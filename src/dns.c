@@ -111,9 +111,14 @@ struct dnsQueueData {
     void *data;
 };
 
-static int dnsOpenServer(const char *command);
-static PF dnsShutdownRead;
+static int dnsOpenServer _PARAMS((const char *command));
+static void dnsShutdownRead _PARAMS((int fd, void *data));
+
 static dnsserver_t **dns_child_table = NULL;
+
+int NDnsServersAlloc = 0;
+char *dns_error_message = NULL;	/* possible error message */
+struct _dnsStats DnsStats;
 
 static int
 dnsOpenServer(const char *command)
@@ -131,23 +136,21 @@ dnsOpenServer(const char *command)
 	local_addr,
 	0,
 	COMM_NOCLOEXEC,
-	"dnsserver listen socket");
-    if (cfd < 0) {
-	debug(34, 0) ("dnsOpenServer: Failed to create dnsserver\n");
+	"socket to dnsserver");
+    if (cfd == COMM_ERROR) {
+	debug(34, 0, "dnsOpenServer: Failed to create dnsserver\n");
 	return -1;
     }
     len = sizeof(S);
     memset(&S, '\0', len);
     if (getsockname(cfd, (struct sockaddr *) &S, &len) < 0) {
-	debug(50, 0) ("dnsOpenServer: getsockname: %s\n", xstrerror());
+	debug(50, 0, "dnsOpenServer: getsockname: %s\n", xstrerror());
 	comm_close(cfd);
 	return -1;
     }
     listen(cfd, 1);
-    /* flush or else we get dup data if unbuffered_logs is set */
-    logsFlush();
     if ((pid = fork()) < 0) {
-	debug(50, 0) ("dnsOpenServer: fork: %s\n", xstrerror());
+	debug(50, 0, "dnsOpenServer: fork: %s\n", xstrerror());
 	comm_close(cfd);
 	return -1;
     }
@@ -159,7 +162,7 @@ dnsOpenServer(const char *command)
 	    local_addr,
 	    0,			/* port */
 	    0,			/* flags */
-	    "squid <-> dnsserver");
+	    NULL);		/* blocking! */
 	if (sfd == COMM_ERROR)
 	    return -1;
 	if (comm_connect_addr(sfd, &S) == COMM_ERROR) {
@@ -167,29 +170,29 @@ dnsOpenServer(const char *command)
 	    return -1;
 	}
 	if (write(sfd, "$hello\n", 7) < 0) {
-	    debug(34, 0) ("dnsOpenServer: $hello write test failed\n");
+	    debug(34, 0, "dnsOpenServer: $hello write test failed\n");
 	    comm_close(sfd);
 	    return -1;
 	}
 	memset(buf, '\0', 128);
 	if (read(sfd, buf, 127) < 0) {
-	    debug(50, 0) ("dnsOpenServer: $hello read test failed\n");
-	    debug(50, 0) ("--> read: %s\n", xstrerror());
+	    debug(50, 0, "dnsOpenServer: $hello read test failed\n");
+	    debug(50, 0, "--> read: %s\n", xstrerror());
 	    comm_close(sfd);
 	    return -1;
 	} else if (strcmp(buf, "$alive\n$end\n")) {
-	    debug(50, 0) ("dnsOpenServer: $hello read test failed\n");
-	    debug(50, 0) ("--> got '%s'\n", rfc1738_escape(buf));
+	    debug(50, 0, "dnsOpenServer: $hello read test failed\n");
+	    debug(50, 0, "--> got '%s'\n", rfc1738_escape(buf));
 	    comm_close(sfd);
 	    return -1;
 	}
-	commSetTimeout(sfd, -1, NULL, NULL);
+	comm_set_fd_lifetime(sfd, -1);
 	return sfd;
     }
     /* child */
     no_suid();			/* give up extra priviliges */
     if ((fd = accept(cfd, NULL, NULL)) < 0) {
-	debug(50, 0) ("dnsOpenServer: FD %d accept: %s\n", cfd, xstrerror());
+	debug(50, 0, "dnsOpenServer: FD %d accept: %s\n", cfd, xstrerror());
 	_exit(1);
     }
     dup2(fd, 0);
@@ -198,11 +201,11 @@ dnsOpenServer(const char *command)
     fclose(debug_log);
     close(fd);
     close(cfd);
-    if (Config.onoff.res_defnames)
+    if (Config.Options.res_defnames)
 	execlp(command, "(dnsserver)", "-D", NULL);
     else
 	execlp(command, "(dnsserver)", NULL);
-    debug(50, 0) ("dnsOpenServer: %s: %s\n", command, xstrerror());
+    debug(50, 0, "dnsOpenServer: %s: %s\n", command, xstrerror());
     _exit(1);
     return 0;
 }
@@ -214,11 +217,9 @@ dnsGetFirstAvailable(void)
     dnsserver_t *dns = NULL;
     for (k = 0; k < NDnsServersAlloc; k++) {
 	dns = *(dns_child_table + k);
-	if (EBIT_TEST(dns->flags, HELPER_BUSY))
+	if (BIT_TEST(dns->flags, DNS_FLAG_BUSY))
 	    continue;
-	if (EBIT_TEST(dns->flags, HELPER_CLOSING))
-	    continue;
-	if (!EBIT_TEST(dns->flags, HELPER_ALIVE))
+	if (!BIT_TEST(dns->flags, DNS_FLAG_ALIVE))
 	    continue;
 	return dns;
     }
@@ -232,8 +233,10 @@ dnsFreeMemory(void)
     int k;
     /* free old structures if present */
     if (dns_child_table) {
-	for (k = 0; k < NDnsServersAlloc; k++)
-	    cbdataFree(dns_child_table[k]);
+	for (k = 0; k < NDnsServersAlloc; k++) {
+	    safe_free(dns_child_table[k]->ip_inbuf);
+	    safe_free(dns_child_table[k]);
+	}
 	safe_free(dns_child_table);
     }
 }
@@ -245,25 +248,23 @@ dnsOpenServers(void)
     char *prg = Config.Program.dnsserver;
     int k;
     int dnssocket;
-    LOCAL_ARRAY(char, fd_note_buf, FD_DESC_SZ);
-    char *s;
+    LOCAL_ARRAY(char, fd_note_buf, FD_ASCII_NOTE_SZ);
 
     dnsFreeMemory();
     dns_child_table = xcalloc(N, sizeof(dnsserver_t *));
     NDnsServersAlloc = 0;
     for (k = 0; k < N; k++) {
 	dns_child_table[k] = xcalloc(1, sizeof(dnsserver_t));
-	cbdataAdd(dns_child_table[k]);
 	if ((dnssocket = dnsOpenServer(prg)) < 0) {
-	    debug(34, 1) ("dnsOpenServers: WARNING: Failed to start 'dnsserver' #%d.\n", k + 1);
-	    EBIT_CLR(dns_child_table[k]->flags, HELPER_ALIVE);
+	    debug(34, 1, "dnsOpenServers: WARNING: Failed to start 'dnsserver' #%d.\n", k + 1);
+	    dns_child_table[k]->flags &= ~DNS_FLAG_ALIVE;
 	    dns_child_table[k]->id = k + 1;
 	    dns_child_table[k]->inpipe = -1;
 	    dns_child_table[k]->outpipe = -1;
 	} else {
-	    debug(34, 4) ("dnsOpenServers: FD %d connected to %s #%d.\n",
+	    debug(34, 4, "dnsOpenServers: FD %d connected to %s #%d.\n",
 		dnssocket, prg, k + 1);
-	    EBIT_SET(dns_child_table[k]->flags, HELPER_ALIVE);
+	    dns_child_table[k]->flags |= DNS_FLAG_ALIVE;
 	    dns_child_table[k]->id = k + 1;
 	    dns_child_table[k]->inpipe = dnssocket;
 	    dns_child_table[k]->outpipe = dnssocket;
@@ -271,20 +272,18 @@ dnsOpenServers(void)
 	    dns_child_table[k]->dispatch_time = current_time;
 	    dns_child_table[k]->size = DNS_INBUF_SZ - 1;
 	    dns_child_table[k]->offset = 0;
-	    if ((s = strrchr(prg, '/')))
-		s++;
-	    else
-		s = prg;
-	    snprintf(fd_note_buf, FD_DESC_SZ, "%s #%d", s, dns_child_table[k]->id);
+	    dns_child_table[k]->ip_inbuf = xcalloc(DNS_INBUF_SZ, 1);
+	    /* update fd_stat */
+	    sprintf(fd_note_buf, "%s #%d", prg, dns_child_table[k]->id);
 	    fd_note(dns_child_table[k]->inpipe, fd_note_buf);
 	    commSetNonBlocking(dns_child_table[k]->inpipe);
-	    debug(34, 3) ("dnsOpenServers: 'dns_server' %d started\n", k);
+	    debug(34, 3, "dnsOpenServers: 'dns_server' %d started\n", k);
 	    NDnsServersAlloc++;
 	}
     }
     if (NDnsServersAlloc == 0 && Config.dnsChildren > 0)
 	fatal("Failed to start any dnsservers");
-    debug(34, 1) ("Started %d 'dnsserver' processes\n", NDnsServersAlloc);
+    debug(34, 1, "Started %d 'dnsserver' processes\n", NDnsServersAlloc);
 }
 
 
@@ -311,11 +310,10 @@ dnsStats(StoreEntry * sentry)
     for (k = 0; k < NDnsServersAlloc; k++) {
 	dns = *(dns_child_table + k);
 	storeAppendPrintf(sentry, "{dnsserver #%d:}\n", k + 1);
-	storeAppendPrintf(sentry, "{    Flags: %c%c%c%c}\n",
-	    EBIT_TEST(dns->flags, HELPER_ALIVE) ? 'A' : ' ',
-	    EBIT_TEST(dns->flags, HELPER_BUSY) ? 'B' : ' ',
-	    EBIT_TEST(dns->flags, HELPER_CLOSING) ? 'C' : ' ',
-	    EBIT_TEST(dns->flags, HELPER_SHUTDOWN) ? 'S' : ' ');
+	storeAppendPrintf(sentry, "{    Flags: %c%c%c}\n",
+	    dns->flags & DNS_FLAG_ALIVE ? 'A' : ' ',
+	    dns->flags & DNS_FLAG_BUSY ? 'B' : ' ',
+	    dns->flags & DNS_FLAG_CLOSING ? 'C' : ' ');
 	storeAppendPrintf(sentry, "{    FDs (in/out): %d/%d}\n",
 	    dns->inpipe, dns->outpipe);
 	storeAppendPrintf(sentry, "{    Alive since: %s}\n",
@@ -338,65 +336,59 @@ dnsStats(StoreEntry * sentry)
 void
 dnsShutdownServers(void)
 {
-    dnsserver_t *dns = NULL;
+    dnsserver_t *dnsData = NULL;
     int k;
+    static char *shutdown_cmd = "$shutdown\n";
 
-    debug(34, 3) ("dnsShutdownServers:\n");
+    debug(34, 3, "dnsShutdownServers:\n");
 
     k = ipcacheQueueDrain();
     if (fqdncacheQueueDrain() || k)
 	return;
     for (k = 0; k < NDnsServersAlloc; k++) {
-	dns = *(dns_child_table + k);
-	if (!EBIT_TEST(dns->flags, HELPER_ALIVE)) {
-	    debug(34, 3) ("dnsShutdownServers: #%d is NOT ALIVE.\n", dns->id);
+	dnsData = *(dns_child_table + k);
+	if (!(dnsData->flags & DNS_FLAG_ALIVE)) {
+	    debug(34, 3, "dnsShutdownServers: #%d is NOT ALIVE.\n", dnsData->id);
 	    continue;
 	}
-	if (EBIT_TEST(dns->flags, HELPER_BUSY)) {
-	    debug(34, 3) ("dnsShutdownServers: #%d is BUSY.\n", dns->id);
-	    EBIT_SET(dns->flags, HELPER_SHUTDOWN);
+	if (dnsData->flags & DNS_FLAG_BUSY) {
+	    debug(34, 3, "dnsShutdownServers: #%d is BUSY.\n", dnsData->id);
 	    continue;
 	}
-	if (EBIT_TEST(dns->flags, HELPER_CLOSING)) {
-	    debug(34, 3) ("dnsShutdownServers: #%d is CLOSING.\n", dns->id);
+	if (dnsData->flags & DNS_FLAG_CLOSING) {
+	    debug(34, 3, "dnsShutdownServers: #%d is CLOSING.\n", dnsData->id);
 	    continue;
 	}
-	dnsShutdownServer(dns);
+	debug(34, 3, "dnsShutdownServers: sending '$shutdown' to dnsserver #%d\n", dnsData->id);
+	debug(34, 3, "dnsShutdownServers: --> FD %d\n", dnsData->outpipe);
+	comm_write(dnsData->outpipe,
+	    xstrdup(shutdown_cmd),
+	    strlen(shutdown_cmd),
+	    0,			/* timeout */
+	    NULL,		/* Handler */
+	    NULL,		/* Handler-data */
+	    xfree);
+	commSetSelect(dnsData->inpipe,
+	    COMM_SELECT_READ,
+	    dnsShutdownRead,
+	    dnsData,
+	    0);
+	dnsData->flags |= DNS_FLAG_CLOSING;
     }
-}
-
-void
-dnsShutdownServer(dnsserver_t * dns)
-{
-    static char *shutdown_cmd = "$shutdown\n";
-    debug(34, 3) ("dnsShutdownServer: sending '$shutdown' to dnsserver #%d\n",
-	dns->id);
-    debug(34, 3) ("dnsShutdownServer: --> FD %d\n", dns->outpipe);
-    cbdataLock(dns);
-    comm_write(dns->outpipe,
-	xstrdup(shutdown_cmd),
-	strlen(shutdown_cmd),
-	NULL,			/* Handler */
-	NULL,			/* Handler-data */
-	xfree);
-    commSetSelect(dns->inpipe,
-	COMM_SELECT_READ,
-	dnsShutdownRead,
-	dns,
-	0);
-    EBIT_SET(dns->flags, HELPER_CLOSING);
 }
 
 static void
 dnsShutdownRead(int fd, void *data)
 {
-    dnsserver_t *dns = data;
-    debug(14, EBIT_TEST(dns->flags, HELPER_CLOSING) ? 5 : 1)
-	("FD %d: Connection from DNSSERVER #%d is closed, disabling\n",
+    dnsserver_t *dnsData = data;
+    debug(14, dnsData->flags & DNS_FLAG_CLOSING ? 5 : 1,
+	"FD %d: Connection from DNSSERVER #%d is closed, disabling\n",
 	fd,
-	dns->id);
-    dns->flags = 0;
-    commSetSelect(fd, COMM_SELECT_WRITE, NULL, NULL, 0);
-    cbdataUnlock(dns);
+	dnsData->id);
+    dnsData->flags = 0;
+    commSetSelect(fd,
+	COMM_SELECT_WRITE,
+	NULL,
+	NULL, 0);
     comm_close(fd);
 }

@@ -44,6 +44,3 @@
 
 /* Define if we should use GNU regex */
 #undef USE_GNUREGEX
-
-/* signed size_t, grr */
-#undef ssize_t

@@ -32,7 +32,6 @@
 #define SQUID_H
 
 #include "config.h"
-#include "options.h"
 
 /*
  * On some systems, FD_SETSIZE is set to something lower than the
@@ -164,21 +163,14 @@
 #if HAVE_GETOPT_H
 #include <getopt.h>
 #endif
-#if HAVE_ASSERT_H
-#include <assert.h>
-#else
-#define assert(X) ((void)0)
-#endif
 
-/* With linux, poll.h might not be available, even though poll(2) is */
-/* Oskar Pearson <oskar@is.co.za> */
-#if HAVE_POLL
-#if HAVE_POLL_H && defined(_SQUID_LINUX_)
+#if defined(USE_POLL) && HAVE_POLL
+#if HAVE_POLL_H
 #include <poll.h>
+#endif /* HAVE_POLL_H */
 #else
-#undef HAVE_POLL
-#endif /* end of Linux workaround */
-#endif /* HAVE_POLL */
+#undef USE_POLL
+#endif
 
 #ifdef __STDC__
 #include <stdarg.h>
@@ -206,23 +198,9 @@
 #define MAXPATHLEN SQUID_MAXPATHLEN
 #endif
 
-#if !HAVE_GETRUSAGE
-#if defined(_SQUID_HPUX_)
+#if !defined(HAVE_GETRUSAGE) && defined(_SQUID_HPUX_)
 #define HAVE_GETRUSAGE 1
 #define getrusage(a, b)  syscall(SYS_GETRUSAGE, a, b)
-#else
-/*
- * If we don't have getrusage() then we create a fake structure
- * with only the fields Squid cares about.  This just makes the
- * source code cleaner, so we don't need lots of #ifdefs in other
- * places
- */
-typedef void struct {
-        struct timeval ru_stime;
-        int ru_maxrss;
-        int ru_majflt;
-} rusage;
-#endif
 #endif
 
 #if !defined(HAVE_GETPAGESIZE) && defined(_SQUID_HPUX_)
@@ -233,7 +211,6 @@ typedef void struct {
 #ifndef BUFSIZ
 #define BUFSIZ  4096		/* make reasonable guess */
 #endif
-
 
 #ifndef SA_RESTART
 #define SA_RESTART 0
@@ -249,9 +226,30 @@ typedef void struct {
 #define SA_RESETHAND SA_ONESHOT
 #endif
 
+typedef struct sentry StoreEntry;
+typedef struct mem_hdr *mem_ptr;
+typedef struct _peer peer;
+typedef struct icp_common_s icp_common_t;
+typedef struct _cacheinfo cacheinfo;
+typedef struct _aclCheck_t aclCheck_t;
+typedef struct _request request_t;
+typedef struct _MemObject MemObject;
+typedef struct _cachemgr_passwd cachemgr_passwd;
+
+/* 32 bit integer compatability hack */
+#if SIZEOF_INT == 4
+typedef int num32;
+typedef unsigned int u_num32;
+#elif SIZEOF_LONG == 4
+typedef long num32;
+typedef unsigned long u_num32;
+#else
+typedef long num32;		/* assume that long's are 32bit */
+typedef unsigned long u_num32;
+#endif
+#define NUM32LEN sizeof(num32)	/* this should always be 4 */
+
 #if PURIFY
-/* disable assert() under purify */
-#define NODEBUG
 #define LOCAL_ARRAY(type,name,size) \
         static type *local_##name=NULL; \
         type *name = local_##name ? local_##name : \
@@ -260,9 +258,11 @@ typedef void struct {
 #define LOCAL_ARRAY(type,name,size) static type name[size]
 #endif
 
-#if CBDATA_DEBUG
-#define cbdataAdd(a)	cbdataAddDbg(a,__FILE__,__LINE__)
+#if defined(_SQUID_NEXT_) && !defined(S_ISDIR)
+#define S_ISDIR(mode) (((mode) & (_S_IFMT)) == (_S_IFDIR))
 #endif
+
+#include "ansiproto.h"
 
 #ifdef USE_GNUREGEX
 #include "GNUregex.h"
@@ -270,54 +270,112 @@ typedef void struct {
 #include <regex.h>
 #endif
 
-#if STORE_KEY_SHA
-#undef STORE_KEY_URL
-#undef STORE_KEY_MD5
-#include "sha.h"
-#elif STORE_KEY_MD5
-#undef STORE_KEY_URL
-#undef STORE_KEY_SHA
-#include "md5.h"
-#else
-#undef STORE_KEY_SHA
-#undef STORE_KEY_MD5
-#define STORE_KEY_URL 1
-#define storeKeyHashCmp urlcmp
-#define storeKeyHashHash hash4
-#endif
+typedef void (*SIH) (int, void *);	/* swap in */
+typedef int (*QS) (const void *, const void *);
 
-#ifdef SQUID_SNMP
-#include "snmp.h"
-#include "snmp_impl.h"
-#include "snmp_vars.h"
-#include "cache_snmp.h"
-#endif
-
-/* Needed for poll() on Linux at least */
-#if HAVE_POLL
-#ifndef POLLRDNORM
-#define POLLRDNORM POLLIN
-#endif
-#ifndef POLLWRNORM
-#define POLLWRNORM POLLOUT
-#endif
-#endif
-
-#include "defines.h"
-#include "enums.h"
-#include "typedefs.h"
-#include "structs.h"
-#include "protos.h"
-#include "globals.h"
-
+#include "cache_cf.h"
+#include "comm.h"
+#include "debug.h"
+#include "fdstat.h"
+#include "disk.h"
+#include "filemap.h"
+#include "hash.h"
+#include "proto.h"		/* must go before neighbors.h */
+#include "neighbors.h"		/* must go before url.h */
+#include "url.h"
+#include "icp.h"
+#include "errorpage.h"		/* must go after icp.h */
+#include "dns.h"
+#include "ipcache.h"
+#include "fqdncache.h"
+#include "mime.h"
+#include "stack.h"
+#include "stat.h"
+#include "stmem.h"
+#include "store.h"
+#include "tools.h"
+#include "http.h"
+#include "ftp.h"
+#include "gopher.h"
 #include "util.h"
+#include "event.h"
+#include "acl.h"
+#include "async_io.h"
+#include "redirect.h"
+#include "client_side.h"
+#include "useragent.h"
+#include "icmp.h"
+#include "net_db.h"
+#include "client_db.h"
+#include "objcache.h"
+#include "refresh.h"
+#include "unlinkd.h"
 
 #if !HAVE_TEMPNAM
 #include "tempnam.h"
 #endif
 
-#if !HAVE_SNPRINTF
-#include "snprintf.h"
-#endif
+extern void serverConnectionsClose _PARAMS((void));
+extern void shut_down _PARAMS((int));
+
+
+extern time_t squid_starttime;	/* main.c */
+extern int do_reuse;		/* main.c */
+extern int theHttpConnection;	/* main.c */
+extern int theInIcpConnection;	/* main.c */
+extern int theOutIcpConnection;	/* main.c */
+extern int vizSock;
+extern volatile int shutdown_pending;	/* main.c */
+extern volatile int reread_pending;	/* main.c */
+extern int opt_unlink_on_reload;	/* main.c */
+extern int opt_reload_hit_only;	/* main.c */
+extern int opt_dns_tests;	/* main.c */
+extern int opt_foreground_rebuild;	/* main.c */
+extern int opt_zap_disk_store;	/* main.c */
+extern int opt_syslog_enable;	/* main.c */
+extern int opt_catch_signals;	/* main.c */
+extern int opt_no_ipcache;	/* main.c */
+extern int vhost_mode;		/* main.c */
+extern int Squid_MaxFD;		/* main.c */
+extern int Biggest_FD;		/* main.c */
+extern int Number_FD;		/* main.c */
+extern int select_loops;	/* main.c */
+extern const char *const version_string;	/* main.c */
+extern const char *const appname;	/* main.c */
+extern struct in_addr local_addr;	/* main.c */
+extern struct in_addr theOutICPAddr;	/* main.c */
+extern const char *const localhost;
+extern struct in_addr no_addr;	/* comm.c */
+extern int opt_udp_hit_obj;	/* main.c */
+extern int opt_mem_pools;	/* main.c */
+extern int opt_forwarded_for;	/* main.c */
+extern int opt_accel_uses_host;	/* main.c */
+extern char ThisCache[];	/* main.c */
+
+/* Prototypes and definitions which don't really deserve a separate
+ * include file */
+
+#define  CONNECT_PORT        443
+
+extern void start_announce _PARAMS((void *unused));
+extern int sslStart _PARAMS((int fd, const char *, request_t *, char *, int *sz));
+extern const char *storeToString _PARAMS((const StoreEntry *));
+extern int waisStart _PARAMS((int, const char *, method_t, char *, StoreEntry *));
+extern void storeDirClean _PARAMS((void *unused));
+extern int passStart _PARAMS((int fd,
+	const char *url,
+	request_t * request,
+	char *buf,
+	int buflen,
+	int *size_ptr));
+extern void identStart _PARAMS((int, icpStateData *,
+	void       (*callback) _PARAMS((void *))));
+extern int httpAnonAllowed _PARAMS((const char *line));
+extern int httpAnonDenied _PARAMS((const char *line));
+
+extern const char *const dash_str;
+extern const char *const null_string;
+
+#define OR(A,B) (A ? A : B)
 
 #endif /* SQUID_H */

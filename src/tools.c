@@ -106,6 +106,10 @@
 
 #include "squid.h"
 
+int do_mallinfo = 0;		/* don't do mallinfo() unless this gets set */
+time_t squid_curtime;
+struct timeval current_time;
+
 #define DEAD_MSG "\
 The Squid Cache (version %s) died.\n\
 \n\
@@ -116,22 +120,21 @@ and report the trace back to squid-bugs@nlanr.net.\n\
 \n\
 Thanks!\n"
 
-static void fatal_common(const char *);
-static void mail_warranty(void);
-static void shutdownTimeoutHandler(int fd, void *data);
-#if USE_ASYNC_IO
-static void safeunlinkComplete(void *data, int retcode, int errcode);
+static void fatal_common _PARAMS((const char *));
+static void mail_warranty _PARAMS((void));
+
+#ifdef _SQUID_SOLARIS_
+int getrusage _PARAMS((int, struct rusage *));
+int getpagesize _PARAMS((void));
+int gethostname _PARAMS((char *, int));
 #endif
 
 static void
 releaseServerSockets(void)
 {
-    int i;
     /* Release the main ports as early as possible */
-    for (i = 0; i < NHttpSockets; i++) {
-	if (HttpSockets[i] >= 0)
-	    close(HttpSockets[i]);
-    }
+    if (theHttpConnection >= 0)
+	close(theHttpConnection);
     if (theInIcpConnection >= 0)
 	close(theInIcpConnection);
     if (theOutIcpConnection >= 0 && theOutIcpConnection != theInIcpConnection)
@@ -142,7 +145,7 @@ static char *
 dead_msg(void)
 {
     LOCAL_ARRAY(char, msg, 1024);
-    snprintf(msg, 1024, DEAD_MSG, version_string, version_string);
+    sprintf(msg, DEAD_MSG, version_string, version_string);
     return msg;
 }
 
@@ -160,20 +163,20 @@ mail_warranty(void)
     fprintf(fp, "To: %s\n", Config.adminEmail);
     fprintf(fp, "Subject: %s\n", dead_msg());
     fclose(fp);
-    snprintf(command, 256, "mail %s < %s", Config.adminEmail, filename);
+    sprintf(command, "mail %s < %s", Config.adminEmail, filename);
     system(command);		/* XXX should avoid system(3) */
     unlink(filename);
 }
 
 static void
-dumpMallocStats(void)
+dumpMallocStats(FILE * f)
 {
 #if HAVE_MSTATS && HAVE_GNUMALLOC_H
     struct mstats ms = mstats();
-    fprintf(debug_log, "\ttotal space in arena:  %6d KB\n",
-	(int) (ms.bytes_total >> 10));
-    fprintf(debug_log, "\tTotal free:            %6d KB %d%%\n",
-	(int) (ms.bytes_free >> 10),
+    fprintf(f, "\ttotal space in arena:  %6d KB\n",
+	ms.bytes_total >> 10);
+    fprintf(f, "\tTotal free:            %6d KB %d%%\n",
+	ms.bytes_free >> 10,
 	percent(ms.bytes_free, ms.bytes_total));
 #elif HAVE_MALLINFO
     struct mallinfo mp;
@@ -181,101 +184,74 @@ dumpMallocStats(void)
     if (!do_mallinfo)
 	return;
     mp = mallinfo();
-    fprintf(debug_log, "Memory usage for %s via mallinfo():\n", appname);
-    fprintf(debug_log, "\ttotal space in arena:  %6d KB\n",
+    fprintf(f, "Memory usage for %s via mallinfo():\n", appname);
+    fprintf(f, "\ttotal space in arena:  %6d KB\n",
 	mp.arena >> 10);
-    fprintf(debug_log, "\tOrdinary blocks:       %6d KB %6d blks\n",
+    fprintf(f, "\tOrdinary blocks:       %6d KB %6d blks\n",
 	mp.uordblks >> 10, mp.ordblks);
-    fprintf(debug_log, "\tSmall blocks:          %6d KB %6d blks\n",
+    fprintf(f, "\tSmall blocks:          %6d KB %6d blks\n",
 	mp.usmblks >> 10, mp.smblks);
-    fprintf(debug_log, "\tHolding blocks:        %6d KB %6d blks\n",
+    fprintf(f, "\tHolding blocks:        %6d KB %6d blks\n",
 	mp.hblkhd >> 10, mp.hblks);
-    fprintf(debug_log, "\tFree Small blocks:     %6d KB\n",
+    fprintf(f, "\tFree Small blocks:     %6d KB\n",
 	mp.fsmblks >> 10);
-    fprintf(debug_log, "\tFree Ordinary blocks:  %6d KB\n",
+    fprintf(f, "\tFree Ordinary blocks:  %6d KB\n",
 	mp.fordblks >> 10);
     t = mp.uordblks + mp.usmblks + mp.hblkhd;
-    fprintf(debug_log, "\tTotal in use:          %6d KB %d%%\n",
+    fprintf(f, "\tTotal in use:          %6d KB %d%%\n",
 	t >> 10, percent(t, mp.arena));
     t = mp.fsmblks + mp.fordblks;
-    fprintf(debug_log, "\tTotal free:            %6d KB %d%%\n",
+    fprintf(f, "\tTotal free:            %6d KB %d%%\n",
 	t >> 10, percent(t, mp.arena));
 #if HAVE_EXT_MALLINFO
-    fprintf(debug_log, "\tmax size of small blocks:\t%d\n",
+    fprintf(f, "\tmax size of small blocks:\t%d\n",
 	mp.mxfast);
-    fprintf(debug_log, "\tnumber of small blocks in a holding block:\t%d\n",
+    fprintf(f, "\tnumber of small blocks in a holding block:\t%d\n",
 	mp.nlblks);
-    fprintf(debug_log, "\tsmall block rounding factor:\t%d\n",
+    fprintf(f, "\tsmall block rounding factor:\t%d\n",
 	mp.grain);
-    fprintf(debug_log, "\tspace (including overhead) allocated in ord. blks:\t%d\n",
+    fprintf(f, "\tspace (including overhead) allocated in ord. blks:\t%d\n",
 	mp.uordbytes);
-    fprintf(debug_log, "\tnumber of ordinary blocks allocated:\t%d\n",
+    fprintf(f, "\tnumber of ordinary blocks allocated:\t%d\n",
 	mp.allocated);
-    fprintf(debug_log, "\tbytes used in maintaining the free tree:\t%d\n",
+    fprintf(f, "\tbytes used in maintaining the free tree:\t%d\n",
 	mp.treeoverhead);
 #endif /* HAVE_EXT_MALLINFO */
-#endif /* HAVE_MALLINFO */
+#if PRINT_MMAP
+    mallocmap();
+#endif /* PRINT_MMAP */
+#endif
 }
 
-void
-squid_getrusage(struct rusage *r)
+static int
+PrintRusage(void (*f) (void), FILE * lf)
 {
 #if HAVE_GETRUSAGE && defined(RUSAGE_SELF)
+    struct rusage rusage;
 #ifdef _SQUID_SOLARIS_
     /* Solaris 2.5 has getrusage() permission bug -- Arjan de Vet */
     enter_suid();
 #endif
-    getrusage(RUSAGE_SELF, r);
+    getrusage(RUSAGE_SELF, &rusage);
 #ifdef _SQUID_SOLARIS_
     leave_suid();
 #endif
-#else
-    memset(r, '\0', sizeof(struct rusage));
-#endif
+    fprintf(lf, "CPU Usage: user %d sys %d\n",
+	(int) rusage.ru_utime.tv_sec, (int) rusage.ru_stime.tv_sec);
+#if defined(_SQUID_SGI_) || defined(_SQUID_OSF_) || defined(BSD4_4)
+    fprintf(lf, "Maximum Resident Size: %ld KB\n", rusage.ru_maxrss);
+#else /* _SQUID_SGI_ */
+    fprintf(lf, "Maximum Resident Size: %ld KB\n",
+	(rusage.ru_maxrss * getpagesize()) >> 10);
+#endif /* _SQUID_SGI_ */
+    fprintf(lf, "Page faults with physical i/o: %ld\n",
+	rusage.ru_majflt);
+#endif /* HAVE_GETRUSAGE */
+    dumpMallocStats(lf);
+    if (f)
+	f();
+    return 0;
 }
-
-double
-rusage_cputime(struct rusage *r)
-{
-    return (double) r->ru_stime.tv_sec +
-	(double) r->ru_utime.tv_sec +
-	(double) r->ru_stime.tv_usec / 1000000.0 +
-	(double) r->ru_utime.tv_usec / 1000000.0;
-}
-
-int
-rusage_maxrss(struct rusage *r)
-{
-#if defined(_SQUID_SGI_)
-    return r->ru_maxrss;
-#elif defined(_SQUID_OSF_)
-    return r->ru_maxrss;
-#elif defined(BSD4_4)
-    return r->ru_maxrss;
-#else
-    return (r->ru_maxrss * getpagesize()) >> 10;
-#endif
-}
-
-int
-rusage_pagefaults(struct rusage *r)
-{
-    return r->ru_majflt;
-}
-
-
-static void
-PrintRusage(void)
-{
-    struct rusage rusage;
-    squid_getrusage(&rusage);
-    fprintf(debug_log, "CPU Usage: %.3f seconds\n", rusage_cputime(&rusage));
-    fprintf(debug_log, "Maximum Resident Size: %d KB\n",
-	rusage_maxrss(&rusage));
-    fprintf(debug_log, "Page faults with physical i/o: %d\n",
-	rusage_pagefaults(&rusage));
-}
-
 
 void
 death(int sig)
@@ -313,9 +289,8 @@ death(int sig)
     signal(sig, SIG_DFL);
 #endif
     releaseServerSockets();
-    storeWriteCleanLogs(0);
-    PrintRusage();
-    dumpMallocStats();
+    storeWriteCleanLog();
+    PrintRusage(NULL, debug_log);
     if (squid_curtime - SQUID_RELEASE_TIME < 864000) {
 	/* skip if more than 10 days old */
 	if (Config.adminEmail)
@@ -331,7 +306,7 @@ void
 sigusr2_handle(int sig)
 {
     static int state = 0;
-    /* no debug() here; bad things happen if the signal is delivered during _db_print() */
+    debug(21, 1, "sigusr2_handle: SIGUSR2 received.\n");
     if (state == 0) {
 	_db_init(Config.Log.log, "ALL,10");
 	state = 1;
@@ -344,37 +319,27 @@ sigusr2_handle(int sig)
 #endif
 }
 
-static void
-shutdownTimeoutHandler(int fd, void *datanotused)
-{
-    debug(21, 1) ("Forcing close of FD %d\n", fd);
-    comm_close(fd);
-}
-
 void
-setSocketShutdownLifetimes(int to)
+setSocketShutdownLifetimes(int lft)
 {
-    fde *f = NULL;
+    FD_ENTRY *f = NULL;
     int i;
     for (i = Biggest_FD; i >= 0; i--) {
 	f = &fd_table[i];
 	if (!f->read_handler && !f->write_handler)
 	    continue;
-	if (f->type != FD_SOCKET)
+	if (fdstatGetType(i) != FD_SOCKET)
 	    continue;
-	if (f->timeout > 0 && (int) (f->timeout - squid_curtime) <= to)
+	if (f->lifetime > 0 && (f->lifetime - squid_curtime) <= lft)
 	    continue;
-	commSetTimeout(i,
-	    to,
-	    f->timeout_handler ? f->timeout_handler : shutdownTimeoutHandler,
-	    f->timeout_data);
+	comm_set_fd_lifetime(i, lft);
     }
 }
 
 void
 normal_shutdown(void)
 {
-    debug(21, 1) ("Shutting down...\n");
+    debug(21, 1, "Shutting down...\n");
     if (Config.pidFilename && strcmp(Config.pidFilename, "none")) {
 	enter_suid();
 	safeunlink(Config.pidFilename, 0);
@@ -382,27 +347,26 @@ normal_shutdown(void)
     }
     releaseServerSockets();
     unlinkdClose();
-    storeWriteCleanLogs(0);
-    PrintRusage();
-    dumpMallocStats();
+    storeWriteCleanLog();
+    PrintRusage(NULL, debug_log);
     storeCloseLog();
-    accessLogClose();
+    statCloseLog();
 #if PURIFY
     configFreeMemory();
+    diskFreeMemory();
     storeFreeMemory();
+    commFreeMemory();
+    filemapFreeMemory();
     dnsFreeMemory();
     redirectFreeMemory();
+    fdstatFreeMemory();
+    errorpageFreeMemory();
     stmemFreeMemory();
     netdbFreeMemory();
     ipcacheFreeMemory();
     fqdncacheFreeMemory();
 #endif
-    file_close(0);
-    file_close(1);
-    file_close(2);
-    fdDumpOpen();
-    fdFreeMemory();
-    debug(21, 0) ("Squid Cache (Version %s): Exiting normally.\n",
+    debug(21, 0, "Squid Cache (Version %s): Exiting normally.\n",
 	version_string);
     fclose(debug_log);
     exit(0);
@@ -416,13 +380,12 @@ fatal_common(const char *message)
 	syslog(LOG_ALERT, "%s", message);
 #endif
     fprintf(debug_log, "FATAL: %s\n", message);
-    if (opt_debug_stderr && debug_log != stderr)
+    if (debug_log != stderr)
 	fprintf(stderr, "FATAL: %s\n", message);
     fprintf(debug_log, "Squid Cache (Version %s): Terminated abnormally.\n",
 	version_string);
     fflush(debug_log);
-    PrintRusage();
-    dumpMallocStats();
+    PrintRusage(NULL, debug_log);
 }
 
 /* fatal */
@@ -434,7 +397,7 @@ fatal(const char *message)
      * used in early initialization phases, long before we ever
      * get to the store log. */
     if (!store_rebuilding)
-	storeWriteCleanLogs(0);
+	storeWriteCleanLog();
     fatal_common(message);
     exit(1);
 }
@@ -447,16 +410,17 @@ fatal_dump(const char *message)
     if (message)
 	fatal_common(message);
     if (opt_catch_signals)
-	storeWriteCleanLogs(0);
+	storeWriteCleanLog();
     abort();
 }
 
+/* fatal with dumping core */
 void
-debug_trap(const char *message)
+_debug_trap(const char *message)
 {
     if (!opt_catch_signals)
 	fatal_dump(message);
-    _db_print("WARNING: %s\n", message);
+    _db_print(0, 0, "WARNING: %s\n", message);
 }
 
 void
@@ -475,7 +439,7 @@ sig_child(int sig)
 #else
 	pid = waitpid(-1, &status, WNOHANG);
 #endif
-	/* no debug() here; bad things happen if the signal is delivered during _db_print() */
+	debug(21, 3, "sig_child: Ate pid %d\n", pid);
 #if HAVE_SIGACTION
     } while (pid > 0);
 #else
@@ -492,14 +456,14 @@ getMyHostname(void)
     const struct hostent *h = NULL;
     char *t = NULL;
 
-    if ((t = Config.visibleHostname) != NULL)
+    if ((t = Config.visibleHostname))
 	return t;
 
     /* Get the host name and store it in host to return */
     if (!present) {
 	host[0] = '\0';
 	if (gethostname(host, SQUIDHOSTNAMELEN) == -1) {
-	    debug(50, 1) ("getMyHostname: gethostname failed: %s\n",
+	    debug(50, 1, "getMyHostname: gethostname failed: %s\n",
 		xstrerror());
 	    return NULL;
 	} else {
@@ -514,32 +478,15 @@ getMyHostname(void)
     return host;
 }
 
-void
+int
 safeunlink(const char *s, int quiet)
 {
-#if USE_ASYNC_IO
-    aioUnlink(s,
-	quiet ? NULL : safeunlinkComplete,
-	quiet ? NULL : xstrdup(s));
-#else
-    if (unlink(s) < 0 && !quiet)
-	debug(50, 1) ("safeunlink: Couldn't delete %s: %s\n", s, xstrerror());
-#endif
+    int err;
+    if ((err = unlink(s)) < 0)
+	if (!quiet)
+	    debug(50, 1, "safeunlink: Couldn't delete %s. %s\n", s, xstrerror());
+    return (err);
 }
-
-#if USE_ASYNC_IO
-static void
-safeunlinkComplete(void *data, int retcode, int errcode)
-{
-    char *s = data;
-    if (retcode < 0) {
-	errno = errcode;
-	debug(50, 1) ("safeunlink: Couldn't delete %s. %s\n", s, xstrerror());
-	errno = 0;
-    }
-    xfree(s);
-}
-#endif
 
 /* leave a privilegied section. (Give up any privilegies)
  * Routines that need privilegies can rap themselves in enter_suid()
@@ -551,7 +498,7 @@ leave_suid(void)
 {
     struct passwd *pwd = NULL;
     struct group *grp = NULL;
-    debug(21, 3) ("leave_suid: PID %d called\n", getpid());
+    debug(21, 3, "leave_suid: PID %d called\n", getpid());
     if (geteuid() != 0)
 	return;
     /* Started as a root, check suid option */
@@ -561,22 +508,22 @@ leave_suid(void)
 	return;
     if (Config.effectiveGroup && (grp = getgrnam(Config.effectiveGroup))) {
 	if (setgid(grp->gr_gid) < 0)
-	    debug(50, 1) ("leave_suid: setgid: %s\n", xstrerror());
+	    debug(50, 1, "leave_suid: setgid: %s\n", xstrerror());
     } else {
 	if (setgid(pwd->pw_gid) < 0)
-	    debug(50, 1) ("leave_suid: setgid: %s\n", xstrerror());
+	    debug(50, 1, "leave_suid: setgid: %s\n", xstrerror());
     }
-    debug(21, 3) ("leave_suid: PID %d giving up root, becoming '%s'\n",
+    debug(21, 3, "leave_suid: PID %d giving up root, becoming '%s'\n",
 	getpid(), pwd->pw_name);
 #if HAVE_SETRESUID
     if (setresuid(pwd->pw_uid, pwd->pw_uid, 0) < 0)
-	debug(50, 1) ("leave_suid: setresuid: %s\n", xstrerror());
+	debug(50, 1, "leave_suid: setresuid: %s\n", xstrerror());
 #elif HAVE_SETEUID
     if (seteuid(pwd->pw_uid) < 0)
-	debug(50, 1) ("leave_suid: seteuid: %s\n", xstrerror());
+	debug(50, 1, "leave_suid: seteuid: %s\n", xstrerror());
 #else
     if (setuid(pwd->pw_uid) < 0)
-	debug(50, 1) ("leave_suid: setuid: %s\n", xstrerror());
+	debug(50, 1, "leave_suid: setuid: %s\n", xstrerror());
 #endif
 }
 
@@ -584,7 +531,7 @@ leave_suid(void)
 void
 enter_suid(void)
 {
-    debug(21, 3) ("enter_suid: PID %d taking root priveleges\n", getpid());
+    debug(21, 3, "enter_suid: PID %d taking root priveleges\n", getpid());
 #if HAVE_SETRESUID
     setresuid(-1, 0, -1);
 #else
@@ -601,41 +548,38 @@ no_suid(void)
     uid_t uid;
     leave_suid();
     uid = geteuid();
-    debug(21, 3) ("leave_suid: PID %d giving up root priveleges forever\n", getpid());
+    debug(21, 3, "leave_suid: PID %d giving up root priveleges forever\n", getpid());
 #if HAVE_SETRESUID
     if (setresuid(uid, uid, uid) < 0)
-	debug(50, 1) ("no_suid: setresuid: %s\n", xstrerror());
+	debug(50, 1, "no_suid: setresuid: %s\n", xstrerror());
 #else
     setuid(0);
     if (setuid(uid) < 0)
-	debug(50, 1) ("no_suid: setuid: %s\n", xstrerror());
+	debug(50, 1, "no_suid: setuid: %s\n", xstrerror());
 #endif
 }
 
 void
 writePidFile(void)
 {
-    int fd;
+    FILE *pid_fp = NULL;
     const char *f = NULL;
     mode_t old_umask;
-    char buf[32];
-    if ((f = Config.pidFilename) == NULL)
-	return;
-    if (!strcmp(Config.pidFilename, "none"))
+
+    if ((f = Config.pidFilename) == NULL || !strcmp(Config.pidFilename, "none"))
 	return;
     enter_suid();
     old_umask = umask(022);
-    fd = file_open(f, O_WRONLY | O_CREAT | O_TRUNC, NULL, NULL);
+    pid_fp = fopen(f, "w");
     umask(old_umask);
     leave_suid();
-    if (fd < 0) {
-	debug(50, 0) ("%s: %s\n", f, xstrerror());
-	debug_trap("Could not write pid file");
-	return;
+    if (pid_fp != NULL) {
+	fprintf(pid_fp, "%d\n", (int) getpid());
+	fclose(pid_fp);
+    } else {
+	debug(50, 0, "WARNING: Could not write pid file\n");
+	debug(50, 0, "         %s: %s\n", f, xstrerror());
     }
-    snprintf(buf, 32, "%d\n", (int) getpid());
-    write(fd, buf, strlen(buf));
-    file_close(fd);
 }
 
 
@@ -643,11 +587,11 @@ pid_t
 readPidFile(void)
 {
     FILE *pid_fp = NULL;
-    const char *f = Config.pidFilename;
+    const char *f = NULL;
     pid_t pid = -1;
     int i;
 
-    if (f == NULL || !strcmp(Config.pidFilename, "none")) {
+    if ((f = Config.pidFilename) == NULL || !strcmp(Config.pidFilename, "none")) {
 	fprintf(stderr, "%s: ERROR: No pid file name defined\n", appname);
 	exit(1);
     }
@@ -677,55 +621,51 @@ setMaxFD(void)
     struct rlimit rl;
 #if defined(RLIMIT_NOFILE)
     if (getrlimit(RLIMIT_NOFILE, &rl) < 0) {
-	debug(50, 0) ("setrlimit: RLIMIT_NOFILE: %s\n", xstrerror());
+	debug(50, 0, "setrlimit: RLIMIT_NOFILE: %s\n", xstrerror());
     } else {
 	rl.rlim_cur = Squid_MaxFD;
 	if (rl.rlim_cur > rl.rlim_max)
 	    Squid_MaxFD = rl.rlim_cur = rl.rlim_max;
 	if (setrlimit(RLIMIT_NOFILE, &rl) < 0) {
-	    snprintf(tmp_error_buf, ERROR_BUF_SZ,
-		"setrlimit: RLIMIT_NOFILE: %s", xstrerror());
+	    sprintf(tmp_error_buf, "setrlimit: RLIMIT_NOFILE: %s", xstrerror());
 	    fatal_dump(tmp_error_buf);
 	}
     }
 #elif defined(RLIMIT_OFILE)
     if (getrlimit(RLIMIT_OFILE, &rl) < 0) {
-	debug(50, 0) ("setrlimit: RLIMIT_NOFILE: %s\n", xstrerror());
+	debug(50, 0, "setrlimit: RLIMIT_NOFILE: %s\n", xstrerror());
     } else {
 	rl.rlim_cur = Squid_MaxFD;
 	if (rl.rlim_cur > rl.rlim_max)
 	    Squid_MaxFD = rl.rlim_cur = rl.rlim_max;
 	if (setrlimit(RLIMIT_OFILE, &rl) < 0) {
-	    snprintf(tmp_error_buf, ERROR_BUF_SZ,
-		"setrlimit: RLIMIT_OFILE: %s", xstrerror());
+	    sprintf(tmp_error_buf, "setrlimit: RLIMIT_OFILE: %s", xstrerror());
 	    fatal_dump(tmp_error_buf);
 	}
     }
 #endif
 #else /* HAVE_SETRLIMIT */
-    debug(21, 1) ("setMaxFD: Cannot increase: setrlimit() not supported on this system\n");
+    debug(21, 1, "setMaxFD: Cannot increase: setrlimit() not supported on this system\n");
 #endif /* HAVE_SETRLIMIT */
 
 #if HAVE_SETRLIMIT && defined(RLIMIT_DATA)
     if (getrlimit(RLIMIT_DATA, &rl) < 0) {
-	debug(50, 0) ("getrlimit: RLIMIT_DATA: %s\n", xstrerror());
+	debug(50, 0, "getrlimit: RLIMIT_DATA: %s\n", xstrerror());
     } else if (rl.rlim_max > rl.rlim_cur) {
 	rl.rlim_cur = rl.rlim_max;	/* set it to the max */
 	if (setrlimit(RLIMIT_DATA, &rl) < 0) {
-	    snprintf(tmp_error_buf, ERROR_BUF_SZ,
-		"setrlimit: RLIMIT_DATA: %s", xstrerror());
+	    sprintf(tmp_error_buf, "setrlimit: RLIMIT_DATA: %s", xstrerror());
 	    fatal_dump(tmp_error_buf);
 	}
     }
 #endif /* RLIMIT_DATA */
 #if HAVE_SETRLIMIT && defined(RLIMIT_VMEM)
     if (getrlimit(RLIMIT_VMEM, &rl) < 0) {
-	debug(50, 0) ("getrlimit: RLIMIT_VMEM: %s\n", xstrerror());
+	debug(50, 0, "getrlimit: RLIMIT_VMEM: %s\n", xstrerror());
     } else if (rl.rlim_max > rl.rlim_cur) {
 	rl.rlim_cur = rl.rlim_max;	/* set it to the max */
 	if (setrlimit(RLIMIT_VMEM, &rl) < 0) {
-	    snprintf(tmp_error_buf, ERROR_BUF_SZ,
-		"setrlimit: RLIMIT_VMEM: %s", xstrerror());
+	    sprintf(tmp_error_buf, "setrlimit: RLIMIT_VMEM: %s", xstrerror());
 	    fatal_dump(tmp_error_buf);
 	}
     }
@@ -749,14 +689,8 @@ percent(int a, int b)
     return b ? ((int) (100.0 * a / b + 0.5)) : 0;
 }
 
-int
-dpercent(double a, double b)
-{
-    return b ? (100.0 * a / b) : 0.0;
-}
-
 void
-squid_signal(int sig, SIGHDLR * func, int flags)
+squid_signal(int sig, void (*func) _PARAMS((int)), int flags)
 {
 #if HAVE_SIGACTION
     struct sigaction sa;
@@ -764,7 +698,7 @@ squid_signal(int sig, SIGHDLR * func, int flags)
     sa.sa_flags = flags;
     sigemptyset(&sa.sa_mask);
     if (sigaction(sig, &sa, NULL) < 0)
-	debug(50, 0) ("sigaction: sig=%d func=%p: %s\n", sig, func, xstrerror());
+	debug(50, 0, "sigaction: sig=%d func=%p: %s\n", sig, func, xstrerror());
 #else
     signal(sig, func);
 #endif
@@ -778,59 +712,8 @@ inaddrFromHostent(const struct hostent *hp)
     return s;
 }
 
-double
-doubleAverage(double cur, double new, int N, int max)
-{
-    if (N > max)
-	N = max;
-    return (cur * (N - 1.0) + new) / N;
-}
-
-int
-intAverage(int cur, int new, int n, int max)
-{
-    if (n > max)
-	n = max;
-    return (cur * (n - 1)) + new / n;
-}
-
-void
-logsFlush(void)
-{
-    if (debug_log)
-	fflush(debug_log);
-    if (cache_useragent_log)
-	fflush(cache_useragent_log);
-}
-
 char *
 checkNullString(char *p)
 {
     return p ? p : "(NULL)";
-}
-
-void
-dlinkAdd(void *data, dlink_node * m, dlink_list * list)
-{
-    m->data = data;
-    m->prev = NULL;
-    m->next = list->head;
-    if (list->head)
-	list->head->prev = m;
-    list->head = m;
-    if (list->tail == NULL)
-	list->tail = m;
-}
-
-void
-dlinkDelete(dlink_node * m, dlink_list * list)
-{
-    if (m->next)
-	m->next->prev = m->prev;
-    if (m->prev)
-	m->prev->next = m->next;
-    if (m == list->head)
-	list->head = m->next;
-    if (m == list->tail)
-	list->tail = m->prev;
 }

@@ -30,6 +30,7 @@
 #if HAVE_STDLIB_H
 #include <stdlib.h>
 #endif
+#include "ansiproto.h"
 #include "util.h"
 #include "tree.h"
 

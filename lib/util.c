@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -130,9 +129,10 @@
 #include <errno.h>
 #endif
 
+#include "ansiproto.h"
 #include "util.h"
 
-void (*failure_notify) (const char *) = NULL;
+void (*failure_notify) _PARAMS((const char *)) = NULL;
 static char msg[128];
 
 extern int sys_nerr;
@@ -444,21 +444,6 @@ xstrerror(void)
     return xstrerror_buf;
 }
 
-#if NOT_NEEDED
-/*
- * xbstrerror with argument for late notification */
-
-const char *
-xbstrerror(int err)
-{
-    static char xbstrerror_buf[BUFSIZ];
-    if (err < 0 || err >= sys_nerr)
-	return ("Unknown");
-    sprintf(xbstrerror_buf, "(%d) %s", err, strerror(err));
-    return xbstrerror_buf;
-}
-#endif
-
 void
 Tolower(char *q)
 {
@@ -481,13 +466,6 @@ tvSubUsec(struct timeval t1, struct timeval t2)
 {
     return (t2.tv_sec - t1.tv_sec) * 1000000 +
 	(t2.tv_usec - t1.tv_usec);
-}
-
-double
-tvSubDsec(struct timeval t1, struct timeval t2)
-{
-    return (double) (t2.tv_sec - t1.tv_sec) +
-	(double) (t2.tv_usec - t1.tv_usec) / 1000000.0;
 }
 
 /*

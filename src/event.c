@@ -33,7 +33,7 @@
 
 /* The list of event processes */
 struct ev_entry {
-    EVH *func;
+    EVH func;
     void *arg;
     const char *name;
     time_t when;
@@ -43,7 +43,7 @@ struct ev_entry {
 static struct ev_entry *tasks = NULL;
 
 void
-eventAdd(const char *name, EVH * func, void *arg, time_t when)
+eventAdd(const char *name, EVH func, void *arg, time_t when)
 {
     struct ev_entry *event = xcalloc(1, sizeof(struct ev_entry));
     struct ev_entry **E;
@@ -51,7 +51,7 @@ eventAdd(const char *name, EVH * func, void *arg, time_t when)
     event->arg = arg;
     event->name = name;
     event->when = squid_curtime + when;
-    debug(41, 7) ("eventAdd: Adding '%s', in %d seconds\n", name, when);
+    debug(41, 3, "eventAdd: Adding '%s', in %d seconds\n", name, when);
     /* Insert after the last event with the same or earlier time */
     for (E = &tasks; *E; E = &(*E)->next) {
 	if ((*E)->when > event->when)
@@ -62,11 +62,11 @@ eventAdd(const char *name, EVH * func, void *arg, time_t when)
 }
 
 void
-eventDelete(EVH * func, void *arg)
+eventDelete(EVH func, void *arg)
 {
     struct ev_entry **E;
     struct ev_entry *event;
-    for (E = &tasks; (event = *E) != NULL; E = &(*E)->next) {
+    for (E = &tasks; (event = *E); E = &(*E)->next) {
 	if (event->func != func)
 	    continue;
 	if (event->arg != arg)
@@ -82,13 +82,13 @@ void
 eventRun(void)
 {
     struct ev_entry *event = NULL;
-    EVH *func;
+    EVH func;
     void *arg;
     if ((event = tasks) == NULL)
 	return;
     if (event->when > squid_curtime)
 	return;
-    debug(41, 7) ("eventRun: Running '%s'\n", event->name);
+    debug(41, 3, "eventRun: Running '%s'\n", event->name);
     func = event->func;
     arg = event->arg;
     event->func = NULL;

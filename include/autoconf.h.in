@@ -40,10 +40,6 @@
 /* Define if you have the ANSI C header files.  */
 #undef STDC_HEADERS
 
-/* Define if your processor stores words with the most significant
-   byte first (like Motorola and SPARC, unlike Intel and VAX).  */
-#undef WORDS_BIGENDIAN
-
 /* Define if struct tm has tm_gmtoff member */
 #undef HAVE_TM_GMTOFF
 
@@ -88,9 +84,6 @@
 
 /* Define if we should use GNU regex */
 #undef USE_GNUREGEX
-
-/* signed size_t, grr */
-#undef ssize_t
 
 /* The number of bytes in a int.  */
 #undef SIZEOF_INT
@@ -173,9 +166,6 @@
 /* Define if you have the sigaction function.  */
 #undef HAVE_SIGACTION
 
-/* Define if you have the snprintf function.  */
-#undef HAVE_SNPRINTF
-
 /* Define if you have the srand48 function.  */
 #undef HAVE_SRAND48
 
@@ -197,9 +187,6 @@
 /* Define if you have the timegm function.  */
 #undef HAVE_TIMEGM
 
-/* Define if you have the vsnprintf function.  */
-#undef HAVE_VSNPRINTF
-
 /* Define if you have the <alloca.h> header file.  */
 #undef HAVE_ALLOCA_H
 
@@ -208,9 +195,6 @@
 
 /* Define if you have the <arpa/nameser.h> header file.  */
 #undef HAVE_ARPA_NAMESER_H
-
-/* Define if you have the <assert.h> header file.  */
-#undef HAVE_ASSERT_H
 
 /* Define if you have the <bstring.h> header file.  */
 #undef HAVE_BSTRING_H
