@@ -118,8 +118,9 @@
 --  Output:   None.
 --
 --------------------------------------------------------------------------*/
-void
-init_stack(Stack * stack, int size)
+void init_stack(stack, size)
+     Stack *stack;
+     int size;
 {
     stack->stack_size = size;
     stack->base = xcalloc(size, sizeof(void **));
@@ -138,8 +139,9 @@ init_stack(Stack * stack, int size)
 --  Output:   None.
 --
 --------------------------------------------------------------------------*/
-void
-push(Stack * stack, void *data)
+void push(stack, data)
+     Stack *stack;
+     void *data;
 {
     if (current_stacksize(stack) == stack->stack_size) {
 	safe_free(data);
@@ -160,8 +162,8 @@ push(Stack * stack, void *data)
 --  Output:   returns 1 if stack is empty.
 --
 --------------------------------------------------------------------------*/
-int
-empty_stack(Stack * stack)
+int empty_stack(stack)
+     Stack *stack;
 {
     return stack->top == stack->base;
 }
@@ -176,8 +178,8 @@ empty_stack(Stack * stack)
 --  Output:   returns 1 if stack is full.
 --
 --------------------------------------------------------------------------*/
-int
-full_stack(Stack * stack)
+int full_stack(stack)
+     Stack *stack;
 {
     int full = (current_stacksize(stack) == stack->stack_size);
     return (full);
@@ -194,8 +196,8 @@ full_stack(Stack * stack)
 --  Output:   None.
 --
 --------------------------------------------------------------------------*/
-void *
-pop(Stack * stack)
+void *pop(stack)
+     Stack *stack;
 {
     void *p;
     if (stack->top == stack->base)
@@ -204,10 +206,4 @@ pop(Stack * stack)
     p = *stack->top;
     *stack->top = NULL;
     return p;
-}
-
-void
-stackFreeMemory(Stack * stack)
-{
-    safe_free(stack->base);
 }

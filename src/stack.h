@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -119,6 +118,5 @@ extern int empty_stack _PARAMS((Stack *));
 extern int full_stack _PARAMS((Stack *));
 extern void push _PARAMS((Stack *, void *));
 extern void init_stack _PARAMS((Stack *, int));
-extern void stackFreeMemory _PARAMS((Stack *));
 
 #endif /* _STACK_H_ */

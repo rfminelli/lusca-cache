@@ -111,7 +111,7 @@
 typedef enum {
     HIER_NONE,
     HIER_DIRECT,
-    HIER_SIBLING_HIT,
+    HIER_NEIGHBOR_HIT,
     HIER_PARENT_HIT,
     HIER_SINGLE_PARENT,
     HIER_FIRSTUP_PARENT,
@@ -119,15 +119,17 @@ typedef enum {
     HIER_FIRST_PARENT_MISS,
     HIER_LOCAL_IP_DIRECT,
     HIER_FIREWALL_IP_DIRECT,
+    HIER_DEAD_PARENT,
+    HIER_DEAD_NEIGHBOR,
+    HIER_REVIVE_PARENT,
+    HIER_REVIVE_NEIGHBOR,
     HIER_NO_DIRECT_FAIL,
     HIER_SOURCE_FASTEST,
-    HIER_SIBLING_UDP_HIT_OBJ,
-    HIER_PARENT_UDP_HIT_OBJ,
+    HIER_UDP_HIT_OBJ,
     HIER_MAX
 } hier_code;
 
 typedef enum {
-    EDGE_NONE,
     EDGE_SIBLING,
     EDGE_PARENT
 } neighbor_t;
@@ -139,7 +141,6 @@ typedef struct _dom_list {
     char *domain;
     int do_ping;		/* boolean */
     struct _dom_list *next;
-    neighbor_t neighbor_type;
 } dom_list;
 
 /* bitfields for edge->options */
@@ -160,7 +161,6 @@ struct _edge {
 	int fetches;
 	int rtt;
 	int counts[ICP_OP_END];
-	int ignored_replies;
     } stats;
 
     u_short icp_port;
@@ -170,7 +170,9 @@ struct _edge {
     struct _acl_list *acls;
     int options;
     int weight;
+#ifdef USE_MULTICAST
     int mcast_ttl;
+#endif				/* USE_MULTICAST */
     time_t last_fail_time;	/* detect down dumb caches */
     struct in_addr addresses[10];
     int n_addresses;
@@ -193,16 +195,12 @@ struct neighbor_cf {
     int icp_port;
     int options;
     int weight;
+#ifdef USE_MULTICAST
     int mcast_ttl;
+#endif				/* USE_MULTICAST */
     dom_list *domains;
     struct _acl_list *acls;
     struct neighbor_cf *next;
-};
-
-struct _hierarchyLogData {
-    hier_code code;
-    char *host;
-    int timeout;
 };
 
 extern edge *getFirstEdge _PARAMS((void));
@@ -210,16 +208,20 @@ extern edge *getFirstUpParent _PARAMS((request_t *));
 extern edge *getNextEdge _PARAMS((edge *));
 extern edge *getSingleParent _PARAMS((request_t *, int *n));
 extern int neighborsUdpPing _PARAMS((protodispatch_data *));
-extern void neighbors_cf_domain _PARAMS((char *, char *, neighbor_t));
+extern void neighbors_cf_domain _PARAMS((char *, char *));
 extern void neighbors_cf_acl _PARAMS((char *, char *));
-extern neighbors *neighbors_create _PARAMS((void));
-extern void hierarchyNote _PARAMS((request_t *, hier_code, int, char *));
+extern neighbors *neighbors_create _PARAMS(());
+extern void hierarchy_log_append _PARAMS((StoreEntry *, hier_code, int, char *));
 extern void neighborsUdpAck _PARAMS((int, char *, icp_common_t *, struct sockaddr_in *, StoreEntry *, char *, int));
+#ifndef USE_MULTICAST
+extern void neighbors_cf_add _PARAMS((char *, char *, int, int, int, int));
+#else
 extern void neighbors_cf_add _PARAMS((char *, char *, int, int, int, int, int));
+#endif /* USE_MULTICAST */
 extern void neighbors_init _PARAMS((void));
 extern void neighbors_open _PARAMS((int));
+extern void neighbors_rotate_log _PARAMS((void));
 extern void neighborsDestroy _PARAMS((void));
-extern edge *neighborFindByName _PARAMS((char *));
 
 extern char *hier_strings[];
 

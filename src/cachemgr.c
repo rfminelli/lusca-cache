@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -195,7 +194,6 @@
 #include <sys/select.h>
 #endif
 
-#include "ansiproto.h"
 #include "util.h"
 
 #define MAX_ENTRIES 10000
@@ -204,13 +202,11 @@
 #define FALSE 0
 #endif
 #ifndef TRUE
-#define TRUE 1
+#define TRUE !FALSE
 #endif
 
-#if 0
 #define LF 10
 #define CR 13
-#endif
 
 #ifndef INADDR_NONE
 #define INADDR_NONE -1
@@ -220,20 +216,13 @@ typedef enum {
     INFO,
     CACHED,
     SERVER,
-    CLIENTS,
     LOG,
     PARAM,
-    STATS_I,
-    STATS_F,
-    STATS_D,
-    STATS_R,
+    STATS_G,
     STATS_O,
     STATS_VM,
     STATS_U,
     STATS_IO,
-    STATS_HDRS,
-    STATS_FDS,
-    STATS_NETDB,
     SHUTDOWN,
     REFRESH,
 #ifdef REMOVE_OBJECT
@@ -247,74 +236,36 @@ static char *op_cmds[] =
     "info",
     "squid.conf",
     "server_list",
-    "client_list",
     "log",
     "parameter",
-    "stats/ipcache",
-    "stats/fqdncache",
-    "stats/dns",
-    "stats/redirector",
+    "stats/general",
     "stats/objects",
     "stats/vm_objects",
     "stats/utilization",
     "stats/io",
-    "stats/reply_headers",
-    "stats/filedescriptors",
-    "stats/netdb",
     "shutdown",
-    "refresh",
+    "<refresh>",
 #ifdef REMOVE_OBJECT
-    "remove",
+    "<remove>",
 #endif
-    "unknown"
+    "<maxop>"
 };
 
-static char *op_cmds_descr[] =
+typedef struct {
+    char *name;
+    char *val;
+} entry;
+
+int hasTables = FALSE;
+
+char *script_name = "/cgi-bin/cachemgr.cgi";
+char *progname = NULL;
+
+static int client_comm_connect _PARAMS((int, char *, int));
+
+void print_trailer()
 {
-    "Cache Information",
-    "Cache Configuration File",
-    "Cache Server List",
-    "Cache Client List",
-    "Cache Log",
-    "Cache Parameters",
-    "IP Cache Contents",
-    "FQDN Cache Contents",
-    "DNS Server Statistics",
-    "Redirector Statistics",
-    "Objects",
-    "VM Objects",
-    "Utilization",
-    "I/O",
-    "HTTP Reply Headers",
-    "Filedescriptor Usage",
-    "Network Probe Database",
-    "Shutdown Cache (password required)",
-    "Refresh Object (URL required)",
-#ifdef REMOVE_OBJECT
-    "Remove Object (URL required)",
-#endif
-    "Unknown Operation"
-};
-
-static int hasTables = FALSE;
-
-static char *script_name = "/cgi-bin/cachemgr.cgi";
-static char *w_space = " \t\n";
-static char *progname = NULL;
-static time_t now;
-
-static char x2c _PARAMS((char *));
-static int client_comm_connect _PARAMS((int sock, char *dest_host, u_short dest_port));
-static void print_trailer _PARAMS((void));
-static void noargs_html _PARAMS((char *, int, char *));
-static void unescape_url _PARAMS((char *));
-static void plustospace _PARAMS((char *));
-static void parse_object _PARAMS((char *));
-static char *describeTimeSince _PARAMS((time_t then));
-
-static void
-print_trailer(void)
-{
+    time_t now = time(NULL);
     static char tbuf[128];
     struct tm *gmt;
 
@@ -328,63 +279,42 @@ print_trailer(void)
     printf("</ADDRESS></BODY></HTML>\n");
 }
 
-
-static void
-print_option(op_t current_opt, op_t opt_nr)
+void noargs_html()
 {
-    printf("<OPTION%sVALUE=\"%s\">%s\n",
-	current_opt == opt_nr ? " SELECTED " : " ",
-	op_cmds[opt_nr],
-	op_cmds_descr[opt_nr]);
-}
-
-
-static void
-noargs_html(char *host, int port, char *url)
-{
-    op_t op = INFO;
-
     printf("\r\n\r\n");
     printf("<HTML><HEAD><TITLE>Cache Manager Interface</TITLE></HEAD>\n");
     printf("<BODY><H1>Cache Manager Interface</H1>\n");
-    printf("<P>This is a WWW interface to the instrumentation interface\n");
-    printf("for the Squid object cache.</P>\n");
+    printf("<p>This is a WWW interface to the instrumentation interface\n");
+    printf("for the Squid object cache.</p>\n");
     printf("<HR>\n");
     printf("<PRE>\n");
     printf("<FORM METHOD=\"POST\" ACTION=\"%s\">\n", script_name);
     printf("<STRONG>Cache Host:</STRONG><INPUT NAME=\"host\" ");
-    printf("SIZE=30 VALUE=\"%s\"><BR>\n", host);
+    printf("SIZE=30 VALUE=\"%s\"><BR>\n", CACHEMGR_HOSTNAME);
     printf("<STRONG>Cache Port:</STRONG><INPUT NAME=\"port\" ");
-    printf("SIZE=30 VALUE=\"%d\"><BR>\n", port);
+    printf("SIZE=30 VALUE=\"%d\"><BR>\n", CACHE_HTTP_PORT);
     printf("<STRONG>Password  :</STRONG><INPUT TYPE=\"password\" ");
     printf("NAME=\"password\" SIZE=30 VALUE=\"\"><BR>\n");
     printf("<STRONG>URL       :</STRONG><INPUT NAME=\"url\" ");
-    printf("SIZE=30 VALUE=\"%s\"><BR>\n", url);
+    printf("SIZE=30 VALUE=\"\"><BR>\n");
     printf("<STRONG>Operation :</STRONG>");
     printf("<SELECT NAME=\"operation\">\n");
-    print_option(op, INFO);
-    print_option(op, CACHED);
-    print_option(op, PARAM);
+    printf("<OPTION SELECTED VALUE=\"info\">Cache Information\n");
+    printf("<OPTION VALUE=\"squid.conf\">Cache Configuration File\n");
+    printf("<OPTION VALUE=\"parameter\">Cache Parameters\n");
 #ifdef MENU_SHOW_LOG
-    print_option(op, LOG);
+    printf("<OPTION VALUE=\"log\">Cache Log\n");
 #endif
-    print_option(op, STATS_U);
-    print_option(op, STATS_IO);
-    print_option(op, STATS_HDRS);
-    print_option(op, STATS_FDS);
-    print_option(op, STATS_NETDB);
-    print_option(op, STATS_O);
-    print_option(op, STATS_VM);
-    print_option(op, SERVER);
-    print_option(op, CLIENTS);
-    print_option(op, STATS_I);
-    print_option(op, STATS_F);
-    print_option(op, STATS_D);
-    print_option(op, STATS_R);
-    print_option(op, SHUTDOWN);
-    print_option(op, REFRESH);
+    printf("<OPTION VALUE=\"stats/utilization\">Utilization\n");
+    printf("<OPTION VALUE=\"stats/io\">I/O\n");
+    printf("<OPTION VALUE=\"stats/objects\">Objects\n");
+    printf("<OPTION VALUE=\"stats/vm_objects\">VM_Objects\n");
+    printf("<OPTION VALUE=\"server_list\">Cache Server List\n");
+    printf("<OPTION VALUE=\"stats/general\">IP Cache Contents\n");
+    printf("<OPTION VALUE=\"shutdown\">Shutdown Cache (password required)\n");
+    printf("<OPTION VALUE=\"refresh\">Refresh Object (URL required)\n");
 #ifdef REMOVE_OBJECT
-    print_option(op, REMOVE);
+    printf("<OPTION VALUE=\"remove\">Remove Object (URL required)\n");
 #endif
     printf("</SELECT><BR>\n");
     printf("<HR>\n");
@@ -393,10 +323,8 @@ noargs_html(char *host, int port, char *url)
     print_trailer();
 }
 
-#if 0
 /* A utility function from the NCSA httpd cgi-src utils.c */
-char *
-makeword(char *line, char stop)
+char *makeword(char *line, char stop)
 {
     int x = 0, y;
     char *word = xmalloc(sizeof(char) * (strlen(line) + 1));
@@ -409,13 +337,12 @@ makeword(char *line, char stop)
 	++x;
     y = 0;
 
-    while ((line[y++] = line[x++]) != '\0');
+    while ((line[y++] = line[x++]));
     return word;
 }
 
 /* A utility function from the NCSA httpd cgi-src utils.c */
-char *
-fmakeword(FILE * f, char stop, int *cl)
+char *fmakeword(FILE * f, char stop, int *cl)
 {
     int wsize = 102400;
     char *word = NULL;
@@ -440,11 +367,9 @@ fmakeword(FILE * f, char stop, int *cl)
     }
     /* NOTREACHED */
 }
-#endif
 
 /* A utility function from the NCSA httpd cgi-src utils.c */
-static char
-x2c(char *what)
+char x2c(char *what)
 {
     char digit;
 
@@ -455,8 +380,7 @@ x2c(char *what)
 }
 
 /* A utility function from the NCSA httpd cgi-src utils.c */
-static void
-unescape_url(char *url)
+void unescape_url(char *url)
 {
     int x, y;
 
@@ -470,8 +394,7 @@ unescape_url(char *url)
 }
 
 /* A utility function from the NCSA httpd cgi-src utils.c */
-static void
-plustospace(char *str)
+void plustospace(char *str)
 {
     int x;
 
@@ -480,145 +403,105 @@ plustospace(char *str)
 	    str[x] = ' ';
 }
 
-#define ONE_SECOND (1)
-#define ONE_MINUTE (ONE_SECOND*60)
-#define ONE_HOUR (ONE_MINUTE*60)
-#define ONE_DAY (ONE_HOUR*24)
-#define ONE_WEEK (ONE_DAY*7)
-#define ONE_MONTH (ONE_DAY*30)
-#define ONE_YEAR (ONE_DAY*365)
 
-static char *
-describeTimeSince(time_t then)
+void parse_object(char *string)
 {
-    time_t delta = now - then;
-    static char buf[128];
-    static char buf2[128];
-    char *fmt = "%s ago";
-    buf[0] = '\0';
-    if (delta < 0) {
-	delta = (-delta);
-	fmt = "in %s";
-    }
-    if (delta < ONE_MINUTE)
-	sprintf(buf, "%ds", (int) (delta / ONE_SECOND));
-    else if (delta < ONE_HOUR)
-	sprintf(buf, "%dm", (int) (delta / ONE_MINUTE));
-    else if (delta < ONE_DAY)
-	sprintf(buf, "%dh", (int) (delta / ONE_HOUR));
-    else if (delta < ONE_WEEK)
-	sprintf(buf, "%dD", (int) (delta / ONE_DAY));
-    else if (delta < ONE_MONTH)
-	sprintf(buf, "%dW", (int) (delta / ONE_WEEK));
-    else if (delta < ONE_YEAR)
-	sprintf(buf, "%dM", (int) (delta / ONE_MONTH));
-    else
-	sprintf(buf, "%dY", (int) (delta / ONE_YEAR));
-    sprintf(buf2, fmt, buf);
-    return buf2;
-}
-
-static void
-parse_object(char *string)
-{
-    char *tbuf = NULL;
-    char *store_status = NULL;
-    char *mem_status = NULL;
-    char *swap_status = NULL;
-    char *ping_status = NULL;
-    char *lock_count = NULL;
-    char *flags = NULL;
-    char *last_verified = NULL;
-    char *last_use = NULL;
-    char *last_modified = NULL;
-    char *expires = NULL;
-    char *refcount = NULL;
-    char *clients = NULL;
-    char *size = NULL;
+    char *tmp_line = NULL;
     char *url = NULL;
+    char *token = NULL;
+    char *store_time = NULL;
+    char *last_ref = NULL;
+    char *ttl = NULL;
+    char *sto = NULL;
+    char *status = NULL;
+    char *obj_status = NULL;
+    char *w_space = " \t\n";
+    int obj_size;
+    int ref_cnt;
 
-    tbuf = xstrdup(string);
+    /* Use tmp_line as a temporary pointer to the input line */
+    tmp_line = string;
 
-    if ((store_status = strtok(tbuf, w_space)) == NULL)
-	goto parse_obj_done;
-    if ((mem_status = strtok(NULL, w_space)) == NULL)
-	goto parse_obj_done;
-    if ((swap_status = strtok(NULL, w_space)) == NULL)
-	goto parse_obj_done;
-    if ((ping_status = strtok(NULL, w_space)) == NULL)
-	goto parse_obj_done;
-    if ((lock_count = strtok(NULL, w_space)) == NULL)
-	goto parse_obj_done;
-    if ((flags = strtok(NULL, w_space)) == NULL)
-	goto parse_obj_done;
-    if ((last_verified = strtok(NULL, w_space)) == NULL)
-	goto parse_obj_done;
-    if ((last_use = strtok(NULL, w_space)) == NULL)
-	goto parse_obj_done;
-    if ((last_modified = strtok(NULL, w_space)) == NULL)
-	goto parse_obj_done;
-    if ((expires = strtok(NULL, w_space)) == NULL)
-	goto parse_obj_done;
-    if ((refcount = strtok(NULL, w_space)) == NULL)
-	goto parse_obj_done;
-    if ((clients = strtok(NULL, w_space)) == NULL)
-	goto parse_obj_done;
-    if ((size = strtok(NULL, w_space)) == NULL)
-	goto parse_obj_done;
-    if ((url = strtok(NULL, w_space)) == NULL)
-	goto parse_obj_done;
+    /* Parse out the url */
+    url = strtok(tmp_line, w_space);
+
+    if (!url)
+	return;
 
 #if !ALL_OBJECTS
     if (!strncmp(url, "cache_object", 12))
-	goto parse_obj_done;
+	return;
     if (!strncmp(url, "POST", 4))
-	goto parse_obj_done;
+	return;
 #endif
 
-    printf("<LI><A HREF=\"%s\">%s</A><BR>",
-	url, url);
-    printf("Verified %s, ", describeTimeSince((time_t) atoi(last_verified + 3)));
-    printf("Used %s, ", describeTimeSince((time_t) atoi(last_use + 3)));
-    printf("Modified %s, ", describeTimeSince((time_t) atoi(last_modified + 3)));
-    printf("Expires %s,<BR>", describeTimeSince((time_t) atoi(expires + 3)));
-    printf("%d bytes, %d accesses, %d active clients,<BR>",
-	atoi(size),
-	atoi(refcount),
-	atoi(clients));
-    printf("%s, %s, %s, %s,<BR>",
-	store_status,
-	mem_status,
-	swap_status,
-	ping_status);
-    printf("%d Locks, Flags: %s\n",
-	atoi(lock_count),
-	flags);
+    tmp_line = NULL;
 
-  parse_obj_done:
-    xfree(tbuf);
+    token = strtok(tmp_line, w_space);
+    sscanf(token, "%d", &obj_size);
+
+    token = strtok(tmp_line, w_space);
+    store_time = strdup(token);
+
+    token = strtok(tmp_line, w_space);
+    obj_status = strdup(token);
+
+    token = strtok(tmp_line, w_space);
+    last_ref = strdup(token);
+
+    token = strtok(tmp_line, w_space);
+    ttl = strdup(token);
+
+    token = strtok(tmp_line, w_space);
+    /* Active */
+
+    token = strtok(tmp_line, w_space);
+    sscanf(token, "%d", &ref_cnt);
+
+    token = strtok(tmp_line, w_space);
+    sto = strdup(token);
+
+    token = strtok(tmp_line, w_space);
+    status = strdup(token);
+
+    printf("<LI>Cache: <A HREF=\"%s\">%s</A><BR>",
+	url, url);
+    printf("Size: %d bytes, TTL: %s ,<BR>",
+	obj_size, ttl);
+    printf("Stored: %s, %s ago, %s %s,<BR>",
+	sto, store_time, obj_status, status);
+    printf("Refs: %d, Referenced %s hh:mm:ss ago</LI>\n",
+	ref_cnt, last_ref);
+
+    free(ttl);
+    free(store_time);
+    free(last_ref);
+    free(sto);
+    free(status);
 }
 
-int
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
-    static char hostname[256] = "";
-    static char operation[256] = "";
-    static char password[256] = "";
-    static char url[4096] = "";
+    static char hostname[256];
+    static char operation[256];
+    static char password[256];
+    static char url[4096];
     static char msg[1024];
     static char buf[4096];
     static char reserve[4096];
     static char s1[255];
     static char s2[255];
-    char *buffer = NULL;
     char *time_string = NULL;
     char *agent = NULL;
     char *s = NULL;
+    int got_data = 0;
+    int x;
+    int cl;
     int conn;
     int len;
     int bytesWritten;
     int portnum = CACHE_HTTP_PORT;
-    op_t op;
+    int op = 0;
     int p_state;
     int n_loops;
     int cpy_ind;
@@ -628,80 +511,17 @@ main(int argc, char *argv[])
     int d1, d2, d3, d4, d5, d6, d7;
     int single = TRUE;
     float f1;
+    time_t time_val;
+    entry entries[MAX_ENTRIES];
 
-    now = time(NULL);
     if ((s = strrchr(argv[0], '/')))
-	progname = xstrdup(s + 1);
+	progname = strdup(s + 1);
     else
-	progname = xstrdup(argv[0]);
+	progname = strdup(argv[0]);
     if ((s = getenv("SCRIPT_NAME")) != NULL) {
-	script_name = xstrdup(s);
+	script_name = strdup(s);
     }
-    strcpy(hostname, CACHEMGR_HOSTNAME);
-
-    /* a POST request */
-    if ((s = getenv("REQUEST_METHOD")) && !strcasecmp(s, "POST") &&
-	(s = getenv("CONTENT_LENGTH")) && (len = atoi(s)) > 0) {
-	buffer = xmalloc(len + 1);
-	fread(buffer, len, 1, stdin);
-	buffer[len] = '\0';
-	/* a GET request */
-    } else if ((s = getenv("QUERY_STRING"))) {
-	/* convert hostname:portnum to host=hostname&port=portnum */
-	if (*s && !strchr(s, '=') && !strchr(s, '&')) {
-	    char *p;
-	    buffer = xmalloc(strlen(s) + sizeof "host=&port=");
-	    if ((p = strchr(s, ':')))
-		if (p != s) {
-		    *p = '\0';
-		    sprintf(buffer, "host=%s&port=%s", s, p + 1);
-		} else {
-		    sprintf(buffer, "port=%s", p + 1);
-	    } else
-		sprintf(buffer, "host=%s", s);
-	} else {
-	    buffer = xstrdup(s);
-	}
-	/* no CGI parameters */
-    } else {
-	buffer = xstrdup("");
-    }
-
     printf("Content-type: text/html\r\n\r\n");
-
-    for (s = strtok(buffer, "&"); s; s = strtok(0, "&")) {
-	char *v;
-
-	plustospace(s);
-	unescape_url(s);
-	if ((v = strchr(s, '=')) != NULL)
-	    *v++ = '\0';
-	else
-	    v = s;
-
-	if (!strcmp(s, "host")) {
-	    strncpy(hostname, v, sizeof hostname);
-	    hostname[sizeof hostname - 1] = '\0';
-	} else if (!strcmp(s, "operation")) {
-	    strncpy(operation, v, sizeof operation);
-	    operation[sizeof operation - 1] = '\0';
-	} else if (!strcmp(s, "password")) {
-	    strncpy(password, v, sizeof password);
-	    password[sizeof password - 1] = '\0';
-	} else if (!strcmp(s, "url")) {
-	    strncpy(url, v, sizeof url);
-	    url[sizeof url - 1] = '\0';
-	} else if (!strcmp(s, "port")) {
-	    portnum = atoi(v);
-	} else {
-	    printf("<P><STRONG>Unknown CGI parameter: %s</STRONG></P>\n",
-		s);
-	    noargs_html(hostname, portnum, url);
-	    exit(0);
-	}
-    }
-    xfree(buffer);
-
     if ((agent = getenv("HTTP_USER_AGENT")) != NULL) {
 	if (!strncasecmp(agent, "Mozilla", 7) ||
 	    !strncasecmp(agent, "OmniWeb/2", 9) ||
@@ -709,41 +529,104 @@ main(int argc, char *argv[])
 	    hasTables = TRUE;
 	}
     }
-    if (!operation[0] || !strcmp(operation, "empty")) {		/* prints HTML form if no args */
-	noargs_html(hostname, portnum, url);
+    hostname[0] = '\0';
+    if ((s = getenv("CONTENT_LENGTH")) == NULL) {
+	noargs_html();
+	exit(0);
+    }
+    cl = atoi(s);
+    password[0] = url[0] = '\0';
+    for (x = 0; cl && (!feof(stdin)); x++) {
+	got_data = 1;
+	entries[x].val = fmakeword(stdin, '&', &cl);
+	plustospace(entries[x].val);
+	unescape_url(entries[x].val);
+	entries[x].name = makeword(entries[x].val, '=');
+	if (!strncmp(entries[x].name, "host", 4))
+	    strncpy(hostname, entries[x].val, 256);
+	else if (!strncmp(entries[x].name, "operation", 7))
+	    strncpy(operation, entries[x].val, 256);
+	else if (!strncmp(entries[x].name, "password", 8))
+	    strncpy(password, entries[x].val, 256);
+	else if (!strncmp(entries[x].name, "url", 3))
+	    strncpy(url, entries[x].val, 4096);
+	else if (!strncmp(entries[x].name, "port", 4))
+	    portnum = atoi(entries[x].val);
+	else {
+	    printf("<P><STRONG>Unknown CGI parameter: %s</STRONG></P>\n",
+		entries[x].name);
+	    noargs_html();
+	    exit(0);
+	}
+    }
+    if (!got_data) {		/* prints HTML form if no args */
+	noargs_html();
 	exit(0);
     }
     if (hostname[0] == '\0') {
 	printf("<H1>ERROR</H1>\n");
 	printf("<P><STRONG>You must provide a hostname!\n</STRONG></P><HR>");
-	noargs_html(hostname, portnum, url);
+	noargs_html();
 	exit(0);
     }
     close(0);
 
-    for (op = INFO; op != MAXOP; op = (op_t) (op + 1))
-	if (!strcmp(operation, op_cmds[op]) ||
-	    !strcmp(operation, op_cmds_descr[op]))
-	    break;
+    if (!strcmp(operation, "info") ||
+	!strcmp(operation, "Cache Information")) {
+	op = INFO;
+    } else if (!strcmp(operation, "squid.conf") ||
+	!strcmp(operation, "Cache Configuration File")) {
+	op = CACHED;
+    } else if (!strcmp(operation, "server_list") ||
+	!strcmp(operation, "Cache Server List")) {
+	op = SERVER;
+#ifdef MENU_SHOW_LOG
+    } else if (!strcmp(operation, "log") ||
+	!strcmp(operation, "Cache Log")) {
+	op = LOG;
+#endif
+    } else if (!strcmp(operation, "parameter") ||
+	!strcmp(operation, "Cache Parameters")) {
+	op = PARAM;
+    } else if (!strcmp(operation, "stats/general") ||
+	!strcmp(operation, "General Statistics")) {
+	op = STATS_G;
+    } else if (!strcmp(operation, "stats/vm_objects") ||
+	!strcmp(operation, "VM_Objects")) {
+	op = STATS_VM;
+    } else if (!strcmp(operation, "stats/objects") ||
+	!strcmp(operation, "Objects")) {
+	op = STATS_O;
+    } else if (!strcmp(operation, "stats/utilization") ||
+	!strcmp(operation, "Utilization")) {
+	op = STATS_U;
+    } else if (!strcmp(operation, "stats/io") ||
+	!strcmp(operation, "I/O")) {
+	op = STATS_IO;
+    } else if (!strcmp(operation, "shutdown")) {
+	op = SHUTDOWN;
+    } else if (!strcmp(operation, "refresh")) {
+	op = REFRESH;
+#ifdef REMOVE_OBJECT
+    } else if (!strcmp(operation, "remove")) {
+	op = REMOVE;
+#endif
+    } else {
+	printf("Unknown operation: %s\n", operation);
+	exit(0);
+    }
 
     switch (op) {
     case INFO:
     case CACHED:
     case SERVER:
-    case CLIENTS:
     case LOG:
     case PARAM:
-    case STATS_I:
-    case STATS_F:
-    case STATS_D:
-    case STATS_R:
+    case STATS_G:
     case STATS_O:
     case STATS_VM:
     case STATS_U:
     case STATS_IO:
-    case STATS_HDRS:
-    case STATS_FDS:
-    case STATS_NETDB:
 	sprintf(msg, "GET cache_object://%s/%s HTTP/1.0\r\n\r\n",
 	    hostname, op_cmds[op]);
 	break;
@@ -767,43 +650,38 @@ main(int argc, char *argv[])
 	/* NOTREACHED */
     }
 
-    time_string = ctime(&now);
+    time_val = time(NULL);
+    time_string = ctime(&time_val);
 
     printf("<HTML><HEAD><TITLE>Cache Manager: %s:%s:%d</TITLE></HEAD>\n",
 	operation, hostname, portnum);
     printf("<BODY><FORM METHOD=\"POST\" ACTION=\"%s\">\n", script_name);
     printf("<INPUT TYPE=\"submit\" VALUE=\"Refresh\">\n");
     printf("<SELECT NAME=\"operation\">\n");
-    printf("<OPTION VALUE=\"empty\">Empty Form\n");
-    print_option(op, INFO);
-    print_option(op, CACHED);
-    print_option(op, PARAM);
+    printf("<OPTION SELECTED VALUE=\"%s\">Current\n", operation);
+    printf("<OPTION VALUE=\"info\">Cache Information\n");
+    printf("<OPTION VALUE=\"squid.conf\">Cache Configuration File\n");
+    printf("<OPTION VALUE=\"parameter\">Cache Parameters\n");
 #ifdef MENU_SHOW_LOG
-    print_option(op, LOG);
+    printf("<OPTION VALUE=\"log\">Cache Log\n");
 #endif
-    print_option(op, STATS_U);
-    print_option(op, STATS_IO);
-    print_option(op, STATS_HDRS);
-    print_option(op, STATS_FDS);
-    print_option(op, STATS_NETDB);
-    print_option(op, STATS_O);
-    print_option(op, STATS_VM);
-    print_option(op, SERVER);
-    print_option(op, CLIENTS);
-    print_option(op, STATS_I);
-    print_option(op, STATS_F);
-    print_option(op, STATS_D);
-    print_option(op, STATS_R);
-    printf("</SELECT>\n");
+    printf("<OPTION VALUE=\"stats/utilization\">Utilization\n");
+    printf("<OPTION VALUE=\"stats/io\">I/O\n");
+    printf("<OPTION VALUE=\"stats/objects\">Objects\n");
+    printf("<OPTION VALUE=\"stats/vm_objects\">VM_Objects\n");
+    printf("<OPTION VALUE=\"server_list\">Cache Server List\n");
+    printf("<OPTION VALUE=\"stats/general\">IP Cache Contents\n");
+    printf("</SELECT>");
     printf("<INPUT TYPE=\"hidden\" NAME=\"host\" VALUE=\"%s\">\n", hostname);
     printf("<INPUT TYPE=\"hidden\" NAME=\"port\" VALUE=\"%d\">\n", portnum);
     printf("<INPUT TYPE=\"hidden\" NAME=\"password\" VALUE=\"NOT_PERMITTED\">\n");
-    printf("<INPUT TYPE=\"hidden\" NAME=\"url\" VALUE=\"%s\">\n", url);
-    printf("</FORM>\n");
+    printf("</FORM>");
+    printf("<p><em><A HREF=\"%s\">Empty form</A></em></p>\n", script_name);
     printf("<HR>\n");
 
-    printf("<H1>%s:  %s:%d</H1>\n", operation, hostname, portnum);
-    printf("<P>dated %s</P>\n", time_string);
+    printf("<H1>%s:  %s:%d</H1>\n", operation,
+	hostname, portnum);
+    printf("<p>dated %s</p>\n", time_string);
     printf("<PRE>\n");
 
     /* Connect to the server */
@@ -830,18 +708,11 @@ main(int argc, char *argv[])
     case INFO:
     case CACHED:
     case SERVER:
-    case CLIENTS:
     case LOG:
-    case STATS_I:
-    case STATS_F:
-    case STATS_D:
-    case STATS_R:
+    case STATS_G:
     case STATS_O:
     case STATS_VM:
     case STATS_IO:
-    case STATS_HDRS:
-    case STATS_FDS:
-    case STATS_NETDB:
     case SHUTDOWN:
     case REFRESH:
 	break;
@@ -899,21 +770,13 @@ main(int argc, char *argv[])
 
 	    /* Have an element of the list, so parse reserve[] accordingly */
 	    if (p_state == 3) {
-		int sn;
 		switch (op) {
 		case INFO:
 		case CACHED:
 		case SERVER:
-		case CLIENTS:
 		case LOG:
-		case STATS_I:
-		case STATS_F:
-		case STATS_D:
-		case STATS_R:
+		case STATS_G:
 		case STATS_IO:
-		case STATS_HDRS:
-		case STATS_FDS:
-		case STATS_NETDB:
 		case SHUTDOWN:
 		    p_state = 1;
 		    printf("%s", reserve);
@@ -934,17 +797,10 @@ main(int argc, char *argv[])
 		    break;
 		case STATS_U:
 		    p_state = 1;
-		    sn = sscanf(reserve, "%s %d %d %d %d %f %d %d %d",
+		    sscanf(reserve, "%s %d %d %d %d %f %d %d %d",
 			s1, &d1, &d2, &d3, &d4, &f1, &d5, &d6, &d7);
-		    if (sn == 1) {
-			if (hasTables)
-			    printf("<tr><td align=\"right\"><STRONG>%s</STRONG>\n", s1);
-			else
-			    printf("%s-Requests\n", s1);
-			break;
-		    }
 		    if (hasTables)
-			printf("<tr><td align=\"right\"><STRONG>%s</STRONG><td align=\"right\">%d<td align=\"right\">%d<td align=\"right\">%d<td align=\"right\">%d<td align=\"right\">%4.2f<td align=\"right\">%d<td align=\"right\">%d<td align=\"right\">%d\n",
+			printf("<tr><td align=\"right\"><B>%s</B><td align=\"right\">%d<td align=\"right\">%d<td align=\"right\">%d<td align=\"right\">%d<td align=\"right\">%4.2f<td align=\"right\">%d<td align=\"right\">%d<td align=\"right\">%d",
 			    s1, d1, d2, d3, d4, f1, d5, d6, d7);
 		    else
 			printf("%8s %7d %9d %9d %9d %4.2f %6d %9d %10d\n",
@@ -981,8 +837,10 @@ main(int argc, char *argv[])
     return 0;
 }
 
-static int
-client_comm_connect(int sock, char *dest_host, u_short dest_port)
+static int client_comm_connect(sock, dest_host, dest_port)
+     int sock;			/* Type of communication to use. */
+     char *dest_host;		/* Server's host name. */
+     u_short dest_port;		/* Server's port. */
 {
     struct hostent *hp;
     static struct sockaddr_in to_addr;

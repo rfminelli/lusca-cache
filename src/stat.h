@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -133,15 +132,11 @@ typedef struct _proto_stat {
 typedef struct _meta_data_stat {
     int hot_vm;
     int store_entries;
-    int mem_obj_count;
-    int mem_data_count;
+    int store_in_mem_objects;
     int ipcache_count;
-    int fqdncache_count;
-    int netdb_addrs;
-    int netdb_hosts;
+    int hash_links;
     int url_strings;
     int misc;
-    int client_info;
 } Meta_data;
 
 extern Meta_data meta_data;
@@ -150,89 +145,67 @@ struct _cacheinfo {
 
     /* information retrieval method */
     /* get a processed statistic object */
-    void (*stat_get) (struct _cacheinfo * c, char *req, StoreEntry * sentry);
+    void (*stat_get) _PARAMS((struct _cacheinfo * c, char *req, StoreEntry * sentry));
 
     /* get a processed info object */
-    void (*info_get) (struct _cacheinfo * c, StoreEntry * sentry);
+    void (*info_get) _PARAMS((struct _cacheinfo * c, StoreEntry * sentry));
 
     /* get a processed logfile object */
-    void (*log_get_start) (struct _cacheinfo * c, StoreEntry * sentry);
+    void (*log_get_start) _PARAMS((struct _cacheinfo * c, StoreEntry * sentry));
 
     /* get a processed logfile status */
-    void (*log_status_get) (struct _cacheinfo * c, StoreEntry * sentry);
+    void (*log_status_get) _PARAMS((struct _cacheinfo * c, StoreEntry * sentry));
 
     /* get a processed squid.conf object */
-    void (*squid_get_start) (struct _cacheinfo * c, StoreEntry * sentry);
+    void (*squid_get_start) _PARAMS((struct _cacheinfo * c, StoreEntry * sentry));
 
     /* get a parameter object */
-    void (*parameter_get) (struct _cacheinfo * c, StoreEntry * sentry);
-    void (*server_list) (struct _cacheinfo * c, StoreEntry * sentry);
+    void (*parameter_get) _PARAMS((struct _cacheinfo * c, StoreEntry * sentry));
+    void (*server_list) _PARAMS((struct _cacheinfo * c, StoreEntry * sentry));
 
 
     /* get a total bytes for object in cache */
-    int (*cache_size_get) (struct _cacheinfo * c);
+    int (*cache_size_get) _PARAMS((struct _cacheinfo * c));
 
     /* statistic update method */
 
-#if LOG_FULL_HEADERS
     /* add a transaction to system log */
-    void (*log_append) (struct _cacheinfo * obj,
-	char *url,
-	struct in_addr,
-	int size,
-	char *action,
-	char *method,
-	int http_code,
-	int msec,
-	char *ident,
-	struct _hierarchyLogData * hierData,
-	char *request_hdrs,
-	char *reply_hdrs);
-#else
-    /* add a transaction to system log */
-    void (*log_append) (struct _cacheinfo * obj,
-	char *url,
-	struct in_addr,
-	int size,
-	char *action,
-	char *method,
-	int http_code,
-	int msec,
-	char *ident,
-	struct _hierarchyLogData * hierData);
-#endif				/* LOG_FULL_HEADERS */
+    void (*log_append) _PARAMS((struct _cacheinfo * obj, char *url, char *id,
+	    int size, char *action, char *method, int http_code, int msec, hier_code));
 
     /* clear logfile */
-    void (*log_clear) (struct _cacheinfo * obj, StoreEntry * sentry);
+    void (*log_clear) _PARAMS((struct _cacheinfo * obj, StoreEntry * sentry));
 
     /* enable logfile */
-    void (*log_enable) (struct _cacheinfo * obj, StoreEntry * sentry);
+    void (*log_enable) _PARAMS((struct _cacheinfo * obj, StoreEntry * sentry));
 
     /* disable logfile */
-    void (*log_disable) (struct _cacheinfo * obj, StoreEntry * sentry);
+    void (*log_disable) _PARAMS((struct _cacheinfo * obj, StoreEntry * sentry));
 
     /* protocol specific stat update method */
     /* return a proto_id for a given url */
-         protocol_t(*proto_id) (char *url);
+         protocol_t(*proto_id) _PARAMS((char *url));
 
     /* a new object cached. update obj count, size */
-    void (*proto_newobject) (struct _cacheinfo * c, protocol_t proto_id, int len, int flag);
+    void (*proto_newobject) _PARAMS((struct _cacheinfo * c, protocol_t proto_id, int len, int flag));
 
     /* an object purged */
-    void (*proto_purgeobject) (struct _cacheinfo * c, protocol_t proto_id, int len);
+    void (*proto_purgeobject) _PARAMS((struct _cacheinfo * c, protocol_t proto_id, int len));
 
     /* an object is referred to. */
-    void (*proto_touchobject) (struct _cacheinfo * c, protocol_t proto_id, int len);
+    void (*proto_touchobject) _PARAMS((struct _cacheinfo * c, protocol_t proto_id, int len));
 
     /* a hit. update hit count, transfer byted. refcount */
-    void (*proto_count) (struct _cacheinfo * obj, protocol_t proto_id,
-	log_type);
+    void (*proto_hit) _PARAMS((struct _cacheinfo * obj, protocol_t proto_id));
+
+    /* a miss. update miss count. refcount */
+    void (*proto_miss) _PARAMS((struct _cacheinfo * obj, protocol_t proto_id));
 
     /* dummy Notimplemented object handler */
-    void (*NotImplement) (struct _cacheinfo * c, StoreEntry * sentry);
+    void (*NotImplement) _PARAMS((struct _cacheinfo * c, StoreEntry * sentry));
 
     /* stat table and data */
-    char logfilename[MAX_FILE_NAME_LEN];	/* logfile name */
+    char logfilename[256];	/* logfile name */
     int logfile_fd;		/* logfile fd */
     int logfile_access;		/* logfile access code */
     /* logfile status {enable, disable} */
@@ -250,20 +223,19 @@ struct _iostats {
 	int read_hist[16];
 	int writes;
 	int write_hist[16];
-    } Http, Ftp, Gopher, Wais;
+    } Http, Ftp;
 };
 
 extern struct _iostats IOStats;
 
-extern cacheinfo *HTTPCacheInfo;
-extern cacheinfo *ICPCacheInfo;
-extern volatile unsigned long ntcpconn;
-extern volatile unsigned long nudpconn;
+extern cacheinfo *CacheInfo;
+extern unsigned long ntcpconn;
+extern unsigned long nudpconn;
 extern char *open_bracket;
 extern char *close_bracket;
 
 extern void stat_init _PARAMS((cacheinfo **, char *));
 extern void stat_rotate_log _PARAMS((void));
-extern void statCloseLog _PARAMS((void));
+
 
 #endif /*STAT_H */

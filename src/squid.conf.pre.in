@@ -15,6 +15,7 @@
 #	"0".  May be overridden with -u on the command line.
 #icp_port @CACHE_ICP_PORT@
 
+#ifdef USE_MULTICAST
 #  TAG: mcast_groups
 #       This tag specifies a list of multicast groups which your
 #       server should join to receive multicasted ICP requests.
@@ -25,6 +26,7 @@
 #
 #mcast_groups 239.128.16.128
 
+#endif /* USE_MULTICAST */
 #  TAG: tcp_incoming_address
 #  TAG: tcp_outgoing_address
 #  TAG: udp_incoming_address
@@ -70,26 +72,27 @@
 #	#          hostname             type     port   port  options
 #	#          -------------------- -------- ----- -----  -----------
 #	cache_host bigserver.usc.edu    parent    3128  3130  [proxy-only]
-#	cache_host littleguy1.usc.edu   sibling   3128  3130  [proxy-only]
-#	cache_host littleguy1.usc.edu   sibling   3128  3130  [proxy-only]
+#	cache_host littleguy1.usc.edu   neighbor  3128  3130  [proxy-only]
+#	cache_host littleguy1.usc.edu   neighbor  3128  3130  [proxy-only]
 #
-#	      type:  either 'parent' or 'sibling'.
+#	      type:  either 'parent' or 'neighbor'.
 #
 #	proxy_port:  The port number where the cache listens for proxy
 #	             requests.
 #
-#	  icp_port:  Used for querying neighbor caches about
-#	             objects.  To have a non-ICP neighbor
+#	  icp_port:  Used for querying neighbor/parent caches about
+#	             objects.  To have a non-ICP neighbor/parent
 #	             specify '7' for the ICP port and make sure the
-#	             neighbor machine has the UDP echo port
+#	             neighbor/parent machine has the UDP echo port
 #	             enabled in its /etc/inetd.conf file.
 #
 #	    options: use 'proxy-only' to specify that objects fetched
 #		     from this cache should not be saved locally.
 #
-#		     use 'weight=n' to specify a weighted parent.
+#		     use 'weight=n' to specify a weighted neighbor.
 #		     The weight must be an integer.  The default weight
 #		     is 1, larger weights are favored more.
+#ifdef USE_MULTICAST
 #
 #                    use 'ttl=n' to specify a IP multicast TTL to use
 #                    when sending an ICP request to this address.
@@ -98,17 +101,19 @@
 #                    multicast groups are treated like regular parents and
 #                    neighbo[u]rs, except that we don't expect to see any
 #                    replies from them.
+#endif /* USE_MULTICAST */
 #
-#	NOTE: non-ICP neighbors must be specified as 'parent'.
+#	NOTE: when using a non-ICP neighbor/parent, there is no
+#	      difference between a neighbor and a parent.
 #
 #cache_host hostname type 3128 3130
 
 #  TAG: cache_host_domain
-#	Use to limit the domains for which a neighbor cache will be queried.
-#	Usage:
+#	Use to limit the domains for which a neighbor/parent cache
+#	will be queried.  Usage:
 #
-#	cache_host_domain cache-host [sibling|parent]	domain [domain ...]
-#	cache_host_domain cache-host [sibling|parent]	!domain
+#		cache_host_domain cache-host	domain [domain ...]
+#		cache_host_domain cache-host	!domain
 #
 #	For example, specifying
 #
@@ -129,14 +134,6 @@
 #		* There are no defaults.
 #		* There is also a 'cache_host_acl' tag in the ACL
 #		  section.
-#
-#	Modifying the neighbor type for specific domains is now
-#	possible.  You can treat a neighbor as a parent for some
-#	domains, and a sibling for others.  Simply add the keywords
-#	'sibling' or 'parent' before the domains.  For example:
-#
-#		cache_host_domain cache.foo.org parent .foo.org
-#		cache_host_domain cache.foo.org sibling .com
 
 #  TAG:	inside_firewall
 #	This tag specifies a list of domains inside your Internet
@@ -250,49 +247,22 @@
 #	to not query neighbor caches for certain objects.  You may
 #	list this option multiple times.
 #
-#	The default is to directly fetch URLs containing 'cgi-bin' or '?'.
+#	NOTE: this option will partially replace 'http_stop' etc, in a
+#	future release.
 #
-hierarchy_stoplist cgi-bin ?
-
-#  TAG: cache_stoplist
-#	A list of words which, if found in a URL, cause the object to
-#	immediately removed from the cache.  In other words, use this
-#	to force certain objects to never be cached.  You may list this
-#	option multiple times.
-#
-#	The default is to not cache URLs containing 'cgi-bin' or '?'.
-#
-cache_stoplist cgi-bin ?
+#hierarchy_stoplist
 
 # OPTIONS WHICH AFFECT THE CACHE SIZE
 #-----------------------------------------------------------------------------
 
 #
 #  TAG: cache_mem (in megabytes)       
-#	Maximum amout of VM used to store objects in memory.
-#	This includes:
-#		in-transit objects,
-#		negative-cached objects,
-#		"hot" objects
-#	The value of cache_mem is an upper limit on the size of the
-#	"in-memory object data" pool.  This is a pool of 4k pages used
-#	to hold object data.
-#
-#	In-transit objects have priority over the others.  When
-#	additional space is needed for incoming data, negative-cached
-#	and hot objects will be released.  In other words, the
-#	negative-cached and hot objects will fill up any unused space
-#	not needed for in-transit objects.
-#
-#	The values of cache_mem_low and cache_mem_high (below) can be
-#	used to tune the use of the memory pool.  When the high mark is
-#	reached, in-transit and hot objects will be released to clear
-#	space.  When an object transfer is completed, it will remain in
-#	memory only if the current memory usage is below the low water
-#	mark.
-#
-#	The default is 8 Megabytes.
-#cache_mem  8
+#	Maximum amout of virtual memory used to cache particularly hot
+#	objects.  Note the cache VM images will grow larger than this
+#	limit because other data are stored in VM besides just hot
+#	objects.  The default is 16 MB.
+#	
+#cache_mem  16
 
 #  TAG: cache_swap (in megabytes)
 #	Maximum about of disk space used by the cache.  The default is
@@ -325,21 +295,6 @@ cache_stoplist cgi-bin ?
 #cache_mem_low 75
 #cache_mem_high 90
 
-#  TAG: maximum_object_size
-#	Objects larger than this size will NOT be saved on disk.  The
-#	value is specified in kilobytes, and the default is 4MB.
-#
-#maximum_object_size 4096
-
-#  TAG: ipcache_size (number of entries)
-#  TAG: ipcache_low  (percent)
-#  TAG: ipcache_high (percent)
-#	The size, low-, and high-water marks for the IP cache.
-#
-#ipcache_size 1024
-#ipcache_low  90
-#ipcache_high 95
-
 
 # LOGFILE PATHNAMES AND CACHE DIRECTORIES
 #-----------------------------------------------------------------------------
@@ -362,6 +317,12 @@ cache_stoplist cgi-bin ?
 #	Cache logging file.  Set logging levels with "debug_options" below.
 #cache_log @DEFAULT_CACHE_LOG@
 
+#  TAG: cache_hierarchy_log 
+#	Hierachical caching access logfile.  It shows which parent,
+#	neighbor, or source host a request is satisfied from.
+#	To disable, enter "none".
+#cache_hierarchy_log @DEFAULT_HIERARCHY_LOG@
+
 #  TAG:	cache_store_log
 #	Logs the activities of the storage manager.  Shows which
 #	objects are ejected from the cache, and which objects are
@@ -372,26 +333,13 @@ cache_stoplist cgi-bin ?
 #	The Cache can emulate the log file format which many 'httpd'
 #	programs use.  To disable/enable this emulation, set 
 #	emulate_httpd_log to 'off' or 'on'.  The default 
-#	is to use the native log format.
+#	is to enable this emulation.
 #
-#emulate_httpd_log off
-
-#  TAG: log_mime_hdrs
-#	The Cache can record both the request and the response
-#	MIME headers for each HTTP transaction.  The headers are
-#	encoded safely and will appear as two bracketed fields
-#	at the end of the access log (for either the native
-#	or httpd-emulated log formats).  To enable this logging
-#	set log_mime_hdrs to 'on'.
-#
-#	NOTE: support for this may require you to define
-#	LOG_FULL_HEADERS before compiling.
-#
-#log_mime_hdrs off
+#emulate_httpd_log on
 
 #  TAG: pid_filename
 #	A pathname to write the process-id to.  There is no default.
-#pid_filename
+#pid_filename /tmp/squid.pid
 
 #  TAG: debug_options
 #	Logging options are set as section,level where each source file
@@ -400,56 +348,35 @@ cache_stoplist cgi-bin ?
 #	log file, so be careful.  The magic word "ALL" sets debugging
 #	levels for all sections.  We recommend normally running with
 #	"ALL,1".
-debug_options ALL,1
-
-#  TAG: ident_lookup
-#	If you wish to make an RFC931/ident lookup of the client username
-#	for each connection, enable this.  It is off by default.
-#
-#ident_lookup off
-
-#  TAG: log_fqdn
-#	Turn this on if you wish to log fully qualified domain names
-#	in the access.log.
-#log_fqdn off
-
-#  TAG: client_netmask
-#	A netmask for client addresses in logfiles and cachemgr output.
-#	Change this to protect the privacy of your cache clients.
-#
-#client_netmask 255.255.255.255
+#debug_options ALL,1
 
 
 # OPTIONS FOR EXTERNAL SUPPORT PROGRAMS
 #-----------------------------------------------------------------------------
 
-#  TAG: ftpget_program 
+#  TAG: cache_ftp_program 
 #	Where to find the 'ftpget' program that retrieves FTP data (HTTP
 #	and Gopher protocol support are built into the cache).  
 #
-#	To disable ftpget and the ability to retrieve FTP objects, set
-#	this to "none".  Note that ftpget is automatically disabled for
-#	http_accel mode.
-#
-#ftpget_program @DEFAULT_FTPGET@
+#cache_ftp_program @DEFAULT_FTPGET@
 
-#  TAG: ftpget_options
+#  TAG: cache_ftp_options
 #	Options for the 'ftpget' program.  Please run 'ftpget' without
 #	any arguments to see a list of options.  The default is
 #	no options.  An example is
 #	
-#	ftpget_options -n 60 -R -W
+#	cache_ftp_options -n 60 -R -W
 #
-#ftpget_options
+#cache_ftp_options
 
 # If you want the anonymous login password to be more informative
 # (and enable the use of picky ftp servers), set this to something
 # resonable for your domain, like wwwuser@somewhere.net
 #
 # The reason why this is domainless by default is that the
-# request can be made on the behalf of a user in any domain,
+# request can be made on the behalf of a user in any domain.
 # depending on how the cache is used.
-# Some ftp server also validate that the email address is valid
+# Some ftp server also validate that the email adress is valid
 # (for example perl.com).
 #
 #ftp_user squid@
@@ -465,89 +392,62 @@ debug_options ALL,1
 #	probably increase this value to at least 10.  The maximum
 #	is 32.  The default is 5.
 #
-#	To disable dnsservers, set this to 0.  NOTE, this is very
-#	strongly discouraged.  If you disable dnsservers your Squid
-#	process will BLOCK on DNS lookups!
-#
 #dns_children 5
-
-#  TAG: redirect_program 
-#	Specify the location of the executable for the URL redirector.
-#	Currently, you must provide your own redirector program.
-#	See the Release-Notes for how to write one.
-#	By default, the redirector is not used.
-#
-#redirect_program /bin/false
-
-#  TAG: redirect_children
-#	The number of redirector processes to spawn.
-#
-#redirect_children 5
 
 
 # OPTIONS FOR TUNING THE CACHE
 #-----------------------------------------------------------------------------
 
+#  TAG: http_stop, gopher_stop, ftp_stop 
+#	Stoplist for URL's.  URL's which contain these strings will be
+#	never be saved in the cache.
+#
+#	NOTE: these options will be removed in a future release, their
+#	functionality will be more appropriately provided by 'ttl_pattern'
+#	and 'hierarchy_stoplist'.
+#
+http_stop     /cgi-bin/
+http_stop     ?
+gopher_stop   ?
+
+#  TAG: ftp, gopher, http
+#	Object size limits (in MB) and default TTLs (in minutes) 
+#	per access type.
+#
+#	You cannot have a max object size that is greater than
+#	cache_mem.  We recommend that max object sizes are no greater
+#	than (cache_mem / 4).
+#
+#	Objects greater than max-obj-size will be proxied, but not
+#	cached.  
+#
+#	The defaults are:
+#
+# Access Type    Max Object Size    TTL (note: 4320 minutes = 3 days)
+# ---------      ----------------   -----------
+#gopher                  4            4320 
+#http                    4            4320 
+#ftp                     4            4320 
+
 #  TAG: wais_relay
 #	Relay WAIS request to host (1st arg) at port (2 arg).  
-#wais_relay localhost 8000
+#	Third argument is max object size.
+#wais_relay localhost 8000 4
 
 #  TAG: request_size
 #	Maximum allowed request size in kilobytes.  If people are using
 #	POST to upload files, then set this to the largest acceptable
 #	filesize plus a few extra kbytes.
 #
-#request_size 100
+request_size 100
 
-#  TAG: refresh_pattern		# case sensitive
-#  TAG: refresh_pattern/i	# case insensitive
+#  TAG: ttl_pattern		# case sensitive
+#  TAG: ttl_pattern/i		# case insensitive
+#	Selection of TTL's based on URL regular expressions (syntax
+#	is the POSIX standard).  There are no defaults.  Regular
+#	expressions are case-sensitive with 'ttl_pattern' and 
+#	case-insensitive with 'ttl_pattern/i'.
 #
-
-	Selection of refresh times based on URL regular expressions
-	(syntax is the POSIX standard).  Regular expressions are
-	case-sensitive with 'refresh_pattern' and case-insensitive with
-	'refresh_pattern/i'.
-
-	When there is a request for an object in the cache, we check
-	the timestamps to see if it is fresh enough.  To
-	accomplish this, we calculate these values:
-
-	'AGE' is how much the object has aged *since* it was retrieved:
-
-		AGE = NOW - OBJECT_DATE
-
-	'LM_AGE' is how old the object was *when* it was retrieved:
-
-		LM_AGE = OBJECT_DATE - LAST_MODIFIED_TIME
-
-	'LM_FACTOR' is the ratio of AGE to LM_AGE:
-
-		LM_FACTOR = AGE / LM_AGE
-
-	Additionally, the object may have an EXPIRES value from
-	the HTTP reply header.
-
-	Each 'refresh_pattern' line has three values:
-		MIN_AGE
-		PERCENT
-		MAX_AGE
-
-	A cached object is considered "fresh" if it meets one of these
-	criteria:
-
-		1) AGE <= MIN_AGE, or
-		2) NOW <= EXPIRES, and
-		   AGE < MAX_AGE, and
-		   LM_FACTOR < PERCENT
-
-	Or, putting it differently, an object is considered "stale" if:
-
-		1) AGE > MIN_AGE, and
-		2) NOW > EXPIRES, or
-		   AGE >= MAX_AGE, or
-		   LM_FACTOR >= PERCENT
-		
-
 #	The list of URL patterns are searched in the order listed here.
 #	All patterns in the list are checked and the last match is used.
 #	There are two ways to specify the TTL: an absolute value, and
@@ -580,8 +480,10 @@ debug_options ALL,1
 #	days.  Otherwise, an object will be cached for three days
 #	by default.
 #
+#	ttl_pattern    .                   4320        20%       4320
 #
-# EXAMPLES:
+#	Examples:
+#
 #	                                              Calculate TTL as
 #	                                Absolute      this percentage of
 #	        Regular Expression      TTL in        the object's age
@@ -591,10 +493,6 @@ debug_options ALL,1
 #ttl_pattern        ^ftp://                10080        20%      43200
 #ttl_pattern/i      \.gif$                  2880        50%      43200
 #ttl_pattern        /cgi-bin/                  0         0%      43200
-#
-# DEFAULTS:
-#
-#ttl_pattern        .                       4320        20%       4320
 
 
 #  TAG: quick_abort
@@ -604,23 +502,7 @@ debug_options ALL,1
 #	file descriptors by repeatedly aborting and re-requesting
 #	non-cachable objects.
 #	
-#	Usage: quick_abort    min-kbytes percent max-kbytes
-#
-#       When the user aborts a request, Squid will check the
-#	quick_abort values to the amount of data transfered until
-#	then.
-#
-#	If the transfer has less than 'min-kbytes' remaining, it
-#	will finish the retrieval.  Setting minlength to -1 will
-#	disable the quick_abort feature.
-#
-#	If the transfer has more than 'max-kbytes' remaining, it
-#	will abort the retrieval.
-#
-#	If more than 'percent' of the transfer has completed, it will
-#	finish the retrieval.
-#
-#quick_abort    -1 0 0
+#quick_abort    off
 
 #  TAG: negative_ttl (in minutes)         
 #	Time-to-Live (TTL) for failed requests.  Certain types of
@@ -708,20 +590,12 @@ debug_options ALL,1
 
 # Defining an Access List
 #
-# acl aclname acltype string1 ...
-# acl aclname acltype "file" ...
-#
-# when using "file", the file should contain one item per line
-#
-# acltype is one of src dst srcdomain dstdomain url_pattern urlpath_pattern
-#	            time port proto method browser
+# acl aclname src|domain|url_regex|urlpath_regex|time|port|proto|method string1 ...
 # 
-# acl aclname src      ip-address/netmask ... (clients IP address)
-# acl aclname src      addr1-addr2/netmask ... (range of addresses)
-# acl aclname dst      ip-address/netmask ... (URL host's IP address)
-# acl aclname srcdomain   foo.com ... (taken from reverse DNS lookup)
-# acl aclname dstdomain   foo.com ... (taken from the URL)
-# acl aclname time     [day-abbrevs]  [h1:m1-h2:m2]
+# acl aclname src      ip-address/netmask ...
+# acl aclname src      addr1/mask1-addr2/mask2 ...	# range of addresses
+# acl aclname domain   foo.com ...
+# acl aclname time     day-abbrevs  h1:m1-h2:m2
 #	day-abbrevs:
 #		S - Sunday
 #		M - Monday
@@ -736,7 +610,6 @@ debug_options ALL,1
 # acl aclname port     80 70 21 ...
 # acl aclname proto    HTTP FTP ...
 # acl aclname method   GET POST ...
-# acl aclname browser  regexp
 
 acl manager proto cache_object
 acl localhost src 127.0.0.1/255.255.255.255
@@ -762,21 +635,6 @@ http_access allow  all
 
 # Reply to all ICP queries we receive
 icp_access  allow  all
-
-#  TAG: miss_access
-#       Use to force your neighbors to use you as a sibling instead of
-#	a parent.  For example:
-#
-#		acl localclients src 172.16.0.0/16
-#		miss_access allow localclients
-#		miss_access deny  !localclients
-#
-#	This means that only your local clients are allowed to fetch
-#	MISSES and all other clients can only fetch HITS.
-#
-#	By default, allow all clients who passed the http_access rules
-#	to fetch MISSES from us.
-miss_access allow  all
 
 #  TAG: cache_host_acl
 #	Just like 'cache_host_domain' but provides more flexibility by
@@ -874,6 +732,20 @@ miss_access allow  all
 #	and as a proxy, change this to 'on'.
 #httpd_accel_with_proxy off
 
+#  TAG: cache_hot_vm_factor
+#	This parameter is only used when the cache is running strictly
+#	in httpd_accel mode.  In this case the cache keeps a number of
+#	objects entirely in memory.  We keep 'hot_vm_factor' such
+#	objects for each megabyte of cache_mem.  So, the number of
+#	number of hot_vm objects is calculated as
+#
+#		hot_vm_count = cache_mem * hot_vm_factor / 1048576
+#
+#	The default is 0.0, which disables hot_vm objects.  The suggested
+#	value for httpd_accel_mode is 12.5.
+#
+#cache_hot_vm_factor 0.0
+
 
 # MISCELLANEOUS
 #-----------------------------------------------------------------------------
@@ -901,44 +773,11 @@ dns_testnames internic.net usc.edu cs.colorado.edu mit.edu yale.edu
 #
 #append_domain .yourdomain.com
 
-#  TAG: tcp_recv_bufsize
-#	Size of receive buffer to set for TCP sockets.  Probably just
-#	as easy to change your kernel's default.  Set to zero to use
-#	the default buffer size.
-#
-#tcp_recv_bufsize 0
-
-
-#  TAG: ssl_proxy
-#	Specify the name of a 'cache_host' listed above, or a hostname
-#	and port number where all SSL requests should be forwarded to.
-#
-#	Usage: ssl_proxy cache_host
-#	       ssl_proxy host:port
-#
-#ssl_proxy none
-
-#  TAG: proxy_auth
-#	Usage: proxy_auth passwd_file [ ignore-domain ]
-#
-#	'passwd_file' is an apache-style file of passwords for
-#	authenticated proxy access Looks like user:password, with the
-#	password being standard crypt() format.  Proxy authentication
-#	is disabled by default.
-#
-#	'ignore-domain' is a domain name for which authorization will
-#	*not* be required.
-#
-#proxy_auth /dev/null
-
 #  TAG: err_html_text
 #	HTML text to include in error messages.  Make this a "mailto"
 #	URL to your admin address, or maybe just a link to your 
 #	organizations Web page.
 #err_html_text
-
-#  TAG: deny_info
-#	deny_info URL acl1 acl2 ...
 
 #  TAG: udp_hit_obj on|off
 #	If set, Squid will request UDP_HIT_OBJ replies from its neighbors.
@@ -958,12 +797,3 @@ dns_testnames internic.net usc.edu cs.colorado.edu mit.edu yale.edu
 #	If you disable this, it will appear as
 #		Forwarded: by http://foo.org:3128/
 #forwarded_for on
-
-
-#  TAG: minimum_direct_hops
-#	If using the ICMP pinging stuff, do direct fetches for sites
-#	which are no more than this many hops away.
-minimum_direct_hops 4
-
-store_objects_per_bucket 50
-store_avg_object_size 20

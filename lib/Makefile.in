@@ -11,7 +11,6 @@ VPATH		= @srcdir@
 
 
 CC		= @CC@
-MAKEDEPEND	= @MAKEDEPEND@
 INSTALL		= @INSTALL@
 INSTALL_BIN 	= @INSTALL_PROGRAM@
 INSTALL_FILE 	= @INSTALL_DATA@
@@ -19,17 +18,15 @@ RANLIB		= @RANLIB@
 AC_CFLAGS	= @CFLAGS@
 LDFLAGS		= @LDFLAGS@
 XTRA_LIBS	= @XTRA_LIBS@
-RM		= @RM@
-LIBOBJS		= @LIBOBJS@
 
 INCLUDE		= -I../include -I$(srcdir)/../include
-UTILOBJS	= rfc1123.o \
+UTILOBJS	= rfc850.o \
 		  rfc1738.o \
 		  util.o \
 		  getfullhostname.o \
-		  base64.o \
-		  uudecode.o \
-		  $(LIBOBJS)
+		  debug.o \
+		  log.o \
+		  tempnam.o
 REGEXOBJS	= GNUregex.o
 LIBS		= libmiscutil.a libregex.a
 
@@ -37,10 +34,7 @@ CFLAGS		= $(AC_CFLAGS) $(INCLUDE)
 
 all: $(LIBS)
 
-$(UTILOBJS): ../include/version.h
-
 libmiscutil.a: $(UTILOBJS)
-	$(RM) -f $@
 	ar r $@ $(UTILOBJS)
 	$(RANLIB) $@
 
@@ -49,14 +43,10 @@ libregex.a: $(REGEXOBJS)
 	$(RANLIB) $@
 
 clean:
-	-rm -f *.o $(LIBS) core
+	-rm -f $(UTILOBJS) $(REGEXOBJS) $(LIBS) core
 
 realclean: clean
 	-rm -f libregex.a
 	-rm -f Makefile
 
 install: all
-
-depend:
-	$(MAKEDEPEND) -I../include -I. -fMakefile *.c
-

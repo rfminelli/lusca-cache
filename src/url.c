@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -41,7 +40,7 @@ char *RequestMethodStr[] =
     "CONNECT"
 };
 
-static char *ProtocolStr[] =
+char *ProtocolStr[] =
 {
     "NONE",
     "http",
@@ -54,13 +53,13 @@ static char *ProtocolStr[] =
 
 static int url_acceptable[256];
 static char hex[17] = "0123456789abcdef";
-static int urlDefaultPort _PARAMS((protocol_t p));
 
 /* convert %xx in url string to a character 
  * Allocate a new string and return a pointer to converted string */
 
-char *
-url_convert_hex(char *org_url, int allocate)
+char *url_convert_hex(org_url, allocate)
+     char *org_url;
+     int allocate;
 {
     static char code[] = "00";
     char *url = NULL;
@@ -90,13 +89,11 @@ url_convert_hex(char *org_url, int allocate)
 
 /* INIT Acceptable table. 
  * Borrow from libwww2 with Mosaic2.4 Distribution   */
-void
-urlInitialize(void)
+void urlInitialize()
 {
     unsigned int i;
     char *good =
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789./-_$";
-    debug(23, 5, "urlInitialize: Initializing...\n");
     for (i = 0; i < 256; i++)
 	url_acceptable[i] = 0;
     for (; *good; good++)
@@ -106,8 +103,8 @@ urlInitialize(void)
 
 /* Encode prohibited char in string */
 /* return the pointer to new (allocated) string */
-char *
-url_escape(char *url)
+char *url_escape(url)
+     char *url;
 {
     char *p, *q;
     char *tmpline = xcalloc(1, MAX_URL);
@@ -126,8 +123,8 @@ url_escape(char *url)
     return tmpline;
 }
 
-method_t
-urlParseMethod(char *s)
+method_t urlParseMethod(s)
+     char *s;
 {
     if (strcasecmp(s, "GET") == 0) {
 	return METHOD_GET;
@@ -144,8 +141,8 @@ urlParseMethod(char *s)
 }
 
 
-protocol_t
-urlParseProtocol(char *s)
+protocol_t urlParseProtocol(s)
+     char *s;
 {
     if (strncasecmp(s, "http", 4) == 0)
 	return PROTO_HTTP;
@@ -167,8 +164,8 @@ urlParseProtocol(char *s)
 }
 
 
-static int
-urlDefaultPort(protocol_t p)
+int urlDefaultPort(p)
+     protocol_t p;
 {
     switch (p) {
     case PROTO_HTTP:
@@ -186,13 +183,14 @@ urlDefaultPort(protocol_t p)
     }
 }
 
-request_t *
-urlParse(method_t method, char *url)
+request_t *urlParse(method, url)
+     method_t method;
+     char *url;
 {
-    LOCAL_ARRAY(char, proto, MAX_URL + 1);
-    LOCAL_ARRAY(char, login, MAX_URL + 1);
-    LOCAL_ARRAY(char, host, MAX_URL + 1);
-    LOCAL_ARRAY(char, urlpath, MAX_URL + 1);
+    static char proto[MAX_URL + 1];
+    static char login[MAX_URL + 1];
+    static char host[MAX_URL + 1];
+    static char urlpath[MAX_URL + 1];
     request_t *request = NULL;
     char *t = NULL;
     int port;
@@ -247,11 +245,12 @@ urlParse(method_t method, char *url)
     return request;
 }
 
-char *
-urlCanonical(request_t * request, char *buf)
+char *urlCanonical(request, buf)
+     request_t *request;
+     char *buf;
 {
-    LOCAL_ARRAY(char, urlbuf, MAX_URL + 1);
-    LOCAL_ARRAY(char, portbuf, 32);
+    static char urlbuf[MAX_URL + 1];
+    static char portbuf[32];
     if (buf == NULL)
 	buf = urlbuf;
     switch (request->method) {
@@ -265,7 +264,7 @@ urlCanonical(request_t * request, char *buf)
 	sprintf(buf, "%s://%s%s%s%s%s",
 	    ProtocolStr[request->protocol],
 	    request->login,
-	    *request->login ? "@" : null_string,
+	    *request->login ? "@" : "",
 	    request->host,
 	    portbuf,
 	    request->urlpath);
@@ -274,27 +273,26 @@ urlCanonical(request_t * request, char *buf)
     return buf;
 }
 
-request_t *
-requestLink(request_t * request)
+request_t *requestLink(request)
+     request_t *request;
 {
     request->link_count++;
     return request;
 }
 
-void
-requestUnlink(request_t * request)
+void requestUnlink(request)
+     request_t *request;
 {
     if (request == NULL)
 	return;
     request->link_count--;
-    if (request->link_count)
-	return;
-    safe_free(request->hierarchy.host);
-    put_free_request_t(request);
+    if (request->link_count == 0)
+	put_free_request_t(request);
 }
 
-int
-matchDomainName(char *domain, char *host)
+int matchDomainName(domain, host)
+     char *domain;
+     char *host;
 {
     int offset;
     if ((offset = strlen(host) - strlen(domain)) < 0)
@@ -310,8 +308,8 @@ matchDomainName(char *domain, char *host)
     return 0;
 }
 
-int
-urlCheckRequest(request_t * r)
+int urlCheckRequest(r)
+     request_t *r;
 {
     int rc = 0;
     if (r->method == METHOD_CONNECT)

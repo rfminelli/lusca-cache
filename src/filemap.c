@@ -128,8 +128,8 @@ extern void fatal_dump _PARAMS((char *));
 
 static fileMap *fm = NULL;
 
-fileMap *
-file_map_create(int n)
+fileMap *file_map_create(n)
+     int n;			/* Number of files */
 {
     fm = xcalloc(1, sizeof(fileMap));
     fm->max_n_files = n;
@@ -142,8 +142,8 @@ file_map_create(int n)
     return (fm);
 }
 
-int
-file_map_bit_set(int file_number)
+int file_map_bit_set(file_number)
+     int file_number;
 {
     unsigned long bitmask = (1L << (file_number & LONG_BIT_MASK));
 
@@ -166,8 +166,8 @@ file_map_bit_set(int file_number)
     return (file_number);
 }
 
-void
-file_map_bit_reset(int file_number)
+void file_map_bit_reset(file_number)
+     int file_number;
 {
     unsigned long bitmask = (1L << (file_number & LONG_BIT_MASK));
 
@@ -175,16 +175,16 @@ file_map_bit_reset(int file_number)
     fm->n_files_in_map--;
 }
 
-int
-file_map_bit_test(int file_number)
+int file_map_bit_test(file_number)
+     int file_number;
 {
     unsigned long bitmask = (1L << (file_number & LONG_BIT_MASK));
     /* be sure the return value is an int, not a u_long */
     return (fm->file_map[file_number >> LONG_BIT_SHIFT] & bitmask ? 1 : 0);
 }
 
-int
-file_map_allocate(int suggestion)
+int file_map_allocate(suggestion)
+     int suggestion;
 {
     int word;
     int bit;
@@ -213,13 +213,6 @@ file_map_allocate(int suggestion)
     debug(8, 0, "You need to recompile with a larger value for MAX_SWAP_FILE\n");
     fatal_dump(NULL);
     return (0);			/* NOTREACHED */
-}
-
-void
-filemapFreeMemory(void)
-{
-    safe_free(fm->file_map);
-    safe_free(fm);
 }
 
 #ifdef TEST

@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -120,25 +119,14 @@ and report the trace back to squid-bugs@nlanr.net.\n\
 \n\
 Thanks!\n"
 
-static void fatal_common _PARAMS((char *));
-static void mail_warranty _PARAMS((void));
-
-#ifdef _SQUID_SOLARIS_
-int getrusage _PARAMS((int, struct rusage *));
-int getpagesize _PARAMS((void));
-int gethostname _PARAMS((char *, int));
-#endif
-
-static char *
-dead_msg(void)
+static char *dead_msg()
 {
-    LOCAL_ARRAY(char, msg, 1024);
+    static char msg[1024];
     sprintf(msg, DEAD_MSG, version_string, version_string);
     return msg;
 }
 
-static void
-mail_warranty(void)
+void mail_warranty()
 {
     FILE *fp = NULL;
     char *filename;
@@ -148,16 +136,16 @@ mail_warranty(void)
     if ((fp = fopen(filename, "w")) == NULL)
 	return;
     fprintf(fp, "From: %s\n", appname);
-    fprintf(fp, "To: %s\n", Config.adminEmail);
+    fprintf(fp, "To: %s\n", getAdminEmail());
     fprintf(fp, "Subject: %s\n", dead_msg());
     fclose(fp);
-    sprintf(command, "mail %s < %s", Config.adminEmail, filename);
+    sprintf(command, "mail %s < %s", getAdminEmail(), filename);
     system(command);		/* XXX should avoid system(3) */
     unlink(filename);
 }
 
-static void
-dumpMallocStats(FILE * f)
+static void dumpMallocStats(f)
+     FILE *f;
 {
 #if HAVE_MALLINFO
     struct mallinfo mp;
@@ -208,31 +196,28 @@ dumpMallocStats(FILE * f)
 #endif /* HAVE_MALLINFO */
 }
 
-static int
-PrintRusage(void (*f) (void), FILE * lf)
+static int PrintRusage(f, lf)
+     void (*f) ();
+     FILE *lf;
 {
 #if HAVE_GETRUSAGE && defined(RUSAGE_SELF)
     struct rusage rusage;
     getrusage(RUSAGE_SELF, &rusage);
     fprintf(lf, "CPU Usage: user %d sys %d\n",
 	(int) rusage.ru_utime.tv_sec, (int) rusage.ru_stime.tv_sec);
-#ifdef _SQUID_SGI_
-    fprintf(lf, "Memory Usage: rss %ld KB\n", rusage.ru_maxrss);
-#else
     fprintf(lf, "Memory Usage: rss %ld KB\n",
-	(rusage.ru_maxrss * getpagesize()) >> 10);
-#endif /* _SQUID_SGI_ */
+	rusage.ru_maxrss * getpagesize() >> 10);
     fprintf(lf, "Page faults with physical i/o: %ld\n",
 	rusage.ru_majflt);
-#endif /* HAVE_GETRUSAGE */
+#endif
     dumpMallocStats(lf);
     if (f)
-	f();
+	f(0);
     return 0;
 }
 
-void
-death(int sig)
+void death(sig)
+     int sig;
 {
     if (sig == SIGSEGV)
 	fprintf(debug_log, "FATAL: Received Segment Violation...dying.\n");
@@ -245,16 +230,11 @@ death(int sig)
     signal(SIGBUS, SIG_DFL);
     signal(sig, SIG_DFL);
 #endif
-    /* Release the main ports as early as possible */
-    if (theHttpConnection >= 0)
-	(void) close(theHttpConnection);
-    if (theInIcpConnection >= 0)
-	(void) close(theInIcpConnection);
     storeWriteCleanLog();
     PrintRusage(NULL, debug_log);
     if (squid_curtime - SQUID_RELEASE_TIME < 864000) {
 	/* skip if more than 10 days old */
-	if (Config.adminEmail)
+	if (getAdminEmail())
 	    mail_warranty();
 	else
 	    puts(dead_msg());
@@ -263,16 +243,16 @@ death(int sig)
 }
 
 
-void
-sigusr2_handle(int sig)
+void sigusr2_handle(sig)
+     int sig;
 {
     static int state = 0;
     debug(21, 1, "sigusr2_handle: SIGUSR2 received.\n");
     if (state == 0) {
-	_db_init(Config.Log.log, "ALL,10");
+	_db_init(getCacheLogFile(), "ALL,10");
 	state = 1;
     } else {
-	_db_init(Config.Log.log, Config.debugOptions);
+	_db_init(getCacheLogFile(), getDebugOptions());
 	state = 0;
     }
 #if !HAVE_SIGACTION
@@ -280,15 +260,15 @@ sigusr2_handle(int sig)
 #endif
 }
 
-void
-setSocketShutdownLifetimes(int lft)
+void setSocketShutdownLifetimes()
 {
     FD_ENTRY *f = NULL;
+    int lft = getShutdownLifetime();
     int cur;
     int i;
     for (i = fdstat_biggest_fd(); i >= 0; i--) {
 	f = &fd_table[i];
-	if (!f->read_handler && !f->write_handler)
+	if (!f->read_handler && !f->write_handler && !f->except_handler)
 	    continue;
 	if (fdstatGetType(i) != FD_SOCKET)
 	    continue;
@@ -299,40 +279,23 @@ setSocketShutdownLifetimes(int lft)
     }
 }
 
-void
-normal_shutdown(void)
+void normal_shutdown()
 {
     debug(21, 1, "Shutting down...\n");
-    if (Config.pidFilename) {
+    if (getPidFilename()) {
 	enter_suid();
-	safeunlink(Config.pidFilename, 0);
+	safeunlink(getPidFilename(), 0);
 	leave_suid();
     }
     storeWriteCleanLog();
     PrintRusage(NULL, debug_log);
-    storeCloseLog();
-    statCloseLog();
-    configFreeMemory();
-    diskFreeMemory();
-    storeFreeMemory();
-    commFreeMemory();
-    filemapFreeMemory();
-    dnsFreeMemory();
-    redirectFreeMemory();
-    fdstatFreeMemory();
-    errorpageFreeMemory();
-    stmemFreeMemory();
-    netdbFreeMemory();
-    ipcacheFreeMemory();
-    fqdncacheFreeMemory();
     debug(21, 0, "Squid Cache (Version %s): Exiting normally.\n",
 	version_string);
-    fclose(debug_log);
     exit(0);
 }
 
-static void
-fatal_common(char *message)
+void fatal_common(message)
+     char *message;
 {
 #if HAVE_SYSLOG
     if (opt_syslog_enable)
@@ -346,42 +309,33 @@ fatal_common(char *message)
 }
 
 /* fatal */
-void
-fatal(char *message)
+void fatal(message)
+     char *message;
 {
     fatal_common(message);
     exit(1);
 }
 
 /* fatal with dumping core */
-void
-fatal_dump(char *message)
+void fatal_dump(message)
+     char *message;
 {
     if (message)
 	fatal_common(message);
-    if (opt_catch_signals)
+    if (catch_signals)
 	storeWriteCleanLog();
     abort();
 }
 
-/* fatal with dumping core */
-void
-_debug_trap(char *message)
-{
-    if (!opt_catch_signals)
-	fatal_dump(message);
-    _db_print(0, 0, "WARNING: %s\n", message);
-}
-
-void
-sig_child(int sig)
+void sig_child(sig)
+     int sig;
 {
 #ifdef _SQUID_NEXT_
     union wait status;
 #else
     int status;
 #endif
-    pid_t pid;
+    int pid;
 
     do {
 #ifdef _SQUID_NEXT_
@@ -398,15 +352,14 @@ sig_child(int sig)
 #endif
 }
 
-char *
-getMyHostname(void)
+char *getMyHostname()
 {
-    LOCAL_ARRAY(char, host, SQUIDHOSTNAMELEN + 1);
+    static char host[SQUIDHOSTNAMELEN + 1];
     static int present = 0;
     struct hostent *h = NULL;
     char *t = NULL;
 
-    if ((t = Config.visibleHostname))
+    if ((t = getVisibleHostname()))
 	return t;
 
     /* Get the host name and store it in host to return */
@@ -417,7 +370,7 @@ getMyHostname(void)
 		xstrerror());
 	    return NULL;
 	} else {
-	    if ((h = gethostbyname(host)) != NULL) {
+	    if ((h = ipcache_gethostbyname(host, IP_BLOCKING_LOOKUP)) != NULL) {
 		/* DNS lookup successful */
 		/* use the official name from DNS lookup */
 		strcpy(host, h->h_name);
@@ -428,8 +381,9 @@ getMyHostname(void)
     return host;
 }
 
-int
-safeunlink(char *s, int quiet)
+int safeunlink(s, quiet)
+     char *s;
+     int quiet;
 {
     int err;
     if ((err = unlink(s)) < 0)
@@ -443,8 +397,7 @@ safeunlink(char *s, int quiet)
  * and leave_suid()
  * To give upp all posibilites to gain privilegies use no_suid()
  */
-void
-leave_suid(void)
+void leave_suid()
 {
     struct passwd *pwd = NULL;
     struct group *grp = NULL;
@@ -452,11 +405,11 @@ leave_suid(void)
     if (geteuid() != 0)
 	return;
     /* Started as a root, check suid option */
-    if (Config.effectiveUser == NULL)
+    if (getEffectiveUser() == NULL)
 	return;
-    if ((pwd = getpwnam(Config.effectiveUser)) == NULL)
+    if ((pwd = getpwnam(getEffectiveUser())) == NULL)
 	return;
-    if (Config.effectiveGroup && (grp = getgrnam(Config.effectiveGroup))) {
+    if (getEffectiveGroup() && (grp = getgrnam(getEffectiveGroup()))) {
 	setgid(grp->gr_gid);
     } else {
 	setgid(pwd->pw_gid);
@@ -473,8 +426,7 @@ leave_suid(void)
 }
 
 /* Enter a privilegied section */
-void
-enter_suid(void)
+void enter_suid()
 {
     debug(21, 3, "enter_suid: PID %d taking root priveleges\n", getpid());
 #if HAVE_SETRESUID
@@ -487,8 +439,7 @@ enter_suid(void)
 /* Give up the posibility to gain privilegies.
  * this should be used before starting a sub process
  */
-void
-no_suid(void)
+void no_suid()
 {
     uid_t uid;
     leave_suid();
@@ -502,13 +453,12 @@ no_suid(void)
 #endif
 }
 
-void
-writePidFile(void)
+void writePidFile()
 {
     FILE *pid_fp = NULL;
     char *f = NULL;
 
-    if ((f = Config.pidFilename) == NULL)
+    if ((f = getPidFilename()) == NULL)
 	return;
     enter_suid();
     pid_fp = fopen(f, "w");
@@ -523,37 +473,7 @@ writePidFile(void)
 }
 
 
-pid_t
-readPidFile(void)
-{
-    FILE *pid_fp = NULL;
-    char *f = NULL;
-    pid_t pid = -1;
-    int i;
-
-    if ((f = Config.pidFilename) == NULL) {
-	fprintf(stderr, "%s: ERROR: No pid file name defined\n", appname);
-	exit(1);
-    }
-    pid_fp = fopen(f, "r");
-    if (pid_fp != NULL) {
-	pid = 0;
-	if (fscanf(pid_fp, "%d", &i) == 1)
-	    pid = (pid_t) i;
-	fclose(pid_fp);
-    } else {
-	if (errno != ENOENT) {
-	    fprintf(stderr, "%s: ERROR: Could not read pid file\n", appname);
-	    fprintf(stderr, "\t%s: %s\n", f, xstrerror());
-	    exit(1);
-	}
-    }
-    return pid;
-}
-
-
-void
-setMaxFD(void)
+void setMaxFD()
 {
 #if HAVE_SETRLIMIT
     /* try to use as many file descriptors as possible */
@@ -601,8 +521,7 @@ setMaxFD(void)
 #endif /* RLIMIT_DATA */
 }
 
-time_t
-getCurrentTime(void)
+time_t getCurrentTime()
 {
 #if GETTIMEOFDAY_NO_TZP
     gettimeofday(&current_time);
@@ -612,14 +531,25 @@ getCurrentTime(void)
     return squid_curtime = current_time.tv_sec;
 }
 
-int
-percent(int a, int b)
+int tvSubMsec(t1, t2)
+     struct timeval t1;
+     struct timeval t2;
+{
+    return (t2.tv_sec - t1.tv_sec) * 1000 +
+	(t2.tv_usec - t1.tv_usec) / 1000;
+}
+
+int percent(a, b)
+     int a;
+     int b;
 {
     return b ? ((int) (100.0 * a / b + 0.5)) : 0;
 }
 
-void
-squid_signal(int sig, void (*func) _PARAMS((int)), int flags)
+void squid_signal(sig, func, flags)
+     int sig;
+     void (*func) ();
+     int flags;
 {
 #if HAVE_SIGACTION
     struct sigaction sa;
@@ -631,12 +561,4 @@ squid_signal(int sig, void (*func) _PARAMS((int)), int flags)
 #else
     (void) signal(sig, func);
 #endif
-}
-
-struct in_addr
-inaddrFromHostent(struct hostent *hp)
-{
-    struct in_addr s;
-    xmemcpy(&s.s_addr, hp->h_addr, sizeof(s.s_addr));
-    return s;
 }
