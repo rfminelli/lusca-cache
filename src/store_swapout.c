@@ -12,10 +12,10 @@
  *  Internet community.  Development is led by Duane Wessels of the
  *  National Laboratory for Applied Network Research and funded by the
  *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
- *  Duane Wessels and the University of California San Diego.  Please
- *  see the COPYRIGHT file for full details.  Squid incorporates
- *  software developed and/or copyrighted by other sources.  Please see
- *  the CREDITS file for full details.
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -50,7 +50,7 @@ storeSwapOutStart(StoreEntry * e)
     char *buf;
     assert(mem);
     storeLockObject(e);
-    storeSwapFileNumberSet(e, storeDirMapAllocate());
+    e->swap_file_number = storeDirMapAllocate();
     c = xcalloc(1, sizeof(*c));
     c->data = e;
     cbdataAdd(c, cbdataXfree, 0);
@@ -58,7 +58,8 @@ storeSwapOutStart(StoreEntry * e)
 	O_WRONLY, storeSwapOutFileClosed, c);
     if (NULL == mem->swapout.sio) {
 	e->swap_status = SWAPOUT_NONE;
-	storeSwapFileNumberSet(e, -1);
+	storeDirMapBitReset(e->swap_file_number);
+	e->swap_file_number = -1;
 	cbdataFree(c);
 	storeUnlockObject(e);
 	return;
@@ -108,10 +109,7 @@ storeSwapOut(StoreEntry * e)
     lowest_offset = storeLowestMemReaderOffset(e);
     debug(20, 7) ("storeSwapOut: lowest_offset = %d\n",
 	(int) lowest_offset);
-    if (mem->inmem_hi - lowest_offset > DISK_PAGE_SIZE)
-        new_mem_lo = lowest_offset;
-    else
-        new_mem_lo = mem->inmem_lo;
+    new_mem_lo = lowest_offset;
     assert(new_mem_lo >= mem->inmem_lo);
     if (storeSwapOutAble(e)) {
 	/*
@@ -122,11 +120,11 @@ storeSwapOut(StoreEntry * e)
 	 */
 	if ((on_disk = storeSwapOutObjectBytesOnDisk(mem)) < new_mem_lo)
 	    new_mem_lo = on_disk;
-    } else if (new_mem_lo > 0) {
+    } else {
 	/*
-	 * Its not swap-able, and we're about to delete a chunk,
-	 * so we must make it PRIVATE.  This is tricky/ugly because
-	 * for the most part, we treat swapable == cachable here.
+	 * Its not swap-able, so we must make it PRIVATE.  Even if
+	 * be only one MEM client and all others must read from
+	 * disk.
 	 */
 	storeReleaseRequest(e);
     }
@@ -178,7 +176,8 @@ storeSwapOut(StoreEntry * e)
 	if (swap_buf_len < 0) {
 	    debug(20, 1) ("stmemCopy returned %d for '%s'\n", swap_buf_len, storeKeyText(e->key));
 	    storeUnlink(e->swap_file_number);
-	    storeSwapFileNumberSet(e, -1);
+	    storeDirMapBitReset(e->swap_file_number);
+	    e->swap_file_number = -1;
 	    e->swap_status = SWAPOUT_NONE;
 	    memFree(swap_buf, MEM_DISK_BUF);
 	    storeReleaseRequest(e);
@@ -234,22 +233,21 @@ storeSwapOutFileClosed(void *data, int errflag, storeIOState * sio)
     assert(e->swap_status == SWAPOUT_WRITING);
     cbdataFree(c);
     if (errflag) {
-	sfileno bad = e->swap_file_number;
-	debug(20, 1) ("storeSwapOutFileClosed: swapfile %08X, errflag=%d\n\t%s\n",
-	    bad, errflag, xstrerror());
-	storeSwapFileNumberSet(e, -1);
+	debug(20, 3) ("storeSwapOutFileClosed: swapfile %08X, errflag=%d\n\t%s\n",
+	    e->swap_file_number, errflag, xstrerror());
 	/*
-	 * yuck.  re-set the filemap bit for some errors so that
+	 * yuck.  don't clear the filemap bit for some errors so that
 	 * we don't try re-using it over and over
 	 */
-	if (errno == EPERM)
-	    storeDirMapBitSet(bad);
+	if (errno != EPERM)
+	    storeDirMapBitReset(e->swap_file_number);
 	if (errflag == DISK_NO_SPACE_LEFT) {
 	    storeDirDiskFull(e->swap_file_number);
 	    storeDirConfigure();
 	    storeConfigure();
 	}
 	storeReleaseRequest(e);
+	e->swap_file_number = -1;
 	e->swap_status = SWAPOUT_NONE;
     } else {
 	/* swapping complete */

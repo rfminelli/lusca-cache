@@ -11,10 +11,10 @@
  *  Internet community.  Development is led by Duane Wessels of the
  *  National Laboratory for Applied Network Research and funded by the
  *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
- *  Duane Wessels and the University of California San Diego.  Please
- *  see the COPYRIGHT file for full details.  Squid incorporates
- *  software developed and/or copyrighted by other sources.  Please see
- *  the CREDITS file for full details.
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -221,19 +221,9 @@ storeDigestAddable(const StoreEntry * e)
 	    Config.digest.rebuild_period);
 	return 0;
     }
-    /*
-     * idea: how about also skipping very fresh (thus, potentially
-     * unstable) entries? Should be configurable through
-     * cd_refresh_pattern, of course.
-     */
-    /*
-     * idea: skip objects that are going to be purged before the next
-     * update.
-     */
-#if !HEAP_REPLACEMENT
-    if ((squid_curtime + Config.digest.rebuild_period) - e->lastref > storeExpiredReferenceAge())
-	return 0;
-#endif
+    /* idea: how about also skipping very fresh (thus, potentially unstable) 
+     * entries? Should be configurable through cd_refresh_pattern, of course */
+
     return 1;
 }
 

@@ -12,10 +12,10 @@
  *  Internet community.  Development is led by Duane Wessels of the
  *  National Laboratory for Applied Network Research and funded by the
  *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
- *  Duane Wessels and the University of California San Diego.  Please
- *  see the COPYRIGHT file for full details.  Squid incorporates
- *  software developed and/or copyrighted by other sources.  Please see
- *  the CREDITS file for full details.
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -122,8 +122,9 @@ file_map_allocate(fileMap * fm, int suggestion)
     int count;
     if (suggestion >= fm->max_n_files)
 	suggestion = 0;
-    if (!file_map_bit_test(fm, suggestion))
-	return suggestion;
+    if (!file_map_bit_test(fm, suggestion)) {
+	return file_map_bit_set(fm, suggestion);
+    }
     word = suggestion >> LONG_BIT_SHIFT;
     for (count = 0; count < fm->nwords; count++) {
 	if (fm->file_map[word] != ALL_ONES)

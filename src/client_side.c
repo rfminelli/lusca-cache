@@ -12,10 +12,10 @@
  *  Internet community.  Development is led by Duane Wessels of the
  *  National Laboratory for Applied Network Research and funded by the
  *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
- *  Duane Wessels and the University of California San Diego.  Please
- *  see the COPYRIGHT file for full details.  Squid incorporates
- *  software developed and/or copyrighted by other sources.  Please see
- *  the CREDITS file for full details.
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -105,6 +105,7 @@ static int clientCheckContentLength(request_t * r);
 static int httpAcceptDefer(void);
 static log_type clientProcessRequest2(clientHttpRequest * http);
 static int clientReplyBodyTooLarge(int clen);
+static int clientRequestBodyTooLarge(int clen);
 
 static int
 checkAccelOnly(clientHttpRequest * http)
@@ -140,7 +141,7 @@ clientAccessCheck(void *data)
     clientHttpRequest *http = data;
     ConnStateData *conn = http->conn;
     if (checkAccelOnly(http)) {
-	clientAccessCheckDone(0, http);
+	clientAccessCheckDone(ACCESS_ALLOWED, http);
 	return;
     }
     http->acl_checklist = aclChecklistCreate(Config.accessList.http,
@@ -524,7 +525,7 @@ clientPurgeRequest(clientHttpRequest * http)
     StoreEntry *entry;
     ErrorState *err = NULL;
     HttpReply *r;
-    debug(33, 1) ("Config2.onoff.enable_purge = %d\n", Config2.onoff.enable_purge);
+    debug(33, 3) ("Config2.onoff.enable_purge = %d\n", Config2.onoff.enable_purge);
     if (!Config2.onoff.enable_purge) {
 	http->log_type = LOG_TCP_DENIED;
 	err = errorCon(ERR_ACCESS_DENIED, HTTP_FORBIDDEN);
@@ -575,10 +576,6 @@ clientUpdateCounters(clientHttpRequest * http)
     Counter.client_http.requests++;
     if (isTcpHit(http->log_type))
 	Counter.client_http.hits++;
-    if (http->log_type == LOG_TCP_HIT)
-	Counter.client_http.disk_hits++;
-    else if (http->log_type == LOG_TCP_MEM_HIT)
-	Counter.client_http.mem_hits++;
     if (http->request->err_type != ERR_NONE)
 	Counter.client_http.errors++;
     statHistCount(&Counter.client_http.all_svc_time, svc_time);
@@ -851,11 +848,9 @@ clientSetKeepaliveFlag(clientHttpRequest * http)
 	request->http_ver);
     debug(33, 3) ("clientSetKeepaliveFlag: method = %s\n",
 	RequestMethodStr[request->method]);
-    /*
-     * If we wanted to limit the number of client-side idle persistent
-     * connections, this is a good place to do it.
-     */
-    if (httpMsgIsPersistent(request->http_ver, req_hdr))
+    if (!Config.onoff.client_pconns)
+	request->flags.proxy_keepalive = 0;
+    else if (httpMsgIsPersistent(request->http_ver, req_hdr))
 	request->flags.proxy_keepalive = 1;
 }
 
@@ -1168,20 +1163,29 @@ clientBuildReplyHeader(clientHttpRequest * http, HttpReply * rep)
     if (request->range)
 	clientBuildRangeHeader(http, rep);
     /*
-     * Add Age header, not that our header must replace Age headers
-     * from other caches if any
+     * Add a estimated Age header on cache hits.
      */
-    if (http->entry->timestamp > 0) {
+    if (is_hit) {
+	/*
+	 * Remove any existing Age header sent by upstream caches
+	 * (note that the existing header is passed along unmodified
+	 * on cache misses)
+	 */
 	httpHeaderDelById(hdr, HDR_AGE);
 	/*
-	 * we do not follow HTTP/1.1 precisely here becuase we rely
-	 * on Date header when computing entry->timestamp; we should
-	 * be using _request_ time if Date header is not available
-	 * or if it is out of sync
+	 * This adds the calculated object age. Note that the details of the
+	 * age calculation is performed by adjusting the timestamp in
+	 * storeTimestampsSet(), not here.
+	 *
+	 * BROWSER WORKAROUND: IE sometimes hangs when receiving a 0 Age
+	 * header, so don't use it unless there is a age to report. Please
+	 * note that Age is only used to make a conservative estimation of
+	 * the objects age, so a Age: 0 header does not add any useful
+	 * information to the reply in any case.
 	 */
-	httpHeaderPutInt(hdr, HDR_AGE,
-	    http->entry->timestamp <= squid_curtime ?
-	    squid_curtime - http->entry->timestamp : 0);
+	if (http->entry->timestamp < squid_curtime)
+	    httpHeaderPutInt(hdr, HDR_AGE,
+		squid_curtime - http->entry->timestamp);
     }
     /* Append X-Cache */
     httpHeaderPutStrf(hdr, HDR_X_CACHE, "%s from %s",
@@ -1569,6 +1573,18 @@ clientReplyBodyTooLarge(int clen)
     return 0;
 }
 
+static int
+clientRequestBodyTooLarge(int clen)
+{
+    if (0 == Config.maxRequestBodySize)
+	return 0;		/* disabled */
+    if (clen < 0)
+	return 0;		/* unknown, bug? */
+    if (clen > Config.maxRequestBodySize)
+	return 1;		/* too large */
+    return 0;
+}
+
 /*
  * accepts chunk of a http message in buf, parses prefix, filters headers and
  * such, writes processed message to the client's socket
@@ -1719,7 +1735,7 @@ clientKeepaliveNextRequest(clientHttpRequest * http)
 	/*
 	 * Set the timeout BEFORE calling clientReadRequest().
 	 */
-	commSetTimeout(conn->fd, Config.Timeout.pconn, requestTimeout, conn);
+	commSetTimeout(conn->fd, 15, requestTimeout, conn);
 	clientReadRequest(conn->fd, conn);	/* Read next request */
 	/*
 	 * Note, the FD may be closed at this point.
@@ -1773,7 +1789,7 @@ clientWriteComplete(int fd, char *bufnotused, size_t size, int errflag, void *da
     } else if ((done = clientCheckTransferDone(http)) != 0 || size == 0) {
 	debug(33, 5) ("clientWriteComplete: FD %d transfer is DONE\n", fd);
 	/* We're finished case */
-	if (http->entry->mem_obj->reply->content_length < 0) {
+	if (httpReplyBodySize(http->request->method, entry->mem_obj->reply) < 0) {
 	    debug(33, 5) ("clientWriteComplete: closing, content_length < 0\n");
 	    comm_close(fd);
 	} else if (!done) {
@@ -1963,7 +1979,7 @@ clientProcessRequest(clientHttpRequest * http)
 	    clientCacheHit,
 	    http);
     } else {
-	/* MISS CASE, http->log_type is already set! */
+	/* MISS CASE */
 	clientProcessMiss(http);
     }
 }
@@ -2010,6 +2026,9 @@ clientProcessMiss(clientHttpRequest * http)
     http->entry = clientCreateStoreEntry(http, r->method, r->flags);
     if (http->redirect.status) {
 	HttpReply *rep = httpReplyCreate();
+#if LOG_TCP_REDIRECTS
+	http->log_type = LOG_TCP_REDIRECT;
+#endif
 	storeReleaseRequest(http->entry);
 	httpRedirectReply(rep, http->redirect.status, http->redirect.location);
 	httpReplySwapOut(rep, http->entry);
@@ -2479,7 +2498,7 @@ clientReadRequest(int fd, void *data)
 		    commSetSelect(fd, COMM_SELECT_READ, NULL, NULL, 0);
 		if (request->content_length < 0)
 		    (void) 0;
-		else if (request->content_length > Config.maxRequestBodySize) {
+		else if (clientRequestBodyTooLarge(request->content_length)) {
 		    err = errorCon(ERR_TOO_BIG, HTTP_REQUEST_ENTITY_TOO_LARGE);
 		    err->request = requestLink(request);
 		    http->entry = clientCreateStoreEntry(http,
@@ -2498,11 +2517,6 @@ clientReadRequest(int fd, void *data)
 	    k = conn->in.size - 1 - conn->in.offset;
 	    if (k == 0) {
 		if (conn->in.offset >= Config.maxRequestHeaderSize) {
-		    int fd = open("/tmp/error:request-too-large", O_WRONLY | O_CREAT | O_TRUNC);
-		    if (fd >= 0) {
-			write(fd, conn->in.buf, conn->in.offset);
-			close(fd);
-		    }
 		    /* The request is too large to handle */
 		    debug(33, 1) ("Request header is too large (%d bytes)\n",
 			(int) conn->in.offset);
@@ -2609,7 +2623,7 @@ httpAccept(int sock, void *data)
 	    break;
 	}
 	debug(33, 4) ("httpAccept: FD %d: accepted\n", fd);
-	connState = memAllocate(MEM_CONNSTATEDATA);
+	connState = xcalloc(1, sizeof(ConnStateData));
 	connState->peer = peer;
 	connState->log_addr = peer.sin_addr;
 	connState->log_addr.s_addr &= Config.Addrs.client_netmask.s_addr;
@@ -2617,7 +2631,7 @@ httpAccept(int sock, void *data)
 	connState->fd = fd;
 	connState->in.size = REQUEST_BUF_SIZE;
 	connState->in.buf = xcalloc(connState->in.size, 1);
-	cbdataAdd(connState, memFree, MEM_CONNSTATEDATA);
+	cbdataAdd(connState, cbdataXfree, 0);
 	/* XXX account connState->in.buf */
 	comm_add_close_handler(fd, connStateFree, connState);
 	if (Config.onoff.log_fqdn)
@@ -2709,7 +2723,7 @@ clientCheckTransferDone(clientHttpRequest * http)
 static int
 clientGotNotEnough(clientHttpRequest * http)
 {
-    int cl = http->entry->mem_obj->reply->content_length;
+    int cl = httpReplyBodySize(http->request->method, http->entry->mem_obj->reply);
     int hs = http->entry->mem_obj->reply->hdr_sz;
     assert(cl >= 0);
     if (http->out.offset < cl + hs)

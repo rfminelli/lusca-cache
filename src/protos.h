@@ -10,10 +10,10 @@
  *  Internet community.  Development is led by Duane Wessels of the
  *  National Laboratory for Applied Network Research and funded by the
  *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
- *  Duane Wessels and the University of California San Diego.  Please
- *  see the COPYRIGHT file for full details.  Squid incorporates
- *  software developed and/or copyrighted by other sources.  Please see
- *  the CREDITS file for full details.
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -111,14 +111,12 @@ extern int GetInteger(void);
 extern void cbdataInit(void);
 #if CBDATA_DEBUG
 extern void cbdataAddDbg(const void *p, CBDUNL *, int, const char *, int);
-extern void cbdataLockDbg(const void *p, const char *, int);
-extern void cbdataUnlockDbg(const void *p, const char *, int);
 #else
 extern void cbdataAdd(const void *p, CBDUNL *, int);
-extern void cbdataLock(const void *p);
-extern void cbdataUnlock(const void *p);
 #endif
 extern void cbdataFree(void *p);
+extern void cbdataLock(const void *p);
+extern void cbdataUnlock(const void *p);
 extern int cbdataValid(const void *p);
 extern CBDUNL cbdataXfree;
 
@@ -374,6 +372,7 @@ extern HttpHeaderFieldInfo *httpHeaderBuildFieldsInfo(const HttpHeaderFieldAttrs
 extern void httpHeaderDestroyFieldsInfo(HttpHeaderFieldInfo * info, int count);
 extern int httpHeaderIdByName(const char *name, int name_len, const HttpHeaderFieldInfo * attrs, int end);
 extern int httpHeaderIdByNameDef(const char *name, int name_len);
+extern const char *httpHeaderNameById(int id);
 extern void httpHeaderMaskInit(HttpHeaderMask * mask, int value);
 extern void httpHeaderCalcMask(HttpHeaderMask * mask, const int *enums, int count);
 extern int httpHeaderHasConnDir(const HttpHeader * hdr, const char *directive);
@@ -728,8 +727,6 @@ extern int stat5minClientRequests(void);
 extern double stat5minCPUUsage(void);
 extern const char *storeEntryFlags(const StoreEntry *);
 extern double statRequestHitRatio(int minutes);
-extern double statRequestHitMemoryRatio(int minutes);
-extern double statRequestHitDiskRatio(int minutes);
 extern double statByteHitRatio(int minutes);
 
 
@@ -862,7 +859,6 @@ extern HttpReply *storeEntryReply(StoreEntry *);
 extern int storeTooManyDiskFilesOpen(void);
 extern void storeEntryReset(StoreEntry *);
 extern void storeHeapPositionUpdate(StoreEntry *);
-extern void storeSwapFileNumberSet(StoreEntry * e, sfileno filn);
 
 /* store_io.c */
 extern STOBJOPEN storeOpen;
@@ -890,19 +886,6 @@ extern void storeAufsClose(storeIOState * sio);
 extern void storeAufsRead(storeIOState *, char *, size_t, off_t, STRCB *, void *);
 extern void storeAufsWrite(storeIOState *, char *, size_t, off_t, FREE *);
 extern void storeAufsUnlink(int fileno);
-#endif
-
-#if USE_DISKD
-/*
- * diskd.c
- */
-extern storeIOState *storeDiskdOpen(sfileno, mode_t, STIOCB *, void *);
-extern void storeDiskdClose(storeIOState * sio);
-extern void storeDiskdRead(storeIOState *, char *, size_t, off_t, STRCB *, void *);
-extern void storeDiskdWrite(storeIOState *, char *, size_t, off_t, FREE *);
-extern void storeDiskdUnlink(int fileno);
-extern STINIT storeDiskdInit;
-extern void storeDiskdReadQueue(void);
 #endif
 
 /*
@@ -967,8 +950,6 @@ extern void storeDirMapBitSet(int fn);
 extern void storeDirOpenSwapLogs(void);
 extern void storeDirSwapLog(const StoreEntry *, int op);
 extern void storeDirUpdateSwapSize(int fn, size_t size, int sign);
-extern void storeDirLRUDelete(StoreEntry *);
-extern void storeDirLRUAdd(StoreEntry *);
 
 /*
  * store_dir_ufs.c
@@ -978,12 +959,8 @@ extern void storeUfsDirParse(cacheSwap * swap);
 extern void storeUfsDirDump(StoreEntry * entry, const char *name, SwapDir * s);
 extern void storeUfsDirFree(SwapDir *);
 extern char *storeUfsFullPath(sfileno fn, char *fullpath);
-extern STINIT storeUfsDirInit;
 #if USE_ASYNC_IO
 extern void storeAufsDirParse(cacheSwap * swap);
-#endif
-#if USE_DISKD
-extern void storeDiskdDirParse(cacheSwap *);
 #endif
 
 
@@ -1225,7 +1202,7 @@ extern void helperFree(helper *);
 extern void leakInit(void);
 extern void *leakAddFL(void *, const char *, int);
 extern void *leakTouchFL(void *, const char *, int);
-extern void *leakFreeFL(void *, const char *, int);
+extern void *leakFree(void *);
 #endif
 
 /*
@@ -1236,8 +1213,4 @@ extern void *leakFreeFL(void *, const char *, int);
 extern int getrusage(int, struct rusage *);
 extern int getpagesize(void);
 extern int gethostname(char *, int);
-#endif
-
-#if URL_CHECKSUM_DEBUG
-extern unsigned int url_checksum(const char *url);
 #endif

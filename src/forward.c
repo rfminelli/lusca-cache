@@ -12,10 +12,10 @@
  *  Internet community.  Development is led by Duane Wessels of the
  *  National Laboratory for Applied Network Research and funded by the
  *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
- *  Duane Wessels and the University of California San Diego.  Please
- *  see the COPYRIGHT file for full details.  Squid incorporates
- *  software developed and/or copyrighted by other sources.  Please see
- *  the CREDITS file for full details.
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -68,9 +68,6 @@ fwdStateFree(FwdState * fwdState)
     int sfd;
     debug(17, 3) ("fwdStateFree: %p\n", fwdState);
     assert(e->mem_obj);
-#if URL_CHECKSUM_DEBUG
-    assert(e->mem_obj->chksum == url_checksum(e->mem_obj->url));
-#endif
     if (e->store_status == STORE_PENDING) {
 	if (e->mem_obj->inmem_hi == 0) {
 	    assert(fwdState->err);
@@ -111,7 +108,7 @@ fwdCheckRetry(FwdState * fwdState)
 	return 0;
     if (fwdState->n_tries > 10)
 	return 0;
-    if (squid_curtime - fwdState->start > 120)
+    if (squid_curtime - fwdState->start > Config.Timeout.connect)
 	return 0;
     if (fwdState->flags.dont_retry)
 	return 0;
@@ -206,6 +203,12 @@ fwdConnectTimeout(int fd, void *data)
 	err->request = requestLink(fwdState->request);
 	err->xerrno = ETIMEDOUT;
 	fwdFail(fwdState, err);
+	/*
+	 * This marks the peer DOWN ... 
+	 */
+	if (fwdState->servers)
+	    if (fwdState->servers->peer)
+		peerCheckConnectStart(fwdState->servers->peer);
     }
     comm_close(fd);
 }
@@ -243,9 +246,6 @@ fwdConnectStart(void *data)
 	fwdConnectDone(fd, COMM_OK, fwdState);
 	return;
     }
-#if URL_CHECKSUM_DEBUG
-    assert(fwdState->entry->mem_obj->chksum == url_checksum(url));
-#endif
     fd = comm_open(SOCK_STREAM,
 	0,
 	Config.Addrs.tcp_outgoing,
@@ -375,9 +375,6 @@ fwdReforward(FwdState * fwdState)
     http_status s;
     assert(e->store_status == STORE_PENDING);
     assert(e->mem_obj);
-#if URL_CHECKSUM_DEBUG
-    assert(e->mem_obj->chksum == url_checksum(e->mem_obj->url));
-#endif
     debug(17, 3) ("fwdReforward: %s?\n", storeUrl(e));
     if (!EBIT_TEST(e->flags, ENTRY_FWD_HDR_WAIT)) {
 	debug(17, 3) ("fwdReforward: No, ENTRY_FWD_HDR_WAIT isn't set\n");
@@ -445,9 +442,6 @@ fwdStart(int fd, StoreEntry * e, request_t * r)
     debug(17, 3) ("fwdStart: '%s'\n", storeUrl(e));
     e->mem_obj->request = requestLink(r);
     e->mem_obj->fd = fd;
-#if URL_CHECKSUM_DEBUG
-    assert(e->mem_obj->chksum == url_checksum(e->mem_obj->url));
-#endif
     if (shutting_down) {
 	/* more yuck */
 	err = errorCon(ERR_SHUTTING_DOWN, HTTP_SERVICE_UNAVAILABLE);
@@ -492,9 +486,6 @@ fwdCheckDeferRead(int fd, void *data)
     int rc = 0;
     if (mem == NULL)
 	return 0;
-#if URL_CHECKSUM_DEBUG
-    assert(e->mem_obj->chksum == url_checksum(e->mem_obj->url));
-#endif
 #if DELAY_POOLS
     if (fd < 0)
 	(void) 0;
@@ -568,9 +559,6 @@ fwdComplete(FwdState * fwdState)
     assert(e->store_status == STORE_PENDING);
     debug(17, 3) ("fwdComplete: %s\n\tstatus %d\n", storeUrl(e),
 	e->mem_obj->reply->sline.status);
-#if URL_CHECKSUM_DEBUG
-    assert(e->mem_obj->chksum == url_checksum(e->mem_obj->url));
-#endif
     fwdLogReplyStatus(fwdState->n_tries, e->mem_obj->reply->sline.status);
     if (fwdReforward(fwdState)) {
 	debug(17, 3) ("fwdComplete: re-forwarding %d %s\n",

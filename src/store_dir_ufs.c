@@ -12,10 +12,10 @@
  *  Internet community.  Development is led by Duane Wessels of the
  *  National Laboratory for Applied Network Research and funded by the
  *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
- *  Duane Wessels and the University of California San Diego.  Please
- *  see the COPYRIGHT file for full details.  Squid incorporates
- *  software developed and/or copyrighted by other sources.  Please see
- *  the CREDITS file for full details.
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -93,6 +93,7 @@ static void storeUfsDirRebuild(SwapDir * sd);
 static void storeUfsDirCloseTmpSwapLog(SwapDir * sd);
 static FILE *storeUfsDirOpenTmpSwapLog(SwapDir *, int *, int *);
 static STLOGOPEN storeUfsDirOpenSwapLog;
+static STINIT storeUfsDirInit;
 static STLOGCLEANOPEN storeUfsDirWriteCleanOpen;
 static void storeUfsDirWriteCleanClose(SwapDir * sd);
 static STLOGCLEANWRITE storeUfsDirWriteCleanEntry;
@@ -244,7 +245,7 @@ storeUfsDirCloseSwapLog(SwapDir * sd)
 	safe_free(ufs_dir_index);
 }
 
-void
+static void
 storeUfsDirInit(SwapDir * sd)
 {
     static int started_clean_event = 0;
@@ -279,6 +280,8 @@ storeRebuildFromDirectory(void *data)
     tlv *tlv_list;
     tlv *t;
     assert(rb != NULL);
+    if (opt_foreground_rebuild)
+	getCurrentTime();
     debug(20, 3) ("storeRebuildFromDirectory: DIR #%d\n", rb->sd->index);
     for (count = 0; count < rb->speed; count++) {
 	assert(fd == -1);
@@ -304,8 +307,8 @@ storeRebuildFromDirectory(void *data)
 	    fd = -1;
 	    continue;
 	}
-	if ((++rb->counts.scancount & 0x3FFF) == 0)
-	    debug(20, 1) ("  %s %7d files opened so far.\n",
+	if ((++rb->counts.scancount & 0xFFFF) == 0)
+	    debug(20, 3) ("  %s %7d files opened so far.\n",
 		rb->sd->path, rb->counts.scancount);
 	debug(20, 9) ("file_in: fd=%d %08X\n", fd, sfileno);
 	Counter.syscalls.disk.reads++;
@@ -397,7 +400,7 @@ storeRebuildFromDirectory(void *data)
 	    tmpe.flags,		/* flags */
 	    (int) rb->flags.clean);
     }
-    eventAdd("storeRebuild", storeRebuildFromDirectory, rb, 0.0, 0);
+    eventAdd("storeRebuild", storeRebuildFromDirectory, rb, 0.0, 1);
 }
 
 static void
@@ -448,7 +451,10 @@ storeRebuildFromSwapLog(void *data)
 		 */
 		storeExpireNow(e);
 		storeReleaseRequest(e);
-		storeSwapFileNumberSet(e, -1);
+		if (e->swap_file_number > -1) {
+		    storeDirMapBitReset(e->swap_file_number);
+		    e->swap_file_number = -1;
+		}
 		rb->counts.objcount--;
 		rb->counts.cancelcount++;
 	    }
@@ -461,8 +467,8 @@ storeRebuildFromSwapLog(void *data)
 	    rb->counts.invalid++;
 	    continue;
 	}
-	if ((++rb->counts.scancount & 0x3FFF) == 0)
-	    debug(20, 1) ("  %7d %s Entries read so far.\n",
+	if ((++rb->counts.scancount & 0xFFFF) == 0)
+	    debug(20, 3) ("  %7d %s Entries read so far.\n",
 		rb->counts.scancount, rb->sd->path);
 	if (!storeDirValidFileno(s.swap_file_number, 0)) {
 	    rb->counts.invalid++;
@@ -529,7 +535,10 @@ storeRebuildFromSwapLog(void *data)
 	    /* junk old, load new */
 	    storeExpireNow(e);
 	    storeReleaseRequest(e);
-	    storeSwapFileNumberSet(e, -1);
+	    if (e->swap_file_number > -1) {
+		storeDirMapBitReset(e->swap_file_number);
+		e->swap_file_number = -1;
+	    }
 	    rb->counts.dupcount++;
 	} else {
 	    /* URL doesnt exist, swapfile not in use */
@@ -550,7 +559,7 @@ storeRebuildFromSwapLog(void *data)
 	    (int) rb->flags.clean);
 	storeDirSwapLog(e, SWAP_LOG_ADD);
     }
-    eventAdd("storeRebuild", storeRebuildFromSwapLog, rb, 0.0, 0);
+    eventAdd("storeRebuild", storeRebuildFromSwapLog, rb, 0.0, 1);
 }
 
 static int
@@ -661,7 +670,7 @@ storeAddDiskRestore(const cache_key * key,
     e->store_status = STORE_OK;
     storeSetMemStatus(e, NOT_IN_MEMORY);
     e->swap_status = SWAPOUT_DONE;
-    storeSwapFileNumberSet(e, file_number);
+    e->swap_file_number = file_number;
     e->swap_file_sz = swap_file_sz;
     e->lock_count = 0;
 #if !HEAP_REPLACEMENT
@@ -678,6 +687,7 @@ storeAddDiskRestore(const cache_key * key,
     EBIT_CLR(e->flags, KEY_PRIVATE);
     e->ping_status = PING_NONE;
     EBIT_CLR(e->flags, ENTRY_VALIDATED);
+    storeDirMapBitSet(e->swap_file_number);
     storeHashInsert(e, key);	/* do it after we clear KEY_PRIVATE */
     return e;
 }
@@ -714,7 +724,7 @@ storeUfsDirRebuild(SwapDir * sd)
 	sd->path, clean ? "CLEAN" : "DIRTY");
     store_dirs_rebuilding++;
     cbdataAdd(rb, cbdataXfree, 0);
-    eventAdd("storeRebuild", func, rb, 0.0, 0);
+    eventAdd("storeRebuild", func, rb, 0.0, 1);
 }
 
 static void
@@ -778,7 +788,6 @@ storeUfsDirOpenTmpSwapLog(SwapDir * sd, int *clean_flag, int *zero_flag)
 	debug(50, 0) ("%s: %s\n", swaplog_path, xstrerror());
 	fatal("Failed to open swap log for reading");
     }
-    commSetCloseOnExec(fileno(fp));
     memset(&clean_sb, '\0', sizeof(struct stat));
     if (stat(clean_path, &clean_sb) < 0)
 	*clean_flag = 0;
@@ -874,9 +883,8 @@ storeUfsDirWriteCleanEntry(const StoreEntry * e, SwapDir * sd)
 	    safe_free(state);
 	    sd->log.clean.state = NULL;
 	    sd->log.clean.write = NULL;
-	} else {
-	    state->outbuf_offset = 0;
 	}
+	state->outbuf_offset = 0;
     }
 }
 
@@ -1091,10 +1099,6 @@ storeUfsDirIs(SwapDir * sd)
 	return 1;
     if (sd->type == SWAPDIR_ASYNCUFS)
 	return 1;
-#if USE_DISKD
-    if (sd->type == SWAPDIR_DISKD)
-	return 1;
-#endif
     return 0;
 }
 
@@ -1140,15 +1144,12 @@ storeUfsDirStats(StoreEntry * sentry)
 	storeAppendPrintf(sentry, "First level subdirectories: %d\n", SD->u.ufs.l1);
 	storeAppendPrintf(sentry, "Second level subdirectories: %d\n", SD->u.ufs.l2);
 	storeAppendPrintf(sentry, "Maximum Size: %d KB\n", SD->max_size);
-	storeAppendPrintf(sentry, "HiWater Size: %d KB\n", SD->high_size);
 	storeAppendPrintf(sentry, "Current Size: %d KB\n", SD->cur_size);
 	storeAppendPrintf(sentry, "Percent Used: %0.2f%%\n",
 	    100.0 * SD->cur_size / SD->max_size);
 	storeAppendPrintf(sentry, "Filemap bits in use: %d of %d (%d%%)\n",
 	    SD->map->n_files_in_map, SD->map->max_n_files,
 	    percent(SD->map->n_files_in_map, SD->map->max_n_files));
-	storeAppendPrintf(sentry, "Removals: %d\n", SD->removals);
-	storeAppendPrintf(sentry, " Scanned: %d\n", SD->scanned);
 #if HAVE_STATVFS
 #define fsbtoblk(num, fsbs, bs) \
         (((fsbs) != 0 && (fsbs) < (bs)) ? \
@@ -1306,78 +1307,6 @@ storeAufsDirParse(cacheSwap * swap)
     sd->obj.read = storeAufsRead;
     sd->obj.write = storeAufsWrite;
     sd->obj.unlink = storeAufsUnlink;
-    sd->log.open = storeUfsDirOpenSwapLog;
-    sd->log.close = storeUfsDirCloseSwapLog;
-    sd->log.write = storeUfsDirSwapLog;
-    sd->log.clean.open = storeUfsDirWriteCleanOpen;
-    swap->n_configured++;
-}
-#endif
-
-#if USE_DISKD
-void
-storeDiskdDirParse(cacheSwap * swap)
-{
-    char *token;
-    char *path;
-    int i;
-    int size;
-    int l1;
-    int l2;
-    unsigned int read_only = 0;
-    SwapDir *sd = NULL;
-    if ((path = strtok(NULL, w_space)) == NULL)
-	self_destruct();
-    i = GetInteger();
-    size = i << 10;		/* Mbytes to kbytes */
-    if (size <= 0)
-	fatal("storeUfsDirParse: invalid size value");
-    i = GetInteger();
-    l1 = i;
-    if (l1 <= 0)
-	fatal("storeUfsDirParse: invalid level 1 directories value");
-    i = GetInteger();
-    l2 = i;
-    if (l2 <= 0)
-	fatal("storeUfsDirParse: invalid level 2 directories value");
-    if ((token = strtok(NULL, w_space)))
-	if (!strcasecmp(token, "read-only"))
-	    read_only = 1;
-    for (i = 0; i < swap->n_configured; i++) {
-	sd = swap->swapDirs + i;
-	if (!strcmp(path, sd->path)) {
-	    /* just reconfigure it */
-	    if (size == sd->max_size)
-		debug(3, 1) ("Cache dir '%s' size remains unchanged at %d KB\n",
-		    path, size);
-	    else
-		debug(3, 1) ("Cache dir '%s' size changed to %d KB\n",
-		    path, size);
-	    sd->max_size = size;
-	    if (sd->flags.read_only != read_only)
-		debug(3, 1) ("Cache dir '%s' now %s\n",
-		    path, read_only ? "Read-Only" : "Read-Write");
-	    sd->flags.read_only = read_only;
-	    return;
-	}
-    }
-    allocate_new_swapdir(swap);
-    sd = swap->swapDirs + swap->n_configured;
-    sd->type = SWAPDIR_DISKD;
-    sd->index = swap->n_configured;
-    sd->path = xstrdup(path);
-    sd->max_size = size;
-    sd->u.ufs.l1 = l1;
-    sd->u.ufs.l2 = l2;
-    sd->u.ufs.swaplog_fd = -1;
-    sd->flags.read_only = read_only;
-    sd->init = storeDiskdInit;
-    sd->newfs = storeUfsDirNewfs;
-    sd->obj.open = storeDiskdOpen;
-    sd->obj.close = storeDiskdClose;
-    sd->obj.read = storeDiskdRead;
-    sd->obj.write = storeDiskdWrite;
-    sd->obj.unlink = storeDiskdUnlink;
     sd->log.open = storeUfsDirOpenSwapLog;
     sd->log.close = storeUfsDirCloseSwapLog;
     sd->log.write = storeUfsDirSwapLog;

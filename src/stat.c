@@ -12,10 +12,10 @@
  *  Internet community.  Development is led by Duane Wessels of the
  *  National Laboratory for Applied Network Research and funded by the
  *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
- *  Duane Wessels and the University of California San Diego.  Please
- *  see the COPYRIGHT file for full details.  Squid incorporates
- *  software developed and/or copyrighted by other sources.  Please see
- *  the CREDITS file for full details.
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -485,12 +485,6 @@ info_get(StoreEntry * sentry)
     storeAppendPrintf(sentry, "\tByte Hit Ratios:\t5min: %3.1f%%, 60min: %3.1f%%\n",
 	statByteHitRatio(5),
 	statByteHitRatio(60));
-    storeAppendPrintf(sentry, "\tRequest Memory Hit Ratios:\t5min: %3.1f%%, 60min: %3.1f%%\n",
-	statRequestHitMemoryRatio(5),
-	statRequestHitMemoryRatio(60));
-    storeAppendPrintf(sentry, "\tRequest Disk Hit Ratios:\t5min: %3.1f%%, 60min: %3.1f%%\n",
-	statRequestHitDiskRatio(5),
-	statRequestHitDiskRatio(60));
     storeAppendPrintf(sentry, "\tStorage Swap size:\t%d KB\n",
 	store_swap_size);
     storeAppendPrintf(sentry, "\tStorage Mem size:\t%d KB\n",
@@ -1293,26 +1287,6 @@ statRequestHitRatio(int minutes)
 	CountHist[minutes].client_http.hits,
 	CountHist[0].client_http.requests -
 	CountHist[minutes].client_http.requests);
-}
-
-extern double
-statRequestHitMemoryRatio(int minutes)
-{
-    assert(minutes < N_COUNT_HIST);
-    return dpercent(CountHist[0].client_http.mem_hits -
-	CountHist[minutes].client_http.mem_hits,
-	CountHist[0].client_http.hits -
-	CountHist[minutes].client_http.hits);
-}
-
-extern double
-statRequestHitDiskRatio(int minutes)
-{
-    assert(minutes < N_COUNT_HIST);
-    return dpercent(CountHist[0].client_http.disk_hits -
-	CountHist[minutes].client_http.disk_hits,
-	CountHist[0].client_http.hits -
-	CountHist[minutes].client_http.hits);
 }
 
 extern double

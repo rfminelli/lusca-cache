@@ -2,7 +2,7 @@
 /*
  * $Id$
  *
- * DEBUG: section 80    WCCP Support
+ * DEBUG: section 80     WCCP Support
  * AUTHOR: Glenn Chisholm
  *
  * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
@@ -12,10 +12,10 @@
  *  Internet community.  Development is led by Duane Wessels of the
  *  National Laboratory for Applied Network Research and funded by the
  *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
- *  Duane Wessels and the University of California San Diego.  Please
- *  see the COPYRIGHT file for full details.  Squid incorporates
- *  software developed and/or copyrighted by other sources.  Please see
- *  the CREDITS file for full details.
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -211,7 +211,7 @@ wccpHandleUdp(int sock, void *not_used)
 {
     struct sockaddr_in from;
     socklen_t from_len;
-    size_t len;
+    int len;
 
     debug(80, 6) ("wccpHandleUdp: Called.\n");
 
@@ -223,7 +223,7 @@ wccpHandleUdp(int sock, void *not_used)
     Counter.syscalls.sock.recvfroms++;
 
     len = recvfrom(sock,
-	(void *) &wccp_i_see_you,
+	&wccp_i_see_you,
 	WCCP_RESPONSE_SIZE,
 	0,
 	(struct sockaddr *) &from,
@@ -265,7 +265,7 @@ wccpHereIam(void *voidnotused)
 
     wccp_here_i_am.id = wccp_i_see_you.id;
     send(theOutWccpConnection,
-	(void *) &wccp_here_i_am,
+	&wccp_here_i_am,
 	sizeof(wccp_here_i_am),
 	0);
 

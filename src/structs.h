@@ -10,10 +10,10 @@
  *  Internet community.  Development is led by Duane Wessels of the
  *  National Laboratory for Applied Network Research and funded by the
  *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
- *  Duane Wessels and the University of California San Diego.  Please
- *  see the COPYRIGHT file for full details.  Squid incorporates
- *  software developed and/or copyrighted by other sources.  Please see
- *  the CREDITS file for full details.
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -308,13 +308,17 @@ struct _SquidConfig {
     char *effectiveUser;
     char *effectiveGroup;
     struct {
+#if USE_DNSSERVER
 	char *dnsserver;
+#endif
 	wordlist *redirect;
 	wordlist *authenticate;
 	char *pinger;
 	char *unlinkd;
     } Program;
+#if USE_DNSSERVER
     int dnsChildren;
+#endif
     int redirectChildren;
     int authenticateChildren;
     int authenticateTTL;
@@ -378,7 +382,9 @@ struct _SquidConfig {
     } Netdb;
     struct {
 	int log_udp;
+#if USE_DNSSERVER
 	int res_defnames;
+#endif
 	int anonymizer;
 	int client_db;
 	int query_icmp;
@@ -404,6 +410,8 @@ struct _SquidConfig {
 	int strip_query_terms;
 	int redirector_bypass;
 	int ignore_unknown_nameservers;
+	int client_pconns;
+	int server_pconns;
 #if USE_CACHE_DIGESTS
 	int digest_generation;
 #endif
@@ -475,12 +483,13 @@ struct _SquidConfig {
 #endif
     HttpHeaderMask anonymize_headers;
     char *coredump_dir;
+    char *chroot_dir;
 #if USE_CACHE_DIGESTS
     struct {
 	int bits_per_entry;
-	int rebuild_period;
-	int rewrite_period;
-	int swapout_chunk_size;
+	time_t rebuild_period;
+	time_t rewrite_period;
+	size_t swapout_chunk_size;
 	int rebuild_chunk_percentage;
     } digest;
 #endif
@@ -1278,9 +1287,6 @@ struct _MemObject {
     int id;
     ssize_t object_sz;
     size_t swap_hdr_sz;
-#if URL_CHECKSUM_DEBUG
-    unsigned int chksum;
-#endif
 };
 
 struct _StoreEntry {
@@ -1312,13 +1318,10 @@ struct _SwapDir {
     swapdir_t type;
     fileMap *map;
     int cur_size;
-    int high_size;
     int max_size;
     char *path;
     int index;			/* This entry's index into the swapDirs array */
-    sfileno suggest;
-    int removals;
-    int scanned;
+    int suggest;
     struct {
 	unsigned int selected:1;
 	unsigned int read_only:1;
@@ -1342,32 +1345,12 @@ struct _SwapDir {
 	    void *state;
 	} clean;
     } log;
-#if !HEAP_REPLACEMENT
-    dlink_list lru_list;
-    dlink_node *lru_walker;
-#endif
     union {
 	struct {
 	    int l1;
 	    int l2;
 	    int swaplog_fd;
 	} ufs;
-#if USE_DISKD
-	struct {
-	    int l1;
-	    int l2;
-	    int swaplog_fd;
-	    int smsgid;
-	    int rmsgid;
-	    int wfd;
-	    int away;
-	    struct {
-		char *buf;
-		link_list *stack;
-		int id;
-	    } shm;
-	} diskd;
-#endif
     } u;
 };
 
@@ -1432,16 +1415,6 @@ struct _storeIOState {
 	    link_list *pending_writes;
 	    link_list *pending_reads;
 	} aufs;
-#if USE_DISKD
-	struct {
-	    int id;
-	    struct {
-		unsigned int reading:1;
-		unsigned int writing:1;
-	    } flags;
-	    char *read_buf;
-	} diskd;
-#endif
     } type;
 };
 
@@ -1558,8 +1531,6 @@ struct _StatCounters {
 	int clients;
 	int requests;
 	int hits;
-	int mem_hits;
-	int disk_hits;
 	int errors;
 	kb_t kbytes_in;
 	kb_t kbytes_out;

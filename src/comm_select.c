@@ -11,10 +11,10 @@
  *  Internet community.  Development is led by Duane Wessels of the
  *  National Laboratory for Applied Network Research and funded by the
  *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
- *  Duane Wessels and the University of California San Diego.  Please
- *  see the COPYRIGHT file for full details.  Squid incorporates
- *  software developed and/or copyrighted by other sources.  Please see
- *  the CREDITS file for full details.
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -35,8 +35,6 @@
 #include "squid.h"
 
 #if USE_ASYNC_IO
-#define MAX_POLL_TIME 10
-#elif USE_DISKD
 #define MAX_POLL_TIME 10
 #else
 #define MAX_POLL_TIME 1000
@@ -334,9 +332,6 @@ comm_poll(int msec)
 #endif
 #if USE_ASYNC_IO
 	aioCheckCallbacks();
-#endif
-#if USE_DISKD
-	storeDiskdReadQueue();
 #endif
 #if DELAY_POOLS
 	FD_ZERO(&slowfds);
@@ -668,9 +663,6 @@ comm_select(int msec)
 #endif
 #if USE_ASYNC_IO
 	aioCheckCallbacks();
-#endif
-#if USE_DISKD
-	storeDiskdReadQueue();
 #endif
 #if DELAY_POOLS
 	FD_ZERO(&slowfds);
