@@ -1797,7 +1797,8 @@ clientReadRequest(int fd, void *data)
 	comm_close(fd);
 	return;
     } else if (size < 0) {
-	if (errno == EWOULDBLOCK || errno == EAGAIN) {
+	icpState->read_err_count++;
+	if ((errno == EWOULDBLOCK || errno == EAGAIN) && icpState->read_err_count < 20) {
 	    debug(50, 0, "clientReadRequest: FD %d: %s\n", fd, xstrerror());
 	    commSetSelect(fd,
 		COMM_SELECT_READ,
