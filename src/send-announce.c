@@ -40,11 +40,13 @@ static IPH send_announce;
 void
 start_announce(void *datanotused)
 {
+    void *junk;
     if (0 == Config.onoff.announce)
 	return;
     if (theOutIcpConnection < 0)
 	return;
-    ipcache_nbgethostbyname(Config.Announce.host, send_announce, NULL);
+    cbdataAdd(junk = xmalloc(1), cbdataXfree, 0);
+    ipcache_nbgethostbyname(Config.Announce.host, send_announce, junk);
     eventAdd("send_announce", start_announce, NULL, (double) Config.Announce.period, 1);
 }
 
@@ -61,6 +63,7 @@ send_announce(const ipcache_addrs * ia, void *junk)
     int n;
     int fd;
     int x;
+    cbdataFree(junk);
     if (ia == NULL) {
 	debug(27, 1) ("send_announce: Unknown host '%s'\n", host);
 	return;
@@ -86,7 +89,7 @@ send_announce(const ipcache_addrs * ia, void *junk)
     l = strlen(sndbuf);
     if ((file = Config.Announce.file) != NULL) {
 	fd = file_open(file, O_RDONLY | O_TEXT);
-	if (fd > -1 && (n = FD_READ_METHOD(fd, sndbuf + l, BUFSIZ - l - 1)) > 0) {
+	if (fd > -1 && (n = read(fd, sndbuf + l, BUFSIZ - l - 1)) > 0) {
 	    fd_bytes(fd, n, FD_READ);
 	    l += n;
 	    sndbuf[l] = '\0';

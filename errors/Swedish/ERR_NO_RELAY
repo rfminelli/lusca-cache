@@ -1,14 +1,14 @@
 <HTML><HEAD>
-<TITLE>FEL: Beg&auml;rd URL kunde inte h&auml;mtas</TITLE>
+<TITLE>FEL: Begärd URL kunde inte hämtas</TITLE>
 </HEAD><BODY>
 <H1>FEL</H1>
-<H2>Beg&auml;rd URL kunde inte h&auml;mtas</H2>
+<H2>Begärd URL kunde inte hämtas</H2>
 <HR>
 <P>
-Vid f&ouml;rs&ouml;ket att h&auml;mta URL:
+Vid försöket att hämta URL:
 <A HREF="%U">%U</A>
 <P>
-Mottogs f&ouml;ljande fel:
+Mottogs följande fel:
 <UL>
 <LI>
 <STRONG>
@@ -17,5 +17,5 @@ Igen Wais Relay
 </UL>
 
 <P>
-Det finns ingen WAIS Relay v&auml;rd definerad f&ouml;r denna cache!  Skrik p&aring; din administrat&ouml;r.
+Det finns ingen WAIS Relay värd definerad för denna cache!  Skrik på din administratör.
 </P>

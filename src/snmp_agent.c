@@ -37,6 +37,8 @@
 #include "squid.h"
 #include "cache_snmp.h"
 
+extern StatCounters *snmpStatGet(int);
+
 /************************************************************************
 
  SQUID MIB Implementation
@@ -47,7 +49,7 @@ variable_list *
 snmp_sysFn(variable_list * Var, snint * ErrP)
 {
     variable_list *Answer = NULL;
-    debug(49, 5) ("snmp_sysFn: Processing request:\n");
+    debug(49, 5) ("snmp_sysFn: Processing request:\n", Var->name[LEN_SQ_SYS]);
     snmpDebugOid(5, Var->name, Var->name_length);
     *ErrP = SNMP_ERR_NOERROR;
     switch (Var->name[LEN_SQ_SYS]) {
@@ -77,7 +79,7 @@ variable_list *
 snmp_confFn(variable_list * Var, snint * ErrP)
 {
     variable_list *Answer = NULL;
-    const char *cp = NULL;
+    char *cp = NULL;
     debug(49, 5) ("snmp_confFn: Processing request with magic %d!\n", Var->name[8]);
     *ErrP = SNMP_ERR_NOERROR;
     switch (Var->name[LEN_SQ_CONF]) {
@@ -96,8 +98,8 @@ snmp_confFn(variable_list * Var, snint * ErrP)
     case CONF_VERSION_ID:
 	Answer = snmp_var_new(Var->name, Var->name_length);
 	Answer->type = ASN_OCTET_STR;
-	Answer->val_len = strlen(VERSION);
-	Answer->val.string = (u_char *) xstrdup(VERSION);
+	Answer->val_len = strlen(SQUID_VERSION);
+	Answer->val.string = (u_char *) xstrdup(SQUID_VERSION);
 	break;
     case CONF_STORAGE:
 	switch (Var->name[LEN_SQ_CONF + 1]) {
@@ -255,7 +257,7 @@ snmp_prfSysFn(variable_list * Var, snint * ErrP)
 	break;
     case PERF_SYS_MEMUSAGE:
 	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    (snint) statMemoryAccounted() >> 10,
+	    (snint) memTotalAllocated() >> 10,
 	    ASN_INTEGER);
 	break;
     case PERF_SYS_CPUTIME:
@@ -411,9 +413,9 @@ snmp_prfProtoFn(variable_list * Var, snint * ErrP)
 	    break;
 	f = snmpStatGet(0);
 	l = snmpStatGet(minutes);
-	debug(49, 8) ("median: min= %d, %d l= %p , f = %p\n", minutes,
+	debug(49, 8) ("median: min= %d, %d l= %x , f = %x\n", minutes,
 	    Var->name[LEN_SQ_PRF + 3], l, f);
-	debug(49, 8) ("median: l= %p , f = %p\n", l, f);
+	debug(49, 8) ("median: l= %x , f = %x\n", l, f);
 	switch (Var->name[LEN_SQ_PRF + 3]) {
 	case PERF_MEDIAN_TIME:
 	    x = minutes;

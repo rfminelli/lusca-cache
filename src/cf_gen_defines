@@ -3,7 +3,7 @@ BEGIN {
 	print "/* Generated automatically from cf.data.pre"
 	print " * DO NOT EDIT"
 	print "*/"
-	print "struct { const char *name; const char *enable; int defined;} defines[] = {"
+	print "struct { char *name; char *enable; int defined;} defines[] = {"
 	define["DELAY_POOLS"]="--enable-delay-pools"
 	define["HTTP_VIOLATIONS"]="--enable-http-violations"
 	define["SQUID_SNMP"]="--enable-snmp"
@@ -13,11 +13,10 @@ BEGIN {
 	define["USE_HTCP"]="--enable-htcp"
 	define["USE_ICMP"]="--enable-icmp"
 	define["USE_IDENT"]="--enable-ident-lookups"
-	define["USE_REFERER_LOG"]="--enable-referer-log"
-	define["USE_SSL"]="--enable-ssl"
-	define["USE_UNLINKD"]="--enable-unlinkd"
 	define["USE_USERAGENT_LOG"]="--enable-useragent-log"
 	define["USE_WCCP"]="--enable-wccp"
+	define["USE_UNLINKD"]="--enable-unlinkd"
+	define["USE_REFERER_LOG"]="--enable-referer-log"
 }
 /^IFDEF:/ {
 	if (define[$2] != "")

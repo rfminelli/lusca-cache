@@ -97,8 +97,6 @@ peerDigestClean(PeerDigest * pd)
     stringClean(&pd->host);
 }
 
-CBDATA_TYPE(PeerDigest);
-
 /* allocate new peer digest, call Init, and lock everything */
 PeerDigest *
 peerDigestCreate(peer * p)
@@ -106,8 +104,8 @@ peerDigestCreate(peer * p)
     PeerDigest *pd;
     assert(p);
 
-    CBDATA_INIT_TYPE(PeerDigest);
-    pd = cbdataAlloc(PeerDigest);
+    pd = memAllocate(MEM_PEER_DIGEST);
+    cbdataAdd(pd, memFree, MEM_PEER_DIGEST);
     peerDigestInit(pd, p);
     cbdataLock(pd->peer);	/* we will use the peer */
 
@@ -115,7 +113,7 @@ peerDigestCreate(peer * p)
 }
 
 /* call Clean and free/unlock everything */
-static void
+void
 peerDigestDestroy(PeerDigest * pd)
 {
     peer *p;
@@ -193,7 +191,7 @@ peerDigestSetCheck(PeerDigest * pd, time_t delay)
     eventAdd("peerDigestCheck", peerDigestCheck, pd, (double) delay, 1);
     pd->times.next_check = squid_curtime + delay;
     debug(72, 3) ("peerDigestSetCheck: will check peer %s in %d secs\n",
-	strBuf(pd->host), (int) delay);
+	strBuf(pd->host), delay);
 }
 
 /*
@@ -235,8 +233,8 @@ peerDigestCheck(void *data)
 	return;
     }
     debug(72, 3) ("peerDigestCheck: peer %s:%d\n", pd->peer->host, pd->peer->http_port);
-    debug(72, 3) ("peerDigestCheck: time: %ld, last received: %ld (%+d)\n",
-	(long int) squid_curtime, (long int) pd->times.received, (int) (squid_curtime - pd->times.received));
+    debug(72, 3) ("peerDigestCheck: time: %d, last received: %d (%+d)\n",
+	squid_curtime, pd->times.received, (squid_curtime - pd->times.received));
 
     /* decide when we should send the request:
      * request now unless too close to other requests */
@@ -245,15 +243,15 @@ peerDigestCheck(void *data)
     /* per-peer limit */
     if (req_time - pd->times.received < PeerDigestReqMinGap) {
 	debug(72, 2) ("peerDigestCheck: %s, avoiding close peer requests (%d < %d secs).\n",
-	    strBuf(pd->host), (int) (req_time - pd->times.received),
-	    (int) PeerDigestReqMinGap);
+	    strBuf(pd->host), req_time - pd->times.received,
+	    PeerDigestReqMinGap);
 	req_time = pd->times.received + PeerDigestReqMinGap;
     }
     /* global limit */
     if (req_time - pd_last_req_time < GlobDigestReqMinGap) {
 	debug(72, 2) ("peerDigestCheck: %s, avoiding close requests (%d < %d secs).\n",
-	    strBuf(pd->host), (int) (req_time - pd_last_req_time),
-	    (int) GlobDigestReqMinGap);
+	    strBuf(pd->host), req_time - pd_last_req_time,
+	    GlobDigestReqMinGap);
 	req_time = pd_last_req_time + GlobDigestReqMinGap;
     }
     if (req_time <= squid_curtime)
@@ -261,8 +259,6 @@ peerDigestCheck(void *data)
     else
 	peerDigestSetCheck(pd, req_time - squid_curtime);
 }
-
-CBDATA_TYPE(DigestFetchState);
 
 /* ask store for a digest */
 static void
@@ -285,10 +281,10 @@ peerDigestRequest(PeerDigest * pd)
 	url = internalRemoteUri(p->host, p->http_port,
 	    "/squid-internal-periodic/", StoreDigestFileName);
 
+    key = storeKeyPublic(url, METHOD_GET);
+    debug(72, 2) ("peerDigestRequest: %s key: %s\n", url, storeKeyText(key));
     req = urlParse(METHOD_GET, url);
     assert(req);
-    key = storeKeyPublicByRequest(req);
-    debug(72, 2) ("peerDigestRequest: %s key: %s\n", url, storeKeyText(key));
 
     /* add custom headers */
     assert(!req->header.len);
@@ -297,8 +293,8 @@ peerDigestRequest(PeerDigest * pd)
     if (p->login)
 	xstrncpy(req->login, p->login, MAX_LOGIN_SZ);
     /* create fetch state structure */
-    CBDATA_INIT_TYPE(DigestFetchState);
-    fetch = cbdataAlloc(DigestFetchState);
+    fetch = memAllocate(MEM_DIGEST_FETCH_STATE);
+    cbdataAdd(fetch, memFree, MEM_DIGEST_FETCH_STATE);
     fetch->request = requestLink(req);
     fetch->pd = pd;
     fetch->offset = 0;
@@ -353,9 +349,9 @@ peerDigestFetchReply(void *data, char *buf, ssize_t size)
 	assert(reply);
 	httpReplyParse(reply, buf, hdr_size);
 	status = reply->sline.status;
-	debug(72, 3) ("peerDigestFetchReply: %s status: %d, expires: %ld (%+d)\n",
+	debug(72, 3) ("peerDigestFetchReply: %s status: %d, expires: %d (%+d)\n",
 	    strBuf(pd->host), status,
-	    (long int) reply->expires, (int) (reply->expires - squid_curtime));
+	    reply->expires, reply->expires - squid_curtime);
 
 	/* this "if" is based on clientHandleIMSReply() */
 	if (status == HTTP_NOT_MODIFIED) {
@@ -730,10 +726,10 @@ peerDigestFetchSetStats(DigestFetchState * fetch)
     fetch->resp_time = squid_curtime - fetch->start_time;
 
     debug(72, 3) ("peerDigestFetchFinish: recv %d bytes in %d secs\n",
-	fetch->recv.bytes, (int) fetch->resp_time);
-    debug(72, 3) ("peerDigestFetchFinish: expires: %ld (%+d), lmt: %ld (%+d)\n",
-	(long int) fetch->expires, (int) (fetch->expires - squid_curtime),
-	(long int) fetch->entry->lastmod, (int) (fetch->entry->lastmod - squid_curtime));
+	fetch->recv.bytes, fetch->resp_time);
+    debug(72, 3) ("peerDigestFetchFinish: expires: %d (%+d), lmt: %d (%+d)\n",
+	fetch->expires, fetch->expires - squid_curtime,
+	fetch->entry->lastmod, fetch->entry->lastmod - squid_curtime);
 }
 
 
@@ -835,8 +831,8 @@ void
 peerDigestStatsReport(const PeerDigest * pd, StoreEntry * e)
 {
 #define f2s(flag) (pd->flags.flag ? "yes" : "no")
-#define appendTime(tm) storeAppendPrintf(e, "%s\t %10ld\t %+d\t %+d\n", \
-    ""#tm, (long int)pd->times.tm, \
+#define appendTime(tm) storeAppendPrintf(e, "%s\t %10d\t %+d\t %+d\n", \
+    ""#tm, pd->times.tm, \
     saneDiff(pd->times.tm - squid_curtime), \
     saneDiff(pd->times.tm - pd->times.initialized))
 
@@ -858,9 +854,9 @@ peerDigestStatsReport(const PeerDigest * pd, StoreEntry * e)
     storeAppendPrintf(e, "\tneeded: %3s, usable: %3s, requested: %3s\n",
 	f2s(needed), f2s(usable), f2s(requested));
     storeAppendPrintf(e, "\n\tlast retry delay: %d secs\n",
-	(int) pd->times.retry_delay);
+	pd->times.retry_delay);
     storeAppendPrintf(e, "\tlast request response time: %d secs\n",
-	(int) pd->times.req_delay);
+	pd->times.req_delay);
     storeAppendPrintf(e, "\tlast request result: %s\n",
 	pd->req_result ? pd->req_result : "(none)");
 

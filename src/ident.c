@@ -139,7 +139,7 @@ identReadReply(int fd, void *data)
     int len = -1;
     buf[0] = '\0';
     statCounter.syscalls.sock.reads++;
-    len = FD_READ_METHOD(fd, buf, BUFSIZ - 1);
+    len = read(fd, buf, BUFSIZ - 1);
     fd_bytes(fd, len, FD_READ);
     if (len <= 0) {
 	comm_close(fd);
@@ -178,8 +178,6 @@ identClientAdd(IdentStateData * state, IDCB * callback, void *callback_data)
     *C = c;
 }
 
-CBDATA_TYPE(IdentStateData);
-
 /**** PUBLIC FUNCTIONS ****/
 
 /*
@@ -215,8 +213,8 @@ identStart(struct sockaddr_in *me, struct sockaddr_in *my_peer, IDCB * callback,
 	callback(NULL, data);
 	return;
     }
-    CBDATA_INIT_TYPE(IdentStateData);
-    state = cbdataAlloc(IdentStateData);
+    state = xcalloc(1, sizeof(IdentStateData));
+    cbdataAdd(state, cbdataXfree, 0);
     state->hash.key = xstrdup(key);
     state->fd = fd;
     state->me = *me;

@@ -214,7 +214,7 @@ mainParseOptions(int argc, char *argv[])
 		icpPortNumOverride = 0;
 	    break;
 	case 'v':
-	    printf("Squid Cache: Version %s\nconfigure options: %s\n", version_string, SQUID_CONFIGURE_OPTIONS);
+	    printf("Squid Cache: Version %s\n", version_string);
 	    exit(0);
 	    /* NOTREACHED */
 	case 'z':
@@ -280,7 +280,7 @@ shut_down(int sig)
 static void
 serverConnectionsOpen(void)
 {
-    clientOpenListenSockets();
+    clientHttpConnectionsOpen();
     icpConnectionsOpen();
 #if USE_HTCP
     htcpInit();
@@ -346,14 +346,11 @@ mainReconfigure(void)
     authenticateShutdown();
     storeDirCloseSwapLogs();
     errorClean();
-    enter_suid();		/* root to read config file */
+    mimeFreeMemory();
     parseConfigFile(ConfigFile);
-    setEffectiveUser();
     _db_init(Config.Log.log, Config.debugOptions);
     ipcache_restart();		/* clear stuck entries */
-    authenticateUserCacheRestart();	/* clear stuck ACL entries */
     fqdncache_restart();	/* sigh, fqdncache too */
-    parseEtcHosts();
     errorInitialize();		/* reload error pages */
 #if USE_DNSSERVERS
     dnsInit();
@@ -361,7 +358,7 @@ mainReconfigure(void)
     idnsInit();
 #endif
     redirectInit();
-    authenticateInit(&Config.authConfig);
+    authenticateInit();
 #if USE_WCCP
     wccpInit();
 #endif
@@ -402,7 +399,7 @@ mainRotate(void)
     dnsInit();
 #endif
     redirectInit();
-    authenticateInit(&Config.authConfig);
+    authenticateInit();
 }
 
 static void
@@ -424,22 +421,28 @@ setEffectiveUser(void)
 static void
 mainSetCwd(void)
 {
-    char pathbuf[MAXPATHLEN];
     if (Config.coredump_dir) {
-	if (0 == strcmp("none", Config.coredump_dir)) {
-	    (void) 0;
-	} else if (chdir(Config.coredump_dir) == 0) {
+	if (!chdir(Config.coredump_dir)) {
 	    debug(0, 1) ("Set Current Directory to %s\n", Config.coredump_dir);
 	    return;
 	} else {
 	    debug(50, 0) ("chdir: %s: %s\n", Config.coredump_dir, xstrerror());
 	}
     }
-    /* If we don't have coredump_dir or couldn't cd there, report current dir */
-    if (getcwd(pathbuf, MAXPATHLEN)) {
-	debug(0, 1) ("Current Directory is %s\n", pathbuf);
+    if (!Config.effectiveUser) {
+	char *p = getcwd(NULL, 0);
+	debug(0, 1) ("Current Directory is %s\n", p);
+	xfree(p);
+	return;
+    }
+    /* we were probably started as root, so cd to a swap
+     * directory in case we dump core */
+    if (!chdir(storeSwapDir(0))) {
+	debug(0, 1) ("Set Current Directory to %s\n", storeSwapDir(0));
+	return;
     } else {
-	debug(50, 0) ("WARNING: Can't find current directory, getcwd: %s\n", xstrerror());
+	debug(50, 0) ("%s: %s\n", storeSwapDir(0), xstrerror());
+	fatal_dump("Cannot cd to swap directory?");
     }
 }
 
@@ -479,14 +482,13 @@ mainInitialize(void)
 	disk_init();		/* disk_init must go before ipcache_init() */
     ipcache_init();
     fqdncache_init();
-    parseEtcHosts();
 #if USE_DNSSERVERS
     dnsInit();
 #else
     idnsInit();
 #endif
     redirectInit();
-    authenticateInit(&Config.authConfig);
+    authenticateInit();
     useragentOpenLog();
     refererOpenLog();
     httpHeaderInitModule();	/* must go before any header processing (e.g. the one in errorInitialize) */
@@ -570,18 +572,10 @@ main(int argc, char **argv)
     int n;			/* # of GC'd objects */
     time_t loop_delay;
     mode_t oldmask;
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
-    int WIN32_init_err;
-#endif
 
     debug_log = stderr;
     if (FD_SETSIZE < Squid_MaxFD)
 	Squid_MaxFD = FD_SETSIZE;
-
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
-    if ((WIN32_init_err = WIN32_Subsystem_Init()))
-	return WIN32_init_err;
-#endif
 
     /* call mallopt() before anything else */
 #if HAVE_MALLOPT
@@ -630,14 +624,13 @@ main(int argc, char **argv)
 	if (!ConfigFile)
 	    ConfigFile = xstrdup(DefaultConfigFile);
 	assert(!configured_once);
+	memInit();		/* memInit is required for config parsing */
+	cbdataInit();
 #if USE_LEAKFINDER
 	leakInit();
 #endif
-	memInit();
-	cbdataInit();
 	eventInit();		/* eventInit() is required for config parsing */
 	storeFsInit();		/* required for config parsing */
-	authenticateSchemeInit();	/* required for config parsign */
 	parse_err = parseConfigFile(ConfigFile);
 
 	if (opt_parse_cfg_only)
@@ -707,7 +700,7 @@ main(int argc, char **argv)
 	    debug(1, 1) ("Preparing for shutdown after %d requests\n",
 		statCounter.client_http.requests);
 	    debug(1, 1) ("Waiting %d seconds for active connections to finish\n",
-		(int) wait);
+		wait);
 	    do_shutdown = 0;
 	    shutting_down = 1;
 	    serverConnectionsClose();
@@ -717,12 +710,17 @@ main(int argc, char **argv)
 	    idnsShutdown();
 #endif
 	    redirectShutdown();
+	    authenticateShutdown();
 	    eventAdd("SquidShutdown", SquidShutdown, NULL, (double) (wait + 1), 1);
 	}
 	eventRun();
 	if ((loop_delay = eventNextTime()) < 0)
 	    loop_delay = 0;
+#if HAVE_POLL
+	switch (comm_poll(loop_delay)) {
+#else
 	switch (comm_select(loop_delay)) {
+#endif
 	case COMM_OK:
 	    errcount = 0;	/* reset if successful */
 	    break;
@@ -947,7 +945,6 @@ SquidShutdown(void *unused)
 #endif
     releaseServerSockets();
     commCloseAllSockets();
-    authenticateShutdown();
 #if USE_UNLINKD
     unlinkdClose();
 #endif

@@ -223,14 +223,14 @@ static void
 netdbSendPing(const ipcache_addrs * ia, void *data)
 {
     struct in_addr addr;
-    char *hostname = ((generic_cbdata *) data)->data;
+    char *hostname = data;
     netdbEntry *n;
     netdbEntry *na;
     net_db_name *x;
     net_db_name **X;
-    cbdataFree(data);
+    cbdataUnlock(hostname);
     if (ia == NULL) {
-	xfree(hostname);
+	cbdataFree(hostname);
 	return;
     }
     addr = ia->in_addrs[ia->cur];
@@ -248,7 +248,7 @@ netdbSendPing(const ipcache_addrs * ia, void *data)
 	x = (net_db_name *) hash_lookup(host_table, hostname);
 	if (x == NULL) {
 	    debug(38, 1) ("netdbSendPing: net_db_name list bug: %s not found", hostname);
-	    xfree(hostname);
+	    cbdataFree(hostname);
 	    return;
 	}
 	/* remove net_db_name from 'network n' linked list */
@@ -274,7 +274,7 @@ netdbSendPing(const ipcache_addrs * ia, void *data)
 	n->next_ping_time = squid_curtime + Config.Netdb.period;
 	n->last_use_time = squid_curtime;
     }
-    xfree(hostname);
+    cbdataFree(hostname);
 }
 
 static struct in_addr
@@ -438,10 +438,8 @@ netdbReloadState(void)
     fd = file_open(path, O_RDONLY | O_TEXT);
     if (fd < 0)
 	return;
-    if (fstat(fd, &sb) < 0) {
-	file_close(fd);
+    if (fstat(fd, &sb) < 0)
 	return;
-    }
     t = buf = xcalloc(1, sb.st_size + 1);
     l = read(fd, buf, sb.st_size);
     file_close(fd);
@@ -680,12 +678,13 @@ netdbPingSite(const char *hostname)
 {
 #if USE_ICMP
     netdbEntry *n;
-    generic_cbdata *h;
+    char *h;
     if ((n = netdbLookupHost(hostname)) != NULL)
 	if (n->next_ping_time > squid_curtime)
 	    return;
-    h = cbdataAlloc(generic_cbdata);
-    h->data = xstrdup(hostname);
+    h = xstrdup(hostname);
+    cbdataAdd(h, cbdataXfree, 0);
+    cbdataLock(h);
     ipcache_nbgethostbyname(hostname, netdbSendPing, h);
 #endif
 }
@@ -981,19 +980,14 @@ netdbBinaryExchange(StoreEntry * s)
     storeComplete(s);
 }
 
-#if USE_ICMP
-CBDATA_TYPE(netdbExchangeState);
-#endif
-
 void
 netdbExchangeStart(void *data)
 {
 #if USE_ICMP
     peer *p = data;
     char *uri;
-    netdbExchangeState *ex;
-    CBDATA_INIT_TYPE(netdbExchangeState);
-    ex = cbdataAlloc(netdbExchangeState);
+    netdbExchangeState *ex = xcalloc(1, sizeof(*ex));
+    cbdataAdd(ex, cbdataXfree, 0);
     cbdataLock(p);
     ex->p = p;
     uri = internalRemoteUri(p->host, p->http_port, "/squid-internal-dynamic/", "netdb");

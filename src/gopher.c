@@ -612,7 +612,7 @@ gopherReadReply(int fd, void *data)
 #endif
     /* leave one space for \0 in gopherToHTML */
     statCounter.syscalls.sock.reads++;
-    len = FD_READ_METHOD(fd, buf, read_sz);
+    len = read(fd, buf, read_sz);
     if (len > 0) {
 	fd_bytes(fd, len, FD_READ);
 #if DELAY_POOLS
@@ -682,7 +682,7 @@ gopherSendComplete(int fd, char *buf, size_t size, int errflag, void *data)
     GopherStateData *gopherState = (GopherStateData *) data;
     StoreEntry *entry = gopherState->entry;
     debug(10, 5) ("gopherSendComplete: FD %d size: %d errflag: %d\n",
-	fd, (int) size, errflag);
+	fd, size, errflag);
     if (size > 0) {
 	fd_bytes(fd, size, FD_WRITE);
 	kb_incr(&statCounter.server.all.kbytes_out, size);
@@ -812,13 +812,11 @@ gopherStart(FwdState * fwdState)
     commSetTimeout(fd, Config.Timeout.read, gopherTimeout, gopherState);
 }
 
-CBDATA_TYPE(GopherStateData);
 static GopherStateData *
 CreateGopherStateData(void)
 {
-    GopherStateData *gd;
-    CBDATA_INIT_TYPE(GopherStateData);
-    gd = cbdataAlloc(GopherStateData);
+    GopherStateData *gd = xcalloc(1, sizeof(GopherStateData));
+    cbdataAdd(gd, cbdataXfree, 0);
     gd->buf = memAllocate(MEM_4K_BUF);
     return (gd);
 }

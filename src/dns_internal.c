@@ -35,9 +35,6 @@
 
 #include "squid.h"
 
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
-#include <windows.h>
-#endif
 #ifndef _PATH_RESOLV_CONF
 #define _PATH_RESOLV_CONF "/etc/resolv.conf"
 #endif
@@ -84,9 +81,6 @@ static void idnsAddNameserver(const char *buf);
 static void idnsFreeNameservers(void);
 static void idnsParseNameservers(void);
 static void idnsParseResolvConf(void);
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
-static void idnsParseWIN32Registry(void);
-#endif
 static void idnsSendQuery(idns_query * q);
 static int idnsFromKnownNameserver(struct sockaddr_in *from);
 static idns_query *idnsFindQuery(unsigned short id);
@@ -103,11 +97,6 @@ idnsAddNameserver(const char *buf)
     if (!safe_inet_addr(buf, &A)) {
 	debug(78, 0) ("WARNING: rejecting '%s' as a name server, because it is not a numeric IP address\n", buf);
 	return;
-    }
-    if (A.s_addr == 0) {
-	debug(78, 0) ("WARNING: Squid does not accept 0.0.0.0 in DNS server specifications.\n");
-	debug(78, 0) ("Will be using 127.0.0.1 instead, assuming you meant that DNS is running on the same machine\n");
-	safe_inet_addr("127.0.0.1", &A);
     }
     if (nns == nns_alloc) {
 	int oldalloc = nns_alloc;
@@ -159,7 +148,7 @@ idnsParseResolvConf(void)
 	debug(78, 1) ("%s: %s\n", _PATH_RESOLV_CONF, xstrerror());
 	return;
     }
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
+#if defined(_SQUID_CYGWIN_)
     setmode(fileno(fp), O_TEXT);
 #endif
     while (fgets(buf, 512, fp)) {
@@ -177,150 +166,6 @@ idnsParseResolvConf(void)
     fclose(fp);
 }
 
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
-static void
-idnsParseWIN32Registry(void)
-{
-    char *t;
-    char *token;
-    HKEY hndKey, hndKey2;
-
-    idnsFreeNameservers();
-    switch (WIN32_OS_version) {
-    case _WIN_OS_WINNT:
-	/* get nameservers from the Windows NT registry */
-	if (RegOpenKey(HKEY_LOCAL_MACHINE,
-		"SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
-		&hndKey) == ERROR_SUCCESS) {
-	    DWORD Type = 0;
-	    DWORD Size = 0;
-	    LONG Result;
-	    Result =
-		RegQueryValueEx(hndKey, "DhcpNameServer", NULL, &Type, NULL,
-		&Size);
-	    if (Result == ERROR_SUCCESS && Size) {
-		t = (unsigned char *) xmalloc(Size);
-		RegQueryValueEx(hndKey, "DhcpNameServer", NULL, &Type, t,
-		    &Size);
-		token = strtok((char *) t, ", ");
-		while (token) {
-		    idnsAddNameserver(token);
-		    debug(78, 1) ("Adding DHCP nameserver %s from Registry\n",
-			token);
-		    token = strtok(NULL, ", ");
-		}
-	    }
-	    Result =
-		RegQueryValueEx(hndKey, "NameServer", NULL, &Type, NULL, &Size);
-	    if (Result == ERROR_SUCCESS && Size) {
-		t = (unsigned char *) xmalloc(Size);
-		RegQueryValueEx(hndKey, "NameServer", NULL, &Type, t, &Size);
-		token = strtok((char *) t, ", ");
-		while (token) {
-		    debug(78, 1) ("Adding nameserver %s from Registry\n",
-			token);
-		    idnsAddNameserver(token);
-		    token = strtok(NULL, ", ");
-		}
-	    }
-	    RegCloseKey(hndKey);
-	}
-	break;
-    case _WIN_OS_WIN2K:
-    case _WIN_OS_WINXP:
-	/* get nameservers from the Windows 2000 registry */
-	/* search all interfaces for DNS server addresses */
-	if (RegOpenKey(HKEY_LOCAL_MACHINE,
-		"SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces",
-		&hndKey) == ERROR_SUCCESS) {
-	    int i;
-	    char keyname[255];
-
-	    for (i = 0; i < 10; i++) {
-		if (RegEnumKey(hndKey, i, (char *) &keyname,
-			255) == ERROR_SUCCESS) {
-		    char newkeyname[255];
-		    strcpy(newkeyname,
-			"SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\");
-		    strcat(newkeyname, keyname);
-		    if (RegOpenKey(HKEY_LOCAL_MACHINE, newkeyname,
-			    &hndKey2) == ERROR_SUCCESS) {
-			DWORD Type = 0;
-			DWORD Size = 0;
-			LONG Result;
-			Result =
-			    RegQueryValueEx(hndKey2, "DhcpNameServer", NULL,
-			    &Type, NULL, &Size);
-			if (Result == ERROR_SUCCESS && Size) {
-			    t = (unsigned char *) xmalloc(Size);
-			    RegQueryValueEx(hndKey2, "DhcpNameServer", NULL,
-				&Type, t, &Size);
-			    token = strtok((char *) t, ", ");
-			    while (token) {
-				debug(78, 1)
-				    ("Adding DHCP nameserver %s from Registry\n",
-				    token);
-				idnsAddNameserver(token);
-				token = strtok(NULL, ", ");
-			    }
-			}
-			Result =
-			    RegQueryValueEx(hndKey2, "NameServer", NULL, &Type,
-			    NULL, &Size);
-			if (Result == ERROR_SUCCESS && Size) {
-			    t = (unsigned char *) xmalloc(Size);
-			    RegQueryValueEx(hndKey2, "NameServer", NULL, &Type,
-				t, &Size);
-			    token = strtok((char *) t, ", ");
-			    while (token) {
-				debug(78,
-				    1) ("Adding nameserver %s from Registry\n",
-				    token);
-				idnsAddNameserver(token);
-				token = strtok(NULL, ", ");
-			    }
-			}
-			RegCloseKey(hndKey2);
-		    }
-		}
-	    }
-	    RegCloseKey(hndKey);
-	}
-	break;
-    case _WIN_OS_WIN95:
-    case _WIN_OS_WIN98:
-    case _WIN_OS_WINME:
-	/* get nameservers from the Windows 9X registry */
-	if (RegOpenKey(HKEY_LOCAL_MACHINE,
-		"SYSTEM\\CurrentControlSet\\Services\\VxD\\MSTCP",
-		&hndKey) == ERROR_SUCCESS) {
-	    DWORD Type = 0;
-	    DWORD Size = 0;
-	    LONG Result;
-	    Result =
-		RegQueryValueEx(hndKey, "NameServer", NULL, &Type, NULL, &Size);
-	    if (Result == ERROR_SUCCESS && Size) {
-		t = (unsigned char *) xmalloc(Size);
-		RegQueryValueEx(hndKey, "NameServer", NULL, &Type, t, &Size);
-		token = strtok((char *) t, ", ");
-		while (token) {
-		    debug(78, 1) ("Adding nameserver %s from Registry\n",
-			token);
-		    idnsAddNameserver(token);
-		    token = strtok(NULL, ", ");
-		}
-	    }
-	    RegCloseKey(hndKey);
-	}
-	break;
-    default:
-	debug(78, 1)
-	    ("Failed to read nameserver from Registry: Unknown System Type.\n");
-	return;
-    }
-}
-#endif
-
 static void
 idnsStats(StoreEntry * sentry)
 {
@@ -336,7 +181,7 @@ idnsStats(StoreEntry * sentry)
     for (n = lru_list.head; n; n = n->next) {
 	q = n->data;
 	storeAppendPrintf(sentry, "%#06x %4d %5d %10.3f %9.3f\n",
-	    (int) q->id, (int) q->sz, q->nsends,
+	    (int) q->id, q->sz, q->nsends,
 	    tvSubDsec(q->start_t, current_time),
 	    tvSubDsec(q->sent_t, current_time));
     }
@@ -488,7 +333,7 @@ idnsGrokReply(const char *buf, size_t sz)
 static void
 idnsRead(int fd, void *data)
 {
-    int *N = &incoming_sockets_accepted;
+    int *N = data;
     ssize_t len;
     struct sockaddr_in from;
     socklen_t from_len;
@@ -521,7 +366,7 @@ idnsRead(int fd, void *data)
 	(*N)++;
 	debug(78, 3) ("idnsRead: FD %d: received %d bytes from %s.\n",
 	    fd,
-	    (int) len,
+	    len,
 	    inet_ntoa(from.sin_addr));
 	ns = idnsFromKnownNameserver(&from);
 	if (ns >= 0) {
@@ -580,7 +425,7 @@ idnsCheckQueue(void *unused)
 	    idnsSendQuery(q);
 	} else {
 	    int v = cbdataValid(q->callback_data);
-	    debug(78, 2) ("idnsCheckQueue: ID %x: giving up after %d tries and %5.1f seconds\n",
+	    debug(78, 1) ("idnsCheckQueue: ID %x: giving up after %d tries and %5.1f seconds\n",
 		(int) q->id, q->nsends,
 		tvSubDsec(q->start_t, current_time));
 	    cbdataUnlock(q->callback_data);
@@ -614,45 +459,23 @@ idnsInit(void)
 {
     static int init = 0;
     if (DnsSocket < 0) {
-	int port;
-	struct in_addr addr;
-	if (Config.Addrs.udp_outgoing.s_addr != no_addr.s_addr)
-	    addr = Config.Addrs.udp_outgoing;
-	else
-	    addr = Config.Addrs.udp_incoming;
 	DnsSocket = comm_open(SOCK_DGRAM,
 	    0,
-	    addr,
+	    Config.Addrs.udp_outgoing,
 	    0,
 	    COMM_NONBLOCKING,
 	    "DNS Socket");
 	if (DnsSocket < 0)
 	    fatal("Could not create a DNS socket");
-	/* Ouch... we can't call functions using debug from a debug
-	 * statement. Doing so messes up the internal _db_level
-	 */
-	port = comm_local_port(DnsSocket);
-	debug(78, 1) ("DNS Socket created at %s, port %d, FD %d\n",
-	    inet_ntoa(addr),
-	    port, DnsSocket);
+	debug(78, 1) ("DNS Socket created on FD %d\n", DnsSocket);
     }
     assert(0 == nns);
     idnsParseNameservers();
-#ifndef _SQUID_MSWIN_
     if (0 == nns)
 	idnsParseResolvConf();
-#endif
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
-    if (0 == nns)
-	idnsParseWIN32Registry();
-#endif
     if (0 == nns)
 	fatal("Could not find any nameservers.\n"
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
-	    "       Please check your TCP-IP settings or /etc/resolv.conf file\n"
-#else
 	    "       Please check your /etc/resolv.conf file\n"
-#endif
 	    "       or use the 'dns_nameservers' option in squid.conf.");
     if (!init) {
 	memDataInit(MEM_IDNS_QUERY, "idns_query", sizeof(idns_query), 0);
@@ -719,7 +542,7 @@ snmp_netIdnsFn(variable_list * Var, snint * ErrP)
 {
     int i, n = 0;
     variable_list *Answer = NULL;
-    debug(49, 5) ("snmp_netDnsFn: Processing request: \n");
+    debug(49, 5) ("snmp_netDnsFn: Processing request:\n", Var->name[LEN_SQ_NET + 1]);
     snmpDebugOid(5, Var->name, Var->name_length);
     *ErrP = SNMP_ERR_NOERROR;
     switch (Var->name[LEN_SQ_NET + 1]) {

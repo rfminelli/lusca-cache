@@ -112,6 +112,7 @@ typedef struct _Ftpdata {
 	char *buf;
 	size_t size;
 	off_t offset;
+	FREE *freefunc;
 	wordlist *message;
 	char *last_command;
 	char *last_reply;
@@ -122,6 +123,7 @@ typedef struct _Ftpdata {
 	char *buf;
 	size_t size;
 	off_t offset;
+	FREE *freefunc;
 	char *host;
 	u_short port;
     } data;
@@ -146,9 +148,8 @@ typedef void (FTPSM) (FtpStateData *);
 /* Local functions */
 static CNCB ftpPasvCallback;
 static PF ftpDataRead;
-static PF ftpDataWrite;
-static CWCB ftpDataWriteCallback;
 static PF ftpStateFree;
+static PF ftpPumpClosedData;
 static PF ftpTimeout;
 static PF ftpReadControlReply;
 static CWCB ftpWriteCommandCallback;
@@ -158,10 +159,12 @@ static int ftpRestartable(FtpStateData * ftpState);
 static void ftpAppendSuccessHeader(FtpStateData * ftpState);
 static void ftpAuthRequired(HttpReply * reply, request_t * request, const char *realm);
 static void ftpHackShortcut(FtpStateData * ftpState, FTPSM * nextState);
+static void ftpPutStart(FtpStateData *);
+static CWCB ftpPutTransferDone;
 static void ftpUnhack(FtpStateData * ftpState);
 static void ftpScheduleReadControlReply(FtpStateData *, int);
 static void ftpHandleControlReply(FtpStateData *);
-static char *ftpHtmlifyListEntry(const char *line, FtpStateData * ftpState);
+static char *ftpHtmlifyListEntry(char *line, FtpStateData * ftpState);
 static void ftpFailed(FtpStateData *, err_type);
 static void ftpFailedErrorMessage(FtpStateData *, err_type);
 
@@ -191,7 +194,6 @@ static FTPSM ftpListDir;
 static FTPSM ftpGetFile;
 static FTPSM ftpSendCwd;
 static FTPSM ftpReadCwd;
-static FTPSM ftpRestOrList;
 static FTPSM ftpSendList;
 static FTPSM ftpSendNlst;
 static FTPSM ftpReadList;
@@ -200,15 +202,16 @@ static FTPSM ftpReadRest;
 static FTPSM ftpSendRetr;
 static FTPSM ftpReadRetr;
 static FTPSM ftpReadTransferDone;
-static FTPSM ftpSendStor;
-static FTPSM ftpReadStor;
-static FTPSM ftpWriteTransferDone;
-static FTPSM ftpSendReply;
-static FTPSM ftpSendMkdir;
-static FTPSM ftpReadMkdir;
-static FTPSM ftpFail;
 static FTPSM ftpSendQuit;
 static FTPSM ftpReadQuit;
+static FTPSM ftpFail;
+static FTPSM ftpDataTransferDone;
+static FTPSM ftpRestOrList;
+static FTPSM ftpSendStor;
+static FTPSM ftpReadStor;
+static FTPSM ftpSendReply;
+static FTPSM ftpTryMkdir;
+static FTPSM ftpReadMkdir;
 /************************************************
 ** State Machine Description (excluding hacks) **
 *************************************************
@@ -219,21 +222,17 @@ User			Pass
 Pass			Type
 Type			TraverseDirectory / GetFile
 TraverseDirectory	Cwd / GetFile / ListDir
-Cwd			TraverseDirectory / Mkdir
+Cwd			TraverseDirectory
 GetFile			Mdtm
 Mdtm			Size
 Size			Pasv
 ListDir			Pasv
-Pasv			FileOrList
-FileOrList		Rest / Retr / Nlst / List / Mkdir (PUT /xxx;type=d)
+Pasv			RestOrList
+RestOrList		Rest / Retr / Nlst / List
 Rest			Retr
-Retr / Nlst / List	DataRead* (on datachannel)
-DataRead*		ReadTransferDone
+Retr / Nlst / List	(ftpDataRead on datachannel)
+(ftpDataRead)		ReadTransferDone
 ReadTransferDone	DataTransferDone
-Stor			DataWrite* (on datachannel)
-DataWrite*		RequestPutBody** (from client)
-RequestPutBody**	DataWrite* / WriteTransferDone
-WriteTransferDone	DataTransferDone
 DataTransferDone	Quit
 Quit			-
 ************************************************/
@@ -256,8 +255,7 @@ FTPSM *FTP_SM_FUNCS[] =
     ftpReadStor,		/* SENT_STOR */
     ftpReadQuit,		/* SENT_QUIT */
     ftpReadTransferDone,	/* READING_DATA (RETR,LIST,NLST) */
-    ftpWriteTransferDone,	/* WRITING_DATA (STOR) */
-    ftpSendReply,		/* WRITTEN_DATA? (STOR) */
+    ftpSendReply,		/* WRITING_DATA (STOR) */
     ftpReadMkdir		/* SENT_MKDIR */
 };
 
@@ -272,15 +270,21 @@ ftpStateFree(int fdnotused, void *data)
     storeUnlockObject(ftpState->entry);
     if (ftpState->reply_hdr) {
 	memFree(ftpState->reply_hdr, MEM_8K_BUF);
+	/* this seems unnecessary, but people report SEGV's
+	 * when freeing memory in this function */
 	ftpState->reply_hdr = NULL;
     }
     requestUnlink(ftpState->request);
     if (ftpState->ctrl.buf) {
-	memFreeBuf(ftpState->ctrl.size, ftpState->ctrl.buf);
+	ftpState->ctrl.freefunc(ftpState->ctrl.buf);
+	/* this seems unnecessary, but people report SEGV's
+	 * when freeing memory in this function */
 	ftpState->ctrl.buf = NULL;
     }
     if (ftpState->data.buf) {
-	memFreeBuf(ftpState->data.size, ftpState->data.buf);
+	ftpState->data.freefunc(ftpState->data.buf);
+	/* this seems unnecessary, but people report SEGV's
+	 * when freeing memory in this function */
 	ftpState->data.buf = NULL;
     }
     if (ftpState->pathcomps)
@@ -627,7 +631,7 @@ dots_fill(size_t len)
 }
 
 static char *
-ftpHtmlifyListEntry(const char *line, FtpStateData * ftpState)
+ftpHtmlifyListEntry(char *line, FtpStateData * ftpState)
 {
     LOCAL_ARRAY(char, icon, 2048);
     LOCAL_ARRAY(char, href, 2048 + 40);
@@ -679,7 +683,7 @@ ftpHtmlifyListEntry(const char *line, FtpStateData * ftpState)
 	return html;
     }
     if ((parts = ftpListParseParts(line, ftpState->flags)) == NULL) {
-	const char *p;
+	char *p;
 	snprintf(html, 8192, "%s\n", line);
 	for (p = line; *p && xisspace(*p); p++);
 	if (*p && !xisspace(*p))
@@ -791,7 +795,7 @@ ftpParseListing(FtpStateData * ftpState)
     while (*end != '\r' && *end != '\n' && end > sbuf)
 	end--;
     usable = end - sbuf;
-    debug(9, 3) ("ftpParseListing: usable = %d\n", (int) usable);
+    debug(9, 3) ("ftpParseListing: usable = %d\n", usable);
     if (usable == 0) {
 	debug(9, 3) ("ftpParseListing: didn't find end for %s\n", storeUrl(e));
 	xfree(sbuf);
@@ -834,10 +838,10 @@ ftpParseListing(FtpStateData * ftpState)
 }
 
 static void
-ftpDataComplete(FtpStateData * ftpState)
+ftpReadComplete(FtpStateData * ftpState)
 {
-    debug(9, 3) ("ftpDataComplete\n");
-    /* Connection closed; transfer done. */
+    debug(9, 3) ("ftpReadComplete\n");
+    /* Connection closed; retrieval done. */
     if (ftpState->data.fd > -1) {
 	/*
 	 * close data socket so it does not occupy resources while
@@ -858,9 +862,9 @@ ftpDataRead(int fd, void *data)
     int j;
     int bin;
     StoreEntry *entry = ftpState->entry;
+    MemObject *mem = entry->mem_obj;
     size_t read_sz;
 #if DELAY_POOLS
-    MemObject *mem = entry->mem_obj;
     delay_id delay_id = delayMostBytesAllowed(mem);
 #endif
     assert(fd == ftpState->data.fd);
@@ -875,7 +879,7 @@ ftpDataRead(int fd, void *data)
 #endif
     memset(ftpState->data.buf + ftpState->data.offset, '\0', read_sz);
     statCounter.syscalls.sock.reads++;
-    len = FD_READ_METHOD(fd, ftpState->data.buf + ftpState->data.offset, read_sz);
+    len = read(fd, ftpState->data.buf + ftpState->data.offset, read_sz);
     if (len > 0) {
 	fd_bytes(fd, len, FD_READ);
 #if DELAY_POOLS
@@ -909,7 +913,7 @@ ftpDataRead(int fd, void *data)
 	    return;
 	}
     } else if (len == 0) {
-	ftpDataComplete(ftpState);
+	ftpReadComplete(ftpState);
     } else {
 	if (ftpState->flags.isdir) {
 	    ftpParseListing(ftpState);
@@ -917,11 +921,14 @@ ftpDataRead(int fd, void *data)
 	    storeAppend(entry, ftpState->data.buf, len);
 	    ftpState->data.offset = 0;
 	}
-	commSetSelect(fd,
-	    COMM_SELECT_READ,
-	    ftpDataRead,
-	    data,
-	    Config.Timeout.read);
+	if (ftpState->size > 0 && mem->inmem_hi >= ftpState->size + mem->reply->hdr_sz)
+	    ftpReadComplete(ftpState);
+	else
+	    commSetSelect(fd,
+		COMM_SELECT_READ,
+		ftpDataRead,
+		data,
+		Config.Timeout.read);
     }
 }
 
@@ -1013,7 +1020,7 @@ ftpBuildTitleUrl(FtpStateData * ftpState)
 	    strCat(ftpState->base_href, rfc1738_escape_part(ftpState->password));
 	}
 	strCat(ftpState->base_href, "@");
-    }
+	}
     strCat(ftpState->base_href, request->host);
     if (request->port != urlDefaultPort(PROTO_FTP)) {
 	strCat(ftpState->base_href, ":");
@@ -1023,7 +1030,6 @@ ftpBuildTitleUrl(FtpStateData * ftpState)
     strCat(ftpState->base_href, "/");
 }
 
-CBDATA_TYPE(FtpStateData);
 void
 ftpStart(FwdState * fwd)
 {
@@ -1032,11 +1038,11 @@ ftpStart(FwdState * fwd)
     int fd = fwd->server_fd;
     LOCAL_ARRAY(char, realm, 8192);
     const char *url = storeUrl(entry);
-    FtpStateData *ftpState;
+    FtpStateData *ftpState = xcalloc(1, sizeof(FtpStateData));
     HttpReply *reply;
-
-    CBDATA_INIT_TYPE(FtpStateData);
-    ftpState = cbdataAlloc(FtpStateData);
+    StoreEntry *pe = NULL;
+    const cache_key *key = NULL;
+    cbdataAdd(ftpState, cbdataXfree, 0);
     debug(9, 3) ("ftpStart: '%s'\n", url);
     statCounter.server.all.requests++;
     statCounter.server.ftp.requests++;
@@ -1066,6 +1072,10 @@ ftpStart(FwdState * fwd)
 	    snprintf(realm, 8192, "ftp %s port %d",
 		ftpState->user, request->port);
 	}
+	/* eject any old cached object */
+	key = storeKeyPublic(entry->mem_obj->url, entry->mem_obj->method);
+	if ((pe = storeGet(key)) != NULL)
+	    storeRelease(pe);
 	/* create reply */
 	reply = entry->mem_obj->reply;
 	assert(reply != NULL);
@@ -1083,9 +1093,13 @@ ftpStart(FwdState * fwd)
 	ftpState->user, ftpState->password);
     ftpState->state = BEGIN;
     ftpState->ctrl.last_command = xstrdup("Connect to server");
-    ftpState->ctrl.buf = memAllocBuf(4096, &ftpState->ctrl.size);
+    ftpState->ctrl.buf = memAllocate(MEM_4K_BUF);
+    ftpState->ctrl.freefunc = memFree4K;
+    ftpState->ctrl.size = 4096;
     ftpState->ctrl.offset = 0;
-    ftpState->data.buf = memAllocBuf(SQUID_TCP_SO_RCVBUF, &ftpState->data.size);
+    ftpState->data.buf = xmalloc(SQUID_TCP_SO_RCVBUF);
+    ftpState->data.size = SQUID_TCP_SO_RCVBUF;
+    ftpState->data.freefunc = xfree;
     ftpScheduleReadControlReply(ftpState, 0);
 }
 
@@ -1111,7 +1125,7 @@ static void
 ftpWriteCommandCallback(int fd, char *bufnotused, size_t size, int errflag, void *data)
 {
     FtpStateData *ftpState = data;
-    debug(9, 7) ("ftpWriteCommandCallback: wrote %d bytes\n", (int) size);
+    debug(9, 7) ("ftpWriteCommandCallback: wrote %d bytes\n", size);
     if (size > 0) {
 	fd_bytes(fd, size, FD_WRITE);
 	kb_incr(&statCounter.server.all.kbytes_out, size);
@@ -1120,7 +1134,7 @@ ftpWriteCommandCallback(int fd, char *bufnotused, size_t size, int errflag, void
     if (errflag == COMM_ERR_CLOSING)
 	return;
     if (errflag) {
-	debug(9, 1) ("ftpWriteCommandCallback: FD %d: %s\n", fd, xstrerror());
+	debug(50, 1) ("ftpWriteCommandCallback: FD %d: %s\n", fd, xstrerror());
 	ftpFailed(ftpState, ERR_WRITE_ERROR);
 	/* ftpFailed closes ctrl.fd and frees ftpState */
 	return;
@@ -1157,7 +1171,7 @@ ftpParseControlReply(char *buf, size_t len, int *codep, int *used)
 	safe_free(sbuf);
 	return NULL;
     }
-    debug(9, 3) ("ftpParseControlReply: %d bytes to play with\n", (int) len);
+    debug(9, 3) ("ftpParseControlReply: %d bytes to play with\n", len);
     end++;
     s = sbuf;
     s += strspn(s, crlf);
@@ -1229,7 +1243,7 @@ ftpReadControlReply(int fd, void *data)
     }
     assert(ftpState->ctrl.offset < ftpState->ctrl.size);
     statCounter.syscalls.sock.reads++;
-    len = FD_READ_METHOD(fd,
+    len = read(fd,
 	ftpState->ctrl.buf + ftpState->ctrl.offset,
 	ftpState->ctrl.size - ftpState->ctrl.offset);
     if (len > 0) {
@@ -1267,6 +1281,7 @@ ftpReadControlReply(int fd, void *data)
 static void
 ftpHandleControlReply(FtpStateData * ftpState)
 {
+    char *oldbuf;
     wordlist **W;
     int bytes_used = 0;
     wordlistDestroy(&ftpState->ctrl.message);
@@ -1275,7 +1290,12 @@ ftpHandleControlReply(FtpStateData * ftpState)
     if (ftpState->ctrl.message == NULL) {
 	/* didn't get complete reply yet */
 	if (ftpState->ctrl.offset == ftpState->ctrl.size) {
-	    ftpState->ctrl.buf = memReallocBuf(ftpState->ctrl.buf, ftpState->ctrl.size << 1, &ftpState->ctrl.size);
+	    oldbuf = ftpState->ctrl.buf;
+	    ftpState->ctrl.buf = xcalloc(ftpState->ctrl.size << 1, 1);
+	    xmemcpy(ftpState->ctrl.buf, oldbuf, ftpState->ctrl.size);
+	    ftpState->ctrl.size <<= 1;
+	    ftpState->ctrl.freefunc(oldbuf);
+	    ftpState->ctrl.freefunc = xfree;
 	}
 	ftpScheduleReadControlReply(ftpState, 0);
 	return;
@@ -1508,15 +1528,15 @@ ftpReadCwd(FtpStateData * ftpState)
 	if (!ftpState->flags.put)
 	    ftpFail(ftpState);
 	else
-	    ftpSendMkdir(ftpState);
+	    ftpTryMkdir(ftpState);
     }
 }
 
 static void
-ftpSendMkdir(FtpStateData * ftpState)
+ftpTryMkdir(FtpStateData * ftpState)
 {
     char *path = ftpState->filepath;
-    debug(9, 3) ("ftpSendMkdir: with path=%s\n", path);
+    debug(9, 3) ("ftpTryMkdir: with path=%s\n", path);
     snprintf(cbuf, 1024, "MKD %s\r\n", path);
     ftpWriteCommand(cbuf, ftpState);
     ftpState->state = SENT_MKDIR;
@@ -1659,8 +1679,7 @@ ftpSendPasv(FtpStateData * ftpState)
     if (getsockname(ftpState->ctrl.fd, (struct sockaddr *) &addr, &addr_len)) {
 	debug(9, 0) ("ftpSendPasv: getsockname(%d,..): %s\n",
 	    ftpState->ctrl.fd, xstrerror());
-	ftpFail(ftpState);
-	return;
+	addr.sin_addr = Config.Addrs.tcp_outgoing;
     }
     /* Open data channel with the same local address as control channel */
     fd = comm_open(SOCK_STREAM,
@@ -1771,8 +1790,8 @@ ftpOpenListenSocket(FtpStateData * ftpState, int fallback)
     int on = 1;
     u_short port = 0;
     /*
-     * Tear down any old data connection if any. We are about to
-     * establish a new one.
+     * * Tear down any old data connection if any. We are about to
+     * * establish a new one.
      */
     if (ftpState->data.fd > 0) {
 	comm_close(ftpState->data.fd);
@@ -1897,17 +1916,14 @@ static void
 ftpRestOrList(FtpStateData * ftpState)
 {
     debug(9, 3) ("This is ftpRestOrList\n");
-    if (ftpState->typecode == 'D') {
-	ftpState->flags.isdir = 1;
-	ftpState->flags.use_base = 1;
-	if (ftpState->flags.put) {
-	    ftpSendMkdir(ftpState);	/* PUT name;type=d */
-	} else {
-	    ftpSendNlst(ftpState);	/* GET name;type=d  sec 3.2.2 of RFC 1738 */
-	}
-    } else if (ftpState->flags.put) {
+    if (ftpState->flags.put) {
 	debug(9, 3) ("ftpRestOrList: Sending STOR request...\n");
 	ftpSendStor(ftpState);
+    } else if (ftpState->typecode == 'D') {
+	/* XXX This should NOT be here */
+	ftpSendNlst(ftpState);	/* sec 3.2.2 of RFC 1738 */
+	ftpState->flags.isdir = 1;
+	ftpState->flags.use_base = 1;
     } else if (ftpState->flags.isdir)
 	ftpSendList(ftpState);
     else if (ftpRestartable(ftpState))
@@ -1943,20 +1959,14 @@ ftpReadStor(FtpStateData * ftpState)
     if (code == 125 || (code == 150 && ftpState->data.host)) {
 	/* Begin data transfer */
 	debug(9, 3) ("ftpReadStor: starting data transfer\n");
-	commSetSelect(ftpState->data.fd,
-	    COMM_SELECT_WRITE,
-	    ftpDataWrite,
-	    ftpState,
-	    Config.Timeout.read);
 	/*
-	 * Cancel the timeout on the Control socket and
+	 * Cancel the timeout on the Control socket, pumpStart will
 	 * establish one on the data socket.
 	 */
 	commSetTimeout(ftpState->ctrl.fd, -1, NULL, NULL);
-	commSetTimeout(ftpState->data.fd, Config.Timeout.read, ftpTimeout,
-	    ftpState);
-	ftpState->state = WRITING_DATA;
+	ftpPutStart(ftpState);
 	debug(9, 3) ("ftpReadStor: writing data channel\n");
+	ftpState->state = WRITING_DATA;
     } else if (code == 150) {
 	/* Accept data channel */
 	debug(9, 3) ("ftpReadStor: accepting data channel\n");
@@ -1966,7 +1976,7 @@ ftpReadStor(FtpStateData * ftpState)
 	    ftpState,
 	    0);
     } else {
-	debug(9, 3) ("ftpReadStor: Unexpected reply code %03d\n", code);
+	debug(9, 3) ("ftpReadStor: Unexpected reply code %s\n", code);
 	ftpFail(ftpState);
     }
 }
@@ -2153,7 +2163,11 @@ ftpReadTransferDone(FtpStateData * ftpState)
 	/* Connection closed; retrieval done. */
 	if (ftpState->flags.html_header_sent)
 	    ftpListingFinish(ftpState);
-	ftpSendQuit(ftpState);
+	if (!ftpState->flags.put) {
+	    storeTimestampsSet(ftpState->entry);
+	    fwdComplete(ftpState->fwd);
+	}
+	ftpDataTransferDone(ftpState);
     } else {			/* != 226 */
 	debug(9, 1) ("ftpReadTransferDone: Got code %d after reading data\n",
 	    code);
@@ -2163,62 +2177,15 @@ ftpReadTransferDone(FtpStateData * ftpState)
     }
 }
 
-/* This will be called when there is data available to put */
 static void
-ftpRequestBody(char *buf, size_t size, void *data)
+ftpDataTransferDone(FtpStateData * ftpState)
 {
-    FtpStateData *ftpState = (FtpStateData *) data;
-    debug(9, 3) ("ftpRequestBody: buf=%p size=%d ftpState=%p\n", buf, (int) size, data);
-    ftpState->data.offset = size;
-    if (size > 0) {
-	/* DataWrite */
-	comm_write(ftpState->data.fd, buf, size, ftpDataWriteCallback, data, NULL);
-    } else if (size < 0) {
-	/* Error */
-	debug(9, 1) ("ftpRequestBody: request aborted");
-	ftpFailed(ftpState, ERR_READ_ERROR);
-    } else if (size == 0) {
-	/* End of transfer */
-	ftpDataComplete(ftpState);
+    debug(9, 3) ("This is ftpDataTransferDone\n");
+    if (ftpState->data.fd > -1) {
+	comm_close(ftpState->data.fd);
+	ftpState->data.fd = -1;
     }
-}
-
-/* This will be called when the put write is completed */
-static void
-ftpDataWriteCallback(int fd, char *buf, size_t size, int err, void *data)
-{
-    FtpStateData *ftpState = (FtpStateData *) data;
-    if (!err) {
-	/* Shedule the rest of the request */
-	clientReadBody(ftpState->request, ftpState->data.buf, ftpState->data.size, ftpRequestBody, ftpState);
-    } else {
-	debug(9, 1) ("ftpDataWriteCallback: write error: %s\n", xstrerror());
-	ftpFailed(ftpState, ERR_WRITE_ERROR);
-    }
-}
-
-static void
-ftpDataWrite(int ftp, void *data)
-{
-    FtpStateData *ftpState = (FtpStateData *) data;
-    debug(9, 3) ("ftpDataWrite\n");
-    /* This starts the body transfer */
-    clientReadBody(ftpState->request, ftpState->data.buf, ftpState->data.size, ftpRequestBody, ftpState);
-}
-
-static void
-ftpWriteTransferDone(FtpStateData * ftpState)
-{
-    int code = ftpState->ctrl.replycode;
-    debug(9, 3) ("This is ftpWriteTransferDone\n");
-    if (code != 226) {
-	debug(9, 1) ("ftpReadTransferDone: Got code %d after sending data\n",
-	    code);
-	ftpFailed(ftpState, ERR_FTP_PUT_ERROR);
-	return;
-    }
-    storeTimestampsSet(ftpState->entry);	/* XXX Is this needed? */
-    ftpSendReply(ftpState);
+    ftpSendQuit(ftpState);
 }
 
 static void
@@ -2357,7 +2324,7 @@ static void
 ftpFailedErrorMessage(FtpStateData * ftpState, err_type error)
 {
     ErrorState *err;
-    const char *command, *reply;
+    char *command, *reply;
     /* Translate FTP errors into HTTP errors */
     err = NULL;
     switch (error) {
@@ -2410,6 +2377,48 @@ ftpFailedErrorMessage(FtpStateData * ftpState, err_type error)
 }
 
 static void
+ftpPumpClosedData(int data_fd, void *data)
+{
+    FtpStateData *ftpState = data;
+    assert(data_fd == ftpState->data.fd);
+    /*
+     * Ugly pump module closed our server-side.  Deal with it.
+     * The data FD is already closed, so just set it to -1.
+     */
+    ftpState->data.fd = -1;
+    /*
+     * Currently, thats all we have to do.  Because the upload failed,
+     * storeAbort() will be called on the reply entry.  That will
+     * call fwdAbort, which closes ftpState->ctrl.fd and then
+     * ftpStateFree gets called.
+     */
+}
+
+static void
+ftpPutStart(FtpStateData * ftpState)
+{
+    debug(9, 3) ("ftpPutStart\n");
+    /*
+     * sigh, we need this gross hack to detect when ugly pump module
+     * aborts and wants to close the server-side.
+     */
+    comm_add_close_handler(ftpState->data.fd, ftpPumpClosedData, ftpState);
+    pumpStart(ftpState->data.fd, ftpState->fwd, ftpPutTransferDone, ftpState);
+}
+
+static void
+ftpPutTransferDone(int fd, char *bufnotused, size_t size, int errflag, void *data)
+{
+    FtpStateData *ftpState = data;
+    if (ftpState->data.fd >= 0) {
+	comm_remove_close_handler(fd, ftpPumpClosedData, ftpState);
+	comm_close(ftpState->data.fd);
+	ftpState->data.fd = -1;
+    }
+    ftpReadComplete(ftpState);
+}
+
+static void
 ftpSendReply(FtpStateData * ftpState)
 {
     ErrorState *err;
@@ -2450,15 +2459,15 @@ ftpSendReply(FtpStateData * ftpState)
 static void
 ftpAppendSuccessHeader(FtpStateData * ftpState)
 {
-    const char *mime_type = NULL;
-    const char *mime_enc = NULL;
+    char *mime_type = NULL;
+    char *mime_enc = NULL;
     String urlpath = ftpState->request->urlpath;
     const char *filename = NULL;
     const char *t = NULL;
     StoreEntry *e = ftpState->entry;
+    StoreEntry *pe = NULL;
     http_reply *reply = e->mem_obj->reply;
     http_version_t version;
-
     if (ftpState->flags.http_header_sent)
 	return;
     ftpState->flags.http_header_sent = 1;
@@ -2509,8 +2518,12 @@ ftpAppendSuccessHeader(FtpStateData * ftpState)
     storeTimestampsSet(e);
     if (ftpState->flags.authenticated) {
 	/*
-	 * Authenticated requests can't be cached.
+	 * Authenticated requests can't be cached. Eject any old cached
+	 * object
 	 */
+	pe = storeGetPublic(e->mem_obj->url, e->mem_obj->method);
+	if (pe)
+	    storeRelease(pe);
 	storeRelease(e);
     } else if (EBIT_TEST(e->flags, ENTRY_CACHABLE) && !ftpState->restarted_offset) {
 	storeSetPublicKey(e);
@@ -2522,7 +2535,7 @@ ftpAppendSuccessHeader(FtpStateData * ftpState)
 static void
 ftpAuthRequired(HttpReply * old_reply, request_t * request, const char *realm)
 {
-    ErrorState *err = errorCon(ERR_CACHE_ACCESS_DENIED, HTTP_UNAUTHORIZED);
+    ErrorState *err = errorCon(ERR_ACCESS_DENIED, HTTP_UNAUTHORIZED);
     HttpReply *rep;
     err->request = requestLink(request);
     rep = errorBuildReply(err);

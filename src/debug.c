@@ -38,7 +38,7 @@
 static char *debug_log_file = NULL;
 static int Ctx_Lock = 0;
 static const char *debugLogTime(time_t);
-static void ctx_print(void);
+static void ctx_print();
 #if HAVE_SYSLOG
 static void _db_print_syslog(const char *format, va_list args);
 #endif
@@ -111,6 +111,7 @@ _db_print_stderr(const char *format, va_list args)
 	return;
     vfprintf(stderr, format, args);
 }
+
 
 #if HAVE_SYSLOG
 static void

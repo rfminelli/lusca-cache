@@ -92,7 +92,7 @@ rfc1738_do_escape(const char *url, int encode_reserved)
     static size_t bufsize = 0;
     const char *p;
     char *q;
-    unsigned int i, do_escape;
+    int i, do_escape;
 
     if (buf == NULL || strlen(url) * 3 > bufsize) {
 	xfree(buf);

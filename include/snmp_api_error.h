@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
-#ifndef SQUID_SNMP_API_ERROR_H
-#define SQUID_SNMP_API_ERROR_H
+#ifndef _SNMP_API_ERROR_H_
+#define _SNMP_API_ERROR_H_
 
 /***************************************************************************
  *
@@ -57,15 +57,14 @@ extern "C" {
 
 /* extern int snmp_errno */
 
-    const char *snmp_api_error(int);
+    char *snmp_api_error(int);
     int snmp_api_errno(void);
 
-    const char *api_errstring(int);	/* Backwards compatibility */
+    char *api_errstring(int);	/* Backwards compatibility */
     void snmp_set_api_error(int);
 
 #ifdef __cplusplus
 }
 
 #endif
-
-#endif				/* SQUID_SNMP_API_ERROR_H */
+#endif				/* _SNMP_API_ERROR_H_ */

@@ -1,21 +1,21 @@
 <HTML><HEAD>
-<TITLE>FEL: Beg&auml;rd URL kunde inte h&auml;mtas</TITLE>
+<TITLE>FEL: Begärd URL kunde inte hämtas</TITLE>
 </HEAD><BODY>
 <H1>FEL</H1>
-<H2>Beg&auml;rd URL kunde inte h&auml;mtas</H2>
+<H2>Begärd URL kunde inte hämtas</H2>
 <HR>
 <P>
-Vid f&ouml;rs&ouml;ket att h&auml;mta URL:
+Vid försöket att hämta URL:
 <A HREF="%U">%U</A>
 <P>
-Mottogs f&ouml;ljande fel:
+Mottogs följande fel:
 <UL>
 <LI>
 <STRONG>
-FTP &auml;r Avst&auml;ngd
+FTP är Avstängd
 </STRONG>
 </UL>
 
 <P>
-Denna cache st&ouml;djer inte FTP.
+Denna cache stödjer inte FTP.
 </P>
