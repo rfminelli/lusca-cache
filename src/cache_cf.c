@@ -86,10 +86,10 @@ static struct {
 
 #define DefaultMemMaxSize 	(16 << 20)	/* 16 MB */
 #define DefaultMemHighWatherMark 90	/* 90% */
-#define DefaultMemLowWatherMark  60	/* 60% */
+#define DefaultMemLowWatherMark  75	/* 75% */
 #define DefaultSwapMaxSize	(100 << 10)	/* 100 MB (100*1024 kbytes) */
 #define DefaultSwapHighWaterMark 90	/* 90% */
-#define DefaultSwapLowWaterMark  60	/* 60% */
+#define DefaultSwapLowWaterMark  75	/* 75% */
 
 #define DefaultFtpDefaultTtl	(7 * 24 * 60 * 60)	/* 1 week */
 #define DefaultFtpMaxObjSize	(4 << 20)	/* 4 MB */
@@ -113,7 +113,7 @@ static struct {
 #define DefaultCleanRate	-1	/* disabled */
 #define DefaultDnsChildren	5	/* 3 processes */
 #define DefaultDnsChildrenMax	32	/* 32 processes */
-#define DefaultMaxRequestSize	(102400)	/* 100Kb */
+#define DefaultMaxRequestSize	(100 << 10)	/* 100Kb */
 #define DefaultHotVmFactor	0.0	/* disabled */
 
 #define DefaultAsciiPortNum	CACHE_HTTP_PORT
