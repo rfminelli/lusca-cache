@@ -1,3 +1,8 @@
+Changes to squid-1.1.23 ()
+
+	- Added unique hostname feature from 1.2 code (David J N Begley)
+	- Applied Richard Kettlewell's Y2K fix to lib/rfc1123.c
+
 Changes to squid-1.1.22 (June 25, 1998):
 
 	- Fixed hash4() for SCO cc (Vlado Potisk).
