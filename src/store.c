@@ -1558,6 +1558,14 @@ storeRelease(StoreEntry * e)
 	if ((hentry = (StoreEntry *) hash_lookup(store_table, hkey)))
 	    storeExpireNow(hentry);
     }
+    /* delay releases while rebuilding swap */
+    if (store_rebuilding == STORE_REBUILDING_FAST) {
+	debug(20, 2, "storeRelease: Delaying release until store is rebuilt: '%s'\n",
+		e->key ? e->key : e->url ? e->url : "NO URL");
+	storeExpireNow(e);
+	storeSetPrivateKey(e);
+	return 0;
+    }
     if (e->key)
 	debug(20, 5, "storeRelease: Release object key: %s\n", e->key);
     else
