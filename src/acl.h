@@ -20,13 +20,13 @@ typedef enum {
 #define ACL_THURSDAY	0x10
 #define ACL_FRIDAY	0x20
 #define ACL_SATURDAY	0x40
-#define ACL_ALLWEEK	0x4F
+#define ACL_ALLWEEK	0x7F
+#define ACL_WEEKDAYS	0x3E
 
 struct _acl_ip_data {
     struct in_addr addr1;	/* if addr2 non-zero then its a range */
-    struct in_addr mask1;
     struct in_addr addr2;
-    struct in_addr mask2;
+    struct in_addr mask;
     struct _acl_ip_data *next;
 };
 
@@ -70,8 +70,6 @@ extern void aclDestroyAccessList _PARAMS((struct _acl_access ** list));
 extern void aclDestroyAcls _PARAMS((void));
 extern void aclParseAccessLine _PARAMS((struct _acl_access **));
 extern void aclParseAclLine _PARAMS((void));
-extern int aclMatchInteger _PARAMS((intlist *, int));
-
 
 extern struct _acl_access *HTTPAccessList;
 extern struct _acl_access *ICPAccessList;

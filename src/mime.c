@@ -50,21 +50,6 @@ char *mime_get_header(char *mime, char *name)
     return NULL;
 }
 
-int mime_refresh_request(mime)
-     char *mime;
-{
-    char *pr = NULL;
-    if (mime == NULL)
-	return 0;
-    if (mime_get_header(mime, "If-Modified-Since"))
-	return 1;
-    if ((pr = mime_get_header(mime, "pragma"))) {
-	if (strcasecmp(pr, "no-cache"))
-	    return 1;
-    }
-    return 0;
-}
-
 ext_table_entry *mime_ext_to_type(extension)
      char *extension;
 {

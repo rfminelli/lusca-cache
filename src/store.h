@@ -84,6 +84,8 @@ typedef struct _MemObject {
     int fd_of_first_client;
     struct _http_reply *reply;
     request_t *request;
+    SIH swapin_complete_handler;
+    void *swapin_complete_data;
 } MemObject;
 
 typedef enum {
@@ -154,7 +156,7 @@ typedef struct pentry {
 } PendingEntry;
 
 extern StoreEntry *storeGet _PARAMS((char *));
-extern StoreEntry *storeCreateEntry _PARAMS((char *, char *, int, int));
+extern StoreEntry *storeCreateEntry _PARAMS((char *, char *, int, method_t));
 extern void storeSetPublicKey _PARAMS((StoreEntry *));
 extern void storeSetPrivateKey _PARAMS((StoreEntry *));
 extern StoreEntry *storeGetFirst _PARAMS((void));
@@ -176,16 +178,13 @@ extern int storeGetSwapSpace _PARAMS((int));
 extern int storeEntryValidToSend _PARAMS((StoreEntry *));
 extern int storeEntryValidLength _PARAMS((StoreEntry *));
 extern int storeEntryLocked _PARAMS((StoreEntry *));
-extern int storeLockObject _PARAMS((StoreEntry *));
+extern int storeLockObject _PARAMS((StoreEntry *, SIH, void *));
 extern int storeOriginalKey _PARAMS((StoreEntry *));
 extern int storeRelease _PARAMS((StoreEntry *));
 extern int storeUnlockObject _PARAMS((StoreEntry *));
 extern int storeUnregister _PARAMS((StoreEntry *, int));
-#ifdef NOT_USED_CODE
-extern int storeGrep _PARAMS((StoreEntry *, char *, int));
-#endif
-extern char *storeGeneratePublicKey _PARAMS((char *, int));
-extern char *storeGeneratePrivateKey _PARAMS((char *, int, int));
+extern char *storeGeneratePublicKey _PARAMS((char *, method_t));
+extern char *storeGeneratePrivateKey _PARAMS((char *, method_t, int));
 extern char *storeMatchMime _PARAMS((StoreEntry *, char *, char *, int));
 extern int storeAddSwapDisk _PARAMS((char *));
 extern char *swappath _PARAMS((int));
@@ -196,7 +195,6 @@ extern char *storeSwapFullPath _PARAMS((int, char *));
 extern int storeWriteCleanLog _PARAMS((void));
 extern int storeRegister(StoreEntry *, int, PIF, void *);
 extern int urlcmp _PARAMS((char *, char *));
-extern int storeSwapInStart _PARAMS((StoreEntry *));
 extern int swapInError _PARAMS((int fd, StoreEntry *));
 extern int storeCopy _PARAMS((StoreEntry *, int, int, char *, int *));
 extern int storeMaintainSwapSpace _PARAMS((void));
@@ -211,5 +209,10 @@ extern void storeAppendPrintf _PARAMS((StoreEntry *, char *,...));
 #else
 extern void storeAppendPrintf();
 #endif
+
+extern int store_rebuilding;
+#define STORE_NOT_REBUILDING 0
+#define STORE_REBUILDING_SLOW 1
+#define STORE_REBUILDING_FAST 2
 
 #endif

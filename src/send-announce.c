@@ -15,7 +15,7 @@ void send_announce()
     struct hostent *hp = NULL;
     char *host = NULL;
     char *file = NULL;
-    int port;
+    u_short port;
     int fd;
     int l;
     int n;
@@ -32,8 +32,8 @@ void send_announce()
     strcat(sndbuf, tbuf);
     sprintf(tbuf, "Running on %s %d %d\n",
 	getMyHostname(),
-	getAsciiPortNum(),
-	getUdpPortNum());
+	getHttpPortNum(),
+	getIcpPortNum());
     strcat(sndbuf, tbuf);
     if (getAdminEmail()) {
 	sprintf(tbuf, "cache_admin: %s\n", getAdminEmail());
@@ -54,14 +54,14 @@ void send_announce()
 	    debug(27, 1, "send_announce: %s: %s\n", file, xstrerror());
 	}
     }
-    qdata = (icpUdpData *) xcalloc(1, sizeof(icpUdpData));
+    qdata = xcalloc(1, sizeof(icpUdpData));
     qdata->msg = xstrdup(sndbuf);
     qdata->len = strlen(sndbuf) + 1;
     qdata->address.sin_family = AF_INET;
     qdata->address.sin_port = htons(port);
     memcpy(&qdata->address.sin_addr, hp->h_addr_list[0], hp->h_length);
     AppendUdp(qdata);
-    comm_set_select_handler(theUdpConnection,
+    comm_set_select_handler(theOutIcpConnection,
 	COMM_SELECT_WRITE,
 	(PF) icpUdpReply,
 	(void *) qdata);
