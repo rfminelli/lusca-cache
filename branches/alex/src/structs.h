@@ -110,7 +110,7 @@ struct _aclCheck_t {
     const struct _acl_access *access_list;
     struct in_addr src_addr;
     struct in_addr dst_addr;
-    request_t *request;
+    request_t *request;     /* cannot make it const becuase of REQ_USED_PROXY_AUTH that we set */
     char ident[ICP_IDENT_SZ];
     char browser[BROWSERNAMELEN];
     acl_lookup_state state[ACL_ENUM_MAX];
@@ -446,6 +446,7 @@ struct _http_reply {
     char user_agent[HTTP_REPLY_FIELD_SZ << 2];
 };
 
+#if OLD_CODE
 struct _HttpStateData {
     StoreEntry *entry;
     request_t *request;
@@ -457,6 +458,7 @@ struct _HttpStateData {
     int fd;
     int flags;
 };
+#endif /* OLD_CODE */
 
 struct _icpUdpData {
     struct sockaddr_in address;
@@ -514,6 +516,7 @@ struct _AccessLogEntry {
     } private;
 };
 
+#if OLD_CODE
 struct _clientHttpRequest {
     ConnStateData *conn;
     request_t *request;		/* Parsed URL ... */
@@ -563,6 +566,14 @@ struct _ConnStateData {
 	time_t until;
     } defer;
 };
+#else /* ! OLD_CODE */
+struct _IdentStateData {
+    int fd;
+    int state;
+    char ident[ICP_IDENT_SZ];
+    IDCB *callback;
+};
+#endif /* OLD_CODE */
 
 struct _dlink_node {
     void *data;
@@ -837,8 +848,13 @@ struct _MemObject {
         int meta_len;
         char *meta_buf;
     } swapout;
+#if OLD_CODE
     struct _http_reply *reply;
     request_t *request;
+#else
+    HttpRequest *pending_request; /* NULL if no request is pending */
+    HttpReply *pending_reply;     /* NULL if no reply is pending   */
+#endif
     struct timeval start_ping;
     IRCB *icp_reply_callback;
     void *ircb_data;
@@ -886,6 +902,7 @@ struct _SwapDir {
     int swaplog_fd;
 };
 
+#if OLD_CODE
 struct _request_t {
     method_t method;
     protocol_t protocol;
@@ -909,6 +926,7 @@ struct _request_t {
     struct _HierarchyLogEntry hier;
     err_type err_type;
 };
+#endif
 
 struct _cachemgr_passwd {
     char *passwd;

@@ -30,6 +30,7 @@
  */
 
 #include "squid.h"
+#include "HttpRequest.h"  /* @?@ -> structs.h */
 
 const char *hier_strings[] =
 {
@@ -147,7 +148,7 @@ peerSelect(request_t * request,
     else
 	debug(44, 3) ("peerSelect: %s\n", RequestMethodStr[request->method]);
     cbdataAdd(psstate, MEM_NONE);
-    psstate->request = requestLink(request);
+    psstate->request = requestUse(request);
     psstate->entry = entry;
     psstate->callback = callback;
     psstate->fail_callback = fail_callback;

@@ -39,7 +39,12 @@ typedef struct _http_reply http_reply;
 typedef struct _HttpStateData HttpStateData;
 typedef struct _icpUdpData icpUdpData;
 typedef struct _clientHttpRequest clientHttpRequest;
+typedef struct _IdentStateData IdentStateData;
+#if OLD_CODE
 typedef struct _ConnStateData ConnStateData;
+#else
+typedef struct _HttpConn ConnStateData;
+#endif
 typedef struct _ipcache_addrs ipcache_addrs;
 typedef struct _ipcache_entry ipcache_entry;
 typedef struct _domain_ping domain_ping;
@@ -64,7 +69,11 @@ typedef struct _store_client store_client;
 typedef struct _MemObject MemObject;
 typedef struct _StoreEntry StoreEntry;
 typedef struct _SwapDir SwapDir;
+#if OLD_CODE
 typedef struct _request_t request_t;
+#else
+typedef struct _HttpRequest request_t;
+#endif
 typedef struct _AccessLogEntry AccessLogEntry;
 typedef struct _cachemgr_passwd cachemgr_passwd;
 typedef struct _refresh_t refresh_t;
@@ -73,6 +82,14 @@ typedef struct _ErrorState ErrorState;
 typedef struct _dlink_node dlink_node;
 typedef struct _dlink_list dlink_list;
 typedef struct _StatCounters StatCounters;
+
+typedef struct _IOBuffer IOBuffer;
+typedef struct _HttpHeader HttpHeader;
+typedef struct _HttpHeaderField HttpHeaderField;
+typedef struct _HttpMsg HttpMsg;
+typedef struct _HttpRequest HttpRequest;
+typedef struct _HttpReply HttpReply;
+typedef struct _HttpConn HttpConn;
 
 typedef void AIOCB(void *, int aio_return, int aio_errno);
 typedef void CWCB(int fd, char *, size_t size, int flag, void *data);
@@ -86,7 +103,7 @@ typedef void DWCB(int, int, size_t, void *);
 typedef void FQDNH(const char *, void *);
 typedef int HASHCMP(const void *, const void *);
 typedef unsigned int HASHHASH(const void *, unsigned int);
-typedef void IDCB(void *);
+typedef void IDCB(HttpConn *conn);
 typedef void IPH(const ipcache_addrs *, void *);
 typedef void IRCB(peer *, peer_t, icp_common_t *, void *data);
 typedef void PSC(peer *, void *);

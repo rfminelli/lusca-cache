@@ -35,7 +35,7 @@
 /* General schema:
 
    <-----------------  capacity  ------------------>
-   <---  rsize  ---->.<--------- "wsize" ---------->
+   <---  rsize  ---->.<--------- "wsize" ---------->(hack)
    [-----------------|-----------------------------]
    \ "read_ptr"      \"write_ptr"                    
 
@@ -46,6 +46,10 @@
 	- when empty buffer is not in use, the buf pointer can be NULL
         - we could allow for concurrent reading and writing, but what for?
           (and it is much more safe this way)
+   Hacks:
+        - If terminator_hack is set, we add 1 byte to requested capacity
+	  to append '\0'; Upper layers may request something like (PAGE_SIZE-1)
+	  to avoid memory fragmentation when requesting terminator_hack;
 */
 
 #include "squid.h"
@@ -67,13 +71,22 @@ static void ioBufferCollapse(IOBuffer *iob);
 
 
 IOBuffer *
-ioBufferCreate(size_t capacity)
+ioBufferCreate(size_t capacity, int term_hack)
 {
-    IOBuffer *iob = xcalloc(sizeof(IOBuffer));
-    iob->capacity = capacity;
-    /* other fields are set to 0 by calloc */
-    /* buffer area is allocated when it is actually needed */
+    IOBuffer *iob = xcalloc(1, sizeof(IOBuffer));
+    ioBufferInit(iob, capacity, term_hack);
     return iob;
+}
+
+void 
+ioBufferInit(IOBuffer *iob, size_t capacity, int term_hack)
+{
+    assert(iob);
+    assert(capacity);
+    memset(iob, 0, sizeof(*iob));
+    iob->terminator_hack = term_hack ? 1 : 0; /* we may use t_hack as an integer */
+    iob->capacity = capacity;
+    /* buffer area is allocated when it is actually needed */
 }
 
 void 
@@ -92,8 +105,8 @@ ioBufferGrow(IOBuffer *iob, void *writer, size_t new_capacity)
     assert(writer && iob->wlock == writer && !iob->block);
     assert(new_capacity > iob->capacity);
     if (iob->buf) {
-        iob->buf = xrealloc(iob->buf, new_capacity);
-	meta_data.io_buffers -= iob->capacity;
+        iob->buf = xrealloc(iob->buf, new_capacity+iob->terminator_hack);
+	meta_data.io_buffers -= iob->capacity; /* hack cancels out here */
 	meta_data.io_buffers += new_capacity;
     }
     iob->capacity = new_capacity;
@@ -110,7 +123,7 @@ ioBufferRLock(IOBuffer *iob, void *reader)
 
 /* obtain lock (_asserts_ that lock is not set) */
 void 
-ioBufferWLock(IOBuffer *iob, void *writer);
+ioBufferWLock(IOBuffer *iob, void *writer)
 {
     assert(iob);
     assert(writer && !iob->wlock);
@@ -156,7 +169,7 @@ ioBufferStartWriting(IOBuffer *iob, void *writer, size_t *sizep)
     assert(writer && iob->wlock == writer && !iob->block);
     iob->block = writer;
     if (!iob->buf)
-	ioBufferExpand();
+	ioBufferExpand(iob);
     if (*sizep)
 	*sizep = ioBufferWSize(iob);
     return ioBufferWPtr(iob);
@@ -164,7 +177,7 @@ ioBufferStartWriting(IOBuffer *iob, void *writer, size_t *sizep)
 
 /* stop using buffer: must specify how much you read */
 void 
-ioBufferDoneReading(IOBuffer *iob, void *reader, size_t size);
+ioBufferDoneReading(IOBuffer *iob, void *reader, size_t size)
 {
     assert(iob);
     assert(reader && iob->rlock == reader && iob->block == reader);
@@ -187,38 +200,42 @@ ioBufferDoneWriting(IOBuffer *iob, void *writer, size_t size)
     assert(size >= 0);
     iob->rsize += size;
     assert(iob->rsize <= iob->capacity);
-    if (!iob->rsize)
+    if (iob->rsize) {
+	if (iob->terminator_hack)
+	    iob->buf[iob->rsize] = '\0';
+    } else
 	ioBufferCollapse(iob); /* nothing to keep */
+    
     iob->block = NULL;
 }
 
 /* if you are lasy: start()+read+done(); locking is left for you */
 size_t
-ioBufferRead(IOBuffer *iob, int fd, void *reader)
+ioBufferReadFile(IOBuffer *iob, int fd, void *writer)
 {
     size_t size = 0;
-    char *buf = ioBufferStartReading(iob, reader, &size);
+    char *buf = ioBufferStartWriting(iob, writer, &size);
     if (size > 0) {
 	size = read(fd, buf, size);
 	if (size > 0)
 	    fd_bytes(fd, size, FD_READ);
     }
-    ioBufferDoneReading(iob, reader, size > 0 ? size : 0);
+    ioBufferDoneWriting(iob, writer, size > 0 ? size : 0);
     return size;
 }
 
 /* if you are lasy: start()+write+done(); locking is left for you */
 size_t
-ioBufferWrite(IOBuffer *iob, int fd, void *writer);
+ioBufferWriteFile(IOBuffer *iob, int fd, void *reader)
 {
     size_t size = 0;
-    char *buf = ioBufferStartWriting(iob, writer, &size);
+    char *buf = ioBufferStartReading(iob, reader, &size);
     if (size > 0) {
 	size = write(fd, buf, size);
 	if (size > 0)
 	    fd_bytes(fd, size, FD_WRITE);
     }
-    ioBufferDoneWriting(iob, writer, size > 0 ? size : 0);
+    ioBufferDoneReading(iob, reader, size > 0 ? size : 0);
     return size;
 }
 
@@ -236,7 +253,7 @@ ioBufferCollapse(IOBuffer *iob)
     if (iob->buf) {
         xfree(iob->buf);
         iob->buf = NULL;
-	meta_data.io_buffers -= iob->capacity;
+	meta_data.io_buffers -= iob->capacity+iob->terminator_hack;
     }
 }
 
@@ -244,7 +261,7 @@ static void
 ioBufferExpand(IOBuffer *iob)
 {
     if (!iob->buf) {
-        iob->buf = xcalloc(iob->capacity);
-	meta_data.io_buffers += iob->capacity;
+        iob->buf = xcalloc(1, iob->capacity+iob->terminator_hack);
+	meta_data.io_buffers += iob->capacity+iob->terminator_hack;
     }
 }

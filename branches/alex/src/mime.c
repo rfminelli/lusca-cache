@@ -105,6 +105,7 @@
  */
 
 #include "squid.h"
+#include "HttpHeader.h"  /* @?@ -> structs.h */
 
 #define GET_HDR_SZ 1024
 
@@ -390,9 +391,13 @@ mimeInit(char *filename)
 static void
 mimeLoadIconFile(const char *icon)
 {
+    static const char *prefix = "HTTP/1.0 200 OK\r\n";
+    static const char *suffix = "\r\n";
+
     int fd;
     int n;
     int l;
+    int pl, hl, sl;
     int flags;
     struct stat sb;
     StoreEntry *e;
@@ -400,6 +405,7 @@ mimeLoadIconFile(const char *icon)
     LOCAL_ARRAY(char, url, MAX_URL);
     char *buf;
     const cache_key *key;
+    HttpHeader hdr;
     snprintf(url, MAX_URL, "http://internal.squid/icons/%s", icon);
     key = storeKeyPublic(url, METHOD_GET);
     if (storeGet(key))
@@ -414,6 +420,24 @@ mimeLoadIconFile(const char *icon)
 	debug(50, 0) ("mimeLoadIconFile: FD %d: fstat: %s\n", fd, xstrerror());
 	return;
     }
+    /* create header information for the icon */
+    httpHeaderInit(&hdr);
+    httpHeaderAddStrField(&hdr, "Date", mkrfc1123(squid_curtime));
+    httpHeaderAddStrField(&hdr, "Server", full_appname_string);
+    httpHeaderAddStrField(&hdr, "Content-Type", Config.icons.content_type);
+    httpHeaderAddIntField(&hdr, "Content-Length", (int) sb.st_size);
+    httpHeaderAddStrField(&hdr, "Last-Modified", mkrfc1123(sb.st_mtime));
+    httpHeaderAddStrField(&hdr, "Expires", mkrfc1123(squid_curtime + 86400));
+    /* put info into the memory buffer */
+    pl = strlen(prefix);
+    hl = hdr.packed_size - 1;
+    sl = strlen(suffix);
+    l = pl+hl+sl;
+    buf = xmalloc(l+1);
+    strcpy(buf+0, prefix);
+    httpHeaderPack(&hdr, buf+pl);
+    strcpy(buf+pl+hl, suffix);
+    /* push buffer into store entry */
     flags = 0;
     EBIT_SET(flags, REQ_CACHABLE);
     e = storeCreateEntry(url,
@@ -421,6 +445,7 @@ mimeLoadIconFile(const char *icon)
 	flags,
 	METHOD_GET);
     assert(e != NULL);
+#if OLD_CODE /* there was no request, why fool our selves ? @?@ */
     e->mem_obj->request = requestLink(urlParse(METHOD_GET, url));
     buf = memAllocate(MEM_4K_BUF, 1);
     l = 0;
@@ -433,7 +458,12 @@ mimeLoadIconFile(const char *icon)
     l += snprintf(buf + l, SM_PAGE_SIZE - l, "Expires: %s\r\n", mkrfc1123(squid_curtime + 86400));
     l += snprintf(buf + l, SM_PAGE_SIZE - l, "\r\n");
     httpParseReplyHeaders(buf, e->mem_obj->reply);
+#endif
     storeAppend(e, buf, l);
+    xfree(buf);
+    /* now read the file content and push it into store */
+    buf = memAllocate(MEM_4K_BUF, 1); /* most icons are smaller than 1K */
+    /* @?@ what if we fail to read? (e.g. permissions problem ) */
     while ((n = read(fd, buf, SM_PAGE_SIZE)) > 0)
 	storeAppend(e, buf, n);
     file_close(fd);

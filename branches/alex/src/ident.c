@@ -30,71 +30,72 @@
  */
 
 #include "squid.h"
+#include "HttpConn.h"
 
 #define IDENT_PORT 113
 
 static PF identReadReply;
 static PF identClose;
 static CNCB identConnectDone;
-static void identCallback(ConnStateData * connState);
+static void identCallback(HttpConn * conn);
 
 static void
 identClose(int fdnotused, void *data)
 {
-    ConnStateData *connState = data;
-    connState->ident.fd = -1;
+    HttpConn *conn = data;
+    conn->ident.fd = -1;
 }
 
 /* start a TCP connection to the peer host on port 113 */
 void
-identStart(int fd, ConnStateData * connState, IDCB * callback)
+identStart(int fd, HttpConn *conn, IDCB *callback)
 {
-    connState->ident.callback = callback;
-    connState->ident.state = IDENT_PENDING;
+    conn->ident.callback = callback;
+    conn->ident.state = IDENT_PENDING;
     if (fd < 0) {
 	fd = comm_open(SOCK_STREAM,
 	    0,
-	    connState->me.sin_addr,
+	    conn->addr.me.sin_addr,
 	    0,
 	    COMM_NONBLOCKING,
 	    "ident");
 	if (fd == COMM_ERROR) {
-	    identCallback(connState);
+	    identCallback(conn);
 	    return;
 	}
     }
-    connState->ident.fd = fd;
+    conn->ident.fd = fd;
     comm_add_close_handler(fd,
 	identClose,
-	connState);
+	conn);
     commConnectStart(fd,
-	inet_ntoa(connState->peer.sin_addr),
+	inet_ntoa(conn->addr.peer.sin_addr),
 	IDENT_PORT,
 	identConnectDone,
-	connState);
+	conn);
 }
 
 static void
 identConnectDone(int fd, int status, void *data)
 {
-    ConnStateData *connState = data;
+    HttpConn *conn = data;
     LOCAL_ARRAY(char, reqbuf, BUFSIZ);
     if (status != COMM_OK) {
 	comm_close(fd);
-	identCallback(connState);
+	identCallback(conn);
 	return;
     }
     snprintf(reqbuf, BUFSIZ, "%d, %d\r\n",
-	ntohs(connState->peer.sin_port),
-	ntohs(connState->me.sin_port));
-    comm_write(fd, xstrdup(reqbuf), strlen(reqbuf), NULL, connState, xfree);
-    commSetSelect(fd, COMM_SELECT_READ, identReadReply, connState, 0);
+	ntohs(conn->addr.peer.sin_port),
+	ntohs(conn->addr.me.sin_port));
+    comm_write(fd, xstrdup(reqbuf), strlen(reqbuf), NULL, conn, xfree);
+    commSetSelect(fd, COMM_SELECT_READ, identReadReply, conn, 0);
 }
 
 static void
 identReadReply(int fd, void *data)
 {
-    ConnStateData *connState = data;
+    HttpConn *conn = data;
     LOCAL_ARRAY(char, buf, BUFSIZ);
     char *t = NULL;
     int len = -1;
@@ -111,18 +112,18 @@ identReadReply(int fd, void *data)
 	if (strstr(buf, "USERID")) {
 	    if ((t = strrchr(buf, ':'))) {
 		while (isspace(*++t));
-		xstrncpy(connState->ident.ident, t, ICP_IDENT_SZ);
+		xstrncpy(conn->ident.ident, t, ICP_IDENT_SZ);
 	    }
 	}
     }
     comm_close(fd);
-    identCallback(connState);
+    identCallback(conn);
 }
 
 static void
-identCallback(ConnStateData * connState)
+identCallback(HttpConn * conn)
 {
-    connState->ident.state = IDENT_DONE;
-    if (connState->ident.callback)
-	connState->ident.callback(connState);
+    conn->ident.state = IDENT_DONE;
+    if (conn->ident.callback)
+	conn->ident.callback(conn);
 }

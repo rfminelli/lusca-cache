@@ -352,7 +352,7 @@ extern DEFER protoCheckDeferRead;
 
 extern void urnStart(request_t *, StoreEntry *);
 
-extern void redirectStart(clientHttpRequest *, RH *, void *);
+extern void redirectStart(HttpRequest *req, RH *, void *);
 extern void redirectOpenServers(void);
 extern void redirectShutdownServers(void);
 extern void redirectStats(StoreEntry *);
@@ -529,8 +529,9 @@ extern method_t urlParseMethod(const char *);
 extern void urlInitialize(void);
 extern request_t *urlParse(method_t, char *);
 extern char *urlCanonical(const request_t *, char *);
-extern request_t *requestLink(request_t *);
-extern void requestUnlink(request_t *);
+extern request_t *requestUse(request_t *);
+extern const request_t *requestLink(const request_t *);
+extern void requestUnlink(const request_t *);
 extern int matchDomainName(const char *d, const char *h);
 extern int urlCheckRequest(const request_t *);
 extern int urlDefaultPort(protocol_t p);

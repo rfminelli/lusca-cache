@@ -30,6 +30,8 @@
  */
 
 #include "squid.h"
+#include "HttpRequest.h" /* @?@ -> structs.h */
+#include "HttpConn.h" /* @?@ -> structs.h */
 
 typedef struct {
     void *data;
@@ -326,29 +328,29 @@ redirectDispatch(redirector_t * redirect, redirectStateData * r)
 
 
 void
-redirectStart(clientHttpRequest * http, RH * handler, void *data)
+redirectStart(HttpRequest *req, RH * handler, void *data)
 {
-    ConnStateData *conn = http->conn;
+    HttpConn *conn = req->conn;
     redirectStateData *r = NULL;
     redirector_t *redirector = NULL;
-    if (!http)
+    if (!req)
 	fatal_dump("redirectStart: NULL clientHttpRequest");
     if (!handler)
 	fatal_dump("redirectStart: NULL handler");
-    debug(29, 5) ("redirectStart: '%s'\n", http->uri);
+    debug(29, 5) ("redirectStart: '%s'\n", req->uri);
     if (Config.Program.redirect == NULL) {
 	handler(data, NULL);
 	return;
     }
     r = xcalloc(1, sizeof(redirectStateData));
-    r->orig_url = xstrdup(http->uri);
-    r->client_addr = conn->log_addr;
+    r->orig_url = xstrdup(req->uri);
+    r->client_addr = conn->addr.log;
     if (conn->ident.ident == NULL || *conn->ident.ident == '\0') {
 	r->client_ident = dash_str;
     } else {
 	r->client_ident = conn->ident.ident;
     }
-    r->method_s = RequestMethodStr[http->request->method];
+    r->method_s = RequestMethodStr[req->method];
     r->handler = handler;
     r->data = data;
     if ((redirector = GetFirstAvailable()))

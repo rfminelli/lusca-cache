@@ -32,6 +32,7 @@
  */
 
 #include "squid.h"
+#include "HttpRequest.h" /* @?@ -> structs.h */
 
 typedef struct {
     char *url;

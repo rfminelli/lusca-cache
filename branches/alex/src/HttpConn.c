@@ -31,28 +31,9 @@
  */
 
 #include "squid.h"
-
-struct _HttpConn {
-    IOBuffer in_buf;
-    IOBuffer out_buf;
-
-    HttpMsg *reader;        /* current reader or NULL */
-    HttpMsg *writer;        /* current writer or NULL */
-
-    CCB get_reader;         /* called when new reader is needed */
-    CCB get_writer;         /* called when new writer is needed */
-
-    int cc_level;           /* concurrency level: #concurrent xactions being processed */
-    int req_count;          /* number of requests created or admitted */
-    int rep_count;          /* number of replies processed */
-
-    HttpConnIndex index;    /* keeps pending writers, searches by HttpMsg->id */
-    HttpConnDIndex deps;    /* keeps all HttpMsgs that depend on this connection */
-
-    uchar timeout_count;    /* number of timeouts caught */
-};
-
-
+#include "HttpConn.h"     /* @?@ -> structs.h */
+#include "HttpRequest.h"  /* @?@ -> structs.h */
+#include "HttpReply.h"    /* @?@ -> structs.h */
 
 /* Local constants */
 
@@ -65,9 +46,43 @@ struct _HttpConn {
 /* maximum concurrency level for passive connections */
 #define MAX_PASSIVE_CC_LEVEL 2
 
+/* max buffer sizes */
+/* -1 is for 0-terminating hack (see IOBuffer.c) */
+#define HTTP_CONN_MAX_IN_BUF_SIZE (4096-1)
+/* do not need 0-termination here (@?@ check how to grow out_buf!)*/
+#define HTTP_CONN_MAX_OUT_BUF_SIZE DISK_PAGE_SIZE
+
+/*
+ * initial buffer sizes, may grow up to the limit specified above 
+ * (there is no good reason to allocate 8KB to receive small HTTP requests)
+ */
+#define HTTP_CONN_REQ_BUF_SIZE 1024
+#define HTTP_CONN_REP_BUF_SIZE DISK_PAGE_SIZE
+
+
 /* Local functions */
+static HttpConn *httpConnCreate(int fd);
 static void httpConnClosed(int fd, void *data);
 static void httpConnTimeout(int fd, void *data);
+static void httpConnDestroy(HttpConn *conn);
+static void httpConnSetIdent(HttpConn *conn, struct sockaddr_in peer, struct sockaddr_in me);
+static int httpConnIsDeferred(int fdnotused, void *data);
+static void httpConnConnectDone(int fd, int status, void *data);
+static void httpConnDefer(HttpConn *conn, time_t delta);
+static void httpConnReadSocket(int fd, void *data);
+static void httpConnPushData(HttpConn *conn);
+static void httpConnWriteSocket(int fd, void *data);
+static void httpConnPullData(HttpConn *conn);
+static void httpConnBroadcastException(HttpConn *conn, int status);
+static void httpConnNoteException(HttpConn *conn, int status) ;
+static HttpMsg *httpConnGetNewReader(HttpConn *conn);
+static HttpMsg *httpConnGetNewWriter(HttpConn *conn);
+static void httpConnCanAdmitReqReader(HttpConn *conn);
+static HttpMsg *httpConnGetReqReader(HttpConn *conn);
+static HttpMsg *httpConnGetRepWriter(HttpConn *conn);
+static void httpConnAccessCheck(HttpConn *conn);
+static HttpMsg *httpConnGetReqWriter(HttpConn *conn);
+static HttpMsg *httpConnGetRepReader(HttpConn *conn);
 
 
 /* Create a passive http connection */
@@ -79,27 +94,32 @@ httpConnAccept(int sock)
     struct sockaddr_in peer;
     struct sockaddr_in me;
     /* accept */
-    memset(&peer, '\0', sizeof(struct sockaddr_in));
-    memset(&me, '\0', sizeof(struct sockaddr_in));
+    memset(&peer, '\0', sizeof(peer));
+    memset(&me, '\0', sizeof(me));
     if ((fd = comm_accept(sock, &peer, &me)) < 0)
 	return NULL;
     /* create httpConn */
+    debug(12, 4) ("httpConnAccept: FD %d: accepted\n", fd);
     conn = httpConnCreate(fd);
+    ioBufferInit(&conn->in_buf, HTTP_CONN_REQ_BUF_SIZE-1, 1); /* enable 0-termination hack */
+    ioBufferInit(&conn->out_buf, HTTP_CONN_REP_BUF_SIZE, 0);  /* disable 0-termination hack */
     /* set custom fields */
-    httpConnSetPeer(peer, me);
-    conn->read_socket = httpConnReadReqs;
-    conn->write_socket = httpConnWriteReps;
-    conn->start_reader = httpConnStartReadReq;
-    conn->start_writer = httpConnStartWriteRep;
+    httpConnSetIdent(conn, peer, me);
+    conn->host = xstrdup(inet_ntoa(peer.sin_addr));
+    conn->port = peer.sin_port;
+    conn->get_reader = httpConnGetReqReader;
+    conn->get_writer = httpConnGetRepWriter;
     /* start fqdn lookup if needed */
     if (Config.onoff.log_fqdn)
 	fqdncache_gethostbyaddr(peer.sin_addr, FQDN_LOOKUP_IF_MISS);
+    /* start ident lookup if needed */
+    identStart(-1, conn, httpConnAccessCheck);
     /* register timeout handler */
     commSetTimeout(fd, Config.Timeout.request, httpConnTimeout, conn);
     /* prepare to accept request */
-    commSetSelect(fd, COMM_SELECT_READ, conn -> read_socket, conn, 0);
+    commSetSelect(fd, COMM_SELECT_READ, httpConnReadSocket, conn, 0);
     /* we must create a reader to have somebody report a timeout on start */
-    conn -> start_reader(conn);
+    httpConnGetNewReader(conn);
     return conn;
 }
 
@@ -117,13 +137,13 @@ httpConnConnect(const char *host, int port, const char *label)
 	return NULL;
 
     conn = httpConnCreate(fd);
+    ioBufferInit(&conn->in_buf, HTTP_CONN_REP_BUF_SIZE-1, 1); /* enable 0-termination hack */
+    ioBufferInit(&conn->out_buf, HTTP_CONN_REQ_BUF_SIZE, 0);  /* disable 0-termination hack */
     /* set custom fields */
     conn->host = xstrdup(host);
     conn->port = port;
-    conn->read_socket = httpConnReadReps;
-    conn->write_socket = httpConnWriteReqs;
-    conn->start_reader = httpConnStartReadRep;
-    conn->start_writer = httpConnStartWriteReq;
+    conn->get_reader = httpConnGetRepReader;
+    conn->get_writer = httpConnGetReqWriter;
     /* set connect timeout @?@ maybe use different handler here? */
     commSetTimeout(fd, Config.Timeout.connect, httpConnTimeout, conn);
     /* start connecting */
@@ -165,43 +185,47 @@ static HttpConn *
 httpConnCreate(int fd)
 {
     HttpConn *conn;
-    conn = xcalloc(1, sizeof(HttpConn));
+    conn = memAllocate(MEM_HTTPCONN, 1);
     conn->fd = fd;
     conn->ident.fd = -1;
-    conn->host = xstrdup("??"); /* in case we forget to set it, remove it later @?@ */
-    conn->in_buf = ioBufferCreate(REQUEST_BUF_SIZE);
+    conn->host = NULL;
+    /* check if we need this @?@ */
     cbdataAdd(conn, MEM_NONE);
     comm_add_close_handler(fd, httpConnClosed, conn);
-    commSetDefer(fd, httpConnDefer, conn);
+    commSetDefer(fd, httpConnIsDeferred, conn);
+    return conn;
 }
 
 /* destroys connection and its dependents @?@ check if we want to destroy dependents here! */
 static void
 httpConnDestroy(HttpConn *conn)
 {
-    HttpConn *conn;
     ConnDependent *dep;
     DepListPos pos = DepListInitPos;
 
     assert(conn);
     
     /* destroy dependents */
-    while (depListGet(conn -> dependents, &dep, &pos))
+    while (depListGet(conn -> deps, &dep, &pos))
 	dep -> destroy(dep);
-    depListDestroy(conn -> dependents);
+    depListDestroy(conn -> deps);
     /* destroy buffers */
     ioBufferFree(conn->in_buf);
     ioBufferFree(conn->out_buf);
     /* destroy other dynamic fields */
     safe_free(conn->host);
-    cbdataFree(conn);
+    /* how do we free it? @?@ */
+    memFree(MEM_HTTPCONN, conn); /* OR cbdataFree(conn); ? */
 }
 
 /* peer in active and passive connections differ?! @?@ */
 static void
-httpConnSetPeer(HttpConn *conn, struct sockaddr_in peer, struct sockaddr_in me)
+httpConnSetIdent(HttpConn *conn, struct sockaddr_in peer, struct sockaddr_in me)
 {
+    IdentStateData *ident; 
     asset(conn);
+    ident = conn->other;
+    
     conn->peer = peer;
     safe_free(conn->host);
     conn->host = xstrdup(inet_ntoa(peer.sin_addr));
@@ -253,9 +277,9 @@ httpConnDefer(HttpConn *conn, time_t delta)
  * current state with the connection using well-known interface functions.
  */
 static void
-httpConnReadSocket(HttpConn *conn)
+httpConnReadSocket(int fd, void *data)
 {
-    int fd;
+    HttpConn *conn = data;
     int idleConnection = 0;
     IOBuffer *buf;
 
@@ -264,11 +288,12 @@ httpConnReadSocket(HttpConn *conn)
     fd = conn->fd;
     assert(buf);
 
-
     debug(12, 4) ("httpConnRead: FD %d: reading...\n", fd);
 
     /* always maintain registered status; @?@: is it OK to do it before read? */
     commSetSelect(fd, COMM_SELECT_READ, conn->readSocket, conn, 0);
+    if (!buf->free_space && buf->capacity < HTTP_CONN_MAX_IN_BUF_SIZE)
+	ioBufferGrow(buf, HTTP_CONN_MAX_IN_BUF_SIZE);
     if (buf->free_space > 0) {
     	size = ioBufferRead(buf, fd, conn);
     	idleConnection = conn -> queue -> is_empty && size <= 0;
@@ -311,17 +336,11 @@ static void
 httpConnPushData(HttpConn *conn)
 {
     assert(conn);
-    if (!ioBufferIsEmpty(conn->in_buf)) { /* we have data */
+    if (!ioBufferIsEmpty(&conn->in_buf)) { /* we have data */
 	if (conn->reader || /* we have a reader OR */
-	    ((conn->reader = conn->get_reader(conn)) &&  /* we got one AND */
+	    (httpConnGetNewReader(conn) &&  /* we got one AND */
 	     !ioBufferIsEmpty(conn->in_buf))) /* the data is still there */
 	    conn->reader->noteDataReady(conn);
-#if 0 /* this is the same as above but more clear and less efficient */
-	if (!conn->reader) /* no reader to read data */
-	    conn->reader = conn->get_reader(conn); /* may return NULL due to load control, etc. */
-	if (!ioBufferIsEmpty(conn->in_buf) && conn->reader) /* double check */
-	    conn->reader->noteDataReady(conn);
-#endif /* good code */
     }
 }
 
@@ -329,10 +348,10 @@ httpConnPushData(HttpConn *conn)
  * write to socket pulling data from pending Writers
  */
 static void
-httpConnWriteSocket(HttpConn *conn)
+httpConnWriteSocket(int fd, void *data)
 {
-    int fd;
     IOBuffer *buf;
+    HttpConn *conn = data;
 
     debug(12, 4) ("httpConnWrite: FD %d: writing...\n", fd);
 
@@ -352,7 +371,7 @@ httpConnWriteSocket(HttpConn *conn)
     	     * fd is closed for write, connection may still be open (half-closed);
     	     * not sure what to do here! @?@
     	     */
-    	    if (depListEmpty(conn->dependents)) {
+    	    if (depListIsEmpty(conn->deps)) {
     	    	comm_close(fd);
     	    	return; /* must exit after close */
     	    }
@@ -390,15 +409,9 @@ httpConnPullData(HttpConn *conn)
     assert(conn);
     if (!ioBufferIsFull(&conn->out_buf)) { /* we have free space */
 	if (conn->writer || /* we have a writer OR */
-	    ((conn->writer = conn->get_writer(conn)) &&  /* we got one AND */
+	    (httpConnGetNewWriter(conn) &&  /* we got one AND */
 	     !ioBufferIsEmpty(&conn->out_buf))) /* the data is still there */
 	    conn->writer->noteSpaceReady(conn);
-#if 0 /* this is the same as above but more clear and less efficient */
-	if (!conn->writer) /* no writer to write data */
-	    conn->writer = conn->get_writer(conn); /* may fail because nobody is waiting, etc. */
-	if (!ioBufferIsFull(&conn->out_buf) && conn->writer) /* double check */
-	    conn->writer->noteSpaceReady(conn);
-#endif /* if good code */
     }
 }
 
@@ -499,8 +512,29 @@ void
 httpConnNoteReaderDone(HttpConn *conn, httpMsg *msg) {
     assert(conn);
     assert(msg && msg == conn->reader);
+    ioBufferRUnLock(&conn->in_buf, msg);
     conn->reader = NULL;
     httpConnPushData(conn);
+}
+
+static HttpMsg *
+httpConnGetNewReader(HttpConn *conn)
+{
+    assert(!conn->reader);
+    conn->reader = conn->get_reader(conn);
+    if (conn->reader)
+	ioBufferWLock(&conn->in_buf, conn->reader);
+    return conn->reader;
+}
+
+static HttpMsg *
+httpConnGetNewWriter(HttpConn *conn)
+{
+    assert(!conn->writer);
+    conn->writer = conn->get_writer(conn);
+    if (conn->writer)
+	ioBufferRLock(&conn->out_buf, conn->writer);
+    return conn->writer;
 }
 
 /*
@@ -550,6 +584,26 @@ httpConnSendReply(HttpConn *conn, HttpReply *rep)
     httpConnPullData(conn); /* this will pull reply out of the table if needed */
 }
 
+static void
+httpConnAccessCheck(HttpConn *conn)
+{
+    const char *browser;
+    if (Config.onoff.ident_lookup && conn->ident.state == IDENT_NONE) {
+	identStart(-1, conn, httpConnAccessCheck);
+	return;
+    }
+    if (checkAccelOnly(http)) {
+	clientAccessCheckDone(0, http);
+	return;
+    }
+    browser = mime_get_header(http->request->headers, "User-Agent");
+    http->acl_checklist = aclChecklistCreate(Config.accessList.http,
+	http->request,
+	conn->peer.sin_addr,
+	browser,
+	conn->ident.ident);
+    aclNBCheck(http->acl_checklist, clientAccessCheckDone, http);
+}
 
 /*
  * Custom routines for active HTTP connections (Proxy -> Server)

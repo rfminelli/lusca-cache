@@ -106,6 +106,7 @@
 
 
 #include "squid.h"
+#include "HttpRequest.h"  /* @?@ -> structs.h */
 
 typedef struct {
     int fd;
@@ -136,7 +137,7 @@ protoDispatchFail(peer * peernotused, void *data)
     if (!storeUnlockObject(pctrl->entry))
 	return;
     err = errorCon(ERR_CANNOT_FORWARD, HTTP_SERVICE_UNAVAILABLE);
-    err->request = requestLink(pctrl->request);
+    err->request = requestUse(pctrl->request);
     errorAppendEntry(pctrl->entry, err);
     requestUnlink(pctrl->request);
     cbdataFree(pctrl);
@@ -191,7 +192,7 @@ protoStart(int fd, StoreEntry * entry, peer * e, request_t * request)
 		debug(17, 1) ("protoStart: Cannot retrieve '%s'\n",
 		    storeUrl(entry));
 		err = errorCon(ERR_UNSUP_REQ, HTTP_BAD_REQUEST);
-		err->request = requestLink(request);
+		err->request = requestUse(request);
 		errorAppendEntry(entry, err);
 	    }
 	}
@@ -228,7 +229,7 @@ protoDispatch(int fd, StoreEntry * entry, request_t * request)
 {
     pctrl_t *pctrl;
     debug(17, 3) ("protoDispatch: '%s'\n", storeUrl(entry));
-    entry->mem_obj->request = requestLink(request);
+    entry->mem_obj->pending_request = requestUse(request);
     if (request->protocol == PROTO_CACHEOBJ) {
 	protoStart(fd, entry, NULL, request);
 	return;
@@ -240,7 +241,7 @@ protoDispatch(int fd, StoreEntry * entry, request_t * request)
     cbdataAdd(pctrl, MEM_NONE);
     pctrl->entry = entry;
     pctrl->fd = fd;
-    pctrl->request = requestLink(request);
+    pctrl->request = requestUse(request);
     /* Keep the StoreEntry locked during peer selection phase */
     storeLockObject(entry);
     peerSelect(request,
@@ -263,14 +264,15 @@ int
 protoAbortFetch(StoreEntry * entry)
 {
     MemObject *mem;
-    struct _http_reply *reply;
+    HttpMsg *reply;
     if (storeClientWaiting(entry))
 	return 0;
     mem = entry->mem_obj;
-    reply = mem->reply;
-    if (reply->content_length < 0)
+    reply = (HttpMsg*)mem->pending_reply;
+    assert(reply);
+    if (httpHeaderGetContentLength(&reply->header) < 0)
 	return 1;
-    if (mem->inmem_hi < reply->content_length + reply->hdr_sz)
+    if (mem->inmem_hi < httpMsgGetTotalSize(reply))
 	return 1;
     return 0;
 }

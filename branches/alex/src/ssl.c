@@ -30,10 +30,11 @@
  */
 
 #include "squid.h"
+#include "HttpRequest.h"  /* @?@ -> structs.h */
 
 typedef struct {
     char *url;
-    char *host;			/* either request->host or proxy host */
+    const char *host;			/* either request->host or proxy host */
     u_short port;
     request_t *request;
     struct {
@@ -321,7 +322,7 @@ sslConnectDone(int fdnotused, int status, void *data)
     if (status == COMM_ERR_DNS) {
 	debug(26, 4) ("sslConnect: Unknown host: %s\n", sslState->host);
 	err = errorCon(ERR_DNS_FAIL, HTTP_NOT_FOUND);
-	err->request = requestLink(request);
+	err->request = requestUse(request);
 	err->dnsserver_msg = xstrdup(dns_error_message);
 	err->callback = sslErrorComplete;
 	err->callback_data = sslState;
@@ -331,7 +332,7 @@ sslConnectDone(int fdnotused, int status, void *data)
 	err->xerrno = errno;
 	err->host = xstrdup(sslState->host);
 	err->port = sslState->port;
-	err->request = requestLink(request);
+	err->request = requestUse(request);
 	err->callback = sslErrorComplete;
 	err->callback_data = sslState;
 	errorSend(sslState->client.fd, err);
@@ -363,14 +364,14 @@ sslStart(int fd, const char *url, request_t * request, size_t * size_ptr)
 	debug(26, 4) ("sslStart: Failed because we're out of sockets.\n");
 	err = errorCon(ERR_SOCKET_FAILURE, HTTP_INTERNAL_SERVER_ERROR);
 	err->xerrno = errno;
-	err->request = requestLink(request);
+	err->request = requestUse(request);
 	errorSend(fd, err);
 	return;
     }
     sslState = xcalloc(1, sizeof(SslStateData));
     cbdataAdd(sslState, MEM_NONE);
     sslState->url = xstrdup(url);
-    sslState->request = requestLink(request);
+    sslState->request = requestUse(request);
     sslState->size_ptr = size_ptr;
     sslState->client.fd = fd;
     sslState->server.fd = sock;
@@ -452,7 +453,7 @@ sslPeerSelectFail(peer * peernotused, void *data)
     SslStateData *sslState = data;
     ErrorState *err;
     err = errorCon(ERR_CANNOT_FORWARD, HTTP_SERVICE_UNAVAILABLE);
-    err->request = requestLink(sslState->request);
+    err->request = requestUse(sslState->request);
     err->callback = sslErrorComplete;
     err->callback_data = sslState;
     errorSend(sslState->client.fd, err);

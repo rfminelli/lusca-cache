@@ -29,6 +29,7 @@
  */
 
 #include "squid.h"
+#include "HttpRequest.h" /* @?@ -> structs.h */
 
 #define WHOIS_PORT 43
 

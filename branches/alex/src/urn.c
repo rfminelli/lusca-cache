@@ -28,6 +28,7 @@
  */
 
 #include "squid.h"
+#include "HttpRequest.h"  /* @?@ -> structs.h */
 
 static STCB urnHandleReply;
 static wordlist *urnParseReply(const char *inbuf);
@@ -96,14 +97,18 @@ urnStart(request_t * r, StoreEntry * e)
     debug(50, 3) ("urnStart: '%s'\n", storeUrl(e));
     urnState = xcalloc(1, sizeof(UrnState));
     urnState->entry = e;
-    urnState->request = requestLink(r);
+    urnState->request = requestUse(r);
     cbdataAdd(urnState, MEM_NONE);
     storeLockObject(urnState->entry);
     if (strncasecmp(r->urlpath, "menu.", 5) == 0) {
 	EBIT_SET(urnState->flags, URN_FORCE_MENU);
+#ifdef OLD_CODE
 	t = xstrdup(r->urlpath + 5);
 	xstrncpy(r->urlpath, t, MAX_URL);
 	xfree(t);
+#else
+	memmove((char*)r->urlpath, r->urlpath + 5, MAX_URL);
+#endif
     }
     if ((t = strchr(r->urlpath, ':')) != NULL) {
 	*t = '\0';
@@ -116,8 +121,12 @@ urnStart(request_t * r, StoreEntry * e)
     safe_free(host);
     k = storeKeyPublic(urlres, METHOD_GET);
     urlres_r = urlParse(METHOD_GET, urlres);
+#ifdef OLD_CODE
     urlres_r->headers = xstrdup("Accept: text/plain\r\n\r\n");
     urlres_r->headers_sz = strlen(urlres_r->headers);
+#else
+    httpHeaderAddStrField(&urlres_r->header, "Accept", "text/plain");
+#endif
     if ((urlres_e = storeGet(k)) == NULL) {
 	urlres_e = storeCreateEntry(urlres, urlres, 0, METHOD_GET);
 	storeClientListAdd(urlres_e, urnState);
@@ -139,6 +148,9 @@ urnStart(request_t * r, StoreEntry * e)
 static void
 urnHandleReply(void *data, char *buf, ssize_t size)
 {
+
+    assert(0); /* @?@ implemenet the code below */
+#if 0
     LOCAL_ARRAY(char, line, 4096);
     UrnState *urnState = data;
     StoreEntry *e = urnState->entry;
@@ -183,11 +195,11 @@ urnHandleReply(void *data, char *buf, ssize_t size)
 	    storeUrl(e));
 	return;
     }
-    assert(urlres_e->mem_obj->reply);
-    httpParseReplyHeaders(buf, urlres_e->mem_obj->reply);
+    assert(urlres_e->mem_obj->pending_reply);
+    httpParseReplyHeaders(buf, urlres_e->mem_obj->pending_reply);
     debug(50, 3) ("mem->reply exists, code=%d.\n",
 	urlres_e->mem_obj->reply->code);
-    if (urlres_e->mem_obj->reply->code != HTTP_OK) {
+    if (urlres_e->mem_obj->->reply->code != HTTP_OK) {
 	debug(50, 3) ("urnHandleReply: failed.\n");
 	err = errorCon(ERR_URN_RESOLVE, HTTP_NOT_FOUND);
 	err->request = requestLink(urnState->request);
@@ -258,6 +270,7 @@ urnHandleReply(void *data, char *buf, ssize_t size)
     storeUnlockObject(urnState->entry);
     requestUnlink(urnState->request);
     cbdataFree(urnState);
+#endif /* if 0 */
 }
 
 static wordlist *

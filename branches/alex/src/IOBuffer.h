@@ -38,17 +38,17 @@ struct _IOBuffer {
     /* protected, do not use these, use interface functions instead */
     void *rlock;  /* points to the owner of Read lock  if any */
     void *wlock;  /* points to the owner of Write lock if any */
-    void *block;  /* points to the process that uses Buffer (does io) _now_ */
+    void *block;  /* points to the process that uses buffer (reads/writes) _now_ */
 
     /* private, stay away */
     char *buf;    /* can be NULL when no data is present */
     size_t rsize; /* amount of readable data; other sizes/pointers are derived */
+    int terminator_hack; /* see IOBuffer.c for details */
 };
 
-typedef struct _IOBuffer IOBuffer;
-
-/* create/destroy */
-extern IOBuffer *ioBufferCreate(size_t capacity);
+/* create/init/destroy */
+extern IOBuffer *ioBufferCreate(size_t capacity, int term_hack);
+extern void ioBufferInit(IOBuffer *iob, size_t capacity, int term_hack);
 extern void ioBufferDestroy(IOBuffer *iob);
 
 /* grow (the buffer should not be used when grow() called) */
