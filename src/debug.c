@@ -105,12 +105,18 @@
 
 #include "squid.h"
 
+FILE *debug_log = NULL;
 static char *debug_log_file = NULL;
+static const char *const w_space = " \t\n\r";
+
+#define MAX_DEBUG_SECTIONS 100
+static int debugLevels[MAX_DEBUG_SECTIONS];
+
 static char *accessLogTime _PARAMS((time_t));
 
 #ifdef __STDC__
 void
-_db_print(const char *format,...)
+_db_print(int section, int level, const char *format,...)
 {
     va_list args;
 #else
@@ -119,6 +125,8 @@ _db_print(va_alist)
      va_dcl
 {
     va_list args;
+    int section;
+    int level;
     const char *format = NULL;
 #endif
     LOCAL_ARRAY(char, f, BUFSIZ);
@@ -127,9 +135,17 @@ _db_print(va_alist)
 #endif
 
 #ifdef __STDC__
+    if (level > debugLevels[section])
+	return;
     va_start(args, format);
 #else
     va_start(args);
+    section = va_arg(args, int);
+    level = va_arg(args, int);
+    if (level > debugLevels[section]) {
+	va_end(args);
+	return;
+    }
     format = va_arg(args, const char *);
 #endif
 
@@ -140,7 +156,7 @@ _db_print(va_alist)
 	format);
 #if HAVE_SYSLOG
     /* level 0 go to syslog */
-    if (_db_level == 0 && opt_syslog_enable) {
+    if (level == 0 && opt_syslog_enable) {
 	tmpbuf[0] = '\0';
 	vsprintf(tmpbuf, format, args);
 	tmpbuf[1023] = '\0';
@@ -149,10 +165,8 @@ _db_print(va_alist)
 #endif /* HAVE_SYSLOG */
     /* write to log file */
     vfprintf(debug_log, f, args);
-    if (!Config.onoff.buffered_logs)
+    if (unbuffered_logs)
 	fflush(debug_log);
-    if (opt_debug_stderr && debug_log != stderr)
-	vfprintf(stderr, f, args);
     va_end(args);
 }
 
