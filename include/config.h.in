@@ -58,11 +58,8 @@
 #define _SQUID_FREEBSD_
 #elif defined(__sgi__)				/* SGI */
 #define _SQUID_SGI_
-#endif
-
-#undef _SQUID_SYSV_SIGNALS_
-#if defined(_SQUID_SYSV_) || defined(_SQUID_LINUX_)
-#define  _SQUID_SYSV_SIGNALS_
+#elif defined(__NeXT__)
+#define _SQUID_NEXT_
 #endif
 
 #if !defined(CACHE_HTTP_PORT)
@@ -79,6 +76,16 @@
 
 #if !defined(CACHEMGR_HOSTNAME)
 #define CACHEMGR_HOSTNAME ""
+#endif
+
+#if SQUID_UDP_SO_SNDBUF > 16384
+#undef SQUID_UDP_SO_SNDBUF
+#define SQUID_UDP_SO_SNDBUF 16384
+#endif
+
+#if SQUID_UDP_SO_RCVBUF > 16384
+#undef SQUID_UDP_SO_RCVBUF
+#define SQUID_UDP_SO_RCVBUF 16384
 #endif
 
 #endif /* _CONFIG_H_ */

@@ -174,5 +174,5 @@ void _db_rotate_log()
     /* Close and reopen the log.  It may have been renamed "manually"
      * before HUP'ing us. */
     if (debug_log != stderr)
-	debugOpenLog(debug_log_file);
+	debugOpenLog(getCacheLogFile());
 }

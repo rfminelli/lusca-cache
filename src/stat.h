@@ -81,7 +81,7 @@ struct _cacheinfo {
 
     /* add a transaction to system log */
     void (*log_append) _PARAMS((struct _cacheinfo * obj, char *url, char *id,
-	    int size, char *action, char *method, int http_code, int msec, char *ident));
+	    int size, char *action, char *method, int http_code, int msec));
 
     /* clear logfile */
     void (*log_clear) _PARAMS((struct _cacheinfo * obj, StoreEntry * sentry));
@@ -125,6 +125,18 @@ struct _cacheinfo {
     proto_stat proto_stat_data[PROTO_MAX + 1];
 
 };
+
+struct _iostats {
+    struct {
+	int reads;
+	int reads_deferred;
+	int read_hist[16];
+	int writes;
+	int write_hist[16];
+    } Http, Ftp;
+};
+
+extern struct _iostats IOStats;
 
 extern cacheinfo *CacheInfo;
 extern unsigned long ntcpconn;

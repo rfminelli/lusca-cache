@@ -102,13 +102,14 @@ static int PrintRusage(f, lf)
      void (*f) ();
      FILE *lf;
 {
-#if HAVE_RUSAGE && defined(RUSAGE_SELF)
+#if HAVE_GETRUSAGE && defined(RUSAGE_SELF)
     struct rusage rusage;
     getrusage(RUSAGE_SELF, &rusage);
-    fprintf(lf, "CPU Usage: user %d sys %d\nMemory Usage: rss %d KB\n",
-	rusage.ru_utime.tv_sec, rusage.ru_stime.tv_sec,
+    fprintf(lf, "CPU Usage: user %d sys %d\n",
+	(int) rusage.ru_utime.tv_sec, (int) rusage.ru_stime.tv_sec);
+    fprintf(lf, "Memory Usage: rss %ld KB\n",
 	rusage.ru_maxrss * getpagesize() / 1000);
-    fprintf(lf, "Page faults with physical i/o: %d\n",
+    fprintf(lf, "Page faults with physical i/o: %ld\n",
 	rusage.ru_majflt);
 #endif
     dumpMallocStats(lf);
@@ -146,18 +147,16 @@ void rotate_logs(sig)
     neighbors_rotate_log();
     stat_rotate_log();
     _db_rotate_log();
-#if RESET_SIGNAL_HANDLER
     signal(sig, rotate_logs);
-#endif
 }
 
 void normal_shutdown()
 {
     debug(21, 1, "Shutting down...\n");
     if (getPidFilename()) {
-	get_suid();
+	enter_suid();
 	safeunlink(getPidFilename(), 0);
-	check_suid();
+	leave_suid();
     }
     storeWriteCleanLog();
     PrintRusage(NULL, debug_log);
@@ -219,66 +218,24 @@ void fatal_dump(message)
     abort();
 }
 
-
-int getHeapSize()
-{
-#if HAVE_MALLINFO
-    struct mallinfo mp;
-
-    mp = mallinfo();
-
-    return (mp.arena);
-#else
-    return (0);
-#endif
-}
-
 void sig_child(sig)
      int sig;
 {
+#ifdef _SQUID_NEXT_
+    union wait status;
+#else
     int status;
+#endif
     int pid;
 
-    if ((pid = waitpid(-1, &status, WNOHANG)) > 0)
+#ifdef _SQUID_NEXT_
+    while ((pid = wait3(&status, WNOHANG, NULL)) > 0 || errno == EINTR)
+#else
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0 || errno == EINTR)
+#endif
 	debug(21, 3, "sig_child: Ate pid %d\n", pid);
-
-#if RESET_SIGNAL_HANDLER
     signal(sig, sig_child);
-#endif
 }
-
-#ifdef OLD_CODE
-/*
- *  getMaxFD - returns the file descriptor table size
- */
-int getMaxFD()
-{
-    static int i = -1;
-
-    if (i == -1) {
-#if HAVE_SYSCONF && defined(_SC_OPEN_MAX)
-	i = sysconf(_SC_OPEN_MAX);	/* prefered method */
-#elif HAVE_GETDTABLESIZE
-	i = getdtablesize();	/* the BSD way */
-#elif defined(OPEN_MAX)
-	i = OPEN_MAX;
-#elif defined(NOFILE)
-	i = NOFILE;
-#elif defined(_NFILE)
-	i = _NFILE;
-#else
-	i = 64;			/* 64 is a safe default */
-#endif
-	debug(21, 10, "getMaxFD set MaxFD at %d\n", i);
-    }
-    return (i);
-}
-#else
-int getMaxFD()
-{
-    return FD_SETSIZE;
-}
-#endif
 
 char *getMyHostname()
 {
@@ -320,28 +277,12 @@ int safeunlink(s, quiet)
     return (err);
 }
 
-/* 
- * Daemonize a process according to guidlines in "Advanced Programming
- * For The UNIX Environment", W.R. Stevens ( Addison Wesley, 1992) - Ch. 13
+/* leave a privilegied section. (Give up any privilegies)
+ * Routines that need privilegies can rap themselves in enter_suid()
+ * and leave_suid()
+ * To give upp all posibilites to gain privilegies use no_suid()
  */
-int daemonize()
-{
-    int n_openf, i;
-    pid_t pid;
-    if ((pid = fork()) < 0)
-	return -1;
-    else if (pid != 0)
-	exit(0);
-    /* Child continues */
-    setsid();			/* Become session leader */
-    n_openf = getMaxFD();	/* Close any inherited files */
-    for (i = 0; i < n_openf; i++)
-	close(i);
-    umask(0);			/* Clear file mode creation mask */
-    return 0;
-}
-
-void check_suid()
+void leave_suid()
 {
     struct passwd *pwd = NULL;
     struct group *grp = NULL;
@@ -366,7 +307,8 @@ void check_suid()
 #endif
 }
 
-void get_suid()
+/* Enter a privilegied section */
+void enter_suid()
 {
 #if HAVE_SETRESUID
     setresuid(-1, 0, -1);
@@ -375,10 +317,13 @@ void get_suid()
 #endif
 }
 
+/* Give up the posibility to gain privilegies.
+ * this should be used before starting a sub process
+ */
 void no_suid()
 {
     uid_t uid;
-    check_suid();
+    leave_suid();
     uid = geteuid();
 #if HAVE_SETRESUID
     setresuid(uid, uid, uid);
@@ -393,6 +338,7 @@ void writePidFile()
     FILE *pid_fp = NULL;
     char *f = NULL;
 
+    enter_suid();
     if ((f = getPidFilename()) == NULL)
 	return;
     if ((pid_fp = fopen(f, "w")) == NULL) {
@@ -402,6 +348,7 @@ void writePidFile()
     }
     fprintf(pid_fp, "%d\n", (int) getpid());
     fclose(pid_fp);
+    leave_suid();
 }
 
 
@@ -434,7 +381,19 @@ void setMaxFD()
 #endif
 #else /* HAVE_SETRLIMIT */
     debug(21, 1, "setMaxFD: Cannot increase: setrlimit() not supported on this system");
-#endif
+#endif /* HAVE_SETRLIMIT */
+
+#if HAVE_SETRLIMIT && defined(RLIMIT_DATA)
+    if (getrlimit(RLIMIT_DATA, &rl) < 0) {
+	debug(21, 0, "getrlimit: RLIMIT_DATA: %s", xstrerror());
+    } else {
+	rl.rlim_cur = rl.rlim_max;	/* set it to the max */
+	if (setrlimit(RLIMIT_DATA, &rl) < 0) {
+	    sprintf(tmp_error_buf, "setrlimit: RLIMIT_DATA: %s", xstrerror());
+	    fatal_dump(tmp_error_buf);
+	}
+    }
+#endif /* RLIMIT_DATA */
 }
 
 time_t getCurrentTime()
@@ -461,9 +420,7 @@ void reconfigure(sig)
 	    if (fdstatGetType(i) == Socket)
 		comm_set_fd_lifetime(i, lft);
     }
-#if RESET_SIGNAL_HANDLER
     signal(sig, reconfigure);
-#endif
 }
 
 int tvSubMsec(t1, t2)

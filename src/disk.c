@@ -68,18 +68,15 @@ typedef struct _FileEntry {
 /* table for FILE variable, write lock and queue. Indexed by fd. */
 FileEntry *file_table;
 
-extern int getMaxFD();
 extern void fatal_dump _PARAMS((char *));
 
 /* initialize table */
 int disk_init()
 {
-    int fd, max_fd = getMaxFD();
+    int fd;
 
-    file_table = (FileEntry *) xmalloc(sizeof(FileEntry) * max_fd);
-    memset(file_table, '\0', sizeof(FileEntry) * max_fd);
-
-    for (fd = 0; fd < max_fd; fd++) {
+    file_table = xcalloc(1, sizeof(FileEntry) * FD_SETSIZE);
+    for (fd = 0; fd < FD_SETSIZE; fd++) {
 	file_table[fd].filename[0] = '\0';
 	file_table[fd].at_eof = NO;
 	file_table[fd].open_stat = NOT_OPEN;
@@ -123,10 +120,7 @@ int file_open(path, handler, mode)
     file_table[fd].write_q = NULL;
 
     conn = &fd_table[fd];
-    memset(conn, 0, sizeof(FD_ENTRY));
-
-    conn->port = 0;
-    conn->handler = NULL;
+    memset(conn, '\0', sizeof(FD_ENTRY));
 
     /* set non-blocking mode */
 #if defined(O_NONBLOCK) && !defined(_SQUID_SUNOS_) && !defined(_SQUID_SOLARIS_)
@@ -168,13 +162,8 @@ int file_update_open(fd, path)
     file_table[fd].write_q = NULL;
 
     conn = &fd_table[fd];
-    memset(conn, 0, sizeof(FD_ENTRY));
-
-    conn->port = 0;
-    conn->handler = NULL;
-
+    memset(conn, '\0', sizeof(FD_ENTRY));
     conn->comm_type = COMM_NONBLOCKING;
-
     return fd;
 }
 
@@ -221,13 +210,14 @@ int file_close(fd)
 }
 
 
+#ifdef NOTUSED_CODE
 /* return a opened fd associate with given path name. */
 /* return DISK_FILE_NOT_FOUND if not found. */
 int file_get_fd(filename)
      char *filename;
 {
-    int fd, max_fd = getMaxFD();
-    for (fd = 1; fd < max_fd; fd++) {
+    int fd;
+    for (fd = 1; fd < FD_SETSIZE; fd++) {
 	if (file_table[fd].open_stat == OPEN) {
 	    if (strncmp(file_table[fd].filename, filename, MAX_FILE_NAME_LEN) == 0) {
 		return fd;
@@ -236,6 +226,7 @@ int file_get_fd(filename)
     }
     return DISK_FILE_NOT_FOUND;
 }
+#endif /* NOTUSED_CODE */
 
 /* grab a writing lock for file */
 int file_write_lock(fd)
@@ -401,7 +392,7 @@ int file_write(fd, ptr_to_buf, len, access_code, handle, handle_data)
 	return DISK_WRT_WRONG_CODE;
     }
     /* if we got here. Caller is eligible to write. */
-    wq = (dwrite_q *) xcalloc(1, sizeof(dwrite_q));
+    wq = xcalloc(1, sizeof(dwrite_q));
 
     wq->buf = ptr_to_buf;
 
@@ -504,8 +495,7 @@ int file_read(fd, buf, req_len, offset, handler, client_data)
 {
     dread_ctrl *ctrl_dat;
 
-    ctrl_dat = (dread_ctrl *) xmalloc(sizeof(dread_ctrl));
-    memset(ctrl_dat, '\0', sizeof(dread_ctrl));
+    ctrl_dat = xcalloc(1, sizeof(dread_ctrl));
     ctrl_dat->fd = fd;
     ctrl_dat->offset = offset;
     ctrl_dat->req_len = req_len;
@@ -604,11 +594,10 @@ int file_walk(fd, handler, client_data, line_handler, line_data)
 {
     dwalk_ctrl *walk_dat;
 
-    walk_dat = (dwalk_ctrl *) xmalloc(sizeof(dwalk_ctrl));
-    memset(walk_dat, '\0', sizeof(dwalk_ctrl));
+    walk_dat = xcalloc(1, sizeof(dwalk_ctrl));
     walk_dat->fd = fd;
     walk_dat->offset = 0;
-    walk_dat->buf = (void *) xcalloc(1, DISK_LINE_LEN);
+    walk_dat->buf = xcalloc(1, DISK_LINE_LEN);
     walk_dat->cur_len = 0;
     walk_dat->handler = handler;
     walk_dat->client_data = client_data;

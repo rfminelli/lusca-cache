@@ -1,5 +1,8 @@
 /* $Id$ */
 
+#include "config.h"
+
+
 /*
  *  Adapted from HTSUtils.c in CERN httpd 3.0 (http://info.cern.ch/httpd/)
  *  by Darren Hardy <hardy@cs.colorado.edu>, November 1994.
@@ -11,6 +14,10 @@
 #include <time.h>
 #include <sys/time.h>
 #include "config.h"
+#include "util.h"
+
+static int make_month _PARAMS((char *s));
+static int make_num _PARAMS((char *s));
 
 static char *month_names[12] =
 {
