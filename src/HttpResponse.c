@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * DEBUG: section ??    HTTP Reply
+ * DEBUG: section ??    HTTP Response
  * AUTHOR: Alex Rousskov
  *
  * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
@@ -40,37 +40,47 @@ static void httpReplySetRState(HttpMsg *msg, ReadState rstate);
 static void httpReplyNoteError(HttpMsg *msg, HttpReply *error);
 static int httpStatusLineParse(HttpReply *rep, const char *blk_start, const char *blk_end);
 #endif
-static char *httpStatusString(http_status status);
 
-
-/*
- * HTTP Reply
- */
-HttpReply *
-httpReplyCreate()
+HttpResponse *
+httpResponseCreate()
 {
-    HttpReply *rep = memAllocate(MEM_HTTPREPLY, 1);
-    /* init with invalid values */
-    rep->date = -2;
-    rep->expires = -2;
-    rep->last_modified = -2;
-    rep->content_length = -1;
-    return rep;
+    HttpResponse *resp = memAllocate(MEM_HTTP_RESPONSE, 1);
+    httpResponseInit(resp);
+    return resp;
 }
 
 void
-httpReplyDestroy(HttpReply *rep)
+httpResponseInit(HttpResponse *resp)
 {
-    assert(rep);
-    memFree(MEM_HTTPREPLY, rep);
+    assert(resp);
+    httpStatusLineInit(&resp->sline);
+    httpHeaderInit(&resp->hdr);
+    httpBodyInit(&resp->body);
+}
+
+void
+httpResponseClean(HttpResponse *resp)
+{
+    assert(resp);
+    httpStatusLineClean(&resp->sline);
+    httpHeaderClean(&resp->hdr);
+    httpBodyClean(&resp->body);
+}
+
+void
+httpResponseDestroy(HttpResponse *resp)
+{
+    assert(resp);
+    httpResponseClean(resp);
+    memFree(MEM_HTTP_RESPONSE, resp);
 }
 
 void
 httpResponseSetHeaders(HttpResponse *resp, 
-    double ver, http_status status,
-    char *ctype, int clen, time_t lmt, time_t expires)
+    double ver, http_status status, const char *reason,
+    const char *ctype, int clen, time_t lmt, time_t expires)
 {
-    httpStatusLineSet(&resp->sline, ver, status, httpStatusString(status));
+    httpStatusLineSet(&resp->sline, ver, status, reason);
     httpHeaderAddStr(&resp->hdr, "Server", full_appname_string);
     httpHeaderAddStr(&resp->hdr, "MIME-Version", "1.0"); /* was not set here before @?@ */
     httpHeaderAddDate(&resp->hdr, "Date", squid_curtime);
@@ -84,28 +94,110 @@ httpResponseSetHeaders(HttpResponse *resp,
 	httpHeaderAddStr(&resp->hdr, "Content-Type", ctype);
 }
 
+/* summarizes response in a compact HttpReply structure */
+/* Note: this should work regardless if we have body set or not */
+void httpResponseSumm(HttpResponse *resp, HttpReply *summ)
+{
+    assert(resp && summ);
+    summ->version = resp->sline.version;
+    summ->code = resp->sline.status;
+    summ->content_length = httpHeaderGetContentLength(&resp->hdr);
+    summ->hdr_sz = httpResponsePackedSize(resp) - resp->body.packed_size; /* does not include terminator */
+    summ->cache_control = resp->hdr.scc_mask;
+    summ->misc_headers = resp->hdr.field_mask;
+    summ->date = httpHeaderGetDate(&resp->hdr, "Date", NULL);
+    summ->expires = httpHeaderGetExpires(&resp->hdr);
+    summ->last_modified = httpHeaderGetDate(&resp->hdr, "Last-Modified", NULL);
+    /* use nice safety features of xstrncpy */
+    xstrncpy(summ->content_type, httpHeaderGetStr(&resp->hdr, "Content-type", NULL), sizeof(summ->content_type));
+}
+
 void
-httpStatusLineSwap(HttpStatusLine *sline, StoreEntry *e) {    
-#if 0
-    LOCAL_ARRAY(char, buf, HTTP_REPLY_BUF_SZ);
-    int l = 0;
-    int s = HTTP_REPLY_BUF_SZ;
-    l += snprintf(buf + l, s - l, "HTTP/%3.1f %d %s\r\n",
-	ver,
-	(int) status,
-	httpStatusString(status));
-    l += snprintf(buf + l, s - l, "Server: Squid/%s\r\n", SQUID_VERSION);
-    l += snprintf(buf + l, s - l, "Date: %s\r\n", mkrfc1123(squid_curtime));
-    if (expires >= 0)
-	l += snprintf(buf + l, s - l, "Expires: %s\r\n", mkrfc1123(expires));
-    if (lmt)
-	l += snprintf(buf + l, s - l, "Last-Modified: %s\r\n", mkrfc1123(lmt));
-    if (clen > 0)
-	l += snprintf(buf + l, s - l, "Content-Length: %d\r\n", clen);
-    if (ctype)
-	l += snprintf(buf + l, s - l, "Content-Type: %s\r\n", ctype);
+httpResponseSwap(HttpResponse *resp, StoreEntry *entry)
+{
+    assert(resp);
+    httpStatusLineSwap(&resp->sline, entry);
+    httpHeaderSwap(&resp->hdr, entry);
+    storeAppendPrintf(entry, "\r\n");
+    httpBodySwap(&resp->body, entry);
+}
+
+int
+httpResponsePackedSize(HttpResponse *resp) {
+    int size;
+    assert(resp);
+    /*
+     * Note: all portions of http msg include terminating 0 in their size.
+     * Terminating 0s should be skipped when packing and one terminating 0
+     * should be appended after packing is done. We must adjust total size for
+     * this.
+     */
+    size = 0;
+    size += resp->sline.packed_size - 1;
+    size += resp->hdr.packed_size - 1;
+    size += 3 - 1; /* CRLF */
+    size += resp->body.packed_size - 1;
+    size++;
+    return size;
+}
+
+char *
+httpResponsePack(HttpResponse *resp, int *len, FREE **freefunc) {
+    int size;
+    char *buf;
+    assert(resp);
+    assert(freefunc); /* must supply storage for freefunc pointer */
+
+    size = httpResponsePackedSize(resp);
+    if (size <= 4*1024) {
+	buf = memAllocate(MEM_4K_BUF, 0);
+	*freefunc = memFree4K;
+    } else
+    if (size <= 8*1024) {
+	buf = memAllocate(MEM_8K_BUF, 0);
+	*freefunc = memFree8K;
+    } else {
+	buf = xmalloc(size);
+	*freefunc = xfree;
+    }
+    if (len)
+	*len = size - 1;
+    
+    httpResponsePackInto(resp, buf);
     return buf;
-#endif
+}
+
+int
+httpResponsePackInto(HttpResponse *resp, char *buf) {
+    int expected_size;
+    int size;
+    assert(resp);
+    assert(buf);
+
+    expected_size = httpResponsePackedSize(resp);
+    size = 0;
+    size += httpStatusLinePackInto(&resp->sline, buf + size) - 1;
+    size += httpHeaderPackInto(&resp->hdr, buf + size) - 1;
+    xmemcpy(buf + size, "\r\n", 2); size += 3 - 1;
+    size += httpBodyPackInto(&resp->body, buf + size) - 1;
+    size++;
+
+    assert(size == expected_size); /* paranoid check */
+    return size;
+}
+
+/* does everything in one call: init, set, pack, clean */
+char *
+httpPackedResponse(double ver, http_status status, 
+ const char *ctype, int clen, time_t lmt, time_t expires, int *len, FREE **freefunc)
+{
+    char *result = NULL;
+    HttpResponse resp;
+    httpResponseInit(&resp);
+    httpResponseSetHeaders(&resp, ver, status, ctype, NULL, clen, lmt, expires);
+    result = httpResponsePack(&resp, len, freefunc);
+    httpResponseClean(&resp);
+    return result;
 }
 
 #if 0
@@ -185,140 +277,3 @@ httpStatusLineParse(HttpReply *rep, const char *blk_start, const char *blk_end) 
 
 #endif
 
-void
-httpReplyUpdateOnNotModified(HttpReply *rep, HttpReply *freshRep)
-{
-    rep->cache_control = freshRep->cache_control;
-    rep->misc_headers = freshRep->misc_headers;
-    if (freshRep->date > -1)
-	rep->date = freshRep->date;
-    if (freshRep->last_modified > -1)
-	rep->last_modified = freshRep->last_modified;
-    if (freshRep->expires > -1)
-	rep->expires = freshRep->expires;
-}
-
-static char *
-httpStatusString(http_status status)
-{
-    /* why not to return matching string instead of using "p" ? @?@ */
-    char *p = NULL;
-    switch (status) {
-    case 100:
-	p = "Continue";
-	break;
-    case 101:
-	p = "Switching Protocols";
-	break;
-    case 200:
-	p = "OK";
-	break;
-    case 201:
-	p = "Created";
-	break;
-    case 202:
-	p = "Accepted";
-	break;
-    case 203:
-	p = "Non-Authoritative Information";
-	break;
-    case 204:
-	p = "No Content";
-	break;
-    case 205:
-	p = "Reset Content";
-	break;
-    case 206:
-	p = "Partial Content";
-	break;
-    case 300:
-	p = "Multiple Choices";
-	break;
-    case 301:
-	p = "Moved Permanently";
-	break;
-    case 302:
-	p = "Moved Temporarily";
-	break;
-    case 303:
-	p = "See Other";
-	break;
-    case 304:
-	p = "Not Modified";
-	break;
-    case 305:
-	p = "Use Proxy";
-	break;
-    case 400:
-	p = "Bad Request";
-	break;
-    case 401:
-	p = "Unauthorized";
-	break;
-    case 402:
-	p = "Payment Required";
-	break;
-    case 403:
-	p = "Forbidden";
-	break;
-    case 404:
-	p = "Not Found";
-	break;
-    case 405:
-	p = "Method Not Allowed";
-	break;
-    case 406:
-	p = "Not Acceptable";
-	break;
-    case 407:
-	p = "Proxy Authentication Required";
-	break;
-    case 408:
-	p = "Request Time-out";
-	break;
-    case 409:
-	p = "Conflict";
-	break;
-    case 410:
-	p = "Gone";
-	break;
-    case 411:
-	p = "Length Required";
-	break;
-    case 412:
-	p = "Precondition Failed";
-	break;
-    case 413:
-	p = "Request Entity Too Large";
-	break;
-    case 414:
-	p = "Request-URI Too Large";
-	break;
-    case 415:
-	p = "Unsupported Media Type";
-	break;
-    case 500:
-	p = "Internal Server Error";
-	break;
-    case 501:
-	p = "Not Implemented";
-	break;
-    case 502:
-	p = "Bad Gateway";
-	break;
-    case 503:
-	p = "Service Unavailable";
-	break;
-    case 504:
-	p = "Gateway Time-out";
-	break;
-    case 505:
-	p = "HTTP Version not supported";
-	break;
-    default:
-	p = "Unknown";
-	debug(11, 0) ("Unknown HTTP status code: %d\n", status);
-	break;
-    }
-    return p;
-}

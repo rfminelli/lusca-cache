@@ -40,7 +40,7 @@
 
 static char *error_text[ERR_MAX];
 
-static void errorStateFree(ErrorState * err);
+static const char *errorBuildContent(ErrorState * err, int *len);
 static const char *errorConvert(char token, ErrorState * err);
 static CWCB errorSendComplete;
 
@@ -117,14 +117,24 @@ errorCon(err_type type, http_status status)
 void
 errorAppendEntry(StoreEntry * entry, ErrorState * err)
 {
+#if 0
     const char *buf;
-    MemObject *mem = entry->mem_obj;
     int len;
+#else
+    HttpResponse *resp;
+#endif
+    MemObject *mem = entry->mem_obj;
     assert(entry->store_status == STORE_PENDING);
     assert(mem != NULL);
     assert(mem->inmem_hi == 0);
+#if 0
     buf = errorBuildBuf(err, &len);
     storeAppend(entry, buf, len);
+#else
+    resp = errorBuildResponse(err);
+    httpResponseSwap(resp, entry);
+    httpResponseDestroy(resp);
+#endif
     mem->reply->code = err->http_status;
     storeComplete(entry);
     storeNegativeCache(entry);
@@ -154,7 +164,9 @@ errorAppendEntry(StoreEntry * entry, ErrorState * err)
 void
 errorSend(int fd, ErrorState * err)
 {
-    const char *buf;
+    HttpResponse *resp;
+    FREE *freefunc;
+    char *buf;
     int len;
     debug(4, 3) ("errorSend: FD %d, err=%p\n", fd, err);
     assert(fd >= 0);
@@ -164,10 +176,18 @@ errorSend(int fd, ErrorState * err)
      */
     if (err->request)
 	err->request->err_type = err->type;
-    buf = errorBuildBuf(err, &len);
+    /* moved in front of errorBuildBuf @?@ */
     EBIT_SET(err->flags, ERR_FLAG_CBDATA);
     cbdataAdd(err, MEM_NONE);
+#if 0
+    buf = errorBuildBuf(err, &len);
     comm_write(fd, xstrdup(buf), len, errorSendComplete, err, xfree);
+#else
+    resp = errorBuildResponse(err);
+    buf = httpResponsePack(resp, &len, &freefunc);
+    httpResponseDestroy(resp);
+    comm_write(fd, buf, len, errorSendComplete, err, freefunc);
+#endif
 }
 
 /*
@@ -193,7 +213,7 @@ errorSendComplete(int fd, char *bufnotused, size_t size, int errflag, void *data
     errorStateFree(err);
 }
 
-static void
+void
 errorStateFree(ErrorState * err)
 {
     requestUnlink(err->request);
@@ -338,6 +358,62 @@ errorConvert(char token, ErrorState * err)
     return p;
 }
 
+/* allocates and initializes an error response */
+HttpResponse *
+errorBuildResponse(ErrorState * err)
+{
+    int clen;
+    HttpResponse *resp = httpResponseCreate();
+    const char *content = errorBuildContent(err, &clen);
+    /* no LMT for error pages; error pages expire immediately */
+    httpResponseSetHeaders(resp, 1.0, err->http_status, NULL, "text/html", clen, 0, squid_curtime);
+    httpBodySet(&resp->body, content, clen+1);
+    return resp;
+}
+
+static const char *
+errorBuildContent(ErrorState * err, int *len)
+{
+    LOCAL_ARRAY(char, content, ERROR_BUF_SZ);
+    int clen;
+    char *m;
+    char *mx;
+    char *p;
+    const char *t;
+    assert(err != NULL);
+    assert(err->type > ERR_NONE && err->type < ERR_MAX);
+    mx = m = xstrdup(error_text[err->type]);
+    clen = 0;
+    while ((p = strchr(m, '%'))) {
+	*p = '\0';		/* terminate */
+	xstrncpy(content + clen, m, ERROR_BUF_SZ - clen);	/* copy */
+	clen += (p - m);	/* advance */
+	if (clen >= ERROR_BUF_SZ)
+	    break;
+	p++;
+	m = p + 1;
+	t = errorConvert(*p, err);	/* convert */
+	xstrncpy(content + clen, t, ERROR_BUF_SZ - clen);	/* copy */
+	clen += strlen(t);	/* advance */
+	if (clen >= ERROR_BUF_SZ)
+	    break;
+    }
+    if (clen < ERROR_BUF_SZ && m != NULL) {
+	xstrncpy(content + clen, m, ERROR_BUF_SZ - clen);
+	clen += strlen(m);
+    }
+    if (clen >= ERROR_BUF_SZ) {
+	clen = ERROR_BUF_SZ - 1;
+	*(content + clen) = '\0';
+    }
+    assert(clen == strlen(content));
+    if (len)
+	*len = clen;
+    xfree(mx);
+    return content;
+}
+
+#if 0 /* we use httpResponse instead of a buffer now */
 const char *
 errorBuildBuf(ErrorState * err, int *len)
 {
@@ -389,3 +465,4 @@ errorBuildBuf(ErrorState * err, int *len)
     xfree(mx);
     return buf;
 }
+#endif

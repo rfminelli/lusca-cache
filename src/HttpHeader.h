@@ -62,11 +62,12 @@ typedef enum {
 struct _HttpHeader {
     /* public, read only */
     size_t packed_size;  /* packed header size (see httpHeaderPack()) */
+    int field_mask;      /* bits set for present [known] fields */
+    int scc_mask;        /* bits set for present server cache control directives */
 
     /* protected, do not use these, use interface functions instead */
     int count;           /* #headers */
     int capacity;        /* max #headers before we have to grow */
-    int field_mask;      /* bits set for present [known] fields */
     struct _HttpHeaderField **fields;
 };
 
@@ -88,15 +89,18 @@ extern void httpHeaderInit(HttpHeader *hdr);
 extern void httpHeaderClean(HttpHeader *hdr);
 extern void httpHeaderDestroy(HttpHeader *hdr);
 
-/* parse/pack */
+/* parse/pack/swap */
 /* parse a 0-terminating buffer and fill internal structires; _end points at the first character after the header; returns true if successfull */
 extern int httpHeaderParse(HttpHeader *hdr, const char *header_start, const char *header_end);
 /* pack header into the buffer, does not check for overflow, check hdr.packed_size first! */
-extern void httpHeaderPack(const HttpHeader *hdr, char *buf);
+extern int httpHeaderPackInto(const HttpHeader *hdr, char *buf);
+/* swap using storeAppend */
+extern void httpHeaderSwap(HttpHeader *hdr, StoreEntry *entry);
 
 /* iterate through fields with name (or find first field with name) */
 extern const char *httpHeaderGetStr(const HttpHeader *hdr, const char *name, HttpHeaderPos *pos);
 extern long httpHeaderGetInt(const HttpHeader *hdr, const char *name, HttpHeaderPos *pos);
+extern time_t httpHeaderGetDate(const HttpHeader *hdr, const char *name, HttpHeaderPos *pos); /* rfc1123 */
 
 /* iterate through all fields */
 extern HttpHeaderField *httpHeaderGetField(const HttpHeader *hdr, const char **name, const char **value, HttpHeaderPos *pos);
@@ -115,7 +119,6 @@ extern int httpHeaderHas(const HttpHeader *hdr, http_hdr_type type);
 
 /* get common generic-header fields */
 extern size_t httpHeaderGetCacheControl(const HttpHeader *hdr);
-extern time_t httpHeaderGetDate(const HttpHeader *hdr);
 /*
 extern int httpHeaderGetVia(const HttpHeader *hdr);
 */
@@ -124,7 +127,7 @@ extern int httpHeaderGetVia(const HttpHeader *hdr);
 /* http reply-header fields */
 extern size_t httpHeaderGetContentLength(const HttpHeader *hdr);
 extern size_t httpHeaderGetExpires(const HttpHeader *hdr);
-extern size_t httpHeaderGetLastModified(const HttpHeader *hdr);
+/* extern size_t httpHeaderGetLastModified(const HttpHeader *hdr); */
 
 
 /* http request-header fields */

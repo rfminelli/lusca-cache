@@ -451,7 +451,9 @@ struct _http_reply {
     Const time_t expires;
     Const time_t last_modified;
     Const char content_type[HTTP_REPLY_FIELD_SZ];
+#if 0 /* unused 512 bytes? */
     Const char user_agent[HTTP_REPLY_FIELD_SZ << 2];
+#endif
 };
 
 struct _HttpStateData {

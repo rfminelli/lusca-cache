@@ -32,8 +32,8 @@
 #include "squid.h"
 
 static const char *const crlf = "\r\n";
-static const char *const proxy_auth_line =
-"Proxy-Authenticate: Basic realm=\"Squid proxy-caching web server\"\r\n";
+static const char *const proxy_auth_challenge =
+    "Basic realm=\"Squid proxy-caching web server\"";
 
 #define REQUEST_BUF_SIZE 4096
 #define FAILURE_MODE_TIME 300
@@ -64,7 +64,11 @@ static STCB clientCacheHit;
 static void clientParseRequestHeaders(clientHttpRequest *);
 static void clientProcessRequest(clientHttpRequest *);
 static void clientProcessExpired(void *data);
+#if 0
 static char *clientConstructProxyAuthReply(clientHttpRequest * http);
+#else
+static HttpResponse *clientConstructProxyAuthReply(clientHttpRequest * http);
+#endif
 static int clientCachable(clientHttpRequest * http);
 static int clientHierarchical(clientHttpRequest * http);
 static int isTcpHit(log_type code);
@@ -108,6 +112,7 @@ clientAccessCheck(void *data)
     aclNBCheck(http->acl_checklist, clientAccessCheckDone, http);
 }
 
+#if 0 /* reimplemented using new interfaces */
 static char *
 clientConstructProxyAuthReply(clientHttpRequest * http)
 {
@@ -156,6 +161,20 @@ clientConstructProxyAuthReply(clientHttpRequest * http)
 	content);
     return buf;
 }
+#endif
+
+static HttpResponse *
+clientConstructProxyAuthReply(clientHttpRequest *http)
+{
+    ErrorState *err = errorCon(ERR_CACHE_ACCESS_DENIED, HTTP_PROXY_AUTHENTICATION_REQUIRED);
+    HttpResponse *resp;
+    err->request = requestLink(http->request);
+    resp = errorBuildResponse(err);
+    /* add Authenticate header */
+    httpHeaderAddStr(&resp->hdr, "Proxy-Authenticate", proxy_auth_challenge);
+    errorStateFree(err);
+    return resp;
+}
 
 StoreEntry *
 clientCreateStoreEntry(clientHttpRequest * h, method_t m, int flags)
@@ -184,7 +203,6 @@ clientAccessCheckDone(int answer, void *data)
 {
     clientHttpRequest *http = data;
     char *redirectUrl = NULL;
-    char *buf;
     ErrorState *err = NULL;
     debug(33, 5) ("clientAccessCheckDone: '%s' answer=%d\n", http->uri, answer);
     http->acl_checklist = NULL;
@@ -196,9 +214,19 @@ clientAccessCheckDone(int answer, void *data)
     } else if (answer == ACCESS_REQ_PROXY_AUTH) {
 	http->al.http.code = HTTP_PROXY_AUTHENTICATION_REQUIRED;
 	http->log_type = LOG_TCP_DENIED;
-	buf = clientConstructProxyAuthReply(http);
 	http->entry = clientCreateStoreEntry(http, http->request->method, 0);
+#if 0
+	const char *buf = clientConstructProxyAuthReply(http);
 	storeAppend(http->entry, buf, strlen(buf));
+#else
+	{
+	    /* create appropreate response */
+	    HttpResponse *response = clientConstructProxyAuthReply(http);
+	    httpResponseSwap(response, http->entry);
+	    /* do not need it anymore */
+	    httpResponseDestroy(response);
+	}
+#endif
     } else {
 	debug(33, 5) ("Access Denied: %s\n", http->uri);
 	http->log_type = LOG_TCP_DENIED;
@@ -476,6 +504,8 @@ clientPurgeRequest(clientHttpRequest * http)
     StoreEntry *entry;
     ErrorState *err = NULL;
     const cache_key *k;
+    int len;
+    FREE *freefunc;
     debug(33, 3) ("Config.onoff.enable_purge = %d\n", Config.onoff.enable_purge);
     if (!Config.onoff.enable_purge) {
 	http->log_type = LOG_TCP_DENIED;
@@ -494,10 +524,15 @@ clientPurgeRequest(clientHttpRequest * http)
 	storeRelease(entry);
 	http->http_code = HTTP_OK;
     }
+#if 0 /* new interface */
     msg = httpReplyHeader(1.0, http->http_code, NULL, 0, 0, -1);
     if ((int) strlen(msg) < 8190)
 	strcat(msg, "\r\n");
     comm_write(fd, xstrdup(msg), strlen(msg), clientWriteComplete, http, xfree);
+#else
+    msg = httpPackedResponse(1.0, http->http_code, NULL, 0, 0, -1, &len, &freefunc);
+    comm_write(fd, msg, len, clientWriteComplete, http, freefunc);
+#endif
 }
 
 int
@@ -1231,7 +1266,9 @@ clientProcessRequest(clientHttpRequest * http)
     StoreEntry *entry = NULL;
     request_t *r = http->request;
     int fd = http->conn->fd;
+#if 0
     char *hdr;
+#endif
     debug(33, 4) ("clientProcessRequest: %s '%s'\n",
 	RequestMethodStr[r->method],
 	url);
@@ -1247,6 +1284,7 @@ clientProcessRequest(clientHttpRequest * http)
 	    http->entry = clientCreateStoreEntry(http, r->method, 0);
 	    storeReleaseRequest(http->entry);
 	    storeBuffer(http->entry);
+#if 0 /* use new interface */
 	    hdr = httpReplyHeader(1.0,
 		HTTP_OK,
 		"text/plain",
@@ -1255,6 +1293,15 @@ clientProcessRequest(clientHttpRequest * http)
 		squid_curtime);
 	    storeAppend(http->entry, hdr, strlen(hdr));
 	    storeAppend(http->entry, "\r\n", 2);
+#else
+	    {
+		HttpResponse resp;
+		httpResponseInit(&resp);
+		httpResponseSetHeaders(&resp, 1.0, HTTP_OK, NULL, "text/plain", r->headers_sz, 0, squid_curtime);
+		httpResponseSwap(&resp, http->entry);
+		httpResponseClean(&resp);
+	    }
+#endif
 	    storeAppend(http->entry, r->headers, r->headers_sz);
 	    storeComplete(http->entry);
 	    return;

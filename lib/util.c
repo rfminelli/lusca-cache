@@ -568,17 +568,17 @@ tvSubDsec(struct timeval t1, struct timeval t2)
 
 /*
  *  xstrncpy() - similar to strncpy(3) but terminates string
- *  always with '\0' if n != 0, and doesn't do padding
+ *  always with '\0' if (n != 0 and dst != NULL), 
+ *  and doesn't do padding
  */
 char *
 xstrncpy(char *dst, const char *src, size_t n)
 {
-    if (n == 0)
+    if (!n || !dst)
 	return dst;
-    if (src == NULL)
-	return dst;
-    while (--n != 0 && *src != '\0')
-	*dst++ = *src++;
+    if (src)
+	while (--n != 0 && *src != '\0')
+	    *dst++ = *src++;
     *dst = '\0';
     return dst;
 }

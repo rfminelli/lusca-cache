@@ -43,6 +43,7 @@ typedef enum {
     ERR_FTP_FAILURE,
     ERR_URN_RESOLVE,
     ERR_ACCESS_DENIED,
+    ERR_CACHE_ACCESS_DENIED,
     ERR_MAX
 } err_type;
 
@@ -416,6 +417,7 @@ typedef enum {
 #else
     MEM_HTTPREPLY,
 #endif
+    MEM_HTTP_RESPONSE,
     MEM_HTTPSTATEDATA,
     MEM_ICPUDPDATA,
     MEM_CLIENTHTTPREQUEST,
