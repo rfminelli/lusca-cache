@@ -94,7 +94,35 @@ storeSwapSubSubDir(int fn, char *fullpath)
     return fullpath;
 }
 
-static void 
+/*
+ * Does swapfile number 'fn' belong in cachedir #F0,
+ * level1 dir #F1, level2 dir #F2?
+ *
+ * This is called by storeDirClean(), but placed here because
+ * the algorithm needs to match storeSwapSubSubDir().
+ *
+ * Don't check that (fn >> SWAP_DIR_SHIFT) == F0 because
+ * 'fn' may not have the directory bits set.
+ */
+int
+storeFilenoBelongsHere(int fn, int F0, int F1, int F2)
+{
+    int D1, D2;
+    int L1, L2;
+    int filn = fn & SWAP_FILE_MASK;
+    assert(F0 < Config.cacheSwap.n_configured);
+    L1 = Config.cacheSwap.swapDirs[F0].l1;
+    L2 = Config.cacheSwap.swapDirs[F0].l2;
+    D1 = ((filn / L2) / L2) % L1;
+    if (F1 != D1)
+	return 0;
+    D2 = (filn / L2) % L2;
+    if (F2 != D2)
+	return 0;
+    return 1;
+}
+
+static void
 storeCreateDirectory(const char *path, int lvl)
 {
     struct stat st;
@@ -271,40 +299,48 @@ storeDirProperFileno(int dirn, int fn)
     return (dirn << SWAP_DIR_SHIFT) | (fn & SWAP_FILE_MASK);
 }
 
+/*
+ * An entry written to the swap log MUST have the following
+ * properties.
+ *   1.  It MUST be a public key.  It does no good to log
+ *       a public ADD, change the key, then log a private
+ *       DEL.  So we need to log a DEL before we change a
+ *       key from public to private.
+ *   2.  It MUST have a valid (> -1) swap_file_number.
+ */
 void
 storeDirSwapLog(const StoreEntry * e, int op)
 {
-    storeSwapData *s = xcalloc(1, sizeof(storeSwapData));
+    storeSwapLogData *s = xcalloc(1, sizeof(storeSwapLogData));
     int dirn;
     dirn = e->swap_file_number >> SWAP_DIR_SHIFT;
     assert(dirn < Config.cacheSwap.n_configured);
-    if (op == SWAP_LOG_ADD) {
-	assert(!EBIT_TEST(e->flag, KEY_PRIVATE));
-	assert(e->swap_file_number >= 0);
-    }
-    if (op == SWAP_LOG_DEL) {
-	if (e->swap_file_number < 0)	/* was never swapped out */
-	    return;
-    }
+    assert(!EBIT_TEST(e->flag, KEY_PRIVATE));
+    assert(e->swap_file_number >= 0);
     /*
      * icons and such; don't write them to the swap log
      */
     if (EBIT_TEST(e->flag, ENTRY_SPECIAL))
 	return;
+    assert(op > SWAP_LOG_NOP && op < SWAP_LOG_MAX);
+    debug(20, 3) ("storeDirSwapLog: %s %s %08X\n",
+	swap_log_op_str[op],
+	storeKeyText(e->key),
+	e->swap_file_number);
     s->op = (char) op;
     s->swap_file_number = e->swap_file_number;
     s->timestamp = e->timestamp;
     s->lastref = e->lastref;
     s->expires = e->expires;
     s->lastmod = e->lastmod;
-    s->object_len = e->object_len;
+    s->swap_file_sz = e->swap_file_sz;
     s->refcount = e->refcount;
     s->flags = e->flag;
     xmemcpy(s->key, e->key, MD5_DIGEST_CHARS);
     file_write(Config.cacheSwap.swapDirs[dirn].swaplog_fd,
 	-1,
 	s,
-	sizeof(storeSwapData),
+	sizeof(storeSwapLogData),
 	NULL,
 	NULL,
 	xfree);
@@ -494,7 +530,7 @@ storeDirWriteCleanLogs(int reopen)
     dlink_node *m;
     char **outbuf;
     off_t *outbufoffset;
-    storeSwapData *s;
+    storeSwapLogData *s;
     if (store_rebuilding) {
 	debug(20, 1) ("Not currently OK to rewrite swap log.\n");
 	debug(20, 1) ("storeDirWriteCleanLogs: Operation aborted.\n");
@@ -542,7 +578,7 @@ storeDirWriteCleanLogs(int reopen)
 	    continue;
 	if (e->swap_status != SWAPOUT_DONE)
 	    continue;
-	if (e->object_len <= 0)
+	if (e->swap_file_sz <= 0)
 	    continue;
 	if (EBIT_TEST(e->flag, RELEASE_REQUEST))
 	    continue;
@@ -554,21 +590,21 @@ storeDirWriteCleanLogs(int reopen)
 	assert(dirn < Config.cacheSwap.n_configured);
 	if (fd[dirn] < 0)
 	    continue;
-	s = (storeSwapData *) (outbuf[dirn] + outbufoffset[dirn]);
-	outbufoffset[dirn] += sizeof(storeSwapData);
-	memset(s, '\0', sizeof(storeSwapData));
+	s = (storeSwapLogData *) (outbuf[dirn] + outbufoffset[dirn]);
+	outbufoffset[dirn] += sizeof(storeSwapLogData);
+	memset(s, '\0', sizeof(storeSwapLogData));
 	s->op = (char) SWAP_LOG_ADD;
 	s->swap_file_number = e->swap_file_number;
 	s->timestamp = e->timestamp;
 	s->lastref = e->lastref;
 	s->expires = e->expires;
 	s->lastmod = e->lastmod;
-	s->object_len = e->object_len;
+	s->swap_file_sz = e->swap_file_sz;
 	s->refcount = e->refcount;
 	s->flags = e->flag;
 	xmemcpy(s->key, e->key, MD5_DIGEST_CHARS);
 	/* buffered write */
-	if (outbufoffset[dirn] + sizeof(storeSwapData) > CLEAN_BUF_SZ) {
+	if (outbufoffset[dirn] + sizeof(storeSwapLogData) > CLEAN_BUF_SZ) {
 	    if (write(fd[dirn], outbuf[dirn], outbufoffset[dirn]) < 0) {
 		debug(50, 0) ("storeDirWriteCleanLogs: %s: write: %s\n",
 		    new[dirn], xstrerror());

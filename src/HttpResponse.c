@@ -56,6 +56,7 @@ httpResponseInit(HttpResponse *resp)
     httpStatusLineInit(&resp->sline);
     httpHeaderInit(&resp->hdr);
     httpBodyInit(&resp->body);
+    resp->pstate = psReadyToParseStartLine;
 }
 
 void
@@ -65,6 +66,7 @@ httpResponseClean(HttpResponse *resp)
     httpStatusLineClean(&resp->sline);
     httpHeaderClean(&resp->hdr);
     httpBodyClean(&resp->body);
+    resp->pstate = psError;
 }
 
 void
@@ -200,13 +202,58 @@ httpPackedResponse(double ver, http_status status,
     return result;
 }
 
+/*
+ * parses a 0-terminating buffer into HttpResponse. 
+ * Returns:
+ *      +1 -- success 
+ *       0 -- need more data (partial parse)
+ *      -1 -- parse error
+ */
+int
+httpResponseParse(HttpResponse *resp, const char *parse_start, const char **parse_end_ptr)
+{
+    const char *blk_start, *blk_end;
+    const char **parse_end_ptr_h = &blk_end;
+    int parse_size = 0;
+    assert(resp);
+    assert(parse_start);
+    assert(resp->pstate < psParsed);
+
+    if (!parse_end_ptr) parse_end_ptr = parse_end_ptr_h;
+
+    *parse_end_ptr = parse_start;
+    if (resp->pstate == psReadyToParseStartLine) {
+	if (!httpResponseIsolateStart(&parse_start, &parse_size, &blk_start, &blk_end))
+	    return 0;
+	if (!httpStatusLineParse(&resp->sline, blk_start, blk_end))
+	    return httpResponseParseError(resp);
+
+	*parse_end_ptr = parse_start;
+        resp->pstate++;
+    }
+    
+    if (resp->pstate == psReadyToParseHeaders) {
+	if (!httpResponseIsolateHeaders(&parse_start, &parse_size, &blk_start, &blk_end))
+	    return 0;
+	if (!httpHeaderParse(&resp->hdr, blk_start, blk_end))
+	    return httpResponseParseError(resp);
+
+	*parse_end_ptr = parse_start;
+	resp->pstate++;
+    }
+
+    /* could check here for a _small_ body that we could parse right away?? @?@ */
+
+    return 1;
+}
+
 #if 0
 
 /*
  * parses http "command line", returns true on success
  */
 static int
-httpReplyParseStart(HttpMsg *msg, const char *blk_start, const char *blk_end)
+httpReplyParseStart(HttpResponse *msg, const char *blk_start, const char *blk_end)
 {
     HttpReply *rep = (HttpReply*) msg;
     assert(rep->rstate == rsReadyToParse); /* the only state we can be called in */
@@ -215,15 +262,15 @@ httpReplyParseStart(HttpMsg *msg, const char *blk_start, const char *blk_end)
 
 
 static void
-httpReplySetRState(HttpMsg *msg, ReadState rstate)
+httpReplySetRState(HttpResponse *msg, ReadState rstate)
 {
-    httpMsgSetRState(msg, rstate); /* call parent first */
+    httpResponseSetRState(msg, rstate); /* call parent first */
     if (msg->rstate == rsParsedHeaders)
 	engineProcessReply((HttpReply*)msg); /* we are ready to be processed */
 }
 
 static void
-httpReplyNoteError(HttpMsg *msg, HttpReply *error)
+httpReplyNoteError(HttpResponse *msg, HttpReply *error)
 {
     /* replace our content with the error message @?@ */
     /* HttpReply *rep = (HttpReply*) msg; */
@@ -235,7 +282,7 @@ httpReplyNoteReqError(HttpReply *rep, HttpRequest *req)
 {
     /* do this for now @?@ */
     assert(0); 
-    /* httpReplyNoteError((HttpMsg*)rep, error); */
+    /* httpReplyNoteError((HttpResponse*)rep, error); */
 }
 
 
@@ -264,7 +311,7 @@ httpReplyCreateTrace(HttpRequest *req) {
      * that ideally we would like to allocate buffer right before read, not in
      * advance; also would be much better to use ioBuffer
      */
-    storeClientCopy(rep->entry, 0, 0, 4096, memAllocate(MEM_4K_BUF, 1), httpMsgNoteDataReady, rep);
+    storeClientCopy(rep->entry, 0, 0, 4096, memAllocate(MEM_4K_BUF, 1), httpResponseNoteDataReady, rep);
     return rep;
 }
 

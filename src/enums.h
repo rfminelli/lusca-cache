@@ -153,6 +153,7 @@ typedef enum {
     MGR_STOREDIR,
     MGR_CBDATA,
     MGR_PCONN,
+    MGR_COUNTERS,
     MGR_5MIN,
     MGR_60MIN,
     MGR_MEM,
@@ -478,8 +479,9 @@ enum {
     STORE_LOG_RELEASE
 };
 
-enum {
+typedef enum {
     SWAP_LOG_NOP,
     SWAP_LOG_ADD,
-    SWAP_LOG_DEL
-};
+    SWAP_LOG_DEL,
+    SWAP_LOG_MAX
+} swap_log_op;

@@ -35,10 +35,11 @@ struct _HttpHeaderField {
 	char *value;  /* field-value from HTTP/1.1 */
 };
 
-/* recognized or "known" fields */
+/* recognized or "known" fields @?@ add more! */
 typedef enum {
     HDR_ACCEPT,
     HDR_AGE,
+    HDR_CACHE_CONTROL,
     HDR_CONTENT_LENGTH,
     HDR_CONTENT_MD5,
     HDR_CONTENT_TYPE,
@@ -55,7 +56,8 @@ typedef enum {
     HDR_UPGRADE,
     HDR_WARNING,
     HDR_PROXY_KEEPALIVE,
-    HDR_MISC_END
+    HDR_OTHER,
+    HDR_ENUM_END
 } http_hdr_type;
 
 
