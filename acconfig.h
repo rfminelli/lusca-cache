@@ -6,6 +6,9 @@
 /* Define if struct mallinfo has mxfast member */
 #undef HAVE_EXT_MALLINFO
 
+/* Default FD_SETSIZE value */
+#undef DEFAULT_FD_SETSIZE
+
 /* Maximum number of open filedescriptors */
 #undef SQUID_MAXFD
 
@@ -38,3 +41,6 @@
 
 /* Define if your compiler supports prototyping */
 #undef HAVE_ANSI_PROTOTYPES
+
+/* Define if we should use GNU regex */
+#undef USE_GNUREGEX
