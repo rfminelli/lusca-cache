@@ -74,10 +74,10 @@ extern void fatal_dump _PARAMS((char *));
 /* initialize table */
 int disk_init()
 {
-    int fd, max_fd = getMaxFD();
+    int fd;
+    int max_fd = getMaxFD();
 
-    file_table = (FileEntry *) xmalloc(sizeof(FileEntry) * max_fd);
-    memset(file_table, '\0', sizeof(FileEntry) * max_fd);
+    file_table = (FileEntry *) xcalloc(max_fd, sizeof(FileEntry));
 
     for (fd = 0; fd < max_fd; fd++) {
 	file_table[fd].filename[0] = '\0';
@@ -362,14 +362,18 @@ int diskHandleWrite(fd, entry)
 		safe_free(q->buf);
 	    safe_free(q);
 	    /* Schedule next write 
-	     *  comm_set_select_handler(fd, COMM_SELECT_WRITE, (PF) diskHandleWrite,
+	     *  comm_set_select_handler(fd,
+	     *      COMM_SELECT_WRITE,
+	     *      (PF) diskHandleWrite,
 	     *      (void *) entry);
 	     */
 	    entry->write_daemon = PRESENT;
 	    /* Repeat loop */
 	} else {		/* !Block_completed; block incomplete */
 	    /* reschedule */
-	    comm_set_select_handler(fd, COMM_SELECT_WRITE, (PF) diskHandleWrite,
+	    comm_set_select_handler(fd,
+		COMM_SELECT_WRITE,
+		(PF) diskHandleWrite,
 		(void *) entry);
 	    entry->write_daemon = PRESENT;
 	    return DISK_OK;
@@ -424,7 +428,9 @@ int file_write(fd, ptr_to_buf, len, access_code, handle, handle_data)
 
     if (file_table[fd].write_daemon == NOT_PRESENT) {
 	/* got to start write routine for this fd */
-	comm_set_select_handler(fd, COMM_SELECT_WRITE, (PF) diskHandleWrite,
+	comm_set_select_handler(fd,
+	    COMM_SELECT_WRITE,
+	    (PF) diskHandleWrite,
 	    (void *) &file_table[fd]);
     }
     return DISK_OK;
@@ -440,32 +446,52 @@ int diskHandleRead(fd, ctrl_dat)
     int len;
 
     /* go to requested position. */
-    lseek(fd, ctrl_dat->offset, SEEK_SET);
+    if (lseek(fd, ctrl_dat->offset, SEEK_SET) < 0) {
+	debug(6, 1, "diskHandleRead: FD %d: lseek: %s\n", fd, xstrerror());
+	ctrl_dat->handler(fd,
+	    ctrl_dat->buf,
+	    ctrl_dat->cur_len,
+	    DISK_ERROR,
+	    ctrl_dat->client_data,
+	    ctrl_dat->offset);
+	safe_free(ctrl_dat);
+	return DISK_ERROR;
+    }
     file_table[fd].at_eof = NO;
     len = read(fd, ctrl_dat->buf + ctrl_dat->cur_len,
 	ctrl_dat->req_len - ctrl_dat->cur_len);
 
-    if (len < 0)
-	switch (errno) {
-#if EAGAIN != EWOULDBLOCK
-	case EAGAIN:
-#endif
-	case EWOULDBLOCK:
-	    break;
-	default:
-	    debug(6, 1, "diskHandleRead: FD %d: error reading: %s\n",
+    if (len < 0) {
+	if (errno == EAGAIN || errno == EWOULDBLOCK) {
+	    /* reschedule */
+	    debug(6, 1, "diskHandleRead: Rescheduling FD %d: %s\n",
 		fd, xstrerror());
-	    ctrl_dat->handler(fd, ctrl_dat->buf,
-		ctrl_dat->cur_len, DISK_ERROR,
-		ctrl_dat->client_data, ctrl_dat->offset);
-	    safe_free(ctrl_dat);
-	    return DISK_ERROR;
+	    comm_set_select_handler(fd,
+		COMM_SELECT_READ,
+		(PF) diskHandleRead,
+		(void *) ctrl_dat);
+	    return DISK_OK;
+	}
+	debug(6, 1, "diskHandleRead: FD %d: error reading: %s\n",
+	    fd, xstrerror());
+	ctrl_dat->handler(fd,
+	    ctrl_dat->buf,
+	    ctrl_dat->cur_len,
+	    DISK_ERROR,
+	    ctrl_dat->client_data,
+	    ctrl_dat->offset);
+	safe_free(ctrl_dat);
+	return DISK_ERROR;
     } else if (len == 0) {
 	/* EOF */
 	ctrl_dat->end_of_file = 1;
 	/* call handler */
-	ctrl_dat->handler(fd, ctrl_dat->buf, ctrl_dat->cur_len, DISK_EOF,
-	    ctrl_dat->client_data, ctrl_dat->offset);
+	ctrl_dat->handler(fd,
+	    ctrl_dat->buf,
+	    ctrl_dat->cur_len,
+	    DISK_EOF,
+	    ctrl_dat->client_data,
+	    ctrl_dat->offset);
 	safe_free(ctrl_dat);
 	return DISK_OK;
     }
@@ -474,14 +500,19 @@ int diskHandleRead(fd, ctrl_dat)
 
     /* reschedule if need more data. */
     if (ctrl_dat->cur_len < ctrl_dat->req_len) {
-	comm_set_select_handler(fd, COMM_SELECT_READ, (PF) diskHandleRead,
+	comm_set_select_handler(fd,
+	    COMM_SELECT_READ,
+	    (PF) diskHandleRead,
 	    (void *) ctrl_dat);
 	return DISK_OK;
     } else {
-	/* all data we need is here. */
-	/* calll handler */
-	ctrl_dat->handler(fd, ctrl_dat->buf, ctrl_dat->cur_len, DISK_OK,
-	    ctrl_dat->client_data, ctrl_dat->offset);
+	/* all data we need is here; call handler */
+	ctrl_dat->handler(fd,
+	    ctrl_dat->buf,
+	    ctrl_dat->cur_len,
+	    DISK_OK,
+	    ctrl_dat->client_data,
+	    ctrl_dat->offset);
 	safe_free(ctrl_dat);
 	return DISK_OK;
     }
@@ -500,10 +531,9 @@ int file_read(fd, buf, req_len, offset, handler, client_data)
      FILE_READ_HD handler;
      void *client_data;
 {
-    dread_ctrl *ctrl_dat;
+    dread_ctrl *ctrl_dat = NULL;
 
-    ctrl_dat = (dread_ctrl *) xmalloc(sizeof(dread_ctrl));
-    memset(ctrl_dat, '\0', sizeof(dread_ctrl));
+    ctrl_dat = (dread_ctrl *) xcalloc(1, sizeof(dread_ctrl));
     ctrl_dat->fd = fd;
     ctrl_dat->offset = offset;
     ctrl_dat->req_len = req_len;
@@ -512,10 +542,10 @@ int file_read(fd, buf, req_len, offset, handler, client_data)
     ctrl_dat->end_of_file = 0;
     ctrl_dat->handler = handler;
     ctrl_dat->client_data = client_data;
-
-    comm_set_select_handler(fd, COMM_SELECT_READ, (PF) diskHandleRead,
+    comm_set_select_handler(fd,
+	COMM_SELECT_READ,
+	(PF) diskHandleRead,
 	(void *) ctrl_dat);
-
     return DISK_OK;
 }
 
@@ -580,7 +610,9 @@ int diskHandleWalk(fd, walk_dat)
     walk_dat->offset += used_bytes;
 
     /* reschedule it for next line. */
-    comm_set_select_handler(fd, COMM_SELECT_READ, (PF) diskHandleWalk,
+    comm_set_select_handler(fd,
+	COMM_SELECT_READ,
+	(PF) diskHandleWalk,
 	(void *) walk_dat);
     return DISK_OK;
 }
@@ -600,8 +632,7 @@ int file_walk(fd, handler, client_data, line_handler, line_data)
 {
     dwalk_ctrl *walk_dat;
 
-    walk_dat = (dwalk_ctrl *) xmalloc(sizeof(dwalk_ctrl));
-    memset(walk_dat, '\0', sizeof(dwalk_ctrl));
+    walk_dat = (dwalk_ctrl *) xcalloc(1, sizeof(dwalk_ctrl));
     walk_dat->fd = fd;
     walk_dat->offset = 0;
     walk_dat->buf = (void *) xcalloc(1, DISK_LINE_LEN);
@@ -611,7 +642,9 @@ int file_walk(fd, handler, client_data, line_handler, line_data)
     walk_dat->line_handler = line_handler;
     walk_dat->line_data = line_data;
 
-    comm_set_select_handler(fd, COMM_SELECT_READ, (PF) diskHandleWalk,
+    comm_set_select_handler(fd,
+	COMM_SELECT_READ,
+	(PF) diskHandleWalk,
 	(void *) walk_dat);
     return DISK_OK;
 }
