@@ -104,7 +104,6 @@
  */
 
 #include "squid.h"
-#include "filemap.h"
 
 /* Number of bits in a long */
 #if SIZEOF_LONG == 8
@@ -124,10 +123,15 @@
 #define ALL_ONES (unsigned long) 0xFFFFFFFF
 #endif
 
+extern int storeGetSwapSpace _PARAMS((int));
+extern void fatal_dump _PARAMS((const char *));
+
+static fileMap *fm = NULL;
+
 fileMap *
 file_map_create(int n)
 {
-    fileMap *fm = xcalloc(1, sizeof(fileMap));
+    fm = xcalloc(1, sizeof(fileMap));
     fm->max_n_files = n;
     fm->nwords = n >> LONG_BIT_SHIFT;
     debug(8, 1, "file_map_create: creating space for %d files\n", n);
@@ -135,14 +139,22 @@ file_map_create(int n)
 	fm->nwords, sizeof(unsigned long));
     fm->file_map = xcalloc(fm->nwords, sizeof(unsigned long));
     meta_data.misc += fm->nwords * sizeof(unsigned long);
-    return fm;
+    return (fm);
 }
 
 int
-file_map_bit_set(fileMap * fm, int file_number)
+file_map_bit_set(int file_number)
 {
     unsigned long bitmask = (1L << (file_number & LONG_BIT_MASK));
+
+#ifdef XTRA_DEBUG
+    if (fm->file_map[file_number >> LONG_BIT_SHIFT] & bitmask)
+	debug(8, 0, "file_map_bit_set: WARNING: file number %d is already set!\n",
+	    file_number);
+#endif
+
     fm->file_map[file_number >> LONG_BIT_SHIFT] |= bitmask;
+
     fm->n_files_in_map++;
     if (!fm->toggle && (fm->n_files_in_map > ((fm->max_n_files * 7) >> 3))) {
 	fm->toggle++;
@@ -154,16 +166,21 @@ file_map_bit_set(fileMap * fm, int file_number)
     return (file_number);
 }
 
+static int available[100];
+static int avail_count = 0;
+
 void
-file_map_bit_reset(fileMap * fm, int file_number)
+file_map_bit_reset(int file_number)
 {
     unsigned long bitmask = (1L << (file_number & LONG_BIT_MASK));
     fm->file_map[file_number >> LONG_BIT_SHIFT] &= ~bitmask;
     fm->n_files_in_map--;
+    if (avail_count < 100)
+	available[avail_count++] = file_number;
 }
 
 int
-file_map_bit_test(fileMap * fm, int file_number)
+file_map_bit_test(int file_number)
 {
     unsigned long bitmask = (1L << (file_number & LONG_BIT_MASK));
     /* be sure the return value is an int, not a u_long */
@@ -171,14 +188,23 @@ file_map_bit_test(fileMap * fm, int file_number)
 }
 
 int
-file_map_allocate(fileMap * fm, int suggestion)
+file_map_allocate(int suggestion)
 {
     int word;
     int bit;
     int count;
-    if (!file_map_bit_test(fm, suggestion)) {
+
+    while (avail_count > 0) {
+	avail_count--;
+	if (file_map_bit_test(available[avail_count]))
+	    continue;
+	fm->last_file_number_allocated = available[avail_count];
+	return file_map_bit_set(available[avail_count]);
+    }
+
+    if (!file_map_bit_test(suggestion)) {
 	fm->last_file_number_allocated = suggestion;
-	return file_map_bit_set(fm, suggestion);
+	return file_map_bit_set(suggestion);
     }
     word = suggestion >> LONG_BIT_SHIFT;
     for (count = 0; count < fm->nwords; count++) {
@@ -186,19 +212,23 @@ file_map_allocate(fileMap * fm, int suggestion)
 	    break;
 	word = (word + 1) % fm->nwords;
     }
+
     for (bit = 0; bit < BITS_IN_A_LONG; bit++) {
 	suggestion = ((unsigned long) word << LONG_BIT_SHIFT) | bit;
-	if (!file_map_bit_test(fm, suggestion)) {
+	if (!file_map_bit_test(suggestion)) {
 	    fm->last_file_number_allocated = suggestion;
-	    return file_map_bit_set(fm, suggestion);
+	    return file_map_bit_set(suggestion);
 	}
     }
-    fatal_dump("file_map_allocate: Exceeded filemap limit");
-    return 0;			/* NOTREACHED */
+
+    debug(8, 0, "file_map_allocate: All %d files are in use!\n", fm->max_n_files);
+    debug(8, 0, "You need to recompile with a larger value for MAX_SWAP_FILE\n");
+    fatal_dump(NULL);
+    return (0);			/* NOTREACHED */
 }
 
 void
-filemapFreeMemory(fileMap * fm)
+filemapFreeMemory(void)
 {
     safe_free(fm->file_map);
     safe_free(fm);

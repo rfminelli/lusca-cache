@@ -134,11 +134,11 @@ typedef struct _meta_data_stat {
     int hot_vm;
     int store_entries;
     int mem_obj_count;
-    int mem_data_count;
     int ipcache_count;
     int fqdncache_count;
     int netdb_addrs;
     int netdb_hosts;
+    int netdb_peers;
     int url_strings;
     int misc;
     int client_info;
