@@ -18,6 +18,7 @@ typedef struct _acl_ip_data acl_ip_data;
 typedef struct _acl_time_data acl_time_data;
 typedef struct _acl_name_list acl_name_list;
 typedef struct _acl_deny_info_list acl_deny_info_list;
+typedef struct _acl_proxy_auth acl_proxy_auth;
 typedef struct _acl acl;
 typedef struct _snmpconf snmpconf;
 typedef struct _acl_list acl_list;
@@ -83,6 +84,7 @@ typedef struct _StatCounters StatCounters;
 typedef struct _tlv tlv;
 typedef struct _storeSwapLogData storeSwapLogData;
 typedef struct _cacheSwap cacheSwap;
+typedef struct _StatLogHist StatLogHist;
 
 /* define AIOCB even without USE_ASYNC_IO */
 typedef void AIOCB(void *, int aio_return, int aio_errno);

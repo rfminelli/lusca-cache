@@ -160,46 +160,43 @@ httpPackedReply(double ver, http_status status, const char *ctype,
 MemBuf
 httpPacked304Reply(const HttpReply *rep)
 {
-    HttpReply *rep304 = NULL;
     MemBuf mb;
     assert(rep);
 
+#if 0
     /* construct reply */
     assert(0); /* implement: rep304 = httpReply304Create(rep); */
     
     mb = httpReplyPack(rep304);
     httpReplyDestroy(rep304);
-    return mb;
-
-#if 0 /* parts */
-    LOCAL_ARRAY(char, line, 256);
-    LOCAL_ARRAY(char, reply, 8192);
-    memset(reply, '\0', 8192);
-    strcpy(reply, "HTTP/1.0 304 Not Modified\r\n");
-    if (source->date > -1) {
-        snprintf(line, 256, "Date: %s\r\n", mkrfc1123(source->date));
-        strcat(reply, line);
-    }
-    if ((int) strlen(source->content_type) > 0) {
-        snprintf(line, 256, "Content-type: %s\r\n", source->content_type);
-        strcat(reply, line);
-    }
-    if (source->content_length) {
-        snprintf(line, 256, "Content-length: %d\r\n", source->content_length);
-        strcat(reply, line);
-    }
-    if (source->expires > -1) {
-        snprintf(line, 256, "Expires: %s\r\n", mkrfc1123(source->expires));
-        strcat(reply, line);
-    }
-    if (source->last_modified > -1) {
-        snprintf(line, 256, "Last-modified: %s\r\n",
-            mkrfc1123(source->last_modified));
-        strcat(reply, line);
-    }
-    strcat(reply, "\r\n");
-    return reply;
 #endif
+
+    memBufDefInit(&mb);
+
+    memBufPrintf(&mb, "%s", "HTTP/1.0 304 Not Modified\r\n");
+
+    if (httpHeaderHas(&rep->hdr, HDR_DATE))
+	memBufPrintf(&mb, "Date: %s\r\n", mkrfc1123(
+	    httpHeaderGetTime(&rep->hdr, HDR_DATE)));
+
+    if (httpHeaderHas(&rep->hdr, HDR_CONTENT_TYPE))
+	memBufPrintf(&mb, "Content-type: %s\r\n",
+	    httpHeaderGetStr(&rep->hdr, HDR_CONTENT_TYPE));
+
+    if (httpHeaderHas(&rep->hdr, HDR_CONTENT_LENGTH))
+	memBufPrintf(&mb, "Content-Length: %d\r\n",
+	    httpReplyContentLen(rep));
+
+    if (httpHeaderHas(&rep->hdr, HDR_EXPIRES))
+	memBufPrintf(&mb, "Expires: %s\r\n", mkrfc1123(
+	    httpHeaderGetTime(&rep->hdr, HDR_EXPIRES)));
+
+    if (httpHeaderHas(&rep->hdr, HDR_LAST_MODIFIED))
+	memBufPrintf(&mb, "Last-modified: %s\r\n", mkrfc1123(
+	    httpHeaderGetTime(&rep->hdr, HDR_LAST_MODIFIED)));
+
+    memBufAppend(&mb, "\r\n", 2);
+    return mb;
 }
 
 void

@@ -128,6 +128,9 @@ extern void memBufPrintf(MemBuf *mb, const char *fmt, ...);
 extern void memBufPrintf();
 #endif
 
+/* vprintf for other printf()'s to use */
+extern void memBufVPrintf(MemBuf *mb, const char *fmt, va_list ap);
+
 /*
  * returns free() function to be used.
  * Important:

@@ -40,6 +40,7 @@
 
 #define COMM_NONBLOCKING	0x01
 #define COMM_NOCLOEXEC		0x02
+#define COMM_REUSEADDR		0x04
 
 #ifdef HAVE_SYSLOG
 #define debug(SECTION, LEVEL) \
@@ -71,7 +72,6 @@
 
 #define FQDN_LOOKUP_IF_MISS	0x01
 #define FQDN_MAX_NAMES 5
-#define FQDNCACHE_AV_FACTOR 1000
 
 /*  
  *  Here are some good prime number choices.  It's important not to
@@ -109,8 +109,6 @@
 #define IDENT_DONE 2
 
 #define IP_LOOKUP_IF_MISS	0x01
-
-#define IPCACHE_AV_FACTOR 1000
 
 #define MAX_MIME 4096
 
@@ -207,3 +205,5 @@
 #define VM_WINDOW_SZ		DISK_PAGE_SIZE
 
 #define SKIP_BASIC_SZ ((size_t) 6)
+
+#define STAT_LOG_HIST_BINS 300

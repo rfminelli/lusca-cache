@@ -307,9 +307,9 @@ DOC_START
 	traffic out on the Internet and may irritate paranoid network
 	administrators.
 
-	Note that source_ping is incompatible with inside_firewall.
-	For hosts beyond the firewall, source_ping packets will never
-	be sent.
+	Note that source_ping is incompatible with 'never_direct'.  For
+	requests matching the 'never_direct' rules, source_ping packets
+	will never be sent.
 
 	By default, source_ping is off.
 
@@ -829,6 +829,20 @@ DOC_START
 	option.
 
 dns_defnames off
+DOC_END
+
+NAME: dns_nameservers
+TYPE: wordlist
+DEFAULT: none
+LOC: Config.dns_nameservers
+DOC_START
+	Use this if you want to specify a list of DNS name servers
+	(IP addresses) to use instead of those given in your
+	/etc/resolv.conf file.
+
+	Example: dns_nameservers 10.0.0.1 192.172.0.4
+
+dns_nameservers none
 DOC_END
 
 

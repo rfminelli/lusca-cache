@@ -454,6 +454,7 @@ storeAppend(StoreEntry * e, const char *buf, int len)
 	debug(20, 5) ("storeAppend: appending %d bytes for '%s'\n",
 	    len,
 	    storeKeyText(e->key));
+	tmp_debug(here) ("bytes: '%.20s'\n", buf); /* @?@ @?@ */
 	storeGetMemSpace(len);
 	stmemAppend(mem->data, buf, len);
 	mem->inmem_hi += len;
@@ -469,7 +470,6 @@ void
 storeAppendPrintf(StoreEntry * e, const char *fmt,...)
 {
     va_list args;
-    LOCAL_ARRAY(char, buf, 4096);
     va_start(args, fmt);
 #else
 void
@@ -479,15 +479,22 @@ storeAppendPrintf(va_alist)
     va_list args;
     StoreEntry *e = NULL;
     const char *fmt = NULL;
-    LOCAL_ARRAY(char, buf, 4096);
     va_start(args);
     e = va_arg(args, StoreEntry *);
     fmt = va_arg(args, char *);
 #endif
-    buf[0] = '\0';
-    vsnprintf(buf, 4096, fmt, args);
-    storeAppend(e, buf, strlen(buf));
+    storeAppendVPrintf(e, fmt, args);
     va_end(args);
+}
+
+/* used be storeAppendPrintf and Packer */
+void
+storeAppendVPrintf(StoreEntry * e, const char *fmt, va_list vargs)
+{
+    LOCAL_ARRAY(char, buf, 4096);
+    buf[0] = '\0';
+    vsnprintf(buf, 4096, fmt, vargs);
+    storeAppend(e, buf, strlen(buf));
 }
 
 int
@@ -840,6 +847,9 @@ storeInit(void)
     store_list.head = store_list.tail = NULL;
     inmem_list.head = inmem_list.tail = NULL;
     storeRebuildStart();
+    cachemgrRegister("store_dir",
+	"Store Directory Stats",
+	storeDirStats, 0);
 }
 
 void

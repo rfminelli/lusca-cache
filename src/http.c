@@ -1153,6 +1153,14 @@ httpReplyHeaderStats(StoreEntry * entry)
 }
 #endif
 
+void
+httpInit(void)
+{
+    cachemgrRegister("reply_headers",
+	"HTTP Reply Header Histograms",
+	httpHeaderStoreRepReport, 0);
+}
+
 static void
 httpAbort(void *data)
 {

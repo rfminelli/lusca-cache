@@ -251,6 +251,7 @@ comm_open(int sock_type,
 	default:
 	    debug(50, 0) ("comm_open: socket failure: %s\n", xstrerror());
 	}
+	fdAdjustReserved();
 	return -1;
     }
     /* update fdstat */
@@ -259,6 +260,8 @@ comm_open(int sock_type,
     F = &fd_table[new_socket];
     if (!(flags & COMM_NOCLOEXEC))
 	commSetCloseOnExec(new_socket);
+    if ((flags & COMM_REUSEADDR))
+	commSetReuseAddr(new_socket);
     if (port > (u_short) 0) {
 	commSetNoLinger(new_socket);
 	if (opt_reuseaddr)
@@ -383,10 +386,12 @@ commResetFD(ConnectStateData * cs)
     fd2 = socket(AF_INET, SOCK_STREAM, 0);
     if (fd2 < 0) {
 	debug(5, 0) ("commResetFD: socket: %s\n", xstrerror());
+	fdAdjustReserved();
 	return 0;
     }
     if (dup2(fd2, cs->fd) < 0) {
 	debug(5, 0) ("commResetFD: dup2: %s\n", xstrerror());
+	fdAdjustReserved();
 	return 0;
     }
     close(fd2);

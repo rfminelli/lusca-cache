@@ -452,9 +452,10 @@ mainInitialize(void)
     if (!configured_once) {
 	unlinkdInit();
 	urlInitialize();
-	objcacheInit();
+	cachemgrInit();
 	statInit();
 	storeInit();
+	httpInit();
 	asnAclInitialize(Config.aclList);
 	if (Config.effectiveUser) {
 	    /* we were probably started as root, so cd to a swap

@@ -264,6 +264,8 @@ main(int argc, char *argv[])
     int alias_count = 0;
     int i;
     int c;
+    int opt_s = 0;
+    extern char *optarg;
 
     safe_inet_addr("255.255.255.255", &no_addr);
 
@@ -280,11 +282,15 @@ main(int argc, char *argv[])
 #endif
 #endif
 
-    while ((c = getopt(argc, argv, "vhdD")) != -1) {
+    while ((c = getopt(argc, argv, "Ddhs:v")) != -1) {
 	switch (c) {
-	case 'v':
-	    printf("dnsserver version %s\n", SQUID_VERSION);
-	    exit(0);
+	case 'D':
+#ifdef RES_DEFNAMES
+	    _res.options |= RES_DEFNAMES;
+#endif
+#ifdef RES_DNSRCH
+	    _res.options |= RES_DNSRCH;
+#endif
 	    break;
 	case 'd':
 	    snprintf(buf, 256, "dnsserver.%d.log", (int) getpid());
@@ -293,12 +299,22 @@ main(int argc, char *argv[])
 	    if (!logfile)
 		fprintf(stderr, "Could not open dnsserver's log file\n");
 	    break;
-	case 'D':
-#ifdef RES_DEFNAMES
-	    _res.options |= RES_DEFNAMES;
-#endif
-	    break;
 	case 'h':
+	    fprintf(stderr, "usage: dnsserver -hvd\n");
+	    exit(1);
+	    break;
+	case 's':
+	    if (opt_s == 0) {
+		_res.nscount = 0;
+		_res.options |= RES_INIT;
+		opt_s = 1;
+	    }
+	    safe_inet_addr(optarg, &_res.nsaddr_list[_res.nscount++].sin_addr);
+	    break;
+	case 'v':
+	    printf("dnsserver version %s\n", SQUID_VERSION);
+	    exit(0);
+	    break;
 	default:
 	    fprintf(stderr, "usage: dnsserver -hvd\n");
 	    exit(1);
