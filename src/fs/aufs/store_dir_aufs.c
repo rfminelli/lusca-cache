@@ -912,11 +912,14 @@ storeAufsDirOpenTmpSwapLog(SwapDir * sd, int *clean_flag, int *zero_flag)
     }
     aioinfo->swaplog_fd = fd;
     /* open a read-only stream of the old log */
-    fp = fopen(swaplog_path, "rb");
+    fp = fopen(swaplog_path, "r");
     if (fp == NULL) {
 	debug(50, 0) ("%s: %s\n", swaplog_path, xstrerror());
 	fatal("Failed to open swap log for reading");
     }
+#if defined(_SQUID_CYGWIN_)
+    setmode(fileno(fp), O_BINARY);
+#endif
     memset(&clean_sb, '\0', sizeof(struct stat));
     if (stat(clean_path, &clean_sb) < 0)
 	*clean_flag = 0;
@@ -1686,9 +1689,9 @@ static void
 storeAufsDirDone(void)
 {
     aioDone();
-    memPoolDestroy(&squidaio_state_pool);
-    memPoolDestroy(&aufs_qread_pool);
-    memPoolDestroy(&aufs_qwrite_pool);
+    memPoolDestroy(squidaio_state_pool);
+    memPoolDestroy(aufs_qread_pool);
+    memPoolDestroy(aufs_qwrite_pool);
     asyncufs_initialised = 0;
 }
 

@@ -109,15 +109,18 @@ authNTLMDone(void)
     ntlmauthenticators = NULL;
     if (ntlm_helper_state_pool) {
 	assert(memPoolInUseCount(ntlm_helper_state_pool) == 0);
-	memPoolDestroy(&ntlm_helper_state_pool);
+	memPoolDestroy(ntlm_helper_state_pool);
+	ntlm_helper_state_pool = NULL;
     }
     if (ntlm_request_pool) {
 	assert(memPoolInUseCount(ntlm_request_pool) == 0);
-	memPoolDestroy(&ntlm_request_pool);
+	memPoolDestroy(ntlm_request_pool);
+	ntlm_request_pool = NULL;
     }
     if (ntlm_user_pool) {
 	assert(memPoolInUseCount(ntlm_user_pool) == 0);
-	memPoolDestroy(&ntlm_user_pool);
+	memPoolDestroy(ntlm_user_pool);
+	ntlm_user_pool = NULL;
     }
     debug(29, 2) ("authNTLMDone: NTLM authentication Shutdown.\n");
 }
@@ -239,7 +242,7 @@ authNTLMInit(authScheme * scheme)
 	assert(proxy_auth_cache);
 	ntlmauthenticators->cmdline = ntlmConfig->authenticate;
 	ntlmauthenticators->n_to_start = ntlmConfig->authenticateChildren;
-	ntlmauthenticators->ipc_type = IPC_STREAM;
+	ntlmauthenticators->ipc_type = IPC_TCP_SOCKET;
 	ntlmauthenticators->datapool = ntlm_helper_state_pool;
 	ntlmauthenticators->IsAvailable = authenticateNTLMHelperServerAvailable;
 	ntlmauthenticators->OnEmptyQueue = authenticateNTLMHelperServerOnEmpty;
@@ -401,18 +404,20 @@ authenticateNTLMHandleplaceholder(void *data, void *lastserver, char *reply)
 {
     authenticateStateData *r = data;
     stateful_helper_callback_t result = S_HELPER_UNKNOWN;
+    int valid;
     /* we should only be called for placeholder requests - which have no reply string */
     assert(reply == NULL);
     assert(r->auth_user_request);
     /* standard callback stuff */
-    if (!cbdataReferenceValid(r->data)) {
+    valid = cbdataValid(r->data);
+    if (!valid) {
 	debug(29, 1) ("AuthenticateNTLMHandlePlacheholder: invalid callback data.\n");
 	return result;
     }
     /* call authenticateNTLMStart to retry this request */
     debug(29, 9) ("authenticateNTLMHandleplaceholder: calling authenticateNTLMStart\n");
     authenticateNTLMStart(r->auth_user_request, r->handler, r->data);
-    cbdataReferenceDone(r->data);
+    cbdataUnlock(r->data);
     authenticateStateFree(r);
     return result;
 }
@@ -422,6 +427,7 @@ authenticateNTLMHandleReply(void *data, void *lastserver, char *reply)
 {
     authenticateStateData *r = data;
     ntlm_helper_state_t *helperstate;
+    int valid;
     stateful_helper_callback_t result = S_HELPER_UNKNOWN;
     char *t = NULL;
     auth_user_request_t *auth_user_request;
@@ -429,9 +435,10 @@ authenticateNTLMHandleReply(void *data, void *lastserver, char *reply)
     ntlm_user_t *ntlm_user;
     ntlm_request_t *ntlm_request;
     debug(29, 9) ("authenticateNTLMHandleReply: Helper: '%p' {%s}\n", lastserver, reply ? reply : "<NULL>");
-    if (!cbdataReferenceValid(r->data)) {
+    valid = cbdataValid(r->data);
+    if (!valid) {
 	debug(29, 1) ("AuthenticateNTLMHandleReply: invalid callback data. Releasing helper '%p'.\n", lastserver);
-	cbdataReferenceDone(r->data);
+	cbdataUnlock(r->data);
 	authenticateStateFree(r);
 	debug(29, 9) ("NTLM HandleReply, telling stateful helper : %d\n", S_HELPER_RELEASE);
 	return S_HELPER_RELEASE;
@@ -563,7 +570,7 @@ authenticateNTLMHandleReply(void *data, void *lastserver, char *reply)
 	     * a different one. Our auth state stays the same */
 	    authenticateNTLMStart(auth_user_request, r->handler, r->data);
 	    /* don't call the callback */
-	    cbdataReferenceDone(r->data);
+	    cbdataUnlock(r->data);
 	    authenticateStateFree(r);
 	    debug(29, 9) ("NTLM HandleReply, telling stateful helper : %d\n", result);
 	    return result;
@@ -595,7 +602,7 @@ authenticateNTLMHandleReply(void *data, void *lastserver, char *reply)
 	ntlm_request->authserver = NULL;
     }
     r->handler(r->data, NULL);
-    cbdataReferenceDone(r->data);
+    cbdataUnlock(r->data);
     authenticateStateFree(r);
     debug(29, 9) ("NTLM HandleReply, telling stateful helper : %d\n", result);
     return result;
@@ -723,7 +730,8 @@ authenticateNTLMStart(auth_user_request_t * auth_user_request, RH * handler, voi
 	    /* No server, or server with invalid challenge */
 	    r = cbdataAlloc(authenticateStateData);
 	    r->handler = handler;
-	    r->data = cbdataReference(data);
+	    cbdataLock(data);
+	    r->data = data;
 	    r->auth_user_request = auth_user_request;
 	    if (server == NULL) {
 		helperStatefulSubmit(ntlmauthenticators, NULL, authenticateNTLMHandleplaceholder, r, NULL);
@@ -750,7 +758,8 @@ authenticateNTLMStart(auth_user_request_t * auth_user_request, RH * handler, voi
     case AUTHENTICATE_STATE_RESPONSE:
 	r = cbdataAlloc(authenticateStateData);
 	r->handler = handler;
-	r->data = cbdataReference(data);
+	cbdataLock(data);
+	r->data = data;
 	r->auth_user_request = auth_user_request;
 	snprintf(buf, 8192, "KK %s\n", sent_string);
 	/* getting rid of deferred request status */

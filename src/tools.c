@@ -443,32 +443,24 @@ getMyHostname(void)
     LOCAL_ARRAY(char, host, SQUIDHOSTNAMELEN + 1);
     static int present = 0;
     const struct hostent *h = NULL;
-    struct in_addr sa;
     if (Config.visibleHostname != NULL)
 	return Config.visibleHostname;
     if (present)
 	return host;
     host[0] = '\0';
-    memcpy(&sa, &any_addr, sizeof(sa));
-    if (Config.Sockaddr.http && sa.s_addr == any_addr.s_addr)
-	memcpy(&sa, &Config.Sockaddr.http->s.sin_addr, sizeof(sa));
-#if USE_SSL
-    if (Config.Sockaddr.https && sa.s_addr == any_addr.s_addr)
-	memcpy(&sa, &Config.Sockaddr.https->s.sin_addr, sizeof(sa));
-#endif
-    /*
-     * If the first http_port address has a specific address, try a
-     * reverse DNS lookup on it.
-     */
-    if (sa.s_addr != any_addr.s_addr) {
-	h = gethostbyaddr((char *) &sa,
-	    sizeof(sa), AF_INET);
+    if (Config.Sockaddr.http->s.sin_addr.s_addr != any_addr.s_addr) {
+	/*
+	 * If the first http_port address has a specific address, try a
+	 * reverse DNS lookup on it.
+	 */
+	h = gethostbyaddr((char *) &Config.Sockaddr.http->s.sin_addr,
+	    sizeof(Config.Sockaddr.http->s.sin_addr), AF_INET);
 	if (h != NULL) {
 	    /* DNS lookup successful */
 	    /* use the official name from DNS lookup */
 	    xstrncpy(host, h->h_name, SQUIDHOSTNAMELEN);
 	    debug(50, 4) ("getMyHostname: resolved %s to '%s'\n",
-		inet_ntoa(sa),
+		inet_ntoa(Config.Sockaddr.http->s.sin_addr),
 		host);
 	    present = 1;
 	    if (strchr(host, '.'))
@@ -476,7 +468,7 @@ getMyHostname(void)
 
 	}
 	debug(50, 1) ("WARNING: failed to resolve %s to a fully qualified hostname\n",
-	    inet_ntoa(sa));
+	    inet_ntoa(Config.Sockaddr.http->s.sin_addr));
     }
     /*
      * Get the host name and store it in host to return
@@ -842,6 +834,43 @@ kb_incr(kb_t * k, size_t v)
 }
 
 void
+gb_flush(gb_t * g)
+{
+    g->gb += (g->bytes >> 30);
+    g->bytes &= (1 << 30) - 1;
+}
+
+double
+gb_to_double(const gb_t * g)
+{
+    return ((double) g->gb) * ((double) (1 << 30)) + ((double) g->bytes);
+}
+
+const char *
+gb_to_str(const gb_t * g)
+{
+    /*
+     * it is often convenient to call gb_to_str several times for _one_ printf
+     */
+#define max_cc_calls 5
+    typedef char GbBuf[32];
+    static GbBuf bufs[max_cc_calls];
+    static int call_id = 0;
+    double value = gb_to_double(g);
+    char *buf = bufs[call_id++];
+    if (call_id >= max_cc_calls)
+	call_id = 0;
+    /* select format */
+    if (value < 1e9)
+	snprintf(buf, sizeof(GbBuf), "%.2f MB", value / 1e6);
+    else if (value < 1e12)
+	snprintf(buf, sizeof(GbBuf), "%.2f GB", value / 1e9);
+    else
+	snprintf(buf, sizeof(GbBuf), "%.2f TB", value / 1e12);
+    return buf;
+}
+
+void
 debugObj(int section, int level, const char *label, void *obj, ObjPackMethod pm)
 {
     MemBuf mb;
@@ -991,17 +1020,4 @@ parseEtcHosts(void)
       skip:
 	wordlistDestroy(&hosts);
     }
-}
-
-int
-getMyPort(void)
-{
-    if (Config.Sockaddr.http)
-	return ntohs(Config.Sockaddr.http->s.sin_port);
-#if USE_SSL
-    if (Config.Sockaddr.https)
-	return ntohs(Config.Sockaddr.https->s.sin_port);
-#endif
-    fatal("No port defined");
-    return 0; /* NOT REACHED */
 }

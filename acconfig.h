@@ -53,9 +53,6 @@
 #undef CACHE_ICP_PORT
 #endif
 
-/* Compile & use the malloc package by Doug Lea] */
-#undef USE_DLMALLOC
-
 /* Define to do simple malloc debugging */
 #undef XMALLOC_DEBUG
 
@@ -69,9 +66,6 @@
 #undef XMALLOC_TRACE
 
 #undef FORW_VIA_DB
-
-/* Define if you have problems with memPools and want to disable Pools */
-#undef DISABLE_POOLS
 
 /* Defines how many threads aufs uses for I/O */
 #undef AUFS_IO_THREADS
@@ -152,7 +146,7 @@
 /*
  * Cache Array Routing Protocol
  */
-#define USE_CARP 1
+#undef USE_CARP
 
 /* Define if NTLM is allowed to fail gracefully when a helper has problems */
 #undef NTLM_FAIL_OPEN
@@ -338,11 +332,6 @@
 #undef LINUX_NETFILTER
 
 /*
- * Enable for cbdata debug information
- */
-#undef CBDATA_DEBUG
-
-/*
  * Do we have unix sockets? (required for the winbind ntlm helper
  */
 #undef HAVE_UNIXSOCKET
@@ -403,11 +392,6 @@
  * Enable support for the X-Accelerator-Vary HTTP header
  */
 #undef X_ACCELERATOR_VARY
-
-/* Support for poll/select/etc stuff */
-#undef USE_POLL
-#undef USE_SELECT
-#undef USE_KQUEUE
 
 @BOTTOM@
 
