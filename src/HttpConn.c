@@ -3,7 +3,8 @@
  * $Id$
  *
  * DEBUG: section 12      HTTP Connection
- * AUTHOR: Duane Wessels & Alex Rousskov
+ * AUTHOR: Duane Wessels
+ * BUGS:   Alex Rousskov
  *
  * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * --------------------------------------------------------
@@ -47,6 +48,8 @@ struct _HttpConn {
 
     HttpConnIndex index;    /* keeps pending writers, searches by HttpMsg->id */
     HttpConnDIndex deps;    /* keeps all HttpMsgs that depend on this connection */
+
+    uchar timeout_count;    /* number of timeouts caught */
 };
 
 
@@ -230,10 +233,18 @@ httpConnClosed(int fd, void *data)
 
 /* tells comm module if the connection is currently deferred */
 static int
-httpConnDefer(int fdnotused, void *data)
+httpConnIsDeferred(int fdnotused, void *data)
 {
     const HttpConn *conn = data;
     return conn->defer.until > squid_curtime;
+}
+
+/* defers the connection activity for a specified time */
+static void
+httpConnDefer(HttpConn *conn, time_t delta)
+{
+    assert(conn);
+    conn->defer.until = squid_curtime + delta;
 }
 
 /*
@@ -256,7 +267,7 @@ httpConnReadSocket(HttpConn *conn)
 
     debug(12, 4) ("httpConnRead: FD %d: reading...\n", fd);
 
-    /* always maintain registered status; @?@: is it OK to do it before read?*/
+    /* always maintain registered status; @?@: is it OK to do it before read? */
     commSetSelect(fd, COMM_SELECT_READ, conn->readSocket, conn, 0);
     if (buf->free_space > 0) {
     	size = ioBufferRead(buf, fd, conn);
@@ -301,10 +312,16 @@ httpConnPushData(HttpConn *conn)
 {
     assert(conn);
     if (!ioBufferIsEmpty(conn->in_buf)) { /* we have data */
+	if (conn->reader || /* we have a reader OR */
+	    ((conn->reader = conn->get_reader(conn)) &&  /* we got one AND */
+	     !ioBufferIsEmpty(conn->in_buf))) /* the data is still there */
+	    conn->reader->noteDataReady(conn);
+#if 0 /* this is the same as above but more clear and less efficient */
 	if (!conn->reader) /* no reader to read data */
-	    conn->reader = conn->get_reader(conn); /* may do nothing because of load control, etc. */
+	    conn->reader = conn->get_reader(conn); /* may return NULL due to load control, etc. */
 	if (!ioBufferIsEmpty(conn->in_buf) && conn->reader) /* double check */
 	    conn->reader->noteDataReady(conn);
+#endif /* good code */
     }
 }
 
@@ -356,8 +373,8 @@ httpConnWriteSocket(HttpConn *conn)
     	}
     }
     /*
-     * notify pending writer about new buffer space; it may be confusing: when
-     * we write to fd we actually read from buffer(!), thus we free some space
+     * notify pending writer about new buffer space; it maybe confusing: when
+     * we write to fd we actually read from buffer, thus, we free some space
      * in the buffer
      */
     httpConnPullData(conn);
@@ -371,11 +388,17 @@ static void
 httpConnPullData(HttpConn *conn)
 {
     assert(conn);
-    if (!ioBufferIsFull(conn->in_buf)) { /* we have free space */
+    if (!ioBufferIsFull(&conn->out_buf)) { /* we have free space */
+	if (conn->writer || /* we have a writer OR */
+	    ((conn->writer = conn->get_writer(conn)) &&  /* we got one AND */
+	     !ioBufferIsEmpty(&conn->out_buf))) /* the data is still there */
+	    conn->writer->noteSpaceReady(conn);
+#if 0 /* this is the same as above but more clear and less efficient */
 	if (!conn->writer) /* no writer to write data */
 	    conn->writer = conn->get_writer(conn); /* may fail because nobody is waiting, etc. */
-	if (!ioBufferIsFull(conn->in_buf) && conn->writer) /* double check */
+	if (!ioBufferIsFull(&conn->out_buf) && conn->writer) /* double check */
 	    conn->writer->noteSpaceReady(conn);
+#endif /* if good code */
     }
 }
 
@@ -392,7 +415,8 @@ httpConnTimeout(int fd, void *data)
 {
     HttpConn *conn = data;
     assert(conn);
-    if (conn->timeout_count) {
+    conn->timeout_count++;
+    if (conn->timeout_count > 1) {
     	/* we got stuck and failed to start moving again, force close */
 	debug(12, 2) ("httpConnTimeout: FD %d: lifetime is expired %d times.\n", fd, conn->timeout_count);
     	comm_close(fd);
@@ -401,14 +425,13 @@ httpConnTimeout(int fd, void *data)
     /* notify dependents, etc. */
     httpConnNoteException(conn, COMM_TIMEOUT);
     /* now check if anybody is still here */
-    if (depListEmpty(conn->dependents)) {
+    if (httpConnDIndexIsEmpty(&conn->deps)) {
     	/* close idle connection */
     	comm_close(fd);
     	return;
     }
     /* if we don't close() here, we still need a timeout handler! */
     commSetTimeout(fd, CONN_TIMEOUT_AFTER_TIMEOUT, httpConnTimeout, conn);
-    conn->timeout_count++;
 }
 
 /*
@@ -418,16 +441,16 @@ httpConnTimeout(int fd, void *data)
 static void
 httpConnBroadcastException(HttpConn *conn, int status) 
 {
-    Dependent *dep;
-    DepListPos pos = DepListInitPos;
+    HttpMsg *dep;
+    HttpMsgDIndexPos pos = HttpMsgDIndexInitPos;
     assert(conn);
     /*
      * Warning: we never know what happens when dependent receives notification;
      * it may, for example, remove itself from the dependent list or even
-     * destroy itself.  DepList implementation must support iteration when the
-     * base llist is "unstable".
+     * destroy itself.  DIndex implementation must support iteration when the
+     * base list is "unstable".
      */
-    while (depListGet(conn -> dependents, &dep, &pos))
+    while (httpMsgDIndexGet(&conn -> deps, &dep, &pos))
     	dep -> noteException(conn, status);
 }
 
