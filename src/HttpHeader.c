@@ -380,7 +380,7 @@ httpHeaderUpdate(HttpHeader * old, const HttpHeader * fresh, const HttpHeaderMas
 int
 httpHeaderReset(HttpHeader * hdr)
 {
-    http_hdr_owner_type ho;
+    http_hdr_owner_type ho = hdr->owner;
     assert(hdr);
     ho = hdr->owner;
     httpHeaderClean(hdr);
@@ -663,7 +663,9 @@ httpHeaderGetByName(const HttpHeader * hdr, const char *name)
 }
 
 /*
- * Returns a the value of the specified list member, if any.
+ * returns a pointer to a specified entry if any 
+ * note that we return one entry so it does not make much sense to ask for
+ * "list" headers
  */
 String
 httpHeaderGetByNameListMember(const HttpHeader * hdr, const char *name, const char *member, const char separator)

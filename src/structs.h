@@ -385,7 +385,6 @@ struct _SquidConfig {
 	int pct;
 	size_t max;
     } quickAbort;
-    size_t readAheadGap;
     RemovalPolicySettings *replPolicy;
     RemovalPolicySettings *memPolicy;
     time_t referenceAge;
@@ -393,7 +392,6 @@ struct _SquidConfig {
     time_t negativeDnsTtl;
     time_t positiveDnsTtl;
     time_t shutdownLifetime;
-    time_t backgroundPingRate;
     struct {
 	time_t read;
 	time_t lifetime;
@@ -406,7 +404,6 @@ struct _SquidConfig {
 	time_t deadPeer;
 	int icp_query;		/* msec */
 	int icp_query_max;	/* msec */
-	int icp_query_min;	/* msec */
 	int mcast_icp_query;	/* msec */
 #if USE_IDENT
 	time_t ident;
@@ -820,7 +817,7 @@ struct _MemBuf {
     /* private, stay away; use interface function instead */
     mb_size_t max_capacity;	/* when grows: assert(new_capacity <= max_capacity) */
     mb_size_t capacity;		/* allocated space */
-    unsigned stolen:1;		/* the buffer has been stolen for use by someone else */
+    FREE *freefunc;		/* what to use to free the buffer, NULL after memBufFreeFunc() is called */
 };
 
 /* see Packer.c for description */
@@ -1051,8 +1048,6 @@ struct _clientHttpRequest {
     request_t *request;		/* Parsed URL ... */
     store_client *sc;		/* The store_client we're using */
     store_client *old_sc;	/* ... for entry to be validated */
-    int old_reqofs;		/* ... for the buffer */
-    int old_reqsize;		/* ... again, for the buffer */
     char *uri;
     char *log_uri;
     struct {
@@ -1084,11 +1079,6 @@ struct _clientHttpRequest {
 	char *location;
     } redirect;
     dlink_node active;
-    char norm_reqbuf[HTTP_REQBUF_SZ];	/* For 'normal requests' */
-    char ims_reqbuf[HTTP_REQBUF_SZ];	/* For 'ims' requests */
-    char *reqbuf;
-    int reqofs;
-    int reqsize;
 };
 
 struct _ConnStateData {
@@ -1178,9 +1168,6 @@ struct _DigestFetchState {
 	int msg;
 	int bytes;
     } sent, recv;
-    char buf[SM_PAGE_SIZE];
-    ssize_t bufofs;
-    digest_read_state_t state;
 };
 
 /* statistics for cache digests and other hit "predictors" */
@@ -1265,11 +1252,9 @@ struct _peer {
     struct {
 	unsigned int proxy_only:1;
 	unsigned int no_query:1;
-	unsigned int background_ping:1;
 	unsigned int no_digest:1;
 	unsigned int default_parent:1;
 	unsigned int roundrobin:1;
-	unsigned int weighted_roundrobin:1;
 	unsigned int mcast_responder:1;
 	unsigned int closest_only:1;
 #if USE_HTCP
@@ -1280,12 +1265,8 @@ struct _peer {
 	unsigned int no_delay:1;
 #endif
 	unsigned int allow_miss:1;
-#if USE_CARP
-	unsigned int carp:1;
-#endif
     } options;
     int weight;
-    int basetime;
     struct {
 	double avg_n_members;
 	int n_times_counted;
@@ -1312,7 +1293,7 @@ struct _peer {
     struct {
 	unsigned int hash;
 	double load_multiplier;
-	double load_factor;	/* normalized weight value */
+	float load_factor;
     } carp;
 #endif
     char *login;		/* Proxy authorization */
@@ -1403,10 +1384,10 @@ struct _icp_common_t {
     unsigned char opcode;	/* opcode */
     unsigned char version;	/* version number */
     unsigned short length;	/* total length (bytes) */
-    u_int32_t reqnum;		/* req number (req'd for UDP) */
-    u_int32_t flags;
-    u_int32_t pad;
-    u_int32_t shostid;		/* sender host id */
+    u_num32 reqnum;		/* req number (req'd for UDP) */
+    u_num32 flags;
+    u_num32 pad;
+    u_num32 shostid;		/* sender host id */
 };
 
 struct _iostats {
@@ -1435,14 +1416,11 @@ struct _mem_hdr {
 struct _store_client {
     int type;
     off_t copy_offset;
-    off_t cmp_offset;
+    off_t seen_offset;
     size_t copy_size;
     char *copy_buf;
     STCB *callback;
     void *callback_data;
-#if STORE_CLIENT_LIST_DEBUG
-    void *owner;
-#endif
     StoreEntry *entry;		/* ptr to the parent StoreEntry, argh! */
     storeIOState *swapin_sio;
     struct {
@@ -1911,6 +1889,30 @@ struct _storeSwapLogData {
     unsigned char key[MD5_DIGEST_CHARS];
 };
 
+/* object to track per-action memory usage (e.g. #idle objects) */
+struct _MemMeter {
+    ssize_t level;		/* current level (count or volume) */
+    ssize_t hwater_level;	/* high water mark */
+    time_t hwater_stamp;	/* timestamp of last high water mark change */
+};
+
+/* object to track per-pool memory usage (alloc = inuse+idle) */
+struct _MemPoolMeter {
+    MemMeter alloc;
+    MemMeter inuse;
+    MemMeter idle;
+    gb_t saved;
+    gb_t total;
+};
+
+/* a pool is a [growing] space for objects of the same size */
+struct _MemPool {
+    const char *label;
+    size_t obj_size;
+    Stack pstack;		/* stack for free pointers */
+    MemPoolMeter meter;
+};
+
 struct _ClientInfo {
     hash_link hash;		/* must be first */
     struct in_addr addr;
@@ -1967,7 +1969,7 @@ struct _FwdState {
 struct _htcpReplyData {
     int hit;
     HttpHeader hdr;
-    u_int32_t msg_id;
+    u_num32 msg_id;
     double version;
     struct {
 	/* cache-to-origin */

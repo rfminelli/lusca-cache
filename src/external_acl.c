@@ -101,7 +101,6 @@ struct _external_acl_format {
 	EXT_ACL_DST,
 	EXT_ACL_PROTO,
 	EXT_ACL_PORT,
-	EXT_ACL_PATH,
 	EXT_ACL_METHOD,
 	EXT_ACL_HEADER,
 	EXT_ACL_HEADER_MEMBER,
@@ -207,7 +206,7 @@ parse_externalAclHelper(external_acl ** list)
 	    char *header, *member, *end;
 	    header = token + 2;
 	    end = strchr(header, '}');
-	    /* cut away the closing brace */
+	    /* cut away the terminating } */
 	    if (end && strlen(end) == 1)
 		*end = '\0';
 	    else
@@ -250,8 +249,6 @@ parse_externalAclHelper(external_acl ** list)
 	    format->type = EXT_ACL_PROTO;
 	else if (strcmp(token, "%PORT") == 0)
 	    format->type = EXT_ACL_PORT;
-	else if (strcmp(token, "%PATH") == 0)
-	    format->type = EXT_ACL_PATH;
 	else if (strcmp(token, "%METHOD") == 0)
 	    format->type = EXT_ACL_METHOD;
 	else {
@@ -316,7 +313,6 @@ dump_externalAclHelper(StoreEntry * sentry, const char *name, const external_acl
 		DUMP_EXT_ACL_TYPE(DST);
 		DUMP_EXT_ACL_TYPE(PROTO);
 		DUMP_EXT_ACL_TYPE(PORT);
-		DUMP_EXT_ACL_TYPE(PATH);
 		DUMP_EXT_ACL_TYPE(METHOD);
 	    }
 	}
@@ -365,7 +361,8 @@ free_external_acl_data(void *data)
 {
     external_acl_data *p = data;
     wordlistDestroy(&p->arguments);
-    cbdataReferenceDone(p->def);
+    cbdataUnlock(p->def);
+    p->def = NULL;
 }
 
 void
@@ -381,7 +378,8 @@ aclParseExternal(void *dataptr)
     token = strtok(NULL, w_space);
     if (!token)
 	self_destruct();
-    data->def = cbdataReference(find_externalAclHelper(token));
+    data->def = find_externalAclHelper(token);
+    cbdataLock(data->def);
     if (!data->def)
 	self_destruct();
     while ((token = strtok(NULL, w_space))) {
@@ -406,12 +404,13 @@ aclMatchExternal(void *data, aclCheck_t * ch)
     debug(82, 9) ("aclMatchExternal: acl=\"%s\"\n", acl->def->name);
     entry = ch->extacl_entry;
     if (entry) {
-	if (cbdataReferenceValid(entry) && entry->def == acl->def &&
+	if (cbdataValid(entry) && entry->def == acl->def &&
 	    strcmp(entry->hash.key, key) == 0) {
 	    /* Ours, use it.. */
 	} else {
 	    /* Not valid, or not ours.. get rid of it */
-	    cbdataReferenceDone(ch->extacl_entry);
+	    cbdataUnlock(ch->extacl_entry);
+	    ch->extacl_entry = NULL;
 	    entry = NULL;
 	}
     }
@@ -445,7 +444,7 @@ aclMatchExternal(void *data, aclCheck_t * ch)
      * piggy backs on ident, and may fail if there is child proxies..
      * Register the username for logging purposes
      */
-    if (entry->user && cbdataReferenceValid(ch->conn) && !ch->conn->rfc931[0])
+    if (entry->user && cbdataValid(ch->conn) && !ch->conn->rfc931[0])
 	xstrncpy(ch->conn->rfc931, entry->user, USER_IDENT_SZ);
     return result;
 }
@@ -518,9 +517,6 @@ makeExternalAclKey(aclCheck_t * ch, external_acl_data * acl_data)
 	case EXT_ACL_PORT:
 	    snprintf(buf, sizeof(buf), "%d", request->port);
 	    str = buf;
-	    break;
-	case EXT_ACL_PATH:
-	    str = strBuf(request->urlpath);
 	    break;
 	case EXT_ACL_METHOD:
 	    str = RequestMethodStr[request->method];
@@ -660,8 +656,8 @@ free_externalAclState(void *data)
 {
     externalAclState *state = data;
     safe_free(state->key);
-    cbdataReferenceDone(state->callback_data);
-    cbdataReferenceDone(state->def);
+    cbdataUnlock(state->callback_data);
+    cbdataUnlock(state->def);
 }
 
 /* FIXME: This should be moved to tools.c */
@@ -765,17 +761,19 @@ externalAclHandleReply(void *data, char *reply)
     }
 
     dlinkDelete(&state->list, &state->def->queue);
-    if (cbdataReferenceValid(state->def))
+    if (cbdataValid(state->def))
 	entry = external_acl_cache_add(state->def, state->key, result, user, error);
     else
 	entry = NULL;
 
     do {
-	void *cbdata;
-	cbdataReferenceDone(state->def);
+	cbdataUnlock(state->def);
+	state->def = NULL;
 
-	if (cbdataReferenceValidDone(state->callback_data, &cbdata))
-	    state->callback(cbdata, entry);
+	if (cbdataValid(state->callback_data))
+	    state->callback(state->callback_data, entry);
+	cbdataUnlock(state->callback_data);
+	state->callback_data = NULL;
 
 	next = state->queue;
 	cbdataFree(state);
@@ -799,10 +797,12 @@ externalAclLookup(aclCheck_t * ch, void *acl_data, EAH * callback, void *callbac
 	return;
     }
     state = cbdataAlloc(externalAclState);
-    state->def = cbdataReference(def);
+    state->def = def;
+    cbdataLock(state->def);
     state->callback = callback;
-    state->callback_data = cbdataReference(callback_data);
+    state->callback_data = callback_data;
     state->key = xstrdup(key);
+    cbdataLock(state->callback_data);
     if (entry && !external_acl_entry_expired(def, entry)) {
 	if (entry->result == -1) {
 	    /* There is a pending lookup. Hook into it */
