@@ -1,7 +1,6 @@
 
 
 
-
 struct _acl_ip_data {
     struct in_addr addr1;	/* if addr2 non-zero then its a range */
     struct in_addr addr2;
@@ -400,6 +399,7 @@ struct _fde {
     PF *timeout_handler;
     time_t timeout;
     void *timeout_data;
+    void *lifetime_data;
     close_handler *close_handler;	/* linked list */
     DEFER *defer_check;		/* check if we should defer read */
     void *defer_data;
@@ -431,18 +431,27 @@ struct _hash_table {
     hash_link *current_ptr;
 };
 
+#if ! USE_ALEX_CODE
+#error must use USE_ALEX_CODE
+#endif
+
+#define Const const
+#include "HttpHeader.h"
+#include "HttpResponse.h"
+
 struct _http_reply {
     double version;
     int code;
-    int content_length;
-    int hdr_sz;
-    int cache_control;
-    int misc_headers;
-    time_t date;
-    time_t expires;
-    time_t last_modified;
-    char content_type[HTTP_REPLY_FIELD_SZ];
-    char user_agent[HTTP_REPLY_FIELD_SZ << 2];
+    Const int content_length;
+    Const int hdr_sz;            /* includes _stored_ status-line, headers, and <CRLF> */
+    /* Note: fields below may not match info stored on disk */
+    Const int cache_control;
+    Const int misc_headers;
+    Const time_t date;
+    Const time_t expires;
+    Const time_t last_modified;
+    Const char content_type[HTTP_REPLY_FIELD_SZ];
+    Const char user_agent[HTTP_REPLY_FIELD_SZ << 2];
 };
 
 struct _HttpStateData {
@@ -738,11 +747,13 @@ struct _icp_common_t {
     u_num32 shostid;		/* sender host id */
 };
 
+#if 0 /* this struct is not used */
 struct _Stack {
     void **base;
     void **top;
     int stack_size;
 };
+#endif
 
 struct _Meta_data {
     int hot_vm;

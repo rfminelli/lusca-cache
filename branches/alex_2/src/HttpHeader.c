@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * DEBUG: section ??    General HTTP Header
+ * DEBUG: section 55    General HTTP Header
  * AUTHOR: Alex Rousskov
  *
  * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
@@ -42,6 +42,51 @@ static const int KnownSplitableFieldCount = sizeof(KnownSplitableFields)/sizeof(
 #define INIT_FIELDS_PER_HEADER 32
 static u_num32 shortHeadersCount = 0;
 static u_num32 longHeadersCount = 0;
+
+#if 0 /* not used, add them later @?@ */
+static struct {
+    int parsed;
+    int misc[HDR_MISC_END];
+    int cc[SCC_ENUM_END];
+} ReplyHeaderStats;
+
+
+/* various strings to use in reports */
+static char *HttpServerCCStr[] =
+{
+    "public",
+    "private",
+    "no-cache",
+    "no-store",
+    "no-transform",
+    "must-revalidate",
+    "proxy-revalidate",
+    "max-age",
+    "NONE"
+};
+
+static char *HttpHdrMiscStr[] =
+{
+    "Accept",
+    "Age",
+    "Content-Length",
+    "Content-MD5",
+    "Content-Type",
+    "Date",
+    "Etag",
+    "Expires",
+    "Host",
+    "If-Modified-Since",
+    "Last-Modified",
+    "Max-Forwards",
+    "Public",
+    "Retry-After",
+    "Set-Cookie",
+    "Upgrade",
+    "Warning",
+    "NONE"
+};
+#endif /* if 0 */
 
 /* recycle bin for short strings */
 static const size_t shortStrSize = 24;
@@ -90,7 +135,6 @@ httpHeaderInit(HttpHeader *hdr)
 {
     assert(hdr);
     memset(hdr, 0, sizeof(*hdr));
-    hdr->packed_size = 1; /* we always need one byte for terminating character */
 
     /* check if pool is ready (no static init in C??) @?@ */
     if (!shortStrings)
@@ -99,6 +143,13 @@ httpHeaderInit(HttpHeader *hdr)
 
 void
 httpHeaderDestroy(HttpHeader *hdr)
+{
+    httpHeaderClean(hdr);
+    xfree(hdr);
+}
+
+void
+httpHeaderClean(HttpHeader *hdr)
 {
     HttpHeaderPos pos = HttpHeaderInitPos;
     HttpHeaderField *f;
@@ -112,14 +163,12 @@ httpHeaderDestroy(HttpHeader *hdr)
 
     while ((f = httpHeaderGetField(hdr, 0, 0, &pos)))
 	httpHeaderFieldDestroy(f);
-
-    xfree(hdr);
-    /* maybe we should recycle headers too ? */
 }
 
 /* just handy in parsing: resets and returns false */
 static int
 httpHeaderReset(HttpHeader *hdr) {
+    httpHeaderClean(hdr);
     httpHeaderInit(hdr);
     return 0;
 }
@@ -132,11 +181,8 @@ httpHeaderParse(HttpHeader *hdr, const char *header_start, const char *header_en
 
     assert(hdr);
     assert(header_start && header_end);
-    /*
-     * first check if there are any chances to parse what we have; @?@ if we are
-     * at EOF and no <CRLF> at the end, we might want to parse anyway, however,
-     * this is risky because some important headers could be cut off!
-     */
+    if (!hdr->packed_size)
+	hdr->packed_size = 1; /* we always need one byte for terminating character */
     /* commonn format headers are "<name>:[ws]<value>" lines delimited by <CRLF> */
     while (field_start < header_end) {
 	const char *field_end = field_start + strcspn(field_start, "\r\n");
@@ -335,6 +381,13 @@ httpHeaderAddIntField(HttpHeader *hdr, const char *name, long value) {
     return value;
 }
 
+/* uses mkrfc1123 */
+time_t
+httpHeaderAddDate(HttpHeader *hdr, const char *name, time_t value)
+{
+    httpHeaderAddStrField(hdr, name, mkrfc1123(value));
+    return value;
+}
 
 /* doubles the size of the fields index, starts with INIT_FIELDS_PER_HEADER */
 static void

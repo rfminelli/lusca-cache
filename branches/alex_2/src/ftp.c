@@ -139,7 +139,11 @@ static char *ftpGetBasicAuth(const char *);
 static void ftpLoginParser(const char *, FtpStateData *);
 static wordlist *ftpParseControlReply(char *buf, size_t len, int *code);
 static void ftpAppendSuccessHeader(FtpStateData * ftpState);
+#if 0
 static char *ftpAuthRequired(const request_t *, const char *);
+#else
+static HttpResponse *ftpStoreAuthRequired(request_t *request, const char *realm, StoreEntry *entry);
+#endif
 static STABH ftpAbort;
 static void ftpHackShortcut(FtpStateData * ftpState, FTPSM * nextState);
 
@@ -919,7 +923,9 @@ ftpStart(request_t * request, StoreEntry * entry)
     LOCAL_ARRAY(char, realm, 8192);
     const char *url = storeUrl(entry);
     FtpStateData *ftpState = xcalloc(1, sizeof(FtpStateData));
+#if 0
     char *response;
+#endif
     int fd;
     ErrorState *err;
     cbdataAdd(ftpState, MEM_NONE);
@@ -939,9 +945,19 @@ ftpStart(request_t * request, StoreEntry * entry)
 	    snprintf(realm, 8192, "ftp %s port %d",
 		ftpState->user, request->port);
 	}
+#if 0
 	response = ftpAuthRequired(request, realm);
 	storeAppend(entry, response, strlen(response));
 	httpParseReplyHeaders(response, entry->mem_obj->reply);
+#else
+	{
+	    /* store appropreate message and get HttpResponse back */
+	    HttpResponse *response = ftpStoreAuthRequired(request, realm, entry);
+	    httpResponseSumm(response, entry->mem_obj->reply);
+	    /* do not need it anymore */
+	    httpResponseDestroy(response);
+	}
+#endif
 	storeComplete(entry);
 	ftpStateFree(-1, ftpState);
 	return;
@@ -1806,6 +1822,7 @@ ftpAppendSuccessHeader(FtpStateData * ftpState)
 	mime_enc = mimeGetContentEncoding(filename);
     }
     storeBuffer(e);
+#if 0 /* old code */
     storeAppendPrintf(e, "HTTP/1.0 200 Gatewaying\r\n");
     reply->code = 200;
     reply->version = 1.0;
@@ -1830,6 +1847,28 @@ ftpAppendSuccessHeader(FtpStateData * ftpState)
     storeAppendPrintf(e, "\r\n");
     storeBufferFlush(e);
     reply->hdr_sz = e->mem_obj->inmem_hi;
+#else
+    {
+	HttpResponse resp;
+        httpResponseInit(&resp);
+	httpStatusLineSet(&resp.sline, 1.0, 200, "Gatewaying");
+	httpHeaderAddStr(&resp.hdr, "Server", full_appname_string);
+	httpHeaderAddStr(&resp.hdr, "Date", mkrfc1123(squid_curtime));
+	httpHeaderAddStr(&resp.hdr, "MIME-Version", "1.0");
+	if (ftpState->size > 0)
+	    httpHeaderAddInt(&resp.hdr, "Content-Length", ftpState->size);
+	if (mime_type)
+	    httpHeaderAddStr(&resp.hdr, "Content-Type", mime_type);
+	if (mime_enc)
+	    httpHeaderAddStr(&resp.hdr, "Content-Encoding", mime_enc);
+	if (ftpState->mdtm > 0)
+	    httpHeaderAddStr(&resp.hdr, "Last-Modified", mkrfc1123(ftpState->mdtm));
+        httpResponseSwap(&resp, e);
+	httpResponseSumm(&resp, reply);
+	httpResponseClean(&resp);
+    }
+#endif
+    storeBufferFlush(e);
     storeTimestampsSet(e);
     storeSetPublicKey(e);
 }
@@ -1846,6 +1885,7 @@ ftpAbort(void *data)
     comm_close(ftpState->ctrl.fd);
 }
 
+#if 0 /* use new interfaces instead */
 static char *
 ftpAuthRequired(const request_t * request, const char *realm)
 {
@@ -1894,6 +1934,33 @@ ftpAuthRequired(const request_t * request, const char *realm)
     l += snprintf(buf + l, s - l, "\r\n%s", content);
     return buf;
 }
+
+#else
+
+static HttpResponse *
+ftpStoreAuthRequired(request_t *request, const char *realm, StoreEntry *entry)
+{
+    const char *content;
+    int len = 0;
+    ErrorState *err = NULL;
+    HttpResponse *resp = httpResponseCreate();
+    /* generate reply headers with correct content length */
+    httpResponseSetHeaders(resp, 1.0, HTTP_UNAUTHORIZED,
+	"text/html", strlen(content), squid_curtime, squid_curtime + Config.negativeTtl);
+    /* add Authenticate header */
+    httpHeaderAddStr(&resp->hdr, "WWW-Authenticate", realm);
+    /* store headers */
+    httpResponseSwap(resp, entry);
+    /* get content (body) */
+    err = errorCon(ERR_ACCESS_DENIED, HTTP_UNAUTHORIZED);
+    err->request = requestLink(request);
+    content = errorBuildBuf(err, &len);
+    /* store content */
+    storeAppend(entry, content, len);
+    errorStateFree(err);
+    return resp;
+}
+#endif
 
 char *
 ftpUrlWith2f(const request_t * request)

@@ -81,7 +81,6 @@ OBJS	 	= \
 		errorpage.o \
 		event.o \
 		fd.o \
-		fdstat.o \
 		filemap.o \
 		fqdncache.o \
 		ftp.o \
@@ -90,6 +89,8 @@ OBJS	 	= \
 		hash.o \
 		http.o \
 		http-anon.o \
+		HttpHeader.o \
+		HttpResponse.o \
 		icmp.o \
 		icp_v2.o \
 		icp_v3.o \

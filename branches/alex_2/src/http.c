@@ -135,6 +135,7 @@ enum {
     CCC_ENUM_END
 };
 
+#if 0 /* moved to HttpHeader.h */
 typedef enum {
     HDR_ACCEPT,
     HDR_AGE,
@@ -197,6 +198,7 @@ static struct {
     int misc[HDR_MISC_END];
     int cc[SCC_ENUM_END];
 } ReplyHeaderStats;
+#endif /* if 0 */
 
 static CNCB httpConnectDone;
 static CWCB httpSendComplete;
@@ -208,7 +210,9 @@ static void httpAppendRequestHeader(char *hdr, const char *line, size_t * sz, si
 static void httpCacheNegatively(StoreEntry *);
 static void httpMakePrivate(StoreEntry *);
 static void httpMakePublic(StoreEntry *);
+#if 0 /* moved to HttpResponse */
 static char *httpStatusString(int status);
+#endif
 static STABH httpAbort;
 static HttpStateData *httpBuildState(int, StoreEntry *, request_t *, peer *);
 static int httpSocketOpen(StoreEntry *, request_t *);
@@ -290,6 +294,7 @@ httpCacheNegatively(StoreEntry * entry)
 }
 
 
+#if 0
 /* Build a reply structure from HTTP reply headers */
 void
 httpParseReplyHeaders(const char *buf, struct _http_reply *reply)
@@ -420,6 +425,7 @@ httpParseReplyHeaders(const char *buf, struct _http_reply *reply)
     memFree(MEM_4K_BUF, headers);
     memFree(MEM_4K_BUF, line);
 }
+#endif /* 0 */
 
 static int
 httpCachableReply(HttpStateData * httpState)
@@ -438,6 +444,7 @@ httpCachableReply(HttpStateData * httpState)
      * header from the reply but still cache the reply body.
      * More confusion at draft-ietf-http-state-mgmt-05.txt.
      */
+    /* With new headers the above stripping should be easy to do? @?@ */
     if (EBIT_TEST(reply->misc_headers, HDR_SET_COOKIE))
 	return 0;
     switch (reply->code) {
@@ -1117,6 +1124,7 @@ httpConnectDone(int fd, int status, void *data)
     }
 }
 
+#if 0 /* moved to httpHeader */
 void
 httpReplyHeaderStats(StoreEntry * entry)
 {
@@ -1134,6 +1142,7 @@ httpReplyHeaderStats(StoreEntry * entry)
 	    HttpServerCCStr[i],
 	    ReplyHeaderStats.cc[i]);
 }
+#endif
 
 static void
 httpAbort(void *data)
@@ -1143,6 +1152,7 @@ httpAbort(void *data)
     comm_close(httpState->fd);
 }
 
+#if 0 /* moved to httpResponse.c */
 static char *
 httpStatusString(int status)
 {
@@ -1266,7 +1276,9 @@ httpStatusString(int status)
     }
     return p;
 }
+#endif
 
+#if 0 /* moved to HttpResponse.c */
 char *
 httpReplyHeader(double ver,
     http_status status,
@@ -1294,3 +1306,4 @@ httpReplyHeader(double ver,
 	l += snprintf(buf + l, s - l, "Content-Type: %s\r\n", ctype);
     return buf;
 }
+#endif

@@ -368,7 +368,7 @@ clientHandleIMSReply(void *data, char *buf, ssize_t size)
 	 * www.thegist.com (Netscape/1.13) returns a content-length for
 	 * 304's which seems to be the length of the 304 HEADERS!!! and
 	 * not the body they refer to.  */
-	storeCopyNotModifiedReplyHeaders(entry->mem_obj, oldentry->mem_obj);
+	httpReplyUpdateOnNotModified(entry->mem_obj->reply, oldentry->mem_obj->reply);
 	storeTimestampsSet(oldentry);
 	storeUnregister(entry, http);
 	storeUnlockObject(entry);
@@ -1792,7 +1792,7 @@ requestTimeout(int fd, void *data)
 int
 httpAcceptDefer(int fdnotused, void *notused)
 {
-    return !fdstat_are_n_free_fd(RESERVED_FD);
+    return fdNFree() < RESERVED_FD;
 }
 
 /* Handle a new connection on HTTP socket. */

@@ -42,7 +42,6 @@ static char *error_text[ERR_MAX];
 
 static void errorStateFree(ErrorState * err);
 static const char *errorConvert(char token, ErrorState * err);
-static const char *errorBuildBuf(ErrorState * err, int *len);
 static CWCB errorSendComplete;
 
 /*
@@ -339,7 +338,7 @@ errorConvert(char token, ErrorState * err)
     return p;
 }
 
-static const char *
+const char *
 errorBuildBuf(ErrorState * err, int *len)
 {
     LOCAL_ARRAY(char, buf, ERROR_BUF_SZ);

@@ -141,7 +141,9 @@ typedef enum {
     MGR_REDIRECTORS,
     MGR_REFRESH,
     MGR_REMOVE,
+    MGR_REQUEST_HDRS,
     MGR_REPLY_HDRS,
+    MGR_MSG_HDRS,
     MGR_SERVER_LIST,
     MGR_NON_PEERS,
     MGR_SHUTDOWN,
@@ -409,7 +411,11 @@ typedef enum {
     MEM_FQDNCACHE_ENTRY,
     MEM_HASH_LINK,
     MEM_HASH_TABLE,
+#if 0 /* renamed to detect all old uses */
     MEM_HTTP_REPLY,
+#else
+    MEM_HTTPREPLY,
+#endif
     MEM_HTTPSTATEDATA,
     MEM_ICPUDPDATA,
     MEM_CLIENTHTTPREQUEST,

@@ -176,11 +176,7 @@ static MemObject *
 new_MemObject(const char *url, const char *log_url)
 {
     MemObject *mem = memAllocate(MEM_MEMOBJECT, 1);
-    mem->reply = memAllocate(MEM_HTTP_REPLY, 1);
-    mem->reply->date = -2;
-    mem->reply->expires = -2;
-    mem->reply->last_modified = -2;
-    mem->reply->content_length = -1;
+    mem->reply = httpReplyCreate();
     mem->url = xstrdup(url);
     mem->log_url = xstrdup(log_url);
     mem->swapout.fd = -1;
@@ -213,7 +209,7 @@ destroy_MemObject(StoreEntry * e)
 	storeUnregister(e, mem->clients->callback_data);
 #endif
     assert(mem->clients == NULL);
-    memFree(MEM_HTTP_REPLY, mem->reply);
+    httpReplyDestroy(mem->reply);
     safe_free(mem->url);
     safe_free(mem->log_url);
     requestUnlink(mem->request);
@@ -1087,6 +1083,7 @@ storeCreateMemObject(StoreEntry * e, const char *url, const char *log_url)
     e->mem_obj = new_MemObject(url, log_url);
 }
 
+#if 0 /* moved to HttpReply.c (has nothing to do with store.c) */
 void
 storeCopyNotModifiedReplyHeaders(MemObject * oldmem, MemObject * newmem)
 {
@@ -1101,6 +1098,7 @@ storeCopyNotModifiedReplyHeaders(MemObject * oldmem, MemObject * newmem)
     if (newreply->expires > -1)
 	oldreply->expires = newreply->expires;
 }
+#endif
 
 /* this just sets DELAY_SENDING */
 void
