@@ -97,7 +97,6 @@ OBJS	 	= \
 		@DELAY_OBJS@ \
 		disk.o \
 		dns.o \
-		dns_internal.o \
 		errorpage.o \
 		ETag.o \
 		event.o \

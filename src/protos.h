@@ -77,8 +77,6 @@ extern int aio_unlink(const char *, aio_result_t *);
 extern int aio_opendir(const char *, aio_result_t *);
 extern aio_result_t *aio_poll_done(void);
 extern int aio_operations_pending(void);
-extern int aio_overloaded(void);
-extern int aio_sync(void);
 
 extern void aioCancel(int, void *);
 extern void aioOpen(const char *, int, mode_t, AIOCB *, void *, void *);
@@ -95,6 +93,7 @@ extern int parseConfigFile(const char *file_name);
 extern void intlistDestroy(intlist **);
 extern int intlistFind(intlist * list, int i);
 extern wordlist *wordlistAdd(wordlist **, const char *);
+extern wordlist *wordlistDup(const wordlist *);
 extern void wordlistDestroy(wordlist **);
 extern void configFreeMemory(void);
 extern void wordlistCat(const wordlist *, MemBuf * mb);
@@ -212,12 +211,6 @@ extern int diskWriteIsComplete(int);
 extern void dnsShutdown(void);
 extern void dnsInit(void);
 extern void dnsSubmit(const char *lookup, HLPCB * callback, void *data);
-
-/* dns_internal.c */
-extern void idnsInit(void);
-extern void idnsShutdown(void);
-extern void idnsALookup(const char *, IDNSCB *, void *);
-extern void idnsPTRLookup(const struct in_addr, IDNSCB *, void *);
 
 extern void eventAdd(const char *name, EVH * func, void *arg, double when, int);
 extern void eventAddIsh(const char *name, EVH * func, void *arg, double delta_ish, int);
@@ -737,10 +730,10 @@ extern void memMeterSyncHWater(MemMeter * m);
 
 /* mem */
 extern void memInit(void);
-extern void memClean(void);
-extern void memInitModule(void);
-extern void memCleanModule(void);
-extern void memConfigure(void);
+extern void memClean();
+extern void memInitModule();
+extern void memCleanModule();
+extern void memConfigure();
 extern void *memAllocate(mem_type);
 extern void *memAllocBuf(size_t net_size, size_t * gross_size);
 extern CBDUNL memFree;
@@ -751,8 +744,6 @@ extern void memFree8K(void *);
 extern void memFreeDISK(void *);
 extern int memInUse(mem_type);
 extern size_t memTotalAllocated(void);
-extern void memDataInit(mem_type, const char *, size_t, int);
-extern void memCheckInit(void);
 
 /* MemPool */
 extern MemPool *memPoolCreate(const char *label, size_t obj_size);
@@ -873,11 +864,11 @@ extern HASHCMP storeKeyHashCmp;
 extern EVH storeDirClean;
 
 /* store_digest.c */
-extern void storeDigestInit(void);
-extern void storeDigestNoteStoreReady(void);
-extern void storeDigestScheduleRebuild(void);
+extern void storeDigestInit();
+extern void storeDigestNoteStoreReady();
+extern void storeDigestScheduleRebuild();
 extern void storeDigestDel(const StoreEntry * entry);
-extern void storeDigestReport(StoreEntry *);
+extern void storeDigestReport();
 
 /*
  * store_dir.c
@@ -1117,11 +1108,11 @@ extern peer *carpSelectParent(request_t *);
 #if DELAY_POOLS
 extern void delayPoolsInit(void);
 extern void delayInitDelayData(unsigned short pools);
-extern void delayFreeDelayData(void);
+extern void delayFreeDelayData();
 extern void delayCreateDelayPool(unsigned short pool, u_char class);
 extern void delayInitDelayPool(unsigned short pool, u_char class, delaySpecSet * rates);
 extern void delayFreeDelayPool(unsigned short pool);
-extern void delayPoolsReconfigure(void);
+extern void delayPoolsReconfigure();
 extern void delaySetNoDelay(int fd);
 extern void delayClearNoDelay(int fd);
 extern int delayIsNoDelay(int fd);

@@ -693,6 +693,7 @@ aclParseAclLine(acl ** head)
 	break;
     case ACL_URL_REGEX:
     case ACL_URLPATH_REGEX:
+    case ACL_BROWSER:
     case ACL_SRC_DOM_REGEX:
     case ACL_DST_DOM_REGEX:
 	aclParseRegexList(&A->data);
@@ -715,9 +716,6 @@ aclParseAclLine(acl ** head)
 	break;
     case ACL_METHOD:
 	aclParseMethodList(&A->data);
-	break;
-    case ACL_BROWSER:
-	aclParseRegexList(&A->data);
 	break;
     case ACL_PROXY_AUTH:
 	aclParseWordList(&A->data);
@@ -744,7 +742,7 @@ aclParseAclLine(acl ** head)
     }
     /*
      * Clear AclMatchedName from our temporary hack
-    */
+     */
     AclMatchedName = NULL;	/* ugly */
     if (!new_acl)
 	return;
@@ -996,7 +994,6 @@ aclDecodeProxyAuth(const char *proxy_auth, char **user, char **password, char *b
     char *sent_auth;
     char *cleartext;
 
-    debug(28, 6) ("aclDecodeProxyAuth: header = '%s'\n", proxy_auth);
     if (proxy_auth == NULL)
 	return 0;
     if (strlen(proxy_auth) < SKIP_BASIC_SZ)
@@ -1017,7 +1014,7 @@ aclDecodeProxyAuth(const char *proxy_auth, char **user, char **password, char *b
     if ((*password = strchr(*user, ':')) != NULL)
 	*(*password)++ = '\0';
     if (*password == NULL) {
-	debug(28, 1) ("aclDecodeProxyAuth: no password in proxy authorization header '%s'\n", proxy_auth);
+	debug(28, 1) ("aclDecodeProxyAuth: no password in proxy authorization header\n");
 	return 0;
     }
     return 1;
@@ -1795,15 +1792,16 @@ aclDestroyAcls(acl ** head)
 	    break;
 	case ACL_URL_REGEX:
 	case ACL_URLPATH_REGEX:
+	case ACL_BROWSER:
 	case ACL_SRC_DOM_REGEX:
 	case ACL_DST_DOM_REGEX:
-	case ACL_BROWSER:
 	    aclDestroyRegexList(a->data);
 	    break;
 	case ACL_PROTO:
 	case ACL_METHOD:
 	case ACL_SRC_ASN:
 	case ACL_DST_ASN:
+	case ACL_NETDB_SRC_RTT:
 	    intlistDestroy((intlist **) & a->data);
 	    break;
 	case ACL_URL_PORT:
@@ -1811,7 +1809,7 @@ aclDestroyAcls(acl ** head)
 	    break;
 	case ACL_NONE:
 	default:
-	    assert(0);
+	    debug(28,1)("aclDestroyAcls: no case for ACL type %d\n", a->type);
 	    break;
 	}
 	safe_free(a->cfgline);
@@ -2118,6 +2116,8 @@ aclDumpGeneric(const acl * a)
 	break;
     case ACL_SRC_DOMAIN:
     case ACL_DST_DOMAIN:
+	return aclDumpDomainList(a->data);
+	break;
 #if SQUID_SNMP
     case ACL_SNMP_COMMUNITY:
 #endif
@@ -2125,7 +2125,7 @@ aclDumpGeneric(const acl * a)
     case ACL_IDENT:
 #endif
     case ACL_PROXY_AUTH:
-	return aclDumpDomainList(a->data);
+	return wordlistDup(a->data);
 	break;
     case ACL_TIME:
 	return aclDumpTimeSpecList(a->data);
@@ -2133,6 +2133,8 @@ aclDumpGeneric(const acl * a)
     case ACL_URL_REGEX:
     case ACL_URLPATH_REGEX:
     case ACL_BROWSER:
+    case ACL_SRC_DOM_REGEX:
+    case ACL_DST_DOM_REGEX:
 	return aclDumpRegexList(a->data);
 	break;
     case ACL_SRC_ASN:
@@ -2155,6 +2157,7 @@ aclDumpGeneric(const acl * a)
 #endif
     case ACL_NONE:
     default:
+	debug(28, 1) ("aclDumpGeneric: no case for ACL type %d\n", a->type);
 	break;
     }
     return NULL;

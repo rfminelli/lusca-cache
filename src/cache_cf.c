@@ -118,6 +118,17 @@ wordlistCat(const wordlist * w, MemBuf * mb)
     }
 }
 
+wordlist *
+wordlistDup(const wordlist * w)
+{
+    wordlist *D = NULL;
+    while (NULL != w) {
+	wordlistAdd(&D, w->key);
+	w = w->next;
+    }
+    return D;
+}
+
 void
 intlistDestroy(intlist ** list)
 {
@@ -230,7 +241,7 @@ configDoConfigure(void)
     if (Config.Program.redirect) {
 	if (Config.redirectChildren < 1) {
 	    Config.redirectChildren = 0;
-	    wordlistDestroy(&Config.Program.redirect);
+	    safe_free(Config.Program.redirect);
 	} else if (Config.redirectChildren > DefaultRedirectChildrenMax) {
 	    debug(3, 0) ("WARNING: redirect_children was set to a bad value: %d\n",
 		Config.redirectChildren);
@@ -300,7 +311,7 @@ configDoConfigure(void)
     requirePathnameExists("cache_dns_program", Config.Program.dnsserver);
     requirePathnameExists("unlinkd_program", Config.Program.unlinkd);
     if (Config.Program.redirect)
-	requirePathnameExists("redirect_program", Config.Program.redirect->key);
+	requirePathnameExists("redirect_program", Config.Program.redirect);
     if (Config.Program.authenticate)
 	requirePathnameExists("authenticate_program", Config.Program.authenticate->key);
     requirePathnameExists("Icon Directory", Config.icons.directory);

@@ -321,7 +321,6 @@ mainReconfigure(void)
     snmpConnectionClose();
 #endif
     dnsShutdown();
-    idnsShutdown();
     redirectShutdown();
     authenticateShutdown();
     storeDirCloseSwapLogs();
@@ -332,7 +331,6 @@ mainReconfigure(void)
     fqdncache_restart();	/* sigh, fqdncache too */
     errorInitialize();		/* reload error pages */
     dnsInit();
-    idnsInit();
     redirectInit();
     authenticateInit();
     serverConnectionsOpen();
@@ -437,7 +435,6 @@ mainInitialize(void)
     ipcache_init();
     fqdncache_init();
     dnsInit();
-    idnsInit();
     redirectInit();
     authenticateInit();
     useragentOpenLog();
@@ -460,7 +457,6 @@ mainInitialize(void)
 	unlinkdInit();
 	urlInitialize();
 	cachemgrInit();
-	eventInit();	/* eventInit() before statInit() */
 	statInit();
 	storeInit();
 	mainSetCwd();
@@ -468,6 +464,7 @@ mainInitialize(void)
 	do_mallinfo = 1;
 	mimeInit(Config.mimeTablePathname);
 	pconnInit();
+	eventInit();
 	refreshInit();
 #if DELAY_POOLS
 	delayPoolsInit();
@@ -498,8 +495,8 @@ mainInitialize(void)
     squid_signal(SIGALRM, time_tick, SA_RESTART);
     alarm(1);
 #endif
-    memCheckInit();
     debug(1, 1) ("Ready to serve requests.\n");
+
     if (!configured_once) {
 	eventAdd("storeMaintain", storeMaintainSwapSpace, NULL, 1.0, 1);
 	eventAdd("storeDirClean", storeDirClean, NULL, 15.0, 1);
@@ -619,7 +616,6 @@ main(int argc, char **argv)
 	    shutting_down = 1;
 	    serverConnectionsClose();
 	    dnsShutdown();
-	    idnsShutdown();
 	    redirectShutdown();
 	    authenticateShutdown();
 	    eventAdd("SquidShutdown", SquidShutdown, NULL, (double) (wait + 1), 1);

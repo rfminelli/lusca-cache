@@ -186,7 +186,7 @@ rusage_maxrss(struct rusage *r)
     return r->ru_maxrss;
 #elif defined(BSD4_4)
     return r->ru_maxrss;
-#elif HAVE_GETPAGESIZE
+#elif defined(HAVE_GETPAGESIZE) && HAVE_GETPAGESIZE != 0
     return (r->ru_maxrss * getpagesize()) >> 10;
 #elif defined(PAGESIZE)
     return (r->ru_maxrss * PAGESIZE) >> 10;
@@ -298,8 +298,7 @@ static void
 fatal_common(const char *message)
 {
 #if HAVE_SYSLOG
-    if (opt_syslog_enable)
-	syslog(LOG_ALERT, "%s", message);
+    syslog(LOG_ALERT, "%s", message);
 #endif
     fprintf(debug_log, "FATAL: %s\n", message);
     if (opt_debug_stderr && debug_log != stderr)
@@ -407,46 +406,28 @@ getMyHostname(void)
     LOCAL_ARRAY(char, host, SQUIDHOSTNAMELEN + 1);
     static int present = 0;
     const struct hostent *h = NULL;
-    if (Config.visibleHostname != NULL)
-	return Config.visibleHostname;
-    /*
-     * If tcp_incoming is set then try to get the corresponding hostname
-     */
-    if (!present && Config.Addrs.tcp_incoming.s_addr != INADDR_ANY) {
-	host[0] = '\0';
-	h = gethostbyaddr((char *) &Config.Addrs.tcp_incoming,
-	    sizeof(Config.Addrs.tcp_incoming), AF_INET);
-	if (h != NULL) {
-	    /* DNS lookup successful */
-	    /* use the official name from DNS lookup */
-	    strcpy(host, h->h_name);
-	    debug(50, 4) ("getMyHostname: resolved tcp_incoming_addr to '%s'\n",
-		host);
-	    present = 1;
-	} else {
-	    debug(50, 6) ("getMyHostname: failed to resolve tcp_incoming_addr\n");
-	}
-    }
-    /*
-     * Get the host name and store it in host to return
-     */
+    char *t = NULL;
+
+    if ((t = Config.visibleHostname) != NULL)
+	return t;
+
+    /* Get the host name and store it in host to return */
     if (!present) {
 	host[0] = '\0';
 	if (gethostname(host, SQUIDHOSTNAMELEN) == -1) {
 	    debug(50, 1) ("getMyHostname: gethostname failed: %s\n",
 		xstrerror());
+	    return NULL;
 	} else {
 	    if ((h = gethostbyname(host)) != NULL) {
-		debug(50, 6) ("getMyHostname: '%s' resolved into '%s'\n",
-		    host, h->h_name);
 		/* DNS lookup successful */
 		/* use the official name from DNS lookup */
 		strcpy(host, h->h_name);
 	    }
+	    present = 1;
 	}
-	present = 1;
     }
-    return present ? host : NULL;
+    return host;
 }
 
 const char *
@@ -790,7 +771,6 @@ dlinkDelete(dlink_node * m, dlink_list * list)
 	list->head = m->next;
     if (m == list->tail)
 	list->tail = m->prev;
-    m->next = m->prev = NULL;
 }
 
 void
