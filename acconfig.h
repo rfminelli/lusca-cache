@@ -82,8 +82,10 @@
 /* Define to enable SNMP monitoring of Squid */
 #undef SQUID_SNMP
 
-/* Define to enable WCCP */
-#undef WCCP
+/*
+ * Define to enable WCCP
+ */
+#define USE_WCCP 1
 
 /*
  * Squid frequently calls gettimeofday() for accurate timestamping.
@@ -231,3 +233,13 @@
  */
 #undef HAVE_STATVFS
 
+/*
+ * If --disable-internal-dns was given to configure, then we'll use
+ * the dnsserver processes instead.
+ */
+#undef USE_DNSSERVERS
+
+/*
+ * we check for the existance of struct mallinfo
+ */
+#undef HAVE_STRUCT_MALLINFO
