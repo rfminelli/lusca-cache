@@ -842,7 +842,7 @@ storeSwapOutHandle(int fdnotused, int flag, size_t len, void *data)
 #endif
     }
     /* Note, we don't otherwise call storeReleaseRequest() here because
-     * storeCheckCachable() does it for is if necessary */
+     * storeCheckCachable() does it for us if necessary */
     storeSwapOutFileClose(e);
 }
 

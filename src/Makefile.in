@@ -89,6 +89,7 @@ OBJS	 	= \
 		hash.o \
 		http.o \
 		http-anon.o \
+		HttpHeader.o \
 		icmp.o \
 		icp_v2.o \
 		icp_v3.o \

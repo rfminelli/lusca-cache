@@ -737,11 +737,13 @@ struct _icp_common_t {
     u_num32 shostid;		/* sender host id */
 };
 
+#if OLD_STACK
 struct _Stack {
     void **base;
     void **top;
     int stack_size;
 };
+#endif /* OLD_STACK */
 
 struct _proto_stat {
     char protoname[25];
@@ -897,6 +899,7 @@ struct _request_t {
     time_t ims;
     int imslen;
     int max_forwards;
+	/* ByteRangeSet *range_set; future feature */ 
     struct in_addr client_addr;
     char *headers;
     size_t headers_sz;
