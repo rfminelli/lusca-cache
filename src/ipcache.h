@@ -3,7 +3,7 @@
  *
  * AUTHOR: Harvest Derived
  *
- * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
+ * SQUID Internet Object Cache  http://www.nlanr.net/Squid/
  * --------------------------------------------------------
  *
  *  Squid is the result of efforts by numerous individuals from the
@@ -105,60 +105,44 @@
 #ifndef _IPCACHE_H_
 #define _IPCACHE_H_
 
-enum {
+typedef int (*IPH) _PARAMS((int, struct hostent *, void *));
+
+typedef enum {
     IP_CACHED,
     IP_NEGATIVE_CACHED,
     IP_PENDING,			/* waiting to be dispatched */
     IP_DISPATCHED		/* waiting for reply from dnsserver */
-};
-typedef unsigned int ipcache_status_t;
+} ipcache_status_t;
 
 #define IP_BLOCKING_LOOKUP	0x01
 #define IP_LOOKUP_IF_MISS	0x02
 #define IP_LOCK_ENTRY		0x04
-
-typedef struct {
-    unsigned char count;
-    unsigned char cur;
-    struct in_addr *in_addrs;
-} ipcache_addrs;
 
 typedef struct _ipcache_entry {
     /* first two items must be equivalent to hash_link in hash.h */
     char *name;
     struct _ipcache_entry *next;
     time_t lastref;
-    time_t expires;
-    ipcache_addrs addrs;
+    time_t ttl;
+    unsigned char addr_count;
+    unsigned char alias_count;
+    unsigned char locks;
+    struct hostent entry;
     struct _ip_pending *pending_head;
     char *error_message;
-    unsigned char locks;
     ipcache_status_t status:3;
 } ipcache_entry;
 
-typedef void (*IPH) (int, const ipcache_addrs *, void *);
-
-extern void ipcache_nbgethostbyname _PARAMS((const char *name,
-	int fd,
-	IPH handler,
-	void *handlerData));
-extern int ipcache_purgelru _PARAMS((void *unused));
-extern int ipcache_unregister _PARAMS((const char *, int));
-extern const ipcache_addrs *ipcache_gethostbyname _PARAMS((const char *, int flags));
-extern void ipcacheInvalidate _PARAMS((const char *));
-extern void ipcacheReleaseInvalid _PARAMS((const char *));
-extern void ipcacheOpenServers _PARAMS((void));
-extern void ipcacheShutdownServers _PARAMS((void));
+extern void ipcache_nbgethostbyname _PARAMS((char *name, int fd, IPH handler, void *handlerData));
+extern int ipcache_unregister _PARAMS((char *, int));
+extern struct hostent *ipcache_gethostbyname _PARAMS((char *, int flags));
 extern void ipcache_init _PARAMS((void));
 extern void stat_ipcache_get _PARAMS((StoreEntry *));
-extern int ipcacheQueueDrain _PARAMS((void));
+extern void ipcacheShutdownServers _PARAMS((void));
 extern void ipcacheOpenServers _PARAMS((void));
-extern void ipcacheCycleAddr _PARAMS((const char *name));
-extern void ipcacheRemoveBadAddr _PARAMS((const char *name, struct in_addr));
-extern void ipcacheFreeMemory _PARAMS((void));
 
 extern char *dns_error_message;
 
 #define IPCACHE_AV_FACTOR 1000
 
-#endif /* _IPCACHE_H_ */
+#endif

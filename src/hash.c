@@ -4,7 +4,7 @@
  * DEBUG: section 0     Hash Tables
  * AUTHOR: Harvest Derived
  *
- * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
+ * SQUID Internet Object Cache  http://www.nlanr.net/Squid/
  * --------------------------------------------------------
  *
  *  Squid is the result of efforts by numerous individuals from the
@@ -105,24 +105,23 @@
 
 #include "squid.h"
 
-#define MAX_HTABLE 20
+#define MAX_HTABLE 4
 
 int hash_links_allocated;
 
 struct master_table {
     int valid;
     hash_link **buckets;
-    int (*cmp) _PARAMS((const char *, const char *));
-    unsigned int (*hash) _PARAMS((const char *, HashID));
+    int (*cmp) (char *, char *);
     int size;
     int current_slot;
     hash_link *current_ptr;
 };
 
 static int default_hash_size = -1;
-static struct master_table htbl[MAX_HTABLE];
+struct master_table htbl[MAX_HTABLE];
 
-static int hash_unlink _PARAMS((HashID, hash_link *, int));
+extern void *xcalloc _PARAMS((int, size_t));
 
 /*
  *  hash_url() - Returns a well-distributed hash function for URLs.
@@ -130,10 +129,12 @@ static int hash_unlink _PARAMS((HashID, hash_link *, int));
  *  Adapted from code written by Mic Bowman.  -Darren
  *  Generates a standard deviation = 15.73
  */
-unsigned int
-hash_url(const char *s, HashID hid)
+static int hash_url(s, hid)
+     char *s;
+     HashID hid;
 {
     unsigned int i, j, n;
+
     j = strlen(s);
     for (i = j / 2, n = 0; i < j; i++)
 	n ^= 271 * (unsigned) s[i];
@@ -141,194 +142,14 @@ hash_url(const char *s, HashID hid)
     return (uhash(i, hid));
 }
 
-unsigned int
-hash_string(const char *s, HashID hid)
-{
-    unsigned int n = 0;
-    unsigned int j = 0;
-    unsigned int i = 0;
-    while (*s) {
-	j++;
-	n ^= 271 * (unsigned) *s++;
-    }
-    i = n ^ (j * 271);
-    return (uhash(i, hid));
-}
-
-/* the following 4 functions were adapted from
- *    usr/src/lib/libc/db/hash_func.c, 4.4 BSD lite */
-
-/*
- * HASH FUNCTIONS
- *
- * Assume that we've already split the bucket to which this key hashes,
- * calculate that bucket, and check that in fact we did already split it.
- *
- * This came from ejb's hsearch.
- */
-
-#define PRIME1		37
-#define PRIME2		1048583
-
-#ifdef UNUSED_CODE
-unsigned int
-hash1(char *keyarg, HashID hid)
-{
-    const u_char *key;
-    unsigned int h;
-    size_t len;
-
-    /* Convert string to integer */
-    len = strlen(keyarg);
-    for (key = keyarg, h = 0; len--;)
-	h = h * PRIME1 ^ (*key++ - ' ');
-    h %= PRIME2;
-    return (uhash(h, hid));
-}
-
-/*
- * Phong's linear congruential hash
- */
-#define dcharhash(h, c)	((h) = 0x63c63cd9*(h) + 0x9c39c33d + (c))
-
-unsigned int
-hash2(keyarg, hid)
-     const void *keyarg;
-     HashID hid;
-{
-    const u_char *e, *key;
-    unsigned int h;
-    u_char c;
-    size_t len;
-
-    key = keyarg;
-    len = strlen(key);
-    e = key + len;
-    for (h = 0; key != e;) {
-	c = *key++;
-	if (!c && key > e)
-	    break;
-	dcharhash(h, c);
-    }
-    return (uhash(h, hid));
-}
-
-/*
- * This is INCREDIBLY ugly, but fast.  We break the string up into 8 byte
- * units.  On the first time through the loop we get the "leftover bytes"
- * (strlen % 8).  On every other iteration, we perform 8 HASHC's so we handle
- * all 8 bytes.  Essentially, this saves us 7 cmp & branch instructions.  If
- * this routine is heavily used enough, it's worth the ugly coding.
- *
- * OZ's original sdbm hash
- */
-unsigned int
-hash3(keyarg, hid)
-     const void *keyarg;
-     HashID hid;
-{
-    const u_char *key;
-    size_t loop;
-    unsigned int h;
-    size_t len;
-
-#define HASHC   h = *key++ + 65599 * h
-
-    h = 0;
-    key = keyarg;
-    len = strlen(key);
-    if (len > 0) {
-	loop = (len + 8 - 1) >> 3;
-
-	switch (len & (8 - 1)) {
-	case 0:
-	    do {
-		HASHC;
-		/* FALLTHROUGH */
-	case 7:
-		HASHC;
-		/* FALLTHROUGH */
-	case 6:
-		HASHC;
-		/* FALLTHROUGH */
-	case 5:
-		HASHC;
-		/* FALLTHROUGH */
-	case 4:
-		HASHC;
-		/* FALLTHROUGH */
-	case 3:
-		HASHC;
-		/* FALLTHROUGH */
-	case 2:
-		HASHC;
-		/* FALLTHROUGH */
-	case 1:
-		HASHC;
-	    } while (--loop);
-	}
-    }
-    return (uhash(h, hid));
-}
-#endif /* UNUSED_CODE */
-
-/* Hash function from Chris Torek. */
-unsigned int
-hash4(const char *keyarg, HashID hid)
-{
-    const char *key;
-    size_t loop;
-    unsigned int h;
-    size_t len;
-
-#define HASH4a   h = (h << 5) - h + *key++;
-#define HASH4b   h = (h << 5) + h + *key++;
-#define HASH4 HASH4b
-
-    h = 0;
-    key = keyarg;
-    len = strlen(keyarg);
-    if (len > 0) {
-	loop = (len + 8 - 1) >> 3;
-
-	switch (len & (8 - 1)) {
-	case 0:
-	    do {
-		HASH4;
-		/* FALLTHROUGH */
-	case 7:
-		HASH4;
-		/* FALLTHROUGH */
-	case 6:
-		HASH4;
-		/* FALLTHROUGH */
-	case 5:
-		HASH4;
-		/* FALLTHROUGH */
-	case 4:
-		HASH4;
-		/* FALLTHROUGH */
-	case 3:
-		HASH4;
-		/* FALLTHROUGH */
-	case 2:
-		HASH4;
-		/* FALLTHROUGH */
-	case 1:
-		HASH4;
-	    } while (--loop);
-	}
-    }
-    return (uhash(h, hid));
-}
 
 /*
  *  hash_init - initializes the hash library -- must call first.
  *  If hash_sz == 0, then it uses the default hash sizes, otherwise
  *  uses the given hash_sz.  Best performance if hash_sz is a prime number.
  */
-void
-hash_init(int hash_sz)
+void hash_init(hash_sz)
+     int hash_sz;
 {
     memset(htbl, '\0', sizeof(struct master_table) * MAX_HTABLE);
     default_hash_size = hash_sz > 0 ? hash_sz : HASH_SIZE;
@@ -339,10 +160,9 @@ hash_init(int hash_sz)
  *  to compare keys.  Returns the identification for the hash table;
  *  otherwise returns a negative number on error.
  */
-HashID
-hash_create(int (*cmp_func) (const char *, const char *),
-    int hash_sz,
-    unsigned int (*hash_func) (const char *, HashID))
+HashID hash_create(cmp_func, hash_sz)
+     int (*cmp_func) (char *, char *);
+     int hash_sz;
 {
     int hid;
 
@@ -361,7 +181,6 @@ hash_create(int (*cmp_func) (const char *, const char *),
     /* allocate and null the buckets */
     htbl[hid].buckets = xcalloc(htbl[hid].size, sizeof(hash_link *));
     htbl[hid].cmp = cmp_func;
-    htbl[hid].hash = hash_func;
     htbl[hid].current_ptr = NULL;
     htbl[hid].current_slot = 0;
     htbl[hid].valid = 1;
@@ -375,28 +194,33 @@ hash_create(int (*cmp_func) (const char *, const char *),
  *
  *  It does not copy any data into the hash table, only pointers.
  */
-int
-hash_insert(HashID hid, const char *k, void *item)
+int hash_insert(hid, k, item)
+     HashID hid;
+     char *k;
+     void *item;
 {
     int i;
     hash_link *new;
 
     if (!htbl[hid].valid)
-	fatal_dump("hash_insert: invalid HashID");
-    if (k == NULL)
-	fatal_dump("hash_insert: NULL key");
+	return -1;
 
     /* Add to the given hash table 'hid' */
     new = xcalloc(1, sizeof(hash_link));
     new->item = item;
-    new->key = (char *) k;
+    new->key = k;
 
     ++hash_links_allocated;
 
-    i = (htbl[hid].hash) (k, hid);
+    i = hash_url(k, hid);	/* use the URL-based hash */
 
-    new->next = htbl[hid].buckets[i];
-    htbl[hid].buckets[i] = new;
+    if (htbl[hid].buckets[i] == NULL) {		/* first item */
+	htbl[hid].buckets[i] = new;
+	htbl[hid].buckets[i]->next = NULL;
+    } else {			/* prepend to list */
+	new->next = htbl[hid].buckets[i];
+	htbl[hid].buckets[i] = new;
+    }
     return 0;
 }
 
@@ -406,18 +230,24 @@ hash_insert(HashID hid, const char *k, void *item)
  *
  *  It does not copy any data into the hash table, only links pointers.
  */
-int
-hash_join(HashID hid, hash_link * lnk)
+int hash_join(hid, lnk)
+     HashID hid;
+     hash_link *lnk;
 {
     int i;
 
     if (!htbl[hid].valid)
 	return -1;
 
-    i = (htbl[hid].hash) (lnk->key, hid);
+    i = hash_url(lnk->key, hid);	/* use the URL-based hash */
 
-    lnk->next = htbl[hid].buckets[i];
-    htbl[hid].buckets[i] = lnk;
+    if (htbl[hid].buckets[i] == NULL) {		/* first item */
+	htbl[hid].buckets[i] = lnk;
+	htbl[hid].buckets[i]->next = NULL;
+    } else {			/* prepend to list */
+	lnk->next = htbl[hid].buckets[i];
+	htbl[hid].buckets[i] = lnk;
+    }
     return 0;
 }
 
@@ -426,51 +256,24 @@ hash_join(HashID hid, hash_link * lnk)
  *  'hid'.  Returns a pointer to the hash bucket on success; otherwise
  *  returns NULL.
  */
-hash_link *
-hash_lookup(HashID hid, const char *k)
+hash_link *hash_lookup(hid, k)
+     HashID hid;
+     char *k;
 {
-    hash_link *walker;
-    int b;
+    static hash_link *walker;
 
     if (!htbl[hid].valid)
 	return NULL;
-    if (k == NULL)
+
+    if (k == (char *) NULL)
 	return NULL;
-    b = (htbl[hid].hash) (k, hid);
-    for (walker = htbl[hid].buckets[b]; walker != NULL; walker = walker->next) {
-	if ((htbl[hid].cmp) (k, walker->key) == 0)
+
+    for (walker = htbl[hid].buckets[hash_url(k, hid)]; walker != NULL;
+	walker = walker->next) {
+	if (htbl[hid].cmp(k, walker->key) == 0)
 	    return (walker);
-	/* XXX this should never happen */
 	if (walker == walker->next)
 	    break;
-    }
-    return NULL;
-}
-
-hash_link *
-hash_lookup_and_move(HashID hid, const char *k)
-{
-    hash_link **walker, *match;
-    int b;
-
-    if (!htbl[hid].valid)
-	return NULL;
-    if (k == NULL)
-	return NULL;
-    b = (htbl[hid].hash) (k, hid);
-    walker = &htbl[hid].buckets[b];
-    while ((match = *walker)) {
-	if ((htbl[hid].cmp) (k, match->key) == 0) {
-	    /* found, move to front of list */
-	    *walker = match->next;
-	    match->next = htbl[hid].buckets[b];
-	    htbl[hid].buckets[b] = match;
-	    return (match);
-	}
-	/* XXX this should not happen */
-	if (match == match->next)
-	    break;
-	walker = &match->next;
     }
     return NULL;
 }
@@ -479,8 +282,8 @@ hash_lookup_and_move(HashID hid, const char *k)
  *  hash_first - returns the first item in the hash table 'hid'.
  *  Otherwise, returns NULL on error.
  */
-hash_link *
-hash_first(HashID hid)
+hash_link *hash_first(hid)
+     HashID hid;
 {
     int i;
     if (!htbl[hid].valid)
@@ -488,8 +291,10 @@ hash_first(HashID hid)
 
     for (i = 0; i < htbl[hid].size; i++) {
 	htbl[hid].current_slot = i;
-	if (htbl[hid].buckets[i] != NULL)
-	    return (htbl[hid].current_ptr = htbl[hid].buckets[i]);
+	if (htbl[hid].buckets[i] != NULL) {
+	    htbl[hid].current_ptr = htbl[hid].buckets[i];
+	    return (htbl[hid].current_ptr);
+	}
     }
     return NULL;
 }
@@ -500,8 +305,8 @@ hash_first(HashID hid)
  *
  *  MUST call hash_first() before hash_next().
  */
-hash_link *
-hash_next(HashID hid)
+hash_link *hash_next(hid)
+     HashID hid;
 {
     int i;
 
@@ -516,14 +321,17 @@ hash_next(HashID hid)
     /* find next bucket */
     for (i = htbl[hid].current_slot + 1; i < htbl[hid].size; i++) {
 	htbl[hid].current_slot = i;
-	if (htbl[hid].buckets[i] != NULL)
-	    return (htbl[hid].current_ptr = htbl[hid].buckets[i]);
+	if (htbl[hid].buckets[i] != NULL) {
+	    htbl[hid].current_ptr = htbl[hid].buckets[i];
+	    return (htbl[hid].current_ptr);
+	}
     }
     return NULL;		/* end of list */
 }
 
-int
-hash_delete(HashID hid, const char *key)
+int hash_delete(hid, key)
+     HashID hid;
+     char *key;
 {
     return hash_delete_link(hid, hash_lookup(hid, key));
 }
@@ -535,18 +343,18 @@ hash_delete(HashID hid, const char *key)
  *  On success, it returns 0 and deletes the link; otherwise, 
  *  returns non-zero on error.
  */
-static int
-hash_unlink(HashID hid, hash_link * hl, int FreeLink)
+int hash_unlink(hid, hl, FreeLink)
+     HashID hid;
+     hash_link *hl;
+     int FreeLink;
 {
     hash_link *walker, *prev;
     int i;
 
-    if (!htbl[hid].valid)
-	fatal_dump("hash_unlink: Invalid HashID");
-    if (hl == NULL)
-	return -1;
+    if (!htbl[hid].valid || hl == NULL)
+	return 1;
 
-    i = (htbl[hid].hash) (hl->key, hid);
+    i = hash_url(hl->key, hid);
     for (prev = NULL, walker = htbl[hid].buckets[i];
 	walker != NULL; prev = walker, walker = walker->next) {
 	if (walker == hl) {
@@ -571,15 +379,17 @@ hash_unlink(HashID hid, hash_link * hl, int FreeLink)
 }
 
 /* take link off and free link node */
-int
-hash_delete_link(HashID hid, hash_link * hl)
+int hash_delete_link(hid, hl)
+     HashID hid;
+     hash_link *hl;
 {
     return (hash_unlink(hid, hl, 1));
 }
 
 /* take link off only */
-int
-hash_remove_link(HashID hid, hash_link * hl)
+int hash_remove_link(hid, hl)
+     HashID hid;
+     hash_link *hl;
 {
     return (hash_unlink(hid, hl, 0));
 }
@@ -588,8 +398,9 @@ hash_remove_link(HashID hid, hash_link * hl)
  *  hash_get_bucket - returns the head item of the bucket 
  *  in the hash table 'hid'. Otherwise, returns NULL on error.
  */
-hash_link *
-hash_get_bucket(HashID hid, unsigned int bucket)
+hash_link *hash_get_bucket(hid, bucket)
+     HashID hid;
+     unsigned int bucket;
 {
     if (!htbl[hid].valid)
 	return NULL;
@@ -599,27 +410,18 @@ hash_get_bucket(HashID hid, unsigned int bucket)
 }
 
 
-void
-hashFreeMemory(HashID hid)
-{
-    safe_free(htbl[hid].buckets);
-    htbl[hid].valid = 0;
-}
-
-
 #ifdef USE_HASH_DRIVER
 /*
  *  hash-driver - Run with a big file as stdin to insert each line into the
  *  hash table, then prints the whole hash table, then deletes a random item,
  *  and prints the table again...
  */
-int
-main(void)
+int main()
 {
     int hid;
     int i;
-    LOCAL_ARRAY(char, buf, BUFSIZ);
-    LOCAL_ARRAY(char, todelete, BUFSIZ);
+    static char buf[BUFSIZ];
+    static char todelete[BUFSIZ];
     hash_link *walker = NULL;
 
     todelete[0] = '\0';

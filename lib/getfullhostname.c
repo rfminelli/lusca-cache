@@ -1,11 +1,10 @@
-
 /*
  * $Id$
  *
  * DEBUG: 
  * AUTHOR: Harvest Derived
  *
- * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
+ * SQUID Internet Object Cache  http://www.nlanr.net/Squid/
  * --------------------------------------------------------
  *
  *  Squid is the result of efforts by numerous individuals from the
@@ -28,7 +27,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *  
  */
-
+ 
 
 /*
  * Copyright (c) 1994, 1995.  All rights reserved.
@@ -135,11 +134,7 @@
 #define _SQUID_NETDB_H_
 #include <netdb.h>
 #endif
-#if HAVE_UNISTD_H
-#include <unistd.h>
-#endif
 
-#include "ansiproto.h"
 #include "util.h"
 
 /*
@@ -147,15 +142,15 @@
  *  host, or NULL on error.  Pointer is only valid until the next call
  *  to the gethost*() functions.
  */
-const char *
-getfullhostname(void)
+char *getfullhostname()
 {
-    const struct hostent *hp = NULL;
+    struct hostent *hp = NULL;
     static char buf[SQUIDHOSTNAMELEN + 1];
+    extern int gethostname();	/* UNIX system call */
 
     if (gethostname(buf, SQUIDHOSTNAMELEN) < 0)
-	return NULL;
-    if ((hp = gethostbyname(buf)) != NULL)
-	strncpy(buf, hp->h_name, SQUIDHOSTNAMELEN);
-    return buf;
+	return (NULL);
+    if ((hp = gethostbyname(buf)) == NULL)
+	return (buf);
+    return (hp->h_name);
 }

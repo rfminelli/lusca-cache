@@ -5,7 +5,7 @@
  * DEBUG: section 0     WWW Client
  * AUTHOR: Harvest Derived
  *
- * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
+ * SQUID Internet Object Cache  http://www.nlanr.net/Squid/
  * --------------------------------------------------------
  *
  *  Squid is the result of efforts by numerous individuals from the
@@ -111,32 +111,33 @@
 #endif
 
 /* Local functions */
-static int client_comm_connect _PARAMS((int sock, char *dest_host, u_short dest_port));
-static void usage _PARAMS((const char *progname));
+static int client_comm_connect();
+static void usage();
 
-static void
-usage(const char *progname)
+static void usage(progname)
+     char *progname;
 {
-    fprintf(stderr,
-	"Usage: %s [-rs] [-i IMS_time] [-h host] [-p port] [-m method] url\n"
-	"Options:\n"
-	"    -r         Force cache to reload URL.\n"
-	"    -s         Silent.  Do not print data to stdout.\n"
-	"    -i IMS     If-Modified-Since time (in Epoch seconds).\n"
-	"    -h host    Retrieve URL from cache on hostname.  Default is localhost.\n"
-	"    -p port    Port number of cache.  Default is %d.\n"
-	"    -m method  Request method, default is GET.\n",
-	progname, CACHE_HTTP_PORT);
+    fprintf(stderr, "\
+Usage: %s [-rs] [-i IMS_time] [-h host] [-p port] [-m method] url\n\
+Options:\n\
+    -r         Force cache to reload URL.\n\
+    -s         Silent.  Do not print data to stdout.\n\
+    -i IMS     If-Modified-Since time (in Epoch seconds).\n\
+    -h host    Retrieve URL from cache on hostname.  Default is localhost.\n\
+    -p port    Port number of cache.  Default is %d.\n\
+    -m method  Request method, default is GET.\n\
+", progname, CACHE_HTTP_PORT);
     exit(1);
 }
 
-int
-main(int argc, char *argv[])
+int main(argc, argv)
+     int argc;
+     char *argv[];
 {
     int conn, c, len, bytesWritten;
     int port, to_stdout, reload;
     char url[BUFSIZ], msg[BUFSIZ], buf[BUFSIZ], hostname[BUFSIZ];
-    const char *method = "GET";
+    char *method = "GET";
     extern char *optarg;
     time_t ims = 0;
 
@@ -208,7 +209,7 @@ main(int argc, char *argv[])
     sprintf(buf, "Accept: */*\r\n");
     strcat(msg, buf);
     if (ims) {
-	sprintf(buf, "If-Modified-Since: %s\r\n", mkrfc1123(ims));
+	sprintf(buf, "If-Modified-Since: %s\r\n", mkrfc850(&ims));
 	strcat(msg, buf);
     }
     sprintf(buf, "\r\n");
@@ -234,10 +235,12 @@ main(int argc, char *argv[])
     return 0;
 }
 
-static int
-client_comm_connect(int sock, char *dest_host, u_short dest_port)
+static int client_comm_connect(sock, dest_host, dest_port)
+     int sock;			/* Type of communication to use. */
+     char *dest_host;		/* Server's host name. */
+     u_short dest_port;		/* Server's port. */
 {
-    const struct hostent *hp;
+    struct hostent *hp;
     static struct sockaddr_in to_addr;
 
     /* Set up the destination socket address for message to send to. */

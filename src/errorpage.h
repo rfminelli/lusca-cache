@@ -1,10 +1,9 @@
-
 /*
  * $Id$
  *
  * AUTHOR: Duane Wessels
  *
- * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
+ * SQUID Internet Object Cache  http://www.nlanr.net/Squid/
  * --------------------------------------------------------
  *
  *  Squid is the result of efforts by numerous individuals from the
@@ -28,16 +27,10 @@
  *  
  */
 
-extern void squid_error_entry _PARAMS((StoreEntry *, log_type, const char *));
-extern char *squid_error_url _PARAMS((const char *, int, int, const char *, int, const char *));
-extern char *squid_error_request _PARAMS((const char *, int, const char *, int));
+extern void squid_error_entry _PARAMS((StoreEntry *, int, char *));
+extern char *squid_error_url _PARAMS((char *, int, int, char *, int, char *));
+extern char *squid_error_request _PARAMS((char *, int, char *, int));
 extern void errorInitialize _PARAMS((void));
-extern char *access_denied_msg _PARAMS((int, int, const char *, const char *));
-extern char *access_denied_redirect _PARAMS((int, int, const char *, const char *, const char *));
-#if USE_PROXY_AUTH
-extern char *proxy_denied_msg _PARAMS((int, int, const char *, const char *));
-#endif /* USE_PROXY_AUTH */
-extern char *authorization_needed_msg _PARAMS((const request_t *, const char *));
-extern void errorpageFreeMemory _PARAMS((void));
+extern char *access_denied_msg _PARAMS((int, int, char *, char *));
 
 extern char *tmp_error_buf;

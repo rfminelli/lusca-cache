@@ -3,7 +3,7 @@
  *
  * AUTHOR: Harvest Derived
  *
- * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
+ * SQUID Internet Object Cache  http://www.nlanr.net/Squid/
  * --------------------------------------------------------
  *
  *  Squid is the result of efforts by numerous individuals from the
@@ -119,6 +119,5 @@ extern int file_map_allocate _PARAMS((int));
 extern int file_map_bit_set _PARAMS((int));
 extern int file_map_bit_test _PARAMS((int));
 extern void file_map_bit_reset _PARAMS((int));
-extern void filemapFreeMemory _PARAMS((void));
 
 #endif /* _FILEMAP_H_ */

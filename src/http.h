@@ -4,7 +4,7 @@
  *
  * AUTHOR: Harvest Derived
  *
- * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
+ * SQUID Internet Object Cache  http://www.nlanr.net/Squid/
  * --------------------------------------------------------
  *
  *  Squid is the result of efforts by numerous individuals from the
@@ -103,10 +103,11 @@
  *   re-implementations of code complying to this set of standards.  
  */
 
-#ifndef HTTP_H
-#define HTTP_H
-
 #define HTTP_REPLY_FIELD_SZ 128
+
+#define HTTP_CC_PRIVATE		0x01
+#define HTTP_CC_NOCACHE		0x02
+#define HTTP_CC_CACHABLE	0x04
 
 struct _http_reply {
     double version;
@@ -128,31 +129,21 @@ typedef struct {
     StoreEntry *entry;
     request_t *request;
     char *req_hdr;
+    int req_hdr_sz;
+    int buf_type;		/* BUF_TYPE_8K or BUF_TYPE_MALLOC */
+    char *reqbuf;		/* Holds the HTTP request being sent to
+				 * the neighbor/origin server. */
     char *icp_rwd_ptr;		/* When a lifetime expires during the
 				 * middle of an icpwrite, don't lose the
 				 * icpReadWriteData */
     char *reply_hdr;
-    int req_hdr_sz;
     int reply_hdr_state;
     edge *neighbor;		/* neighbor request made to */
-    ConnectStateData connectState;
-    int eof;			/* reached end-of-object? */
-    request_t *orig_request;
 } HttpStateData;
 
-extern int httpCachable _PARAMS((const char *, int));
-extern int proxyhttpStart _PARAMS((const char *, request_t *, StoreEntry *, edge *));
-extern int httpStart _PARAMS((char *, request_t *, char *, int, StoreEntry *));
-extern void httpParseReplyHeaders _PARAMS((const char *, struct _http_reply *));
-extern void httpProcessReplyHeader _PARAMS((HttpStateData *, const char *, int));
+extern int httpCachable _PARAMS((char *, int));
+extern int proxyhttpStart _PARAMS((edge *, char *, StoreEntry *));
+extern int httpStart _PARAMS((int, char *, request_t *, char *, int, StoreEntry *));
+extern void httpParseHeaders _PARAMS((char *, struct _http_reply *));
+extern void httpProcessReplyHeader _PARAMS((HttpStateData *, char *, int));
 extern void httpReplyHeaderStats _PARAMS((StoreEntry *));
-extern size_t httpBuildRequestHeader _PARAMS((request_t * request,
-	request_t * orig_request,
-	StoreEntry * entry,
-	char *hdr_in,
-	size_t * in_len,
-	char *hdr_out,
-	size_t out_sz,
-	int cfd));
-
-#endif /* HTTP_H */

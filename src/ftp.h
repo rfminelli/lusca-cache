@@ -3,7 +3,7 @@
  *
  * AUTHOR: Harvest Derived
  *
- * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
+ * SQUID Internet Object Cache  http://www.nlanr.net/Squid/
  * --------------------------------------------------------
  *
  *  Squid is the result of efforts by numerous individuals from the
@@ -102,11 +102,7 @@
  *   re-implementations of code complying to this set of standards.  
  */
 
-#ifndef FTP_H
-#define FTP_H
-
-extern int ftpStart _PARAMS((int unusedfd, const char *url, request_t * req, StoreEntry * entry));
+extern int ftpStart _PARAMS((int unusedfd, char *url, request_t * req, StoreEntry * entry));
 extern int ftpInitialize _PARAMS((void));
+extern int ftpCachable _PARAMS((char *));
 extern void ftpServerClose _PARAMS((void));
-
-#endif /* FTP_H */

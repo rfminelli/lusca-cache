@@ -4,7 +4,7 @@
  *
  * AUTHOR: Duane Wessels
  *
- * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
+ * SQUID Internet Object Cache  http://www.nlanr.net/Squid/
  * --------------------------------------------------------
  *
  *  Squid is the result of efforts by numerous individuals from the
@@ -28,38 +28,10 @@
  *  
  */
 
-#ifndef SQUID_H
-#define SQUID_H
-
 #include "config.h"
 
-/*
- * On some systems, FD_SETSIZE is set to something lower than the
- * actual number of files which can be opened.  IRIX is one case,
- * NetBSD is another.  So here we increase FD_SETSIZE to our
- * configure-discovered maximum *before* any system includes.
- */
-
-/*
- * Linux (2.x only?) always defines FD_SETSIZE in <linux/time.h> so
- * we get in trouble if we try to increase it.  barf.
- */
-
-#ifndef _SQUID_LINUX_
-#if SQUID_MAXFD > FD_SETSIZE
-#define FD_SETSIZE SQUID_MAXFD
-#endif
-#endif /* _SQUID_LINUX_ */
-
-/*
- * So if FD_SETSIZE is less than SQUID_MAXFD we'd probably better
- * shrink SQUID_MAXFD so that select(2) doesn't puke even though
- * we might really be able to open more than FD_SETSIZE descriptors.
- * happy happy happy joy joy joy.
- */
-
-#if FD_SETSIZE < SQUID_MAXFD
-#define SQUID_MAXFD FD_SETSIZE
+#if SQUID_FD_SETSIZE > 256
+#define FD_SETSIZE SQUID_FD_SETSIZE
 #endif
 
 #if HAVE_UNISTD_H
@@ -156,14 +128,8 @@
 #if HAVE_SYS_SELECT_H
 #include <sys/select.h>
 #endif
-#if USE_ASYNC_IO && HAVE_AIO_H
-#include <aio.h>
-#endif
-#if HAVE_GETOPT_H
-#include <getopt.h>
-#endif
 
-#ifdef __STDC__
+#if defined(__STRICT_ANSI__)
 #include <stdarg.h>
 #else
 #include <varargs.h>
@@ -174,7 +140,8 @@
 #include <syslog.h>
 #endif
 
-#if HAVE_SHADOW_H
+/* Only enable shadow password suite if both header and library exist */
+#if HAVE_SHADOW_H && HAVE_LIBSHADOW
 #include <shadow.h>
 #endif
 
@@ -184,14 +151,12 @@
 #define SQUIDHOSTNAMELEN MAXHOSTNAMELEN
 #endif
 
-#define SQUID_MAXPATHLEN 256
-
 #ifndef INADDR_NONE
-#define INADDR_NONE ((unsigned long) -1)
+#define INADDR_NONE -1
 #endif
 
-#if !defined(HAVE_GETRUSAGE) && defined(_SQUID_HPUX_)
-#define HAVE_GETRUSAGE 1
+#if !defined(HAVE_RUSAGE) && defined(_SQUID_HPUX_)
+#define HAVE_RUSAGE
 #define getrusage(a, b)  syscall(SYS_GETRUSAGE, a, b)
 #endif
 
@@ -223,10 +188,7 @@ typedef struct mem_hdr *mem_ptr;
 typedef struct _edge edge;
 typedef struct icp_common_s icp_common_t;
 typedef struct _cacheinfo cacheinfo;
-typedef struct _aclCheck_t aclCheck_t;
 typedef struct _request request_t;
-typedef struct _MemObject MemObject;
-typedef struct _cachemgr_passwd cachemgr_passwd;
 
 /* 32 bit integer compatability hack */
 #if SIZEOF_INT == 4
@@ -241,30 +203,17 @@ typedef unsigned long u_num32;
 #endif
 #define NUM32LEN sizeof(num32)	/* this should always be 4 */
 
-#if PURIFY
-#define LOCAL_ARRAY(type,name,size) \
-        static type *local_##name=NULL; \
-        type *name = local_##name ? local_##name : \
-                ( local_##name = (type *)xcalloc(size, sizeof(type)) )
-#else
-#define LOCAL_ARRAY(type,name,size) static type name[size]
-#endif
-
-#include "ansiproto.h"
-
-#if HAVE_REGEX_H
-#include <regex.h>
-#else /* HAVE_REGEX_H */
 #include "GNUregex.h"
-#endif /* HAVE_REGEX_H */
+#include "ansihelp.h"
 
-typedef void (*SIH) (int, void *);	/* swap in */
-typedef int (*QS) (const void *, const void *);
+typedef void (*SIH) _PARAMS((int, void *));	/* swap in */
+typedef int (*QS) _PARAMS((const void *, const void *));
 
 #include "cache_cf.h"
 #include "comm.h"
 #include "debug.h"
 #include "disk.h"
+#include "dynamic_array.h"
 #include "fdstat.h"
 #include "filemap.h"
 #include "hash.h"
@@ -273,9 +222,7 @@ typedef int (*QS) (const void *, const void *);
 #include "url.h"
 #include "icp.h"
 #include "errorpage.h"		/* must go after icp.h */
-#include "dns.h"
 #include "ipcache.h"
-#include "fqdncache.h"
 #include "mime.h"
 #include "stack.h"
 #include "stat.h"
@@ -285,18 +232,9 @@ typedef int (*QS) (const void *, const void *);
 #include "http.h"
 #include "ftp.h"
 #include "gopher.h"
-#include "util.h"
-#include "event.h"
 #include "acl.h"
-#include "async_io.h"
-#include "redirect.h"
-#include "client_side.h"
-#include "useragent.h"
-#include "icmp.h"
-#include "net_db.h"
-#include "client_db.h"
-#include "objcache.h"
-#include "refresh.h"
+#include "util.h"
+#include "background.h"
 
 #if !HAVE_TEMPNAM
 #include "tempnam.h"
@@ -307,56 +245,39 @@ extern void shut_down _PARAMS((int));
 
 
 extern time_t squid_starttime;	/* main.c */
+extern time_t next_cleaning;	/* main.c */
+extern int catch_signals;	/* main.c */
 extern int do_reuse;		/* main.c */
 extern int theHttpConnection;	/* main.c */
 extern int theInIcpConnection;	/* main.c */
 extern int theOutIcpConnection;	/* main.c */
-extern int vizSock;
-extern volatile int shutdown_pending;	/* main.c */
-extern volatile int reread_pending;	/* main.c */
+extern int shutdown_pending;	/* main.c */
+extern int reread_pending;	/* main.c */
 extern int opt_unlink_on_reload;	/* main.c */
 extern int opt_reload_hit_only;	/* main.c */
 extern int opt_dns_tests;	/* main.c */
 extern int opt_foreground_rebuild;	/* main.c */
-extern int opt_zap_disk_store;	/* main.c */
 extern int opt_syslog_enable;	/* main.c */
-extern int opt_catch_signals;	/* main.c */
-extern int opt_no_ipcache;	/* main.c */
 extern int vhost_mode;		/* main.c */
-extern const char *const version_string;	/* main.c */
-extern const char *const appname;	/* main.c */
+extern char version_string[];	/* main.c */
+extern char appname[];		/* main.c */
 extern struct in_addr local_addr;	/* main.c */
-extern struct in_addr theOutICPAddr;	/* main.c */
-extern const char *const localhost;
-extern struct in_addr any_addr;	/* comm.c */
-extern struct in_addr no_addr;	/* comm.c */
+extern char localhost[];
 extern int opt_udp_hit_obj;	/* main.c */
 extern int opt_mem_pools;	/* main.c */
 extern int opt_forwarded_for;	/* main.c */
-extern int opt_accel_uses_host;	/* main.c */
+
 
 /* Prototypes and definitions which don't really deserve a seaprate
  * include file */
 
 #define  CONNECT_PORT        443
 
-extern int objcacheStart _PARAMS((int, const char *, StoreEntry *));
-extern void send_announce _PARAMS((void *unused));
-extern int sslStart _PARAMS((int fd, const char *, request_t *, char *, int *sz));
-extern const char *storeToString _PARAMS((const StoreEntry *));
-extern void timestampsSet _PARAMS((StoreEntry *));
-extern int waisStart _PARAMS((int, const char *, method_t, char *, StoreEntry *));
-extern void storeDirClean _PARAMS((void *unused));
-extern int passStart _PARAMS((int fd,
-	const char *url,
-	request_t * request,
-	char *buf,
-	int buflen,
-	int *size_ptr));
-extern void identStart _PARAMS((int, icpStateData *,
-	void       (*callback) _PARAMS((void *))));
-
-extern const char *const dash_str;
-extern const char *const null_string;
-
-#endif /* SQUID_H */
+extern int objcacheStart _PARAMS((int, char *, StoreEntry *));
+extern void send_announce _PARAMS((void));
+extern int sslStart _PARAMS((int fd, char *, request_t *, char *, int *sz));
+extern char *storeToString _PARAMS((StoreEntry *));
+extern time_t ttlSet _PARAMS((StoreEntry *));
+extern void ttlAddToList _PARAMS((char *, int, time_t, int, time_t));
+extern int waisStart _PARAMS((int, char *, method_t, char *, StoreEntry *));
+extern void storeDirClean _PARAMS((void));

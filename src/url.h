@@ -3,7 +3,7 @@
  *
  * AUTHOR: Duane Wessels
  *
- * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
+ * SQUID Internet Object Cache  http://www.nlanr.net/Squid/
  * --------------------------------------------------------
  *
  *  Squid is the result of efforts by numerous individuals from the
@@ -33,17 +33,16 @@
 #define MAX_URL  4096
 #define MAX_LOGIN_SZ  128
 
-enum {
-    METHOD_NONE,		/* 000 */
-    METHOD_GET,			/* 001 */
-    METHOD_POST,		/* 010 */
-    METHOD_PUT,			/* 011 */
-    METHOD_HEAD,		/* 100 */
-    METHOD_CONNECT		/* 101 */
-};
-typedef unsigned int method_t;
+typedef enum {
+    METHOD_NONE,
+    METHOD_GET,
+    METHOD_POST,
+    METHOD_PUT,
+    METHOD_HEAD,
+    METHOD_CONNECT
+} method_t;
 
-extern const char *RequestMethodStr[];
+extern char *RequestMethodStr[];
 
 typedef enum {
     PROTO_NONE,
@@ -55,43 +54,41 @@ typedef enum {
     PROTO_MAX
 } protocol_t;
 
+extern char *ProtocolStr[];
+
 struct _request {
     method_t method;
     protocol_t protocol;
-    char login[MAX_LOGIN_SZ];
+    char login[MAX_LOGIN_SZ + 1];
     char host[SQUIDHOSTNAMELEN + 1];
-    u_short port;
-    char urlpath[MAX_URL];
+    int port;
+    char urlpath[MAX_URL + 1];
     int link_count;		/* free when zero */
-    struct _hierarchyLogData hierarchy;
+    hier_code hierarchy_code;
     int flags;
-    time_t max_age;
-    float http_ver;
 };
 
+/* bitfields for the flags member */
+#define		REQ_UNUSED1	0x01
+#define		REQ_NOCACHE	0x02
+#define		REQ_IMS		0x04
+#define		REQ_AUTH	0x08
+#define		REQ_CACHABLE	0x10
+#define 	REQ_UNUSED2	0x20
+#define 	REQ_HIERARCHICAL 0x40
+#define 	REQ_LOOPDETECT  0x80
+
 extern char *url_convert_hex _PARAMS((char *org_url, int allocate));
-extern char *url_escape _PARAMS((const char *url));
-extern protocol_t urlParseProtocol _PARAMS((const char *));
-extern method_t urlParseMethod _PARAMS((const char *));
+extern char *url_escape _PARAMS((char *url));
+extern protocol_t urlParseProtocol _PARAMS((char *));
+extern method_t urlParseMethod _PARAMS((char *));
+extern int urlDefaultPort _PARAMS((protocol_t));
 extern void urlInitialize _PARAMS((void));
 extern request_t *urlParse _PARAMS((method_t, char *));
-extern char *urlCanonical _PARAMS((const request_t *, char *));
+extern char *urlCanonical _PARAMS((request_t *, char *));
 extern request_t *requestLink _PARAMS((request_t *));
 extern void requestUnlink _PARAMS((request_t *));
-extern int matchDomainName _PARAMS((const char *d, const char *h));
-extern int urlCheckRequest _PARAMS((const request_t *));
-
-/* bitfields for the flags member */
-#define REQ_UNUSED1		0x01
-#define REQ_NOCACHE		0x02
-#define REQ_IMS			0x04
-#define REQ_AUTH		0x08
-#define REQ_CACHABLE		0x10
-#define REQ_UNUSED2		0x20
-#define REQ_HIERARCHICAL	0x40
-#define REQ_LOOPDETECT		0x80
-#define REQ_PROXY_KEEPALIVE	0x100
-#define REQ_PROXYING		0x200
-#define REQ_REFRESH		0x400
+extern int matchDomainName _PARAMS((char *d, char *h));
+extern int urlCheckRequest _PARAMS((request_t *));
 
 #endif /* _URL_HEADER_ */

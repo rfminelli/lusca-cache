@@ -4,7 +4,7 @@
  * DEBUG: section 0     Store Entry Debugging
  * AUTHOR: Harvest Derived
  *
- * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
+ * SQUID Internet Object Cache  http://www.nlanr.net/Squid/
  * --------------------------------------------------------
  *
  *  Squid is the result of efforts by numerous individuals from the
@@ -107,18 +107,18 @@
 
 /* convert store entry content to string. Use for debugging */
 /* return pointer to static buffer containing string */
-const char *
-storeToString(const StoreEntry * e)
+char *storeToString(e)
+     StoreEntry *e;
 {
-    MemObject *mem;
-    LOCAL_ARRAY(char, stsbuf, 16 << 10);	/* have to make this really big */
-    LOCAL_ARRAY(char, tmpbuf, 8 << 10);
+    static char stsbuf[16 << 10];	/* have to make this really big */
+    static char tmpbuf[8 << 10];
+    time_t t;
 
     if (!e) {
 	sprintf(stsbuf, "\nStoreEntry pointer is NULL.\n");
 	return stsbuf;
     }
-    sprintf(stsbuf, "\nStoreEntry @: %p\n****************\n", e);
+    sprintf(stsbuf, "\nStoreEntry @: 0x%p\n****************\n", e);
     strcat(stsbuf, tmpbuf);
 
     sprintf(stsbuf, "Current Time: %d [%s]\n", (int) squid_curtime,
@@ -131,7 +131,7 @@ storeToString(const StoreEntry * e)
     sprintf(tmpbuf, "URL: %s\n", e->url);
     strcat(stsbuf, tmpbuf);
 
-    sprintf(tmpbuf, "Next: %p\n", e->next);
+    sprintf(tmpbuf, "Next: 0x%p\n", e->next);
     strcat(stsbuf, tmpbuf);
 
     sprintf(tmpbuf, "Flags: %#x ==> ", e->flag);
@@ -156,35 +156,106 @@ storeToString(const StoreEntry * e)
     strcat(tmpbuf, "\n");
     strcat(stsbuf, tmpbuf);
 
-    sprintf(tmpbuf, "Timestamp: %9d [%s]\n",
-	(int) e->timestamp,
-	mkhttpdlogtime(&e->timestamp));
-    strcat(stsbuf, tmpbuf);
-    sprintf(tmpbuf, "Lastref  : %9d [%s]\n",
-	(int) e->lastref,
-	mkhttpdlogtime(&e->lastref));
-    strcat(stsbuf, tmpbuf);
-    sprintf(tmpbuf, "Expires  : %9d [%s]\n",
-	(int) e->expires,
-	mkhttpdlogtime(&e->expires));
+    t = (time_t) e->timestamp;
+    sprintf(tmpbuf, "Timestamp: %9d [%s]\n", (int) e->timestamp,
+	mkhttpdlogtime(&t));
     strcat(stsbuf, tmpbuf);
 
-    sprintf(tmpbuf, "ObjectLen: %d\n", (int) e->object_len);
+    t = (time_t) e->lastref;
+    sprintf(tmpbuf, "Lastref  : %9d [%s]\n", (int) e->lastref,
+	mkhttpdlogtime(&t));
+    strcat(stsbuf, tmpbuf);
+
+    t = (time_t) e->expires;
+    sprintf(tmpbuf, "Expires  : %9d [%s]\n", (int) e->expires,
+	mkhttpdlogtime(&t));
+    strcat(stsbuf, tmpbuf);
+
+    sprintf(tmpbuf, "ObjectLen: %d\n", e->object_len);
     strcat(stsbuf, tmpbuf);
 
     sprintf(tmpbuf, "SwapFileNumber: %d\n", e->swap_file_number);
     strcat(stsbuf, tmpbuf);
 
-    sprintf(tmpbuf, "StoreStatus: %s\n", storeStatusStr[e->store_status]);
+    sprintf(tmpbuf, "Status: ");
+    switch (e->store_status) {
+
+    case STORE_OK:
+	strcat(tmpbuf, "STORE_OK\n");
+	break;
+
+    case STORE_PENDING:
+	strcat(tmpbuf, "STORE_PENDING\n");
+	break;
+
+    case STORE_ABORTED:
+	strcat(tmpbuf, "STORE_ABORTED\n");
+	break;
+
+    default:
+	strcat(tmpbuf, "UNKNOWN\n");
+	break;
+    }
     strcat(stsbuf, tmpbuf);
 
-    sprintf(tmpbuf, "MemStatus: %s\n", memStatusStr[e->mem_status]);
+    sprintf(tmpbuf, "MemStatus: ");
+    switch (e->mem_status) {
+
+    case NOT_IN_MEMORY:
+	strcat(tmpbuf, "NOT_IN_MEMORY\n");
+	break;
+
+    case SWAPPING_IN:
+	strcat(tmpbuf, "SWAPPING_IN\n");
+	break;
+
+    case IN_MEMORY:
+	strcat(tmpbuf, "IN_MEMORY\n");
+	break;
+
+    default:
+	strcat(tmpbuf, "UNKNOWN\n");
+	break;
+    }
     strcat(stsbuf, tmpbuf);
 
-    sprintf(tmpbuf, "PingStatus: %s\n", pingStatusStr[e->ping_status]);
+
+    sprintf(tmpbuf, "PingStatus: ");
+    switch (e->ping_status) {
+    case PING_WAITING:
+	strcat(tmpbuf, "WAITING\n");
+	break;
+    case PING_TIMEOUT:
+	strcat(tmpbuf, "TIMEOUT\n");
+	break;
+    case PING_DONE:
+	strcat(tmpbuf, "DONE\n");
+	break;
+    case PING_NONE:
+	strcat(tmpbuf, "NOPING\n");
+	break;
+    default:
+	strcat(tmpbuf, "UNKNOWN\n");
+	break;
+    }
     strcat(stsbuf, tmpbuf);
 
-    sprintf(tmpbuf, "SwapStatus: %s\n", swapStatusStr[e->swap_status]);
+
+    sprintf(tmpbuf, "SwapStatus: ");
+    switch (e->swap_status) {
+    case NO_SWAP:
+	strcat(tmpbuf, "NO_SWAP\n");
+	break;
+    case SWAPPING_OUT:
+	strcat(tmpbuf, "SWAPPING_OUT\n");
+	break;
+    case SWAP_OK:
+	strcat(tmpbuf, "SWAP_OK\n");
+	break;
+    default:
+	strcat(tmpbuf, "UNKNOWN\n");
+	break;
+    }
     strcat(stsbuf, tmpbuf);
 
     sprintf(tmpbuf, "Method: %s\n", RequestMethodStr[e->method]);
@@ -196,95 +267,111 @@ storeToString(const StoreEntry * e)
     sprintf(tmpbuf, "LockCount: %d\n", e->lock_count);
     strcat(stsbuf, tmpbuf);
 
-    mem = e->mem_obj;
-    if (mem == NULL) {
+    if (!e->mem_obj) {
 	sprintf(tmpbuf, "MemObject: NULL.\n");
 	strcat(stsbuf, tmpbuf);
 	return stsbuf;
     }
-    sprintf(tmpbuf, "MemObject: %p\n****************\n", mem);
+    sprintf(tmpbuf, "MemObject: 0x%p\n****************\n", e->mem_obj);
     strcat(stsbuf, tmpbuf);
 
-    if (!mem->mime_hdr) {
+    if (!e->mem_obj->mime_hdr) {
 	sprintf(tmpbuf, "MimeHdr: NULL.\n");
 	strcat(stsbuf, tmpbuf);
     } else {
-	sprintf(tmpbuf, "MimeHdr:\n-----------\n%s\n-----------\n", mem->mime_hdr);
+	sprintf(tmpbuf, "MimeHdr:\n-----------\n%s\n-----------\n", e->mem_obj->mime_hdr);
 	strcat(stsbuf, tmpbuf);
     }
 
-    if (!mem->data) {
+    if (!e->mem_obj->data) {
 	sprintf(tmpbuf, "Data: NULL.\n");
 	strcat(stsbuf, tmpbuf);
     } else {
-	sprintf(tmpbuf, "Data: %p\n", mem->data);
+	sprintf(tmpbuf, "Data: 0x%p\n", e->mem_obj->data);
 	strcat(stsbuf, tmpbuf);
     }
 
 
-    if (!mem->e_swap_buf)
+    if (!e->mem_obj->e_swap_buf)
 	sprintf(tmpbuf, "E_swap_buf: NOT SET\n");
     else
-	sprintf(tmpbuf, "E_swap_buf: %s\n", mem->e_swap_buf);
+	sprintf(tmpbuf, "E_swap_buf: %s\n", e->mem_obj->e_swap_buf);
     strcat(stsbuf, tmpbuf);
-    sprintf(tmpbuf, "First_miss: %p\n", mem->e_pings_first_miss);
+    sprintf(tmpbuf, "First_miss: 0x%p\n", e->mem_obj->e_pings_first_miss);
     strcat(stsbuf, tmpbuf);
 
-    sprintf(tmpbuf, "E_swap_buf_len: %d\n", mem->e_swap_buf_len);
+    sprintf(tmpbuf, "E_swap_buf_len: %d\n", e->mem_obj->e_swap_buf_len);
     strcat(stsbuf, tmpbuf);
     sprintf(tmpbuf, "[pings]: npings = %d  nacks = %d\n",
-	mem->e_pings_n_pings, mem->e_pings_n_acks);
+	e->mem_obj->e_pings_n_pings, e->mem_obj->e_pings_n_acks);
     strcat(stsbuf, tmpbuf);
 
-    sprintf(tmpbuf, "SwapAccess: %d\n", mem->e_swap_access);
+    sprintf(tmpbuf, "SwapAccess: %d\n", e->mem_obj->e_swap_access);
     strcat(stsbuf, tmpbuf);
 
-    if (!mem->e_abort_msg) {
+    if (!e->mem_obj->e_abort_msg) {
 	sprintf(tmpbuf, "AbortMsg: NULL.\n");
 	strcat(stsbuf, tmpbuf);
     } else {
-	sprintf(tmpbuf, "AbortMsg:\n-----------\n%s\n-----------\n", mem->e_abort_msg);
+	sprintf(tmpbuf, "AbortMsg:\n-----------\n%s\n-----------\n", e->mem_obj->e_abort_msg);
 	strcat(stsbuf, tmpbuf);
     }
 
-    sprintf(tmpbuf, "CurrentLen: %d\n", mem->e_current_len);
+    sprintf(tmpbuf, "CurrentLen: %d\n", e->mem_obj->e_current_len);
     strcat(stsbuf, tmpbuf);
 
-    sprintf(tmpbuf, "LowestOffset: %d\n", mem->e_lowest_offset);
+    sprintf(tmpbuf, "LowestOffset: %d\n", e->mem_obj->e_lowest_offset);
     strcat(stsbuf, tmpbuf);
 
-    sprintf(tmpbuf, "ClientListSize: %d\n", mem->nclients);
+    sprintf(tmpbuf, "ClientListSize: %d\n", e->mem_obj->client_list_size);
     strcat(stsbuf, tmpbuf);
 
-    if (!mem->clients) {
+    if (!e->mem_obj->client_list) {
 	sprintf(tmpbuf, "ClientList: NULL.\n");
 	strcat(stsbuf, tmpbuf);
     } else {
 	int i;
-	sprintf(tmpbuf, "ClientList: %p\n", mem->clients);
+	sprintf(tmpbuf, "ClientList: 0x%p\n", e->mem_obj->client_list);
 	strcat(stsbuf, tmpbuf);
 
-	for (i = 0; i < mem->nclients; ++i) {
-	    struct _store_client *sc = &mem->clients[i];
-	    sprintf(tmpbuf, "    Client[%d]: fd = %d\n", i, sc->fd);
-	    strcat(stsbuf, tmpbuf);
-	    sprintf(tmpbuf, "              : last_offset = %d\n", sc->last_offset);
-	    strcat(stsbuf, tmpbuf);
-	    sprintf(tmpbuf, "              : callback = %p\n", sc->callback);
-	    strcat(stsbuf, tmpbuf);
-	    sprintf(tmpbuf, "              : callback_data = %p\n", sc->callback_data);
+	for (i = 0; i < e->mem_obj->client_list_size; ++i) {
+	    if (e->mem_obj->client_list[i])
+		sprintf(tmpbuf, "    Client[%d]: fd == %d  last_offset == %d\n", i,
+		    e->mem_obj->client_list[i]->fd, e->mem_obj->client_list[i]->last_offset);
+	    else
+		sprintf(tmpbuf, "    Client[%d]: NULL.\n", i);
 	    strcat(stsbuf, tmpbuf);
 	}
     }
 
-    sprintf(tmpbuf, "SwapOffset: %u\n", mem->swap_offset);
+    sprintf(tmpbuf, "SwapOffset: %u\n", e->mem_obj->swap_offset);
     strcat(stsbuf, tmpbuf);
 
-    sprintf(tmpbuf, "SwapOutFd: %d\n", mem->swapout_fd);
+    sprintf(tmpbuf, "SwapFd: %d\n", e->mem_obj->swap_fd);
     strcat(stsbuf, tmpbuf);
 
-    sprintf(tmpbuf, "SwapInFd: %d\n", mem->swapin_fd);
+    sprintf(tmpbuf, "PendingListSize: %d\n", e->mem_obj->pending_list_size);
     strcat(stsbuf, tmpbuf);
+
+    if (!e->mem_obj->pending) {
+	sprintf(tmpbuf, "PendingList: NULL.\n");
+	strcat(stsbuf, tmpbuf);
+    } else {
+	int i;
+	sprintf(tmpbuf, "PendingList: 0x%p\n", e->mem_obj->pending);
+	strcat(stsbuf, tmpbuf);
+
+	for (i = 0; i < (int) e->mem_obj->pending_list_size; ++i) {
+	    if (e->mem_obj->pending[i])
+		sprintf(tmpbuf, "    Pending[%d]: fd == %d  handler == 0x%p data == 0x%p\n", i,
+		    e->mem_obj->pending[i]->fd,
+		    e->mem_obj->pending[i]->handler,
+		    e->mem_obj->pending[i]->data);
+	    else
+		sprintf(tmpbuf, "    Pending[%d]: NULL.\n", i);
+	    strcat(stsbuf, tmpbuf);
+	}
+    }
 
     strcat(stsbuf, "\n");
 
