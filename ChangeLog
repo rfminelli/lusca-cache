@@ -1,21 +1,3 @@
-Changes to squid-2.6 ():
-	
-	- CARP now plays well with the other peering algorithms,
-	  and support for CARP peerings is compiled by default. Can be
-	  disabled by --disable-carp
-	- Configuration file can be read from an external program
-	  or preprocessor. See squid.8 man page.
-	- http_port is now optional, allowing for SSL only operation
-	- Satellite and other high latency peering relations enhancements
-	  (Robert Cohren)
-	- Nuked num32 types, and made type detection more robust by the
-	  use of typedefs rather than #defines.
-	- the mailto links on Squid's ERR pages now contain data about the
-	  occurred error by default, so that the email will contain this data in
-	  its body. This feature can be disabled via the email_err_data directive.
-	  (Clemens Löser)
-
-
 Changes to squid-2.5 ():
 
 	- Major rewrite of proxy authentication to support other schemes
@@ -75,6 +57,7 @@ Changes to squid-2.5 ():
 	  cache_peer option.
 	- Responses with Vary: in the header are now cached by squid.
 	  (Henrik Nordstrom).
+	- Removed unused 'siteselect_timeout' directive.
 
 Changes to Squid-2.4.STABLE7 (July 2, 2002):
 

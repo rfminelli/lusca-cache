@@ -43,7 +43,7 @@
 static const char *const crlf = "\r\n";
 
 static CWCB httpSendComplete;
-static CWCB httpSendRequestEntity;
+static CWCB httpSendRequestEntry;
 
 static PF httpReadReply;
 static void httpSendRequest(HttpStateData *);
@@ -210,10 +210,6 @@ httpMaybeRemovePublic(StoreEntry * e, http_status status)
 	    storeRelease(pe);
 	}
 	break;
-    default:
-	/* Keep GCC happy. The methods above are all mutating HTTP methods 
-	 */
-	break;
     }
 }
 
@@ -275,7 +271,7 @@ httpCachableReply(HttpStateData * httpState)
 	    return 1;
 	else if (rep->last_modified > -1)
 	    return 1;
-	else if (!httpState->_peer)
+	else if (!httpState->peer)
 	    return 1;
 	/* @?@ (here and 302): invalid expires header compiles to squid_curtime */
 	else if (rep->expires > -1)
@@ -468,12 +464,12 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	    EBIT_SET(entry->flags, ENTRY_REVALIDATE);
     }
     if (httpState->flags.keepalive)
-	if (httpState->_peer)
-	    httpState->_peer->stats.n_keepalives_sent++;
+	if (httpState->peer)
+	    httpState->peer->stats.n_keepalives_sent++;
     if (reply->keep_alive)
-	if (httpState->_peer)
-	    httpState->_peer->stats.n_keepalives_recv++;
-    if (reply->date > -1 && !httpState->_peer) {
+	if (httpState->peer)
+	    httpState->peer->stats.n_keepalives_recv++;
+    if (reply->date > -1 && !httpState->peer) {
 	int skew = abs(reply->date - squid_curtime);
 	if (skew > 86400)
 	    debug(11, 3) ("%s's clock is skewed by %d seconds!\n",
@@ -675,7 +671,7 @@ httpReadReply(int fd, void *data)
 /* This will be called when request write is complete. Schedule read of
  * reply. */
 static void
-httpSendComplete(int fd, char *bufnotused, size_t size, comm_err_t errflag, void *data)
+httpSendComplete(int fd, char *bufnotused, size_t size, int errflag, void *data)
 {
     HttpStateData *httpState = data;
     StoreEntry *entry = httpState->entry;
@@ -733,13 +729,36 @@ httpBuildRequestHeader(request_t * request,
     LOCAL_ARRAY(char, bbuf, BBUF_SZ);
     String strConnection = StringNull;
     const HttpHeader *hdr_in = &orig_request->header;
+    int we_do_ranges;
     const HttpHeaderEntry *e;
+    String strVia;
     String strFwd;
     HttpHeaderPos pos = HttpHeaderInitPos;
     httpHeaderInit(hdr_out, hoRequest);
     /* append our IMS header */
     if (request->lastmod > -1 && request->method == METHOD_GET)
 	httpHeaderPutTime(hdr_out, HDR_IF_MODIFIED_SINCE, request->lastmod);
+
+    /* decide if we want to do Ranges ourselves 
+     * (and fetch the whole object now)
+     * We want to handle Ranges ourselves iff
+     *    - we can actually parse client Range specs
+     *    - the specs are expected to be simple enough (e.g. no out-of-order ranges)
+     *    - reply will be cachable
+     * (If the reply will be uncachable we have to throw it away after 
+     *  serving this request, so it is better to forward ranges to 
+     *  the server and fetch only the requested content) 
+     */
+    if (NULL == orig_request->range)
+	we_do_ranges = 0;
+    else if (!orig_request->flags.cachable)
+	we_do_ranges = 0;
+    else if (httpHdrRangeOffsetLimit(orig_request->range))
+	we_do_ranges = 0;
+    else
+	we_do_ranges = 1;
+    debug(11, 8) ("httpBuildRequestHeader: range specs: %p, cachable: %d; we_do_ranges: %d\n",
+	orig_request->range, orig_request->flags.cachable, we_do_ranges);
 
     strConnection = httpHeaderGetList(hdr_in, HDR_CONNECTION);
     while ((e = httpHeaderGetEntry(hdr_in, &pos))) {
@@ -800,13 +819,15 @@ httpBuildRequestHeader(request_t * request,
 		    httpHeaderPutInt(hdr_out, HDR_MAX_FORWARDS, hops - 1);
 	    }
 	    break;
-	case HDR_VIA:
-	    /* If Via is disabled then forward any received header as-is */
-	    if (!Config.onoff.via)
+	case HDR_RANGE:
+	case HDR_IF_RANGE:
+	case HDR_REQUEST_RANGE:
+	    if (!we_do_ranges)
 		httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 	    break;
 	case HDR_PROXY_CONNECTION:
 	case HDR_CONNECTION:
+	case HDR_VIA:
 	case HDR_X_FORWARDED_FOR:
 	case HDR_CACHE_CONTROL:
 	    /* append these after the loop if needed */
@@ -818,15 +839,14 @@ httpBuildRequestHeader(request_t * request,
     }
 
     /* append Via */
-    if (Config.onoff.via) {
-	String strVia = httpHeaderGetList(hdr_in, HDR_VIA);
-	snprintf(bbuf, BBUF_SZ, "%d.%d %s",
-	    orig_request->http_ver.major,
-	    orig_request->http_ver.minor, ThisCache);
-	strListAdd(&strVia, bbuf, ',');
-	httpHeaderPutStr(hdr_out, HDR_VIA, strBuf(strVia));
-	stringClean(&strVia);
-    }
+    strVia = httpHeaderGetList(hdr_in, HDR_VIA);
+    snprintf(bbuf, BBUF_SZ, "%d.%d %s",
+	orig_request->http_ver.major,
+	orig_request->http_ver.minor, ThisCache);
+    strListAdd(&strVia, bbuf, ',');
+    httpHeaderPutStr(hdr_out, HDR_VIA, strBuf(strVia));
+    stringClean(&strVia);
+
     /* append X-Forwarded-For */
     strFwd = httpHeaderGetList(hdr_in, HDR_X_FORWARDED_FOR);
     strListAdd(&strFwd, (cfd < 0 ? "unknown" : fd_table[cfd].ipaddr), ',');
@@ -933,13 +953,13 @@ httpSendRequest(HttpStateData * httpState)
     request_t *req = httpState->request;
     StoreEntry *entry = httpState->entry;
     int cfd;
-    peer *p = httpState->_peer;
+    peer *p = httpState->peer;
     CWCB *sendHeaderDone;
 
     debug(11, 5) ("httpSendRequest: FD %d: httpState %p.\n", httpState->fd, httpState);
 
     if (httpState->orig_request->body_connection)
-	sendHeaderDone = httpSendRequestEntity;
+	sendHeaderDone = httpSendRequestEntry;
     else
 	sendHeaderDone = httpSendComplete;
 
@@ -965,9 +985,9 @@ httpSendRequest(HttpStateData * httpState)
 	httpState->flags.keepalive = 1;
     else if ((double) p->stats.n_keepalives_recv / (double) p->stats.n_keepalives_sent > 0.50)
 	httpState->flags.keepalive = 1;
-    if (httpState->_peer)
-	if (neighborType(httpState->_peer, httpState->request) == PEER_SIBLING &&
-	    !httpState->_peer->options.allow_miss)
+    if (httpState->peer)
+	if (neighborType(httpState->peer, httpState->request) == PEER_SIBLING &&
+	    !httpState->peer->options.allow_miss)
 	    httpState->flags.only_if_cached = 1;
     memBufDefInit(&mb);
     httpBuildRequestPrefix(req,
@@ -996,12 +1016,12 @@ httpStart(FwdState * fwd)
     httpState->entry = fwd->entry;
     httpState->fd = fd;
     if (fwd->servers)
-	httpState->_peer = fwd->servers->_peer;		/* might be NULL */
-    if (httpState->_peer) {
+	httpState->peer = fwd->servers->peer;	/* might be NULL */
+    if (httpState->peer) {
 	proxy_req = requestCreate(orig_req->method,
 	    PROTO_NONE, storeUrl(httpState->entry));
-	xstrncpy(proxy_req->host, httpState->_peer->host, SQUIDHOSTNAMELEN);
-	proxy_req->port = httpState->_peer->http_port;
+	xstrncpy(proxy_req->host, httpState->peer->host, SQUIDHOSTNAMELEN);
+	proxy_req->port = httpState->peer->http_port;
 	proxy_req->flags = orig_req->flags;
 	proxy_req->lastmod = orig_req->lastmod;
 	httpState->request = requestLink(proxy_req);
@@ -1012,11 +1032,11 @@ httpStart(FwdState * fwd)
 	 * We might end up getting the object from somewhere else if,
 	 * for example, the request to this neighbor fails.
 	 */
-	if (httpState->_peer->options.proxy_only)
+	if (httpState->peer->options.proxy_only)
 	    storeReleaseRequest(httpState->entry);
 #if DELAY_POOLS
 	assert(delayIsNoDelay(fd) == 0);
-	if (httpState->_peer->options.no_delay)
+	if (httpState->peer->options.no_delay)
 	    delaySetNoDelay(fd);
 #endif
     } else {
@@ -1038,22 +1058,22 @@ httpStart(FwdState * fwd)
 }
 
 static void
-httpSendRequestEntityDone(int fd, void *data)
+httpSendRequestEntryDone(int fd, void *data)
 {
     HttpStateData *httpState = data;
     aclCheck_t ch;
-    debug(11, 5) ("httpSendRequestEntityDone: FD %d\n",
+    debug(11, 5) ("httpSendRequestEntryDone: FD %d\n",
 	fd);
     memset(&ch, '\0', sizeof(ch));
     ch.request = httpState->request;
     if (!Config.accessList.brokenPosts) {
-	debug(11, 5) ("httpSendRequestEntityDone: No brokenPosts list\n");
+	debug(11, 5) ("httpSendRequestEntryDone: No brokenPosts list\n");
 	httpSendComplete(fd, NULL, 0, 0, data);
     } else if (!aclCheckFast(Config.accessList.brokenPosts, &ch)) {
-	debug(11, 5) ("httpSendRequestEntityDone: didn't match brokenPosts\n");
+	debug(11, 5) ("httpSendRequestEntryDone: didn't match brokenPosts\n");
 	httpSendComplete(fd, NULL, 0, 0, data);
     } else {
-	debug(11, 2) ("httpSendRequestEntityDone: matched brokenPosts\n");
+	debug(11, 2) ("httpSendRequestEntryDone: matched brokenPosts\n");
 	comm_write(fd, "\r\n", 2, httpSendComplete, data, NULL);
     }
 }
@@ -1063,11 +1083,11 @@ httpRequestBodyHandler(char *buf, size_t size, void *data)
 {
     HttpStateData *httpState = (HttpStateData *) data;
     if (size > 0) {
-	comm_write(httpState->fd, buf, size, httpSendRequestEntity, data, memFree8K);
+	comm_write(httpState->fd, buf, size, httpSendRequestEntry, data, memFree8K);
     } else if (size == 0) {
 	/* End of body */
 	memFree8K(buf);
-	httpSendRequestEntityDone(httpState->fd, data);
+	httpSendRequestEntryDone(httpState->fd, data);
     } else {
 	/* Failed to get whole body, probably aborted */
 	memFree8K(buf);
@@ -1076,12 +1096,12 @@ httpRequestBodyHandler(char *buf, size_t size, void *data)
 }
 
 static void
-httpSendRequestEntity(int fd, char *bufnotused, size_t size, comm_err_t errflag, void *data)
+httpSendRequestEntry(int fd, char *bufnotused, size_t size, int errflag, void *data)
 {
     HttpStateData *httpState = data;
     StoreEntry *entry = httpState->entry;
     ErrorState *err;
-    debug(11, 5) ("httpSendRequestEntity: FD %d: size %d: errflag %d.\n",
+    debug(11, 5) ("httpSendRequestEntry: FD %d: size %d: errflag %d.\n",
 	fd, (int) size, errflag);
     if (size > 0) {
 	fd_bytes(fd, size, FD_WRITE);

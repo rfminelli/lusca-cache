@@ -66,13 +66,14 @@ fwdStateServerPeer(FwdState * fwdState)
 	return NULL;
     if (NULL == fwdState->servers)
 	return NULL;
-    return fwdState->servers->_peer;
+    return fwdState->servers->peer;
 }
 
 static void
 fwdServerFree(FwdServer * fs)
 {
-    cbdataReferenceDone(fs->_peer);
+    if (fs->peer)
+	cbdataUnlock(fs->peer);
     memFree(fs, MEM_FWD_SERVER);
 }
 
@@ -159,7 +160,7 @@ fwdServerClosed(int fd, void *data)
 	    FwdServer **T, *T2 = NULL;
 	    fwdState->servers = fs->next;
 	    for (T = &fwdState->servers; *T; T2 = *T, T = &(*T)->next);
-	    if (T2 && T2->_peer) {
+	    if (T2 && T2->peer) {
 		/* cycle */
 		*T = fs;
 		fs->next = NULL;
@@ -177,7 +178,7 @@ fwdServerClosed(int fd, void *data)
 }
 
 static void
-fwdConnectDone(int server_fd, comm_err_t status, void *data)
+fwdConnectDone(int server_fd, int status, void *data)
 {
     FwdState *fwdState = data;
     static FwdState *current = NULL;
@@ -193,7 +194,7 @@ fwdConnectDone(int server_fd, comm_err_t status, void *data)
 	 * a direct connection.  If DNS lookup fails when trying
 	 * a neighbor cache, we may want to retry another option.
 	 */
-	if (NULL == fs->_peer)
+	if (NULL == fs->peer)
 	    fwdState->flags.dont_retry = 1;
 	debug(17, 4) ("fwdConnectDone: Unknown host: %s\n",
 	    request->host);
@@ -201,39 +202,39 @@ fwdConnectDone(int server_fd, comm_err_t status, void *data)
 	err->dnsserver_msg = xstrdup(dns_error_message);
 	err->request = requestLink(request);
 	fwdFail(fwdState, err);
-	if (fs->_peer)
-	    fs->_peer->stats.conn_open--;
+	if (fs->peer)
+	    fs->peer->stats.conn_open--;
 	comm_close(server_fd);
     } else if (status != COMM_OK) {
 	assert(fs);
 	err = errorCon(ERR_CONNECT_FAIL, HTTP_SERVICE_UNAVAILABLE);
 	err->xerrno = errno;
-	if (fs->_peer) {
-	    err->host = xstrdup(fs->_peer->host);
-	    err->port = fs->_peer->http_port;
+	if (fs->peer) {
+	    err->host = xstrdup(fs->peer->host);
+	    err->port = fs->peer->http_port;
 	} else {
 	    err->host = xstrdup(request->host);
 	    err->port = request->port;
 	}
 	err->request = requestLink(request);
 	fwdFail(fwdState, err);
-	if (fs->_peer) {
-	    peerConnectFailed(fs->_peer);
-	    fs->_peer->stats.conn_open--;
+	if (fs->peer) {
+	    peerConnectFailed(fs->peer);
+	    fs->peer->stats.conn_open--;
 	}
 	comm_close(server_fd);
     } else {
 	debug(17, 3) ("fwdConnectDone: FD %d: '%s'\n", server_fd, storeUrl(fwdState->entry));
-	if (fs->_peer)
-	    hierarchyNote(&fwdState->request->hier, fs->code, fs->_peer->host);
+	if (fs->peer)
+	    hierarchyNote(&fwdState->request->hier, fs->code, fs->peer->host);
 	else if (Config.onoff.log_ip_on_direct)
 	    hierarchyNote(&fwdState->request->hier, fs->code, fd_table[server_fd].ipaddr);
 	else
 	    hierarchyNote(&fwdState->request->hier, fs->code, request->host);
 	fd_note(server_fd, storeUrl(fwdState->entry));
 	fd_table[server_fd].uses++;
-	if (fs->_peer)
-	    peerConnectSucceded(fs->_peer);
+	if (fs->peer)
+	    peerConnectSucceded(fs->peer);
 	fwdDispatch(fwdState);
     }
     current = NULL;
@@ -257,8 +258,8 @@ fwdConnectTimeout(int fd, void *data)
 	 * This marks the peer DOWN ... 
 	 */
 	if (fwdState->servers)
-	    if (fwdState->servers->_peer)
-		peerConnectFailed(fwdState->servers->_peer);
+	    if (fwdState->servers->peer)
+		peerConnectFailed(fwdState->servers->peer);
     }
     if (p)
 	p->stats.conn_open--;
@@ -271,7 +272,7 @@ aclMapAddr(acl_address * head, aclCheck_t * ch)
     acl_address *l;
     struct in_addr addr;
     for (l = head; l; l = l->next) {
-	if (aclMatchAclList(l->aclList, ch))
+	if (aclMatchAclList(l->acl_list, ch))
 	    return l->addr;
     }
     addr.s_addr = INADDR_ANY;
@@ -283,7 +284,7 @@ aclMapTOS(acl_tos * head, aclCheck_t * ch)
 {
     acl_tos *l;
     for (l = head; l; l = l->next) {
-	if (aclMatchAclList(l->aclList, ch))
+	if (aclMatchAclList(l->acl_list, ch))
 	    return l->tos;
     }
     return 0;
@@ -333,10 +334,10 @@ fwdConnectStart(void *data)
     assert(fs);
     assert(fwdState->server_fd == -1);
     debug(17, 3) ("fwdConnectStart: %s\n", url);
-    if (fs->_peer) {
-	host = fs->_peer->host;
-	port = fs->_peer->http_port;
-	ctimeout = fs->_peer->connect_timeout > 0 ? fs->_peer->connect_timeout
+    if (fs->peer) {
+	host = fs->peer->host;
+	port = fs->peer->http_port;
+	ctimeout = fs->peer->connect_timeout > 0 ? fs->peer->connect_timeout
 	    : Config.Timeout.peer_connect;
     } else if (fwdState->request->flags.accelerated &&
 	Config.Accel.single_host && Config.Accel.host) {
@@ -388,8 +389,8 @@ fwdConnectStart(void *data)
      * based on the max-conn option.  We need to increment here,
      * even if the connection may fail.
      */
-    if (fs->_peer)
-	fs->_peer->stats.conn_open++;
+    if (fs->peer)
+	fs->peer->stats.conn_open++;
     comm_add_close_handler(fd, fwdServerClosed, fwdState);
     commSetTimeout(fd,
 	ctimeout,
@@ -445,7 +446,7 @@ fwdDispatch(FwdState * fwdState)
      * is closed.
      */
     assert(fwdState->server_fd > -1);
-    if (fwdState->servers && (p = fwdState->servers->_peer)) {
+    if (fwdState->servers && (p = fwdState->servers->peer)) {
 	p->stats.fetches++;
 	fwdState->request->peer_login = p->login;
 	httpStart(fwdState);
@@ -644,7 +645,7 @@ fwdCheckDeferRead(int fd, void *data)
 #endif
     if (EBIT_TEST(e->flags, ENTRY_FWD_HDR_WAIT))
 	return rc;
-    if (mem->inmem_hi - storeLowestMemReaderOffset(e) < Config.readAheadGap)
+    if (mem->inmem_hi - storeLowestMemReaderOffset(e) < READ_AHEAD_GAP)
 	return rc;
     return 1;
 }
@@ -655,7 +656,7 @@ fwdFail(FwdState * fwdState, ErrorState * errorState)
     assert(EBIT_TEST(fwdState->entry->flags, ENTRY_FWD_HDR_WAIT));
     debug(17, 3) ("fwdFail: %s \"%s\"\n\t%s\n",
 	err_type_str[errorState->type],
-	httpStatusString(errorState->httpStatus),
+	httpStatusString(errorState->http_status),
 	storeUrl(fwdState->entry));
     if (fwdState->err)
 	errorStateFree(fwdState->err);

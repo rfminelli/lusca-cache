@@ -91,8 +91,8 @@ static StoreEntry *storeDiskdDirAddDiskRestore(SwapDir * SD, const cache_key * k
     time_t timestamp,
     time_t lastref,
     time_t lastmod,
-    u_int32_t refcount,
-    u_int16_t flags,
+    u_num32 refcount,
+    u_short flags,
     int clean);
 static void storeDiskdDirRebuild(SwapDir * sd);
 static void storeDiskdDirCloseTmpSwapLog(SwapDir * sd);
@@ -217,12 +217,12 @@ storeDiskdDirCreateDirectory(const char *path, int should_exist)
     getCurrentTime();
     if (0 == stat(path, &st)) {
 	if (S_ISDIR(st.st_mode)) {
-	    debug(47, should_exist ? 3 : 1) ("%s exists\n", path);
+	    debug(20, should_exist ? 3 : 1) ("%s exists\n", path);
 	} else {
 	    fatalf("Swap directory %s is not a directory.", path);
 	}
     } else if (0 == mkdir(path, 0755)) {
-	debug(47, should_exist ? 1 : 3) ("%s created\n", path);
+	debug(20, should_exist ? 1 : 3) ("%s created\n", path);
 	created = 1;
     } else {
 	fatalf("Failed to make swap directory %s: %s",
@@ -236,11 +236,11 @@ storeDiskdDirVerifyDirectory(const char *path)
 {
     struct stat sb;
     if (stat(path, &sb) < 0) {
-	debug(47, 0) ("%s: %s\n", path, xstrerror());
+	debug(20, 0) ("%s: %s\n", path, xstrerror());
 	return -1;
     }
     if (S_ISDIR(sb.st_mode) == 0) {
-	debug(47, 0) ("%s is not a directory\n", path);
+	debug(20, 0) ("%s is not a directory\n", path);
 	return -1;
     }
     return 0;
@@ -385,9 +385,8 @@ storeDiskdDirInit(SwapDir * sd)
 	debug(50, 0) ("storeDiskdInit: msgget: %s\n", xstrerror());
 	fatal("msgget failed");
     }
-    diskdinfo->shm.nbufs = diskdinfo->magic2 * 1.3;
     diskdinfo->shm.id = shmget((key_t) (ikey + 2),
-	diskdinfo->shm.nbufs * SHMBUF_BLKSZ, 0600 | IPC_CREAT);
+	SHMBUFS * SHMBUF_BLKSZ, 0600 | IPC_CREAT);
     if (diskdinfo->shm.id < 0) {
 	debug(50, 0) ("storeDiskdInit: shmget: %s\n", xstrerror());
 	fatal("shmget failed");
@@ -397,9 +396,9 @@ storeDiskdDirInit(SwapDir * sd)
 	debug(50, 0) ("storeDiskdInit: shmat: %s\n", xstrerror());
 	fatal("shmat failed");
     }
-    diskdinfo->shm.inuse_map = xcalloc((diskdinfo->shm.nbufs + 7) / 8, 1);
-    diskd_stats.shmbuf_count += diskdinfo->shm.nbufs;
-    for (i = 0; i < diskdinfo->shm.nbufs; i++) {
+    diskdinfo->shm.inuse_map = xcalloc((SHMBUFS + 7) / 8, 1);
+    diskd_stats.shmbuf_count += SHMBUFS;
+    for (i = 0; i < SHMBUFS; i++) {
 	CBIT_SET(diskdinfo->shm.inuse_map, i);
 	storeDiskdShmPut(sd, i * SHMBUF_BLKSZ);
     }
@@ -411,7 +410,12 @@ storeDiskdDirInit(SwapDir * sd)
     args[2] = skey2;
     args[3] = skey3;
     args[4] = NULL;
-    x = ipcCreate(IPC_STREAM,
+#if HAVE_POLL && defined(_SQUID_OSF_)
+    /* pipes and poll() don't get along on DUNIX -DW */
+    x = ipcCreate(IPC_TCP_SOCKET,
+#else
+    x = ipcCreate(IPC_FIFO,
+#endif
 	Config.Program.diskd,
 	args,
 	"diskd",
@@ -515,7 +519,7 @@ storeDiskdDirCallback(SwapDir * SD)
 	if (x < 0)
 	    break;
 	else if (x != msg_snd_rcv_sz) {
-	    debug(47, 1) ("storeDiskdDirCallback: msgget returns %d\n",
+	    debug(79, 1) ("storeDiskdDirCallback: msgget returns %d\n",
 		x);
 	    break;
 	}
@@ -549,12 +553,12 @@ storeDiskdDirRebuildFromDirectory(void *data)
     tlv *tlv_list;
     tlv *t;
     assert(rb != NULL);
-    debug(47, 3) ("storeDiskdDirRebuildFromDirectory: DIR #%d\n", rb->sd->index);
+    debug(20, 3) ("storeDiskdDirRebuildFromDirectory: DIR #%d\n", rb->sd->index);
     for (count = 0; count < rb->speed; count++) {
 	assert(fd == -1);
 	fd = storeDiskdDirGetNextFile(rb, &filn, &size);
 	if (fd == -2) {
-	    debug(47, 1) ("Done scanning %s swaplog (%d entries)\n",
+	    debug(20, 1) ("Done scanning %s swaplog (%d entries)\n",
 		rb->sd->path, rb->n_read);
 	    store_dirs_rebuilding--;
 	    storeDiskdDirCloseTmpSwapLog(rb->sd);
@@ -567,7 +571,7 @@ storeDiskdDirRebuildFromDirectory(void *data)
 	assert(fd > -1);
 	/* lets get file stats here */
 	if (fstat(fd, &sb) < 0) {
-	    debug(47, 1) ("storeDiskdDirRebuildFromDirectory: fstat(FD %d): %s\n",
+	    debug(20, 1) ("storeDiskdDirRebuildFromDirectory: fstat(FD %d): %s\n",
 		fd, xstrerror());
 	    file_close(fd);
 	    store_open_disk_fd--;
@@ -575,12 +579,12 @@ storeDiskdDirRebuildFromDirectory(void *data)
 	    continue;
 	}
 	if ((++rb->counts.scancount & 0xFFFF) == 0)
-	    debug(47, 3) ("  %s %7d files opened so far.\n",
+	    debug(20, 3) ("  %s %7d files opened so far.\n",
 		rb->sd->path, rb->counts.scancount);
-	debug(47, 9) ("file_in: fd=%d %08X\n", fd, filn);
+	debug(20, 9) ("file_in: fd=%d %08X\n", fd, filn);
 	statCounter.syscalls.disk.reads++;
 	if (FD_READ_METHOD(fd, hdr_buf, SM_PAGE_SIZE) < 0) {
-	    debug(47, 1) ("storeDiskdDirRebuildFromDirectory: read(FD %d): %s\n",
+	    debug(20, 1) ("storeDiskdDirRebuildFromDirectory: read(FD %d): %s\n",
 		fd, xstrerror());
 	    file_close(fd);
 	    store_open_disk_fd--;
@@ -597,12 +601,12 @@ storeDiskdDirRebuildFromDirectory(void *data)
 #endif
 	tlv_list = storeSwapMetaUnpack(hdr_buf, &swap_hdr_len);
 	if (tlv_list == NULL) {
-	    debug(47, 1) ("storeDiskdDirRebuildFromDirectory: failed to get meta data\n");
+	    debug(20, 1) ("storeDiskdDirRebuildFromDirectory: failed to get meta data\n");
 	    /* XXX shouldn't this be a call to storeDiskdUnlink ? */
 	    storeDiskdDirUnlinkFile(SD, filn);
 	    continue;
 	}
-	debug(47, 3) ("storeDiskdDirRebuildFromDirectory: successful swap meta unpacking\n");
+	debug(20, 3) ("storeDiskdDirRebuildFromDirectory: successful swap meta unpacking\n");
 	memset(key, '\0', MD5_DIGEST_CHARS);
 	memset(&tmpe, '\0', sizeof(StoreEntry));
 	for (t = tlv_list; t; t = t->next) {
@@ -622,7 +626,7 @@ storeDiskdDirRebuildFromDirectory(void *data)
 	storeSwapTLVFree(tlv_list);
 	tlv_list = NULL;
 	if (storeKeyNull(key)) {
-	    debug(47, 1) ("storeDiskdDirRebuildFromDirectory: NULL key\n");
+	    debug(20, 1) ("storeDiskdDirRebuildFromDirectory: NULL key\n");
 	    storeDiskdDirUnlinkFile(SD, filn);
 	    continue;
 	}
@@ -633,7 +637,7 @@ storeDiskdDirRebuildFromDirectory(void *data)
 	} else if (tmpe.swap_file_sz == sb.st_size - swap_hdr_len) {
 	    tmpe.swap_file_sz = sb.st_size;
 	} else if (tmpe.swap_file_sz != sb.st_size) {
-	    debug(47, 1) ("storeDiskdDirRebuildFromDirectory: SIZE MISMATCH %ld!=%ld\n",
+	    debug(20, 1) ("storeDiskdDirRebuildFromDirectory: SIZE MISMATCH %ld!=%ld\n",
 		(long int) tmpe.swap_file_sz, (long int) sb.st_size);
 	    storeDiskdDirUnlinkFile(SD, filn);
 	    continue;
@@ -688,7 +692,7 @@ storeDiskdDirRebuildFromSwapLog(void *data)
     /* load a number of objects per invocation */
     for (count = 0; count < rb->speed; count++) {
 	if (fread(&s, ss, 1, rb->log) != 1) {
-	    debug(47, 1) ("Done reading %s swaplog (%d entries)\n",
+	    debug(20, 1) ("Done reading %s swaplog (%d entries)\n",
 		rb->sd->path, rb->n_read);
 	    fclose(rb->log);
 	    rb->log = NULL;
@@ -712,7 +716,7 @@ storeDiskdDirRebuildFromSwapLog(void *data)
 	 * to mask it off.
 	 */
 	s.swap_filen &= 0x00FFFFFF;
-	debug(47, 3) ("storeDiskdDirRebuildFromSwapLog: %s %s %08X\n",
+	debug(20, 3) ("storeDiskdDirRebuildFromSwapLog: %s %s %08X\n",
 	    swap_log_op_str[(int) s.op],
 	    storeKeyText(s.key),
 	    s.swap_filen);
@@ -768,7 +772,7 @@ storeDiskdDirRebuildFromSwapLog(void *data)
 	} else {
 	    x = log(++rb->counts.bad_log_op) / log(10.0);
 	    if (0.0 == x - (double) (int) x)
-		debug(47, 1) ("WARNING: %d invalid swap log entries found\n",
+		debug(20, 1) ("WARNING: %d invalid swap log entries found\n",
 		    rb->counts.bad_log_op);
 	    rb->counts.invalid++;
 	    continue;
@@ -809,7 +813,7 @@ storeDiskdDirRebuildFromSwapLog(void *data)
 		storeDiskdDirUnrefObj(SD, e);
 	    } else {
 		debug_trap("storeDiskdDirRebuildFromSwapLog: bad condition");
-		debug(47, 1) ("\tSee %s:%d\n", __FILE__, __LINE__);
+		debug(20, 1) ("\tSee %s:%d\n", __FILE__, __LINE__);
 	    }
 	    continue;
 	} else if (used) {
@@ -818,7 +822,7 @@ storeDiskdDirRebuildFromSwapLog(void *data)
 	     * point.  If the log is dirty, the filesize check should have
 	     * caught this.  If the log is clean, there should never be a
 	     * newer entry. */
-	    debug(47, 1) ("WARNING: newer swaplog entry for dirno %d, fileno %08X\n",
+	    debug(20, 1) ("WARNING: newer swaplog entry for dirno %d, fileno %08X\n",
 		SD->index, s.swap_filen);
 	    /* I'm tempted to remove the swapfile here just to be safe,
 	     * but there is a bad race condition in the NOVM version if
@@ -881,7 +885,7 @@ storeDiskdDirGetNextFile(RebuildState * rb, sfileno * filn_p, int *size)
     int fd = -1;
     int used = 0;
     int dirs_opened = 0;
-    debug(47, 3) ("storeDiskdDirGetNextFile: flag=%d, %d: /%02X/%02X\n",
+    debug(20, 3) ("storeDiskdDirGetNextFile: flag=%d, %d: /%02X/%02X\n",
 	rb->flags.init,
 	rb->sd->index,
 	rb->curlvl1,
@@ -913,30 +917,30 @@ storeDiskdDirGetNextFile(RebuildState * rb, sfileno * filn_p, int *size)
 		rb->entry = readdir(rb->td);	/* skip . and .. */
 		rb->entry = readdir(rb->td);
 		if (rb->entry == NULL && errno == ENOENT)
-		    debug(47, 1) ("storeDiskdDirGetNextFile: directory does not exist!.\n");
-		debug(47, 3) ("storeDiskdDirGetNextFile: Directory %s\n", rb->fullpath);
+		    debug(20, 1) ("storeDiskdDirGetNextFile: directory does not exist!.\n");
+		debug(20, 3) ("storeDiskdDirGetNextFile: Directory %s\n", rb->fullpath);
 	    }
 	}
 	if (rb->td != NULL && (rb->entry = readdir(rb->td)) != NULL) {
 	    rb->in_dir++;
 	    if (sscanf(rb->entry->d_name, "%x", &rb->fn) != 1) {
-		debug(47, 3) ("storeDiskdDirGetNextFile: invalid %s\n",
+		debug(20, 3) ("storeDiskdDirGetNextFile: invalid %s\n",
 		    rb->entry->d_name);
 		continue;
 	    }
 	    if (!storeDiskdFilenoBelongsHere(rb->fn, rb->sd->index, rb->curlvl1, rb->curlvl2)) {
-		debug(47, 3) ("storeDiskdDirGetNextFile: %08X does not belong in %d/%d/%d\n",
+		debug(20, 3) ("storeDiskdDirGetNextFile: %08X does not belong in %d/%d/%d\n",
 		    rb->fn, rb->sd->index, rb->curlvl1, rb->curlvl2);
 		continue;
 	    }
 	    used = storeDiskdDirMapBitTest(SD, rb->fn);
 	    if (used) {
-		debug(47, 3) ("storeDiskdDirGetNextFile: Locked, continuing with next.\n");
+		debug(20, 3) ("storeDiskdDirGetNextFile: Locked, continuing with next.\n");
 		continue;
 	    }
 	    snprintf(rb->fullfilename, SQUID_MAXPATHLEN, "%s/%s",
 		rb->fullpath, rb->entry->d_name);
-	    debug(47, 3) ("storeDiskdDirGetNextFile: Opening %s\n", rb->fullfilename);
+	    debug(20, 3) ("storeDiskdDirGetNextFile: Opening %s\n", rb->fullfilename);
 	    fd = file_open(rb->fullfilename, O_RDONLY);
 	    if (fd < 0)
 		debug(50, 1) ("storeDiskdDirGetNextFile: %s: %s\n", rb->fullfilename, xstrerror());
@@ -970,12 +974,12 @@ storeDiskdDirAddDiskRestore(SwapDir * SD, const cache_key * key,
     time_t timestamp,
     time_t lastref,
     time_t lastmod,
-    u_int32_t refcount,
-    u_int16_t flags,
+    u_num32 refcount,
+    u_short flags,
     int clean)
 {
     StoreEntry *e = NULL;
-    debug(47, 5) ("storeDiskdAddDiskRestore: %s, fileno=%08X\n", storeKeyText(key), file_number);
+    debug(20, 5) ("storeDiskdAddDiskRestore: %s, fileno=%08X\n", storeKeyText(key), file_number);
     /* if you call this you'd better be sure file_number is not 
      * already in use! */
     e = new_StoreEntry(STORE_ENTRY_WITHOUT_MEMOBJ, NULL, NULL);
@@ -1035,7 +1039,7 @@ storeDiskdDirRebuild(SwapDir * sd)
     }
     if (!clean)
 	rb->flags.need_to_validate = 1;
-    debug(47, 1) ("Rebuilding storage in %s (%s)\n",
+    debug(20, 1) ("Rebuilding storage in %s (%s)\n",
 	sd->path, clean ? "CLEAN" : "DIRTY");
     store_dirs_rebuilding++;
     eventAdd("storeRebuild", func, rb, 0.0, 1);
@@ -1099,7 +1103,7 @@ storeDiskdDirOpenTmpSwapLog(SwapDir * sd, int *clean_flag, int *zero_flag)
     }
     diskdinfo->swaplog_fd = fd;
     /* open a read-only stream of the old log */
-    fp = fopen(swaplog_path, "rb");
+    fp = fopen(swaplog_path, "r");
     if (fp == NULL) {
 	debug(50, 0) ("%s: %s\n", swaplog_path, xstrerror());
 	fatal("Failed to open swap log for reading");
@@ -1158,7 +1162,7 @@ storeDiskdDirWriteCleanStart(SwapDir * sd)
 	xfree(state);
 	return -1;
     }
-    debug(47, 3) ("storeDirWriteCleanLogs: opened %s, FD %d\n",
+    debug(20, 3) ("storeDirWriteCleanLogs: opened %s, FD %d\n",
 	state->new, state->fd);
 #if HAVE_FCHMOD
     if (stat(state->cur, &sb) == 0)
@@ -1209,7 +1213,7 @@ storeDiskdDirWriteCleanEntry(SwapDir * sd, const StoreEntry * e)
 	if (FD_WRITE_METHOD(state->fd, state->outbuf, state->outbuf_offset) < 0) {
 	    debug(50, 0) ("storeDirWriteCleanLogs: %s: write: %s\n",
 		state->new, xstrerror());
-	    debug(47, 0) ("storeDirWriteCleanLogs: Current swap logfile not replaced.\n");
+	    debug(20, 0) ("storeDirWriteCleanLogs: Current swap logfile not replaced.\n");
 	    file_close(state->fd);
 	    state->fd = -1;
 	    unlink(state->new);
@@ -1234,7 +1238,7 @@ storeDiskdDirWriteCleanDone(SwapDir * sd)
     if (FD_WRITE_METHOD(state->fd, state->outbuf, state->outbuf_offset) < 0) {
 	debug(50, 0) ("storeDirWriteCleanLogs: %s: write: %s\n",
 	    state->new, xstrerror());
-	debug(47, 0) ("storeDirWriteCleanLogs: Current swap logfile "
+	debug(20, 0) ("storeDirWriteCleanLogs: Current swap logfile "
 	    "not replaced.\n");
 	file_close(state->fd);
 	state->fd = -1;
@@ -1511,7 +1515,7 @@ storeDiskdDirMaintain(SwapDir * SD)
 	 * This is kinda cheap, but so we need this priority hack?
 	 */
     }
-    debug(47, 3) ("storeMaintainSwapSpace: f=%f, max_scan=%d, max_remove=%d\n", f, max_scan, max_remove);
+    debug(20, 3) ("storeMaintainSwapSpace: f=%f, max_scan=%d, max_remove=%d\n", f, max_scan, max_remove);
     walker = SD->repl->PurgeInit(SD->repl, max_scan);
     while (1) {
 	if (SD->cur_size < SD->low_size)
@@ -1525,7 +1529,7 @@ storeDiskdDirMaintain(SwapDir * SD)
 	storeRelease(e);
     }
     walker->Done(walker);
-    debug(47, (removed ? 2 : 3)) ("storeDiskdDirMaintain: %s removed %d/%d f=%.03f max_scan=%d\n",
+    debug(20, (removed ? 2 : 3)) ("storeDiskdDirMaintain: %s removed %d/%d f=%.03f max_scan=%d\n",
 	SD->path, removed, max_remove, f, max_scan);
 }
 
@@ -1587,7 +1591,7 @@ storeDiskdDirUnrefObj(SwapDir * SD, StoreEntry * e)
 void
 storeDiskdDirUnlinkFile(SwapDir * SD, sfileno f)
 {
-    debug(47, 3) ("storeDiskdDirUnlinkFile: unlinking fileno %08X\n", f);
+    debug(79, 3) ("storeDiskdDirUnlinkFile: unlinking fileno %08X\n", f);
     /* storeDiskdDirMapBitReset(SD, f); */
 #if USE_UNLINKD
     unlinkdUnlink(storeDiskdDirFullPath(SD, f, NULL));
@@ -1606,7 +1610,7 @@ storeDiskdDirUnlinkFile(SwapDir * SD, sfileno f)
 void
 storeDiskdDirReplAdd(SwapDir * SD, StoreEntry * e)
 {
-    debug(47, 4) ("storeDiskdDirReplAdd: added node %p to dir %d\n", e,
+    debug(20, 4) ("storeDiskdDirReplAdd: added node %p to dir %d\n", e,
 	SD->index);
     SD->repl->Add(SD->repl, e, &e->repl);
 }
@@ -1619,7 +1623,7 @@ storeDiskdDirReplRemove(StoreEntry * e)
     if (e->swap_dirn < 0)
 	return;
     SD = INDEXSD(e->swap_dirn);
-    debug(47, 4) ("storeDiskdDirReplRemove: remove node %p from dir %d\n", e,
+    debug(20, 4) ("storeDiskdDirReplRemove: remove node %p from dir %d\n", e,
 	SD->index);
     SD->repl->Remove(SD->repl, e, &e->repl);
 }
@@ -1636,7 +1640,7 @@ storeDiskdShmGet(SwapDir * sd, off_t * shm_offset)
     char *buf = NULL;
     diskdinfo_t *diskdinfo = sd->fsdata;
     int i;
-    for (i = 0; i < diskdinfo->shm.nbufs; i++) {
+    for (i = 0; i < SHMBUFS; i++) {
 	if (CBIT_TEST(diskdinfo->shm.inuse_map, i))
 	    continue;
 	CBIT_SET(diskdinfo->shm.inuse_map, i);
@@ -1646,7 +1650,7 @@ storeDiskdShmGet(SwapDir * sd, off_t * shm_offset)
     }
     assert(buf);
     assert(buf >= diskdinfo->shm.buf);
-    assert(buf < diskdinfo->shm.buf + (diskdinfo->shm.nbufs * SHMBUF_BLKSZ));
+    assert(buf < diskdinfo->shm.buf + (SHMBUFS * SHMBUF_BLKSZ));
     diskd_stats.shmbuf_count++;
     if (diskd_stats.max_shmuse < diskd_stats.shmbuf_count)
 	diskd_stats.max_shmuse = diskd_stats.shmbuf_count;
@@ -1659,9 +1663,9 @@ storeDiskdShmPut(SwapDir * sd, off_t offset)
     int i;
     diskdinfo_t *diskdinfo = sd->fsdata;
     assert(offset >= 0);
-    assert(offset < diskdinfo->shm.nbufs * SHMBUF_BLKSZ);
+    assert(offset < SHMBUFS * SHMBUF_BLKSZ);
     i = offset / SHMBUF_BLKSZ;
-    assert(i < diskdinfo->shm.nbufs);
+    assert(i < SHMBUFS);
     assert(CBIT_TEST(diskdinfo->shm.inuse_map, i));
     CBIT_CLR(diskdinfo->shm.inuse_map, i);
     diskd_stats.shmbuf_count--;
@@ -1716,21 +1720,7 @@ storeDiskdDirParseQ1(SwapDir * sd, const char *name, const char *value, int reco
     diskdinfo_t *diskdinfo = sd->fsdata;
     int old_magic1 = diskdinfo->magic1;
     diskdinfo->magic1 = atoi(value);
-    if (!reconfiguring)
-	return;
-    if (old_magic1 < diskdinfo->magic1) {
-       /*
-	* This is because shm.nbufs is computed at startup, when
-	* we call shmget().  We can't increase the Q1/Q2 parameters
-	* beyond their initial values because then we might have
-	* more "Q2 messages" than shared memory chunks, and this
-	* will cause an assertion in storeDiskdShmGet().
-	*/
-       debug(3, 1) ("WARNING: cannot increase cache_dir '%s' Q1 value while Squid is running.\n", sd->path);
-       diskdinfo->magic1 = old_magic1;
-       return;
-    }
-    if (old_magic1 != diskdinfo->magic1)
+    if (reconfiguring && old_magic1 != diskdinfo->magic1)
 	debug(3, 1) ("cache_dir '%s' new Q1 value '%d'\n",
 	    sd->path, diskdinfo->magic1);
 }
@@ -1748,15 +1738,7 @@ storeDiskdDirParseQ2(SwapDir * sd, const char *name, const char *value, int reco
     diskdinfo_t *diskdinfo = sd->fsdata;
     int old_magic2 = diskdinfo->magic2;
     diskdinfo->magic2 = atoi(value);
-    if (!reconfiguring)
-       return;
-    if (old_magic2 < diskdinfo->magic2) {
-       /* See comments in Q1 function above */
-       debug(3, 1) ("WARNING: cannot increase cache_dir '%s' Q2 value while Squid is running.\n", sd->path);
-       diskdinfo->magic2 = old_magic2;
-       return;
-    }
-    if (old_magic2 != diskdinfo->magic2)
+    if (reconfiguring && old_magic2 != diskdinfo->magic2)
 	debug(3, 1) ("cache_dir '%s' new Q2 value '%d'\n",
 	    sd->path, diskdinfo->magic2);
 }
@@ -1872,19 +1854,19 @@ storeDiskdCleanupDoubleCheck(SwapDir * sd, StoreEntry * e)
 {
     struct stat sb;
     if (stat(storeDiskdDirFullPath(sd, e->swap_filen, NULL), &sb) < 0) {
-	debug(47, 0) ("storeDiskdCleanupDoubleCheck: MISSING SWAP FILE\n");
-	debug(47, 0) ("storeDiskdCleanupDoubleCheck: FILENO %08X\n", e->swap_filen);
-	debug(47, 0) ("storeDiskdCleanupDoubleCheck: PATH %s\n",
+	debug(20, 0) ("storeDiskdCleanupDoubleCheck: MISSING SWAP FILE\n");
+	debug(20, 0) ("storeDiskdCleanupDoubleCheck: FILENO %08X\n", e->swap_filen);
+	debug(20, 0) ("storeDiskdCleanupDoubleCheck: PATH %s\n",
 	    storeDiskdDirFullPath(sd, e->swap_filen, NULL));
 	storeEntryDump(e, 0);
 	return -1;
     }
     if (e->swap_file_sz != sb.st_size) {
-	debug(47, 0) ("storeDiskdCleanupDoubleCheck: SIZE MISMATCH\n");
-	debug(47, 0) ("storeDiskdCleanupDoubleCheck: FILENO %08X\n", e->swap_filen);
-	debug(47, 0) ("storeDiskdCleanupDoubleCheck: PATH %s\n",
+	debug(20, 0) ("storeDiskdCleanupDoubleCheck: SIZE MISMATCH\n");
+	debug(20, 0) ("storeDiskdCleanupDoubleCheck: FILENO %08X\n", e->swap_filen);
+	debug(20, 0) ("storeDiskdCleanupDoubleCheck: PATH %s\n",
 	    storeDiskdDirFullPath(sd, e->swap_filen, NULL));
-	debug(47, 0) ("storeDiskdCleanupDoubleCheck: ENTRY SIZE: %ld, FILE SIZE: %ld\n",
+	debug(20, 0) ("storeDiskdCleanupDoubleCheck: ENTRY SIZE: %ld, FILE SIZE: %ld\n",
 	    (long int) e->swap_file_sz, (long int) sb.st_size);
 	storeEntryDump(e, 0);
 	return -1;
@@ -1967,7 +1949,7 @@ storeDiskdDirParse(SwapDir * sd, int index, char *path)
 static void
 storeDiskdDirDone(void)
 {
-    memPoolDestroy(&diskd_state_pool);
+    memPoolDestroy(diskd_state_pool);
     diskd_initialised = 0;
 }
 
@@ -1981,6 +1963,6 @@ storeFsSetup_diskd(storefs_entry_t * storefs)
     diskd_state_pool = memPoolCreate("DISKD IO State data", sizeof(diskdstate_t));
     memset(&diskd_stats, '\0', sizeof(diskd_stats));
     cachemgrRegister("diskd", "DISKD Stats", storeDiskdStats, 0, 1);
-    debug(47, 1) ("diskd started\n");
+    debug(79, 1) ("diskd started\n");
     diskd_initialised = 1;
 }

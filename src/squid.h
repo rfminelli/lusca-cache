@@ -53,16 +53,16 @@
  * directly, so this is a dirty hack!
  */
 #if defined(_SQUID_LINUX_)
-#undef CHANGE_FD_SETSIZE
-#define CHANGE_FD_SETSIZE 0
-#include <features.h>
-#if (__GLIBC__ > 2) || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 2)
-#if SQUID_MAXFD > DEFAULT_FD_SETSIZE
-#include <bits/types.h>
-#undef __FD_SETSIZE
-#define __FD_SETSIZE SQUID_MAXFD
-#endif
-#endif
+#  undef CHANGE_FD_SETSIZE
+#  define CHANGE_FD_SETSIZE 0
+#  include <features.h>
+#  if (__GLIBC__ > 2) || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 2)
+#    if SQUID_MAXFD > DEFAULT_FD_SETSIZE
+#      include <bits/types.h>
+#      undef __FD_SETSIZE
+#      define __FD_SETSIZE SQUID_MAXFD
+#    endif
+#  endif
 #endif
 
 /*
@@ -102,6 +102,12 @@
 #else
 #define assert(EX)  ((EX)?((void)0):xassert("EX", __FILE__, __LINE__))
 #endif
+
+
+/* 32 bit integer compatability */
+#include "squid_types.h"
+#define num32 int32_t
+#define u_num32 u_int32_t
 
 #if HAVE_UNISTD_H
 #include <unistd.h>
@@ -202,7 +208,7 @@
 #if HAVE_LIMITS_H
 #include <limits.h>
 #endif
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
+#if defined(_SQUID_CYGWIN_)
 #include <io.h>
 #endif
 
@@ -346,6 +352,12 @@ struct rusage {
 #define LOCAL_ARRAY(type,name,size) static type name[size]
 #endif
 
+#if CBDATA_DEBUG
+#define cbdataAlloc(a,b)	cbdataAllocDbg(a,b,__FILE__,__LINE__)
+#define cbdataLock(a)		cbdataLockDbg(a,__FILE__,__LINE__)
+#define cbdataUnlock(a)		cbdataUnlockDbg(a,__FILE__,__LINE__)
+#endif
+
 #if USE_LEAKFINDER
 #define leakAdd(p) leakAddFL(p,__FILE__,__LINE__)
 #define leakTouch(p) leakTouchFL(p,__FILE__,__LINE__)
@@ -391,16 +403,14 @@ struct rusage {
 #include "hash.h"
 #include "rfc1035.h"
 
-
 #include "defines.h"
 #include "enums.h"
 #include "typedefs.h"
-#include "util.h"
-#include "MemPool.h"
 #include "structs.h"
 #include "protos.h"
 #include "globals.h"
 
+#include "util.h"
 
 #if !HAVE_TEMPNAM
 #include "tempnam.h"

@@ -73,7 +73,6 @@ CC = @CC@
 CGIEXT = @CGIEXT@
 CPP = @CPP@
 CRYPTLIB = @CRYPTLIB@
-CXX = @CXX@
 DEPDIR = @DEPDIR@
 DIGEST_AUTH_HELPERS = @DIGEST_AUTH_HELPERS@
 ERR_DEFAULT_LANGUAGE = @ERR_DEFAULT_LANGUAGE@
@@ -92,7 +91,6 @@ MKDIR = @MKDIR@
 MV = @MV@
 NTLM_AUTH_HELPERS = @NTLM_AUTH_HELPERS@
 OBJEXT = @OBJEXT@
-OPT_DEFAULT_HOSTS = @OPT_DEFAULT_HOSTS@
 OPT_DISKD_EXE = @OPT_DISKD_EXE@
 OPT_DNSSERVER_EXE = @OPT_DNSSERVER_EXE@
 OPT_PINGER = @OPT_PINGER@
@@ -151,11 +149,10 @@ RECURSIVE_TARGETS = info-recursive dvi-recursive install-info-recursive \
 	install-exec-recursive installdirs-recursive install-recursive \
 	uninstall-recursive check-recursive installcheck-recursive
 DIST_COMMON = README ./include/autoconf.h.in ./include/stamp-h.in \
-	COPYING ChangeLog INSTALL Makefile.am Makefile.in TODO \
-	acconfig.h acinclude.m4 aclocal.m4 cfgaux/compile \
-	cfgaux/config.guess cfgaux/config.sub cfgaux/depcomp \
-	cfgaux/install-sh cfgaux/missing cfgaux/mkinstalldirs configure \
-	configure.in
+	COPYING ChangeLog INSTALL Makefile.am Makefile.in acconfig.h \
+	acinclude.m4 aclocal.m4 cfgaux/compile cfgaux/config.guess \
+	cfgaux/config.sub cfgaux/depcomp cfgaux/install-sh \
+	cfgaux/missing cfgaux/mkinstalldirs configure configure.in
 all: all-recursive
 
 .SUFFIXES:

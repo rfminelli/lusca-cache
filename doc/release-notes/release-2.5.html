@@ -1,7 +1,7 @@
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
 <HTML>
 <HEAD>
- <META NAME="GENERATOR" CONTENT="LinuxDoc-Tools 0.9.21">
+ <META NAME="GENERATOR" CONTENT="LinuxDoc-Tools 0.9.16">
  <TITLE>Squid 2.5 release notes</TITLE>
 </HEAD>
 <BODY>
@@ -77,6 +77,8 @@ cache_peer option.</LI>
 <LI>Responses with Vary: in the header are now cached by squid.
 (Henrik Nordstrom).</LI>
 <LI>Support for openBSD pf interface in interception mode.</LI>
+<LI>It is now possible to send complex arguments to helpers
+by quoting the arguments by " and/or \ </LI>
 </UL>
 </P>
 
@@ -120,7 +122,20 @@ cache_peer option.</LI>
 <DT><B>pipeline_prefetch</B><DD><P>Now defaults to off for bandwidth management and access logging reasons.</P>
 <DT><B>vary_ignore_expire</B><DD><P>Enables a workaround for web servers that immediately expire Varied objects because they think squid is unable to handle Vary:.</P>
 <DT><B>sleep_after_fork</B><DD><P>Give the OS a small amount of time to accomodate the fork+exec used to launch helpers - if squid has a lot of virtual memory allocated the OS may run out of virtual memory during helper spawning otherwise.</P>
+<DT><B>reference_age</B><DD><P>This has been removed - starting with Squid-2.4 this directive have had no effect and has now been fully removed to avoid confusion.</P>
+<DT><B>siteselect_timeout</B><DD><P>This has been removed - it is not referenced anywhere in the source code.</P>
 </DL>
 </P>
+
+<H2><A NAME="s3">3. Known limitations</A></H2>
+
+<P>There is a few limitations to this version of Squid that we hope to correct in a later release</P>
+<P>
+<DL>
+<DT><B>deny_info</B><DD><P>deny_info only works for http_access, not for the acls listen in http_reply_access </P>
+<DT><B>authentication</B><DD><P>The proxy authentication acl types only works in http_access and partially in delay_access, not the other acl driven directives (tcp_outoing_address, redirect_access, cache_peer_access, ...)</P>
+</DL>
+</P>
+
 </BODY>
 </HTML>

@@ -214,18 +214,19 @@ ipcacheAddEntry(ipcache_entry * i)
 static void
 ipcacheCallback(ipcache_entry * i)
 {
-    IPH *callback = i->handler;
-    void *cbdata;
+    IPH *handler = i->handler;
+    void *handlerData = i->handlerData;
     i->lastref = squid_curtime;
-    if (!i->handler)
-	return;
     ipcacheLockEntry(i);
-    callback = i->handler;
+    if (NULL == handler)
+	return;
     i->handler = NULL;
-    if (cbdataReferenceValidDone(i->handlerData, &cbdata)) {
+    i->handlerData = NULL;
+    if (cbdataValid(handlerData)) {
 	dns_error_message = i->error_message;
-	callback(i->flags.negcached ? NULL : &i->addrs, cbdata);
+	handler(i->flags.negcached ? NULL : &i->addrs, handlerData);
     }
+    cbdataUnlock(handlerData);
     ipcacheUnlockEntry(i);
 }
 
@@ -325,7 +326,7 @@ ipcacheParse(rfc1035_rr * answers, int nr)
     for (j = 0, k = 0; k < nr; k++) {
 	if (answers[k].type != RFC1035_TYPE_A)
 	    continue;
-	if (answers[k]._class != RFC1035_CLASS_IN)
+	if (answers[k].class != RFC1035_CLASS_IN)
 	    continue;
 	na++;
     }
@@ -341,7 +342,7 @@ ipcacheParse(rfc1035_rr * answers, int nr)
     for (j = 0, k = 0; k < nr; k++) {
 	if (answers[k].type != RFC1035_TYPE_A)
 	    continue;
-	if (answers[k]._class != RFC1035_CLASS_IN)
+	if (answers[k].class != RFC1035_CLASS_IN)
 	    continue;
 	if (j == 0)
 	    i.expires = squid_curtime + answers[k].ttl;
@@ -419,7 +420,8 @@ ipcache_nbgethostbyname(const char *name, IPH * handler, void *handlerData)
 	else
 	    IpcacheStats.hits++;
 	i->handler = handler;
-	i->handlerData = cbdataReference(handlerData);
+	i->handlerData = handlerData;
+	cbdataLock(handlerData);
 	ipcacheCallback(i);
 	return;
     }
@@ -427,7 +429,8 @@ ipcache_nbgethostbyname(const char *name, IPH * handler, void *handlerData)
     IpcacheStats.misses++;
     i = ipcacheCreateEntry(name);
     i->handler = handler;
-    i->handlerData = cbdataReference(handlerData);
+    i->handlerData = handlerData;
+    cbdataLock(handlerData);
     i->request_time = current_time;
     c = cbdataAlloc(generic_cbdata);
     c->data = i;
