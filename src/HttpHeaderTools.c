@@ -5,17 +5,17 @@
  * DEBUG: section 66    HTTP Header Tools
  * AUTHOR: Alex Rousskov
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -35,9 +35,7 @@
 
 #include "squid.h"
 
-#if UNUSED_CODE
 static int httpHeaderStrCmp(const char *h1, const char *h2, int len);
-#endif
 static void httpHeaderPutStrvf(HttpHeader * hdr, http_hdr_type id, const char *fmt, va_list vargs);
 
 
@@ -314,7 +312,6 @@ httpHeaderParseSize(const char *start, ssize_t * value)
  * parses a given string then packs compiled headers and compares the result
  * with the original, reports discrepancies
  */
-#if UNUSED_CODE
 void
 httpHeaderTestParser(const char *hstr)
 {
@@ -365,11 +362,9 @@ httpHeaderTestParser(const char *hstr)
     packerClean(&p);
     memBufClean(&mb);
 }
-#endif
 
 
 /* like strncasecmp but ignores ws characters */
-#if UNUSED_CODE
 static int
 httpHeaderStrCmp(const char *h1, const char *h2, int len)
 {
@@ -395,46 +390,4 @@ httpHeaderStrCmp(const char *h1, const char *h2, int len)
     }
     /* NOTREACHED */
     return 0;
-}
-#endif
-
-/*
- * httpHdrMangle checks the anonymizer (header_access) configuration.
- * Returns 1 if the header is allowed.
- */
-static int
-httpHdrMangle(HttpHeaderEntry * e, request_t * request)
-{
-    int retval;
-
-    /* check with anonymizer tables */
-    header_mangler *hm;
-    aclCheck_t *checklist;
-    assert(e);
-    hm = &Config.header_access[e->id];
-    checklist = aclChecklistCreate(hm->access_list, request, NULL);
-    /* aclCheckFast returns 1 for allow. */
-    if (1 == aclCheckFast(hm->access_list, checklist))
-	retval = 1;
-    /* It was denied; Do we replace it with something else? */
-    else if (NULL == hm->replacement)
-	retval = 0;
-    /* yes, we do */
-    else
-	stringReset(&e->value, hm->replacement);
-    retval = 1;
-
-    aclChecklistFree(checklist);
-    return retval;
-}
-
-/* Mangles headers for a list of headers. */
-void
-httpHdrMangleList(HttpHeader * l, request_t * request)
-{
-    HttpHeaderEntry *e;
-    HttpHeaderPos p = HttpHeaderInitPos;
-    while ((e = httpHeaderGetEntry(l, &p)))
-	if (0 == httpHdrMangle(e, request))
-	    httpHeaderDelAt(l, p);
 }

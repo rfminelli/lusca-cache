@@ -5,17 +5,17 @@
  * DEBUG: section 0     Debug Routines
  * AUTHOR: Harvest Derived
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -38,90 +38,76 @@
 static char *debug_log_file = NULL;
 static int Ctx_Lock = 0;
 static const char *debugLogTime(time_t);
-static void ctx_print(void);
-#if HAVE_SYSLOG
-static void _db_print_syslog(const char *format, va_list args);
-#endif
-static void _db_print_stderr(const char *format, va_list args);
-static void _db_print_file(const char *format, va_list args);
+static void ctx_print();
 
-void
 #if STDC_HEADERS
+void
 _db_print(const char *format,...)
 {
+#if defined(__QNX__)
+    va_list eargs;
+#endif
+    va_list args;
 #else
+void
 _db_print(va_alist)
      va_dcl
 {
+    va_list args;
     const char *format = NULL;
 #endif
     LOCAL_ARRAY(char, f, BUFSIZ);
-    va_list args1;
-#if STDC_HEADERS
-    va_list args2;
-    va_list args3;
-    va_start(args1, format);
-    va_start(args2, format);
-    va_start(args3, format);
-#else
-#define args2 args1
-#define args3 args1
-    format = va_arg(args1, const char *);
-#endif
-    snprintf(f, BUFSIZ, "%s| %s",
-	debugLogTime(squid_curtime),
-	format);
-    _db_print_file(f, args1);
-    _db_print_stderr(f, args2);
 #if HAVE_SYSLOG
-    _db_print_syslog(format, args3);
+    LOCAL_ARRAY(char, tmpbuf, BUFSIZ);
 #endif
-    va_end(args1);
-#if STDC_HEADERS
-    va_end(args2);
-    va_end(args3);
-#endif
-}
 
-static void
-_db_print_file(const char *format, va_list args)
-{
+#if STDC_HEADERS
+    va_start(args, format);
+#if defined(__QNX__)
+    va_start(eargs, format);
+#endif
+#else
+    va_start(args);
+    format = va_arg(args, const char *);
+#endif
+
     if (debug_log == NULL)
 	return;
     /* give a chance to context-based debugging to print current context */
     if (!Ctx_Lock)
 	ctx_print();
-    vfprintf(debug_log, format, args);
+    snprintf(f, BUFSIZ, "%s| %s",
+	debugLogTime(squid_curtime),
+	format);
+#if HAVE_SYSLOG
+    /* level 0,1 go to syslog */
+    if (_db_level <= 1 && opt_syslog_enable) {
+	tmpbuf[0] = '\0';
+	vsnprintf(tmpbuf, BUFSIZ, format, args);
+	tmpbuf[BUFSIZ - 1] = '\0';
+	syslog(_db_level == 0 ? LOG_WARNING : LOG_NOTICE, "%s", tmpbuf);
+    }
+#endif /* HAVE_SYSLOG */
+    /* write to log file */
+#if defined(__QNX__)
+    vfprintf(debug_log, f, eargs);
+#else
+    vfprintf(debug_log, f, args);
+#endif
     if (!Config.onoff.buffered_logs)
 	fflush(debug_log);
+    if (opt_debug_stderr >= _db_level && debug_log != stderr) {
+#if defined(__QNX__)
+	vfprintf(stderr, f, eargs);
+#else
+	vfprintf(stderr, f, args);
+#endif
+    }
+#if defined(__QNX__)
+    va_end(eargs);
+#endif
+    va_end(args);
 }
-
-static void
-_db_print_stderr(const char *format, va_list args)
-{
-    if (opt_debug_stderr < _db_level)
-	return;
-    if (debug_log == stderr)
-	return;
-    vfprintf(stderr, format, args);
-}
-
-#if HAVE_SYSLOG
-static void
-_db_print_syslog(const char *format, va_list args)
-{
-    LOCAL_ARRAY(char, tmpbuf, BUFSIZ);
-    /* level 0,1 go to syslog */
-    if (_db_level > 1)
-	return;
-    if (0 == opt_syslog_enable)
-	return;
-    tmpbuf[0] = '\0';
-    vsnprintf(tmpbuf, BUFSIZ, format, args);
-    tmpbuf[BUFSIZ - 1] = '\0';
-    syslog(_db_level == 0 ? LOG_WARNING : LOG_NOTICE, "%s", tmpbuf);
-}
-#endif /* HAVE_SYSLOG */
 
 static void
 debugArg(const char *arg)
@@ -171,9 +157,6 @@ debugOpenLog(const char *logfile)
 	fflush(stderr);
 	debug_log = stderr;
     }
-#if defined(_SQUID_CYGWIN_)
-    setmode(fileno(debug_log), O_TEXT);
-#endif
 }
 
 void

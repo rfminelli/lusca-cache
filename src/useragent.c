@@ -5,17 +5,17 @@
  * DEBUG: section 40    User-Agent logging
  * AUTHOR: Joe Ramey <ramey@csc.ti.com>
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -35,20 +35,31 @@
 
 #include "squid.h"
 
-#if USE_USERAGENT_LOG
-static Logfile *useragentlog = NULL;
-#endif
-
 void
 useragentOpenLog(void)
 {
 #if USE_USERAGENT_LOG
-    assert(NULL == useragentlog);
-    if (!Config.Log.useragent || (0 == strcmp(Config.Log.useragent, "none"))) {
-	debug(40, 1) ("User-Agent logging is disabled.\n");
-	return;
+    char *fname = NULL;
+    int log_fd = -1;
+    fname = Config.Log.useragent;
+    /* Close and reopen the log.  It may have been renamed "manually"
+     * before HUP'ing us. */
+    if (cache_useragent_log) {
+	file_close(fileno(cache_useragent_log));
+	fclose(cache_useragent_log);
+	cache_useragent_log = NULL;
     }
-    useragentlog = logfileOpen(Config.Log.useragent, 0, 1);
+    if (fname && strcmp(fname, "none") != 0) {
+	log_fd = file_open(fname, O_WRONLY | O_CREAT | O_APPEND);
+	if (log_fd < 0) {
+	    debug(50, 0) ("useragentOpenLog: %s: %s\n", fname, xstrerror());
+	} else if ((cache_useragent_log = fdopen(log_fd, "a")) == NULL) {
+	    file_close(log_fd);
+	    debug(50, 0) ("useragentOpenLog: %s: %s\n", fname, xstrerror());
+	}
+    }
+    if (log_fd < 0 || cache_useragent_log == NULL)
+	debug(40, 1) ("User-Agent logging is disabled.\n");
 #endif
 }
 
@@ -56,9 +67,39 @@ void
 useragentRotateLog(void)
 {
 #if USE_USERAGENT_LOG
-    if (NULL == useragentlog)
+    char *fname = NULL;
+    int i;
+    LOCAL_ARRAY(char, from, MAXPATHLEN);
+    LOCAL_ARRAY(char, to, MAXPATHLEN);
+    struct stat sb;
+    if ((fname = Config.Log.useragent) == NULL)
 	return;
-    logfileRotate(useragentlog);
+    if (strcmp(fname, "none") == 0)
+	return;
+#ifdef S_ISREG
+    if (stat(fname, &sb) == 0)
+	if (S_ISREG(sb.st_mode) == 0)
+	    return;
+#endif
+    debug(40, 1) ("useragentRotateLog: Rotating.\n");
+    /* Rotate numbers 0 through N up one */
+    for (i = Config.Log.rotateNumber; i > 1;) {
+	i--;
+	snprintf(from, MAXPATHLEN, "%s.%d", fname, i - 1);
+	snprintf(to, MAXPATHLEN, "%s.%d", fname, i);
+	xrename(from, to);
+    }
+    if (cache_useragent_log) {
+	file_close(fileno(cache_useragent_log));
+	fclose(cache_useragent_log);
+	cache_useragent_log = NULL;
+    }
+    /* Rotate the current log to .0 */
+    if (Config.Log.rotateNumber > 0) {
+	snprintf(to, MAXPATHLEN, "%s.%d", fname, 0);
+	xrename(fname, to);
+    }
+    useragentOpenLog();
 #endif
 }
 
@@ -69,25 +110,18 @@ logUserAgent(const char *client, const char *agent)
     static time_t last_time = 0;
     static char time_str[128];
     const char *s;
-    if (NULL == useragentlog)
+    if (!cache_useragent_log)
 	return;
     if (squid_curtime != last_time) {
 	s = mkhttpdlogtime(&squid_curtime);
 	strcpy(time_str, s);
 	last_time = squid_curtime;
     }
-    logfilePrintf(useragentlog, "%s [%s] \"%s\"\n",
+    fprintf(cache_useragent_log, "%s [%s] \"%s\"\n",
 	client,
 	time_str,
 	agent);
-#endif
-}
-
-void
-useragentLogClose(void)
-{
-#if USE_USERAGENT_LOG
-    logfileClose(useragentlog);
-    useragentlog = NULL;
+    if (!Config.onoff.buffered_logs)
+	fflush(cache_useragent_log);
 #endif
 }

@@ -5,17 +5,17 @@
  * DEBUG: section 75    WHOIS protocol
  * AUTHOR: Duane Wessels, Kostas Anagnostakis
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -49,20 +49,17 @@ static PF whoisReadReply;
 
 /* PUBLIC */
 
-CBDATA_TYPE(WhoisState);
-
 void
 whoisStart(FwdState * fwd)
 {
-    WhoisState *p;
+    WhoisState *p = xcalloc(1, sizeof(*p));
     int fd = fwd->server_fd;
     char *buf;
     size_t l;
-    CBDATA_INIT_TYPE(WhoisState);
-    p = cbdataAlloc(WhoisState);
     p->request = fwd->request;
     p->entry = fwd->entry;
     p->fwd = fwd;
+    cbdataAdd(p, cbdataXfree, 0);
     storeLockObject(p->entry);
     comm_add_close_handler(fd, whoisClose, p);
     l = strLen(p->request->urlpath) + 3;
@@ -91,8 +88,8 @@ whoisReadReply(int fd, void *data)
     char *buf = memAllocate(MEM_4K_BUF);
     MemObject *mem = entry->mem_obj;
     int len;
-    statCounter.syscalls.sock.reads++;
-    len = FD_READ_METHOD(fd, buf, 4095);
+    Counter.syscalls.sock.reads++;
+    len = read(fd, buf, 4095);
     buf[len] = '\0';
     debug(75, 3) ("whoisReadReply: FD %d read %d bytes\n", fd, len);
     debug(75, 5) ("{%s}\n", buf);
@@ -100,8 +97,8 @@ whoisReadReply(int fd, void *data)
 	if (0 == mem->inmem_hi)
 	    mem->reply->sline.status = HTTP_OK;
 	fd_bytes(fd, len, FD_READ);
-	kb_incr(&statCounter.server.all.kbytes_in, len);
-	kb_incr(&statCounter.server.http.kbytes_in, len);
+	kb_incr(&Counter.server.all.kbytes_in, len);
+	kb_incr(&Counter.server.http.kbytes_in, len);
 	storeAppend(entry, buf, len);
 	commSetSelect(fd, COMM_SELECT_READ, whoisReadReply, p, Config.Timeout.read);
     } else if (len < 0) {

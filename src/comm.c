@@ -5,17 +5,17 @@
  * DEBUG: section 5     Socket Functions
  * AUTHOR: Harvest Derived
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -69,10 +69,6 @@ static IPH commConnectDnsHandle;
 static void commConnectCallback(ConnectStateData * cs, int status);
 static int commResetFD(ConnectStateData * cs);
 static int commRetryConnect(ConnectStateData * cs);
-CBDATA_TYPE(ConnectStateData);
-
-static MemPool *comm_write_pool = NULL;
-static MemPool *conn_close_pool = NULL;
 
 static void
 CommWriteStateCallbackAndFree(int fd, int code)
@@ -84,11 +80,8 @@ CommWriteStateCallbackAndFree(int fd, int code)
     if (CommWriteState == NULL)
 	return;
     if (CommWriteState->free_func) {
-	FREE *free_func = CommWriteState->free_func;
-	void *free_buf = CommWriteState->buf;
-	CommWriteState->free_func = NULL;
+	CommWriteState->free_func(CommWriteState->buf);
 	CommWriteState->buf = NULL;
-	free_func(free_buf);
     }
     callback = CommWriteState->handler;
     data = CommWriteState->handler_data;
@@ -96,7 +89,7 @@ CommWriteStateCallbackAndFree(int fd, int code)
     if (callback && cbdataValid(data))
 	callback(fd, CommWriteState->buf, CommWriteState->offset, code, data);
     cbdataUnlock(data);
-    memPoolFree(comm_write_pool, CommWriteState);
+    safe_free(CommWriteState);
 }
 
 /* Return the local port associated with fd. */
@@ -133,7 +126,7 @@ commBind(int s, struct in_addr in_addr, u_short port)
     S.sin_family = AF_INET;
     S.sin_port = htons(port);
     S.sin_addr = in_addr;
-    statCounter.syscalls.sock.binds++;
+    Counter.syscalls.sock.binds++;
     if (bind(s, (struct sockaddr *) &S, sizeof(S)) == 0)
 	return COMM_OK;
     debug(50, 0) ("commBind: Cannot bind socket FD %d to %s:%d: %s\n",
@@ -158,7 +151,7 @@ comm_open(int sock_type,
     fde *F = NULL;
 
     /* Create socket for accepting new connections. */
-    statCounter.syscalls.sock.sockets++;
+    Counter.syscalls.sock.sockets++;
     if ((new_socket = socket(AF_INET, sock_type, proto)) < 0) {
 	/* Increase the number of reserved fd's if calls to socket()
 	 * are failing because the open file table is full.  This
@@ -230,9 +223,9 @@ comm_listen(int sock)
 void
 commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *data)
 {
-    ConnectStateData *cs;
+    ConnectStateData *cs = xcalloc(1, sizeof(ConnectStateData));
     debug(5, 3) ("commConnectStart: FD %d, %s:%d\n", fd, host, (int) port);
-    cs = cbdataAlloc(ConnectStateData);
+    cbdataAdd(cs, cbdataXfree, 0);
     cs->fd = fd;
     cs->host = xstrdup(host);
     cs->port = port;
@@ -289,6 +282,8 @@ commConnectFree(int fd, void *data)
 {
     ConnectStateData *cs = data;
     debug(5, 3) ("commConnectFree: FD %d\n", fd);
+    if (cs->locks)
+	ipcacheUnregister(cs->host, cs);
     if (cs->data)
 	cbdataUnlock(cs->data);
     safe_free(cs->host);
@@ -302,9 +297,9 @@ commResetFD(ConnectStateData * cs)
     int fd2;
     if (!cbdataValid(cs->data))
 	return 0;
-    statCounter.syscalls.sock.sockets++;
+    Counter.syscalls.sock.sockets++;
     fd2 = socket(AF_INET, SOCK_STREAM, 0);
-    statCounter.syscalls.sock.sockets++;
+    Counter.syscalls.sock.sockets++;
     if (fd2 < 0) {
 	debug(5, 0) ("commResetFD: socket: %s\n", xstrerror());
 	if (ENFILE == errno || EMFILE == errno)
@@ -425,7 +420,7 @@ comm_connect_addr(int sock, const struct sockaddr_in *address)
     errno = 0;
     if (!F->flags.called_connect) {
 	F->flags.called_connect = 1;
-	statCounter.syscalls.sock.connects++;
+	Counter.syscalls.sock.connects++;
 	x = connect(sock, (struct sockaddr *) address, sizeof(*address));
 	if (x < 0)
 	    debug(5, 9) ("connect FD %d: %s\n", sock, xstrerror());
@@ -484,7 +479,7 @@ comm_accept(int fd, struct sockaddr_in *pn, struct sockaddr_in *me)
     socklen_t Slen;
     fde *F = NULL;
     Slen = sizeof(P);
-    statCounter.syscalls.sock.accepts++;
+    Counter.syscalls.sock.accepts++;
     if ((sock = accept(fd, (struct sockaddr *) &P, &Slen)) < 0) {
 	if (ignoreErrno(errno)) {
 	    debug(50, 5) ("comm_accept: FD %d: %s\n", fd, xstrerror());
@@ -527,7 +522,7 @@ commCallCloseHandlers(int fd)
 	if (cbdataValid(ch->data))
 	    ch->handler(fd, ch->data);
 	cbdataUnlock(ch->data);
-	memPoolFree(conn_close_pool, ch);	/* AAA */
+	safe_free(ch);
     }
 }
 
@@ -537,7 +532,7 @@ commLingerClose(int fd, void *unused)
 {
     LOCAL_ARRAY(char, buf, 1024);
     int n;
-    n = FD_READ_METHOD(fd, buf, 1024);
+    n = read(fd, buf, 1024);
     if (n < 0)
 	debug(5, 3) ("commLingerClose: FD %d read: %s\n", fd, xstrerror());
     comm_close(fd);
@@ -570,12 +565,10 @@ void
 comm_close(int fd)
 {
     fde *F = NULL;
-
     debug(5, 5) ("comm_close: FD %d\n", fd);
     assert(fd >= 0);
     assert(fd < Squid_MaxFD);
     F = &fd_table[fd];
-
     if (F->flags.closing)
 	return;
     if (shutting_down && (!F->flags.open || F->type == FD_FILE))
@@ -589,7 +582,7 @@ comm_close(int fd)
 	pconnHistCount(1, F->uses);
     fd_close(fd);		/* update fdstat */
     close(fd);
-    statCounter.syscalls.sock.closes++;
+    Counter.syscalls.sock.closes++;
 }
 
 /* Send a udp datagram to specified TO_ADDR. */
@@ -601,7 +594,7 @@ comm_udp_sendto(int fd,
     int len)
 {
     int x;
-    statCounter.syscalls.sock.sendtos++;
+    Counter.syscalls.sock.sendtos++;
     x = sendto(fd, buf, len, 0, (struct sockaddr *) to_addr, addr_len);
     if (x < 0) {
 #ifdef _SQUID_LINUX_
@@ -649,7 +642,7 @@ commSetSelect(int fd, unsigned int type, PF * handler, void *client_data, time_t
 void
 comm_add_close_handler(int fd, PF * handler, void *data)
 {
-    close_handler *new = memPoolAlloc(conn_close_pool);		/* AAA */
+    close_handler *new = xmalloc(sizeof(*new));
     close_handler *c;
     debug(5, 5) ("comm_add_close_handler: FD %d, handler=%p, data=%p\n",
 	fd, handler, data);
@@ -680,8 +673,7 @@ comm_remove_close_handler(int fd, PF * handler, void *data)
     else
 	fd_table[fd].close_handler = p->next;
     cbdataUnlock(p->data);
-    memPoolFree(conn_close_pool, p);	/* AAA */
-
+    safe_free(p);
 }
 
 static void
@@ -716,26 +708,14 @@ commSetNonBlocking(int fd)
 {
     int flags;
     int dummy = 0;
-#ifdef _SQUID_CYGWIN_
-    int nonblocking = TRUE;
-    if (fd_table[fd].type != FD_PIPE) {
-	if (ioctl(fd, FIONBIO, &nonblocking) < 0) {
-	    debug(50, 0) ("commSetNonBlocking: FD %d: %s %D\n", fd, xstrerror(), fd_table[fd].type);
-	    return COMM_ERROR;
-	}
-    } else {
-#endif
-	if ((flags = fcntl(fd, F_GETFL, dummy)) < 0) {
-	    debug(50, 0) ("FD %d: fcntl F_GETFL: %s\n", fd, xstrerror());
-	    return COMM_ERROR;
-	}
-	if (fcntl(fd, F_SETFL, flags | SQUID_NONBLOCK) < 0) {
-	    debug(50, 0) ("commSetNonBlocking: FD %d: %s\n", fd, xstrerror());
-	    return COMM_ERROR;
-	}
-#ifdef _SQUID_CYGWIN_
+    if ((flags = fcntl(fd, F_GETFL, dummy)) < 0) {
+	debug(50, 0) ("FD %d: fcntl F_GETFL: %s\n", fd, xstrerror());
+	return COMM_ERROR;
     }
-#endif
+    if (fcntl(fd, F_SETFL, flags | SQUID_NONBLOCK) < 0) {
+	debug(50, 0) ("commSetNonBlocking: FD %d: %s\n", fd, xstrerror());
+	return COMM_ERROR;
+    }
     fd_table[fd].flags.nonblocking = 1;
     return 0;
 }
@@ -792,9 +772,6 @@ comm_init(void)
      * after accepting a client but before it opens a socket or a file.
      * Since Squid_MaxFD can be as high as several thousand, don't waste them */
     RESERVED_FD = XMIN(100, Squid_MaxFD / 4);
-    CBDATA_INIT_TYPE(ConnectStateData);
-    comm_write_pool = memPoolCreate("CommWriteStateData", sizeof(CommWriteStateData));
-    conn_close_pool = memPoolCreate("close_handler", sizeof(close_handler));
 }
 
 /* Write to FD. */
@@ -809,10 +786,10 @@ commHandleWrite(int fd, void *data)
 	fd, (int) state->offset, state->size);
 
     nleft = state->size - state->offset;
-    len = FD_WRITE_METHOD(fd, state->buf + state->offset, nleft);
+    len = write(fd, state->buf + state->offset, nleft);
     debug(5, 5) ("commHandleWrite: write() returns %d\n", len);
     fd_bytes(fd, len, FD_WRITE);
-    statCounter.syscalls.sock.writes++;
+    Counter.syscalls.sock.writes++;
 
     if (len == 0) {
 	/* Note we even call write if nleft == 0 */
@@ -858,7 +835,7 @@ commHandleWrite(int fd, void *data)
 
 
 /* Select for Writing on FD, until SIZE bytes are sent.  Call
- * *HANDLER when complete. */
+ * * HANDLER when complete. */
 void
 comm_write(int fd, char *buf, int size, CWCB * handler, void *handler_data, FREE * free_func)
 {
@@ -867,10 +844,11 @@ comm_write(int fd, char *buf, int size, CWCB * handler, void *handler_data, FREE
 	fd, size, handler, handler_data);
     if (NULL != state) {
 	debug(5, 1) ("comm_write: fd_table[%d].rwstate != NULL\n", fd);
-	memPoolFree(comm_write_pool, state);
+	safe_free(state);
 	fd_table[fd].rwstate = NULL;
     }
-    fd_table[fd].rwstate = state = memPoolAlloc(comm_write_pool);
+    assert(state == NULL);
+    fd_table[fd].rwstate = state = xcalloc(1, sizeof(CommWriteStateData));
     state->buf = buf;
     state->size = size;
     state->offset = 0;

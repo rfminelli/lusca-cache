@@ -5,17 +5,17 @@
  * DEBUG: section 45    Callback Data Registry
  * AUTHOR: Duane Wessels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -44,7 +44,6 @@ static hash_table *htable = NULL;
 static int leakCount = 0;
 
 typedef struct _ptr {
-    hash_link hash;		/* must be first */
     void *key;
     struct _ptr *next;
     const char *file;
@@ -80,7 +79,7 @@ leakAddFL(void *p, const char *file, int line)
     c->file = file;
     c->line = line;
     c->when = squid_curtime;
-    hash_join(htable, &c->hash);
+    hash_join(htable, (hash_link *) c);
     leakCount++;
     return p;
 }
@@ -99,7 +98,7 @@ leakTouchFL(void *p, const char *file, int line)
 }
 
 void *
-leakFreeFL(void *p, const char *file, int line)
+leakFree(void *p)
 {
     ptr *c = (ptr *) hash_lookup(htable, p);
     assert(p);

@@ -18,20 +18,14 @@ localstatedir   = @localstatedir@
 srcdir		= @srcdir@
 VPATH		= @srcdir@
 
-SUBDIRS		= fs repl auth
-
 # Gotta love the DOS legacy
 #
 SQUID_EXE	= squid$(exec_suffix)
 CLIENT_EXE	= client$(exec_suffix)
-OPT_DNSSERVER_EXE = dnsserver$(exec_suffix)
-DNSSERVER_EXE	= @OPT_DNSSERVER_EXE@
-OPT_UNLINKD_EXE	= unlinkd$(exec_suffix)
-UNLINKD_EXE	= @OPT_UNLINKD_EXE@
-OPT_PINGER_EXE	= pinger$(exec_suffix)
-PINGER_EXE	= @OPT_PINGER_EXE@
+DNSSERVER_EXE	= dnsserver$(exec_suffix)
+UNLINKD_EXE	= unlinkd$(exec_suffix)
+PINGER_EXE	= pinger$(exec_suffix)
 CACHEMGR_EXE	= cachemgr$(cgi_suffix)
-DISKD_EXE	= diskd$(exec_suffix)
 
 DEFAULT_PREFIX		= $(prefix)
 DEFAULT_CONFIG_FILE     = $(sysconfdir)/squid.conf
@@ -44,13 +38,10 @@ DEFAULT_PID_FILE        = $(localstatedir)/logs/squid.pid
 DEFAULT_SWAP_DIR        = $(localstatedir)/cache
 DEFAULT_PINGER		= $(libexecdir)/$(PINGER_EXE)
 DEFAULT_UNLINKD		= $(libexecdir)/$(UNLINKD_EXE)
-DEFAULT_DISKD		= $(libexecdir)/$(DISKD_EXE)
 DEFAULT_ICON_DIR	= $(sysconfdir)/icons
 DEFAULT_ERROR_DIR	= $(sysconfdir)/errors
 DEFAULT_MIB_PATH	= $(sysconfdir)/mib.txt
 
-AUTH_OBJS	= @AUTH_OBJS@
-AUTH_MODULES	= @AUTH_MODULES@
 CC		= @CC@
 MAKEDEPEND	= @MAKEDEPEND@
 INSTALL		= @INSTALL@
@@ -65,23 +56,19 @@ REGEXLIB	= @REGEXLIB@
 PTHREADLIB	= @PTHREADLIB@
 SNMPLIB		= @SNMPLIB@
 MALLOCLIB	= @LIB_MALLOC@
-SSLLIB		= @SSLLIB@
 AC_CFLAGS	= @CFLAGS@
 LDFLAGS		= @LDFLAGS@
 XTRA_LIBS	= @XTRA_LIBS@
 XTRA_OBJS 	= @XTRA_OBJS@
-STORE_OBJS	= @STORE_OBJS@
-STORE_MODULES	= @STORE_MODULES@
-REPL_OBJS	= @REPL_OBJS@
-REPL_POLICIES	= @REPL_POLICIES@
 MV		= @MV@
 RM		= @RM@
 SHELL		= /bin/sh
 
+
 INCLUDE		= -I. -I../include -I$(top_srcdir)/include
 CFLAGS 		= $(AC_CFLAGS) $(INCLUDE) $(DEFINES)
 SQUID_LIBS	= -L../lib $(CRYPTLIB) $(REGEXLIB) @SQUID_PTHREAD_LIB@ \
-		  $(SNMPLIB) $(MALLOCLIB) $(SSLLIB) -lmiscutil $(XTRA_LIBS)
+		  $(SNMPLIB) $(MALLOCLIB) -lmiscutil $(XTRA_LIBS)
 CLIENT_LIBS	= -L../lib -lmiscutil $(XTRA_LIBS)
 DNSSERVER_LIBS	= -L../lib -lmiscutil $(XTRA_LIBS)
 PINGER_LIBS	= -L../lib -lmiscutil $(XTRA_LIBS)
@@ -95,7 +82,7 @@ OBJS	 	= \
 		access_log.o \
 		acl.o \
 		asn.o \
-		auth_modules.o \
+		@ASYNC_OBJS@ \
 		authenticate.o \
 		cache_cf.o \
 		CacheDigest.o \
@@ -109,7 +96,8 @@ OBJS	 	= \
 		debug.o \
 		@DELAY_OBJS@ \
 		disk.o \
-		@DNS_OBJS@ \
+		dns.o \
+		dns_internal.o \
 		errorpage.o \
 		ETag.o \
 		event.o \
@@ -141,7 +129,6 @@ OBJS	 	= \
 		ipc.o \
 		ipcache.o \
 		@LEAKFINDER_OBJS@ \
-		logfile.o \
 		main.o \
 		mem.o \
 		MemPool.o \
@@ -154,40 +141,38 @@ OBJS	 	= \
 		pconn.o \
 		peer_digest.o \
 		peer_select.o \
+		pump.o \
 		redirect.o \
-		referer.o \
 		refresh.o \
-		repl_modules.o \
 		send-announce.o \
 		@SNMP_OBJS@ \
 		ssl.o \
-		@SSL_OBJS@ \
 		stat.o \
 		StatHist.o \
 		String.o \
 		stmem.o \
 		store.o \
 		store_io.o \
+		store_io_ufs.o \
 		store_client.o \
 		store_digest.o \
 		store_dir.o \
+		store_dir_ufs.o \
 		store_key_md5.o \
 		store_log.o \
-		store_modules.o \
 		store_rebuild.o \
 		store_swapin.o \
 		store_swapmeta.o \
 		store_swapout.o \
 		string_arrays.o \
 		tools.o \
-		@UNLINKD_OBJS@ \
+		unlinkd.o \
 		url.o \
 		urn.o \
 		useragent.o \
 		wais.o \
 		wccp.o \
 		whois.o \
-		@WIN32_OBJS@ \
 		$(XTRA_OBJS)
 
 SNMP_OBJS	= \
@@ -198,30 +183,28 @@ HTCP_OBJS	= htcp.o
 
 DELAY_OBJS	= delay_pools.o
 
+ASYNC_OBJS	= \
+		aiops.o \
+		async_io.o \
+		store_io_asyncufs.o
+
 LEAKFINDER_OBJS	= \
 		leakfinder.o
-
-SSL_OBJS 	= ssl_support.o
 
 DEFAULTS        = \
 	-DDEFAULT_CONFIG_FILE=\"$(DEFAULT_CONFIG_FILE)\"
 
-all:    squid.conf
-	@for dir in $(SUBDIRS); do \
-		echo "Making $@ in $$dir..."; \
-		(cd $$dir ; $(MAKE) $(MFLAGS) prefix="$(prefix)" $@) || exit 1; \
-	done
-	@$(MAKE) $(MFLAGS) $(PROGS) $(UTILS) $(SUID_UTILS) $(CGIPROGS)
+all:    squid.conf $(PROGS) $(UTILS) $(SUID_UTILS) $(CGIPROGS)
 
-$(OBJS): $(top_srcdir)/include/version.h ../include/autoconf.h
+$(OBJS): $(top_srcdir)/include/version.h
 
 $(SNMP_OBJS): ../snmplib/libsnmp.a $(top_srcdir)/include/cache_snmp.h
 
-$(SQUID_EXE): $(OBJS) $(STORE_OBJS) $(REPL_OBJS) $(AUTH_OBJS)
-	$(CC) -o $@ $(LDFLAGS) $(OBJS) $(STORE_OBJS) $(REPL_OBJS) $(AUTH_OBJS) $(SQUID_LIBS)
+$(SQUID_EXE): $(OBJS)
+	$(CC) -o $@ $(LDFLAGS) $(OBJS) $(SQUID_LIBS)
 
 globals.o: globals.c Makefile
-	$(CC) -c globals.c $(CFLAGS) -I$(srcdir) $(DEFAULTS)
+	$(CC) -c $< $(CFLAGS) -I$(srcdir) $(DEFAULTS)
 
 globals.c: globals.h mk-globals-c.pl
 	$(PERL) $(srcdir)/mk-globals-c.pl < $(srcdir)/globals.h > $@
@@ -255,19 +238,11 @@ test_cache_digest: test_cache_digest.o CacheDigest.o debug.o globals.o store_key
 
 cache_cf.o: cf_parser.c
 
-squid.conf: cf_parser.c
-	@sh -c "test -f squid.conf || ./cf_gen cf.data"
-
-cf_parser.c: cf.data cf_gen
+squid.conf cf_parser.c: cf.data cf_gen
 	./cf_gen cf.data
 
 cf_gen: cf_gen.o
 	$(CC) -o $@ $(LDFLAGS) cf_gen.o $(STD_APP_LIBS)
-
-cf_gen.o: cf_gen.c cf_gen_defines.h Makefile defines.h ../include/autoconf.h
-
-cf_gen_defines.h: $(srcdir)/cf_gen_defines $(srcdir)/cf.data.pre
-	awk -f $(srcdir)/cf_gen_defines <$(srcdir)/cf.data.pre >cf_gen_defines.h
 
 cf.data: cf.data.pre Makefile
 	sed "\
@@ -275,7 +250,6 @@ cf.data: cf.data.pre Makefile
 	s%@DEFAULT_DNSSERVER@%$(DEFAULT_DNSSERVER)%g;\
 	s%@DEFAULT_UNLINKD@%$(DEFAULT_UNLINKD)%g;\
 	s%@DEFAULT_PINGER@%$(DEFAULT_PINGER)%g;\
-	s%@DEFAULT_DISKD@%$(DEFAULT_DISKD)%g;\
 	s%@DEFAULT_CACHE_LOG@%$(DEFAULT_CACHE_LOG)%g;\
 	s%@DEFAULT_ACCESS_LOG@%$(DEFAULT_ACCESS_LOG)%g;\
 	s%@DEFAULT_STORE_LOG@%$(DEFAULT_STORE_LOG)%g;\
@@ -287,73 +261,39 @@ cf.data: cf.data.pre Makefile
 	s%@DEFAULT_PREFIX@%$(DEFAULT_PREFIX)%g;"\
 	< $(srcdir)/cf.data.pre >$@
 
-store_modules.c: store_modules.sh Makefile 
-	sh $(srcdir)/store_modules.sh $(STORE_MODULES) >store_modules.c
-
-store_modules.o: store_modules.c
-	$(CC) -c store_modules.c $(CFLAGS) -I$(srcdir)
-
-$(STORE_OBJS):
-	@sh -c "cd `dirname $@` && $(MAKE) $(MFLAGS) `basename $@`"
-
-repl_modules.c: repl_modules.sh Makefile 
-	sh $(srcdir)/repl_modules.sh $(REPL_POLICIES) >repl_modules.c
-
-repl_modules.o: repl_modules.c
-	$(CC) -c repl_modules.c $(CFLAGS) -I$(srcdir)
-
-$(REPL_OBJS):
-	@sh -c "cd `dirname $@` && $(MAKE) $(MFLAGS) `basename $@`"
-
-repl_modules repl/stamp:
-	@sh -c "cd repl && $(MAKE) all"
-
-auth_modules.c: auth_modules.sh Makefile
-	sh $(srcdir)/auth_modules.sh $(AUTH_MODULES) >auth_modules.c
-
-auth_modules.o: auth_modules.c
-	$(CC) -c auth_modules.c $(CFLAGS) -I$(srcdir)
-
-$(AUTH_OBJS):
-	@sh -c "cd `dirname $@` && $(MAKE) $(MFLAGS) `basename $@`"
-
 install-mkdirs:
 	-@if test ! -d $(prefix); then \
 		echo "mkdir $(prefix)"; \
-		mkdir -p $(prefix); \
+		mkdir $(prefix); \
 	fi
 	-@if test ! -d $(exec_prefix); then \
 		echo "mkdir $(exec_prefix)"; \
-		mkdir -p $(exec_prefix); \
+		mkdir $(exec_prefix); \
 	fi
 	-@if test ! -d $(bindir); then \
 		echo "mkdir $(bindir)"; \
-		mkdir -p $(bindir); \
+		mkdir $(bindir); \
 	fi
 	-@if test ! -d $(libexecdir); then \
 		echo "mkdir $(libexecdir)"; \
-		mkdir -p $(libexecdir); \
+		mkdir $(libexecdir); \
 	fi
 	-@if test ! -d $(sysconfdir); then \
 		echo "mkdir $(sysconfdir)"; \
-		mkdir -p $(sysconfdir); \
+		mkdir $(sysconfdir); \
 	fi
 	-@if test ! -d $(localstatedir); then \
 		echo "mkdir $(localstatedir)"; \
-		mkdir -p $(localstatedir); \
+		mkdir $(localstatedir); \
 	fi
 	-@if test ! -d $(localstatedir)/logs; then \
 		echo "mkdir $(localstatedir)/logs"; \
-		mkdir -p $(localstatedir)/logs; \
+		mkdir $(localstatedir)/logs; \
 	fi
 
 # Michael Lupp <mike@nemesis.saar.de> wants to know about additions
 # to the install target.
 install: all install-mkdirs
-	@for dir in $(SUBDIRS); do \
-		echo "Making $@ in $$dir..."; \
-		(cd $$dir ; $(MAKE) $(MFLAGS) prefix="$(prefix)" $@) || exit 1; \
-	done
 	@for f in $(PROGS); do \
 		if test -f $(bindir)/$$f; then \
 			echo $(MV) $(bindir)/$$f $(bindir)/-$$f; \
@@ -366,8 +306,7 @@ install: all install-mkdirs
 			$(RM) -f $(bindir)/-$$f; \
 		fi; \
 	done
-	@if test -n "$(UTILS)"; then \
-	    for f in $(UTILS); do \
+	@for f in $(UTILS); do \
 		if test -f $(libexecdir)/$$f; then \
 			echo $(MV) $(libexecdir)/$$f $(libexecdir)/-$$f; \
 			$(MV) $(libexecdir)/$$f $(libexecdir)/-$$f; \
@@ -378,8 +317,7 @@ install: all install-mkdirs
 			echo $(RM) -f $(libexecdir)/-$$f; \
 			$(RM) -f $(libexecdir)/-$$f; \
 		fi; \
-	    done; \
-	fi
+	done
 	@for f in $(CGIPROGS); do \
 		if test -f $(libexecdir)/$$f; then \
 			echo $(MV) $(libexecdir)/$$f $(libexecdir)/-$$f; \
@@ -410,7 +348,7 @@ install: all install-mkdirs
 	fi
 
 install-pinger:
-	@f=$(PINGER_EXE); \
+	@f=pinger; \
 	if test -f $(libexecdir)/$$f; then \
 		echo $(MV) $(libexecdir)/$$f $(libexecdir)/-$$f; \
 		$(MV) $(libexecdir)/$$f $(libexecdir)/-$$f; \
@@ -424,24 +362,14 @@ install-pinger:
 
 clean: 
 	-rm -rf *.o *pure_* core $(PROGS) $(UTILS) $(CGIPROGS) $(SUID_UTILS)
-	-rm -f cf_gen cf_gen_defines.h cf_parser.c cf.data globals.c string_arrays.c
-	-rm -f store_modules.c repl_modules.c auth_modules.c squid.conf
-	@for dir in $(SUBDIRS); do \
-		echo "Making $@ in $$dir..."; \
-		(cd $$dir ; $(MAKE) $(MFLAGS) prefix="$(prefix)" $@) || exit 1; \
-	done
+	-rm -f cf_gen cf_parser.c cf.data globals.c string_arrays.c
 
 distclean:	clean
-	-rm -f Makefile
+	-rm -f Makefile squid.conf squid.conf.pre
 	-rm -f Makefile.bak
-	-rm -f tags
-	@for dir in $(SUBDIRS); do \
-		echo "Making $@ in $$dir..."; \
-		(cd $$dir ; $(MAKE) $(MFLAGS) prefix="$(prefix)" $@) || exit 1; \
-	done
 
 tags:
 	ctags *.[ch] ../include/*.h ../lib/*.[ch]
 
-depend: cf_parser.c
-	$(MAKEDEPEND) $(INCLUDE) -fMakefile $(srcdir)/*.c
+depend:
+	$(MAKEDEPEND) -I../include -I. -fMakefile *.c

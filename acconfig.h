@@ -19,10 +19,7 @@
  * in the Makefiles, wich is done automatically by configure.
  *
  */
-
-#ifndef __CONFIGURE_H__
-#define __CONFIGURE_H__
-@TOP@
+@ TOP @
 /* $Id$ */
 
 /*********************************
@@ -52,7 +49,7 @@
 #undef USE_ASYNC_IO
 
 /* Defines how many threads to use for async I/O */
-#undef ASYNC_IO_THREADS
+#undef NUMTHREADS
 
 /*
  * If you want to use Squid's ICMP features (highly recommended!) then
@@ -77,13 +74,6 @@
  * directory.
  */
 #undef USE_USERAGENT_LOG
-
-/*
- * If you want to log Referer request header values, define this.
- * By default, they are written to referer.log in the Squid log
- * directory.
- */
-#undef USE_REFERER_LOG
 
 /*
  * A dangerous feature which causes Squid to kill its parent process
@@ -131,9 +121,6 @@
  * Cache Array Routing Protocol
  */
 #undef USE_CARP
-
-/* Define if NTLM is allowed to fail gracefully when a helper has problems */
-#undef NTLM_FAIL_OPEN
 
 /********************************
  *  END OF CONFIGURABLE OPTIONS *
@@ -274,62 +261,3 @@
  * Use the heap-based replacement techniques
  */
 #undef HEAP_REPLACEMENT
-
-/*
- * message type for message queues
- */
-#undef mtyp_t
-
-/*
- * Define this to include code for SSL encryption.
- */
-#undef USE_SSL
-
-/*
- * Define this to make use of the OpenSSL libraries for
- * MD5 calculation rather than Squid's own MD5 implementation
- * or if building with SSL encryption (USE_SSL)
- */
-#undef USE_OPENSSL
-
-/* Define if you want to set the COSS membuf size */
-#undef COSS_MEMBUF_SZ
-
-/* Print stacktraces on fatal errors */
-#undef PRINT_STACK_TRACE
-
-/*
- * Define this if unlinkd is required
- * (strongly recommended for ufs storage type)
- */
-#undef USE_UNLINKD
-
-/* 
- * Enable support for Transparent Proxy on Linux 2.4 systems
- */
-#undef LINUX_NETFILTER
-
-/*
- * Known-size intgers
- */
-
-#undef int16_t
-
-#undef u_int16_t
-
-#undef int32_t
-
-#undef u_int32_t
-
-#undef int64_t
-
-#undef u_int64_t
-
-/*
- * Enable support for the X-Accelerator-Vary HTTP header
- */
-#undef X_ACCELERATOR_VARY
-
-@BOTTOM@
-
-#endif /* __CONFIGURE_H__ */

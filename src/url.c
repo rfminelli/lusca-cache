@@ -5,17 +5,17 @@
  * DEBUG: section 23    URL Parsing
  * AUTHOR: Duane Wessels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -57,26 +57,6 @@ const char *RequestMethodStr[] =
     "BMOVE",
     "BDELETE",
     "BPROPFIND",
-    "%EXT00",
-    "%EXT01",
-    "%EXT02",
-    "%EXT03",
-    "%EXT04",
-    "%EXT05",
-    "%EXT06",
-    "%EXT07",
-    "%EXT08",
-    "%EXT09",
-    "%EXT10",
-    "%EXT11",
-    "%EXT12",
-    "%EXT13",
-    "%EXT14",
-    "%EXT15",
-    "%EXT16",
-    "%EXT17",
-    "%EXT18",
-    "%EXT19",
     "ERROR"
 };
 
@@ -163,8 +143,6 @@ urlInitialize(void)
     assert(0 < matchDomainName("zzz.com", "foo.com"));
     assert(0 > matchDomainName("aaa.com", "foo.com"));
     assert(0 == matchDomainName("FOO.com", "foo.COM"));
-    assert(0 < matchDomainName("bfoo.com", "afoo.com"));
-    assert(0 > matchDomainName("afoo.com", "bfoo.com"));
     assert(0 < matchDomainName("x-foo.com", ".foo.com"));
     /* more cases? */
 }
@@ -173,13 +151,6 @@ method_t
 urlParseMethod(const char *s)
 {
     method_t method = METHOD_NONE;
-    /*
-     * This check for '%' makes sure that we don't
-     * match one of the extension method placeholders,
-     * which have the form %EXT[0-9][0-9]
-     */
-    if (*s == '%')
-	return METHOD_NONE;
     for (method++; method < METHOD_ENUM_END; method++) {
 	if (0 == strcasecmp(s, RequestMethodStr[method]))
 	    return method;
@@ -274,10 +245,10 @@ urlParse(method_t method, char *url)
 	port = urlDefaultPort(protocol);
 	/* Is there any login informaiton? */
 	if ((t = strrchr(host, '@'))) {
-	    strcpy((char *) login, (char *) host);
+	    strcpy(login, host);
 	    t = strrchr(login, '@');
 	    *t = 0;
-	    strcpy((char *) host, t + 1);
+	    strcpy(host, t + 1);
 	}
 	if ((t = strrchr(host, ':'))) {
 	    *t++ = '\0';
@@ -550,17 +521,12 @@ urlCheckRequest(const request_t * r)
 	    rc = 1;
 	break;
     case PROTO_HTTPS:
-#ifdef USE_SSL
-	rc = 1;
-	break;
-#else
 	/*
 	 * Squid can't originate an SSL connection, so it should
 	 * never receive an "https:" URL.  It should always be
 	 * CONNECT instead.
 	 */
 	rc = 0;
-#endif
     default:
 	break;
     }
@@ -596,36 +562,4 @@ urlHostname(const char *url)
 	xmemmove(host, t, strlen(t) + 1);
     }
     return host;
-}
-
-static void
-urlExtMethodAdd(const char *mstr)
-{
-    method_t method = 0;
-    for (method++; method < METHOD_ENUM_END; method++) {
-	if (0 == strcmp(mstr, RequestMethodStr[method])) {
-	    debug(23, 2) ("Extension method '%s' already exists\n", mstr);
-	    return;
-	}
-	if (0 != strncmp("%EXT", RequestMethodStr[method], 4))
-	    continue;
-	/* Don't free statically allocated "%EXTnn" string */
-	RequestMethodStr[method] = xstrdup(mstr);
-	debug(23, 1) ("Extension method '%s' added, enum=%d\n", mstr, (int) method);
-	return;
-    }
-    debug(23, 1) ("WARNING: Could not add new extension method '%s' due to lack of array space\n", mstr);
-}
-
-void
-urlExtMethodConfigure(void)
-{
-    wordlist *w = Config.ext_methods;
-    while (w) {
-	char *s;
-	for (s = w->key; *s; s++)
-	    *s = xtoupper(*s);
-	urlExtMethodAdd(w->key);
-	w = w->next;
-    }
 }

@@ -5,17 +5,17 @@
  * DEBUG: section 42    ICMP Pinger program
  * AUTHOR: Duane Wessels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -43,13 +43,11 @@
 #include <netinet/ip_icmp.h>
 
 #ifndef _SQUID_LINUX_
-#ifndef _SQUID_CYGWIN_
 #define icmphdr icmp
 #define iphdr ip
 #endif
-#endif
 
-#if defined (_SQUID_LINUX_) || defined (_SQUID_CYGWIN_)
+#ifdef _SQUID_LINUX_
 #ifdef icmp_id
 #undef icmp_id
 #endif

@@ -5,17 +5,17 @@
  * DEBUG: section 31    Hypertext Caching Protocol
  * AUTHOR: Duane Wesssels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -614,8 +614,16 @@ htcpCheckHit(const htcpSpecifier * s)
 {
     request_t *request;
     method_t m = urlParseMethod(s->method);
-    StoreEntry *e = NULL, *hit = NULL;
+    StoreEntry *e = storeGetPublic(s->uri, m);
     char *blk_end;
+    if (NULL == e) {
+	debug(31, 3) ("htcpCheckHit: NO; public object not found\n");
+	return NULL;
+    }
+    if (!storeEntryValidToSend(e)) {
+	debug(31, 3) ("htcpCheckHit: NO; entry not valid to send\n");
+	return NULL;
+    }
     request = urlParse(m, s->uri);
     if (NULL == request) {
 	debug(31, 3) ("htcpCheckHit: NO; failed to parse URL\n");
@@ -624,26 +632,15 @@ htcpCheckHit(const htcpSpecifier * s)
     blk_end = s->req_hdrs + strlen(s->req_hdrs);
     if (!httpHeaderParse(&request->header, s->req_hdrs, blk_end)) {
 	debug(31, 3) ("htcpCheckHit: NO; failed to parse request headers\n");
-	goto miss;
-    }
-    e = storeGetPublicByRequest(request);
-    if (NULL == e) {
-	debug(31, 3) ("htcpCheckHit: NO; public object not found\n");
-	goto miss;
-    }
-    if (!storeEntryValidToSend(e)) {
-	debug(31, 3) ("htcpCheckHit: NO; entry not valid to send\n");
-	goto miss;
-    }
-    if (refreshCheckHTCP(e, request)) {
+	e = NULL;
+    } else if (refreshCheckHTCP(e, request)) {
 	debug(31, 3) ("htcpCheckHit: NO; cached response is stale\n");
-	goto miss;
+	e = NULL;
+    } else {
+	debug(31, 3) ("htcpCheckHit: YES!?\n");
     }
-    debug(31, 3) ("htcpCheckHit: YES!?\n");
-    hit = e;
-  miss:
     requestDestroy(request);
-    return hit;
+    return e;
 }
 
 static void
@@ -750,9 +747,8 @@ htcpHandleData(char *buf, int sz, struct sockaddr_in *from)
     hdr.msg_id = ntohl(hdr.msg_id);
     debug(31, 3) ("htcpHandleData: sz = %d\n", sz);
     debug(31, 3) ("htcpHandleData: length = %d\n", (int) hdr.length);
-    if (hdr.opcode >= HTCP_END) {
-	debug(31, 0) ("htcpHandleData: client %s, opcode %d out of range\n",
-	    inet_ntoa(from->sin_addr),
+    if (hdr.opcode > HTCP_END) {
+	debug(31, 0) ("htcpHandleData: opcode %d out of range\n",
 	    (int) hdr.opcode);
 	return;
     }
@@ -787,10 +783,6 @@ htcpHandleData(char *buf, int sz, struct sockaddr_in *from)
 	break;
     case HTCP_SET:
 	htcpHandleSet(&hdr, buf, sz, from);
-	break;
-    case HTCP_CLR:
-	debug(31, 1) ("htcpHandleData: client %s, CLR not supported\n",
-	    inet_ntoa(from->sin_addr));
 	break;
     default:
 	assert(0);
@@ -829,7 +821,7 @@ htcpRecv(int fd, void *data)
     static struct sockaddr_in from;
     int flen = sizeof(struct sockaddr_in);
     memset(&from, '\0', flen);
-    statCounter.syscalls.sock.recvfroms++;
+    Counter.syscalls.sock.recvfroms++;
     len = recvfrom(fd, buf, 8192, 0, (struct sockaddr *) &from, &flen);
     debug(31, 3) ("htcpRecv: FD %d, %d bytes from %s:%d\n",
 	fd, len, inet_ntoa(from.sin_addr), ntohs(from.sin_port));
@@ -894,8 +886,7 @@ htcpQuery(StoreEntry * e, request_t * req, peer * p)
     MemBuf mb;
     http_state_flags flags;
     memset(&flags, '\0', sizeof(flags));
-    snprintf(vbuf, sizeof(vbuf), "%d/%d",
-	req->http_ver.major, req->http_ver.minor);
+    snprintf(vbuf, sizeof(vbuf), "%3.1f", req->http_ver);
     stuff.op = HTCP_TST;
     stuff.rr = RR_REQUEST;
     stuff.f1 = 1;
@@ -919,7 +910,7 @@ htcpQuery(StoreEntry * e, request_t * req, peer * p)
     }
     htcpSend(pkt, (int) pktlen, &p->in_addr);
     save_key = queried_keys[stuff.msg_id % N_QUERIED_KEYS];
-    storeKeyCopy(save_key, e->hash.key);
+    storeKeyCopy(save_key, e->key);
     debug(31, 3) ("htcpQuery: key (%p) %s\n", save_key, storeKeyText(save_key));
     xfree(pkt);
 }

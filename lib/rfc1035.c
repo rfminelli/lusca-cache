@@ -5,28 +5,28 @@
  * Low level DNS protocol routines
  * AUTHOR: Duane Wessels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation; either version 2 of the License, or
  *  (at your option) any later version.
- *  
+ *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
- *  
+ *
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111, USA.
@@ -92,11 +92,6 @@ struct _rfc1035_header {
     unsigned short nscount;
     unsigned short arcount;
 };
-
-static const char *Alphanum =
-"abcdefghijklmnopqrstuvwxyz"
-"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-"0123456789";
 
 /*
  * rfc1035HeaderPack()
@@ -174,15 +169,12 @@ rfc1035LabelPack(char *buf, size_t sz, const char *label)
  * Note message compression is not supported here.
  * Returns number of octets packed.
  */
-static off_t
+off_t
 rfc1035NamePack(char *buf, size_t sz, const char *name)
 {
     off_t off = 0;
     char *copy = strdup(name);
     char *t;
-    /*
-     * NOTE: use of strtok here makes names like foo....com valid.
-     */
     for (t = strtok(copy, "."); t; t = strtok(NULL, "."))
 	off += rfc1035LabelPack(buf + off, sz - off, t);
     free(copy);
@@ -284,7 +276,7 @@ rfc1035NameUnpack(const char *buf, size_t sz, off_t off, char *name, size_t ns)
     do {
 	c = *(buf + off);
 	if (c > RFC1035_MAXLABELSZ) {
-	    /* blasted compression */
+	    /* fucking compression */
 	    unsigned short s;
 	    off_t ptr;
 	    memcpy(&s, buf + off, sizeof(s));
@@ -341,7 +333,6 @@ rfc1035RRUnpack(const char *buf, size_t sz, off_t off, rfc1035_rr * RR)
 	 * replies at 512 octets, as per RFC 1035.  Returning sz+1
 	 * should cause no further processing for this reply.
 	 */
-	memset(RR, '\0', sizeof(*RR));
 	return sz + 1;
     }
     switch (RR->type) {
@@ -371,39 +362,6 @@ rfc1035Qid(void)
     return qid;
 }
 
-static void
-rfc1035SetErrno(int n)
-{
-    switch (rfc1035_errno = n) {
-    case 0:
-	rfc1035_error_message = "No error condition";
-	break;
-    case 1:
-	rfc1035_error_message = "Format Error: The name server was "
-	    "unable to interpret the query.";
-	break;
-    case 2:
-	rfc1035_error_message = "Server Failure: The name server was "
-	    "unable to process this query.";
-	break;
-    case 3:
-	rfc1035_error_message = "Name Error: The domain name does "
-	    "not exist.";
-	break;
-    case 4:
-	rfc1035_error_message = "Not Implemented: The name server does "
-	    "not support the requested kind of query.";
-	break;
-    case 5:
-	rfc1035_error_message = "Refused: The name server refuses to "
-	    "perform the specified operation.";
-	break;
-    default:
-	rfc1035_error_message = "Unknown Error";
-	break;
-    }
-}
-
 void
 rfc1035RRDestroy(rfc1035_rr * rr, int n)
 {
@@ -423,7 +381,7 @@ rfc1035AnswersUnpack(const char *buf,
     rfc1035_rr ** records,
     unsigned short *id)
 {
-    size_t off = 0;
+    off_t off = 0;
     int l;
     int i;
     int nr = 0;
@@ -435,7 +393,35 @@ rfc1035AnswersUnpack(const char *buf,
     rfc1035_errno = 0;
     rfc1035_error_message = NULL;
     if (hdr.rcode) {
-	rfc1035SetErrno((int) hdr.rcode);
+	rfc1035_errno = (int) hdr.rcode;
+	switch (rfc1035_errno) {
+	case 0:
+	    rfc1035_error_message = "No error condition";
+	    break;
+	case 1:
+	    rfc1035_error_message = "Format Error: The name server was "
+		"unable to interpret the query.";
+	    break;
+	case 2:
+	    rfc1035_error_message = "Server Failure: The name server was "
+		"unable to process this query.";
+	    break;
+	case 3:
+	    rfc1035_error_message = "Name Error: The domain name does "
+		"not exist.";
+	    break;
+	case 4:
+	    rfc1035_error_message = "Not Implemented: The name server does "
+		"not support the requested kind of query.";
+	    break;
+	case 5:
+	    rfc1035_error_message = "Refused: The name server refuses to "
+		"perform the specified operation.";
+	    break;
+	default:
+	    rfc1035_error_message = "Unknown Error";
+	    break;
+	}
 	return -rfc1035_errno;
     }
     i = (int) hdr.qdcount;
@@ -482,14 +468,9 @@ unsigned short
 rfc1035BuildAQuery(const char *hostname, char *buf, size_t * szp)
 {
     static rfc1035_header h;
-    size_t offset = 0;
+    off_t offset = 0;
     size_t sz = *szp;
     memset(&h, '\0', sizeof(h));
-    /* the first char of hostname must be alphanmeric */
-    if (NULL == strchr(Alphanum, *hostname)) {
-	rfc1035SetErrno(3);
-	return 0;
-    }
     h.id = rfc1035Qid();
     h.qr = 0;
     h.rd = 1;
@@ -520,7 +501,7 @@ unsigned short
 rfc1035BuildPTRQuery(const struct in_addr addr, char *buf, size_t * szp)
 {
     static rfc1035_header h;
-    size_t offset = 0;
+    off_t offset = 0;
     size_t sz = *szp;
     static char rev[32];
     unsigned int i;
@@ -543,7 +524,7 @@ rfc1035BuildPTRQuery(const struct in_addr addr, char *buf, size_t * szp)
 	RFC1035_TYPE_PTR,
 	RFC1035_CLASS_IN);
     assert(offset <= sz);
-    *szp = offset;
+    *szp = (size_t) offset;
     return h.id;
 }
 

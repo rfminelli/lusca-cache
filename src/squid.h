@@ -4,17 +4,17 @@
  *
  * AUTHOR: Duane Wessels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -81,19 +81,11 @@
 
 #if PURIFY
 #define assert(EX) ((void)0)
-#elif defined(NODEBUG)
-#define assert(EX) ((void)0)
 #elif STDC_HEADERS
 #define assert(EX)  ((EX)?((void)0):xassert( # EX , __FILE__, __LINE__))
 #else
 #define assert(EX)  ((EX)?((void)0):xassert("EX", __FILE__, __LINE__))
 #endif
-
-
-/* 32 bit integer compatability */
-#include "squid_types.h"
-#define num32 int32_t
-#define u_num32 u_int32_t
 
 #if HAVE_UNISTD_H
 #include <unistd.h>
@@ -197,9 +189,6 @@
 #if HAVE_LIMITS_H
 #include <limits.h>
 #endif
-#if defined(_SQUID_CYGWIN_)
-#include <io.h>
-#endif
 
 #if HAVE_DIRENT_H
 #include <dirent.h>
@@ -222,10 +211,6 @@
 #include <unix.h>
 #endif
 
-#if HAVE_SYS_MOUNT_H
-#include <sys/mount.h>
-#endif
-
 /*
  * We require poll.h before using poll().  If the symbols used
  * by poll() are defined elsewhere, we will need to make this
@@ -241,24 +226,10 @@
 #endif /* HAVE_POLL_H */
 #endif /* HAVE_POLL */
 
-#if defined(HAVE_STDARG_H)
+#if STDC_HEADERS
 #include <stdarg.h>
-#define HAVE_STDARGS		/* let's hope that works everywhere (mj) */
-#define VA_LOCAL_DECL va_list ap;
-#define VA_START(f) va_start(ap, f)
-#define VA_SHIFT(v,t) ;		/* no-op for ANSI */
-#define VA_END va_end(ap)
 #else
-#if defined(HAVE_VARARGS_H)
 #include <varargs.h>
-#undef HAVE_STDARGS
-#define VA_LOCAL_DECL va_list ap;
-#define VA_START(f) va_start(ap)	/* f is ignored! */
-#define VA_SHIFT(v,t) v = va_arg(ap,t)
-#define VA_END va_end(ap)
-#else
-#error XX **NO VARARGS ** XX
-#endif
 #endif
 
 /* Make sure syslog goes after stdarg/varargs */
@@ -342,15 +313,12 @@ struct rusage {
 #endif
 
 #if CBDATA_DEBUG
-#define cbdataAlloc(a,b)	cbdataAllocDbg(a,b,__FILE__,__LINE__)
-#define cbdataLock(a)		cbdataLockDbg(a,__FILE__,__LINE__)
-#define cbdataUnlock(a)		cbdataUnlockDbg(a,__FILE__,__LINE__)
+#define cbdataAdd(a,b,c)	cbdataAddDbg(a,b,c,__FILE__,__LINE__)
 #endif
 
 #if USE_LEAKFINDER
 #define leakAdd(p) leakAddFL(p,__FILE__,__LINE__)
 #define leakTouch(p) leakTouchFL(p,__FILE__,__LINE__)
-#define leakFree(p) leakFreeFL(p,__FILE__,__LINE__)
 #else
 #define leakAdd(p) p
 #define leakTouch(p) p
@@ -367,21 +335,13 @@ struct rusage {
 #include <regex.h>
 #endif
 
-#include "md5.h"
-
-#if USE_SSL
-#include "ssl_support.h"
-/* This is an ugly hack, but necessary.
- *
- * Squid's md5 conflicts with OpenSSL's md5, but they're more or less
- * interchangable.
- * Free is defined in include/radix.h and also in OpenSSL, but we don't need
- * OpenSSL's, so it can be undef'd and then appear from radix.h later.
- * It's dangerous and ugly, but I can't see any other way to get around it.
- */
-#undef Free
+#if USE_ASYNC_IO
+#undef USE_UNLINKD
+#else
+#define USE_UNLINKD 1
 #endif
 
+#include "md5.h"
 #include "Stack.h"
 
 /* Needed for poll() on Linux at least */
@@ -400,6 +360,9 @@ struct rusage {
 
 #include "hash.h"
 #include "rfc1035.h"
+#if HEAP_REPLACEMENT
+#include "heap.h"
+#endif
 
 #include "defines.h"
 #include "enums.h"
@@ -430,9 +393,7 @@ struct rusage {
 #define XMAX(a,b) ((a)>(b)? (a) : (b))
 
 /*
- * Squid source files should not call these functions directly.
- * Use xmalloc, xfree, xcalloc, snprintf, and xstrdup instead.
- * Also use xmemcpy, xisspace, ...
+ * Squid source files should not call these functions directly
  */
 #ifndef malloc
 #define malloc +
@@ -451,36 +412,16 @@ struct rusage {
 #endif
 
 /*
- * Hey dummy, don't be tempted to move this to lib/config.h.in
- * again.  O_NONBLOCK will not be defined there because you didn't
- * #include <fcntl.h> yet.
+ * Hey dummy, don't be tempted to move this to lib/config.h.in again.  O_NONBLOCK
+ * will not be defined there because you didn't #include <fcntl.h> yet.
  */
-#if defined(_SQUID_SUNOS_)
-/*
- * We assume O_NONBLOCK is broken, or does not exist, on SunOS.
- */
-#define SQUID_NONBLOCK O_NDELAY
-#elif defined(O_NONBLOCK)
-/*
- * We used to assume O_NONBLOCK was broken on Solaris, but evidence
- * now indicates that its fine on Solaris 8, and in fact required for
- * properly detecting EOF on FIFOs.  So now we assume that if 
- * its defined, it works correctly on all operating systems.
- */
+#if defined(O_NONBLOCK) && !defined(_SQUID_SUNOS_) && !defined(_SQUID_SOLARIS_)
 #define SQUID_NONBLOCK O_NONBLOCK
-/*
- * O_NDELAY is our fallback.
- */
 #else
 #define SQUID_NONBLOCK O_NDELAY
 #endif
 
-/*
- * I'm sick of having to keep doing this ..
- */
-#define INDEXSD(i)   (&Config.cacheSwap.swapDirs[(i)])
-
-#define FD_READ_METHOD(fd, buf, len) (*fd_table[fd].read_method)(fd, buf, len)
-#define FD_WRITE_METHOD(fd, buf, len) (*fd_table[fd].write_method)(fd, buf, len)
+#define SWAP_DIR_SHIFT 24
+#define SWAP_FILE_MASK 0x00FFFFFF
 
 #endif /* SQUID_H */

@@ -5,17 +5,17 @@
  * DEBUG: section 58    HTTP Reply (Response)
  * AUTHOR: Alex Rousskov
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -145,12 +145,12 @@ httpReplyParse(HttpReply * rep, const char *buf, ssize_t end)
      */
     char *headers = memAllocate(MEM_4K_BUF);
     int success;
-    size_t s = XMIN(end + 1, 4096);
     /* reset current state, because we are not used in incremental fashion */
     httpReplyReset(rep);
-    /* put a string terminator.  s is how many bytes to touch in
-     * 'buf' including the terminating NULL. */
-    xstrncpy(headers, buf, s);
+    /* put a string terminator */
+    xstrncpy(headers, buf, 4096);
+    if (end >= 0 && end < 4096)
+	*(headers + end) = '\0';
     success = httpReplyParseStep(rep, headers, 0);
     memFree(headers, MEM_4K_BUF);
     return success == 1;
@@ -194,7 +194,7 @@ httpReplySwapOut(const HttpReply * rep, StoreEntry * e)
 }
 
 MemBuf
-httpPackedReply(http_version_t ver, http_status status, const char *ctype,
+httpPackedReply(double ver, http_status status, const char *ctype,
     int clen, time_t lmt, time_t expires)
 {
     HttpReply *rep = httpReplyCreate();
@@ -228,7 +228,7 @@ httpPacked304Reply(const HttpReply * rep)
 }
 
 void
-httpReplySetHeaders(HttpReply * reply, http_version_t ver, http_status status, const char *reason,
+httpReplySetHeaders(HttpReply * reply, double ver, http_status status, const char *reason,
     const char *ctype, int clen, time_t lmt, time_t expires)
 {
     HttpHeader *hdr;
@@ -259,10 +259,8 @@ void
 httpRedirectReply(HttpReply * reply, http_status status, const char *loc)
 {
     HttpHeader *hdr;
-    http_version_t ver;
     assert(reply);
-    httpBuildVersion(&ver, 1, 0);
-    httpStatusLineSet(&reply->sline, ver, status, httpStatusString(status));
+    httpStatusLineSet(&reply->sline, 1.0, status, httpStatusString(status));
     hdr = &reply->header;
     httpHeaderPutStr(hdr, HDR_SERVER, full_appname_string);
     httpHeaderPutTime(hdr, HDR_DATE, squid_curtime);
@@ -315,13 +313,6 @@ httpReplyHdrExpirationTime(const HttpReply * rep)
 	    if (rep->cache_control->max_age >= 0)
 		return squid_curtime;
 	}
-    }
-    if (Config.onoff.vary_ignore_expire &&
-	httpHeaderHas(&rep->header, HDR_VARY)) {
-	const time_t d = httpHeaderGetTime(&rep->header, HDR_DATE);
-	const time_t e = httpHeaderGetTime(&rep->header, HDR_EXPIRES);
-	if (d == e)
-	    return -1;
     }
     if (httpHeaderHas(&rep->header, HDR_EXPIRES)) {
 	const time_t e = httpHeaderGetTime(&rep->header, HDR_EXPIRES);

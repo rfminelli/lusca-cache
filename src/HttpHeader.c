@@ -5,17 +5,17 @@
  * DEBUG: section 55    HTTP Header
  * AUTHOR: Alex Rousskov
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -101,7 +101,6 @@ static const HttpHeaderFieldAttrs HeadersAttrs[] =
     {"Mime-Version", HDR_MIME_VERSION, ftStr},	/* for now */
     {"Pragma", HDR_PRAGMA, ftStr},
     {"Proxy-Authenticate", HDR_PROXY_AUTHENTICATE, ftStr},
-    {"Proxy-Authentication-Info", HDR_PROXY_AUTHENTICATION_INFO, ftStr},
     {"Proxy-Authorization", HDR_PROXY_AUTHORIZATION, ftStr},
     {"Proxy-Connection", HDR_PROXY_CONNECTION, ftStr},
     {"Public", HDR_PUBLIC, ftStr},
@@ -118,16 +117,11 @@ static const HttpHeaderFieldAttrs HeadersAttrs[] =
     {"Via", HDR_VIA, ftStr},	/* for now */
     {"Warning", HDR_WARNING, ftStr},	/* for now */
     {"WWW-Authenticate", HDR_WWW_AUTHENTICATE, ftStr},
-    {"Authentication-Info", HDR_AUTHENTICATION_INFO, ftStr},
     {"X-Cache", HDR_X_CACHE, ftStr},
     {"X-Cache-Lookup", HDR_X_CACHE_LOOKUP, ftStr},
     {"X-Forwarded-For", HDR_X_FORWARDED_FOR, ftStr},
     {"X-Request-URI", HDR_X_REQUEST_URI, ftStr},
     {"X-Squid-Error", HDR_X_SQUID_ERROR, ftStr},
-    {"Negotiate", HDR_NEGOTIATE, ftStr},
-#if X_ACCELERATOR_VARY
-    {"X-Accelerator-Vary", HDR_X_ACCELERATOR_VARY, ftStr},
-#endif
     {"Other:", HDR_OTHER, ftStr}	/* ':' will not allow matches */
 };
 static HttpHeaderFieldInfo *Headers = NULL;
@@ -155,12 +149,7 @@ static http_hdr_type ListHeadersArr[] =
     HDR_VIA,
     /* HDR_WARNING, */
     HDR_WWW_AUTHENTICATE,
-    HDR_AUTHENTICATION_INFO,
-    HDR_PROXY_AUTHENTICATION_INFO,
     /* HDR_EXPECT, HDR_TE, HDR_TRAILER */
-#if X_ACCELERATOR_VARY
-    HDR_X_ACCELERATOR_VARY,
-#endif
     HDR_X_FORWARDED_FOR
 };
 
@@ -194,9 +183,6 @@ static http_hdr_type ReplyHeadersArr[] =
     HDR_WARNING, HDR_PROXY_CONNECTION, HDR_X_CACHE,
     HDR_X_CACHE_LOOKUP,
     HDR_X_REQUEST_URI,
-#if X_ACCELERATOR_VARY
-    HDR_X_ACCELERATOR_VARY,
-#endif
     HDR_X_SQUID_ERROR
 };
 
@@ -616,51 +602,6 @@ httpHeaderGetList(const HttpHeader * hdr, http_hdr_type id)
     return s;
 }
 
-/* return a string or list of entries with the same id separated by ',' and ws */
-String
-httpHeaderGetStrOrList(const HttpHeader * hdr, http_hdr_type id)
-{
-    const char *str;
-    String s;
-
-    if (CBIT_TEST(ListHeadersMask, id))
-	s = httpHeaderGetList(hdr, id);
-    else {
-	str = httpHeaderGetStr(hdr, id);
-	stringInit(&s, str);
-    }
-    return s;
-}
-
-/*
- * returns a pointer to a specified entry if any 
- * note that we return one entry so it does not make much sense to ask for
- * "list" headers
- */
-String
-httpHeaderGetByName(const HttpHeader * hdr, const char *name)
-{
-    http_hdr_type id;
-    HttpHeaderPos pos = HttpHeaderInitPos;
-    HttpHeaderEntry *e;
-    String result = StringNull;
-
-    assert(hdr);
-    assert(name);
-
-    /* First try the quick path */
-    id = httpHeaderIdByNameDef(name, strlen(name));
-    if (id != -1)
-	return httpHeaderGetStrOrList(hdr, id);
-
-    /* Sorry, an unknown header name. Do linear search */
-    while ((e = httpHeaderGetEntry(hdr, &pos))) {
-	if (e->id == HDR_OTHER && strCaseCmp(e->name, name) == 0) {
-	    strListAdd(&result, strBuf(e->value), ',');
-	}
-    }
-    return result;
-}
 
 /* test if a field is present */
 int

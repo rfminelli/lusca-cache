@@ -5,17 +5,17 @@
  * DEBUG: section 0     WWW Client
  * AUTHOR: Harvest Derived
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -46,20 +46,17 @@ static void usage(const char *progname);
 static int Now(struct timeval *);
 static SIGHDLR catch;
 static SIGHDLR pipe_handler;
-static void set_our_signal(void);
-static ssize_t myread(int fd, void *buf, size_t len);
-static ssize_t mywrite(int fd, void *buf, size_t len);
+static void set_our_signal();
 static int put_fd;
 static char *put_file = NULL;
 static struct stat sb;
 int total_bytes = 0;
-int io_timeout = 120;
 
 static void
 usage(const char *progname)
 {
     fprintf(stderr,
-	"Usage: %s [-arsv] [-i IMS] [-h remote host] [-l local host] [-p port] [-m method] [-t count] [-I ping-interval] [-H 'strings'] [-T timeout] url\n"
+	"Usage: %s [-arsv] [-i IMS] [-h remote host] [-l local host] [-p port] [-m method] [-t count] [-I ping-interval] [-H 'strings'] url\n"
 	"Options:\n"
 	"    -P file      PUT request.\n"
 	"    -a           Do NOT include Accept: header.\n"
@@ -74,8 +71,7 @@ usage(const char *progname)
 	"    -t count     Trace count cache-hops\n"
 	"    -g count     Ping mode, \"count\" iterations (0 to loop until interrupted).\n"
 	"    -I interval  Ping interval in seconds (default 1 second).\n"
-	"    -H 'string'  Extra headers to send. Use '\\n' for new lines.\n"
-	"    -T timeout   Timeout value (seconds) for read/write operations.\n",
+	"    -H 'string'  Extra headers to send. Use '\\n' for new lines.\n",
 	progname, CACHE_HTTP_PORT);
     exit(1);
 }
@@ -89,6 +85,7 @@ main(int argc, char *argv[])
     int ping, pcount;
     int keep_alive = 0;
     int opt_noaccept = 0;
+    int opt_put = 0;
     int opt_verbose = 0;
     char *hostname, *localhost;
     char url[BUFSIZ], msg[BUFSIZ], buf[BUFSIZ];
@@ -193,6 +190,8 @@ main(int argc, char *argv[])
 	xfree(t);
     }
     if (put_file) {
+	opt_put = 1;
+	/*method = xstrdup("PUT"); */
 	put_fd = open(put_file, O_RDONLY);
 	set_our_signal();
 	if (put_fd < 0) {
@@ -200,9 +199,6 @@ main(int argc, char *argv[])
 		xstrerror());
 	    exit(-1);
 	}
-#if defined(_SQUID_CYGWIN_)
-	setmode(put_fd, O_BINARY);
-#endif
 	fstat(put_fd, &sb);
     }
     snprintf(msg, BUFSIZ, "%s %s HTTP/1.0\r\n", method, url);
@@ -279,7 +275,7 @@ main(int argc, char *argv[])
 	    exit(1);
 	}
 	/* Send the HTTP request */
-	bytesWritten = mywrite(conn, msg, strlen(msg));
+	bytesWritten = write(conn, msg, strlen(msg));
 	if (bytesWritten < 0) {
 	    perror("client: ERROR: write");
 	    exit(1);
@@ -290,8 +286,8 @@ main(int argc, char *argv[])
 	if (put_file) {
 	    int x;
 	    lseek(put_fd, 0, SEEK_SET);
-	    while ((x = myread(put_fd, buf, sizeof(buf))) > 0) {
-		x = mywrite(conn, buf, x);
+	    while ((x = read(put_fd, buf, sizeof(buf))) > 0) {
+		x = write(conn, buf, x);
 		total_bytes += x;
 		if (x <= 0)
 		    break;
@@ -301,7 +297,7 @@ main(int argc, char *argv[])
 	}
 	/* Read the data */
 
-	while ((len = myread(conn, buf, sizeof(buf))) > 0) {
+	while ((len = read(conn, buf, sizeof(buf))) > 0) {
 	    fsize += len;
 	    if (to_stdout)
 		fwrite(buf, len, 1, stdout);
@@ -433,18 +429,4 @@ set_our_signal(void)
     signal(SIGPIPE, pipe_handler);
 #endif
 
-}
-
-static ssize_t
-myread(int fd, void *buf, size_t len)
-{
-    alarm(io_timeout);
-    return read(fd, buf, len);
-}
-
-static ssize_t
-mywrite(int fd, void *buf, size_t len)
-{
-    alarm(io_timeout);
-    return write(fd, buf, len);
 }

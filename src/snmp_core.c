@@ -5,28 +5,28 @@
  * DEBUG: section 49    SNMP support
  * AUTHOR: Glenn Chisholm
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation; either version 2 of the License, or
  *  (at your option) any later version.
- *  
+ *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
- *  
+ *
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111, USA.
@@ -73,6 +73,7 @@ static oid_ParseFn *snmpTreeNext(oid * Current, snint CurrentLen, oid ** Next, s
 static oid_ParseFn *snmpTreeGet(oid * Current, snint CurrentLen);
 static mib_tree_entry *snmpTreeEntry(oid entry, snint len, mib_tree_entry * current);
 static mib_tree_entry *snmpTreeSiblingEntry(oid entry, snint len, mib_tree_entry * current);
+static oid *snmpOidDup(oid * A, snint ALen);
 static void snmpSnmplibDebug(int lvl, char *buf);
 
 
@@ -262,21 +263,12 @@ snmpInit(void)
 						LEN_SQ_NET + 2, snmp_netFqdnFn, static_Inst, 0)),
 					snmpAddNode(snmpCreateOid(LEN_SQ_NET + 1, SQ_NET, NET_DNS_CACHE),
 					    LEN_SQ_NET + 1, NULL, NULL, 3,
-#if USE_DNSSERVERS
 					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_DNS_CACHE, DNS_REQ),
 						LEN_SQ_NET + 2, snmp_netDnsFn, static_Inst, 0),
 					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_DNS_CACHE, DNS_REP),
 						LEN_SQ_NET + 2, snmp_netDnsFn, static_Inst, 0),
 					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_DNS_CACHE, DNS_SERVERS),
 						LEN_SQ_NET + 2, snmp_netDnsFn, static_Inst, 0))),
-#else
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_DNS_CACHE, DNS_REQ),
-						LEN_SQ_NET + 2, snmp_netIdnsFn, static_Inst, 0),
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_DNS_CACHE, DNS_REP),
-						LEN_SQ_NET + 2, snmp_netIdnsFn, static_Inst, 0),
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_DNS_CACHE, DNS_SERVERS),
-						LEN_SQ_NET + 2, snmp_netIdnsFn, static_Inst, 0))),
-#endif
 				    snmpAddNode(snmpCreateOid(LEN_SQ_MESH, SQ_MESH),
 					LEN_SQ_MESH, NULL, NULL, 2,
 					snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 1, SQ_MESH, 1),
@@ -459,7 +451,7 @@ snmpHandleUdp(int sock, void *not_used)
     memset(&from, '\0', from_len);
     memset(buf, '\0', SNMP_REQUEST_SIZE);
 
-    statCounter.syscalls.sock.recvfroms++;
+    Counter.syscalls.sock.recvfroms++;
 
     len = recvfrom(sock,
 	buf,
@@ -533,6 +525,7 @@ snmpConstructReponse(snmp_request_t * rq)
 {
     struct snmp_session Session;
     struct snmp_pdu *RespPDU;
+    int ret;
 
     debug(49, 5) ("snmpConstructReponse: Called.\n");
     RespPDU = snmpAgentResponse(rq->PDU);
@@ -541,7 +534,7 @@ snmpConstructReponse(snmp_request_t * rq)
 	Session.Version = SNMP_VERSION_1;
 	Session.community = rq->community;
 	Session.community_len = strlen((char *) rq->community);
-	snmp_build(&Session, RespPDU, rq->outbuf, &rq->outlen);
+	ret = snmp_build(&Session, RespPDU, rq->outbuf, &rq->outlen);
 	sendto(rq->sock, rq->outbuf, rq->outlen, 0, (struct sockaddr *) &rq->from, sizeof(rq->from));
 	snmp_free_pdu(RespPDU);
 	xfree(rq->outbuf);
@@ -644,7 +637,7 @@ static oid_ParseFn *
 snmpTreeGet(oid * Current, snint CurrentLen)
 {
     oid_ParseFn *Fn = NULL;
-    mib_tree_entry *mibTreeEntry = NULL;
+    mib_tree_entry *mibTreeEntry = NULL, *lastEntry = NULL;
     int count = 0;
 
     debug(49, 5) ("snmpTreeGet: Called\n");
@@ -656,6 +649,7 @@ snmpTreeGet(oid * Current, snint CurrentLen)
     if (Current[count] == mibTreeEntry->name[count]) {
 	count++;
 	while ((mibTreeEntry) && (count < CurrentLen) && (!mibTreeEntry->parsefunction)) {
+	    lastEntry = mibTreeEntry;
 	    mibTreeEntry = snmpTreeEntry(Current[count], count, mibTreeEntry);
 	    count++;
 	}
@@ -955,7 +949,7 @@ snmpAddNode(va_alist)
 
     va_start(args, children);
     entry = xmalloc(sizeof(mib_tree_entry));
-    entry->name = name;
+    entry->name = snmpOidDup(name, len);
     entry->len = len;
     entry->parsefunction = parsefunction;
     entry->instancefunction = instancefunction;
@@ -1006,7 +1000,6 @@ snmpCreateOid(va_alist)
     return (new_oid);
 }
 
-#if UNUSED_CODE
 /*
  * Allocate space for, and copy, an OID.  Returns new oid.
  */
@@ -1017,7 +1010,6 @@ snmpOidDup(oid * A, snint ALen)
     xmemcpy(Ans, A, (sizeof(oid) * ALen));
     return Ans;
 }
-#endif
 
 /*
  * Debug calls, prints out the OID for debugging purposes.

@@ -5,17 +5,17 @@
  * DEBUG: section 44    Peer Selection Algorithm
  * AUTHOR: Duane Wessels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -89,7 +89,6 @@ static void peerGetSomeNeighbor(ps_state *);
 static void peerGetSomeNeighborReplies(ps_state *);
 static void peerGetSomeDirect(ps_state *);
 static void peerGetSomeParent(ps_state *);
-static void peerGetAllParents(ps_state *);
 static void peerAddFwdServer(FwdServer **, peer *, hier_code);
 
 static void
@@ -109,7 +108,7 @@ peerSelectStateFree(ps_state * psstate)
     cbdataFree(psstate);
 }
 
-static int
+int
 peerSelectIcpPing(request_t * request, int direct, StoreEntry * entry)
 {
     int n;
@@ -134,12 +133,12 @@ peerSelect(request_t * request,
     PSC * callback,
     void *callback_data)
 {
-    ps_state *psstate;
+    ps_state *psstate = xcalloc(1, sizeof(ps_state));
     if (entry)
 	debug(44, 3) ("peerSelect: %s\n", storeUrl(entry));
     else
 	debug(44, 3) ("peerSelect: %s\n", RequestMethodStr[request->method]);
-    psstate = cbdataAlloc(ps_state);
+    cbdataAdd(psstate, cbdataXfree, 0);
     psstate->request = requestLink(request);
     psstate->entry = entry;
     psstate->callback = callback;
@@ -205,29 +204,22 @@ peerSelectCallback(ps_state * psstate)
 static int
 peerCheckNetdbDirect(ps_state * psstate)
 {
-    peer *p;
+    peer *p = whichPeer(&psstate->closest_parent_miss);
     int myrtt;
     int myhops;
-    if (psstate->direct == DIRECT_NO)
+    if (p == NULL)
 	return 0;
     myrtt = netdbHostRtt(psstate->request->host);
     debug(44, 3) ("peerCheckNetdbDirect: MY RTT = %d msec\n", myrtt);
-    debug(44, 3) ("peerCheckNetdbDirect: minimum_direct_rtt = %d msec\n",
-	Config.minDirectRtt);
-    if (myrtt && myrtt <= Config.minDirectRtt)
+    debug(44, 3) ("peerCheckNetdbDirect: closest_parent_miss RTT = %d msec\n",
+	psstate->ping.p_rtt);
+    if (myrtt && myrtt < psstate->ping.p_rtt)
 	return 1;
     myhops = netdbHostHops(psstate->request->host);
     debug(44, 3) ("peerCheckNetdbDirect: MY hops = %d\n", myhops);
     debug(44, 3) ("peerCheckNetdbDirect: minimum_direct_hops = %d\n",
 	Config.minDirectHops);
     if (myhops && myhops <= Config.minDirectHops)
-	return 1;
-    p = whichPeer(&psstate->closest_parent_miss);
-    if (p == NULL)
-	return 0;
-    debug(44, 3) ("peerCheckNetdbDirect: closest_parent_miss RTT = %d msec\n",
-	psstate->ping.p_rtt);
-    if (myrtt && myrtt <= psstate->ping.p_rtt)
 	return 1;
     return 0;
 }
@@ -265,8 +257,6 @@ peerSelectFoo(ps_state * ps)
 	    ps->direct = DIRECT_NO;
 	} else if (request->flags.loopdetect) {
 	    ps->direct = DIRECT_YES;
-	} else if (peerCheckNetdbDirect(ps)) {
-	    ps->direct = DIRECT_YES;
 	} else {
 	    ps->direct = DIRECT_MAYBE;
 	}
@@ -283,23 +273,11 @@ peerSelectFoo(ps_state * ps)
 	peerGetSomeNeighborReplies(ps);
 	entry->ping_status = PING_DONE;
     }
-    switch (ps->direct) {
-    case DIRECT_YES:
+    if (Config.onoff.prefer_direct)
 	peerGetSomeDirect(ps);
-	break;
-    case DIRECT_NO:
-	peerGetSomeParent(ps);
-	peerGetAllParents(ps);
-	break;
-    default:
-	if (Config.onoff.prefer_direct)
-	    peerGetSomeDirect(ps);
-	if (request->flags.hierarchical || !Config.onoff.nonhierarchical_direct)
-	    peerGetSomeParent(ps);
-	if (!Config.onoff.prefer_direct)
-	    peerGetSomeDirect(ps);
-	break;
-    }
+    peerGetSomeParent(ps);
+    if (!Config.onoff.prefer_direct)
+	peerGetSomeDirect(ps);
     peerSelectCallback(ps);
 }
 
@@ -326,7 +304,7 @@ peerGetSomeNeighbor(ps_state * ps)
 	return;
     }
 #if USE_CACHE_DIGESTS
-    if ((p = neighborsDigestSelect(request))) {
+    if ((p = neighborsDigestSelect(request, entry))) {
 	if (neighborType(p, request) == PEER_PARENT)
 	    code = CD_PARENT_HIT;
 	else
@@ -379,10 +357,11 @@ peerGetSomeNeighbor(ps_state * ps)
 static void
 peerGetSomeNeighborReplies(ps_state * ps)
 {
+    StoreEntry *entry = ps->entry;
     request_t *request = ps->request;
     peer *p = NULL;
     hier_code code = HIER_NONE;
-    assert(ps->entry->ping_status == PING_WAITING);
+    assert(entry->ping_status == PING_WAITING);
     assert(ps->direct != DIRECT_YES);
     if (peerCheckNetdbDirect(ps)) {
 	code = CLOSEST_DIRECT;
@@ -453,35 +432,6 @@ peerGetSomeParent(ps_state * ps)
     if (code != HIER_NONE) {
 	debug(44, 3) ("peerSelect: %s/%s\n", hier_strings[code], p->host);
 	peerAddFwdServer(&ps->servers, p, code);
-    }
-}
-
-/* Adds alive parents. Used as a last resort for never_direct.
- */
-static void
-peerGetAllParents(ps_state * ps)
-{
-    peer *p;
-    request_t *request = ps->request;
-    /* Add all alive parents */
-    for (p = Config.peers; p; p = p->next) {
-	/* XXX: neighbors.c lacks a public interface for enumerating
-	 * parents to a request so we have to dig some here..
-	 */
-	if (neighborType(p, request) != PEER_PARENT)
-	    continue;
-	if (!peerHTTPOkay(p, request))
-	    continue;
-	debug(15, 3) ("peerGetAllParents: adding alive parent %s\n", p->host);
-	peerAddFwdServer(&ps->servers, p, ANY_OLD_PARENT);
-    }
-    /* XXX: should add dead parents here, but it is currently
-     * not possible to find out which parents are dead or which
-     * simply are not configured to handle the request.
-     */
-    /* Add default parent as a last resort */
-    if ((p = getDefaultParent(request))) {
-	peerAddFwdServer(&ps->servers, p, DEFAULT_PARENT);
     }
 }
 

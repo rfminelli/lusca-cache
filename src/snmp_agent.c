@@ -5,17 +5,17 @@
  * DEBUG: section 49     SNMP Interface
  * AUTHOR: Kostas Anagnostakis
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -36,6 +36,8 @@
 
 #include "squid.h"
 #include "cache_snmp.h"
+
+extern StatCounters *snmpStatGet(int);
 
 /************************************************************************
 
@@ -255,7 +257,7 @@ snmp_prfSysFn(variable_list * Var, snint * ErrP)
 	break;
     case PERF_SYS_MEMUSAGE:
 	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    (snint) statMemoryAccounted() >> 10,
+	    (snint) memTotalAllocated() >> 10,
 	    ASN_INTEGER);
 	break;
     case PERF_SYS_CPUTIME:
@@ -277,14 +279,17 @@ snmp_prfSysFn(variable_list * Var, snint * ErrP)
 	    ASN_INTEGER);
 	break;
     case PERF_SYS_CURLRUEXP:
-	/* No global LRU info anymore */
 	Answer = snmp_var_new_integer(Var->name, Var->name_length,
+#if !HEAP_REPLACEMENT
+	    (snint) (storeExpiredReferenceAge() * 100),
+#else
 	    0,
+#endif
 	    SMI_TIMETICKS);
 	break;
     case PERF_SYS_CURUNLREQ:
 	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    (snint) statCounter.unlink.requests,
+	    (snint) Counter.unlink.requests,
 	    SMI_COUNTER32);
 	break;
     case PERF_SYS_CURUNUSED_FD:
@@ -294,7 +299,7 @@ snmp_prfSysFn(variable_list * Var, snint * ErrP)
 	break;
     case PERF_SYS_CURRESERVED_FD:
 	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    (snint) RESERVED_FD,
+	    (snint) Number_FD,
 	    SMI_GAUGE32);
 	break;
     case PERF_SYS_NUMOBJCNT:
@@ -324,67 +329,67 @@ snmp_prfProtoFn(variable_list * Var, snint * ErrP)
 	switch (Var->name[LEN_SQ_PRF + 2]) {
 	case PERF_PROTOSTAT_AGGR_HTTP_REQ:
 	    Answer = snmp_var_new_integer(Var->name, Var->name_length,
-		(snint) statCounter.client_http.requests,
+		(snint) Counter.client_http.requests,
 		SMI_COUNTER32);
 	    break;
 	case PERF_PROTOSTAT_AGGR_HTTP_HITS:
 	    Answer = snmp_var_new_integer(Var->name, Var->name_length,
-		(snint) statCounter.client_http.hits,
+		(snint) Counter.client_http.hits,
 		SMI_COUNTER32);
 	    break;
 	case PERF_PROTOSTAT_AGGR_HTTP_ERRORS:
 	    Answer = snmp_var_new_integer(Var->name, Var->name_length,
-		(snint) statCounter.client_http.errors,
+		(snint) Counter.client_http.errors,
 		SMI_COUNTER32);
 	    break;
 	case PERF_PROTOSTAT_AGGR_HTTP_KBYTES_IN:
 	    Answer = snmp_var_new_integer(Var->name, Var->name_length,
-		(snint) statCounter.client_http.kbytes_in.kb,
+		(snint) Counter.client_http.kbytes_in.kb,
 		SMI_COUNTER32);
 	    break;
 	case PERF_PROTOSTAT_AGGR_HTTP_KBYTES_OUT:
 	    Answer = snmp_var_new_integer(Var->name, Var->name_length,
-		(snint) statCounter.client_http.kbytes_out.kb,
+		(snint) Counter.client_http.kbytes_out.kb,
 		SMI_COUNTER32);
 	    break;
 	case PERF_PROTOSTAT_AGGR_ICP_S:
 	    Answer = snmp_var_new_integer(Var->name, Var->name_length,
-		(snint) statCounter.icp.pkts_sent,
+		(snint) Counter.icp.pkts_sent,
 		SMI_COUNTER32);
 	    break;
 	case PERF_PROTOSTAT_AGGR_ICP_R:
 	    Answer = snmp_var_new_integer(Var->name, Var->name_length,
-		(snint) statCounter.icp.pkts_recv,
+		(snint) Counter.icp.pkts_recv,
 		SMI_COUNTER32);
 	    break;
 	case PERF_PROTOSTAT_AGGR_ICP_SKB:
 	    Answer = snmp_var_new_integer(Var->name, Var->name_length,
-		(snint) statCounter.icp.kbytes_sent.kb,
+		(snint) Counter.icp.kbytes_sent.kb,
 		SMI_COUNTER32);
 	    break;
 	case PERF_PROTOSTAT_AGGR_ICP_RKB:
 	    Answer = snmp_var_new_integer(Var->name, Var->name_length,
-		(snint) statCounter.icp.kbytes_recv.kb,
+		(snint) Counter.icp.kbytes_recv.kb,
 		SMI_COUNTER32);
 	    break;
 	case PERF_PROTOSTAT_AGGR_REQ:
 	    Answer = snmp_var_new_integer(Var->name, Var->name_length,
-		(snint) statCounter.server.all.requests,
+		(snint) Counter.server.all.requests,
 		SMI_INTEGER);
 	    break;
 	case PERF_PROTOSTAT_AGGR_ERRORS:
 	    Answer = snmp_var_new_integer(Var->name, Var->name_length,
-		(snint) statCounter.server.all.errors,
+		(snint) Counter.server.all.errors,
 		SMI_INTEGER);
 	    break;
 	case PERF_PROTOSTAT_AGGR_KBYTES_IN:
 	    Answer = snmp_var_new_integer(Var->name, Var->name_length,
-		(snint) statCounter.server.all.kbytes_in.kb,
+		(snint) Counter.server.all.kbytes_in.kb,
 		SMI_COUNTER32);
 	    break;
 	case PERF_PROTOSTAT_AGGR_KBYTES_OUT:
 	    Answer = snmp_var_new_integer(Var->name, Var->name_length,
-		(snint) statCounter.server.all.kbytes_out.kb,
+		(snint) Counter.server.all.kbytes_out.kb,
 		SMI_COUNTER32);
 	    break;
 	case PERF_PROTOSTAT_AGGR_CURSWAP:
@@ -394,7 +399,7 @@ snmp_prfProtoFn(variable_list * Var, snint * ErrP)
 	    break;
 	case PERF_PROTOSTAT_AGGR_CLIENTS:
 	    Answer = snmp_var_new_integer(Var->name, Var->name_length,
-		(snint) statCounter.client_http.clients,
+		(snint) Counter.client_http.clients,
 		SMI_COUNTER32);
 	    break;
 	default:

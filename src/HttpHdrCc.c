@@ -5,17 +5,17 @@
  * DEBUG: section 65    HTTP Cache Control Header
  * AUTHOR: Alex Rousskov
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -48,7 +48,6 @@ static const HttpHeaderFieldAttrs CcAttrs[CC_ENUM_END] =
     {"only-if-cached", CC_ONLY_IF_CACHED},
     {"max-age", CC_MAX_AGE},
     {"s-maxage", CC_S_MAXAGE},
-    {"max-stale", CC_MAX_STALE},
     {"Other,", CC_OTHER}	/* ',' will protect from matches */
 };
 HttpHeaderFieldInfo *CcFieldsInfo = NULL;
@@ -78,7 +77,7 @@ HttpHdrCc *
 httpHdrCcCreate(void)
 {
     HttpHdrCc *cc = memAllocate(MEM_HTTP_HDR_CC);
-    cc->max_age = cc->s_maxage = cc->max_stale = -1;
+    cc->max_age = cc->s_maxage = -1;
     return cc;
 }
 
@@ -141,12 +140,6 @@ httpHdrCcParseInit(HttpHdrCc * cc, const String * str)
 		EBIT_CLR(cc->mask, type);
 	    }
 	    break;
-	case CC_MAX_STALE:
-	    if (!p || !httpHeaderParseInt(p, &cc->max_stale)) {
-		debug(65, 2) ("cc: max-stale directive is valid without value\n");
-		cc->max_stale = -1;
-	    }
-	    break;
 	default:
 	    /* note that we ignore most of '=' specs */
 	    break;
@@ -171,7 +164,6 @@ httpHdrCcDup(const HttpHdrCc * cc)
     dup->mask = cc->mask;
     dup->max_age = cc->max_age;
     dup->s_maxage = cc->s_maxage;
-    dup->max_stale = cc->max_stale;
     return dup;
 }
 
@@ -194,9 +186,6 @@ httpHdrCcPackInto(const HttpHdrCc * cc, Packer * p)
 	    if (flag == CC_S_MAXAGE)
 		packerPrintf(p, "=%d", (int) cc->s_maxage);
 
-	    if (flag == CC_MAX_STALE)
-		packerPrintf(p, "=%d", (int) cc->max_stale);
-
 	    pcount++;
 	}
     }
@@ -210,8 +199,6 @@ httpHdrCcJoinWith(HttpHdrCc * cc, const HttpHdrCc * new_cc)
 	cc->max_age = new_cc->max_age;
     if (cc->s_maxage < 0)
 	cc->s_maxage = new_cc->s_maxage;
-    if (cc->max_stale < 0)
-	cc->max_stale = new_cc->max_stale;
     cc->mask |= new_cc->mask;
 }
 

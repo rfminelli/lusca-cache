@@ -3,17 +3,17 @@
  * $Id$
  *
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -31,9 +31,6 @@
  *
  */
 
-#include "config.h"
-#include "splay.h"
-
 struct _dlink_node {
     void *data;
     dlink_node *prev;
@@ -45,20 +42,17 @@ struct _dlink_list {
     dlink_node *tail;
 };
 
-struct _acl_user_data {
-    splayNode *names;
-    struct {
-	unsigned int case_insensitive:1;
-	unsigned int required:1;
-    } flags;
-};
-
-
 struct _acl_ip_data {
     struct in_addr addr1;	/* if addr2 non-zero then its a range */
     struct in_addr addr2;
     struct in_addr mask;
     acl_ip_data *next;		/* used for parsing, not for storing */
+};
+
+struct _acl_snmp_comm {
+    char *name;
+    void *community;
+    acl_snmp_comm *next;
 };
 
 struct _acl_time_data {
@@ -73,101 +67,16 @@ struct _acl_name_list {
     acl_name_list *next;
 };
 
-struct _acl_proxy_auth_match_cache {
-    dlink_node link;
-    int matchrv;
-    void *acl_data;
-};
-
-struct _auth_user_hash_pointer {
+struct _acl_proxy_auth_user {
     /* first two items must be same as hash_link */
-    char *key;
-    auth_user_hash_pointer *next;
-    auth_user_t *auth_user;
-    dlink_node link;		/* other hash entries that point to the same auth_user */
-};
-
-struct _auth_user_t {
+    char *user;
+    acl_proxy_auth_user *next;
     /* extra fields for proxy_auth */
-    /* this determines what scheme owns the user data. */
-    auth_type_t auth_type;
-    /* the index +1 in the authscheme_list to the authscheme entry */
-    int auth_module;
-    /* we only have one username associated with a given auth_user struct */
-    auth_user_hash_pointer *usernamehash;
-    /* we may have many proxy-authenticate strings that decode to the same user */
-    dlink_list proxy_auth_list;
-    dlink_list proxy_match_cache;
-    struct {
-	unsigned int credentials_ok:2;	/*0=unchecked,1=ok,2=failed */
-    } flags;
+    char *passwd;
+    int passwd_ok;		/* 1 = passwd checked OK */
     long expiretime;
-    /* IP addr this user authenticated from */
-    struct in_addr ipaddr;
+    struct in_addr ipaddr;	/* IP addr this user authenticated from */
     time_t ip_expiretime;
-    /* how many references are outstanding to this instance */
-    size_t references;
-    /* the auth scheme has it's own private data area */
-    void *scheme_data;
-    /* the auth_user_request structures that link to this. Yes it could be a splaytree
-     * but how many requests will a single username have in parallel? */
-    dlink_list requests;
-};
-
-struct _auth_user_request_t {
-    /* this is the object passed around by client_side and acl functions */
-    /* it has request specific data, and links to user specific data */
-    /* the user */
-    auth_user_t *auth_user;
-    /* return a message on the 407 error pages */
-    char *message;
-    /* any scheme specific request related data */
-    void *scheme_data;
-    /* how many 'processes' are working on this data */
-    size_t references;
-};
-
-
-/*
- * This defines an auth scheme module
- */
-
-struct _authscheme_entry {
-    char *typestr;
-    AUTHSACTIVE *Active;
-    AUTHSADDHEADER *AddHeader;
-    AUTHSADDTRAILER *AddTrailer;
-    AUTHSAUTHED *authenticated;
-    AUTHSAUTHUSER *authAuthenticate;
-    AUTHSCONFIGURED *configured;
-    AUTHSDUMP *dump;
-    AUTHSFIXERR *authFixHeader;
-    AUTHSFREE *FreeUser;
-    AUTHSFREECONFIG *freeconfig;
-    AUTHSUSERNAME *authUserUsername;
-    AUTHSONCLOSEC *oncloseconnection;	/*optional */
-    AUTHSDECODE *decodeauth;
-    AUTHSDIRECTION *getdirection;
-    AUTHSPARSE *parse;
-    AUTHSINIT *init;
-    AUTHSREQFREE *requestFree;
-    AUTHSSHUTDOWN *donefunc;
-    AUTHSSTART *authStart;
-    AUTHSSTATS *authStats;
-};
-
-/*
- * This is a configured auth scheme
- */
-
-/* private data types */
-struct _authScheme {
-    /* pointer to the authscheme_list's string entry */
-    char *typestr;
-    /* the scheme id in the authscheme_list */
-    int Id;
-    /* the scheme's configuration details. */
-    void *scheme_data;
 };
 
 struct _acl_deny_info_list {
@@ -190,16 +99,6 @@ struct _String {
     unsigned short int size;	/* buffer size; 64K limit */
     unsigned short int len;	/* current length  */
     char *buf;
-};
-
-struct _header_mangler {
-    acl_access *access_list;
-    char *replacement;
-};
-
-struct _http_version_t {
-    unsigned int major;
-    unsigned int minor;
 };
 
 #if SQUID_SNMP
@@ -247,17 +146,22 @@ struct _aclCheck_t {
     struct in_addr my_addr;
     unsigned short my_port;
     request_t *request;
-    /* for acls that look at reply data */
-    HttpReply *reply;
-    ConnStateData *conn;	/* hack for ident and NTLM */
-    char rfc931[USER_IDENT_SZ];
-    auth_user_request_t *auth_user_request;
+#if USE_IDENT
+    ConnStateData *conn;	/* hack for ident */
+    char ident[USER_IDENT_SZ];
+#endif
+    acl_proxy_auth_user *auth_user;
     acl_lookup_state state[ACL_ENUM_MAX];
 #if SQUID_SNMP
     char *snmp_community;
 #endif
     PF *callback;
     void *callback_data;
+};
+
+struct _aio_result_t {
+    int aio_return;
+    int aio_errno;
 };
 
 struct _wordlist {
@@ -292,16 +196,6 @@ struct _sockaddr_in_list {
     sockaddr_in_list *next;
 };
 
-#if USE_SSL
-struct _https_port_list {
-    https_port_list *next;
-    struct sockaddr_in s;
-    char *cert;
-    char *key;
-};
-
-#endif
-
 #if DELAY_POOLS
 struct _delaySpec {
     int restore_bps;
@@ -327,11 +221,6 @@ struct _delayConfig {
 
 #endif
 
-struct _RemovalPolicySettings {
-    char *type;
-    wordlist *args;
-};
-
 struct _SquidConfig {
     struct {
 	size_t maxSize;
@@ -349,8 +238,14 @@ struct _SquidConfig {
 	int pct;
 	size_t max;
     } quickAbort;
-    RemovalPolicySettings *replPolicy;
-    RemovalPolicySettings *memPolicy;
+#if HEAP_REPLACEMENT
+    char *replPolicy;
+#else
+    /* 
+     * Note: the non-LRU policies do not use referenceAge, but we cannot
+     * remove it until we find out how to implement #else for cf_parser.c
+     */
+#endif
     time_t referenceAge;
     time_t negativeTtl;
     time_t negativeDnsTtl;
@@ -371,10 +266,6 @@ struct _SquidConfig {
 #if USE_IDENT
 	time_t ident;
 #endif
-#if !USE_DNSSERVERS
-	time_t idns_retransmit;
-	time_t idns_query;
-#endif
     } Timeout;
     size_t maxRequestHeaderSize;
     size_t maxRequestBodySize;
@@ -390,9 +281,6 @@ struct _SquidConfig {
     } Port;
     struct {
 	sockaddr_in_list *http;
-#if USE_SSL
-	https_port_list *https;
-#endif
     } Sockaddr;
 #if SQUID_SNMP
     struct {
@@ -414,15 +302,7 @@ struct _SquidConfig {
 	char *access;
 	char *store;
 	char *swap;
-#if USE_USERAGENT_LOG
 	char *useragent;
-#endif
-#if USE_REFERER_LOG
-	char *referer;
-#endif
-#if WIP_FWD_LOG
-	char *forward;
-#endif
 	int rotateNumber;
     } Log;
     char *adminEmail;
@@ -433,23 +313,18 @@ struct _SquidConfig {
 	char *dnsserver;
 #endif
 	wordlist *redirect;
-#if USE_ICMP
+	wordlist *authenticate;
 	char *pinger;
-#endif
-#if USE_UNLINKD
 	char *unlinkd;
-#endif
-	char *diskd;
     } Program;
 #if USE_DNSSERVERS
     int dnsChildren;
 #endif
     int redirectChildren;
-    time_t authenticateGCInterval;
-    time_t authenticateTTL;
-    time_t authenticateIpTTL;
+    int authenticateChildren;
+    int authenticateTTL;
+    int authenticateIpTTL;
     struct {
-	int single_host;
 	char *host;
 	u_short port;
     } Accel;
@@ -458,7 +333,6 @@ struct _SquidConfig {
     char *debugOptions;
     char *pidFilename;
     char *mimeTablePathname;
-    char *etcHostsPath;
     char *visibleHostname;
     char *uniqueHostname;
     wordlist *hostnameAliases;
@@ -496,14 +370,12 @@ struct _SquidConfig {
 	int size;
     } fqdncache;
     int minDirectHops;
-    int minDirectRtt;
     cachemgr_passwd *passwd_list;
     struct {
 	int objectsPerBucket;
 	size_t avgObjectSize;
 	size_t maxObjectSize;
 	size_t minObjectSize;
-	size_t maxInMemObjSize;
     } Store;
     struct {
 	int high;
@@ -537,7 +409,6 @@ struct _SquidConfig {
 	int offline;
 	int redir_rewrites_host;
 	int prefer_direct;
-	int nonhierarchical_direct;
 	int strip_query_terms;
 	int redirector_bypass;
 	int ignore_unknown_nameservers;
@@ -546,11 +417,6 @@ struct _SquidConfig {
 #if USE_CACHE_DIGESTS
 	int digest_generation;
 #endif
-	int log_ip_on_direct;
-	int authenticateIpTTLStrict;
-	int ie_refresh;
-	int vary_ignore_expire;
-	int pipeline_prefetch;
     } onoff;
     acl *aclList;
     struct {
@@ -569,14 +435,9 @@ struct _SquidConfig {
 	acl_access *identLookup;
 #endif
 	acl_access *redirector;
-	acl_access *reply;
     } accessList;
     acl_deny_info_list *denyInfoList;
-    struct _authConfig {
-	authScheme *schemes;
-	int n_allocated;
-	int n_configured;
-    } authConfig;
+    char *proxyAuthRealm;
     struct {
 	size_t list_width;
 	int list_wrap;
@@ -589,6 +450,7 @@ struct _SquidConfig {
 	int n_allocated;
 	int n_configured;
     } cacheSwap;
+    char *fake_ua;
     struct {
 	char *directory;
     } icons;
@@ -622,7 +484,7 @@ struct _SquidConfig {
 	char *encode_key;
     } mcast_miss;
 #endif
-    header_mangler header_access[HDR_ENUM_END];
+    HttpHeaderMask anonymize_headers;
     char *coredump_dir;
     char *chroot_dir;
 #if USE_CACHE_DIGESTS
@@ -634,20 +496,6 @@ struct _SquidConfig {
 	int rebuild_chunk_percentage;
     } digest;
 #endif
-#if USE_SSL
-    struct {
-	char *certificate;
-	char *key;
-	int version;
-    } SSL;
-#endif
-    wordlist *ext_methods;
-    struct {
-	int high_rptm;
-	int high_pf;
-	size_t high_memory;
-    } warnings;
-    char *store_dir_select_algorithm;
 };
 
 struct _SquidConfig2 {
@@ -688,6 +536,12 @@ struct _dnsserver_t {
     char ip_inbuf[DNS_INBUF_SZ];
     struct timeval dispatch_time;
     void *data;
+};
+
+struct _dnsStatData {
+    int requests;
+    int replies;
+    int hist[DefaultDnsChildrenMax];
 };
 
 struct _dwrite_q {
@@ -748,11 +602,6 @@ struct _fde {
     DEFER *defer_check;		/* check if we should defer read */
     void *defer_data;
     CommWriteStateData *rwstate;	/* State data for comm_write */
-    READ_HANDLER *read_method;
-    WRITE_HANDLER *write_method;
-#if USE_SSL
-    SSL *ssl;
-#endif
 };
 
 struct _fileMap {
@@ -787,7 +636,7 @@ struct _Packer {
 /* http status line */
 struct _HttpStatusLine {
     /* public, read only */
-    http_version_t version;
+    float version;
     const char *reason;		/* points to a _constant_ string (default or supplied), never free()d */
     http_status status;
 };
@@ -812,7 +661,6 @@ struct _HttpHdrCc {
     int mask;
     int max_age;
     int s_maxage;
-    int max_stale;
 };
 
 /* http byte-range-spec */
@@ -922,7 +770,6 @@ struct _HttpStateData {
     StoreEntry *entry;
     request_t *request;
     char *reply_hdr;
-    size_t reply_hdr_size;
     int reply_hdr_state;
     peer *peer;			/* peer request made to */
     int eof;			/* reached end-of-object? */
@@ -975,7 +822,7 @@ struct _AccessLogEntry {
 	method_t method;
 	int code;
 	const char *content_type;
-	http_version_t version;
+	float version;
     } http;
     struct {
 	icp_opcode opcode;
@@ -985,8 +832,7 @@ struct _AccessLogEntry {
 	size_t size;
 	log_type code;
 	int msec;
-	const char *rfc931;
-	const char *authuser;
+	const char *ident;
     } cache;
     struct {
 	char *request;
@@ -1001,8 +847,6 @@ struct _AccessLogEntry {
 struct _clientHttpRequest {
     ConnStateData *conn;
     request_t *request;		/* Parsed URL ... */
-    store_client *sc;		/* The store_client we're using */
-    store_client *old_sc;	/* ... for entry to be validated */
     char *uri;
     char *log_uri;
     struct {
@@ -1017,8 +861,9 @@ struct _clientHttpRequest {
 #if USE_CACHE_DIGESTS
     const char *lookup_type;	/* temporary hack: storeGet() result: HIT/MISS/NONE */
 #endif
+    http_status http_code;
     struct timeval start;
-    http_version_t http_ver;
+    float http_ver;
     int redirect_state;
     aclCheck_t *acl_checklist;	/* need ptr back so we can unreg if needed */
     clientHttpRequest *next;
@@ -1027,7 +872,6 @@ struct _clientHttpRequest {
 	unsigned int accel:1;
 	unsigned int internal:1;
 	unsigned int done_copying:1;
-	unsigned int purging:1;
     } flags;
     struct {
 	http_status status;
@@ -1043,25 +887,13 @@ struct _ConnStateData {
 	off_t offset;
 	size_t size;
     } in;
-    struct {
-	size_t size_left;	/* How much body left to process */
-	request_t *request;	/* Parameters passed to clientReadBody */
-	char *buf;
-	size_t bufsize;
-	CBCB *callback;
-	void *cbdata;
-    } body;
-    auth_type_t auth_type;	/* Is this connection based authentication ? if so 
-				 * what type it is. */
-    /* note this is ONLY connection based because NTLM is against HTTP spec */
-    /* the user details for connection based authentication */
-    auth_user_request_t *auth_user_request;
     clientHttpRequest *chr;
     struct sockaddr_in peer;
     struct sockaddr_in me;
     struct in_addr log_addr;
-    char rfc931[USER_IDENT_SZ];
+    char ident[USER_IDENT_SZ];
     int nrequests;
+    int persistent;
     struct {
 	int n;
 	time_t until;
@@ -1074,6 +906,49 @@ struct _ipcache_addrs {
     unsigned char count;
     unsigned char cur;
     unsigned char badcount;
+};
+
+struct _ip_pending {
+    IPH *handler;
+    void *handlerData;
+    ip_pending *next;
+};
+
+struct _ipcache_entry {
+    /* first two items must be equivalent to hash_link */
+    char *name;
+    ipcache_entry *next;
+    time_t lastref;
+    time_t expires;
+    ipcache_addrs addrs;
+    ip_pending *pending_head;
+    char *error_message;
+    struct timeval request_time;
+    dlink_node lru;
+    u_char locks;
+    ipcache_status_t status:3;
+};
+
+struct _fqdn_pending {
+    FQDNH *handler;
+    void *handlerData;
+    fqdn_pending *next;
+};
+
+struct _fqdncache_entry {
+    /* first two items must be equivalent to hash_link */
+    char *name;
+    fqdncache_entry *next;
+    time_t lastref;
+    time_t expires;
+    unsigned char name_count;
+    char *names[FQDN_MAX_NAMES + 1];
+    fqdn_pending *pending_head;
+    char *error_message;
+    struct timeval request_time;
+    dlink_node lru;
+    unsigned char locks;
+    fqdncache_status_t status:3;
 };
 
 struct _domain_ping {
@@ -1111,8 +986,6 @@ struct _DigestFetchState {
     PeerDigest *pd;
     StoreEntry *entry;
     StoreEntry *old_entry;
-    store_client *sc;
-    store_client *old_sc;
     request_t *request;
     int offset;
     int mask_offset;
@@ -1180,13 +1053,9 @@ struct _peer {
 	int ignored_replies;
 	int n_keepalives_sent;
 	int n_keepalives_recv;
-	time_t probe_start;
 	time_t last_query;
 	time_t last_reply;
-	time_t last_connect_failure;
-	time_t last_connect_probe;
 	int logged_state;	/* so we can print dead/revived msgs */
-	int conn_open;		/* current opened connections */
     } stats;
     struct {
 	int version;
@@ -1219,7 +1088,6 @@ struct _peer {
 #if DELAY_POOLS
 	unsigned int no_delay:1;
 #endif
-	unsigned int allow_miss:1;
     } options;
     int weight;
     struct {
@@ -1238,39 +1106,41 @@ struct _peer {
     char *digest_url;
 #endif
     int tcp_up;			/* 0 if a connect() fails */
+    time_t last_fail_time;
     struct in_addr addresses[10];
     int n_addresses;
     int rr_count;
-    int rr_lastcount;
     peer *next;
     int test_fd;
 #if USE_CARP
     struct {
-	unsigned int hash;
-	double load_multiplier;
+	unsigned long hash;
+	unsigned long load_multiplier;
 	float load_factor;
     } carp;
 #endif
     char *login;		/* Proxy authorization */
     time_t connect_timeout;
-    int max_conn;
 };
 
 struct _net_db_name {
-    hash_link hash;		/* must be first */
+    char *name;
+    net_db_name *htbl_next;
     net_db_name *next;
     netdbEntry *net_db_entry;
 };
 
 struct _net_db_peer {
-    const char *peername;
+    char *peername;
     double hops;
     double rtt;
     time_t expires;
 };
 
 struct _netdbEntry {
-    hash_link hash;		/* must be first */
+    /* first two items must be equivalent to hash_link */
+    char *key;
+    netdbEntry *next;
     char network[16];
     int pings_sent;
     int pings_recv;
@@ -1316,7 +1186,6 @@ struct _ps_state {
     aclCheck_t *acl_checklist;
 };
 
-#if USE_ICMP
 struct _pingerEchoData {
     struct in_addr to;
     unsigned char opcode;
@@ -1332,8 +1201,6 @@ struct _pingerReplyData {
     int psize;
     char payload[PINGER_PAYLOAD_SZ];
 };
-
-#endif
 
 struct _icp_common_t {
     unsigned char opcode;	/* opcode */
@@ -1383,46 +1250,12 @@ struct _store_client {
 	unsigned int store_copying:1;
 	unsigned int copy_event_pending:1;
     } flags;
+    store_client *next;
 #if DELAY_POOLS
     delay_id delay_id;
 #endif
-    dlink_node node;
 };
 
-
-/* Removal policies */
-
-struct _RemovalPolicyNode {
-    void *data;
-};
-
-struct _RemovalPolicy {
-    char *_type;
-    void *_data;
-    void (*Free) (RemovalPolicy * policy);
-    void (*Add) (RemovalPolicy * policy, StoreEntry * entry, RemovalPolicyNode * node);
-    void (*Remove) (RemovalPolicy * policy, StoreEntry * entry, RemovalPolicyNode * node);
-    void (*Referenced) (RemovalPolicy * policy, const StoreEntry * entry, RemovalPolicyNode * node);
-    void (*Dereferenced) (RemovalPolicy * policy, const StoreEntry * entry, RemovalPolicyNode * node);
-    RemovalPolicyWalker *(*WalkInit) (RemovalPolicy * policy);
-    RemovalPurgeWalker *(*PurgeInit) (RemovalPolicy * policy, int max_scan);
-    void (*Stats) (RemovalPolicy * policy, StoreEntry * entry);
-};
-
-struct _RemovalPolicyWalker {
-    RemovalPolicy *_policy;
-    void *_data;
-    const StoreEntry *(*Next) (RemovalPolicyWalker * walker);
-    void (*Done) (RemovalPolicyWalker * walker);
-};
-
-struct _RemovalPurgeWalker {
-    RemovalPolicy *_policy;
-    void *_data;
-    int scanned, max_scan, locked;
-    StoreEntry *(*Next) (RemovalPurgeWalker * walker);
-    void (*Done) (RemovalPurgeWalker * walker);
-};
 
 /* This structure can be freed while object is purged out from memory */
 struct _MemObject {
@@ -1431,11 +1264,10 @@ struct _MemObject {
     mem_hdr data_hdr;
     off_t inmem_hi;
     off_t inmem_lo;
-    dlink_list clients;
+    store_client *clients;
     int nclients;
     struct {
 	off_t queue_offset;	/* relative to in-mem data */
-	mem_node *memnode;	/* which node we're currently paging out */
 	storeIOState *sio;
     } swapout;
     HttpReply *reply;
@@ -1449,29 +1281,37 @@ struct _MemObject {
 	void *data;
     } abort;
     char *log_url;
-    RemovalPolicyNode repl;
+#if HEAP_REPLACEMENT
+    /* 
+     * A MemObject knows where it is in the in-memory heap.
+     */
+    heap_node *node;
+#else
+    dlink_node lru;
+#endif
     int id;
     ssize_t object_sz;
     size_t swap_hdr_sz;
-#if URL_CHECKSUM_DEBUG
-    unsigned int chksum;
-#endif
-    const char *vary_headers;
 };
 
 struct _StoreEntry {
-    hash_link hash;		/* must be first */
+    /* first two items must be same as hash_link */
+    const cache_key *key;
+    StoreEntry *next;
     MemObject *mem_obj;
-    RemovalPolicyNode repl;
     time_t timestamp;
     time_t lastref;
     time_t expires;
     time_t lastmod;
     size_t swap_file_sz;
-    sfileno swap_filen:25;
-    sdirno swap_dirn:7;
     u_short refcount;
     u_short flags;
+    sfileno swap_file_number;
+#if HEAP_REPLACEMENT
+    heap_node *node;
+#else
+    dlink_node lru;
+#endif
     u_short lock_count;		/* Assume < 65536! */
     mem_status_t mem_status:3;
     ping_status_t ping_status:3;
@@ -1480,35 +1320,20 @@ struct _StoreEntry {
 };
 
 struct _SwapDir {
-    char *type;
+    swapdir_t type;
+    fileMap *map;
     int cur_size;
-    int low_size;
     int max_size;
     char *path;
     int index;			/* This entry's index into the swapDirs array */
-    ssize_t max_objsize;
-    RemovalPolicy *repl;
-    int removals;
-    int scanned;
+    int suggest;
     struct {
 	unsigned int selected:1;
 	unsigned int read_only:1;
     } flags;
-    STINIT *init;		/* Initialise the fs */
-    STNEWFS *newfs;		/* Create a new fs */
-    STDUMP *dump;		/* Dump fs config snippet */
-    STFREE *freefs;		/* Free the fs data */
-    STDBLCHECK *dblcheck;	/* Double check the obj integrity */
-    STSTATFS *statfs;		/* Dump fs statistics */
-    STMAINTAINFS *maintainfs;	/* Replacement maintainence */
-    STCHECKOBJ *checkobj;	/* Check if the fs will store an object */
-    /* These two are notifications */
-    STREFOBJ *refobj;		/* Reference this object */
-    STUNREFOBJ *unrefobj;	/* Unreference this object */
-    STCALLBACK *callback;	/* Handle pending callbacks */
-    STSYNC *sync;		/* Sync the directory */
+    STINIT *init;
+    STNEWFS *newfs;
     struct {
-	STOBJCREATE *create;
 	STOBJOPEN *open;
 	STOBJCLOSE *close;
 	STOBJREAD *read;
@@ -1520,18 +1345,18 @@ struct _SwapDir {
 	STLOGCLOSE *close;
 	STLOGWRITE *write;
 	struct {
-	    STLOGCLEANSTART *start;
-	    STLOGCLEANNEXTENTRY *nextentry;
+	    STLOGCLEANOPEN *open;
 	    STLOGCLEANWRITE *write;
-	    STLOGCLEANDONE *done;
 	    void *state;
 	} clean;
-	int writes_since_clean;
     } log;
-    struct {
-	int blksize;
-    } fs;
-    void *fsdata;
+    union {
+	struct {
+	    int l1;
+	    int l2;
+	    int swaplog_fd;
+	} ufs;
+    } u;
 };
 
 struct _request_flags {
@@ -1545,6 +1370,7 @@ struct _request_flags {
     unsigned int proxy_keepalive:1;
     unsigned int proxying:1;
     unsigned int refresh:1;
+    unsigned int used_proxy_auth:1;
     unsigned int redirected:1;
     unsigned int need_validation:1;
 #if HTTP_VIOLATIONS
@@ -1552,7 +1378,6 @@ struct _request_flags {
 #endif
     unsigned int accelerated:1;
     unsigned int internal:1;
-    unsigned int body_sent:1;
 };
 
 struct _link_list {
@@ -1561,13 +1386,10 @@ struct _link_list {
 };
 
 struct _storeIOState {
-    sdirno swap_dirn;
-    sfileno swap_filen;
-    StoreEntry *e;		/* Need this so the FS layers can play god */
+    sfileno swap_file_number;
     mode_t mode;
     size_t st_size;		/* do stat(2) after read open */
-    off_t offset;		/* current on-disk offset pointer */
-    STFNCB *file_callback;	/* called on delayed sfileno assignments */
+    off_t offset;		/* current offset pointer */
     STIOCB *callback;
     void *callback_data;
     struct {
@@ -1577,7 +1399,28 @@ struct _storeIOState {
     struct {
 	unsigned int closing:1;	/* debugging aid */
     } flags;
-    void *fsstate;
+    union {
+	struct {
+	    int fd;
+	    struct {
+		unsigned int close_request:1;
+		unsigned int reading:1;
+		unsigned int writing:1;
+	    } flags;
+	} ufs;
+	struct {
+	    int fd;
+	    struct {
+		unsigned int close_request:1;
+		unsigned int reading:1;
+		unsigned int writing:1;
+		unsigned int opening:1;
+	    } flags;
+	    const char *read_buf;
+	    link_list *pending_writes;
+	    link_list *pending_reads;
+	} aufs;
+    } type;
 };
 
 struct _request_t {
@@ -1585,7 +1428,7 @@ struct _request_t {
     protocol_t protocol;
     char login[MAX_LOGIN_SZ];
     char host[SQUIDHOSTNAMELEN + 1];
-    auth_user_request_t *auth_user_request;
+    char user_ident[USER_IDENT_SZ];	/* from proxy auth or ident server */
     u_short port;
     String urlpath;
     char *canonical;
@@ -1593,7 +1436,7 @@ struct _request_t {
     request_flags flags;
     HttpHdrCc *cache_control;
     HttpHdrRange *range;
-    http_version_t http_ver;
+    float http_ver;
     time_t ims;
     int imslen;
     int max_forwards;
@@ -1602,13 +1445,13 @@ struct _request_t {
     struct in_addr my_addr;
     unsigned short my_port;
     HttpHeader header;
-    ConnStateData *body_connection;	/* used by clientReadBody() */
+    char *body;
+    size_t body_sz;
     int content_length;
     HierarchyLogEntry hier;
     err_type err_type;
     char *peer_login;		/* Configured peer login:password */
     time_t lastmod;		/* Used on refreshes */
-    const char *vary_headers;	/* Used when varying entities are detected. Changes how the store key is calculated */
 };
 
 struct _cachemgr_passwd {
@@ -1648,7 +1491,6 @@ struct _ErrorState {
     err_type type;
     int page_id;
     http_status http_status;
-    auth_user_request_t *auth_user_request;
     request_t *request;
     char *url;
     int xerrno;
@@ -1694,8 +1536,6 @@ struct _StatCounters {
 	int clients;
 	int requests;
 	int hits;
-	int mem_hits;
-	int disk_hits;
 	int errors;
 	kb_t kbytes_in;
 	kb_t kbytes_out;
@@ -1793,12 +1633,8 @@ struct _StatCounters {
 	int selects;
 #endif
     } syscalls;
+    int swap_files_cleaned;
     int aborted_requests;
-    struct {
-	int files_cleaned;
-	int outs;
-	int ins;
-    } swap;
 };
 
 /* per header statistics */
@@ -1824,13 +1660,9 @@ struct _tlv {
     tlv *next;
 };
 
-/*
- * Do we need to have the dirn in here? I don't think so, since we already
- * know the dirn .. 
- */
 struct _storeSwapLogData {
     char op;
-    sfileno swap_filen;
+    sfileno swap_file_number;
     time_t timestamp;
     time_t lastref;
     time_t expires;
@@ -1866,7 +1698,9 @@ struct _MemPool {
 };
 
 struct _ClientInfo {
-    hash_link hash;		/* must be first */
+    /* first two items must be equivalent to hash_link */
+    char *key;
+    ClientInfo *next;
     struct in_addr addr;
     struct {
 	int result_hist[LOG_TYPE_MAX];
@@ -1908,9 +1742,6 @@ struct _FwdState {
     ErrorState *err;
     time_t start;
     int n_tries;
-#if WIP_FWD_LOG
-    http_status last_status;
-#endif
     struct {
 	unsigned int dont_retry:1;
 	unsigned int ftp_pasv_failed:1;
@@ -1940,15 +1771,6 @@ struct _helper_request {
     void *data;
 };
 
-struct _helper_stateful_request {
-    char *buf;
-    HLPSCB *callback;
-    int placeholder;		/* if 1, this is a dummy request waiting for a stateful helper
-				 * to become available for deferred requests.*/
-    void *data;
-};
-
-
 struct _helper {
     wordlist *cmdline;
     dlink_list servers;
@@ -1957,26 +1779,6 @@ struct _helper {
     int n_to_start;
     int n_running;
     int ipc_type;
-    time_t last_queue_warn;
-    struct {
-	int requests;
-	int replies;
-	int queue_size;
-	int avg_svc_time;
-    } stats;
-};
-
-struct _helper_stateful {
-    wordlist *cmdline;
-    dlink_list servers;
-    dlink_list queue;
-    const char *id_name;
-    int n_to_start;
-    int n_running;
-    int ipc_type;
-    MemPool *datapool;
-    HLPSAVAIL *IsAvailable;
-    HLPSONEQ *OnEmptyQueue;
     time_t last_queue_warn;
     struct {
 	int requests;
@@ -2009,34 +1811,6 @@ struct _helper_server {
     } stats;
 };
 
-
-struct _helper_stateful_server {
-    int index;
-    int rfd;
-    int wfd;
-    char *buf;
-    size_t buf_sz;
-    off_t offset;
-    struct timeval dispatch_time;
-    struct timeval answer_time;
-    dlink_node link;
-    dlink_list queue;
-    statefulhelper *parent;
-    helper_stateful_request *request;
-    struct _helper_stateful_flags {
-	unsigned int alive:1;
-	unsigned int busy:1;
-	unsigned int closing:1;
-	unsigned int shutdown:1;
-	stateful_helper_reserve_t reserved:2;
-    } flags;
-    struct {
-	int uses;
-    } stats;
-    size_t deferred_requests;	/* current number of deferred requests */
-    void *data;			/* State data used by the calling routines */
-};
-
 /*
  * use this when you need to pass callback data to a blocking
  * operation, but you don't want to add that pointer to cbdata
@@ -2056,59 +1830,4 @@ struct _store_rebuild_data {
     int badflags;		/* # bad e->flags */
     int bad_log_op;
     int zero_object_sz;
-};
-
-/*
- * This defines an fs type
- */
-
-struct _storefs_entry {
-    char *typestr;
-    STFSPARSE *parsefunc;
-    STFSRECONFIGURE *reconfigurefunc;
-    STFSSHUTDOWN *donefunc;
-};
-
-/*
- * This defines an repl type
- */
-
-struct _storerepl_entry {
-    char *typestr;
-    REMOVALPOLICYCREATE *create;
-};
-
-/*
- * Async disk IO - this defines a async disk io queue
- */
-
-struct _diskd_queue {
-    int smsgid;			/* send sysvmsg id */
-    int rmsgid;			/* recv sysvmsg id */
-    int wfd;			/* queue file descriptor ? */
-    int away;			/* number of requests away */
-    int sent_count;		/* number of messages sent */
-    int recv_count;		/* number of messages received */
-    struct {
-	char *buf;		/* shm buffer */
-	link_list *stack;
-	int id;			/* sysvshm id */
-    } shm;
-};
-
-struct _Logfile {
-    int fd;
-    char path[MAXPATHLEN];
-    char *buf;
-    size_t bufsz;
-    off_t offset;
-    struct {
-	unsigned int fatal:1;
-    } flags;
-};
-
-struct cache_dir_option {
-    char *name;
-    void (*parse) (SwapDir * sd, const char *option, const char *value, int reconfiguring);
-    void (*dump) (StoreEntry * e, const char *option, SwapDir * sd);
 };

@@ -5,17 +5,17 @@
  * DEBUG: section 13    High Level Memory Pool Management
  * AUTHOR: Harvest Derived
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -189,62 +189,108 @@ memInit(void)
     memDataInit(MEM_2K_BUF, "2K Buffer", 2048, 10);
     memDataInit(MEM_4K_BUF, "4K Buffer", 4096, 10);
     memDataInit(MEM_8K_BUF, "8K Buffer", 8192, 10);
-    memDataInit(MEM_16K_BUF, "16K Buffer", 16384, 10);
-    memDataInit(MEM_32K_BUF, "32K Buffer", 32768, 10);
-    memDataInit(MEM_64K_BUF, "64K Buffer", 65536, 10);
     memDataInit(MEM_CLIENT_SOCK_BUF, "Client Socket Buffer", CLIENT_SOCK_SZ, 0);
+    memDataInit(MEM_ACCESSLOGENTRY, "AccessLogEntry",
+	sizeof(AccessLogEntry), 10);
     memDataInit(MEM_ACL, "acl", sizeof(acl), 0);
+    memDataInit(MEM_ACLCHECK_T, "aclCheck_t", sizeof(aclCheck_t), 0);
+    memDataInit(MEM_ACL_ACCESS, "acl_access", sizeof(acl_access), 0);
     memDataInit(MEM_ACL_DENY_INFO_LIST, "acl_deny_info_list",
 	sizeof(acl_deny_info_list), 0);
     memDataInit(MEM_ACL_IP_DATA, "acl_ip_data", sizeof(acl_ip_data), 0);
     memDataInit(MEM_ACL_LIST, "acl_list", sizeof(acl_list), 0);
     memDataInit(MEM_ACL_NAME_LIST, "acl_name_list", sizeof(acl_name_list), 0);
     memDataInit(MEM_ACL_TIME_DATA, "acl_time_data", sizeof(acl_time_data), 0);
-    memDataInit(MEM_AUTH_USER_T, "auth_user_t",
-	sizeof(auth_user_t), 0);
-    memDataInit(MEM_AUTH_USER_HASH, "auth_user_hash_pointer",
-	sizeof(auth_user_hash_pointer), 0);
-    memDataInit(MEM_ACL_PROXY_AUTH_MATCH, "acl_proxy_auth_match_cache",
-	sizeof(acl_proxy_auth_match_cache), 0);
-    memDataInit(MEM_ACL_USER_DATA, "acl_user_data",
-	sizeof(acl_user_data), 0);
+    memDataInit(MEM_ACL_PROXY_AUTH_USER, "acl_proxy_auth_user",
+	sizeof(acl_proxy_auth_user), 0);
+    memDataInit(MEM_AIO_RESULT_T, "aio_result_t", sizeof(aio_result_t), 0);
+    memDataInit(MEM_CACHEMGR_PASSWD, "cachemgr_passwd",
+	sizeof(cachemgr_passwd), 0);
 #if USE_CACHE_DIGESTS
     memDataInit(MEM_CACHE_DIGEST, "CacheDigest", sizeof(CacheDigest), 0);
 #endif
-    memDataInit(MEM_LINK_LIST, "link_list", sizeof(link_list), 10);
+    memDataInit(MEM_CLIENTHTTPREQUEST, "clientHttpRequest",
+	sizeof(clientHttpRequest), 0);
+    memDataInit(MEM_CLOSE_HANDLER, "close_handler", sizeof(close_handler), 0);
+    memDataInit(MEM_COMMWRITESTATEDATA, "CommWriteStateData",
+	sizeof(CommWriteStateData), 0);
+    memDataInit(MEM_CONNSTATEDATA, "ConnStateData", sizeof(ConnStateData), 0);
+#if USE_CACHE_DIGESTS
+    memDataInit(MEM_DIGEST_FETCH_STATE, "DigestFetchState", sizeof(DigestFetchState), 0);
+#endif
+    memDataInit(MEM_DISK_BUF, "Disk I/O Buffer", DISK_PAGE_SIZE, 200);
+    memDataInit(MEM_DLINK_LIST, "dlink_list", sizeof(dlink_list), 10);
     memDataInit(MEM_DLINK_NODE, "dlink_node", sizeof(dlink_node), 10);
+    memDataInit(MEM_DNSSERVER_T, "dnsserver_t", sizeof(dnsserver_t), 0);
+    memDataInit(MEM_DNSSTATDATA, "dnsStatData", sizeof(dnsStatData), 0);
+    memDataInit(MEM_DOMAIN_PING, "domain_ping", sizeof(domain_ping), 0);
+    memDataInit(MEM_DOMAIN_TYPE, "domain_type", sizeof(domain_type), 0);
     memDataInit(MEM_DREAD_CTRL, "dread_ctrl", sizeof(dread_ctrl), 0);
     memDataInit(MEM_DWRITE_Q, "dwrite_q", sizeof(dwrite_q), 0);
+    memDataInit(MEM_ERRORSTATE, "ErrorState", sizeof(ErrorState), 0);
+    memDataInit(MEM_FILEMAP, "fileMap", sizeof(fileMap), 0);
+    memDataInit(MEM_FQDNCACHE_ENTRY, "fqdncache_entry",
+	sizeof(fqdncache_entry), 0);
+    memDataInit(MEM_FQDNCACHE_PENDING, "fqdn_pending",
+	sizeof(fqdn_pending), 0);
+    memDataInit(MEM_FWD_STATE, "FwdState", sizeof(FwdState), 0);
     memDataInit(MEM_FWD_SERVER, "FwdServer", sizeof(FwdServer), 0);
+    memDataInit(MEM_HASH_LINK, "hash_link", sizeof(hash_link), 0);
+    memDataInit(MEM_HASH_TABLE, "hash_table", sizeof(hash_table), 0);
+    memDataInit(MEM_HIERARCHYLOGENTRY, "HierarchyLogEntry",
+	sizeof(HierarchyLogEntry), 0);
+    memDataInit(MEM_HTTP_STATE_DATA, "HttpStateData", sizeof(HttpStateData), 0);
     memDataInit(MEM_HTTP_REPLY, "HttpReply", sizeof(HttpReply), 0);
     memDataInit(MEM_HTTP_HDR_ENTRY, "HttpHeaderEntry", sizeof(HttpHeaderEntry), 0);
     memDataInit(MEM_HTTP_HDR_CC, "HttpHdrCc", sizeof(HttpHdrCc), 0);
     memDataInit(MEM_HTTP_HDR_RANGE_SPEC, "HttpHdrRangeSpec", sizeof(HttpHdrRangeSpec), 0);
     memDataInit(MEM_HTTP_HDR_RANGE, "HttpHdrRange", sizeof(HttpHdrRange), 0);
     memDataInit(MEM_HTTP_HDR_CONTENT_RANGE, "HttpHdrContRange", sizeof(HttpHdrContRange), 0);
+    memDataInit(MEM_ICPUDPDATA, "icpUdpData", sizeof(icpUdpData), 0);
+    memDataInit(MEM_ICP_COMMON_T, "icp_common_t", sizeof(icp_common_t), 0);
+    memDataInit(MEM_ICP_PING_DATA, "ping_data", sizeof(ping_data), 0);
     memDataInit(MEM_INTLIST, "intlist", sizeof(intlist), 0);
+    memDataInit(MEM_IOSTATS, "iostats", sizeof(iostats), 0);
+    memDataInit(MEM_IPCACHE_PENDING, "ip_pending", sizeof(ip_pending), 0);
+    memDataInit(MEM_IPCACHE_ENTRY, "ipcache_entry", sizeof(ipcache_entry), 0);
     memDataInit(MEM_MEMOBJECT, "MemObject", sizeof(MemObject),
 	Squid_MaxFD >> 3);
     memDataInit(MEM_MEM_NODE, "mem_node", sizeof(mem_node), 0);
     memDataInit(MEM_NETDBENTRY, "netdbEntry", sizeof(netdbEntry), 0);
     memDataInit(MEM_NET_DB_NAME, "net_db_name", sizeof(net_db_name), 0);
+    memDataInit(MEM_NET_DB_PEER, "net_db_peer", sizeof(net_db_peer), 0);
+    memDataInit(MEM_PEER, "peer", sizeof(peer), 0);
+#if USE_CACHE_DIGESTS
+    memDataInit(MEM_PEER_DIGEST, "PeerDigest", sizeof(PeerDigest), 0);
+    memDataInit(MEM_DIGEST_FETCH_STATE, "DigestFetchState", sizeof(DigestFetchState), 0);
+#endif
+    memDataInit(MEM_PINGERECHODATA, "pingerEchoData",
+	sizeof(pingerEchoData), 0);
+    memDataInit(MEM_PINGERREPLYDATA, "pingerReplyData",
+	sizeof(pingerReplyData), 0);
+    memDataInit(MEM_PS_STATE, "ps_state", sizeof(ps_state), 0);
+    memDataInit(MEM_REFRESH_T, "refresh_t", sizeof(refresh_t), 0);
     memDataInit(MEM_RELIST, "relist", sizeof(relist), 0);
     memDataInit(MEM_REQUEST_T, "request_t", sizeof(request_t),
 	Squid_MaxFD >> 3);
+    memDataInit(MEM_SQUIDCONFIG, "SquidConfig", sizeof(SquidConfig), 0);
+    memDataInit(MEM_SQUIDCONFIG2, "SquidConfig2", sizeof(SquidConfig2), 0);
+    memDataInit(MEM_STATCOUNTERS, "StatCounters", sizeof(StatCounters), 0);
     memDataInit(MEM_STMEM_BUF, "Store Mem Buffer", SM_PAGE_SIZE,
 	Config.memMaxSize / SM_PAGE_SIZE);
     memDataInit(MEM_STOREENTRY, "StoreEntry", sizeof(StoreEntry), 0);
+    memDataInit(MEM_STORE_CLIENT, "store_client", sizeof(store_client), 0);
+    memDataInit(MEM_SWAPDIR, "SwapDir", sizeof(SwapDir), 0);
+    memDataInit(MEM_USHORTLIST, "ushort_list", sizeof(ushortlist), 0);
     memDataInit(MEM_WORDLIST, "wordlist", sizeof(wordlist), 0);
     memDataInit(MEM_CLIENT_INFO, "ClientInfo", sizeof(ClientInfo), 0);
     memDataInit(MEM_MD5_DIGEST, "MD5 digest", MD5_DIGEST_CHARS, 0);
+    memDataInit(MEM_HELPER, "helper", sizeof(helper), 0);
     memDataInit(MEM_HELPER_REQUEST, "helper_request",
 	sizeof(helper_request), 0);
-    memDataInit(MEM_HELPER_STATEFUL_REQUEST, "helper_stateful_request",
-	sizeof(helper_stateful_request), 0);
-    memDataInit(MEM_TLV, "storeSwapTLV", sizeof(tlv), 0);
-    memDataInit(MEM_CLIENT_REQ_BUF, "clientRequestBuffer", CLIENT_REQ_BUF_SZ, 0);
-    memDataInit(MEM_SWAP_LOG_DATA, "storeSwapLogData", sizeof(storeSwapLogData), 0);
-
+    memDataInit(MEM_HELPER_SERVER, "helper_server",
+	sizeof(helper_server), 0);
+    memDataInit(MEM_STORE_IO, "storeIOState", sizeof(storeIOState), 0);
     /* init string pools */
     for (i = 0; i < mem_str_pool_count; i++) {
 	StrPools[i].pool = memPoolCreate(StrPoolsAttrs[i].name, StrPoolsAttrs[i].obj_size);
@@ -305,19 +351,7 @@ memFree8K(void *p)
 }
 
 void
-memFree16K(void *p)
+memFreeDISK(void *p)
 {
-    memFree(p, MEM_16K_BUF);
-}
-
-void
-memFree32K(void *p)
-{
-    memFree(p, MEM_32K_BUF);
-}
-
-void
-memFree64K(void *p)
-{
-    memFree(p, MEM_64K_BUF);
+    memFree(p, MEM_DISK_BUF);
 }

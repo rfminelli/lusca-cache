@@ -5,17 +5,17 @@
  * DEBUG: section 20    Storage Manager Logging Functions
  * AUTHOR: Duane Wessels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -40,86 +40,107 @@ static char *storeLogTags[] =
     "CREATE",
     "SWAPIN",
     "SWAPOUT",
-    "RELEASE",
-    "SO_FAIL",
+    "RELEASE"
 };
 
-static Logfile *storelog = NULL;
+static int storelog_fd = -1;
 
 void
 storeLog(int tag, const StoreEntry * e)
 {
+    MemBuf mb;
     MemObject *mem = e->mem_obj;
     HttpReply *reply;
-    if (NULL == storelog)
+    if (storelog_fd < 0)
 	return;
-#if UNUSED_CODE
+    if (mem == NULL)
+	return;
     if (EBIT_TEST(e->flags, ENTRY_DONT_LOG))
 	return;
-#endif
-    if (mem != NULL) {
-	if (mem->log_url == NULL) {
-	    debug(20, 1) ("storeLog: NULL log_url for %s\n", mem->url);
-	    storeMemObjectDump(mem);
-	    mem->log_url = xstrdup(mem->url);
-	}
-	reply = mem->reply;
-	/*
-	 * XXX Ok, where should we print the dir number here?
-	 * Because if we print it before the swap file number, it'll break
-	 * the existing log format.
-	 */
-	logfilePrintf(storelog, "%9d.%03d %-7s %02d %08X %s %4d %9d %9d %9d %s %d/%d %s %s\n",
-	    (int) current_time.tv_sec,
-	    (int) current_time.tv_usec / 1000,
-	    storeLogTags[tag],
-	    e->swap_dirn,
-	    e->swap_filen,
-	    storeKeyText(e->hash.key),
-	    reply->sline.status,
-	    (int) reply->date,
-	    (int) reply->last_modified,
-	    (int) reply->expires,
-	    strLen(reply->content_type) ? strBuf(reply->content_type) : "unknown",
-	    reply->content_length,
-	    (int) (mem->inmem_hi - mem->reply->hdr_sz),
-	    RequestMethodStr[mem->method],
-	    mem->log_url);
-    } else {
-	/* no mem object. Most RELEASE cases */
-	logfilePrintf(storelog, "%9d.%03d %-7s %02d %08X %s   ?         ?         ?         ? ?/? ?/? ? ?\n",
-	    (int) current_time.tv_sec,
-	    (int) current_time.tv_usec / 1000,
-	    storeLogTags[tag],
-	    e->swap_dirn,
-	    e->swap_filen,
-	    storeKeyText(e->hash.key));
+    if (mem->log_url == NULL) {
+	debug(20, 1) ("storeLog: NULL log_url for %s\n", mem->url);
+	storeMemObjectDump(mem);
+	mem->log_url = xstrdup(mem->url);
     }
+    memBufDefInit(&mb);
+    reply = mem->reply;
+    memBufPrintf(&mb, "%9d.%03d %-7s %08X %4d %9d %9d %9d %s %d/%d %s %s\n",
+	(int) current_time.tv_sec,
+	(int) current_time.tv_usec / 1000,
+	storeLogTags[tag],
+	e->swap_file_number,
+	reply->sline.status,
+	(int) reply->date,
+	(int) reply->last_modified,
+	(int) reply->expires,
+	strLen(reply->content_type) ? strBuf(reply->content_type) : "unknown",
+	reply->content_length,
+	(int) (mem->inmem_hi - mem->reply->hdr_sz),
+	RequestMethodStr[mem->method],
+	mem->log_url);
+    file_write_mbuf(storelog_fd, -1, mb, NULL, NULL);
 }
 
 void
 storeLogRotate(void)
 {
-    if (NULL == storelog)
+    char *fname = NULL;
+    int i;
+    LOCAL_ARRAY(char, from, MAXPATHLEN);
+    LOCAL_ARRAY(char, to, MAXPATHLEN);
+#ifdef S_ISREG
+    struct stat sb;
+#endif
+
+    if (storelog_fd > -1) {
+	file_close(storelog_fd);
+	storelog_fd = -1;
+    }
+    if ((fname = Config.Log.store) == NULL)
 	return;
-    logfileRotate(storelog);
+    if (strcmp(fname, "none") == 0)
+	return;
+#ifdef S_ISREG
+    if (stat(fname, &sb) == 0)
+	if (S_ISREG(sb.st_mode) == 0)
+	    return;
+#endif
+
+    debug(20, 1) ("storeLogRotate: Rotating.\n");
+
+    /* Rotate numbers 0 through N up one */
+    for (i = Config.Log.rotateNumber; i > 1;) {
+	i--;
+	snprintf(from, MAXPATHLEN, "%s.%d", fname, i - 1);
+	snprintf(to, MAXPATHLEN, "%s.%d", fname, i);
+	xrename(from, to);
+    }
+    /* Rotate the current log to .0 */
+    if (Config.Log.rotateNumber > 0) {
+	snprintf(to, MAXPATHLEN, "%s.%d", fname, 0);
+	xrename(fname, to);
+    }
+    storelog_fd = file_open(fname, O_WRONLY | O_CREAT);
+    if (storelog_fd < 0) {
+	debug(50, 0) ("storeLogRotate: %s: %s\n", fname, xstrerror());
+	debug(20, 1) ("Store logging disabled\n");
+    }
 }
 
 void
 storeLogClose(void)
 {
-    if (NULL == storelog)
-	return;
-    logfileClose(storelog);
-    storelog = NULL;
+    if (storelog_fd >= 0)
+	file_close(storelog_fd);
 }
 
 void
 storeLogOpen(void)
 {
-    if (strcmp(Config.Log.store, "none") == 0) {
+    if (strcmp(Config.Log.store, "none") == 0)
+	storelog_fd = -1;
+    else
+	storelog_fd = file_open(Config.Log.store, O_WRONLY | O_CREAT);
+    if (storelog_fd < 0)
 	debug(20, 1) ("Store logging disabled\n");
-	return;
-    }
-    storelog = logfileOpen(Config.Log.store, 0, 1);
 }

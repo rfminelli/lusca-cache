@@ -5,17 +5,17 @@
  * DEBUG: section 57    HTTP Status-line
  * AUTHOR: Alex Rousskov
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -37,27 +37,23 @@
 
 
 /* local constants */
-const char *HttpStatusLineFormat = "HTTP/%d.%d %3d %s\r\n";
+const char *HttpStatusLineFormat = "HTTP/%3.1f %3d %s\r\n";
 
 void
 httpStatusLineInit(HttpStatusLine * sline)
 {
-    http_version_t version;
-    httpBuildVersion(&version, 0, 0);
-    httpStatusLineSet(sline, version, HTTP_STATUS_NONE, NULL);
+    httpStatusLineSet(sline, 0.0, HTTP_STATUS_NONE, NULL);
 }
 
 void
 httpStatusLineClean(HttpStatusLine * sline)
 {
-    http_version_t version;
-    httpBuildVersion(&version, 0, 0);
-    httpStatusLineSet(sline, version, HTTP_INTERNAL_SERVER_ERROR, NULL);
+    httpStatusLineSet(sline, 0.0, HTTP_INTERNAL_SERVER_ERROR, NULL);
 }
 
 /* set values */
 void
-httpStatusLineSet(HttpStatusLine * sline, http_version_t version, http_status status, const char *reason)
+httpStatusLineSet(HttpStatusLine * sline, double version, http_status status, const char *reason)
 {
     assert(sline);
     sline->version = version;
@@ -72,11 +68,10 @@ httpStatusLinePackInto(const HttpStatusLine * sline, Packer * p)
 {
     assert(sline && p);
     debug(57, 9) ("packing sline %p using %p:\n", sline, p);
-    debug(57, 9) (HttpStatusLineFormat, sline->version.major,
-	sline->version.minor, sline->status,
+    debug(57, 9) (HttpStatusLineFormat, sline->version, sline->status,
 	sline->reason ? sline->reason : httpStatusString(sline->status));
-    packerPrintf(p, HttpStatusLineFormat, sline->version.major,
-	sline->version.minor, sline->status, httpStatusLineReason(sline));
+    packerPrintf(p, HttpStatusLineFormat,
+	sline->version, sline->status, httpStatusLineReason(sline));
 }
 
 /* pack fields using Packer */
@@ -90,12 +85,10 @@ httpStatusLineParse(HttpStatusLine * sline, const char *start, const char *end)
     start += 5;
     if (!xisdigit(*start))
 	return 0;
-    if (sscanf(start, "%d.%d", &sline->version.major, &sline->version.minor) != 2) {
-	debug(57, 7) ("httpStatusLineParse: Invalid HTTP identifier.\n");
-    }
+    sline->version = atof(start);
     if (!(start = strchr(start, ' ')))
 	return 0;
-    sline->status = (http_status) atoi(++start);
+    sline->status = atoi(++start);
     /* we ignore 'reason-phrase' */
     return 1;			/* success */
 }

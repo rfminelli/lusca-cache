@@ -3,17 +3,17 @@
  * $Id$
  *
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -51,6 +51,9 @@
 #define ACL_ALLWEEK	0x7F
 #define ACL_WEEKDAYS	0x3E
 
+#define DefaultDnsChildrenMax		32	/* 32 processes */
+#define DefaultRedirectChildrenMax	32	/* 32 processes */
+#define DefaultAuthenticateChildrenMax	32	/* 32 processes */
 #define MAXHTTPPORTS			12
 
 #define COMM_OK		  (0)
@@ -130,9 +133,10 @@
 #define REDIRECT_DONE 2
 
 #define AUTHENTICATE_AV_FACTOR 1000
-/* AUTHENTICATION */
 
-#define NTLM_CHALLENGE_SZ 300
+#define AUTHENTICATE_NONE 0
+#define AUTHENTICATE_PENDING 1
+#define AUTHENTICATE_DONE 2
 
 #define  CONNECT_PORT        443
 
@@ -143,6 +147,7 @@
 #define LOG_DISABLE 0
 
 #define SM_PAGE_SIZE 4096
+#define DISK_PAGE_SIZE  8192
 
 #define EBIT_SET(flag, bit) 	((void)((flag) |= ((1L<<(bit)))))
 #define EBIT_CLR(flag, bit) 	((void)((flag) &= ~((1L<<(bit)))))
@@ -168,7 +173,6 @@
 
 #define AUTH_MSG_SZ 4096
 #define HTTP_REPLY_BUF_SZ 4096
-#define CLIENT_REQ_BUF_SZ 4096
 
 #if !defined(ERROR_BUF_SZ) && defined(MAX_URL)
 #define ERROR_BUF_SZ (MAX_URL << 2)
@@ -278,28 +282,8 @@
 #define _PATH_DEVNULL "/dev/null"
 #endif
 
-/* cbdata macros */
-#define cbdataAlloc(type) ((type *)cbdataInternalAlloc(CBDATA_##type))
-#define cbdataFree(var) (var = (var != NULL ? cbdataInternalFree(var): NULL))
-#define CBDATA_TYPE(type)	static cbdata_type CBDATA_##type = 0
-#define CBDATA_GLOBAL_TYPE(type)	cbdata_type CBDATA_##type
-#define CBDATA_INIT_TYPE(type)	(CBDATA_##type ? 0 : (CBDATA_##type = cbdataAddType(CBDATA_##type, #type, sizeof(type), NULL)))
-#define CBDATA_INIT_TYPE_FREECB(type, free_func)	(CBDATA_##type ? 0 : (CBDATA_##type = cbdataAddType(CBDATA_##type, #type, sizeof(type), free_func)))
-
-#ifndef O_TEXT
-#define O_TEXT 0
+#if USE_ASYNC_IO
+#ifndef NUMTHREADS
+#define NUMTHREADS 16
 #endif
-#ifndef O_BINARY
-#define O_BINARY 0
-#endif
-
-/* CygWin & Windows NT Port */
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
-#define _WIN_OS_UNKNOWN	0
-#define _WIN_OS_WIN32S	1
-#define _WIN_OS_WIN95	2
-#define _WIN_OS_WIN98	3
-#define _WIN_OS_WINNT	4
-#define _WIN_OS_WIN2K	5
-#define _WIN_OS_STRING_SZ 80
 #endif

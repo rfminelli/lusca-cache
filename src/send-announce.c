@@ -5,17 +5,17 @@
  * DEBUG: section 27    Cache Announcer
  * AUTHOR: Duane Wessels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -40,11 +40,13 @@ static IPH send_announce;
 void
 start_announce(void *datanotused)
 {
+    void *junk;
     if (0 == Config.onoff.announce)
 	return;
     if (theOutIcpConnection < 0)
 	return;
-    ipcache_nbgethostbyname(Config.Announce.host, send_announce, NULL);
+    cbdataAdd(junk = xmalloc(1), cbdataXfree, 0);
+    ipcache_nbgethostbyname(Config.Announce.host, send_announce, junk);
     eventAdd("send_announce", start_announce, NULL, (double) Config.Announce.period, 1);
 }
 
@@ -61,6 +63,7 @@ send_announce(const ipcache_addrs * ia, void *junk)
     int n;
     int fd;
     int x;
+    cbdataFree(junk);
     if (ia == NULL) {
 	debug(27, 1) ("send_announce: Unknown host '%s'\n", host);
 	return;
@@ -85,8 +88,8 @@ send_announce(const ipcache_addrs * ia, void *junk)
     strcat(sndbuf, tbuf);
     l = strlen(sndbuf);
     if ((file = Config.Announce.file) != NULL) {
-	fd = file_open(file, O_RDONLY | O_TEXT);
-	if (fd > -1 && (n = FD_READ_METHOD(fd, sndbuf + l, BUFSIZ - l - 1)) > 0) {
+	fd = file_open(file, O_RDONLY);
+	if (fd > -1 && (n = read(fd, sndbuf + l, BUFSIZ - l - 1)) > 0) {
 	    fd_bytes(fd, n, FD_READ);
 	    l += n;
 	    sndbuf[l] = '\0';

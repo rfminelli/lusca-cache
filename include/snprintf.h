@@ -26,7 +26,7 @@
 #define VA_SHIFT(v,t) v = va_arg(ap,t)
 #define VA_END va_end(ap)
 #else
-#error **NO VARARGS **
+XX **NO VARARGS ** XX
 #endif
 #endif
 

@@ -3,17 +3,13 @@
  *
  * AUTHOR: Harvest Derived
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
- * ----------------------------------------------------------
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
+ * --------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by
+ *  the National Science Foundation.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -80,7 +76,7 @@ extern void *xmalloc(size_t);
 extern void *xrealloc(void *, size_t);
 extern void Tolower(char *);
 extern void xfree(void *);
-extern void xxfree(const void *);
+extern void xxfree(void *);
 
 /* rfc1738.c */
 extern char *rfc1738_escape(const char *);
@@ -92,7 +88,7 @@ extern void rfc1738_unescape(char *);
 extern char *html_quote(const char *);
 
 #if XMALLOC_STATISTICS
-extern void malloc_statistics(void (*)(int, int, int, void *), void *);
+extern void malloc_statistics(void (*)(int, int, void *), void *);
 #endif
 
 #if XMALLOC_TRACE
@@ -115,7 +111,6 @@ extern int safe_inet_addr(const char *, SIA *);
 extern time_t parse_iso3307_time(const char *buf);
 extern char *base64_decode(const char *coded);
 extern const char *base64_encode(const char *decoded);
-extern const char *base64_encode_bin(const char *data, int len);
 
 extern double xpercent(double part, double whole);
 extern int xpercentInt(double part, double whole);
@@ -126,10 +121,5 @@ extern const char *xitoa(int num);
 #if !HAVE_DRAND48
 double drand48(void);
 #endif
-
-/*
- * Returns the amount of known allocated memory
- */
-int statMemoryAccounted(void);
 
 #endif /* ndef _UTIL_H_ */

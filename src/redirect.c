@@ -5,17 +5,17 @@
  * DEBUG: section 29    Redirector
  * AUTHOR: Duane Wessels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -49,7 +49,6 @@ static void redirectStateFree(redirectStateData * r);
 static helper *redirectors = NULL;
 static OBJH redirectStats;
 static int n_bypassed = 0;
-CBDATA_TYPE(redirectStateData);
 
 static void
 redirectHandleReply(void *data, char *reply)
@@ -123,15 +122,16 @@ redirectStart(clientHttpRequest * http, RH * handler, void *data)
 	handler(data, NULL);
 	return;
     }
-    r = cbdataAlloc(redirectStateData);
+    r = xcalloc(1, sizeof(redirectStateData));
+    cbdataAdd(r, cbdataXfree, 0);
     r->orig_url = xstrdup(http->uri);
     r->client_addr = conn->log_addr;
-    if (http->request->auth_user_request)
-	r->client_ident = authenticateUserRequestUsername(http->request->auth_user_request);
-    else if (conn->rfc931[0]) {
-	r->client_ident = conn->rfc931;
-    } else {
+    if (http->request->user_ident[0])
+	r->client_ident = http->request->user_ident;
+    else if (conn->ident == NULL || *conn->ident == '\0') {
 	r->client_ident = dash_str;
+    } else {
+	r->client_ident = conn->ident;
     }
     r->method_s = RequestMethodStr[http->request->method];
     r->handler = handler;
@@ -165,7 +165,6 @@ redirectInit(void)
 	    "URL Redirector Stats",
 	    redirectStats, 0, 1);
 	init = 1;
-	CBDATA_INIT_TYPE(redirectStateData);
     }
 }
 

@@ -5,17 +5,17 @@
  * DEBUG: section 20    Storage Manager Swapin Functions
  * AUTHOR: Duane Wessels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -36,7 +36,6 @@
 #include "squid.h"
 
 static STIOCB storeSwapInFileClosed;
-static STFNCB storeSwapInFileNotify;
 
 void
 storeSwapInStart(store_client * sc)
@@ -47,21 +46,23 @@ storeSwapInStart(store_client * sc)
 	/* We're still reloading and haven't validated this entry yet */
 	return;
     }
-    debug(20, 3) ("storeSwapInStart: called for %d %08X %s \n",
-	e->swap_dirn, e->swap_filen, storeKeyText(e->hash.key));
+    debug(20, 3) ("storeSwapInStart: called for %08X %s \n",
+	e->swap_file_number, storeKeyText(e->key));
     if (e->swap_status != SWAPOUT_WRITING && e->swap_status != SWAPOUT_DONE) {
 	debug(20, 1) ("storeSwapInStart: bad swap_status (%s)\n",
 	    swapStatusStr[e->swap_status]);
 	return;
     }
-    if (e->swap_filen < 0) {
-	debug(20, 1) ("storeSwapInStart: swap_filen < 0\n");
+    if (e->swap_file_number < 0) {
+	debug(20, 1) ("storeSwapInStart: swap_file_number < 0\n");
 	return;
     }
     assert(e->mem_obj != NULL);
     debug(20, 3) ("storeSwapInStart: Opening fileno %08X\n",
-	e->swap_filen);
-    sc->swapin_sio = storeOpen(e, storeSwapInFileNotify, storeSwapInFileClosed,
+	e->swap_file_number);
+    sc->swapin_sio = storeOpen(e->swap_file_number,
+	O_RDONLY,
+	storeSwapInFileClosed,
 	sc);
     cbdataLock(sc->swapin_sio);
 }
@@ -80,17 +81,4 @@ storeSwapInFileClosed(void *data, int errflag, storeIOState * sio)
 	sc->callback = NULL;
 	callback(sc->callback_data, sc->copy_buf, errflag);
     }
-    statCounter.swap.ins++;
-}
-
-static void
-storeSwapInFileNotify(void *data, int errflag, storeIOState * sio)
-{
-    store_client *sc = data;
-    StoreEntry *e = sc->entry;
-
-    debug(1, 3) ("storeSwapInFileNotify: changing %d/%d to %d/%d\n", e->swap_filen, e->swap_dirn, sio->swap_filen, sio->swap_dirn);
-
-    e->swap_filen = sio->swap_filen;
-    e->swap_dirn = sio->swap_dirn;
 }

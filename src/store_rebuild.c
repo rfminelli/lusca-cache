@@ -5,17 +5,17 @@
  * DEBUG: section 20    Store Rebuild Routines
  * AUTHOR: Duane Wessels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -39,20 +39,37 @@ static struct _store_rebuild_data counts;
 static struct timeval rebuild_start;
 static void storeCleanup(void *);
 
-typedef struct {
-    /* total number of "swap.state" entries that will be read */
-    int total;
-    /* number of entries read so far */
-    int scanned;
-} store_rebuild_progress;
-
-static store_rebuild_progress *RebuildProgress = NULL;
-
 static int
-storeCleanupDoubleCheck(StoreEntry * e)
+storeCleanupDoubleCheck(const StoreEntry * e)
 {
-    SwapDir *SD = &Config.cacheSwap.swapDirs[e->swap_dirn];
-    return (SD->dblcheck(SD, e));
+    /* XXX too UFS specific */
+    struct stat sb;
+    int dirn = e->swap_file_number >> SWAP_DIR_SHIFT;
+    if (Config.cacheSwap.swapDirs[dirn].type == SWAPDIR_UFS)
+	(void) 0;
+    if (Config.cacheSwap.swapDirs[dirn].type == SWAPDIR_ASYNCUFS)
+	(void) 0;
+    else
+	return 0;
+    if (stat(storeUfsFullPath(e->swap_file_number, NULL), &sb) < 0) {
+	debug(20, 0) ("storeCleanup: MISSING SWAP FILE\n");
+	debug(20, 0) ("storeCleanup: FILENO %08X\n", e->swap_file_number);
+	debug(20, 0) ("storeCleanup: PATH %s\n",
+	    storeUfsFullPath(e->swap_file_number, NULL));
+	storeEntryDump(e, 0);
+	return -1;
+    }
+    if (e->swap_file_sz != sb.st_size) {
+	debug(20, 0) ("storeCleanup: SIZE MISMATCH\n");
+	debug(20, 0) ("storeCleanup: FILENO %08X\n", e->swap_file_number);
+	debug(20, 0) ("storeCleanup: PATH %s\n",
+	    storeUfsFullPath(e->swap_file_number, NULL));
+	debug(20, 0) ("storeCleanup: ENTRY SIZE: %d, FILE SIZE: %d\n",
+	    e->swap_file_sz, (int) sb.st_size);
+	storeEntryDump(e, 0);
+	return -1;
+    }
+    return 0;
 }
 
 static void
@@ -66,7 +83,7 @@ storeCleanup(void *datanotused)
     hash_link *link_ptr = NULL;
     hash_link *link_next = NULL;
     validnum_start = validnum;
-    while (validnum - validnum_start < 500) {
+    while (validnum - validnum_start < 50) {
 	if (++bucketnum >= store_hash_buckets) {
 	    debug(20, 1) ("  Completed Validation Procedure\n");
 	    debug(20, 1) ("  Validated %d Entries\n", validnum);
@@ -89,7 +106,7 @@ storeCleanup(void *datanotused)
 	     * Calling storeRelease() has no effect because we're
 	     * still in 'store_rebuilding' state
 	     */
-	    if (e->swap_filen < 0)
+	    if (e->swap_file_number < 0)
 		continue;
 	    if (opt_store_doublecheck)
 		if (storeCleanupDoubleCheck(e))
@@ -99,7 +116,7 @@ storeCleanup(void *datanotused)
 	     * Only set the file bit if we know its a valid entry
 	     * otherwise, set it in the validation procedure
 	     */
-	    storeDirUpdateSwapSize(&Config.cacheSwap.swapDirs[e->swap_dirn], e->swap_file_sz, 1);
+	    storeDirUpdateSwapSize(e->swap_file_number, e->swap_file_sz, 1);
 	    if ((++validnum & 0x3FFFF) == 0)
 		debug(20, 1) ("  %7d Entries Validated so far.\n", validnum);
 	}
@@ -143,8 +160,6 @@ storeRebuildComplete(struct _store_rebuild_data *dc)
 	(double) counts.objcount / (dt > 0.0 ? dt : 1.0));
     debug(20, 1) ("Beginning Validation Procedure\n");
     eventAdd("storeCleanup", storeCleanup, NULL, 0.0, 1);
-    xfree(RebuildProgress);
-    RebuildProgress = NULL;
 }
 
 /*
@@ -163,34 +178,4 @@ storeRebuildStart(void)
      * finished rebuilding for sure.  The corresponding decrement
      * occurs in storeCleanup(), when it is finished.
      */
-    RebuildProgress = xcalloc(Config.cacheSwap.n_configured,
-	sizeof(store_rebuild_progress));
-}
-
-/*
- * A fs-specific rebuild procedure periodically reports its
- * progress.
- */
-void
-storeRebuildProgress(int index, int total, int sofar)
-{
-    static time_t last_report = 0;
-    double n = 0.0;
-    double d = 0.0;
-    if (index < 0)
-	return;
-    if (index >= Config.cacheSwap.n_configured)
-	return;
-    if (NULL == RebuildProgress)
-	return;
-    RebuildProgress[index].total = total;
-    RebuildProgress[index].scanned = sofar;
-    if (squid_curtime - last_report < 15)
-	return;
-    for (index = 0; index < Config.cacheSwap.n_configured; index++) {
-	n += (double) RebuildProgress[index].scanned;
-	d += (double) RebuildProgress[index].total;
-    }
-    debug(20, 1) ("Store rebuilding is %4.1f%% complete\n", 100.0 * n / d);
-    last_report = squid_curtime;
 }

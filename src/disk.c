@@ -5,17 +5,17 @@
  * DEBUG: section 6     Disk I/O Routines
  * AUTHOR: Harvest Derived
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -38,7 +38,7 @@
 static PF diskHandleRead;
 static PF diskHandleWrite;
 
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_OS2_) || defined(_SQUID_CYGWIN_)
+#if defined(_SQUID_MSWIN_) || defined(_SQUID_OS2_)
 static int
 diskWriteIsComplete(int fd)
 {
@@ -65,7 +65,7 @@ file_open(const char *path, int mode)
     mode |= SQUID_NONBLOCK;
     errno = 0;
     fd = open(path, mode, 0644);
-    statCounter.syscalls.disk.opens++;
+    Counter.syscalls.disk.opens++;
     if (fd < 0) {
 	debug(50, 3) ("file_open: error opening file %s: %s\n", path,
 	    xstrerror());
@@ -92,7 +92,7 @@ file_close(int fd)
 	read_callback(-1, F->read_data);
     }
     if (F->flags.write_daemon) {
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_OS2_) || defined (_SQUID_CYGWIN_)
+#if defined(_SQUID_MSWIN_) || defined(_SQUID_OS2_)
 	/*
 	 * on some operating systems, you can not delete or rename
 	 * open files, so we won't allow delayed close.
@@ -118,7 +118,7 @@ file_close(int fd)
     debug(6, F->flags.close_request ? 2 : 5)
 	("file_close: FD %d, really closing\n", fd);
     fd_close(fd);
-    statCounter.syscalls.disk.closes++;
+    Counter.syscalls.disk.closes++;
 }
 
 /*
@@ -146,7 +146,7 @@ diskCombineWrites(struct _fde_disk *fdd)
 	len = 0;
 	for (q = fdd->write_q; q != NULL; q = q->next)
 	    len += q->len - q->buf_offset;
-	wq = memAllocate(MEM_DWRITE_Q);
+	wq = xcalloc(1, sizeof(dwrite_q));
 	wq->buf = xmalloc(len);
 	wq->len = 0;
 	wq->buf_offset = 0;
@@ -160,10 +160,7 @@ diskCombineWrites(struct _fde_disk *fdd)
 	    fdd->write_q = q->next;
 	    if (q->free_func)
 		(q->free_func) (q->buf);
-	    if (q) {
-		memFree(q, MEM_DWRITE_Q);
-		q = NULL;
-	    }
+	    safe_free(q);
 	} while (fdd->write_q != NULL);
 	fdd->write_q_tail = wq;
 	fdd->write_q = wq;
@@ -190,13 +187,11 @@ diskHandleWrite(int fd, void *notused)
     debug(6, 3) ("diskHandleWrite: FD %d writing %d bytes\n",
 	fd, (int) (fdd->write_q->len - fdd->write_q->buf_offset));
     errno = 0;
-    if (fdd->write_q->file_offset != -1)
-	lseek(fd, fdd->write_q->file_offset, SEEK_SET);
-    len = FD_WRITE_METHOD(fd,
+    len = write(fd,
 	fdd->write_q->buf + fdd->write_q->buf_offset,
 	fdd->write_q->len - fdd->write_q->buf_offset);
     debug(6, 3) ("diskHandleWrite: FD %d len = %d\n", fd, len);
-    statCounter.syscalls.disk.writes++;
+    Counter.syscalls.disk.writes++;
     fd_bytes(fd, len, FD_WRITE);
     if (len < 0) {
 	if (!ignoreErrno(errno)) {
@@ -227,10 +222,7 @@ diskHandleWrite(int fd, void *notused)
 		fdd->write_q = q->next;
 		if (q->free_func)
 		    (q->free_func) (q->buf);
-		if (q) {
-		    memFree(q, MEM_DWRITE_Q);
-		    q = NULL;
-		}
+		safe_free(q);
 	    } while ((q = fdd->write_q));
 	}
 	len = 0;
@@ -247,10 +239,7 @@ diskHandleWrite(int fd, void *notused)
 	    fdd->write_q = q->next;
 	    if (q->free_func)
 		(q->free_func) (q->buf);
-	    if (q) {
-		memFree(q, MEM_DWRITE_Q);
-		q = NULL;
-	    }
+	    safe_free(q);
 	}
     }
     if (fdd->write_q == NULL) {
@@ -304,7 +293,7 @@ file_write(int fd,
     assert(fd >= 0);
     assert(F->flags.open);
     /* if we got here. Caller is eligible to write. */
-    wq = memAllocate(MEM_DWRITE_Q);
+    wq = xcalloc(1, sizeof(dwrite_q));
     wq->file_offset = file_offset;
     wq->buf = ptr_to_buf;
     wq->len = len;
@@ -357,14 +346,14 @@ diskHandleRead(int fd, void *data)
 	debug(6, 3) ("diskHandleRead: FD %d seeking to offset %d\n",
 	    fd, (int) ctrl_dat->offset);
 	lseek(fd, ctrl_dat->offset, SEEK_SET);	/* XXX ignore return? */
-	statCounter.syscalls.disk.seeks++;
+	Counter.syscalls.disk.seeks++;
 	F->disk.offset = ctrl_dat->offset;
     }
     errno = 0;
-    len = FD_READ_METHOD(fd, ctrl_dat->buf, ctrl_dat->req_len);
+    len = read(fd, ctrl_dat->buf, ctrl_dat->req_len);
     if (len > 0)
 	F->disk.offset += len;
-    statCounter.syscalls.disk.reads++;
+    Counter.syscalls.disk.reads++;
     fd_bytes(fd, len, FD_READ);
     if (len < 0) {
 	if (ignoreErrno(errno)) {

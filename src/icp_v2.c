@@ -5,17 +5,17 @@
  * DEBUG: section 12    Internet Cache Protocol
  * AUTHOR: Duane Wessels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -156,10 +156,10 @@ icpUdpSend(int fd,
 	    IcpQueueTail = queue;
 	}
 	commSetSelect(fd, COMM_SELECT_WRITE, icpUdpSendQueue, NULL, 0);
-	statCounter.icp.replies_queued++;
+	Counter.icp.replies_queued++;
     } else {
 	/* don't queue it */
-	statCounter.icp.replies_dropped++;
+	Counter.icp.replies_dropped++;
     }
     return x;
 }
@@ -337,7 +337,7 @@ icpPktDump(icp_common_t * pkt)
 void
 icpHandleUdp(int sock, void *data)
 {
-    int *N = &incoming_sockets_accepted;
+    int *N = data;
     struct sockaddr_in from;
     socklen_t from_len;
     LOCAL_ARRAY(char, buf, SQUID_UDP_SO_RCVBUF);
@@ -348,7 +348,7 @@ icpHandleUdp(int sock, void *data)
     while (max--) {
 	from_len = sizeof(from);
 	memset(&from, '\0', from_len);
-	statCounter.syscalls.sock.recvfroms++;
+	Counter.syscalls.sock.recvfroms++;
 	len = recvfrom(sock,
 	    buf,
 	    SQUID_UDP_SO_RCVBUF - 1,
@@ -514,32 +514,32 @@ icpCount(void *buf, int which, size_t len, int delay)
     if (len < sizeof(*icp))
 	return;
     if (SENT == which) {
-	statCounter.icp.pkts_sent++;
-	kb_incr(&statCounter.icp.kbytes_sent, len);
+	Counter.icp.pkts_sent++;
+	kb_incr(&Counter.icp.kbytes_sent, len);
 	if (ICP_QUERY == icp->opcode) {
-	    statCounter.icp.queries_sent++;
-	    kb_incr(&statCounter.icp.q_kbytes_sent, len);
+	    Counter.icp.queries_sent++;
+	    kb_incr(&Counter.icp.q_kbytes_sent, len);
 	} else {
-	    statCounter.icp.replies_sent++;
-	    kb_incr(&statCounter.icp.r_kbytes_sent, len);
+	    Counter.icp.replies_sent++;
+	    kb_incr(&Counter.icp.r_kbytes_sent, len);
 	    /* this is the sent-reply service time */
-	    statHistCount(&statCounter.icp.reply_svc_time, delay);
+	    statHistCount(&Counter.icp.reply_svc_time, delay);
 	}
 	if (ICP_HIT == icp->opcode)
-	    statCounter.icp.hits_sent++;
+	    Counter.icp.hits_sent++;
     } else if (RECV == which) {
-	statCounter.icp.pkts_recv++;
-	kb_incr(&statCounter.icp.kbytes_recv, len);
+	Counter.icp.pkts_recv++;
+	kb_incr(&Counter.icp.kbytes_recv, len);
 	if (ICP_QUERY == icp->opcode) {
-	    statCounter.icp.queries_recv++;
-	    kb_incr(&statCounter.icp.q_kbytes_recv, len);
+	    Counter.icp.queries_recv++;
+	    kb_incr(&Counter.icp.q_kbytes_recv, len);
 	} else {
-	    statCounter.icp.replies_recv++;
-	    kb_incr(&statCounter.icp.r_kbytes_recv, len);
-	    /* statCounter.icp.query_svc_time set in clientUpdateCounters */
+	    Counter.icp.replies_recv++;
+	    kb_incr(&Counter.icp.r_kbytes_recv, len);
+	    /* Counter.icp.query_svc_time set in clientUpdateCounters */
 	}
 	if (ICP_HIT == icp->opcode)
-	    statCounter.icp.hits_recv++;
+	    Counter.icp.hits_recv++;
     }
 }
 

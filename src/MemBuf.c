@@ -1,21 +1,20 @@
-
 /*
  * $Id$
  *
  * DEBUG: section 59    auto-growing Memory Buffer with printf
  * AUTHOR: Alex Rousskov
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -317,18 +316,6 @@ memBufGrow(MemBuf * mb, mb_size_t min_cap)
 	mb->buf = memAllocate(MEM_8K_BUF);
 	mb->freefunc = &memFree8K;
 	break;
-    case 16384:
-	mb->buf = memAllocate(MEM_16K_BUF);
-	mb->freefunc = &memFree16K;
-	break;
-    case 32768:
-	mb->buf = memAllocate(MEM_32K_BUF);
-	mb->freefunc = &memFree32K;
-	break;
-    case 65536:
-	mb->buf = memAllocate(MEM_64K_BUF);
-	mb->freefunc = &memFree64K;
-	break;
     default:
 	/* recycle if old buffer was not "pool"ed */
 	if (old_mb.freefunc == &xfree) {
@@ -345,7 +332,7 @@ memBufGrow(MemBuf * mb, mb_size_t min_cap)
 
     /* copy and free old buffer if needed */
     if (old_mb.buf && old_mb.freefunc) {
-	xmemcpy(mb->buf, old_mb.buf, old_mb.size);
+	memcpy(mb->buf, old_mb.buf, old_mb.size);
 	(*old_mb.freefunc) (old_mb.buf);
     } else {
 	assert(!old_mb.buf && !old_mb.freefunc);

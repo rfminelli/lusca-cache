@@ -5,17 +5,17 @@
  * DEBUG: section 38    Network Measurement Database
  * AUTHOR: Duane Wessels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -40,7 +40,6 @@
 typedef struct {
     peer *p;
     StoreEntry *e;
-    store_client *sc;
     request_t *r;
     off_t seen;
     off_t used;
@@ -61,7 +60,7 @@ static void netdbPurgeLRU(void);
 static netdbEntry *netdbLookupHost(const char *key);
 static net_db_peer *netdbPeerByName(const netdbEntry * n, const char *);
 static net_db_peer *netdbPeerAdd(netdbEntry * n, peer * e);
-static const char *netdbPeerName(const char *name);
+static char *netdbPeerName(const char *name);
 static IPH netdbSendPing;
 static QS sortPeerByRtt;
 static QS sortByRtt;
@@ -81,9 +80,9 @@ static void
 netdbHashInsert(netdbEntry * n, struct in_addr addr)
 {
     xstrncpy(n->network, inet_ntoa(networkFromInaddr(addr)), 16);
-    n->hash.key = n->network;
+    n->key = n->network;
     assert(hash_lookup(addr_table, n->network) == NULL);
-    hash_join(addr_table, &n->hash);
+    hash_join(addr_table, (hash_link *) n);
 }
 
 static void
@@ -101,12 +100,12 @@ static void
 netdbHostInsert(netdbEntry * n, const char *hostname)
 {
     net_db_name *x = memAllocate(MEM_NET_DB_NAME);
-    x->hash.key = xstrdup(hostname);
+    x->name = xstrdup(hostname);
     x->next = n->hosts;
     n->hosts = x;
     x->net_db_entry = n;
     assert(hash_lookup(host_table, hostname) == NULL);
-    hash_join(host_table, &x->hash);
+    hash_join(host_table, (hash_link *) x);
     n->link_count++;
 }
 
@@ -126,7 +125,7 @@ netdbHostDelete(const net_db_name * x)
 	}
     }
     hash_remove_link(host_table, (hash_link *) x);
-    xfree(x->hash.key);
+    xfree(x->name);
     memFree((void *) x, MEM_NET_DB_NAME);
 }
 
@@ -223,14 +222,14 @@ static void
 netdbSendPing(const ipcache_addrs * ia, void *data)
 {
     struct in_addr addr;
-    char *hostname = ((generic_cbdata *) data)->data;
+    char *hostname = data;
     netdbEntry *n;
     netdbEntry *na;
     net_db_name *x;
     net_db_name **X;
-    cbdataFree(data);
+    cbdataUnlock(hostname);
     if (ia == NULL) {
-	xfree(hostname);
+	cbdataFree(hostname);
 	return;
     }
     addr = ia->in_addrs[ia->cur];
@@ -248,7 +247,7 @@ netdbSendPing(const ipcache_addrs * ia, void *data)
 	x = (net_db_name *) hash_lookup(host_table, hostname);
 	if (x == NULL) {
 	    debug(38, 1) ("netdbSendPing: net_db_name list bug: %s not found", hostname);
-	    xfree(hostname);
+	    cbdataFree(hostname);
 	    return;
 	}
 	/* remove net_db_name from 'network n' linked list */
@@ -274,7 +273,7 @@ netdbSendPing(const ipcache_addrs * ia, void *data)
 	n->next_ping_time = squid_curtime + Config.Netdb.period;
 	n->last_use_time = squid_curtime;
     }
-    xfree(hostname);
+    cbdataFree(hostname);
 }
 
 static struct in_addr
@@ -368,24 +367,14 @@ static void
 netdbSaveState(void *foo)
 {
     LOCAL_ARRAY(char, path, SQUID_MAXPATHLEN);
-    Logfile *lf;
+    FILE *fp;
     netdbEntry *n;
     net_db_name *x;
     struct timeval start = current_time;
     int count = 0;
     snprintf(path, SQUID_MAXPATHLEN, "%s/netdb_state", storeSwapDir(0));
-    /*
-     * This was nicer when we were using stdio, but thanks to
-     * Solaris bugs, its a bad idea.  fopen can fail if more than
-     * 256 FDs are open.
-     */
-    /*
-     * unlink() is here because there is currently no way to make
-     * logfileOpen() use O_TRUNC.
-     */
-    unlink(path);
-    lf = logfileOpen(path, 4096, 0);
-    if (NULL == lf) {
+    fp = fopen(path, "w");
+    if (fp == NULL) {
 	debug(50, 1) ("netdbSaveState: %s: %s\n", path, xstrerror());
 	return;
     }
@@ -393,7 +382,7 @@ netdbSaveState(void *foo)
     while ((n = (netdbEntry *) hash_next(addr_table))) {
 	if (n->pings_recv == 0)
 	    continue;
-	logfilePrintf(lf, "%s %d %d %10.5f %10.5f %d %d",
+	fprintf(fp, "%s %d %d %10.5f %10.5f %d %d",
 	    n->network,
 	    n->pings_sent,
 	    n->pings_recv,
@@ -402,12 +391,11 @@ netdbSaveState(void *foo)
 	    (int) n->next_ping_time,
 	    (int) n->last_use_time);
 	for (x = n->hosts; x; x = x->next)
-	    logfilePrintf(lf, " %s", hashKeyStr(&x->hash));
-	logfilePrintf(lf, "\n");
+	    fprintf(fp, " %s", x->name);
+	fprintf(fp, "\n");
 	count++;
-#undef RBUF_SZ
     }
-    logfileClose(lf);
+    fclose(fp);
     getCurrentTime();
     debug(38, 1) ("NETDB state saved; %d entries, %d msec\n",
 	count, tvSubMsec(start, current_time));
@@ -420,94 +408,75 @@ netdbReloadState(void)
     LOCAL_ARRAY(char, path, SQUID_MAXPATHLEN);
     char *buf;
     char *t;
-    char *s;
-    int fd;
-    int l;
-    struct stat sb;
+    FILE *fp;
     netdbEntry *n;
     netdbEntry N;
     struct in_addr addr;
     int count = 0;
     struct timeval start = current_time;
     snprintf(path, SQUID_MAXPATHLEN, "%s/netdb_state", storeSwapDir(0));
-    /*
-     * This was nicer when we were using stdio, but thanks to
-     * Solaris bugs, its a bad idea.  fopen can fail if more than
-     * 256 FDs are open.
-     */
-    fd = file_open(path, O_RDONLY | O_TEXT);
-    if (fd < 0)
+    fp = fopen(path, "r");
+    if (fp == NULL)
 	return;
-    if (fstat(fd, &sb) < 0) {
-	file_close(fd);
-	return;
-    }
-    t = buf = xcalloc(1, sb.st_size + 1);
-    l = read(fd, buf, sb.st_size);
-    file_close(fd);
-    if (l <= 0)
-	return;
-    while ((s = strchr(t, '\n'))) {
-	char *q;
-	assert(s - buf < l);
-	*s = '\0';
+    buf = memAllocate(MEM_4K_BUF);
+    while (fgets(buf, 4095, fp)) {
 	memset(&N, '\0', sizeof(netdbEntry));
-	q = strtok(t, w_space);
-	t = s + 1;
-	if (NULL == q)
+	if ((t = strtok(buf, w_space)) == NULL)
 	    continue;
-	if (!safe_inet_addr(q, &addr))
+	if (!safe_inet_addr(t, &addr))
 	    continue;
 	if (netdbLookupAddr(addr) != NULL)	/* no dups! */
 	    continue;
-	if ((q = strtok(NULL, w_space)) == NULL)
+	if ((t = strtok(NULL, w_space)) == NULL)
 	    continue;
-	N.pings_sent = atoi(q);
-	if ((q = strtok(NULL, w_space)) == NULL)
+	N.pings_sent = atoi(t);
+	if ((t = strtok(NULL, w_space)) == NULL)
 	    continue;
-	N.pings_recv = atoi(q);
+	N.pings_recv = atoi(t);
 	if (N.pings_recv == 0)
 	    continue;
 	/* give this measurement low weight */
 	N.pings_sent = 1;
 	N.pings_recv = 1;
-	if ((q = strtok(NULL, w_space)) == NULL)
+	if ((t = strtok(NULL, w_space)) == NULL)
 	    continue;
-	N.hops = atof(q);
-	if ((q = strtok(NULL, w_space)) == NULL)
+	N.hops = atof(t);
+	if ((t = strtok(NULL, w_space)) == NULL)
 	    continue;
-	N.rtt = atof(q);
-	if ((q = strtok(NULL, w_space)) == NULL)
+	N.rtt = atof(t);
+	if ((t = strtok(NULL, w_space)) == NULL)
 	    continue;
-	N.next_ping_time = (time_t) atoi(q);
-	if ((q = strtok(NULL, w_space)) == NULL)
+	N.next_ping_time = (time_t) atoi(t);
+	if ((t = strtok(NULL, w_space)) == NULL)
 	    continue;
-	N.last_use_time = (time_t) atoi(q);
+	N.last_use_time = (time_t) atoi(t);
 	n = memAllocate(MEM_NETDBENTRY);
 	xmemcpy(n, &N, sizeof(netdbEntry));
 	netdbHashInsert(n, addr);
-	while ((q = strtok(NULL, w_space)) != NULL) {
-	    if (netdbLookupHost(q) != NULL)	/* no dups! */
+	while ((t = strtok(NULL, w_space)) != NULL) {
+	    if (netdbLookupHost(t) != NULL)	/* no dups! */
 		continue;
-	    netdbHostInsert(n, q);
+	    netdbHostInsert(n, t);
 	}
 	count++;
     }
-    xfree(buf);
+    memFree(buf, MEM_4K_BUF);
+    fclose(fp);
     getCurrentTime();
     debug(38, 1) ("NETDB state reloaded; %d entries, %d msec\n",
 	count, tvSubMsec(start, current_time));
 }
 
-static const char *
+static char *
 netdbPeerName(const char *name)
 {
-    const wordlist *w;
+    wordlist *w;
     for (w = peer_names; w; w = w->next) {
 	if (!strcmp(w->key, name))
 	    return w->key;
     }
-    return wordlistAdd(&peer_names, name);
+    w = wordlistAdd(&peer_names, name);
+    return w->key;
 }
 
 static void
@@ -522,7 +491,7 @@ static void
 netdbFreeNameEntry(void *data)
 {
     net_db_name *x = data;
-    xfree(x->hash.key);
+    xfree(x->name);
     memFree(x, MEM_NET_DB_NAME);
 }
 
@@ -627,11 +596,11 @@ netdbExchangeHandleReply(void *data, char *buf, ssize_t size)
 	netdbExchangeDone(ex);
     } else if (ex->e->store_status == STORE_PENDING) {
 	debug(38, 3) ("netdbExchangeHandleReply: STORE_PENDING\n");
-	storeClientCopy(ex->sc, ex->e, ex->seen, ex->used, ex->buf_sz,
+	storeClientCopy(ex->e, ex->seen, ex->used, ex->buf_sz,
 	    ex->buf, netdbExchangeHandleReply, ex);
     } else if (ex->seen < ex->e->mem_obj->inmem_hi) {
 	debug(38, 3) ("netdbExchangeHandleReply: ex->e->mem_obj->inmem_hi\n");
-	storeClientCopy(ex->sc, ex->e, ex->seen, ex->used, ex->buf_sz,
+	storeClientCopy(ex->e, ex->seen, ex->used, ex->buf_sz,
 	    ex->buf, netdbExchangeHandleReply, ex);
     } else {
 	debug(38, 3) ("netdbExchangeHandleReply: Done\n");
@@ -646,7 +615,7 @@ netdbExchangeDone(void *data)
     debug(38, 3) ("netdbExchangeDone: %s\n", storeUrl(ex->e));
     memFree(ex->buf, MEM_4K_BUF);
     requestUnlink(ex->r);
-    storeUnregister(ex->sc, ex->e, ex);
+    storeUnregister(ex->e, ex);
     storeUnlockObject(ex->e);
     cbdataUnlock(ex->p);
     cbdataFree(ex);
@@ -680,12 +649,13 @@ netdbPingSite(const char *hostname)
 {
 #if USE_ICMP
     netdbEntry *n;
-    generic_cbdata *h;
+    char *h;
     if ((n = netdbLookupHost(hostname)) != NULL)
 	if (n->next_ping_time > squid_curtime)
 	    return;
-    h = cbdataAlloc(generic_cbdata);
-    h->data = xstrdup(hostname);
+    h = xstrdup(hostname);
+    cbdataAdd(h, cbdataXfree, 0);
+    cbdataLock(h);
     ipcache_nbgethostbyname(hostname, netdbSendPing, h);
 #endif
 }
@@ -780,7 +750,7 @@ netdbDump(StoreEntry * sentry)
 	    n->rtt,
 	    n->hops);
 	for (x = n->hosts; x; x = x->next)
-	    storeAppendPrintf(sentry, " %s", hashKeyStr(&x->hash));
+	    storeAppendPrintf(sentry, " %s", x->name);
 	storeAppendPrintf(sentry, "\n");
 	p = n->peers;
 	for (j = 0; j < n->n_peers; j++, p++) {
@@ -920,7 +890,6 @@ void
 netdbBinaryExchange(StoreEntry * s)
 {
     http_reply *reply = s->mem_obj->reply;
-    http_version_t version;
 #if USE_ICMP
     netdbEntry *n;
     int i;
@@ -930,8 +899,7 @@ netdbBinaryExchange(StoreEntry * s)
     struct in_addr addr;
     storeBuffer(s);
     httpReplyReset(reply);
-    httpBuildVersion(&version, 1, 0);
-    httpReplySetHeaders(reply, version, HTTP_OK, "OK",
+    httpReplySetHeaders(reply, 1.0, HTTP_OK, "OK",
 	NULL, -1, squid_curtime, -2);
     httpReplySwapOut(reply, s);
     rec_sz = 0;
@@ -973,17 +941,12 @@ netdbBinaryExchange(StoreEntry * s)
     memFree(buf, MEM_4K_BUF);
 #else
     httpReplyReset(reply);
-    httpBuildVersion(&version, 1, 0);
-    httpReplySetHeaders(reply, version, HTTP_BAD_REQUEST, "Bad Request",
+    httpReplySetHeaders(reply, 1.0, HTTP_BAD_REQUEST, "Bad Request",
 	NULL, -1, squid_curtime, -2);
     storeAppendPrintf(s, "NETDB support not compiled into this Squid cache.\n");
 #endif
     storeComplete(s);
 }
-
-#if USE_ICMP
-CBDATA_TYPE(netdbExchangeState);
-#endif
 
 void
 netdbExchangeStart(void *data)
@@ -991,9 +954,8 @@ netdbExchangeStart(void *data)
 #if USE_ICMP
     peer *p = data;
     char *uri;
-    netdbExchangeState *ex;
-    CBDATA_INIT_TYPE(netdbExchangeState);
-    ex = cbdataAlloc(netdbExchangeState);
+    netdbExchangeState *ex = xcalloc(1, sizeof(*ex));
+    cbdataAdd(ex, cbdataXfree, 0);
     cbdataLock(p);
     ex->p = p;
     uri = internalRemoteUri(p->host, p->http_port, "/squid-internal-dynamic/", "netdb");
@@ -1006,13 +968,13 @@ netdbExchangeStart(void *data)
     }
     requestLink(ex->r);
     assert(NULL != ex->r);
-    httpBuildVersion(&ex->r->http_ver, 1, 0);
+    ex->r->http_ver = 1.0;
     ex->e = storeCreateEntry(uri, uri, null_request_flags, METHOD_GET);
-    ex->buf_sz = 4096;
+    ex->buf_sz = 4096;;
     ex->buf = memAllocate(MEM_4K_BUF);
     assert(NULL != ex->e);
-    ex->sc = storeClientListAdd(ex->e, ex);
-    storeClientCopy(ex->sc, ex->e, ex->seen, ex->used, ex->buf_sz,
+    storeClientListAdd(ex->e, ex);
+    storeClientCopy(ex->e, ex->seen, ex->used, ex->buf_sz,
 	ex->buf, netdbExchangeHandleReply, ex);
     ex->r->flags.loopdetect = 1;	/* cheat! -- force direct */
     if (p->login)

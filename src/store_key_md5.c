@@ -5,17 +5,17 @@
  * DEBUG: section 20    Storage Manager MD5 Cache Keys
  * AUTHOR: Duane Wessels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -121,28 +121,6 @@ storeKeyPublic(const char *url, const method_t method)
 }
 
 const cache_key *
-storeKeyPublicByRequest(request_t * request)
-{
-    return storeKeyPublicByRequestMethod(request, request->method);
-}
-
-const cache_key *
-storeKeyPublicByRequestMethod(request_t * request, const method_t method)
-{
-    static cache_key digest[MD5_DIGEST_CHARS];
-    unsigned char m = (unsigned char) method;
-    const char *url = urlCanonical(request);
-    MD5_CTX M;
-    MD5Init(&M);
-    MD5Update(&M, &m, sizeof(m));
-    MD5Update(&M, (unsigned char *) url, strlen(url));
-    if (request->vary_headers)
-	MD5Update(&M, (unsigned char *) request->vary_headers, strlen(request->vary_headers));
-    MD5Final(digest, &M);
-    return digest;
-}
-
-cache_key *
 storeKeyDup(const cache_key * key)
 {
     cache_key *dup = memAllocate(MEM_MD5_DIGEST);

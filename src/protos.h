@@ -3,17 +3,17 @@
  * $Id$
  *
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -41,12 +41,7 @@ extern void hierarchyNote(HierarchyLogEntry *, hier_code, const char *);
 extern void fvdbCountVia(const char *key);
 extern void fvdbCountForw(const char *key);
 #endif
-#if HEADERS_LOG
-extern void headersLog(int cs, int pq, method_t m, void *data);
-#endif
-char *log_quote(const char *header);
 
-/* acl.c */
 extern aclCheck_t *aclChecklistCreate(const struct _acl_access *,
     request_t *,
     const char *ident);
@@ -59,7 +54,7 @@ extern void aclDestroyAcls(acl **);
 extern void aclParseAccessLine(struct _acl_access **);
 extern void aclParseAclLine(acl **);
 extern int aclIsProxyAuth(const char *name);
-extern err_type aclGetDenyInfoPage(acl_deny_info_list ** head, const char *name);
+extern int aclGetDenyInfoPage(acl_deny_info_list ** head, const char *name);
 extern void aclParseDenyInfoLine(struct _acl_deny_info_list **);
 extern void aclDestroyDenyInfoList(struct _acl_deny_info_list **);
 extern void aclDestroyRegexList(struct _relist *data);
@@ -68,7 +63,34 @@ extern void aclParseRegexList(void *curlist);
 extern const char *aclTypeToStr(squid_acl);
 extern wordlist *aclDumpGeneric(const acl *);
 extern int aclPurgeMethodInUse(acl_access *);
-extern void aclCacheMatchFlush(dlink_list * cache);
+
+#if USE_ASYNC_IO
+extern int aio_cancel(aio_result_t *);
+extern int aio_open(const char *, int, mode_t, aio_result_t *);
+extern int aio_read(int, char *, int, off_t, int, aio_result_t *);
+extern int aio_write(int, char *, int, off_t, int, aio_result_t *);
+extern int aio_close(int, aio_result_t *);
+extern int aio_stat(const char *, struct stat *, aio_result_t *);
+extern int aio_unlink(const char *, aio_result_t *);
+extern int aio_opendir(const char *, aio_result_t *);
+extern aio_result_t *aio_poll_done(void);
+extern int aio_operations_pending(void);
+extern int aio_overloaded(void);
+extern int aio_sync(void);
+extern int aio_get_queue_len(void);
+
+extern void aioInit(void);
+extern void aioCancel(int);
+extern void aioOpen(const char *, int, mode_t, AIOCB *, void *);
+extern void aioClose(int);
+extern void aioWrite(int, int offset, char *, int size, AIOCB *, void *, FREE *);
+extern void aioRead(int, int offset, char *, int size, AIOCB *, void *);
+extern void aioStat(char *, struct stat *, AIOCB *, void *);
+extern void aioUnlink(const char *, AIOCB *, void *);
+extern void aioCheckCallbacks(void);
+extern void aioSync(void);
+extern int aioQueueSize(void);
+#endif
 
 /*
  * cache_cf.c
@@ -76,9 +98,7 @@ extern void aclCacheMatchFlush(dlink_list * cache);
 extern int parseConfigFile(const char *file_name);
 extern void intlistDestroy(intlist **);
 extern int intlistFind(intlist * list, int i);
-extern const char *wordlistAdd(wordlist **, const char *);
-extern void wordlistAddWl(wordlist **, wordlist *);
-extern void wordlistJoin(wordlist **, wordlist **);
+extern wordlist *wordlistAdd(wordlist **, const char *);
 extern wordlist *wordlistDup(const wordlist *);
 extern void wordlistDestroy(wordlist **);
 extern void configFreeMemory(void);
@@ -87,35 +107,18 @@ extern void allocate_new_swapdir(cacheSwap *);
 extern void self_destruct(void);
 extern int GetInteger(void);
 
-/* extra functions from cache_cf.c useful for lib modules */
-extern void parse_int(int *var);
-extern void parse_eol(char *volatile *var);
-extern void parse_wordlist(wordlist ** list);
-extern void requirePathnameExists(const char *name, const char *path);
-extern void parse_time_t(time_t * var);
-extern void parse_cachedir_options(SwapDir * sd, struct cache_dir_option *options, int reconfiguring);
-extern void dump_cachedir_options(StoreEntry * e, struct cache_dir_option *options, SwapDir * sd);
 
-
-/*
- * cbdata.c
- */
 extern void cbdataInit(void);
 #if CBDATA_DEBUG
-extern void *cbdataInternalAllocDbg(cbdata_type type, int, const char *);
-extern void cbdataLockDbg(const void *p, const char *, int);
-extern void cbdataUnlockDbg(const void *p, const char *, int);
+extern void cbdataAddDbg(const void *p, CBDUNL *, int, const char *, int);
 #else
-extern void *cbdataInternalAlloc(cbdata_type type);
+extern void cbdataAdd(const void *p, CBDUNL *, int);
+#endif
+extern void cbdataFree(void *p);
 extern void cbdataLock(const void *p);
 extern void cbdataUnlock(const void *p);
-#endif
-/* Note: Allocations is done using the cbdataAlloc macro */
-extern void *cbdataInternalFree(void *p);
 extern int cbdataValid(const void *p);
-extern void cbdataInitType(cbdata_type type, char *label, int size, FREE * free_func);
-extern cbdata_type cbdataAddType(cbdata_type type, char *label, int size, FREE * free_func);
-extern int cbdataLocked(const void *p);
+extern CBDUNL cbdataXfree;
 
 extern void clientdbInit(void);
 extern void clientdbUpdate(struct in_addr, log_type, protocol_t, size_t);
@@ -130,12 +133,10 @@ extern int modifiedSince(StoreEntry *, request_t *);
 extern char *clientConstructTraceEcho(clientHttpRequest *);
 extern void clientPurgeRequest(clientHttpRequest *);
 extern int checkNegativeHit(StoreEntry *);
-extern void clientOpenListenSockets(void);
+extern void clientHttpConnectionsOpen(void);
 extern void clientHttpConnectionsClose(void);
 extern StoreEntry *clientCreateStoreEntry(clientHttpRequest *, method_t, request_flags);
 extern int isTcpHit(log_type);
-extern void clientReadBody(request_t * req, char *buf, size_t size, CBCB * callback, void *data);
-extern int clientAbortBody(request_t * req);
 
 extern int commSetNonBlocking(int fd);
 extern int commUnsetNonBlocking(int fd);
@@ -181,7 +182,6 @@ extern int comm_select(int);
 #endif
 extern void commUpdateReadBits(int, PF *);
 extern void commUpdateWriteBits(int, PF *);
-extern void comm_quick_poll_required(void);
 
 extern void packerToStoreInit(Packer * p, StoreEntry * e);
 extern void packerToMemInit(Packer * p, MemBuf * mb);
@@ -211,26 +211,13 @@ extern void xassert(const char *, const char *, int);
 /* packs, then prints an object using debug() */
 extern void debugObj(int section, int level, const char *label, void *obj, ObjPackMethod pm);
 
-/* disk.c */
+
 extern int file_open(const char *path, int mode);
 extern void file_close(int fd);
 extern void file_write(int, off_t, void *, int len, DWCB *, void *, FREE *);
 extern void file_write_mbuf(int fd, off_t, MemBuf mb, DWCB * handler, void *handler_data);
 extern void file_read(int, char *, int, off_t, DRCB *, void *);
 extern void disk_init(void);
-
-/* diskd.c */
-extern diskd_queue *afile_create_queue(void);
-extern void afile_destroy_queue(diskd_queue *);
-extern void afile_sync_queue(diskd_queue *);
-extern void afile_sync(void);
-extern void afile_open(const char *path, int mode, DOCB *, void *);
-extern void afile_close(int fd, DCCB * callback, void *data);
-extern void afile_write(int, off_t, void *, int len, DWCB *, void *, FREE *);
-extern void afile_write_mbuf(int fd, off_t, MemBuf, DWCB *, void *);
-extern void afile_read(int, char *, int, off_t, DRCB *, void *);
-extern void afile_unlink(const char *path, DUCB *, void *);
-extern void afile_truncate(const char *path, DTCB *, void *);
 
 extern void dnsShutdown(void);
 extern void dnsInit(void);
@@ -269,6 +256,7 @@ extern void filemapFreeMemory(fileMap *);
 
 
 extern void fqdncache_nbgethostbyaddr(struct in_addr, FQDNH *, void *);
+extern int fqdncacheUnregister(struct in_addr, void *);
 extern const char *fqdncache_gethostbyaddr(struct in_addr, int flags);
 extern void fqdncache_init(void);
 extern void fqdnStats(StoreEntry *);
@@ -278,7 +266,6 @@ extern int fqdncacheQueueDrain(void);
 extern void fqdncacheFreeMemory(void);
 extern void fqdncache_restart(void);
 extern EVH fqdncache_purgelru;
-extern void fqdncacheAddEntryFromHosts(char *addr, wordlist * hostnames);
 
 extern void ftpStart(FwdState *);
 extern char *ftpUrlWith2f(const request_t *);
@@ -289,7 +276,6 @@ extern int gopherCachable(const char *);
 
 extern void whoisStart(FwdState *);
 
-/* http.c */
 extern int httpCachable(method_t);
 extern void httpStart(FwdState *);
 extern void httpParseReplyHeaders(const char *, http_reply *);
@@ -304,8 +290,6 @@ extern void httpAnonInitModule(void);
 extern int httpAnonHdrAllowed(http_hdr_type hdr_id);
 extern int httpAnonHdrDenied(http_hdr_type hdr_id);
 extern void httpBuildRequestHeader(request_t *, request_t *, StoreEntry *, HttpHeader *, int, http_state_flags);
-extern void httpBuildVersion(http_version_t * version, unsigned int major, unsigned int minor);
-extern const char *httpMakeVaryMark(request_t * request, HttpReply * reply);
 
 /* ETag */
 extern int etagParseInit(ETag * etag, const char *str);
@@ -316,7 +300,7 @@ extern int etagIsEqual(const ETag * tag1, const ETag * tag2);
 extern void httpStatusLineInit(HttpStatusLine * sline);
 extern void httpStatusLineClean(HttpStatusLine * sline);
 /* set/get values */
-extern void httpStatusLineSet(HttpStatusLine * sline, http_version_t version,
+extern void httpStatusLineSet(HttpStatusLine * sline, double version,
     http_status status, const char *reason);
 extern const char *httpStatusLineReason(const HttpStatusLine * sline);
 /* parse/pack */
@@ -370,7 +354,6 @@ extern int httpHdrRangeIsComplex(const HttpHdrRange * range);
 extern int httpHdrRangeWillBeComplex(const HttpHdrRange * range);
 extern ssize_t httpHdrRangeFirstOffset(const HttpHdrRange * range);
 extern ssize_t httpHdrRangeLowestOffset(const HttpHdrRange * range, ssize_t);
-extern int httpHdrRangeOffsetLimit(HttpHdrRange *);
 
 
 /* Http Content Range Header Field */
@@ -442,8 +425,6 @@ extern const char *httpHeaderGetStr(const HttpHeader * hdr, http_hdr_type id);
 extern const char *httpHeaderGetLastStr(const HttpHeader * hdr, http_hdr_type id);
 extern const char *httpHeaderGetAuth(const HttpHeader * hdr, http_hdr_type id, const char *authScheme);
 extern String httpHeaderGetList(const HttpHeader * hdr, http_hdr_type id);
-extern String httpHeaderGetStrOrList(const HttpHeader * hdr, http_hdr_type id);
-extern String httpHeaderGetByName(const HttpHeader * hdr, const char *name);
 extern int httpHeaderDelByName(HttpHeader * hdr, const char *name);
 extern int httpHeaderDelById(HttpHeader * hdr, http_hdr_type id);
 extern void httpHeaderDelAt(HttpHeader * hdr, HttpHeaderPos pos);
@@ -455,10 +436,9 @@ extern HttpHeaderEntry *httpHeaderEntryClone(const HttpHeaderEntry * e);
 extern void httpHeaderEntryPackInto(const HttpHeaderEntry * e, Packer * p);
 /* store report about current header usage and other stats */
 extern void httpHeaderStoreReport(StoreEntry * e);
-extern void httpHdrMangleList(HttpHeader *, request_t *);
 
 /* Http Msg (currently in HttpReply.c @?@ ) */
-extern int httpMsgIsPersistent(http_version_t http_ver, const HttpHeader * hdr);
+extern int httpMsgIsPersistent(float http_ver, const HttpHeader * hdr);
 extern int httpMsgIsolateHeaders(const char **parse_start, const char **blk_start, const char **blk_end);
 
 /* Http Reply */
@@ -479,10 +459,10 @@ extern MemBuf httpReplyPack(const HttpReply * rep);
 /* swap: create swap-based packer, pack, destroy packer */
 extern void httpReplySwapOut(const HttpReply * rep, StoreEntry * e);
 /* set commonly used info with one call */
-extern void httpReplySetHeaders(HttpReply * rep, http_version_t ver, http_status status,
+extern void httpReplySetHeaders(HttpReply * rep, double ver, http_status status,
     const char *reason, const char *ctype, int clen, time_t lmt, time_t expires);
 /* do everything in one call: init, set, pack, clean, return MemBuf */
-extern MemBuf httpPackedReply(http_version_t ver, http_status status, const char *ctype,
+extern MemBuf httpPackedReply(double ver, http_status status, const char *ctype,
     int clen, time_t lmt, time_t expires);
 /* construct 304 reply and pack it into MemBuf, return MemBuf */
 extern MemBuf httpPacked304Reply(const HttpReply * rep);
@@ -542,11 +522,7 @@ extern variable_list *snmp_prfProtoFn(variable_list *, snint *);
 extern variable_list *snmp_prfPeerFn(variable_list *, snint *);
 extern variable_list *snmp_netIpFn(variable_list *, snint *);
 extern variable_list *snmp_netFqdnFn(variable_list *, snint *);
-#if USE_DNSSERVERS
 extern variable_list *snmp_netDnsFn(variable_list *, snint *);
-#else
-extern variable_list *snmp_netIdnsFn(variable_list *, snint *);
-#endif
 extern variable_list *snmp_meshPtblFn(variable_list *, snint *);
 extern variable_list *snmp_meshCtblFn(variable_list *, snint *);
 #endif /* SQUID_SNMP */
@@ -582,7 +558,7 @@ extern void ipcacheMarkGoodAddr(const char *name, struct in_addr);
 extern void ipcacheFreeMemory(void);
 extern ipcache_addrs *ipcacheCheckNumeric(const char *name);
 extern void ipcache_restart(void);
-extern int ipcacheAddEntryFromHosts(const char *name, const char *ipaddr);
+extern int ipcacheUnregister(const char *name, void *data);
 
 /* MemBuf */
 /* init with specific sizes */
@@ -651,18 +627,16 @@ extern peer *peerFindByName(const char *);
 extern peer *peerFindByNameAndPort(const char *, unsigned short);
 extern peer *getDefaultParent(request_t * request);
 extern peer *getRoundRobinParent(request_t * request);
-EVH peerClearRR;
 extern peer *getAnyParent(request_t * request);
-extern lookup_t peerDigestLookup(peer * p, request_t * request);
-extern peer *neighborsDigestSelect(request_t * request);
+extern lookup_t peerDigestLookup(peer * p, request_t * request, StoreEntry * entry);
+extern peer *neighborsDigestSelect(request_t * request, StoreEntry * entry);
 extern void peerNoteDigestLookup(request_t * request, peer * p, lookup_t lookup);
 extern void peerNoteDigestGone(peer * p);
 extern int neighborUp(const peer * e);
 extern CBDUNL peerDestroy;
 extern char *neighborTypeStr(const peer * e);
 extern peer_t neighborType(const peer *, const request_t *);
-extern void peerConnectFailed(peer *);
-extern void peerConnectSucceded(peer *);
+extern void peerCheckConnectStart(peer *);
 extern void dump_peer_options(StoreEntry *, peer *);
 extern int peerHTTPOkay(const peer *, request_t *);
 extern peer *whichPeer(const struct sockaddr_in *from);
@@ -711,11 +685,6 @@ extern void fwdComplete(FwdState * fwdState);
 extern void fwdInit(void);
 extern int fwdReforwardableStatus(http_status s);
 extern void fwdServersFree(FwdServer ** FS);
-#if WIP_FWD_LOG
-extern void fwdUninit(void);
-extern void fwdLogRotate(void);
-extern void fwdStatus(FwdState *, http_status);
-#endif
 
 extern void urnStart(request_t *, StoreEntry *);
 
@@ -723,44 +692,9 @@ extern void redirectStart(clientHttpRequest *, RH *, void *);
 extern void redirectInit(void);
 extern void redirectShutdown(void);
 
-/* auth_modules.c */
-extern void authSchemeSetup(void);
-
-/* authenticate.c */
-extern void authenticateAuthUserMerge(auth_user_t *, auth_user_t *);
-extern auth_user_t *authenticateAuthUserNew(const char *);
-extern int authenticateAuthSchemeId(const char *typestr);
-extern void authenticateStart(auth_user_request_t *, RH *, void *);
-extern void authenticateSchemeInit(void);
-extern void authenticateInit(authConfig *);
+extern void authenticateStart(acl_proxy_auth_user *, RH *, void *);
+extern void authenticateInit(void);
 extern void authenticateShutdown(void);
-extern void authenticateFixHeader(HttpReply *, auth_user_request_t *, request_t *, int, int);
-extern void authenticateAddTrailer(HttpReply *, auth_user_request_t *, request_t *, int);
-extern auth_user_request_t *authenticateGetAuthUser(const char *proxy_auth);
-extern void authenticateAuthenticateUser(auth_user_request_t *, request_t *, ConnStateData *, http_hdr_type);
-extern void authenticateAuthUserUnlock(auth_user_t * auth_user);
-extern void authenticateAuthUserLock(auth_user_t * auth_user);
-extern void authenticateAuthUserRequestUnlock(auth_user_request_t *);
-extern void authenticateAuthUserRequestLock(auth_user_request_t *);
-extern char *authenticateAuthUserRequestMessage(auth_user_request_t *);
-extern int authenticateAuthUserInuse(auth_user_t * auth_user);
-extern void authenticateAuthUserRequestSetIp(auth_user_request_t *, struct in_addr);
-extern int authenticateDirection(auth_user_request_t *);
-extern FREE authenticateFreeProxyAuthUser;
-extern void authenticateFreeProxyAuthUserACLResults(void *data);
-extern void authenticateProxyUserCacheCleanup(void *);
-extern void authenticateInitUserCache(void);
-extern int authenticateActiveSchemeCount(void);
-extern int authenticateSchemeCount(void);
-extern void authenticateUserNameCacheAdd(auth_user_t * auth_user);
-extern int authenticateCheckAuthUserIP(struct in_addr request_src_addr, auth_user_request_t * auth_user);
-extern int authenticateUserAuthenticated(auth_user_request_t *);
-extern void authenticateUserCacheRestart(void);
-extern char *authenticateUserUsername(auth_user_t *);
-extern char *authenticateUserRequestUsername(auth_user_request_t *);
-extern int authenticateValidateUser(auth_user_request_t *);
-extern void authenticateOnCloseConnection(ConnStateData * conn);
-extern void authSchemeAdd(char *type, AUTHSSETUP * setup);
 
 extern void refreshAddToList(const char *, int, time_t, int, time_t);
 extern int refreshIsCachable(const StoreEntry *);
@@ -776,7 +710,7 @@ extern void shut_down(int);
 
 
 extern void start_announce(void *unused);
-extern void sslStart(int fd, const char *, request_t *, size_t *, int *);
+extern void sslStart(int fd, const char *, request_t *, size_t * sz);
 extern void waisStart(FwdState *);
 
 /* ident.c */
@@ -793,10 +727,8 @@ extern int stat5minClientRequests(void);
 extern double stat5minCPUUsage(void);
 extern const char *storeEntryFlags(const StoreEntry *);
 extern double statRequestHitRatio(int minutes);
-extern double statRequestHitMemoryRatio(int minutes);
-extern double statRequestHitDiskRatio(int minutes);
 extern double statByteHitRatio(int minutes);
-extern int storeEntryLocked(const StoreEntry *);
+
 
 
 /* StatHist */
@@ -829,14 +761,12 @@ extern void memCleanModule(void);
 extern void memConfigure(void);
 extern void *memAllocate(mem_type);
 extern void *memAllocBuf(size_t net_size, size_t * gross_size);
-extern void memFree(void *, int type);
+extern CBDUNL memFree;
 extern void memFreeBuf(size_t size, void *);
 extern void memFree2K(void *);
 extern void memFree4K(void *);
 extern void memFree8K(void *);
-extern void memFree16K(void *);
-extern void memFree32K(void *);
-extern void memFree64K(void *);
+extern void memFreeDISK(void *);
 extern int memInUse(mem_type);
 extern size_t memTotalAllocated(void);
 extern void memDataInit(mem_type, const char *, size_t, int);
@@ -870,8 +800,6 @@ extern void stmemFreeData(mem_hdr *);
 extern StoreEntry *new_StoreEntry(int, const char *, const char *);
 extern StoreEntry *storeGet(const cache_key *);
 extern StoreEntry *storeGetPublic(const char *uri, const method_t method);
-extern StoreEntry *storeGetPublicByRequest(request_t * request);
-extern StoreEntry *storeGetPublicByRequestMethod(request_t * request, const method_t method);
 extern StoreEntry *storeCreateEntry(const char *, const char *, request_flags, method_t);
 extern void storeSetPublicKey(StoreEntry *);
 extern void storeComplete(StoreEntry *);
@@ -882,6 +810,14 @@ extern void storeAppend(StoreEntry *, const char *, int);
 extern void storeLockObject(StoreEntry *);
 extern void storeRelease(StoreEntry *);
 extern int storeUnlockObject(StoreEntry *);
+extern int storeUnregister(StoreEntry *, void *);
+extern void storeClientCopy(StoreEntry * e,
+    off_t seen_offset,
+    off_t copy_offset,
+    size_t size,
+    char *buf,
+    STCB * callback,
+    void *data);
 extern int storePendingNClients(const StoreEntry *);
 extern EVH storeMaintainSwapSpace;
 extern void storeExpireNow(StoreEntry *);
@@ -891,9 +827,13 @@ extern void storeConfigure(void);
 extern void storeNegativeCache(StoreEntry *);
 extern void storeFreeMemory(void);
 extern int expiresMoreThan(time_t, time_t);
+extern int storeClientCopyPending(StoreEntry *, void *);
 extern void InvokeHandlers(StoreEntry *);
 extern int storeEntryValidToSend(StoreEntry *);
 extern void storeTimestampsSet(StoreEntry *);
+#if !HEAP_REPLACEMENT
+extern time_t storeExpiredReferenceAge(void);
+#endif
 extern void storeRegisterAbort(StoreEntry * e, STABH * cb, void *);
 extern void storeUnregisterAbort(StoreEntry * e);
 extern void storeMemObjectDump(MemObject * mem);
@@ -918,27 +858,35 @@ extern int contentLen(const StoreEntry * e);
 extern HttpReply *storeEntryReply(StoreEntry *);
 extern int storeTooManyDiskFilesOpen(void);
 extern void storeEntryReset(StoreEntry *);
-extern void storeHeapPositionUpdate(StoreEntry *, SwapDir *);
-extern void storeSwapFileNumberSet(StoreEntry * e, sfileno filn);
-extern void storeFsInit(void);
-extern void storeFsDone(void);
-extern void storeFsAdd(char *, STSETUP *);
-extern void storeReplAdd(char *, REMOVALPOLICYCREATE *);
-
-/* store_modules.c */
-extern void storeFsSetup(void);
-
-/* repl_modules.c */
-extern void storeReplSetup(void);
+extern void storeHeapPositionUpdate(StoreEntry *);
 
 /* store_io.c */
-extern storeIOState *storeCreate(StoreEntry *, STFNCB *, STIOCB *, void *);
-extern storeIOState *storeOpen(StoreEntry *, STFNCB *, STIOCB *, void *);
-extern void storeClose(storeIOState *);
-extern void storeRead(storeIOState *, char *, size_t, off_t, STRCB *, void *);
-extern void storeWrite(storeIOState *, char *, size_t, off_t, FREE *);
-extern void storeUnlink(StoreEntry *);
+extern STOBJOPEN storeOpen;
+extern STOBJCLOSE storeClose;
+extern STOBJREAD storeRead;
+extern STOBJWRITE storeWrite;
+extern STOBJUNLINK storeUnlink;
 extern off_t storeOffset(storeIOState *);
+
+/*
+ * store_io_ufs.c
+ */
+extern storeIOState *storeUfsOpen(sfileno, mode_t, STIOCB *, void *);
+extern void storeUfsClose(storeIOState * sio);
+extern void storeUfsRead(storeIOState *, char *, size_t, off_t, STRCB *, void *);
+extern void storeUfsWrite(storeIOState *, char *, size_t, off_t, FREE *);
+extern void storeUfsUnlink(int fileno);
+
+#if USE_ASYNC_IO
+/*
+ * store_io_ufs.c
+ */
+extern storeIOState *storeAufsOpen(sfileno, mode_t, STIOCB *, void *);
+extern void storeAufsClose(storeIOState * sio);
+extern void storeAufsRead(storeIOState *, char *, size_t, off_t, STRCB *, void *);
+extern void storeAufsWrite(storeIOState *, char *, size_t, off_t, FREE *);
+extern void storeAufsUnlink(int fileno);
+#endif
 
 /*
  * store_log.c
@@ -952,14 +900,12 @@ extern void storeLogOpen(void);
 /*
  * store_key_*.c
  */
-extern cache_key *storeKeyDup(const cache_key *);
+extern const cache_key *storeKeyDup(const cache_key *);
 extern cache_key *storeKeyCopy(cache_key *, const cache_key *);
 extern void storeKeyFree(const cache_key *);
 extern const cache_key *storeKeyScan(const char *);
 extern const char *storeKeyText(const cache_key *);
 extern const cache_key *storeKeyPublic(const char *, const method_t);
-extern const cache_key *storeKeyPublicByRequest(request_t *);
-extern const cache_key *storeKeyPublicByRequestMethod(request_t *, const method_t);
 extern const cache_key *storeKeyPrivate(const char *, method_t, int);
 extern int storeKeyHashBuckets(int);
 extern int storeKeyNull(const cache_key *);
@@ -985,24 +931,38 @@ extern char *storeSwapDir(int);
 extern char *storeSwapFullPath(int, char *);
 extern char *storeSwapSubSubDir(int, char *);
 extern const char *storeSwapPath(int);
+extern int storeDirMapAllocate(void);
+extern int storeDirMapBitTest(int fn);
+extern int storeDirMapBitsInUse(void);
+extern int storeDirNumber(int fileno);
+extern int storeDirProperFileno(int dirn, int fn);
+extern int storeDirValidFileno(int fn, int);
 extern int storeDirWriteCleanLogs(int reopen);
-extern STDIRSELECT *storeDirSelectSwapDir;
 extern int storeVerifySwapDirs(void);
 extern void storeCreateSwapDirectories(void);
 extern void storeDirCloseSwapLogs(void);
 extern void storeDirCloseTmpSwapLog(int dirn);
 extern void storeDirConfigure(void);
-extern void storeDirDiskFull(sdirno);
+extern void storeDirDiskFull(int fn);
 extern void storeDirInit(void);
+extern void storeDirMapBitReset(int fn);
+extern void storeDirMapBitSet(int fn);
 extern void storeDirOpenSwapLogs(void);
 extern void storeDirSwapLog(const StoreEntry *, int op);
-extern void storeDirUpdateSwapSize(SwapDir *, size_t size, int sign);
-extern void storeDirSync(void);
-extern void storeDirCallback(void);
-extern void storeDirLRUDelete(StoreEntry *);
-extern void storeDirLRUAdd(StoreEntry *);
-extern int storeDirGetBlkSize(const char *path, int *blksize);
-extern int storeDirGetUFSStats(const char *, int *, int *, int *, int *);
+extern void storeDirUpdateSwapSize(int fn, size_t size, int sign);
+
+/*
+ * store_dir_ufs.c
+ */
+extern OBJH storeUfsDirStats;
+extern void storeUfsDirParse(cacheSwap * swap);
+extern void storeUfsDirDump(StoreEntry * entry, const char *name, SwapDir * s);
+extern void storeUfsDirFree(SwapDir *);
+extern char *storeUfsFullPath(sfileno fn, char *fullpath);
+#if USE_ASYNC_IO
+extern void storeAufsDirParse(cacheSwap * swap);
+#endif
+
 
 /*
  * store_swapmeta.c
@@ -1017,7 +977,6 @@ extern void storeSwapTLVFree(tlv * n);
  */
 extern void storeRebuildStart(void);
 extern void storeRebuildComplete(struct _store_rebuild_data *);
-extern void storeRebuildProgress(int index, int total, int sofar);
 
 /*
  * store_swapin.c
@@ -1034,13 +993,11 @@ extern int storeSwapOutAble(const StoreEntry * e);
 /*
  * store_client.c
  */
-#if STORE_CLIENT_LIST_DEBUG
 extern store_client *storeClientListSearch(const MemObject * mem, void *data);
-#endif
-extern store_client *storeClientListAdd(StoreEntry * e, void *data);
-extern void storeClientCopy(store_client *, StoreEntry *, off_t, off_t, size_t, char *, STCB *, void *);
-extern int storeClientCopyPending(store_client *, StoreEntry * e, void *data);
-extern int storeUnregister(store_client * sc, StoreEntry * e, void *data);
+extern void storeClientListAdd(StoreEntry * e, void *data);
+extern void storeClientCopy(StoreEntry *, off_t, off_t, size_t, char *, STCB *, void *);
+extern int storeClientCopyPending(StoreEntry * e, void *data);
+extern int storeUnregister(StoreEntry * e, void *data);
 extern off_t storeLowestMemReaderOffset(const StoreEntry * entry);
 extern void InvokeHandlers(StoreEntry * e);
 extern int storePendingNClients(const StoreEntry * e);
@@ -1084,11 +1041,14 @@ extern void releaseServerSockets(void);
 extern void PrintRusage(void);
 extern void dumpMallocStats(void);
 
-#if USE_UNLINKD
+extern void pumpInit(int fd, request_t * r, char *uri);
+extern void pumpStart(int, FwdState *, CWCB * callback, void *);
+extern int pumpMethod(method_t method);
+extern int pumpRestart(request_t *);
+
 extern void unlinkdInit(void);
 extern void unlinkdClose(void);
 extern void unlinkdUnlink(const char *);
-#endif
 
 extern char *url_convert_hex(char *org_url, int allocate);
 extern char *url_escape(const char *url);
@@ -1104,15 +1064,10 @@ extern int urlCheckRequest(const request_t *);
 extern int urlDefaultPort(protocol_t p);
 extern char *urlCanonicalClean(const request_t *);
 extern char *urlHostname(const char *url);
-extern void urlExtMethodConfigure(void);
 
 extern void useragentOpenLog(void);
 extern void useragentRotateLog(void);
 extern void logUserAgent(const char *, const char *);
-extern void useragentLogClose(void);
-extern void refererOpenLog(void);
-extern void refererRotateLog(void);
-extern void logReferer(const char *, const char *, const char *);
 extern peer_t parseNeighborType(const char *s);
 
 extern void errorInitialize(void);
@@ -1136,9 +1091,6 @@ extern void asnFreeMemory(void);
 extern void dlinkAdd(void *data, dlink_node *, dlink_list *);
 extern void dlinkAddTail(void *data, dlink_node *, dlink_list *);
 extern void dlinkDelete(dlink_node * m, dlink_list * list);
-extern void dlinkNodeDelete(dlink_node * m);
-extern dlink_node *dlinkNodeNew(void);
-
 extern void kb_incr(kb_t *, size_t);
 extern double gb_to_double(const gb_t *);
 extern const char *gb_to_str(const gb_t *);
@@ -1148,8 +1100,6 @@ extern int stringHasCntl(const char *);
 extern void linklistPush(link_list **, void *);
 extern void *linklistShift(link_list **);
 extern int xrename(const char *from, const char *to);
-extern int isPowTen(int);
-extern void parseEtcHosts(void);
 
 #if USE_HTCP
 extern void htcpInit(void);
@@ -1159,7 +1109,7 @@ extern void htcpSocketClose(void);
 #endif
 
 /* String */
-#define strLen(s)     ((/* const */ int)(s).len)
+#define strLen(s)     ((const int)(s).len)
 #define strBuf(s)     ((const char*)(s).buf)
 #define strChr(s,ch)  ((const char*)strchr(strBuf(s), (ch)))
 #define strRChr(s,ch) ((const char*)strrchr(strBuf(s), (ch)))
@@ -1235,54 +1185,25 @@ extern int delayBytesWanted(delay_id d, int min, int max);
 extern void delayBytesIn(delay_id, int qty);
 extern int delayMostBytesWanted(const MemObject * mem, int max);
 extern delay_id delayMostBytesAllowed(const MemObject * mem);
-extern void delaySetStoreClient(store_client * sc, delay_id delay_id);
+extern void delaySetStoreClient(StoreEntry * e, void *data, delay_id delay_id);
 extern void delayRegisterDelayIdPtr(delay_id * loc);
 extern void delayUnregisterDelayIdPtr(delay_id * loc);
 #endif
 
 /* helper.c */
 extern void helperOpenServers(helper * hlp);
-extern void helperStatefulOpenServers(statefulhelper * hlp);
 extern void helperSubmit(helper * hlp, const char *buf, HLPCB * callback, void *data);
-extern void helperStatefulSubmit(statefulhelper * hlp, const char *buf, HLPSCB * callback, void *data, helper_stateful_server * lastserver);
 extern void helperStats(StoreEntry * sentry, helper * hlp);
-extern void helperStatefulStats(StoreEntry * sentry, statefulhelper * hlp);
 extern void helperShutdown(helper * hlp);
-extern void helperStatefulShutdown(statefulhelper * hlp);
 extern helper *helperCreate(const char *);
-extern statefulhelper *helperStatefulCreate(const char *);
 extern void helperFree(helper *);
-extern void helperStatefulFree(statefulhelper *);
-extern void helperStatefulReset(helper_stateful_server * srv);
-extern void helperStatefulReleaseServer(helper_stateful_server * srv);
-extern void *helperStatefulServerGetData(helper_stateful_server * srv);
-extern helper_stateful_server *helperStatefulDefer(statefulhelper *);
-
-
 
 #if USE_LEAKFINDER
 extern void leakInit(void);
 extern void *leakAddFL(void *, const char *, int);
 extern void *leakTouchFL(void *, const char *, int);
-extern void *leakFreeFL(void *, const char *, int);
+extern void *leakFree(void *);
 #endif
-
-/* logfile.c */
-extern Logfile *logfileOpen(const char *path, size_t bufsz, int);
-extern void logfileClose(Logfile * lf);
-extern void logfileRotate(Logfile * lf);
-extern void logfileWrite(Logfile * lf, void *buf, size_t len);
-extern void logfileFlush(Logfile * lf);
-#if STDC_HEADERS
-extern void logfilePrintf(Logfile * lf, const char *fmt,...);
-#else
-extern void logfilePrintf(va_alist);
-#endif
-
-/*
- * Removal Policies
- */
-extern RemovalPolicy *createRemovalPolicy(RemovalPolicySettings * settings);
 
 /*
  * prototypes for system functions missing from system includes
@@ -1292,23 +1213,4 @@ extern RemovalPolicy *createRemovalPolicy(RemovalPolicySettings * settings);
 extern int getrusage(int, struct rusage *);
 extern int getpagesize(void);
 extern int gethostname(char *, int);
-#endif
-
-#if URL_CHECKSUM_DEBUG
-extern unsigned int url_checksum(const char *url);
-#endif
-
-/*
- * hack to allow snmp access to the statistics counters
- */
-extern StatCounters *snmpStatGet(int);
-
-/* Vary support functions */
-int varyEvaluateMatch(StoreEntry * entry, request_t * req);
-
-/* CygWin & Windows NT Port */
-/* win32.c */
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
-extern int WIN32_Subsystem_Init();
-extern void WIN32_Exit(int);
 #endif

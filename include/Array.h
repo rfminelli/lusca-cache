@@ -3,17 +3,13 @@
  *
  * AUTHOR: Alex Rousskov
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
- * ----------------------------------------------------------
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
+ * --------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by
+ *  the National Science Foundation.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -43,11 +39,11 @@ typedef struct {
 } Array;
 
 
-extern Array *arrayCreate(void);
+extern Array *arrayCreate();
 extern void arrayInit(Array * s);
 extern void arrayClean(Array * s);
-extern void arrayDestroy(Array * s);
-extern void arrayAppend(Array * s, void *obj);
+extern void arrayDestroy(Array *s);
+extern void arrayAppend(Array *s, void *obj);
 extern void arrayPreAppend(Array * s, int app_count);
 
 

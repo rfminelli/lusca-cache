@@ -5,17 +5,17 @@
  * DEBUG: section 19    Store Memory Primitives
  * AUTHOR: Harvest Derived
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -43,10 +43,7 @@ stmemFree(mem_hdr * mem)
 	mem->head = p->next;
 	memFree(p->data, MEM_STMEM_BUF);
 	store_mem_size -= SM_PAGE_SIZE;
-	if (p) {
-	    memFree(p, MEM_MEM_NODE);
-	    p = NULL;
-	}
+	safe_free(p);
     }
     mem->head = mem->tail = NULL;
     mem->origin_offset = 0;
@@ -70,10 +67,7 @@ stmemFreeDataUpto(mem_hdr * mem, int target_offset)
 	    current_offset += lastp->len;
 	    memFree(lastp->data, MEM_STMEM_BUF);
 	    store_mem_size -= SM_PAGE_SIZE;
-	    if (lastp) {
-		memFree(lastp, MEM_MEM_NODE);
-		lastp = NULL;
-	    }
+	    safe_free(lastp);
 	}
     }
     mem->head = p;
@@ -108,7 +102,7 @@ stmemAppend(mem_hdr * mem, const char *data, int len)
     }
     while (len > 0) {
 	len_to_copy = XMIN(len, SM_PAGE_SIZE);
-	p = memAllocate(MEM_MEM_NODE);
+	p = xcalloc(1, sizeof(mem_node));
 	p->next = NULL;
 	p->len = len_to_copy;
 	p->data = memAllocate(MEM_STMEM_BUF);

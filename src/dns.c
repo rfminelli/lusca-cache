@@ -5,17 +5,17 @@
  * DEBUG: section 34    Dnsserver interface
  * AUTHOR: Harvest Derived
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -37,6 +37,7 @@
 
 static helper *dnsservers = NULL;
 
+#if USE_DNSSERVERS
 static void
 dnsStats(StoreEntry * sentry)
 {
@@ -44,9 +45,12 @@ dnsStats(StoreEntry * sentry)
     helperStats(sentry, dnsservers);
 }
 
+#endif
+
 void
 dnsInit(void)
 {
+#if USE_DNSSERVERS
     static int init = 0;
     wordlist *w;
     if (!Config.Program.dnsserver)
@@ -70,6 +74,7 @@ dnsInit(void)
 	    dnsStats, 0, 1);
 	init = 1;
     }
+#endif
 }
 
 void
@@ -89,18 +94,7 @@ void
 dnsSubmit(const char *lookup, HLPCB * callback, void *data)
 {
     char buf[256];
-    static time_t first_warn = 0;
     snprintf(buf, 256, "%s\n", lookup);
-    if (dnsservers->stats.queue_size >= dnsservers->n_running * 2) {
-	if (first_warn == 0)
-	    first_warn = squid_curtime;
-	if (squid_curtime - first_warn > 3 * 60)
-	    fatal("DNS servers not responding for 3 minutes");
-	debug(34, 1) ("dnsSubmit: queue overload, rejecting %s\n", lookup);
-	callback(data, "$fail temporary network problem, pleas retry later");
-	return;
-    }
-    first_warn = 0;
     helperSubmit(dnsservers, buf, callback, data);
 }
 
@@ -115,6 +109,7 @@ snmp_netDnsFn(variable_list * Var, snint * ErrP)
     debug(49, 5) ("snmp_netDnsFn: Processing request:\n", Var->name[LEN_SQ_NET + 1]);
     snmpDebugOid(5, Var->name, Var->name_length);
     *ErrP = SNMP_ERR_NOERROR;
+#if USE_DNSSERVERS
     switch (Var->name[LEN_SQ_NET + 1]) {
     case DNS_REQ:
 	Answer = snmp_var_new_integer(Var->name, Var->name_length,
@@ -135,6 +130,11 @@ snmp_netDnsFn(variable_list * Var, snint * ErrP)
 	*ErrP = SNMP_ERR_NOSUCHNAME;
 	break;
     }
+#else
+    Answer = snmp_var_new_integer(Var->name, Var->name_length,
+	0,
+	SMI_COUNTER32);
+#endif
     return Answer;
 }
 #endif /*SQUID_SNMP */

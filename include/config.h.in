@@ -3,17 +3,13 @@
  *
  * AUTHOR: Duane Wessels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
- * ----------------------------------------------------------
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
+ * --------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by
+ *  the National Science Foundation.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -101,10 +97,7 @@
 #elif defined(__NetBSD__)
 #define _SQUID_NETBSD_
 
-#elif defined(__CYGWIN32__)  || defined(__CYGWIN__) 
-#define _SQUID_CYGWIN_
-
-#elif defined(WIN32) || defined(WINNT) || defined(__WIN32__) || defined(__WIN32)
+#elif defined(__CYGWIN32__)  || defined(__CYGWIN__) || defined(WIN32) || defined(WINNT) || defined(__WIN32__) || defined(__WIN32)
 #define _SQUID_MSWIN_
 
 #elif defined(__APPLE__)
@@ -182,5 +175,18 @@
 #define squid_random rand
 #define squid_srandom srand
 #endif
+
+/* 32 bit integer compatability hack */
+#if SIZEOF_INT == 4
+typedef int num32;
+typedef unsigned int u_num32;
+#elif SIZEOF_LONG == 4
+typedef long num32;
+typedef unsigned long u_num32;
+#else
+typedef long num32;             /* assume that long's are 32bit */
+typedef unsigned long u_num32;
+#endif
+#define NUM32LEN sizeof(num32)  /* this should always be 4 */
 
 #endif /* _CONFIG_H_ */

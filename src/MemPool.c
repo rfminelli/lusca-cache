@@ -5,17 +5,17 @@
  * DEBUG: section 63    Low Level Memory Pool Management
  * AUTHOR: Alex Rousskov
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -39,9 +39,6 @@
 
 #define MB ((size_t)1024*1024)
 
-/* exported */
-unsigned int mem_pool_alloc_calls = 0;
-unsigned int mem_pool_free_calls = 0;
 
 /* module globals */
 
@@ -61,6 +58,7 @@ static Stack Pools;
 static void memShrink(ssize_t new_limit);
 static void memPoolDescribe(const MemPool * pool);
 static void memPoolShrink(MemPool * pool, ssize_t new_limit);
+
 
 
 static double
@@ -162,7 +160,7 @@ memPoolMeterReport(const MemPoolMeter * pm, size_t obj_size,
     int alloc_count, int inuse_count, int idle_count, StoreEntry * e)
 {
     assert(pm);
-    storeAppendPrintf(e, "%d\t %d\t %d\t %.2f\t %d\t %d\t %d\t %d\t %d\t %d\t %d\t %d\t %d\t %.2f\t %.2f\t %.2f\t %d\n",
+    storeAppendPrintf(e, "%d\t %d\t %d\t %.2f\t %d\t %d\t %d\t %d\t %d\t %d\t %d\t %d\t %d\t %d\t %d\n",
     /* alloc */
 	alloc_count,
 	toKB(obj_size * pm->alloc.level),
@@ -180,11 +178,9 @@ memPoolMeterReport(const MemPoolMeter * pm, size_t obj_size,
 	toKB(obj_size * pm->idle.hwater_level),
     /* (int)rint(xpercent(pm->idle.level, pm->alloc.level)), */
     /* saved */
-	pm->saved.count,
-	xpercent(pm->saved.count, mem_traffic_volume.count),
-	xpercent(obj_size * gb_to_double(&pm->saved), gb_to_double(&mem_traffic_volume)),
-	xpercent(pm->saved.count, pm->total.count),
-	pm->total.count);
+	xpercentInt(pm->saved.count, mem_traffic_volume.count),
+	xpercentInt(obj_size * gb_to_double(&pm->saved), gb_to_double(&mem_traffic_volume)),
+	xpercentInt(pm->saved.count, pm->total.count));
 }
 
 /* MemMeter */
@@ -235,7 +231,6 @@ memPoolAlloc(MemPool * pool)
     gb_inc(&TheMeter.total, pool->obj_size);
     memMeterAdd(TheMeter.inuse, pool->obj_size);
     gb_inc(&mem_traffic_volume, pool->obj_size);
-    mem_pool_alloc_calls++;
     if (pool->pstack.count) {
 	assert(pool->meter.idle.level);
 	memMeterDec(pool->meter.idle);
@@ -257,7 +252,6 @@ memPoolFree(MemPool * pool, void *obj)
     assert(pool && obj);
     memMeterDec(pool->meter.inuse);
     memMeterDel(TheMeter.inuse, pool->obj_size);
-    mem_pool_free_calls++;
     if (TheMeter.idle.level + pool->obj_size <= mem_idle_limit) {
 	memMeterInc(pool->meter.idle);
 	memMeterAdd(TheMeter.idle, pool->obj_size);
@@ -346,14 +340,13 @@ memReport(StoreEntry * e)
     storeAppendPrintf(e, "Current memory usage:\n");
     /* heading */
     storeAppendPrintf(e, "Pool\t Obj Size\t"
-	"Allocated\t\t\t\t\t In Use\t\t\t\t Idle\t\t\t Allocations Saved\t\t\t Hit Rate\t\n"
+	"Allocated\t\t\t\t\t In Use\t\t\t\t Idle\t\t\t Allocations Saved\t\t Hit Rate\t\n"
 	" \t (bytes)\t"
 	"(#)\t (KB)\t high (KB)\t high (hrs)\t impact (%%total)\t"
 	"(#)\t (KB)\t high (KB)\t portion (%%alloc)\t"
 	"(#)\t (KB)\t high (KB)\t"
-	"(number)\t (%%num)\t (%%vol)\t"
-	"(%%num)\t"
-	"(number)"
+	"(%%number)\t (%%volume)\t"
+	"(%%number)"
 	"\n");
     /* main table */
     for (i = 0; i < Pools.count; i++) {
@@ -378,6 +371,4 @@ memReport(StoreEntry * e)
 	overhd_size, xpercent(overhd_size, TheMeter.inuse.level));
     /* limits */
     storeAppendPrintf(e, "Idle pool limit: %.2f MB\n", toMB(mem_idle_limit));
-    storeAppendPrintf(e, "memPoolAlloc calls: %d\n", mem_pool_alloc_calls);
-    storeAppendPrintf(e, "memPoolFree calls: %d\n", mem_pool_free_calls);
 }

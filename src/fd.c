@@ -5,17 +5,17 @@
  * DEBUG: section 51    Filedescriptor Functions
  * AUTHOR: Duane Wessels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -34,9 +34,6 @@
  */
 
 #include "squid.h"
-
-int default_read_method(int, char *, int);
-int default_write_method(int, const char *, int);
 
 const char *fdTypeStr[] =
 {
@@ -83,12 +80,6 @@ fd_close(int fd)
 	assert(F->read_handler == NULL);
 	assert(F->write_handler == NULL);
     }
-    F->read_method = &default_read_method;
-    F->write_method = &default_write_method;
-#if USE_SSL
-    safe_free(F->ssl);
-    F->ssl = NULL;
-#endif
     debug(51, 3) ("fd_close FD %d %s\n", fd, F->desc);
     F->flags.open = 0;
     fdUpdateBiggest(fd, 0);
@@ -99,24 +90,17 @@ fd_close(int fd)
     F->timeout = 0;
 }
 
-int
-default_read_method(int fd, char *buf, int len)
-{
-    return (read(fd, buf, len));
-}
-
-int
-default_write_method(int fd, const char *buf, int len)
-{
-    return (write(fd, buf, len));
-}
-
 void
 fd_open(int fd, unsigned int type, const char *desc)
 {
-    fde *F;
+    fde *F = &fd_table[fd];
     assert(fd >= 0);
-    F = &fd_table[fd];
+#if USE_ASYNC_IO
+    if (F->flags.closing) {
+	/* Reuse of a closed FD before we have noticed it is closed */
+	fd_close(fd);
+    }
+#endif
     if (F->flags.open) {
 	debug(51, 1) ("WARNING: Closing open FD %4d\n", fd);
 	fd_close(fd);
@@ -125,8 +109,6 @@ fd_open(int fd, unsigned int type, const char *desc)
     debug(51, 3) ("fd_open FD %d %s\n", fd, desc);
     F->type = type;
     F->flags.open = 1;
-    F->read_method = &default_read_method;
-    F->write_method = &default_write_method;
     fdUpdateBiggest(fd, 1);
     if (desc)
 	xstrncpy(F->desc, desc, FD_DESC_SZ);

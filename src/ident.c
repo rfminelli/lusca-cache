@@ -5,17 +5,17 @@
  * DEBUG: section 30    Ident (RFC 931)
  * AUTHOR: Duane Wessels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -47,7 +47,8 @@ typedef struct _IdentClient {
 } IdentClient;
 
 typedef struct _IdentStateData {
-    hash_link hash;		/* must be first */
+    char *key;
+    struct _IdentStateData *next;
     int fd;			/* IDENT fd */
     struct sockaddr_in me;
     struct sockaddr_in my_peer;
@@ -138,8 +139,8 @@ identReadReply(int fd, void *data)
     char *t = NULL;
     int len = -1;
     buf[0] = '\0';
-    statCounter.syscalls.sock.reads++;
-    len = FD_READ_METHOD(fd, buf, BUFSIZ - 1);
+    Counter.syscalls.sock.reads++;
+    len = read(fd, buf, BUFSIZ - 1);
     fd_bytes(fd, len, FD_READ);
     if (len <= 0) {
 	comm_close(fd);
@@ -178,8 +179,6 @@ identClientAdd(IdentStateData * state, IDCB * callback, void *callback_data)
     *C = c;
 }
 
-CBDATA_TYPE(IdentStateData);
-
 /**** PUBLIC FUNCTIONS ****/
 
 /*
@@ -215,14 +214,14 @@ identStart(struct sockaddr_in *me, struct sockaddr_in *my_peer, IDCB * callback,
 	callback(NULL, data);
 	return;
     }
-    CBDATA_INIT_TYPE(IdentStateData);
-    state = cbdataAlloc(IdentStateData);
-    state->hash.key = xstrdup(key);
+    state = xcalloc(1, sizeof(IdentStateData));
+    cbdataAdd(state, cbdataXfree, 0);
+    state->key = xstrdup(key);
     state->fd = fd;
     state->me = *me;
     state->my_peer = *my_peer;
     identClientAdd(state, callback, data);
-    hash_join(ident_hash, &state->hash);
+    hash_join(ident_hash, (hash_link *) state);
     comm_add_close_handler(fd,
 	identClose,
 	state);

@@ -1,21 +1,20 @@
-
 /*
  * $Id$
  *
  * DEBUG: section 39    Cache Array Routing Protocol
  * AUTHOR: Eric Stern
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -37,18 +36,15 @@
 
 #if USE_CARP
 
-static OBJH carpCachemgr;
-
 void
 carpInit(void)
 {
     /* calculate load factors */
     int K = 0;
-    double a = 0.0;
-    double dJ;
-    double Xn;
-    double P_last;
-    double X_last;
+    float a = 0.0;
+    float Xn;
+    float P_last;
+    float X_last;
     int k;
     peer *p;
     for (p = Config.peers; p; p = p->next) {
@@ -57,41 +53,38 @@ carpInit(void)
     }
     if (a == 0.0) {
 	for (p = Config.peers; p; p = p->next)
-	    p->carp.load_multiplier = 1.0;
+	    p->carp.load_multiplier = 1;
 	return;
     }
     /*
      * sum of carp-load-factor's for all cache_peer's in squid.conf
-     * must equal 1.0.  If this doesn't work, see
-     * http://www.eskimo.com/~scs/C-faq/q14.4.html
+     * must equal 1.0
      */
     assert(1000 == (int) (1000.0 * a));
     k = 1;
     P_last = 0;
     p = Config.peers;
-    p->carp.load_multiplier = pow(p->carp.load_factor * K, 1.0 / K);
+    p->carp.load_multiplier = pow(K * p->carp.load_factor, 1 / K);
     Xn = p->carp.load_multiplier;
     P_last = p->carp.load_factor;
     X_last = p->carp.load_multiplier;
     if (!p->next)
 	return;
     for (p = p->next; p; p = p->next) {
-	k++;
-	dJ = (double) (K - k + 1);
-	p->carp.load_multiplier = (dJ * (p->carp.load_factor - P_last)) / Xn;
-	p->carp.load_multiplier += pow(X_last, dJ);
-	p->carp.load_multiplier = pow(p->carp.load_multiplier, 1 / dJ);
+	p->carp.load_multiplier = ((K - k + 1) * (p->carp.load_factor - P_last)) / Xn;
+	p->carp.load_multiplier += pow(X_last, K - k + 1);
+	p->carp.load_multiplier = pow(p->carp.load_multiplier, 1 / (K - k + 1));
 	Xn *= p->carp.load_multiplier;
 	X_last = p->carp.load_multiplier;
+	k++;
 	P_last = p->carp.load_factor;
     }
-    cachemgrRegister("carp", "CARP information", carpCachemgr, 0, 1);
 }
 
 peer *
 carpSelectParent(request_t * request)
 {
-#define ROTATE_LEFT(x, n) (((x) << (n)) | ((x) >> (((sizeof(unsigned long)*8)-(n)))))
+#define ROTATE_LEFT(x, n) (((x) << (n)) | ((x) >> ((sizeof(u_long)*8)-(n))))
     const char *c;
     peer *p = NULL;
     peer *tp;
@@ -125,28 +118,4 @@ carpSelectParent(request_t * request)
 	debug(39, 3) ("carpSelectParent: selected CARP %s\n", p->host);
     return p;
 }
-
-static void
-carpCachemgr(StoreEntry * sentry)
-{
-    peer *p;
-    int sumfetches = 0;
-    storeAppendPrintf(sentry, "%24s %10s %10s %10s %10s\n",
-	"Hostname",
-	"Hash",
-	"Multiplier",
-	"Factor",
-	"Actual");
-    for (p = Config.peers; p; p = p->next)
-	sumfetches += p->stats.fetches;
-    for (p = Config.peers; p; p = p->next) {
-	storeAppendPrintf(sentry, "%24s %10x %10f %10f %10f\n",
-	    p->host, p->carp.hash,
-	    p->carp.load_multiplier,
-	    p->carp.load_factor,
-	    sumfetches ? (double) p->stats.fetches / sumfetches : -1.0);
-    }
-
-}
-
 #endif

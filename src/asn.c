@@ -1,21 +1,20 @@
-
 /*
  * $Id$
  *
  * DEBUG: section 53    AS Number handling
  * AUTHOR: Duane Wessels, Kostas Anagnostakis
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -63,7 +62,6 @@ struct _as_info {
 
 struct _ASState {
     StoreEntry *entry;
-    store_client *sc;
     request_t *request;
     int as_number;
     off_t seen;
@@ -92,6 +90,9 @@ static void asnAclInitialize(acl * acls);
 static void asStateFree(void *data);
 static void destroyRadixNodeInfo(as_info *);
 static OBJH asnStats;
+
+extern struct radix_node *rn_lookup(void *, void *, void *);
+
 
 /* PUBLIC */
 
@@ -148,14 +149,12 @@ asnAclInitialize(acl * acls)
 
 /* initialize the radix tree structure */
 
-CBDATA_TYPE(ASState);
 void
 asnInit(void)
 {
     extern int max_keylen;
     static int inited = 0;
     max_keylen = 40;
-    CBDATA_INIT_TYPE(ASState);
     if (0 == inited++)
 	rn_init();
     rn_inithead((void **) &AS_tree_head, 8);
@@ -186,8 +185,8 @@ asnCacheStart(int as)
     LOCAL_ARRAY(char, asres, 4096);
     StoreEntry *e;
     request_t *req;
-    ASState *asState;
-    asState = cbdataAlloc(ASState);
+    ASState *asState = xcalloc(1, sizeof(ASState));
+    cbdataAdd(asState, cbdataXfree, 0);
     debug(53, 3) ("asnCacheStart: AS %d\n", as);
     snprintf(asres, 4096, "whois://%s/!gAS%d", Config.as_whois_server, as);
     asState->as_number = as;
@@ -196,17 +195,16 @@ asnCacheStart(int as)
     asState->request = requestLink(req);
     if ((e = storeGetPublic(asres, METHOD_GET)) == NULL) {
 	e = storeCreateEntry(asres, asres, null_request_flags, METHOD_GET);
-	asState->sc = storeClientListAdd(e, asState);
+	storeClientListAdd(e, asState);
 	fwdStart(-1, e, asState->request);
     } else {
 	storeLockObject(e);
-	asState->sc = storeClientListAdd(e, asState);
+	storeClientListAdd(e, asState);
     }
     asState->entry = e;
     asState->seen = 0;
     asState->offset = 0;
-    storeClientCopy(asState->sc,
-	e,
+    storeClientCopy(e,
 	asState->seen,
 	asState->offset,
 	4096,
@@ -267,21 +265,19 @@ asHandleReply(void *data, char *buf, ssize_t size)
 	asState->seen, asState->offset);
     if (e->store_status == STORE_PENDING) {
 	debug(53, 3) ("asHandleReply: store_status == STORE_PENDING: %s\n", storeUrl(e));
-	storeClientCopy(asState->sc,
-	    e,
+	storeClientCopy(e,
 	    asState->seen,
 	    asState->offset,
-	    4096,
+	    SM_PAGE_SIZE,
 	    buf,
 	    asHandleReply,
 	    asState);
     } else if (asState->seen < e->mem_obj->inmem_hi) {
 	debug(53, 3) ("asHandleReply: asState->seen < e->mem_obj->inmem_hi %s\n", storeUrl(e));
-	storeClientCopy(asState->sc,
-	    e,
+	storeClientCopy(e,
 	    asState->seen,
 	    asState->offset,
-	    4096,
+	    SM_PAGE_SIZE,
 	    buf,
 	    asHandleReply,
 	    asState);
@@ -297,7 +293,7 @@ asStateFree(void *data)
 {
     ASState *asState = data;
     debug(53, 3) ("asnStateFree: %s\n", storeUrl(asState->entry));
-    storeUnregister(asState->sc, asState->entry, asState);
+    storeUnregister(asState->entry, asState);
     storeUnlockObject(asState->entry);
     requestUnlink(asState->request);
     cbdataFree(asState);
@@ -407,12 +403,10 @@ destroyRadixNodeInfo(as_info * e_info)
     xfree(data);
 }
 
-static int
+int
 mask_len(int mask)
 {
     int len = 32;
-    if (mask == 0)
-	return 0;
     while ((mask & 1) == 0) {
 	len--;
 	mask >>= 1;

@@ -5,17 +5,17 @@
  * DEBUG: section 21    Misc Functions
  * AUTHOR: Harvest Derived
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -41,7 +41,7 @@ The Squid Cache (version %s) died.\n\
 You've encountered a fatal error in the Squid Cache version %s.\n\
 If a core file was created (possibly in the swap directory),\n\
 please execute 'gdb squid core' or 'dbx squid core', then type 'where',\n\
-and report the trace back to squid-bugs@squid-cache.org.\n\
+and report the trace back to squid-bugs@ircache.net.\n\
 \n\
 Thanks!\n"
 
@@ -53,16 +53,7 @@ extern void log_trace_done();
 extern void log_trace_init(char *);
 #endif
 
-#ifdef _SQUID_LINUX_
-/* Workaround for crappy glic header files */
-extern int backtrace(void *, int);
-extern void backtrace_symbols_fd(void *, int, int);
-extern int setresuid(uid_t, uid_t, uid_t);
-#endif /* _SQUID_LINUX */
-
 extern void (*failure_notify) (const char *);
-
-MemPool *dlink_node_pool = NULL;
 
 void
 releaseServerSockets(void)
@@ -272,14 +263,6 @@ death(int sig)
 	fflush(stdout);
     }
 #endif /* _SQUID_SOLARIS_ */
-#if HAVE_BACKTRACE_SYMBOLS_FD
-    {
-	static void *(callarray[8192]);
-	int n;
-	n = backtrace(callarray, 8192);
-	backtrace_symbols_fd(callarray, n, fileno(debug_log));
-    }
-#endif
 #endif /* PRINT_STACK_TRACE */
 
 #if SA_RESETHAND == 0
@@ -460,11 +443,9 @@ getMyHostname(void)
 		inet_ntoa(Config.Sockaddr.http->s.sin_addr),
 		host);
 	    present = 1;
-	    if (strchr(host, '.'))
-		return host;
-
+	    return host;
 	}
-	debug(50, 1) ("WARNING: failed to resolve %s to a fully qualified hostname\n",
+	debug(50, 1) ("WARNING: failed to resolve %s to a hostname\n",
 	    inet_ntoa(Config.Sockaddr.http->s.sin_addr));
     }
     /*
@@ -481,8 +462,7 @@ getMyHostname(void)
 	/* use the official name from DNS lookup */
 	xstrncpy(host, h->h_name, SQUIDHOSTNAMELEN);
 	present = 1;
-	if (strchr(host, '.'))
-	    return host;
+	return host;
     }
     fatal("Could not determine fully qualified hostname.  Please set 'visible_hostname'\n");
     return NULL;		/* keep compiler happy */
@@ -497,7 +477,7 @@ uniqueHostname(void)
 void
 safeunlink(const char *s, int quiet)
 {
-    statCounter.syscalls.disk.unlinks++;
+    Counter.syscalls.disk.unlinks++;
     if (unlink(s) < 0 && !quiet)
 	debug(50, 1) ("safeunlink: Couldn't delete %s: %s\n", s, xstrerror());
 }
@@ -580,7 +560,7 @@ writePidFile(void)
 	return;
     enter_suid();
     old_umask = umask(022);
-    fd = file_open(f, O_WRONLY | O_CREAT | O_TRUNC | O_TEXT);
+    fd = file_open(f, O_WRONLY | O_CREAT | O_TRUNC);
     umask(old_umask);
     leave_suid();
     if (fd < 0) {
@@ -589,7 +569,7 @@ writePidFile(void)
 	return;
     }
     snprintf(buf, 32, "%d\n", (int) getpid());
-    FD_WRITE_METHOD(fd, buf, strlen(buf));
+    write(fd, buf, strlen(buf));
     file_close(fd);
 }
 
@@ -756,30 +736,14 @@ logsFlush(void)
 {
     if (debug_log)
 	fflush(debug_log);
+    if (cache_useragent_log)
+	fflush(cache_useragent_log);
 }
 
 char *
 checkNullString(char *p)
 {
     return p ? p : "(NULL)";
-}
-
-dlink_node *
-dlinkNodeNew()
-{
-    if (dlink_node_pool == NULL)
-	dlink_node_pool = memPoolCreate("Dlink list nodes", sizeof(dlink_node));
-    /* where should we call memPoolDestroy(dlink_node_pool); */
-    return memPoolAlloc(dlink_node_pool);
-}
-
-/* the node needs to be unlinked FIRST */
-void
-dlinkNodeDelete(dlink_node * m)
-{
-    if (m == NULL)
-	return;
-    memPoolFree(dlink_node_pool, m);
 }
 
 void
@@ -884,13 +848,13 @@ debugObj(int section, int level, const char *label, void *obj, ObjPackMethod pm)
 int
 stringHasWhitespace(const char *s)
 {
-    return strpbrk(s, w_space) != NULL;
+    return (strcspn(s, w_space) != strlen(s));
 }
 
 void
 linklistPush(link_list ** L, void *p)
 {
-    link_list *l = memAllocate(MEM_LINK_LIST);
+    link_list *l = xmalloc(sizeof(*l));
     l->next = NULL;
     l->ptr = p;
     while (*L)
@@ -908,9 +872,10 @@ linklistShift(link_list ** L)
     l = *L;
     p = l->ptr;
     *L = (*L)->next;
-    memFree(l, MEM_LINK_LIST);
+    xfree(l);
     return p;
 }
+
 
 /*
  * Same as rename(2) but complains if something goes wrong;
@@ -939,80 +904,4 @@ stringHasCntl(const char *s)
 	    return 1;
     }
     return 0;
-}
-
-/*
- * isPowTen returns true if its argument is an integer power of
- * 10.  Its used for logging of certain error messages that can
- * occur often, but that we don't want to fill cache.log with.
- */
-int
-isPowTen(int count)
-{
-    double x = log(count) / log(10.0);
-    if (0.0 != x - (double) (int) x)
-	return 0;
-    return 1;
-}
-
-void
-parseEtcHosts(void)
-{
-    FILE *fp;
-    char buf[1024];
-    char buf2[512];
-    char *nt = buf;
-    char *lt = buf;
-    char *addr = buf;
-    char *host = NULL;
-    if (NULL == Config.etcHostsPath)
-	return;
-    if (0 == strcmp(Config.etcHostsPath, "none"))
-	return;
-    fp = fopen(Config.etcHostsPath, "r");
-    if (fp == NULL) {
-	debug(1, 1) ("parseEtcHosts: %s: %s\n",
-	    Config.etcHostsPath, xstrerror());
-	return;
-    }
-#if defined(_SQUID_CYGWIN_)
-    setmode(fileno(fp), O_TEXT);
-#endif
-    while (fgets(buf, 1024, fp)) {	/* for each line */
-	wordlist *hosts = NULL;
-	if (buf[0] == '#')	/* MS-windows likes to add comments */
-	    continue;
-	lt = buf;
-	addr = buf;
-	debug(1, 5) ("etc_hosts: line is '%s'\n", buf);
-	nt = strpbrk(lt, w_space);
-	if (nt == NULL)		/* empty line */
-	    continue;
-	*nt = '\0';		/* null-terminate the address */
-	debug(1, 5) ("etc_hosts: address is '%s'\n", addr);
-	lt = nt + 1;
-	while ((nt = strpbrk(lt, w_space))) {
-	    if (nt == lt) {	/* multiple spaces */
-		debug(1, 5) ("etc_hosts: multiple spaces, skipping\n");
-		lt = nt + 1;
-		continue;
-	    }
-	    *nt = '\0';
-	    debug(1, 5) ("etc_hosts: got hostname '%s'\n", lt);
-	    if (Config.appendDomain && !strchr(lt, '.')) {
-		/* I know it's ugly, but it's only at reconfig */
-		strncpy(buf2, lt, 512);
-		strncat(buf2, Config.appendDomain, 512 - strlen(lt));
-		host = buf2;
-	    } else {
-		host = lt;
-	    }
-	    wordlistAdd(&hosts, host);
-	    if (ipcacheAddEntryFromHosts(host, addr) != 0)
-		continue;	/* invalid address, continuing is useless */
-	    lt = nt + 1;
-	}
-	fqdncacheAddEntryFromHosts(addr, hosts);
-	wordlistDestroy(&hosts);
-    }
 }

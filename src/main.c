@@ -5,17 +5,17 @@
  * DEBUG: section 1     Startup and Main Loop
  * AUTHOR: Harvest Derived
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -73,8 +73,6 @@ static EVH SquidShutdown;
 static void mainSetCwd(void);
 static int checkRunningPid(void);
 
-static const char *squid_start_script = "squid_start";
-
 #if TEST_ACCESS
 #include "test_access.c"
 #endif
@@ -101,7 +99,6 @@ usage(void)
 	"       -F        Don't serve any requests until store is rebuilt.\n"
 	"       -N        No daemon mode.\n"
 	"       -R        Do not set REUSEADDR on port.\n"
-	"       -S        Double-check swap during rebuild.\n"
 	"       -V        Virtual host httpd-accelerator.\n"
 	"       -X        Force full debugging.\n"
 	"       -Y        Only return UDP_HIT or UDP_MISS_NOFETCH during fast reload.\n",
@@ -280,7 +277,7 @@ shut_down(int sig)
 static void
 serverConnectionsOpen(void)
 {
-    clientOpenListenSockets();
+    clientHttpConnectionsOpen();
     icpConnectionsOpen();
 #if USE_HTCP
     htcpInit();
@@ -337,29 +334,26 @@ mainReconfigure(void)
 #if USE_WCCP
     wccpConnectionClose();
 #endif
-#if USE_DNSSERVERS
     dnsShutdown();
-#else
+#if !USE_DNSSERVERS
     idnsShutdown();
 #endif
     redirectShutdown();
     authenticateShutdown();
     storeDirCloseSwapLogs();
     errorClean();
+    mimeFreeMemory();
     parseConfigFile(ConfigFile);
     _db_init(Config.Log.log, Config.debugOptions);
     ipcache_restart();		/* clear stuck entries */
-    authenticateUserCacheRestart();	/* clear stuck ACL entries */
     fqdncache_restart();	/* sigh, fqdncache too */
-    parseEtcHosts();
     errorInitialize();		/* reload error pages */
-#if USE_DNSSERVERS
     dnsInit();
-#else
+#if !USE_DNSSERVERS
     idnsInit();
 #endif
     redirectInit();
-    authenticateInit(&Config.authConfig);
+    authenticateInit();
 #if USE_WCCP
     wccpInit();
 #endif
@@ -381,26 +375,12 @@ static void
 mainRotate(void)
 {
     icmpClose();
-#if USE_DNSSERVERS
-    dnsShutdown();
-#endif
-    redirectShutdown();
-    authenticateShutdown();
     _db_rotate_log();		/* cache.log */
     storeDirWriteCleanLogs(1);
     storeLogRotate();		/* store.log */
     accessLogRotate();		/* access.log */
     useragentRotateLog();	/* useragent.log */
-    refererRotateLog();		/* referer.log */
-#if WIP_FWD_LOG
-    fwdLogRotate();
-#endif
     icmpOpen();
-#if USE_DNSSERVERS
-    dnsInit();
-#endif
-    redirectInit();
-    authenticateInit(&Config.authConfig);
 }
 
 static void
@@ -422,19 +402,29 @@ setEffectiveUser(void)
 static void
 mainSetCwd(void)
 {
-    char *p;
     if (Config.coredump_dir) {
-	if (chdir(Config.coredump_dir) == 0) {
+	if (!chdir(Config.coredump_dir)) {
 	    debug(0, 1) ("Set Current Directory to %s\n", Config.coredump_dir);
 	    return;
 	} else {
 	    debug(50, 0) ("chdir: %s: %s\n", Config.coredump_dir, xstrerror());
 	}
     }
-    /* If we don't have coredump_dir or couldn't cd there, report current dir */
-    p = getcwd(NULL, 0);
-    debug(0, 1) ("Current Directory is %s\n", p);
-    xfree(p);
+    if (!Config.effectiveUser) {
+	char *p = getcwd(NULL, 0);
+	debug(0, 1) ("Current Directory is %s\n", p);
+	xfree(p);
+	return;
+    }
+    /* we were probably started as root, so cd to a swap
+     * directory in case we dump core */
+    if (!chdir(storeSwapDir(0))) {
+	debug(0, 1) ("Set Current Directory to %s\n", storeSwapDir(0));
+	return;
+    } else {
+	debug(50, 0) ("%s: %s\n", storeSwapDir(0), xstrerror());
+	fatal_dump("Cannot cd to swap directory?");
+    }
 }
 
 static void
@@ -473,16 +463,13 @@ mainInitialize(void)
 	disk_init();		/* disk_init must go before ipcache_init() */
     ipcache_init();
     fqdncache_init();
-    parseEtcHosts();
-#if USE_DNSSERVERS
     dnsInit();
-#else
+#if !USE_DNSSERVERS
     idnsInit();
 #endif
     redirectInit();
-    authenticateInit(&Config.authConfig);
+    authenticateInit();
     useragentOpenLog();
-    refererOpenLog();
     httpHeaderInitModule();	/* must go before any header processing (e.g. the one in errorInitialize) */
     httpReplyInitModule();	/* must go before accepting replies */
     errorInitialize();
@@ -498,9 +485,10 @@ mainInitialize(void)
 #endif
 
     if (!configured_once) {
-#if USE_UNLINKD
-	unlinkdInit();
+#if USE_ASYNC_IO
+	aioInit();
 #endif
+	unlinkdInit();
 	urlInitialize();
 	cachemgrInit();
 	statInit();
@@ -564,18 +552,10 @@ main(int argc, char **argv)
     int n;			/* # of GC'd objects */
     time_t loop_delay;
     mode_t oldmask;
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
-    int WIN32_init_err;
-#endif
 
     debug_log = stderr;
     if (FD_SETSIZE < Squid_MaxFD)
 	Squid_MaxFD = FD_SETSIZE;
-
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
-    if ((WIN32_init_err = WIN32_Subsystem_Init()))
-	return WIN32_init_err;
-#endif
 
     /* call mallopt() before anything else */
 #if HAVE_MALLOPT
@@ -624,14 +604,12 @@ main(int argc, char **argv)
 	if (!ConfigFile)
 	    ConfigFile = xstrdup(DefaultConfigFile);
 	assert(!configured_once);
+	cbdataInit();
 #if USE_LEAKFINDER
 	leakInit();
 #endif
-	memInit();
-	cbdataInit();
+	memInit();		/* memInit is required for config parsing */
 	eventInit();		/* eventInit() is required for config parsing */
-	storeFsInit();		/* required for config parsing */
-	authenticateSchemeInit();	/* required for config parsign */
 	parse_err = parseConfigFile(ConfigFile);
 
 	if (opt_parse_cfg_only)
@@ -699,18 +677,18 @@ main(int argc, char **argv)
 	} else if (do_shutdown) {
 	    time_t wait = do_shutdown > 0 ? (int) Config.shutdownLifetime : 0;
 	    debug(1, 1) ("Preparing for shutdown after %d requests\n",
-		statCounter.client_http.requests);
+		Counter.client_http.requests);
 	    debug(1, 1) ("Waiting %d seconds for active connections to finish\n",
 		wait);
 	    do_shutdown = 0;
 	    shutting_down = 1;
 	    serverConnectionsClose();
-#if USE_DNSSERVERS
 	    dnsShutdown();
-#else
+#if !USE_DNSSERVERS
 	    idnsShutdown();
 #endif
 	    redirectShutdown();
+	    authenticateShutdown();
 	    eventAdd("SquidShutdown", SquidShutdown, NULL, (double) (wait + 1), 1);
 	}
 	eventRun();
@@ -767,43 +745,6 @@ sendSignal(void)
     exit(0);
 }
 
-/*
- * This function is run when Squid is in daemon mode, just
- * before the parent forks and starts up the child process.
- * It can be used for admin-specific tasks, such as notifying
- * someone that Squid is (re)started.
- */
-static void
-mainStartScript(const char *prog)
-{
-    char script[SQUID_MAXPATHLEN];
-    char *t;
-    size_t sl = 0;
-    pid_t cpid;
-    pid_t rpid;
-    xstrncpy(script, prog, MAXPATHLEN);
-    if ((t = strrchr(script, '/'))) {
-	*(++t) = '\0';
-	sl = strlen(script);
-    }
-    xstrncpy(&script[sl], squid_start_script, MAXPATHLEN - sl);
-    if ((cpid = fork()) == 0) {
-	/* child */
-	execl(script, squid_start_script, 0);
-	_exit(0);
-    } else {
-	do {
-#ifdef _SQUID_NEXT_
-	    union wait status;
-	    rpid = wait3(&status, 0, NULL);
-#else
-	    int status;
-	    rpid = waitpid(-1, &status, 0);
-#endif
-	} while (rpid != cpid);
-    }
-}
-
 static int
 checkRunningPid(void)
 {
@@ -832,7 +773,6 @@ watch_child(char *argv[])
 #endif
     pid_t pid;
     int i;
-    int nullfd;
     if (*(argv[0]) == '(')
 	return;
     openlog(appname, LOG_PID | LOG_NDELAY | LOG_CONS, LOG_LOCAL4);
@@ -844,30 +784,14 @@ watch_child(char *argv[])
 	syslog(LOG_ALERT, "setsid failed: %s", xstrerror());
     closelog();
 #ifdef TIOCNOTTY
-    if ((i = open("/dev/tty", O_RDWR | O_TEXT)) >= 0) {
+    if ((i = open("/dev/tty", O_RDWR)) >= 0) {
 	ioctl(i, TIOCNOTTY, NULL);
 	close(i);
     }
 #endif
-
-
-    /*
-     * RBCOLLINS - if cygwin stackdumps when squid is run without
-     * -N, check the cygwin1.dll version, it needs to be AT LEAST
-     * 1.1.3.  execvp had a bit overflow error in a loop..
-     */
-    /* Connect stdio to /dev/null in daemon mode */
-    nullfd = open("/dev/null", O_RDWR | O_TEXT);
-    dup2(nullfd, 0);
-    if (opt_debug_stderr < 0) {
-	dup2(nullfd, 1);
-	dup2(nullfd, 2);
-    }
-    /* Close all else */
-    for (i = 3; i < Squid_MaxFD; i++)
+    for (i = 0; i < Squid_MaxFD; i++)
 	close(i);
     for (;;) {
-	mainStartScript(argv[0]);
 	if ((pid = fork()) == 0) {
 	    /* child */
 	    openlog(appname, LOG_PID | LOG_NDELAY | LOG_CONS, LOG_LOCAL4);
@@ -909,15 +833,6 @@ watch_child(char *argv[])
 	if (WIFEXITED(status))
 	    if (WEXITSTATUS(status) == 0)
 		exit(0);
-	if (WIFSIGNALED(status)) {
-	    switch (WTERMSIG(status)) {
-	    case SIGKILL:
-		exit(0);
-		break;
-	    default:
-		break;
-	    }
-	}
 	squid_signal(SIGINT, SIG_DFL, SA_RESTART);
 	sleep(3);
     }
@@ -945,24 +860,22 @@ SquidShutdown(void *unused)
 #endif
     releaseServerSockets();
     commCloseAllSockets();
-    authenticateShutdown();
-#if USE_UNLINKD
     unlinkdClose();
+#if USE_ASYNC_IO
+    aioSync();			/* flush pending object writes / unlinks */
 #endif
-    storeDirSync();		/* Flush pending object writes/unlinks */
     storeDirWriteCleanLogs(0);
     PrintRusage();
     dumpMallocStats();
-    storeDirSync();		/* Flush log writes */
+#if USE_ASYNC_IO
+    aioSync();			/* flush log writes */
+#endif
     storeLogClose();
     accessLogClose();
-    useragentLogClose();
-#if WIP_FWD_LOG
-    fwdUninit();
+#if USE_ASYNC_IO
+    aioSync();			/* flush log close */
 #endif
-    storeDirSync();		/* Flush log close */
 #if PURIFY || XMALLOC_TRACE
-    storeFsDone();
     configFreeMemory();
     storeFreeMemory();
     /*stmemFreeMemory(); */
@@ -998,9 +911,5 @@ SquidShutdown(void *unused)
 	version_string);
     if (debug_log)
 	fclose(debug_log);
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
-    WIN32_Exit(0);
-#else
     exit(0);
-#endif
 }

@@ -5,17 +5,17 @@
  * DEBUG: section 76    Internal Squid Object handling
  * AUTHOR: Duane, Alex, Henrik
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -44,7 +44,6 @@ internalStart(request_t * request, StoreEntry * entry)
 {
     ErrorState *err;
     const char *upath = strBuf(request->urlpath);
-    http_version_t version;
     debug(76, 3) ("internalStart: %s requesting '%s'\n",
 	inet_ntoa(request->client_addr), upath);
     if (0 == strcmp(upath, "/squid-internal-dynamic/netdb")) {
@@ -55,9 +54,8 @@ internalStart(request_t * request, StoreEntry * entry)
 #else
 	const char *msgbuf = "This cache does not suport Cache Digests.\n";
 #endif
-	httpBuildVersion(&version, 1, 0);
 	httpReplySetHeaders(entry->mem_obj->reply,
-	    version,
+	    1.0,
 	    HTTP_NOT_FOUND,
 	    "Not Found",
 	    "text/plain",
@@ -98,15 +96,8 @@ internalRemoteUri(const char *host, u_short port, const char *dir, const char *n
     static char lc_host[SQUIDHOSTNAMELEN];
     assert(host && port && name);
     /* convert host name to lower case */
-    xstrncpy(lc_host, host, SQUIDHOSTNAMELEN - 1);
+    xstrncpy(lc_host, host, sizeof(lc_host));
     Tolower(lc_host);
-    /*
-     * append the domain in order to mirror the requests with appended
-     * domains
-     */
-    if (Config.appendDomain && !strchr(lc_host, '.'))
-	strncat(lc_host, Config.appendDomain, SQUIDHOSTNAMELEN -
-	    strlen(lc_host) - 1);
     /* build uri in mb */
     memBufReset(&mb);
     memBufPrintf(&mb, "http://%s", lc_host);

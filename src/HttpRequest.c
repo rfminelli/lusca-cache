@@ -5,17 +5,17 @@
  * DEBUG: section 73    HTTP Request
  * AUTHOR: Duane Wessels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -55,12 +55,8 @@ void
 requestDestroy(request_t * req)
 {
     assert(req);
-    if (req->body_connection)
-	clientAbortBody(req);
-    if (req->auth_user_request)
-	authenticateAuthUserRequestUnlock(req->auth_user_request);
+    safe_free(req->body);
     safe_free(req->canonical);
-    safe_free(req->vary_headers);
     stringClean(&req->urlpath);
     httpHeaderClean(&req->header);
     if (req->cache_control)
@@ -145,16 +141,26 @@ httpRequestPrefixLen(const request_t * req)
 	req->header.len + 2;
 }
 
-/*
- * Returns true if HTTP allows us to pass this header on.  Does not
- * check anonymizer (aka header_access) configuration.
- */
+/* returns true if header is allowed to be passed on */
 int
 httpRequestHdrAllowed(const HttpHeaderEntry * e, String * strConn)
 {
     assert(e);
+    /* check with anonymizer tables */
+    if (CBIT_TEST(Config.anonymize_headers, e->id))
+	return 0;
     /* check connection header */
     if (strConn && strListIsMember(strConn, strBuf(e->name), ','))
+	return 0;
+    return 1;
+}
+
+/* returns true if header is allowed to be passed on */
+int
+httpRequestHdrAllowedByName(http_hdr_type id)
+{
+    /* check with anonymizer tables */
+    if (CBIT_TEST(Config.anonymize_headers, id))
 	return 0;
     return 1;
 }

@@ -1,21 +1,20 @@
-
 /*
  * $Id$
  *
  * DEBUG: section 71    Store Digest Manager
  * AUTHOR: Alex Rousskov
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -51,7 +50,7 @@
 typedef struct {
     StoreDigestCBlock cblock;
     int rebuild_lock;		/* bucket number */
-    generic_cbdata *rewrite_lock;	/* points to store entry with the digest */
+    StoreEntry *rewrite_lock;	/* store entry with the digest */
     int rebuild_offset;
     int rewrite_offset;
     int rebuild_count;
@@ -135,17 +134,17 @@ storeDigestDel(const StoreEntry * entry)
     }
     assert(entry && store_digest);
     debug(71, 6) ("storeDigestDel: checking entry, key: %s\n",
-	storeKeyText(entry->hash.key));
+	storeKeyText(entry->key));
     if (!EBIT_TEST(entry->flags, KEY_PRIVATE)) {
-	if (!cacheDigestTest(store_digest, entry->hash.key)) {
+	if (!cacheDigestTest(store_digest, entry->key)) {
 	    sd_stats.del_lost_count++;
 	    debug(71, 6) ("storeDigestDel: lost entry, key: %s url: %s\n",
-		storeKeyText(entry->hash.key), storeUrl(entry));
+		storeKeyText(entry->key), storeUrl(entry));
 	} else {
 	    sd_stats.del_count++;
-	    cacheDigestDel(store_digest, entry->hash.key);
+	    cacheDigestDel(store_digest, entry->key);
 	    debug(71, 6) ("storeDigestDel: deled entry, key: %s\n",
-		storeKeyText(entry->hash.key));
+		storeKeyText(entry->key));
 	}
     }
 #endif
@@ -187,7 +186,7 @@ storeDigestAddable(const StoreEntry * e)
     /* add some stats! XXX */
 
     debug(71, 6) ("storeDigestAddable: checking entry, key: %s\n",
-	storeKeyText(e->hash.key));
+	storeKeyText(e->key));
 
     /* check various entry flags (mimics storeCheckCachable XXX) */
     if (!EBIT_TEST(e->flags, ENTRY_CACHABLE)) {
@@ -222,19 +221,9 @@ storeDigestAddable(const StoreEntry * e)
 	    Config.digest.rebuild_period);
 	return 0;
     }
-    /*
-     * idea: how about also skipping very fresh (thus, potentially
-     * unstable) entries? Should be configurable through
-     * cd_refresh_pattern, of course.
-     */
-    /*
-     * idea: skip objects that are going to be purged before the next
-     * update.
-     */
-#if OLD_UNUSED_CODE		/* This code isn't applicable anymore, we can't fix it atm either :( */
-    if ((squid_curtime + Config.digest.rebuild_period) - e->lastref > storeExpiredReferenceAge())
-	return 0;
-#endif
+    /* idea: how about also skipping very fresh (thus, potentially unstable) 
+     * entries? Should be configurable through cd_refresh_pattern, of course */
+
     return 1;
 }
 
@@ -245,14 +234,14 @@ storeDigestAdd(const StoreEntry * entry)
 
     if (storeDigestAddable(entry)) {
 	sd_stats.add_count++;
-	if (cacheDigestTest(store_digest, entry->hash.key))
+	if (cacheDigestTest(store_digest, entry->key))
 	    sd_stats.add_coll_count++;
-	cacheDigestAdd(store_digest, entry->hash.key);
+	cacheDigestAdd(store_digest, entry->key);
 	debug(71, 6) ("storeDigestAdd: added entry, key: %s\n",
-	    storeKeyText(entry->hash.key));
+	    storeKeyText(entry->key));
     } else {
 	sd_stats.rej_count++;
-	if (cacheDigestTest(store_digest, entry->hash.key))
+	if (cacheDigestTest(store_digest, entry->key))
 	    sd_stats.rej_coll_count++;
     }
 }
@@ -350,11 +339,10 @@ storeDigestRewriteStart(void *datanotused)
     url = internalLocalUri("/squid-internal-periodic/", StoreDigestFileName);
     flags = null_request_flags;
     flags.cachable = 1;
-    e = storeCreateEntry(url, url, flags, METHOD_GET);
-    assert(e);
-    sd_state.rewrite_lock = cbdataAlloc(generic_cbdata);
-    sd_state.rewrite_lock->data = e;
-    debug(71, 3) ("storeDigestRewrite: url: %s key: %s\n", url, storeKeyText(e->hash.key));
+    sd_state.rewrite_lock = e = storeCreateEntry(url, url, flags, METHOD_GET);
+    assert(sd_state.rewrite_lock);
+    cbdataAdd(sd_state.rewrite_lock, NULL, 0);
+    debug(71, 3) ("storeDigestRewrite: url: %s key: %s\n", url, storeKeyText(e->key));
     e->mem_obj->request = requestLink(urlParse(METHOD_GET, url));
     /* wait for rebuild (if any) to finish */
     if (sd_state.rebuild_lock) {
@@ -367,20 +355,17 @@ storeDigestRewriteStart(void *datanotused)
 static void
 storeDigestRewriteResume(void)
 {
-    StoreEntry *e;
-    http_version_t version;
+    StoreEntry *e = sd_state.rewrite_lock;
 
     assert(sd_state.rewrite_lock);
     assert(!sd_state.rebuild_lock);
-    e = sd_state.rewrite_lock->data;
     sd_state.rewrite_offset = 0;
     EBIT_SET(e->flags, ENTRY_SPECIAL);
     /* setting public key will purge old digest entry if any */
     storeSetPublicKey(e);
     /* fake reply */
     httpReplyReset(e->mem_obj->reply);
-    httpBuildVersion(&version, 1, 0);
-    httpReplySetHeaders(e->mem_obj->reply, version, 200, "Cache Digest OK",
+    httpReplySetHeaders(e->mem_obj->reply, 1.0, 200, "Cache Digest OK",
 	"application/cache-digest", store_digest->mask_size + sizeof(sd_state.cblock),
 	squid_curtime, squid_curtime + Config.digest.rewrite_period);
     debug(71, 3) ("storeDigestRewrite: entry expires on %d (%+d)\n",
@@ -396,7 +381,7 @@ storeDigestRewriteResume(void)
 static void
 storeDigestRewriteFinish(StoreEntry * e)
 {
-    assert(sd_state.rewrite_lock && e == sd_state.rewrite_lock->data);
+    assert(e == sd_state.rewrite_lock);
     storeComplete(e);
     storeTimestampsSet(e);
     debug(71, 2) ("storeDigestRewriteFinish: digest expires at %d (%+d)\n",
@@ -405,9 +390,12 @@ storeDigestRewriteFinish(StoreEntry * e)
     requestUnlink(e->mem_obj->request);
     e->mem_obj->request = NULL;
     storeUnlockObject(e);
+    /*
+     * note, it won't really get free()'d here because we used
+     * MEM_DONTFREE in the call to cbdataAdd().
+     */
     cbdataFree(sd_state.rewrite_lock);
-    e = NULL;
-    sd_state.rewrite_lock = NULL;
+    sd_state.rewrite_lock = e = NULL;
     sd_state.rewrite_count++;
     eventAdd("storeDigestRewriteStart", storeDigestRewriteStart, NULL, (double)
 	Config.digest.rewrite_period, 1);
@@ -420,11 +408,10 @@ storeDigestRewriteFinish(StoreEntry * e)
 static void
 storeDigestSwapOutStep(void *data)
 {
-    StoreEntry *e;
+    StoreEntry *e = data;
     int chunk_size = Config.digest.swapout_chunk_size;
-    assert(data == sd_state.rewrite_lock);
-    e = (StoreEntry *) ((generic_cbdata *) data)->data;
     assert(e);
+    assert(e == sd_state.rewrite_lock);
     /* _add_ check that nothing bad happened while we were waiting @?@ @?@ */
     if (sd_state.rewrite_offset + chunk_size > store_digest->mask_size)
 	chunk_size = store_digest->mask_size - sd_state.rewrite_offset;
@@ -436,7 +423,7 @@ storeDigestSwapOutStep(void *data)
     if (sd_state.rewrite_offset >= store_digest->mask_size)
 	storeDigestRewriteFinish(e);
     else
-	eventAdd("storeDigestSwapOutStep", storeDigestSwapOutStep, data, 0.0, 1);
+	eventAdd("storeDigestSwapOutStep", storeDigestSwapOutStep, e, 0.0, 1);
 }
 
 static void

@@ -5,17 +5,17 @@
  * DEBUG: section 26    Secure Sockets Layer Proxy
  * AUTHOR: Duane Wessels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -47,7 +47,6 @@ typedef struct {
 	char *buf;
     } client, server;
     size_t *size_ptr;		/* pointer to size in an ConnStateData for logging */
-    int *status_ptr;		/* pointer to status for logging */
 #if DELAY_POOLS
     delay_id delay_id;
 #endif
@@ -199,16 +198,16 @@ sslReadServer(int fd, void *data)
 #if DELAY_POOLS
     read_sz = delayBytesWanted(sslState->delay_id, 1, read_sz);
 #endif
-    statCounter.syscalls.sock.reads++;
-    len = FD_READ_METHOD(fd, sslState->server.buf + sslState->server.len, read_sz);
+    Counter.syscalls.sock.reads++;
+    len = read(fd, sslState->server.buf + sslState->server.len, read_sz);
     debug(26, 3) ("sslReadServer: FD %d, read   %d bytes\n", fd, len);
     if (len > 0) {
 	fd_bytes(fd, len, FD_READ);
 #if DELAY_POOLS
 	delayBytesIn(sslState->delay_id, len);
 #endif
-	kb_incr(&statCounter.server.all.kbytes_in, len);
-	kb_incr(&statCounter.server.other.kbytes_in, len);
+	kb_incr(&Counter.server.all.kbytes_in, len);
+	kb_incr(&Counter.server.other.kbytes_in, len);
 	sslState->server.len += len;
     }
     cbdataLock(sslState);
@@ -235,26 +234,19 @@ sslReadClient(int fd, void *data)
     debug(26, 3) ("sslReadClient: FD %d, reading %d bytes at offset %d\n",
 	fd, SQUID_TCP_SO_RCVBUF - sslState->client.len,
 	sslState->client.len);
-    statCounter.syscalls.sock.reads++;
-    len = FD_READ_METHOD(fd,
+    Counter.syscalls.sock.reads++;
+    len = read(fd,
 	sslState->client.buf + sslState->client.len,
 	SQUID_TCP_SO_RCVBUF - sslState->client.len);
     debug(26, 3) ("sslReadClient: FD %d, read   %d bytes\n", fd, len);
     if (len > 0) {
 	fd_bytes(fd, len, FD_READ);
-	kb_incr(&statCounter.client_http.kbytes_in, len);
+	kb_incr(&Counter.client_http.kbytes_in, len);
 	sslState->client.len += len;
     }
     cbdataLock(sslState);
     if (len < 0) {
-	int level = 1;
-#ifdef ECONNRESET
-	if (errno == ECONNRESET)
-	    level = 2;
-#endif
-	if (ignoreErrno(errno))
-	    level = 3;
-	debug(50, level) ("sslReadClient: FD %d: read failure: %s\n",
+	debug(50, ECONNRESET == errno ? 3 : 1) ("sslReadClient: FD %d: read failure: %s\n",
 	    fd, xstrerror());
 	if (!ignoreErrno(errno))
 	    comm_close(fd);
@@ -275,15 +267,15 @@ sslWriteServer(int fd, void *data)
     assert(fd == sslState->server.fd);
     debug(26, 3) ("sslWriteServer: FD %d, %d bytes to write\n",
 	fd, sslState->client.len);
-    statCounter.syscalls.sock.writes++;
-    len = FD_WRITE_METHOD(fd,
+    Counter.syscalls.sock.writes++;
+    len = write(fd,
 	sslState->client.buf,
 	sslState->client.len);
     debug(26, 3) ("sslWriteServer: FD %d, %d bytes written\n", fd, len);
     if (len > 0) {
 	fd_bytes(fd, len, FD_WRITE);
-	kb_incr(&statCounter.server.all.kbytes_out, len);
-	kb_incr(&statCounter.server.other.kbytes_out, len);
+	kb_incr(&Counter.server.all.kbytes_out, len);
+	kb_incr(&Counter.server.other.kbytes_out, len);
 	assert(len <= sslState->client.len);
 	sslState->client.len -= len;
 	if (sslState->client.len > 0) {
@@ -314,14 +306,14 @@ sslWriteClient(int fd, void *data)
     assert(fd == sslState->client.fd);
     debug(26, 3) ("sslWriteClient: FD %d, %d bytes to write\n",
 	fd, sslState->server.len);
-    statCounter.syscalls.sock.writes++;
-    len = FD_WRITE_METHOD(fd,
+    Counter.syscalls.sock.writes++;
+    len = write(fd,
 	sslState->server.buf,
 	sslState->server.len);
     debug(26, 3) ("sslWriteClient: FD %d, %d bytes written\n", fd, len);
     if (len > 0) {
 	fd_bytes(fd, len, FD_WRITE);
-	kb_incr(&statCounter.client_http.kbytes_out, len);
+	kb_incr(&Counter.client_http.kbytes_out, len);
 	assert(len <= sslState->server.len);
 	sslState->server.len -= len;
 	/* increment total object size */
@@ -362,7 +354,6 @@ sslConnected(int fd, void *data)
 {
     SslStateData *sslState = data;
     debug(26, 3) ("sslConnected: FD %d sslState=%p\n", fd, sslState);
-    *sslState->status_ptr = HTTP_OK;
     xstrncpy(sslState->server.buf, conn_established, SQUID_TCP_SO_RCVBUF);
     sslState->server.len = strlen(conn_established);
     sslSetSelect(sslState);
@@ -386,19 +377,9 @@ sslConnectDone(int fdnotused, int status, void *data)
     SslStateData *sslState = data;
     request_t *request = sslState->request;
     ErrorState *err = NULL;
-    if (sslState->servers->peer)
-	hierarchyNote(&sslState->request->hier, sslState->servers->code,
-	    sslState->servers->peer->host);
-    else if (Config.onoff.log_ip_on_direct)
-	hierarchyNote(&sslState->request->hier, sslState->servers->code,
-	    fd_table[sslState->server.fd].ipaddr);
-    else
-	hierarchyNote(&sslState->request->hier, sslState->servers->code,
-	    sslState->host);
     if (status == COMM_ERR_DNS) {
 	debug(26, 4) ("sslConnect: Unknown host: %s\n", sslState->host);
 	err = errorCon(ERR_DNS_FAIL, HTTP_NOT_FOUND);
-	*sslState->status_ptr = HTTP_NOT_FOUND;
 	err->request = requestLink(request);
 	err->dnsserver_msg = xstrdup(dns_error_message);
 	err->callback = sslErrorComplete;
@@ -406,7 +387,6 @@ sslConnectDone(int fdnotused, int status, void *data)
 	errorSend(sslState->client.fd, err);
     } else if (status != COMM_OK) {
 	err = errorCon(ERR_CONNECT_FAIL, HTTP_SERVICE_UNAVAILABLE);
-	*sslState->status_ptr = HTTP_SERVICE_UNAVAILABLE;
 	err->xerrno = errno;
 	err->host = xstrdup(sslState->host);
 	err->port = sslState->port;
@@ -429,44 +409,17 @@ sslConnectDone(int fdnotused, int status, void *data)
     }
 }
 
-CBDATA_TYPE(SslStateData);
 void
-sslStart(int fd, const char *url, request_t * request, size_t * size_ptr, int *status_ptr)
+sslStart(int fd, const char *url, request_t * request, size_t * size_ptr)
 {
     /* Create state structure. */
     SslStateData *sslState = NULL;
     int sock;
     ErrorState *err = NULL;
-    aclCheck_t ch;
-    int answer;
-    /*
-     * client_addr == no_addr indicates this is an "internal" request
-     * from peer_digest.c, asn.c, netdb.c, etc and should always
-     * be allowed.  yuck, I know.
-     */
-    if (request->client_addr.s_addr != no_addr.s_addr) {
-	/*
-	 * Check if this host is allowed to fetch MISSES from us (miss_access)
-	 */
-	memset(&ch, '\0', sizeof(aclCheck_t));
-	ch.src_addr = request->client_addr;
-	ch.my_addr = request->my_addr;
-	ch.my_port = request->my_port;
-	ch.request = request;
-	answer = aclCheckFast(Config.accessList.miss, &ch);
-	if (answer == 0) {
-	    err = errorCon(ERR_FORWARDING_DENIED, HTTP_FORBIDDEN);
-	    *sslState->status_ptr = HTTP_FORBIDDEN;
-	    err->request = requestLink(request);
-	    err->src_addr = request->client_addr;
-	    errorSend(fd, err);
-	    return;
-	}
-    }
     debug(26, 3) ("sslStart: '%s %s'\n",
 	RequestMethodStr[request->method], url);
-    statCounter.server.all.requests++;
-    statCounter.server.other.requests++;
+    Counter.server.all.requests++;
+    Counter.server.other.requests++;
     /* Create socket. */
     sock = comm_open(SOCK_STREAM,
 	0,
@@ -477,14 +430,13 @@ sslStart(int fd, const char *url, request_t * request, size_t * size_ptr, int *s
     if (sock == COMM_ERROR) {
 	debug(26, 4) ("sslStart: Failed because we're out of sockets.\n");
 	err = errorCon(ERR_SOCKET_FAILURE, HTTP_INTERNAL_SERVER_ERROR);
-	*sslState->status_ptr = HTTP_INTERNAL_SERVER_ERROR;
 	err->xerrno = errno;
 	err->request = requestLink(request);
 	errorSend(fd, err);
 	return;
     }
-    CBDATA_INIT_TYPE(SslStateData);
-    sslState = cbdataAlloc(SslStateData);
+    sslState = xcalloc(1, sizeof(SslStateData));
+    cbdataAdd(sslState, cbdataXfree, 0);
 #if DELAY_POOLS
     sslState->delay_id = delayClient(request);
     delayRegisterDelayIdPtr(&sslState->delay_id);
@@ -492,7 +444,6 @@ sslStart(int fd, const char *url, request_t * request, size_t * size_ptr, int *s
     sslState->url = xstrdup(url);
     sslState->request = requestLink(request);
     sslState->size_ptr = size_ptr;
-    sslState->status_ptr = status_ptr;
     sslState->client.fd = fd;
     sslState->server.fd = sock;
     sslState->server.buf = xmalloc(SQUID_TCP_SO_RCVBUF);
@@ -565,7 +516,6 @@ sslPeerSelectComplete(FwdServer * fs, void *data)
     if (fs == NULL) {
 	ErrorState *err;
 	err = errorCon(ERR_CANNOT_FORWARD, HTTP_SERVICE_UNAVAILABLE);
-	*sslState->status_ptr = HTTP_SERVICE_UNAVAILABLE;
 	err->request = requestLink(sslState->request);
 	err->callback = sslErrorComplete;
 	err->callback_data = sslState;
@@ -587,7 +537,6 @@ sslPeerSelectComplete(FwdServer * fs, void *data)
 	sslState->request->peer_login = fs->peer->login;
 	sslState->request->flags.proxying = 1;
     } else {
-	sslState->request->peer_login = NULL;
 	sslState->request->flags.proxying = 0;
     }
 #if DELAY_POOLS
@@ -597,6 +546,9 @@ sslPeerSelectComplete(FwdServer * fs, void *data)
 	sslState->delay_id = 0;
     }
 #endif
+    hierarchyNote(&sslState->request->hier,
+	fs->peer ? fs->code : DIRECT,
+	sslState->host);
     commConnectStart(sslState->server.fd,
 	sslState->host,
 	sslState->port,

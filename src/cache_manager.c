@@ -5,17 +5,17 @@
  * DEBUG: section 16    Cache Manager Objects
  * AUTHOR: Duane Wessels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -49,8 +49,8 @@ typedef struct _action_table {
     char *desc;
     OBJH *handler;
     struct {
-	unsigned int pw_req:1;
-	unsigned int atomic:1;
+	int pw_req:1;
+	int atomic:1;
     } flags;
     struct _action_table *next;
 } action_table;
@@ -253,13 +253,11 @@ cachemgrStart(int fd, request_t * request, StoreEntry * entry)
     if (a->flags.atomic)
 	storeBuffer(entry);
     {
-	http_version_t version;
 	HttpReply *rep = entry->mem_obj->reply;
 	/* prove there are no previous reply headers around */
 	assert(0 == rep->sline.status);
-	httpBuildVersion(&version, 1, 0);
 	httpReplySetHeaders(rep,
-	    version,
+	    (double) 1.0,
 	    HTTP_OK,
 	    NULL,
 	    "text/plain",

@@ -3,17 +3,17 @@
  * $Id$
  *
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -32,6 +32,7 @@
  */
 
 extern FILE *debug_log;		/* NULL */
+extern FILE *cache_useragent_log;	/* NULL */
 extern SquidConfig Config;
 extern SquidConfig2 Config2;
 extern char *ConfigFile;	/* NULL */
@@ -61,6 +62,7 @@ extern const char *memStatusStr[];
 extern const char *pingStatusStr[];
 extern const char *storeStatusStr[];
 extern const char *swapStatusStr[];
+extern dnsStatData DnsStats;
 extern fde *fd_table;		/* NULL */
 extern int Biggest_FD;		/* -1 */
 extern int Number_FD;		/* 0 */
@@ -115,7 +117,7 @@ extern int store_dirs_rebuilding;	/* 1 */
 extern int store_swap_size;	/* 0 */
 extern unsigned long store_mem_size;	/* 0 */
 extern time_t hit_only_mode_until;	/* 0 */
-extern StatCounters statCounter;
+extern StatCounters Counter;
 extern char *err_type_str[];
 extern char *icp_opcode_str[];
 extern char *swap_log_op_str[];
@@ -124,6 +126,12 @@ extern double request_failure_ratio;	/* 0.0 */
 extern double current_dtime;
 extern int store_hash_buckets;	/* 0 */
 extern hash_table *store_table;	/* NULL */
+#if HEAP_REPLACEMENT
+extern heap *store_heap;
+extern heap *inmem_heap;
+#else
+extern dlink_list store_list;
+#endif
 extern dlink_list ClientActiveRequests;
 extern const String StringNull;	/* { 0, 0, NULL } */
 extern const MemBuf MemBufNull;	/* MemBufNULL */
@@ -144,17 +152,3 @@ extern int refresh_nocache_hack;	/* 0 */
 extern request_flags null_request_flags;
 extern int store_open_disk_fd;	/* 0 */
 extern const char *SwapDirType[];
-extern authscheme_entry_t *authscheme_list;	/* NULL */
-extern storefs_entry_t *storefs_list;	/* NULL */
-extern storerepl_entry_t *storerepl_list;	/* NULL */
-extern int store_swap_low;	/* 0 */
-extern int store_swap_high;	/* 0 */
-extern int store_pages_max;	/* 0 */
-extern ssize_t store_maxobjsize;	/* -1 */
-extern RemovalPolicy *mem_policy;
-extern hash_table *proxy_auth_username_cache;	/* NULL */
-extern int incoming_sockets_accepted;
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
-extern unsigned int WIN32_OS_version;	/* 0 */
-extern char WIN32_OS_string[_WIN_OS_STRING_SZ];
-#endif

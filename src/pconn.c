@@ -5,17 +5,17 @@
  * DEBUG: section 48    Persistent Connections
  * AUTHOR: Duane Wessels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -36,13 +36,13 @@
 #include "squid.h"
 
 struct _pconn {
-    hash_link hash;		/* must be first */
+    char *key;
+    struct _pconn *next;
     int *fds;
     int nfds_alloc;
     int nfds;
 };
 
-#define PCONN_FDS_SZ	8	/* pconn set size, increase for better memcache hit rate */
 #define PCONN_HIST_SZ (1<<16)
 int client_pconn_hist[PCONN_HIST_SZ];
 int server_pconn_hist[PCONN_HIST_SZ];
@@ -55,8 +55,6 @@ static struct _pconn *pconnNew(const char *key);
 static void pconnDelete(struct _pconn *p);
 static void pconnRemoveFD(struct _pconn *p, int fd);
 static OBJH pconnHistDump;
-static MemPool *pconn_data_pool = NULL;
-static MemPool *pconn_fds_pool = NULL;
 
 static const char *
 pconnKey(const char *host, u_short port)
@@ -69,26 +67,23 @@ pconnKey(const char *host, u_short port)
 static struct _pconn *
 pconnNew(const char *key)
 {
-    struct _pconn *p = memPoolAlloc(pconn_data_pool);
-    p->hash.key = xstrdup(key);
-    p->nfds_alloc = PCONN_FDS_SZ;
-    p->fds = memPoolAlloc(pconn_fds_pool);
-    debug(48, 3) ("pconnNew: adding %s\n", hashKeyStr(&p->hash));
-    hash_join(table, &p->hash);
+    struct _pconn *p = xcalloc(1, sizeof(struct _pconn));
+    p->key = xstrdup(key);
+    p->nfds_alloc = 2;
+    p->fds = xcalloc(p->nfds_alloc, sizeof(int));
+    debug(48, 3) ("pconnNew: adding %s\n", p->key);
+    hash_join(table, (hash_link *) p);
     return p;
 }
 
 static void
 pconnDelete(struct _pconn *p)
 {
-    debug(48, 3) ("pconnDelete: deleting %s\n", hashKeyStr(&p->hash));
+    debug(48, 3) ("pconnDelete: deleting %s\n", p->key);
     hash_remove_link(table, (hash_link *) p);
-    if (p->nfds_alloc == PCONN_FDS_SZ)
-	memPoolFree(pconn_fds_pool, p->fds);
-    else
-	xfree(p->fds);
-    xfree(p->hash.key);
-    memPoolFree(pconn_data_pool, p);
+    xfree(p->fds);
+    xfree(p->key);
+    xfree(p);
 }
 
 static void
@@ -112,7 +107,7 @@ pconnTimeout(int fd, void *data)
 {
     struct _pconn *p = data;
     assert(table != NULL);
-    debug(48, 3) ("pconnTimeout: FD %d %s\n", fd, hashKeyStr(&p->hash));
+    debug(48, 3) ("pconnTimeout: FD %d %s\n", fd, p->key);
     pconnRemoveFD(p, fd);
     comm_close(fd);
 }
@@ -124,10 +119,9 @@ pconnRead(int fd, void *data)
     struct _pconn *p = data;
     int n;
     assert(table != NULL);
-    statCounter.syscalls.sock.reads++;
-    n = FD_READ_METHOD(fd, buf, 256);
-    debug(48, 3) ("pconnRead: %d bytes from FD %d, %s\n", n, fd,
-	hashKeyStr(&p->hash));
+    Counter.syscalls.sock.reads++;
+    n = read(fd, buf, 256);
+    debug(48, 3) ("pconnRead: %d bytes from FD %d, %s\n", n, fd, p->key);
     pconnRemoveFD(p, fd);
     comm_close(fd);
 }
@@ -174,9 +168,6 @@ pconnInit(void)
 	client_pconn_hist[i] = 0;
 	server_pconn_hist[i] = 0;
     }
-    pconn_data_pool = memPoolCreate("pconn_data", sizeof(struct _pconn));
-    pconn_fds_pool = memPoolCreate("pconn_fds", PCONN_FDS_SZ * sizeof(int));
-
     cachemgrRegister("pconn",
 	"Persistent Connection Utilization Histograms",
 	pconnHistDump, 0, 1);
@@ -209,10 +200,7 @@ pconnPush(int fd, const char *host, u_short port)
 	old = p->fds;
 	p->fds = xmalloc(p->nfds_alloc * sizeof(int));
 	xmemcpy(p->fds, old, p->nfds * sizeof(int));
-	if (p->nfds == PCONN_FDS_SZ)
-	    memPoolFree(pconn_fds_pool, old);
-	else
-	    xfree(old);
+	xfree(old);
     }
     p->fds[p->nfds++] = fd;
     commSetSelect(fd, COMM_SELECT_READ, pconnRead, p, 0);

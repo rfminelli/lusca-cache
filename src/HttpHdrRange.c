@@ -5,17 +5,17 @@
  * DEBUG: section 64    HTTP Range Header
  * AUTHOR: Alex Rousskov
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -208,7 +208,7 @@ httpHdrRangeSpecMergeWith(HttpHdrRangeSpec * recep, const HttpHdrRangeSpec * don
  * Range
  */
 
-static HttpHdrRange *
+HttpHdrRange *
 httpHdrRangeCreate(void)
 {
     HttpHdrRange *r = memAllocate(MEM_HTTP_HDR_RANGE);
@@ -467,26 +467,7 @@ httpHdrRangeBoundaryStr(clientHttpRequest * http)
     assert(http);
     stringAppend(&b, full_appname_string, strlen(full_appname_string));
     stringAppend(&b, ":", 1);
-    key = storeKeyText(http->entry->hash.key);
+    key = storeKeyText(http->entry->key);
     stringAppend(&b, key, strlen(key));
     return b;
-}
-
-/*  
- * Return true if the first range offset is larger than the configured
- * limit.
- */
-int
-httpHdrRangeOffsetLimit(HttpHdrRange * range)
-{
-    if (NULL == range)
-	/* not a range request */
-	return 0;
-    if (-1 == Config.rangeOffsetLimit)
-	/* disabled */
-	return 0;
-    if (Config.rangeOffsetLimit >= httpHdrRangeFirstOffset(range))
-	/* below the limit */
-	return 0;
-    return 1;
 }

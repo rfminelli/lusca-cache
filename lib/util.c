@@ -5,17 +5,17 @@
  * DEBUG: 
  * AUTHOR: Harvest Derived
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -70,17 +70,14 @@
 #include "util.h"
 #include "snprintf.h"
 
-static void default_failure_notify(const char *);
-
-void (*failure_notify) (const char *) = default_failure_notify;
+void (*failure_notify) (const char *) = NULL;
 static char msg[128];
 
 #if !defined(__CYGWIN__)
 extern int sys_nerr;
 #else
-#define sys_nerr _sys_nerr
+extern __declspec(dllimport) int sys_nerr;
 #endif
-
 
 #if MEM_GEN_TRACE
 
@@ -107,34 +104,19 @@ log_trace_done()
 
 #if XMALLOC_STATISTICS
 #define DBG_MAXSIZE   (1024*1024)
-#define DBG_SPLIT     (256)	/* mallocs below this value are tracked with DBG_GRAIN_SM precision instead of DBG_GRAIN */
 #define DBG_GRAIN     (16)
-#define DBG_GRAIN_SM  (4)
-#define DBG_OFFSET    (DBG_SPLIT/DBG_GRAIN_SM - DBG_SPLIT/DBG_GRAIN )
-#define DBG_MAXINDEX  (DBG_MAXSIZE/DBG_GRAIN + DBG_OFFSET)
-// #define DBG_INDEX(sz) (sz<DBG_MAXSIZE?(sz+DBG_GRAIN-1)/DBG_GRAIN:DBG_MAXINDEX)
+#define DBG_MAXINDEX  (DBG_MAXSIZE/DBG_GRAIN)
+#define DBG_INDEX(sz) (sz<DBG_MAXSIZE?(sz+DBG_GRAIN-1)/DBG_GRAIN:DBG_MAXINDEX)
 static int malloc_sizes[DBG_MAXINDEX + 1];
-static int malloc_histo[DBG_MAXINDEX + 1];
 static int dbg_stat_init = 0;
 
-static int
-DBG_INDEX(int sz)
-{
-    if (sz >= DBG_MAXSIZE)
-	return DBG_MAXINDEX;
-
-    if (sz <= DBG_SPLIT)
-	return (sz + DBG_GRAIN_SM - 1) / DBG_GRAIN_SM;
-
-    return (sz + DBG_GRAIN - 1) / DBG_GRAIN + DBG_OFFSET;
-}
 
 static void
 stat_init(void)
 {
     int i;
     for (i = 0; i <= DBG_MAXINDEX; i++)
-	malloc_sizes[i] = malloc_histo[i] = 0;
+	malloc_sizes[i] = 0;
     dbg_stat_init = 1;
 }
 
@@ -147,15 +129,11 @@ malloc_stat(int sz)
 }
 
 void
-malloc_statistics(void (*func) (int, int, int, void *), void *data)
+malloc_statistics(void (*func) (int, int, void *), void *data)
 {
     int i;
-    for (i = 0; i <= DBG_SPLIT; i += DBG_GRAIN_SM)
-	func(i, malloc_sizes[DBG_INDEX(i)], malloc_histo[DBG_INDEX(i)], data);
-    i -= DBG_GRAIN_SM;
-    for (i = i; i <= DBG_MAXSIZE; i += DBG_GRAIN)
-	func(i, malloc_sizes[DBG_INDEX(i)], malloc_histo[DBG_INDEX(i)], data);
-    xmemcpy(&malloc_histo, &malloc_sizes, sizeof(malloc_sizes));
+    for (i = 0; i <= DBG_MAXSIZE; i += DBG_GRAIN)
+	func(i, malloc_sizes[DBG_INDEX(i)], data);
 }
 #endif /* XMALLOC_STATISTICS */
 
@@ -177,7 +155,7 @@ size_t xmalloc_total = 0;
 #endif
 
 #if XMALLOC_DEBUG
-#define DBG_ARRY_SZ (1<<11)
+#define DBG_ARRY_SZ (1<<10)
 #define DBG_ARRY_BKTS (1<<8)
 static void *(*malloc_ptrs)[DBG_ARRY_SZ];
 static int malloc_size[DBG_ARRY_BKTS][DBG_ARRY_SZ];
@@ -474,8 +452,7 @@ xfree(void *s)
 #endif
 
 #if XMALLOC_DEBUG
-    if (s != NULL)
-	check_free(s);
+    check_free(s);
 #endif
     if (s != NULL)
 	free(s);
@@ -487,9 +464,8 @@ xfree(void *s)
 
 /* xxfree() - like xfree(), but we already know s != NULL */
 void
-xxfree(const void *s_const)
+xxfree(void *s)
 {
-    void *s = (void *)s_const;
 #if XMALLOC_TRACE
     xmalloc_show_trace(s, -1);
 #endif
@@ -575,7 +551,7 @@ xcalloc(int n, size_t sz)
     check_malloc(p, sz * n);
 #endif
 #if XMALLOC_STATISTICS
-    malloc_stat(sz * n);
+    malloc_stat(sz);
 #endif
 #if XMALLOC_TRACE
     xmalloc_show_trace(p, 1);
@@ -631,9 +607,8 @@ xstrerror(void)
 {
     static char xstrerror_buf[BUFSIZ];
     if (errno < 0 || errno >= sys_nerr)
-	snprintf(xstrerror_buf, BUFSIZ, "(%d) Unknown", errno);
-    else
-	snprintf(xstrerror_buf, BUFSIZ, "(%d) %s", errno, strerror(errno));
+	return ("Unknown");
+    snprintf(xstrerror_buf, BUFSIZ, "(%d) %s", errno, strerror(errno));
     return xstrerror_buf;
 }
 
@@ -747,13 +722,4 @@ xitoa(int num)
     static char buf[24];	/* 2^64 = 18446744073709551616 */
     snprintf(buf, sizeof(buf), "%d", num);
     return buf;
-}
-
-/* A default failure notifier when the main program hasn't installed any */
-void
-default_failure_notify(const char *msg)
-{
-    write(2, msg, strlen(msg));
-    write(2, "\n", 1);
-    abort();
 }

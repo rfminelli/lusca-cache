@@ -1,21 +1,20 @@
-
 /*
  * $Id$
  *
- * DEBUG: none          Generate squid.conf and cf_parser.c
+ * DEBUG: none
  * AUTHOR: Max Okumoto
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -49,7 +48,6 @@
  *****************************************************************************/
 
 #include "config.h"
-#include "cf_gen_defines.h"
 
 #if HAVE_STDIO_H
 #include <stdio.h>
@@ -65,12 +63,6 @@
 #endif
 #if HAVE_ASSERT_H
 #include <assert.h>
-#endif
-#if defined(_SQUID_CYGWIN_)
-#include <io.h>
-#endif
-#if HAVE_FCNTL_H
-#include <fcntl.h>
 #endif
 
 #include "util.h"
@@ -97,12 +89,11 @@ typedef struct Entry {
     char *type;
     char *loc;
     char *default_value;
-    Line *default_if_none;
+    char *default_if_none;
     char *comment;
     char *ifdef;
     Line *doc;
     Line *nocomment;
-    int array_flag;
     struct Entry *next;
 } Entry;
 
@@ -114,15 +105,6 @@ static void gen_dump(Entry *, FILE *);
 static void gen_free(Entry *, FILE *);
 static void gen_conf(Entry *, FILE *);
 static void gen_default_if_none(Entry *, FILE *);
-
-static void
-lineAdd(Line ** L, char *str)
-{
-    while (*L)
-	L = &(*L)->next;
-    *L = xcalloc(1, sizeof(Line));
-    (*L)->data = xstrdup(str);
-}
 
 int
 main(int argc, char *argv[])
@@ -152,9 +134,6 @@ main(int argc, char *argv[])
 	perror(input_filename);
 	exit(1);
     }
-#if defined(_SQUID_CYGWIN_)
-    setmode(fileno(fp), O_TEXT);
-#endif
     state = sSTART;
     while (feof(fp) == 0 && state != sEXIT) {
 	char buff[MAX_LINE];
@@ -210,7 +189,7 @@ main(int argc, char *argv[])
 		ptr = buff + 16;
 		while (xisspace(*ptr))
 		    ptr++;
-		lineAdd(&curr->default_if_none, ptr);
+		curr->default_if_none = xstrdup(ptr);
 	    } else if (!strncmp(buff, "LOC:", 4)) {
 		if ((ptr = strtok(buff + 4, WS)) == NULL) {
 		    printf("Error on line %d\n", linenum);
@@ -221,11 +200,6 @@ main(int argc, char *argv[])
 		if ((ptr = strtok(buff + 5, WS)) == NULL) {
 		    printf("Error on line %d\n", linenum);
 		    exit(1);
-		}
-		/* hack to support arrays, rather than pointers */
-		if (0 == strcmp(ptr + strlen(ptr) - 2, "[]")) {
-		    curr->array_flag = 1;
-		    *(ptr + strlen(ptr) - 2) = '\0';
 		}
 		curr->type = xstrdup(ptr);
 	    } else if (!strncmp(buff, "IFDEF:", 6)) {
@@ -333,9 +307,6 @@ main(int argc, char *argv[])
 	perror(output_filename);
 	exit(1);
     }
-#if defined(_SQUID_CYGWIN_)
-    setmode(fileno(fp), O_TEXT);
-#endif
     fprintf(fp,
 	"/*\n"
 	" * Generated automatically from %s by %s\n"
@@ -358,9 +329,6 @@ main(int argc, char *argv[])
 	perror(conf_filename);
 	exit(1);
     }
-#if defined(_SQUID_CYGWIN_)
-    setmode(fileno(fp), O_TEXT);
-#endif
     gen_conf(entries, fp);
     fclose(fp);
 
@@ -428,7 +396,6 @@ static void
 gen_default_if_none(Entry * head, FILE * fp)
 {
     Entry *entry;
-    Line *line;
     fprintf(fp,
 	"static void\n"
 	"defaults_if_none(void)\n"
@@ -441,18 +408,13 @@ gen_default_if_none(Entry * head, FILE * fp)
 	    continue;
 	if (entry->ifdef)
 	    fprintf(fp, "#if %s\n", entry->ifdef);
-	if (entry->default_if_none) {
-	    fprintf(fp,
-		"\tif (check_null_%s(%s)) {\n",
-		entry->type,
-		entry->loc);
-	    for (line = entry->default_if_none; line; line = line->next)
-		fprintf(fp,
-		    "\t\tdefault_line(\"%s %s\");\n",
-		    entry->name,
-		    line->data);
-	    fprintf(fp, "\t}\n");
-	}
+	fprintf(fp,
+	    "\tif (check_null_%s(%s))\n"
+	    "\t\tdefault_line(\"%s %s\");\n",
+	    entry->type,
+	    entry->loc,
+	    entry->name,
+	    entry->default_if_none);
 	if (entry->ifdef)
 	    fprintf(fp, "#endif\n");
     }
@@ -491,9 +453,8 @@ gen_parse(Entry * head, FILE * fp)
 		);
 	} else {
 	    fprintf(fp,
-		"\t\tparse_%s(&%s%s);\n",
-		entry->type, entry->loc,
-		entry->array_flag ? "[0]" : ""
+		"\t\tparse_%s(&%s);\n",
+		entry->type, entry->loc
 		);
 	}
 	if (entry->ifdef)
@@ -552,48 +513,20 @@ gen_free(Entry * head, FILE * fp)
 	    continue;
 	if (entry->ifdef)
 	    fprintf(fp, "#if %s\n", entry->ifdef);
-	fprintf(fp, "\tfree_%s(&%s%s);\n",
-	    entry->type, entry->loc,
-	    entry->array_flag ? "[0]" : "");
+	fprintf(fp, "\tfree_%s(&%s);\n", entry->type, entry->loc);
 	if (entry->ifdef)
 	    fprintf(fp, "#endif\n");
     }
     fprintf(fp, "}\n\n");
 }
 
-static int
-defined(char *name)
-{
-    int i = 0;
-    if (!name)
-	return 1;
-    for (i = 0; strcmp(defines[i].name, name) != 0; i++) {
-	assert(defines[i].name);
-    }
-    return defines[i].defined;
-}
-
-static const char *
-available_if(char *name)
-{
-    int i = 0;
-    assert(name);
-    for (i = 0; strcmp(defines[i].name, name) != 0; i++) {
-	assert(defines[i].name);
-    }
-    return defines[i].enable;
-}
-
 static void
 gen_conf(Entry * head, FILE * fp)
 {
     Entry *entry;
-    char buf[8192];
-    Line *def = NULL;
 
     for (entry = head; entry != NULL; entry = entry->next) {
 	Line *line;
-	int blank = 1;
 
 	if (!strcmp(entry->name, "comment"))
 	    (void) 0;
@@ -602,43 +535,9 @@ gen_conf(Entry * head, FILE * fp)
 	if (entry->comment)
 	    fprintf(fp, "\t%s", entry->comment);
 	fprintf(fp, "\n");
-	if (!defined(entry->ifdef)) {
-	    fprintf(fp, "# Note: This option is only available if Squid is rebuilt with the\n");
-	    fprintf(fp, "#       %s option\n#\n", available_if(entry->ifdef));
-	}
 	for (line = entry->doc; line != NULL; line = line->next) {
 	    fprintf(fp, "#%s\n", line->data);
 	}
-	if (entry->default_value && strcmp(entry->default_value, "none") != 0) {
-	    sprintf(buf, "%s %s", entry->name, entry->default_value);
-	    lineAdd(&def, buf);
-	}
-	if (entry->default_if_none) {
-	    for (line = entry->default_if_none; line; line = line->next) {
-		sprintf(buf, "%s %s", entry->name, line->data);
-		lineAdd(&def, buf);
-	    }
-	}
-	if (entry->nocomment)
-	    blank = 0;
-	if (!def && entry->doc && !entry->nocomment &&
-	    strcmp(entry->name, "comment") != 0)
-	    lineAdd(&def, "none");
-	if (def && (entry->doc || entry->nocomment)) {
-	    if (blank)
-		fprintf(fp, "#\n");
-	    fprintf(fp, "#Default:\n");
-	    while (def != NULL) {
-		line = def;
-		def = line->next;
-		fprintf(fp, "# %s\n", line->data);
-		xfree(line->data);
-		xfree(line);
-	    }
-	    blank = 1;
-	}
-	if (entry->nocomment && blank)
-	    fprintf(fp, "#\n");
 	for (line = entry->nocomment; line != NULL; line = line->next) {
 	    fprintf(fp, "%s\n", line->data);
 	}

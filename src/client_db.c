@@ -5,17 +5,17 @@
  * DEBUG: section 0     Client Database
  * AUTHOR: Duane Wessels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -44,10 +44,10 @@ clientdbAdd(struct in_addr addr)
 {
     ClientInfo *c;
     c = memAllocate(MEM_CLIENT_INFO);
-    c->hash.key = xstrdup(inet_ntoa(addr));
+    c->key = xstrdup(inet_ntoa(addr));
     c->addr = addr;
-    hash_join(client_table, &c->hash);
-    statCounter.client_http.clients++;
+    hash_join(client_table, (hash_link *) c);
+    Counter.client_http.clients++;
     return c;
 }
 
@@ -169,7 +169,7 @@ clientdbDump(StoreEntry * sentry)
     storeAppendPrintf(sentry, "Cache Clients:\n");
     hash_first(client_table);
     while ((c = (ClientInfo *) hash_next(client_table))) {
-	storeAppendPrintf(sentry, "Address: %s\n", hashKeyStr(&c->hash));
+	storeAppendPrintf(sentry, "Address: %s\n", c->key);
 	storeAppendPrintf(sentry, "Name: %s\n", fqdnFromAddr(c->addr));
 	storeAppendPrintf(sentry, "Currently established connections: %d\n",
 	    c->n_established);
@@ -214,7 +214,7 @@ static void
 clientdbFreeItem(void *data)
 {
     ClientInfo *c = data;
-    safe_free(c->hash.key);
+    safe_free(c->key);
     memFree(c, MEM_CLIENT_INFO);
 }
 
@@ -236,7 +236,7 @@ client_entry(struct in_addr *current)
 	key = inet_ntoa(*current);
 	hash_first(client_table);
 	while ((c = (ClientInfo *) hash_next(client_table))) {
-	    if (!strcmp(key, hashKeyStr(&c->hash)))
+	    if (!strcmp(key, c->key))
 		break;
 	}
 	c = (ClientInfo *) hash_next(client_table);
@@ -290,7 +290,7 @@ snmp_meshCtblFn(variable_list * Var, snint * ErrP)
 	break;
     case MESH_CTBL_HTHITS:
 	aggr = 0;
-	for (l = LOG_TAG_NONE; l < LOG_TYPE_MAX; l++) {
+	for (l = 0; l < LOG_TYPE_MAX; l++) {
 	    if (isTcpHit(l))
 		aggr += c->Http.result_hist[l];
 	}

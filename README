@@ -1,5 +1,5 @@
 
-SQUID Web Proxy Cache        http://www.squid-cache.org/
+SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
 --------------------------------------------------------
 
   Squid is the result of efforts by numerous individuals from the
@@ -22,11 +22,12 @@ SQUID Web Proxy Cache        http://www.squid-cache.org/
   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111, USA.
 
 Squid is derived from the ``cached'' software from the ARPA-funded
-Harvest research project.  
+Harvest research project.  The Harvest home page is
+http://harvest.cs.colorado.edu/.
 
 Please use our mailing lists for questions, feedback and bug fixes
 
-        squid-users@ircache.net		# general questions, pubilc forum
-        squid-bugs@squid-cache.org	# bugs and fixes
-        squid@squid-cache.org		# other feedback
+        squid-users@ircache.net	# general questions, pubilc forum
+        squid-bugs@ircache.net	# bugs and fixes
+        squid@ircache.net	# other feedback
 

@@ -5,17 +5,17 @@
  * DEBUG: section 25    MIME Parsing
  * AUTHOR: Harvest Derived
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -49,7 +49,7 @@ typedef struct _mime_entry {
 } mimeEntry;
 
 static mimeEntry *MimeTable = NULL;
-static mimeEntry **MimeTableTail = &MimeTable;
+static mimeEntry **MimeTableTail = NULL;
 
 static void mimeLoadIconFile(const char *icon);
 
@@ -268,11 +268,6 @@ mimeGetViewOption(const char *fn)
     return m ? m->view_option : 0;
 }
 
-/* Initializes/reloads the mime table
- * Note: Due to Solaris STDIO problems the caller should NOT
- * call mimeFreeMemory on reconfigure. This way, if STDIO
- * fails we at least have the old copy loaded.
- */
 void
 mimeInit(char *filename)
 {
@@ -297,10 +292,8 @@ mimeInit(char *filename)
 	debug(50, 1) ("mimeInit: %s: %s\n", filename, xstrerror());
 	return;
     }
-#if defined (_SQUID_CYGWIN_)
-    setmode(fileno(fp), O_TEXT);
-#endif
-    mimeFreeMemory();
+    if (MimeTableTail == NULL)
+	MimeTableTail = &MimeTable;
     while (fgets(buf, BUFSIZ, fp)) {
 	if ((t = strchr(buf, '#')))
 	    *t = '\0';
@@ -401,7 +394,6 @@ mimeLoadIconFile(const char *icon)
     char *buf;
     const char *type = mimeGetContentType(icon);
     HttpReply *reply;
-    http_version_t version;
     if (type == NULL)
 	fatal("Unknown icon format while reading mime.conf\n");
     buf = internalLocalUri("/squid-internal-static/icons/", icon);
@@ -409,14 +401,13 @@ mimeLoadIconFile(const char *icon)
     if (storeGetPublic(url, METHOD_GET))
 	return;
     snprintf(path, MAXPATHLEN, "%s/%s", Config.icons.directory, icon);
-    fd = file_open(path, O_RDONLY | O_BINARY);
+    fd = file_open(path, O_RDONLY);
     if (fd < 0) {
 	debug(25, 0) ("mimeLoadIconFile: %s: %s\n", path, xstrerror());
 	return;
     }
     if (fstat(fd, &sb) < 0) {
 	debug(50, 0) ("mimeLoadIconFile: FD %d: fstat: %s\n", fd, xstrerror());
-	file_close(fd);
 	return;
     }
     flags = null_request_flags;
@@ -430,8 +421,7 @@ mimeLoadIconFile(const char *icon)
     storeBuffer(e);
     e->mem_obj->request = requestLink(urlParse(METHOD_GET, url));
     httpReplyReset(reply = e->mem_obj->reply);
-    httpBuildVersion(&version, 1, 0);
-    httpReplySetHeaders(reply, version, HTTP_OK, NULL,
+    httpReplySetHeaders(reply, 1.0, HTTP_OK, NULL,
 	type, (int) sb.st_size, sb.st_mtime, -1);
     reply->cache_control = httpHdrCcCreate();
     httpHdrCcSetMaxAge(reply->cache_control, 86400);
@@ -440,7 +430,7 @@ mimeLoadIconFile(const char *icon)
     reply->hdr_sz = e->mem_obj->inmem_hi;	/* yuk */
     /* read the file into the buffer and append it to store */
     buf = memAllocate(MEM_4K_BUF);
-    while ((n = FD_READ_METHOD(fd, buf, 4096)) > 0)
+    while ((n = read(fd, buf, 4096)) > 0)
 	storeAppend(e, buf, n);
     file_close(fd);
     EBIT_SET(e->flags, ENTRY_SPECIAL);

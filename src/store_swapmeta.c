@@ -5,17 +5,17 @@
  * DEBUG: section 20    Storage Manager Swapfile Metadata
  * AUTHOR: Kostas Anagnostakis
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -38,7 +38,7 @@
 static tlv **
 storeSwapTLVAdd(int type, const void *ptr, size_t len, tlv ** tail)
 {
-    tlv *t = memAllocate(MEM_TLV);
+    tlv *t = xcalloc(1, sizeof(tlv));
     t->type = (char) type;
     t->length = (int) len;
     t->value = xmalloc(len);
@@ -54,7 +54,7 @@ storeSwapTLVFree(tlv * n)
     while ((t = n) != NULL) {
 	n = t->next;
 	xfree(t->value);
-	memFree(t, MEM_TLV);
+	xfree(t);
     }
 }
 
@@ -64,20 +64,17 @@ storeSwapTLVFree(tlv * n)
 tlv *
 storeSwapMetaBuild(StoreEntry * e)
 {
+    MemObject *mem = e->mem_obj;
     tlv *TLV = NULL;		/* we'll return this */
     tlv **T = &TLV;
     const char *url;
-    const char *vary;
-    assert(e->mem_obj != NULL);
+    assert(mem != NULL);
     assert(e->swap_status == SWAPOUT_WRITING);
     url = storeUrl(e);
     debug(20, 3) ("storeSwapMetaBuild: %s\n", url);
-    T = storeSwapTLVAdd(STORE_META_KEY, e->hash.key, MD5_DIGEST_CHARS, T);
+    T = storeSwapTLVAdd(STORE_META_KEY, e->key, MD5_DIGEST_CHARS, T);
     T = storeSwapTLVAdd(STORE_META_STD, &e->timestamp, STORE_HDR_METASIZE, T);
     T = storeSwapTLVAdd(STORE_META_URL, url, strlen(url) + 1, T);
-    vary = e->mem_obj->vary_headers;
-    if (vary)
-	T = storeSwapTLVAdd(STORE_META_VARY_HEADERS, vary, strlen(vary) + 1, T);
     return TLV;
 }
 
@@ -139,7 +136,7 @@ storeSwapMetaUnpack(const char *buf, int *hdr_len)
 	    break;
 	}
 	xmemcpy(&length, &buf[j], sizeof(int));
-	if (length < 0 || length > (1 << 16)) {
+	if (length < 0 || length > (1 << 10)) {
 	    debug(20, 0) ("storeSwapMetaUnpack: insane length (%d)!\n", length);
 	    break;
 	}

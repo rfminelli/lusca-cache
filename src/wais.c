@@ -5,17 +5,17 @@
  * DEBUG: section 24    WAIS Relay
  * AUTHOR: Harvest Derived
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -102,15 +102,15 @@ waisReadReply(int fd, void *data)
 #if DELAY_POOLS
     read_sz = delayBytesWanted(delay_id, 1, read_sz);
 #endif
-    statCounter.syscalls.sock.reads++;
-    len = FD_READ_METHOD(fd, buf, read_sz);
+    Counter.syscalls.sock.reads++;
+    len = read(fd, buf, read_sz);
     if (len > 0) {
 	fd_bytes(fd, len, FD_READ);
 #if DELAY_POOLS
 	delayBytesIn(delay_id, len);
 #endif
-	kb_incr(&statCounter.server.all.kbytes_in, len);
-	kb_incr(&statCounter.server.other.kbytes_in, len);
+	kb_incr(&Counter.server.all.kbytes_in, len);
+	kb_incr(&Counter.server.other.kbytes_in, len);
     }
     debug(24, 5) ("waisReadReply: FD %d read len:%d\n", fd, len);
     if (len > 0) {
@@ -170,8 +170,8 @@ waisSendComplete(int fd, char *bufnotused, size_t size, int errflag, void *data)
 	fd, size, errflag);
     if (size > 0) {
 	fd_bytes(fd, size, FD_WRITE);
-	kb_incr(&statCounter.server.all.kbytes_out, size);
-	kb_incr(&statCounter.server.other.kbytes_out, size);
+	kb_incr(&Counter.server.all.kbytes_out, size);
+	kb_incr(&Counter.server.other.kbytes_out, size);
     }
     if (errflag == COMM_ERR_CLOSING)
 	return;
@@ -216,7 +216,6 @@ waisSendRequest(int fd, void *data)
     EBIT_CLR(waisState->entry->flags, ENTRY_FWD_HDR_WAIT);
 }
 
-CBDATA_TYPE(WaisStateData);
 void
 waisStart(FwdState * fwd)
 {
@@ -227,10 +226,10 @@ waisStart(FwdState * fwd)
     const char *url = storeUrl(entry);
     method_t method = request->method;
     debug(24, 3) ("waisStart: \"%s %s\"\n", RequestMethodStr[method], url);
-    statCounter.server.all.requests++;
-    statCounter.server.other.requests++;
-    CBDATA_INIT_TYPE(WaisStateData);
-    waisState = cbdataAlloc(WaisStateData);
+    Counter.server.all.requests++;
+    Counter.server.other.requests++;
+    waisState = xcalloc(1, sizeof(WaisStateData));
+    cbdataAdd(waisState, cbdataXfree, 0);
     waisState->method = method;
     waisState->request_hdr = &request->header;
     waisState->fd = fd;

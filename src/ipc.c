@@ -5,17 +5,17 @@
  * DEBUG: section 54    Interprocess Communication
  * AUTHOR: Duane Wessels
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -228,14 +228,14 @@ ipcCreate(int type, const char *prog, char *const args[], const char *name, int 
 	    return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
     }
     if (type == IPC_UDP_SOCKET) {
-	x = send(cwfd, hello_string, strlen(hello_string) + 1, 0);
+	x = send(cwfd, hello_string, strlen(hello_string), 0);
 	if (x < 0) {
 	    debug(50, 0) ("sendto FD %d: %s\n", cwfd, xstrerror());
 	    debug(50, 0) ("ipcCreate: CHILD: hello write test failed\n");
 	    _exit(1);
 	}
     } else {
-	if (write(cwfd, hello_string, strlen(hello_string) + 1) < 0) {
+	if (write(cwfd, hello_string, strlen(hello_string)) < 0) {
 	    debug(50, 0) ("write FD %d: %s\n", cwfd, xstrerror());
 	    debug(50, 0) ("ipcCreate: CHILD: hello write test failed\n");
 	    _exit(1);
@@ -268,14 +268,10 @@ ipcCreate(int type, const char *prog, char *const args[], const char *name, int 
     close(t1);
     close(t2);
     close(t3);
-    /* Make sure all other filedescriptors are closed */
-    for (x = 3; x < SQUID_MAXFD; x++)
-	close(x);
 #if HAVE_SETSID
     setsid();
 #endif
     execvp(prog, args);
-    debug_log = fdopen(2, "a+");
     debug(50, 0) ("ipcCreate: %s: %s\n", prog, xstrerror());
     _exit(1);
     return 0;

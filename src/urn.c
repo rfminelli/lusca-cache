@@ -1,21 +1,22 @@
 
 /*
+ *
  * $Id$
  *
  * DEBUG: section 52    URN Parsing
  * AUTHOR: Kostas Anagnostakis
  *
- * SQUID Web Proxy Cache          http://www.squid-cache.org/
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * ----------------------------------------------------------
  *
- *  Squid is the result of efforts by numerous individuals from
- *  the Internet community; see the CONTRIBUTORS file for full
- *  details.   Many organizations have provided support for Squid's
- *  development; see the SPONSORS file for full details.  Squid is
- *  Copyrighted (C) 2001 by the Regents of the University of
- *  California; see the COPYRIGHT file for full details.  Squid
- *  incorporates software developed and/or copyrighted by other
- *  sources; see the CREDITS file for full details.
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by the
+ *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -37,12 +38,11 @@
 
 typedef struct {
     StoreEntry *entry;
-    store_client *sc;
     StoreEntry *urlres_e;
     request_t *request;
     request_t *urlres_r;
     struct {
-	unsigned int force_menu:1;
+	int force_menu:1;
     } flags;
 } UrnState;
 
@@ -60,7 +60,7 @@ static url_entry *urnParseReply(const char *inbuf, method_t);
 static const char *const crlf = "\r\n";
 static QS url_entry_sort;
 
-static url_entry *
+url_entry *
 urnFindMinRtt(url_entry * urls, method_t m, int *rtt_ret)
 {
     int min_rtt = 0;
@@ -95,7 +95,6 @@ urnFindMinRtt(url_entry * urls, method_t m, int *rtt_ret)
     return min_u;
 }
 
-CBDATA_TYPE(UrnState);
 void
 urnStart(request_t * r, StoreEntry * e)
 {
@@ -107,10 +106,10 @@ urnStart(request_t * r, StoreEntry * e)
     StoreEntry *urlres_e;
     ErrorState *err;
     debug(52, 3) ("urnStart: '%s'\n", storeUrl(e));
-    CBDATA_INIT_TYPE(UrnState);
-    urnState = cbdataAlloc(UrnState);
+    urnState = xcalloc(1, sizeof(UrnState));
     urnState->entry = e;
     urnState->request = requestLink(r);
+    cbdataAdd(urnState, cbdataXfree, 0);
     storeLockObject(urnState->entry);
     if (strncasecmp(strBuf(r->urlpath), "menu.", 5) == 0) {
 	char *new_path = xstrdup(strBuf(r->urlpath) + 5);
@@ -138,15 +137,15 @@ urnStart(request_t * r, StoreEntry * e)
     httpHeaderPutStr(&urlres_r->header, HDR_ACCEPT, "text/plain");
     if ((urlres_e = storeGetPublic(urlres, METHOD_GET)) == NULL) {
 	urlres_e = storeCreateEntry(urlres, urlres, null_request_flags, METHOD_GET);
-	urnState->sc = storeClientListAdd(urlres_e, urnState);
+	storeClientListAdd(urlres_e, urnState);
 	fwdStart(-1, urlres_e, urlres_r);
     } else {
 	storeLockObject(urlres_e);
-	urnState->sc = storeClientListAdd(urlres_e, urnState);
+	storeClientListAdd(urlres_e, urnState);
     }
     urnState->urlres_e = urlres_e;
     urnState->urlres_r = requestLink(urlres_r);
-    storeClientCopy(urnState->sc, urlres_e,
+    storeClientCopy(urlres_e,
 	0,
 	0,
 	4096,
@@ -186,7 +185,6 @@ urnHandleReply(void *data, char *buf, ssize_t size)
     ErrorState *err;
     int i;
     int urlcnt = 0;
-    http_version_t version;
 
     debug(52, 3) ("urnHandleReply: Called with size=%d.\n", size);
     if (EBIT_TEST(urlres_e->flags, ENTRY_ABORTED)) {
@@ -201,7 +199,7 @@ urnHandleReply(void *data, char *buf, ssize_t size)
 	return;
     }
     if (urlres_e->store_status == STORE_PENDING && size < SM_PAGE_SIZE) {
-	storeClientCopy(urnState->sc, urlres_e,
+	storeClientCopy(urlres_e,
 	    size,
 	    0,
 	    SM_PAGE_SIZE,
@@ -274,8 +272,7 @@ urnHandleReply(void *data, char *buf, ssize_t size)
 	full_appname_string, getMyHostname());
     rep = e->mem_obj->reply;
     httpReplyReset(rep);
-    httpBuildVersion(&version, 1, 0);
-    httpReplySetHeaders(rep, version, HTTP_MOVED_TEMPORARILY, NULL,
+    httpReplySetHeaders(rep, 1.0, HTTP_MOVED_TEMPORARILY, NULL,
 	"text/html", mb.size, 0, squid_curtime);
     if (urnState->flags.force_menu) {
 	debug(51, 3) ("urnHandleReply: forcing menu\n");
@@ -292,7 +289,7 @@ urnHandleReply(void *data, char *buf, ssize_t size)
     }
     safe_free(urls);
     /* mb was absorbed in httpBodySet call, so we must not clean it */
-    storeUnregister(urnState->sc, urlres_e, urnState);
+    storeUnregister(urlres_e, urnState);
     storeUnlockObject(urlres_e);
     storeUnlockObject(urnState->entry);
     requestUnlink(urnState->request);
