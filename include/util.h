@@ -134,6 +134,7 @@ extern char *uudecode _PARAMS((const char *));
 extern char *xstrdup _PARAMS((const char *));
 extern const char *xstrerror _PARAMS((void));
 extern int tvSubMsec _PARAMS((struct timeval, struct timeval));
+extern int tvSubUsec _PARAMS((struct timeval, struct timeval));
 extern char *xstrncpy _PARAMS((char *, const char *, size_t));
 extern time_t parse_rfc1123 _PARAMS((const char *str));
 extern void *xcalloc _PARAMS((int, size_t));
@@ -153,7 +154,5 @@ void malloc_statistics _PARAMS((void (*)_PARAMS((int, int, void *)), void *));
 
 typedef struct in_addr SIA;
 extern int safe_inet_addr _PARAMS((const char *, SIA *));
-extern time_t parse_iso3307_time _PARAMS((const char *buf));
-extern char *base64_decode _PARAMS((const char *coded));
 
 #endif /* ndef _UTIL_H_ */
