@@ -328,8 +328,15 @@ gopher_stop   ?
 #	Hierachical caching access logfile.  It shows which parent,
 #	neighbor, or source host a request is satisfied from.
 #	The default filename is cache.hierarchy.log.
+#	set to "none" to disable.
 #
 #cache_hierarchy_log @prefix@/logs/hierarchy.log 
+
+#  TAG: cache_store_log
+#	Logs activities of the storage manager.
+#	set to "none" to disable.
+#
+#cache_store_log @prefix@/logs/store.log 
 
 #
 #  TAG: emulate_httpd_log
@@ -665,8 +672,6 @@ request_size 100
 #       The port number(s) where cached will listen allow outbound CONNECT
 #       (SSL).  The defaults are 443 (https) and 563 (snews).
 #connect_ports 443 563
-
-#cache_store_log @prefix@/logs/store.log 
 
 
 ## acl aclname src|domain|time|pattern|port|proto|method string1 ...
