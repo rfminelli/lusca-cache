@@ -1,7 +1,14 @@
 /* $Id$ */
 
+#include "config.h"
+
+#if HAVE_STDIO_H
 #include <stdio.h>
+#endif
+#if HAVE_STRING_H
 #include <string.h>
+#endif
+
 #include "util.h"
 #define BIG_BUFSIZ (BUFSIZ * 4)
 
@@ -9,7 +16,7 @@
  *  RFC 1738 defines that these characters should be escaped, as well
  *  any non-US-ASCII character or anything between 0x00 - 0x1F.
  */
-char rfc1738_unsafe_chars[] =
+static char rfc1738_unsafe_chars[] =
 {
     (char) 0x3C,		/* < */
     (char) 0x3E,		/* > */
@@ -51,7 +58,7 @@ char *rfc1738_escape(url)
 	    }
 	}
 	/* RFC 1738 says any control chars (0x00-0x1F) are encoded */
-	if ((*p >= (char) 0x00) && (*p <= (char) 0x1F)) {
+	if (*p <= (char) 0x1F) {
 	    do_escape = 1;
 	}
 	/* RFC 1738 says 0x7f is encoded */

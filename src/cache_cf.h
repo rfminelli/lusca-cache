@@ -4,6 +4,8 @@
 #ifndef _CACHE_CONFIG_H_
 #define _CACHE_CONFIG_H_
 
+#define DefaultDnsChildrenMax	32	/* 32 processes */
+
 typedef struct _wordlist {
     char *key;
     struct _wordlist *next;
@@ -74,9 +76,7 @@ extern char *getVisibleHostname _PARAMS((void));
 extern char *getWaisRelayHost _PARAMS((void));
 extern double getCacheHotVmFactor _PARAMS((void));
 extern int getAccelWithProxy _PARAMS((void));
-extern int getAnnouncePort _PARAMS((void));
 extern int getAnnounceRate _PARAMS((void));
-extern int getAsciiPortNum _PARAMS((void));
 extern int getBehindFirewall _PARAMS((void));
 extern int getCacheMemHighWaterMark _PARAMS((void));
 extern int getCacheMemLowWaterMark _PARAMS((void));
@@ -88,7 +88,6 @@ extern int getCacheSwapMax _PARAMS((void));
 extern int getCleanRate _PARAMS((void));
 extern int getClientLifetime _PARAMS((void));
 extern int getConnectTimeout _PARAMS((void));
-extern int getDnSChildren _PARAMS((void));
 extern int getDnsChildren _PARAMS((void));
 extern int getFtpMax _PARAMS((void));
 extern int getFtpTTL _PARAMS((void));
@@ -102,28 +101,39 @@ extern int getNegativeDNSTTL _PARAMS((void));
 extern int getNegativeTTL _PARAMS((void));
 extern int getQuickAbort _PARAMS((void));
 extern int getReadTimeout _PARAMS((void));
+extern int getShutdownLifetime _PARAMS((void));
 extern int getSourcePing _PARAMS((void));
 extern int getStallDelay _PARAMS((void));
-extern int getUdpPortNum _PARAMS((void));
 extern int getWAISMax _PARAMS((void));
-extern int getWaisRelayPort _PARAMS((void));
 extern int ip_acl_match _PARAMS((struct in_addr, ip_acl *));
 extern int parseConfigFile _PARAMS((char *file_name));
-extern int setAsciiPortNum _PARAMS((int));
 extern int setCacheSwapMax _PARAMS((int size));
-extern int setUdpPortNum _PARAMS((int));
 extern ip_access_type ip_access_check _PARAMS((struct in_addr, ip_acl *));
+extern u_short getAccelPort _PARAMS((void));
+extern u_short getAnnouncePort _PARAMS((void));
+extern u_short getHttpPortNum _PARAMS((void));
+extern u_short getIcpPortNum _PARAMS((void));
+extern u_short getWaisRelayPort _PARAMS((void));
+extern u_short setHttpPortNum _PARAMS((int));
+extern u_short setIcpPortNum _PARAMS((int));
 extern void intlistDestroy _PARAMS((intlist **));
 extern void wordlistDestroy _PARAMS((wordlist **));
-wordlist *getBindAddrList _PARAMS((void));
-wordlist *getCacheDirs _PARAMS((void));
-wordlist *getFtpStoplist _PARAMS((void));
-wordlist *getGopherStoplist _PARAMS((void));
-wordlist *getHttpStoplist _PARAMS((void));
-wordlist *getInsideFirewallList _PARAMS((void));
-wordlist *getLocalDomainList _PARAMS((void));
-wordlist *getDnsTestnameList _PARAMS((void));
-extern int getShutdownLifetime _PARAMS((void));
+extern struct in_addr getTcpIncomingAddr _PARAMS((void));
+extern struct in_addr getTcpOutgoingAddr _PARAMS((void));
+extern struct in_addr getUdpIncomingAddr _PARAMS((void));
+extern struct in_addr getUdpOutgoingAddr _PARAMS((void));
+extern wordlist *getCacheDirs _PARAMS((void));
+extern wordlist *getDnsTestnameList _PARAMS((void));
+extern wordlist *getFtpStoplist _PARAMS((void));
+extern wordlist *getGopherStoplist _PARAMS((void));
+extern wordlist *getHttpStoplist _PARAMS((void));
+extern wordlist *getHierarchyStoplist _PARAMS((void));
+extern wordlist *getInsideFirewallList _PARAMS((void));
+extern wordlist *getLocalDomainList _PARAMS((void));
+#if REDIRECT_IN_PROGRESS
+extern int getRedirectChildren _PARAMS((void));
+extern char *getRedirectProgram _PARAMS((void));
+#endif
 
 
 #endif /* ndef  _CACHE_CONFIG_H_ */
