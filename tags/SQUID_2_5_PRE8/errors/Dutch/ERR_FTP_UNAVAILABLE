@@ -1,0 +1,17 @@
+<HTML><HEAD>
+<TITLE>FOUT: De gevraagde URL kon niet worden opgehaald</TITLE>
+</HEAD><BODY>
+<H1>FOUT</H1>
+<H2>FOUT: De gevraagde URL kon niet worden opgehaald</H2>
+<HR>
+<P>
+De FTP server was te druk bezet tijdens het opvragen van de URL:
+<A HREF="%U">%U</A>
+<P>
+Squid stuurde de volgende FTP opdracht:
+<blockquote><strong><pre>%f</pre></strong></blockquote>
+en ontving daarop het volgende antwoord:
+<blockquote><strong><pre>%F</pre></strong></blockquote>
+<blockquote><strong><pre>%g</pre></strong></blockquote>
+</P>
+
