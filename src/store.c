@@ -975,9 +975,11 @@ int storeSwapInHandle(fd_notused, buf, len, flag, e, offset_notused)
 {
     debug(20, 2, "storeSwapInHandle: '%s'\n", e->key);
 
-    if ((flag < 0) && (flag != DISK_EOF)) {
-	debug(20, 0, "storeSwapInHandle: SwapIn failure (err code = %d).\n", flag);
+    if (flag < 0 && flag != DISK_EOF) {
+	debug(20, 0, "storeSwapInHandle: SwapIn failure (err code = %d).\n",
+		flag);
 	put_free_8k_page(e->mem_obj->e_swap_buf);
+        e->mem_obj->e_swap_buf = NULL;
 	storeSetMemStatus(e, NOT_IN_MEMORY);
 	file_close(e->mem_obj->swap_fd);
 	swapInError(-1, e);	/* Invokes storeAbort() and completes the I/O */
@@ -1008,6 +1010,7 @@ int storeSwapInHandle(fd_notused, buf, len, flag, e, offset_notused)
 	/* complete swapping in */
 	storeSetMemStatus(e, IN_MEMORY);
 	put_free_8k_page(e->mem_obj->e_swap_buf);
+	e->mem_obj->e_swap_buf = NULL;
 	file_close(e->mem_obj->swap_fd);
 	storeLog(STORE_LOG_SWAPIN, e);
 	debug(20, 5, "storeSwapInHandle: SwapIn complete: <URL:%s> from %s.\n",
@@ -1079,19 +1082,18 @@ void storeSwapOutHandle(fd, flag, e)
      StoreEntry *e;
 {
     static char filename[MAX_FILE_NAME_LEN];
-    char *page_ptr = NULL;
 
     debug(20, 3, "storeSwapOutHandle: '%s'\n", e->key);
 
     e->timestamp = squid_curtime;
     storeSwapFullPath(e->swap_file_number, filename);
-    page_ptr = e->mem_obj->e_swap_buf;
 
     if (flag < 0) {
 	debug(20, 1, "storeSwapOutHandle: SwapOut failure (err code = %d).\n",
 	    flag);
 	e->swap_status = NO_SWAP;
-	put_free_8k_page(page_ptr);
+	put_free_8k_page(e->mem_obj->e_swap_buf);
+	e->mem_obj->e_swap_buf = NULL;
 	file_close(fd);
 	storeReleaseRequest(e);
 	if (e->swap_file_number != -1) {
@@ -1128,7 +1130,8 @@ void storeSwapOutHandle(fd, flag, e)
 	storeLog(STORE_LOG_SWAPOUT, e);
 	debug(20, 5, "storeSwapOutHandle: SwapOut complete: <URL:%s> to %s.\n",
 	    e->url, storeSwapFullPath(e->swap_file_number, NULL));
-	put_free_8k_page(page_ptr);
+	put_free_8k_page(e->mem_obj->e_swap_buf);
+	e->mem_obj->e_swap_buf = NULL;
 	sprintf(logmsg, "%s %s %d %d %d\n",
 	    filename,
 	    e->url,
@@ -2402,7 +2405,7 @@ static int storeVerifySwapDirs(clean)
 	    debug(20, 1, "storeVerifySwapDirs: Created swap directory %s\n", path);
 	    directory_created = 1;
 	}
-	if (clean) {
+	if (clean && opt_unlink_on_reload) {
 	    debug(20, 1, "storeVerifySwapDirs: Zapping all objects on disk storage.\n");
 	    /* This could be dangerous, second copy of cache can destroy
 	     * the existing swap files of the previous cache. We may
@@ -2440,14 +2443,16 @@ int storeInit()
 {
     int dir_created;
     wordlist *w = NULL;
+    char *f = NULL;
 
-    storelog_fd = file_open(getStoreLogFile(), NULL, O_WRONLY | O_APPEND | O_CREAT);
+    if ((f = getStoreLogFile()));
+    	storelog_fd = file_open(f, NULL, O_WRONLY | O_APPEND | O_CREAT);
 
     for (w = getCacheDirs(); w; w = w->next)
 	storeAddSwapDisk(w->key);
     storeSanityCheck();
     file_map_create(MAX_SWAP_FILE);
-    dir_created = storeVerifySwapDirs(zap_disk_store);
+    dir_created = storeVerifySwapDirs(opt_zap_disk_store);
     storeCreateHashTable(urlcmp);
 
     sprintf(swaplog_file, "%s/log", swappath(0));
@@ -2460,14 +2465,14 @@ int storeInit()
     }
     swaplog_lock = file_write_lock(swaplog_fd);
 
-    if (!zap_disk_store) {
+    if (!opt_zap_disk_store) {
 	ok_write_clean_log = 0;
 	storeStartRebuildFromDisk();
     } else {
 	ok_write_clean_log = 1;
     }
 
-    if (dir_created || zap_disk_store)
+    if (dir_created || opt_zap_disk_store)
 	storeCreateSwapSubDirs();
 
     store_mem_high = (long) (getCacheMemMax() / 100) *
@@ -2516,9 +2521,8 @@ void storeSanityCheck()
 		continue;
 	    debug(20, 0, "WARNING: Cannot write to swap directory '%s'\n",
 		name);
-	    debug(20, 0, "Forcing a *full restart* (e.g., %s -z)...\n",
-		appname);
-	    zap_disk_store = 1;
+	    debug(20, 0, "WARNING: Forcing a clean restart.\n");
+	    opt_zap_disk_store = 1;
 	    return;
 	}
     }
@@ -2715,5 +2719,5 @@ void storeRotateLog()
     }
     if (storelog_fd > -1)
 	file_close(storelog_fd);
-    storelog_fd = file_open(getStoreLogFile(), NULL, O_WRONLY | O_APPEND | O_CREAT);
+    storelog_fd = file_open(fname, NULL, O_WRONLY | O_APPEND | O_CREAT);
 }
