@@ -124,8 +124,9 @@ static void debugOpenLog(logfile)
     }
 }
 
-void _db_init(logfile)
+void _db_init(logfile, options)
      char *logfile;
+     char *options;
 {
     int i;
     char *p = NULL;
@@ -134,16 +135,15 @@ void _db_init(logfile)
     for (i = 0; i < MAX_DEBUG_SECTIONS; i++)
 	debugLevels[i] = -1;
 
-    if ((p = getDebugOptions())) {
-	p = xstrdup(p);
-	for (s = strtok(p, w_space); s; s = strtok(NULL, w_space)) {
+    if (options) {
+	p = xstrdup(options);
+	for (s = strtok(p, w_space); s; s = strtok(NULL, w_space))
 	    debugArg(s);
-	}
 	xfree(p);
     }
     debugOpenLog(logfile);
 
-#if HAVE_SYSLOG
+#if HAVE_SYSLOG && defined(LOG_LOCAL4)
     if (syslog_enable)
 	openlog(appname, LOG_PID | LOG_NDELAY | LOG_CONS, LOG_LOCAL4);
 #endif /* HAVE_SYSLOG */
@@ -174,5 +174,5 @@ void _db_rotate_log()
     /* Close and reopen the log.  It may have been renamed "manually"
      * before HUP'ing us. */
     if (debug_log != stderr)
-	debugOpenLog(debug_log_file);
+	debugOpenLog(getCacheLogFile());
 }

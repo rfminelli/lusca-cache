@@ -1,3 +1,4 @@
+
 /*  $Id$ */
 
 #ifndef _URL_HEADER_
@@ -35,6 +36,7 @@ typedef struct _request {
     char host[SQUIDHOSTNAMELEN + 1];
     int port;
     char urlpath[MAX_URL + 1];
+    int link_count;		/* free when zero */
 } request_t;
 
 extern char *url_convert_hex _PARAMS((char *org_url, int allocate));
@@ -45,5 +47,8 @@ extern int urlDefaultPort _PARAMS((protocol_t));
 extern void urlInitialize _PARAMS((void));
 extern request_t *urlParse _PARAMS((method_t, char *));
 extern char *urlCanonical _PARAMS((request_t *, char *));
+extern request_t *requestLink _PARAMS((request_t *));
+extern void requestUnlink _PARAMS((request_t *));
+extern int matchDomainName _PARAMS((char *d, char *h));
 
 #endif /* _URL_HEADER_ */

@@ -3,19 +3,6 @@
 #ifndef STAT_H
 #define STAT_H
 
-#ifdef OLD_CODE
-/* protocol id */
-#define PROTOCOL_SUPPORTED 3
-#define PROTOCOL_EXTRA     4	/* included total, cacheobj, abort, notimplemented */
-#define TOTAL_ID     0
-#define HTTP_ID      1
-#define GOPHER_ID    2
-#define FTP_ID       3
-#define CACHEOBJ_ID  PROTOCOL_SUPPORTED + 1
-#define ABORT_ID     PROTOCOL_SUPPORTED + 2
-#define NOTIMPLE_ID  PROTOCOL_SUPPORTED + 3	/* for robustness */
-#endif
-
 /* logfile status */
 #define LOG_ENABLE  1
 #define LOG_DISABLE 0
@@ -47,6 +34,7 @@ typedef struct _meta_data_stat {
     int ipcache_count;
     int hash_links;
     int url_strings;
+    int misc;
 } Meta_data;
 
 extern Meta_data meta_data;
@@ -81,7 +69,7 @@ struct _cacheinfo {
 
     /* add a transaction to system log */
     void (*log_append) _PARAMS((struct _cacheinfo * obj, char *url, char *id,
-	    int size, char *action, char *method, int http_code, int msec, char *ident));
+	    int size, char *action, char *method, int http_code, int msec, hier_code));
 
     /* clear logfile */
     void (*log_clear) _PARAMS((struct _cacheinfo * obj, StoreEntry * sentry));
@@ -126,9 +114,23 @@ struct _cacheinfo {
 
 };
 
+struct _iostats {
+    struct {
+	int reads;
+	int reads_deferred;
+	int read_hist[16];
+	int writes;
+	int write_hist[16];
+    } Http, Ftp;
+};
+
+extern struct _iostats IOStats;
+
 extern cacheinfo *CacheInfo;
 extern unsigned long ntcpconn;
 extern unsigned long nudpconn;
+extern char *open_bracket;
+extern char *close_bracket;
 
 extern void stat_init _PARAMS((cacheinfo **, char *));
 extern void stat_rotate_log _PARAMS((void));

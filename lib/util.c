@@ -1,23 +1,70 @@
 /* $Id$ */
 
+#include "config.h"
+
+#if HAVE_STDIO_H
 #include <stdio.h>
+#endif
+#if HAVE_STDLIB_H
 #include <stdlib.h>
+#endif
+#if HAVE_STRING_H
 #include <string.h>
+#endif
+#if HAVE_UNISTD_H
 #include <unistd.h>
-#ifndef _SQUID_FREEBSD_		/* "Obsolete" Markus Stumpf <maex@Space.NET> */
+#endif
+#if HAVE_MALLOC_H && !defined(_SQUID_FREEBSD_) && !defined(_SQUID_NEXT_)
 #include <malloc.h>
 #endif
+#if HAVE_ERRNO_H
 #include <errno.h>
+#endif
 
-void (*failure_notify) () = NULL;
+#include "util.h"
+
+void (*failure_notify) _PARAMS((char *)) = NULL;
 static char msg[128];
 
 extern int sys_nerr;
-#if !defined(__FreeBSD__) && !defined(__NetBSD__)
+#if NEED_SYS_ERRLIST && !defined(_SQUID_NETBSD_)
 extern char *sys_errlist[];
 #endif
 
-#include "autoconf.h"
+#if XMALLOC_STATISTICS
+#define DBG_MAXSIZE   (1024*1024)
+#define DBG_GRAIN     (16)
+#define DBG_MAXINDEX  (DBG_MAXSIZE/DBG_GRAIN)
+#define DBG_INDEX(sz) (sz<DBG_MAXSIZE?(sz+DBG_GRAIN-1)/DBG_GRAIN:DBG_MAXINDEX)
+static int malloc_sizes[DBG_MAXINDEX + 1];
+static int dbg_stat_init = 0;
+
+static void stat_init()
+{
+    int i;
+    for (i = 0; i <= DBG_MAXINDEX; i++)
+	malloc_sizes[i] = 0;
+    dbg_stat_init = 1;
+}
+
+static int malloc_stat(sz)
+     int sz;
+{
+    if (!dbg_stat_init)
+	stat_init();
+    return malloc_sizes[DBG_INDEX(sz)] += 1;
+}
+
+void malloc_statistics(func, data)
+     void (*func) _PARAMS((int, int, void *));
+     void *data;
+{
+    int i;
+    for (i = 0; i <= DBG_MAXSIZE; i += DBG_GRAIN)
+	func(i, malloc_sizes[DBG_INDEX(i)], data);
+}
+#endif /* XMALLOC_STATISTICS */
+
 
 
 #if XMALLOC_DEBUG
@@ -34,10 +81,10 @@ static void *Q;
 static void check_init()
 {
     for (B = 0; B < DBG_ARRY_SZ; B++) {
-      for (I = 0; I < DBG_ARRY_SZ; I++) {
-	malloc_ptrs[B][I] = NULL;
-	malloc_size[B][I] = 0;
-      }
+	for (I = 0; I < DBG_ARRY_SZ; I++) {
+	    malloc_ptrs[B][I] = NULL;
+	    malloc_size[B][I] = 0;
+	}
     }
     dbg_initd = 1;
 }
@@ -112,6 +159,9 @@ void *xmalloc(sz)
 #if XMALLOC_DEBUG
     check_malloc(p, sz);
 #endif
+#if XMALLOC_STATISTICS
+    malloc_stat(sz);
+#endif
     return (p);
 }
 
@@ -163,6 +213,9 @@ void *xrealloc(s, sz)
 #if XMALLOC_DEBUG
     check_malloc(p, sz);
 #endif
+#if XMALLOC_STATISTICS
+    malloc_stat(sz);
+#endif
     return (p);
 }
 
@@ -193,6 +246,9 @@ void *xcalloc(n, sz)
 #if XMALLOC_DEBUG
     check_malloc(p, sz * n);
 #endif
+#if XMALLOC_STATISTICS
+    malloc_stat(sz);
+#endif
     return (p);
 }
 
@@ -204,7 +260,7 @@ char *xstrdup(s)
      char *s;
 {
     static char *p = NULL;
-    int sz;
+    size_t sz;
 
     if (s == NULL) {
 	if (failure_notify) {
@@ -215,7 +271,7 @@ char *xstrdup(s)
 	exit(1);
     }
     sz = strlen(s);
-    p = (char *) xmalloc((size_t) sz + 1);
+    p = xmalloc((size_t) sz + 1);
     memcpy(p, s, sz);		/* copy string */
     p[sz] = '\0';		/* terminate string */
     return (p);
@@ -244,10 +300,16 @@ char *strdup(s)
 }
 #endif
 
-#if !HAVE_STRERROR
-char *strerror(n)
-int n;
+void xmemcpy(from, to, len)
+     void *from;
+     void *to;
+     int len;
 {
-    return (xstrerror(n));
-}
+#if HAVE_MEMMOVE
+    (void) memmove(from, to, len);
+#elif HAVE_BCOPY
+    bcopy(to, from, len);
+#else
+    (void) memcpy(from, to, len);
 #endif
+}
