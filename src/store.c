@@ -922,31 +922,6 @@ void storeAppend(e, data, len)
 	InvokeHandlers(e);
 }
 
-#if defined(__STRICT_ANSI__)
-void storeAppendPrintf(StoreEntry *e, char *fmt, ...)
-{
-	va_list args;
-	static char buf[4096];
-	va_start(args, fmt);
-#else
-void storeAppendPrintf(va_alist)
-	va_dcl
-{
-	va_list args;
-	StoreEntry *e = NULL;
-	char *fmt = NULL;
-	static char buf[4096];
-	va_start(args);
-	e = va_arg(args, StoreEntry *);
-	fmt = va_arg(args, char *);
-#endif
-	buf[0]  = '\0';
-	vsprintf(buf, fmt, args);
-	storeAppend(e, buf, strlen(buf));
-	va_end(args);
-}
-
-
 /* add directory to swap disk */
 int storeAddSwapDisk(path)
      char *path;
@@ -2427,7 +2402,7 @@ static int storeVerifySwapDirs(clean)
 	    debug(20, 1, "storeVerifySwapDirs: Created swap directory %s\n", path);
 	    directory_created = 1;
 	}
-	if (clean) {
+	if (clean && opt_unlink_on_reload) {
 	    debug(20, 1, "storeVerifySwapDirs: Zapping all objects on disk storage.\n");
 	    /* This could be dangerous, second copy of cache can destroy
 	     * the existing swap files of the previous cache. We may

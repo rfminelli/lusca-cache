@@ -19,7 +19,7 @@ The Squid Cache (version %s) died.\n\
 You've encountered a fatal error in the Squid Cache version %s.\n\
 If a core file was created (possibly in the swap directory),\n\
 please execute 'gdb squid core' or 'dbx squid core', then type 'where',\n\
-and report the trace back to squid@nlanr.net.\n\
+and report the trace back to squid-bugs@nlanr.net.\n\
 \n\
 Thanks!\n"
 
@@ -168,7 +168,8 @@ void shut_down(sig)
     int i;
     int lft = getShutdownLifetime();
     FD_ENTRY *f;
-    debug(21, 1, "Preparing for shutdown after %d connections\n", ntcpconn);
+    debug(21, 1, "Preparing for shutdown after %d connections\n",
+	ntcpconn + nudpconn);
     serverConnectionsClose();
     ipcacheShutdownServers();
     for (i = fdstat_biggest_fd(); i >= 0; i--) {
