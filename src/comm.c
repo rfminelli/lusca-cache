@@ -35,9 +35,6 @@
 
 #include "squid.h"
 
-#if defined(_SQUID_CYGWIN_)
-#include <sys/ioctl.h>
-#endif
 #ifdef HAVE_NETINET_TCP_H
 #include <netinet/tcp.h>
 #endif
@@ -72,9 +69,10 @@ static IPH commConnectDnsHandle;
 static void commConnectCallback(ConnectStateData * cs, int status);
 static int commResetFD(ConnectStateData * cs);
 static int commRetryConnect(ConnectStateData * cs);
-CBDATA_TYPE(ConnectStateData);
+static CBDUNL commConnectDataFree;
 
 static MemPool *comm_write_pool = NULL;
+static MemPool *conn_state_pool = NULL;
 static MemPool *conn_close_pool = NULL;
 
 static void
@@ -82,7 +80,7 @@ CommWriteStateCallbackAndFree(int fd, int code)
 {
     CommWriteStateData *CommWriteState = fd_table[fd].rwstate;
     CWCB *callback = NULL;
-    void *cbdata;
+    void *data;
     fd_table[fd].rwstate = NULL;
     if (CommWriteState == NULL)
 	return;
@@ -94,9 +92,11 @@ CommWriteStateCallbackAndFree(int fd, int code)
 	free_func(free_buf);
     }
     callback = CommWriteState->handler;
+    data = CommWriteState->handler_data;
     CommWriteState->handler = NULL;
-    if (callback && cbdataReferenceValidDone(CommWriteState->handler_data, &cbdata))
-	callback(fd, CommWriteState->buf, CommWriteState->offset, code, cbdata);
+    if (callback && cbdataValid(data))
+	callback(fd, CommWriteState->buf, CommWriteState->offset, code, data);
+    cbdataUnlock(data);
     memPoolFree(comm_write_pool, CommWriteState);
 }
 
@@ -146,7 +146,7 @@ commBind(int s, struct in_addr in_addr, u_short port)
 }
 
 /* Create a socket. Default is blocking, stream (TCP) socket.  IO_TYPE
- * is OR of flags specified in comm.h. Defaults TOS */
+ * is OR of flags specified in comm.h. */
 int
 comm_open(int sock_type,
     int proto,
@@ -155,23 +155,7 @@ comm_open(int sock_type,
     int flags,
     const char *note)
 {
-    return comm_openex(sock_type, proto, addr, port, flags, 0, note);
-}
-
-
-/* Create a socket. Default is blocking, stream (TCP) socket.  IO_TYPE
- * is OR of flags specified in defines.h:COMM_* */
-int
-comm_openex(int sock_type,
-    int proto,
-    struct in_addr addr,
-    u_short port,
-    int flags,
-    unsigned char TOS,
-    const char *note)
-{
     int new_socket;
-    int tos = 0;
     fde *F = NULL;
 
     /* Create socket for accepting new connections. */
@@ -191,23 +175,10 @@ comm_openex(int sock_type,
 	}
 	return -1;
     }
-    /* set TOS if needed */
-    if (TOS) {
-#ifdef IP_TOS
-	tos = TOS;
-	if (setsockopt(new_socket, IPPROTO_IP, IP_TOS, (char *) &tos, sizeof(int)) < 0)
-	        debug(50, 1) ("comm_open: setsockopt(IP_TOS) on FD %d: %s\n",
-		new_socket, xstrerror());
-#else
-	debug(50, 0) ("comm_open: setsockopt(IP_TOS) not supported on this platform\n");
-#endif
-    }
     /* update fdstat */
     debug(5, 5) ("comm_open: FD %d is a new socket\n", new_socket);
     fd_open(new_socket, FD_SOCKET, note);
     F = &fd_table[new_socket];
-    F->local_addr = addr;
-    F->tos = tos;
     if (!(flags & COMM_NOCLOEXEC))
 	commSetCloseOnExec(new_socket);
     if ((flags & COMM_REUSEADDR))
@@ -260,17 +231,24 @@ comm_listen(int sock)
 void
 commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *data)
 {
-    ConnectStateData *cs;
+    ConnectStateData *cs = memPoolAlloc(conn_state_pool);
     debug(5, 3) ("commConnectStart: FD %d, %s:%d\n", fd, host, (int) port);
-    cs = cbdataAlloc(ConnectStateData);
+    cbdataAdd(cs, commConnectDataFree, 0);
     cs->fd = fd;
     cs->host = xstrdup(host);
     cs->port = port;
     cs->callback = callback;
-    cs->data = cbdataReference(data);
+    cs->data = data;
+    cbdataLock(cs->data);
     comm_add_close_handler(fd, commConnectFree, cs);
     cs->locks++;
     ipcache_nbgethostbyname(host, commConnectDnsHandle, cs);
+}
+
+static void
+commConnectDataFree(void *data, int unused)
+{
+    memPoolFree(conn_state_pool, data);
 }
 
 static void
@@ -301,15 +279,16 @@ static void
 commConnectCallback(ConnectStateData * cs, int status)
 {
     CNCB *callback = cs->callback;
-    void *cbdata = cs->data;
+    void *data = cs->data;
     int fd = cs->fd;
     comm_remove_close_handler(fd, commConnectFree, cs);
     cs->callback = NULL;
     cs->data = NULL;
     commSetTimeout(fd, -1, NULL, NULL);
     commConnectFree(fd, cs);
-    if (cbdataReferenceValid(cbdata))
-	callback(fd, status, cbdata);
+    if (cbdataValid(data))
+	callback(fd, status, data);
+    cbdataUnlock(data);
 }
 
 static void
@@ -317,7 +296,8 @@ commConnectFree(int fd, void *data)
 {
     ConnectStateData *cs = data;
     debug(5, 3) ("commConnectFree: FD %d\n", fd);
-    cbdataReferenceDone(cs->data);
+    if (cs->data)
+	cbdataUnlock(cs->data);
     safe_free(cs->host);
     cbdataFree(cs);
 }
@@ -327,8 +307,7 @@ static int
 commResetFD(ConnectStateData * cs)
 {
     int fd2;
-    fde *F;
-    if (!cbdataReferenceValid(cs->data))
+    if (!cbdataValid(cs->data))
 	return 0;
     statCounter.syscalls.sock.sockets++;
     fd2 = socket(AF_INET, SOCK_STREAM, 0);
@@ -343,34 +322,23 @@ commResetFD(ConnectStateData * cs)
 	debug(5, 0) ("commResetFD: dup2: %s\n", xstrerror());
 	if (ENFILE == errno || EMFILE == errno)
 	    fdAdjustReserved();
-	close(fd2);
 	return 0;
     }
     close(fd2);
-    F = &fd_table[cs->fd];
     fd_table[cs->fd].flags.called_connect = 0;
     /*
      * yuck, this has assumptions about comm_open() arguments for
      * the original socket
      */
-    if (commBind(cs->fd, F->local_addr, F->local_port) != COMM_OK) {
-	debug(5, 0) ("commResetFD: bind: %s\n", xstrerror());
-	return 0;
+    commSetCloseOnExec(cs->fd);
+    if (Config.Addrs.tcp_outgoing.s_addr != no_addr.s_addr) {
+	if (commBind(cs->fd, Config.Addrs.tcp_outgoing, 0) != COMM_OK) {
+	    return 0;
+	}
     }
-#ifdef IP_TOS
-    if (F->tos) {
-	int tos = F->tos;
-	if (setsockopt(cs->fd, IPPROTO_IP, IP_TOS, (char *) &tos, sizeof(int)) < 0)
-	        debug(50, 1) ("commResetFD: setsockopt(IP_TOS) on FD %d: %s\n", cs->fd, xstrerror());
-    }
-#endif
-    if (F->flags.close_on_exec)
-	commSetCloseOnExec(cs->fd);
-    if (F->flags.nonblocking)
-	commSetNonBlocking(cs->fd);
+    commSetNonBlocking(cs->fd);
 #ifdef TCP_NODELAY
-    if (F->flags.nodelay)
-	commSetTcpNoDelay(cs->fd);
+    commSetTcpNoDelay(cs->fd);
 #endif
     if (Config.tcpRcvBufsz > 0)
 	commSetTcpRcvbuf(cs->fd, Config.tcpRcvBufsz);
@@ -439,19 +407,16 @@ commSetTimeout(int fd, int timeout, PF * handler, void *data)
     F = &fd_table[fd];
     assert(F->flags.open);
     if (timeout < 0) {
-	cbdataReferenceDone(F->timeout_data);
 	F->timeout_handler = NULL;
-	F->timeout = 0;
-    } else {
-	assert(handler || F->timeout_handler);
-	if (handler) {
-	    cbdataReferenceDone(F->timeout_data);
-	    F->timeout_handler = handler;
-	    F->timeout_data = cbdataReference(data);
-	}
-	F->timeout = squid_curtime + (time_t) timeout;
+	F->timeout_data = NULL;
+	return F->timeout = 0;
     }
-    return F->timeout;
+    assert(handler || F->timeout_handler);
+    if (handler || data) {
+	F->timeout_handler = handler;
+	F->timeout_data = data;
+    }
+    return F->timeout = squid_curtime + (time_t) timeout;
 }
 
 int
@@ -566,9 +531,9 @@ commCallCloseHandlers(int fd)
     while ((ch = F->close_handler) != NULL) {
 	F->close_handler = ch->next;
 	debug(5, 5) ("commCallCloseHandlers: ch->handler=%p\n", ch->handler);
-	if (cbdataReferenceValid(ch->data))
+	if (cbdataValid(ch->data))
 	    ch->handler(fd, ch->data);
-	cbdataReferenceDone(ch->data);
+	cbdataUnlock(ch->data);
 	memPoolFree(conn_close_pool, ch);	/* AAA */
     }
 }
@@ -579,7 +544,7 @@ commLingerClose(int fd, void *unused)
 {
     LOCAL_ARRAY(char, buf, 1024);
     int n;
-    n = FD_READ_METHOD(fd, buf, 1024);
+    n = read(fd, buf, 1024);
     if (n < 0)
 	debug(5, 3) ("commLingerClose: FD %d read: %s\n", fd, xstrerror());
     comm_close(fd);
@@ -598,10 +563,6 @@ commLingerTimeout(int fd, void *unused)
 void
 comm_lingering_close(int fd)
 {
-#if USE_SSL
-    if (fd_table[fd].ssl)
-	ssl_shutdown_method(fd);
-#endif
     if (shutdown(fd, 1) < 0) {
 	comm_close(fd);
 	return;
@@ -612,31 +573,14 @@ comm_lingering_close(int fd)
 }
 #endif
 
-/*
- * enable linger with time of 0 so that when the socket is
- * closed, TCP generates a RESET
- */
-void
-comm_reset_close(int fd)
-{
-    struct linger L;
-    L.l_onoff = 1;
-    L.l_linger = 0;
-    if (setsockopt(fd, SOL_SOCKET, SO_LINGER, (char *) &L, sizeof(L)) < 0)
-	debug(50, 0) ("commResetTCPClose: FD %d: %s\n", fd, xstrerror());
-    comm_close(fd);
-}
-
 void
 comm_close(int fd)
 {
     fde *F = NULL;
-
     debug(5, 5) ("comm_close: FD %d\n", fd);
     assert(fd >= 0);
     assert(fd < Squid_MaxFD);
     F = &fd_table[fd];
-
     if (F->flags.closing)
 	return;
     if (shutting_down && (!F->flags.open || F->type == FD_FILE))
@@ -644,21 +588,10 @@ comm_close(int fd)
     assert(F->flags.open);
     assert(F->type != FD_FILE);
     F->flags.closing = 1;
-#if USE_SSL
-    if (F->ssl)
-	ssl_shutdown_method(fd);
-#endif
-    commSetTimeout(fd, -1, NULL, NULL);
     CommWriteStateCallbackAndFree(fd, COMM_ERR_CLOSING);
     commCallCloseHandlers(fd);
     if (F->uses)		/* assume persistent connect count */
 	pconnHistCount(1, F->uses);
-#if USE_SSL
-    if (F->ssl) {
-	SSL_free(F->ssl);
-	F->ssl = NULL;
-    }
-#endif
     fd_close(fd);		/* update fdstat */
     close(fd);
     statCounter.syscalls.sock.closes++;
@@ -698,6 +631,27 @@ commSetDefer(int fd, DEFER * func, void *data)
 }
 
 void
+commSetSelect(int fd, unsigned int type, PF * handler, void *client_data, time_t timeout)
+{
+    fde *F = &fd_table[fd];
+    assert(fd >= 0);
+    assert(F->flags.open);
+    debug(5, 5) ("commSetSelect: FD %d type %d\n", fd, type);
+    if (type & COMM_SELECT_READ) {
+	F->read_handler = handler;
+	F->read_data = client_data;
+	commUpdateReadBits(fd, handler);
+    }
+    if (type & COMM_SELECT_WRITE) {
+	F->write_handler = handler;
+	F->write_data = client_data;
+	commUpdateWriteBits(fd, handler);
+    }
+    if (timeout)
+	F->timeout = squid_curtime + timeout;
+}
+
+void
 comm_add_close_handler(int fd, PF * handler, void *data)
 {
     close_handler *new = memPoolAlloc(conn_close_pool);		/* AAA */
@@ -707,9 +661,10 @@ comm_add_close_handler(int fd, PF * handler, void *data)
     for (c = fd_table[fd].close_handler; c; c = c->next)
 	assert(c->handler != handler || c->data != data);
     new->handler = handler;
-    new->data = cbdataReference(data);
+    new->data = data;
     new->next = fd_table[fd].close_handler;
     fd_table[fd].close_handler = new;
+    cbdataLock(data);
 }
 
 void
@@ -729,8 +684,9 @@ comm_remove_close_handler(int fd, PF * handler, void *data)
 	last->next = p->next;
     else
 	fd_table[fd].close_handler = p->next;
-    cbdataReferenceDone(p->data);
-    memPoolFree(conn_close_pool, p);
+    cbdataUnlock(p->data);
+    memPoolFree(conn_close_pool, p);	/* AAA */
+
 }
 
 static void
@@ -818,7 +774,6 @@ commSetCloseOnExec(int fd)
     }
     if (fcntl(fd, F_SETFD, flags | FD_CLOEXEC) < 0)
 	debug(50, 0) ("FD %d: set close-on-exec failed: %s\n", fd, xstrerror());
-    fd_table[fd].flags.close_on_exec = 1;
 #endif
 }
 
@@ -829,7 +784,6 @@ commSetTcpNoDelay(int fd)
     int on = 1;
     if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *) &on, sizeof(on)) < 0)
 	debug(50, 1) ("commSetTcpNoDelay: FD %d: %s\n", fd, xstrerror());
-    fd_table[fd].flags.nodelay = 1;
 }
 #endif
 
@@ -843,8 +797,8 @@ comm_init(void)
      * after accepting a client but before it opens a socket or a file.
      * Since Squid_MaxFD can be as high as several thousand, don't waste them */
     RESERVED_FD = XMIN(100, Squid_MaxFD / 4);
-    CBDATA_INIT_TYPE(ConnectStateData);
     comm_write_pool = memPoolCreate("CommWriteStateData", sizeof(CommWriteStateData));
+    conn_state_pool = memPoolCreate("ConnectStateData", sizeof(ConnectStateData));
     conn_close_pool = memPoolCreate("close_handler", sizeof(close_handler));
 }
 
@@ -856,11 +810,11 @@ commHandleWrite(int fd, void *data)
     int len = 0;
     int nleft;
 
-    debug(5, 5) ("commHandleWrite: FD %d: off %ld, sz %ld.\n",
-	fd, (long int) state->offset, (long int) state->size);
+    debug(5, 5) ("commHandleWrite: FD %d: off %d, sz %d.\n",
+	fd, (int) state->offset, state->size);
 
     nleft = state->size - state->offset;
-    len = FD_WRITE_METHOD(fd, state->buf + state->offset, nleft);
+    len = write(fd, state->buf + state->offset, nleft);
     debug(5, 5) ("commHandleWrite: write() returns %d\n", len);
     fd_bytes(fd, len, FD_WRITE);
     statCounter.syscalls.sock.writes++;
@@ -909,9 +863,9 @@ commHandleWrite(int fd, void *data)
 
 
 /* Select for Writing on FD, until SIZE bytes are sent.  Call
- * *HANDLER when complete. */
+ * * HANDLER when complete. */
 void
-comm_write(int fd, const char *buf, int size, CWCB * handler, void *handler_data, FREE * free_func)
+comm_write(int fd, char *buf, int size, CWCB * handler, void *handler_data, FREE * free_func)
 {
     CommWriteStateData *state = fd_table[fd].rwstate;
     debug(5, 5) ("comm_write: FD %d: sz %d: hndl %p: data %p.\n",
@@ -922,12 +876,13 @@ comm_write(int fd, const char *buf, int size, CWCB * handler, void *handler_data
 	fd_table[fd].rwstate = NULL;
     }
     fd_table[fd].rwstate = state = memPoolAlloc(comm_write_pool);
-    state->buf = (char *) buf;
+    state->buf = buf;
     state->size = size;
     state->offset = 0;
     state->handler = handler;
-    state->handler_data = cbdataReference(handler_data);
+    state->handler_data = handler_data;
     state->free_func = free_func;
+    cbdataLock(handler_data);
     commSetSelect(fd, COMM_SELECT_WRITE, commHandleWrite, state, 0);
 }
 
@@ -968,6 +923,7 @@ commCloseAllSockets(void)
 {
     int fd;
     fde *F = NULL;
+    PF *callback;
     for (fd = 0; fd <= Biggest_FD; fd++) {
 	F = &fd_table[fd];
 	if (!F->flags.open)
@@ -977,53 +933,14 @@ commCloseAllSockets(void)
 	if (F->flags.ipc)	/* don't close inter-process sockets */
 	    continue;
 	if (F->timeout_handler) {
-	    PF *callback = F->timeout_handler;
-	    void *cbdata = NULL;
-	    F->timeout_handler = NULL;
 	    debug(5, 5) ("commCloseAllSockets: FD %d: Calling timeout handler\n",
 		fd);
-	    if (cbdataReferenceValidDone(F->timeout_data, &cbdata))
-		callback(fd, cbdata);
+	    callback = F->timeout_handler;
+	    F->timeout_handler = NULL;
+	    callback(fd, F->timeout_data);
 	} else {
 	    debug(5, 5) ("commCloseAllSockets: FD %d: calling comm_close()\n", fd);
 	    comm_close(fd);
 	}
     }
-}
-
-void
-checkTimeouts(void)
-{
-    int fd;
-    fde *F = NULL;
-    PF *callback;
-    for (fd = 0; fd <= Biggest_FD; fd++) {
-	F = &fd_table[fd];
-	if (!F->flags.open)
-	    continue;
-	if (F->timeout == 0)
-	    continue;
-	if (F->timeout > squid_curtime)
-	    continue;
-	debug(5, 5) ("checkTimeouts: FD %d Expired\n", fd);
-	if (F->timeout_handler) {
-	    debug(5, 5) ("checkTimeouts: FD %d: Call timeout handler\n", fd);
-	    callback = F->timeout_handler;
-	    F->timeout_handler = NULL;
-	    callback(fd, F->timeout_data);
-	} else {
-	    debug(5, 5) ("checkTimeouts: FD %d: Forcing comm_close()\n", fd);
-	    comm_close(fd);
-	}
-    }
-}
-
-
-int
-commDeferRead(int fd)
-{
-    fde *F = &fd_table[fd];
-    if (F->defer_check == NULL)
-	return 0;
-    return F->defer_check(fd, F->defer_data);
 }

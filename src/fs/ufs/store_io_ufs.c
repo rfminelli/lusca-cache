@@ -40,9 +40,7 @@
 static DRCB storeUfsReadDone;
 static DWCB storeUfsWriteDone;
 static void storeUfsIOCallback(storeIOState * sio, int errflag);
-static CBDUNL storeUfsIOFreeEntry;
-
-CBDATA_TYPE(storeIOState);
+static void storeUfsIOFreeEntry(void *, int);
 
 /* === PUBLIC =========================================================== */
 
@@ -62,15 +60,16 @@ storeUfsOpen(SwapDir * SD, StoreEntry * e, STFNCB * file_callback,
 	return NULL;
     }
     debug(79, 3) ("storeUfsOpen: opened FD %d\n", fd);
-    CBDATA_INIT_TYPE_FREECB(storeIOState, storeUfsIOFreeEntry);
-    sio = cbdataAlloc(storeIOState);
+    sio = memAllocate(MEM_STORE_IO);
+    cbdataAdd(sio, storeUfsIOFreeEntry, MEM_STORE_IO);
     sio->fsstate = memPoolAlloc(ufs_state_pool);
 
     sio->swap_filen = f;
     sio->swap_dirn = SD->index;
     sio->mode = O_RDONLY;
     sio->callback = callback;
-    sio->callback_data = cbdataReference(callback_data);
+    sio->callback_data = callback_data;
+    cbdataLock(callback_data);
     sio->e = e;
     ((ufsstate_t *) (sio->fsstate))->fd = fd;
     ((ufsstate_t *) (sio->fsstate))->flags.writing = 0;
@@ -109,15 +108,16 @@ storeUfsCreate(SwapDir * SD, StoreEntry * e, STFNCB * file_callback, STIOCB * ca
 	return NULL;
     }
     debug(79, 3) ("storeUfsCreate: opened FD %d\n", fd);
-    CBDATA_INIT_TYPE_FREECB(storeIOState, storeUfsIOFreeEntry);
-    sio = cbdataAlloc(storeIOState);
+    sio = memAllocate(MEM_STORE_IO);
+    cbdataAdd(sio, storeUfsIOFreeEntry, MEM_STORE_IO);
     sio->fsstate = memPoolAlloc(ufs_state_pool);
 
     sio->swap_filen = filn;
     sio->swap_dirn = dirn;
     sio->mode = mode;
     sio->callback = callback;
-    sio->callback_data = cbdataReference(callback_data);
+    sio->callback_data = callback_data;
+    cbdataLock(callback_data);
     sio->e = (StoreEntry *) e;
     ((ufsstate_t *) (sio->fsstate))->fd = fd;
     ((ufsstate_t *) (sio->fsstate))->flags.writing = 0;
@@ -152,7 +152,8 @@ storeUfsRead(SwapDir * SD, storeIOState * sio, char *buf, size_t size, off_t off
     assert(sio->read.callback == NULL);
     assert(sio->read.callback_data == NULL);
     sio->read.callback = callback;
-    sio->read.callback_data = cbdataReference(callback_data);
+    sio->read.callback_data = callback_data;
+    cbdataLock(callback_data);
     debug(79, 3) ("storeUfsRead: dirno %d, fileno %08X, FD %d\n",
 	sio->swap_dirn, sio->swap_filen, ufsstate->fd);
     sio->offset = offset;
@@ -196,8 +197,8 @@ storeUfsReadDone(int fd, const char *buf, int len, int errflag, void *my_data)
 {
     storeIOState *sio = my_data;
     ufsstate_t *ufsstate = (ufsstate_t *) sio->fsstate;
-    STRCB *callback;
-    void *cbdata;
+    STRCB *callback = sio->read.callback;
+    void *their_data = sio->read.callback_data;
     ssize_t rlen;
 
     debug(79, 3) ("storeUfsReadDone: dirno %d, fileno %08X, FD %d, len %d\n",
@@ -210,12 +211,13 @@ storeUfsReadDone(int fd, const char *buf, int len, int errflag, void *my_data)
 	rlen = (ssize_t) len;
 	sio->offset += len;
     }
-    assert(sio->read.callback);
-    assert(sio->read.callback_data);
-    callback = sio->read.callback;
+    assert(callback);
+    assert(their_data);
     sio->read.callback = NULL;
-    if (cbdataReferenceValidDone(sio->read.callback_data, &cbdata))
-	callback(cbdata, buf, (size_t) rlen);
+    sio->read.callback_data = NULL;
+    if (cbdataValid(their_data))
+	callback(their_data, buf, (size_t) rlen);
+    cbdataUnlock(their_data);
 }
 
 static void
@@ -223,8 +225,8 @@ storeUfsWriteDone(int fd, int errflag, size_t len, void *my_data)
 {
     storeIOState *sio = my_data;
     ufsstate_t *ufsstate = (ufsstate_t *) sio->fsstate;
-    debug(79, 3) ("storeUfsWriteDone: dirno %d, fileno %08X, FD %d, len %ld\n",
-	sio->swap_dirn, sio->swap_filen, fd, (long int) len);
+    debug(79, 3) ("storeUfsWriteDone: dirno %d, fileno %08X, FD %d, len %d\n",
+	sio->swap_dirn, sio->swap_filen, fd, len);
     ufsstate->flags.writing = 0;
     if (errflag) {
 	debug(79, 0) ("storeUfsWriteDone: got failure (%d)\n", errflag);
@@ -240,24 +242,27 @@ static void
 storeUfsIOCallback(storeIOState * sio, int errflag)
 {
     ufsstate_t *ufsstate = (ufsstate_t *) sio->fsstate;
-    void *cbdata;
     debug(79, 3) ("storeUfsIOCallback: errflag=%d\n", errflag);
     if (ufsstate->fd > -1) {
 	file_close(ufsstate->fd);
 	store_open_disk_fd--;
     }
-    if (cbdataReferenceValidDone(sio->callback_data, &cbdata))
-	sio->callback(cbdata, errflag, sio);
+    if (cbdataValid(sio->callback_data))
+	sio->callback(sio->callback_data, errflag, sio);
+    cbdataUnlock(sio->callback_data);
+    sio->callback_data = NULL;
     sio->callback = NULL;
     cbdataFree(sio);
 }
 
 
 /*
- * Clean up any references from the SIO before it get's released.
+ * We can't pass memFree() as a free function here, because we need to free
+ * the fsstate variable ..
  */
 static void
-storeUfsIOFreeEntry(void *sio)
+storeUfsIOFreeEntry(void *sio, int foo)
 {
     memPoolFree(ufs_state_pool, ((storeIOState *) sio)->fsstate);
+    memFree(sio, MEM_STORE_IO);
 }

@@ -126,8 +126,6 @@
 #include <sys/select.h>
 #endif
 
-#include <assert.h>
-
 #include "util.h"
 #include "snprintf.h"
 
@@ -165,9 +163,9 @@ static struct in_addr no_addr;
  */
 #define safe_free(str) { if (str) { xfree(str); (str) = NULL; } }
 static const char *safe_str(const char *str);
-static const char *xstrtok(char **str, char del);
+static char *xstrtok(char **str, char del);
 static void print_trailer(void);
-static void auth_html(const char *host, int port, const char *user_name);
+static void auth_html(char *host, int port, const char *user_name);
 static void error_html(const char *msg);
 static char *menu_url(cachemgr_request * req, const char *action);
 static int parse_status_line(const char *sline, const char **statusStr);
@@ -194,7 +192,7 @@ is_number(const char *str)
     return strspn(str, "\t -+01234567890./\n") == strlen(str);
 }
 
-static const char *
+static char *
 xstrtok(char **str, char del)
 {
     if (*str) {
@@ -223,12 +221,12 @@ print_trailer(void)
     printf("<HR>\n");
     printf("<ADDRESS>\n");
     printf("Generated %s, by %s/%s@%s\n",
-	mkrfc1123(now), progname, VERSION, getfullhostname());
+	mkrfc1123(now), progname, SQUID_VERSION, getfullhostname());
     printf("</ADDRESS></BODY></HTML>\n");
 }
 
 static void
-auth_html(const char *host, int port, const char *user_name)
+auth_html(char *host, int port, const char *user_name)
 {
     if (!user_name)
 	user_name = "";
@@ -534,10 +532,9 @@ process_request(cachemgr_request * req)
     }
     memset(&S, '\0', sizeof(struct sockaddr_in));
     S.sin_family = AF_INET;
-    if ((hp = gethostbyname(req->hostname)) != NULL) {
-	assert(hp->h_length <= sizeof(S.sin_addr.s_addr));
+    if ((hp = gethostbyname(req->hostname)) != NULL)
 	xmemcpy(&S.sin_addr.s_addr, hp->h_addr, hp->h_length);
-    } else if (safe_inet_addr(req->hostname, &S.sin_addr))
+    else if (safe_inet_addr(req->hostname, &S.sin_addr))
 	(void) 0;
     else {
 	snprintf(buf, 1024, "Unknown host: %s\n", req->hostname);
@@ -739,7 +736,6 @@ make_auth_header(const cachemgr_request * req)
 
     str64 = base64_encode(buf);
     l += snprintf(buf, sizeof(buf), "Authorization: Basic %s\r\n", str64);
-    assert(l < sizeof(buf));
     l += snprintf(&buf[l], sizeof(buf) - l,
 	"Proxy-Authorization: Basic %s\r\n", str64);
     return buf;

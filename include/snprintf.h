@@ -2,9 +2,6 @@
  * $Id$
  */
 
-#ifndef SQUID_SNPRINTF_H
-#define SQUID_SNPRINTF_H
-
 /* if you have configure you can use this */
 #if defined(HAVE_CONFIG_H)
 #include "config.h"
@@ -29,7 +26,7 @@
 #define VA_SHIFT(v,t) v = va_arg(ap,t)
 #define VA_END va_end(ap)
 #else
-#error **NO VARARGS **
+XX **NO VARARGS ** XX
 #endif
 #endif
 
@@ -50,5 +47,3 @@ int vsnprintf(char *str, size_t count, const char *fmt, va_list arg);
 int vsnprintf();
 #endif
 #endif
-
-#endif /* SQUID_SNPRINTF_H */

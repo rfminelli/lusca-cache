@@ -41,6 +41,7 @@ stmemFree(mem_hdr * mem)
     mem_node *p;
     while ((p = mem->head)) {
 	mem->head = p->next;
+	memFree(p->data, MEM_STMEM_BUF);
 	store_mem_size -= SM_PAGE_SIZE;
 	if (p) {
 	    memFree(p, MEM_MEM_NODE);
@@ -67,6 +68,7 @@ stmemFreeDataUpto(mem_hdr * mem, int target_offset)
 	    lastp = p;
 	    p = p->next;
 	    current_offset += lastp->len;
+	    memFree(lastp->data, MEM_STMEM_BUF);
 	    store_mem_size -= SM_PAGE_SIZE;
 	    if (lastp) {
 		memFree(lastp, MEM_MEM_NODE);
@@ -109,6 +111,7 @@ stmemAppend(mem_hdr * mem, const char *data, int len)
 	p = memAllocate(MEM_MEM_NODE);
 	p->next = NULL;
 	p->len = len_to_copy;
+	p->data = memAllocate(MEM_STMEM_BUF);
 	store_mem_size += SM_PAGE_SIZE;
 	xmemcpy(p->data, data, len_to_copy);
 	if (!mem->head) {
@@ -133,7 +136,7 @@ stmemCopy(const mem_hdr * mem, off_t offset, char *buf, size_t size)
     char *ptr_to_buf = NULL;
     int bytes_from_this_packet = 0;
     int bytes_into_this_packet = 0;
-    debug(19, 6) ("memCopy: offset %ld: size %d\n", (long int) offset, (int) size);
+    debug(19, 6) ("memCopy: offset %d: size %d\n", (int) offset, size);
     if (p == NULL)
 	return 0;
     assert(size > 0);

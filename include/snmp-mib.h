@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
-#ifndef SQUID_SNMP_MIB_H
-#define SQUID_SNMP_MIB_H
+#ifndef _SNMP_MIB_H_
+#define _SNMP_MIB_H_
 
 /***************************************************************************
  *
@@ -35,5 +35,4 @@
 #if 0
 #include <mib.h>		/* Then the function definitions */
 #endif
-
-#endif /* SQUID_SNMP_MIB_H */
+#endif /* _SNMP_MIB_H_ */

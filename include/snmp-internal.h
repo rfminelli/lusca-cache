@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
-#ifndef SQUID_SNMP_INTERNAL_H
-#define SQUID_SNMP_INTERNAL_H
+#ifndef _SNMP_INTERNAL_H_
+#define _SNMP_INTERNAL_H_
 
 /**********************************************************************
  *
@@ -32,4 +32,10 @@
 #define SNMP_TRAP_PORT	    162
 #define SNMP_MAX_LEN	    484
 
-#endif /* SQUID_SNMP_INTERNAL_H */
+#ifdef DEBUG
+#define ERROR(string)	printf("%s(%d): %s\n",__FILE__, __LINE__, string);
+#else
+#define ERROR(string)
+#endif
+
+#endif /* _SNMP_INTERNAL_H_ */

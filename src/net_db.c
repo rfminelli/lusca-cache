@@ -33,35 +33,19 @@
  *
  */
 
-/*
- * XXX XXX XXX
- *
- * This code may be slightly broken now. If you're getting consistent
- * (sometimes working) corrupt data exchanges, please contact adrian
- * (adrian@squid-cache.org) to sort them out.
- */
-
 #include "squid.h"
 
 #if USE_ICMP
-#define	NETDB_REQBUF_SZ	4096
-
-typedef enum {
-    STATE_NONE,
-    STATE_HEADER,
-    STATE_BODY
-} netdb_conn_state_t;
 
 typedef struct {
     peer *p;
     StoreEntry *e;
     store_client *sc;
     request_t *r;
+    off_t seen;
     off_t used;
     size_t buf_sz;
-    char buf[NETDB_REQBUF_SZ];
-    int buf_ofs;
-    netdb_conn_state_t connstate;
+    char *buf;
 } netdbExchangeState;
 
 static hash_table *addr_table = NULL;
@@ -239,14 +223,14 @@ static void
 netdbSendPing(const ipcache_addrs * ia, void *data)
 {
     struct in_addr addr;
-    char *hostname = ((generic_cbdata *) data)->data;
+    char *hostname = data;
     netdbEntry *n;
     netdbEntry *na;
     net_db_name *x;
     net_db_name **X;
-    cbdataFree(data);
+    cbdataUnlock(hostname);
     if (ia == NULL) {
-	xfree(hostname);
+	cbdataFree(hostname);
 	return;
     }
     addr = ia->in_addrs[ia->cur];
@@ -264,7 +248,7 @@ netdbSendPing(const ipcache_addrs * ia, void *data)
 	x = (net_db_name *) hash_lookup(host_table, hostname);
 	if (x == NULL) {
 	    debug(38, 1) ("netdbSendPing: net_db_name list bug: %s not found", hostname);
-	    xfree(hostname);
+	    cbdataFree(hostname);
 	    return;
 	}
 	/* remove net_db_name from 'network n' linked list */
@@ -290,7 +274,7 @@ netdbSendPing(const ipcache_addrs * ia, void *data)
 	n->next_ping_time = squid_curtime + Config.Netdb.period;
 	n->last_use_time = squid_curtime;
     }
-    xfree(hostname);
+    cbdataFree(hostname);
 }
 
 static struct in_addr
@@ -454,12 +438,10 @@ netdbReloadState(void)
     fd = file_open(path, O_RDONLY | O_TEXT);
     if (fd < 0)
 	return;
-    if (fstat(fd, &sb) < 0) {
-	file_close(fd);
+    if (fstat(fd, &sb) < 0)
 	return;
-    }
     t = buf = xcalloc(1, sb.st_size + 1);
-    l = FD_READ_METHOD(fd, buf, sb.st_size);
+    l = read(fd, buf, sb.st_size);
     file_close(fd);
     if (l <= 0)
 	return;
@@ -542,9 +524,8 @@ netdbFreeNameEntry(void *data)
     memFree(x, MEM_NET_DB_NAME);
 }
 
-
 static void
-netdbExchangeHandleReply(void *data, char *notused, ssize_t retsize)
+netdbExchangeHandleReply(void *data, char *buf, ssize_t size)
 {
     netdbExchangeState *ex = data;
     int rec_sz = 0;
@@ -557,67 +538,40 @@ netdbExchangeHandleReply(void *data, char *notused, ssize_t retsize)
     HttpReply *rep;
     size_t hdr_sz;
     int nused = 0;
-    int size;
-    int oldbufofs = ex->buf_ofs;
-
     rec_sz = 0;
     rec_sz += 1 + sizeof(addr.s_addr);
     rec_sz += 1 + sizeof(int);
     rec_sz += 1 + sizeof(int);
-    debug(38, 3) ("netdbExchangeHandleReply: %d read bytes\n", (int) retsize);
-    if (!cbdataReferenceValid(ex->p)) {
+    ex->seen = ex->used + size;
+    debug(38, 3) ("netdbExchangeHandleReply: %d bytes\n", (int) size);
+    if (!cbdataValid(ex->p)) {
 	debug(38, 3) ("netdbExchangeHandleReply: Peer became invalid\n");
 	netdbExchangeDone(ex);
 	return;
     }
     debug(38, 3) ("netdbExchangeHandleReply: for '%s:%d'\n", ex->p->host, ex->p->http_port);
-    p = ex->buf;
-
-    /* Get the size of the buffer now */
-    size = ex->buf_ofs + retsize;
-    debug(38, 3) ("netdbExchangeHandleReply: %d bytes buf\n", (int) size);
-
-    /* Check if we're still doing headers */
-    if (ex->connstate == STATE_HEADER) {
-
-	ex->buf_ofs += retsize;
-
+    p = buf;
+    if (0 == ex->used) {
 	/* skip reply headers */
-	if ((hdr_sz = headersEnd(p, ex->buf_ofs))) {
+	if ((hdr_sz = headersEnd(p, size))) {
 	    debug(38, 5) ("netdbExchangeHandleReply: hdr_sz = %d\n", hdr_sz);
 	    rep = ex->e->mem_obj->reply;
 	    if (0 == rep->sline.status)
-		httpReplyParse(rep, ex->buf, hdr_sz);
+		httpReplyParse(rep, buf, hdr_sz);
 	    debug(38, 3) ("netdbExchangeHandleReply: reply status %d\n",
 		rep->sline.status);
 	    if (HTTP_OK != rep->sline.status) {
 		netdbExchangeDone(ex);
 		return;
 	    }
-	    assert(ex->buf_ofs >= hdr_sz);
-
-	    /*
-	     * Now, point p to the part of the buffer where the data
-	     * starts, and update the size accordingly
-	     */
-	    assert(ex->used == 0);
-	    ex->used = hdr_sz;
-	    size = ex->buf_ofs - hdr_sz;
+	    assert(size >= hdr_sz);
+	    ex->used += hdr_sz;
+	    size -= hdr_sz;
 	    p += hdr_sz;
-
-	    /* Finally, set the conn state mode to STATE_BODY */
-	    ex->connstate = STATE_BODY;
 	} else {
-	    /* Have more headers .. */
-	    storeClientCopy(ex->sc, ex->e, ex->buf_ofs,
-		ex->buf_sz - ex->buf_ofs, ex->buf + ex->buf_ofs,
-		netdbExchangeHandleReply, ex);
-	    return;
+	    size = 0;
 	}
     }
-    assert(ex->connstate == STATE_BODY);
-
-    /* If we get here, we have some body to parse .. */
     debug(38, 5) ("netdbExchangeHandleReply: start parsing loop, size = %d\n",
 	size);
     while (size >= rec_sz) {
@@ -656,51 +610,27 @@ netdbExchangeHandleReply(void *data, char *notused, ssize_t retsize)
 	ex->used += rec_sz;
 	size -= rec_sz;
 	p += rec_sz;
-	nused++;
+	/*
+	 * This is a fairly cpu-intensive loop, break after adding
+	 * just a few
+	 */
+	if (++nused == 20)
+	    break;
     }
-
-    /*
-     * Copy anything that is left over to the beginning of the buffer,
-     * and adjust buf_ofs accordingly
-     */
-
-    /*
-     * Evilly, size refers to the buf size left now,
-     * ex->buf_ofs is the original buffer size, so just copy that
-     * much data over
-     */
-    memmove(ex->buf, ex->buf + (ex->buf_ofs - size), size);
-    ex->buf_ofs = size;
-
-    /*
-     * And don't re-copy the remaining data ..
-     */
-    ex->used += size;
-
-    /*
-     * Now the tricky bit - size _included_ the leftover bit from the _last_
-     * storeClientCopy. We don't want to include that, or our offset will be wrong.
-     * So, don't count the size of the leftover buffer we began with.
-     * This can _disappear_ when we're not tracking offsets ..
-     */
-    ex->used -= oldbufofs;
-
-    debug(38, 3) ("netdbExchangeHandleReply: size left over in this buffer: %d bytes\n", size);
-
     debug(38, 3) ("netdbExchangeHandleReply: used %d entries, (x %d bytes) == %d bytes total\n",
 	nused, rec_sz, nused * rec_sz);
-    debug(38, 3) ("netdbExchangeHandleReply: used %ld\n", (long int) ex->used);
+    debug(38, 3) ("netdbExchangeHandleReply: seen %d, used %d\n", ex->seen, ex->used);
     if (EBIT_TEST(ex->e->flags, ENTRY_ABORTED)) {
 	debug(38, 3) ("netdbExchangeHandleReply: ENTRY_ABORTED\n");
 	netdbExchangeDone(ex);
     } else if (ex->e->store_status == STORE_PENDING) {
 	debug(38, 3) ("netdbExchangeHandleReply: STORE_PENDING\n");
-	storeClientCopy(ex->sc, ex->e, ex->used, ex->buf_sz - ex->buf_ofs,
-	    ex->buf + ex->buf_ofs, netdbExchangeHandleReply, ex);
-    } else if (ex->used < ex->e->mem_obj->inmem_hi) {
+	storeClientCopy(ex->sc, ex->e, ex->seen, ex->used, ex->buf_sz,
+	    ex->buf, netdbExchangeHandleReply, ex);
+    } else if (ex->seen < ex->e->mem_obj->inmem_hi) {
 	debug(38, 3) ("netdbExchangeHandleReply: ex->e->mem_obj->inmem_hi\n");
-	storeClientCopy(ex->sc, ex->e, ex->used, ex->buf_sz - ex->buf_ofs,
-	    ex->buf + ex->buf_ofs, netdbExchangeHandleReply, ex);
+	storeClientCopy(ex->sc, ex->e, ex->seen, ex->used, ex->buf_sz,
+	    ex->buf, netdbExchangeHandleReply, ex);
     } else {
 	debug(38, 3) ("netdbExchangeHandleReply: Done\n");
 	netdbExchangeDone(ex);
@@ -712,10 +642,11 @@ netdbExchangeDone(void *data)
 {
     netdbExchangeState *ex = data;
     debug(38, 3) ("netdbExchangeDone: %s\n", storeUrl(ex->e));
+    memFree(ex->buf, MEM_4K_BUF);
     requestUnlink(ex->r);
     storeUnregister(ex->sc, ex->e, ex);
     storeUnlockObject(ex->e);
-    cbdataReferenceDone(ex->p);
+    cbdataUnlock(ex->p);
     cbdataFree(ex);
 }
 
@@ -747,12 +678,13 @@ netdbPingSite(const char *hostname)
 {
 #if USE_ICMP
     netdbEntry *n;
-    generic_cbdata *h;
+    char *h;
     if ((n = netdbLookupHost(hostname)) != NULL)
 	if (n->next_ping_time > squid_curtime)
 	    return;
-    h = cbdataAlloc(generic_cbdata);
-    h->data = xstrdup(hostname);
+    h = xstrdup(hostname);
+    cbdataAdd(h, cbdataXfree, 0);
+    cbdataLock(h);
     ipcache_nbgethostbyname(hostname, netdbSendPing, h);
 #endif
 }
@@ -1048,20 +980,16 @@ netdbBinaryExchange(StoreEntry * s)
     storeComplete(s);
 }
 
-#if USE_ICMP
-CBDATA_TYPE(netdbExchangeState);
-#endif
-
 void
 netdbExchangeStart(void *data)
 {
 #if USE_ICMP
     peer *p = data;
     char *uri;
-    netdbExchangeState *ex;
-    CBDATA_INIT_TYPE(netdbExchangeState);
-    ex = cbdataAlloc(netdbExchangeState);
-    ex->p = cbdataReference(p);
+    netdbExchangeState *ex = xcalloc(1, sizeof(*ex));
+    cbdataAdd(ex, cbdataXfree, 0);
+    cbdataLock(p);
+    ex->p = p;
     uri = internalRemoteUri(p->host, p->http_port, "/squid-internal-dynamic/", "netdb");
     debug(38, 3) ("netdbExchangeStart: Requesting '%s'\n", uri);
     assert(NULL != uri);
@@ -1073,13 +1001,13 @@ netdbExchangeStart(void *data)
     requestLink(ex->r);
     assert(NULL != ex->r);
     httpBuildVersion(&ex->r->http_ver, 1, 0);
-    ex->connstate = STATE_HEADER;
     ex->e = storeCreateEntry(uri, uri, null_request_flags, METHOD_GET);
-    ex->buf_sz = NETDB_REQBUF_SZ;
+    ex->buf_sz = 4096;
+    ex->buf = memAllocate(MEM_4K_BUF);
     assert(NULL != ex->e);
     ex->sc = storeClientListAdd(ex->e, ex);
-    storeClientCopy(ex->sc, ex->e, 0, ex->buf_sz, ex->buf,
-	netdbExchangeHandleReply, ex);
+    storeClientCopy(ex->sc, ex->e, ex->seen, ex->used, ex->buf_sz,
+	ex->buf, netdbExchangeHandleReply, ex);
     ex->r->flags.loopdetect = 1;	/* cheat! -- force direct */
     if (p->login)
 	xstrncpy(ex->r->login, p->login, MAX_LOGIN_SZ);

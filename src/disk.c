@@ -179,6 +179,7 @@ diskHandleWrite(int fd, void *notused)
     struct _fde_disk *fdd = &F->disk;
     dwrite_q *q = fdd->write_q;
     int status = DISK_OK;
+    int do_callback;
     int do_close;
     if (NULL == q)
 	return;
@@ -191,7 +192,7 @@ diskHandleWrite(int fd, void *notused)
     errno = 0;
     if (fdd->write_q->file_offset != -1)
 	lseek(fd, fdd->write_q->file_offset, SEEK_SET);
-    len = FD_WRITE_METHOD(fd,
+    len = write(fd,
 	fdd->write_q->buf + fdd->write_q->buf_offset,
 	fdd->write_q->len - fdd->write_q->buf_offset);
     debug(6, 3) ("diskHandleWrite: FD %d len = %d\n", fd, len);
@@ -258,22 +259,27 @@ diskHandleWrite(int fd, void *notused)
     } else {
 	/* another block is queued */
 	diskCombineWrites(fdd);
+	cbdataLock(fdd->wrt_handle_data);
 	commSetSelect(fd, COMM_SELECT_WRITE, diskHandleWrite, NULL, 0);
 	F->flags.write_daemon = 1;
     }
     do_close = F->flags.close_request;
     if (fdd->wrt_handle) {
-	DWCB *callback = fdd->wrt_handle;
-	void *cbdata;
-	fdd->wrt_handle = NULL;
-	if (cbdataReferenceValidDone(fdd->wrt_handle_data, &cbdata)) {
-	    callback(fd, status, len, cbdata);
+	if (fdd->wrt_handle_data == NULL)
+	    do_callback = 1;
+	else if (cbdataValid(fdd->wrt_handle_data))
+	    do_callback = 1;
+	else
+	    do_callback = 0;
+	if (fdd->wrt_handle_data != NULL)
+	    cbdataUnlock(fdd->wrt_handle_data);
+	if (do_callback) {
+	    fdd->wrt_handle(fd, status, len, fdd->wrt_handle_data);
 	    /*
 	     * NOTE, this callback can close the FD, so we must
 	     * not touch 'F', 'fdd', etc. after this.
 	     */
 	    return;
-	    /* XXX But what about close_request??? */
 	}
     }
     if (do_close)
@@ -289,7 +295,7 @@ file_write(int fd,
     off_t file_offset,
     void *ptr_to_buf,
     int len,
-    DWCB * handle,
+    DWCB handle,
     void *handle_data,
     FREE * free_func)
 {
@@ -305,13 +311,8 @@ file_write(int fd,
     wq->buf_offset = 0;
     wq->next = NULL;
     wq->free_func = free_func;
-    if (!F->disk.wrt_handle_data) {
-	F->disk.wrt_handle = handle;
-	F->disk.wrt_handle_data = cbdataReference(handle_data);
-    } else {
-	/* Detect if there is multiple concurrent users of this fd.. we only support one callback */
-	assert(F->disk.wrt_handle_data == handle_data && F->disk.wrt_handle == handle);
-    }
+    F->disk.wrt_handle = handle;
+    F->disk.wrt_handle_data = handle_data;
     /* add to queue */
     if (F->disk.write_q == NULL) {
 	/* empty queue */
@@ -321,6 +322,7 @@ file_write(int fd,
 	F->disk.write_q_tail = wq;
     }
     if (!F->flags.write_daemon) {
+	cbdataLock(F->disk.wrt_handle_data);
 	diskHandleWrite(fd, NULL);
     }
 }
@@ -359,7 +361,7 @@ diskHandleRead(int fd, void *data)
 	F->disk.offset = ctrl_dat->offset;
     }
     errno = 0;
-    len = FD_READ_METHOD(fd, ctrl_dat->buf, ctrl_dat->req_len);
+    len = read(fd, ctrl_dat->buf, ctrl_dat->req_len);
     if (len > 0)
 	F->disk.offset += len;
     statCounter.syscalls.disk.reads++;
@@ -375,9 +377,9 @@ diskHandleRead(int fd, void *data)
     } else if (len == 0) {
 	rc = DISK_EOF;
     }
-    if (cbdataReferenceValid(ctrl_dat->client_data))
+    if (cbdataValid(ctrl_dat->client_data))
 	ctrl_dat->handler(fd, ctrl_dat->buf, len, rc, ctrl_dat->client_data);
-    cbdataReferenceDone(ctrl_dat->client_data);
+    cbdataUnlock(ctrl_dat->client_data);
     memFree(ctrl_dat, MEM_DREAD_CTRL);
 }
 
@@ -398,6 +400,7 @@ file_read(int fd, char *buf, int req_len, off_t offset, DRCB * handler, void *cl
     ctrl_dat->buf = buf;
     ctrl_dat->end_of_file = 0;
     ctrl_dat->handler = handler;
-    ctrl_dat->client_data = cbdataReference(client_data);
+    ctrl_dat->client_data = client_data;
+    cbdataLock(client_data);
     diskHandleRead(fd, ctrl_dat);
 }

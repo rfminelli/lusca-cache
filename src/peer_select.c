@@ -66,7 +66,7 @@ static struct {
     int timeouts;
 } PeerStats;
 
-static const char *DirectStr[] =
+static char *DirectStr[] =
 {
     "DIRECT_UNKNOWN",
     "DIRECT_NO",
@@ -109,7 +109,7 @@ peerSelectStateFree(ps_state * psstate)
     cbdataFree(psstate);
 }
 
-static int
+int
 peerSelectIcpPing(request_t * request, int direct, StoreEntry * entry)
 {
     int n;
@@ -134,22 +134,23 @@ peerSelect(request_t * request,
     PSC * callback,
     void *callback_data)
 {
-    ps_state *psstate;
+    ps_state *psstate = memAllocate(MEM_PS_STATE);
     if (entry)
 	debug(44, 3) ("peerSelect: %s\n", storeUrl(entry));
     else
 	debug(44, 3) ("peerSelect: %s\n", RequestMethodStr[request->method]);
-    psstate = cbdataAlloc(ps_state);
+    cbdataAdd(psstate, memFree, MEM_PS_STATE);
     psstate->request = requestLink(request);
     psstate->entry = entry;
     psstate->callback = callback;
-    psstate->callback_data = cbdataReference(callback_data);
+    psstate->callback_data = callback_data;
     psstate->direct = DIRECT_UNKNOWN;
 #if USE_CACHE_DIGESTS
     request->hier.peer_select_start = current_time;
 #endif
     if (psstate->entry)
 	storeLockObject(psstate->entry);
+    cbdataLock(callback_data);
     peerSelectFoo(psstate);
 }
 
@@ -178,8 +179,7 @@ peerSelectCallback(ps_state * psstate)
 {
     StoreEntry *entry = psstate->entry;
     FwdServer *fs = psstate->servers;
-    PSC *callback;
-    void *cbdata;
+    void *data = psstate->callback_data;
     if (entry) {
 	debug(44, 3) ("peerSelectCallback: %s\n", storeUrl(entry));
 	if (entry->ping_status == PING_WAITING)
@@ -194,12 +194,11 @@ peerSelectCallback(ps_state * psstate)
     }
     psstate->ping.stop = current_time;
     psstate->request->hier.ping = psstate->ping;
-    callback = psstate->callback;
-    psstate->callback = NULL;
-    if (cbdataReferenceValidDone(psstate->callback_data, &cbdata)) {
+    if (cbdataValid(data)) {
 	psstate->servers = NULL;
-	callback(fs, cbdata);
+	psstate->callback(fs, data);
     }
+    cbdataUnlock(data);
     peerSelectStateFree(psstate);
 }
 
@@ -327,11 +326,16 @@ peerGetSomeNeighbor(ps_state * ps)
 	return;
     }
 #if USE_CACHE_DIGESTS
-    if ((p = neighborsDigestSelect(request))) {
+    if ((p = neighborsDigestSelect(request, entry))) {
 	if (neighborType(p, request) == PEER_PARENT)
 	    code = CD_PARENT_HIT;
 	else
 	    code = CD_SIBLING_HIT;
+    } else
+#endif
+#if USE_CARP
+    if ((p = carpSelectParent(request))) {
+	code = CARP;
     } else
 #endif
     if ((p = netdbClosestParent(request))) {
@@ -439,13 +443,7 @@ peerGetSomeParent(ps_state * ps)
 	return;
     if ((p = getDefaultParent(request))) {
 	code = DEFAULT_PARENT;
-#if USE_CARP
-    } else if ((p = carpSelectParent(request))) {
-	code = CARP;
-#endif
     } else if ((p = getRoundRobinParent(request))) {
-	code = ROUNDROBIN_PARENT;
-    } else if ((p = getWeightedRoundRobinParent(request))) {
 	code = ROUNDROBIN_PARENT;
     } else if ((p = getFirstUpParent(request))) {
 	code = FIRSTUP_PARENT;
@@ -494,10 +492,10 @@ peerPingTimeout(void *data)
     StoreEntry *entry = psstate->entry;
     if (entry)
 	debug(44, 3) ("peerPingTimeout: '%s'\n", storeUrl(entry));
-    if (!cbdataReferenceValid(psstate->callback_data)) {
+    if (!cbdataValid(psstate->callback_data)) {
 	/* request aborted */
 	entry->ping_status = PING_DONE;
-	cbdataReferenceDone(psstate->callback_data);
+	cbdataUnlock(psstate->callback_data);
 	peerSelectStateFree(psstate);
 	return;
     }
@@ -536,11 +534,8 @@ peerIcpParentMiss(peer * p, icp_common_t * header, ps_state * ps)
     /* set FIRST_MISS if there is no CLOSEST parent */
     if (ps->closest_parent_miss.sin_addr.s_addr != any_addr.s_addr)
 	return;
-    rtt = (tvSubMsec(ps->ping.start, current_time) - p->basetime) / p->weight;
-    if (rtt < 1)
-	rtt = 1;
-    if (ps->first_parent_miss.sin_addr.s_addr == any_addr.s_addr ||
-	rtt < ps->ping.w_rtt) {
+    rtt = tvSubMsec(ps->ping.start, current_time) / p->weight;
+    if (ps->ping.w_rtt == 0 || rtt < ps->ping.w_rtt) {
 	ps->first_parent_miss = p->in_addr;
 	ps->ping.w_rtt = rtt;
     }
@@ -626,11 +621,8 @@ peerHtcpParentMiss(peer * p, htcpReplyData * htcp, ps_state * ps)
     /* set FIRST_MISS if there is no CLOSEST parent */
     if (ps->closest_parent_miss.sin_addr.s_addr != any_addr.s_addr)
 	return;
-    rtt = (tvSubMsec(ps->ping.start, current_time) - p->basetime) / p->weight;
-    if (rtt < 1)
-	rtt = 1;
-    if (ps->first_parent_miss.sin_addr.s_addr == any_addr.s_addr ||
-	rtt < ps->ping.w_rtt) {
+    rtt = tvSubMsec(ps->ping.start, current_time) / p->weight;
+    if (ps->ping.w_rtt == 0 || rtt < ps->ping.w_rtt) {
 	ps->first_parent_miss = p->in_addr;
 	ps->ping.w_rtt = rtt;
     }
@@ -657,8 +649,9 @@ peerAddFwdServer(FwdServer ** FS, peer * p, hier_code code)
     debug(44, 5) ("peerAddFwdServer: adding %s %s\n",
 	p ? p->host : "DIRECT",
 	hier_strings[code]);
-    fs->peer = cbdataReference(p);
+    fs->peer = p;
     fs->code = code;
+    cbdataLock(fs->peer);
     while (*FS)
 	FS = &(*FS)->next;
     *FS = fs;

@@ -127,7 +127,7 @@ log_quote(const char *header)
 	*buf = '\0';
 	return buf;
     }
-    buf = xcalloc(1, (strlen(header) * 3) + 1);
+    buf = xcalloc((strlen(header) * 3) + 1, 1);
     buf_cursor = buf;
     /*
      * We escape: \x00-\x1F"#%;<>?{}|\\\\^~`\[\]\x7F-\xFF 
@@ -182,120 +182,69 @@ log_quote(const char *header)
     return buf;
 }
 
-static char *
-username_quote(const char *header)
-/* copy of log_quote. Bugs there will be found here */
-{
-    int c;
-    int i;
-    char *buf;
-    char *buf_cursor;
-    if (header == NULL) {
-	buf = xcalloc(1, 1);
-	*buf = '\0';
-	return buf;
-    }
-    buf = xcalloc(1, (strlen(header) * 3) + 1);
-    buf_cursor = buf;
-    /*
-     * We escape: space \x00-\x1F and space (0x40) and \x7F-\xFF
-     * to prevent garbage in the logs. CR and LF are also there just in case. 
-     */
-    while ((c = *(const unsigned char *) header++) != '\0') {
-	if (c == '\r') {
-	    *buf_cursor++ = '\\';
-	    *buf_cursor++ = 'r';
-	} else if (c == '\n') {
-	    *buf_cursor++ = '\\';
-	    *buf_cursor++ = 'n';
-	} else if (c <= 0x1F
-		|| c >= 0x7F
-	    || c == ' ') {
-	    *buf_cursor++ = '%';
-	    i = c * 2;
-	    *buf_cursor++ = c2x[i];
-	    *buf_cursor++ = c2x[i + 1];
-	} else {
-	    *buf_cursor++ = (char) c;
-	}
-    }
-    *buf_cursor = '\0';
-    return buf;
-}
-
-static char *
-accessLogFormatName(const char *name)
-{
-    if (NULL == name)
-	return NULL;
-    return username_quote(name);
-}
-
 static void
 accessLogSquid(AccessLogEntry * al)
 {
     const char *client = NULL;
-    char *user = NULL;
     if (Config.onoff.log_fqdn)
 	client = fqdncache_gethostbyaddr(al->cache.caddr, FQDN_LOOKUP_IF_MISS);
     if (client == NULL)
 	client = inet_ntoa(al->cache.caddr);
-    user = accessLogFormatName(al->cache.authuser ?
-	al->cache.authuser : al->cache.rfc931);
-    logfilePrintf(logfile, "%9d.%03d %6d %s %s/%03d %ld %s %s %s %s%s/%s %s",
+    logfilePrintf(logfile, "%9d.%03d %6d %s %s/%03d %d %s %s %s %s%s/%s %s",
 	(int) current_time.tv_sec,
 	(int) current_time.tv_usec / 1000,
 	al->cache.msec,
 	client,
 	log_tags[al->cache.code],
 	al->http.code,
-	(long int) al->cache.size,
+	al->cache.size,
 	al->private.method_str,
 	al->url,
-	user && *user ? user : dash_str,
+	al->cache.ident,
 	al->hier.ping.timedout ? "TIMEOUT_" : "",
 	hier_strings[al->hier.code],
 	al->hier.host,
 	al->http.content_type);
-    safe_free(user);
 }
 
 static void
 accessLogCommon(AccessLogEntry * al)
 {
     const char *client = NULL;
-    char *user1 = NULL, *user2 = NULL;
     if (Config.onoff.log_fqdn)
 	client = fqdncache_gethostbyaddr(al->cache.caddr, 0);
     if (client == NULL)
 	client = inet_ntoa(al->cache.caddr);
-    user1 = accessLogFormatName(al->cache.authuser);
-    user2 = accessLogFormatName(al->cache.rfc931);
-    logfilePrintf(logfile, "%s %s %s [%s] \"%s %s HTTP/%d.%d\" %d %ld %s:%s",
+    logfilePrintf(logfile, "%s %s - [%s] \"%s %s HTTP/%d.%d\" %d %d %s:%s",
 	client,
-	user2 ? user2 : dash_str,
-	user1 ? user1 : dash_str,
+	al->cache.ident,
 	mkhttpdlogtime(&squid_curtime),
 	al->private.method_str,
 	al->url,
 	al->http.version.major, al->http.version.minor,
 	al->http.code,
-	(long int) al->cache.size,
+	al->cache.size,
 	log_tags[al->cache.code],
 	hier_strings[al->hier.code]);
-    safe_free(user1);
-    safe_free(user2);
 }
 
 void
 accessLogLog(AccessLogEntry * al)
 {
+    LOCAL_ARRAY(char, ident_buf, USER_IDENT_SZ);
+
     if (LogfileStatus != LOG_ENABLE)
 	return;
     if (al->url == NULL)
 	al->url = dash_str;
     if (!al->http.content_type || *al->http.content_type == '\0')
 	al->http.content_type = dash_str;
+    if (!al->cache.ident || *al->cache.ident == '\0') {
+	al->cache.ident = dash_str;
+    } else {
+	xstrncpy(ident_buf, rfc1738_escape(al->cache.ident), USER_IDENT_SZ);
+	al->cache.ident = ident_buf;
+    }
     if (al->icp.opcode)
 	al->private.method_str = icp_opcode_str[al->icp.opcode];
     else
@@ -357,8 +306,6 @@ accessLogRotate(void)
 void
 accessLogClose(void)
 {
-    if (NULL == logfile)
-	return;
     logfileClose(logfile);
     logfile = NULL;
 #if HEADERS_LOG
@@ -381,8 +328,6 @@ void
 accessLogInit(void)
 {
     assert(sizeof(log_tags) == (LOG_TYPE_MAX + 1) * sizeof(char *));
-    if (strcasecmp(Config.Log.access, "none") == 0)
-	return;
     logfile = logfileOpen(Config.Log.access, MAX_URL << 1, 1);
     LogfileStatus = LOG_ENABLE;
 #if HEADERS_LOG

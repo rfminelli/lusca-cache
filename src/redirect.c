@@ -49,14 +49,13 @@ static void redirectStateFree(redirectStateData * r);
 static helper *redirectors = NULL;
 static OBJH redirectStats;
 static int n_bypassed = 0;
-CBDATA_TYPE(redirectStateData);
 
 static void
 redirectHandleReply(void *data, char *reply)
 {
     redirectStateData *r = data;
+    int valid;
     char *t;
-    void *cbdata;
     debug(29, 5) ("redirectHandleRead: {%s}\n", reply ? reply : "<NULL>");
     if (reply) {
 	if ((t = strchr(reply, ' ')))
@@ -64,8 +63,10 @@ redirectHandleReply(void *data, char *reply)
 	if (*reply == '\0')
 	    reply = NULL;
     }
-    if (cbdataReferenceValidDone(r->data, &cbdata))
-	r->handler(cbdata, reply);
+    valid = cbdataValid(r->data);
+    cbdataUnlock(r->data);
+    if (valid)
+	r->handler(r->data, reply);
     redirectStateFree(r);
 }
 
@@ -121,19 +122,21 @@ redirectStart(clientHttpRequest * http, RH * handler, void *data)
 	handler(data, NULL);
 	return;
     }
-    r = cbdataAlloc(redirectStateData);
+    r = xcalloc(1, sizeof(redirectStateData));
+    cbdataAdd(r, cbdataXfree, 0);
     r->orig_url = xstrdup(http->uri);
     r->client_addr = conn->log_addr;
-    if (http->request->auth_user_request)
-	r->client_ident = authenticateUserRequestUsername(http->request->auth_user_request);
-    else if (conn->rfc931[0]) {
-	r->client_ident = conn->rfc931;
-    } else {
+    if (http->request->user_ident[0])
+	r->client_ident = http->request->user_ident;
+    else if (conn->ident == NULL || *conn->ident == '\0') {
 	r->client_ident = dash_str;
+    } else {
+	r->client_ident = conn->ident;
     }
     r->method_s = RequestMethodStr[http->request->method];
     r->handler = handler;
-    r->data = cbdataReference(data);
+    r->data = data;
+    cbdataLock(r->data);
     if ((fqdn = fqdncache_gethostbyaddr(r->client_addr, 0)) == NULL)
 	fqdn = dash_str;
     snprintf(buf, 8192, "%s %s/%s %s %s\n",
@@ -155,14 +158,13 @@ redirectInit(void)
 	redirectors = helperCreate("redirector");
     redirectors->cmdline = Config.Program.redirect;
     redirectors->n_to_start = Config.redirectChildren;
-    redirectors->ipc_type = IPC_STREAM;
+    redirectors->ipc_type = IPC_TCP_SOCKET;
     helperOpenServers(redirectors);
     if (!init) {
 	cachemgrRegister("redirector",
 	    "URL Redirector Stats",
 	    redirectStats, 0, 1);
 	init = 1;
-	CBDATA_INIT_TYPE(redirectStateData);
     }
 }
 

@@ -155,9 +155,6 @@ static int htcpInSocket = -1;
 static int htcpOutSocket = -1;
 #define N_QUERIED_KEYS 256
 static cache_key queried_keys[N_QUERIED_KEYS][MD5_DIGEST_CHARS];
-static MemPool *htcpSpecifierPool = NULL;
-static MemPool *htcpDetailPool = NULL;
-
 
 static char *htcpBuildPacket(htcpStuff * stuff, ssize_t * len);
 static htcpSpecifier *htcpUnpackSpecifier(char *buf, int sz);
@@ -421,7 +418,7 @@ htcpFreeSpecifier(htcpSpecifier * s)
     safe_free(s->uri);
     safe_free(s->version);
     safe_free(s->req_hdrs);
-    memPoolFree(htcpSpecifierPool, s);
+    memFree(s, MEM_HTCP_SPECIFIER);
 }
 
 static void
@@ -430,7 +427,7 @@ htcpFreeDetail(htcpDetail * d)
     safe_free(d->resp_hdrs);
     safe_free(d->entity_hdrs);
     safe_free(d->cache_hdrs);
-    memPoolFree(htcpDetailPool, d);
+    memFree(d, MEM_HTCP_DETAIL);
 }
 
 static int
@@ -463,7 +460,7 @@ htcpUnpackCountstr(char *buf, int sz, char **str)
 static htcpSpecifier *
 htcpUnpackSpecifier(char *buf, int sz)
 {
-    htcpSpecifier *s = memPoolAlloc(htcpSpecifierPool);
+    htcpSpecifier *s = memAllocate(MEM_HTCP_SPECIFIER);
     int o;
     debug(31, 3) ("htcpUnpackSpecifier: %d bytes\n", (int) sz);
     o = htcpUnpackCountstr(buf, sz, &s->method);
@@ -505,7 +502,7 @@ htcpUnpackSpecifier(char *buf, int sz)
 static htcpDetail *
 htcpUnpackDetail(char *buf, int sz)
 {
-    htcpDetail *d = memPoolAlloc(htcpDetailPool);
+    htcpDetail *d = memAllocate(MEM_HTCP_DETAIL);
     int o;
     debug(31, 3) ("htcpUnpackDetail: %d bytes\n", (int) sz);
     o = htcpUnpackCountstr(buf, sz, &d->resp_hdrs);
@@ -617,8 +614,16 @@ htcpCheckHit(const htcpSpecifier * s)
 {
     request_t *request;
     method_t m = urlParseMethod(s->method);
-    StoreEntry *e = NULL, *hit = NULL;
+    StoreEntry *e = storeGetPublic(s->uri, m);
     char *blk_end;
+    if (NULL == e) {
+	debug(31, 3) ("htcpCheckHit: NO; public object not found\n");
+	return NULL;
+    }
+    if (!storeEntryValidToSend(e)) {
+	debug(31, 3) ("htcpCheckHit: NO; entry not valid to send\n");
+	return NULL;
+    }
     request = urlParse(m, s->uri);
     if (NULL == request) {
 	debug(31, 3) ("htcpCheckHit: NO; failed to parse URL\n");
@@ -627,26 +632,15 @@ htcpCheckHit(const htcpSpecifier * s)
     blk_end = s->req_hdrs + strlen(s->req_hdrs);
     if (!httpHeaderParse(&request->header, s->req_hdrs, blk_end)) {
 	debug(31, 3) ("htcpCheckHit: NO; failed to parse request headers\n");
-	goto miss;
-    }
-    e = storeGetPublicByRequest(request);
-    if (NULL == e) {
-	debug(31, 3) ("htcpCheckHit: NO; public object not found\n");
-	goto miss;
-    }
-    if (!storeEntryValidToSend(e)) {
-	debug(31, 3) ("htcpCheckHit: NO; entry not valid to send\n");
-	goto miss;
-    }
-    if (refreshCheckHTCP(e, request)) {
+	e = NULL;
+    } else if (refreshCheckHTCP(e, request)) {
 	debug(31, 3) ("htcpCheckHit: NO; cached response is stale\n");
-	goto miss;
+	e = NULL;
+    } else {
+	debug(31, 3) ("htcpCheckHit: YES!?\n");
     }
-    debug(31, 3) ("htcpCheckHit: YES!?\n");
-    hit = e;
-  miss:
     requestDestroy(request);
-    return hit;
+    return e;
 }
 
 static void
@@ -849,7 +843,18 @@ htcpRecv(int fd, void *data)
 void
 htcpInit(void)
 {
+    static int calls = 0;
     if (Config.Port.htcp <= 0) {
+	/*
+	 *      Need to allocate a bit of memory anyway, otherwise
+	 *      mem.c::memCheckInit() will bail out.
+	 */
+	if (0 == calls++) {
+	    memDataInit(MEM_HTCP_SPECIFIER, "htcpSpecifier",
+		sizeof(htcpSpecifier), 0);
+	    memDataInit(MEM_HTCP_DETAIL, "htcpDetail", sizeof(htcpDetail), 0);
+	}
+	htcpInSocket = -1;
 	debug(31, 1) ("HTCP Disabled.\n");
 	return;
     }
@@ -884,9 +889,9 @@ htcpInit(void)
     } else {
 	htcpOutSocket = htcpInSocket;
     }
-    if (!htcpSpecifierPool) {
-	htcpSpecifierPool = memPoolCreate("htcpSpecifier", sizeof(htcpSpecifier));
-	htcpDetailPool = memPoolCreate("htcpDetail", sizeof(htcpDetail));
+    if (0 == calls++) {
+	memDataInit(MEM_HTCP_SPECIFIER, "htcpSpecifier", sizeof(htcpSpecifier), 0);
+	memDataInit(MEM_HTCP_DETAIL, "htcpDetail", sizeof(htcpDetail), 0);
     }
 }
 
@@ -963,9 +968,6 @@ htcpSocketShutdown(void)
      * to that specific interface.  During shutdown, we must
      * disable reading on the outgoing socket.
      */
-    /* XXX Don't we need this handler to read replies while shutting down?
-     * I think there should be a separate hander for reading replies..
-     */
     assert(htcpOutSocket > -1);
     commSetSelect(htcpOutSocket, COMM_SELECT_READ, NULL, NULL, 0);
 }
@@ -977,6 +979,5 @@ htcpSocketClose(void)
     if (htcpOutSocket > -1) {
 	debug(12, 1) ("FD %d Closing HTCP socket\n", htcpOutSocket);
 	comm_close(htcpOutSocket);
-	htcpOutSocket = -1;
     }
 }

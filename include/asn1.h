@@ -1,5 +1,5 @@
-#ifndef SQUID_SNMP_ASN1_H
-#define SQUID_SNMP_ASN1_H
+#ifndef _SNMP_ASN1_H_
+#define _SNMP_ASN1_H_
 
 /*
  * Definitions for Abstract Syntax Notation One, ASN.1
@@ -96,7 +96,6 @@ extern "C" {
 
 #ifdef __cplusplus
 }
-
 #endif
 
-#endif	/* SQUID_SNMP_ASN1_H */
+#endif				/* _SNMP_ASN1_H_ */

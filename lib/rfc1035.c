@@ -183,7 +183,7 @@ rfc1035LabelPack(char *buf, size_t sz, const char *label)
  * Note message compression is not supported here.
  * Returns number of octets packed.
  */
-static off_t
+off_t
 rfc1035NamePack(char *buf, size_t sz, const char *name)
 {
     off_t off = 0;
@@ -299,7 +299,7 @@ rfc1035HeaderUnpack(const char *buf, size_t sz, off_t * off, rfc1035_header * h)
  * Returns 0 (success) or 1 (error)
  */
 static int
-rfc1035NameUnpack(const char *buf, size_t sz, off_t * off, char *name, size_t ns, int rdepth)
+rfc1035NameUnpack(const char *buf, size_t sz, off_t * off, char *name, size_t ns)
 {
     off_t no = 0;
     unsigned char c;
@@ -312,8 +312,6 @@ rfc1035NameUnpack(const char *buf, size_t sz, off_t * off, char *name, size_t ns
 	    /* blasted compression */
 	    unsigned short s;
 	    off_t ptr;
-	    if (rdepth > 64)		/* infinite pointer loop */
-		return 1;
 	    memcpy(&s, buf + (*off), sizeof(s));
 	    s = ntohs(s);
 	    (*off) += sizeof(s);
@@ -324,7 +322,7 @@ rfc1035NameUnpack(const char *buf, size_t sz, off_t * off, char *name, size_t ns
 	    /* Make sure the pointer is inside this message */
 	    if (ptr >= sz)
 		return 1;
-	    return rfc1035NameUnpack(buf, sz, &ptr, name + no, ns - no, rdepth + 1);
+	    return rfc1035NameUnpack(buf, sz, &ptr, name + no, ns - no);
 	} else if (c > RFC1035_MAXLABELSZ) {
 	    /*
 	     * "(The 10 and 01 combinations are reserved for future use.)"
@@ -335,8 +333,8 @@ rfc1035NameUnpack(const char *buf, size_t sz, off_t * off, char *name, size_t ns
 	    len = (size_t) c;
 	    if (len == 0)
 		break;
-	    if (len > (ns - no - 1))	/* label won't fit */
-		return 1;
+	    if (len > (ns - 1))
+		len = ns - 1;
 	    if ((*off) + len > sz)	/* message is too short */
 		return 1;
 	    memcpy(name + no, buf + (*off), len);
@@ -344,7 +342,7 @@ rfc1035NameUnpack(const char *buf, size_t sz, off_t * off, char *name, size_t ns
 	    no += len;
 	    *(name + (no++)) = '.';
 	}
-    } while (c > 0 && no < ns);
+    } while (c > 0);
     *(name + no - 1) = '\0';
     /* make sure we didn't allow someone to overflow the name buffer */
     assert(no <= ns);
@@ -367,7 +365,7 @@ rfc1035RRUnpack(const char *buf, size_t sz, off_t * off, rfc1035_rr * RR)
     unsigned short s;
     unsigned int i;
     off_t rdata_off;
-    if (rfc1035NameUnpack(buf, sz, off, RR->name, RFC1035_MAXHOSTNAMESZ, 0)) {
+    if (rfc1035NameUnpack(buf, sz, off, RR->name, RFC1035_MAXHOSTNAMESZ)) {
 	RFC1035_UNPACK_DEBUG;
 	memset(RR, '\0', sizeof(*RR));
 	return 1;
@@ -406,7 +404,7 @@ rfc1035RRUnpack(const char *buf, size_t sz, off_t * off, rfc1035_rr * RR)
     case RFC1035_TYPE_PTR:
 	RR->rdata = malloc(RFC1035_MAXHOSTNAMESZ);
 	rdata_off = *off;
-	if (rfc1035NameUnpack(buf, sz, &rdata_off, RR->rdata, RFC1035_MAXHOSTNAMESZ, 0))
+	if (rfc1035NameUnpack(buf, sz, &rdata_off, RR->rdata, RFC1035_MAXHOSTNAMESZ))
 	    return 1;
 	if (rdata_off != ((*off) + RR->rdlength)) {
 	    /*
@@ -593,7 +591,7 @@ unsigned short
 rfc1035BuildAQuery(const char *hostname, char *buf, size_t * szp)
 {
     static rfc1035_header h;
-    size_t offset = 0;
+    off_t offset = 0;
     size_t sz = *szp;
     memset(&h, '\0', sizeof(h));
     /* the first char of hostname must be alphanmeric */
@@ -631,7 +629,7 @@ unsigned short
 rfc1035BuildPTRQuery(const struct in_addr addr, char *buf, size_t * szp)
 {
     static rfc1035_header h;
-    size_t offset = 0;
+    off_t offset = 0;
     size_t sz = *szp;
     static char rev[32];
     unsigned int i;
@@ -654,7 +652,7 @@ rfc1035BuildPTRQuery(const struct in_addr addr, char *buf, size_t * szp)
 	RFC1035_TYPE_PTR,
 	RFC1035_CLASS_IN);
     assert(offset <= sz);
-    *szp = offset;
+    *szp = (size_t) offset;
     return h.id;
 }
 

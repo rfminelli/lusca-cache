@@ -31,8 +31,8 @@
  *  
  */
 
-#ifndef SQUID_STACK_H
-#define SQUID_STACK_H
+#ifndef _STACK_H_
+#define _STACK_H_
 
 #include "Array.h"
 
@@ -42,9 +42,9 @@ typedef Array Stack;
 #define stackInit arrayInit
 #define stackClean arrayClean
 #define stackDestroy arrayDestroy
-extern void *stackPop(Stack * s);
+extern void *stackPop(Stack *s);
 #define stackPush arrayAppend
 #define stackPrePush arrayPreAppend
-extern void *stackTop(Stack * s);
+extern void *stackTop(Stack *s);
 
-#endif /* SQUID_STACK_H */
+#endif /* ndef _STACK_H_ */

@@ -49,7 +49,6 @@ storeSwapOutStart(StoreEntry * e)
     int swap_hdr_sz = 0;
     tlv *tlv_list;
     char *buf;
-    storeIOState *sio;
     assert(mem);
     /* Build the swap metadata, so the filesystem will know how much
      * metadata there is to store
@@ -62,10 +61,10 @@ storeSwapOutStart(StoreEntry * e)
     storeSwapTLVFree(tlv_list);
     mem->swap_hdr_sz = (size_t) swap_hdr_sz;
     /* Create the swap file */
-    c = cbdataAlloc(generic_cbdata);
+    c = memAllocate(MEM_GEN_CBDATA);
     c->data = e;
-    sio = storeCreate(e, storeSwapOutFileNotify, storeSwapOutFileClosed, c);
-    mem->swapout.sio = cbdataReference(sio);
+    cbdataAdd(c, memFree, MEM_GEN_CBDATA);
+    mem->swapout.sio = storeCreate(e, storeSwapOutFileNotify, storeSwapOutFileClosed, c);
     if (NULL == mem->swapout.sio) {
 	e->swap_status = SWAPOUT_NONE;
 	cbdataFree(c);
@@ -79,6 +78,7 @@ storeSwapOutStart(StoreEntry * e)
     e->swap_filen = mem->swapout.sio->swap_filen;
     e->swap_dirn = mem->swapout.sio->swap_dirn;
     /* write out the swap metadata */
+    cbdataLock(mem->swapout.sio);
     storeWrite(mem->swapout.sio, buf, mem->swap_hdr_sz, 0, xfree);
 }
 
@@ -116,10 +116,6 @@ storeSwapOut(StoreEntry * e)
 	storeSwapOutFileClose(e);
 	return;
     }
-    if (EBIT_TEST(e->flags, ENTRY_SPECIAL)) {
-	debug(20, 3) ("storeSwapOut: %s SPECIAL\n", storeUrl(e));
-	return;
-    }
     debug(20, 7) ("storeSwapOut: mem->inmem_lo = %d\n",
 	(int) mem->inmem_lo);
     debug(20, 7) ("storeSwapOut: mem->inmem_hi = %d\n",
@@ -139,16 +135,6 @@ storeSwapOut(StoreEntry * e)
      */
     swapout_size = (ssize_t) (mem->inmem_hi - mem->swapout.queue_offset);
     if ((e->store_status != STORE_OK) && (swapout_size < store_maxobjsize)) {
-	/*
-	 * NOTE: the store_maxobjsize here is the max of optional
-	 * max-size values from 'cache_dir' lines.  It is not the
-	 * same as 'maximum_object_size'.  By default, store_maxobjsize
-	 * will be set to -1.  However, I am worried that this
-	 * deferance may consume a lot of memory in some cases.
-	 * It would be good to make this decision based on reply
-	 * content-length, rather than wait to accumulate huge
-	 * amounts of object data in memory.
-	 */
 	debug(20, 5) ("storeSwapOut: Deferring starting swapping out\n");
 	return;
     }
@@ -186,13 +172,6 @@ storeSwapOut(StoreEntry * e)
     }
     stmemFreeDataUpto(&mem->data_hdr, new_mem_lo);
     mem->inmem_lo = new_mem_lo;
-#if SIZEOF_OFF_T == 4
-    if (mem->inmem_hi > 0x7FFF0000) {
-	debug(20, 0) ("WARNING: preventing off_t overflow for %s\n", storeUrl(e));
-	storeAbort(e);
-	return;
-    }
-#endif
     if (e->swap_status == SWAPOUT_WRITING)
 	assert(mem->inmem_lo <= on_disk);
     if (!storeSwapOutAble(e))
@@ -254,8 +233,8 @@ storeSwapOut(StoreEntry * e)
 
 	debug(20, 3) ("storeSwapOut: swap_buf_len = %d\n", (int) swap_buf_len);
 	assert(swap_buf_len > 0);
-	debug(20, 3) ("storeSwapOut: swapping out %ld bytes from %ld\n",
-	    (long int) swap_buf_len, (long int) mem->swapout.queue_offset);
+	debug(20, 3) ("storeSwapOut: swapping out %d bytes from %d\n",
+	    swap_buf_len, (int) mem->swapout.queue_offset);
 	mem->swapout.queue_offset += swap_buf_len;
 	storeWrite(mem->swapout.sio, mem->swapout.memnode->data, swap_buf_len, -1, NULL);
 	/* the storeWrite() call might generate an error */
@@ -328,7 +307,8 @@ storeSwapOutFileClosed(void *data, int errflag, storeIOState * sio)
 	statCounter.swap.outs++;
     }
     debug(20, 3) ("storeSwapOutFileClosed: %s:%d\n", __FILE__, __LINE__);
-    cbdataReferenceDone(mem->swapout.sio);
+    mem->swapout.sio = NULL;
+    cbdataUnlock(sio);
     storeUnlockObject(e);
 }
 
@@ -377,8 +357,8 @@ storeSwapOutAble(const StoreEntry * e)
 	if (((store_client *) node->data)->type == STORE_DISK_CLIENT)
 	    return 1;
     }
-    /* Don't pollute the disk with icons and other special entries */
-    if (EBIT_TEST(e->flags, ENTRY_SPECIAL))
-	return 0;
+    if (store_dirs_rebuilding)
+	if (!EBIT_TEST(e->flags, ENTRY_SPECIAL))
+	    return 0;
     return EBIT_TEST(e->flags, ENTRY_CACHABLE);
 }

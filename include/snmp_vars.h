@@ -1,5 +1,6 @@
-#ifndef SQUID_SNMP_VARS_H
-#define SQUID_SNMP_VARS_H
+/* -*- c++ -*- */
+#ifndef _SNMP_VARS_H_
+#define _SNMP_VARS_H_
 
 /**********************************************************************
  *
@@ -50,12 +51,11 @@ void snmp_var_free(struct variable_list *);
 u_char *snmp_var_EncodeVarBind(u_char *, int *, struct variable_list *, int);
 u_char *snmp_var_DecodeVarBind(u_char *, int *, struct variable_list **, int);
 
-#define MAX_NAME_LEN	64	/* number of subid's in a objid */
-
-/* RFC 1902: Structure of Management Information for SNMPv2
- *
- * Defined Types
+/* 
+ * MAX_NAME_LEN is the number of subid's in a objid 
+ * RFC 1902:Structure of Management Information for SNMPv2 Defined Types
  */
+#define MAX_NAME_LEN    64
 #define SMI_INTEGER     ASN_INTEGER
 #define SMI_STRING      ASN_OCTET_STR
 #define SMI_OBJID       ASN_OBJECT_ID
@@ -70,7 +70,8 @@ u_char *snmp_var_DecodeVarBind(u_char *, int *, struct variable_list **, int);
 #define SMI_NOSUCHOBJECT   (ASN_CONTEXT | ASN_PRIMITIVE | 0x0)
 #define SMI_NOSUCHINSTANCE (ASN_CONTEXT | ASN_PRIMITIVE | 0x1)
 #define SMI_ENDOFMIBVIEW   (ASN_CONTEXT | ASN_PRIMITIVE | 0x2)
+
 typedef struct variable variable;
 typedef struct variable_list variable_list;
 
-#endif /* SQUID_SNMP_VARS_H */
+#endif /* _SNMP_VARS_H_ */

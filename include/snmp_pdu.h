@@ -1,5 +1,7 @@
-#ifndef SQUID_SNMP_PDU_H
-#define SQUID_SNMP_PDU_H
+
+/* -*- c++ -*- */
+#ifndef _SNMP_PDU_H_
+#define _SNMP_PDU_H_
 
 /**********************************************************************
  *
@@ -55,51 +57,54 @@ struct snmp_pdu {
     u_int time;			/* Uptime */
 };
 
-struct snmp_pdu *snmp_pdu_create(int);
-struct snmp_pdu *snmp_pdu_clone(struct snmp_pdu *);
-struct snmp_pdu *snmp_pdu_fix(struct snmp_pdu *, int);
-struct snmp_pdu *snmp_fix_pdu(struct snmp_pdu *, int);
-void snmp_free_pdu(struct snmp_pdu *);
-void snmp_pdu_free(struct snmp_pdu *);
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-u_char *snmp_pdu_encode(u_char *, int *, struct snmp_pdu *);
-u_char *snmp_pdu_decode(u_char *, int *, struct snmp_pdu *);
+    struct snmp_pdu *snmp_pdu_create(int);
+    struct snmp_pdu *snmp_pdu_clone(struct snmp_pdu *);
+    struct snmp_pdu *snmp_pdu_fix(struct snmp_pdu *, int);
+    struct snmp_pdu *snmp_fix_pdu(struct snmp_pdu *, int);
+    void snmp_free_pdu(struct snmp_pdu *);
+    void snmp_pdu_free(struct snmp_pdu *);
+
+    u_char *snmp_pdu_encode(u_char *, int *, struct snmp_pdu *);
+    u_char *snmp_pdu_decode(u_char *, int *, struct snmp_pdu *);
+    char *snmp_pdu_type(struct snmp_pdu *);
 
     /* Add a NULL Variable to a PDU */
-void snmp_add_null_var(struct snmp_pdu *, oid *, int);
+    void snmp_add_null_var(struct snmp_pdu *, oid *, int);
 
-/* RFC 1905: Protocol Operations for SNMPv2
- *
- * RFC 1157: A Simple Network Management Protocol (SNMP)
- *
- * PDU Types
- */
+#ifdef __cplusplus
+}
+
+#endif				/*
+				 * * RFC 1905: Protocol Operations for SNMPv2
+				 * *
+				 * * RFC 1157: A Simple Network Management Protocol (SNMP)
+				 * *
+				 * * PDU Types
+				 */
 #define SNMP_PDU_GET	    (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x0)
 #define SNMP_PDU_GETNEXT    (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x1)
 #define SNMP_PDU_RESPONSE   (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x2)
-#ifdef UNUSED_CODE
 #define SNMP_PDU_SET        (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x3)
 #define TRP_REQ_MSG	    (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x4)	/*Obsolete */
-#endif
 #define SNMP_PDU_GETBULK    (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x5)
-#ifdef UNUSED_CODE
 #define SNMP_PDU_INFORM     (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x6)
 #define SNMP_PDU_V2TRAP     (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x7)
 #define SNMP_PDU_REPORT     (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x8)
-#endif
 #define MAX_BINDINGS 2147483647	/* PDU Defaults */
 #define SNMP_DEFAULT_ERRSTAT	    -1
 #define SNMP_DEFAULT_ERRINDEX	    -1
 #define SNMP_DEFAULT_ADDRESS	    0
-#define SNMP_DEFAULT_REQID	    0
-
-/* RFC 1907: Management Information Base for SNMPv2
- *
- * RFC 1157: A Simple Network Management Protocol (SNMP)
- *
- * Trap Types
- */
-#if UNUSED_CODE
+#define SNMP_DEFAULT_REQID	    0	/*
+					 * * RFC 1907: Management Information Base for SNMPv2
+					 * *
+					 * * RFC 1157: A Simple Network Management Protocol (SNMP)
+					 * *
+					 * * Trap Types
+					 */
 #define SNMP_TRAP_COLDSTART             (0x0)
 #define SNMP_TRAP_WARMSTART             (0x1)
 #define SNMP_TRAP_LINKDOWN              (0x2)
@@ -107,6 +112,4 @@ void snmp_add_null_var(struct snmp_pdu *, oid *, int);
 #define SNMP_TRAP_AUTHENTICATIONFAILURE (0x4)
 #define SNMP_TRAP_EGPNEIGHBORLOSS       (0x5)
 #define SNMP_TRAP_ENTERPRISESPECIFIC    (0x6)
-#endif
-
-#endif /* SQUID_SNMP_PDU_H */
+#endif				/* _SNMP_PDU_H_ */

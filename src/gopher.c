@@ -100,6 +100,7 @@ static PF gopherTimeout;
 static PF gopherReadReply;
 static CWCB gopherSendComplete;
 static PF gopherSendRequest;
+static GopherStateData *CreateGopherStateData(void);
 
 static char def_gopher_bin[] = "www/unknown";
 static char def_gopher_text[] = "text/plain";
@@ -613,7 +614,7 @@ gopherReadReply(int fd, void *data)
 #endif
     /* leave one space for \0 in gopherToHTML */
     statCounter.syscalls.sock.reads++;
-    len = FD_READ_METHOD(fd, buf, read_sz);
+    len = read(fd, buf, read_sz);
     if (len > 0) {
 	fd_bytes(fd, len, FD_READ);
 #if DELAY_POOLS
@@ -683,7 +684,7 @@ gopherSendComplete(int fd, char *buf, size_t size, int errflag, void *data)
     GopherStateData *gopherState = (GopherStateData *) data;
     StoreEntry *entry = gopherState->entry;
     debug(10, 5) ("gopherSendComplete: FD %d size: %d errflag: %d\n",
-	fd, (int) size, errflag);
+	fd, size, errflag);
     if (size > 0) {
 	fd_bytes(fd, size, FD_WRITE);
 	kb_incr(&statCounter.server.all.kbytes_out, size);
@@ -743,16 +744,16 @@ gopherSendRequest(int fd, void *data)
 {
     GopherStateData *gopherState = data;
     char *buf = memAllocate(MEM_4K_BUF);
+    char *t;
     if (gopherState->type_id == GOPHER_CSO) {
-	const char *t = strchr(gopherState->request, '?');
-	if (t != NULL)
-	    t++; /* skip the ? */
+	t = strchr(gopherState->request, '?');
+	if (t)
+	    t++;
 	else
 	    t = "";
 	snprintf(buf, 4096, "query %s\r\nquit\r\n", t);
     } else if (gopherState->type_id == GOPHER_INDEX) {
-	char *t = strchr(gopherState->request, '?');
-	if (t != NULL)
+	if ((t = strchr(gopherState->request, '?')))
 	    *t = '\t';
 	snprintf(buf, 4096, "%s\r\n", gopherState->request);
     } else {
@@ -769,17 +770,12 @@ gopherSendRequest(int fd, void *data)
 	storeSetPublicKey(gopherState->entry);	/* Make it public */
 }
 
-CBDATA_TYPE(GopherStateData);
-
 void
 gopherStart(FwdState * fwdState)
 {
     int fd = fwdState->server_fd;
     StoreEntry *entry = fwdState->entry;
-    GopherStateData *gopherState;
-    CBDATA_INIT_TYPE(GopherStateData);
-    gopherState = cbdataAlloc(GopherStateData);
-    gopherState->buf = memAllocate(MEM_4K_BUF);
+    GopherStateData *gopherState = CreateGopherStateData();
     storeLockObject(entry);
     gopherState->entry = entry;
     gopherState->fwdState = fwdState;
@@ -823,4 +819,13 @@ gopherStart(FwdState * fwdState)
     gopherState->fwdState = fwdState;
     commSetSelect(fd, COMM_SELECT_WRITE, gopherSendRequest, gopherState, 0);
     commSetTimeout(fd, Config.Timeout.read, gopherTimeout, gopherState);
+}
+
+static GopherStateData *
+CreateGopherStateData(void)
+{
+    GopherStateData *gd = xcalloc(1, sizeof(GopherStateData));
+    cbdataAdd(gd, cbdataXfree, 0);
+    gd->buf = memAllocate(MEM_4K_BUF);
+    return (gd);
 }

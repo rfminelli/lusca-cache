@@ -125,10 +125,6 @@ static const HttpHeaderFieldAttrs HeadersAttrs[] =
     {"X-Forwarded-For", HDR_X_FORWARDED_FOR, ftStr},
     {"X-Request-URI", HDR_X_REQUEST_URI, ftStr},
     {"X-Squid-Error", HDR_X_SQUID_ERROR, ftStr},
-    {"Negotiate", HDR_NEGOTIATE, ftStr},
-#if X_ACCELERATOR_VARY
-    {"X-Accelerator-Vary", HDR_X_ACCELERATOR_VARY, ftStr},
-#endif
     {"Other:", HDR_OTHER, ftStr}	/* ':' will not allow matches */
 };
 static HttpHeaderFieldInfo *Headers = NULL;
@@ -159,9 +155,6 @@ static http_hdr_type ListHeadersArr[] =
     HDR_AUTHENTICATION_INFO,
     HDR_PROXY_AUTHENTICATION_INFO,
     /* HDR_EXPECT, HDR_TE, HDR_TRAILER */
-#if X_ACCELERATOR_VARY
-    HDR_X_ACCELERATOR_VARY,
-#endif
     HDR_X_FORWARDED_FOR
 };
 
@@ -195,9 +188,6 @@ static http_hdr_type ReplyHeadersArr[] =
     HDR_WARNING, HDR_PROXY_CONNECTION, HDR_X_CACHE,
     HDR_X_CACHE_LOOKUP,
     HDR_X_REQUEST_URI,
-#if X_ACCELERATOR_VARY
-    HDR_X_ACCELERATOR_VARY,
-#endif
     HDR_X_SQUID_ERROR
 };
 
@@ -332,7 +322,7 @@ httpHeaderClean(HttpHeader * hdr)
 	/* tmp hack to try to avoid coredumps */
 	if (e->id < 0 || e->id >= HDR_ENUM_END) {
 	    debug(55, 0) ("httpHeaderClean BUG: entry[%d] is invalid (%d). Ignored.\n",
-		(int) pos, e->id);
+		pos, e->id);
 	} else {
 	    statHistCount(&HttpHeaderStats[hdr->owner].fieldTypeDistr, e->id);
 	    /* yes, this destroy() leaves us in an incosistent state */
@@ -409,8 +399,7 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 		field_ptr++;
 	    if (*field_ptr == '\n')
 		field_ptr++;
-	}
-	while (*field_ptr == ' ' || *field_ptr == '\t');
+	} while (*field_ptr == ' ' || *field_ptr == '\t');
 	if (!*field_end || field_end > header_end)
 	    return httpHeaderReset(hdr);	/* missing <CRLF> */
 	e = httpHeaderEntryParseCreate(field_start, field_end);
@@ -618,104 +607,6 @@ httpHeaderGetList(const HttpHeader * hdr, http_hdr_type id)
     return s;
 }
 
-/* return a string or list of entries with the same id separated by ',' and ws */
-String
-httpHeaderGetStrOrList(const HttpHeader * hdr, http_hdr_type id)
-{
-    HttpHeaderEntry *e;
-
-    if (CBIT_TEST(ListHeadersMask, id))
-	return httpHeaderGetList(hdr, id);
-    if ((e = httpHeaderFindEntry(hdr, id))) {
-	String s;
-	stringInit(&s, strBuf(e->value));
-	return s;
-    }
-    return StringNull;
-}
-
-/*
- * Returns the value of the specified header.
- */
-String
-httpHeaderGetByName(const HttpHeader * hdr, const char *name)
-{
-    http_hdr_type id;
-    HttpHeaderPos pos = HttpHeaderInitPos;
-    HttpHeaderEntry *e;
-    String result = StringNull;
-
-    assert(hdr);
-    assert(name);
-
-    /* First try the quick path */
-    id = httpHeaderIdByNameDef(name, strlen(name));
-    if (id != -1)
-	return httpHeaderGetStrOrList(hdr, id);
-
-    /* Sorry, an unknown header name. Do linear search */
-    while ((e = httpHeaderGetEntry(hdr, &pos))) {
-	if (e->id == HDR_OTHER && strCaseCmp(e->name, name) == 0) {
-	    strListAdd(&result, strBuf(e->value), ',');
-	}
-    }
-    return result;
-}
-
-/*
- * Returns a the value of the specified list member, if any.
- */
-String
-httpHeaderGetByNameListMember(const HttpHeader * hdr, const char *name, const char *member, const char separator)
-{
-    String result = StringNull;
-    String header;
-    const char *pos = NULL;
-    const char *item;
-    int ilen;
-    int mlen = strlen(member);
-
-    assert(hdr);
-    assert(name);
-
-    header = httpHeaderGetByName(hdr, name);
-
-    while (strListGetItem(&header, separator, &item, &ilen, &pos)) {
-	if (strncmp(item, member, mlen) == 0 && item[mlen] == '=') {
-	    stringAppend(&result, item + mlen + 1, ilen - mlen - 1);
-	    break;
-	}
-    }
-    return result;
-}
-
-/*
- * returns a the value of the specified list member, if any.
- */
-String
-httpHeaderGetListMember(const HttpHeader * hdr, http_hdr_type id, const char *member, const char separator)
-{
-    String result = StringNull;
-    String header;
-    const char *pos = NULL;
-    const char *item;
-    int ilen;
-    int mlen = strlen(member);
-
-    assert(hdr);
-    assert(id >= 0);
-
-    header = httpHeaderGetStrOrList(hdr, id);
-
-    while (strListGetItem(&header, separator, &item, &ilen, &pos)) {
-	if (strncmp(item, member, mlen) == 0 && item[mlen] == '=') {
-	    stringAppend(&result, item + mlen + 1, ilen - mlen - 1);
-	    break;
-	}
-    }
-    stringClean(&header);
-    return result;
-}
 
 /* test if a field is present */
 int
@@ -738,12 +629,12 @@ httpHeaderPutInt(HttpHeader * hdr, http_hdr_type id, int number)
 }
 
 void
-httpHeaderPutTime(HttpHeader * hdr, http_hdr_type id, time_t htime)
+httpHeaderPutTime(HttpHeader * hdr, http_hdr_type id, time_t time)
 {
     assert_eid(id);
     assert(Headers[id].type == ftDate_1123);	/* must be of an appropriate type */
-    assert(htime >= 0);
-    httpHeaderAddEntry(hdr, httpHeaderEntryCreate(id, NULL, mkrfc1123(htime)));
+    assert(time >= 0);
+    httpHeaderAddEntry(hdr, httpHeaderEntryCreate(id, NULL, mkrfc1123(time)));
 }
 
 void
@@ -756,10 +647,10 @@ httpHeaderPutStr(HttpHeader * hdr, http_hdr_type id, const char *str)
 }
 
 void
-httpHeaderPutAuth(HttpHeader * hdr, const char *auth_scheme, const char *realm)
+httpHeaderPutAuth(HttpHeader * hdr, const char *authScheme, const char *realm)
 {
-    assert(hdr && auth_scheme && realm);
-    httpHeaderPutStrf(hdr, HDR_WWW_AUTHENTICATE, "%s realm=\"%s\"", auth_scheme, realm);
+    assert(hdr && authScheme && realm);
+    httpHeaderPutStrf(hdr, HDR_WWW_AUTHENTICATE, "%s realm=\"%s\"", authScheme, realm);
 }
 
 void
@@ -932,16 +823,16 @@ httpHeaderGetContRange(const HttpHeader * hdr)
 }
 
 const char *
-httpHeaderGetAuth(const HttpHeader * hdr, http_hdr_type id, const char *auth_scheme)
+httpHeaderGetAuth(const HttpHeader * hdr, http_hdr_type id, const char *authScheme)
 {
     const char *field;
     int l;
-    assert(hdr && auth_scheme);
+    assert(hdr && authScheme);
     field = httpHeaderGetStr(hdr, id);
     if (!field)			/* no authorization field */
 	return NULL;
-    l = strlen(auth_scheme);
-    if (!l || strncasecmp(field, auth_scheme, l))	/* wrong scheme */
+    l = strlen(authScheme);
+    if (!l || strncasecmp(field, authScheme, l))	/* wrong scheme */
 	return NULL;
     field += l;
     if (!xisspace(*field))	/* wrong scheme */
@@ -1068,7 +959,7 @@ httpHeaderEntryParseCreate(const char *field_start, const char *field_end)
     if (field_end - value_start > 65536) {
 	/* String has a 64K limit */
 	debug(55, 1) ("WARNING: ignoring '%s' header of %d bytes\n",
-	    strBuf(e->name), (int) (field_end - value_start));
+	    strBuf(e->name), field_end - value_start);
 	if (e->id == HDR_OTHER)
 	    stringClean(&e->name);
 	memFree(e, MEM_HTTP_HDR_ENTRY);

@@ -52,6 +52,8 @@ typedef struct {
 
 /* local constant and vars */
 
+static const char *const proxy_auth_challenge_fmt = "Basic realm=\"%s\"";
+
 /*
  * note: hard coded error messages are not appended with %S automagically
  * to give you more control on the format
@@ -67,10 +69,6 @@ static const struct {
 	    "<hr noshade size=1>\n"
 	    "Generated %T by %h (%s)\n"
 	    "</BODY></HTML>\n"
-    },
-    {
-	TCP_RESET,
-	    "reset"
     }
 };
 
@@ -119,11 +117,9 @@ errorInitialize(void)
 	    /* dynamic */
 	    ErrorDynamicPageInfo *info = ErrorDynamicPages.items[i - ERR_MAX];
 	    assert(info && info->id == i && info->page_name);
-	    if (strchr(info->page_name, ':') == NULL) {
-		/* Not on redirected errors... */
-		error_text[i] = errorLoadText(info->page_name);
-	    }
+	    error_text[i] = errorLoadText(info->page_name);
 	}
+	assert(error_text[i]);
     }
 }
 
@@ -183,7 +179,7 @@ errorTryLoadText(const char *page_name, const char *dir)
 	return NULL;
     }
     text = xcalloc(sb.st_size + 2 + 1, 1);	/* 2 == space for %S */
-    if (FD_READ_METHOD(fd, text, sb.st_size) != sb.st_size) {
+    if (read(fd, text, sb.st_size) != sb.st_size) {
 	debug(4, 0) ("errorTryLoadText: failed to fully read: '%s': %s\n",
 	    path, xstrerror());
 	xfree(text);
@@ -212,32 +208,13 @@ errorDynamicPageInfoDestroy(ErrorDynamicPageInfo * info)
     xfree(info);
 }
 
-static int
-errorPageId(const char *page_name)
-{
-    int i;
-    for (i = 0; i < ERR_MAX; i++) {
-	if (strcmp(err_type_str[i], page_name) == 0)
-	    return i;
-    }
-    for (i = 0; i < ErrorDynamicPages.count; i++) {
-	if (strcmp(((ErrorDynamicPageInfo *) ErrorDynamicPages.items[i])->page_name, page_name) == 0)
-	    return i + ERR_MAX;
-    }
-    return ERR_NONE;
-}
-
 int
 errorReservePageId(const char *page_name)
 {
-    ErrorDynamicPageInfo *info;
-    int id = errorPageId(page_name);
-    if (id == ERR_NONE) {
-	info = errorDynamicPageInfoCreate(ERR_MAX + ErrorDynamicPages.count, page_name);
-	stackPush(&ErrorDynamicPages, info);
-	id = info->id;
-    }
-    return id;
+    ErrorDynamicPageInfo *info =
+    errorDynamicPageInfoCreate(ERR_MAX + ErrorDynamicPages.count, page_name);
+    stackPush(&ErrorDynamicPages, info);
+    return info->id;
 }
 
 static const char *
@@ -259,8 +236,7 @@ errorPageName(int pageId)
 ErrorState *
 errorCon(err_type type, http_status status)
 {
-    ErrorState *err;
-    err = cbdataAlloc(ErrorState);
+    ErrorState *err = memAllocate(MEM_ERRORSTATE);
     err->page_id = type;	/* has to be reset manually if needed */
     err->type = type;
     err->http_status = status;
@@ -299,23 +275,29 @@ errorAppendEntry(StoreEntry * entry, ErrorState * err)
 	errorStateFree(err);
 	return;
     }
-    if (err->page_id == TCP_RESET) {
-	if (err->request) {
-	    debug(4, 2) ("RSTing this reply\n");
-	    err->request->flags.reset_tcp = 1;
-	}
-    }
     storeLockObject(entry);
     storeBuffer(entry);
     rep = errorBuildReply(err);
     /* Add authentication header */
-    /* TODO: alter errorstate to be accel on|off aware. The 0 on the next line
-     * depends on authenticate behaviour: all schemes to date send no extra data
-     * on 407/401 responses, and do not check the accel state on 401/407 responses 
-     */
-    authenticateFixHeader(rep, err->auth_user_request, err->request, 0, 1);
+    switch (err->http_status) {
+    case HTTP_PROXY_AUTHENTICATION_REQUIRED:
+	/* Proxy authorisation needed */
+	httpHeaderPutStrf(&rep->header, HDR_PROXY_AUTHENTICATE,
+	    proxy_auth_challenge_fmt, Config.proxyAuthRealm);
+	break;
+    case HTTP_UNAUTHORIZED:
+	/* WWW Authorisation needed */
+	httpHeaderPutStrf(&rep->header, HDR_WWW_AUTHENTICATE,
+	    proxy_auth_challenge_fmt, Config.proxyAuthRealm);
+	break;
+    default:
+	/* Keep GCC happy */
+	break;
+    }
     httpReplySwapOut(rep, entry);
-    httpReplyAbsorb(mem->reply, rep);
+    httpReplyDestroy(rep);
+    mem->reply->sline.status = err->http_status;
+    mem->reply->content_length = -1;
     EBIT_CLR(entry->flags, ENTRY_FWD_HDR_WAIT);
     storeBufferFlush(entry);
     storeComplete(entry);
@@ -358,6 +340,7 @@ errorSend(int fd, ErrorState * err)
 	err->request->err_type = err->type;
     /* moved in front of errorBuildBuf @?@ */
     err->flags.flag_cbdata = 1;
+    cbdataAdd(err, memFree, MEM_ERRORSTATE);
     rep = errorBuildReply(err);
     comm_write_mbuf(fd, httpReplyPack(rep), errorSendComplete, err);
     httpReplyDestroy(rep);
@@ -376,15 +359,12 @@ static void
 errorSendComplete(int fd, char *bufnotused, size_t size, int errflag, void *data)
 {
     ErrorState *err = data;
-    debug(4, 3) ("errorSendComplete: FD %d, size=%ld\n", fd, (long int) size);
+    debug(4, 3) ("errorSendComplete: FD %d, size=%d\n", fd, size);
     if (errflag != COMM_ERR_CLOSING) {
-	if (err->callback) {
-	    debug(4, 3) ("errorSendComplete: callback\n");
+	if (err->callback)
 	    err->callback(fd, err->callback_data, size);
-	} else {
+	else
 	    comm_close(fd);
-	    debug(4, 3) ("errorSendComplete: comm_close\n");
-	}
     }
     errorStateFree(err);
 }
@@ -401,10 +381,10 @@ errorStateFree(ErrorState * err)
     wordlistDestroy(&err->ftp.server_msg);
     safe_free(err->ftp.request);
     safe_free(err->ftp.reply);
-    if (err->auth_user_request)
-	authenticateAuthUserRequestUnlock(err->auth_user_request);
-    err->auth_user_request = NULL;
-    cbdataFree(err);
+    if (err->flags.flag_cbdata)
+	cbdataFree(err);
+    else
+	memFree(err, MEM_ERRORSTATE);
 }
 
 #define CVT_BUF_SZ 512
@@ -424,7 +404,6 @@ errorStateFree(ErrorState * err)
  * I - server IP address                        x
  * L - HREF link for more info/contact          x
  * M - Request Method                           x
- * m - Error message returned by external Auth. x 
  * p - URL port #                               x
  * P - Protocol                                 x
  * R - Full HTTP Request                        x
@@ -433,7 +412,7 @@ errorStateFree(ErrorState * err)
  * t - local time                               x
  * T - UTC                                      x
  * U - URL without password                     x
- * u - URL with password                        x
+ * u - URL without password, %2f added to path  x
  * w - cachemgr email address                   x
  * z - dns server error message                 x
  */
@@ -452,7 +431,9 @@ errorConvert(char token, ErrorState * err)
 	p = r ? ftpUrlWith2f(r) : "[no URL]";
 	break;
     case 'c':
-	p = errorPageName(err->type);
+	assert(err->type >= ERR_NONE);
+	assert(err->type < ERR_MAX);
+	p = err_type_str[err->type];
 	break;
     case 'e':
 	memBufPrintf(&mb, "%d", err->xerrno);
@@ -499,12 +480,8 @@ errorConvert(char token, ErrorState * err)
     case 'L':
 	if (Config.errHtmlText) {
 	    memBufPrintf(&mb, "%s", Config.errHtmlText);
-	    do_quote = 0;
 	} else
 	    p = "[not available]";
-	break;
-    case 'm':
-	p = authenticateAuthUserRequestMessage(err->auth_user_request) ? authenticateAuthUserRequestMessage(err->auth_user_request) : "[not available]";
 	break;
     case 'M':
 	p = r ? RequestMethodStr[r->method] : "[unkown method]";
@@ -563,9 +540,6 @@ errorConvert(char token, ErrorState * err)
     case 'U':
 	p = r ? urlCanonicalClean(r) : err->url ? err->url : "[no URL]";
 	break;
-    case 'u':
-	p = r ? urlCanonical(r) : err->url ? err->url : "[no URL]";
-	break;
     case 'w':
 	if (Config.adminEmail)
 	    memBufPrintf(&mb, "%s", Config.adminEmail);
@@ -599,32 +573,23 @@ HttpReply *
 errorBuildReply(ErrorState * err)
 {
     HttpReply *rep = httpReplyCreate();
-    const char *name = errorPageName(err->page_id);
+    MemBuf content = errorBuildContent(err);
     http_version_t version;
     /* no LMT for error pages; error pages expire immediately */
     httpBuildVersion(&version, 1, 0);
-    if (strchr(name, ':')) {
-	/* Redirection */
-	char *quoted_url = rfc1738_escape_part(errorConvert('u', err));
-	httpReplySetHeaders(rep, version, HTTP_MOVED_TEMPORARILY, NULL, "text/html", 0, 0, squid_curtime);
-	httpHeaderPutStrf(&rep->header, HDR_LOCATION, name, quoted_url);
-	httpHeaderPutStrf(&rep->header, HDR_X_SQUID_ERROR, "%d %s\n", err->http_status, "Access Denied");
-    } else {
-	MemBuf content = errorBuildContent(err);
-	httpReplySetHeaders(rep, version, err->http_status, NULL, "text/html", content.size, 0, squid_curtime);
-	/*
-	 * include some information for downstream caches. Implicit
-	 * replaceable content. This isn't quite sufficient. xerrno is not
-	 * necessarily meaningful to another system, so we really should
-	 * expand it. Additionally, we should identify ourselves. Someone
-	 * might want to know. Someone _will_ want to know OTOH, the first
-	 * X-CACHE-MISS entry should tell us who.
-	 */
-	httpHeaderPutStrf(&rep->header, HDR_X_SQUID_ERROR, "%s %d",
-	    name, err->xerrno);
-	httpBodySet(&rep->body, &content);
-	/* do not memBufClean() the content, it was absorbed by httpBody */
-    }
+    httpReplySetHeaders(rep, version, err->http_status, NULL, "text/html", content.size, 0, squid_curtime);
+    /*
+     * include some information for downstream caches. Implicit
+     * replaceable content. This isn't quite sufficient. xerrno is not
+     * necessarily meaningful to another system, so we really should
+     * expand it. Additionally, we should identify ourselves. Someone
+     * might want to know. Someone _will_ want to know OTOH, the first
+     * X-CACHE-MISS entry should tell us who.
+     */
+    httpHeaderPutStrf(&rep->header, HDR_X_SQUID_ERROR, "%s %d",
+	errorPageName(err->page_id), err->xerrno);
+    httpBodySet(&rep->body, &content);
+    /* do not memBufClean() the content, it was absorbed by httpBody */
     return rep;
 }
 

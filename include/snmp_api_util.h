@@ -2,8 +2,8 @@
  * $Id$
  */
 
-#ifndef SQUID_SNMP_API_UTIL_H
-#define SQUID_SNMP_API_UTIL_H
+#ifndef _SNMP_API_UTIL_H_
+#define _SNMP_API_UTIL_H_
 
 /***********************************************************
 	Copyright 1997 by Carnegie Mellon University
@@ -94,5 +94,4 @@ extern "C" {
 }
 
 #endif
-
-#endif				/* SQUID_SNMP_API_UTIL_H */
+#endif				/* _SNMP_API_UTIL_H_ */

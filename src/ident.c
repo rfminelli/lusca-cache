@@ -70,10 +70,10 @@ identCallback(IdentStateData * state, char *result)
     if (result && *result == '\0')
 	result = NULL;
     while ((client = state->clients)) {
-	void *cbdata;
 	state->clients = client->next;
-	if (cbdataReferenceValidDone(client->callback_data, &cbdata))
-	    client->callback(result, cbdata);
+	if (cbdataValid(client->callback_data))
+	    client->callback(result, client->callback_data);
+	cbdataUnlock(client->callback_data);
 	xfree(client);
     }
 }
@@ -109,10 +109,10 @@ identConnectDone(int fd, int status, void *data)
 	return;
     }
     /*
-     * see if any of our clients still care
+     * see if our clients still care
      */
     for (c = state->clients; c; c = c->next) {
-	if (cbdataReferenceValid(c->callback_data))
+	if (cbdataValid(c->callback_data))
 	    break;
     }
     if (c == NULL) {
@@ -139,7 +139,7 @@ identReadReply(int fd, void *data)
     int len = -1;
     buf[0] = '\0';
     statCounter.syscalls.sock.reads++;
-    len = FD_READ_METHOD(fd, buf, BUFSIZ - 1);
+    len = read(fd, buf, BUFSIZ - 1);
     fd_bytes(fd, len, FD_READ);
     if (len <= 0) {
 	comm_close(fd);
@@ -172,12 +172,11 @@ identClientAdd(IdentStateData * state, IDCB * callback, void *callback_data)
     IdentClient *c = xcalloc(1, sizeof(*c));
     IdentClient **C;
     c->callback = callback;
-    c->callback_data = cbdataReference(callback_data);
+    c->callback_data = callback_data;
+    cbdataLock(callback_data);
     for (C = &state->clients; *C; C = &(*C)->next);
     *C = c;
 }
-
-CBDATA_TYPE(IdentStateData);
 
 /**** PUBLIC FUNCTIONS ****/
 
@@ -214,8 +213,8 @@ identStart(struct sockaddr_in *me, struct sockaddr_in *my_peer, IDCB * callback,
 	callback(NULL, data);
 	return;
     }
-    CBDATA_INIT_TYPE(IdentStateData);
-    state = cbdataAlloc(IdentStateData);
+    state = xcalloc(1, sizeof(IdentStateData));
+    cbdataAdd(state, cbdataXfree, 0);
     state->hash.key = xstrdup(key);
     state->fd = fd;
     state->me = *me;

@@ -82,9 +82,7 @@ logfileClose(Logfile * lf)
 void
 logfileRotate(Logfile * lf)
 {
-#ifdef S_ISREG
     struct stat sb;
-#endif
     int i;
     char from[MAXPATHLEN];
     char to[MAXPATHLEN];
@@ -180,7 +178,7 @@ static void
 logfileWriteWrapper(Logfile * lf, const void *buf, size_t len)
 {
     int s;
-    s = FD_WRITE_METHOD(lf->fd, buf, len);
+    s = write(lf->fd, buf, len);
     fd_bytes(lf->fd, s, FD_WRITE);
     if (s == len)
 	return;

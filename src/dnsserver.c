@@ -128,9 +128,6 @@
 #if HAVE_SYS_SELECT_H
 #include <sys/select.h>
 #endif
-#if HAVE_GETOPT_H
-#include <getopt.h>
-#endif
 
 #if HAVE_ARPA_NAMESER_H
 #include <arpa/nameser.h>
@@ -325,7 +322,7 @@ main(int argc, char *argv[])
 #endif /* HAVE_RES_INIT */
 	    break;
 	case 'v':
-	    printf("dnsserver version %s\n", VERSION);
+	    printf("dnsserver version %s\n", SQUID_VERSION);
 	    exit(0);
 	    break;
 	case 'h':

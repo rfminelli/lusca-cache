@@ -45,24 +45,10 @@
  */
 #define CHANGE_FD_SETSIZE 1
 
-/*
- * Cannot increase FD_SETSIZE on Linux, but we can increase __FD_SETSIZE
- * with glibc 2.2 (or later? remains to be seen). We do this by including
- * bits/types.h which defines __FD_SETSIZE first, then we redefine
- * __FD_SETSIZE. Ofcourse a user program may NEVER include bits/whatever.h
- * directly, so this is a dirty hack!
- */
+/* Cannot increase FD_SETSIZE on Linux */
 #if defined(_SQUID_LINUX_)
 #undef CHANGE_FD_SETSIZE
 #define CHANGE_FD_SETSIZE 0
-#include <features.h>
-#if (__GLIBC__ > 2) || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 2)
-#if SQUID_MAXFD > DEFAULT_FD_SETSIZE
-#include <bits/types.h>
-#undef __FD_SETSIZE
-#define __FD_SETSIZE SQUID_MAXFD
-#endif
-#endif
 #endif
 
 /*
@@ -102,12 +88,6 @@
 #else
 #define assert(EX)  ((EX)?((void)0):xassert("EX", __FILE__, __LINE__))
 #endif
-
-
-/* 32 bit integer compatability */
-#include "squid_types.h"
-#define num32 int32_t
-#define u_num32 u_int32_t
 
 #if HAVE_UNISTD_H
 #include <unistd.h>
@@ -199,6 +179,9 @@
 #if HAVE_BSTRING_H
 #include <bstring.h>
 #endif
+#ifdef HAVE_CRYPT_H
+#include <crypt.h>
+#endif
 #if HAVE_SYS_SELECT_H
 #include <sys/select.h>
 #endif
@@ -252,24 +235,10 @@
 #endif /* HAVE_POLL_H */
 #endif /* HAVE_POLL */
 
-#if defined(HAVE_STDARG_H)
+#if STDC_HEADERS
 #include <stdarg.h>
-#define HAVE_STDARGS		/* let's hope that works everywhere (mj) */
-#define VA_LOCAL_DECL va_list ap;
-#define VA_START(f) va_start(ap, f)
-#define VA_SHIFT(v,t) ;		/* no-op for ANSI */
-#define VA_END va_end(ap)
 #else
-#if defined(HAVE_VARARGS_H)
 #include <varargs.h>
-#undef HAVE_STDARGS
-#define VA_LOCAL_DECL va_list ap;
-#define VA_START(f) va_start(ap)	/* f is ignored! */
-#define VA_SHIFT(v,t) v = va_arg(ap,t)
-#define VA_END va_end(ap)
-#else
-#error XX **NO VARARGS ** XX
-#endif
 #endif
 
 /* Make sure syslog goes after stdarg/varargs */
@@ -352,6 +321,12 @@ struct rusage {
 #define LOCAL_ARRAY(type,name,size) static type name[size]
 #endif
 
+#if CBDATA_DEBUG
+#define cbdataAdd(a,b,c)	cbdataAddDbg(a,b,c,__FILE__,__LINE__)
+#define cbdataLock(a)		cbdataLockDbg(a,__FILE__,__LINE__)
+#define cbdataUnlock(a)		cbdataUnlockDbg(a,__FILE__,__LINE__)
+#endif
+
 #if USE_LEAKFINDER
 #define leakAdd(p) leakAddFL(p,__FILE__,__LINE__)
 #define leakTouch(p) leakTouchFL(p,__FILE__,__LINE__)
@@ -373,11 +348,6 @@ struct rusage {
 #endif
 
 #include "md5.h"
-
-#if USE_SSL
-#include "ssl_support.h"
-#endif
-
 #include "Stack.h"
 
 /* Needed for poll() on Linux at least */
@@ -397,16 +367,25 @@ struct rusage {
 #include "hash.h"
 #include "rfc1035.h"
 
-
 #include "defines.h"
 #include "enums.h"
 #include "typedefs.h"
-#include "util.h"
-#include "MemPool.h"
 #include "structs.h"
 #include "protos.h"
 #include "globals.h"
 
+#include "util.h"
+
+/*
+ * Mac OS X Server already has radix.h as a standard header, so
+ * this causes conflicts.  However, rn_walktree is our own thing,
+ * and we must make sure to provide a prototype.
+ */
+#ifndef _SQUID_APPLE_
+#include "radix.h"
+#else
+extern int rn_walktree __P((struct radix_node_head *, int (*)(), void *));
+#endif
 
 #if !HAVE_TEMPNAM
 #include "tempnam.h"
@@ -468,9 +447,7 @@ struct rusage {
 /*
  * I'm sick of having to keep doing this ..
  */
-#define INDEXSD(i)   (&Config.cacheSwap.swapDirs[(i)])
 
-#define FD_READ_METHOD(fd, buf, len) (*fd_table[fd].read_method)(fd, buf, len)
-#define FD_WRITE_METHOD(fd, buf, len) (*fd_table[fd].write_method)(fd, buf, len)
+#define INDEXSD(i)   (&Config.cacheSwap.swapDirs[(i)])
 
 #endif /* SQUID_H */

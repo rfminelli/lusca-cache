@@ -31,8 +31,8 @@
  *  
  */
 
-#ifndef SQUID_UTIL_H
-#define SQUID_UTIL_H
+#ifndef _UTIL_H_
+#define _UTIL_H_
 
 #include "config.h"
 #include <stdio.h>
@@ -75,12 +75,12 @@ extern double tvSubDsec(struct timeval, struct timeval);
 extern char *xstrncpy(char *, const char *, size_t);
 extern size_t xcountws(const char *str);
 extern time_t parse_rfc1123(const char *str);
-extern void *xcalloc(size_t, size_t);
+extern void *xcalloc(int, size_t);
 extern void *xmalloc(size_t);
 extern void *xrealloc(void *, size_t);
 extern void Tolower(char *);
 extern void xfree(void *);
-extern void xxfree(const void *);
+extern void xxfree(void *);
 
 /* rfc1738.c */
 extern char *rfc1738_escape(const char *);
@@ -115,7 +115,6 @@ extern int safe_inet_addr(const char *, SIA *);
 extern time_t parse_iso3307_time(const char *buf);
 extern char *base64_decode(const char *coded);
 extern const char *base64_encode(const char *decoded);
-extern const char *base64_encode_bin(const char *data, int len);
 
 extern double xpercent(double part, double whole);
 extern int xpercentInt(double part, double whole);
@@ -127,25 +126,4 @@ extern const char *xitoa(int num);
 double drand48(void);
 #endif
 
-typedef struct {
-    size_t count;
-    size_t bytes;
-    size_t gb;
-} gb_t;
-
-/* gb_type operations */
-#define gb_flush_limit (0x3FFFFFFF)
-#define gb_inc(gb, delta) { if ((gb)->bytes > gb_flush_limit || delta > gb_flush_limit) gb_flush(gb); (gb)->bytes += delta; (gb)->count++; }
-#define gb_incb(gb, delta) { if ((gb)->bytes > gb_flush_limit || delta > gb_flush_limit) gb_flush(gb); (gb)->bytes += delta; }
-#define gb_incc(gb, delta) { if ((gb)->bytes > gb_flush_limit || delta > gb_flush_limit) gb_flush(gb); (gb)->count+= delta; }
-extern double gb_to_double(const gb_t *);
-extern const char *double_to_str(char *buf, int buf_size, double value);
-extern const char *gb_to_str(const gb_t *);
-extern void gb_flush(gb_t *);  /* internal, do not use this */
-
-/*
- * Returns the amount of known allocated memory
- */
-int statMemoryAccounted(void);
-
-#endif /* SQUID_UTIL_H */
+#endif /* ndef _UTIL_H_ */

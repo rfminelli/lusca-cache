@@ -66,7 +66,7 @@ static u_short echo_port;
 static int NLateReplies = 0;
 static peer *first_ping = NULL;
 
-const char *
+char *
 neighborTypeStr(const peer * p)
 {
     if (p->type == PEER_NONE)
@@ -151,14 +151,9 @@ peerAllowedToUse(const peer * p, request_t * request)
     checklist.my_addr = request->my_addr;
     checklist.my_port = request->my_port;
     checklist.request = request;
-#if 0 && USE_IDENT
-    /*
-     * this is currently broken because 'request->user_ident' has been
-     * moved to conn->rfc931 and we don't have access to the parent
-     * ConnStateData here.
-     */
+#if USE_IDENT
     if (request->user_ident[0])
-	xstrncpy(checklist.rfc931, request->user_ident, USER_IDENT_SZ);
+	xstrncpy(checklist.ident, request->user_ident, USER_IDENT_SZ);
 #endif
     return aclCheckFast(p->access, &checklist);
 }
@@ -170,8 +165,6 @@ peerWouldBePinged(const peer * p, request_t * request)
     if (!peerAllowedToUse(p, request))
 	return 0;
     if (p->options.no_query)
-	return 0;
-    if (p->options.background_ping && (squid_curtime - p->stats.last_query < Config.backgroundPingRate))
 	return 0;
     if (p->options.mcast_responder)
 	return 0;
@@ -187,9 +180,8 @@ peerWouldBePinged(const peer * p, request_t * request)
     /* Ping dead peers every timeout interval */
     if (squid_curtime - p->stats.last_query > Config.Timeout.deadPeer)
 	return 1;
-    if (p->icp.port == echo_port)
-	if (!neighborUp(p))
-	    return 0;
+    if (!neighborUp(p))
+	return 0;
     return 1;
 }
 
@@ -201,9 +193,6 @@ peerHTTPOkay(const peer * p, request_t * request)
 	return 0;
     if (!neighborUp(p))
 	return 0;
-    if (p->max_conn)
-	if (p->stats.conn_open >= p->max_conn)
-	    return 0;
     return 1;
 }
 
@@ -275,43 +264,6 @@ getRoundRobinParent(request_t * request)
     if (q)
 	q->rr_count++;
     debug(15, 3) ("getRoundRobinParent: returning %s\n", q ? q->host : "NULL");
-    return q;
-}
-
-peer *
-getWeightedRoundRobinParent(request_t * request)
-{
-    peer *p;
-    peer *q = NULL;
-    int weighted_rtt;
-    for (p = Config.peers; p; p = p->next) {
-	if (!p->options.weighted_roundrobin)
-	    continue;
-	if (neighborType(p, request) != PEER_PARENT)
-	    continue;
-	if (!peerHTTPOkay(p, request))
-	    continue;
-	if (q && q->rr_count < p->rr_count)
-	    continue;
-	q = p;
-    }
-    if (q && q->rr_count > 1000000)
-	for (p = Config.peers; p; p = p->next) {
-	    if (!p->options.weighted_roundrobin)
-		continue;
-	    if (neighborType(p, request) != PEER_PARENT)
-		continue;
-	    p->rr_count = 0;
-	}
-    if (q) {
-	weighted_rtt = (q->stats.rtt - q->basetime) / q->weight;
-
-	if (weighted_rtt < 1)
-	    weighted_rtt = 1;
-	q->rr_count += weighted_rtt;
-	debug(15, 3) ("getWeightedRoundRobinParent: weighted_rtt %d\n", (int) weighted_rtt);
-    }
-    debug(15, 3) ("getWeightedRoundRobinParent: returning %s\n", q ? q->host : "NULL");
     return q;
 }
 
@@ -601,18 +553,16 @@ neighborsUdpPing(request_t * request,
 	if (Config.Timeout.icp_query_max)
 	    if (*timeout > Config.Timeout.icp_query_max)
 		*timeout = Config.Timeout.icp_query_max;
-	if (*timeout < Config.Timeout.icp_query_min)
-	    *timeout = Config.Timeout.icp_query_min;
     }
     return peers_pinged;
 }
 
 /* lookup the digest of a given peer */
 lookup_t
-peerDigestLookup(peer * p, request_t * request)
+peerDigestLookup(peer * p, request_t * request, StoreEntry * entry)
 {
 #if USE_CACHE_DIGESTS
-    const cache_key *key = request ? storeKeyPublicByRequest(request) : NULL;
+    const cache_key *key = request ? storeKeyPublic(storeUrl(entry), request->method) : NULL;
     assert(p);
     assert(request);
     debug(15, 5) ("peerDigestLookup: peer %s\n", p->host);
@@ -648,7 +598,7 @@ peerDigestLookup(peer * p, request_t * request)
 
 /* select best peer based on cache digests */
 peer *
-neighborsDigestSelect(request_t * request)
+neighborsDigestSelect(request_t * request, StoreEntry * entry)
 {
     peer *best_p = NULL;
 #if USE_CACHE_DIGESTS
@@ -661,14 +611,14 @@ neighborsDigestSelect(request_t * request)
     int i;
     if (!request->flags.hierarchical)
 	return NULL;
-    key = storeKeyPublicByRequest(request);
+    key = storeKeyPublic(storeUrl(entry), request->method);
     for (i = 0, p = first_ping; i++ < Config.npeers; p = p->next) {
 	lookup_t lookup;
 	if (!p)
 	    p = Config.peers;
 	if (i == 1)
 	    first_ping = p;
-	lookup = peerDigestLookup(p, request);
+	lookup = peerDigestLookup(p, request, entry);
 	if (lookup == LOOKUP_NONE)
 	    continue;
 	choice_count++;
@@ -731,7 +681,7 @@ neighborAlive(peer * p, const MemObject * mem, const icp_common_t * header)
 static void
 neighborUpdateRtt(peer * p, MemObject * mem)
 {
-    int rtt, rtt_av_factor;
+    int rtt;
     if (!mem)
 	return;
     if (!mem->start_ping.tv_sec)
@@ -739,11 +689,8 @@ neighborUpdateRtt(peer * p, MemObject * mem)
     rtt = tvSubMsec(mem->start_ping, current_time);
     if (rtt < 1 || rtt > 10000)
 	return;
-    rtt_av_factor = RTT_AV_FACTOR;
-    if (p->options.weighted_roundrobin)
-	rtt_av_factor = RTT_BACKGROUND_AV_FACTOR;
     p->stats.rtt = intAverage(p->stats.rtt, rtt,
-	p->stats.pings_acked, rtt_av_factor);
+	p->stats.pings_acked, RTT_AV_FACTOR);
 }
 
 #if USE_HTCP
@@ -804,9 +751,9 @@ neighborIgnoreNonPeer(const struct sockaddr_in *from, icp_opcode opcode)
 
 /* ignoreMulticastReply
  * 
- * * We want to ignore replies from multicast peers if the
- * * cache_host_domain rules would normally prevent the peer
- * * from being used
+ * We want to ignore replies from multicast peers if the
+ * cache_host_domain rules would normally prevent the peer
+ * from being used
  */
 static int
 ignoreMulticastReply(peer * p, MemObject * mem)
@@ -986,7 +933,7 @@ neighborUp(const peer * p)
 }
 
 void
-peerDestroy(void *data)
+peerDestroy(void *data, int unused)
 {
     peer *p = data;
     struct _domain_ping *l = NULL;
@@ -1000,15 +947,24 @@ peerDestroy(void *data)
     }
     safe_free(p->host);
 #if USE_CACHE_DIGESTS
-    cbdataReferenceDone(p->digest);
+    if (p->digest) {
+	PeerDigest *pd = p->digest;
+	p->digest = NULL;
+	cbdataUnlock(pd);
+    }
 #endif
+    xfree(p);
 }
 
 void
 peerNoteDigestGone(peer * p)
 {
 #if USE_CACHE_DIGESTS
-    cbdataReferenceDone(p->digest);
+    if (p->digest) {
+	PeerDigest *pd = p->digest;
+	p->digest = NULL;
+	cbdataUnlock(pd);
+    }
 #endif
 }
 
@@ -1109,7 +1065,7 @@ peerProbeConnect(peer * p)
 	return;			/* probe already running */
     if (squid_curtime - p->stats.last_connect_probe < Config.Timeout.connect)
 	return;			/* don't probe to often */
-    fd = comm_open(SOCK_STREAM, 0, getOutgoingAddr(NULL),
+    fd = comm_open(SOCK_STREAM, 0, Config.Addrs.tcp_outgoing,
 	0, COMM_NONBLOCKING, p->host);
     if (fd < 0)
 	return;
@@ -1159,7 +1115,7 @@ static void
 peerCountMcastPeersStart(void *data)
 {
     peer *p = data;
-    ps_state *psstate;
+    ps_state *psstate = xcalloc(1, sizeof(ps_state));
     StoreEntry *fake;
     MemObject *mem;
     icp_common_t *query;
@@ -1169,12 +1125,12 @@ peerCountMcastPeersStart(void *data)
     p->mcast.flags.count_event_pending = 0;
     snprintf(url, MAX_URL, "http://%s/", inet_ntoa(p->in_addr.sin_addr));
     fake = storeCreateEntry(url, url, null_request_flags, METHOD_GET);
-    psstate = cbdataAlloc(ps_state);
     psstate->request = requestLink(urlParse(METHOD_GET, url));
     psstate->entry = fake;
     psstate->callback = NULL;
     psstate->callback_data = p;
     psstate->ping.start = current_time;
+    cbdataAdd(psstate, cbdataXfree, 0);
     mem = fake->mem_obj;
     mem->request = requestLink(psstate->request);
     mem->start_ping = current_time;
@@ -1227,8 +1183,6 @@ peerCountMcastPeersDone(void *data)
 static void
 peerCountHandleIcpReply(peer * p, peer_t type, protocol_t proto, void *hdrnotused, void *data)
 {
-    int rtt_av_factor;
-
     ps_state *psstate = data;
     StoreEntry *fake = psstate->entry;
     MemObject *mem = fake->mem_obj;
@@ -1237,10 +1191,7 @@ peerCountHandleIcpReply(peer * p, peer_t type, protocol_t proto, void *hdrnotuse
     assert(fake);
     assert(mem);
     psstate->ping.n_recv++;
-    rtt_av_factor = RTT_AV_FACTOR;
-    if (p->options.weighted_roundrobin)
-	rtt_av_factor = RTT_BACKGROUND_AV_FACTOR;
-    p->stats.rtt = intAverage(p->stats.rtt, rtt, psstate->ping.n_recv, rtt_av_factor);
+    p->stats.rtt = intAverage(p->stats.rtt, rtt, psstate->ping.n_recv, RTT_AV_FACTOR);
 }
 
 static void
@@ -1262,16 +1213,12 @@ dump_peer_options(StoreEntry * sentry, peer * p)
 	storeAppendPrintf(sentry, " proxy-only");
     if (p->options.no_query)
 	storeAppendPrintf(sentry, " no-query");
-    if (p->options.background_ping)
-	storeAppendPrintf(sentry, " background-ping");
     if (p->options.no_digest)
 	storeAppendPrintf(sentry, " no-digest");
     if (p->options.default_parent)
 	storeAppendPrintf(sentry, " default");
     if (p->options.roundrobin)
 	storeAppendPrintf(sentry, " round-robin");
-    if (p->options.weighted_roundrobin)
-	storeAppendPrintf(sentry, " weighted-round-robin");
     if (p->options.mcast_responder)
 	storeAppendPrintf(sentry, " multicast-responder");
     if (p->options.closest_only)
@@ -1318,7 +1265,6 @@ dump_peers(StoreEntry * sentry, peer * peers)
 	storeAppendPrintf(sentry, "Status     : %s\n",
 	    neighborUp(e) ? "Up" : "Down");
 	storeAppendPrintf(sentry, "AVG RTT    : %d msec\n", e->stats.rtt);
-	storeAppendPrintf(sentry, "OPEN CONNS : %d\n", e->stats.conn_open);
 	storeAppendPrintf(sentry, "LAST QUERY : %8d seconds ago\n",
 	    (int) (squid_curtime - e->stats.last_query));
 	storeAppendPrintf(sentry, "LAST REPLY : %8d seconds ago\n",

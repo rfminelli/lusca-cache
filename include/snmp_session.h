@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
-#ifndef SQUID_SNMP_SESSION_H
-#define SQUID_SNMP_SESSION_H
+#ifndef _SNMP_SESSION_H_
+#define _SNMP_SESSION_H_
 
 /**********************************************************************
  *
@@ -39,9 +39,16 @@ struct snmp_session {
     char *peername;		/* Domain name or dotted IP address of default peer */
     u_short remote_port;	/* UDP port number of peer. */
     u_short local_port;		/* My UDP port number, 0 for default, picked randomly */
+    /* This isn't used, but is here so that libraries compiled with this
+     * in place still work.
+     */
+    u_char *(*authenticator) ();
+    int (*callback) ();		/* Function to interpret incoming data */
+    /* Pointer to data that the callback function may consider important */
+    void *callback_magic;
 };
 
 #define RECEIVED_MESSAGE   1
 #define TIMED_OUT	   2
 
-#endif /* SQUID_SNMP_SESSION_H */
+#endif /* _SNMP_SESSION_H_ */

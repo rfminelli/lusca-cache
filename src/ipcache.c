@@ -50,7 +50,6 @@ struct _ipcache_entry {
     unsigned short locks;
     struct {
 	unsigned int negcached:1;
-	unsigned int fromhosts:1;
     } flags;
 };
 
@@ -133,7 +132,6 @@ ipcache_get(const char *name)
 static int
 ipcacheExpiredEntry(ipcache_entry * i)
 {
-    /* all static entries are locked, so this takes care of them too */
     if (i->locks != 0)
 	return 0;
     if (i->addrs.count == 0)
@@ -165,26 +163,6 @@ ipcache_purgelru(void *voidnotused)
     debug(14, 9) ("ipcache_purgelru: removed %d entries\n", removed);
 }
 
-/* purges entries added from /etc/hosts (or whatever). */
-static void
-purge_entries_fromhosts(void)
-{
-    dlink_node *m = lru_list.head;
-    ipcache_entry *i = NULL, *t;
-    while (m) {
-	if (i != NULL) {	/* need to delay deletion */
-	    ipcacheRelease(i);	/* we just override locks */
-	    i = NULL;
-	}
-	t = m->data;
-	if (t->flags.fromhosts)
-	    i = t;
-	m = m->next;
-    }
-    if (i != NULL)
-	ipcacheRelease(i);
-}
-
 /* create blank ipcache_entry */
 static ipcache_entry *
 ipcacheCreateEntry(const char *name)
@@ -214,18 +192,19 @@ ipcacheAddEntry(ipcache_entry * i)
 static void
 ipcacheCallback(ipcache_entry * i)
 {
-    IPH *callback = i->handler;
-    void *cbdata;
+    IPH *handler = i->handler;
+    void *handlerData = i->handlerData;
     i->lastref = squid_curtime;
-    if (!i->handler)
-	return;
     ipcacheLockEntry(i);
-    callback = i->handler;
+    if (NULL == handler)
+	return;
     i->handler = NULL;
-    if (cbdataReferenceValidDone(i->handlerData, &cbdata)) {
+    i->handlerData = NULL;
+    if (cbdataValid(handlerData)) {
 	dns_error_message = i->error_message;
-	callback(i->flags.negcached ? NULL : &i->addrs, cbdata);
+	handler(i->flags.negcached ? NULL : &i->addrs, handlerData);
     }
+    cbdataUnlock(handlerData);
     ipcacheUnlockEntry(i);
 }
 
@@ -363,12 +342,13 @@ ipcacheHandleReply(void *data, char *reply)
 ipcacheHandleReply(void *data, rfc1035_rr * answers, int na)
 #endif
 {
+    int n;
     generic_cbdata *c = data;
     ipcache_entry *i = c->data;
     ipcache_entry *x = NULL;
     cbdataFree(c);
     c = NULL;
-    IpcacheStats.replies++;
+    n = ++IpcacheStats.replies;
     statHistCount(&statCounter.dns.svc_time,
 	tvSubMsec(i->request_time, current_time));
 #if USE_DNSSERVERS
@@ -419,7 +399,8 @@ ipcache_nbgethostbyname(const char *name, IPH * handler, void *handlerData)
 	else
 	    IpcacheStats.hits++;
 	i->handler = handler;
-	i->handlerData = cbdataReference(handlerData);
+	i->handlerData = handlerData;
+	cbdataLock(handlerData);
 	ipcacheCallback(i);
 	return;
     }
@@ -427,10 +408,12 @@ ipcache_nbgethostbyname(const char *name, IPH * handler, void *handlerData)
     IpcacheStats.misses++;
     i = ipcacheCreateEntry(name);
     i->handler = handler;
-    i->handlerData = cbdataReference(handlerData);
+    i->handlerData = handlerData;
+    cbdataLock(handlerData);
     i->request_time = current_time;
-    c = cbdataAlloc(generic_cbdata);
+    c = memAllocate(MEM_GEN_CBDATA);
     c->data = i;
+    cbdataAdd(c, memFree, MEM_GEN_CBDATA);
 #if USE_DNSSERVERS
     dnsSubmit(hashKeyStr(&i->hash), ipcacheHandleReply, c);
 #else
@@ -504,12 +487,11 @@ static void
 ipcacheStatPrint(ipcache_entry * i, StoreEntry * sentry)
 {
     int k;
-    storeAppendPrintf(sentry, " %-32.32s %c%c %6d %6d %2d(%2d)",
+    storeAppendPrintf(sentry, " %-32.32s  %c %6d %6d %2d(%2d)",
 	hashKeyStr(&i->hash),
-	i->flags.fromhosts ? 'H' : ' ',
 	i->flags.negcached ? 'N' : ' ',
 	(int) (squid_curtime - i->lastref),
-	(int) ((i->flags.fromhosts ? -1 : i->expires - squid_curtime)),
+	(int) (i->expires - squid_curtime),
 	(int) i->addrs.count,
 	(int) i->addrs.badcount);
     for (k = 0; k < (int) i->addrs.count; k++) {
@@ -712,50 +694,6 @@ ipcache_restart(void)
 	    (float) Config.ipcache.high) / (float) 100);
     ipcache_low = (long) (((float) Config.ipcache.size *
 	    (float) Config.ipcache.low) / (float) 100);
-    purge_entries_fromhosts();
-}
-
-/*
- *  adds a "static" entry from /etc/hosts.  
- *  returns 0 upon success, 1 if the ip address is invalid
- */
-int
-ipcacheAddEntryFromHosts(const char *name, const char *ipaddr)
-{
-    ipcache_entry *i;
-    struct in_addr ip;
-    if (!safe_inet_addr(ipaddr, &ip)) {
-	if (strchr(ipaddr, ':') && strspn(ipaddr, "0123456789abcdefABCDEF:") == strlen(ipaddr)) {
-	    debug(14, 3) ("ipcacheAddEntryFromHosts: Skipping IPv6 address '%s'\n", ipaddr);
-	} else {
-	    debug(14, 1) ("ipcacheAddEntryFromHosts: Bad IP address '%s'\n",
-		ipaddr);
-	}
-	return 1;
-    }
-    if ((i = ipcache_get(name))) {
-	if (1 == i->flags.fromhosts) {
-	    ipcacheUnlockEntry(i);
-	} else if (i->locks > 0) {
-	    debug(14, 1) ("ipcacheAddEntryFromHosts: can't add static entry"
-		" for locked name '%s'\n", name);
-	    return 1;
-	} else {
-	    ipcacheRelease(i);
-	}
-    }
-    i = ipcacheCreateEntry(name);
-    i->addrs.count = 1;
-    i->addrs.cur = 0;
-    i->addrs.badcount = 0;
-    i->addrs.in_addrs = xcalloc(1, sizeof(struct in_addr));
-    i->addrs.bad_mask = xcalloc(1, sizeof(unsigned char));
-    i->addrs.in_addrs[0].s_addr = ip.s_addr;
-    i->addrs.bad_mask[0] = FALSE;
-    i->flags.fromhosts = 1;
-    ipcacheAddEntry(i);
-    ipcacheLockEntry(i);
-    return 0;
 }
 
 #ifdef SQUID_SNMP
@@ -767,7 +705,7 @@ variable_list *
 snmp_netIpFn(variable_list * Var, snint * ErrP)
 {
     variable_list *Answer = NULL;
-    debug(49, 5) ("snmp_netIpFn: Processing request:\n");
+    debug(49, 5) ("snmp_netIpFn: Processing request:\n", Var->name[LEN_SQ_NET + 1]);
     snmpDebugOid(5, Var->name, Var->name_length);
     *ErrP = SNMP_ERR_NOERROR;
     switch (Var->name[LEN_SQ_NET + 1]) {

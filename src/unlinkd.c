@@ -97,11 +97,12 @@ unlinkdUnlink(const char *path)
     if (queuelen >= UNLINKD_QUEUE_LIMIT) {
 	struct timeval to;
 	fd_set R;
+	int x;
 	FD_ZERO(&R);
 	FD_SET(unlinkd_rfd, &R);
 	to.tv_sec = 0;
 	to.tv_usec = 100000;
-	select(unlinkd_rfd + 1, &R, NULL, NULL, &to);
+	x = select(unlinkd_rfd + 1, &R, NULL, NULL, &to);
     }
     /*
      * If there is at least one outstanding unlink request, then
@@ -159,15 +160,14 @@ void
 unlinkdInit(void)
 {
     int x;
-    const char *args[2];
+    char *args[2];
     struct timeval slp;
     args[0] = "(unlinkd)";
     args[1] = NULL;
-#if USE_POLL && defined(_SQUID_OSF_)
+#if HAVE_POLL && defined(_SQUID_OSF_)
     /* pipes and poll() don't get along on DUNIX -DW */
-    x = ipcCreate(IPC_STREAM,
+    x = ipcCreate(IPC_TCP_SOCKET,
 #else
-    /* We currently need to use FIFO.. see below */
     x = ipcCreate(IPC_FIFO,
 #endif
 	Config.Program.unlinkd,

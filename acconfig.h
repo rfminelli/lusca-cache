@@ -19,16 +19,8 @@
  * in the Makefiles, wich is done automatically by configure.
  *
  */
-
-#ifndef __CONFIGURE_H__
-#define __CONFIGURE_H__
-@TOP@
+@ TOP @
 /* $Id$ */
-
-/*
- * configure command line used to configure Squid
- */
-#undef SQUID_CONFIGURE_OPTIONS
 
 /*********************************
  * START OF CONFIGURABLE OPTIONS *
@@ -38,23 +30,6 @@
  * field blank, then define this to getfullhostname()
  */
 #undef CACHEMGR_HOSTNAME
-
-/*
- * What default TCP port to use for HTTP listening?
- */
-#ifndef CACHE_HTTP_PORT
-#undef CACHE_HTTP_PORT
-#endif
-
-/*
- * What default UDP port to use for ICP listening?
- */
-#ifndef CACHE_ICP_PORT
-#undef CACHE_ICP_PORT
-#endif
-
-/* Compile & use the malloc package by Doug Lea] */
-#undef USE_DLMALLOC
 
 /* Define to do simple malloc debugging */
 #undef XMALLOC_DEBUG
@@ -70,11 +45,11 @@
 
 #undef FORW_VIA_DB
 
-/* Define if you have problems with memPools and want to disable Pools */
-#undef DISABLE_POOLS
+/* Define to use async disk I/O operations */
+#undef USE_ASYNC_IO
 
-/* Defines how many threads aufs uses for I/O */
-#undef AUFS_IO_THREADS
+/* Defines how many threads to use for async I/O */
+#undef ASYNC_IO_THREADS
 
 /*
  * If you want to use Squid's ICMP features (highly recommended!) then
@@ -152,10 +127,7 @@
 /*
  * Cache Array Routing Protocol
  */
-#define USE_CARP 1
-
-/* Define if NTLM is allowed to fail gracefully when a helper has problems */
-#undef NTLM_FAIL_OPEN
+#undef USE_CARP
 
 /********************************
  *  END OF CONFIGURABLE OPTIONS *
@@ -222,7 +194,7 @@
 /*
  * This makes warnings go away.  If you have socklen_t defined in your
  * /usr/include files, then this should remain undef'd.  Otherwise it
- * should be defined to int. 
+ * should be defined to int.
  */
 #undef socklen_t
 
@@ -240,12 +212,6 @@
  *  Linux system.
  */
 #undef IPF_TRANSPARENT
-
-/*
- * Enable support for Transparent Proxy on systems using PF address
- * redirection. This provides "masquerading" support for OpenBSD.
- */
-#undef PF_TRANSPARENT
 
 /*
  * Enable code for assiting in finding memory leaks.  Hacker stuff only.
@@ -308,18 +274,6 @@
  */
 #undef mtyp_t
 
-/*
- * Define this to include code for SSL encryption.
- */
-#undef USE_SSL
-
-/*
- * Define this to make use of the OpenSSL libraries for
- * MD5 calculation rather than Squid's own MD5 implementation
- * or if building with SSL encryption (USE_SSL)
- */
-#undef USE_OPENSSL
-
 /* Define if you want to set the COSS membuf size */
 #undef COSS_MEMBUF_SZ
 
@@ -336,79 +290,3 @@
  * Enable support for Transparent Proxy on Linux 2.4 systems
  */
 #undef LINUX_NETFILTER
-
-/*
- * Enable for cbdata debug information
- */
-#undef CBDATA_DEBUG
-
-/*
- * Do we have unix sockets? (required for the winbind ntlm helper
- */
-#undef HAVE_UNIXSOCKET
-
-/*
- * Known-size integers
- */
-
-#undef int16_t
-
-#undef u_int16_t
-
-#undef int32_t
-
-#undef u_int32_t
-
-#undef int64_t
-
-#undef u_int64_t
-
-/* The number of bytes in a __int64.  */
-#undef SIZEOF___INT64
-
-/* The number of bytes in a int16_t.  */
-#undef SIZEOF_INT16_T
-
-/* The number of bytes in a int32_t.  */
-#undef SIZEOF_INT32_T
-
-/* The number of bytes in a int64_t.  */
-#undef SIZEOF_INT64_T
-
-/* The number of bytes in a off_t.  */
-#undef SIZEOF_OFF_T
-
-/* The number of bytes in a size_t.  */
-#undef SIZEOF_SIZE_T
-
-/* The number of bytes in a u_int16_t.  */
-#undef SIZEOF_U_INT16_T
-
-/* The number of bytes in a u_int32_t.  */
-#undef SIZEOF_U_INT32_T
-
-/* The number of bytes in a u_int64_t.  */
-#undef SIZEOF_U_INT64_T
-
-/* The number of bytes in a uint16_t.  */
-#undef SIZEOF_UINT16_T
-
-/* The number of bytes in a uint32_t.  */
-#undef SIZEOF_UINT32_T
-
-/* The number of bytes in a uint64_t.  */
-#undef SIZEOF_UINT64_T
-
-/*
- * Enable support for the X-Accelerator-Vary HTTP header
- */
-#undef X_ACCELERATOR_VARY
-
-/* Support for poll/select/etc stuff */
-#undef USE_POLL
-#undef USE_SELECT
-#undef USE_KQUEUE
-
-@BOTTOM@
-
-#endif /* __CONFIGURE_H__ */

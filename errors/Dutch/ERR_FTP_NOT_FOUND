@@ -1,19 +1,21 @@
 <HTML><HEAD>
-<TITLE>FOUT: De gevraagde URL kon niet worden opgehaald</TITLE>
+<TITLE>ERROR: The requested URL could not be retrieved</TITLE>
 </HEAD><BODY>
-<H1>FOUT</H1>
-<H2>De gevraagde URL kon niet worden opgehaald</H2>
+<H1>ERROR</H1>
+<H2>The requested URL could not be retrieved</H2>
 <HR>
 <P>
-De volgende URL kon niet worden opgehaald:
+The following URL could not be retrieved:
 <A HREF="%U">%U</A>
 <P>
-Squid stuurde de volgende FTP opdracht:
+Squid sent the following FTP command:
 <blockquote><strong><pre>%f</pre></strong></blockquote>
-en ontving daarop het volgende antwoord:
+and then received this reply
 <blockquote><strong><pre>%F</pre></strong></blockquote>
 <blockquote><strong><pre>%g</pre></strong></blockquote>
 <P>
-Dit kan veroorzaakt worden door een FTP URL met een absoluut pad (hetgeen niet in overeenstemming is met RFC 1738). Als dit de oorzaak is, dan kan het bestand gevonden worden op <A HREF="%B">%B</A>.
+This might be caused by an FTP URL with an absolute path (which does
+not comply with RFC 1738).  If this is the cause, then the file
+can be found at <A HREF="%B">%B</A>.
 </P>
 
