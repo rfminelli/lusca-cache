@@ -135,7 +135,6 @@ AC_CHECK_HEADERS( \
 	alloca.h \
 	arpa/inet.h \
 	arpa/nameser.h \
-	assert.h \
 	bstring.h \
 	config.h \
 	crypt.h \
@@ -143,6 +142,7 @@ AC_CHECK_HEADERS( \
 	errno.h \
 	fcntl.h \
 	getopt.h \
+	gnumalloc.h \
 	grp.h \
 	libc.h \
 	limits.h \
@@ -232,8 +232,7 @@ dnl Check for special functions
 AC_FUNC_ALLOCA
 
 AC_CHECK_TYPE(pid_t, int)
-AC_CHECK_TYPE(size_t, unsigned int)
-AC_CHECK_TYPE(ssize_t, int)
+AC_CHECK_TYPE(size_t, int)
 AC_CHECK_TYPE(off_t, int)
 AC_CHECK_TYPE(mode_t, u_short)
 
@@ -323,6 +322,7 @@ AC_CHECK_FUNCS(\
 	memcpy \
 	memmove \
 	mktime \
+	mstats \
 	poll \
 	random \
 	regcomp \
@@ -369,7 +369,6 @@ AC_SUBST(LIBREGEX)
 AC_REPLACE_FUNCS(\
 	tempnam \
 	strerror \
-	snprintf \
 )
 
 AC_MSG_CHECKING(Default FD_SETSIZE value)

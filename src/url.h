@@ -33,7 +33,29 @@
 #define MAX_URL  4096
 #define MAX_LOGIN_SZ  128
 
+enum {
+    METHOD_NONE,		/* 000 */
+    METHOD_GET,			/* 001 */
+    METHOD_POST,		/* 010 */
+    METHOD_PUT,			/* 011 */
+    METHOD_HEAD,		/* 100 */
+    METHOD_CONNECT,		/* 101 */
+    METHOD_TRACE,		/* 110 */
+    METHOD_PURGE		/* 111 */
+};
+typedef unsigned int method_t;
+
 extern const char *RequestMethodStr[];
+
+typedef enum {
+    PROTO_NONE,
+    PROTO_HTTP,
+    PROTO_FTP,
+    PROTO_GOPHER,
+    PROTO_WAIS,
+    PROTO_CACHEOBJ,
+    PROTO_MAX
+} protocol_t;
 
 struct _request {
     method_t method;
@@ -43,6 +65,7 @@ struct _request {
     u_short port;
     char urlpath[MAX_URL];
     int link_count;		/* free when zero */
+    struct _hierarchyLogData hierarchy;
     int flags;
     time_t max_age;
     float http_ver;
@@ -50,11 +73,6 @@ struct _request {
     int imslen;
     int max_forwards;
     struct in_addr client_addr;
-    char *headers;
-    size_t headers_sz;
-    char *body;
-    size_t body_sz;
-    HierarchyLogEntry hier;
 };
 
 extern char *url_convert_hex _PARAMS((char *org_url, int allocate));
@@ -64,14 +82,14 @@ extern method_t urlParseMethod _PARAMS((const char *));
 extern void urlInitialize _PARAMS((void));
 extern request_t *urlParse _PARAMS((method_t, char *));
 extern char *urlCanonical _PARAMS((const request_t *, char *));
+extern char *urlNoLogin _PARAMS((const request_t *, char *));
 extern request_t *requestLink _PARAMS((request_t *));
 extern void requestUnlink _PARAMS((request_t *));
 extern int matchDomainName _PARAMS((const char *d, const char *h));
 extern int urlCheckRequest _PARAMS((const request_t *));
-extern int urlDefaultPort _PARAMS((protocol_t p));
 
 /* bitfields for the flags member */
-#define REQ_UNUSED1		0x01
+#define REQ_RANGE		0x01
 #define REQ_NOCACHE		0x02
 #define REQ_IMS			0x04
 #define REQ_AUTH		0x08

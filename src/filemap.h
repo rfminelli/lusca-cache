@@ -105,20 +105,20 @@
 #ifndef _FILEMAP_H_
 #define _FILEMAP_H_
 
-struct _fileMap {
+typedef struct _fileMap {
     int max_n_files;
     int n_files_in_map;
     int last_file_number_allocated;
     int toggle;
     int nwords;
     unsigned long *file_map;
-};
+} fileMap;
 
 extern fileMap *file_map_create _PARAMS((int));
-extern int file_map_allocate _PARAMS((fileMap *, int));
-extern int file_map_bit_set _PARAMS((fileMap *, int));
-extern int file_map_bit_test _PARAMS((fileMap *, int));
-extern void file_map_bit_reset _PARAMS((fileMap *, int));
-extern void filemapFreeMemory _PARAMS((fileMap *));
+extern int file_map_allocate _PARAMS((int));
+extern int file_map_bit_set _PARAMS((int));
+extern int file_map_bit_test _PARAMS((int));
+extern void file_map_bit_reset _PARAMS((int));
+extern void filemapFreeMemory _PARAMS((void));
 
 #endif /* _FILEMAP_H_ */

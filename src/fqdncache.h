@@ -108,7 +108,15 @@
 #ifndef _FQDNCACHE_H_
 #define _FQDNCACHE_H_
 
-typedef void FQDNH _PARAMS((const char *, void *));
+typedef void (*FQDNH) (int, const char *, void *);
+
+enum {
+    FQDN_CACHED,
+    FQDN_NEGATIVE_CACHED,
+    FQDN_PENDING,		/* waiting to be dispatched */
+    FQDN_DISPATCHED		/* waiting for reply from dnsserver */
+};
+typedef unsigned int fqdncache_status_t;
 
 #define FQDN_BLOCKING_LOOKUP	0x01
 #define FQDN_LOOKUP_IF_MISS	0x02
@@ -129,8 +137,8 @@ typedef struct _fqdncache_entry {
     fqdncache_status_t status:3;
 } fqdncache_entry;
 
-extern void fqdncache_nbgethostbyaddr _PARAMS((struct in_addr, FQDNH *, void *));
-extern int fqdncacheUnregister _PARAMS((struct in_addr, void *));
+extern void fqdncache_nbgethostbyaddr _PARAMS((struct in_addr, int fd, FQDNH handler, void *handlerData));
+extern int fqdncacheUnregister _PARAMS((struct in_addr, int));
 extern const char *fqdncache_gethostbyaddr _PARAMS((struct in_addr, int flags));
 extern void fqdncache_init _PARAMS((void));
 extern void fqdnStats _PARAMS((StoreEntry *));

@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -106,7 +105,7 @@
 #ifndef GOPHER_H
 #define GOPHER_H
 
-extern void gopherStart _PARAMS((StoreEntry *));
+extern int gopherStart _PARAMS((int, const char *, StoreEntry *));
 extern int gopherCachable _PARAMS((const char *));
 
 #endif /* GOPHER_H */

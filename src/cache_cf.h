@@ -108,7 +108,6 @@
 
 #define DefaultDnsChildrenMax		32	/* 32 processes */
 #define DefaultRedirectChildrenMax	32	/* 32 processes */
-#define MAXHTTPPORTS			12
 
 typedef struct _wordlist {
     char *key;
@@ -120,16 +119,23 @@ typedef struct _intlist {
     struct _intlist *next;
 } intlist;
 
-typedef struct _ushortlist {
-    u_short i;
-    struct _ushortlist *next;
-} ushortlist;
-
 typedef struct _relist {
     char *pattern;
     regex_t regex;
     struct _relist *next;
 } relist;
+
+typedef enum {
+    IP_ALLOW,
+    IP_DENY
+} ip_access_type;
+
+typedef struct _ip_acl {
+    struct in_addr addr;
+    struct in_addr mask;
+    ip_access_type access;
+    struct _ip_acl *next;
+} ip_acl;
 
 struct SquidConfig {
     struct {
@@ -150,18 +156,14 @@ struct SquidConfig {
     int negativeTtl;
     int negativeDnsTtl;
     int positiveDnsTtl;
-    struct {
-	int read;
-	int defer;
-	int lifetime;
-	int connect;
-	int request;
-    } Timeout;
-    int shutdownLifetime;
+    int readTimeout;
+    int lifetimeDefault;
+    int lifetimeShutdown;
+    int connectTimeout;
     int cleanRate;
     int maxRequestSize;
     struct {
-	ushortlist *http;
+	u_short http;
 	u_short icp;
     } Port;
     struct {
@@ -169,18 +171,24 @@ struct SquidConfig {
 	char *access;
 	char *store;
 	char *swap;
+#if USE_USERAGENT_LOG
 	char *useragent;
+#endif				/* USE_USERAGENT_LOG */
 	int rotateNumber;
 	int log_fqdn;
     } Log;
+#if USE_PROXY_AUTH
     struct {
 	char *File;
 	relist *IgnoreDomains;
     } proxyAuth;
+#endif				/* USE_PROXY_AUTH */
     char *adminEmail;
     char *effectiveUser;
     char *effectiveGroup;
     struct {
+	char *ftpget;
+	char *ftpget_opts;
 	char *dnsserver;
 	char *redirect;
 	char *pinger;
@@ -190,7 +198,9 @@ struct SquidConfig {
     int redirectChildren;
     int sourcePing;
     int commonLogFormat;
+#if LOG_FULL_HEADERS
     int logMimeHdrs;
+#endif				/* LOG_FULL_HEADERS */
     int identLookup;
     int neighborTimeout;
     int stallDelay;
@@ -205,8 +215,8 @@ struct SquidConfig {
     size_t appendDomainLen;
     char *volatile debugOptions;
     char *pidFilename;
-    char *mimeTablePathname;
     char *visibleHostname;
+    char *ftpUser;
     char *errHtmlText;
     struct {
 	char *host;
@@ -224,11 +234,16 @@ struct SquidConfig {
     } Addrs;
     int tcpRcvBufsz;
     int udpMaxHitObjsz;
+    wordlist *cache_dirs;
     wordlist *cache_stoplist;
     wordlist *hierarchy_stoplist;
+    wordlist *local_domain_list;
     wordlist *mcast_group_list;
+    wordlist *inside_firewall_list;
     wordlist *dns_testname_list;
     relist *cache_stop_relist;
+    ip_acl *local_ip_list;
+    ip_acl *firewall_ip_list;
     peer *sslProxy, *passProxy;
     struct {
 	int size;
@@ -248,6 +263,8 @@ struct SquidConfig {
 	int mcast_ttl;
 	struct sockaddr_in S;
     } vizHack;
+    int levelOneDirs;
+    int levelTwoDirs;
     struct {
 	int high;
 	int low;
@@ -260,22 +277,8 @@ struct SquidConfig {
 	int anonymizer;
 	int client_db;
 	int query_icmp;
+	int icp_hit_stale;
     } Options;
-    struct {
-	struct _acl_access *HTTP;
-	struct _acl_access *ICP;
-	struct _acl_access *MISS;
-	struct _acl_access *NeverDirect;
-	struct _acl_access *AlwaysDirect;
-    } accessList;
-    struct _acl_deny_info_list *denyInfoList;
-    struct {
-	size_t list_width;
-	int list_wrap;
-	char *icon_prefix;
-	char *icon_suffix;
-	char *anon_user;
-    } Ftp;
 };
 
 extern struct SquidConfig Config;
@@ -292,6 +295,7 @@ extern int httpd_accel_mode;
 
 extern int parseConfigFile _PARAMS((const char *file_name));
 extern int setCacheSwapMax _PARAMS((int size));
+extern ip_access_type ip_access_check _PARAMS((struct in_addr, const ip_acl *));
 extern void intlistDestroy _PARAMS((intlist **));
 extern void wordlistDestroy _PARAMS((wordlist **));
 extern void configFreeMemory _PARAMS((void));

@@ -88,7 +88,9 @@
 #if HAVE_GRP_H
 #include <grp.h>
 #endif
-#if HAVE_MALLOC_H && !defined(_SQUID_FREEBSD_) && !defined(_SQUID_NEXT_)
+#if HAVE_GNUMALLOC_H
+#include <gnumalloc.h>
+#elif HAVE_MALLOC_H && !defined(_SQUID_FREEBSD_) && !defined(_SQUID_NEXT_)
 #include <malloc.h>
 #endif
 #if HAVE_MEMORY_H
@@ -161,13 +163,13 @@
 #if HAVE_GETOPT_H
 #include <getopt.h>
 #endif
+
+#if defined(USE_POLL) && HAVE_POLL
 #if HAVE_POLL_H
 #include <poll.h>
-#endif
-#if HAVE_ASSERT_H
-#include <assert.h>
+#endif /* HAVE_POLL_H */
 #else
-#define assert(X) ((void)0)
+#undef USE_POLL
 #endif
 
 #ifdef __STDC__
@@ -233,11 +235,6 @@ typedef struct _aclCheck_t aclCheck_t;
 typedef struct _request request_t;
 typedef struct _MemObject MemObject;
 typedef struct _cachemgr_passwd cachemgr_passwd;
-typedef struct _fileMap fileMap;
-typedef struct _cwstate CommWriteStateData;
-typedef struct _ipcache_addrs ipcache_addrs;
-typedef struct _AccessLogEntry AccessLogEntry;
-typedef struct _HierarchyLogEntry HierarchyLogEntry;
 
 /* 32 bit integer compatability hack */
 #if SIZEOF_INT == 4
@@ -269,27 +266,23 @@ typedef unsigned long u_num32;
 #include <regex.h>
 #endif
 
-typedef void SIH _PARAMS((void *, int));	/* swap in */
-typedef int QS _PARAMS((const void *, const void *));	/* qsort */
-typedef void STCB _PARAMS((void *, char *, ssize_t));	/* store callback */
+typedef void (*SIH) (int, void *);	/* swap in */
+typedef int (*QS) (const void *, const void *);
+typedef void (*PIF) (int, void *);	/* store callback */
 
-#include "enums.h"
 #include "cache_cf.h"
-#include "fd.h"
 #include "comm.h"
-#include "disk.h"
 #include "debug.h"
 #include "fdstat.h"
+#include "disk.h"
+#include "filemap.h"
 #include "hash.h"
 #include "proto.h"		/* must go before neighbors.h */
-#include "peer_select.h"	/* must go before neighbors.h */
 #include "neighbors.h"		/* must go before url.h */
-#include "access_log.h"
 #include "url.h"
 #include "icp.h"
 #include "errorpage.h"		/* must go after icp.h */
 #include "dns.h"
-#include "event.h"
 #include "ipcache.h"
 #include "fqdncache.h"
 #include "mime.h"
@@ -297,12 +290,12 @@ typedef void STCB _PARAMS((void *, char *, ssize_t));	/* store callback */
 #include "stat.h"
 #include "stmem.h"
 #include "store.h"
-#include "store_dir.h"
 #include "tools.h"
 #include "http.h"
 #include "ftp.h"
 #include "gopher.h"
 #include "util.h"
+#include "event.h"
 #include "acl.h"
 #include "async_io.h"
 #include "redirect.h"
@@ -314,15 +307,9 @@ typedef void STCB _PARAMS((void *, char *, ssize_t));	/* store callback */
 #include "objcache.h"
 #include "refresh.h"
 #include "unlinkd.h"
-#include "multicast.h"
-#include "cbdata.h"
 
 #if !HAVE_TEMPNAM
 #include "tempnam.h"
-#endif
-
-#if !HAVE_SNPRINTF
-#include "snprintf.h"
 #endif
 
 extern void serverConnectionsClose _PARAMS((void));
@@ -331,13 +318,13 @@ extern void shut_down _PARAMS((int));
 
 extern time_t squid_starttime;	/* main.c */
 extern int do_reuse;		/* main.c */
-extern int HttpSockets[];	/* main.c */
-extern int NHttpSockets;	/* main.c */
+extern int theHttpConnection;	/* main.c */
 extern int theInIcpConnection;	/* main.c */
 extern int theOutIcpConnection;	/* main.c */
 extern int vizSock;
 extern volatile int shutdown_pending;	/* main.c */
-extern volatile int reconfigure_pending;	/* main.c */
+extern volatile int reread_pending;	/* main.c */
+extern int opt_unlink_on_reload;	/* main.c */
 extern int opt_reload_hit_only;	/* main.c */
 extern int opt_dns_tests;	/* main.c */
 extern int opt_foreground_rebuild;	/* main.c */
@@ -348,19 +335,18 @@ extern int opt_no_ipcache;	/* main.c */
 extern int vhost_mode;		/* main.c */
 extern int Squid_MaxFD;		/* main.c */
 extern int Biggest_FD;		/* main.c */
+extern int Number_FD;		/* main.c */
 extern int select_loops;	/* main.c */
 extern const char *const version_string;	/* main.c */
 extern const char *const appname;	/* main.c */
 extern struct in_addr local_addr;	/* main.c */
 extern struct in_addr theOutICPAddr;	/* main.c */
 extern const char *const localhost;
-extern struct in_addr no_addr;	/* main.c */
-extern struct in_addr any_addr;	/* main.c */
+extern struct in_addr no_addr;	/* comm.c */
 extern int opt_udp_hit_obj;	/* main.c */
 extern int opt_mem_pools;	/* main.c */
 extern int opt_forwarded_for;	/* main.c */
 extern int opt_accel_uses_host;	/* main.c */
-extern int configured_once;	/* main.c */
 extern char ThisCache[];	/* main.c */
 
 /* Prototypes and definitions which don't really deserve a separate
@@ -369,17 +355,23 @@ extern char ThisCache[];	/* main.c */
 #define  CONNECT_PORT        443
 
 extern void start_announce _PARAMS((void *unused));
-extern void sslStart _PARAMS((int fd, const char *, request_t *, int *sz));
-extern void waisStart _PARAMS((request_t *, StoreEntry *));
+extern int sslStart _PARAMS((int fd, const char *, request_t *, char *, size_t * sz));
+extern const char *storeToString _PARAMS((const StoreEntry *));
+extern int waisStart _PARAMS((int, const char *, method_t, char *, StoreEntry *));
 extern void storeDirClean _PARAMS((void *unused));
-extern void passStart _PARAMS((int, const char *, request_t *, int *));
-extern void identStart _PARAMS((int, ConnStateData *, IDCB * callback));
+extern int passStart _PARAMS((int fd,
+	const char *url,
+	request_t * request,
+	char *buf,
+	int buflen,
+	size_t * size_ptr));
+extern void identStart _PARAMS((int, icpStateData *,
+	void       (*callback) _PARAMS((void *))));
 extern int httpAnonAllowed _PARAMS((const char *line));
 extern int httpAnonDenied _PARAMS((const char *line));
 
 extern const char *const dash_str;
 extern const char *const null_string;
-extern const char *const w_space;
 
 #define OR(A,B) (A ? A : B)
 
