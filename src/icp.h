@@ -123,7 +123,7 @@ typedef enum {
     LOG_UDP_MISS,		/* 13 */
     LOG_UDP_DENIED,		/* 14 */
     LOG_UDP_INVALID,		/* 15 */
-    LOG_UDP_MISSNOFETCH,	/* 16 */
+    LOG_UDP_MISS_NOFETCH,	/* 16 */
     ERR_READ_TIMEOUT,		/* 17 */
     ERR_LIFETIME_EXP,		/* 18 */
     ERR_NO_CLIENTS_BIG_OBJ,	/* 19 */
@@ -152,7 +152,9 @@ typedef struct wwd {
     void *msg;
     size_t len;
     struct wwd *next;
+#ifndef LESS_TIMING
     struct timeval start;
+#endif
     log_type logcode;
     protocol_t proto;
 } icpUdpData;
@@ -187,7 +189,8 @@ typedef struct iwd {
     struct timeval start;
     int accel;
     int size;			/* hack for CONNECT which doesnt use sentry */
-    PF aclHandler;
+    aclCheck_t *aclChecklist;
+    void (*aclHandler) (struct iwd *, int answer);
     float http_ver;
     struct {
 	int fd;
@@ -195,6 +198,8 @@ typedef struct iwd {
 	void (*callback) _PARAMS((void *));
 	int state;
     } ident;
+    int ip_lookup_pending;
+    int redirect_state;
 } icpStateData;
 
 extern void *icpCreateMessage _PARAMS((icp_opcode opcode,

@@ -127,7 +127,8 @@ struct _iostats IOStats;
 const char *const open_bracket = "{\n";
 const char *const close_bracket = "}\n";
 
-extern char *diskFileName _PARAMS((int));
+extern int unlinkd_count;
+extern int fileno_stack_count;
 
 /* LOCALS */
 static const char *describeStatuses _PARAMS((const StoreEntry *));
@@ -326,8 +327,10 @@ describeFlags(const StoreEntry * entry)
     int flags = (int) entry->flag;
     char *t;
     buf[0] = '\0';
+#ifdef OLD_CODE
     if (BIT_TEST(flags, IP_LOOKUP_PENDING))
 	strcat(buf, "IP,");
+#endif
     if (BIT_TEST(flags, DELETE_BEHIND))
 	strcat(buf, "DB,");
     if (BIT_TEST(flags, CLIENT_ABORT_REQUEST))
@@ -488,7 +491,7 @@ log_get_start(const cacheinfo * obj, StoreEntry * sentry)
 	storeComplete(sentry);
 	return;
     }
-    fd = file_open(obj->logfilename, NULL, O_RDONLY, NULL, NULL);
+    fd = file_open(obj->logfilename, NULL, O_RDONLY);
     if (fd < 0) {
 	debug(50, 0, "Cannot open logfile: %s: %s\n",
 	    obj->logfilename, xstrerror());
@@ -535,7 +538,7 @@ squid_get_start(const cacheinfo * obj, StoreEntry * sentry)
 
     data = xcalloc(1, sizeof(squid_read_data_t));
     data->sentry = sentry;
-    data->fd = file_open(ConfigFile, NULL, O_RDONLY, NULL, NULL);
+    data->fd = file_open(ConfigFile, NULL, O_RDONLY);
     storeAppendPrintf(sentry, open_bracket);
     file_walk(data->fd, (FILE_WALK_HD) squidReadEndHandler, (void *) data,
 	(FILE_WALK_LHD) squidReadHandler, (void *) data);
@@ -606,9 +609,9 @@ server_list(const cacheinfo * obj, StoreEntry * sentry)
     storeAppendPrintf(sentry, close_bracket);
 }
 
-#ifdef XMALLOC_STATISTICS
+#if XMALLOC_STATISTICS
 static void
-info_get_mallstat(int size, int number, StoreEntry * sentry)
+info_get_mallstat(int size, number, StoreEntry * sentry)
 {
     if (number > 0)
 	storeAppendPrintf(sentry, "{\t%d = %d}\n", size, number);
@@ -631,6 +634,7 @@ statFiledescriptors(StoreEntry * sentry)
     char *s = NULL;
     int lft;
     int to;
+    FD_ENTRY *f;
 
     storeAppendPrintf(sentry, open_bracket);
     storeAppendPrintf(sentry, "{Active file descriptors:}\n");
@@ -643,6 +647,7 @@ statFiledescriptors(StoreEntry * sentry)
 	"Description");
     storeAppendPrintf(sentry, "{---- ------ ---- ---- --------------------- ------------------------------}\n");
     for (i = 0; i < Squid_MaxFD; i++) {
+	f = &fd_table[i];
 	if (!fdstat_isopen(i))
 	    continue;
 	j = fdstatGetType(i);
@@ -651,9 +656,9 @@ statFiledescriptors(StoreEntry * sentry)
 	    fdstatTypeStr[j]);
 	switch (j) {
 	case FD_SOCKET:
-	    if ((lft = comm_get_fd_lifetime(i)) < 0)
+	    if ((lft = f->lifetime) < 0)
 		lft = 0;
-	    to = comm_get_fd_timeout(i);
+	    to = f->timeout_time;
 	    if (lft > 0)
 		lft = (lft - squid_curtime) / 60;
 	    if (to > 0)
@@ -701,6 +706,7 @@ memoryAccounted(void)
 	meta_data.url_strings +
 	meta_data.netdb_addrs * sizeof(netdbEntry) +
 	meta_data.netdb_hosts * sizeof(struct _net_db_name) +
+                 meta_data.netdb_peers * sizeof(struct _net_db_peer) +
                  meta_data.client_info * client_info_sz +
                  meta_data.misc;
 }
@@ -750,9 +756,12 @@ info_get(const cacheinfo * obj, StoreEntry * sentry)
     storeAppendPrintf(sentry, "{\tNumber of UDP connections:\t%lu}\n",
 	nudpconn);
 
+
     f = (float) (squid_curtime - squid_starttime);
     storeAppendPrintf(sentry, "{\tConnections per hour:\t%.1f}\n",
 	f == 0.0 ? 0.0 : ((ntcpconn + nudpconn) / (f / 3600.0)));
+    storeAppendPrintf(sentry, "{\tSelect loop called: %d times, %0.3f ms avg}\n",
+	select_loops, 1000.0 * f / select_loops);
 
     storeAppendPrintf(sentry, "{Cache information for %s:}\n",
 	appname);
@@ -762,6 +771,10 @@ info_get(const cacheinfo * obj, StoreEntry * sentry)
 	store_mem_size >> 10);
     storeAppendPrintf(sentry, "{\tStorage LRU Expiration Age:\t%6.2f days}\n",
 	(double) storeExpiredReferenceAge() / 86400.0);
+    storeAppendPrintf(sentry, "{\tRequests given to unlinkd:\t%d}\n",
+	unlinkd_count);
+    storeAppendPrintf(sentry, "{\tUnused fileno stack count:\t%d}\n",
+	fileno_stack_count);
 
 #if HAVE_GETRUSAGE && defined(RUSAGE_SELF)
     storeAppendPrintf(sentry, "{Resource usage for %s:}\n", appname);
@@ -831,7 +844,7 @@ info_get(const cacheinfo * obj, StoreEntry * sentry)
     storeAppendPrintf(sentry, "{\tMax number of file desc available:    %4d}\n",
 	Squid_MaxFD);
     storeAppendPrintf(sentry, "{\tLargest file desc currently in use:   %4d}\n",
-	fdstat_biggest_fd());
+	Biggest_FD);
     storeAppendPrintf(sentry, "{\tAvailable number of file descriptors: %4d}\n",
 	fdstat_are_n_free_fd(0));
     storeAppendPrintf(sentry, "{\tReserved number of file descriptors:  %4d}\n",
@@ -915,6 +928,12 @@ info_get(const cacheinfo * obj, StoreEntry * sentry)
 	meta_data.netdb_hosts,
 	(int) sizeof(struct _net_db_name),
 	             (int) (meta_data.netdb_hosts * sizeof(struct _net_db_name) >> 10));
+
+    storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB}\n",
+	"NetDB Peer Entries",
+	meta_data.netdb_peers,
+	(int) sizeof(struct _net_db_peer),
+	             (int) (meta_data.netdb_peers * sizeof(struct _net_db_peer) >> 10));
 
     storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB}\n",
 	"ClientDB Entries",
@@ -1078,10 +1097,13 @@ log_append(const cacheinfo * obj,
     const char *client = NULL;
     hier_code hier_code = HIER_NONE;
     const char *hier_host = dash_str;
+    int hier_timeout = 0;
+#ifdef LOG_ICP_NUMBERS
     int ns = 0;
     int ne = 0;
     int nr = 0;
     int tt = 0;
+#endif
 
     if (obj->logfile_status != LOG_ENABLE)
 	return;
@@ -1104,24 +1126,31 @@ log_append(const cacheinfo * obj,
     if (hierData) {
 	hier_code = hierData->code;
 	hier_host = hierData->host ? hierData->host : dash_str;
-	if (hierData->icp.start.tv_sec && hierData->icp.stop.tv_sec)
-	    tt = tvSubMsec(hierData->icp.start, hierData->icp.stop);
-	ns = hierData->icp.n_sent;
-	ne = hierData->icp.n_replies_expected;
-	nr = hierData->icp.n_recv;
+	hier_timeout = hierData->timeout;
+#ifdef LOG_ICP_NUMBERS
+	tt = hierData->delay;
+	ns = hierData->n_sent;
+	ne = hierData->n_expect;
+	nr = hierData->n_recv;
+#endif
     }
     if (Config.commonLogFormat)
-	sprintf(tmp, "%s %s - [%s] \"%s %s\" %s:%s %d\n",
+	sprintf(tmp, "%s %s - [%s] \"%s %s\" %s:%s%s %d\n",
 	    client,
 	    ident,
 	    mkhttpdlogtime(&squid_curtime),
 	    method,
 	    url,
 	    action,
+	    hier_timeout ? "TIMEOUT_" : null_string,
 	    hier_strings[hier_code],
 	    size);
     else
-	sprintf(tmp, "%9d.%03d %6d %s %s/%03d %d %s %s %s %s/%s %d/%d/%d/%d %s\n",
+#ifdef LOG_ICP_NUMBERS
+	sprintf(tmp, "%9d.%03d %6d %s %s/%03d %d %s %s %s %s%s/%s/%d/%d/%d/%d %s\n",
+#else
+	sprintf(tmp, "%9d.%03d %6d %s %s/%03d %d %s %s %s %s%s/%s %s\n",
+#endif
 	    (int) current_time.tv_sec,
 	    (int) current_time.tv_usec / 1000,
 	    msec,
@@ -1132,9 +1161,12 @@ log_append(const cacheinfo * obj,
 	    method,
 	    url,
 	    ident,
+	    hier_timeout ? "TIMEOUT_" : null_string,
 	    hier_strings[hier_code],
 	    hier_host,
+#ifdef LOG_ICP_NUMBERS
 	    ns, ne, nr, tt,
+#endif
 	    content_type);
 #if LOG_FULL_HEADERS
     if (Config.logMimeHdrs) {
@@ -1167,7 +1199,7 @@ log_enable(cacheinfo * obj, StoreEntry * sentry)
 	obj->logfile_status = LOG_ENABLE;
 
 	/* open the logfile */
-	obj->logfile_fd = file_open(obj->logfilename, NULL, O_WRONLY | O_CREAT, NULL, NULL);
+	obj->logfile_fd = file_open(obj->logfilename, NULL, O_WRONLY | O_CREAT);
 	if (obj->logfile_fd == DISK_ERROR) {
 	    debug(18, 0, "Cannot open logfile: %s\n", obj->logfilename);
 	    obj->logfile_status = LOG_DISABLE;
@@ -1200,7 +1232,7 @@ log_clear(cacheinfo * obj, StoreEntry * sentry)
     unlink(obj->logfilename);
 
     /* reopen it anyway */
-    obj->logfile_fd = file_open(obj->logfilename, NULL, O_WRONLY | O_CREAT, NULL, NULL);
+    obj->logfile_fd = file_open(obj->logfilename, NULL, O_WRONLY | O_CREAT);
     if (obj->logfile_fd == DISK_ERROR) {
 	debug(18, 0, "Cannot open logfile: %s\n", obj->logfilename);
 	obj->logfile_status = LOG_DISABLE;
@@ -1293,7 +1325,7 @@ stat_init(cacheinfo ** object, const char *logfilename)
     if (logfilename) {
 	memset(obj->logfilename, '\0', SQUID_MAXPATHLEN);
 	xstrncpy(obj->logfilename, logfilename, SQUID_MAXPATHLEN);
-	obj->logfile_fd = file_open(obj->logfilename, NULL, O_WRONLY | O_CREAT, NULL, NULL);
+	obj->logfile_fd = file_open(obj->logfilename, NULL, O_WRONLY | O_CREAT);
 	if (obj->logfile_fd == DISK_ERROR) {
 	    debug(50, 0, "%s: %s\n", obj->logfilename, xstrerror());
 	    fatal("Cannot open logfile.");
@@ -1379,7 +1411,7 @@ stat_rotate_log(void)
     /* Close and reopen the log.  It may have been renamed "manually"
      * before HUP'ing us. */
     file_close(HTTPCacheInfo->logfile_fd);
-    HTTPCacheInfo->logfile_fd = file_open(fname, NULL, O_WRONLY | O_CREAT, NULL, NULL);
+    HTTPCacheInfo->logfile_fd = file_open(fname, NULL, O_WRONLY | O_CREAT);
     if (HTTPCacheInfo->logfile_fd == DISK_ERROR) {
 	debug(18, 0, "stat_rotate_log: Cannot open logfile: %s\n", fname);
 	HTTPCacheInfo->logfile_status = LOG_DISABLE;
