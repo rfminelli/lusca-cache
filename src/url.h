@@ -34,12 +34,12 @@
 #define MAX_LOGIN_SZ  128
 
 typedef enum {
-    METHOD_NONE,		/* 000 */
-    METHOD_GET,			/* 001 */
-    METHOD_POST,		/* 010 */
-    METHOD_PUT,			/* 011 */
-    METHOD_HEAD,		/* 100 */
-    METHOD_CONNECT,		/* 101 */
+    METHOD_NONE,
+    METHOD_GET,
+    METHOD_POST,
+    METHOD_PUT,
+    METHOD_HEAD,
+    METHOD_CONNECT
 } method_t;
 
 extern char *RequestMethodStr[];
@@ -64,7 +64,7 @@ struct _request {
     int port;
     char urlpath[MAX_URL + 1];
     int link_count;		/* free when zero */
-    struct _hierarchyLogData hierarchy;
+    hier_code hierarchy_code;
 };
 
 extern char *url_convert_hex _PARAMS((char *org_url, int allocate));

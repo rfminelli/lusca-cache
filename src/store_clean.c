@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -62,16 +61,15 @@ void storeDirClean()
     static int index = 0;
     DIR *dp = NULL;
     struct dirent *de = NULL;
-    LOCAL_ARRAY(char, p1, MAXPATHLEN + 1);
-    LOCAL_ARRAY(char, p2, MAXPATHLEN + 1);
+    static char p2[MAXPATHLEN + 1];
+    static char p1[MAXPATHLEN + 1];
     int files[20];
     int fileno;
     int n = 0;
     int k = 0;
-    sprintf(p1, "%s/%02X/%02X",
+    sprintf(p1, "%s/%02d",
 	swappath(index),
-	(index / ncache_dirs) % SWAP_DIRECTORIES_L1,
-	(index / ncache_dirs) / SWAP_DIRECTORIES_L1 % SWAP_DIRECTORIES_L2);
+	(index / ncache_dirs) % SWAP_DIRECTORIES);
     debug(36, 3, "storeDirClean: Cleaning directory %s\n", p1);
     dp = opendir(p1);
     if (dp == NULL) {
@@ -79,7 +77,7 @@ void storeDirClean()
 	fatal_dump(NULL);
     }
     while ((de = readdir(dp)) && k < 20) {
-	if (sscanf(de->d_name, "%X", &fileno) != 1)
+	if (sscanf(de->d_name, "%d", &fileno) != 1)
 	    continue;
 	if (file_map_bit_test(fileno))
 	    continue;
@@ -94,7 +92,7 @@ void storeDirClean()
 	k = 10;
     for (n = 0; n < k; n++) {
 	debug(36, 3, "storeDirClean: Cleaning file %d\n", files[n]);
-	sprintf(p2, "%s/%08X", p1, files[n]);
+	sprintf(p2, "%s/%d", p1, files[n]);
 	safeunlink(p2, 0);
     }
     debug(36, 1, "Cleaned %d unused files from %s\n", k, p1);

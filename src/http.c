@@ -116,18 +116,6 @@ struct {
     int ctype;
 } ReplyHeaderStats;
 
-static int httpStateFree _PARAMS((int fd, HttpStateData *));
-static void httpReadReplyTimeout _PARAMS((int fd, HttpStateData *));
-static void httpLifetimeExpire _PARAMS((int fd, HttpStateData *));
-static void httpMakePublic _PARAMS((StoreEntry *));
-static void httpMakePrivate _PARAMS((StoreEntry *));
-static void httpCacheNegatively _PARAMS((StoreEntry *));
-static void httpReadReply _PARAMS((int fd, HttpStateData *));
-static void httpSendComplete _PARAMS((int fd, char *, int, int, void *));
-static void httpSendRequest _PARAMS((int fd, HttpStateData *));
-static void httpConnInProgress _PARAMS((int fd, HttpStateData *));
-static int httpConnect _PARAMS((int fd, struct hostent *, void *));
-
 static int httpStateFree(fd, httpState)
      int fd;
      HttpStateData *httpState;
@@ -139,6 +127,12 @@ static int httpStateFree(fd, httpState)
 	put_free_8k_page(httpState->reply_hdr);
 	httpState->reply_hdr = NULL;
     }
+    if (httpState->reqbuf && httpState->buf_type == BUF_TYPE_8K) {
+	put_free_8k_page(httpState->reqbuf);
+	httpState->reqbuf = NULL;
+    } else {
+	safe_free(httpState->reqbuf)
+    }
     requestUnlink(httpState->request);
     xfree(httpState);
     return 0;
@@ -148,9 +142,18 @@ int httpCachable(url, method)
      char *url;
      int method;
 {
+    wordlist *p = NULL;
+
     /* GET and HEAD are cachable. Others are not. */
     if (method != METHOD_GET && method != METHOD_HEAD)
 	return 0;
+
+    /* scan stop list */
+    for (p = getHttpStoplist(); p; p = p->next) {
+	if (strstr(url, p->key))
+	    return 0;
+    }
+
     /* else cachable */
     return 1;
 }
@@ -188,7 +191,7 @@ static void httpLifetimeExpire(fd, httpState)
 static void httpMakePublic(entry)
      StoreEntry *entry;
 {
-    ttlSet(entry);
+    entry->expires = squid_curtime + ttlSet(entry);
     if (BIT_TEST(entry->flag, ENTRY_CACHABLE))
 	storeSetPublicKey(entry);
 }
@@ -207,9 +210,10 @@ static void httpMakePrivate(entry)
 static void httpCacheNegatively(entry)
      StoreEntry *entry;
 {
-    storeNegativeCache(entry);
+    entry->expires = squid_curtime + getNegativeTTL();
     if (BIT_TEST(entry->flag, ENTRY_CACHABLE))
 	storeSetPublicKey(entry);
+    /* XXX: mark object "not to store on disk"? */
 }
 
 
@@ -264,6 +268,15 @@ void httpParseHeaders(buf, reply)
 		t++;
 		strncpy(reply->last_modified, t, HTTP_REPLY_FIELD_SZ - 1);
 		ReplyHeaderStats.lm++;
+	    }
+	} else if (!strncasecmp(t, "Cache-Control:", 14)) {
+	    if ((t = strtok(NULL, w_space))) {
+		if (!strncasecmp(t, "private", 7))
+		    reply->cache_control |= HTTP_CC_PRIVATE;
+		else if (!strncasecmp(t, "cachable", 8))
+		    reply->cache_control |= HTTP_CC_CACHABLE;
+		else if (!strncasecmp(t, "no-cache", 8))
+		    reply->cache_control |= HTTP_CC_NOCACHE;
 	    }
 	}
 	t = strtok(NULL, "\n");
@@ -335,7 +348,11 @@ void httpProcessReplyHeader(httpState, buf, size)
 	case 301:		/* Moved Permanently */
 	case 410:		/* Gone */
 	    /* don't cache objects from neighbors w/o LMT, Date, or Expires */
-	    if (*reply->date)
+	    if (BIT_SET(reply->cache_control, HTTP_CC_PRIVATE))
+		httpMakePrivate(entry);
+	    else if (BIT_SET(reply->cache_control, HTTP_CC_NOCACHE))
+		httpMakePrivate(entry);
+	    else if (*reply->date)
 		httpMakePublic(entry);
 	    else if (*reply->last_modified)
 		httpMakePublic(entry);
@@ -397,7 +414,7 @@ static void httpReadReply(fd, httpState)
      int fd;
      HttpStateData *httpState;
 {
-    LOCAL_ARRAY(char, buf, SQUID_TCP_SO_RCVBUF);
+    static char buf[SQUID_TCP_SO_RCVBUF];
     int len;
     int bin;
     int clen;
@@ -438,15 +455,15 @@ static void httpReadReply(fd, httpState)
 	    (time_t) 0);
 	comm_set_fd_lifetime(fd, 3600);		/* limit during deferring */
 	/* dont try reading again for a while */
-	comm_set_stall(fd, Config.stallDelay);
+	comm_set_stall(fd, getStallDelay());
 	return;
     }
     errno = 0;
+    IOStats.Http.reads++;
     len = read(fd, buf, SQUID_TCP_SO_RCVBUF);
     debug(11, 5, "httpReadReply: FD %d: len %d.\n", fd, len);
     comm_set_fd_lifetime(fd, 86400);	/* extend after good read */
     if (len > 0) {
-	IOStats.Http.reads++;
 	for (clen = len - 1, bin = 0; clen; bin++)
 	    clen >>= 1;
 	IOStats.Http.read_hist[bin]++;
@@ -460,7 +477,7 @@ static void httpReadReply(fd, httpState)
 	    comm_set_select_handler(fd, COMM_SELECT_READ,
 		(PF) httpReadReply, (void *) httpState);
 	    comm_set_select_handler_plus_timeout(fd, COMM_SELECT_TIMEOUT,
-		(PF) httpReadReplyTimeout, (void *) httpState, Config.readTimeout);
+		(PF) httpReadReplyTimeout, (void *) httpState, getReadTimeout());
 	} else {
 	    BIT_RESET(entry->flag, ENTRY_CACHABLE);
 	    storeReleaseRequest(entry);
@@ -476,7 +493,7 @@ static void httpReadReply(fd, httpState)
 	/* Connection closed; retrieval done. */
 	storeComplete(entry);
 	comm_close(fd);
-    } else if ((entry->mem_obj->e_current_len + len) > Config.Http.maxObjSize &&
+    } else if ((entry->mem_obj->e_current_len + len) > getHttpMax() &&
 	!(entry->flag & DELETE_BEHIND)) {
 	/*  accept data, but start to delete behind it */
 	storeStartDeleteBehind(entry);
@@ -488,16 +505,16 @@ static void httpReadReply(fd, httpState)
 	comm_set_select_handler_plus_timeout(fd,
 	    COMM_SELECT_TIMEOUT,
 	    (PF) httpReadReplyTimeout,
-	    (void *) httpState, Config.readTimeout);
+	    (void *) httpState, getReadTimeout());
     } else if (entry->flag & CLIENT_ABORT_REQUEST) {
 	/* append the last bit of info we get */
 	storeAppend(entry, buf, len);
 	squid_error_entry(entry, ERR_CLIENT_ABORT, NULL);
 	comm_close(fd);
     } else {
+	storeAppend(entry, buf, len);
 	if (httpState->reply_hdr_state < 2 && len > 0)
 	    httpProcessReplyHeader(httpState, buf, len);
-	storeAppend(entry, buf, len);
 	comm_set_select_handler(fd,
 	    COMM_SELECT_READ,
 	    (PF) httpReadReply,
@@ -506,7 +523,7 @@ static void httpReadReply(fd, httpState)
 	    COMM_SELECT_TIMEOUT,
 	    (PF) httpReadReplyTimeout,
 	    (void *) httpState,
-	    Config.readTimeout);
+	    getReadTimeout());
     }
 }
 
@@ -526,6 +543,13 @@ static void httpSendComplete(fd, buf, size, errflag, data)
     debug(11, 5, "httpSendComplete: FD %d: size %d: errflag %d.\n",
 	fd, size, errflag);
 
+    if (httpState->reqbuf && httpState->buf_type == BUF_TYPE_8K) {
+	put_free_8k_page(httpState->reqbuf);
+	httpState->reqbuf = NULL;
+    } else {
+	safe_free(httpState->reqbuf);
+    }
+
     if (errflag) {
 	squid_error_entry(entry, ERR_CONNECT_FAIL, xstrerror());
 	comm_close(fd);
@@ -540,7 +564,7 @@ static void httpSendComplete(fd, buf, size, errflag, data)
 	    COMM_SELECT_TIMEOUT,
 	    (PF) httpReadReplyTimeout,
 	    (void *) httpState,
-	    Config.readTimeout);
+	    getReadTimeout());
 	comm_set_fd_lifetime(fd, 86400);	/* extend lifetime */
     }
 }
@@ -556,13 +580,12 @@ static void httpSendRequest(fd, httpState)
     char *t = NULL;
     char *post_buf = NULL;
     static char *crlf = "\r\n";
+    static char *VIA_PROXY_TEXT = "via Squid Cache version";
     int len = 0;
     int buflen;
     int cfd = -1;
     request_t *req = httpState->request;
     char *Method = RequestMethodStr[req->method];
-    int buftype = 0;
-    StoreEntry *entry = httpState->entry;
 
     debug(11, 5, "httpSendRequest: FD %d: httpState %p.\n", fd, httpState);
     buflen = strlen(Method) + strlen(req->urlpath);
@@ -577,13 +600,14 @@ static void httpSendRequest(fd, httpState)
 	}
     }
     if (buflen < DISK_PAGE_SIZE) {
-	buf = get_free_8k_page();
-	memset(buf, '\0', buflen);
-	buftype = BUF_TYPE_8K;
+	httpState->reqbuf = get_free_8k_page();
+	memset(httpState->reqbuf, '\0', buflen);
+	httpState->buf_type = BUF_TYPE_8K;
     } else {
-	buf = xcalloc(buflen, 1);
-	buftype = BUF_TYPE_MALLOC;
+	httpState->reqbuf = xcalloc(buflen, 1);
+	httpState->buf_type = BUF_TYPE_MALLOC;
     }
+    buf = httpState->reqbuf;
 
     sprintf(buf, "%s %s HTTP/1.0\r\n",
 	Method,
@@ -592,7 +616,12 @@ static void httpSendRequest(fd, httpState)
     if (httpState->req_hdr) {	/* we have to parse the request header */
 	xbuf = xstrdup(httpState->req_hdr);
 	for (t = strtok(xbuf, crlf); t; t = strtok(NULL, crlf)) {
-	    if (strncasecmp(t, "Connection:", 11) == 0)
+	    if (strncasecmp(t, "User-Agent:", 11) == 0) {
+		ybuf = (char *) get_free_4k_page();
+		memset(ybuf, '\0', SM_PAGE_SIZE);
+		sprintf(ybuf, "%s %s %s", t, VIA_PROXY_TEXT, version_string);
+		t = ybuf;
+	    } else if (strncasecmp(t, "Connection:", 11) == 0)
 		continue;
 	    if (len + (int) strlen(t) > buflen - 10)
 		continue;
@@ -601,31 +630,25 @@ static void httpSendRequest(fd, httpState)
 	    len += strlen(t) + 2;
 	}
 	xfree(xbuf);
+	if (ybuf) {
+	    put_free_4k_page(ybuf);
+	    ybuf = NULL;
+	}
     }
     /* Add Forwarded: header */
     ybuf = get_free_4k_page();
-    if (entry->mem_obj)
-	cfd = entry->mem_obj->fd_of_first_client;
-    if (cfd < 0) {
-	sprintf(ybuf, "%s\r\n", ForwardedBy);
-    } else {
+    if (httpState->entry->mem_obj)
+	cfd = httpState->entry->mem_obj->fd_of_first_client;
+    if (cfd > -1 && opt_forwarded_for) {
 	sprintf(ybuf, "%s for %s\r\n", ForwardedBy, fd_table[cfd].ipaddr);
+    } else {
+	sprintf(ybuf, "%s\r\n", ForwardedBy);
     }
     strcat(buf, ybuf);
     len += strlen(ybuf);
     put_free_4k_page(ybuf);
     ybuf = NULL;
 
-    /* Add IMS header */
-    if (entry->lastmod && req->method == METHOD_GET) {
-	debug(11, 3, "httpSendRequest: Adding IMS: %s\r\n",
-	    mkrfc850(entry->lastmod));
-	ybuf = get_free_4k_page();
-	sprintf(ybuf, "If-Modified-Since: %s\r\n", mkrfc850(entry->lastmod));
-	strcat(buf, ybuf);
-	len += strlen(ybuf);
-	put_free_4k_page(ybuf);
-    }
     strcat(buf, crlf);
     len += 2;
     if (post_buf) {
@@ -639,8 +662,7 @@ static void httpSendRequest(fd, httpState)
 	len,
 	30,
 	httpSendComplete,
-	httpState,
-	buftype == BUF_TYPE_8K ? put_free_8k_page : xfree);
+	httpState);
 }
 
 static void httpConnInProgress(fd, httpState)
@@ -670,8 +692,6 @@ static void httpConnInProgress(fd, httpState)
 	}
     }
     /* Call the real write handler, now that we're fully connected */
-    if (opt_no_ipcache)
-	ipcacheInvalidate(entry->mem_obj->request->host);
     comm_set_select_handler(fd, COMM_SELECT_WRITE,
 	(PF) httpSendRequest, (void *) httpState);
 }
@@ -682,6 +702,7 @@ int proxyhttpStart(e, url, entry)
      StoreEntry *entry;
 {
     int sock;
+    int status;
     HttpStateData *httpState = NULL;
     request_t *request = NULL;
 
@@ -694,7 +715,7 @@ int proxyhttpStart(e, url, entry)
 	storeStartDeleteBehind(entry);
 
     /* Create socket. */
-    sock = comm_open(COMM_NONBLOCKING, Config.Addrs.tcp_outgoing, 0, url);
+    sock = comm_open(COMM_NONBLOCKING, getTcpOutgoingAddr(), 0, url);
     if (sock == COMM_ERROR) {
 	debug(11, 4, "proxyhttpStart: Failed because we're out of sockets.\n");
 	squid_error_entry(entry, ERR_NO_FDS, xstrerror());
@@ -715,55 +736,38 @@ int proxyhttpStart(e, url, entry)
     strncpy(request->host, e->host, SQUIDHOSTNAMELEN);
     request->port = e->http_port;
     strncpy(request->urlpath, url, MAX_URL);
-    ipcache_nbgethostbyname(request->host,
-	sock,
-	(IPH) httpConnect,
-	httpState);
-    return COMM_OK;
-}
 
-static int httpConnect(fd, hp, data)
-     int fd;
-     struct hostent *hp;
-     void *data;
-{
-    HttpStateData *httpState = data;
-    request_t *request = httpState->request;
-    StoreEntry *entry = httpState->entry;
-    edge *e = NULL;
-    int status;
-    if (hp == NULL) {
-	debug(11, 4, "httpConnect: Unknown host: %s\n", request->host);
+    /* check if IP is already in cache. It must be. 
+     * It should be done before this route is called. 
+     * Otherwise, we cannot check return code for connect. */
+    if (!ipcache_gethostbyname(request->host, IP_BLOCKING_LOOKUP)) {
+	debug(11, 4, "proxyhttpstart: Called without IP entry in ipcache. OR lookup failed.\n");
 	squid_error_entry(entry, ERR_DNS_FAIL, dns_error_message);
-	comm_close(fd);
+	comm_close(sock);
 	return COMM_ERROR;
     }
     /* Open connection. */
-    if ((status = comm_connect(fd, request->host, request->port))) {
+    if ((status = comm_connect(sock, request->host, request->port))) {
 	if (status != EINPROGRESS) {
 	    squid_error_entry(entry, ERR_CONNECT_FAIL, xstrerror());
-	    comm_close(fd);
-	    if ((e = httpState->neighbor)) {
-		e->last_fail_time = squid_curtime;
-		e->neighbor_up = 0;
-	    }
+	    comm_close(sock);
+	    e->last_fail_time = squid_curtime;
+	    e->neighbor_up = 0;
 	    return COMM_ERROR;
 	} else {
-	    debug(11, 5, "proxyhttpStart: FD %d: EINPROGRESS.\n", fd);
-	    comm_set_select_handler(fd, COMM_SELECT_LIFETIME,
+	    debug(11, 5, "proxyhttpStart: FD %d: EINPROGRESS.\n", sock);
+	    comm_set_select_handler(sock, COMM_SELECT_LIFETIME,
 		(PF) httpLifetimeExpire, (void *) httpState);
-	    comm_set_select_handler(fd, COMM_SELECT_WRITE,
+	    comm_set_select_handler(sock, COMM_SELECT_WRITE,
 		(PF) httpConnInProgress, (void *) httpState);
 	    return COMM_OK;
 	}
     }
     /* Install connection complete handler. */
-    if (opt_no_ipcache)
-	ipcacheInvalidate(request->host);
-    fd_note(fd, entry->url);
-    comm_set_select_handler(fd, COMM_SELECT_LIFETIME,
+    fd_note(sock, entry->url);
+    comm_set_select_handler(sock, COMM_SELECT_LIFETIME,
 	(PF) httpLifetimeExpire, (void *) httpState);
-    comm_set_select_handler(fd, COMM_SELECT_WRITE,
+    comm_set_select_handler(sock, COMM_SELECT_WRITE,
 	(PF) httpSendRequest, (void *) httpState);
     return COMM_OK;
 }
@@ -776,7 +780,7 @@ int httpStart(unusedfd, url, request, req_hdr, entry)
      StoreEntry *entry;
 {
     /* Create state structure. */
-    int sock;
+    int sock, status;
     HttpStateData *httpState = NULL;
 
     debug(11, 3, "httpStart: \"%s %s\"\n",
@@ -784,7 +788,7 @@ int httpStart(unusedfd, url, request, req_hdr, entry)
     debug(11, 10, "httpStart: req_hdr '%s'\n", req_hdr);
 
     /* Create socket. */
-    sock = comm_open(COMM_NONBLOCKING, Config.Addrs.tcp_outgoing, 0, url);
+    sock = comm_open(COMM_NONBLOCKING, getTcpOutgoingAddr(), 0, url);
     if (sock == COMM_ERROR) {
 	debug(11, 4, "httpStart: Failed because we're out of sockets.\n");
 	squid_error_entry(entry, ERR_NO_FDS, xstrerror());
@@ -797,11 +801,37 @@ int httpStart(unusedfd, url, request, req_hdr, entry)
     comm_add_close_handler(sock,
 	(PF) httpStateFree,
 	(void *) httpState);
-    ipcache_nbgethostbyname(request->host,
-	sock,
-	httpConnect,
-	httpState);
 
+    /* check if IP is already in cache. It must be. 
+     * It should be done before this route is called. 
+     * Otherwise, we cannot check return code for connect. */
+    if (!ipcache_gethostbyname(request->host, 0)) {
+	debug(11, 4, "httpstart: Called without IP entry in ipcache. OR lookup failed.\n");
+	squid_error_entry(entry, ERR_DNS_FAIL, dns_error_message);
+	comm_close(sock);
+	return COMM_ERROR;
+    }
+    /* Open connection. */
+    if ((status = comm_connect(sock, request->host, request->port))) {
+	if (status != EINPROGRESS) {
+	    squid_error_entry(entry, ERR_CONNECT_FAIL, xstrerror());
+	    comm_close(sock);
+	    return COMM_ERROR;
+	} else {
+	    debug(11, 5, "httpStart: FD %d: EINPROGRESS.\n", sock);
+	    comm_set_select_handler(sock, COMM_SELECT_LIFETIME,
+		(PF) httpLifetimeExpire, (void *) httpState);
+	    comm_set_select_handler(sock, COMM_SELECT_WRITE,
+		(PF) httpConnInProgress, (void *) httpState);
+	    return COMM_OK;
+	}
+    }
+    /* Install connection complete handler. */
+    fd_note(sock, entry->url);
+    comm_set_select_handler(sock, COMM_SELECT_LIFETIME,
+	(PF) httpLifetimeExpire, (void *) httpState);
+    comm_set_select_handler(sock, COMM_SELECT_WRITE,
+	(PF) httpSendRequest, (void *) httpState);
     return COMM_OK;
 }
 
