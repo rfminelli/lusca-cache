@@ -1,0 +1,84 @@
+
+/*
+ *  $Id$
+ */
+
+#ifndef _CONFIG_H_
+#define _CONFIG_H_
+
+#include "autoconf.h"	/* For GNU autoconf variables */
+#include "version.h"
+
+/*
+ *  XFER_TIMEOUT is the number of seconds that liburl will wait on a read()
+ *  before giving up.
+ */
+#ifndef XFER_TIMEOUT
+#define XFER_TIMEOUT    120     /* 2 minutes */
+#endif
+
+/****************************************************************************
+ *--------------------------------------------------------------------------*
+ * DO *NOT* MAKE ANY CHANGES below here unless you know what you're doing...*
+ *--------------------------------------------------------------------------*
+ ****************************************************************************/
+
+#ifdef USE_POSIX_REGEX
+#ifndef USE_RE_SYNTAX
+#define USE_RE_SYNTAX	REG_EXTENDED	/* default Syntax */
+#endif
+#endif
+
+#if defined(SYSTYPE_SYSV) || defined(__svr4__) || defined(SYSTYPE_SVR4) || defined(__SYSTYPE_SVR4__)
+#define _SQUID_SYSV_
+#else
+#define _SQUID_BSD_
+#endif
+
+/* define the _SQUID_TYPE_ based on a guess of the OS */
+#if defined(__sun__)				/* SUN */
+#define _SQUID_SUN_
+#if defined(_SQUID_SYSV_)			/* SOLARIS */
+#define _SQUID_SOLARIS_
+#else						/* SUNOS */
+#define _SQUID_SUNOS_
+#endif
+#elif defined(__hpux)                           /* HP-UX - SysV-like? */
+#define _SQUID_HPUX_
+#define _SQUID_SYSV_
+#elif defined(__osf__)                          /* OSF/1 */
+#define _SQUID_OSF_
+#elif defined(__ultrix)				/* Ultrix */
+#define _SQUID_ULTRIX_
+#elif defined(_AIX)                          	/* AIX */
+#define _SQUID_AIX_
+#elif defined(__linux__)                        /* Linux */
+#define _SQUID_LINUX_
+#elif defined(__FreeBSD__)			/* FreeBSD */
+#define _SQUID_FREEBSD_
+#elif defined(__sgi__)				/* SGI */
+#define _SQUID_SGI_
+#endif
+
+#undef _SQUID_SYSV_SIGNALS_
+#if defined(_SQUID_SYSV_) || defined(_SQUID_LINUX_)
+#define  _SQUID_SYSV_SIGNALS_
+#endif
+
+#if !defined(CACHE_HTTP_PORT)
+#define CACHE_HTTP_PORT @CACHE_HTTP_PORT@
+#endif
+
+#if !defined(CACHE_ICP_PORT)
+#define CACHE_ICP_PORT @CACHE_ICP_PORT@
+#endif
+
+#if !defined(CACHE_FTP_PORT)
+#define CACHE_FTP_PORT @CACHE_FTP_PORT@
+#endif
+
+#if !defined(CACHEMGR_HOSTNAME)
+#define CACHEMGR_HOSTNAME ""
+#endif
+
+#endif /* _CONFIG_H_ */
