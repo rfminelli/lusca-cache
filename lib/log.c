@@ -1,23 +1,48 @@
 
 /* $Id$ */
 
+#include "config.h"
+
+#if HAVE_STDIO_H
 #include <stdio.h>
+#endif
+#if HAVE_STRING_H
 #include <string.h>
+#endif
+#if HAVE_UNISTD_H
 #include <unistd.h>
+#endif
+#if HAVE_ERRNO_H
 #include <errno.h>
+#endif
+#if HAVE_TIME_H
 #include <time.h>
+#endif
+#if HAVE_SYS_TYPES_H
 #include <sys/types.h>
+#endif
+#if HAVE_SYS_STAT_H
 #include <sys/stat.h>
+#endif
+#if HAVE_SYS_FILE_H
 #include <sys/file.h>
-#if defined(__STRICT_ANSI__)
+#endif
+#if defined(__STRICT_ANSI__) && HAVE_STDARG_H
 #include <stdarg.h>
-#else
+#elif HAVE_VARARGS_H
 #include <varargs.h>
 #endif
+
 #include "util.h"
 
+#ifdef _SQUID_NEXT_
+typedef int pid_t;
+extern pid_t getpid _PARAMS((void));
+#endif
+
+
 /* Local functions */
-static char *standard_msg();
+static char *standard_msg _PARAMS((void));
 
 /* Local variables */
 static FILE *fp_log = NULL;
@@ -26,6 +51,7 @@ static int pid;
 static char *pname = NULL;
 static char lbuf[2048];
 
+#ifdef UNUSED_CODE
 /*
  *  init_log() - Initializes the logging routines.  Log() prints to 
  *  FILE *a, and errorlog() prints to FILE *b;
@@ -42,6 +68,7 @@ void init_log(a, b)
     if (fp_errs)
 	setbuf(fp_errs, NULL);
 }
+#endif
 
 void init_log3(pn, a, b)
      char *pn;
@@ -165,16 +192,6 @@ void fatal(va_alist)
 }
 
 /*
- *  log_errno() - Same as perror(); doesn't print when errno == 0
- */
-void log_errno(s)
-     char *s;
-{
-    if (errno != 0)
-	errorlog("%s: %s\n", s, strerror(errno));
-}
-
-/*
  *  log_errno2() - Same as perror(); doesn't print when errno == 0
  */
 void log_errno2(file, line, s)
@@ -183,18 +200,9 @@ void log_errno2(file, line, s)
      char *s;
 {
     if (errno != 0)
-	errorlog("%s [%d]: %s: %s\n", file, line, s, strerror(errno));
+	errorlog("%s [%d]: %s: %s\n", file, line, s, xstrerror());
 }
 
-
-/*
- *  fatal_errno() - Same as perror()
- */
-void fatal_errno(s)
-     char *s;
-{
-    fatal("%s: %s\n", s, strerror(errno));
-}
 
 /*
  *  standard_msg() - Prints the standard pid and timestamp

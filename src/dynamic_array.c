@@ -9,8 +9,8 @@ dynamic_array *create_dynamic_array(size, delta)
 {
     dynamic_array *ary = NULL;
 
-    ary = (dynamic_array *) xcalloc(1, sizeof(dynamic_array));
-    ary->collection = (void *) xcalloc(size, sizeof(void *));
+    ary = xcalloc(1, sizeof(dynamic_array));
+    ary->collection = xcalloc(size, sizeof(void *));
     ary->size = size;
     ary->delta = delta;
     ary->index = 0;
@@ -26,7 +26,7 @@ int insert_dynamic_array(ary, entry)
      */
     if (ary->index >= ary->size) {
 	ary->size += ary->delta;
-	ary->collection = (void **) xrealloc(ary->collection, ary->size * sizeof(void *));
+	ary->collection = xrealloc(ary->collection, ary->size * sizeof(void *));
     }
     ary->collection[(ary->index)++] = entry;
     return (ary->index);
