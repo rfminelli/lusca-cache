@@ -46,15 +46,17 @@ httpReplyCreate(HttpRequest *req)
     rep->httpReplyParseStart = &httpReplyParseStart;
     rep->setRState = &httpReplySetRState;
     rep->noteError = &httpReplyNoteError;
+    rep->destroy = &httpReplyDestroy;
     /* did we set everything? */
     httpMsgCheck(rep);
 }
 
 void
-httpReplyDestroy(HttpReply *rep)
+httpReplyDestroy(HttpMsg *msg)
 {
-    httpMsgClean(rep);
-    xfree(rep);
+    assert(msg);
+    httpMsgClean(msg);
+    xfree(msg);
 }
 
 

@@ -42,27 +42,38 @@ struct _ObjIndex {
     int capacity;
     int count;
     struct _ObjIndexItem *items;
+    int dupOk;                  /* true if two different objects may share id */
 };
+
+typedef struct _ObjIndex ObjIndex;
 
 typedef int ObjIndexPos;
 
 /* use this and only this to initialize ObjIndexPos */
 #define ObjIndexInitPos (-1)
 
-/* create/init/destroy */
-extern ObjIndex *objIndexCreate();
-extern void objIndexInit(ObjIndex *idx);
+/* create/init/destroy/clean */
+extern ObjIndex *objIndexCreate(int dupOk);
+extern void objIndexInit(ObjIndex *idx, int dupOK);
 extern void objIndexDestroy(ObjIndex *idx);
+extern void objIndexClean(ObjIndex *idx);
 
 /* accounting */
 #define objIndexIsEmpty(idx) (!objIndexCount(idx))
-#define objIndexCount(idx) (idx->count)
+#define objIndexCount(idx) ((idx)->count)
 
 /* iterate through objects */
-extern void *objIndexGet(const ObjIndex *idx, void **obj, ObjIndexPos *id, ObjIndexPos *pos);
+extern void *objIndexGet(const ObjIndex *idx, void *objPtr, ObjIndexPos *id, ObjIndexPos *pos);
 
 /* add/delete */
-extern void objIndexDel(ObjIndex *idx, ObjIndexPos id);
+extern void objIndexDel(ObjIndex *idx, void *obj);
 extern void objIndexAdd(ObjIndex *idx, void *obj, ObjIndexPos id);
+
+/* search */
+extern int objIndexFindId(ObjIndex *idx, void *obj);
+/* returns matching object and deletes it from index */
+extern void *objIndexMatchOut(ObjIndex *idx, ObjIndexPos id);
+/* returns objects with the smallest id and deletes it from index */
+extern void *objIndexFirstOut(ObjIndex *idx);
 
 #endif /* ndef _HTTP_HEADER_H_ */

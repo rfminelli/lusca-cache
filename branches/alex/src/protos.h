@@ -10,8 +10,8 @@ extern void hierarchyNote(HierarchyLogEntry *, hier_code, icp_ping_data *, const
 extern aclCheck_t *aclChecklistCreate(const struct _acl_access *,
     request_t *,
     struct in_addr src,
-    char *ua,
-    char *id);
+    const char *ua,
+    const char *id);
 extern void aclNBCheck(aclCheck_t *, PF *, void *);
 extern int aclCheckFast(const struct _acl_access *A, aclCheck_t *);
 extern void aclChecklistFree(aclCheck_t *);

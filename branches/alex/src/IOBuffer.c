@@ -210,10 +210,10 @@ ioBufferDoneWriting(IOBuffer *iob, void *writer, size_t size)
 }
 
 /* if you are lasy: start()+read+done(); locking is left for you */
-size_t
+ssize_t
 ioBufferReadFile(IOBuffer *iob, int fd, void *writer)
 {
-    size_t size = 0;
+    ssize_t size = 0;
     char *buf = ioBufferStartWriting(iob, writer, &size);
     if (size > 0) {
 	size = read(fd, buf, size);
@@ -225,7 +225,7 @@ ioBufferReadFile(IOBuffer *iob, int fd, void *writer)
 }
 
 /* if you are lasy: start()+write+done(); locking is left for you */
-size_t
+ssize_t
 ioBufferWriteFile(IOBuffer *iob, int fd, void *reader)
 {
     size_t size = 0;

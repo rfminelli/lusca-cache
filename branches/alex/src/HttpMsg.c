@@ -48,6 +48,8 @@ httpMsgInit(HttpMsg *msg)
     /* these must be set in children: */
     msg->parseStart = NULL; 
     msg->noteError = NULL;
+    msg->noteException = NULL;
+    msg->destroy = NULL;
 }
 
 void
@@ -59,8 +61,10 @@ httpMsgClone(HttpMsg *msg, HttpMsg *clone)
     /* default methods */
     msg->setRState = clone->setRState;
     /* these were set in children: */
-    msg->parseStart = clone->parseStart; 
+    msg->parseStart = clone->parseStart;
     msg->noteError = clone->noteError;
+    msg->destroy = clone->destroy;
+    msg->noteException = clone->noteException;
 }
 
 /* if we did not allocated memory for msg, we still need to clean stuff */
@@ -75,6 +79,8 @@ httpMsgCheck(HttpMsg *msg)
     assert(msg);
     assert(msg->parseStart);
     assert(msg->noteError);
+    assert(msg->noteException);
+    assert(msg->destroy);
 }
 
 /* called after fresh data was read from conn socket */
