@@ -1,0 +1,30 @@
+$Id$
+
+These are The Rules:
+
+General:
+
+1. Request/Reply meta data (headers and such) are always memory resident if known
+2. Request/Reply body is always transfered through store.c
+
+
+Modules:
+
+
+store.c
+-------
+
+Can:
+
+1. create a StoreEntry
+2. pull data into StoreEntry from a buffer (currently no gaps/ranges are allowed)
+3. push data from StoreEntry into a buffer
+4. notify callback function when push or pull has been made
+5. decide whether/when to store StoreEntry on disk
+6. be responsible for consistent (recoverable) state of disk cache at any time
+
+
+Cannot:
+
+1. Does not know anything about network connections
+2. Does not know anything about http or other protocols
