@@ -1,5 +1,10 @@
 /* $Id$ */
 
+#include "config.h"
+#include "autoconf.h"
+#include "version.h"
+
+
 /*
  *  Adapted from HTSUtils.c in CERN httpd 3.0 (http://info.cern.ch/httpd/)
  *  by Darren Hardy <hardy@cs.colorado.edu>, November 1994.
