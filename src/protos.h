@@ -213,7 +213,6 @@ extern void eventRun(void);
 extern time_t eventNextTime(void);
 extern void eventDelete(EVH * func, void *arg);
 extern void eventInit(void);
-extern void eventFreeMemory(void);
 
 extern void fd_close(int fd);
 extern void fd_open(int fd, unsigned int type, const char *);
@@ -480,23 +479,15 @@ extern PF httpAccept;
 #ifdef SQUID_SNMP
 extern PF snmpHandleUdp;
 extern void snmpInit(void);
+extern int snmpInitConfig(void);
 extern void snmpConnectionOpen(void);
 extern void snmpConnectionShutdown(void);
 extern void snmpConnectionClose(void);
-extern void snmpDebugOid(int lvl, oid * Name, snint Len);
-extern void addr2oid(struct in_addr addr, oid * Dest);
-extern struct in_addr *oid2addr(oid * id);
-variable_list *snmp_basicFn(variable_list *, snint *);
-variable_list *snmp_confFn(variable_list *, snint *);
-variable_list *snmp_sysFn(variable_list *, snint *);
-variable_list *snmp_prfSysFn(variable_list *, snint *);
-variable_list *snmp_prfProtoFn(variable_list *, snint *);
-variable_list *snmp_prfPeerFn(variable_list *, snint *);
-variable_list *snmp_netIpFn(variable_list *, snint *);
-variable_list *snmp_netFqdnFn(variable_list *, snint *);
-variable_list *snmp_netDnsFn(variable_list *, snint *);
-variable_list *snmp_meshPtblFn(variable_list *, snint *);
-variable_list *snmp_meshCtblFn(variable_list *, snint *);
+extern int snmpCreateView(char **);
+extern int snmpCreateUser(char **);
+extern int snmpCreateCommunity(char **);
+extern void snmpTokenize(char *, char **, int);
+extern int snmpCompare(oid * name1, int len1, oid * name2, int len2);
 #endif /* SQUID_SNMP */
 
 extern void icpHandleIcpV3(int, struct sockaddr_in, char *, int);

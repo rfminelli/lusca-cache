@@ -722,7 +722,6 @@ SquidShutdown(void *unused)
     clientdbFreeMemory();
     httpHeaderCleanModule();
     statFreeMemory();
-    eventFreeMemory();
     mimeFreeMemory();
     errorClean();
 #endif

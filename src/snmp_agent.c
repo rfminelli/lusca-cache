@@ -35,9 +35,17 @@
 
 
 #include "squid.h"
+
+#include "snmp.h"
+#include "snmp_impl.h"
+#include "asn1.h"
+#include "snmp_api.h"
+#include "snmp_vars.h"
+#include "snmp_oidlist.h"
 #include "cache_snmp.h"
 
 extern StatCounters *snmpStatGet(int);
+
 
 /************************************************************************
 
