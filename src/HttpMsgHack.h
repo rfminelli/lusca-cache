@@ -48,6 +48,8 @@
     size_t (*noteBuffDataReady)(HttpMsg *msg, const char *buf, size_t size);
     /* called when space conn buffer is avalibale */
     void (*noteSpaceReady)(HttpMsg *msg);
+    /* set new rstate, useful for hooks */
+    void (*setRState)(HttpMsg *msg, ReadState rstate);
     /* parses the first line of an http message */
     int (*parseStart)(HttpMsg *msg, const char *start, const char *end);
     /* called on connection close() */
@@ -61,6 +63,7 @@
 
     /* protected, do not use these, use interface functions instead */
     IOBuffer *buf;     /* comm | buf | store */
-    StoreEntry *body;  /* body (if any) is always passed via store */
+    StoreEntry *entry; /* body (if any) is always passed via store */
+    ReadState rstate;  /* current read state */
 /* }; */
 

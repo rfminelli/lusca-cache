@@ -30,25 +30,31 @@
 
 #include "squid.h"
 #include "HttpReply.h"
+#include "HttpRequest.h"
 
 
 /* local constants */
 
 /* local routines */
+static int httpReplyParseStart(HttpMsg *msg, const char *blk_start, const char *blk_end);
+static void httpReplySetRState(HttpMsg *msg, ReadState rstate);
+static void httpReplyNoteError(HttpMsg *msg, HttpReply *error);
+static int httpStatusLineParse(HttpReply *rep, const char *blk_start, const char *blk_end);
 
 HttpReply *
 httpReplyCreate(HttpRequest *req)
 {
-    HttpReply *rep = xcalloc(sizeof(HttpReply));
-    httpMsgInit(rep);
+    HttpReply *rep = memAllocate(MEM_HTTPREPLY, 1);
+    httpMsgInit((HttpMsg*)rep);
     rep->request = req;
     /* custom methods */
-    rep->httpReplyParseStart = &httpReplyParseStart;
+    rep->parseStart = &httpReplyParseStart;
     rep->setRState = &httpReplySetRState;
     rep->noteError = &httpReplyNoteError;
     rep->destroy = &httpReplyDestroy;
     /* did we set everything? */
-    httpMsgCheck(rep);
+    httpMsgCheck((HttpMsg*)rep);
+    return rep;
 }
 
 void
@@ -56,7 +62,7 @@ httpReplyDestroy(HttpMsg *msg)
 {
     assert(msg);
     httpMsgClean(msg);
-    xfree(msg);
+    memFree(MEM_HTTPREPLY, msg);
 }
 
 
@@ -64,11 +70,11 @@ httpReplyDestroy(HttpMsg *msg)
  * parses http "command line", returns true on success
  */
 static int
-httpReplyParseStart(HttpMsg *msg, char *blk_start, const char *blk_end)
+httpReplyParseStart(HttpMsg *msg, const char *blk_start, const char *blk_end)
 {
     HttpReply *rep = (HttpReply*) msg;
     assert(rep->rstate == rsReadyToParse); /* the only state we can be called in */
-    return httpStatusLineParse(&rep->status_line, blk_start, blk_end);
+    return httpStatusLineParse(rep, blk_start, blk_end);
 }
 
 
@@ -84,15 +90,16 @@ static void
 httpReplyNoteError(HttpMsg *msg, HttpReply *error)
 {
     /* replace our content with the error message @?@ */
-    HttpReply *rep = (HttpReply*) msg;
+    /* HttpReply *rep = (HttpReply*) msg; */
     assert(0); /* not implemented yet */
 }
 
 void
-httpReplyNoteReqError(HttpReply *rep, HttpReply *error)
+httpReplyNoteReqError(HttpReply *rep, HttpRequest *req)
 {
     /* do this for now @?@ */
-    httpReplyNoteError((HttpMsg*)rep, error);
+    assert(0); 
+    /* httpReplyNoteError((HttpMsg*)rep, error); */
 }
 
 
@@ -112,10 +119,22 @@ httpReplyCreateTrace(HttpRequest *req) {
     httpHeaderAddStrField(&rep->header, "Server", full_appname_string);
     httpHeaderAddStrField(&rep->header, "Content-Type", "message/http");
     /* HTTP says we need to reply with original request as our body */
-    assert(req->entry);
+    assert(rep->entry != NULL);
+    assert(req->entry != NULL);
     rep->entry = req->entry;
-    storeCleintListAdd(rep->entry, rep);
-    /* @?@ but we do not (and should not) know the size at this point */
-    storeClientCopy(rep->entry, 0, 0, 0 /*size @?@ ??*/, httpMsgNoteDataReady, rep);
+    storeClientListAdd(rep->entry, rep);
+    /*
+     * allocate buffer for incoming data and pass it to store_client.c; @?@ note
+     * that ideally we would like to allocate buffer right before read, not in
+     * advance; also would be much better to use ioBuffer
+     */
+    storeClientCopy(rep->entry, 0, 0, 4096, memAllocate(MEM_4K_BUF, 1), httpMsgNoteDataReady, rep);
     return rep;
+}
+
+static int
+httpStatusLineParse(HttpReply *rep, const char *blk_start, const char *blk_end) {
+    /* @?@ implement it */
+    assert(0);
+    return 0;
 }

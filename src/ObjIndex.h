@@ -70,7 +70,7 @@ extern void objIndexDel(ObjIndex *idx, void *obj);
 extern void objIndexAdd(ObjIndex *idx, void *obj, ObjIndexPos id);
 
 /* search */
-extern int objIndexFindId(ObjIndex *idx, void *obj);
+extern int objIndexFindId(ObjIndex *idx, void *obj, ObjIndexPos *id);
 /* returns matching object and deletes it from index */
 extern void *objIndexMatchOut(ObjIndex *idx, ObjIndexPos id);
 /* returns objects with the smallest id and deletes it from index */

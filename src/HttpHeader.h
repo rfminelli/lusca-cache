@@ -83,6 +83,7 @@ extern long httpHeaderAddIntField(HttpHeader *hdr, const char *name, long value)
 /* often used field names (may use caching to speedup retreival!) */
 extern size_t httpHeaderGetContentLength(const HttpHeader *hdr);
 extern time_t httpHeaderGetMaxAge(const HttpHeader *hdr);
+extern int httpHeaderGetMaxForward(const HttpHeader *hdr);
 
 /* put report about current header usage and other stats into a static string */
 extern const char *httpHeaderReport();
