@@ -1,109 +1,65 @@
-Changes to squid-1.2.alpha7 ():
+Changes to squid-1.1.17 (October 19, 1997):
 
-	- fixes fixes fixes.
-	- Made Arjan's PROXY_AUTH ACL patch standard.
+	- Fixed ftpget null pointer coredump for mime encodings.
+	- Fixed setuid() bug when creating swap directories.  Now
+	  change to 'effective_user' before making dirs.
+	- Fixed cachemgr.cgi to give 'unknown host' message if
+	  gethostbyname() fails.
+	- Fixed extra disk read() bug for swapins.  Now a disk
+	  read calls back immediately if any data was read instead
+	  of trying to fill the 8k buffer.
+	- Fixed asciiHandleConn().  The 'while (1)' loop broke things
+	  badly under very high loads.  Limit to 10 times through
+	  the loop, or until RESERVED_FD limit is reached.
 
-Changes to squid-1.2.alpha6 ():
+Changes to squid-1.1.16 (August 25, 1997):
 
-	- Simpler cacheobj implementation.
-	- persistent connection histogram
-	- SERVER-SIDE PERSISTENT CONNECTIONS:
-        	- Added pconn.c 
-        	- Addec Cofig.Timeout.pconn; default 120 seconds
-        	- Added httpState->flags
-        	- Added flags arg to httpBuildRequestHeader()
-        	- Added HTTP_PROXYING and HTTP_KEEPALIVE flags
-        	- Added 'Connection' to allowed HTTP headers (http-anon.c)
-		- Added 'Proxy-Connection' to allowed HTTP headers
-		  (http-anon.c)
-		- Merged proxyhttpStart() with httpStart() and crated
-		  new httpBuildState().
-		- New httpPconnTransferDone() detects end-of-data on
-		  persistent connections.
+	- Added while loop around accept() (Michael O'Reilly).
+	- Exit if parseKilobytes() overflows (e.g. maximum_object_size).
+	- Added 'closest-only' cache_host option to accept only
+	  CLOSEST_PARENT_MISS but not FIRST_PARENT_MISS.
+	- Fixed ftpget to escape special characters in HTML output.
+	- Fixed ftpget to take the second-level filename extension
+	  content-type for 'x-gzip' and 'x-compress' encodings.
+	- Changed ftpget to check for whitespace in Windows listings
+	  (R. Scott Bailey).
+	- Fixed long URL coredump problem from the new 'log_url' scheme.
+	- PROXY_AUTH passwd security fix (David Luyer).
 
-Changes to squid-1.2.alpha5 ():
+Changes to squid-1.1.15 (August 11, 1997):
 
-	- New configuration system.  Everything is generated from
-	  'cf.data.pre', including the main parser, setting defaults,
-	  outputting current values, and freeing memory.  
-	  This also involved moving some of the local data structures
-	  (e.g. struct _acl *AclList in acl.c) to the Config
-	  structure.  (Max Okumoto)
-	- No more '/i' for regular expressions.  Now insert a '-i'
-	  to switch to case-insensitive.  Use '+i' for case-sensitive.
-	- When you have a variable named the same as its type, sizeof()
-	  gets the wrong one (fde).
-	- Need to flush unbuffered logs before fork().
-	- Added two fields swap log: refcount and e->flag.
-	- Removed all the .h files for each .c file.  Now #include stuff
-	  is in either: defines.h, enums.h, typedefs.h, structs.h,
-	  or protos.h, globals.h.  This greatly reduces dependencies
-	  between the various source files.
-	- globals.c is generated from globals.h by a Perl script.
-	- Started customizable error texts.
-
-Changes to squid-1.2.alpha4 ():
-
-	- New MIME configuration, regular expression based
-	- Added request_timeout config option
-	- Multiple HTTP sockets (Lincoln Dale).
-	- Moved 'fds_are_n_free' check to httpAccept().
-	- s/USE_POLL/HAVE_POLL/; make poll() default if available.
-	- Changed storeRegister to use offsets and make immediate
-	  callbacks if appropriate.
-	- Removed icpDetectClientClose().  Some of that functionality
-	  goes into clientReadRequest() and the rest into
-	  httpRequestFree().
-	- Moved IP lookups to commConnect stuff.
-	- Added support for retrying connect().
-	- New inline debug() macro (David Luyer).
-	- Replace frequent gettimeofday() calls with alarm(3) based
-	  clock.  Need to add more gettimeofday() calls to get back
-	  high-resolution timestamp logging (Andres Kroonmaa).
-	- Added support for Cache-control: proxy-revalidate;
-	  based on squid-1.1 patch from Mike Mitchell.
-
-Changes to squid-1.2.alpha3 ():
-
-	- Implemented persistent connections between clients and squid.
-	- Moved various FD tables (comm.c, fdstat.c, disk.c) to a single
-	  table in fd.c.
-	- Removed use of FD as an identifier in certain callback
-	  operations (ipcache, fqdncache).
-	- General code cleanup.
-	- Fixed typedefs for callback functions.
-	- Removed FD lifetime/timeout dichotomy.  Now we only have
-	  timeouts, however the lifetime concept/keyword may still
-	  linger in certain places.
-	- Change Makefile 'realclean' target to 'distclean'
-	- Changed config file parsing of time specifications to use
-	  parseTimeLine().
-	- Removed storetoString.c
-
-Changes to squid-1.2.alpha2 ():
-
-	- Merged squid-1.1.9, squid-1.1.10 changes
-
-Changes to squid-1.2.alpha1 ():
-
-	- Unified peer selection algorithm.
-	- aiops.c and aiops.h are a threaded implementation of
-	  asynchronous file operations (Stewart Forster).
-	- async_io.c and async_io.h are complete rewrites of the old
-	  versions (Stewart Forster).
-	- Rewrote all disk file operations of squid to support
-	  the idea of callbacks except where not required (Stewart
-	  Forster).
-	- Background validation of 'tainted' swap log entries (Stewart
-	  Forster).
-	- Modified storeWriteCleanLog to create the log file using the
-	  open/write rather than fopen/printf (Stewart Forster).
-	- Added the EINTR error response to handle badly interrupted
-	  system calls (Stewart Forster).
-	- UDP_HIT_OBJ not supported, removed.
-	- Different sized 'cache_dirs' supported.
-
-==============================================================================
+	- Fixed bug in diskHandleWrite().  'break' should be 'continue'
+	  (Michael O'Reilly).
+	- Fixed a storeDoRebuildFromDisk() bug; needed to check for
+	  swapfile < 0 earlier.
+	- HEAD requests should not be given to passStart() (Taketo Kabe).
+	- Generate an 'INVALID URL' error if a hostname contains
+	  illegal characters.
+	- Added keyword 'all' for inside_firewall option (Javier Achirica).
+	- Fixed logging of wrong URL for requests changed by a
+	  redirector.
+	- Added first-cut RELOAD_INTO_IMS feature.  #ifdef'd to
+	  protect the innocent.
+	- Fixed comm_select() to only check stall_delay for read
+	  handlers (Peter Wemm).
+	- IMPORTANT change to the -z option: Numerous people have lost
+	  their cache contents because Squid would automatically wipe
+	  out the cache if one of the cache directories did not exist.
+	  Squid will no longer do this.  Now, Squid tests all the
+	  'cache_dir' directories and all of the first-level swap
+	  directories underneath then.  If one of those directories
+	  does not exist, Squid exits and writes a message to stderr
+	  and to cache.log.  The message tells the administrator to run
+	  'squid -z' to create the swap directories, or to manually fix
+	  the problem.   This means that you must manually run 'squid -z'
+	  when setting up Squid for the first time.
+	- Fixed IP cache bug with popular hostnames which lose all
+	  their addresses to ipcacheRemoveBadAddr().  In 1.1.12 we
+	  required that IP cache entries could only be released if not
+	  referenced for one minute.  However, some names are so
+	  popular that they would never get released.  Now we also
+	  require that i->addrs.count > 0 if we're NOT going to release
+	  the expired entry (Joe Ramey).
 
 Changes to squid-1.1.14 (July 11, 1997):
 

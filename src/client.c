@@ -1,6 +1,4 @@
 
-
-
 /*
  * $Id$
  *
@@ -139,7 +137,6 @@ main(int argc, char *argv[])
 {
     int conn, c, len, bytesWritten;
     int port, to_stdout, reload;
-    int keep_alive = 0;
     int opt_noaccept = 0;
     char url[BUFSIZ], msg[BUFSIZ], buf[BUFSIZ], hostname[BUFSIZ];
     const char *method = "GET";
@@ -159,7 +156,7 @@ main(int argc, char *argv[])
 	strcpy(url, argv[argc - 1]);
 	if (url[0] == '-')
 	    usage(argv[0]);
-	while ((c = getopt(argc, argv, "ah:i:km:p:rst:?")) != -1)
+	while ((c = getopt(argc, argv, "ah:i:m:p:rst:?")) != -1)
 	    switch (c) {
 	    case 'a':
 		opt_noaccept = 1;
@@ -170,9 +167,6 @@ main(int argc, char *argv[])
 		break;
 	    case 's':		/* silent */
 		to_stdout = 0;
-		break;
-	    case 'k':		/* backward compat */
-		keep_alive = 1;
 		break;
 	    case 'r':		/* reload */
 		reload = 1;
@@ -208,35 +202,31 @@ main(int argc, char *argv[])
 	    fprintf(stderr, "client: ERROR: Cannot connect to %s:%d: Host unknown.\n", hostname, port);
 	} else {
 	    char tbuf[BUFSIZ];
-	    snprintf(tbuf, BUFSIZ, "client: ERROR: Cannot connect to %s:%d",
+	    sprintf(tbuf, "client: ERROR: Cannot connect to %s:%d",
 		hostname, port);
 	    perror(tbuf);
 	}
 	exit(1);
     }
     /* Build the HTTP request */
-    snprintf(msg, BUFSIZ, "%s %s HTTP/1.0\r\n", method, url);
+    sprintf(msg, "%s %s HTTP/1.0\r\n", method, url);
     if (reload) {
-	snprintf(buf, BUFSIZ, "Pragma: no-cache\r\n");
+	sprintf(buf, "Pragma: no-cache\r\n");
 	strcat(msg, buf);
     }
     if (opt_noaccept == 0) {
-	snprintf(buf, BUFSIZ, "Accept: */*\r\n");
+	sprintf(buf, "Accept: */*\r\n");
 	strcat(msg, buf);
     }
     if (ims) {
-	snprintf(buf, BUFSIZ, "If-Modified-Since: %s\r\n", mkrfc1123(ims));
+	sprintf(buf, "If-Modified-Since: %s\r\n", mkrfc1123(ims));
 	strcat(msg, buf);
     }
     if (max_forwards > -1) {
-	snprintf(buf, BUFSIZ, "Max-Forwards: %d\r\n", max_forwards);
+	sprintf(buf, "Max-Forwards: %d\r\n", max_forwards);
 	strcat(msg, buf);
     }
-    if (keep_alive) {
-	snprintf(buf, BUFSIZ, "Proxy-Connection: Keep-Alive\r\n");
-	strcat(msg, buf);
-    }
-    snprintf(buf, BUFSIZ, "\r\n");
+    sprintf(buf, "\r\n");
     strcat(msg, buf);
 
     /* Send the HTTP request */
