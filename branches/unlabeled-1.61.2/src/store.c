@@ -977,9 +977,9 @@ int storeSwapInHandle(fd_notused, buf, len, flag, e, offset_notused)
 
     if (flag < 0 && flag != DISK_EOF) {
 	debug(20, 0, "storeSwapInHandle: SwapIn failure (err code = %d).\n",
-		flag);
+	    flag);
 	put_free_8k_page(e->mem_obj->e_swap_buf);
-        e->mem_obj->e_swap_buf = NULL;
+	e->mem_obj->e_swap_buf = NULL;
 	storeSetMemStatus(e, NOT_IN_MEMORY);
 	file_close(e->mem_obj->swap_fd);
 	swapInError(-1, e);	/* Invokes storeAbort() and completes the I/O */
@@ -2446,7 +2446,7 @@ int storeInit()
     char *f = NULL;
 
     if ((f = getStoreLogFile()));
-    	storelog_fd = file_open(f, NULL, O_WRONLY | O_APPEND | O_CREAT);
+    storelog_fd = file_open(f, NULL, O_WRONLY | O_APPEND | O_CREAT);
 
     for (w = getCacheDirs(); w; w = w->next)
 	storeAddSwapDisk(w->key);
