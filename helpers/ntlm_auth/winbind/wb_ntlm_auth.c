@@ -44,8 +44,8 @@
 #include <getopt.h>
 #endif
 
-#include "winbind_nss_config.h"
-#include "winbindd_nss.h"
+#include "nsswitch/winbind_nss_config.h"
+#include "nsswitch/winbindd_nss.h"
 
 #ifndef min
 #define min(x,y) ((x)<(y)?(x):(y))
@@ -220,7 +220,6 @@ do_authenticate(ntlm_authenticate * auth, int auth_length)
 	return;
     }
 
-    have_nthash = 0;
     nthash = ntlm_fetch_string((char *) auth, auth_length, &auth->ntresponse);
     switch (nthash.l) {
     case 0:
@@ -230,12 +229,11 @@ do_authenticate(ntlm_authenticate * auth, int auth_length)
     case 24:
 	memcpy(request.data.auth_crap.nt_resp, nthash.str, 24);
 	request.data.auth_crap.nt_resp_len = 24;
-	have_nthash = 1;
 	break;
     default:
-	debug("nthash len = %d. Ignoring it.\n", nthash.l);
-	request.data.auth_crap.nt_resp_len = 0;
-	break;
+	debug("nthash len = %d\n", nthash.l);
+	authfail(domain, user, "Broken NT hash response");
+	return;
     }
 
     debug("Checking user '%s\\%s' lmhash len =%d, have_nthash=%d, "

@@ -238,7 +238,8 @@ authenticateDigestNonceShutdown(void)
     }
     if (digest_nonce_pool) {
 	assert(memPoolInUseCount(digest_nonce_pool) == 0);
-	memPoolDestroy(&digest_nonce_pool);
+	memPoolDestroy(digest_nonce_pool);
+	digest_nonce_pool = NULL;
     }
     debug(29, 2) ("authenticateDigestNonceShutdown: Nonce cache shutdown\n");
 }
@@ -479,7 +480,8 @@ authDigestUserShutdown(void)
     }
     if (digest_user_pool) {
 	assert(memPoolInUseCount(digest_user_pool) == 0);
-	memPoolDestroy(&digest_user_pool);
+	memPoolDestroy(digest_user_pool);
+	digest_user_pool = NULL;
     }
 }
 
@@ -542,7 +544,8 @@ authDigestRequestShutdown(void)
     /* No requests should be in progress when we get here */
     if (digest_request_pool) {
 	assert(memPoolInUseCount(digest_request_pool) == 0);
-	memPoolDestroy(&digest_request_pool);
+	memPoolDestroy(digest_request_pool);
+	digest_request_pool = NULL;
     }
 }
 
@@ -633,8 +636,9 @@ authDigestConfigured(void)
 static int
 authDigestAuthenticated(auth_user_request_t * auth_user_request)
 {
-    digest_user_h *digest_user = auth_user_request->auth_user->scheme_data;
-    if (digest_user->flags.credentials_ok == 1)
+    digest_request_h *request = auth_user_request->scheme_data;
+    assert(request);
+    if (request->flags.credentials_ok == 1)
 	return 1;
     else
 	return 0;
@@ -659,29 +663,20 @@ authenticateDigestAuthenticateUser(auth_user_request_t * auth_user_request, requ
     assert(auth_user->scheme_data != NULL);
     digest_user = auth_user->scheme_data;
 
+    digest_request = auth_user_request->scheme_data;
+    assert(auth_user_request->scheme_data != NULL);
     /* if the check has corrupted the user, just return */
-    if (digest_user->flags.credentials_ok == 3) {
+    if (digest_request->flags.credentials_ok == 3) {
 	return;
     }
-    assert(auth_user_request->scheme_data != NULL);
-    digest_request = auth_user_request->scheme_data;
-
     /* do we have the HA1 */
     if (!digest_user->HA1created) {
-	digest_user->flags.credentials_ok = 2;
+	digest_request->flags.credentials_ok = 2;
 	return;
     }
     if (digest_request->nonce == NULL) {
 	/* this isn't a nonce we issued */
-	/* TODO: record breaks in authentication at the request level 
-	 * This is probably best done with support changes at the
-	 * auth_rewrite level -RBC
-	 * and can wait for auth_rewrite V2.
-	 * RBC 20010902 further note: flags.credentials ok is now
-	 * a local scheme flag, so we can move this to the request
-	 * level at any time.
-	 */
-	digest_user->flags.credentials_ok = 3;
+	digest_request->flags.credentials_ok = 3;
 	return;
     }
     DigestCalcHA1(digest_request->algorithm, NULL, NULL, NULL,
@@ -696,10 +691,10 @@ authenticateDigestAuthenticateUser(auth_user_request_t * auth_user_request, requ
 	"squid is = '%s'\n", digest_request->response, Response);
 
     if (strcasecmp(digest_request->response, Response)) {
-	digest_user->flags.credentials_ok = 3;
+	digest_request->flags.credentials_ok = 3;
 	return;
     }
-    digest_user->flags.credentials_ok = 1;
+    digest_request->flags.credentials_ok = 1;
     /* password was checked and did match */
     debug(29, 4) ("authenticateDigestAuthenticateuser: user '%s' validated OK\n",
 	digest_user->username);
@@ -713,14 +708,12 @@ authenticateDigestAuthenticateUser(auth_user_request_t * auth_user_request, requ
 static int
 authenticateDigestDirection(auth_user_request_t * auth_user_request)
 {
-    digest_request_h *digest_request;
-    digest_user_h *digest_user = auth_user_request->auth_user->scheme_data;
+    digest_request_h *digest_request = auth_user_request->scheme_data;
     /* null auth_user is checked for by authenticateDirection */
-    switch (digest_user->flags.credentials_ok) {
+    switch (digest_request->flags.credentials_ok) {
     case 0:			/* not checked */
 	return -1;
     case 1:			/* checked & ok */
-	digest_request = auth_user_request->scheme_data;
 	if (authDigestNonceIsStale(digest_request->nonce))
 	    /* send stale response to the client agent */
 	    return -2;
@@ -794,7 +787,7 @@ authenticateDigestFixHeader(auth_user_request_t * auth_user_request, HttpReply *
     digest_request_h *digest_request;
     int stale = 0;
     digest_nonce_h *nonce = authenticateDigestNonceNew();
-    if (auth_user_request && authDigestAuthenticated(auth_user_request) && auth_user_request->scheme_data) {
+    if (auth_user_request && auth_user_request->scheme_data && authDigestAuthenticated(auth_user_request)) {
 	digest_request = auth_user_request->scheme_data;
 	stale = authDigestNonceIsStale(digest_request->nonce);
     }
@@ -836,8 +829,8 @@ authenticateDigestHandleReply(void *data, char *reply)
     auth_user_request_t *auth_user_request;
     digest_request_h *digest_request;
     digest_user_h *digest_user;
+    int valid;
     char *t = NULL;
-    void *cbdata;
     debug(29, 9) ("authenticateDigestHandleReply: {%s}\n", reply ? reply : "<NULL>");
     if (reply) {
 	if ((t = strchr(reply, ' ')))
@@ -851,13 +844,15 @@ authenticateDigestHandleReply(void *data, char *reply)
     digest_request = auth_user_request->scheme_data;
     digest_user = auth_user_request->auth_user->scheme_data;
     if (reply && (strncasecmp(reply, "ERR", 3) == 0))
-	digest_user->flags.credentials_ok = 3;
+	digest_request->flags.credentials_ok = 3;
     else {
 	CvtBin(reply, digest_user->HA1);
 	digest_user->HA1created = 1;
     }
-    if (cbdataReferenceValidDone(r->data, &cbdata))
-	r->handler(cbdata, NULL);
+    valid = cbdataValid(r->data);
+    if (valid)
+	r->handler(r->data, NULL);
+    cbdataUnlock(r->data);
     authenticateStateFree(r);
 }
 
@@ -876,7 +871,7 @@ authDigestInit(authScheme * scheme)
 	    digestauthenticators = helperCreate("digestauthenticator");
 	digestauthenticators->cmdline = digestConfig->authenticate;
 	digestauthenticators->n_to_start = digestConfig->authenticateChildren;
-	digestauthenticators->ipc_type = IPC_STREAM;
+	digestauthenticators->ipc_type = IPC_TCP_SOCKET;
 	helperOpenServers(digestauthenticators);
 	if (!init) {
 	    cachemgrRegister("digestauthenticator",
@@ -1033,7 +1028,7 @@ authDigestLogUsername(auth_user_request_t * auth_user_request, char *username)
     dlink_node *node;
 
     /* log the username */
-    debug(29, 9) ("authBasicDecodeAuth: Creating new user for logging '%s'\n", username);
+    debug(29, 9) ("authDigestLogUsername: Creating new user for logging '%s'\n", username);
     /* new auth_user */
     auth_user = authenticateAuthUserNew("digest");
     /* new scheme data */
@@ -1347,7 +1342,8 @@ authenticateDigestStart(auth_user_request_t * auth_user_request, RH * handler, v
     }
     r = cbdataAlloc(authenticateStateData);
     r->handler = handler;
-    r->data = cbdataReference(data);
+    cbdataLock(data);
+    r->data = data;
     r->auth_user_request = auth_user_request;
     snprintf(buf, 8192, "\"%s\":\"%s\"\n", digest_user->username, digest_request->realm);
     helperSubmit(digestauthenticators, buf, authenticateDigestHandleReply, r);

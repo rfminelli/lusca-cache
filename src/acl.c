@@ -340,7 +340,7 @@ aclParseMethodList(void *curlist)
 static int
 decode_addr(const char *asc, struct in_addr *addr, struct in_addr *mask)
 {
-    u_int32_t a;
+    u_num32 a;
     int a1 = 0, a2 = 0, a3 = 0, a4 = 0;
 
     switch (sscanf(asc, "%d.%d.%d.%d", &a1, &a2, &a3, &a4)) {
@@ -363,7 +363,7 @@ decode_addr(const char *asc, struct in_addr *addr, struct in_addr *mask)
     if (mask != NULL) {		/* mask == NULL if called to decode a netmask */
 
 	/* Guess netmask */
-	a = (u_int32_t) ntohl(addr->s_addr);
+	a = (u_num32) ntohl(addr->s_addr);
 	if (!(a & 0xFFFFFFFFul))
 	    mask->s_addr = htonl(0x00000000ul);
 	else if (!(a & 0x00FFFFFF))
@@ -949,8 +949,8 @@ aclParseAccessLine(acl_access ** head)
 	cbdataFree(A);
 	return;
     }
-    aclParseAclList(&A->aclList);
-    if (A->aclList == NULL) {
+    aclParseAclList(&A->acl_list);
+    if (A->acl_list == NULL) {
 	debug(28, 0) ("%s line %d: %s\n",
 	    cfg_filename, config_lineno, config_input_line);
 	debug(28, 0) ("aclParseAccessLine: Access line contains no ACL's, skipping\n");
@@ -991,7 +991,7 @@ aclParseAclList(acl_list ** head)
 	    memFree(L, MEM_ACL_LIST);
 	    continue;
 	}
-	L->_acl = a;
+	L->acl = a;
 	*Tail = L;
 	Tail = &L->next;
     }
@@ -1258,11 +1258,11 @@ int
 aclMatchUserMaxIP(void *data, auth_user_request_t * auth_user_request,
     struct in_addr src_addr)
 {
-    /*
-     * the logic for flush the ip list when the limit is hit vs keep
-     * it sorted in most recent access order and just drop the oldest
-     * one off is currently undecided
-     */
+/*
+ * the logic for flush the ip list when the limit is hit vs keep
+ * it sorted in most recent access order and just drop the oldest
+ * one off is currently undecided
+ */
     acl_user_ip_data *acldata = data;
 
     if (authenticateAuthUserRequestIPCount(auth_user_request) <= acldata->max)
@@ -1367,9 +1367,12 @@ aclMatchTime(acl_time_data * data, time_t when)
     debug(28, 3) ("aclMatchTime: checking %d in %d-%d, weekbits=%x\n",
 	(int) t, (int) data->start, (int) data->stop, data->weekbits);
 
-    if (t < data->start || t > data->stop)
-	return 0;
-    return data->weekbits & (1 << tm.tm_wday) ? 1 : 0;
+    while (data) {
+	if (t >= data->start && t <= data->stop && (data->weekbits & (1 << tm.tm_wday)))
+	    return 1;
+	data = data->next;
+    }
+    return 0;
 }
 
 #if SQUID_SNMP
@@ -1688,20 +1691,17 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 int
 aclMatchAclList(const acl_list * list, aclCheck_t * checklist)
 {
-    PROF_start(aclMatchAclList);
     while (list) {
-	AclMatchedName = list->_acl->name;
+	AclMatchedName = list->acl->name;
 	debug(28, 3) ("aclMatchAclList: checking %s%s\n",
-	    list->op ? null_string : "!", list->_acl->name);
-	if (aclMatchAcl(list->_acl, checklist) != list->op) {
+	    list->op ? null_string : "!", list->acl->name);
+	if (aclMatchAcl(list->acl, checklist) != list->op) {
 	    debug(28, 3) ("aclMatchAclList: returning 0\n");
-	    PROF_stop(aclMatchAclList);
 	    return 0;
 	}
 	list = list->next;
     }
     debug(28, 3) ("aclMatchAclList: returning 1\n");
-    PROF_stop(aclMatchAclList);
     return 1;
 }
 
@@ -1710,7 +1710,8 @@ aclCheckCleanup(aclCheck_t * checklist)
 {
     /* Cleanup temporary stuff used by the ACL checking */
     if (checklist->extacl_entry) {
-	cbdataReferenceDone(checklist->extacl_entry);
+	cbdataUnlock(checklist->extacl_entry);
+	checklist->extacl_entry = NULL;
     }
 }
 
@@ -1718,20 +1719,17 @@ int
 aclCheckFast(const acl_access * A, aclCheck_t * checklist)
 {
     allow_t allow = ACCESS_DENIED;
-    PROF_start(aclCheckFast);
     debug(28, 5) ("aclCheckFast: list: %p\n", A);
     while (A) {
 	allow = A->allow;
-	if (aclMatchAclList(A->aclList, checklist)) {
+	if (aclMatchAclList(A->acl_list, checklist)) {
 	    aclCheckCleanup(checklist);
-	    PROF_stop(aclCheckFast);
 	    return allow == ACCESS_ALLOWED;
 	}
 	A = A->next;
     }
     debug(28, 5) ("aclCheckFast: no matches, returning: %d\n", allow == ACCESS_DENIED);
     aclCheckCleanup(checklist);
-    PROF_stop(aclCheckFast);
     return allow == ACCESS_DENIED;
 }
 
@@ -1742,22 +1740,20 @@ aclCheck(aclCheck_t * checklist)
     const acl_access *A;
     int match;
     ipcache_addrs *ia;
-    /* NOTE: This holds a cbdata reference to the current access_list
-     * entry, not the whole list.
-     */
-    while ((A = checklist->accessList) != NULL) {
+    while ((A = checklist->access_list) != NULL) {
 	/*
 	 * If the _acl_access is no longer valid (i.e. its been
 	 * freed because of a reconfigure), then bail on this
 	 * access check.  For now, return ACCESS_DENIED.
 	 */
-	if (!cbdataReferenceValid(A)) {
-	    cbdataReferenceDone(checklist->accessList);
+	if (!cbdataValid(A)) {
+	    cbdataUnlock(A);
+	    checklist->access_list = NULL;
 	    break;
 	}
 	debug(28, 3) ("aclCheck: checking '%s'\n", A->cfgline);
 	allow = A->allow;
-	match = aclMatchAclList(A->aclList, checklist);
+	match = aclMatchAclList(A->acl_list, checklist);
 	if (checklist->state[ACL_DST_IP] == ACL_LOOKUP_NEEDED) {
 	    checklist->state[ACL_DST_IP] = ACL_LOOKUP_PENDING;
 	    ipcache_nbgethostbyname(checklist->request->host,
@@ -1802,14 +1798,15 @@ aclCheck(aclCheck_t * checklist)
 #if USE_IDENT
 	else if (checklist->state[ACL_IDENT] == ACL_LOOKUP_NEEDED) {
 	    debug(28, 3) ("aclCheck: Doing ident lookup\n");
-	    if (checklist->conn && cbdataReferenceValid(checklist->conn)) {
+	    if (cbdataValid(checklist->conn)) {
 		identStart(&checklist->conn->me, &checklist->conn->peer,
 		    aclLookupIdentDone, checklist);
 		checklist->state[ACL_IDENT] = ACL_LOOKUP_PENDING;
 		return;
 	    } else {
 		debug(28, 1) ("aclCheck: Can't start ident lookup. No client connection\n");
-		cbdataReferenceDone(checklist->conn);
+		cbdataUnlock(checklist->conn);
+		checklist->conn = NULL;
 		allow = 0;
 		match = -1;
 	    }
@@ -1827,15 +1824,18 @@ aclCheck(aclCheck_t * checklist)
 	 */
 	if (match) {
 	    debug(28, 3) ("aclCheck: match found, returning %d\n", allow);
-	    cbdataReferenceDone(checklist->accessList);		/* A */
+	    cbdataUnlock(A);
+	    checklist->access_list = NULL;
 	    aclCheckCallback(checklist, allow);
 	    return;
 	}
+	checklist->access_list = A->next;
 	/*
-	 * Reference the next _acl_access entry
+	 * Lock the next _acl_access entry
 	 */
-	checklist->accessList = cbdataReference(A->next);
-	cbdataReferenceDone(A);
+	if (A->next)
+	    cbdataLock(A->next);
+	cbdataUnlock(A);
     }
     debug(28, 3) ("aclCheck: NO match found, returning %d\n", allow != ACCESS_DENIED ? ACCESS_DENIED : ACCESS_ALLOWED);
     aclCheckCallback(checklist, allow != ACCESS_DENIED ? ACCESS_DENIED : ACCESS_ALLOWED);
@@ -1847,8 +1847,14 @@ aclChecklistFree(aclCheck_t * checklist)
     if (checklist->request)
 	requestUnlink(checklist->request);
     checklist->request = NULL;
-    cbdataReferenceDone(checklist->conn);
-    cbdataReferenceDone(checklist->accessList);
+    if (checklist->conn) {
+	cbdataUnlock(checklist->conn);
+	checklist->conn = NULL;
+    }
+    if (checklist->access_list) {
+	cbdataUnlock(checklist->access_list);
+	checklist->access_list = NULL;
+    }
     aclCheckCleanup(checklist);
     cbdataFree(checklist);
 }
@@ -1856,8 +1862,6 @@ aclChecklistFree(aclCheck_t * checklist)
 static void
 aclCheckCallback(aclCheck_t * checklist, allow_t answer)
 {
-    PF *callback;
-    void *cbdata;
     debug(28, 3) ("aclCheckCallback: answer=%d\n", answer);
     /* During reconfigure, we can end up not finishing call sequences into the auth code */
     if (checklist->auth_user_request) {
@@ -1869,10 +1873,11 @@ aclCheckCallback(aclCheck_t * checklist, allow_t answer)
 	checklist->conn->auth_type = AUTH_BROKEN;
 	checklist->auth_user_request = NULL;
     }
-    callback = checklist->callback;
+    if (cbdataValid(checklist->callback_data))
+	checklist->callback(answer, checklist->callback_data);
+    cbdataUnlock(checklist->callback_data);
     checklist->callback = NULL;
-    if (cbdataReferenceValidDone(checklist->callback_data, &cbdata))
-	callback(answer, cbdata);
+    checklist->callback_data = NULL;
     aclChecklistFree(checklist);
 }
 
@@ -1893,7 +1898,7 @@ aclLookupIdentDone(const char *ident, void *data)
      * Cache the ident result in the connection, to avoid redoing ident lookup
      * over and over on persistent connections
      */
-    if (cbdataReferenceValid(checklist->conn) && !checklist->conn->rfc931[0])
+    if (cbdataValid(checklist->conn) && !checklist->conn->rfc931[0])
 	xstrncpy(checklist->conn->rfc931, checklist->rfc931, USER_IDENT_SZ);
     aclCheck(checklist);
 }
@@ -1957,7 +1962,8 @@ aclLookupExternalDone(void *data, void *result)
 {
     aclCheck_t *checklist = data;
     checklist->state[ACL_EXTERNAL] = ACL_LOOKUP_DONE;
-    checklist->extacl_entry = cbdataReference(result);
+    checklist->extacl_entry = result;
+    cbdataLock(checklist->extacl_entry);
     aclCheck(checklist);
 }
 
@@ -1967,7 +1973,12 @@ aclChecklistCreate(const acl_access * A, request_t * request, const char *ident)
     int i;
     aclCheck_t *checklist;
     checklist = cbdataAlloc(aclCheck_t);
-    checklist->accessList = cbdataReference(A);
+    checklist->access_list = A;
+    /*
+     * aclCheck() makes sure checklist->access_list is a valid
+     * pointer, so lock it.
+     */
+    cbdataLock(A);
     if (request != NULL) {
 	checklist->request = requestLink(request);
 	checklist->src_addr = request->client_addr;
@@ -1988,7 +1999,8 @@ void
 aclNBCheck(aclCheck_t * checklist, PF * callback, void *callback_data)
 {
     checklist->callback = callback;
-    checklist->callback_data = cbdataReference(callback_data);
+    checklist->callback_data = callback_data;
+    cbdataLock(callback_data);
     aclCheck(checklist);
 }
 
@@ -2140,7 +2152,7 @@ aclDestroyAccessList(acl_access ** list)
     for (l = *list; l; l = next) {
 	debug(28, 3) ("aclDestroyAccessList: '%s'\n", l->cfgline);
 	next = l->next;
-	aclDestroyAclList(&l->aclList);
+	aclDestroyAclList(&l->acl_list);
 	safe_free(l->cfgline);
 	cbdataFree(l);
     }
@@ -2543,10 +2555,10 @@ aclPurgeMethodInUse(acl_access * a)
 {
     acl_list *b;
     for (; a; a = a->next) {
-	for (b = a->aclList; b; b = b->next) {
-	    if (ACL_METHOD != b->_acl->type)
+	for (b = a->acl_list; b; b = b->next) {
+	    if (ACL_METHOD != b->acl->type)
 		continue;
-	    if (aclMatchInteger(b->_acl->data, METHOD_PURGE))
+	    if (aclMatchInteger(b->acl->data, METHOD_PURGE))
 		return 1;
 	}
     }

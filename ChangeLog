@@ -1,22 +1,88 @@
-Changes to squid-2.6 ():
-	
-	- CARP now plays well with the other peering algorithms,
-	  and support for CARP peerings is compiled by default. Can be
-	  disabled by --disable-carp
-	- Configuration file can be read from an external program
-	  or preprocessor. See squid.8 man page.
-	- http_port is now optional, allowing for SSL only operation
-	- Satellite and other high latency peering relations enhancements
-	  (Robert Cohren)
-	- Nuked num32 types, and made type detection more robust by the
-	  use of typedefs rather than #defines.
-	- the mailto links on Squid's ERR pages now contain data about the
-	  occurred error by default, so that the email will contain this data in
-	  its body. This feature can be disabled via the email_err_data directive.
-	  (Clemens Löser)
+Changes to squid-2.5.STABLE2 (Mars 17, 2003):
 
-
-Changes to squid-2.5 ():
+	- Contrib files added back to the distribution
+	- Several compiler warnings fixed when using --disable-ident or
+	  --disable-http-violations
+	- authentication can now be used in most access controls, but
+	  must in most cases first be enforced in http_access to force
+	  the user to authenticate.
+	- cleanups in the developer bootstrap.sh process when preparing
+	  the sources.
+	- several squid.conf.default documentation updated to correctly
+	  refer to the current names when refering to other directives
+	- authenticate_ip_ttl documentation updates
+	- several assertion faults and segmentation violations corrected
+	- the RunCache/RunAccel and squid.rc scripts updated to refer to
+	  the squid binary in sbin rather than the old bin location.
+	- squid_ldap_auth command line processing fixes when specifying
+	  the LDAP server last on the line instead of -h option
+	- aufs data corruption bugfix
+	- aufs performance improvement for low traffic systems
+	- aufs stability improvements
+	- external_acl corrected to properly deal with quoted strings
+	- WCCPv1 bugfix to make sure the router accepts the hash assignments
+	- "Total accounted memory" now correctly reported in cachemgr
+	- several small memory leaks (mostly reconfigure related)
+	- new squid.conf option to allow GET/HEAD requests with a request
+	  entity
+	- "make uninstall" no longer removes squid.conf
+	- cachemgr.cgi now uses POST to avoid having the cachemgr password
+	  logged in the web server logs
+	- authentication schemes which are known to not be proxyable are now
+	  filtered out from forwarded server replies to avoid that the clients
+	  tries to use such schemes when we know for a fact it won't work
+	- spelling corrections in various error messages
+	- now possible to define acl values with spaces in them
+	  by using the "include file" feature
+	- squid_ldap_group updated to 2.10 to fix compilation issues with
+	  recent (and older) OpenLDAP libraries and to make the helper deal
+	  correctly with true LDAP groups by first looking up the user DN.
+	- Some internal code cleanups
+	- now verifies that programs etc exists iside the chroot directory
+	  when using chroot_dir. No longer neccesary to set up a split view
+	  environment where the same paths works both inside the chroot and
+	  outside just to convince Squid that the files is actually there..
+	- improved memory usage reporting
+	- --disable-hostname-checks configure option
+	- no longer ignores double dots in host names. Any hostname with
+	  double dots is now rejected as invalid.
+	- log_mime_hdrs no longer logs garbage if very long headers
+	  are seen.
+	- 'select_fds_hist' object added to cachemgr 'histogram' output
+	- pid file now unlinked when squid has really shut down, not
+	  immediately when the shutdown request is received. This allows
+	  the pid file to be monitored to determine when Squid has shut down
+	  properly
+	- correct authentication scheme setups on some platforms or compilers
+	- several squid.conf.default documentation updates to remove references
+	  to renamed or replaced directives by changing them to their current
+	  names.
+	- the SSL reverse proxy support updated to allow building with
+	  OpenSSL 0.9.7 and and later.
+	- Corrected a minor performance problem while processing HEAD replies
+	  from various broken web servers not sending a correct HTTP reply
+	- time acls can now specify multiple times in the same acl name, like
+	  most other acl types.
+	- winbind helpers updated to match Samba-2.2.7a and should
+	  work with Samba-2.2.6 or later (required). For compability with
+	  older Samba versions A new configure option --with-samba-sources=...
+	  has been added to allow you to specify which Samba version the
+	  helpers should be built for if different than the above versions.
+	- Squid MIB definition syntax correction to work better with newer
+	  (and older) SNMP tools.
+	- Fixed access.log format when logging "error:invalid-HTTP-ident" on
+	  requests where parsing the HTTP identifier (HTTP/1.0) failed.
+	- "make distclean" no longer removes the icons, this avoids the
+	  dependency on "uudecode" to rebuild Squid after "make distclean"
+	- User name returned by external acl lookups (external_acl_type)
+	  is now available as "ident" in later acl checks in addition to
+	  the logging in access.log.
+	- Incorrect behaviour of Digest authentication partly corrected - it
+	  will not handle sessions, but will always enforce password
+	  correctness.. (patch submitted by Sean Burford).
+	- Issue with persistent connections and PUT/POST request corrected
+	  
+Changes to squid-2.5.STABLE1 (September 25, 2002):
 
 	- Major rewrite of proxy authentication to support other schemes
 	  than basic. First in the line is NTLM support but others can
@@ -25,6 +91,7 @@ Changes to squid-2.5 ():
 	- Reworked how request bodies are passed down to the protocols.
 	  Now all client side processing is inside client_side.c, and
 	  the pass and pump modules is no longer used.
+	  used by Squid.
 	- Optimized searching in proxy_auth and ident ACL types. Squid should
 	  now handle large access lists a lot more efficiently.
 	  (Francesco Chemolli)
@@ -75,6 +142,7 @@ Changes to squid-2.5 ():
 	  cache_peer option.
 	- Responses with Vary: in the header are now cached by squid.
 	  (Henrik Nordstrom).
+	- Removed unused 'siteselect_timeout' directive.
 
 Changes to Squid-2.4.STABLE7 (July 2, 2002):
 

@@ -25,8 +25,8 @@
 #include <sys/time.h>           /* for gettimeofday */
 #include <errno.h>              /* BUG: is this portable? */
 
-#include "winbind_nss_config.h"
-#include "winbindd_nss.h"
+#include "nsswitch/winbind_nss_config.h"
+#include "nsswitch/winbindd_nss.h"
 
 char debug_enabled=0;
 char *myname;
@@ -113,8 +113,8 @@ void manage_request(void)
 	
     c=memchr(buf,'\n',BUFFER_SIZE);
     if (c) {
-	*c = '\0';
-	length = c-buf;
+	*c='\0';
+	length=c-buf;
     } else {
 	err = 1;
 	return;

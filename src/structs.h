@@ -254,31 +254,31 @@ struct _acl {
 
 struct _acl_list {
     int op;
-    acl *_acl;
+    acl *acl;
     acl_list *next;
 };
 
 struct _acl_access {
     int allow;
-    acl_list *aclList;
+    acl_list *acl_list;
     char *cfgline;
     acl_access *next;
 };
 
 struct _acl_address {
     acl_address *next;
-    acl_list *aclList;
+    acl_list *acl_list;
     struct in_addr addr;
 };
 
 struct _acl_tos {
     acl_tos *next;
-    acl_list *aclList;
+    acl_list *acl_list;
     int tos;
 };
 
 struct _aclCheck_t {
-    const acl_access *accessList;
+    const acl_access *access_list;
     struct in_addr src_addr;
     struct in_addr dst_addr;
     struct in_addr my_addr;
@@ -383,21 +383,19 @@ struct _SquidConfig {
     struct {
 	char *relayHost;
 	u_short relayPort;
-	peer *_peer;
+	peer *peer;
     } Wais;
     struct {
 	size_t min;
 	int pct;
 	size_t max;
     } quickAbort;
-    size_t readAheadGap;
     RemovalPolicySettings *replPolicy;
     RemovalPolicySettings *memPolicy;
     time_t negativeTtl;
     time_t negativeDnsTtl;
     time_t positiveDnsTtl;
     time_t shutdownLifetime;
-    time_t backgroundPingRate;
     struct {
 	time_t read;
 	time_t lifetime;
@@ -410,7 +408,6 @@ struct _SquidConfig {
 	time_t deadPeer;
 	int icp_query;		/* msec */
 	int icp_query_max;	/* msec */
-	int icp_query_min;	/* msec */
 	int mcast_icp_query;	/* msec */
 #if USE_IDENT
 	time_t ident;
@@ -594,9 +591,6 @@ struct _SquidConfig {
 	int vary_ignore_expire;
 	int pipeline_prefetch;
 	int request_entities;
-	int check_hostnames;
-	int via;
-	int emailErrData;
     } onoff;
     acl *aclList;
     struct {
@@ -798,7 +792,7 @@ struct _fde {
     time_t timeout;
     void *timeout_data;
     void *lifetime_data;
-    close_handler *closeHandler;	/* linked list */
+    close_handler *close_handler;	/* linked list */
     DEFER *defer_check;		/* check if we should defer read */
     void *defer_data;
     CommWriteStateData *rwstate;	/* State data for comm_write */
@@ -828,7 +822,7 @@ struct _MemBuf {
     /* private, stay away; use interface function instead */
     mb_size_t max_capacity;	/* when grows: assert(new_capacity <= max_capacity) */
     mb_size_t capacity;		/* allocated space */
-    unsigned stolen:1;		/* the buffer has been stolen for use by someone else */
+    FREE *freefunc;		/* what to use to free the buffer, NULL after memBufFreeFunc() is called */
 };
 
 /* see Packer.c for description */
@@ -980,7 +974,7 @@ struct _HttpStateData {
     char *reply_hdr;
     size_t reply_hdr_size;
     int reply_hdr_state;
-    peer *_peer;		/* peer request made to */
+    peer *peer;			/* peer request made to */
     int eof;			/* reached end-of-object? */
     request_t *orig_request;
     int fd;
@@ -1049,27 +1043,34 @@ struct _AccessLogEntry {
     } headers;
     struct {
 	const char *method_str;
-    } _private;
+    } private;
     HierarchyLogEntry hier;
 };
 
 struct _clientHttpRequest {
     ConnStateData *conn;
     request_t *request;		/* Parsed URL ... */
+    store_client *sc;		/* The store_client we're using */
+    store_client *old_sc;	/* ... for entry to be validated */
     char *uri;
     char *log_uri;
     struct {
 	off_t offset;
 	size_t size;
-	size_t headers_sz;
     } out;
     HttpHdrRangeIter range_iter;	/* data for iterating thru range specs */
     size_t req_sz;		/* raw request size on input, not current request size */
     StoreEntry *entry;
     StoreEntry *old_entry;
-    log_type logType;
+    log_type log_type;
+#if USE_CACHE_DIGESTS
+    const char *lookup_type;	/* temporary hack: storeGet() result: HIT/MISS/NONE */
+#endif
     struct timeval start;
     http_version_t http_ver;
+    int redirect_state;
+    aclCheck_t *acl_checklist;	/* need ptr back so we can unreg if needed */
+    clientHttpRequest *next;
     AccessLogEntry al;
     struct {
 	unsigned int accel:1;
@@ -1082,15 +1083,14 @@ struct _clientHttpRequest {
 	char *location;
     } redirect;
     dlink_node active;
-    dlink_list client_stream;
 };
 
 struct _ConnStateData {
     int fd;
     struct {
 	char *buf;
-	off_t notYetUsed;
-	size_t allocatedSize;
+	off_t offset;
+	size_t size;
     } in;
     struct {
 	size_t size_left;	/* How much body left to process */
@@ -1105,7 +1105,7 @@ struct _ConnStateData {
     /* note this is ONLY connection based because NTLM is against HTTP spec */
     /* the user details for connection based authentication */
     auth_user_request_t *auth_user_request;
-    void *currentobject;	/* used by the owner of the connection. Opaque otherwise */
+    clientHttpRequest *chr;
     struct sockaddr_in peer;
     struct sockaddr_in me;
     struct in_addr log_addr;
@@ -1172,9 +1172,6 @@ struct _DigestFetchState {
 	int msg;
 	int bytes;
     } sent, recv;
-    char buf[SM_PAGE_SIZE];
-    ssize_t bufofs;
-    digest_read_state_t state;
 };
 
 /* statistics for cache digests and other hit "predictors" */
@@ -1259,11 +1256,9 @@ struct _peer {
     struct {
 	unsigned int proxy_only:1;
 	unsigned int no_query:1;
-	unsigned int background_ping:1;
 	unsigned int no_digest:1;
 	unsigned int default_parent:1;
 	unsigned int roundrobin:1;
-	unsigned int weighted_roundrobin:1;
 	unsigned int mcast_responder:1;
 	unsigned int closest_only:1;
 #if USE_HTCP
@@ -1274,12 +1269,8 @@ struct _peer {
 	unsigned int no_delay:1;
 #endif
 	unsigned int allow_miss:1;
-#if USE_CARP
-	unsigned int carp:1;
-#endif
     } options;
     int weight;
-    int basetime;
     struct {
 	double avg_n_members;
 	int n_times_counted;
@@ -1306,7 +1297,7 @@ struct _peer {
     struct {
 	unsigned int hash;
 	double load_multiplier;
-	double load_factor;	/* normalized weight value */
+	float load_factor;
     } carp;
 #endif
     char *login;		/* Proxy authorization */
@@ -1397,10 +1388,10 @@ struct _icp_common_t {
     unsigned char opcode;	/* opcode */
     unsigned char version;	/* version number */
     unsigned short length;	/* total length (bytes) */
-    u_int32_t reqnum;		/* req number (req'd for UDP) */
-    u_int32_t flags;
-    u_int32_t pad;
-    u_int32_t shostid;		/* sender host id */
+    u_num32 reqnum;		/* req number (req'd for UDP) */
+    u_num32 flags;
+    u_num32 pad;
+    u_num32 shostid;		/* sender host id */
 };
 
 struct _iostats {
@@ -1424,6 +1415,29 @@ struct _mem_hdr {
     mem_node *tail;
     int origin_offset;
 };
+
+/* keep track each client receiving data from that particular StoreEntry */
+struct _store_client {
+    int type;
+    off_t copy_offset;
+    off_t seen_offset;
+    size_t copy_size;
+    char *copy_buf;
+    STCB *callback;
+    void *callback_data;
+    StoreEntry *entry;		/* ptr to the parent StoreEntry, argh! */
+    storeIOState *swapin_sio;
+    struct {
+	unsigned int disk_io_pending:1;
+	unsigned int store_copying:1;
+	unsigned int copy_event_pending:1;
+    } flags;
+#if DELAY_POOLS
+    delay_id delay_id;
+#endif
+    dlink_node node;
+};
+
 
 /* Removal policies */
 
@@ -1589,7 +1603,6 @@ struct _request_flags {
 #endif
     unsigned int accelerated:1;
     unsigned int internal:1;
-    unsigned int internalclient:1;
     unsigned int body_sent:1;
     unsigned int reset_tcp:1;
 };
@@ -1644,7 +1657,7 @@ struct _request_t {
     ConnStateData *body_connection;	/* used by clientReadBody() */
     int content_length;
     HierarchyLogEntry hier;
-    err_type errType;
+    err_type err_type;
     char *peer_login;		/* Configured peer login:password */
     time_t lastmod;		/* Used on refreshes */
     const char *vary_headers;	/* Used when varying entities are detected. Changes how the store key is calculated */
@@ -1686,7 +1699,7 @@ struct _CommWriteStateData {
 struct _ErrorState {
     err_type type;
     int page_id;
-    http_status httpStatus;
+    http_status http_status;
     auth_user_request_t *auth_user_request;
     request_t *request;
     char *url;
@@ -1880,6 +1893,30 @@ struct _storeSwapLogData {
     unsigned char key[MD5_DIGEST_CHARS];
 };
 
+/* object to track per-action memory usage (e.g. #idle objects) */
+struct _MemMeter {
+    ssize_t level;		/* current level (count or volume) */
+    ssize_t hwater_level;	/* high water mark */
+    time_t hwater_stamp;	/* timestamp of last high water mark change */
+};
+
+/* object to track per-pool memory usage (alloc = inuse+idle) */
+struct _MemPoolMeter {
+    MemMeter alloc;
+    MemMeter inuse;
+    MemMeter idle;
+    gb_t saved;
+    gb_t total;
+};
+
+/* a pool is a [growing] space for objects of the same size */
+struct _MemPool {
+    const char *label;
+    size_t obj_size;
+    Stack pstack;		/* stack for free pointers */
+    MemPoolMeter meter;
+};
+
 struct _ClientInfo {
     hash_link hash;		/* must be first */
     struct in_addr addr;
@@ -1909,7 +1946,7 @@ struct _CacheDigest {
 };
 
 struct _FwdServer {
-    peer *_peer;		/* NULL --> origin server */
+    peer *peer;			/* NULL --> origin server */
     hier_code code;
     FwdServer *next;
 };
@@ -1936,7 +1973,7 @@ struct _FwdState {
 struct _htcpReplyData {
     int hit;
     HttpHeader hdr;
-    u_int32_t msg_id;
+    u_num32 msg_id;
     double version;
     struct {
 	/* cache-to-origin */

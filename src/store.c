@@ -316,12 +316,8 @@ storeUnlockObject(StoreEntry * e)
 StoreEntry *
 storeGet(const cache_key * key)
 {
-    void *p;
-    PROF_start(storeGet);
     debug(20, 3) ("storeGet: looking up %s\n", storeKeyText(key));
-    p = hash_lookup(store_table, key);
-    PROF_stop(storeGet);
-    return (StoreEntry *) p;
+    return (StoreEntry *) hash_lookup(store_table, key);
 }
 
 StoreEntry *
@@ -825,7 +821,6 @@ storeMaintainSwapSpace(void *datanotused)
     SwapDir *SD;
     static time_t last_warn_time = 0;
 
-    PROF_start(storeMaintainSwapSpace);
     /* walk each fs */
     for (i = 0; i < Config.cacheSwap.n_configured; i++) {
 	/* call the maintain function .. */
@@ -845,7 +840,6 @@ storeMaintainSwapSpace(void *datanotused)
     }
     /* Reregister a maintain event .. */
     eventAdd("MaintainSwapSpace", storeMaintainSwapSpace, NULL, 1.0, 1);
-    PROF_stop(storeMaintainSwapSpace);
 }
 
 
@@ -853,7 +847,6 @@ storeMaintainSwapSpace(void *datanotused)
 void
 storeRelease(StoreEntry * e)
 {
-    PROF_start(storeRelease);
     debug(20, 3) ("storeRelease: Releasing: '%s'\n", storeKeyText(e->hash.key));
     /* If, for any reason we can't discard this object because of an
      * outstanding request, mark it for pending release */
@@ -861,7 +854,6 @@ storeRelease(StoreEntry * e)
 	storeExpireNow(e);
 	debug(20, 3) ("storeRelease: Only setting RELEASE_REQUEST bit\n");
 	storeReleaseRequest(e);
-	PROF_stop(storeRelease);
 	return;
     }
     if (store_dirs_rebuilding && e->swap_filen > -1) {
@@ -878,7 +870,6 @@ storeRelease(StoreEntry * e)
 	    e->lock_count++;
 	    EBIT_SET(e->flags, RELEASE_REQUEST);
 	    stackPush(&LateReleaseStack, e);
-	    PROF_stop(storeRelease);
 	    return;
 	} else {
 	    destroy_StoreEntry(e);
@@ -899,7 +890,6 @@ storeRelease(StoreEntry * e)
     }
     storeSetMemStatus(e, NOT_IN_MEMORY);
     destroy_StoreEntry(e);
-    PROF_stop(storeRelease);
 }
 
 static void
@@ -1049,18 +1039,6 @@ storeKeepInMemory(const StoreEntry * e)
     if (mem->data_hdr.head == NULL)
 	return 0;
     return mem->inmem_lo == 0;
-}
-
-int
-storeCheckNegativeHit(StoreEntry * e)
-{
-    if (!EBIT_TEST(e->flags, ENTRY_NEGCACHED))
-	return 0;
-    if (e->expires <= squid_curtime)
-	return 0;
-    if (e->store_status != STORE_OK)
-	return 0;
-    return 1;
 }
 
 void
