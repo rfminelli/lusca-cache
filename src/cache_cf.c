@@ -130,6 +130,7 @@ static struct {
     int connectTimeout;
     int ageMaxDefault;
     int cleanRate;
+    int dnsChildren;
     int maxRequestSize;
     double hotVmFactor;
     struct {
@@ -150,14 +151,10 @@ static struct {
 	char *ftpget;
 	char *ftpget_opts;
 	char *dnsserver;
-	char *redirect;
     } Program;
-    int dnsChildren;
-    int redirectChildren;
     int sourcePing;
     int quickAbort;
     int commonLogFormat;
-    int identLookup;
     int neighborTimeout;
     int stallDelay;
     int singleParentBypass;
@@ -183,7 +180,6 @@ static struct {
 	struct in_addr tcp_outgoing;
 	struct in_addr udp_incoming;
 	struct in_addr udp_outgoing;
-	struct in_addr client_netmask;
     } Addrs;
     wordlist *cache_dirs;
     wordlist *http_stoplist;
@@ -222,8 +218,7 @@ static struct {
 #define DefaultConnectTimeout	(2 * 60)	/* 2 min */
 #define DefaultDefaultAgeMax	(3600 * 24 * 30)	/* 30 days */
 #define DefaultCleanRate	-1	/* disabled */
-#define DefaultDnsChildren	5	/* 5 processes */
-#define DefaultRedirectChildren	5	/* 5 processes */
+#define DefaultDnsChildren	5	/* 3 processes */
 #define DefaultMaxRequestSize	(100 << 10)	/* 100Kb */
 #define DefaultHotVmFactor	0.0	/* disabled */
 
@@ -239,7 +234,6 @@ static struct {
 #define DefaultFtpgetProgram	DEFAULT_FTPGET
 #define DefaultFtpgetOptions	""
 #define DefaultDnsserverProgram DEFAULT_DNSSERVER
-#define DefaultRedirectProgram  (char *)NULL	/* default NONE */
 #define DefaultEffectiveUser	(char *)NULL	/* default NONE */
 #define DefaultEffectiveGroup	(char *)NULL	/* default NONE */
 #define DefaultAppendDomain	(char *)NULL	/* default NONE */
@@ -250,8 +244,7 @@ static struct {
 #define DefaultAccelPort	0	/* default off */
 #define DefaultAccelWithProxy	0	/* default off */
 #define DefaultSourcePing	0	/* default off */
-#define DefaultCommonLogFormat	0	/* default off */
-#define DefaultIdentLookup	0	/* default off */
+#define DefaultCommonLogFormat	1	/* default on */
 #define DefaultQuickAbort	0	/* default off */
 #define DefaultNeighborTimeout  2	/* 2 seconds */
 #define DefaultStallDelay	1	/* 1 seconds */
@@ -267,7 +260,6 @@ static struct {
 #define DefaultTcpOutgoingAddr	INADDR_NONE
 #define DefaultUdpIncomingAddr	INADDR_ANY
 #define DefaultUdpOutgoingAddr	INADDR_NONE
-#define DefaultClientNetmask	0xFFFFFFFF;
 
 ip_acl *local_ip_list = NULL;
 ip_acl *firewall_ip_list = NULL;
@@ -275,7 +267,6 @@ ip_acl *firewall_ip_list = NULL;
 int zap_disk_store = 0;		/* off, try to rebuild from disk */
 int httpd_accel_mode = 0;	/* for fast access */
 int emulate_httpd_log = DefaultCommonLogFormat;		/* for fast access */
-int identLookup = DefaultIdentLookup;	/* for fast access */
 time_t neighbor_timeout = DefaultNeighborTimeout;	/* for fast access */
 int single_parent_bypass = 0;
 int DnsPositiveTtl = DefaultPositiveDnsTtl;
@@ -293,7 +284,6 @@ static void configSetFactoryDefaults _PARAMS((void));
 static void configFreeMemory _PARAMS((void));
 static void configDoConfigure _PARAMS((void));
 static char *safe_xstrdup _PARAMS((char *p));
-static void parseOnOff _PARAMS((int *));
 static char fatal_str[BUFSIZ];
 
 void self_destruct()
@@ -552,6 +542,41 @@ static void parseHostAclLine()
 }
 
 
+static void parseSourcePingLine()
+{
+    char *srcping;
+
+    srcping = strtok(NULL, w_space);
+    if (srcping == NULL)
+	self_destruct();
+
+    /* set source_ping, default is off. */
+    if (!strcasecmp(srcping, "on"))
+	Config.sourcePing = 1;
+    else if (!strcasecmp(srcping, "off"))
+	Config.sourcePing = 0;
+    else
+	Config.sourcePing = 0;
+}
+
+
+static void parseQuickAbortLine()
+{
+    char *abort;
+
+    abort = strtok(NULL, w_space);
+    if (abort == NULL)
+	self_destruct();
+
+    if (!strcasecmp(abort, "on") || !strcasecmp(abort, "quick"))
+	Config.quickAbort = 1;
+    else if (!strcmp(abort, "off") || !strcasecmp(abort, "normal"))
+	Config.quickAbort = 0;
+    else
+	Config.quickAbort = 0;
+
+}
+
 static void parseMemLine()
 {
     char *token;
@@ -750,14 +775,6 @@ static void parseDnsChildrenLine()
     Config.dnsChildren = i;
 }
 
-static void parseRedirectChildrenLine()
-{
-    char *token;
-    int i;
-    GetInteger(i);
-    Config.redirectChildren = i;
-}
-
 static void parseRequestSizeLine()
 {
     char *token;
@@ -789,7 +806,7 @@ static void parseDirLine()
 static void parseHttpdAccelLine()
 {
     char *token;
-    LOCAL_ARRAY(char, buf, BUFSIZ);
+    static char buf[BUFSIZ];
     int i;
 
     token = strtok(NULL, w_space);
@@ -803,6 +820,23 @@ static void parseHttpdAccelLine()
     sprintf(buf, "http://%s:%d", Config.Accel.host, Config.Accel.port);
     Config.Accel.prefix = xstrdup(buf);
     httpd_accel_mode = 1;
+}
+
+static void parseHttpdAccelWithProxyLine()
+{
+    char *proxy;
+
+    proxy = strtok(NULL, w_space);
+    if (proxy == NULL)
+	self_destruct();
+
+    /* set httpd_accel_with_proxy, default is off. */
+    if (!strcasecmp(proxy, "on"))
+	Config.Accel.withProxy = 1;
+    else if (!strcasecmp(proxy, "off"))
+	Config.Accel.withProxy = 0;
+    else
+	Config.Accel.withProxy = 0;
 }
 
 static void parseEffectiveUserLine()
@@ -900,27 +934,16 @@ static void parseDnsProgramLine()
     Config.Program.dnsserver = xstrdup(token);
 }
 
-static void parseRedirectProgramLine()
-{
-    char *token;
-    token = strtok(NULL, w_space);
-    if (token == NULL)
-	self_destruct();
-    safe_free(Config.Program.redirect);
-    Config.Program.redirect = xstrdup(token);
-}
-
-static void parseOnOff(var)
-     int *var;
+static void parseEmulateLine()
 {
     char *token;
     token = strtok(NULL, w_space);
     if (token == NULL)
 	self_destruct();
     if (!strcasecmp(token, "on") || !strcasecmp(token, "enable"))
-	*var = 1;
+	Config.commonLogFormat = 1;
     else
-	*var = 0;
+	Config.commonLogFormat = 0;
 }
 
 static void parseWAISRelayLine()
@@ -1010,7 +1033,7 @@ static void parseAddressLine(addr)
 static void parseLocalDomainFile(fname)
      char *fname;
 {
-    LOCAL_ARRAY(char, tmp_line, BUFSIZ);
+    static char tmp_line[BUFSIZ];
     FILE *fp = NULL;
     char *t = NULL;
 
@@ -1092,6 +1115,16 @@ static void parseNeighborTimeout()
     Config.neighborTimeout = i;
 }
 
+static void parseSingleParentBypassLine()
+{
+    char *token;
+    token = strtok(NULL, w_space);
+    if (token == NULL)
+	self_destruct();
+    if (!strcasecmp(token, "on"))
+	Config.singleParentBypass = 1;
+}
+
 static void parseDebugOptionsLine()
 {
     char *token;
@@ -1169,7 +1202,7 @@ int parseConfigFile(file_name)
 {
     FILE *fp = NULL;
     char *token = NULL;
-    LOCAL_ARRAY(char, tmp_line, BUFSIZ);
+    static char tmp_line[BUFSIZ];
 
     configFreeMemory();
     configSetFactoryDefaults();
@@ -1240,8 +1273,9 @@ int parseConfigFile(file_name)
 	else if (!strcmp(token, "logfile_rotate"))
 	    parseLogfileRotateLine();
 
+	/* Parse a httpd_accel_with_proxy line */
 	else if (!strcmp(token, "httpd_accel_with_proxy"))
-	    parseOnOff(&Config.Accel.withProxy);
+	    parseHttpdAccelWithProxyLine();
 
 	/* Parse a httpd_accel line */
 	else if (!strcmp(token, "httpd_accel"))
@@ -1376,22 +1410,17 @@ int parseConfigFile(file_name)
 	else if (!strcmp(token, "dns_children"))
 	    parseDnsChildrenLine();
 
-	else if (!strcmp(token, "redirect_program"))
-	    parseRedirectProgramLine();
-	else if (!strcmp(token, "redirect_children"))
-	    parseRedirectChildrenLine();
-
+	/* Parse source_ping line */
 	else if (!strcmp(token, "source_ping"))
-	    parseOnOff(&Config.sourcePing);
+	    parseSourcePingLine();
 
+	/* Parse quick_abort line */
 	else if (!strcmp(token, "quick_abort"))
-	    parseOnOff(&Config.quickAbort);
+	    parseQuickAbortLine();
 
+	/* Parse emulate_httpd_log line */
 	else if (!strcmp(token, "emulate_httpd_log"))
-	    parseOnOff(&Config.commonLogFormat);
-
-	else if (!strcmp(token, "lookup_ident"))
-	    parseOnOff(&Config.identLookup);
+	    parseEmulateLine();
 
 	else if (!strcmp(token, "append_domain"))
 	    parseAppendDomainLine();
@@ -1421,9 +1450,6 @@ int parseConfigFile(file_name)
 	else if (!strcmp(token, "udp_outgoing_address"))
 	    parseAddressLine(&Config.Addrs.udp_outgoing);
 
-	else if (!strcmp(token, "client_netmask"))
-	    parseAddressLine(&Config.Addrs.client_netmask);
-
 	else if (!strcmp(token, "bind_address"))
 	    parseAddressLine(&Config.Addrs.tcp_incoming);
 
@@ -1445,7 +1471,7 @@ int parseConfigFile(file_name)
 	    parseDnsTestnameLine();
 
 	else if (!strcmp(token, "single_parent_bypass"))
-	    parseOnOff(&Config.singleParentBypass);
+	    parseSingleParentBypassLine();
 
 	else if (!strcmp(token, "debug_options"))
 	    parseDebugOptionsLine();
@@ -1500,24 +1526,13 @@ int parseConfigFile(file_name)
     if (getDnsChildren() < 1) {
 	printf("WARNING: dns_children was set to a bad value: %d\n",
 	    getDnsChildren());
-	Config.dnsChildren = DefaultDnsChildren;
-	printf("Setting it to the default (%d).\n", DefaultDnsChildren);
+	printf("Setting it to the default (3).\n");
+	Config.dnsChildren = 3;
     } else if (getDnsChildren() > DefaultDnsChildrenMax) {
 	printf("WARNING: dns_children was set to a bad value: %d\n",
 	    getDnsChildren());
 	printf("Setting it to the maximum (%d).\n", DefaultDnsChildrenMax);
 	Config.dnsChildren = DefaultDnsChildrenMax;
-    }
-    if (getRedirectChildren() < 1) {
-	printf("WARNING: redirect_children was set to a bad value: %d\n",
-	    getRedirectChildren());
-	Config.redirectChildren = DefaultRedirectChildren;
-	printf("Setting it to the default (%d).\n", DefaultRedirectChildren);
-    } else if (getRedirectChildren() > DefaultRedirectChildrenMax) {
-	printf("WARNING: redirect_children was set to a bad value: %d\n",
-	    getRedirectChildren());
-	printf("Setting it to the maximum (%d).\n", DefaultRedirectChildrenMax);
-	Config.redirectChildren = DefaultRedirectChildrenMax;
     }
     fclose(fp);
 
@@ -1637,10 +1652,6 @@ int getDnsChildren()
 {
     return Config.dnsChildren;
 }
-int getRedirectChildren()
-{
-    return Config.redirectChildren;
-}
 int getQuickAbort()
 {
     return Config.quickAbort;
@@ -1688,10 +1699,6 @@ u_short getIcpPortNum()
 char *getDnsProgram()
 {
     return Config.Program.dnsserver;
-}
-char *getRedirectProgram()
-{
-    return Config.Program.redirect;
 }
 char *getFtpProgram()
 {
@@ -1801,10 +1808,6 @@ struct in_addr getUdpOutgoingAddr()
 {
     return Config.Addrs.udp_outgoing;
 }
-struct in_addr getClientNetmask()
-{
-    return Config.Addrs.client_netmask;
-}
 
 u_short setHttpPortNum(port)
      u_short port;
@@ -1837,7 +1840,6 @@ static void configFreeMemory()
     safe_free(Config.Program.ftpget);
     safe_free(Config.Program.ftpget_opts);
     safe_free(Config.Program.dnsserver);
-    safe_free(Config.Program.redirect);
     safe_free(Config.Accel.host);
     safe_free(Config.Accel.prefix);
     safe_free(Config.appendDomain);
@@ -1889,7 +1891,6 @@ static void configSetFactoryDefaults()
     Config.ageMaxDefault = DefaultDefaultAgeMax;
     Config.cleanRate = DefaultCleanRate;
     Config.dnsChildren = DefaultDnsChildren;
-    Config.redirectChildren = DefaultRedirectChildren;
     Config.hotVmFactor = DefaultHotVmFactor;
     Config.sourcePing = DefaultSourcePing;
     Config.quickAbort = DefaultQuickAbort;
@@ -1913,7 +1914,6 @@ static void configSetFactoryDefaults()
     Config.Program.ftpget = safe_xstrdup(DefaultFtpgetProgram);
     Config.Program.ftpget_opts = safe_xstrdup(DefaultFtpgetOptions);
     Config.Program.dnsserver = safe_xstrdup(DefaultDnsserverProgram);
-    Config.Program.redirect = safe_xstrdup(DefaultRedirectProgram);
     Config.Accel.host = safe_xstrdup(DefaultAccelHost);
     Config.Accel.prefix = safe_xstrdup(DefaultAccelPrefix);
     Config.Accel.port = DefaultAccelPort;
@@ -1929,7 +1929,6 @@ static void configSetFactoryDefaults()
     Config.Addrs.tcp_incoming.s_addr = DefaultTcpIncomingAddr;
     Config.Addrs.udp_outgoing.s_addr = DefaultUdpOutgoingAddr;
     Config.Addrs.udp_incoming.s_addr = DefaultUdpIncomingAddr;
-    Config.Addrs.client_netmask.s_addr = DefaultClientNetmask;
 }
 
 static void configDoConfigure()
@@ -1941,7 +1940,6 @@ static void configDoConfigure()
     DnsPositiveTtl = Config.positiveDnsTtl;
     sprintf(ForwardedBy, "Forwarded: by http://%s:%d/",
 	getMyHostname(), getHttpPortNum());
-    do_redirect = getRedirectProgram()? 1 : 0;
 
 
 #if !ALLOW_HOT_CACHE

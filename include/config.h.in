@@ -41,10 +41,6 @@
 #define XFER_TIMEOUT    120     /* 2 minutes */
 #endif
 
-#ifndef USE_ASYNC_IO
-#define USE_ASYNC_IO 0
-#endif
-
 /****************************************************************************
  *--------------------------------------------------------------------------*
  * DO *NOT* MAKE ANY CHANGES below here unless you know what you're doing...*
@@ -87,9 +83,6 @@
 #elif defined(__sgi__)				/* SGI */
 #define _SQUID_SGI_
 #define _SGI_SOURCE
-#if USE_ASYNC_IO
-#define _ABI_SOURCE
-#endif /* USE_ASYNC_IO */
 #elif defined(__NeXT__)
 #define _SQUID_NEXT_
 #elif defined(__bsdi__)

@@ -201,7 +201,7 @@ int protoDispatchDNSHandle(unused1, unused2, data)
 	if ((hp = ipcache_gethostbyname(req->host, 0)) == NULL) {
 	    debug(17, 1, "Unknown host: %s\n", req->host);
 	} else if (firewall_ip_list) {
-	    xmemcpy(&srv_addr, *(hp->h_addr_list + 0), hp->h_length);
+	    xmemcpy(&srv_addr, hp->h_addr_list[0], hp->h_length);
 	    if (ip_access_check(srv_addr, firewall_ip_list) == IP_DENY) {
 		hierarchy_log_append(entry,
 		    HIER_LOCAL_IP_DIRECT, 0,
@@ -210,7 +210,7 @@ int protoDispatchDNSHandle(unused1, unused2, data)
 		return 0;
 	    }
 	} else if (local_ip_list) {
-	    xmemcpy(&srv_addr, *(hp->h_addr_list + 0), hp->h_length);
+	    xmemcpy(&srv_addr, hp->h_addr_list[0], hp->h_length);
 	    if (ip_access_check(srv_addr, local_ip_list) == IP_DENY) {
 		hierarchy_log_append(entry,
 		    HIER_LOCAL_IP_DIRECT, 0,
@@ -384,7 +384,6 @@ int protoUndispatch(fd, url, entry, request)
     if (request->protocol == PROTO_CACHEOBJ)
 	return 0;
 
-    (void) redirectUnregister(url, fd);
     /* clean up DNS pending list for this name/fd look up here */
     if (!ipcache_unregister(request->host, fd)) {
 	debug(17, 5, "protoUndispatch: ipcache failed to unregister '%s'\n",
@@ -411,7 +410,7 @@ void protoCancelTimeout(fd, entry)
 	return;
     }
     debug(17, 2, "protoCancelTimeout: FD %d <URL:%s>\n", fd, entry->url);
-    if (fdstatGetType(fd) != FD_SOCKET) {
+    if (fdstat_type(fd) != FD_SOCKET) {
 	debug(17, 0, "FD %d: Someone called protoCancelTimeout() on a non-socket\n",
 	    fd);
 	fatal_dump(NULL);
@@ -536,7 +535,7 @@ static int protoNotImplemented(fd, url, entry)
      char *url;
      StoreEntry *entry;
 {
-    LOCAL_ARRAY(char, buf, 256);
+    static char buf[256];
 
     debug(17, 1, "protoNotImplemented: Cannot retrieve <URL:%s>\n", url);
 
@@ -555,7 +554,7 @@ static int protoCantFetchObject(fd, entry, reason)
      StoreEntry *entry;
      char *reason;
 {
-    LOCAL_ARRAY(char, buf, 2048);
+    static char buf[2048];
 
     debug(17, 1, "protoCantFetchObject: FD %d %s\n", fd, reason);
     debug(17, 1, "--> <URL:%s>\n", entry->url);

@@ -130,8 +130,8 @@ void _db_print(va_alist)
     int level;
     char *format = NULL;
 #endif
-    LOCAL_ARRAY(char, f, BUFSIZ);
-    LOCAL_ARRAY(char, tmpbuf, BUFSIZ);
+    static char f[BUFSIZ];
+    static char tmpbuf[BUFSIZ];
     char *s = NULL;
 
     if (debug_log == NULL)
@@ -255,8 +255,8 @@ void _db_init(logfile, options)
 void _db_rotate_log()
 {
     int i;
-    LOCAL_ARRAY(char, from, MAXPATHLEN);
-    LOCAL_ARRAY(char, to, MAXPATHLEN);
+    static char from[MAXPATHLEN];
+    static char to[MAXPATHLEN];
 
     if (debug_log_file == NULL)
 	return;

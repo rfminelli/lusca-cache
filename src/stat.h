@@ -171,7 +171,7 @@ struct _cacheinfo {
 
     /* add a transaction to system log */
     void (*log_append) _PARAMS((struct _cacheinfo * obj, char *url, char *id,
-	    int size, char *action, char *method, int http_code, int msec, char *ident, hier_code));
+	    int size, char *action, char *method, int http_code, int msec, hier_code));
 
     /* clear logfile */
     void (*log_clear) _PARAMS((struct _cacheinfo * obj, StoreEntry * sentry));
@@ -236,8 +236,6 @@ extern char *close_bracket;
 
 extern void stat_init _PARAMS((cacheinfo **, char *));
 extern void stat_rotate_log _PARAMS((void));
-extern int memoryAccounted _PARAMS((void));
-extern int mallinfoTotal _PARAMS((void));
 
 
 #endif /*STAT_H */

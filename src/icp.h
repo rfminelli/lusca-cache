@@ -159,7 +159,13 @@ typedef struct wwd {
 } icpUdpData;
 
 extern char *icpWrite _PARAMS((int, char *, int, int, void (*handler) (), void *));
-extern int icpUdpSend _PARAMS((int, char *, icp_common_t *, struct sockaddr_in *, icp_opcode, log_type));
+extern int icpUdpSend _PARAMS((int,
+	char *,
+	icp_common_t *,
+	struct sockaddr_in *,
+	int flags,
+	icp_opcode,
+	log_type));
 
 extern int icpHandleUdp _PARAMS((int sock, void *data));
 extern int asciiHandleConn _PARAMS((int sock, void *data));
@@ -169,30 +175,4 @@ extern int neighbors_do_private_keys;
 extern char *IcpOpcodeStr[];
 extern int icpUdpReply _PARAMS((int fd, icpUdpData * queue));
 
-
-#define ICP_IDENT_SZ 63
-typedef struct iwd {
-    icp_common_t header;	/* Allows access to previous header */
-    int fd;
-    char *url;
-    char *inbuf;
-    int inbufsize;
-    method_t method;		/* GET, POST, ... */
-    request_t *request;		/* Parsed URL ... */
-    char *request_hdr;		/* Mime header */
-    StoreEntry *entry;
-    long offset;
-    int log_type;
-    int http_code;
-    struct sockaddr_in peer;
-    struct sockaddr_in me;
-    char *ptr_to_4k_page;
-    char *buf;
-    struct timeval start;
-    int flags;
-    int size;			/* hack for CONNECT which doesnt use sentry */
-    char ident[ICP_IDENT_SZ + 1];
-    int ident_fd;
-} icpStateData;
-
-#endif /* ICP_H */
+#endif

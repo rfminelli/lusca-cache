@@ -173,7 +173,7 @@ void hierarchy_log_append(entry, code, timeout, cache_host)
     char *url = entry->url;
     MemObject *mem = entry->mem_obj;
     static time_t last_time = 0;
-    LOCAL_ARRAY(char, time_str, 128);
+    static char time_str[128];
     char *s = NULL;
 
     if (!cache_hierarchy_log)
@@ -337,7 +337,6 @@ void neighborRemove(target)
     }
     if (e) {
 	*E = e->next;
-	safe_free(e->host);
 	safe_free(e);
 	friends->n--;
     }
@@ -353,8 +352,8 @@ void neighborsDestroy()
     for (e = friends->edges_head; e; e = next) {
 	next = e->next;
 	safe_free(e->host);
+	/* XXX I think we need to free e->domains too -DW */
 	safe_free(e);
-	friends->n--;
     }
     safe_free(friends);
     friends = NULL;
@@ -372,7 +371,7 @@ static void neighborsOpenLog(fname)
 	cache_hierarchy_log = NULL;
     }
     if (strcmp(fname, "none") != 0) {
-	log_fd = file_open(fname, NULL, O_WRONLY | O_CREAT);
+	log_fd = file_open(fname, NULL, O_WRONLY | O_CREAT | O_APPEND);
 	if (log_fd < 0) {
 	    debug(15, 0, "neighborsOpenLog: %s: %s\n", fname, xstrerror());
 	} else if ((cache_hierarchy_log = fdopen(log_fd, "a")) == NULL) {
@@ -416,6 +415,7 @@ void neighbors_open(fd)
 	    safe_free(e);
 	    continue;
 	}
+	ipcacheLockEntry(e->host);
 	e->n_addresses = 0;
 	for (j = 0; *list && j < EDGE_MAX_ADDRESSES; j++) {
 	    ina = &e->addresses[j];
@@ -484,7 +484,6 @@ void neighbors_open(fd)
 int neighborsUdpPing(proto)
      protodispatch_data *proto;
 {
-    char *t = NULL;
     char *host = proto->request->host;
     char *url = proto->url;
     StoreEntry *entry = proto->entry;
@@ -493,6 +492,7 @@ int neighborsUdpPing(proto)
     edge *e = NULL;
     int i;
     MemObject *mem = entry->mem_obj;
+    int reqnum = 0;
 
     mem->e_pings_n_pings = 0;
     mem->e_pings_n_acks = 0;
@@ -500,7 +500,7 @@ int neighborsUdpPing(proto)
     mem->w_rtt = 0;
     mem->start_ping = current_time;
 
-    if (friends->edges_head == NULL)
+    if (friends->edges_head == (edge *) NULL)
 	return 0;
 
     for (i = 0, e = friends->first_ping; i++ < friends->n; e = e->next) {
@@ -510,7 +510,7 @@ int neighborsUdpPing(proto)
 
 	/* Don't resolve refreshes through neighbors because we don't resolve
 	 * misses through neighbors */
-	if (entry->flag & REFRESH_REQUEST && e->type == EDGE_SIBLING)
+	if (e->type == EDGE_SIBLING && entry->flag & REFRESH_REQUEST)
 	    continue;
 
 	/* skip any cache where we failed to connect() w/in the last 60s */
@@ -525,27 +525,30 @@ int neighborsUdpPing(proto)
 	debug(15, 4, "neighborsUdpPing: pinging cache %s for <URL:%s>\n",
 	    e->host, url);
 
-	/* e->header.reqnum++; */
 	if (BIT_TEST(entry->flag, KEY_PRIVATE))
-	    e->header.reqnum = atoi(entry->key);
+	    reqnum = atoi(entry->key);
 	else
-	    e->header.reqnum = getKeyCounter();
+	    reqnum = getKeyCounter();
 	debug(15, 3, "neighborsUdpPing: key = '%s'\n", entry->key);
-	debug(15, 3, "neighborsUdpPing: reqnum = %d\n", e->header.reqnum);
+	debug(15, 3, "neighborsUdpPing: reqnum = %d\n", reqnum);
 
 	if (e->icp_port == echo_port) {
-	    debug(15, 4, "neighborsUdpPing: Looks like a dumb cache, send DECHO ping\n");
+	    debug(15, 4, "neighborsUdpPing: Sending DECHO to dumb cache\n");
+	    echo_hdr.reqnum = reqnum;
 	    icpUdpSend(friends->fd,
 		url,
 		&echo_hdr,
 		&e->in_addr,
+		entry->flag,
 		ICP_OP_DECHO,
 		LOG_TAG_NONE);
 	} else {
+	    e->header.reqnum = reqnum;
 	    icpUdpSend(friends->fd,
 		url,
 		&e->header,
 		&e->in_addr,
+		entry->flag,
 		ICP_OP_QUERY,
 		LOG_TAG_NONE);
 	}
@@ -554,18 +557,16 @@ int neighborsUdpPing(proto)
 	e->stats.pings_sent++;
 
 	if (e->stats.ack_deficit < HIER_MAX_DEFICIT) {
-	    /* consider it's alive. count it */
+	    /* its alive, expect a reply from it */
 	    e->neighbor_up = 1;
 	    mem->e_pings_n_pings++;
 	} else {
-	    /* consider it's dead. send a ping but don't count it. */
+	    /* Neighbor is dead; ping it anyway, but don't expect a reply */
 	    e->neighbor_up = 0;
 	    if (e->stats.ack_deficit > (HIER_MAX_DEFICIT << 1))
 		/* do this to prevent wrap around but we still want it
 		 * to move a bit so we can debug it easier. */
 		e->stats.ack_deficit = HIER_MAX_DEFICIT + 1;
-	    debug(15, 6, "cache %s is considered dead but send PING anyway, hope it comes up soon.\n",
-		inet_ntoa(e->in_addr.sin_addr));
 	    /* log it once at the threshold */
 	    if ((e->stats.ack_deficit == HIER_MAX_DEFICIT)) {
 		debug(15, 0, "neighborsUdpPing: Detected DEAD %s: %s\n",
@@ -577,21 +578,26 @@ int neighborsUdpPing(proto)
     }
 
     /* only do source_ping if we have neighbors */
-    if (echo_hdr.opcode) {
-	if (proto->source_ping && (hep = ipcache_gethostbyname(host, IP_BLOCKING_LOOKUP))) {
-	    debug(15, 6, "neighborsUdpPing: Send to original host\n");
-	    debug(15, 6, "neighborsUdpPing: url=%s, host=%s, t=%d\n",
-		url, host, t);
+    if (friends->n) {
+	if (!proto->source_ping) {
+	    debug(15, 6, "neighborsUdpPing: Source Ping is disabled.\n");
+	} else if ((hep = ipcache_gethostbyname(host, IP_BLOCKING_LOOKUP))) {
+	    debug(15, 6, "neighborsUdpPing: Source Ping: to %s for '%s'\n",
+		host, url);
 	    to_addr.sin_family = AF_INET;
 	    xmemcpy(&to_addr.sin_addr, hep->h_addr, hep->h_length);
 	    to_addr.sin_port = htons(echo_port);
-	    echo_hdr.reqnum = squid_curtime;
-	    debug(15, 6, "neighborsUdpPing - url: %s to url-host %s \n",
-		url, inet_ntoa(to_addr.sin_addr));
-	    /* send to original site */
-	    icpUdpSend(friends->fd, url, &echo_hdr, &to_addr, ICP_OP_SECHO, LOG_TAG_NONE);
+	    echo_hdr.reqnum = reqnum;
+	    icpUdpSend(friends->fd,
+		url,
+		&echo_hdr,
+		&to_addr,
+		entry->flag,
+		ICP_OP_SECHO,
+		LOG_TAG_NONE);
 	} else {
-	    debug(15, 6, "neighborsUdpPing: Source Ping is disabled.\n");
+	    debug(15, 6, "neighborsUdpPing: Source Ping: unknown host: %s\n",
+		host);
 	}
     }
     return (mem->e_pings_n_pings);
@@ -917,8 +923,8 @@ void neighbors_rotate_log()
 {
     char *fname = NULL;
     int i;
-    LOCAL_ARRAY(char, from, MAXPATHLEN);
-    LOCAL_ARRAY(char, to, MAXPATHLEN);
+    static char from[MAXPATHLEN];
+    static char to[MAXPATHLEN];
 
     if ((fname = getHierarchyLogFile()) == NULL)
 	return;

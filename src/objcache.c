@@ -170,7 +170,7 @@ int objcacheStart(fd, url, entry)
     char *buf = NULL;
     char *BADCacheURL = "Bad Object Cache URL %s ... negative cached.\n";
     char *BADPassword = "Incorrect password, sorry.\n";
-    LOCAL_ARRAY(char, password, 64);
+    static char password[64];
     struct sockaddr_in peer_socket_name;
     int sock_name_length = sizeof(peer_socket_name);
 
@@ -244,12 +244,6 @@ int objcacheStart(fd, url, entry)
 	BIT_RESET(data->entry->flag, DELAY_SENDING);
 	storeComplete(data->entry);
 
-    } else if (strcmp(data->request, "stats/redirector") == 0) {
-	BIT_SET(data->entry->flag, DELAY_SENDING);
-	CacheInfo->stat_get(CacheInfo, "redirector", data->entry);
-	BIT_RESET(data->entry->flag, DELAY_SENDING);
-	storeComplete(data->entry);
-
     } else if (strcmp(data->request, "stats/io") == 0) {
 	BIT_SET(data->entry->flag, DELAY_SENDING);
 	CacheInfo->stat_get(CacheInfo, "io", data->entry);
@@ -259,12 +253,6 @@ int objcacheStart(fd, url, entry)
     } else if (strcmp(data->request, "stats/reply_headers") == 0) {
 	BIT_SET(data->entry->flag, DELAY_SENDING);
 	CacheInfo->stat_get(CacheInfo, "reply_headers", data->entry);
-	BIT_RESET(data->entry->flag, DELAY_SENDING);
-	storeComplete(data->entry);
-
-    } else if (strcmp(data->request, "stats/filedescriptors") == 0) {
-	BIT_SET(data->entry->flag, DELAY_SENDING);
-	CacheInfo->stat_get(CacheInfo, "filedescriptors", data->entry);
 	BIT_RESET(data->entry->flag, DELAY_SENDING);
 	storeComplete(data->entry);
 

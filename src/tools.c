@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -122,7 +121,7 @@ Thanks!\n"
 
 static char *dead_msg()
 {
-    LOCAL_ARRAY(char, msg, 1024);
+    static char msg[1024];
     sprintf(msg, DEAD_MSG, version_string, version_string);
     return msg;
 }
@@ -130,8 +129,8 @@ static char *dead_msg()
 void mail_warranty()
 {
     FILE *fp = NULL;
-    LOCAL_ARRAY(char, filename, 256);
-    LOCAL_ARRAY(char, command, 256);
+    static char filename[256];
+    static char command[256];
 
     sprintf(filename, "/tmp/mailin%d", (int) getpid());
     fp = fopen(filename, "w");
@@ -359,7 +358,7 @@ void sig_child(sig)
 
 char *getMyHostname()
 {
-    LOCAL_ARRAY(char, host, SQUIDHOSTNAMELEN + 1);
+    static char host[SQUIDHOSTNAMELEN + 1];
     static int present = 0;
     struct hostent *h = NULL;
     char *t = NULL;

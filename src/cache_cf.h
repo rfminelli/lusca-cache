@@ -105,8 +105,7 @@
 #ifndef _CACHE_CONFIG_H_
 #define _CACHE_CONFIG_H_
 
-#define DefaultDnsChildrenMax		32	/* 32 processes */
-#define DefaultRedirectChildrenMax	32	/* 32 processes */
+#define DefaultDnsChildrenMax	32	/* 32 processes */
 
 typedef struct _wordlist {
     char *key;
@@ -147,7 +146,6 @@ extern char w_space[];
 extern int DnsPositiveTtl;
 extern int config_lineno;
 extern int emulate_httpd_log;
-extern int identLookup;
 extern int httpd_accel_mode;
 extern int unbuffered_logs;
 extern int zap_disk_store;
@@ -167,7 +165,6 @@ extern char *getAppendDomain _PARAMS((void));
 extern char *getCacheLogFile _PARAMS((void));
 extern char *getDebugOptions _PARAMS((void));
 extern char *getDnsProgram _PARAMS((void));
-extern char *getRedirectProgram _PARAMS((void));
 extern char *getEffectiveGroup _PARAMS((void));
 extern char *getEffectiveUser _PARAMS((void));
 extern char *getFtpOptions _PARAMS((void));
@@ -193,7 +190,6 @@ extern int getCleanRate _PARAMS((void));
 extern int getClientLifetime _PARAMS((void));
 extern int getConnectTimeout _PARAMS((void));
 extern int getDnsChildren _PARAMS((void));
-extern int getRedirectChildren _PARAMS((void));
 extern int getFtpMax _PARAMS((void));
 extern int getFtpTTL _PARAMS((void));
 extern int getGopherMax _PARAMS((void));
@@ -227,7 +223,6 @@ extern struct in_addr getTcpIncomingAddr _PARAMS((void));
 extern struct in_addr getTcpOutgoingAddr _PARAMS((void));
 extern struct in_addr getUdpIncomingAddr _PARAMS((void));
 extern struct in_addr getUdpOutgoingAddr _PARAMS((void));
-extern struct in_addr getClientNetmask _PARAMS((void));
 extern wordlist *getCacheDirs _PARAMS((void));
 extern wordlist *getDnsTestnameList _PARAMS((void));
 extern wordlist *getFtpStoplist _PARAMS((void));

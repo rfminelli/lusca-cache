@@ -151,7 +151,7 @@ typedef struct gopher_ds {
     int HTML_header_added;
     int port;
     char type_id;
-    char request[MAX_URL + 1];
+    char request[MAX_URL];
     int data_in;
     int cso_recno;
     int len;
@@ -184,7 +184,7 @@ static void gopher_mime_content(buf, name, def)
      char *name;
      char *def;
 {
-    LOCAL_ARRAY(char, temp, MAX_URL + 1);
+    static char temp[MAX_URL];
     char *ext1 = NULL;
     char *ext2 = NULL;
     char *str = NULL;
@@ -234,7 +234,7 @@ static void gopher_mime_content(buf, name, def)
 void gopherMimeCreate(data)
      GopherData *data;
 {
-    LOCAL_ARRAY(char, tempMIME, MAX_MIME);
+    static char tempMIME[MAX_MIME];
 
     sprintf(tempMIME, "\
 HTTP/1.0 200 OK Gatewaying\r\n\
@@ -289,8 +289,8 @@ int gopher_url_parser(url, host, port, type_id, request)
      char *type_id;
      char *request;
 {
-    LOCAL_ARRAY(char, proto, MAX_URL);
-    LOCAL_ARRAY(char, hostbuf, MAX_URL);
+    static char proto[MAX_URL];
+    static char hostbuf[MAX_URL];
     int t;
 
     proto[0] = hostbuf[0] = '\0';
@@ -355,7 +355,7 @@ int gopherCachable(url)
 void gopherEndHTML(data)
      GopherData *data;
 {
-    LOCAL_ARRAY(char, tmpbuf, TEMP_BUF_SIZE);
+    static char tmpbuf[TEMP_BUF_SIZE];
 
     if (!data->data_in) {
 	sprintf(tmpbuf, "<HR><H2><i>Server Return Nothing.</i></H2>\n");
@@ -375,9 +375,9 @@ void gopherToHTML(data, inbuf, len)
     char *pos = inbuf;
     char *lpos = NULL;
     char *tline = NULL;
-    LOCAL_ARRAY(char, line, TEMP_BUF_SIZE);
-    LOCAL_ARRAY(char, tmpbuf, TEMP_BUF_SIZE);
-    LOCAL_ARRAY(char, outbuf, TEMP_BUF_SIZE << 4);
+    static char line[TEMP_BUF_SIZE];
+    static char tmpbuf[TEMP_BUF_SIZE];
+    static char outbuf[TEMP_BUF_SIZE << 4];
     char *name = NULL;
     char *selector = NULL;
     char *host = NULL;
@@ -593,7 +593,7 @@ void gopherToHTML(data, inbuf, len)
 		int t;
 		int code;
 		int recno;
-		LOCAL_ARRAY(char, result, MAX_CSO_RESULT);
+		static char result[MAX_CSO_RESULT];
 
 		tline = line;
 
@@ -908,7 +908,7 @@ void gopherSendRequest(fd, data)
      GopherData *data;
 {
     int len;
-    LOCAL_ARRAY(char, query, MAX_URL);
+    static char query[MAX_URL];
     char *buf = get_free_4k_page();
 
     data->icp_page_ptr = buf;

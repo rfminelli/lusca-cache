@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -110,8 +109,6 @@
 #define MAGIC_MARKER    "\004\004\004"	/* No doubt this should be more configurable */
 #define MAGIC_MARKER_SZ 3
 
-static char ftpASCII[] = "A";
-static char ftpBinary[] = "I";
 static int ftpget_server_read = -1;
 static int ftpget_server_write = -1;
 static u_short ftpget_port = 0;
@@ -128,14 +125,15 @@ typedef struct _Ftpdata {
 				 * expires */
     int got_marker;		/* denotes end of successful request */
     int reply_hdr_state;
-    int authenticated;		/* This ftp request is authenticated */
 } FtpData;
+
 
 /* Local functions */
 static int ftpStateFree _PARAMS((int fd, FtpData * ftpState));
 static void ftpProcessReplyHeader _PARAMS((FtpData * data, char *buf, int size));
 static void ftpServerClosed _PARAMS((int fd, void *nodata));
 static void ftp_login_parser _PARAMS((char *login, FtpData * data));
+static char *ftpTransferMode _PARAMS((char *urlpath));
 
 /* Global functions not declared in ftp.h */
 void ftpLifetimeExpire _PARAMS((int fd, FtpData * data));
@@ -144,9 +142,6 @@ void ftpSendComplete _PARAMS((int fd, char *buf, int size, int errflag, void *ft
 void ftpSendRequest _PARAMS((int fd, FtpData * data));
 void ftpConnInProgress _PARAMS((int fd, FtpData * data));
 void ftpServerClose _PARAMS((void));
-
-/* External functions */
-extern char *base64_decode _PARAMS((char *coded));
 
 static int ftpStateFree(fd, ftpState)
      int fd;
@@ -306,7 +301,7 @@ int ftpReadReply(fd, data)
      int fd;
      FtpData *data;
 {
-    LOCAL_ARRAY(char, buf, SQUID_TCP_SO_RCVBUF);
+    static char buf[SQUID_TCP_SO_RCVBUF];
     int len;
     int clen;
     int off;
@@ -463,18 +458,35 @@ void ftpSendComplete(fd, buf, size, errflag, data)
     }
 }
 
+static char *ftpTransferMode(urlpath)
+     char *urlpath;
+{
+    static char ftpASCII[] = "A";
+    static char ftpBinary[] = "I";
+    char *ext = NULL;
+    ext_table_entry *mime = NULL;
+    int len;
+    len = strlen(urlpath);
+    if (*(urlpath + len - 1) == '/')
+	return ftpASCII;
+    if ((ext = strrchr(urlpath, '.')) == NULL)
+	return ftpBinary;
+    if ((mime = mime_ext_to_type(++ext)) == NULL)
+	return ftpBinary;
+    if (!strcmp(mime->mime_encoding, "7bit"))
+	return ftpASCII;
+    return ftpBinary;
+}
+
 void ftpSendRequest(fd, data)
      int fd;
      FtpData *data;
 {
-    char *ext = NULL;
-    ext_table_entry *e = NULL;
-    int l;
     char *path = NULL;
     char *mode = NULL;
     char *buf = NULL;
-    LOCAL_ARRAY(char, tbuf, BUFSIZ);
-    LOCAL_ARRAY(char, opts, BUFSIZ);
+    static char tbuf[BUFSIZ];
+    static char opts[BUFSIZ];
     static char *space = " ";
     char *s = NULL;
     int got_timeout = 0;
@@ -489,18 +501,7 @@ void ftpSendRequest(fd, data)
     memset(buf, '\0', buflen);
 
     path = data->request->urlpath;
-    l = strlen(path);
-    if (path[l - 1] == '/')
-	mode = ftpASCII;
-    else {
-	if ((ext = strrchr(path, '.')) != NULL) {
-	    ext++;
-	    mode = ((e = mime_ext_to_type(ext)) &&
-		strncmp(e->mime_type, "text", 4) == 0) ? ftpASCII :
-		ftpBinary;
-	} else
-	    mode = ftpBinary;
-    }
+    mode = ftpTransferMode(path);
 
     /* Start building the buffer ... */
     strcat(buf, getFtpProgram());
@@ -530,9 +531,6 @@ void ftpSendRequest(fd, data)
     if ((s = getVisibleHostname())) {
 	sprintf(tbuf, "-H %s ", s);
 	strcat(buf, tbuf);
-    }
-    if (data->authenticated) {
-	strcat(buf, "-a ");
     }
     strcat(buf, "-h ");		/* httpify */
     strcat(buf, "- ");		/* stdout */
@@ -593,13 +591,7 @@ int ftpStart(unusedfd, url, request, entry)
      request_t *request;
      StoreEntry *entry;
 {
-    LOCAL_ARRAY(char, realm, 8192);
     FtpData *data = NULL;
-    char *req_hdr = entry->mem_obj->mime_hdr;
-    char *auth_hdr;
-    char *response;
-    char *auth;
-
     int status;
 
     debug(9, 3, "FtpStart: FD %d <URL:%s>\n", unusedfd, url);
@@ -608,35 +600,8 @@ int ftpStart(unusedfd, url, request, entry)
     storeLockObject(data->entry = entry, NULL, NULL);
     data->request = requestLink(request);
 
-    auth_hdr = mime_get_header(req_hdr, "Authorization");
-    auth = NULL;
-    if (auth_hdr) {
-	if (strcasecmp(strtok(auth_hdr, " \t"), "Basic") == 0) {
-	    auth = base64_decode(strtok(NULL, " \t"));
-	}
-    }
     /* Parse login info. */
-    if (auth) {
-	ftp_login_parser(auth, data);
-	data->authenticated = 1;
-    } else {
-	ftp_login_parser(request->login, data);
-	if (*data->user && !*data->password) {
-	    /* This request is not fully authenticated */
-	    if (request->port == 21) {
-		sprintf(realm, "ftp %s", data->user);
-	    } else {
-		sprintf(realm, "ftp %s port %d",
-		    data->user, request->port);
-	    }
-	    response = authorization_needed_msg(request, realm);
-	    storeAppend(entry, response, strlen(response));
-	    httpParseHeaders(response, entry->mem_obj->reply);
-	    storeComplete(entry);
-	    ftpStateFree(-1, data);
-	    return COMM_OK;
-	}
-    }
+    ftp_login_parser(request->login, data);
 
     debug(9, 5, "FtpStart: FD %d, host=%s, path=%s, user=%s, passwd=%s\n",
 	unusedfd, data->request->host, data->request->urlpath,
@@ -733,12 +698,11 @@ int ftpInitialize()
     int cfd;
     int squid_to_ftpget[2];
     int ftpget_to_squid[2];
-    LOCAL_ARRAY(char, pbuf, 128);
+    static char pbuf[128];
     char *ftpget = getFtpProgram();
     struct sockaddr_in S;
     int len;
 
-    debug(9, 5, "ftpInitialize: Initializing...\n");
     if (pipe(squid_to_ftpget) < 0) {
 	debug(9, 0, "ftpInitialize: pipe: %s\n", xstrerror());
 	return -1;
@@ -751,7 +715,6 @@ int ftpInitialize()
 	local_addr,
 	0,
 	"ftpget -S socket");
-    debug(9, 5, "ftpget -S socket on FD %d\n", cfd);
     if (cfd == COMM_ERROR) {
 	debug(9, 0, "ftpInitialize: Failed to create socket\n");
 	return -1;

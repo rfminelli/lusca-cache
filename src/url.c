@@ -94,7 +94,6 @@ void urlInitialize()
     unsigned int i;
     char *good =
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789./-_$";
-    debug(23, 5, "urlInitialize: Initializing...\n");
     for (i = 0; i < 256; i++)
 	url_acceptable[i] = 0;
     for (; *good; good++)
@@ -188,10 +187,10 @@ request_t *urlParse(method, url)
      method_t method;
      char *url;
 {
-    LOCAL_ARRAY(char, proto, MAX_URL + 1);
-    LOCAL_ARRAY(char, login, MAX_URL + 1);
-    LOCAL_ARRAY(char, host, MAX_URL + 1);
-    LOCAL_ARRAY(char, urlpath, MAX_URL + 1);
+    static char proto[MAX_URL + 1];
+    static char login[MAX_URL + 1];
+    static char host[MAX_URL + 1];
+    static char urlpath[MAX_URL + 1];
     request_t *request = NULL;
     char *t = NULL;
     int port;
@@ -240,8 +239,8 @@ char *urlCanonical(request, buf)
      request_t *request;
      char *buf;
 {
-    LOCAL_ARRAY(char, urlbuf, MAX_URL + 1);
-    LOCAL_ARRAY(char, portbuf, 32);
+    static char urlbuf[MAX_URL + 1];
+    static char portbuf[32];
     if (buf == NULL)
 	buf = urlbuf;
     switch (request->method) {

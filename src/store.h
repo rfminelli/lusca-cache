@@ -181,8 +181,7 @@ typedef struct _MemObject {
     /* use another field to avoid changing the existing code */
     struct pentry **pending;
 
-    short swapin_fd;
-    short swapout_fd;
+    short swap_fd;
     int fd_of_first_client;
     struct _http_reply *reply;
     request_t *request;
@@ -190,6 +189,7 @@ typedef struct _MemObject {
     void *swapin_complete_data;
     hier_code hierarchy_code;
 } MemObject;
+
 typedef enum {
     NOT_IN_MEMORY,
     SWAPPING_IN,

@@ -174,7 +174,7 @@ static void waisReadReply(fd, waisState)
      int fd;
      WaisStateData *waisState;
 {
-    LOCAL_ARRAY(char, buf, 4096);
+    static char buf[4096];
     int len;
     StoreEntry *entry = NULL;
 

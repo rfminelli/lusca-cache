@@ -115,7 +115,6 @@
  * 64 file descriptors free for disk-i/o and connections to remote servers */
 
 int RESERVED_FD = 64;
-struct in_addr any_addr;
 
 #define min(x,y) ((x)<(y)? (x) : (y))
 #define max(a,b) ((a)>(b)? (a) : (b))
@@ -376,13 +375,13 @@ int comm_connect_addr(sock, address)
 		xstrerror());
 	    return COMM_ERROR;
 	}
-    strcpy(conn->ipaddr, inet_ntoa(address->sin_addr));
-    conn->remote_port = ntohs(address->sin_port);
     /* set the lifetime for this client */
     if (status == COMM_OK) {
 	lft = comm_set_fd_lifetime(sock, getClientLifetime());
-	debug(5, 10, "comm_connect_addr: FD %d connected to %s:%d, lifetime %d.\n",
-	    sock, conn->ipaddr, conn->remote_port, lft);
+	strcpy(conn->ipaddr, inet_ntoa(address->sin_addr));
+	conn->remote_port = ntohs(address->sin_port);
+	debug(5, 10, "comm_connect_addr: FD %d (lifetime %d): connected to %s:%d.\n",
+	    sock, lft, conn->ipaddr, conn->remote_port);
     } else if (status == EINPROGRESS) {
 	lft = comm_set_fd_lifetime(sock, getConnectTimeout());
 	debug(5, 10, "comm_connect_addr: FD %d connection pending, lifetime %d\n",
@@ -428,7 +427,6 @@ int comm_accept(fd, peer, me)
 	}
     }
 
-    P.sin_addr.s_addr &= getClientNetmask().s_addr;
     if (peer)
 	*peer = P;
 
@@ -456,17 +454,21 @@ int comm_close(fd)
 {
     FD_ENTRY *conn = NULL;
     struct close_handler *ch = NULL;
-    debug(5, 5, "comm_close: FD %d\n", fd);
+
     if (fd < 0)
 	return -1;
-    if (fdstatGetType(fd) == FD_FILE) {
+
+    if (fdstat_type(fd) == FD_FILE) {
 	debug(5, 0, "FD %d: Someone called comm_close() on a File\n", fd);
 	fatal_dump(NULL);
     }
     conn = &fd_table[fd];
+
     safe_free(conn->rstate);
     safe_free(conn->wstate);
+
     comm_set_fd_lifetime(fd, -1);	/* invalidate the lifetime */
+    debug(5, 5, "comm_close: FD %d\n", fd);
     /* update fdstat */
     fdstat_close(fd);
     /* Call close handlers */
@@ -660,17 +662,11 @@ int comm_select(sec, failtime)
 	    serverConnectionsClose();
 	    ftpServerClose();
 	    ipcacheShutdownServers();
-	    redirectShutdownServers();
 	    setSocketShutdownLifetimes();
 	}
 	nfds = 0;
 	maxfd = fdstat_biggest_fd() + 1;
 	for (i = 0; i < maxfd; i++) {
-#if USE_ASYNC_IO
-	    /* Using async IO for disk handle, so don't select on them */
-	    if (fdstatGetType(i) == FD_FILE)
-		continue;
-#endif
 	    /* Check each open socket for a handler. */
 	    if (fd_table[i].read_handler && fd_table[i].stall_until <= squid_curtime) {
 		nfds++;
@@ -688,21 +684,13 @@ int comm_select(sec, failtime)
 	if (!fdstat_are_n_free_fd(RESERVED_FD)) {
 	    FD_CLR(theHttpConnection, &readfds);
 	}
-	if (shutdown_pending || reread_pending)
-	    debug(5, 2, "comm_select: Still waiting on %d FDs\n", nfds);
 	if (nfds == 0)
 	    return COMM_SHUTDOWN;
 	if (shutdown_pending || reread_pending)
 	    debug(5, 2, "comm_select: Still waiting on %d FDs\n", nfds);
 	while (1) {
-#if USE_ASYNC_IO
-	    /* Another CPU vs latency tradeoff for async IO */
-	    poll_time.tv_sec = 0;
-	    poll_time.tv_usec = 250000;
-#else
 	    poll_time.tv_sec = sec > 1 ? 1 : 0;
 	    poll_time.tv_usec = 0;
-#endif
 	    num = select(maxfd, &readfds, &writefds, &exceptfds, &poll_time);
 	    if (num >= 0)
 		break;
@@ -714,9 +702,6 @@ int comm_select(sec, failtime)
 	    return COMM_ERROR;
 	    /* NOTREACHED */
 	}
-#if USE_ASYNC_IO
-	aioExamine();		/* See if any IO completed */
-#endif
 	if (num < 0)
 	    continue;
 	debug(5, num ? 5 : 8, "comm_select: %d sockets ready at %d\n",
@@ -1003,7 +988,6 @@ int comm_init()
     meta_data.misc += FD_SETSIZE * sizeof(int);
     zero_tv.tv_sec = 0;
     zero_tv.tv_usec = 0;
-    any_addr.s_addr = inet_addr("0.0.0.0");
     return 0;
 }
 
@@ -1115,7 +1099,6 @@ static void checkLifetimes()
 {
     int fd;
     time_t lft;
-
     int (*func) () = NULL;
 
     for (fd = 0; fd < FD_SETSIZE; fd++) {

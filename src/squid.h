@@ -125,9 +125,6 @@
 #if HAVE_SYS_SELECT_H
 #include <sys/select.h>
 #endif
-#if USE_ASYNC_IO && HAVE_AIO_H
-#include <aio.h>
-#endif
 
 #if defined(__STRICT_ANSI__)
 #include <stdarg.h>
@@ -199,15 +196,6 @@ typedef unsigned long u_num32;
 #endif
 #define NUM32LEN sizeof(num32)	/* this should always be 4 */
 
-#if MALLOC_GUARD
-#define LOCAL_ARRAY(type,name,size) \
-        static type *local_##name=NULL; \
-        type *name = local_##name ? local_##name : \
-                ( local_##name = (type *)xcalloc(size, sizeof(type)) )
-#else
-#define LOCAL_ARRAY(type,name,size) static type name[size]
-#endif
-
 #include "GNUregex.h"
 #include "ansihelp.h"
 
@@ -239,8 +227,6 @@ typedef void (*SIH) _PARAMS((int, void *));	/* swap in */
 #include "acl.h"
 #include "util.h"
 #include "background.h"
-#include "async_io.h"
-#include "redirect.h"
 
 #if !HAVE_TEMPNAM
 #include "tempnam.h"
@@ -268,8 +254,6 @@ extern char version_string[];	/* main.c */
 extern char appname[];		/* main.c */
 extern struct in_addr local_addr;	/* main.c */
 extern char localhost[];
-extern struct in_addr any_addr;	/* comm.c */
-extern int do_redirect;		/* redirect.c */
 
 
 /* Prototypes and definitions which don't really deserve a seaprate
