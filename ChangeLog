@@ -1,85 +1,12 @@
-Changes to squid-1.1.alpha8:
+Changes to squid-1.0.7 (August 14, 1996):
 
-	- Removed all references to hierarchy.log.
-	- Changed hierarchy_log_append() to hierarchyNote() and added
-	  _hierarchyLogData structure.
-	- Fixed "tty input" bug where a reverse lookup request was
-	  written to stdout.
-	- Cleaned up pointers in protoUnregister().
-	- Includes all squid-1.0 changes up to squid-1.0.6.
+	- Added "store_clean" routines to periodically remove orphaned
+	  swap files.
+	- Increased StoreEntry->method_t from 3 to 4 bits, probably fixes
+	  storeGenerate*Key() coredumps.
+	- Added debugging to examine_select().
+	- Added peer address to debugging for Ignored ICP packets.
 
-Changes to squid-1.1.alpha7:
-
-	- Added 'tcp_recv_bufsize' option to config.
-	- Changed NEIGHBOR to SIBLING where appropriate.
-	- Split UDP_HIT_OBJ into {PARENT,SIBLING}_UDP_HIT_OBJ
-	- Misc casts and cleanup from running Insight.
-	- Replaced all get*() functions with direct references to
-	  Config structure.
-	- Removed 'http_stop', 'ftp_stop', and 'gopher_stop' from config.
-	- Added 'ssl_proxy' config for forwarding all SSL requests to
-	  another proxy.
-	- Includes all squid-1.0 changes up to squid-1.0.5.
-
-Changes to squid-1.1.alpha6:
-
-	- Changed storage manager to use a two level directory
-	  structure.  This makes squid-1.1 incompatible with squid-1.0!
-	- Added last modification time to the StoreEntry structure, and
-	  the swap log.
-	- Changed how memory passed to comm_write() gets freed.  Now
-	  pass in a free handler function which gets called when the
-	  RWStateData structure is destroyed.
-	- Other misc cleanup.
-	- Added a reverse-address-lookup cache (``fqdncache'').
-	- Added support for threaded ACLs for destination IP addresses
-	  and source hostnames.
-	- Use aclMatchDomainList() instead of aclMatchWord() for domain names.
-	- Renamed cachemgr 'stats/general' to 'stats/ipcache'.
-	- Added 'log_fqdn' option to config file.
-	- Added 'client_netmask' to config file.
-
-
-Changes to squid-1.1.alpha5:
-
-	- Got Asynchronous I/O stuff to compile and run on IRIX 5.3
-	- Cleaned up diskHandleWrite()
-	- Added free() handler to struct dwrite_q so diskHandleWrite()
-	  can free memory after its been written.
-	- Changed file_open() to not allow files to be opened O_RDWR.
-	- Changed file_open() to always set O_APPEND for O_WRONLY files.
-	- Includes all squid-1.0 changes up to squid-1.0.2.
-
-Changes to squid-1.1.alpha4:
-
-	- Fixed Asynchronous Disk I/O routines to basically work.
-	- Fixed memory write bugs when using the redirector.
-	- Added support for non-anonymous FTP urls without needing a
-	  password in the URL.
-
-Changes to squid-1.1.alpha4:
-
-	- Changed cachemgr detailed filedescriptor info to be a separate item.
-	- 'no-cache' reload now discards bad IP cache entries too.
-	- Added 'echo request' URL hack:  http://cachehost:3128/echo
-	- Added URL redirector feature.
-	- Addeed 'ident_lookup' option to config file
-	- Fixed http to never rely on blocking IP cache lookups.
-	- Removed need for locked IP cache entries.
-	- Changed free page stacks to always free pages if more than
-	  'max' are allocated.
-
-Changes to squid-1.1.alpha3:
-
-	- Added Asynchronous Disk I/O routines from Pete Bentley.
-	  (NOTE, not yet working for IRIX 5.3).
-	- Made squid native access log the default format.
-
-Changes to squid-1.1.alpha2:
-
-	- Added support for RFC931/ident
-
-==============================================================================
 Changes to squid-1.0.6 (August 12, 1996):
 
 	- Fixed coredump in icpStateFree() for bad requests.

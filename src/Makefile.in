@@ -6,9 +6,7 @@
 #  Uncomment and customize the following to suit your needs:
 #
 HOST_OPT	= # -DCACHEMGR_HOSTNAME="getfullhostname()"
-AIO_OPT		= # -DUSE_ASYNC_IO=1
-AIO_LIBS	= # @AIO_LIBS@
-DEFINES         = $(HOST_OPT) $(AIO_OPT)
+DEFINES         = $(HOST_OPT)
 
 prefix		= @prefix@
 exec_prefix	= @exec_prefix@
@@ -25,6 +23,7 @@ DEFAULT_FTPGET          = $(libexecdir)/ftpget
 DEFAULT_DNSSERVER       = $(libexecdir)/dnsserver
 DEFAULT_CACHE_LOG       = $(localstatedir)/logs/cache.log
 DEFAULT_ACCESS_LOG      = $(localstatedir)/logs/access.log
+DEFAULT_HIERARCHY_LOG   = $(localstatedir)/logs/hierarchy.log
 DEFAULT_STORE_LOG       = $(localstatedir)/logs/store.log
 DEFAULT_SWAP_DIR        = $(localstatedir)/cache
 
@@ -53,14 +52,13 @@ CLIENT_LIBS	= -L../lib -lmiscutil $(XTRA_LIBS)
 PROGS           = squid client
 UTILS           = dnsserver ftpget
 CGIPROGS	= cachemgr.cgi
-OBJS	 	= acl.o async_io.o background.o cache_cf.o errorpage.o \
-		client_side.o comm.o debug.o disk.o dns.o dynamic_array.o \
-		fdstat.o filemap.o ftp.o fqdncache.o gopher.o \
-		hash.o http.o icp.o ident.o ipcache.o \
+OBJS	 	= acl.o background.o cache_cf.o errorpage.o comm.o \
+		debug.o disk.o dynamic_array.o \
+		fdstat.o filemap.o ftp.o gopher.o \
+		hash.o http.o icp.o ipcache.o \
 		main.o mime.o neighbors.o objcache.o \
-		proto.o redirect.o send-announce.o ssl.o stack.o \
-		stat.o stmem.o \
-		store.o storetoString.o tools.o ttl.o \
+		proto.o send-announce.o ssl.o stack.o stat.o stmem.o \
+		store.o store_clean.o storetoString.o tools.o ttl.o \
 		url.o wais.o $(XTRA_OBJS)
 
 DEFAULTS        = \
@@ -69,13 +67,14 @@ DEFAULTS        = \
 	-DDEFAULT_DNSSERVER=\"$(DEFAULT_DNSSERVER)\" \
 	-DDEFAULT_CACHE_LOG=\"$(DEFAULT_CACHE_LOG)\" \
 	-DDEFAULT_ACCESS_LOG=\"$(DEFAULT_ACCESS_LOG)\" \
+	-DDEFAULT_HIERARCHY_LOG=\"$(DEFAULT_HIERARCHY_LOG)\" \
 	-DDEFAULT_STORE_LOG=\"$(DEFAULT_STORE_LOG)\" \
 	-DDEFAULT_SWAP_DIR=\"$(DEFAULT_SWAP_DIR)\"
 
 all:    squid.conf $(PROGS) $(UTILS) $(CGIPROGS)
 
 squid:	$(OBJS)
-	$(CC) -o $@ $(LDFLAGS) $(OBJS) $(CRYPT_LIB) $(LIBS) $(AIO_LIBS)
+	$(CC) -o $@ $(LDFLAGS) $(OBJS) $(CRYPT_LIB) $(LIBS)
 
 cache_cf.o: cache_cf.c
 	$(CC) -c $< $(CFLAGS) $(DEFAULTS)
@@ -99,6 +98,7 @@ squid.conf: squid.conf.pre
 	s%@DEFAULT_DNSSERVER@%$(DEFAULT_DNSSERVER)%g;\
 	s%@DEFAULT_CACHE_LOG@%$(DEFAULT_CACHE_LOG)%g;\
 	s%@DEFAULT_ACCESS_LOG@%$(DEFAULT_ACCESS_LOG)%g;\
+	s%@DEFAULT_HIERARCHY_LOG@%$(DEFAULT_HIERARCHY_LOG)%g;\
 	s%@DEFAULT_STORE_LOG@%$(DEFAULT_STORE_LOG)%g;\
 	s%@DEFAULT_SWAP_DIR@%$(DEFAULT_SWAP_DIR)%g" <$? >$@
 
@@ -185,3 +185,4 @@ realclean:	clean
 
 tags:
 	ctags *.[ch] ../include/*.h ../lib/*.[ch]
+

@@ -130,8 +130,8 @@ void _db_print(va_alist)
     int level;
     char *format = NULL;
 #endif
-    LOCAL_ARRAY(char, f, BUFSIZ);
-    LOCAL_ARRAY(char, tmpbuf, BUFSIZ);
+    static char f[BUFSIZ];
+    static char tmpbuf[BUFSIZ];
     char *s = NULL;
 
     if (debug_log == NULL)
@@ -255,26 +255,26 @@ void _db_init(logfile, options)
 void _db_rotate_log()
 {
     int i;
-    LOCAL_ARRAY(char, from, MAXPATHLEN);
-    LOCAL_ARRAY(char, to, MAXPATHLEN);
+    static char from[MAXPATHLEN];
+    static char to[MAXPATHLEN];
 
     if (debug_log_file == NULL)
 	return;
 
     /* Rotate numbers 0 through N up one */
-    for (i = Config.Log.rotateNumber; i > 1;) {
+    for (i = getLogfileRotateNumber(); i > 1;) {
 	i--;
 	sprintf(from, "%s.%d", debug_log_file, i - 1);
 	sprintf(to, "%s.%d", debug_log_file, i);
 	rename(from, to);
     }
     /* Rotate the current log to .0 */
-    if (Config.Log.rotateNumber > 0) {
+    if (getLogfileRotateNumber() > 0) {
 	sprintf(to, "%s.%d", debug_log_file, 0);
 	rename(debug_log_file, to);
     }
     /* Close and reopen the log.  It may have been renamed "manually"
      * before HUP'ing us. */
     if (debug_log != stderr)
-	debugOpenLog(Config.Log.log);
+	debugOpenLog(getCacheLogFile());
 }

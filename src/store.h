@@ -181,8 +181,7 @@ typedef struct _MemObject {
     /* use another field to avoid changing the existing code */
     struct pentry **pending;
 
-    short swapin_fd;
-    short swapout_fd;
+    short swap_fd;
     int fd_of_first_client;
     struct _http_reply *reply;
     request_t *request;
@@ -215,11 +214,6 @@ typedef enum {
     SWAP_OK
 } swap_status_t;
 
-extern char *memStatusStr[];
-extern char *pingStatusStr[];
-extern char *storeStatusStr[];
-extern char *swapStatusStr[];
-
 /* A cut down structure for store manager */
 struct sentry {
     /* first two items must be same as hash_link in hash.h */
@@ -232,10 +226,9 @@ struct sentry {
 
     u_num32 flag;
     u_num32 timestamp;
+    u_num32 lastref;
     u_num32 refcount;
-    time_t lastref;
-    time_t expires;
-    time_t lastmod;
+    u_num32 expires;
 
     int object_len;
     int swap_file_number;
@@ -244,7 +237,7 @@ struct sentry {
     ping_status_t ping_status:3;
     store_status_t store_status:3;
     swap_status_t swap_status:3;
-    method_t method:3;
+    method_t method:4;
 
     /* WARNING: Explicit assummption that fewer than 256
      * WARNING:  clients all hop onto the same object.  The code
@@ -322,5 +315,8 @@ extern int store_rebuilding;
 #define STORE_NOT_REBUILDING 0
 #define STORE_REBUILDING_SLOW 1
 #define STORE_REBUILDING_FAST 2
+
+#define SWAP_DIRECTORIES	100
+extern int ncache_dirs;
 
 #endif

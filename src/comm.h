@@ -145,6 +145,7 @@ typedef struct fde {
     StoreEntry *store_entry;
 
     /* Select handlers. */
+    void *client_data;		/* App. data to associate w/ handled conn. */
     PF read_handler;		/* Read  select handler. */
     void *read_data;		/* App. data to associate w/ handled conn. */
     PF write_handler;		/* Write select handler. */
@@ -161,7 +162,8 @@ typedef struct fde {
     char ascii_note[FD_ASCII_NOTE_SZ];
     unsigned int comm_type;
     time_t stall_until;		/* don't select for read until this time reached */
-    RWStateData *rwstate;	/* State data for comm_read/comm_write */
+    RWStateData *rstate;	/* State data for comm_read */
+    RWStateData *wstate;	/* State data for comm_write */
 } FD_ENTRY;
 
 extern FD_ENTRY *fd_table;
@@ -170,7 +172,7 @@ extern char **getAddressList _PARAMS((char *name));
 extern char *fd_note _PARAMS((int fd, char *));
 extern int commSetNonBlocking _PARAMS((int fd));
 extern int comm_accept _PARAMS((int fd, struct sockaddr_in *, struct sockaddr_in *));
-extern void comm_close _PARAMS((int fd));
+extern int comm_close _PARAMS((int fd));
 extern int comm_connect _PARAMS((int sock, char *hst, int prt));
 extern int comm_connect_addr _PARAMS((int sock, struct sockaddr_in *));
 extern int comm_get_fd_lifetime _PARAMS((int fd));
@@ -192,20 +194,8 @@ extern int fd_of_first_client _PARAMS((StoreEntry *));
 extern struct in_addr *getAddress _PARAMS((char *name));
 extern void comm_set_stall _PARAMS((int, int));
 extern int comm_get_fd_timeout _PARAMS((int fd));
-extern void comm_read _PARAMS((int fd,
-	char *buf,
-	int size,
-	int timeout,
-	int immed,
-	rw_complete_handler * handler,
-	void *handler_data));
-extern void comm_write _PARAMS((int fd,
-	char *buf,
-	int size,
-	int timeout,
-	rw_complete_handler * handler,
-	void *handler_data,
-	void       (*)(void *)));
+extern void comm_read _PARAMS((int fd, char *buf, int size, int timeout, int immed, rw_complete_handler * handler, void *handler_data));
+extern void comm_write _PARAMS((int fd, char *buf, int size, int timeout, rw_complete_handler * handler, void *handler_data));
 
 extern int RESERVED_FD;
 
