@@ -159,8 +159,6 @@ static icpUdpData *UdpQueueTail = NULL;
 static FILE *forw_via_log = NULL;
 #endif
 
-#define ICP_SENDMOREDATA_BUF SM_PAGE_SIZE
-
 #ifdef NO_HIT_OBJ_SUPPORT
 typedef struct {
     int fd;
@@ -604,7 +602,7 @@ icpReadDataDone(int fd, char *buf, int len, int err, void *data)
 	int hack = 0;
 	char C = '\0';
 	int size = len;
-	if (size == ICP_SENDMOREDATA_BUF) {
+	if (size == DISK_PAGE_SIZE) {
 	    hack = 1;
 	    size--;
 	    C = *(buf + size);
