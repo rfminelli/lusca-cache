@@ -167,7 +167,6 @@ intlist *connect_port_list = &https;
 
 ip_acl *local_ip_list = NULL;
 
-int zap_disk_store = 0;		/* off, try to rebuild from disk */
 int httpd_accel_mode = 0;	/* for fast access */
 int emulate_httpd_log = DefaultCommonLogFormat;		/* for fast access */
 time_t neighbor_timeout = DefaultNeighborTimeout;	/* for fast access */
@@ -793,7 +792,9 @@ static void parseHierachyLogLine()
     if (token == (char *) NULL)
 	self_destruct();
     safe_free(Config.Log.hierarchy);
-    Config.Log.hierarchy = xstrdup(token);
+    Config.Log.hierarchy = NULL;
+    if (strcmp(token, "none"))
+    	Config.Log.hierarchy = xstrdup(token);
 }
 
 static void parseStoreLogLine()
@@ -803,7 +804,9 @@ static void parseStoreLogLine()
     if (token == (char *) NULL)
 	self_destruct();
     safe_free(Config.Log.store);
-    Config.Log.store = xstrdup(token);
+    Config.Log.store = NULL;
+    if (strcmp(token, "none"))
+    	Config.Log.store = xstrdup(token);
 }
 
 static void parseLogfileRotateLine()
