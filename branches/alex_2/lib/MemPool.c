@@ -91,13 +91,13 @@ memPoolCreate(size_t preallocCnt, size_t dynStackCnt, size_t objSz, const char *
     mp->buf = xcalloc(preallocCnt, objSz);
     mp->obj_size = objSz;
     mp->name = xstrdup(poolName ? poolName : "anonymous");
-    mp->_buf_end = mp->buf + preallocCnt; /* internal, never dereference this! */
+    mp->_buf_end = mp->buf + objSz*preallocCnt; /* internal, never dereference this! */
     mp->static_stack = stackCreate(preallocCnt);
     mp->dynamic_stack = stackCreate(dynStackCnt);
     /* other members are initialized with 0 because of calloc() */
     /* push all pre-allocated memory on stack because it is currently free */
     while(preallocCnt-- > 0)
-	stackPush(mp->static_stack, mp->buf + preallocCnt);
+	stackPush(mp->static_stack, mp->buf + objSz*preallocCnt);
     return mp;
 }
 
@@ -120,7 +120,7 @@ memPoolDestroy(MemPool *mp)
  * never fails
  */
 void *
-memPoolGetObj(MemPool *mp)
+memPoolGetObj2(MemPool *mp)
 {
     assert(mp);
     if (mp->static_stack->count)
@@ -134,6 +134,14 @@ memPoolGetObj(MemPool *mp)
     return xcalloc(1, mp->obj_size);
 }
 
+void *
+memPoolGetObj(MemPool *mp)
+{
+    void *obj = memPoolGetObj2(mp);
+    /*printf("memPoolGetObj: %p :  %d -> %d , %d >= %d\n", obj, mp->static_stack->count, mp->dynamic_stack->count, mp->alloc_count, mp->free_count);*/
+    return obj;
+}
+
 /*
  * return object to the pool; put on the corresponding stack or free if
  * corresponding stack is full
@@ -142,6 +150,7 @@ void
 memPoolPutObj(MemPool *mp, void *obj)
 {
     assert(mp);
+    /*printf("memPoolPutObj: %p :  %d >= %d\n", obj, mp->alloc_count, mp->free_count);*/
     /* static object? */
     if (mp->buf <= (char*)obj && mp->_buf_end > (char*)obj) {
 	assert(!mp->static_stack->is_full); /* never full if we got here! */
@@ -149,12 +158,13 @@ memPoolPutObj(MemPool *mp, void *obj)
     } else
     /* dynamic object, but stack may be full */
     if (!mp->dynamic_stack->is_full) {
+	assert(mp->alloc_count);
 	stackPush(mp->dynamic_stack, obj);
     } else {
         /* free-ing is the last option */
-	xfree(obj);
 	mp->free_count++;
 	assert(mp->free_count <= mp->alloc_count);
+	xfree(obj); /* do this after assert */
     }
 }
 

@@ -52,7 +52,7 @@ void httpStatusLineSet(HttpStatusLine *sline, double version, http_status status
     sline->version = version;
     sline->status = status;
     /* Note: no xstrdup for 'reason', assumes constant 'reasons' */
-    sline->reason = reason ? reason : httpStatusString(status);
+    sline->reason = reason;
 }
 
 void
@@ -60,15 +60,25 @@ httpStatusLinePackInto(const HttpStatusLine *sline, Packer *p)
 {
     assert(sline && p);
     packerPrintf(p, HttpStatusLineFormat,
-	sline->version, sline->status, sline->reason);
+	sline->version, sline->status, 
+	sline->reason ? sline->reason : httpStatusString(sline->status));
 }
 
 int
 httpStatusLineParse(HttpStatusLine *sline, const char *start, const char *end) {
-    /* @?@ implement it */
     assert(sline);
-    assert(0);
-    return 0;
+    sline->status = HTTP_INVALID_HEADER; /* Squid header parsing error */
+    if (strncasecmp(start, "HTTP/", 5))
+	return 0;
+    start += 5;
+    if (!isdigit(*start))
+	return 0;
+    sline->version = atof(start);
+    if (!(start = strchr(start, ' ')))
+	return 0;
+    sline->status = atoi(++start);
+    /* we ignore 'reason-phrase' */
+    return 1; /* success */
 }
 
 static const char *

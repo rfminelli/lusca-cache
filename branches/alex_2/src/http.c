@@ -480,6 +480,7 @@ httpCachableReply(HttpStateData * httpState)
 	    return 0;
 	/* NOTREACHED */
 	break;
+/* @?@ should we replace these magic numbers with http_status enums? */
 	/* Errors can be negatively cached */
     case 204:			/* No Content */
     case 305:			/* Use Proxy (proxy redirect) */

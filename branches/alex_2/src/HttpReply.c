@@ -47,6 +47,7 @@ HttpReply *
 httpReplyCreate()
 {
     HttpReply *rep = memAllocate(MEM_HTTPREPLY, 1);
+    tmp_debug(here) ("creating rep: %p\n", rep);
     httpReplyInit(rep);
     return rep;
 }
@@ -75,6 +76,7 @@ void
 httpReplyDestroy(HttpReply *rep)
 {
     assert(rep);
+    tmp_debug(here) ("destroying rep: %p\n", rep);
     httpReplyClean(rep);
     memFree(MEM_HTTPREPLY, rep);
 }
@@ -86,15 +88,23 @@ httpReplyReset(HttpReply *rep)
     httpReplyInit(rep);
 }
 
+/* parses a buffer that may not be 0-terminated */
 int
 httpReplyParse(HttpReply *rep, const char *buf)
 {
-    const int success = httpReplyParseStep(rep, buf, 0);
-    if (success != 1) {
-	/* reset */
-	httpReplyClean(rep);
-	httpReplyInit(rep);
-    }
+    /*
+     * this extra buffer/copy will be eliminated when headers become meta-data
+     * in store. Currently we have to xstrncpy the buffer becuase store.c may
+     * feed a non 0-terminated buffer to us @?@.
+     */
+    char *headers = memAllocate(MEM_4K_BUF, 1);
+    int success;
+    /* reset current state, because we are not used in incremental fashion */
+    httpReplyReset(rep);
+    /* put a 0-terminator */
+    xstrncpy(headers, buf, 4096);
+    success = httpReplyParseStep(rep, headers, 0);
+    memFree(MEM_4K_BUF, headers);
     return success == 1;
 }
 
@@ -300,8 +310,9 @@ httpReplyHasScc(const HttpReply *rep, http_scc_type type)
  *      -1 -- parse error
  */
 static int
-httpReplyParseStep(HttpReply *rep, const char *parse_start, int atEnd)
+httpReplyParseStep(HttpReply *rep, const char *buf, int atEnd)
 {
+    const char *parse_start = buf;
     const char *blk_start, *blk_end;
     const char **parse_end_ptr = &blk_end;
     assert(rep);
@@ -316,6 +327,7 @@ httpReplyParseStep(HttpReply *rep, const char *parse_start, int atEnd)
 	    return httpReplyParseError(rep);
 
 	*parse_end_ptr = parse_start;
+	rep->hdr_sz = *parse_end_ptr - buf;
         rep->pstate++;
     }
     
@@ -329,6 +341,7 @@ httpReplyParseStep(HttpReply *rep, const char *parse_start, int atEnd)
 	    return httpReplyParseError(rep);
 
 	*parse_end_ptr = parse_start;
+	rep->hdr_sz = *parse_end_ptr - buf;
 	rep->pstate++;
     }
 
@@ -342,8 +355,11 @@ httpReplyParseStep(HttpReply *rep, const char *parse_start, int atEnd)
 static int
 httpReplyParseError(HttpReply *rep)
 {
-    httpReplyClean(rep);
-    httpReplyInit(rep);
+    assert(rep);
+    /* reset */
+    httpReplyReset(rep);
+    /* indicate an error */
+    rep->sline.status = HTTP_INVALID_HEADER;
     return -1;
 }
 

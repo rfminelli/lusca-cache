@@ -75,7 +75,7 @@ Stack *
 stackCreate(size_t capacity)
 {
     Stack *s = xcalloc(1, sizeof(Stack));
-    s->buf = xcalloc(capacity, sizeof(void*));
+    s->buf = capacity > 0 ? xcalloc(capacity, sizeof(void*)) : NULL;
     s->capacity = capacity;
 	s->count = 0;
 	s->is_full = stackIsFull(s);
@@ -88,17 +88,21 @@ stackDestroy(Stack *s)
 {
     assert(s);
     /* could also warn if some objects are left */
-    xfree(s->buf);
+    if (s->buf)
+	xfree(s->buf);
     xfree(s);
 }
 
 void *
 stackPop(Stack *s)
 {
+    void *popped;
     assert(s);
     assert(s->count);
+    popped = s->buf[--s->count];
+    s->is_full = stackIsFull(s);
     s->pop_count++; /* might overflow eventually, but ok */
-    return s->buf[--s->count];
+    return popped;
 }
 
 void
