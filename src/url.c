@@ -43,7 +43,7 @@ char *url_convert_hex(org_url, allocate)
 
     url = allocate ? (char *) xstrdup(org_url) : org_url;
 
-    if (strlen(url) < 3 || !strchr(url, '%'))
+    if ((int) strlen(url) < 3 || !strchr(url, '%'))
 	return url;
 
     for (s = t = url; *(s + 2); s++) {
@@ -186,9 +186,10 @@ request_t *urlParse(method, url)
 	    *t = 0;
 	    strcpy(host, t + 1);
 	}
-	if ((t = strrchr(host, ':')) && *(t + 1) != '\0') {
-	    *t = '\0';
-	    port = atoi(t + 1);
+	if ((t = strrchr(host, ':'))) {
+	    *t++ = '\0';
+	    if (*t != '\0')
+		port = atoi(t);
 	}
     }
     for (t = host; *t; t++)

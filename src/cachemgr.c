@@ -74,6 +74,7 @@ typedef enum {
     STATS_O,
     STATS_VM,
     STATS_U,
+    STATS_IO,
     SHUTDOWN,
     REFRESH,
 #ifdef REMOVE_OBJECT
@@ -93,6 +94,7 @@ static char *op_cmds[] =
     "stats/objects",
     "stats/vm_objects",
     "stats/utilization",
+    "stats/io",
     "shutdown",
     "<refresh>",
 #ifdef REMOVE_OBJECT
@@ -158,6 +160,7 @@ void noargs_html()
     printf("<OPTION VALUE=\"log\">Cache Log\n");
 #endif
     printf("<OPTION VALUE=\"stats/utilization\">Utilization\n");
+    printf("<OPTION VALUE=\"stats/io\">I/O\n");
     printf("<OPTION VALUE=\"stats/objects\">Objects\n");
     printf("<OPTION VALUE=\"stats/vm_objects\">VM_Objects\n");
     printf("<OPTION VALUE=\"server_list\">Cache Server List\n");
@@ -179,7 +182,7 @@ void noargs_html()
 char *makeword(char *line, char stop)
 {
     int x = 0, y;
-    char *word = (char *) malloc(sizeof(char) * (strlen(line) + 1));
+    char *word = xmalloc(sizeof(char) * (strlen(line) + 1));
 
     for (x = 0; ((line[x]) && (line[x] != stop)); x++)
 	word[x] = line[x];
@@ -196,14 +199,11 @@ char *makeword(char *line, char stop)
 /* A utility function from the NCSA httpd cgi-src utils.c */
 char *fmakeword(FILE * f, char stop, int *cl)
 {
-    int wsize;
-    char *word;
-    int ll;
+    int wsize = 102400;
+    char *word = NULL;
+    int ll = 0;
 
-    wsize = 102400;
-    ll = 0;
-    word = (char *) malloc(sizeof(char) * (wsize + 1));
-
+    word = xmalloc(sizeof(char) * (wsize + 1));
     for (;;) {
 	word[ll] = (char) fgetc(f);
 	if (ll == wsize) {
@@ -226,7 +226,7 @@ char *fmakeword(FILE * f, char stop, int *cl)
 /* A utility function from the NCSA httpd cgi-src utils.c */
 char x2c(char *what)
 {
-    register char digit;
+    char digit;
 
     digit = (what[0] >= 'A' ? ((what[0] & 0xdf) - 'A') + 10 : (what[0] - '0'));
     digit *= 16;
@@ -237,7 +237,7 @@ char x2c(char *what)
 /* A utility function from the NCSA httpd cgi-src utils.c */
 void unescape_url(char *url)
 {
-    register int x, y;
+    int x, y;
 
     for (x = 0, y = 0; url[y]; ++x, ++y) {
 	if ((url[x] = url[y]) == '%') {
@@ -251,7 +251,7 @@ void unescape_url(char *url)
 /* A utility function from the NCSA httpd cgi-src utils.c */
 void plustospace(char *str)
 {
-    register int x;
+    int x;
 
     for (x = 0; str[x]; x++)
 	if (str[x] == '+')
@@ -454,6 +454,9 @@ int main(int argc, char *argv[])
     } else if (!strcmp(operation, "stats/utilization") ||
 	!strcmp(operation, "Utilization")) {
 	op = STATS_U;
+    } else if (!strcmp(operation, "stats/io") ||
+	!strcmp(operation, "I/O")) {
+	op = STATS_IO;
     } else if (!strcmp(operation, "shutdown")) {
 	op = SHUTDOWN;
     } else if (!strcmp(operation, "refresh")) {
@@ -477,6 +480,7 @@ int main(int argc, char *argv[])
     case STATS_O:
     case STATS_VM:
     case STATS_U:
+    case STATS_IO:
 	sprintf(msg, "GET cache_object://%s/%s HTTP/1.0\r\n\r\n",
 	    hostname, op_cmds[op]);
 	break;
@@ -515,6 +519,7 @@ int main(int argc, char *argv[])
     printf("<OPTION VALUE=\"log\">Cache Log\n");
 #endif
     printf("<OPTION VALUE=\"stats/utilization\">Utilization\n");
+    printf("<OPTION VALUE=\"stats/io\">I/O\n");
     printf("<OPTION VALUE=\"stats/objects\">Objects\n");
     printf("<OPTION VALUE=\"stats/vm_objects\">VM_Objects\n");
     printf("<OPTION VALUE=\"server_list\">Cache Server List\n");
@@ -559,6 +564,7 @@ int main(int argc, char *argv[])
     case STATS_G:
     case STATS_O:
     case STATS_VM:
+    case STATS_IO:
     case SHUTDOWN:
     case REFRESH:
 	break;
@@ -621,6 +627,7 @@ int main(int argc, char *argv[])
 		case SERVER:
 		case LOG:
 		case STATS_G:
+		case STATS_IO:
 		case SHUTDOWN:
 		    p_state = 1;
 		    printf("%s", reserve);

@@ -164,10 +164,6 @@ typedef enum {
     FAIL_HARD			/* do cache these */
 } state_t;
 
-#define DFD_TYPE_NONE 0
-#define DFD_TYPE_PASV 1
-#define DFD_TYPE_PORT 2
-
 typedef struct _request {
     char *host;
     int port;
@@ -181,7 +177,6 @@ typedef struct _request {
     int cfd;
     int sfd;
     int dfd;
-    int dfd_type;
     int conn_att;
     int login_att;
     state_t state;
@@ -867,7 +862,7 @@ int read_reply(fd)
 	else
 	    quit = (buf[2] >= '0' && buf[2] <= '9' && buf[3] == ' ');
 	if (!quit) {
-	    l = (list_t *) xmalloc(sizeof(list_t));
+	    l = xmalloc(sizeof(list_t));
 	    l->ptr = xstrdup(&buf[4]);
 	    l->next = NULL;
 	    *Tail = l;
@@ -900,7 +895,7 @@ int send_cmd(fd, buf)
     int x;
 
     len = strlen(buf) + 2;
-    xbuf = (char *) xmalloc(len + 1);
+    xbuf = xmalloc(len + 1);
     sprintf(xbuf, "%s\r\n", buf);
     Debug(26, 1, ("send_cmd: %s\n", buf));
     x = write_with_timeout(fd, xbuf, len);
@@ -944,11 +939,51 @@ time_t parse_iso3307_time(buf)
 
 #define SEND_CBUF \
         if (send_cmd(r->sfd, cbuf) < 0) { \
-                r->errmsg = (char *) xmalloc (SMALLBUFSIZ); \
+                r->errmsg = xmalloc (SMALLBUFSIZ); \
                 sprintf(r->errmsg, "Failed to send '%s'", cbuf); \
                 r->rc = 4; \
                 return FAIL_SOFT; \
         }
+
+/*
+ *  close_dfd()
+ *  Close any open data channel
+ */
+void close_dfd(r)
+     request_t *r;
+{
+    if (r->dfd >= 0)
+	close(r->dfd);
+    r->flags &= ~F_NEEDACCEPT;
+    r->dfd = -1;
+}
+
+/*
+ *  is_dfd_open()
+ *  Check if a data channel is already open
+ */
+int is_dfd_open(r)
+     request_t *r;
+{
+    if (r->dfd >= 0 && !(r->flags & F_NEEDACCEPT)) {
+	fd_set R;
+	struct timeval tv;
+	FD_ZERO(&R);
+	FD_SET(r->dfd, &R);
+	tv.tv_sec = 0;
+	tv.tv_usec = 0;
+	if (select(r->dfd + 1, &R, NULL, NULL, &tv) == 0) {
+	    Debug(26, 3, ("Data channel already connected (FD=%d)\n", r->dfd));
+	    return 1;
+	} else {
+	    Debug(26, 2, ("Data channel closed by server (%s)\n", xstrerror()));
+	}
+    } else if (r->dfd >= 0) {
+	Debug(26, 2, ("Data socket not connected, closing\n"));
+    }
+    close_dfd(r);
+    return 0;
+}
 
 /*
  *  parse_request()
@@ -964,7 +999,7 @@ state_t parse_request(r)
 {
     Debug(26, 1, ("parse_request: looking up '%s'\n", r->host));
     if (get_host(r->host) == (Host *) NULL) {
-	r->errmsg = (char *) xmalloc(SMALLBUFSIZ);
+	r->errmsg = xmalloc(SMALLBUFSIZ);
 	sprintf(r->errmsg, "Unknown host: %s", r->host);
 	r->rc = 10;
 	return FAIL_HARD;
@@ -993,7 +1028,7 @@ state_t do_connect(r)
     Debug(26, 1, ("do_connect: connect attempt #%d to '%s'\n",
 	    r->conn_att, r->host));
     if ((sock = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
-	r->errmsg = (char *) xmalloc(SMALLBUFSIZ);
+	r->errmsg = xmalloc(SMALLBUFSIZ);
 	sprintf(r->errmsg, "socket: %s", xstrerror());
 	r->rc = 2;
 	return FAIL_CONNECT;
@@ -1009,7 +1044,7 @@ state_t do_connect(r)
 	return FAIL_CONNECT;
     }
     if (x < 0) {
-	r->errmsg = (char *) xmalloc(SMALLBUFSIZ);
+	r->errmsg = xmalloc(SMALLBUFSIZ);
 	sprintf(r->errmsg, "%s (port %d): %s",
 	    r->host, r->port, xstrerror());
 	r->rc = 3;
@@ -1178,26 +1213,11 @@ state_t do_port(r)
     int port = 0;
     static int init = 0;
 
-    if (r->dfd >= 0 && r->dfd_type == DFD_TYPE_PORT) {
-	fd_set R;
-	struct timeval tv;
-	FD_ZERO(&R);
-	FD_SET(r->dfd, &R);
-	tv.tv_sec = 0;
-	tv.tv_usec = 0;
-	if (select(r->dfd + 1, &R, NULL, NULL, &tv) == 0) {
-	    Debug(26, 3, ("do_port: FD %d Already connected\n", r->dfd));
-	    r->flags |= F_NEEDACCEPT;
-	    return PORT_OK;
-	} else {
-	    Debug(26, 2, ("Data connection closed by server (%s)\n", xstrerror()));
-	    close(r->dfd);
-	    r->dfd = -1;
-	    r->dfd_type = DFD_TYPE_NONE;
-	}
-    }
+    if (is_dfd_open(r))
+	return PORT_OK;
+
     if ((sock = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
-	r->errmsg = (char *) xmalloc(SMALLBUFSIZ);
+	r->errmsg = xmalloc(SMALLBUFSIZ);
 	sprintf(r->errmsg, "socket: %s", xstrerror());
 	r->rc = 2;
 	return FAIL_SOFT;
@@ -1224,14 +1244,14 @@ state_t do_port(r)
 	    break;
 	if (++tries < 10)
 	    continue;
-	r->errmsg = (char *) xmalloc(SMALLBUFSIZ);
+	r->errmsg = xmalloc(SMALLBUFSIZ);
 	sprintf(r->errmsg, "bind: %s", xstrerror());
 	r->rc = 2;
 	return FAIL_SOFT;
     }
 
     if (listen(sock, 1) < 0) {
-	r->errmsg = (char *) xmalloc(SMALLBUFSIZ);
+	r->errmsg = xmalloc(SMALLBUFSIZ);
 	sprintf(r->errmsg, "listen: %s", xstrerror());
 	r->rc = 2;
 	return FAIL_SOFT;
@@ -1250,7 +1270,6 @@ state_t do_port(r)
     if ((code = read_reply(r->sfd)) > 0) {
 	if (code == 200) {
 	    r->dfd = sock;
-	    r->dfd_type = DFD_TYPE_PORT;
 	    r->flags |= F_NEEDACCEPT;
 	    return PORT_OK;
 	}
@@ -1278,27 +1297,12 @@ state_t do_pasv(r)
     if (!pasv_supported)
 	return PASV_FAIL;
 
-    if (r->dfd >= 0 && r->dfd_type == DFD_TYPE_PASV) {
-	fd_set R;
-	struct timeval tv;
-	FD_ZERO(&R);
-	FD_SET(r->dfd, &R);
-	tv.tv_sec = 0;
-	tv.tv_usec = 0;
-	if (select(r->dfd + 1, &R, NULL, NULL, &tv) == 0) {
-	    Debug(26, 3, ("do_pasv: FD %d Already connected\n", r->dfd));
-	    return PORT_OK;
-	} else {
-	    Debug(26, 2, ("Data connection closed by server (%s)\n", xstrerror()));
-	    close(r->dfd);
-	    r->dfd = -1;
-	    r->dfd_type = DFD_TYPE_NONE;
-	}
-    }
-    r->flags &= ~F_NEEDACCEPT;
+    /* If there already are a open data connection, use that */
+    if (is_dfd_open(r))
+	return PORT_OK;
 
     if ((sock = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
-	r->errmsg = (char *) xmalloc(SMALLBUFSIZ);
+	r->errmsg = xmalloc(SMALLBUFSIZ);
 	sprintf(r->errmsg, "socket: %s", xstrerror());
 	r->rc = 2;
 	return FAIL_SOFT;
@@ -1329,13 +1333,12 @@ state_t do_pasv(r)
     S.sin_port = htons(port = ((p1 << 8) + p2));
 
     if (connect_with_timeout(sock, &S, sizeof(S)) < 0) {
-	r->errmsg = (char *) xmalloc(SMALLBUFSIZ);
+	r->errmsg = xmalloc(SMALLBUFSIZ);
 	sprintf(r->errmsg, "%s, port %d: %s", junk, port, xstrerror());
 	r->rc = 2;
 	return FAIL_SOFT;
     }
     r->dfd = sock;
-    r->dfd_type = DFD_TYPE_PASV;
     return PORT_OK;
 }
 
@@ -1356,7 +1359,7 @@ state_t do_cwd(r)
 	if (code >= 200 && code < 300)
 	    return CWD_OK;
 #ifdef TRY_CWD_FIRST
-	if (!r->flags & F_ISDIR)
+	if (!(r->flags & F_ISDIR))
 	    return CWD_FAIL;
 #endif
 	r->errmsg = xstrdup(server_reply_msg);
@@ -1473,16 +1476,13 @@ state_t do_accept(r)
     if (sock == READ_TIMEOUT)
 	return request_timeout(r);
     if (sock < 0) {
-	r->errmsg = (char *) xmalloc(SMALLBUFSIZ);
+	r->errmsg = xmalloc(SMALLBUFSIZ);
 	sprintf(r->errmsg, "accept: %s", xstrerror());
 	r->rc = 3;
 	return FAIL_SOFT;
     }
-    r->flags &= ~F_NEEDACCEPT;
-    if (r->dfd >= 0)
-	close(r->dfd);
+    close_dfd(r);
     r->dfd = sock;
-    r->dfd_type = DFD_TYPE_PORT;
     return DATA_TRANSFER;
 }
 
@@ -1498,21 +1498,13 @@ state_t read_data(r)
     if (n == READ_TIMEOUT) {
 	return request_timeout(r);
     } else if (n < 0) {
-	if (r->dfd >= 0) {
-	    close(r->dfd);
-	    r->dfd = -1;
-	    r->dfd_type = DFD_TYPE_NONE;
-	}
-	r->errmsg = (char *) xmalloc(SMALLBUFSIZ);
+	close_dfd(r);
+	r->errmsg = xmalloc(SMALLBUFSIZ);
 	sprintf(r->errmsg, "read: %s", xstrerror());
 	r->rc = 4;
 	return FAIL_SOFT;
     } else if (n == 0) {
-	if (r->dfd >= 0) {
-	    close(r->dfd);
-	    r->dfd = -1;
-	    r->dfd_type = DFD_TYPE_NONE;
-	}
+	close_dfd(r);
 	if ((code = read_reply(r->sfd)) > 0) {
 	    if (code == 226)
 		return TRANSFER_DONE;
@@ -1525,7 +1517,7 @@ state_t read_data(r)
     if (x == READ_TIMEOUT)
 	return request_timeout(r);
     if (x < 0) {
-	r->errmsg = (char *) xmalloc(SMALLBUFSIZ);
+	r->errmsg = xmalloc(SMALLBUFSIZ);
 	sprintf(r->errmsg, "write: %s", xstrerror());
 	r->rc = 4;
 	return FAIL_SOFT;
@@ -1571,8 +1563,7 @@ parts_t *parse_entry(buf)
     if (*buf == '\0')
 	return NULL;
 
-    p = (parts_t *) xmalloc(sizeof(parts_t));
-    memset(p, '\0', sizeof(parts_t));
+    p = xcalloc(1, sizeof(parts_t));
 
     n_tokens = 0;
     for (i = 0; i < MAX_TOKENS; i++)
@@ -1668,9 +1659,9 @@ char *htmlize_list_entry(line, r)
     char *ename = NULL;
     parts_t *parts = NULL;
 
-    link = (char *) xmalloc(MIDBUFSIZ);
-    icon = (char *) xmalloc(MIDBUFSIZ);
-    html = (char *) xmalloc(BIGBUFSIZ);
+    link = xmalloc(MIDBUFSIZ);
+    icon = xmalloc(MIDBUFSIZ);
+    html = xmalloc(BIGBUFSIZ);
 
     /* check .. as special case */
     if (!strcmp(line, "..")) {
@@ -1772,15 +1763,16 @@ void try_readme(r)
 	xfree(tfname);
 	return;
     }
-    readme = (request_t *) xmalloc(sizeof(request_t));
-    memset(readme, '\0', sizeof(request_t));
-
+    readme = xcalloc(1, sizeof(request_t));
     readme->path = xstrdup("README");
     readme->cfd = fd;
     readme->sfd = r->sfd;
-    readme->dfd = r->dfd;
-    r->dfd = -1;
-    r->dfd_type = DFD_TYPE_NONE;
+    if (is_dfd_open(r)) {
+	readme->dfd = r->dfd;
+	r->dfd = -1;
+    } else {
+	readme->dfd = -1;
+    }
 #ifdef TRY_CWD_FIRST
     readme->state = CWD_FAIL;
 #else
@@ -1793,13 +1785,10 @@ void try_readme(r)
 	close(readme->cfd);
 	readme->cfd = -1;
     }
-    if (readme->dfd >= 0) {
-	if (r->dfd == -1)
-	    r->dfd = readme->dfd;
-	else
-	    close(readme->dfd);
+    if (is_dfd_open(readme)) {
+	close_dfd(r);
+	r->dfd = readme->dfd;
 	readme->dfd = -1;
-	readme->dfd_type = DFD_TYPE_NONE;
     }
     fp = fopen(tfname, "r");
     unlink(tfname);
@@ -1881,15 +1870,11 @@ state_t htmlify_listing(r)
 	    xfree(t);
 	}
     }
-    if (r->dfd >= 0) {
-	close(r->dfd);
-	r->dfd = -1;
-	r->dfd_type = DFD_TYPE_NONE;
-    }
+    close_dfd(r);
     if (n == READ_TIMEOUT) {
 	return request_timeout(r);
     } else if (n < 0) {
-	r->errmsg = (char *) xmalloc(SMALLBUFSIZ);
+	r->errmsg = xmalloc(SMALLBUFSIZ);
 	sprintf(r->errmsg, "read: %s", xstrerror());
 	r->rc = 4;
 	return FAIL_SOFT;
@@ -2061,9 +2046,6 @@ static int process_request(r)
 	    }
 	    break;
 	case FAIL_SOFT:
-	    fail(r);
-	    return (r->rc);
-	    /* NOTREACHED */
 	case FAIL_HARD:
 	    fail(r);
 	    return (r->rc);
@@ -2236,7 +2218,7 @@ int ftpget_srv_mode(port)
 	log_errno2(__FILE__, __LINE__, fullprogname);
 	_exit(1);
     }
-    return 1;
+    /* NOTREACHED */
 }
 
 void usage(argcount)
@@ -2404,7 +2386,7 @@ int main(argc, argv)
 	    continue;
 	} else if (!strcmp(*argv, "-C")) {
 	    if (--argc < 1)
-		usage();
+		usage(argc);
 	    argv++;
 	    j = k = 0;
 	    sscanf(*argv, "%d:%d", &j, &k);
@@ -2438,8 +2420,7 @@ int main(argc, argv)
 	fprintf(stderr, "Wrong number of arguments left (%d)\n", argc);
 	usage(argc);
     }
-    r = (request_t *) xmalloc(sizeof(request_t));
-    memset(r, '\0', sizeof(request_t));
+    r = xcalloc(1, sizeof(request_t));
 
     if (strcmp(argv[0], "-") == 0) {
 	r->cfd = 1;
@@ -2455,7 +2436,6 @@ int main(argc, argv)
     r->port = port;
     r->sfd = -1;
     r->dfd = -1;
-    r->dfd_type = DFD_TYPE_NONE;
     r->size = -1;
     r->state = BEGIN;
     r->flags |= o_httpify ? F_HTTPIFY : 0;
@@ -2471,8 +2451,8 @@ int main(argc, argv)
 
     len = 15 + strlen(r->user) + strlen(r->pass) + strlen(r->host)
 	+ strlen(r->path);
-    r->url = (char *) xmalloc(len);
-    r->title_url = (char *) xmalloc(len);
+    r->url = xmalloc(len);
+    r->title_url = xmalloc(len);
 
     *r->url = '\0';
     strcat(r->url, "ftp://");
@@ -2500,7 +2480,7 @@ int main(argc, argv)
 
     /* Make a copy of the escaped URL with some room to grow at the end */
     t = rfc1738_escape(r->url);
-    r->url_escaped = (char *) xmalloc(strlen(t) + 10);
+    r->url_escaped = xmalloc(strlen(t) + 10);
     strcpy(r->url_escaped, t);
 
     rc = process_request(MainRequest = r);
@@ -2510,8 +2490,7 @@ int main(argc, argv)
 	close(r->sfd);
     if (r->cfd >= 0)
 	close(r->cfd);
-    if (r->dfd >= 0)
-	close(r->dfd);
+    close_dfd(r);
     close(0);
     close(1);
     exit(rc);

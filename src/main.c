@@ -19,11 +19,13 @@ int reread_pending = 0;		/* set by SIGHUP handler */
 char *version_string = SQUID_VERSION;
 char *appname = "squid";
 
-extern void (*failure_notify) ();	/* for error reporting from xmalloc */
+extern void (*failure_notify) _PARAMS((char *));	/* for error reporting from xmalloc */
 
 static int asciiPortNumOverride = 0;
 static int udpPortNumOverride = 0;
+#if defined(MALLOC_DBG)
 static int malloc_debug_level = 0;
+#endif
 
 static void usage()
 {
@@ -89,9 +91,11 @@ static void mainParseOptions(argc, argv)
 	case 'u':
 	    udpPortNumOverride = atoi(optarg);
 	    break;
+#if defined(MALLOC_DBG)
 	case 'm':
 	    malloc_debug_level = atoi(optarg);
 	    break;
+#endif
 	case 'z':
 	    zap_disk_store = 1;
 	    break;
@@ -194,6 +198,7 @@ static void mainInitialize()
 {
     static int first_time = 1;
 
+
     if (catch_signals) {
 	signal(SIGSEGV, death);
 	signal(SIGBUS, death);
@@ -204,6 +209,7 @@ static void mainInitialize()
     if (ConfigFile == NULL)
 	ConfigFile = xstrdup(DefaultConfigFile);
     parseConfigFile(ConfigFile);
+    check_suid();
 
     if (asciiPortNumOverride > 0)
 	setAsciiPortNum(asciiPortNumOverride);
@@ -228,9 +234,6 @@ static void mainInitialize()
 #if defined(MALLOC_DBG)
     malloc_debug(0, malloc_debug_level);
 #endif
-
-    /* do suid checking */
-    check_suid();
 
     if (first_time) {
 	first_time = 0;

@@ -195,11 +195,13 @@ int protoDispatch(fd, url, entry, request)
     if (strncasecmp(url, "cache_object:", 13) == 0)
 	return objcacheStart(fd, url, entry);
 
+#ifdef OLD_CODE			/* now in icpAccessCheck() */
     /* Check for Proxy request in Accel mode */
     if (httpd_accel_mode &&
 	strncmp(url, getAccelPrefix(), strlen(getAccelPrefix())) &&
 	!getAccelWithProxy())
 	return protoNotImplemented(fd, url, entry);
+#endif
 
     data = (protodispatch_data *) xcalloc(1, sizeof(protodispatch_data));
 
@@ -406,6 +408,7 @@ int getFromCache(fd, entry, e, request)
     protoCancelTimeout(fd, entry);
 
     if (e) {
+	e->stats.fetches++;
 	return proxyhttpStart(e, url, entry);
     } else if (request->protocol == PROTO_HTTP) {
 	return httpStart(fd, url, request, request_hdr, entry);
