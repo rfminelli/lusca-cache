@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -106,6 +105,26 @@
 
 #include "squid.h"
 
+typedef enum {
+    FDSTAT_CLOSE,
+    FDSTAT_OPEN
+} File_Desc_Status;
+
+typedef struct _FDENTRY {
+    File_Desc_Status status;
+    File_Desc_Type type;
+} FDENTRY;
+
+static FDENTRY *fd_stat_tab = NULL;
+
+static void fdstat_update _PARAMS((int fd, File_Desc_Status status));
+
+File_Desc_Type
+fdstatGetType(int fd)
+{
+    return fd_stat_tab[fd].type;
+}
+
 const char *fdstatTypeStr[] =
 {
     "None",
@@ -120,7 +139,65 @@ const char *fdstatTypeStr[] =
 void
 fdstat_init(void)
 {
+    int i;
+    fd_stat_tab = xcalloc(Squid_MaxFD, sizeof(FDENTRY));
+    meta_data.misc += Squid_MaxFD * sizeof(FDENTRY);
+    for (i = 0; i < Squid_MaxFD; ++i) {
+	fd_stat_tab[i].status = FDSTAT_CLOSE;
+	fd_stat_tab[i].type = FD_UNKNOWN;
+    }
     Biggest_FD = -1;
+}
+
+/* call for updating the current biggest fd */
+static void
+fdstat_update(int fd, File_Desc_Status status)
+{
+    if (fd < Biggest_FD)
+	return;
+    if (fd >= Squid_MaxFD) {
+	debug_trap("Running out of file descriptors.\n");
+	return;
+    }
+    if (fd > Biggest_FD) {
+	if (status == FDSTAT_OPEN)
+	    Biggest_FD = fd;
+	else
+	    debug_trap("fdstat_update: Biggest_FD inconsistency");
+	return;
+    }
+    /* if we are here, then fd == Biggest_FD */
+    if (status == FDSTAT_CLOSE) {
+	while (fd_stat_tab[Biggest_FD].status != FDSTAT_OPEN)
+	    Biggest_FD--;
+    } else {
+	debug_trap("fdstat_update: re-opening Biggest_FD?");
+    }
+}
+
+/* call when open fd */
+void
+fdstat_open(int fd, File_Desc_Type type)
+{
+    fd_stat_tab[fd].status = FDSTAT_OPEN;
+    fd_stat_tab[fd].type = type;
+    fdstat_update(fd, FDSTAT_OPEN);
+    Number_FD++;
+}
+
+int
+fdstat_isopen(int fd)
+{
+    return (fd_stat_tab[fd].status == FDSTAT_OPEN);
+}
+
+/* call when close fd */
+void
+fdstat_close(int fd)
+{
+    fd_stat_tab[fd].status = FDSTAT_CLOSE;
+    fdstat_update(fd, FDSTAT_CLOSE);
+    Number_FD--;
 }
 
 int
@@ -131,7 +208,7 @@ fdstat_are_n_free_fd(int n)
 
     if (n == 0) {
 	for (fd = 0; fd < Squid_MaxFD; ++fd)
-	    if (fd_table[fd].open == FD_CLOSE)
+	    if (fd_stat_tab[fd].status == FDSTAT_CLOSE)
 		++n;
 	return (n);
     }
@@ -139,10 +216,16 @@ fdstat_are_n_free_fd(int n)
 	return 1;
     else {
 	for (fd = Squid_MaxFD - 1; ((fd > 0) && (n_free_fd < n)); --fd) {
-	    if (fd_table[fd].open == FD_CLOSE) {
+	    if (fd_stat_tab[fd].status == FDSTAT_CLOSE) {
 		++n_free_fd;
 	    }
 	}
 	return (n_free_fd >= n);
     }
+}
+
+void
+fdstatFreeMemory(void)
+{
+    safe_free(fd_stat_tab);
 }
