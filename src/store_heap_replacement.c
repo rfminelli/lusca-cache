@@ -58,8 +58,14 @@ static heap_key
 HeapKeyGen_StoreEntry_LFUDA(void *entry, double age)
 {
     StoreEntry *e = entry;
-    double tie = (e->lastref > 1) ? (1.0 / e->lastref) : 1;
-    return age + e->refcount - tie;
+    double tie;
+    if (e->lastref <= 0)
+	tie = 0.0;
+    else if (squid_curtime <= e->lastref)
+	tie = 0.0;
+    else
+	tie = 1.0 - exp((double) (e->lastref - squid_curtime) / 86400.0);
+    return age + (double) e->refcount - tie;
 }
 
 
@@ -79,8 +85,8 @@ static heap_key
 HeapKeyGen_StoreEntry_GDSF(void *entry, double age)
 {
     StoreEntry *e = entry;
-    double size = e->swap_file_sz ? e->swap_file_sz : 1.0;
-    double tie = (e->lastref > 1) ? (1.0 / e->lastref) : 1;
+    double size = e->swap_file_sz ? (double) e->swap_file_sz : 1.0;
+    double tie = (e->lastref > 1) ? (1.0 / e->lastref) : 1.0;
     return age + ((double) e->refcount / size) - tie;
 }
 

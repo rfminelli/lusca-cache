@@ -31,9 +31,6 @@
  *
  */
 
-#ifndef _TYPEDEFS_H_
-#define _TYPEDEFS_H_
-
 typedef unsigned int store_status_t;
 typedef unsigned int mem_status_t;
 typedef unsigned int ping_status_t;
@@ -74,6 +71,7 @@ typedef struct _intlist intlist;
 typedef struct _intrange intrange;
 typedef struct _ushortlist ushortlist;
 typedef struct _relist relist;
+typedef struct _sockaddr_in_list sockaddr_in_list;
 typedef struct _SquidConfig SquidConfig;
 typedef struct _SquidConfig2 SquidConfig2;
 typedef struct _close_handler close_handler;
@@ -267,5 +265,3 @@ typedef unsigned int delay_id;
 #if USE_HTCP
 typedef struct _htcpReplyData htcpReplyData;
 #endif
-
-#endif /* _TYPEDEFS_H_ */

@@ -132,6 +132,7 @@ static void
 httpMaybeRemovePublic(StoreEntry * e, http_status status)
 {
     int remove = 0;
+    int forbidden = 0;
     StoreEntry *pe;
     if (!EBIT_TEST(e->flags, KEY_PRIVATE))
 	return;
@@ -141,34 +142,61 @@ httpMaybeRemovePublic(StoreEntry * e, http_status status)
     case HTTP_MULTIPLE_CHOICES:
     case HTTP_MOVED_PERMANENTLY:
     case HTTP_MOVED_TEMPORARILY:
-    case HTTP_FORBIDDEN:
-    case HTTP_NOT_FOUND:
-    case HTTP_METHOD_NOT_ALLOWED:
     case HTTP_GONE:
+    case HTTP_NOT_FOUND:
 	remove = 1;
+	break;
+    case HTTP_FORBIDDEN:
+    case HTTP_METHOD_NOT_ALLOWED:
+	forbidden = 1;
 	break;
 #if WORK_IN_PROGRESS
     case HTTP_UNAUTHORIZED:
-	remove = 1;
+	forbidden = 1;
 	break;
 #endif
     default:
-	remove = 0;
+#if QUESTIONABLE
+	/*
+	 * Any 2xx response should eject previously cached entities...
+	 */
+	if (status >= 200 && status < 300)
+	    remove = 1;
+#endif
 	break;
     }
-    if (!remove)
+    if (!remove && !forbidden)
 	return;
     assert(e->mem_obj);
     if ((pe = storeGetPublic(e->mem_obj->url, e->mem_obj->method)) != NULL) {
 	assert(e != pe);
 	storeRelease(pe);
     }
-    if (e->mem_obj->method == METHOD_GET) {
-	/* A fresh GET should eject old HEAD objects */
-	if ((pe = storeGetPublic(e->mem_obj->url, METHOD_HEAD)) != NULL) {
+    /*
+     * Also remove any cached HEAD response in case the object has
+     * changed.
+     */
+    if ((pe = storeGetPublic(e->mem_obj->url, METHOD_HEAD)) != NULL) {
+	assert(e != pe);
+	storeRelease(pe);
+    }
+    if (forbidden)
+	return;
+    switch (e->mem_obj->method) {
+    case METHOD_PUT:
+    case METHOD_DELETE:
+    case METHOD_PROPPATCH:
+    case METHOD_MKCOL:
+    case METHOD_MOVE:
+	/*
+	 * Remove any cached GET object if it is beleived that the
+	 * object may have changed as a result of other methods
+	 */
+	if ((pe = storeGetPublic(e->mem_obj->url, METHOD_GET)) != NULL) {
 	    assert(e != pe);
 	    storeRelease(pe);
 	}
+	break;
     }
 }
 
@@ -559,9 +587,6 @@ httpSendComplete(int fd, char *bufnotused, size_t size, int errflag, void *data)
     ErrorState *err;
     debug(11, 5) ("httpSendComplete: FD %d: size %d: errflag %d.\n",
 	fd, size, errflag);
-#if URL_CHECKSUM_DEBUG
-    assert(entry->mem_obj->chksum == url_checksum(entry->mem_obj->url));
-#endif
     if (size > 0) {
 	fd_bytes(fd, size, FD_WRITE);
 	kb_incr(&Counter.server.all.kbytes_out, size);
@@ -696,7 +721,7 @@ httpBuildRequestHeader(request_t * request,
 	httpHeaderPutStr(hdr_out, HDR_USER_AGENT, Config.fake_ua);
 
     /* append Via */
-    {
+    if (httpRequestHdrAllowedByName(HDR_VIA)) {
 	String strVia = httpHeaderGetList(hdr_in, HDR_VIA);
 	snprintf(bbuf, BBUF_SZ, "%3.1f %s", orig_request->http_ver, ThisCache);
 	strListAdd(&strVia, bbuf, ',');
@@ -704,7 +729,7 @@ httpBuildRequestHeader(request_t * request,
 	stringClean(&strVia);
     }
     /* append X-Forwarded-For */
-    {
+    if (httpRequestHdrAllowedByName(HDR_X_FORWARDED_FOR)) {
 	String strFwd = httpHeaderGetList(hdr_in, HDR_X_FORWARDED_FOR);
 	strListAdd(&strFwd, (cfd < 0 ? "unknown" : fd_table[cfd].ipaddr), ',');
 	httpHeaderPutStr(hdr_out, HDR_X_FORWARDED_FOR, strBuf(strFwd));

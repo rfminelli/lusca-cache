@@ -68,9 +68,6 @@ fwdStateFree(FwdState * fwdState)
     int sfd;
     debug(17, 3) ("fwdStateFree: %p\n", fwdState);
     assert(e->mem_obj);
-#if URL_CHECKSUM_DEBUG
-    assert(e->mem_obj->chksum == url_checksum(e->mem_obj->url));
-#endif
     if (e->store_status == STORE_PENDING) {
 	if (e->mem_obj->inmem_hi == 0) {
 	    assert(fwdState->err);
@@ -243,9 +240,6 @@ fwdConnectStart(void *data)
 	fwdConnectDone(fd, COMM_OK, fwdState);
 	return;
     }
-#if URL_CHECKSUM_DEBUG
-    assert(fwdState->entry->mem_obj->chksum == url_checksum(url));
-#endif
     fd = comm_open(SOCK_STREAM,
 	0,
 	Config.Addrs.tcp_outgoing,
@@ -375,9 +369,6 @@ fwdReforward(FwdState * fwdState)
     http_status s;
     assert(e->store_status == STORE_PENDING);
     assert(e->mem_obj);
-#if URL_CHECKSUM_DEBUG
-    assert(e->mem_obj->chksum == url_checksum(e->mem_obj->url));
-#endif
     debug(17, 3) ("fwdReforward: %s?\n", storeUrl(e));
     if (!EBIT_TEST(e->flags, ENTRY_FWD_HDR_WAIT)) {
 	debug(17, 3) ("fwdReforward: No, ENTRY_FWD_HDR_WAIT isn't set\n");
@@ -413,8 +404,7 @@ fwdServersFree(FwdServer ** FS)
 }
 
 void
-fwdStart(int fd, StoreEntry * e, request_t * r, struct in_addr client_addr,
-    struct in_addr my_addr)
+fwdStart(int fd, StoreEntry * e, request_t * r)
 {
     FwdState *fwdState;
     aclCheck_t ch;
@@ -425,19 +415,20 @@ fwdStart(int fd, StoreEntry * e, request_t * r, struct in_addr client_addr,
      * from peer_digest.c, asn.c, netdb.c, etc and should always
      * be allowed.  yuck, I know.
      */
-    if (client_addr.s_addr != no_addr.s_addr) {
+    if (r->client_addr.s_addr != no_addr.s_addr) {
 	/*      
 	 * Check if this host is allowed to fetch MISSES from us (miss_access)
 	 */
 	memset(&ch, '\0', sizeof(aclCheck_t));
-	ch.src_addr = client_addr;
-	ch.my_addr = my_addr;
+	ch.src_addr = r->client_addr;
+	ch.my_addr = r->my_addr;
+	ch.my_port = r->my_port;
 	ch.request = r;
 	answer = aclCheckFast(Config.accessList.miss, &ch);
 	if (answer == 0) {
 	    err = errorCon(ERR_FORWARDING_DENIED, HTTP_FORBIDDEN);
 	    err->request = requestLink(r);
-	    err->src_addr = client_addr;
+	    err->src_addr = r->client_addr;
 	    errorAppendEntry(e, err);
 	    return;
 	}
@@ -445,9 +436,6 @@ fwdStart(int fd, StoreEntry * e, request_t * r, struct in_addr client_addr,
     debug(17, 3) ("fwdStart: '%s'\n", storeUrl(e));
     e->mem_obj->request = requestLink(r);
     e->mem_obj->fd = fd;
-#if URL_CHECKSUM_DEBUG
-    assert(e->mem_obj->chksum == url_checksum(e->mem_obj->url));
-#endif
     if (shutting_down) {
 	/* more yuck */
 	err = errorCon(ERR_SHUTTING_DOWN, HTTP_SERVICE_UNAVAILABLE);
@@ -489,23 +477,29 @@ fwdCheckDeferRead(int fd, void *data)
 {
     StoreEntry *e = data;
     MemObject *mem = e->mem_obj;
+    int rc = 0;
     if (mem == NULL)
 	return 0;
-#if URL_CHECKSUM_DEBUG
-    assert(e->mem_obj->chksum == url_checksum(e->mem_obj->url));
-#endif
 #if DELAY_POOLS
     if (fd < 0)
 	(void) 0;
     else if (delayIsNoDelay(fd))
 	(void) 0;
-    else if (delayMostBytesWanted(mem, 1) == 0)
-	return 1;
+    else {
+	int i = delayMostBytesWanted(mem, INT_MAX);
+	if (0 == i)
+	    return 1;
+	/* was: rc = -(rc != INT_MAX); */
+	else if (INT_MAX == i)
+	    rc = 0;
+	else
+	    rc = -1;
+    }
 #endif
     if (EBIT_TEST(e->flags, ENTRY_FWD_HDR_WAIT))
-	return 0;
+	return rc;
     if (mem->inmem_hi - storeLowestMemReaderOffset(e) < READ_AHEAD_GAP)
-	return 0;
+	return rc;
     return 1;
 }
 
@@ -559,9 +553,6 @@ fwdComplete(FwdState * fwdState)
     assert(e->store_status == STORE_PENDING);
     debug(17, 3) ("fwdComplete: %s\n\tstatus %d\n", storeUrl(e),
 	e->mem_obj->reply->sline.status);
-#if URL_CHECKSUM_DEBUG
-    assert(e->mem_obj->chksum == url_checksum(e->mem_obj->url));
-#endif
     fwdLogReplyStatus(fwdState->n_tries, e->mem_obj->reply->sline.status);
     if (fwdReforward(fwdState)) {
 	debug(17, 3) ("fwdComplete: re-forwarding %d %s\n",

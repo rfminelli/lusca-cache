@@ -144,6 +144,7 @@ struct _aclCheck_t {
     struct in_addr src_addr;
     struct in_addr dst_addr;
     struct in_addr my_addr;
+    unsigned short my_port;
     request_t *request;
 #if USE_IDENT
     ConnStateData *conn;	/* hack for ident */
@@ -189,6 +190,11 @@ struct _relist {
     char *pattern;
     regex_t regex;
     relist *next;
+};
+
+struct _sockaddr_in_list {
+    struct sockaddr_in s;
+    sockaddr_in_list *next;
 };
 
 #if DELAY_POOLS
@@ -266,7 +272,6 @@ struct _SquidConfig {
     size_t maxRequestBodySize;
     size_t maxReplyBodySize;
     struct {
-	ushortlist *http;
 	u_short icp;
 #if USE_HTCP
 	u_short htcp;
@@ -275,6 +280,9 @@ struct _SquidConfig {
 	u_short snmp;
 #endif
     } Port;
+    struct {
+	sockaddr_in_list *http;
+    } Sockaddr;
 #if SQUID_SNMP
     struct {
 	char *configFile;
@@ -332,7 +340,6 @@ struct _SquidConfig {
 	u_short port;
     } Announce;
     struct {
-	struct in_addr tcp_incoming;
 	struct in_addr tcp_outgoing;
 	struct in_addr udp_incoming;
 	struct in_addr udp_outgoing;
@@ -399,6 +406,9 @@ struct _SquidConfig {
 	int strip_query_terms;
 	int redirector_bypass;
 	int ignore_unknown_nameservers;
+#if USE_CACHE_DIGESTS
+	int digest_generation;
+#endif
     } onoff;
     acl *aclList;
     struct {
@@ -460,12 +470,22 @@ struct _SquidConfig {
 #if MULTICAST_MISS_STREAM
     struct {
 	struct in_addr addr;
+	int ttl;
 	unsigned short port;
 	char *encode_key;
     } mcast_miss;
 #endif
     HttpHeaderMask anonymize_headers;
     char *coredump_dir;
+#if USE_CACHE_DIGESTS
+    struct {
+	int bits_per_entry;
+	int rebuild_period;
+	int rewrite_period;
+	int swapout_chunk_size;
+	int rebuild_chunk_percentage;
+    } digest;
+#endif
 };
 
 struct _SquidConfig2 {
@@ -625,6 +645,7 @@ struct _HttpHdrExtField {
 struct _HttpHdrCc {
     int mask;
     int max_age;
+    int s_maxage;
 };
 
 /* http byte-range-spec */
@@ -1067,6 +1088,7 @@ struct _peer {
     } mcast;
 #if USE_CACHE_DIGESTS
     PeerDigest *digest;
+    char *digest_url;
 #endif
     int tcp_up;			/* 0 if a connect() fails */
     time_t last_fail_time;
@@ -1255,9 +1277,6 @@ struct _MemObject {
     int id;
     ssize_t object_sz;
     size_t swap_hdr_sz;
-#if URL_CHECKSUM_DEBUG
-    unsigned int chksum;
-#endif
 };
 
 struct _StoreEntry {
@@ -1322,22 +1341,6 @@ struct _SwapDir {
 	    int l2;
 	    int swaplog_fd;
 	} ufs;
-#if USE_DISKD
-	struct {
-	    int l1;
-	    int l2;
-	    int swaplog_fd;
-	    int smsgid;
-	    int rmsgid;
-	    int wfd;
-	    int away;
-	    struct {
-		char *buf;
-		link_list *stack;
-		int id;
-	    } shm;
-	} diskd;
-#endif
     } u;
 };
 
@@ -1402,16 +1405,6 @@ struct _storeIOState {
 	    link_list *pending_writes;
 	    link_list *pending_reads;
 	} aufs;
-#if USE_DISKD
-	struct {
-	    int id;
-	    struct {
-		unsigned int reading:1;
-		unsigned int writing:1;
-	    } flags;
-	    char *read_buf;
-	} diskd;
-#endif
     } type;
 };
 
@@ -1432,8 +1425,10 @@ struct _request_t {
     time_t ims;
     int imslen;
     int max_forwards;
+    /* these in_addr's could probably be sockaddr_in's */
     struct in_addr client_addr;
     struct in_addr my_addr;
+    unsigned short my_port;
     HttpHeader header;
     char *body;
     size_t body_sz;
