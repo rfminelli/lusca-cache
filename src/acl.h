@@ -33,7 +33,6 @@ typedef enum {
     ACL_NONE,
     ACL_SRC_IP,
     ACL_DST_IP,
-    ACL_SRC_DOMAIN,
     ACL_DST_DOMAIN,
     ACL_TIME,
     ACL_URLPATH_REGEX,
@@ -41,8 +40,7 @@ typedef enum {
     ACL_URL_PORT,
     ACL_USER,
     ACL_PROTO,
-    ACL_METHOD,
-    ACL_ENUM_MAX
+    ACL_METHOD
 } squid_acl;
 
 #define ACL_SUNDAY	0x01
@@ -97,24 +95,8 @@ struct _acl_access {
     struct _acl_access *next;
 };
 
-typedef enum {
-    ACL_LOOKUP_NONE,
-    ACL_LOOKUP_NEED,
-    ACL_LOOKUP_PENDING,
-    ACL_LOOKUP_DONE
-} acl_lookup_state;
-
-struct _aclCheck_t {
-    struct in_addr src_addr;
-    struct in_addr dst_addr;
-    char src_fqdn[SQUIDHOSTNAMELEN];
-    request_t *request;
-    char ident[ICP_IDENT_SZ];
-    acl_lookup_state state[ACL_ENUM_MAX];
-};
-
-extern int aclCheck _PARAMS((struct _acl_access *, aclCheck_t *));
-extern int aclMatchAcl _PARAMS((struct _acl *, aclCheck_t *));
+extern int aclCheck _PARAMS((struct _acl_access *, struct in_addr, request_t *));
+extern int aclMatchAcl _PARAMS((struct _acl * acl, struct in_addr c, request_t *));
 extern void aclDestroyAccessList _PARAMS((struct _acl_access ** list));
 extern void aclDestroyAcls _PARAMS((void));
 extern void aclParseAccessLine _PARAMS((struct _acl_access **));

@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -33,8 +32,8 @@
 
 void send_announce()
 {
-    LOCAL_ARRAY(char, tbuf, 256);
-    LOCAL_ARRAY(char, sndbuf, BUFSIZ);
+    static char tbuf[256];
+    static char sndbuf[BUFSIZ];
     icpUdpData *qdata = NULL;
     struct hostent *hp = NULL;
     char *host = NULL;
@@ -44,8 +43,8 @@ void send_announce()
     int l;
     int n;
 
-    host = Config.Announce.host;
-    port = Config.Announce.port;
+    host = getAnnounceHost();
+    port = getAnnouncePort();
 
     if ((hp = ipcache_gethostbyname(host, IP_BLOCKING_LOOKUP)) == NULL) {
 	debug(27, 1, "send_announce: Unknown host '%s'\n", host);
@@ -56,11 +55,11 @@ void send_announce()
     strcat(sndbuf, tbuf);
     sprintf(tbuf, "Running on %s %d %d\n",
 	getMyHostname(),
-	Config.Port.http,
-	Config.Port.icp);
+	getHttpPortNum(),
+	getIcpPortNum());
     strcat(sndbuf, tbuf);
-    if (Config.adminEmail) {
-	sprintf(tbuf, "cache_admin: %s\n", Config.adminEmail);
+    if (getAdminEmail()) {
+	sprintf(tbuf, "cache_admin: %s\n", getAdminEmail());
 	strcat(sndbuf, tbuf);
     }
     sprintf(tbuf, "generated %d [%s]\n",
@@ -69,7 +68,7 @@ void send_announce()
     strcat(sndbuf, tbuf);
     l = strlen(sndbuf);
 
-    if ((file = Config.Announce.file)) {
+    if ((file = getAnnounceFile())) {
 	fd = file_open(file, NULL, O_RDONLY);
 	if (fd > -1 && (n = read(fd, sndbuf + l, BUFSIZ - l - 1)) > 0) {
 	    l += n;
@@ -83,7 +82,7 @@ void send_announce()
     qdata->len = strlen(sndbuf) + 1;
     qdata->address.sin_family = AF_INET;
     qdata->address.sin_port = htons(port);
-    xmemcpy(&qdata->address.sin_addr, *(hp->h_addr_list + 0), hp->h_length);
+    xmemcpy(&qdata->address.sin_addr, hp->h_addr_list[0], hp->h_length);
     AppendUdp(qdata);
     comm_set_select_handler(theOutIcpConnection,
 	COMM_SELECT_WRITE,

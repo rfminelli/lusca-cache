@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -215,16 +214,11 @@ typedef enum {
     SERVER,
     LOG,
     PARAM,
-    STATS_I,
-    STATS_F,
-    STATS_D,
-    STATS_R,
+    STATS_G,
     STATS_O,
     STATS_VM,
     STATS_U,
     STATS_IO,
-    STATS_HDRS,
-    STATS_FDS,
     SHUTDOWN,
     REFRESH,
 #ifdef REMOVE_OBJECT
@@ -240,16 +234,11 @@ static char *op_cmds[] =
     "server_list",
     "log",
     "parameter",
-    "stats/ipcache",
-    "stats/fqdncache",
-    "stats/dns",
-    "stats/redirector",
+    "stats/general",
     "stats/objects",
     "stats/vm_objects",
     "stats/utilization",
     "stats/io",
-    "stats/reply_headers",
-    "stats/filedescriptors",
     "shutdown",
     "<refresh>",
 #ifdef REMOVE_OBJECT
@@ -316,15 +305,10 @@ void noargs_html()
 #endif
     printf("<OPTION VALUE=\"stats/utilization\">Utilization\n");
     printf("<OPTION VALUE=\"stats/io\">I/O\n");
-    printf("<OPTION VALUE=\"stats/reply_headers\">HTTP Reply Headers\n");
-    printf("<OPTION VALUE=\"stats/filedescriptors\">Filedescriptor Usage\n");
     printf("<OPTION VALUE=\"stats/objects\">Objects\n");
     printf("<OPTION VALUE=\"stats/vm_objects\">VM_Objects\n");
     printf("<OPTION VALUE=\"server_list\">Cache Server List\n");
-    printf("<OPTION VALUE=\"stats/ipcache\">IP Cache Contents\n");
-    printf("<OPTION VALUE=\"stats/fqdncache\">FQDN Cache Contents\n");
-    printf("<OPTION VALUE=\"stats/dns\">DNS Server Statistics\n");
-    printf("<OPTION VALUE=\"stats/redirector\">Redirector Statistics\n");
+    printf("<OPTION VALUE=\"stats/general\">IP Cache Contents\n");
     printf("<OPTION VALUE=\"shutdown\">Shutdown Cache (password required)\n");
     printf("<OPTION VALUE=\"refresh\">Refresh Object (URL required)\n");
 #ifdef REMOVE_OBJECT
@@ -603,18 +587,9 @@ int main(int argc, char *argv[])
     } else if (!strcmp(operation, "parameter") ||
 	!strcmp(operation, "Cache Parameters")) {
 	op = PARAM;
-    } else if (!strcmp(operation, "stats/ipcache") ||
-	!strcmp(operation, "IP Cache")) {
-	op = STATS_I;
-    } else if (!strcmp(operation, "stats/fqdncache") ||
-	!strcmp(operation, "FQDN Cache")) {
-	op = STATS_F;
-    } else if (!strcmp(operation, "stats/dns") ||
-	!strcmp(operation, "DNS Server Stats")) {
-	op = STATS_D;
-    } else if (!strcmp(operation, "stats/redirector") ||
-	!strcmp(operation, "Redirection Server Stats")) {
-	op = STATS_R;
+    } else if (!strcmp(operation, "stats/general") ||
+	!strcmp(operation, "General Statistics")) {
+	op = STATS_G;
     } else if (!strcmp(operation, "stats/vm_objects") ||
 	!strcmp(operation, "VM_Objects")) {
 	op = STATS_VM;
@@ -627,12 +602,6 @@ int main(int argc, char *argv[])
     } else if (!strcmp(operation, "stats/io") ||
 	!strcmp(operation, "I/O")) {
 	op = STATS_IO;
-    } else if (!strcmp(operation, "stats/reply_headers") ||
-	!strcmp(operation, "Reply Headers")) {
-	op = STATS_HDRS;
-    } else if (!strcmp(operation, "stats/filedescriptors") ||
-	!strcmp(operation, "Filedescriptor")) {
-	op = STATS_FDS;
     } else if (!strcmp(operation, "shutdown")) {
 	op = SHUTDOWN;
     } else if (!strcmp(operation, "refresh")) {
@@ -652,16 +621,11 @@ int main(int argc, char *argv[])
     case SERVER:
     case LOG:
     case PARAM:
-    case STATS_I:
-    case STATS_F:
-    case STATS_D:
-    case STATS_R:
+    case STATS_G:
     case STATS_O:
     case STATS_VM:
     case STATS_U:
     case STATS_IO:
-    case STATS_HDRS:
-    case STATS_FDS:
 	sprintf(msg, "GET cache_object://%s/%s HTTP/1.0\r\n\r\n",
 	    hostname, op_cmds[op]);
 	break;
@@ -701,15 +665,10 @@ int main(int argc, char *argv[])
 #endif
     printf("<OPTION VALUE=\"stats/utilization\">Utilization\n");
     printf("<OPTION VALUE=\"stats/io\">I/O\n");
-    printf("<OPTION VALUE=\"stats/reply_headers\">HTTP Reply Headers\n");
-    printf("<OPTION VALUE=\"stats/filedescriptors\">Filedescriptor Usage\n");
     printf("<OPTION VALUE=\"stats/objects\">Objects\n");
     printf("<OPTION VALUE=\"stats/vm_objects\">VM_Objects\n");
     printf("<OPTION VALUE=\"server_list\">Cache Server List\n");
-    printf("<OPTION VALUE=\"stats/ipcache\">IP Cache Contents\n");
-    printf("<OPTION VALUE=\"stats/fqdncache\">FQDN Cache Contents\n");
-    printf("<OPTION VALUE=\"stats/dns\">DNS Server Statistics\n");
-    printf("<OPTION VALUE=\"stats/redirector\">Redirector Statistics\n");
+    printf("<OPTION VALUE=\"stats/general\">IP Cache Contents\n");
     printf("</SELECT>");
     printf("<INPUT TYPE=\"hidden\" NAME=\"host\" VALUE=\"%s\">\n", hostname);
     printf("<INPUT TYPE=\"hidden\" NAME=\"port\" VALUE=\"%d\">\n", portnum);
@@ -747,15 +706,10 @@ int main(int argc, char *argv[])
     case CACHED:
     case SERVER:
     case LOG:
-    case STATS_I:
-    case STATS_F:
-    case STATS_D:
-    case STATS_R:
+    case STATS_G:
     case STATS_O:
     case STATS_VM:
     case STATS_IO:
-    case STATS_HDRS:
-    case STATS_FDS:
     case SHUTDOWN:
     case REFRESH:
 	break;
@@ -817,13 +771,8 @@ int main(int argc, char *argv[])
 		case CACHED:
 		case SERVER:
 		case LOG:
-		case STATS_I:
-		case STATS_F:
-		case STATS_D:
-		case STATS_R:
+		case STATS_G:
 		case STATS_IO:
-		case STATS_HDRS:
-		case STATS_FDS:
 		case SHUTDOWN:
 		    p_state = 1;
 		    printf("%s", reserve);
@@ -847,7 +796,7 @@ int main(int argc, char *argv[])
 		    sscanf(reserve, "%s %d %d %d %d %f %d %d %d",
 			s1, &d1, &d2, &d3, &d4, &f1, &d5, &d6, &d7);
 		    if (hasTables)
-			printf("<tr><td><B>%s</B><td>%d<td>%d<td>%d<td>%d<td>%4.2f<td>%d<td>%d<td>%d",
+			printf("<tr><td align=right><B>%s</B><td align=right>%d<td align=right>%d<td align=right>%d<td align=right>%d<td align=right>%4.2f<td align=right>%d<td align=right>%d<td align=right>%d",
 			    s1, d1, d2, d3, d4, f1, d5, d6, d7);
 		    else
 			printf("%8s %7d %10d %10d %9d    %4.2f %10d  %10d   %10d<BR>\n",

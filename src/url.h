@@ -64,7 +64,7 @@ struct _request {
     int port;
     char urlpath[MAX_URL + 1];
     int link_count;		/* free when zero */
-    struct _hierarchyLogData hierarchy;
+    hier_code hierarchy_code;
 };
 
 extern char *url_convert_hex _PARAMS((char *org_url, int allocate));
