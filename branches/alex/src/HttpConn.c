@@ -31,7 +31,7 @@
 
 #include "squid.h"
 
-/* queue of HttpRe's
+/* queue of HttpRe's */
 struct _HttpReQueue {
     HttpRe *head;
     HttpRe *tail;
@@ -437,18 +437,3 @@ httpConnNoteException(HttpConn *conn, int status)
     /* notify dependents */
     httpConnBroadcastException(conn, status);
 }
-
-
-/* Accept a new connection on HTTP socket (MoveThis!) */
-void
-httpAccept(int sock, void *notused)
-{
-    /* re-register this handler */
-    commSetSelect(sock, COMM_SELECT_READ, httpAccept, NULL, 0);
-    if (!httpConnAccept(sock))
-    	debug(12, 1) ("httpAccept: FD %d: accept failure: %s\n",
-	    sock, xstrerror());
-    else
-	debug(12, 4) ("httpAccept: FD %d: accepted\n", fd);
-}
-
