@@ -67,3 +67,15 @@ httpReplyUpdateOnNotModified(HttpReply *rep, HttpReply *freshRep)
     if (freshRep->expires > -1)
 	rep->expires = freshRep->expires;
 }
+
+int
+httpReplyParseHeaders(HttpReply *rep, const char *buf, const char **end)
+{
+    int success;
+    HttpResponse resp;
+    httpResponseInit(&resp);
+    if ((success = httpResponseParse(&resp, buf, end)) >= 0)
+	httpResponseSumm(&resp, rep);
+    httpResponseClean(&resp);
+    return success;
+}

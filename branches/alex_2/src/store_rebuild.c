@@ -22,6 +22,8 @@ struct _rebuild_dir {
     DIR *td;
     RBHD *rebuild_func;
     rebuild_dir *next;
+    char fullpath[SQUID_MAXPATHLEN];
+    char fullfilename[SQUID_MAXPATHLEN];
 };
 
 struct storeRebuildState {
@@ -37,7 +39,7 @@ struct storeRebuildState {
     int badflags;		/* # bad e->flags */
     int need_to_validate;
     int bad_log_op;
-    int zero_object_len;
+    int zero_object_sz;
     time_t start;
     time_t stop;
 } RebuildState;
@@ -54,6 +56,16 @@ static RBHD storeRebuildFromSwapLog;
 static void storeRebuildComplete(void);
 static EVH storeRebuildADirectory;
 static int storeGetNextFile(rebuild_dir *, int *sfileno, int *size);
+static StoreEntry *storeAddDiskRestore(const cache_key * key,
+    int file_number,
+    size_t swap_file_sz,
+    time_t expires,
+    time_t timestamp,
+    time_t lastref,
+    time_t lastmod,
+    u_num32 refcount,
+    u_num32 flags,
+    int clean);
 
 static int
 storeRebuildFromDirectory(rebuild_dir * d)
@@ -65,12 +77,11 @@ storeRebuildFromDirectory(rebuild_dir * d)
     int sfileno = 0;
     int count;
     int size;
-    struct stat fst;
-    int hdr_len;
+    struct stat sb;
+    int swap_hdr_len;
     int fd = -1;
     tlv *tlv_list;
     tlv *t;
-    double x;
     assert(d != NULL);
     debug(20, 3) ("storeRebuildFromDirectory: DIR #%d\n", d->dirn);
     for (count = 0; count < d->speed; count++) {
@@ -86,7 +97,7 @@ storeRebuildFromDirectory(rebuild_dir * d)
 	}
 	assert(fd > -1);
 	/* lets get file stats here */
-	if (fstat(fd, &fst) < 0) {
+	if (fstat(fd, &sb) < 0) {
 	    debug(20, 1) ("storeRebuildFromDirectory: fstat(FD %d): %s\n",
 		fd, xstrerror());
 	    file_close(fd);
@@ -96,7 +107,7 @@ storeRebuildFromDirectory(rebuild_dir * d)
 	if ((++RebuildState.statcount & 0x3FFF) == 0)
 	    debug(20, 1) ("  %7d files opened so far.\n",
 		RebuildState.statcount);
-	debug(20, 9) ("file_in: fd=%d %08x\n", fd, sfileno);
+	debug(20, 9) ("file_in: fd=%d %08X\n", fd, sfileno);
 	if (read(fd, hdr_buf, DISK_PAGE_SIZE) < 0) {
 	    debug(20, 1) ("storeRebuildFromDirectory: read(FD %d): %s\n",
 		fd, xstrerror());
@@ -106,8 +117,8 @@ storeRebuildFromDirectory(rebuild_dir * d)
 	}
 	file_close(fd);
 	fd = -1;
-	hdr_len = 0;
-	tlv_list = storeSwapMetaUnpack(hdr_buf, &hdr_len);
+	swap_hdr_len = 0;
+	tlv_list = storeSwapMetaUnpack(hdr_buf, &swap_hdr_len);
 	if (tlv_list == NULL) {
 	    debug(20, 1) ("storeRebuildFromDirectory: failed to get meta data\n");
 	    storeUnlinkFileno(sfileno);
@@ -138,19 +149,25 @@ storeRebuildFromDirectory(rebuild_dir * d)
 	    continue;
 	}
 	tmpe.key = key;
-	if (tmpe.object_len == 0) {
+#if OLD_CODE
+	if (tmpe.swap_file_sz == 0) {
 	    RebuildState.invalid++;
-	    x = log(++RebuildState.zero_object_len) / log(10.0);
+	    x = log(++RebuildState.zero_object_sz) / log(10.0);
 	    if (0.0 == x - (double) (int) x)
-		debug(20, 1) ("WARNING: %d swapfiles found with ZERO length\n",
-		    RebuildState.zero_object_len);
+		debug(20, 1) ("WARNING: %d swapfiles found with ZERO size\n",
+		    RebuildState.zero_object_sz);
 	    storeUnlinkFileno(sfileno);
 	    continue;
 	}
+#endif
 	/* check sizes */
-	if (hdr_len + tmpe.object_len != fst.st_size) {
-	    debug(20, 1) ("storeRebuildFromDirectory: SIZE MISMATCH %d+%d!=%d\n",
-		hdr_len, tmpe.object_len, fst.st_size);
+	if (tmpe.swap_file_sz == 0) {
+	    tmpe.swap_file_sz = sb.st_size;
+	} else if (tmpe.swap_file_sz == sb.st_size - swap_hdr_len) {
+	    tmpe.swap_file_sz = sb.st_size;
+	} else if (tmpe.swap_file_sz != sb.st_size) {
+	    debug(20, 1) ("storeRebuildFromDirectory: SIZE MISMATCH %d!=%d\n",
+		tmpe.swap_file_sz, sb.st_size);
 	    storeUnlinkFileno(sfileno);
 	    continue;
 	}
@@ -169,7 +186,7 @@ storeRebuildFromDirectory(rebuild_dir * d)
 	storeEntryDump(&tmpe, 5);
 	e = storeAddDiskRestore(key,
 	    sfileno,
-	    (int) tmpe.object_len,
+	    tmpe.swap_file_sz,
 	    tmpe.expires,
 	    tmpe.timestamp,
 	    tmpe.lastref,
@@ -185,8 +202,8 @@ static int
 storeRebuildFromSwapLog(rebuild_dir * d)
 {
     StoreEntry *e = NULL;
-    storeSwapData s;
-    size_t ss = sizeof(storeSwapData);
+    storeSwapLogData s;
+    size_t ss = sizeof(storeSwapLogData);
     int count;
     int used;			/* is swapfile already in use? */
     int newer;			/* is the log entry newer than current entry? */
@@ -203,6 +220,14 @@ storeRebuildFromSwapLog(rebuild_dir * d)
 	    return -1;
 	}
 	d->n_read++;
+	if (s.op <= SWAP_LOG_NOP)
+	    continue;
+	if (s.op >= SWAP_LOG_MAX)
+	    continue;
+	debug(20, 3) ("storeRebuildFromSwapLog: %s %s %08X\n",
+	    swap_log_op_str[(int) s.op],
+	    storeKeyText(s.key),
+	    s.swap_file_number);
 	if (s.op == SWAP_LOG_ADD) {
 	    (void) 0;
 	} else if (s.op == SWAP_LOG_DEL) {
@@ -284,9 +309,15 @@ storeRebuildFromSwapLog(rebuild_dir * d)
 	    RebuildState.clashcount++;
 	    continue;
 	} else if (e) {
-	    /* URL already exists, this swapfile not being used */
+	    /* key already exists, this swapfile not being used */
 	    /* junk old, load new */
-	    storeRelease(e);	/* release old entry */
+	    storeExpireNow(e);
+	    storeSetPrivateKey(e);
+	    EBIT_SET(e->flag, RELEASE_REQUEST);
+	    if (e->swap_file_number > -1) {
+		storeDirMapBitReset(e->swap_file_number);
+		e->swap_file_number = -1;
+	    }
 	    RebuildState.dupcount++;
 	} else {
 	    /* URL doesnt exist, swapfile not in use */
@@ -297,7 +328,7 @@ storeRebuildFromSwapLog(rebuild_dir * d)
 	RebuildState.objcount++;
 	e = storeAddDiskRestore(s.key,
 	    s.swap_file_number,
-	    s.object_len,
+	    s.swap_file_sz,
 	    s.expires,
 	    s.timestamp,
 	    s.lastref,
@@ -335,10 +366,11 @@ storeRebuildADirectory(void *unused)
 	eventAdd("storeRebuild", storeRebuildADirectory, NULL, 0);
 }
 
-void
+#if TEMP_UNUSED_CODE
+static void
 storeConvertFile(const cache_key * key,
     int file_number,
-    int size,
+    size_t swap_file_sz,
     time_t expires,
     time_t timestamp,
     time_t lastref,
@@ -355,7 +387,7 @@ storeConvertFile(const cache_key * key,
     tlv *tlv_list;
     StoreEntry e;
     e.key = key;
-    e.object_len = size;
+    e.swap_file_sz = swap_file_sz;
     e.expires = expires;
     e.lastref = lastref;
     e.refcount = refcount;
@@ -378,14 +410,13 @@ storeConvertFile(const cache_key * key,
     xfree(buf);
     storeSwapTLVFree(tlv_list);
 }
+#endif
 
 static int
 storeGetNextFile(rebuild_dir * d, int *sfileno, int *size)
 {
     int fd = -1;
     int used = 0;
-    LOCAL_ARRAY(char, fullfilename, SQUID_MAXPATHLEN);
-    LOCAL_ARRAY(char, fullpath, SQUID_MAXPATHLEN);
     debug(20, 3) ("storeGetNextFile: flag=%d, %d: /%02X/%02X\n",
 	d->flag,
 	d->dirn,
@@ -395,70 +426,77 @@ storeGetNextFile(rebuild_dir * d, int *sfileno, int *size)
 	return -2;
     while (fd < 0 && d->done == 0) {
 	fd = -1;
-	if (!d->flag) {		/* initialize, open first file */
-	    d->done = d->dirn = d->curlvl1 = d->curlvl2 = d->in_dir = 0;
+	if (0 == d->flag) {	/* initialize, open first file */
+	    d->done = 0;
+	    d->curlvl1 = 0;
+	    d->curlvl2 = 0;
+	    d->in_dir = 0;
 	    d->flag = 1;
 	    assert(Config.cacheSwap.n_configured > 0);
 	}
-	if (!d->in_dir) {	/* we need to read in a new directory */
-	    snprintf(fullpath, SQUID_MAXPATHLEN, "%s/%02X/%02X",
+	if (0 == d->in_dir) {	/* we need to read in a new directory */
+	    snprintf(d->fullpath, SQUID_MAXPATHLEN, "%s/%02X/%02X",
 		Config.cacheSwap.swapDirs[d->dirn].path,
 		d->curlvl1, d->curlvl2);
-	    if (d->flag && d->td)
+	    if (d->flag && d->td != NULL)
 		closedir(d->td);
-	    d->td = opendir(fullpath);
+	    d->td = opendir(d->fullpath);
+	    if (d->td == NULL) {
+		debug(50, 1) ("storeGetNextFile: opendir: %s: %s\n",
+		    d->fullpath, xstrerror());
+		break;
+	    }
 	    d->entry = readdir(d->td);	/* skip . and .. */
 	    d->entry = readdir(d->td);
-	    if (errno == ENOENT) {
-		debug(20, 3) ("storeGetNextFile: directory does not exist!.\n");
-	    }
-	    debug(20, 3) ("storeGetNextFile: Directory %s/%02X/%02X\n",
-		Config.cacheSwap.swapDirs[d->dirn].path,
-		d->curlvl1, d->curlvl2);
+	    if (errno == ENOENT)
+		debug(20, 1) ("storeGetNextFile: directory does not exist!.\n");
+	    debug(20, 3) ("storeGetNextFile: Directory %s\n", d->fullpath);
 	}
-	if ((d->entry = readdir(d->td))) {
+	if (d->td != NULL && (d->entry = readdir(d->td)) != NULL) {
 	    d->in_dir++;
-	    if (sscanf(d->entry->d_name, "%x", sfileno) != 1) {
+	    if (sscanf(d->entry->d_name, "%x", &d->fn) != 1) {
 		debug(20, 3) ("storeGetNextFile: invalid %s\n",
 		    d->entry->d_name);
 		continue;
 	    }
-	    d->fn = *sfileno;
+	    if (!storeFilenoBelongsHere(d->fn, d->dirn, d->curlvl1, d->curlvl2)) {
+		debug(20, 3) ("storeGetNextFile: %08X does not belong in %d/%d/%d\n",
+		    d->fn, d->dirn, d->curlvl1, d->curlvl2);
+		continue;
+	    }
 	    d->fn = storeDirProperFileno(d->dirn, d->fn);
-	    *sfileno = d->fn;
 	    used = storeDirMapBitTest(d->fn);
 	    if (used) {
 		debug(20, 3) ("storeGetNextFile: Locked, continuing with next.\n");
 		continue;
 	    }
-	    snprintf(fullfilename, SQUID_MAXPATHLEN, "%s/%s",
-		fullpath, d->entry->d_name);
-	    debug(20, 3) ("storeGetNextFile: Opening %s\n", fullfilename);
-	    fd = file_open(fullfilename, O_RDONLY, NULL, NULL, NULL);
+	    snprintf(d->fullfilename, SQUID_MAXPATHLEN, "%s/%s",
+		d->fullpath, d->entry->d_name);
+	    debug(20, 3) ("storeGetNextFile: Opening %s\n", d->fullfilename);
+	    fd = file_open(d->fullfilename, O_RDONLY, NULL, NULL, NULL);
+	    if (fd < 0)
+		debug(50, 1) ("storeGetNextFile: %s: %s\n", d->fullfilename, xstrerror());
 	    continue;
 	}
 	d->in_dir = 0;
-	d->curlvl2 = (d->curlvl2 + 1) % Config.cacheSwap.swapDirs[d->dirn].l2;
-	if (d->curlvl2 != 0)
+	if (++d->curlvl2 < Config.cacheSwap.swapDirs[d->dirn].l2)
 	    continue;
-	d->curlvl1 = (d->curlvl1 + 1) % Config.cacheSwap.swapDirs[d->dirn].l1;
-	if (d->curlvl1 != 0)
+	d->curlvl2 = 0;
+	if (++d->curlvl1 < Config.cacheSwap.swapDirs[d->dirn].l1)
 	    continue;
-	d->dirn = (d->dirn + 1) % Config.cacheSwap.n_configured;
-	if (d->dirn != 0)
-	    continue;
-	else
-	    d->done = 1;
+	d->curlvl1 = 0;
+	d->done = 1;
     }
+    *sfileno = d->fn;
     return fd;
 }
 
 /* Add a new object to the cache with empty memory copy and pointer to disk
  * use to rebuild store from disk. */
-StoreEntry *
+static StoreEntry *
 storeAddDiskRestore(const cache_key * key,
     int file_number,
-    int size,
+    size_t swap_file_sz,
     time_t expires,
     time_t timestamp,
     time_t lastref,
@@ -477,7 +515,7 @@ storeAddDiskRestore(const cache_key * key,
     storeSetMemStatus(e, NOT_IN_MEMORY);
     e->swap_status = SWAPOUT_DONE;
     e->swap_file_number = file_number;
-    e->object_len = size;
+    e->swap_file_sz = swap_file_sz;
     e->lock_count = 0;
     e->refcount = 0;
     e->lastref = lastref;
@@ -500,6 +538,7 @@ storeCleanup(void *datanotused)
 {
     static int bucketnum = -1;
     static int validnum = 0;
+    static int store_errors = 0;
     StoreEntry *e;
     hash_link *link_ptr = NULL;
     if (++bucketnum >= store_hash_buckets) {
@@ -507,6 +546,8 @@ storeCleanup(void *datanotused)
 	debug(20, 1) ("  Validated %d Entries\n", validnum);
 	debug(20, 1) ("  store_swap_size = %dk\n", store_swap_size);
 	store_rebuilding = 0;
+	if (opt_store_doublecheck)
+	    assert(store_errors == 0);
 	return;
     }
     link_ptr = hash_get_bucket(store_table, bucketnum);
@@ -516,33 +557,51 @@ storeCleanup(void *datanotused)
 	    continue;
 	if (e->swap_file_number < 0)
 	    continue;
+	if (EBIT_TEST(e->flag, RELEASE_REQUEST)) {
+	    if (e->swap_file_number > -1)
+		debug(20, 1) ("storeCleanup: WARNING: swap_file_number = %d for RELEASE_REQUEST entry\n",
+		    e->swap_file_number);
+	    /*
+	     * I don't think it safe to call storeRelease()
+	     * from inside this loop using link_ptr.
+	     */
+	    continue;
+	}
+	if (opt_store_doublecheck) {
+	    struct stat sb;
+	    if (stat(storeSwapFullPath(e->swap_file_number, NULL), &sb) < 0) {
+		store_errors++;
+		debug(0, 0) ("storeCleanup: MISSING SWAP FILE\n");
+		debug(0, 0) ("storeCleanup: FILENO %08X\n", e->swap_file_number);
+		debug(0, 0) ("storeCleanup: PATH %s\n",
+		    storeSwapFullPath(e->swap_file_number, NULL));
+		storeEntryDump(e, 0);
+		continue;
+	    }
+	    if (e->swap_file_sz != sb.st_size) {
+		store_errors++;
+		debug(0, 0) ("storeCleanup: SIZE MISMATCH\n");
+		debug(0, 0) ("storeCleanup: FILENO %08X\n", e->swap_file_number);
+		debug(0, 0) ("storeCleanup: PATH %s\n",
+		    storeSwapFullPath(e->swap_file_number, NULL));
+		debug(0, 0) ("storeCleanup: ENTRY SIZE: %d, FILE SIZE: %d\n",
+		    e->swap_file_sz, sb.st_size);
+		storeEntryDump(e, 0);
+		continue;
+	    }
+	}
 	EBIT_SET(e->flag, ENTRY_VALIDATED);
 	/* Only set the file bit if we know its a valid entry */
 	/* otherwise, set it in the validation procedure */
-	storeDirUpdateSwapSize(e->swap_file_number, e->object_len, 1);
+	storeDirUpdateSwapSize(e->swap_file_number, e->swap_file_sz, 1);
 	if ((++validnum & 0xFFFF) == 0)
 	    debug(20, 1) ("  %7d Entries Validated so far.\n", validnum);
-	assert(validnum <= memInUse(MEM_STOREENTRY));
     }
     eventAdd("storeCleanup", storeCleanup, NULL, 0);
 }
 
-#if OLD_CODE
 void
-storeCleanupComplete(void *data, int retcode, int errcode)
-{
-    StoreEntry *e = data;
-    storeUnlockObject(e);
-    outvalid--;
-    if (retcode == -2 && errcode == -2)
-	return;
-    if (!EBIT_TEST(e->flag, ENTRY_VALIDATED))
-	storeRelease(e);
-}
-#endif
-
-void
-storeValidate(StoreEntry * e, STVLDCB callback, void *callback_data, void *tag)
+storeValidate(StoreEntry * e, STVLDCB * callback, void *callback_data, void *tag)
 {
     valid_ctrl_t *ctrlp;
     char *path;
@@ -566,9 +625,11 @@ storeValidate(StoreEntry * e, STVLDCB callback, void *callback_data, void *tag)
 #if USE_ASYNC_IO
     aioStat(path, sb, storeValidateComplete, ctrlp, tag);
 #else
-    /* When evaluating the actual arguments in a function call, the order
+    /*
+     * When evaluating the actual arguments in a function call, the order
      * in which the arguments and the function expression are evaluated is
-     * not specified; */
+     * not specified;
+     */
     x = stat(path, sb);
     storeValidateComplete(ctrlp, x, errno);
 #endif
@@ -593,11 +654,11 @@ storeValidateComplete(void *data, int retcode, int errcode)
 	path = storeSwapFullPath(e->swap_file_number, NULL);
 	retcode = stat(path, sb);
     }
-    if (retcode < 0 || sb->st_size == 0 || sb->st_size != e->object_len) {
+    if (retcode < 0 || sb->st_size == 0 || sb->st_size != e->swap_file_sz) {
 	EBIT_CLR(e->flag, ENTRY_VALIDATED);
     } else {
 	EBIT_SET(e->flag, ENTRY_VALIDATED);
-	storeDirUpdateSwapSize(e->swap_file_number, e->object_len, 1);
+	storeDirUpdateSwapSize(e->swap_file_number, e->swap_file_sz, 1);
     }
     errno = errcode;
     ctrlp->callback(ctrlp->callback_data, retcode, errcode);
@@ -658,8 +719,8 @@ storeRebuildStart(void)
 	    d->rebuild_func = storeRebuildFromSwapLog;
 	    d->log = fp;
 	    d->clean = clean;
-	    d->next = RebuildState.rebuild_dir;
 	}
+	d->next = RebuildState.rebuild_dir;
 	RebuildState.rebuild_dir = d;
 	if (!clean)
 	    RebuildState.need_to_validate = 1;

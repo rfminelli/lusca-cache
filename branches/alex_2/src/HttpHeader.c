@@ -34,6 +34,75 @@
 
 /* local constants and vars */
 
+/* server cache control */
+typedef enum {
+    SCC_PUBLIC,
+    SCC_PRIVATE,
+    SCC_NO_CACHE,
+    SCC_NO_STORE,
+    SCC_NO_TRANSFORM,
+    SCC_MUST_REVALIDATE,
+    SCC_PROXY_REVALIDATE,
+    SCC_MAX_AGE,
+    SCC_OTHER,
+    SCC_ENUM_END
+} http_scc_t;
+
+typedef struct {
+    const char *name;
+    int len;
+    int id;
+    struct { int test1; int test2; } dummy;
+} field_attrs_t;
+
+static field_attrs_t HdrFieldAttrs[] = {
+    { "Accept:",             7, HDR_ACCEPT },
+    { "Age:",                4, HDR_AGE },
+    { "Cache-Control:",     14, HDR_CACHE_CONTROL },
+    { "Content-Length:",    15, HDR_CONTENT_LENGTH },
+    { "Content-MD5:",       12, HDR_CONTENT_MD5 },
+    { "Content-Type:",      13, HDR_CONTENT_TYPE },
+    { "Date:",               5, HDR_DATE },
+    { "Etag:",               5, HDR_ETAG },
+    { "Expires:",            8, HDR_EXPIRES },
+    { "Host:",               5, HDR_HOST },
+    { "If-Modified-Since:", 18, HDR_IMS },
+    { "Last-Modified:",     14, HDR_LAST_MODIFIED },
+    { "Max-Forwards:",      13, HDR_MAX_FORWARDS },
+    { "Public:",             7, HDR_PUBLIC },
+    { "Retry-After:",       12, HDR_RETRY_AFTER },
+    { "Set-Cookie:",        11, HDR_SET_COOKIE },
+    { "Upgrade:",            8, HDR_UPGRADE },
+    { "Warning:",            8, HDR_WARNING },
+    { "Proxy-Connection:",  17, HDR_PROXY_KEEPALIVE }, /* special */
+    { "Other",               6, HDR_OTHER },   /* @?@ check this! */
+    { "NONE",                5, HDR_ENUM_END}  /* @?@ check this! */
+};
+
+static field_attrs_t SccFieldAttrs[] = {
+    { "public",            6, SCC_PUBLIC },
+    { "private",           7, SCC_PRIVATE },
+    { "no-cache",          8, SCC_NO_CACHE },
+    { "no-store",          8, SCC_NO_STORE },
+    { "no-transform",     12, SCC_NO_TRANSFORM },
+    { "must-revalidate",  15, SCC_MUST_REVALIDATE },
+    { "proxy-revalidate", 16, SCC_PROXY_REVALIDATE },
+    { "max-age",           7, SCC_MAX_AGE },
+};
+
+static int ReplyHeadersMask = 0; /* set run-time using ReplyHeaders */
+static http_hdr_type ReplyHeaders[] = {
+    HDR_ACCEPT, HDR_AGE, HDR_CACHE_CONTROL, HDR_CONTENT_LENGTH,
+    HDR_CONTENT_MD5,  HDR_CONTENT_TYPE, HDR_DATE, HDR_ETAG, HDR_EXPIRES,
+    HDR_LAST_MODIFIED, HDR_MAX_FORWARDS, HDR_PUBLIC, HDR_RETRY_AFTER,
+    HDR_SET_COOKIE, HDR_UPGRADE, HDR_WARNING, HDR_PROXY_KEEPALIVE, HDR_OTHER
+};
+
+static int RequestHeadersMask = 0; /* set run-time using RequestHeaders */
+static http_hdr_type RequestHeaders[] = {
+    HDR_OTHER
+};
+
 static const char *KnownSplitableFields[] = {
     "Connection", "Range"
 };
@@ -48,7 +117,7 @@ static u_num32 longHeadersCount = 0;
 typedef struct {
     const char *label;
     int parsed;
-    int misc[HDR_MISC_END];
+    int misc[HDR_ENUM_END];
 } HttpHeaderStats;
 
 #if 0 /* not used, add them later @?@ */
@@ -115,6 +184,9 @@ static void httpHeaderGrow(HttpHeader *hdr);
 static void httpHeaderAddField(HttpHeader *hdr, HttpHeaderField *fld);
 static void httpHeaderAddSingleField(HttpHeader *hdr, HttpHeaderField *fld);
 static void httpHeaderAddListField(HttpHeader *hdr, HttpHeaderField *fld);
+static void httpHeaderCountField(HttpHeader *hdr, HttpHeaderField *fld);
+static void httpHeaderCountSCCField(HttpHeader *hdr, HttpHeaderField *fld);
+static int httpHeaderFindFieldType(HttpHeaderField *fld, const field_attrs_t *attrs, int end, int mask);
 static HttpHeaderField *httpHeaderFieldCreate(const char *name, const char *value);
 static HttpHeaderField *httpHeaderFieldParseCreate(const char *field_start, const char *field_end);
 static void httpHeaderFieldDestroy(HttpHeaderField *f);
@@ -361,6 +433,8 @@ httpHeaderAddSingleField(HttpHeader *hdr, HttpHeaderField *fld)
 	httpHeaderGrow(hdr);
     hdr->fields[hdr->count++] = fld;
     hdr->packed_size += httpHeaderFieldBufSize(fld);
+    /* accounting */
+    httpHeaderCountField(hdr, fld);
 }
 
 /*
@@ -428,12 +502,78 @@ httpHeaderGetContentLength(const HttpHeader *hdr)
 
 time_t
 httpHeaderGetExpires(const HttpHeader *hdr) {
-    time_t value = httpHeaderGetDate(hdr, "Expires", NULL);
+    time_t value = -1;
+
+    /* The max-age directive takes priority over Expires, check it first */
+    if (EBIT_TEST(hdr->scc_mask, SCC_MAX_AGE)) {
+	HttpHeaderPos pos = HttpHeaderInitPos;
+	const char *max_age_str;
+	while ((max_age_str = httpHeaderGetStr(hdr, "Cache-Control", &pos))) {
+	    if (!strncasecmp(max_age_str, "max-age", 7)) {
+		/* skip white space */
+		while (*max_age_str && isspace(*max_age_str))
+		    max_age_str++;
+		if (*max_age_str == '=') {
+		    time_t max_age = (time_t)atoi(++max_age_str);
+		    if (max_age > 0)
+			value = squid_curtime + max_age;
+		}
+	    }
+	}
+    }
+    if (value < 0)
+	value = httpHeaderGetDate(hdr, "Expires", NULL);
     /*
      * The HTTP/1.0 specs says that robust implementations should consider bad
      * or malformed Expires header as equivalent to "expires immediately."
      */
     return (value < 0) ? squid_curtime : value;
+}
+
+/* updates masks and stats for a field */
+static void
+httpHeaderCountField(HttpHeader *hdr, HttpHeaderField *fld)
+{
+    /* add Req/Pep detection here @?@ */
+    int type = httpHeaderFindFieldType(fld,
+	HdrFieldAttrs, HDR_ENUM_END,
+	(1) ? ReplyHeadersMask : RequestHeadersMask);
+    /* exception */
+    if (type == HDR_PROXY_KEEPALIVE && strcasecmp("Keep-Alive", fld->value))
+	type = -1;
+    if (type < 0)
+	type = HDR_OTHER;
+    /* update mask */
+    EBIT_SET(hdr->field_mask, type);
+    /* @?@ update stats for req/resp:type @?@ */
+    HdrFieldAttrs[type].dummy.test1++;
+    /* process scc @?@ check if we need to do that for requests or not */
+    if (1 && type == HDR_CACHE_CONTROL)
+	httpHeaderCountSCCField(hdr, fld);
+}
+
+/* updates scc mask and stats for an scc field */
+static void
+httpHeaderCountSCCField(HttpHeader *hdr, HttpHeaderField *fld)
+{
+    int type = httpHeaderFindFieldType(fld,
+	SccFieldAttrs, SCC_ENUM_END, -1);
+    if (type < 0)
+	type = SCC_OTHER;
+    /* update mask */
+    EBIT_SET(hdr->scc_mask, type);
+    /* @?@ update stats for scc @?@ */
+    SccFieldAttrs[type].dummy.test1++;
+}
+
+static int
+httpHeaderFindFieldType(HttpHeaderField *fld, const field_attrs_t *attrs, int end, int mask) {
+    int i;
+    for (i = 0; i < end; ++i)
+	if (mask < 0 || EBIT_TEST(mask, i))
+	    if (!strncasecmp(fld->name, attrs[i].name, attrs[i].len))
+		return i;
+    return -1;
 }
 
 /* doubles the size of the fields index, starts with INIT_FIELDS_PER_HEADER */
@@ -479,6 +619,13 @@ httpHeaderFieldParseCreate(const char *field_start, const char *field_end)
     while (value_start < field_end && isspace(*value_start)) 
 	value_start++;
 
+    /* cut off "; parameter" from Content-Type @?@ why? */
+    if (!strncasecmp(field_start, "Content-Type:", 14)) {
+	const int l = strcspn(value_start, ";\t ");
+	if (l > 0)
+	    field_end = value_start + l;
+    }
+
     f = xcalloc(1, sizeof(HttpHeaderField));
     f->name = dupShortBuf(field_start, name_end-field_start);
     f->value = dupShortBuf(value_start, field_end-value_start);
@@ -491,6 +638,7 @@ httpHeaderFieldDestroy(HttpHeaderField *f)
     assert(f);
     freeShortString(f->name);
     freeShortString(f->value);
+    xfree(f);
 }
 
 /*

@@ -158,6 +158,7 @@ static struct op_table OpTable[] =
     {MGR_STOREDIR, storeDirStats},
     {MGR_CBDATA, cbdataDump},
     {MGR_PCONN, pconnHistDump},
+    {MGR_COUNTERS, statCounters},
     {MGR_5MIN, statAvg5min},
     {MGR_60MIN, statAvg60min},
     {MGR_MEM, memStats},
@@ -227,6 +228,8 @@ objcacheParseRequest(const char *buf)
 	op = MGR_CONFIGURATION;
     else if (!strcmp(buf, "pconn"))
 	op = MGR_PCONN;
+    else if (!strcmp(buf, "counters"))
+	op = MGR_COUNTERS;
     else if (!strcmp(buf, "5min"))
 	op = MGR_5MIN;
     else if (!strcmp(buf, "60min"))

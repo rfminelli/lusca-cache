@@ -57,12 +57,17 @@ struct _HttpBody {
 
 typedef struct _HttpBody HttpBody;
 
+typedef enum { psReadyToParseStartLine = 0, psReadyToParseHeaders, psParsed, psError } HttpMsgParseState;
+
 /* http-response message */
 struct _HttpResponse {
     /* public, writable */
     HttpStatusLine sline;
     HttpHeader hdr;
     HttpBody body; /* may be empty, se comments for HttpBody */
+
+    /* public, readable */
+    HttpMsgParseState pstate;
 };
 
 typedef struct _HttpResponse HttpResponse;
@@ -78,6 +83,9 @@ extern void httpReplyDestroy(HttpReply *rep);
 /* updatre when 304 reply is received for a cached object */
 extern void httpReplyUpdateOnNotModified(HttpReply *rep, HttpReply *freshRep);
 
+/* parse */
+extern int httpReplyParseHeaders(HttpReply *rep, const char *buf, const char **end);
+
 /*
  * HTTP Response
  */
@@ -92,8 +100,8 @@ extern void httpResponseDestroy(HttpResponse *resp);
 extern void httpResponseSetHeaders(HttpResponse *resp, double ver, http_status status, const char *reason, const char *ctype, int clen, time_t lmt, time_t expires);
 
 /* parse/summ */
-/* parse a 0-terminating buffer and fill internal structires; returns true if successful */
-extern int httpResponseParseHeaders(HttpResponse *resp, const char *resp_start);
+/* parse a 0-terminating buffer and fill internal structires; returns +1 (ok), 0 (more), or -1 (err) */
+int httpResponseParse(HttpResponse *resp, const char *parse_start, const char * *parse_end_ptr);
 /* summarizes response in a compact HttpReply structure */
 extern void httpResponseSumm(HttpResponse *resp, HttpReply *summ);
 
