@@ -198,17 +198,19 @@ static struct {
     int cc[SCC_ENUM_END];
 } ReplyHeaderStats;
 
-static CNCB httpConnectDone;
-static CWCB httpSendComplete;
-static PF httpReadReply;
-static PF httpSendRequest;
-static PF httpStateFree;
-static PF httpTimeout;
-static void httpAppendRequestHeader _PARAMS((char *hdr, const char *line, size_t * sz, size_t max));
-static void httpCacheNegatively _PARAMS((StoreEntry *));
-static void httpMakePrivate _PARAMS((StoreEntry *));
+static void httpStateFree _PARAMS((int fd, void *));
+static void httpReadReplyTimeout _PARAMS((int fd, void *));
+static void httpLifetimeExpire _PARAMS((int fd, void *));
 static void httpMakePublic _PARAMS((StoreEntry *));
-static STABH httpAbort;
+static void httpMakePrivate _PARAMS((StoreEntry *));
+static void httpCacheNegatively _PARAMS((StoreEntry *));
+static void httpReadReply _PARAMS((int fd, void *));
+static void httpSendComplete _PARAMS((int fd, char *, int, int, void *));
+static void httpSendRequest _PARAMS((int fd, void *));
+static void httpConnect _PARAMS((int fd, const ipcache_addrs *, void *));
+static void httpConnectDone _PARAMS((int fd, int status, void *data));
+static void httpAppendRequestHeader _PARAMS((char *hdr, const char *line, size_t * sz, size_t max));
+
 
 static void
 httpStateFree(int fd, void *data)
@@ -216,21 +218,20 @@ httpStateFree(int fd, void *data)
     HttpStateData *httpState = data;
     if (httpState == NULL)
 	return;
-    storeUnregisterAbort(httpState->entry);
     storeUnlockObject(httpState->entry);
     if (httpState->reply_hdr) {
 	put_free_8k_page(httpState->reply_hdr);
 	httpState->reply_hdr = NULL;
     }
+    if (httpState->ip_lookup_pending)
+	ipcache_unregister(httpState->request->host, httpState->fd);
     requestUnlink(httpState->request);
     requestUnlink(httpState->orig_request);
-    httpState->request = NULL;
-    httpState->orig_request = NULL;
-    cbdataFree(httpState);
+    xfree(httpState);
 }
 
 int
-httpCachable(method_t method)
+httpCachable(const char *url, int method)
 {
     /* GET and HEAD are cachable. Others are not. */
     if (method != METHOD_GET && method != METHOD_HEAD)
@@ -239,13 +240,28 @@ httpCachable(method_t method)
     return 1;
 }
 
+/* This will be called when timeout on read. */
 static void
-httpTimeout(int fd, void *data)
+httpReadReplyTimeout(int fd, void *data)
+{
+    HttpStateData *httpState = data;
+    StoreEntry *entry = NULL;
+    entry = httpState->entry;
+    debug(11, 4, "httpReadReplyTimeout: FD %d: '%s'\n", fd, entry->url);
+    squid_error_entry(entry, ERR_READ_TIMEOUT, NULL);
+    commSetSelect(fd, COMM_SELECT_READ, NULL, NULL, 0);
+    comm_close(fd);
+}
+
+/* This will be called when socket lifetime is expired. */
+static void
+httpLifetimeExpire(int fd, void *data)
 {
     HttpStateData *httpState = data;
     StoreEntry *entry = httpState->entry;
-    debug(11, 4) ("httpTimeout: FD %d: '%s'\n", fd, entry->url);
-    storeAbort(entry, ERR_READ_TIMEOUT, NULL, 0);
+    debug(11, 4, "httpLifeTimeExpire: FD %d: '%s'\n", fd, entry->url);
+    squid_error_entry(entry, ERR_LIFETIME_EXP, NULL);
+    commSetSelect(fd, COMM_SELECT_READ | COMM_SELECT_WRITE, NULL, NULL, 0);
     comm_close(fd);
 }
 
@@ -310,7 +326,7 @@ httpParseReplyHeaders(const char *buf, struct _http_reply *reply)
 	    l = 4096;
 	xstrncpy(line, s, l);
 	t = line;
-	debug(11, 3) ("httpParseReplyHeaders: %s\n", t);
+	debug(11, 3, "httpParseReplyHeaders: %s\n", t);
 	if (!strncasecmp(t, "HTTP/", 5)) {
 	    reply->version = atof(t + 5);
 	    if ((t = strchr(t, ' ')))
@@ -412,7 +428,7 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
     int hdr_len;
     struct _http_reply *reply = entry->mem_obj->reply;
 
-    debug(11, 3) ("httpProcessReplyHeader: key '%s'\n", entry->key);
+    debug(11, 3, "httpProcessReplyHeader: key '%s'\n", entry->key);
 
     if (httpState->reply_hdr == NULL)
 	httpState->reply_hdr = get_free_8k_page();
@@ -422,7 +438,7 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	strncat(httpState->reply_hdr, buf, room < size ? room : size);
 	hdr_len += room < size ? room : size;
 	if (hdr_len > 4 && strncmp(httpState->reply_hdr, "HTTP/", 5)) {
-	    debug(11, 3) ("httpProcessReplyHeader: Non-HTTP-compliant header: '%s'\n", entry->key);
+	    debug(11, 3, "httpProcessReplyHeader: Non-HTTP-compliant header: '%s'\n", entry->key);
 	    httpState->reply_hdr_state += 2;
 	    reply->code = 555;
 	    return;
@@ -437,13 +453,13 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
     }
     if (httpState->reply_hdr_state == 1) {
 	httpState->reply_hdr_state++;
-	debug(11, 9) ("GOT HTTP REPLY HDR:\n---------\n%s\n----------\n",
+	debug(11, 9, "GOT HTTP REPLY HDR:\n---------\n%s\n----------\n",
 	    httpState->reply_hdr);
 	/* Parse headers into reply structure */
 	httpParseReplyHeaders(httpState->reply_hdr, reply);
 	storeTimestampsSet(entry);
 	/* Check if object is cacheable or not based on reply code */
-	debug(11, 3) ("httpProcessReplyHeader: HTTP CODE: %d\n", reply->code);
+	debug(11, 3, "httpProcessReplyHeader: HTTP CODE: %d\n", reply->code);
 	switch (reply->code) {
 	    /* Responses that are cacheable */
 	case 200:		/* OK */
@@ -525,33 +541,38 @@ httpReadReply(int fd, void *data)
 {
     HttpStateData *httpState = data;
     LOCAL_ARRAY(char, buf, SQUID_TCP_SO_RCVBUF);
-    StoreEntry *entry = httpState->entry;
     int len;
     int bin;
     int clen;
     int off;
-    if (protoAbortFetch(entry)) {
-	storeAbort(entry, ERR_CLIENT_ABORT, NULL, 0);
-	comm_close(fd);
-	return;
-    }
+    StoreEntry *entry = httpState->entry;
     /* check if we want to defer reading */
-    clen = entry->mem_obj->e_current_len;
+    clen = entry->object_len;
     off = storeGetLowestReaderOffset(entry);
     if ((clen - off) > HTTP_DELETE_GAP) {
+	if (entry->flag & CLIENT_ABORT_REQUEST) {
+	    squid_error_entry(entry, ERR_CLIENT_ABORT, NULL);
+	    comm_close(fd);
+	    return;
+	}
 	IOStats.Http.reads_deferred++;
-	debug(11, 3) ("httpReadReply: Read deferred for Object: %s\n",
+	debug(11, 3, "httpReadReply: Read deferred for Object: %s\n",
 	    entry->url);
-	debug(11, 3) ("                Current Gap: %d bytes\n", clen - off);
+	debug(11, 3, "                Current Gap: %d bytes\n", clen - off);
 	/* reschedule, so it will be automatically reactivated
 	 * when Gap is big enough. */
 	commSetSelect(fd,
 	    COMM_SELECT_READ,
 	    httpReadReply,
-	    httpState, 0);
+	    (void *) httpState, 0);
 	/* disable read timeout until we are below the GAP */
+	commSetSelect(fd,
+	    COMM_SELECT_TIMEOUT,
+	    NULL,
+	    (void *) NULL,
+	    (time_t) 0);
 	if (!BIT_TEST(entry->flag, READ_DEFERRED)) {
-	    commSetTimeout(fd, Config.Timeout.defer, NULL, NULL);
+	    comm_set_fd_lifetime(fd, 3600);	/* limit during deferring */
 	    BIT_SET(entry->flag, READ_DEFERRED);
 	}
 	/* dont try reading again for a while */
@@ -562,32 +583,35 @@ httpReadReply(int fd, void *data)
     }
     errno = 0;
     len = read(fd, buf, SQUID_TCP_SO_RCVBUF);
-    fd_bytes(fd, len, FD_READ);
-    debug(11, 5) ("httpReadReply: FD %d: len %d.\n", fd, len);
+    debug(11, 5, "httpReadReply: FD %d: len %d.\n", fd, len);
     if (len > 0) {
-	commSetTimeout(fd, Config.Timeout.read, NULL, NULL);
+	comm_set_fd_lifetime(fd, 86400);	/* extend after good read */
 	IOStats.Http.reads++;
 	for (clen = len - 1, bin = 0; clen; bin++)
 	    clen >>= 1;
 	IOStats.Http.read_hist[bin]++;
     }
     if (len < 0) {
-	if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+	debug(50, 2, "httpReadReply: FD %d: read failure: %s.\n",
+	    fd, xstrerror());
+	if (errno == EAGAIN || errno == EWOULDBLOCK) {
 	    /* reinstall handlers */
 	    /* XXX This may loop forever */
 	    commSetSelect(fd, COMM_SELECT_READ,
-		httpReadReply, httpState, 0);
+		httpReadReply, (void *) httpState, 0);
+	    commSetSelect(fd, COMM_SELECT_TIMEOUT,
+		httpReadReplyTimeout, (void *) httpState, Config.readTimeout);
 	} else {
 	    BIT_RESET(entry->flag, ENTRY_CACHABLE);
 	    storeReleaseRequest(entry);
-	    storeAbort(entry, ERR_READ_ERROR, xstrerror(), 0);
+	    squid_error_entry(entry, ERR_READ_ERROR, xstrerror());
 	    comm_close(fd);
 	}
-	debug(50, 2) ("httpReadReply: FD %d: read failure: %s.\n",
-	    fd, xstrerror());
-    } else if (len == 0 && entry->mem_obj->e_current_len == 0) {
+    } else if (len == 0 && entry->mem_obj->swap_length == 0) {
 	httpState->eof = 1;
-	storeAbort(entry, ERR_ZERO_SIZE_OBJECT, errno ? xstrerror() : NULL, 0);
+	squid_error_entry(entry,
+	    ERR_ZERO_SIZE_OBJECT,
+	    errno ? xstrerror() : NULL);
 	comm_close(fd);
     } else if (len == 0) {
 	/* Connection closed; retrieval done. */
@@ -597,6 +621,13 @@ httpReadReply(int fd, void *data)
 	storeAppend(entry, buf, len);	/* invoke handlers! */
 	storeComplete(entry);	/* deallocates mem_obj->request */
 	comm_close(fd);
+    } else if (entry->flag & CLIENT_ABORT_REQUEST) {
+	squid_error_entry(entry, ERR_CLIENT_ABORT, NULL);
+	comm_close(fd);
+    } else if (!storeClientWaiting(entry)) {
+	/* we can terminate connection right now */
+	squid_error_entry(entry, ERR_NO_CLIENTS_BIG_OBJ, NULL);
+	comm_close(fd);
     } else {
 	if (httpState->reply_hdr_state < 2)
 	    httpProcessReplyHeader(httpState, buf, len);
@@ -604,7 +635,12 @@ httpReadReply(int fd, void *data)
 	commSetSelect(fd,
 	    COMM_SELECT_READ,
 	    httpReadReply,
-	    httpState, 0);
+	    (void *) httpState, 0);
+	commSetSelect(fd,
+	    COMM_SELECT_TIMEOUT,
+	    httpReadReplyTimeout,
+	    (void *) httpState,
+	    Config.readTimeout);
     }
 }
 
@@ -617,11 +653,11 @@ httpSendComplete(int fd, char *buf, int size, int errflag, void *data)
     StoreEntry *entry = NULL;
 
     entry = httpState->entry;
-    debug(11, 5) ("httpSendComplete: FD %d: size %d: errflag %d.\n",
+    debug(11, 5, "httpSendComplete: FD %d: size %d: errflag %d.\n",
 	fd, size, errflag);
 
     if (errflag) {
-	storeAbort(entry, ERR_CONNECT_FAIL, xstrerror(), 0);
+	squid_error_entry(entry, ERR_CONNECT_FAIL, xstrerror());
 	comm_close(fd);
 	return;
     } else {
@@ -629,7 +665,13 @@ httpSendComplete(int fd, char *buf, int size, int errflag, void *data)
 	commSetSelect(fd,
 	    COMM_SELECT_READ,
 	    httpReadReply,
-	    httpState, 0);
+	    (void *) httpState, 0);
+	commSetSelect(fd,
+	    COMM_SELECT_TIMEOUT,
+	    httpReadReplyTimeout,
+	    (void *) httpState,
+	    Config.readTimeout);
+	comm_set_fd_lifetime(fd, 86400);	/* extend lifetime */
     }
 }
 
@@ -647,7 +689,7 @@ httpAppendRequestHeader(char *hdr, const char *line, size_t * sz, size_t max)
 	    return;
     }
     /* allowed header, explicitly known to be not dangerous */
-    debug(11, 5) ("httpAppendRequestHeader: %s\n", line);
+    debug(11, 5, "httpAppendRequestHeader: %s\n", line);
     strcpy(hdr + (*sz), line);
     strcat(hdr + (*sz), crlf);
     *sz = n;
@@ -657,6 +699,7 @@ size_t
 httpBuildRequestHeader(request_t * request,
     request_t * orig_request,
     StoreEntry * entry,
+    char *hdr_in,
     size_t * in_len,
     char *hdr_out,
     size_t out_sz,
@@ -676,10 +719,8 @@ httpBuildRequestHeader(request_t * request,
     int cc_flags = 0;
     int n;
     const char *url = NULL;
-    char *hdr_in = orig_request->headers;
 
-    assert(hdr_in != NULL);
-    debug(11, 3) ("httpBuildRequestHeader: INPUT:\n%s\n", hdr_in);
+    debug(11, 3, "httpBuildRequestHeader: INPUT:\n%s\n", hdr_in);
     xstrncpy(fwdbuf, "X-Forwarded-For: ", 4096);
     xstrncpy(viabuf, "Via: ", 4096);
     sprintf(ybuf, "%s %s HTTP/1.0",
@@ -699,8 +740,10 @@ httpBuildRequestHeader(request_t * request,
 	if (l > 4096)
 	    l = 4096;
 	xstrncpy(xbuf, t, l);
-	debug(11, 5) ("httpBuildRequestHeader: %s\n", xbuf);
+	debug(11, 5, "httpBuildRequestHeader: %s\n", xbuf);
 	if (strncasecmp(xbuf, "Proxy-Connection:", 17) == 0)
+	    continue;
+	if (strncasecmp(xbuf, "Proxy-authorization:", 20) == 0)
 	    continue;
 	if (strncasecmp(xbuf, "Connection:", 11) == 0)
 	    continue;
@@ -734,7 +777,7 @@ httpBuildRequestHeader(request_t * request,
 	}
 	httpAppendRequestHeader(hdr_out, xbuf, &len, out_sz - 512);
     }
-    hdr_len = end - hdr_in;
+    hdr_len = t - hdr_in;
     /* Append Via: */
     sprintf(ybuf, "%3.1f %s", orig_request->http_ver, ThisCache);
     strcat(viabuf, ybuf);
@@ -750,9 +793,6 @@ httpBuildRequestHeader(request_t * request,
 	url = entry ? entry->url : urlCanonical(orig_request, NULL);
 	sprintf(ybuf, "Cache-control: Max-age=%d", (int) getMaxAge(url));
 	httpAppendRequestHeader(hdr_out, ybuf, &len, out_sz);
-if (request->urlpath) {
-	assert(strstr(url, request->urlpath));
-}
     }
     httpAppendRequestHeader(hdr_out, null_string, &len, out_sz);
     put_free_4k_page(xbuf);
@@ -764,7 +804,7 @@ if (request->urlpath) {
 	debug_trap("httpBuildRequestHeader: size mismatch");
 	len = l;
     }
-    debug(11, 3) ("httpBuildRequestHeader: OUTPUT:\n%s\n", hdr_out);
+    debug(11, 3, "httpBuildRequestHeader: OUTPUT:\n%s\n", hdr_out);
     return len;
 }
 
@@ -781,10 +821,10 @@ httpSendRequest(int fd, void *data)
     StoreEntry *entry = httpState->entry;
     int cfd;
 
-    debug(11, 5) ("httpSendRequest: FD %d: httpState %p.\n", fd, httpState);
+    debug(11, 5, "httpSendRequest: FD %d: httpState %p.\n", fd, httpState);
     buflen = strlen(req->urlpath);
-    if (req->headers)
-	buflen += req->headers_sz + 1;
+    if (httpState->req_hdr)
+	buflen += httpState->req_hdr_sz + 1;
     buflen += 512;		/* lots of extra */
 
     if ((req->method == METHOD_POST || req->method == METHOD_PUT)) {
@@ -804,18 +844,20 @@ httpSendRequest(int fd, void *data)
     else if (entry->mem_obj == NULL)
 	cfd = -1;
     else
-	cfd = entry->mem_obj->fd;
+	cfd = storeFirstClientFD(entry->mem_obj);
     len = httpBuildRequestHeader(req,
 	httpState->orig_request ? httpState->orig_request : req,
 	entry,
+	httpState->req_hdr,
 	NULL,
 	buf,
 	buflen,
 	cfd);
-    debug(11, 6) ("httpSendRequest: FD %d:\n%s\n", fd, buf);
+    debug(11, 6, "httpSendRequest: FD %d:\n%s\n", fd, buf);
     comm_write(fd,
 	buf,
 	len,
+	30,
 	httpSendComplete,
 	httpState,
 	buftype == BUF_TYPE_8K ? put_free_8k_page : xfree);
@@ -823,54 +865,77 @@ httpSendRequest(int fd, void *data)
     httpState->orig_request = NULL;
 }
 
-void
-proxyhttpStart(request_t * orig_request,
+int
+proxyhttpStart(const char *url,
+    request_t * orig_request,
     StoreEntry * entry,
     peer * e)
 {
-    HttpStateData *httpState;
-    request_t *request;
-    int fd;
-    debug(11, 3) ("proxyhttpStart: \"%s %s\"\n",
-	RequestMethodStr[orig_request->method], entry->url);
+    int sock;
+    HttpStateData *httpState = NULL;
+    request_t *request = NULL;
+
+    debug(11, 3, "proxyhttpStart: \"%s %s\"\n",
+	RequestMethodStr[orig_request->method], url);
+    debug(11, 10, "proxyhttpStart: HTTP request header:\n%s\n",
+	entry->mem_obj->mime_hdr);
+
     if (e->options & NEIGHBOR_PROXY_ONLY)
-#if DONT_USE_VM
 	storeReleaseRequest(entry);
-#else
-	storeStartDeleteBehind(entry);
-#endif
+
     /* Create socket. */
-    fd = comm_open(SOCK_STREAM,
+    sock = comm_open(SOCK_STREAM,
 	0,
 	Config.Addrs.tcp_outgoing,
 	0,
 	COMM_NONBLOCKING,
-	entry->url);
-    if (fd == COMM_ERROR) {
-	debug(11, 4) ("proxyhttpStart: Failed because we're out of sockets.\n");
-	storeAbort(entry, ERR_NO_FDS, xstrerror(), 0);
-	return;
+	url);
+    if (sock == COMM_ERROR) {
+	debug(11, 4, "proxyhttpStart: Failed because we're out of sockets.\n");
+	squid_error_entry(entry, ERR_NO_FDS, xstrerror());
+	return COMM_ERROR;
     }
-    storeLockObject(entry);
     httpState = xcalloc(1, sizeof(HttpStateData));
-    cbdataAdd(httpState);
-    httpState->entry = entry;
+    storeLockObject(httpState->entry = entry);
+    httpState->req_hdr = entry->mem_obj->mime_hdr;
+    httpState->req_hdr_sz = entry->mem_obj->mime_hdr_sz;
     request = get_free_request_t();
     httpState->request = requestLink(request);
     httpState->neighbor = e;
     httpState->orig_request = requestLink(orig_request);
-    httpState->fd = fd;
+    httpState->fd = sock;
     /* register the handler to free HTTP state data when the FD closes */
     comm_add_close_handler(httpState->fd,
 	httpStateFree,
-	httpState);
+	(void *) httpState);
     request->method = orig_request->method;
     xstrncpy(request->host, e->host, SQUIDHOSTNAMELEN);
     request->port = e->http_port;
-    xstrncpy(request->urlpath, entry->url, MAX_URL);
+    xstrncpy(request->urlpath, url, MAX_URL);
     BIT_SET(request->flags, REQ_PROXYING);
-    commSetTimeout(fd, Config.Timeout.connect, httpTimeout, httpState);
-    commConnectStart(httpState->fd,
+    httpState->ip_lookup_pending = 1;
+    ipcache_nbgethostbyname(request->host,
+	httpState->fd,
+	httpConnect,
+	httpState);
+    return COMM_OK;
+}
+
+static void
+httpConnect(int fd, const ipcache_addrs * ia, void *data)
+{
+    HttpStateData *httpState = data;
+    request_t *request = httpState->request;
+    StoreEntry *entry = httpState->entry;
+    httpState->ip_lookup_pending = 0;
+    if (ia == NULL) {
+	debug(11, 4, "httpConnect: Unknown host: %s\n", request->host);
+	squid_error_entry(entry, ERR_DNS_FAIL, dns_error_message);
+	comm_close(fd);
+	return;
+    }
+    /* Open connection. */
+    commConnectStart(fd,
 	request->host,
 	request->port,
 	httpConnectDone,
@@ -883,58 +948,65 @@ httpConnectDone(int fd, int status, void *data)
     HttpStateData *httpState = data;
     request_t *request = httpState->request;
     StoreEntry *entry = httpState->entry;
-    if (status == COMM_ERR_DNS) {
-	debug(11, 4) ("httpConnectDone: Unknown host: %s\n", request->host);
-	storeAbort(entry, ERR_DNS_FAIL, dns_error_message, 0);
-	comm_close(fd);
-    } else if (status != COMM_OK) {
-	storeAbort(entry, ERR_CONNECT_FAIL, xstrerror(), 0);
+    if (status != COMM_OK) {
+	squid_error_entry(entry, ERR_CONNECT_FAIL, xstrerror());
 	if (httpState->neighbor)
 	    peerCheckConnectStart(httpState->neighbor);
 	comm_close(fd);
     } else {
+	/* Install connection complete handler. */
 	if (opt_no_ipcache)
 	    ipcacheInvalidate(request->host);
 	fd_note(fd, entry->url);
-	commSetSelect(fd, COMM_SELECT_WRITE, httpSendRequest, httpState, 0);
+	commSetSelect(fd, COMM_SELECT_LIFETIME,
+	    httpLifetimeExpire, (void *) httpState, 0);
+	commSetSelect(fd, COMM_SELECT_WRITE,
+	    httpSendRequest, (void *) httpState, 0);
     }
 }
 
-void
-httpStart(request_t * request, StoreEntry * entry)
+int
+httpStart(char *url,
+    request_t * request,
+    char *req_hdr,
+    int req_hdr_sz,
+    StoreEntry * entry)
 {
-    int fd;
-    HttpStateData *httpState;
-    debug(11, 3) ("httpStart: \"%s %s\"\n",
-	RequestMethodStr[request->method], entry->url);
+    /* Create state structure. */
+    int sock;
+    HttpStateData *httpState = NULL;
+
+    debug(11, 3, "httpStart: \"%s %s\"\n",
+	RequestMethodStr[request->method], url);
+    debug(11, 10, "httpStart: req_hdr '%s'\n", req_hdr);
+
     /* Create socket. */
-    fd = comm_open(SOCK_STREAM,
+    sock = comm_open(SOCK_STREAM,
 	0,
 	Config.Addrs.tcp_outgoing,
 	0,
 	COMM_NONBLOCKING,
-	entry->url);
-    if (fd == COMM_ERROR) {
-	debug(11, 4) ("httpStart: Failed because we're out of sockets.\n");
-	storeAbort(entry, ERR_NO_FDS, xstrerror(), 0);
-	return;
+	url);
+    if (sock == COMM_ERROR) {
+	debug(11, 4, "httpStart: Failed because we're out of sockets.\n");
+	squid_error_entry(entry, ERR_NO_FDS, xstrerror());
+	return COMM_ERROR;
     }
-    storeLockObject(entry);
     httpState = xcalloc(1, sizeof(HttpStateData));
-    cbdataAdd(httpState);
-    httpState->entry = entry;
+    storeLockObject(httpState->entry = entry);
+    httpState->req_hdr = req_hdr;
+    httpState->req_hdr_sz = req_hdr_sz;
     httpState->request = requestLink(request);
-    httpState->fd = fd;
+    httpState->fd = sock;
     comm_add_close_handler(httpState->fd,
 	httpStateFree,
+	(void *) httpState);
+    httpState->ip_lookup_pending = 1;
+    ipcache_nbgethostbyname(request->host,
+	httpState->fd,
+	httpConnect,
 	httpState);
-    storeRegisterAbort(entry, httpAbort, httpState);
-    commSetTimeout(fd, Config.Timeout.connect, httpTimeout, httpState);
-    commConnectStart(httpState->fd,
-	request->host,
-	request->port,
-	httpConnectDone,
-	httpState);
+    return COMM_OK;
 }
 
 void
@@ -955,12 +1027,4 @@ httpReplyHeaderStats(StoreEntry * entry)
 	    HttpServerCCStr[i],
 	    ReplyHeaderStats.cc[i]);
     storeAppendPrintf(entry, close_bracket);
-}
-
-static void
-httpAbort(void *data)
-{
-    HttpStateData *httpState = data;
-    debug(11, 1) ("httpAbort: %s\n", httpState->entry->url);
-    comm_close(httpState->fd);
 }

@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * DEBUG: section 0     Debug Routines
+ * DEBUG: section 0     Store Entry Debugging
  * AUTHOR: Harvest Derived
  *
  * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
@@ -105,188 +105,152 @@
 
 #include "squid.h"
 
-FILE *debug_log = NULL;
-static char *debug_log_file = NULL;
-static const char *const w_space = " \t\n\r";
-
-#define MAX_DEBUG_SECTIONS 100
-static int debugLevels[MAX_DEBUG_SECTIONS];
-
-static char *accessLogTime _PARAMS((time_t));
-
-#ifdef __STDC__
-void
-_db_print(int section, int level, const char *format,...)
+/* convert store entry content to string. Use for debugging */
+/* return pointer to static buffer containing string */
+const char *
+storeToString(const StoreEntry * e)
 {
-    va_list args;
-#else
-void
-_db_print(va_alist)
-     va_dcl
-{
-    va_list args;
-    int section;
-    int level;
-    const char *format = NULL;
-#endif
-    LOCAL_ARRAY(char, f, BUFSIZ);
-#if HAVE_SYSLOG
-    LOCAL_ARRAY(char, tmpbuf, BUFSIZ);
-#endif
+    MemObject *mem;
+    LOCAL_ARRAY(char, stsbuf, 16 << 10);	/* have to make this really big */
+    LOCAL_ARRAY(char, tmpbuf, 8 << 10);
 
-#ifdef __STDC__
-    if (level > debugLevels[section])
-	return;
-    va_start(args, format);
-#else
-    va_start(args);
-    section = va_arg(args, int);
-    level = va_arg(args, int);
-    if (level > debugLevels[section]) {
-	va_end(args);
-	return;
+    if (!e) {
+	sprintf(stsbuf, "\nStoreEntry pointer is NULL.\n");
+	return stsbuf;
     }
-    format = va_arg(args, const char *);
-#endif
+    sprintf(stsbuf, "\nStoreEntry @: %p\n****************\n", e);
+    strcat(stsbuf, tmpbuf);
 
-    if (debug_log == NULL)
-	return;
-    sprintf(f, "%s| %s",
-	accessLogTime(squid_curtime),
-	format);
-#if HAVE_SYSLOG
-    /* level 0 go to syslog */
-    if (level == 0 && opt_syslog_enable) {
-	tmpbuf[0] = '\0';
-	vsprintf(tmpbuf, format, args);
-	tmpbuf[1023] = '\0';
-	syslog(LOG_ERR, "%s", tmpbuf);
+    sprintf(stsbuf, "Current Time: %d [%s]\n", (int) squid_curtime,
+	mkhttpdlogtime(&squid_curtime));
+    strcat(stsbuf, tmpbuf);
+
+    sprintf(tmpbuf, "Key: %s\n", e->key);
+    strcat(stsbuf, tmpbuf);
+
+    sprintf(tmpbuf, "URL: %s\n", e->url);
+    strcat(stsbuf, tmpbuf);
+
+    sprintf(tmpbuf, "Next: %p\n", e->next);
+    strcat(stsbuf, tmpbuf);
+
+    sprintf(tmpbuf, "Flags: %#x ==> ", e->flag);
+    if (BIT_TEST(e->flag, KEY_CHANGE))
+	strncat(tmpbuf, " KEYCHANGE", sizeof(tmpbuf) - 1);
+    if (BIT_TEST(e->flag, ENTRY_CACHABLE))
+	strncat(tmpbuf, " CACHABLE", sizeof(tmpbuf) - 1);
+    if (BIT_TEST(e->flag, REFRESH_REQUEST))
+	strncat(tmpbuf, " REFRESH_REQ", sizeof(tmpbuf) - 1);
+    if (BIT_TEST(e->flag, RELEASE_REQUEST))
+	strncat(tmpbuf, " RELEASE_REQ", sizeof(tmpbuf) - 1);
+    if (BIT_TEST(e->flag, CLIENT_ABORT_REQUEST))
+	strncat(tmpbuf, " CLIENT_ABORT", sizeof(tmpbuf) - 1);
+    if (BIT_TEST(e->flag, ABORT_MSG_PENDING))
+	strncat(tmpbuf, " ABORT_MSG_PENDING", sizeof(tmpbuf) - 1);
+    if (BIT_TEST(e->flag, DELAY_SENDING))
+	strncat(tmpbuf, " DELAY_SENDING", sizeof(tmpbuf) - 1);
+    if (e->lock_count)
+	strncat(tmpbuf, "L", sizeof(tmpbuf) - 1);
+    strcat(tmpbuf, "\n");
+    strcat(stsbuf, tmpbuf);
+
+    sprintf(tmpbuf, "Timestamp: %9d [%s]\n",
+	(int) e->timestamp,
+	mkhttpdlogtime(&e->timestamp));
+    strcat(stsbuf, tmpbuf);
+    sprintf(tmpbuf, "Lastref  : %9d [%s]\n",
+	(int) e->lastref,
+	mkhttpdlogtime(&e->lastref));
+    strcat(stsbuf, tmpbuf);
+    sprintf(tmpbuf, "Expires  : %9d [%s]\n",
+	(int) e->expires,
+	mkhttpdlogtime(&e->expires));
+    strcat(stsbuf, tmpbuf);
+
+    sprintf(tmpbuf, "ObjectLen: %d\n", (int) e->object_len);
+    strcat(stsbuf, tmpbuf);
+
+    sprintf(tmpbuf, "SwapFileNumber: %d\n", e->swap_file_number);
+    strcat(stsbuf, tmpbuf);
+
+    sprintf(tmpbuf, "StoreStatus: %s\n", storeStatusStr[e->store_status]);
+    strcat(stsbuf, tmpbuf);
+
+    sprintf(tmpbuf, "PingStatus: %s\n", pingStatusStr[e->ping_status]);
+    strcat(stsbuf, tmpbuf);
+
+    sprintf(tmpbuf, "Method: %s\n", RequestMethodStr[e->method]);
+    strcat(stsbuf, tmpbuf);
+
+    sprintf(tmpbuf, "RefCount: %u\n", e->refcount);
+    strcat(stsbuf, tmpbuf);
+
+    sprintf(tmpbuf, "LockCount: %d\n", e->lock_count);
+    strcat(stsbuf, tmpbuf);
+
+    mem = e->mem_obj;
+    if (mem == NULL) {
+	sprintf(tmpbuf, "MemObject: NULL.\n");
+	strcat(stsbuf, tmpbuf);
+	return stsbuf;
     }
-#endif /* HAVE_SYSLOG */
-    /* write to log file */
-    vfprintf(debug_log, f, args);
-    if (unbuffered_logs)
-	fflush(debug_log);
-    va_end(args);
-}
+    sprintf(tmpbuf, "MemObject: %p\n****************\n", mem);
+    strcat(stsbuf, tmpbuf);
 
-static void
-debugArg(const char *arg)
-{
-    int s = 0;
-    int l = 0;
-    int i;
-
-    if (!strncasecmp(arg, "ALL", 3)) {
-	s = -1;
-	arg += 4;
+    if (!mem->mime_hdr) {
+	sprintf(tmpbuf, "MimeHdr: NULL.\n");
+	strcat(stsbuf, tmpbuf);
     } else {
-	s = atoi(arg);
-	while (*arg && *arg++ != ',');
+	sprintf(tmpbuf, "MimeHdr:\n-----------\n%s\n-----------\n", mem->mime_hdr);
+	strcat(stsbuf, tmpbuf);
     }
-    l = atoi(arg);
 
-    if (s >= 0) {
-	debugLevels[s] = l;
-	return;
+    sprintf(tmpbuf, "First_miss: %p\n", mem->e_pings_first_miss);
+    strcat(stsbuf, tmpbuf);
+
+    sprintf(tmpbuf, "[pings]: npings = %d  nacks = %d\n",
+	mem->e_pings_n_pings, mem->e_pings_n_acks);
+    strcat(stsbuf, tmpbuf);
+
+    if (!mem->e_abort_msg) {
+	sprintf(tmpbuf, "AbortMsg: NULL.\n");
+	strcat(stsbuf, tmpbuf);
+    } else {
+	sprintf(tmpbuf, "AbortMsg:\n-----------\n%s\n-----------\n", mem->e_abort_msg);
+	strcat(stsbuf, tmpbuf);
     }
-    for (i = 0; i < MAX_DEBUG_SECTIONS; i++)
-	debugLevels[i] = l;
-}
 
-static void
-debugOpenLog(const char *logfile)
-{
-    if (logfile == NULL) {
-	debug_log = stderr;
-	return;
+    sprintf(tmpbuf, "ClientListSize: %d\n", mem->nclients);
+    strcat(stsbuf, tmpbuf);
+
+    if (!mem->clients) {
+	sprintf(tmpbuf, "ClientList: NULL.\n");
+	strcat(stsbuf, tmpbuf);
+    } else {
+	int i;
+	sprintf(tmpbuf, "ClientList: %p\n", mem->clients);
+	strcat(stsbuf, tmpbuf);
+
+	for (i = 0; i < mem->nclients; ++i) {
+	    struct _store_client *sc = &mem->clients[i];
+	    sprintf(tmpbuf, "    Client[%d]: fd = %d\n", i, sc->fd);
+	    strcat(stsbuf, tmpbuf);
+	    sprintf(tmpbuf, "              : offset = %d\n", (int) sc->offset);
+	    strcat(stsbuf, tmpbuf);
+	    sprintf(tmpbuf, "              : callback = %p\n", sc->callback);
+	    strcat(stsbuf, tmpbuf);
+	    sprintf(tmpbuf, "              : callback_data = %p\n", sc->callback_data);
+	    strcat(stsbuf, tmpbuf);
+	}
     }
-    if (debug_log_file)
-	xfree(debug_log_file);
-    debug_log_file = xstrdup(logfile);	/* keep a static copy */
-    if (debug_log && debug_log != stderr)
-	fclose(debug_log);
-    debug_log = fopen(logfile, "a+");
-    if (!debug_log) {
-	fprintf(stderr, "WARNING: Cannot write log file: %s\n", logfile);
-	perror(logfile);
-	fprintf(stderr, "         messages will be sent to 'stderr'.\n");
-	fflush(stderr);
-	debug_log = stderr;
-    }
-}
 
-void
-_db_init(const char *logfile, const char *options)
-{
-    int i;
-    char *p = NULL;
-    char *s = NULL;
+    sprintf(tmpbuf, "SwapOffset: %u\n", mem->swap_length);
+    strcat(stsbuf, tmpbuf);
 
-    for (i = 0; i < MAX_DEBUG_SECTIONS; i++)
-	debugLevels[i] = -1;
+    sprintf(tmpbuf, "SwapOutFd: %d\n", mem->swapout_fd);
+    strcat(stsbuf, tmpbuf);
 
-    if (options) {
-	p = xstrdup(options);
-	for (s = strtok(p, w_space); s; s = strtok(NULL, w_space))
-	    debugArg(s);
-	xfree(p);
-    }
-    debugOpenLog(logfile);
+    strcat(stsbuf, "\n");
 
-#if HAVE_SYSLOG && defined(LOG_LOCAL4)
-    if (opt_syslog_enable)
-	openlog(appname, LOG_PID | LOG_NDELAY | LOG_CONS, LOG_LOCAL4);
-#endif /* HAVE_SYSLOG */
-
-}
-
-void
-_db_rotate_log(void)
-{
-    int i;
-    LOCAL_ARRAY(char, from, MAXPATHLEN);
-    LOCAL_ARRAY(char, to, MAXPATHLEN);
-#ifdef S_ISREG
-    struct stat sb;
-#endif
-
-    if (debug_log_file == NULL)
-	return;
-#ifdef S_ISREG
-    if (stat(debug_log_file, &sb) == 0)
-	if (S_ISREG(sb.st_mode) == 0)
-	    return;
-#endif
-
-    /* Rotate numbers 0 through N up one */
-    for (i = Config.Log.rotateNumber; i > 1;) {
-	i--;
-	sprintf(from, "%s.%d", debug_log_file, i - 1);
-	sprintf(to, "%s.%d", debug_log_file, i);
-	rename(from, to);
-    }
-    /* Rotate the current log to .0 */
-    if (Config.Log.rotateNumber > 0) {
-	sprintf(to, "%s.%d", debug_log_file, 0);
-	rename(debug_log_file, to);
-    }
-    /* Close and reopen the log.  It may have been renamed "manually"
-     * before HUP'ing us. */
-    if (debug_log != stderr)
-	debugOpenLog(Config.Log.log);
-}
-
-static char *
-accessLogTime(time_t t)
-{
-    struct tm *tm;
-    static char buf[128];
-    static time_t last_t = 0;
-    if (t != last_t) {
-	tm = localtime(&t);
-	strftime(buf, 127, "%y/%m/%d %H:%M:%S", tm);
-	last_t = t;
-    }
-    return buf;
+    return stsbuf;
 }

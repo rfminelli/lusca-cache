@@ -54,8 +54,6 @@ typedef enum {
     MGR_SHUTDOWN,
     MGR_UTILIZATION,
     MGR_VM_OBJECTS,
-    MGR_STOREDIR,
-    MGR_CBDATA,
     MGR_MAX
 } objcache_op;
 
@@ -86,7 +84,5 @@ static char *objcacheOpcodeStr[] =
     "shutdown",
     "utilization",
     "vm_objects",
-    "storedir",
-    "cbdata",
     "MAX"
 };

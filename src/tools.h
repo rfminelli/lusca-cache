@@ -107,7 +107,7 @@
 #define TOOLS_H
 
 extern const char *getMyHostname _PARAMS((void));
-extern void safeunlink _PARAMS((const char *path, int quiet));
+extern int safeunlink _PARAMS((const char *path, int quiet));
 extern void death _PARAMS((int sig));
 extern void fatal _PARAMS((const char *message));
 extern void fatal_dump _PARAMS((const char *message));
@@ -126,9 +126,6 @@ extern void squid_signal _PARAMS((int sig, void (*func) _PARAMS((int)), int flag
 extern pid_t readPidFile _PARAMS((void));
 extern void _debug_trap _PARAMS((const char *message));
 extern struct in_addr inaddrFromHostent _PARAMS((const struct hostent * hp));
-extern int intAverage _PARAMS((int, int, int, int));
-extern double doubleAverage _PARAMS((double, double, int, int));
-extern void debug_trap _PARAMS((const char *));
 
 extern int do_mallinfo;
 extern time_t squid_curtime;

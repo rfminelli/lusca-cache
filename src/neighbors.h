@@ -1,6 +1,5 @@
 
 
-
 /*
  * $Id$
  *
@@ -112,13 +111,35 @@
 /* put them all here for easier reference when writing a logfile analyzer */
 
 typedef enum {
+    HIER_NONE,
+    HIER_DIRECT,
+    HIER_SIBLING_HIT,
+    HIER_PARENT_HIT,
+    HIER_DEFAULT_PARENT,
+    HIER_SINGLE_PARENT,
+    HIER_FIRSTUP_PARENT,
+    HIER_NO_PARENT_DIRECT,
+    HIER_FIRST_PARENT_MISS,
+    HIER_CLOSEST_PARENT_MISS,
+    HIER_CLOSEST_DIRECT,
+    HIER_LOCAL_IP_DIRECT,
+    HIER_FIREWALL_IP_DIRECT,
+    HIER_NO_DIRECT_FAIL,
+    HIER_SOURCE_FASTEST,
+    HIER_SIBLING_UDP_HIT_OBJ,
+    HIER_PARENT_UDP_HIT_OBJ,
+    HIER_PASS_PARENT,
+    HIER_SSL_PARENT,
+    HIER_ROUNDROBIN_PARENT,
+    HIER_MAX
+} hier_code;
+
+typedef enum {
     PEER_NONE,
     PEER_SIBLING,
     PEER_PARENT,
     PEER_MULTICAST
-} peer_t;
-
-typedef void IRCB _PARAMS((peer *, peer_t, icp_opcode, void *data));
+} neighbor_t;
 
 /* Mark a neighbor cache as dead if it doesn't answer this many pings */
 #define HIER_MAX_DEFICIT  20
@@ -131,7 +152,7 @@ struct _domain_ping {
 
 struct _domain_type {
     char *domain;
-    peer_t type;
+    neighbor_t type;
     struct _domain_type *next;
 };
 
@@ -146,7 +167,7 @@ struct _domain_type {
 #define RTT_AV_FACTOR      1000
 struct _peer {
     char *host;
-    peer_t type;
+    neighbor_t type;
     struct sockaddr_in in_addr;
     struct {
 	int pings_sent;
@@ -180,7 +201,8 @@ struct _peer {
     int rr_count;
     struct _peer *next;
     int ip_lookup_pending;
-    int test_fd;
+    int ck_conn_event_pend;
+    int ipcache_fd;
 };
 
 /* flags for peer->mcast.flags */
@@ -190,13 +212,20 @@ struct _peer {
 struct _hierarchyLogData {
     hier_code code;
     char *host;
-    icp_ping_data icp;
     int timeout;
-#ifdef LOG_ICP_NUMBERS
+#if defined(LOG_ICP_NUMBERS) || defined(HIER_EXPERIMENT)
     int n_sent;
     int n_expect;
     int n_recv;
     int delay;
+#endif
+#ifdef HIER_EXPERIMENT
+#define HIER_METH_DIRECT 0
+#define HIER_METH_RAND   1
+#define HIER_METH_ICP1   2
+#define HIER_METH_ICP2   3
+#define HIER_METHODS     4
+    int hier_method;
 #endif
 };
 
@@ -204,19 +233,15 @@ extern peer *getFirstPeer _PARAMS((void));
 extern peer *getFirstUpParent _PARAMS((request_t *));
 extern peer *getNextPeer _PARAMS((peer *));
 extern peer *getSingleParent _PARAMS((request_t *));
+#ifdef HIER_EXPERIMENT
+extern peer *getRandomParent _PARAMS((request_t *));
+#endif
 extern int neighborsCount _PARAMS((request_t *));
-extern int neighborsUdpPing _PARAMS((request_t *,
-	StoreEntry *,
-	IRCB * callback,
-	void *data,
-	int *exprep));
+extern int neighborsUdpPing _PARAMS((protodispatch_data *));
 extern void neighborAddDomainPing _PARAMS((const char *, const char *));
 extern void neighborAddDomainType _PARAMS((const char *, const char *, const char *));
 extern void neighborAddAcl _PARAMS((const char *, const char *));
-extern void hierarchyNote _PARAMS((request_t *,
-	hier_code,
-	icp_ping_data *,
-	const char *));
+extern void hierarchyNote _PARAMS((request_t *, hier_code, int, const char *));
 extern void neighborsUdpAck _PARAMS((int, const char *, icp_common_t *, const struct sockaddr_in *, StoreEntry *, char *, int));
 extern void neighborAdd _PARAMS((const char *, const char *, int, int, int, int, int));
 extern void neighbors_open _PARAMS((int));
@@ -229,5 +254,7 @@ extern int neighborUp _PARAMS((const peer * e));
 extern void peerDestroy _PARAMS((peer * e));
 extern char *neighborTypeStr _PARAMS((const peer * e));
 extern void peerCheckConnectStart _PARAMS((peer *));
+
+extern const char *hier_strings[];
 
 #endif /* NEIGHBORS_H */

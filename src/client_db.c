@@ -43,7 +43,8 @@ typedef struct _client_info {
 
 int client_info_sz;
 
-static hash_table * client_table = NULL;
+static HashID client_table = 0;
+
 static ClientInfo *clientdbAdd _PARAMS((struct in_addr addr));
 
 static ClientInfo *
@@ -70,7 +71,7 @@ clientdbInit(void)
 }
 
 void
-clientdbUpdate(struct in_addr addr, log_type log_type, protocol_t p)
+clientdbUpdate(struct in_addr addr, log_type log_type, u_short port)
 {
     char *key;
     ClientInfo *c;
@@ -82,10 +83,10 @@ clientdbUpdate(struct in_addr addr, log_type log_type, protocol_t p)
 	c = clientdbAdd(addr);
     if (c == NULL)
 	debug_trap("clientdbUpdate: Failed to add entry");
-    if (p == PROTO_HTTP) {
+    if (port == Config.Port.http) {
 	c->Http.n_requests++;
 	c->Http.result_hist[log_type]++;
-    } else if (p == PROTO_ICP) {
+    } else if (port == Config.Port.icp) {
 	c->Icp.n_requests++;
 	c->Icp.result_hist[log_type]++;
     }
