@@ -118,7 +118,7 @@ size_t
 headersEnd(const char *mime, size_t l)
 {
     size_t e = 0;
-    int state = 0;
+    int state = 1;
     while (e < l && state < 3) {
 	switch (state) {
 	case 0:
@@ -134,9 +134,7 @@ headersEnd(const char *mime, size_t l)
 		state = 0;
 	    break;
 	case 2:
-	    if ('\r' == mime[e])	/* ignore repeated CR */
-		(void) 0;
-	    else if ('\n' == mime[e])
+	    if ('\n' == mime[e])
 		state = 3;
 	    else
 		state = 0;
@@ -219,10 +217,17 @@ mimeGetIcon(const char *fn)
 const char *
 mimeGetIconURL(const char *fn)
 {
+    static MemBuf mb = MemBufNULL;
     char *icon = mimeGetIcon(fn);
     if (icon == NULL)
 	return null_string;
-    return internalLocalUri("/squid-internal-static/icons/", icon);
+    if (Config.icons.use_short_names) {
+	memBufReset(&mb);
+	memBufPrintf(&mb, "/squid-internal-static/icons/%s", icon);
+	return mb.buf;
+    } else {
+	return internalLocalUri("/squid-internal-static/icons/", icon);
+    }
 }
 
 char *
@@ -297,7 +302,7 @@ mimeInit(char *filename)
 	debug(25, 1) ("mimeInit: %s: %s\n", filename, xstrerror());
 	return;
     }
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
+#if defined (_SQUID_CYGWIN_)
     setmode(fileno(fp), O_TEXT);
 #endif
     mimeFreeMemory();

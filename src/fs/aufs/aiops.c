@@ -32,6 +32,10 @@
  *
  */
 
+#ifndef _REENTRANT
+#error "_REENTRANT MUST be defined to build squid async io support."
+#endif
+
 #include "squid.h"
 #include "store_asyncufs.h"
 
@@ -49,6 +53,14 @@
 
 #define RIDICULOUS_LENGTH	4096
 
+#ifdef AUFS_IO_THREADS
+int squidaio_nthreads = AUFS_IO_THREADS;
+#else
+int squidaio_nthreads = 0;
+#endif
+int squidaio_magic1 = 1;	/* dummy initializer value */
+int squidaio_magic2 = 1;	/* real value set in aiops.c */
+
 enum _squidaio_thread_status {
     _THREAD_STARTING = 0,
     _THREAD_WAITING,
@@ -57,6 +69,19 @@ enum _squidaio_thread_status {
     _THREAD_DONE
 };
 typedef enum _squidaio_thread_status squidaio_thread_status;
+
+enum _squidaio_request_type {
+    _AIO_OP_NONE = 0,
+    _AIO_OP_OPEN,
+    _AIO_OP_READ,
+    _AIO_OP_WRITE,
+    _AIO_OP_CLOSE,
+    _AIO_OP_UNLINK,
+    _AIO_OP_TRUNCATE,
+    _AIO_OP_OPENDIR,
+    _AIO_OP_STAT
+};
+typedef enum _squidaio_request_type squidaio_request_type;
 
 typedef struct squidaio_request_t {
     struct squidaio_request_t *next;
@@ -115,7 +140,6 @@ static void squidaio_poll_queues(void);
 
 static squidaio_thread_t *threads = NULL;
 static int squidaio_initialised = 0;
-
 
 #define AIO_LARGE_BUFS  16384
 #define AIO_MEDIUM_BUFS	AIO_LARGE_BUFS >> 1
@@ -292,8 +316,18 @@ squidaio_init(void)
 
     /* Create threads and get them to sit in their wait loop */
     squidaio_thread_pool = memPoolCreate("aio_thread", sizeof(squidaio_thread_t));
-    assert(NUMTHREADS);
-    for (i = 0; i < NUMTHREADS; i++) {
+    if (squidaio_nthreads == 0) {
+	int j = 16;
+	for (i = 0; i < n_asyncufs_dirs; i++) {
+	    squidaio_nthreads += j;
+	    j = j * 2 / 3;
+	    if (j < 4)
+		j = 4;
+	}
+    }
+    squidaio_magic1 = squidaio_nthreads * MAGIC1_FACTOR;
+    squidaio_magic2 = squidaio_nthreads * MAGIC2_FACTOR;
+    for (i = 0; i < squidaio_nthreads; i++) {
 	threadp = memPoolAlloc(squidaio_thread_pool);
 	threadp->status = _THREAD_STARTING;
 	threadp->current_req = NULL;
@@ -434,26 +468,34 @@ squidaio_queue_request(squidaio_request_t * request)
     request->resultp->_data = request;
     /* Play some tricks with the request_queue2 queue */
     request->next = NULL;
-    if (pthread_mutex_trylock(&request_queue.mutex) == 0) {
-	if (request_queue2.head) {
-	    /* Grab blocked requests */
-	    *request_queue.tailp = request_queue2.head;
-	    request_queue.tailp = request_queue2.tailp;
-	}
-	/* Enqueue request */
-	*request_queue.tailp = request;
-	request_queue.tailp = &request->next;
-	pthread_cond_signal(&request_queue.cond);
-	pthread_mutex_unlock(&request_queue.mutex);
-	if (request_queue2.head) {
-	    /* Clear queue of blocked requests */
-	    request_queue2.head = NULL;
-	    request_queue2.tailp = &request_queue2.head;
+    if (!request_queue2.head) {
+	if (pthread_mutex_trylock(&request_queue.mutex) == 0) {
+	    /* Normal path */
+	    *request_queue.tailp = request;
+	    request_queue.tailp = &request->next;
+	    pthread_cond_signal(&request_queue.cond);
+	    pthread_mutex_unlock(&request_queue.mutex);
+	} else {
+	    /* Oops, the request queue is blocked, use request_queue2 */
+	    *request_queue2.tailp = request;
+	    request_queue2.tailp = &request->next;
 	}
     } else {
-	/* Oops, the request queue is blocked, use request_queue2 */
+	/* Secondary path. We have blocked requests to deal with */
+	/* add the request to the chain */
 	*request_queue2.tailp = request;
-	request_queue2.tailp = &request->next;
+	if (pthread_mutex_trylock(&request_queue.mutex) == 0) {
+	    /* Ok, the queue is no longer blocked */
+	    *request_queue.tailp = request_queue2.head;
+	    request_queue.tailp = &request->next;
+	    pthread_cond_signal(&request_queue.cond);
+	    pthread_mutex_unlock(&request_queue.mutex);
+	    request_queue2.head = NULL;
+	    request_queue2.tailp = &request_queue2.head;
+	} else {
+	    /* still blocked, bump the blocked request chain */
+	    request_queue2.tailp = &request->next;
+	}
     }
     if (request_queue2.head) {
 	static int filter = 0;
@@ -555,7 +597,6 @@ squidaio_cancel(squidaio_result_t * resultp)
 	request->cancelled = 1;
 	request->resultp = NULL;
 	resultp->_data = NULL;
-	resultp->result_type = _AIO_OP_NONE;
 	return 0;
     }
     return 1;
@@ -576,7 +617,6 @@ squidaio_open(const char *path, int oflag, mode_t mode, squidaio_result_t * resu
     requestp->resultp = resultp;
     requestp->request_type = _AIO_OP_OPEN;
     requestp->cancelled = 0;
-    resultp->result_type = _AIO_OP_OPEN;
 
     squidaio_queue_request(requestp);
     return 0;
@@ -607,7 +647,6 @@ squidaio_read(int fd, char *bufp, int bufs, off_t offset, int whence, squidaio_r
     requestp->resultp = resultp;
     requestp->request_type = _AIO_OP_READ;
     requestp->cancelled = 0;
-    resultp->result_type = _AIO_OP_READ;
 
     squidaio_queue_request(requestp);
     return 0;
@@ -640,7 +679,6 @@ squidaio_write(int fd, char *bufp, int bufs, off_t offset, int whence, squidaio_
     requestp->resultp = resultp;
     requestp->request_type = _AIO_OP_WRITE;
     requestp->cancelled = 0;
-    resultp->result_type = _AIO_OP_WRITE;
 
     squidaio_queue_request(requestp);
     return 0;
@@ -667,7 +705,6 @@ squidaio_close(int fd, squidaio_result_t * resultp)
     requestp->resultp = resultp;
     requestp->request_type = _AIO_OP_CLOSE;
     requestp->cancelled = 0;
-    resultp->result_type = _AIO_OP_CLOSE;
 
     squidaio_queue_request(requestp);
     return 0;
@@ -696,7 +733,6 @@ squidaio_stat(const char *path, struct stat *sb, squidaio_result_t * resultp)
     requestp->resultp = resultp;
     requestp->request_type = _AIO_OP_STAT;
     requestp->cancelled = 0;
-    resultp->result_type = _AIO_OP_STAT;
 
     squidaio_queue_request(requestp);
     return 0;
@@ -723,7 +759,6 @@ squidaio_unlink(const char *path, squidaio_result_t * resultp)
     requestp->resultp = resultp;
     requestp->request_type = _AIO_OP_UNLINK;
     requestp->cancelled = 0;
-    resultp->result_type = _AIO_OP_UNLINK;
 
     squidaio_queue_request(requestp);
     return 0;
@@ -750,7 +785,6 @@ squidaio_truncate(const char *path, off_t length, squidaio_result_t * resultp)
     requestp->resultp = resultp;
     requestp->request_type = _AIO_OP_TRUNCATE;
     requestp->cancelled = 0;
-    resultp->result_type = _AIO_OP_TRUNCATE;
 
     squidaio_queue_request(requestp);
     return 0;
@@ -777,7 +811,6 @@ squidaio_opendir(const char *path, squidaio_result_t * resultp)
     if (!squidaio_initialised)
 	squidaio_init();
     requestp = memPoolAlloc(squidaio_request_pool);
-    resultp->result_type = _AIO_OP_OPENDIR;
     return -1;
 }
 

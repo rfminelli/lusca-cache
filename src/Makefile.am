@@ -26,12 +26,6 @@ else
 DELAY_POOL_SOURCE = 
 endif
 
-if ENABLE_XPROF_STATS
-XPROF_STATS_SOURCE = ProfStats.c
-else
-XPROF_STATS_SOURCE = 
-endif
-
 if ENABLE_HTCP
 HTCPSOURCE = htcp.c
 endif
@@ -67,8 +61,6 @@ WIN32SOURCE = win32.c
 else
 WIN32SOURCE = 
 endif
-
-AM_CFLAGS = -Werror -Wall
 
 SUBDIRS		= fs repl auth
 
@@ -126,15 +118,8 @@ squid_SOURCES = \
 	cbdata.c \
 	client_db.c \
 	client_side.c \
-	client_side_reply.c \
-	client_side_request.c \
-	client_side_request.h \
-	clientStream.c \
-	clientStream.h \
 	comm.c \
 	comm_select.c \
-	comm_poll.c \
-	comm_kqueue.c \
 	debug.c \
 	defines.h \
 	$(DELAY_POOL_SOURCE) \
@@ -172,19 +157,17 @@ squid_SOURCES = \
 	internal.c \
 	ipc.c \
 	ipcache.c \
-	IPInterception.c \
-	IPInterception.h \
 	$(LEAKFINDERSOURCE) \
 	logfile.c \
 	main.c \
 	mem.c \
+	MemPool.c \
 	MemBuf.c \
 	mime.c \
 	multicast.c \
 	neighbors.c \
 	net_db.c \
 	Packer.c \
-	$(XPROF_STATS_SOURCE) \
 	pconn.c \
 	peer_digest.c \
 	peer_select.c \
@@ -203,9 +186,7 @@ squid_SOURCES = \
 	stmem.c \
 	store.c \
 	store_io.c \
-	StoreIOBuffer.h \
 	store_client.c \
-	StoreClient.h \
 	store_digest.c \
 	store_dir.c \
 	store_key_md5.c \
@@ -217,8 +198,6 @@ squid_SOURCES = \
 	structs.h \
 	tools.c \
 	typedefs.h \
-	ufscommon.c \
-	ufscommon.h \
 	$(UNLINKDSOURCE) \
 	url.c \
 	urn.c \
@@ -249,7 +228,6 @@ squid_LDADD = \
 	@SSLLIB@ \
 	-lmiscutil \
 	@XTRA_LIBS@
-squid_DEPENDENCIES = $(top_builddir)/lib/libmiscutil.a
 
 unlinkd_SOURCES = 
 unlinkd_LDADD = unlinkd-daemon.o
@@ -295,20 +273,19 @@ EXTRA_DIST = \
 DEFAULT_PREFIX		= $(prefix)
 DEFAULT_CONFIG_FILE     = $(sysconfdir)/squid.conf
 DEFAULT_MIME_TABLE	= $(sysconfdir)/mime.conf
-DEFAULT_DNSSERVER       = $(libexecdir)/dnsserver$(EXEEXT)
+DEFAULT_DNSSERVER       = $(libexecdir)/`echo dnsserver | sed '$(transform);s/$$/$(EXEEXT)/'`
 DEFAULT_LOG_PREFIX	= $(localstatedir)/logs
 DEFAULT_CACHE_LOG       = $(DEFAULT_LOG_PREFIX)/cache.log
 DEFAULT_ACCESS_LOG      = $(DEFAULT_LOG_PREFIX)/access.log
 DEFAULT_STORE_LOG       = $(DEFAULT_LOG_PREFIX)/store.log
 DEFAULT_PID_FILE        = $(DEFAULT_LOG_PREFIX)/squid.pid
 DEFAULT_SWAP_DIR        = $(localstatedir)/cache
-DEFAULT_PINGER		= $(libexecdir)/pinger$(EXEEXT)
-DEFAULT_UNLINKD		= $(libexecdir)/unlinkd$(EXEEXT)
-DEFAULT_DISKD		= $(libexecdir)/diskd$(EXEEXT)
+DEFAULT_PINGER		= $(libexecdir)/`echo pinger | sed '$(transform);s/$$/$(EXEEXT)/'`
+DEFAULT_UNLINKD		= $(libexecdir)/`echo unlinkd | sed '$(transform);s/$$/$(EXEEXT)/'`
+DEFAULT_DISKD		= $(libexecdir)/`echo diskd | sed '$(transform);s/$$/$(EXEEXT)/'`
 DEFAULT_ICON_DIR	= $(datadir)/icons
 DEFAULT_ERROR_DIR	= $(datadir)/errors/@ERR_DEFAULT_LANGUAGE@
 DEFAULT_MIB_PATH	= $(datadir)/mib.txt
-DEFAULT_HOSTS		= @OPT_DEFAULT_HOSTS@
 
 DEFS = @DEFS@ -DDEFAULT_CONFIG_FILE=\"$(DEFAULT_CONFIG_FILE)\"
 
@@ -358,8 +335,7 @@ cf.data: cf.data.pre Makefile
 	s%@DEFAULT_ICON_DIR@%$(DEFAULT_ICON_DIR)%g;\
 	s%@DEFAULT_MIB_PATH@%$(DEFAULT_MIB_PATH)%g;\
 	s%@DEFAULT_ERROR_DIR@%$(DEFAULT_ERROR_DIR)%g;\
-	s%@DEFAULT_PREFIX@%$(DEFAULT_PREFIX)%g;\
-	s%@DEFAULT_HOSTS@%$(DEFAULT_HOSTS)%g;"\
+	s%@DEFAULT_PREFIX@%$(DEFAULT_PREFIX)%g;"\
 	< $(srcdir)/cf.data.pre >$@
 
 store_modules.c: store_modules.sh Makefile
