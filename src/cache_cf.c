@@ -64,6 +64,10 @@ static int parseTimeUnits(const char *unit);
 static void parseTimeLine(time_t * tptr, const char *units);
 static void parse_string(char **);
 static void parse_wordlist(wordlist **);
+#if SQUID_SNMP
+/* sigh, stringlist is only used for SNMP stuff now */
+static void parse_stringlist(wordlist **);
+#endif
 static void default_all(void);
 static void defaults_if_none(void);
 static int parse_line(char *);
@@ -153,7 +157,6 @@ parseConfigFile(const char *file_name)
     FILE *fp = NULL;
     char *token = NULL;
     char *tmp_line;
-    int err_count = 0;
     free_all();
     default_all();
     if ((fp = fopen(file_name, "r")) == NULL)
@@ -178,7 +181,6 @@ parseConfigFile(const char *file_name)
 	    debug(3, 0) ("parseConfigFile: line %d unrecognized: '%s'\n",
 		config_lineno,
 		config_input_line);
-	    err_count++;
 	}
 	safe_free(tmp_line);
     }
@@ -189,7 +191,7 @@ parseConfigFile(const char *file_name)
 	"Current Squid Configuration",
 	dump_config,
 	1, 1);
-    return err_count;
+    return 0;
 }
 
 static void
@@ -436,6 +438,31 @@ free_acl(acl ** ae)
     aclDestroyAcls(ae);
 }
 
+#if SQUID_SNMP
+
+static void
+dump_snmp_access(StoreEntry * entry, const char *name, communityEntry * Head)
+{
+    acl_list *l;
+    communityEntry *cp;
+    acl_access *head;
+
+    for (cp = Head; cp; cp = cp->next) {
+	head = cp->acls;
+	while (head != NULL) {
+	    for (l = head->acl_list; l != NULL; l = l->next) {
+		storeAppendPrintf(entry, "%s %s %s %s%s\n",
+		    name, cp->name,
+		    head->allow ? "Allow" : "Deny",
+		    l->op ? null_string : "!",
+		    l->acl->name);
+	    }
+	    head = head->next;
+	}
+    }
+}
+#endif
+
 static void
 dump_acl_access(StoreEntry * entry, const char *name, acl_access * head)
 {
@@ -453,6 +480,39 @@ dump_acl_access(StoreEntry * entry, const char *name, acl_access * head)
 	head = head->next;
     }
 }
+
+#if SQUID_SNMP
+
+static void
+parse_snmp_access(communityEntry ** head)
+{
+    char *t = NULL;
+    communityEntry *cp;
+/* This is tricky: we need to define the communities here, assuming that 
+ * communities and the MIB have already been defined */
+
+    if (!snmpInitConfig()) {
+	debug(15, 0) ("parse_snmp_access: Access lists NOT defined.\n");
+	return;
+    }
+    t = strtok(NULL, w_space);
+    for (cp = *head; cp; cp = cp->next)
+	if (!strcmp(t, cp->name)) {
+	    aclParseAccessLine(&cp->acls);
+	    return;
+	}
+    debug(15, 0) ("parse_snmp_access: Unknown community %s!\n", t);
+}
+
+static void
+free_snmp_access(communityEntry ** Head)
+{
+    communityEntry *cp;
+
+    for (cp = *Head; cp; cp = cp->next)
+	aclDestroyAccessList(&cp->acls);
+}
+#endif
 
 static void
 parse_acl_access(acl_access ** head)
@@ -674,7 +734,7 @@ parse_peer(peer ** head)
     int i;
     ushortlist *u;
     const char *me = null_string;	/* XXX */
-    p = memAllocate(MEM_PEER);
+    p = xcalloc(1, sizeof(peer));
     p->http_port = CACHE_HTTP_PORT;
     p->icp.port = CACHE_ICP_PORT;
     p->weight = 1;
@@ -751,19 +811,15 @@ parse_peer(peer ** head)
     p->tcp_up = PEER_TCP_MAGIC_COUNT;
 #if USE_CARP
     if (p->carp.load_factor) {
-	/* calculate this peers hash for use in CARP */
+	/*
+	 * calculate this peers hash for use in CARP
+	 */
 	p->carp.hash = 0;
 	for (token = p->host; *token != 0; token++)
 	    p->carp.hash += (p->carp.hash << 19) + *token;
     }
 #endif
-    cbdataAdd(p, MEM_PEER); /* must preceed peerDigestCreate */
-#if USE_CACHE_DIGESTS
-    if (!p->options.no_digest) {
-	p->digest = peerDigestCreate(p);
-	cbdataLock(p->digest); /* so we know when/if digest disappears */
-    }	
-#endif
+    cbdataAdd(p, MEM_NONE);
     while (*head != NULL)
 	head = &(*head)->next;
     *head = p;
@@ -1329,6 +1385,18 @@ check_null_wordlist(wordlist * w)
 {
     return w == NULL;
 }
+
+#if SQUID_SNMP
+static void
+parse_stringlist(wordlist ** list)
+{
+    char *token;
+    while ((token = strtok(NULL, null_string)))
+	wordlistAdd(list, token);
+}
+#define free_stringlist free_wordlist
+#define dump_stringlist dump_wordlist
+#endif /* SQUID_SNMP */
 
 #define free_wordlist wordlistDestroy
 
