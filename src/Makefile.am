@@ -116,8 +116,6 @@ squid_SOURCES = \
 	client_side.c \
 	comm.c \
 	comm_select.c \
-	comm_poll.c \
-	comm_kqueue.c \
 	debug.c \
 	defines.h \
 	$(DELAY_POOL_SOURCE) \
@@ -159,6 +157,7 @@ squid_SOURCES = \
 	logfile.c \
 	main.c \
 	mem.c \
+	MemPool.c \
 	MemBuf.c \
 	mime.c \
 	multicast.c \

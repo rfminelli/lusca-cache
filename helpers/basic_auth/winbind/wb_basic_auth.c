@@ -113,8 +113,8 @@ void manage_request(void)
 	
     c=memchr(buf,'\n',BUFFER_SIZE);
     if (c) {
-	*c = '\0';
-	length = c-buf;
+	*c='\0';
+	length=c-buf;
     } else {
 	err = 1;
 	return;

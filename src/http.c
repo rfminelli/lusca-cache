@@ -43,7 +43,7 @@
 static const char *const crlf = "\r\n";
 
 static CWCB httpSendComplete;
-static CWCB httpSendRequestEntity;
+static CWCB httpSendRequestEntry;
 
 static PF httpReadReply;
 static void httpSendRequest(HttpStateData *);
@@ -729,6 +729,7 @@ httpBuildRequestHeader(request_t * request,
     LOCAL_ARRAY(char, bbuf, BBUF_SZ);
     String strConnection = StringNull;
     const HttpHeader *hdr_in = &orig_request->header;
+    int we_do_ranges;
     const HttpHeaderEntry *e;
     String strVia;
     String strFwd;
@@ -737,6 +738,27 @@ httpBuildRequestHeader(request_t * request,
     /* append our IMS header */
     if (request->lastmod > -1 && request->method == METHOD_GET)
 	httpHeaderPutTime(hdr_out, HDR_IF_MODIFIED_SINCE, request->lastmod);
+
+    /* decide if we want to do Ranges ourselves 
+     * (and fetch the whole object now)
+     * We want to handle Ranges ourselves iff
+     *    - we can actually parse client Range specs
+     *    - the specs are expected to be simple enough (e.g. no out-of-order ranges)
+     *    - reply will be cachable
+     * (If the reply will be uncachable we have to throw it away after 
+     *  serving this request, so it is better to forward ranges to 
+     *  the server and fetch only the requested content) 
+     */
+    if (NULL == orig_request->range)
+	we_do_ranges = 0;
+    else if (!orig_request->flags.cachable)
+	we_do_ranges = 0;
+    else if (httpHdrRangeOffsetLimit(orig_request->range))
+	we_do_ranges = 0;
+    else
+	we_do_ranges = 1;
+    debug(11, 8) ("httpBuildRequestHeader: range specs: %p, cachable: %d; we_do_ranges: %d\n",
+	orig_request->range, orig_request->flags.cachable, we_do_ranges);
 
     strConnection = httpHeaderGetList(hdr_in, HDR_CONNECTION);
     while ((e = httpHeaderGetEntry(hdr_in, &pos))) {
@@ -796,6 +818,12 @@ httpBuildRequestHeader(request_t * request,
 		if (hops > 0)
 		    httpHeaderPutInt(hdr_out, HDR_MAX_FORWARDS, hops - 1);
 	    }
+	    break;
+	case HDR_RANGE:
+	case HDR_IF_RANGE:
+	case HDR_REQUEST_RANGE:
+	    if (!we_do_ranges)
+		httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 	    break;
 	case HDR_PROXY_CONNECTION:
 	case HDR_CONNECTION:
@@ -931,7 +959,7 @@ httpSendRequest(HttpStateData * httpState)
     debug(11, 5) ("httpSendRequest: FD %d: httpState %p.\n", httpState->fd, httpState);
 
     if (httpState->orig_request->body_connection)
-	sendHeaderDone = httpSendRequestEntity;
+	sendHeaderDone = httpSendRequestEntry;
     else
 	sendHeaderDone = httpSendComplete;
 
@@ -1030,22 +1058,22 @@ httpStart(FwdState * fwd)
 }
 
 static void
-httpSendRequestEntityDone(int fd, void *data)
+httpSendRequestEntryDone(int fd, void *data)
 {
     HttpStateData *httpState = data;
     aclCheck_t ch;
-    debug(11, 5) ("httpSendRequestEntityDone: FD %d\n",
+    debug(11, 5) ("httpSendRequestEntryDone: FD %d\n",
 	fd);
     memset(&ch, '\0', sizeof(ch));
     ch.request = httpState->request;
     if (!Config.accessList.brokenPosts) {
-	debug(11, 5) ("httpSendRequestEntityDone: No brokenPosts list\n");
+	debug(11, 5) ("httpSendRequestEntryDone: No brokenPosts list\n");
 	httpSendComplete(fd, NULL, 0, 0, data);
     } else if (!aclCheckFast(Config.accessList.brokenPosts, &ch)) {
-	debug(11, 5) ("httpSendRequestEntityDone: didn't match brokenPosts\n");
+	debug(11, 5) ("httpSendRequestEntryDone: didn't match brokenPosts\n");
 	httpSendComplete(fd, NULL, 0, 0, data);
     } else {
-	debug(11, 2) ("httpSendRequestEntityDone: matched brokenPosts\n");
+	debug(11, 2) ("httpSendRequestEntryDone: matched brokenPosts\n");
 	comm_write(fd, "\r\n", 2, httpSendComplete, data, NULL);
     }
 }
@@ -1055,11 +1083,11 @@ httpRequestBodyHandler(char *buf, size_t size, void *data)
 {
     HttpStateData *httpState = (HttpStateData *) data;
     if (size > 0) {
-	comm_write(httpState->fd, buf, size, httpSendRequestEntity, data, memFree8K);
+	comm_write(httpState->fd, buf, size, httpSendRequestEntry, data, memFree8K);
     } else if (size == 0) {
 	/* End of body */
 	memFree8K(buf);
-	httpSendRequestEntityDone(httpState->fd, data);
+	httpSendRequestEntryDone(httpState->fd, data);
     } else {
 	/* Failed to get whole body, probably aborted */
 	memFree8K(buf);
@@ -1068,12 +1096,12 @@ httpRequestBodyHandler(char *buf, size_t size, void *data)
 }
 
 static void
-httpSendRequestEntity(int fd, char *bufnotused, size_t size, int errflag, void *data)
+httpSendRequestEntry(int fd, char *bufnotused, size_t size, int errflag, void *data)
 {
     HttpStateData *httpState = data;
     StoreEntry *entry = httpState->entry;
     ErrorState *err;
-    debug(11, 5) ("httpSendRequestEntity: FD %d: size %d: errflag %d.\n",
+    debug(11, 5) ("httpSendRequestEntry: FD %d: size %d: errflag %d.\n",
 	fd, (int) size, errflag);
     if (size > 0) {
 	fd_bytes(fd, size, FD_WRITE);

@@ -204,18 +204,19 @@ fqdncacheAddEntry(fqdncache_entry * f)
 static void
 fqdncacheCallback(fqdncache_entry * f)
 {
-    FQDNH *callback;
-    void *cbdata;
+    FQDNH *handler = f->handler;
+    void *handlerData = f->handlerData;
     f->lastref = squid_curtime;
-    if (!f->handler)
+    if (NULL == handler)
 	return;
     fqdncacheLockEntry(f);
-    callback = f->handler;
     f->handler = NULL;
-    if (cbdataReferenceValidDone(f->handlerData, &cbdata)) {
+    f->handlerData = NULL;
+    if (cbdataValid(handlerData)) {
 	dns_error_message = f->error_message;
-	callback(f->flags.negcached ? NULL : f->names[0], cbdata);
+	handler(f->flags.negcached ? NULL : f->names[0], handlerData);
     }
+    cbdataUnlock(handlerData);
     fqdncacheUnlockEntry(f);
 }
 
@@ -373,7 +374,8 @@ fqdncache_nbgethostbyaddr(struct in_addr addr, FQDNH * handler, void *handlerDat
 	else
 	    FqdncacheStats.hits++;
 	f->handler = handler;
-	f->handlerData = cbdataReference(handlerData);
+	f->handlerData = handlerData;
+	cbdataLock(handlerData);
 	fqdncacheCallback(f);
 	return;
     }
@@ -382,7 +384,8 @@ fqdncache_nbgethostbyaddr(struct in_addr addr, FQDNH * handler, void *handlerDat
     FqdncacheStats.misses++;
     f = fqdncacheCreateEntry(name);
     f->handler = handler;
-    f->handlerData = cbdataReference(handlerData);
+    f->handlerData = handlerData;
+    cbdataLock(handlerData);
     f->request_time = current_time;
     c = cbdataAlloc(generic_cbdata);
     c->data = f;

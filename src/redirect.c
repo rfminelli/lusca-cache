@@ -55,8 +55,8 @@ static void
 redirectHandleReply(void *data, char *reply)
 {
     redirectStateData *r = data;
+    int valid;
     char *t;
-    void *cbdata;
     debug(29, 5) ("redirectHandleRead: {%s}\n", reply ? reply : "<NULL>");
     if (reply) {
 	if ((t = strchr(reply, ' ')))
@@ -64,8 +64,10 @@ redirectHandleReply(void *data, char *reply)
 	if (*reply == '\0')
 	    reply = NULL;
     }
-    if (cbdataReferenceValidDone(r->data, &cbdata))
-	r->handler(cbdata, reply);
+    valid = cbdataValid(r->data);
+    cbdataUnlock(r->data);
+    if (valid)
+	r->handler(r->data, reply);
     redirectStateFree(r);
 }
 
@@ -133,7 +135,8 @@ redirectStart(clientHttpRequest * http, RH * handler, void *data)
     }
     r->method_s = RequestMethodStr[http->request->method];
     r->handler = handler;
-    r->data = cbdataReference(data);
+    r->data = data;
+    cbdataLock(r->data);
     if ((fqdn = fqdncache_gethostbyaddr(r->client_addr, 0)) == NULL)
 	fqdn = dash_str;
     snprintf(buf, 8192, "%s %s/%s %s %s\n",
@@ -155,7 +158,7 @@ redirectInit(void)
 	redirectors = helperCreate("redirector");
     redirectors->cmdline = Config.Program.redirect;
     redirectors->n_to_start = Config.redirectChildren;
-    redirectors->ipc_type = IPC_STREAM;
+    redirectors->ipc_type = IPC_TCP_SOCKET;
     helperOpenServers(redirectors);
     if (!init) {
 	cachemgrRegister("redirector",

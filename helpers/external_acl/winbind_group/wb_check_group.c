@@ -260,14 +260,14 @@ main (int argc, char *argv[])
 	    warn("Oversized message\n");
 	    goto error;
 	}
-
+	
 	if ((p = strchr(buf, '\n')) != NULL)
 	    *p = '\0';		/* strip \n */
 	if ((p = strchr(buf, '\r')) != NULL)
 	    *p = '\0';		/* strip \r */
 
 	debug("Got '%s' from Squid (length: %d).\n",buf,sizeof(buf));
-
+	
 	if (buf[0] == '\0') {
 	    warn("Invalid Request\n");
 	    goto error;
