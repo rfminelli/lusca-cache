@@ -121,7 +121,7 @@ errorAppendEntry(StoreEntry * entry, ErrorState * err)
     const char *buf;
     int len;
 #else
-    HttpResponse *resp;
+    HttpReply *rep;
 #endif
     MemObject *mem = entry->mem_obj;
     assert(entry->store_status == STORE_PENDING);
@@ -131,11 +131,11 @@ errorAppendEntry(StoreEntry * entry, ErrorState * err)
     buf = errorBuildBuf(err, &len);
     storeAppend(entry, buf, len);
 #else
-    resp = errorBuildResponse(err);
-    httpResponseSwap(resp, entry);
-    httpResponseDestroy(resp);
+    rep = errorBuildReply(err);
+    httpReplySwapOut(rep, entry);
+    httpReplyDestroy(rep);
 #endif
-    mem->reply->code = err->http_status;
+    mem->reply->sline.status = err->http_status;
     storeComplete(entry);
     storeNegativeCache(entry);
     storeReleaseRequest(entry);
@@ -164,10 +164,12 @@ errorAppendEntry(StoreEntry * entry, ErrorState * err)
 void
 errorSend(int fd, ErrorState * err)
 {
-    HttpResponse *resp;
+    HttpReply *rep;
+#if 0
     FREE *freefunc;
     char *buf;
     int len;
+#endif
     debug(4, 3) ("errorSend: FD %d, err=%p\n", fd, err);
     assert(fd >= 0);
     /*
@@ -183,10 +185,9 @@ errorSend(int fd, ErrorState * err)
     buf = errorBuildBuf(err, &len);
     comm_write(fd, xstrdup(buf), len, errorSendComplete, err, xfree);
 #else
-    resp = errorBuildResponse(err);
-    buf = httpResponsePack(resp, &len, &freefunc);
-    httpResponseDestroy(resp);
-    comm_write(fd, buf, len, errorSendComplete, err, freefunc);
+    rep = errorBuildReply(err);
+    comm_write_mbuf(fd, httpReplyPack(rep), errorSendComplete, err);
+    httpReplyDestroy(rep);
 #endif
 }
 
@@ -359,16 +360,16 @@ errorConvert(char token, ErrorState * err)
 }
 
 /* allocates and initializes an error response */
-HttpResponse *
-errorBuildResponse(ErrorState * err)
+HttpReply *
+errorBuildReply(ErrorState *err)
 {
     int clen;
-    HttpResponse *resp = httpResponseCreate();
+    HttpReply *rep = httpReplyCreate();
     const char *content = errorBuildContent(err, &clen);
     /* no LMT for error pages; error pages expire immediately */
-    httpResponseSetHeaders(resp, 1.0, err->http_status, NULL, "text/html", clen, 0, squid_curtime);
-    httpBodySet(&resp->body, content, clen+1);
-    return resp;
+    httpReplySetHeaders(rep, 1.0, err->http_status, NULL, "text/html", clen, 0, squid_curtime);
+    httpBodySet(&rep->body, content, clen+1, NULL);
+    return rep;
 }
 
 static const char *
@@ -413,7 +414,7 @@ errorBuildContent(ErrorState * err, int *len)
     return content;
 }
 
-#if 0 /* we use httpResponse instead of a buffer now */
+#if 0 /* we use httpReply instead of a buffer now */
 const char *
 errorBuildBuf(ErrorState * err, int *len)
 {

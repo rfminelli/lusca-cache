@@ -755,16 +755,18 @@ storeEntryValidLength(const StoreEntry * e)
 {
     int diff;
     http_reply *reply;
+    int clen;
     assert(e->mem_obj != NULL);
     reply = e->mem_obj->reply;
+    clen = httpReplyContentLen(reply);
     debug(20, 3) ("storeEntryValidLength: Checking '%s'\n", storeKeyText(e->key));
     debug(20, 5) ("storeEntryValidLength:     object_len = %d\n",
 	objectLen(e));
     debug(20, 5) ("storeEntryValidLength:         hdr_sz = %d\n",
 	reply->hdr_sz);
     debug(20, 5) ("storeEntryValidLength: content_length = %d\n",
-	reply->content_length);
-    if (reply->content_length < 0) {
+	clen);
+    if (clen < 0) {
 	debug(20, 5) ("storeEntryValidLength: Unspecified content length: %s\n",
 	    storeKeyText(e->key));
 	return 1;
@@ -779,11 +781,11 @@ storeEntryValidLength(const StoreEntry * e)
 	    storeKeyText(e->key));
 	return 1;
     }
-    if (reply->code == HTTP_NOT_MODIFIED)
+    if (reply->sline.status == HTTP_NOT_MODIFIED)
 	return 1;
-    if (reply->code == HTTP_NO_CONTENT)
+    if (reply->sline.status == HTTP_NO_CONTENT)
 	return 1;
-    diff = reply->hdr_sz + reply->content_length - objectLen(e);
+    diff = reply->hdr_sz + clen - objectLen(e);
     if (diff == 0)
 	return 1;
     debug(20, 3) ("storeEntryValidLength: %d bytes too %s; '%s'\n",
@@ -972,14 +974,25 @@ void
 storeTimestampsSet(StoreEntry * entry)
 {
     time_t served_date = -1;
-    struct _http_reply *reply = entry->mem_obj->reply;
+    HttpReply *reply = entry->mem_obj->reply;
+#if 0 /* new interface */
     served_date = reply->date > -1 ? reply->date : squid_curtime;
     entry->expires = reply->expires;
     if (reply->last_modified > -1)
 	entry->lastmod = reply->last_modified;
     else
 	entry->lastmod = served_date;
+#else
+    served_date = httpHeaderGetTime(&reply->hdr, HDR_DATE);
+    if (served_date < 0)
+	served_date = squid_curtime;
+    entry->expires = httpReplyExpires(reply);
+    entry->lastmod = httpHeaderGetTime(&reply->hdr, HDR_LAST_MODIFIED);
+    if (entry->lastmod < 0)
+	entry->lastmod = served_date;
+#endif
     entry->timestamp = served_date;
+
 }
 
 void

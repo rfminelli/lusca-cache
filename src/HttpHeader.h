@@ -30,16 +30,20 @@
 #ifndef _HTTP_HEADER_H_
 #define _HTTP_HEADER_H_
 
+#if 0
 struct _HttpHeaderField {
 	char *name;   /* field-name  from HTTP/1.1 (no column after name!) */
 	char *value;  /* field-value from HTTP/1.1 */
 };
+#endif
 
-/* recognized or "known" fields @?@ add more! */
+/* recognized or "known" header fields; @?@ add more! */
 typedef enum {
     HDR_ACCEPT,
     HDR_AGE,
     HDR_CACHE_CONTROL,
+    HDR_CONNECTION,
+    HDR_CONTENT_ENCODING,
     HDR_CONTENT_LENGTH,
     HDR_CONTENT_MD5,
     HDR_CONTENT_TYPE,
@@ -49,41 +53,72 @@ typedef enum {
     HDR_HOST,
     HDR_IMS,
     HDR_LAST_MODIFIED,
+    HDR_LOCATION,
     HDR_MAX_FORWARDS,
+    HDR_PROXY_AUTHENTICATE,
     HDR_PUBLIC,
     HDR_RETRY_AFTER,
     HDR_SET_COOKIE,
     HDR_UPGRADE,
     HDR_WARNING,
+    HDR_WWW_AUTHENTICATE,
     HDR_PROXY_KEEPALIVE,
     HDR_OTHER,
     HDR_ENUM_END
 } http_hdr_type;
 
+/* server cache control */
+struct _HttpScc {
+    int mask;
+    time_t max_age;
+};
+typedef struct _HttpScc HttpScc;
+
+/* server cache control */
+typedef enum {
+    SCC_PUBLIC,
+    SCC_PRIVATE,
+    SCC_NO_CACHE,
+    SCC_NO_STORE,
+    SCC_NO_TRANSFORM,
+    SCC_MUST_REVALIDATE,
+    SCC_PROXY_REVALIDATE,
+    SCC_MAX_AGE,
+    SCC_OTHER,
+    SCC_ENUM_END
+} http_scc_type;
+
+typedef struct _HttpHeaderExtField HttpHeaderExtField;
+
+/* a storage for an entry of one of possible types (for lower level routines) */
+union _field_store {
+    int v_int;
+    time_t v_time;
+    char *v_pchar;
+    const char *v_pcchar;
+    HttpScc *v_pscc;
+    HttpHeaderExtField *v_pefield;
+};
+
+typedef union _field_store field_store;
+
+typedef struct _HttpHeaderEntry HttpHeaderEntry;
 
 struct _HttpHeader {
     /* public, read only */
-    size_t packed_size;  /* packed header size (see httpHeaderPack()) */
-    int field_mask;      /* bits set for present [known] fields */
-    int scc_mask;        /* bits set for present server cache control directives */
+    int emask;           /* bits set for present entries */
 
     /* protected, do not use these, use interface functions instead */
-    int count;           /* #headers */
-    int capacity;        /* max #headers before we have to grow */
-    struct _HttpHeaderField **fields;
+    int capacity;        /* max #entries before we have to grow */
+    int ucount;          /* #entries used, including holes */
+    HttpHeaderEntry *entries;
 };
 
-typedef struct _HttpHeaderField HttpHeaderField;
+
 typedef struct _HttpHeader HttpHeader;
 
-/*
- * use HttpHeaderPos as opaque type, do not interpret, 
- * it is not what you think it is
- */
-typedef size_t HttpHeaderPos; 
-
-/* use this and only this to initialize HttpHeaderPos */
-#define HttpHeaderInitPos (-1)
+/* module initialization to be called from main() */
+extern void httpHeaderInitModule();
 
 /* create/init/clean/destroy */
 extern HttpHeader *httpHeaderCreate();
@@ -91,61 +126,62 @@ extern void httpHeaderInit(HttpHeader *hdr);
 extern void httpHeaderClean(HttpHeader *hdr);
 extern void httpHeaderDestroy(HttpHeader *hdr);
 
-/* parse/pack/swap */
+/* clone: creates new header and copies all entries one-by-one */
+HttpHeader *httpHeaderClone(HttpHeader *hdr);
+
+/* parse/pack */
 /* parse a 0-terminating buffer and fill internal structires; _end points at the first character after the header; returns true if successfull */
 extern int httpHeaderParse(HttpHeader *hdr, const char *header_start, const char *header_end);
-/* pack header into the buffer, does not check for overflow, check hdr.packed_size first! */
-extern int httpHeaderPackInto(const HttpHeader *hdr, char *buf);
-/* swap using storeAppend */
-extern void httpHeaderSwap(HttpHeader *hdr, StoreEntry *entry);
+/* pack header using packer */
+extern void httpHeaderPackInto(const HttpHeader *hdr, Packer *p);
 
-/* iterate through fields with name (or find first field with name) */
-extern const char *httpHeaderGetStr(const HttpHeader *hdr, const char *name, HttpHeaderPos *pos);
-extern long httpHeaderGetInt(const HttpHeader *hdr, const char *name, HttpHeaderPos *pos);
-extern time_t httpHeaderGetDate(const HttpHeader *hdr, const char *name, HttpHeaderPos *pos); /* rfc1123 */
-
-/* iterate through all fields */
-extern HttpHeaderField *httpHeaderGetField(const HttpHeader *hdr, const char **name, const char **value, HttpHeaderPos *pos);
-
-/* delete field(s) by name or pos */
-extern int httpHeaderDelFields(HttpHeader *hdr, const char *name);
-extern void httpHeaderDelField(HttpHeader *hdr, HttpHeaderPos pos);
-
-/* add a field (appends) */
-extern const char *httpHeaderAddStr(HttpHeader *hdr, const char *name, const char *value);
-extern long httpHeaderAddInt(HttpHeader *hdr, const char *name, long value);
-extern time_t httpHeaderAddDate(HttpHeader *hdr, const char *name, time_t value); /* mkrfc1123 */
-
-/* fast test if a known field is present */
+/* test if a field is present */
 extern int httpHeaderHas(const HttpHeader *hdr, http_hdr_type type);
 
-/* get common generic-header fields */
-extern size_t httpHeaderGetCacheControl(const HttpHeader *hdr);
+/* delete a field if any (same as setting an exising field to an invalid value) */
+extern void httpHeaderDel(HttpHeader *hdr, http_hdr_type id);
+
 /*
-extern int httpHeaderGetVia(const HttpHeader *hdr);
-*/
+ * set a field 
+ * If field is not present, it is added; otherwise, old content is destroyed.
+ * The function will duplicate the value submitted so it is safe to pass tmp values.
+ * Note: in most cases it is much better to use higher level
+ * routines provided by HttpReply and HttpRequest
+ */
+extern void httpHeaderSet(HttpHeader *hdr, http_hdr_type type, const field_store value);
+/* same, but with (const char *) to avoid compiler warnings */
+extern void httpHeaderSetStr(HttpHeader *hdr, http_hdr_type type, const char *str);
+
+/* add extension header (these fields are not parsed/analyzed/joined, etc.) */
+extern void httpHeaderAddExt(HttpHeader *hdr, const char *name, const char* value);
+
+/*
+ * get a value of a field (not lvalue though; we could change this to return
+ * lvalues, but it creates more problems than it solves)
+ */
+extern field_store httpHeaderGet(const HttpHeader *hdr, http_hdr_type id);
+extern const char *httpHeaderGetStr(const HttpHeader *hdr, http_hdr_type id);
+extern time_t httpHeaderGetTime(const HttpHeader *hdr, http_hdr_type id);
+extern HttpScc *httpHeaderGetScc(const HttpHeader *hdr);
+
+/*
+ * Note: there is no way to get a value of an extention field; extention field
+ * is something you do not know anything about so it does not make sense to ask
+ * for it.
+ */
+
+/*
+ * deletes all field(s) with a given name if any, returns #fields deleted;
+ * used to process Connection: header and delete fields in "paranoid" setup
+ */
+int httpHeaderDelFields(HttpHeader *hdr, const char *name);
 
 
-/* http reply-header fields */
-extern int httpHeaderGetContentLength(const HttpHeader *hdr);
-extern time_t httpHeaderGetExpires(const HttpHeader *hdr);
-/* extern time_t httpHeaderGetLastModified(const HttpHeader *hdr); */
 
-
-/* http request-header fields */
-extern time_t httpHeaderGetMaxAge(const HttpHeader *hdr);  /* @?@ */
-extern int httpHeaderGetMaxForwards(const HttpHeader *hdr);
-extern int httpHeaderGetIMS(const HttpHeader *hdr);
-extern int httpHeaderGetUserAgent(const HttpHeader *hdr);
-
-/* http entitiy-header fields */
-extern int httpHeaderGetAge(const HttpHeader *hdr);
-
-/* put report about current header usage and other stats into a store entry */
+/* pack report about current header usage and other stats */
 extern void httpHeaderStoreReport(StoreEntry *e);
-extern void httpHeaderStoreRepReport(StoreEntry *e);
 extern void httpHeaderStoreReqReport(StoreEntry *e);
-
+extern void httpHeaderStoreRepReport(StoreEntry *e);
 
 
 #endif /* ndef _HTTP_HEADER_H_ */

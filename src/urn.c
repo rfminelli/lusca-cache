@@ -147,7 +147,7 @@ urnHandleReply(void *data, char *buf, ssize_t size)
 #if 0
     char *hdr;
 #else
-    HttpResponse resp;
+    HttpReply *rep;
 #endif
     wordlist *w;
     wordlist *urls;
@@ -188,10 +188,10 @@ urnHandleReply(void *data, char *buf, ssize_t size)
 	return;
     }
     assert(urlres_e->mem_obj->reply);
-    httpParseReplyHeaders(buf, urlres_e->mem_obj->reply);
+    httpReplyParse(urlres_e->mem_obj->reply, buf);
     debug(52, 3) ("mem->reply exists, code=%d.\n",
-	urlres_e->mem_obj->reply->code);
-    if (urlres_e->mem_obj->reply->code != HTTP_OK) {
+	urlres_e->mem_obj->reply->sline.status);
+    if (urlres_e->mem_obj->reply->sline.status != HTTP_OK) {
 	debug(52, 3) ("urnHandleReply: failed.\n");
 	err = errorCon(ERR_URN_RESOLVE, HTTP_NOT_FOUND);
 	err->request = requestLink(urnState->request);
@@ -237,7 +237,7 @@ urnHandleReply(void *data, char *buf, ssize_t size)
 	"</ADDRESS>\n",
 	appname, version_string, getMyHostname());
     stringAppend(S, line, l);
-#if 0 /* new interface */ 
+#if 0 /* use new interface */ 
    hdr = httpReplyHeader(1.0,
 	HTTP_MOVED_TEMPORARILY,
 	"text/html",
@@ -255,19 +255,18 @@ urnHandleReply(void *data, char *buf, ssize_t size)
     storeAppend(e, "\r\n", 2);
     storeAppend(e, S->buf, stringLength(S));
 #else
-    httpResponseInit(&resp);
-    httpResponseSetHeaders(&resp, 1.0, HTTP_MOVED_TEMPORARILY, NULL,
+    rep = e->mem_obj->reply;
+    httpReplyReset(rep);
+    httpReplySetHeaders(rep, 1.0, HTTP_MOVED_TEMPORARILY, NULL,
 	"text/html", stringLength(S), 0, squid_curtime);
-    httpResponseSumm(&resp, e->mem_obj->reply);
     if (EBIT_TEST(urnState->flags, URN_FORCE_MENU)) {
 	debug(51, 3) ("urnHandleReply: forcing menu\n");
     } else
     if (min_w) {
-	httpHeaderAddStr(&resp.hdr, "Location", min_w->key);
+	httpHeaderSetStr(&rep->hdr, HDR_LOCATION, min_w->key);
     }
-    httpBodySet(&resp.body, S->buf, stringLength(S));
-    httpResponseSwap(&resp, e);
-    httpResponseClean(&resp);
+    httpBodySet(&rep->body, S->buf, stringLength(S)+1, NULL);
+    httpReplySwapOut(rep, e);
 #endif
     storeComplete(e);
     memFree(MEM_4K_BUF, buf);

@@ -107,6 +107,7 @@ extern void comm_write(int fd,
     CWCB * handler,
     void *handler_data,
     FREE *);
+extern void comm_write_mbuf(int fd, MemBuf mb, CWCB *handler, void *handler_data);
 extern void commCallCloseHandlers(int fd);
 extern int commSetTimeout(int fd, int, PF *, void *);
 extern void commSetDefer(int fd, DEFER * func, void *);
@@ -197,7 +198,11 @@ extern HASHHASH hash4;
 
 extern int httpCachable(method_t);
 extern void httpStart(request_t *, StoreEntry *, peer *);
+#if 0
 extern void httpParseReplyHeaders(const char *, struct _http_reply *);
+#else
+extern void httpParseReplyHeaders(const char *, http_reply *);
+#endif
 extern void httpProcessReplyHeader(HttpStateData *, const char *, int);
 extern void httpReplyHeaderStats(StoreEntry *);
 extern size_t httpBuildRequestHeader(request_t * request,
@@ -611,7 +616,7 @@ extern void useragentRotateLog(void);
 extern void logUserAgent(const char *, const char *);
 extern peer_t parseNeighborType(const char *s);
 
-extern HttpResponse *errorBuildResponse(ErrorState * err);
+extern HttpReply *errorBuildReply(ErrorState * err);
 extern void errorSend(int fd, ErrorState *);
 extern void errorAppendEntry(StoreEntry *, ErrorState *);
 void errorStateFree(ErrorState * err);

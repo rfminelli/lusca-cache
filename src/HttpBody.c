@@ -40,43 +40,46 @@ void
 httpBodyInit(HttpBody *body)
 {
     body->buf = NULL;
-    body->packed_size = 1; /* one terminating character */
+    body->size = 0;
+    body->freefunc = NULL;
 }
 
 void
 httpBodyClean(HttpBody *body)
 {
     assert(body);
-    safe_free(body->buf);
+    if (body->buf) {
+	assert(body->freefunc);
+	(*body->freefunc)(body->buf);
+    }
     body->buf = NULL;
-    body->packed_size = 0;
+    body->size = 0;
 }
 
 void
-httpBodySet(HttpBody *body, const char *buf, int size)
+httpBodySet(HttpBody *body, const char *buf, int size, FREE *freefunc)
 {
     assert(body);
     assert(!body->buf);
+    assert(buf);
     assert(size);
     assert(buf[size-1] == '\0'); /* paranoid */
-    body->buf = xmalloc(size);
-    xmemcpy(body->buf, buf, size);
-    body->packed_size = size;
-}
-
-int
-httpBodyPackInto(HttpBody *body, char *buf)
-{
-    assert(body);
-    xmemcpy(buf, httpBodyPtr(body), body->packed_size);
-    return body->packed_size;
+    if (!freefunc) { /* they want us to make our own copy */
+	body->buf = xmalloc(size);
+	xmemcpy(body->buf, buf, size);
+	freefunc = &xfree;
+    }
+    body->freefunc = freefunc;
+    body->size = size;
 }
 
 void
-httpBodySwap(const HttpBody *body, StoreEntry *entry)
+httpBodyPackInto(const HttpBody *body, Packer *p)
 {
-    assert(body);
-    storeAppend(entry, httpBodyPtr(body), body->packed_size);
+    assert(body && p);
+    /* assume it was a 0-terminating buffer */
+    if (body->size)
+	packerAppend(p, body->buf, body->size-1);
 }
 
 const char *

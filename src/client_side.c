@@ -46,7 +46,9 @@ static PF clientReadRequest;
 static PF connStateFree;
 static PF requestTimeout;
 static STCB clientGetHeadersForIMS;
+#if 0
 static char *clientConstruct304reply(struct _http_reply *);
+#endif
 static int CheckQuickAbort2(const clientHttpRequest *);
 static int clientCheckTransferDone(clientHttpRequest *);
 static void CheckQuickAbort(clientHttpRequest *);
@@ -67,7 +69,7 @@ static void clientProcessExpired(void *data);
 #if 0
 static char *clientConstructProxyAuthReply(clientHttpRequest * http);
 #else
-static HttpResponse *clientConstructProxyAuthReply(clientHttpRequest * http);
+static HttpReply *clientConstructProxyAuthReply(clientHttpRequest * http);
 #endif
 static int clientCachable(clientHttpRequest * http);
 static int clientHierarchical(clientHttpRequest * http);
@@ -163,17 +165,17 @@ clientConstructProxyAuthReply(clientHttpRequest * http)
 }
 #endif
 
-static HttpResponse *
+static HttpReply *
 clientConstructProxyAuthReply(clientHttpRequest *http)
 {
     ErrorState *err = errorCon(ERR_CACHE_ACCESS_DENIED, HTTP_PROXY_AUTHENTICATION_REQUIRED);
-    HttpResponse *resp;
+    HttpReply *rep;
     err->request = requestLink(http->request);
-    resp = errorBuildResponse(err);
-    /* add Authenticate header */
-    httpHeaderAddStr(&resp->hdr, "Proxy-Authenticate", proxy_auth_challenge);
+    rep = errorBuildReply(err);
     errorStateFree(err);
-    return resp;
+    /* add Authenticate header */
+    httpHeaderSetStr(&rep->hdr, HDR_PROXY_AUTHENTICATE, proxy_auth_challenge);
+    return rep;
 }
 
 StoreEntry *
@@ -221,10 +223,10 @@ clientAccessCheckDone(int answer, void *data)
 #else
 	{
 	    /* create appropreate response */
-	    HttpResponse *response = clientConstructProxyAuthReply(http);
-	    httpResponseSwap(response, http->entry);
+	    HttpReply *rep = clientConstructProxyAuthReply(http);
+	    httpReplySwapOut(rep, http->entry);
 	    /* do not need it anymore */
-	    httpResponseDestroy(response);
+	    httpReplyDestroy(rep);
 	}
 #endif
     } else {
@@ -327,8 +329,9 @@ clientGetsOldEntry(StoreEntry * new_entry, StoreEntry * old_entry, request_t * r
 {
     /* If the reply is anything but "Not Modified" then
      * we must forward it to the client */
-    if (new_entry->mem_obj->reply->code != 304) {
-	debug(33, 5) ("clientGetsOldEntry: NO, reply=%d\n", new_entry->mem_obj->reply->code);
+    const http_status status = new_entry->mem_obj->reply->sline.status;
+    if (status != 304) {
+	debug(33, 5) ("clientGetsOldEntry: NO, reply=%d\n", status);
 	return 0;
     }
     /* If the client did not send IMS in the request, then it
@@ -370,7 +373,7 @@ clientHandleIMSReply(void *data, char *buf, ssize_t size)
 	storeUnlockObject(entry);
 	entry = http->entry = http->old_entry;
 	entry->refcount++;
-    } else if (mem->reply->code == 0) {
+    } else if (mem->reply->sline.status == 0) {
 	debug(33, 3) ("clientHandleIMSReply: Incomplete headers for '%s'\n", url);
 	if (entry->store_status == STORE_ABORTED)
 	    debug(33, 0) ("clientHandleIMSReply: entry->swap_status == STORE_ABORTED\n");
@@ -409,7 +412,7 @@ clientHandleIMSReply(void *data, char *buf, ssize_t size)
     } else {
 	/* the client can handle this reply, whatever it is */
 	http->log_type = LOG_TCP_REFRESH_MISS;
-	if (mem->reply->code == 304) {
+	if (mem->reply->sline.status == 304) {
 	    http->old_entry->timestamp = squid_curtime;
 	    http->old_entry->refcount++;
 	    http->log_type = LOG_TCP_REFRESH_HIT;
@@ -445,10 +448,16 @@ modifiedSince(StoreEntry * entry, request_t * request)
     if (entry->lastmod < 0)
 	return 1;
     /* Find size of the object */
+#if 0
     if (mem->reply->content_length >= 0)
 	object_length = mem->reply->content_length;
     else
 	object_length = contentLen(entry);
+#else
+    object_length = httpReplyContentLen(mem->reply);
+    if (object_length < 0)
+	object_length = contentLen(entry);
+#endif
     if (entry->lastmod > request->ims) {
 	debug(33, 3) ("--> YES: entry newer than client\n");
 	return 1;
@@ -500,12 +509,18 @@ void
 clientPurgeRequest(clientHttpRequest * http)
 {
     int fd = http->conn->fd;
+#if 0
     char *msg;
+#endif
     StoreEntry *entry;
     ErrorState *err = NULL;
     const cache_key *k;
+#if 0
     int len;
     FREE *freefunc;
+#endif
+    MemBuf mb;
+
     debug(33, 3) ("Config.onoff.enable_purge = %d\n", Config.onoff.enable_purge);
     if (!Config.onoff.enable_purge) {
 	http->log_type = LOG_TCP_DENIED;
@@ -530,8 +545,8 @@ clientPurgeRequest(clientHttpRequest * http)
 	strcat(msg, "\r\n");
     comm_write(fd, xstrdup(msg), strlen(msg), clientWriteComplete, http, xfree);
 #else
-    msg = httpPackedResponse(1.0, http->http_code, NULL, 0, 0, -1, &len, &freefunc);
-    comm_write(fd, msg, len, clientWriteComplete, http, freefunc);
+    mb = httpPackedReply(1.0, http->http_code, NULL, 0, 0, -1);
+    comm_write_mbuf(fd, mb, clientWriteComplete, http);
 #endif
 }
 
@@ -587,8 +602,8 @@ httpRequestFree(void *data)
 	http->al.icp.opcode = 0;
 	http->al.url = http->uri;
 	if (mem) {
-	    http->al.http.code = mem->reply->code;
-	    http->al.http.content_type = mem->reply->content_type;
+	    http->al.http.code = mem->reply->sline.status;
+	    http->al.http.content_type = httpReplyContentType(mem->reply);
 	}
 	http->al.cache.caddr = conn->log_addr;
 	http->al.cache.size = http->out.size;
@@ -1044,7 +1059,11 @@ clientWriteComplete(int fd, char *bufnotused, size_t size, int errflag, void *da
     } else if ((done = clientCheckTransferDone(http)) != 0 || size == 0) {
 	debug(33, 5) ("clientWriteComplete: FD %d transfer is DONE\n", fd);
 	/* We're finished case */
+#if 0
 	if (http->entry->mem_obj->reply->content_length < 0 || !done ||
+#else
+	if (httpReplyContentLen(http->entry->mem_obj->reply) < 0 || !done ||
+#endif
 	    EBIT_TEST(entry->flag, ENTRY_BAD_LENGTH)) {
 	    /* 
 	     * Client connection closed due to unknown or invalid
@@ -1106,7 +1125,9 @@ clientGetHeadersForIMS(void *data, char *buf, ssize_t size)
     clientHttpRequest *http = data;
     StoreEntry *entry = http->entry;
     MemObject *mem = entry->mem_obj;
+#if 0
     char *reply = NULL;
+#endif
     debug(33, 3) ("clientGetHeadersForIMS: %s, %d bytes\n",
 	http->uri, (int) size);
     assert(size <= SM_PAGE_SIZE);
@@ -1118,7 +1139,7 @@ clientGetHeadersForIMS(void *data, char *buf, ssize_t size)
 	clientProcessMiss(http);
 	return;
     }
-    if (mem->reply->code == 0) {
+    if (mem->reply->sline.status == 0) {
 	if (entry->mem_status == IN_MEMORY) {
 	    clientProcessMiss(http);
 	    return;
@@ -1146,7 +1167,7 @@ clientGetHeadersForIMS(void *data, char *buf, ssize_t size)
     }
     /* All headers are available, check if object is modified or not */
     /* ---------------------------------------------------------------
-     * Removed check for reply->code != 200 because of a potential
+     * Removed check for reply->sline.status != 200 because of a potential
      * problem with ICP.  We will return a HIT for any public, cached
      * object.  This includes other responses like 301, 410, as coded in
      * http.c.  It is Bad(tm) to return UDP_HIT and then, if the reply
@@ -1159,9 +1180,9 @@ clientGetHeadersForIMS(void *data, char *buf, ssize_t size)
      * ---------------------------------------------------------------- */
 #ifdef CHECK_REPLY_CODE_NOTEQUAL_200
     /* Only objects with statuscode==200 can be "Not modified" */
-    if (mem->reply->code != 200) {
+    if (mem->reply->sline.status != 200) {
 	debug(33, 4) ("clientGetHeadersForIMS: Reply code %d!=200\n",
-	    mem->reply->code);
+	    mem->reply->sline.status);
 	clientProcessMiss(http);
 	return;
     }
@@ -1181,6 +1202,7 @@ clientGetHeadersForIMS(void *data, char *buf, ssize_t size)
 	return;
     }
     debug(33, 4) ("clientGetHeadersForIMS: Not modified '%s'\n", storeUrl(entry));
+#if 0 /* use new interfaces */
     reply = clientConstruct304reply(mem->reply);
     comm_write(http->conn->fd,
 	xstrdup(reply),
@@ -1188,6 +1210,10 @@ clientGetHeadersForIMS(void *data, char *buf, ssize_t size)
 	clientHandleIMSComplete,
 	http,
 	xfree);
+#else
+    comm_write_mbuf(http->conn->fd, httpPacked304Reply(mem->reply),
+	clientHandleIMSComplete, http);
+#endif
 }
 
 static void
@@ -1295,11 +1321,10 @@ clientProcessRequest(clientHttpRequest * http)
 	    storeAppend(http->entry, "\r\n", 2);
 #else
 	    {
-		HttpResponse resp;
-		httpResponseInit(&resp);
-		httpResponseSetHeaders(&resp, 1.0, HTTP_OK, NULL, "text/plain", r->headers_sz, 0, squid_curtime);
-		httpResponseSwap(&resp, http->entry);
-		httpResponseClean(&resp);
+		HttpReply *rep = httpReplyCreate();
+		httpReplySetHeaders(rep, 1.0, HTTP_OK, NULL, "text/plain", r->headers_sz, 0, squid_curtime);
+		httpReplySwapOut(rep, http->entry);
+		httpReplyDestroy(rep);
 	    }
 #endif
 	    storeAppend(http->entry, r->headers, r->headers_sz);
@@ -1908,7 +1933,11 @@ CheckQuickAbort2(const clientHttpRequest * http)
 	return 1;
     if (http->entry->mem_obj == NULL)
 	return 1;
+#if 0
     expectlen = http->entry->mem_obj->reply->content_length;
+#else
+    expectlen = httpReplyContentLen(http->entry->mem_obj->reply);
+#endif
     curlen = http->entry->mem_obj->inmem_hi;
     minlen = Config.quickAbort.min;
     if (minlen < 0)
@@ -1958,6 +1987,7 @@ clientCheckTransferDone(clientHttpRequest * http)
     MemObject *mem;
     http_reply *reply;
     int sendlen;
+    int clen;
     if (entry == NULL)
 	return 0;
     /*
@@ -1979,13 +2009,13 @@ clientCheckTransferDone(clientHttpRequest * http)
     reply = mem->reply;
     if (reply->hdr_sz == 0)
 	return 0;		/* haven't found end of headers yet */
-    else if (reply->code == HTTP_OK)
+    else if (reply->sline.status == HTTP_OK)
 	sending = SENDING_BODY;
-    else if (reply->code == HTTP_NO_CONTENT)
+    else if (reply->sline.status == HTTP_NO_CONTENT)
 	sending = SENDING_HDRSONLY;
-    else if (reply->code == HTTP_NOT_MODIFIED)
+    else if (reply->sline.status == HTTP_NOT_MODIFIED)
 	sending = SENDING_HDRSONLY;
-    else if (reply->code < HTTP_OK)
+    else if (reply->sline.status < HTTP_OK)
 	sending = SENDING_HDRSONLY;
     else if (http->request->method == METHOD_HEAD)
 	sending = SENDING_HDRSONLY;
@@ -1997,12 +2027,13 @@ clientCheckTransferDone(clientHttpRequest * http)
      * then we must wait for the object to become STORE_OK or
      * STORE_ABORTED.
      */
+    clen = httpReplyContentLen(reply);
     if (sending == SENDING_HDRSONLY)
 	sendlen = reply->hdr_sz;
-    else if (reply->content_length < 0)
+    else if (clen < 0)
 	return 0;
     else
-	sendlen = reply->content_length + reply->hdr_sz;
+	sendlen = clen + reply->hdr_sz;
     /*
      * Now that we have the expected length, did we send it all?
      */
@@ -2012,8 +2043,9 @@ clientCheckTransferDone(clientHttpRequest * http)
 	return 1;
 }
 
+#if 0 /* moved to HttpReply */
 static char *
-clientConstruct304reply(struct _http_reply *source)
+clientConstruct304reply(http_reply *source)
 {
     LOCAL_ARRAY(char, line, 256);
     LOCAL_ARRAY(char, reply, 8192);
@@ -2043,6 +2075,7 @@ clientConstruct304reply(struct _http_reply *source)
     strcat(reply, "\r\n");
     return reply;
 }
+#endif
 
 /*
  * This function is designed to serve a fairly specific purpose.

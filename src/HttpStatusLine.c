@@ -35,11 +35,11 @@
 const char *HttpStatusLineFormat = "HTTP/%3.1f %3d %s\r\n";
 
 /* local routines */
-static char *httpStatusString(http_status status);
+static const char *httpStatusString(http_status status);
 
 void
 httpStatusLineInit(HttpStatusLine *sline) {
-    httpStatusLineSet(sline, 0.0, 500, NULL);
+    httpStatusLineSet(sline, 0.0, 0, NULL);
 }
 
 void
@@ -49,40 +49,17 @@ httpStatusLineClean(HttpStatusLine *sline) {
 
 void httpStatusLineSet(HttpStatusLine *sline, double version, http_status status, const char *reason) {
     assert(sline);
-    /* we must ensure that version occupies 3 characters only @?@ */
-    if (sline -> version < 0.0 || sline -> version > 9.9)
-	sline -> version = 0.1; /* 0.0 will clash with unset value */
-
     sline->version = version;
     sline->status = status;
-    /* Note: no xstrdup for reason, assumes constant reasons @?@ */
+    /* Note: no xstrdup for 'reason', assumes constant 'reasons' */
     sline->reason = reason ? reason : httpStatusString(status);
-    sline->packed_size =
-	5 + /* HTTP/ */
-	3 + /* version */
-	1 + /* space */
-	3 + /* status */
-	1 + /* space */
-	strlen(reason) +
-	2 + /* CRLF */
-	1;  /* terminating 0 */
-}
-
-int
-httpStatusLinePackInto(HttpStatusLine *sline, char *buf)
-{
-    int act_size;
-    assert(sline);
-    act_size = snprintf(buf, sline->packed_size, HttpStatusLineFormat,
-	sline->version, sline->status, sline->reason);
-    assert(act_size == sline->packed_size);
-    return act_size;
 }
 
 void
-httpStatusLineSwap(HttpStatusLine *sline, StoreEntry *e) {    
-    assert(sline && e);
-    storeAppendPrintf(e, HttpStatusLineFormat,
+httpStatusLinePackInto(const HttpStatusLine *sline, Packer *p)
+{
+    assert(sline && p);
+    packerPrintf(p, HttpStatusLineFormat,
 	sline->version, sline->status, sline->reason);
 }
 
@@ -94,12 +71,15 @@ httpStatusLineParse(HttpStatusLine *sline, const char *start, const char *end) {
     return 0;
 }
 
-static char *
+static const char *
 httpStatusString(http_status status)
 {
     /* why not to return matching string instead of using "p" ? @?@ */
-    char *p = NULL;
+    const char *p = NULL;
     switch (status) {
+    case 0:
+	p = "Init";  /* we init .status with code 0 */
+	break;
     case 100:
 	p = "Continue";
 	break;
