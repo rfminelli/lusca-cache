@@ -66,7 +66,7 @@ static struct {
     int timeouts;
 } PeerStats;
 
-static const char *DirectStr[] =
+static char *DirectStr[] =
 {
     "DIRECT_UNKNOWN",
     "DIRECT_NO",
@@ -109,7 +109,7 @@ peerSelectStateFree(ps_state * psstate)
     cbdataFree(psstate);
 }
 
-static int
+int
 peerSelectIcpPing(request_t * request, int direct, StoreEntry * entry)
 {
     int n;
@@ -134,12 +134,12 @@ peerSelect(request_t * request,
     PSC * callback,
     void *callback_data)
 {
-    ps_state *psstate;
+    ps_state *psstate = memAllocate(MEM_PS_STATE);
     if (entry)
 	debug(44, 3) ("peerSelect: %s\n", storeUrl(entry));
     else
 	debug(44, 3) ("peerSelect: %s\n", RequestMethodStr[request->method]);
-    psstate = cbdataAlloc(ps_state);
+    cbdataAdd(psstate, memFree, MEM_PS_STATE);
     psstate->request = requestLink(request);
     psstate->entry = entry;
     psstate->callback = callback;
@@ -326,7 +326,7 @@ peerGetSomeNeighbor(ps_state * ps)
 	return;
     }
 #if USE_CACHE_DIGESTS
-    if ((p = neighborsDigestSelect(request))) {
+    if ((p = neighborsDigestSelect(request, entry))) {
 	if (neighborType(p, request) == PEER_PARENT)
 	    code = CD_PARENT_HIT;
 	else
@@ -535,8 +535,7 @@ peerIcpParentMiss(peer * p, icp_common_t * header, ps_state * ps)
     if (ps->closest_parent_miss.sin_addr.s_addr != any_addr.s_addr)
 	return;
     rtt = tvSubMsec(ps->ping.start, current_time) / p->weight;
-    if (ps->first_parent_miss.sin_addr.s_addr == any_addr.s_addr ||
-	rtt < ps->ping.w_rtt) {
+    if (ps->ping.w_rtt == 0 || rtt < ps->ping.w_rtt) {
 	ps->first_parent_miss = p->in_addr;
 	ps->ping.w_rtt = rtt;
     }
@@ -623,8 +622,7 @@ peerHtcpParentMiss(peer * p, htcpReplyData * htcp, ps_state * ps)
     if (ps->closest_parent_miss.sin_addr.s_addr != any_addr.s_addr)
 	return;
     rtt = tvSubMsec(ps->ping.start, current_time) / p->weight;
-    if (ps->first_parent_miss.sin_addr.s_addr == any_addr.s_addr ||
-	rtt < ps->ping.w_rtt) {
+    if (ps->ping.w_rtt == 0 || rtt < ps->ping.w_rtt) {
 	ps->first_parent_miss = p->in_addr;
 	ps->ping.w_rtt = rtt;
     }

@@ -31,9 +31,6 @@
  *
  */
 
-#ifndef SQUID_ENUMS_H
-#define SQUID_ENUMS_H
-
 typedef enum {
     LOG_TAG_NONE,
     LOG_TCP_HIT,
@@ -120,19 +117,11 @@ typedef enum {
     ACL_PROXY_AUTH_REGEX,
     ACL_SRC_ASN,
     ACL_DST_ASN,
-#if USE_ARP_ACL
     ACL_SRC_ARP,
-#endif
-#if SQUID_SNMP
     ACL_SNMP_COMMUNITY,
-#endif
-#if SRC_RTT_NOT_YET_FINISHED
     ACL_NETDB_SRC_RTT,
-#endif
     ACL_MAXCONN,
     ACL_REQ_MIME_TYPE,
-    ACL_REP_MIME_TYPE,
-    ACL_MAX_USER_IP,
     ACL_ENUM_MAX
 } squid_acl;
 
@@ -238,10 +227,6 @@ typedef enum {
     HDR_X_FORWARDED_FOR,
     HDR_X_REQUEST_URI,		/* appended if ADD_X_REQUEST_URI is #defined */
     HDR_X_SQUID_ERROR,
-    HDR_NEGOTIATE,
-#if X_ACCELERATOR_VARY
-    HDR_X_ACCELERATOR_VARY,
-#endif
     HDR_OTHER,
     HDR_ENUM_END
 } http_hdr_type;
@@ -388,8 +373,6 @@ enum {
     METHOD_BMOVE,
     METHOD_BDELETE,
     METHOD_BPROPFIND,
-    METHOD_BPROPPATCH,
-    METHOD_SEARCH,
     METHOD_EXT00,
     METHOD_EXT01,
     METHOD_EXT02,
@@ -499,10 +482,8 @@ enum {
     ENTRY_NEGCACHED,
     ENTRY_VALIDATED,
     ENTRY_BAD_LENGTH,
-    ENTRY_ABORTED
-#if UNUSED_CODE
-    ENTRY_DONT_LOG
-#endif
+    ENTRY_ABORTED,
+    ENTRY_DONT_LOG		/* hack for gross 'Pump' entries */
 };
 
 typedef enum {
@@ -510,37 +491,6 @@ typedef enum {
     ACCESS_ALLOWED,
     ACCESS_REQ_PROXY_AUTH
 } allow_t;
-
-typedef enum {
-    AUTH_ACL_CHALLENGE = -2,
-    AUTH_ACL_HELPER = -1,
-    AUTH_ACL_CANNOT_AUTHENTICATE = 0,
-    AUTH_AUTHENTICATED = 1
-} auth_acl_t;
-
-typedef enum {
-    AUTH_UNKNOWN,		/* default */
-    AUTH_BASIC,
-    AUTH_NTLM,
-    AUTH_DIGEST,
-    AUTH_BROKEN			/* known type, but broken data */
-} auth_type_t;
-
-/* stateful helper callback response codes */
-typedef enum {
-    S_HELPER_UNKNOWN,
-    S_HELPER_RESERVE,
-    S_HELPER_RELEASE,
-    S_HELPER_DEFER
-} stateful_helper_callback_t;
-
-/* stateful helper reservation info */
-typedef enum {
-    S_HELPER_FREE,		/* available for requests */
-    S_HELPER_RESERVED,		/* in a reserved state - no active request, but state data in the helper shouldn't be disturbed */
-    S_HELPER_DEFERRED		/* available for requests, and at least one more will come from a previous caller with the server pointer */
-} stateful_helper_reserve_t;
-
 
 #if SQUID_SNMP
 enum {
@@ -559,30 +509,50 @@ typedef enum {
     MEM_16K_BUF,
     MEM_32K_BUF,
     MEM_64K_BUF,
+    MEM_ACCESSLOGENTRY,
     MEM_ACL,
+    MEM_ACLCHECK_T,
+    MEM_ACL_ACCESS,
     MEM_ACL_DENY_INFO_LIST,
     MEM_ACL_IP_DATA,
     MEM_ACL_LIST,
     MEM_ACL_NAME_LIST,
-    MEM_AUTH_USER_T,
-    MEM_AUTH_USER_HASH,
-    MEM_ACL_PROXY_AUTH_MATCH,
-    MEM_ACL_USER_DATA,
+    MEM_ACL_PROXY_AUTH_USER,
     MEM_ACL_TIME_DATA,
+    MEM_CACHEMGR_PASSWD,
 #if USE_CACHE_DIGESTS
     MEM_CACHE_DIGEST,
 #endif
+    MEM_CLIENTHTTPREQUEST,
     MEM_CLIENT_INFO,
     MEM_CLIENT_SOCK_BUF,
+    MEM_CLOSE_HANDLER,
+    MEM_COMMWRITESTATEDATA,
+    MEM_CONNSTATEDATA,
+#if USE_CACHE_DIGESTS
+    MEM_DIGEST_FETCH_STATE,
+#endif
     MEM_LINK_LIST,
+    MEM_DLINK_LIST,
     MEM_DLINK_NODE,
+    MEM_DNSSERVER_T,
+    MEM_DNSSTATDATA,
+    MEM_DOMAIN_PING,
+    MEM_DOMAIN_TYPE,
     MEM_DONTFREE,
     MEM_DREAD_CTRL,
     MEM_DWRITE_Q,
+    MEM_ERRORSTATE,
+    MEM_FILEMAP,
     MEM_FQDNCACHE_ENTRY,
     MEM_FWD_SERVER,
+    MEM_FWD_STATE,
+    MEM_HASH_LINK,
+    MEM_HASH_TABLE,
+    MEM_HELPER,
     MEM_HELPER_REQUEST,
-    MEM_HELPER_STATEFUL_REQUEST,
+    MEM_HELPER_SERVER,
+    MEM_HIERARCHYLOGENTRY,
 #if USE_HTCP
     MEM_HTCP_SPECIFIER,
     MEM_HTCP_DETAIL,
@@ -593,23 +563,49 @@ typedef enum {
     MEM_HTTP_HDR_RANGE,
     MEM_HTTP_HDR_RANGE_SPEC,
     MEM_HTTP_REPLY,
+    MEM_HTTP_STATE_DATA,
+    MEM_ICPUDPDATA,
+    MEM_ICP_COMMON_T,
+    MEM_ICP_PING_DATA,
     MEM_INTLIST,
+    MEM_IOSTATS,
     MEM_IPCACHE_ENTRY,
     MEM_MD5_DIGEST,
     MEM_MEMOBJECT,
     MEM_MEM_NODE,
     MEM_NETDBENTRY,
     MEM_NET_DB_NAME,
+    MEM_NET_DB_PEER,
+    MEM_PEER,
+#if USE_CACHE_DIGESTS
+    MEM_PEER_DIGEST,
+#endif
+#if USE_ICMP
+    MEM_PINGERECHODATA,
+    MEM_PINGERREPLYDATA,
+#endif
+    MEM_PS_STATE,
+    MEM_REFRESH_T,
     MEM_RELIST,
     MEM_REQUEST_T,
+    MEM_SQUIDCONFIG,
+    MEM_SQUIDCONFIG2,
+    MEM_STATCOUNTERS,
+    MEM_STMEM_BUF,
     MEM_STOREENTRY,
+    MEM_STORE_CLIENT,
+    MEM_SWAPDIR,
+    MEM_USHORTLIST,
     MEM_WORDLIST,
+    MEM_STORE_IO,
 #if !USE_DNSSERVERS
     MEM_IDNS_QUERY,
 #endif
     MEM_EVENT,
     MEM_TLV,
     MEM_SWAP_LOG_DATA,
+    MEM_GEN_CBDATA,
+    MEM_PUMP_STATE_DATA,
     MEM_CLIENT_REQ_BUF,
     MEM_MAX
 } mem_type;
@@ -626,7 +622,6 @@ enum {
     STORE_META_STD,		/* standard metadata */
     STORE_META_HITMETERING,	/* reserved for hit metering */
     STORE_META_VALID,
-    STORE_META_VARY_HEADERS,	/* Stores Vary request headers */
     STORE_META_END
 };
 
@@ -680,63 +675,3 @@ enum {
     NETDB_EX_RTT,
     NETDB_EX_HOPS
 };
-
-/*
- * cbdata types. similar to the MEM_* types above, but managed
- * in cbdata.c. A big difference is that these types are dynamically
- * allocated. This list is only a list of predefined types. Other types
- * are added runtime
- */
-typedef enum {
-    CBDATA_UNKNOWN = 0,
-    CBDATA_UNDEF = 0,
-    CBDATA_acl_access,
-    CBDATA_aclCheck_t,
-    CBDATA_clientHttpRequest,
-    CBDATA_ConnStateData,
-    CBDATA_ErrorState,
-    CBDATA_FwdState,
-    CBDATA_generic_cbdata,
-    CBDATA_helper,
-    CBDATA_helper_server,
-    CBDATA_statefulhelper,
-    CBDATA_helper_stateful_server,
-    CBDATA_HttpStateData,
-    CBDATA_peer,
-    CBDATA_ps_state,
-    CBDATA_RemovalPolicy,
-    CBDATA_RemovalPolicyWalker,
-    CBDATA_RemovalPurgeWalker,
-    CBDATA_store_client,
-    CBDATA_FIRST_CUSTOM_TYPE = 1000
-} cbdata_type;
-
-/*
- * Return codes from checkVary(request)
- */
-enum {
-    VARY_NONE,
-    VARY_MATCH,
-    VARY_OTHER,
-    VARY_CANCEL
-};
-
-/* CygWin & Windows NT Port */
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
-/*
- * Supported Windows OS types codes
- */
-enum {
-    _WIN_OS_UNKNOWN,
-    _WIN_OS_WIN32S,
-    _WIN_OS_WIN95,
-    _WIN_OS_WIN98,
-    _WIN_OS_WINME,
-    _WIN_OS_WINNT,
-    _WIN_OS_WIN2K,
-    _WIN_OS_WINXP
-};
-
-#endif
-
-#endif /* SQUID_ENUMS_H */

@@ -533,6 +533,7 @@ snmpConstructReponse(snmp_request_t * rq)
 {
     struct snmp_session Session;
     struct snmp_pdu *RespPDU;
+    int ret;
 
     debug(49, 5) ("snmpConstructReponse: Called.\n");
     RespPDU = snmpAgentResponse(rq->PDU);
@@ -541,7 +542,7 @@ snmpConstructReponse(snmp_request_t * rq)
 	Session.Version = SNMP_VERSION_1;
 	Session.community = rq->community;
 	Session.community_len = strlen((char *) rq->community);
-	snmp_build(&Session, RespPDU, rq->outbuf, &rq->outlen);
+	ret = snmp_build(&Session, RespPDU, rq->outbuf, &rq->outlen);
 	sendto(rq->sock, rq->outbuf, rq->outlen, 0, (struct sockaddr *) &rq->from, sizeof(rq->from));
 	snmp_free_pdu(RespPDU);
 	xfree(rq->outbuf);
@@ -644,7 +645,7 @@ static oid_ParseFn *
 snmpTreeGet(oid * Current, snint CurrentLen)
 {
     oid_ParseFn *Fn = NULL;
-    mib_tree_entry *mibTreeEntry = NULL;
+    mib_tree_entry *mibTreeEntry = NULL, *lastEntry = NULL;
     int count = 0;
 
     debug(49, 5) ("snmpTreeGet: Called\n");
@@ -656,6 +657,7 @@ snmpTreeGet(oid * Current, snint CurrentLen)
     if (Current[count] == mibTreeEntry->name[count]) {
 	count++;
 	while ((mibTreeEntry) && (count < CurrentLen) && (!mibTreeEntry->parsefunction)) {
+	    lastEntry = mibTreeEntry;
 	    mibTreeEntry = snmpTreeEntry(Current[count], count, mibTreeEntry);
 	    count++;
 	}

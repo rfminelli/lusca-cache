@@ -192,7 +192,7 @@ diskHandleWrite(int fd, void *notused)
     errno = 0;
     if (fdd->write_q->file_offset != -1)
 	lseek(fd, fdd->write_q->file_offset, SEEK_SET);
-    len = FD_WRITE_METHOD(fd,
+    len = write(fd,
 	fdd->write_q->buf + fdd->write_q->buf_offset,
 	fdd->write_q->len - fdd->write_q->buf_offset);
     debug(6, 3) ("diskHandleWrite: FD %d len = %d\n", fd, len);
@@ -295,7 +295,7 @@ file_write(int fd,
     off_t file_offset,
     void *ptr_to_buf,
     int len,
-    DWCB * handle,
+    DWCB handle,
     void *handle_data,
     FREE * free_func)
 {
@@ -361,7 +361,7 @@ diskHandleRead(int fd, void *data)
 	F->disk.offset = ctrl_dat->offset;
     }
     errno = 0;
-    len = FD_READ_METHOD(fd, ctrl_dat->buf, ctrl_dat->req_len);
+    len = read(fd, ctrl_dat->buf, ctrl_dat->req_len);
     if (len > 0)
 	F->disk.offset += len;
     statCounter.syscalls.disk.reads++;

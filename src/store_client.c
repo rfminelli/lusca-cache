@@ -133,7 +133,8 @@ storeClientListAdd(StoreEntry * e, void *data)
 #endif
     e->refcount++;
     mem->nclients++;
-    sc = cbdataAlloc(store_client);
+    sc = memAllocate(MEM_STORE_CLIENT);
+    cbdataAdd(sc, memFree, MEM_STORE_CLIENT);	/* sc is callback_data for file_read */
     cbdataLock(data);		/* locked while we point to it */
     sc->callback_data = data;
     sc->seen_offset = 0;
@@ -361,7 +362,7 @@ storeClientReadBody(void *data, const char *buf, ssize_t len)
     assert(sc->flags.disk_io_pending);
     sc->flags.disk_io_pending = 0;
     assert(sc->callback != NULL);
-    debug(20, 3) ("storeClientReadBody: len %d\n", (int) len);
+    debug(20, 3) ("storeClientReadBody: len %d\n", len);
     if (sc->copy_offset == 0 && len > 0 && mem->reply->sline.status == 0)
 	httpReplyParse(mem->reply, sc->copy_buf, headersEnd(sc->copy_buf, len));
     storeClientCallback(sc, len);
@@ -383,7 +384,7 @@ storeClientReadHeader(void *data, const char *buf, ssize_t len)
     assert(sc->flags.disk_io_pending);
     sc->flags.disk_io_pending = 0;
     assert(sc->callback != NULL);
-    debug(20, 3) ("storeClientReadHeader: len %d\n", (int) len);
+    debug(20, 3) ("storeClientReadHeader: len %d\n", len);
     if (len < 0) {
 	debug(20, 3) ("storeClientReadHeader: %s\n", xstrerror());
 	storeClientCallback(sc, len);
@@ -426,21 +427,12 @@ storeClientReadHeader(void *data, const char *buf, ssize_t len)
 		(void) 0;	/* a match! */
 	    else {
 		debug(20, 1) ("storeClientReadHeader: URL mismatch\n");
-		debug(20, 1) ("\t{%s} != {%s}\n", (char *) t->value, mem->url);
+		debug(20, 1) ("\t{%s} != {%s}\n", t->value, mem->url);
 		swap_object_ok = 0;
 		break;
 	    }
 	    break;
 	case STORE_META_STD:
-	    break;
-	case STORE_META_VARY_HEADERS:
-	    if (mem->vary_headers) {
-		if (strcmp(mem->vary_headers, t->value) != 0)
-		    swap_object_ok = 0;
-	    } else {
-		/* Assume the object is OK.. remember the vary request headers */
-		mem->vary_headers = xstrdup(t->value);
-	    }
 	    break;
 	default:
 	    debug(20, 1) ("WARNING: got unused STORE_META type %d\n", t->type);
@@ -465,7 +457,7 @@ storeClientReadHeader(void *data, const char *buf, ssize_t len)
 	 */
 	copy_sz = XMIN(sc->copy_size, body_sz);
 	debug(20, 3) ("storeClientReadHeader: copying %d bytes of body\n",
-	    (int) copy_sz);
+	    copy_sz);
 	xmemmove(sc->copy_buf, sc->copy_buf + swap_hdr_sz, copy_sz);
 	if (sc->copy_offset == 0 && len > 0 && mem->reply->sline.status == 0)
 	    httpReplyParse(mem->reply, sc->copy_buf,

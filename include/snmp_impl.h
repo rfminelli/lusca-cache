@@ -2,8 +2,8 @@
  * $Id$
  */
 
-#ifndef SQUID_SNMP_IMPL_H
-#define SQUID_SNMP_IMPL_H
+#ifndef _SNMP_IMPL_H_
+#define _SNMP_IMPL_H_
 
 /*
  * Definitions for SNMP (RFC 1067) implementation.
@@ -97,4 +97,4 @@ struct trapVar {
 /* from snmp.c */
 extern u_char sid[];		/* size SID_MAX_LEN */
 
-#endif /* SQUID_SNMP_IMPL_H */
+#endif /* _SNMP_IMPL_H_ */

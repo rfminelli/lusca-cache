@@ -2,8 +2,8 @@
  * $Id$
  */
 
-#ifndef SQUID_PARSE_H
-#define SQUID_PARSE_H
+#ifndef _HAVE_PARSE_H_
+#define _HAVE_PARSE_H_
 
 /***********************************************************
 	Copyright 1989 by Carnegie Mellon University
@@ -50,7 +50,7 @@ struct snmp_mib_tree {
     u_int subid;		/* This node's integer subidentifier */
     int type;			/* This node's object type */
     struct enum_list *enums;	/* (optional) list of enumerated integers (otherwise NULL) */
-    void (*printer) (char *buf, variable_list *var, void *foo, int quiet);		/* Value printing function */
+    void (*printer) ();		/* Value printing function */
 };
 
 /* non-aggregate types for tree end nodes */
@@ -84,11 +84,10 @@ extern "C" {
 /*void print_type(struct variable_list *); */
     void print_oid_nums(oid *, int);
 
-    struct snmp_mib_tree *read_mib(char *);
+    struct snmp_mib_tree *read_mib();
 
 #ifdef __cplusplus
 }
 
 #endif
-
-#endif				/* SQUID_PARSE_H */
+#endif				/* _HAVE_PARSE_H_ */

@@ -166,7 +166,6 @@ destroy_MemObject(StoreEntry * e)
     ctx_exit(ctx);		/* must exit before we free mem->url */
     safe_free(mem->url);
     safe_free(mem->log_url);	/* XXX account log_url */
-    safe_free(mem->vary_headers);
     memFree(mem, MEM_MEMOBJECT);
 }
 
@@ -326,22 +325,6 @@ storeGetPublic(const char *uri, const method_t method)
     return storeGet(storeKeyPublic(uri, method));
 }
 
-StoreEntry *
-storeGetPublicByRequestMethod(request_t * req, const method_t method)
-{
-    return storeGet(storeKeyPublicByRequestMethod(req, method));
-}
-
-StoreEntry *
-storeGetPublicByRequest(request_t * req)
-{
-    StoreEntry *e = storeGetPublicByRequestMethod(req, req->method);
-    if (e == NULL && req->method == METHOD_HEAD)
-	/* We can generate a HEAD reply from a cached GET object */
-	e = storeGetPublicByRequestMethod(req, METHOD_GET);
-    return e;
-}
-
 static int
 getKeyCounter(void)
 {
@@ -399,63 +382,12 @@ storeSetPublicKey(StoreEntry * e)
 	    e->hash.key, mem->url);
 #endif
     assert(!EBIT_TEST(e->flags, RELEASE_REQUEST));
-    if (mem->request) {
-	StoreEntry *pe;
-	request_t *request = mem->request;
-	if (!mem->vary_headers) {
-	    /* First handle the case where the object no longer varies */
-	    safe_free(request->vary_headers);
-	} else {
-	    if (request->vary_headers && strcmp(request->vary_headers, mem->vary_headers) != 0) {
-		/* Oops.. the variance has changed. Kill the base object
-		 * to record the new variance key
-		 */
-		safe_free(request->vary_headers);	/* free old "bad" variance key */
-		pe = storeGetPublic(mem->url, mem->method);
-		if (pe)
-		    storeRelease(pe);
-	    }
-	    /* Make sure the request knows the variance status */
-	    if (!request->vary_headers)
-		request->vary_headers = xstrdup(httpMakeVaryMark(request, mem->reply));
-	}
-	if (mem->vary_headers && !storeGetPublic(mem->url, mem->method)) {
-	    /* Create "vary" base object */
-	    http_version_t version;
-	    String vary;
-	    pe = storeCreateEntry(mem->url, mem->log_url, request->flags, request->method);
-	    httpBuildVersion(&version, 1, 0);
-	    httpReplySetHeaders(pe->mem_obj->reply, version, HTTP_OK, "Internal marker object", "x-squid-internal/vary", -1, -1, squid_curtime + 100000);
-	    vary = httpHeaderGetList(&mem->reply->header, HDR_VARY);
-	    if (strBuf(vary)) {
-		httpHeaderPutStr(&pe->mem_obj->reply->header, HDR_VARY, strBuf(vary));
-		stringClean(&vary);
-	    }
-#if X_ACCELERATOR_VARY
-	    vary = httpHeaderGetList(&mem->reply->header, HDR_X_ACCELERATOR_VARY);
-	    if (strBuf(vary)) {
-		httpHeaderPutStr(&pe->mem_obj->reply->header, HDR_X_ACCELERATOR_VARY, strBuf(vary));
-		stringClean(&vary);
-	    }
-#endif
-	    storeSetPublicKey(pe);
-	    httpReplySwapOut(pe->mem_obj->reply, pe);
-	    storeBufferFlush(pe);
-	    storeTimestampsSet(pe);
-	    storeComplete(pe);
-	    storeUnlockObject(pe);
-	}
-	newkey = storeKeyPublicByRequest(mem->request);
-    } else
-	newkey = storeKeyPublic(mem->url, mem->method);
+    newkey = storeKeyPublic(mem->url, mem->method);
     if ((e2 = (StoreEntry *) hash_lookup(store_table, newkey))) {
 	debug(20, 3) ("storeSetPublicKey: Making old '%s' private.\n", mem->url);
 	storeSetPrivateKey(e2);
 	storeRelease(e2);
-	if (mem->request)
-	    newkey = storeKeyPublicByRequest(mem->request);
-	else
-	    newkey = storeKeyPublic(mem->url, mem->method);
+	newkey = storeKeyPublic(mem->url, mem->method);
     }
     if (e->hash.key)
 	storeHashDelete(e);
@@ -781,7 +713,7 @@ storeGetMemSpace(int size)
 	return;
     last_check = squid_curtime;
     pages_needed = (size / SM_PAGE_SIZE) + 1;
-    if (memInUse(MEM_MEM_NODE) + pages_needed < store_pages_max)
+    if (memInUse(MEM_STMEM_BUF) + pages_needed < store_pages_max)
 	return;
     debug(20, 2) ("storeGetMemSpace: Starting, need %d pages\n", pages_needed);
     /* XXX what to set as max_scan here? */
@@ -789,7 +721,7 @@ storeGetMemSpace(int size)
     while ((e = walker->Next(walker))) {
 	storePurgeMem(e);
 	released++;
-	if (memInUse(MEM_MEM_NODE) + pages_needed < store_pages_max)
+	if (memInUse(MEM_STMEM_BUF) + pages_needed < store_pages_max)
 	    break;
     }
     walker->Done(walker);
@@ -828,8 +760,8 @@ storeMaintainSwapSpace(void *datanotused)
     }
     if (store_swap_size > Config.Swap.maxSize) {
 	if (squid_curtime - last_warn_time > 10) {
-	    debug(20, 0) ("WARNING: Disk space over limit: %ld KB > %ld KB\n",
-		(long int) store_swap_size, (long int) Config.Swap.maxSize);
+	    debug(20, 0) ("WARNING: Disk space over limit: %d KB > %d KB\n",
+		store_swap_size, Config.Swap.maxSize);
 	    last_warn_time = squid_curtime;
 	}
     }
@@ -975,19 +907,19 @@ storeEntryValidLength(const StoreEntry * e)
 static void
 storeInitHashValues(void)
 {
-    long int i;
+    int i;
     /* Calculate size of hash table (maximum currently 64k buckets).  */
     i = Config.Swap.maxSize / Config.Store.avgObjectSize;
-    debug(20, 1) ("Swap maxSize %ld KB, estimated %ld objects\n",
-	(long int) Config.Swap.maxSize, i);
+    debug(20, 1) ("Swap maxSize %d KB, estimated %d objects\n",
+	Config.Swap.maxSize, i);
     i /= Config.Store.objectsPerBucket;
-    debug(20, 1) ("Target number of buckets: %ld\n", i);
+    debug(20, 1) ("Target number of buckets: %d\n", i);
     /* ideally the full scan period should be configurable, for the
      * moment it remains at approximately 24 hours.  */
     store_hash_buckets = storeKeyHashBuckets(i);
     debug(20, 1) ("Using %d Store buckets\n", store_hash_buckets);
-    debug(20, 1) ("Max Mem  size: %ld KB\n", (long int) Config.memMaxSize >> 10);
-    debug(20, 1) ("Max Swap size: %ld KB\n", (long int) Config.Swap.maxSize);
+    debug(20, 1) ("Max Mem  size: %d KB\n", Config.memMaxSize >> 10);
+    debug(20, 1) ("Max Swap size: %d KB\n", Config.Swap.maxSize);
 }
 
 void
@@ -1142,6 +1074,8 @@ storeMemObjectDump(MemObject * mem)
 	(int) mem->inmem_hi);
     debug(20, 1) ("MemObject->inmem_lo: %d\n",
 	(int) mem->inmem_lo);
+    debug(20, 1) ("MemObject->clients: %p\n",
+	mem->clients);
     debug(20, 1) ("MemObject->nclients: %d\n",
 	mem->nclients);
     debug(20, 1) ("MemObject->reply: %p\n",
@@ -1317,7 +1251,7 @@ storeFsDone(void)
  * called to add another store fs module
  */
 void
-storeFsAdd(const char *type, STSETUP * setup)
+storeFsAdd(char *type, STSETUP * setup)
 {
     int i;
     /* find the number of currently known storefs types */
@@ -1336,7 +1270,7 @@ storeFsAdd(const char *type, STSETUP * setup)
  * called to add another store removal policy module
  */
 void
-storeReplAdd(const char *type, REMOVALPOLICYCREATE * create)
+storeReplAdd(char *type, REMOVALPOLICYCREATE * create)
 {
     int i;
     /* find the number of currently known repl types */
@@ -1365,7 +1299,7 @@ createRemovalPolicy(RemovalPolicySettings * settings)
     debug(20, 1) ("ERROR: Be sure to have set cache_replacement_policy\n");
     debug(20, 1) ("ERROR:   and memory_replacement_policy in squid.conf!\n");
     fatalf("ERROR: Unknown policy %s\n", settings->type);
-    return NULL;		/* NOTREACHED */
+    return NULL;
 }
 
 #if 0

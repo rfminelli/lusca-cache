@@ -614,8 +614,16 @@ htcpCheckHit(const htcpSpecifier * s)
 {
     request_t *request;
     method_t m = urlParseMethod(s->method);
-    StoreEntry *e = NULL, *hit = NULL;
+    StoreEntry *e = storeGetPublic(s->uri, m);
     char *blk_end;
+    if (NULL == e) {
+	debug(31, 3) ("htcpCheckHit: NO; public object not found\n");
+	return NULL;
+    }
+    if (!storeEntryValidToSend(e)) {
+	debug(31, 3) ("htcpCheckHit: NO; entry not valid to send\n");
+	return NULL;
+    }
     request = urlParse(m, s->uri);
     if (NULL == request) {
 	debug(31, 3) ("htcpCheckHit: NO; failed to parse URL\n");
@@ -624,26 +632,15 @@ htcpCheckHit(const htcpSpecifier * s)
     blk_end = s->req_hdrs + strlen(s->req_hdrs);
     if (!httpHeaderParse(&request->header, s->req_hdrs, blk_end)) {
 	debug(31, 3) ("htcpCheckHit: NO; failed to parse request headers\n");
-	goto miss;
-    }
-    e = storeGetPublicByRequest(request);
-    if (NULL == e) {
-	debug(31, 3) ("htcpCheckHit: NO; public object not found\n");
-	goto miss;
-    }
-    if (!storeEntryValidToSend(e)) {
-	debug(31, 3) ("htcpCheckHit: NO; entry not valid to send\n");
-	goto miss;
-    }
-    if (refreshCheckHTCP(e, request)) {
+	e = NULL;
+    } else if (refreshCheckHTCP(e, request)) {
 	debug(31, 3) ("htcpCheckHit: NO; cached response is stale\n");
-	goto miss;
+	e = NULL;
+    } else {
+	debug(31, 3) ("htcpCheckHit: YES!?\n");
     }
-    debug(31, 3) ("htcpCheckHit: YES!?\n");
-    hit = e;
-  miss:
     requestDestroy(request);
-    return hit;
+    return e;
 }
 
 static void

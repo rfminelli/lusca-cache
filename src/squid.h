@@ -89,12 +89,6 @@
 #define assert(EX)  ((EX)?((void)0):xassert("EX", __FILE__, __LINE__))
 #endif
 
-
-/* 32 bit integer compatability */
-#include "squid_types.h"
-#define num32 int32_t
-#define u_num32 u_int32_t
-
 #if HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -241,24 +235,10 @@
 #endif /* HAVE_POLL_H */
 #endif /* HAVE_POLL */
 
-#if defined(HAVE_STDARG_H)
+#if STDC_HEADERS
 #include <stdarg.h>
-#define HAVE_STDARGS		/* let's hope that works everywhere (mj) */
-#define VA_LOCAL_DECL va_list ap;
-#define VA_START(f) va_start(ap, f)
-#define VA_SHIFT(v,t) ;		/* no-op for ANSI */
-#define VA_END va_end(ap)
 #else
-#if defined(HAVE_VARARGS_H)
 #include <varargs.h>
-#undef HAVE_STDARGS
-#define VA_LOCAL_DECL va_list ap;
-#define VA_START(f) va_start(ap)	/* f is ignored! */
-#define VA_SHIFT(v,t) v = va_arg(ap,t)
-#define VA_END va_end(ap)
-#else
-#error XX **NO VARARGS ** XX
-#endif
 #endif
 
 /* Make sure syslog goes after stdarg/varargs */
@@ -342,7 +322,7 @@ struct rusage {
 #endif
 
 #if CBDATA_DEBUG
-#define cbdataAlloc(a,b)	cbdataAllocDbg(a,b,__FILE__,__LINE__)
+#define cbdataAdd(a,b,c)	cbdataAddDbg(a,b,c,__FILE__,__LINE__)
 #define cbdataLock(a)		cbdataLockDbg(a,__FILE__,__LINE__)
 #define cbdataUnlock(a)		cbdataUnlockDbg(a,__FILE__,__LINE__)
 #endif
@@ -368,11 +348,6 @@ struct rusage {
 #endif
 
 #include "md5.h"
-
-#if USE_SSL
-#include "ssl_support.h"
-#endif
-
 #include "Stack.h"
 
 /* Needed for poll() on Linux at least */
@@ -400,6 +375,14 @@ struct rusage {
 #include "globals.h"
 
 #include "util.h"
+
+/*
+ * Mac OS X Server already has radix.h as a standard header, so
+ * this causes conflicts.
+ */
+#ifndef _SQUID_APPLE_
+#include "radix.h"
+#endif
 
 #if !HAVE_TEMPNAM
 #include "tempnam.h"
@@ -461,9 +444,7 @@ struct rusage {
 /*
  * I'm sick of having to keep doing this ..
  */
-#define INDEXSD(i)   (&Config.cacheSwap.swapDirs[(i)])
 
-#define FD_READ_METHOD(fd, buf, len) (*fd_table[fd].read_method)(fd, buf, len)
-#define FD_WRITE_METHOD(fd, buf, len) (*fd_table[fd].write_method)(fd, buf, len)
+#define INDEXSD(i)   (&Config.cacheSwap.swapDirs[(i)])
 
 #endif /* SQUID_H */

@@ -31,8 +31,8 @@
  *
  */
 
-#ifndef SQUID_TYPEDEFS_H
-#define SQUID_TYPEDEFS_H
+#ifndef _TYPEDEFS_H_
+#define _TYPEDEFS_H_
 
 typedef unsigned int store_status_t;
 typedef unsigned int mem_status_t;
@@ -61,22 +61,13 @@ typedef struct _acl_ip_data acl_ip_data;
 typedef struct _acl_time_data acl_time_data;
 typedef struct _acl_name_list acl_name_list;
 typedef struct _acl_deny_info_list acl_deny_info_list;
-typedef struct _auth_user_t auth_user_t;
-typedef struct _auth_user_request_t auth_user_request_t;
-typedef struct _auth_user_hash_pointer auth_user_hash_pointer;
-typedef struct _auth_user_ip_t auth_user_ip_t;
-typedef struct _acl_proxy_auth_match_cache acl_proxy_auth_match_cache;
-typedef struct _authscheme_entry authscheme_entry_t;
-typedef struct _authScheme authScheme;
-typedef struct _acl_user_data acl_user_data;
-typedef struct _acl_user_ip_data acl_user_ip_data;
+typedef struct _acl_proxy_auth acl_proxy_auth;
+typedef struct _acl_proxy_auth_user acl_proxy_auth_user;
 typedef struct _acl_arp_data acl_arp_data;
 typedef struct _acl acl;
 typedef struct _acl_snmp_comm acl_snmp_comm;
 typedef struct _acl_list acl_list;
 typedef struct _acl_access acl_access;
-typedef struct _acl_address acl_address;
-typedef struct _acl_tos acl_tos;
 typedef struct _aclCheck_t aclCheck_t;
 typedef struct _wordlist wordlist;
 typedef struct _intlist intlist;
@@ -84,12 +75,12 @@ typedef struct _intrange intrange;
 typedef struct _ushortlist ushortlist;
 typedef struct _relist relist;
 typedef struct _sockaddr_in_list sockaddr_in_list;
-typedef struct _https_port_list https_port_list;
 typedef struct _SquidConfig SquidConfig;
 typedef struct _SquidConfig2 SquidConfig2;
 typedef struct _close_handler close_handler;
 typedef struct _dread_ctrl dread_ctrl;
 typedef struct _dnsserver_t dnsserver_t;
+typedef struct _dnsStatData dnsStatData;
 typedef struct _dwrite_q dwrite_q;
 typedef struct _ETag ETag;
 typedef struct _fde fde;
@@ -114,7 +105,6 @@ typedef struct _HttpStateData HttpStateData;
 typedef struct _icpUdpData icpUdpData;
 typedef struct _clientHttpRequest clientHttpRequest;
 typedef struct _ConnStateData ConnStateData;
-typedef struct _ConnCloseHelperData ConnCloseHelperData;
 typedef struct _ipcache_addrs ipcache_addrs;
 typedef struct _domain_ping domain_ping;
 typedef struct _domain_type domain_type;
@@ -144,10 +134,7 @@ typedef struct _StoreEntry StoreEntry;
 typedef struct _SwapDir SwapDir;
 typedef struct _request_flags request_flags;
 typedef struct _helper_flags helper_flags;
-typedef struct _helper_stateful_flags helper_stateful_flags;
 typedef struct _http_state_flags http_state_flags;
-typedef struct _header_mangler header_mangler;
-typedef struct _body_size body_size;
 typedef struct _request_t request_t;
 typedef struct _AccessLogEntry AccessLogEntry;
 typedef struct _cachemgr_passwd cachemgr_passwd;
@@ -159,7 +146,6 @@ typedef struct _dlink_list dlink_list;
 typedef struct _StatCounters StatCounters;
 typedef struct _tlv tlv;
 typedef struct _storeSwapLogData storeSwapLogData;
-typedef struct _authConfig authConfig;
 typedef struct _cacheSwap cacheSwap;
 typedef struct _StatHist StatHist;
 typedef struct _String String;
@@ -173,16 +159,14 @@ typedef struct _Version Version;
 typedef struct _FwdState FwdState;
 typedef struct _FwdServer FwdServer;
 typedef struct _helper helper;
-typedef struct _helper_stateful statefulhelper;
 typedef struct _helper_server helper_server;
-typedef struct _helper_stateful_server helper_stateful_server;
 typedef struct _helper_request helper_request;
-typedef struct _helper_stateful_request helper_stateful_request;
 typedef struct _generic_cbdata generic_cbdata;
 typedef struct _storeIOState storeIOState;
 typedef struct _queued_read queued_read;
 typedef struct _queued_write queued_write;
 typedef struct _link_list link_list;
+typedef struct _PumpStateData PumpStateData;
 typedef struct _storefs_entry storefs_entry_t;
 typedef struct _storerepl_entry storerepl_entry_t;
 typedef struct _diskd_queue diskd_queue;
@@ -210,7 +194,7 @@ typedef void CWCB(int fd, char *, size_t size, int flag, void *data);
 typedef void CNCB(int fd, int status, void *);
 
 typedef void FREE(void *);
-typedef void CBDUNL(void *);
+typedef void CBDUNL(void *, int);
 typedef void FOCB(void *, int fd, int errcode);
 typedef void EVH(void *);
 typedef void PF(int, void *);
@@ -232,9 +216,6 @@ typedef void PSC(FwdServer *, void *);
 typedef void RH(void *data, char *);
 typedef void UH(void *data, wordlist *);
 typedef int DEFER(int fd, void *data);
-typedef int READ_HANDLER(int, char *, int);
-typedef int WRITE_HANDLER(int, const char *, int);
-typedef void CBCB(char *buf, size_t size, void *data);
 
 typedef void STIOCB(void *their_data, int errflag, storeIOState *);
 typedef void STFNCB(void *their_data, int errflag, storeIOState *);
@@ -249,15 +230,12 @@ typedef void OBJH(StoreEntry *);
 typedef void SIGHDLR(int sig);
 typedef void STVLDCB(void *, int, int);
 typedef void HLPCB(void *, char *buf);
-typedef stateful_helper_callback_t HLPSCB(void *, void *lastserver, char *buf);
-typedef int HLPSAVAIL(void *);
-typedef void HLPSONEQ(void *);
 typedef void HLPCMDOPTS(int *argc, char **argv);
 typedef void IDNSCB(void *, rfc1035_rr *, int);
 
 typedef void STINIT(SwapDir *);
 typedef void STNEWFS(SwapDir *);
-typedef void STDUMP(StoreEntry *, SwapDir *);
+typedef void STDUMP(StoreEntry *, const char *, SwapDir *);
 typedef void STFREE(SwapDir *);
 typedef int STDBLCHECK(SwapDir *, StoreEntry *);
 typedef void STSTATFS(SwapDir *, StoreEntry *);
@@ -294,30 +272,6 @@ typedef void STFSSHUTDOWN(void);
 
 typedef double hbase_f(double);
 typedef void StatHistBinDumper(StoreEntry *, int idx, double val, double size, int count);
-
-/* authenticate.c authenticate scheme routines typedefs */
-typedef int AUTHSACTIVE(void);
-typedef int AUTHSAUTHED(auth_user_request_t *);
-typedef void AUTHSAUTHUSER(auth_user_request_t *, request_t *, ConnStateData *, http_hdr_type);
-typedef int AUTHSCONFIGURED(void);
-typedef void AUTHSDECODE(auth_user_request_t *, const char *);
-typedef int AUTHSDIRECTION(auth_user_request_t *);
-typedef void AUTHSDUMP(StoreEntry *, const char *, authScheme *);
-typedef void AUTHSFIXERR(auth_user_request_t *, HttpReply *, http_hdr_type, request_t *);
-typedef void AUTHSADDHEADER(auth_user_request_t *, HttpReply *, int);
-typedef void AUTHSADDTRAILER(auth_user_request_t *, HttpReply *, int);
-typedef void AUTHSFREE(auth_user_t *);
-typedef void AUTHSFREECONFIG(authScheme *);
-typedef char *AUTHSUSERNAME(auth_user_t *);
-typedef void AUTHSONCLOSEC(ConnStateData *);
-typedef void AUTHSPARSE(authScheme *, int, char *);
-typedef void AUTHSINIT(authScheme *);
-typedef void AUTHSREQFREE(auth_user_request_t *);
-typedef void AUTHSSETUP(authscheme_entry_t *);
-typedef void AUTHSSHUTDOWN(void);
-typedef void AUTHSSTART(auth_user_request_t *, RH *, void *);
-typedef void AUTHSSTATS(StoreEntry *);
-typedef const char *AUTHSCONNLASTHEADER(auth_user_request_t *);
 
 /* append/vprintf's for Packer */
 typedef void (*append_f) (void *, const char *buf, int size);
@@ -360,4 +314,4 @@ typedef RemovalPolicy *REMOVALPOLICYCREATE(wordlist * args);
 
 typedef int STDIRSELECT(const StoreEntry *);
 
-#endif /* SQUID_TYPEDEFS_H */
+#endif /* _TYPEDEFS_H_ */

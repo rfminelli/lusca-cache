@@ -2,13 +2,13 @@
 <TITLE>FEL: FTP skicka misslyckades </TITLE>
 </HEAD><BODY>
 <H1>FEL</H1>
-<H2>FTP SKICKA/&ouml;verf&ouml;ra misslyckades</H2>
+<H2>FTP SKICKA/överföra misslyckades</H2>
 <HR>
 <P>
-Vid f&ouml;rs&ouml;ket att SKICKA f&ouml;ljande URL:
+Vid försöket att SKICKA följande URL:
 <A HREF="%U">%U</A>
 <P>
-Squid s&auml;nde f&ouml;ljande FTP kommando:
+Squid sände följande FTP kommando:
 <PRE><STRONG>
         %f
 </STRONG></PRE>
@@ -19,7 +19,7 @@ och fick till svar
 <P>
 Prova att:
 <PRE>
-Kontrollera s&ouml;kv&auml;g, r&auml;ttigheter, diskutrymme och f&ouml;rs&ouml;k igen.
+Kontrollera sökväg, rättigheter, diskutrymme och försök igen.
 </PRE>
 </P>
 

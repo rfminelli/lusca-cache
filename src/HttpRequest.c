@@ -55,12 +55,8 @@ void
 requestDestroy(request_t * req)
 {
     assert(req);
-    if (req->body_connection)
-	clientAbortBody(req);
-    if (req->auth_user_request)
-	authenticateAuthUserRequestUnlock(req->auth_user_request);
+    safe_free(req->body);
     safe_free(req->canonical);
-    safe_free(req->vary_headers);
     stringClean(&req->urlpath);
     httpHeaderClean(&req->header);
     if (req->cache_control)
@@ -145,16 +141,26 @@ httpRequestPrefixLen(const request_t * req)
 	req->header.len + 2;
 }
 
-/*
- * Returns true if HTTP allows us to pass this header on.  Does not
- * check anonymizer (aka header_access) configuration.
- */
+/* returns true if header is allowed to be passed on */
 int
 httpRequestHdrAllowed(const HttpHeaderEntry * e, String * strConn)
 {
     assert(e);
+    /* check with anonymizer tables */
+    if (CBIT_TEST(Config.anonymize_headers, e->id))
+	return 0;
     /* check connection header */
     if (strConn && strListIsMember(strConn, strBuf(e->name), ','))
+	return 0;
+    return 1;
+}
+
+/* returns true if header is allowed to be passed on */
+int
+httpRequestHdrAllowedByName(http_hdr_type id)
+{
+    /* check with anonymizer tables */
+    if (CBIT_TEST(Config.anonymize_headers, id))
 	return 0;
     return 1;
 }

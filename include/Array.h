@@ -31,8 +31,8 @@
  *  
  */
 
-#ifndef SQUID_ARRAY_H
-#define SQUID_ARRAY_H
+#ifndef _ARRAY_H_
+#define _ARRAY_H_
 
 /* see Array.c for more documentation */
 
@@ -43,12 +43,12 @@ typedef struct {
 } Array;
 
 
-extern Array *arrayCreate(void);
+extern Array *arrayCreate();
 extern void arrayInit(Array * s);
 extern void arrayClean(Array * s);
-extern void arrayDestroy(Array * s);
-extern void arrayAppend(Array * s, void *obj);
+extern void arrayDestroy(Array *s);
+extern void arrayAppend(Array *s, void *obj);
 extern void arrayPreAppend(Array * s, int app_count);
 
 
-#endif /* SQUID_ARRAY_H */
+#endif /* ndef _ARRAY_H_ */

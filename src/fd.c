@@ -35,9 +35,6 @@
 
 #include "squid.h"
 
-int default_read_method(int, char *, int);
-int default_write_method(int, const char *, int);
-
 const char *fdTypeStr[] =
 {
     "None",
@@ -93,24 +90,11 @@ fd_close(int fd)
     F->timeout = 0;
 }
 
-int
-default_read_method(int fd, char *buf, int len)
-{
-    return (read(fd, buf, len));
-}
-
-int
-default_write_method(int fd, const char *buf, int len)
-{
-    return (write(fd, buf, len));
-}
-
 void
 fd_open(int fd, unsigned int type, const char *desc)
 {
-    fde *F;
+    fde *F = &fd_table[fd];
     assert(fd >= 0);
-    F = &fd_table[fd];
     if (F->flags.open) {
 	debug(51, 1) ("WARNING: Closing open FD %4d\n", fd);
 	fd_close(fd);
@@ -119,8 +103,6 @@ fd_open(int fd, unsigned int type, const char *desc)
     debug(51, 3) ("fd_open FD %d %s\n", fd, desc);
     F->type = type;
     F->flags.open = 1;
-    F->read_method = &default_read_method;
-    F->write_method = &default_write_method;
     fdUpdateBiggest(fd, 1);
     if (desc)
 	xstrncpy(F->desc, desc, FD_DESC_SZ);

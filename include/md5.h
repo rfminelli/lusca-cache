@@ -2,31 +2,8 @@
  * $Id$
  */
 
-#ifndef SQUID_MD5_H
-#define SQUID_MD5_H
-
-#if USE_OPENSSL
-
-/*
- * If Squid is compiled with OpenSSL then we use the MD5 routines
- * from there via some wrapper macros, and the rest of this file is ignored..
- */
-
-#if HAVE_OPENSSL_MD5_H
-#include <openssl/md5.h>
-#else
-#error Cannot find OpenSSL headers
-#endif
-
-/* Hack to adopt Squid to the OpenSSL syntax */
-#define MD5_DIGEST_CHARS MD5_DIGEST_LENGTH
-
-#define MD5Init MD5_Init
-#define MD5Update MD5_Update
-#define MD5Final MD5_Final
-
-#else /* USE_OPENSSL */
-
+#ifndef MD5_H
+#define MD5_H
 /* MD5.H - header file for MD5C.C
  */
 
@@ -52,21 +29,17 @@
  * documentation and/or software.
  */
 
-#include "squid_types.h"
-
 /* MD5 context. */
 typedef struct {
-    u_int32_t state[4];		/* state (ABCD) */
-    u_int32_t count[2];		/* number of bits, modulo 2^64 (lsb first) */
+    u_num32 state[4];		/* state (ABCD) */
+    u_num32 count[2];		/* number of bits, modulo 2^64 (lsb first) */
     unsigned char buffer[64];	/* input buffer */
 } MD5_CTX;
 
 void MD5Init(MD5_CTX *);
-void MD5Update(MD5_CTX *, const void *, unsigned long);
-void MD5Final(unsigned char *, MD5_CTX *);
+void MD5Update(MD5_CTX *, unsigned char *, unsigned int);
+void MD5Final(unsigned char[16], MD5_CTX *);
 
 #define MD5_DIGEST_CHARS         16
 
-#endif /* USE_OPENSSL */
-
-#endif /* SQUID_MD5_H */
+#endif /* MD5_H */

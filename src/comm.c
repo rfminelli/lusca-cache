@@ -35,9 +35,6 @@
 
 #include "squid.h"
 
-#if defined(_SQUID_CYGWIN_)
-#include <sys/ioctl.h>
-#endif
 #ifdef HAVE_NETINET_TCP_H
 #include <netinet/tcp.h>
 #endif
@@ -72,9 +69,10 @@ static IPH commConnectDnsHandle;
 static void commConnectCallback(ConnectStateData * cs, int status);
 static int commResetFD(ConnectStateData * cs);
 static int commRetryConnect(ConnectStateData * cs);
-CBDATA_TYPE(ConnectStateData);
+static CBDUNL commConnectDataFree;
 
 static MemPool *comm_write_pool = NULL;
+static MemPool *conn_state_pool = NULL;
 static MemPool *conn_close_pool = NULL;
 
 static void
@@ -148,7 +146,7 @@ commBind(int s, struct in_addr in_addr, u_short port)
 }
 
 /* Create a socket. Default is blocking, stream (TCP) socket.  IO_TYPE
- * is OR of flags specified in comm.h. Defaults TOS */
+ * is OR of flags specified in comm.h. */
 int
 comm_open(int sock_type,
     int proto,
@@ -157,23 +155,7 @@ comm_open(int sock_type,
     int flags,
     const char *note)
 {
-    return comm_openex(sock_type, proto, addr, port, flags, 0, note);
-}
-
-
-/* Create a socket. Default is blocking, stream (TCP) socket.  IO_TYPE
- * is OR of flags specified in defines.h:COMM_* */
-int
-comm_openex(int sock_type,
-    int proto,
-    struct in_addr addr,
-    u_short port,
-    int flags,
-    unsigned char TOS,
-    const char *note)
-{
     int new_socket;
-    int tos;
     fde *F = NULL;
 
     /* Create socket for accepting new connections. */
@@ -193,23 +175,10 @@ comm_openex(int sock_type,
 	}
 	return -1;
     }
-    /* set TOS if needed */
-    if (TOS) {
-#ifdef IP_TOS
-	tos = TOS;
-	if (setsockopt(new_socket, IPPROTO_IP, IP_TOS, (char *) &tos, sizeof(int)) < 0)
-	        debug(50, 1) ("comm_open: setsockopt(IP_TOS) on FD %d: %s\n",
-		new_socket, xstrerror());
-#else
-	debug(50, 0) ("comm_open: setsockopt(IP_TOS) not supported on this platform\n");
-#endif
-    }
     /* update fdstat */
     debug(5, 5) ("comm_open: FD %d is a new socket\n", new_socket);
     fd_open(new_socket, FD_SOCKET, note);
     F = &fd_table[new_socket];
-    F->local_addr = addr;
-    F->tos = tos;
     if (!(flags & COMM_NOCLOEXEC))
 	commSetCloseOnExec(new_socket);
     if ((flags & COMM_REUSEADDR))
@@ -262,9 +231,9 @@ comm_listen(int sock)
 void
 commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *data)
 {
-    ConnectStateData *cs;
+    ConnectStateData *cs = memPoolAlloc(conn_state_pool);
     debug(5, 3) ("commConnectStart: FD %d, %s:%d\n", fd, host, (int) port);
-    cs = cbdataAlloc(ConnectStateData);
+    cbdataAdd(cs, commConnectDataFree, 0);
     cs->fd = fd;
     cs->host = xstrdup(host);
     cs->port = port;
@@ -274,6 +243,12 @@ commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *
     comm_add_close_handler(fd, commConnectFree, cs);
     cs->locks++;
     ipcache_nbgethostbyname(host, commConnectDnsHandle, cs);
+}
+
+static void
+commConnectDataFree(void *data, int unused)
+{
+    memPoolFree(conn_state_pool, data);
 }
 
 static void
@@ -332,7 +307,6 @@ static int
 commResetFD(ConnectStateData * cs)
 {
     int fd2;
-    fde *F;
     if (!cbdataValid(cs->data))
 	return 0;
     statCounter.syscalls.sock.sockets++;
@@ -348,34 +322,23 @@ commResetFD(ConnectStateData * cs)
 	debug(5, 0) ("commResetFD: dup2: %s\n", xstrerror());
 	if (ENFILE == errno || EMFILE == errno)
 	    fdAdjustReserved();
-	close(fd2);
 	return 0;
     }
     close(fd2);
-    F = &fd_table[cs->fd];
     fd_table[cs->fd].flags.called_connect = 0;
     /*
      * yuck, this has assumptions about comm_open() arguments for
      * the original socket
      */
-    if (commBind(cs->fd, F->local_addr, F->local_port) != COMM_OK) {
-	debug(5, 0) ("commResetFD: bind: %s\n", xstrerror());
-	return 0;
+    commSetCloseOnExec(cs->fd);
+    if (Config.Addrs.tcp_outgoing.s_addr != no_addr.s_addr) {
+	if (commBind(cs->fd, Config.Addrs.tcp_outgoing, 0) != COMM_OK) {
+	    return 0;
+	}
     }
-#ifdef IP_TOS
-    if (F->tos) {
-	int tos = F->tos;
-	if (setsockopt(cs->fd, IPPROTO_IP, IP_TOS, (char *) &tos, sizeof(int)) < 0)
-	        debug(50, 1) ("commResetFD: setsockopt(IP_TOS) on FD %d: %s\n", cs->fd, xstrerror());
-    }
-#endif
-    if (F->flags.close_on_exec)
-	commSetCloseOnExec(cs->fd);
-    if (F->flags.nonblocking)
-	commSetNonBlocking(cs->fd);
+    commSetNonBlocking(cs->fd);
 #ifdef TCP_NODELAY
-    if (F->flags.nodelay)
-	commSetTcpNoDelay(cs->fd);
+    commSetTcpNoDelay(cs->fd);
 #endif
     if (Config.tcpRcvBufsz > 0)
 	commSetTcpRcvbuf(cs->fd, Config.tcpRcvBufsz);
@@ -581,7 +544,7 @@ commLingerClose(int fd, void *unused)
 {
     LOCAL_ARRAY(char, buf, 1024);
     int n;
-    n = FD_READ_METHOD(fd, buf, 1024);
+    n = read(fd, buf, 1024);
     if (n < 0)
 	debug(5, 3) ("commLingerClose: FD %d read: %s\n", fd, xstrerror());
     comm_close(fd);
@@ -600,10 +563,6 @@ commLingerTimeout(int fd, void *unused)
 void
 comm_lingering_close(int fd)
 {
-#if USE_SSL
-    if (fd_table[fd].ssl)
-	ssl_shutdown_method(fd);
-#endif
     if (shutdown(fd, 1) < 0) {
 	comm_close(fd);
 	return;
@@ -618,12 +577,10 @@ void
 comm_close(int fd)
 {
     fde *F = NULL;
-
     debug(5, 5) ("comm_close: FD %d\n", fd);
     assert(fd >= 0);
     assert(fd < Squid_MaxFD);
     F = &fd_table[fd];
-
     if (F->flags.closing)
 	return;
     if (shutting_down && (!F->flags.open || F->type == FD_FILE))
@@ -631,20 +588,10 @@ comm_close(int fd)
     assert(F->flags.open);
     assert(F->type != FD_FILE);
     F->flags.closing = 1;
-#if USE_SSL
-    if (F->ssl)
-	ssl_shutdown_method(fd);
-#endif
     CommWriteStateCallbackAndFree(fd, COMM_ERR_CLOSING);
     commCallCloseHandlers(fd);
     if (F->uses)		/* assume persistent connect count */
 	pconnHistCount(1, F->uses);
-#if USE_SSL
-    if (F->ssl) {
-	SSL_free(F->ssl);
-	F->ssl = NULL;
-    }
-#endif
     fd_close(fd);		/* update fdstat */
     close(fd);
     statCounter.syscalls.sock.closes++;
@@ -827,7 +774,6 @@ commSetCloseOnExec(int fd)
     }
     if (fcntl(fd, F_SETFD, flags | FD_CLOEXEC) < 0)
 	debug(50, 0) ("FD %d: set close-on-exec failed: %s\n", fd, xstrerror());
-    fd_table[fd].flags.close_on_exec = 1;
 #endif
 }
 
@@ -838,7 +784,6 @@ commSetTcpNoDelay(int fd)
     int on = 1;
     if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *) &on, sizeof(on)) < 0)
 	debug(50, 1) ("commSetTcpNoDelay: FD %d: %s\n", fd, xstrerror());
-    fd_table[fd].flags.nodelay = 1;
 }
 #endif
 
@@ -852,8 +797,8 @@ comm_init(void)
      * after accepting a client but before it opens a socket or a file.
      * Since Squid_MaxFD can be as high as several thousand, don't waste them */
     RESERVED_FD = XMIN(100, Squid_MaxFD / 4);
-    CBDATA_INIT_TYPE(ConnectStateData);
     comm_write_pool = memPoolCreate("CommWriteStateData", sizeof(CommWriteStateData));
+    conn_state_pool = memPoolCreate("ConnectStateData", sizeof(ConnectStateData));
     conn_close_pool = memPoolCreate("close_handler", sizeof(close_handler));
 }
 
@@ -865,11 +810,11 @@ commHandleWrite(int fd, void *data)
     int len = 0;
     int nleft;
 
-    debug(5, 5) ("commHandleWrite: FD %d: off %ld, sz %ld.\n",
-	fd, (long int) state->offset, (long int) state->size);
+    debug(5, 5) ("commHandleWrite: FD %d: off %d, sz %d.\n",
+	fd, (int) state->offset, state->size);
 
     nleft = state->size - state->offset;
-    len = FD_WRITE_METHOD(fd, state->buf + state->offset, nleft);
+    len = write(fd, state->buf + state->offset, nleft);
     debug(5, 5) ("commHandleWrite: write() returns %d\n", len);
     fd_bytes(fd, len, FD_WRITE);
     statCounter.syscalls.sock.writes++;
@@ -918,9 +863,9 @@ commHandleWrite(int fd, void *data)
 
 
 /* Select for Writing on FD, until SIZE bytes are sent.  Call
- * *HANDLER when complete. */
+ * * HANDLER when complete. */
 void
-comm_write(int fd, const char *buf, int size, CWCB * handler, void *handler_data, FREE * free_func)
+comm_write(int fd, char *buf, int size, CWCB * handler, void *handler_data, FREE * free_func)
 {
     CommWriteStateData *state = fd_table[fd].rwstate;
     debug(5, 5) ("comm_write: FD %d: sz %d: hndl %p: data %p.\n",
@@ -931,7 +876,7 @@ comm_write(int fd, const char *buf, int size, CWCB * handler, void *handler_data
 	fd_table[fd].rwstate = NULL;
     }
     fd_table[fd].rwstate = state = memPoolAlloc(comm_write_pool);
-    state->buf = (char *) buf;
+    state->buf = buf;
     state->size = size;
     state->offset = 0;
     state->handler = handler;

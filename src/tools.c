@@ -62,8 +62,6 @@ extern int setresuid(uid_t, uid_t, uid_t);
 
 extern void (*failure_notify) (const char *);
 
-MemPool *dlink_node_pool = NULL;
-
 void
 releaseServerSockets(void)
 {
@@ -463,11 +461,9 @@ getMyHostname(void)
 		inet_ntoa(Config.Sockaddr.http->s.sin_addr),
 		host);
 	    present = 1;
-	    if (strchr(host, '.'))
-		return host;
-
+	    return host;
 	}
-	debug(50, 1) ("WARNING: failed to resolve %s to a fully qualified hostname\n",
+	debug(50, 1) ("WARNING: failed to resolve %s to a hostname\n",
 	    inet_ntoa(Config.Sockaddr.http->s.sin_addr));
     }
     /*
@@ -484,8 +480,7 @@ getMyHostname(void)
 	/* use the official name from DNS lookup */
 	xstrncpy(host, h->h_name, SQUIDHOSTNAMELEN);
 	present = 1;
-	if (strchr(host, '.'))
-	    return host;
+	return host;
     }
     fatal("Could not determine fully qualified hostname.  Please set 'visible_hostname'\n");
     return NULL;		/* keep compiler happy */
@@ -513,7 +508,7 @@ safeunlink(const char *s, int quiet)
 void
 leave_suid(void)
 {
-    debug(21, 3) ("leave_suid: PID %d called\n", (int) getpid());
+    debug(21, 3) ("leave_suid: PID %d called\n", getpid());
     if (geteuid() != 0)
 	return;
     /* Started as a root, check suid option */
@@ -525,7 +520,7 @@ leave_suid(void)
     if (setgid(Config2.effectiveGroupID) < 0)
 	debug(50, 0) ("ALERT: setgid: %s\n", xstrerror());
     debug(21, 3) ("leave_suid: PID %d giving up root, becoming '%s'\n",
-	(int) getpid(), Config.effectiveUser);
+	getpid(), Config.effectiveUser);
 #if HAVE_SETRESUID
     if (setresuid(Config2.effectiveUserID, Config2.effectiveUserID, 0) < 0)
 	debug(50, 0) ("ALERT: setresuid: %s\n", xstrerror());
@@ -542,7 +537,7 @@ leave_suid(void)
 void
 enter_suid(void)
 {
-    debug(21, 3) ("enter_suid: PID %d taking root priveleges\n", (int) getpid());
+    debug(21, 3) ("enter_suid: PID %d taking root priveleges\n", getpid());
 #if HAVE_SETRESUID
     setresuid(-1, 0, -1);
 #else
@@ -559,7 +554,7 @@ no_suid(void)
     uid_t uid;
     leave_suid();
     uid = geteuid();
-    debug(21, 3) ("leave_suid: PID %d giving up root priveleges forever\n", (int) getpid());
+    debug(21, 3) ("leave_suid: PID %d giving up root priveleges forever\n", getpid());
 #if HAVE_SETRESUID
     if (setresuid(uid, uid, uid) < 0)
 	debug(50, 1) ("no_suid: setresuid: %s\n", xstrerror());
@@ -592,7 +587,7 @@ writePidFile(void)
 	return;
     }
     snprintf(buf, 32, "%d\n", (int) getpid());
-    FD_WRITE_METHOD(fd, buf, strlen(buf));
+    write(fd, buf, strlen(buf));
     file_close(fd);
 }
 
@@ -761,28 +756,10 @@ logsFlush(void)
 	fflush(debug_log);
 }
 
-const char *
-checkNullString(const char *p)
+char *
+checkNullString(char *p)
 {
     return p ? p : "(NULL)";
-}
-
-dlink_node *
-dlinkNodeNew()
-{
-    if (dlink_node_pool == NULL)
-	dlink_node_pool = memPoolCreate("Dlink list nodes", sizeof(dlink_node));
-    /* where should we call memPoolDestroy(dlink_node_pool); */
-    return memPoolAlloc(dlink_node_pool);
-}
-
-/* the node needs to be unlinked FIRST */
-void
-dlinkNodeDelete(dlink_node * m)
-{
-    if (m == NULL)
-	return;
-    memPoolFree(dlink_node_pool, m);
 }
 
 void
@@ -956,70 +933,4 @@ isPowTen(int count)
     if (0.0 != x - (double) (int) x)
 	return 0;
     return 1;
-}
-
-void
-parseEtcHosts(void)
-{
-    FILE *fp;
-    char buf[1024];
-    char buf2[512];
-    char *nt = buf;
-    char *lt = buf;
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
-    char *systemroot = NULL;
-#endif
-    if (NULL == Config.etcHostsPath)
-	return;
-    if (0 == strcmp(Config.etcHostsPath, "none"))
-	return;
-    fp = fopen(Config.etcHostsPath, "r");
-    if (fp == NULL) {
-	debug(1, 1) ("parseEtcHosts: %s: %s\n",
-	    Config.etcHostsPath, xstrerror());
-	return;
-    }
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
-    setmode(fileno(fp), O_TEXT);
-#endif
-    while (fgets(buf, 1024, fp)) {	/* for each line */
-	wordlist *hosts = NULL;
-	char *addr;
-	if (buf[0] == '#')	/* MS-windows likes to add comments */
-	    continue;
-	lt = buf;
-	addr = buf;
-	debug(1, 5) ("etc_hosts: line is '%s'\n", buf);
-	nt = strpbrk(lt, w_space);
-	if (nt == NULL)		/* empty line */
-	    continue;
-	*nt = '\0';		/* null-terminate the address */
-	debug(1, 5) ("etc_hosts: address is '%s'\n", addr);
-	lt = nt + 1;
-	while ((nt = strpbrk(lt, w_space))) {
-	    char *host = NULL;
-	    if (nt == lt) {	/* multiple spaces */
-		debug(1, 5) ("etc_hosts: multiple spaces, skipping\n");
-		lt = nt + 1;
-		continue;
-	    }
-	    *nt = '\0';
-	    debug(1, 5) ("etc_hosts: got hostname '%s'\n", lt);
-	    if (Config.appendDomain && !strchr(lt, '.')) {
-		/* I know it's ugly, but it's only at reconfig */
-		strncpy(buf2, lt, 512);
-		strncat(buf2, Config.appendDomain, 512 - strlen(lt));
-		host = buf2;
-	    } else {
-		host = lt;
-	    }
-	    if (ipcacheAddEntryFromHosts(host, addr) != 0)
-		goto skip;	/* invalid address, continuing is useless */
-	    wordlistAdd(&hosts, host);
-	    lt = nt + 1;
-	}
-	fqdncacheAddEntryFromHosts(addr, hosts);
-      skip:
-	wordlistDestroy(&hosts);
-    }
 }

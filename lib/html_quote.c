@@ -49,7 +49,7 @@
  */
 static struct {
     unsigned char code;
-    const char *quote;
+    char *quote;
 } htmlstandardentities[] =
 
 {
@@ -98,7 +98,7 @@ html_quote(const char *string)
 	buf = xcalloc(bufsize, 1);
     }
     for (src = string, dst = buf; *src; src++) {
-	const char *escape = NULL;
+	char *escape = NULL;
 	const unsigned char ch = *src;
 
 	/* Walk thru the list of HTML Entities that must be quoted to

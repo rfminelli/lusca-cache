@@ -31,15 +31,12 @@
  *
  */
 
-#ifndef SQUID_GLOBALS_H
-#define SQUID_GLOBALS_H
-
 extern FILE *debug_log;		/* NULL */
 extern SquidConfig Config;
 extern SquidConfig2 Config2;
 extern char *ConfigFile;	/* NULL */
 extern char *IcpOpcodeStr[];
-extern const char *dns_error_message;	/* NULL */
+extern char *dns_error_message;	/* NULL */
 extern const char *log_tags[];
 extern char tmp_error_buf[ERROR_BUF_SZ];
 extern char *volatile debug_options;	/* NULL */
@@ -55,8 +52,8 @@ extern const char *const appname;	/* "squid" */
 extern const char *const dash_str;	/* "-" */
 extern const char *const localhost;	/* "127.0.0.1" */
 extern const char *const null_string;	/* "" */
-extern const char *const version_string;	/* VERSION */
-extern const char *const full_appname_string;	/* PACKAGE "/" VERSION */
+extern const char *const version_string;	/* SQUID_VERSION */
+extern const char *const full_appname_string;	/* "Squid/" SQUID_VERSION */
 extern const char *const w_space;	/* " \t\n\r" */
 extern const char *fdTypeStr[];
 extern const char *hier_strings[];
@@ -64,6 +61,7 @@ extern const char *memStatusStr[];
 extern const char *pingStatusStr[];
 extern const char *storeStatusStr[];
 extern const char *swapStatusStr[];
+extern dnsStatData DnsStats;
 extern fde *fd_table;		/* NULL */
 extern int Biggest_FD;		/* -1 */
 extern int Number_FD;		/* 0 */
@@ -147,7 +145,6 @@ extern int refresh_nocache_hack;	/* 0 */
 extern request_flags null_request_flags;
 extern int store_open_disk_fd;	/* 0 */
 extern const char *SwapDirType[];
-extern authscheme_entry_t *authscheme_list;	/* NULL */
 extern storefs_entry_t *storefs_list;	/* NULL */
 extern storerepl_entry_t *storerepl_list;	/* NULL */
 extern int store_swap_low;	/* 0 */
@@ -155,11 +152,3 @@ extern int store_swap_high;	/* 0 */
 extern int store_pages_max;	/* 0 */
 extern ssize_t store_maxobjsize;	/* -1 */
 extern RemovalPolicy *mem_policy;
-extern hash_table *proxy_auth_username_cache;	/* NULL */
-extern int incoming_sockets_accepted;
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
-extern unsigned int WIN32_OS_version;	/* 0 */
-extern char *WIN32_OS_string;
-#endif
-
-#endif /* SQUID_GLOBALS_H */
