@@ -322,7 +322,7 @@ fatal(const char *message)
     if (!store_rebuilding)
 	storeDirWriteCleanLogs(0);
     fatal_common(message);
-    exit(shutting_down ? 0 : 1);
+    exit(1);
 }
 
 /* printf-style interface for fatal */

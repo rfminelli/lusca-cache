@@ -1,4 +1,7 @@
 
+
+
+
 /*
  * $Id$
  *
@@ -103,6 +106,36 @@ struct _snmp_request_t {
     u_char *community;
 };
 
+struct _viewEntry {
+    char viewName[32];
+    int viewIndex;
+    int viewType;
+    int viewSubtreeLen;
+    oid viewSubtree[32];
+    struct _viewEntry *next;
+};
+
+struct _communityEntry {
+    char name[64];
+    int readView;
+    int writeView;
+    acl_access *acls;
+    communityEntry *next;
+};
+
+struct _usecEntry {
+    u_char userName[32];
+    int userLen;
+    int qoS;
+    u_char authKey[16];
+    u_char privKey[16];
+    int noauthReadView;
+    int noauthWriteView;
+    int authReadView;
+    int authWriteView;
+    usecEntry *next;
+};
+
 #endif
 
 struct _acl {
@@ -135,9 +168,6 @@ struct _aclCheck_t {
     char browser[BROWSERNAMELEN];
     acl_proxy_auth_user *auth_user;
     acl_lookup_state state[ACL_ENUM_MAX];
-#if SQUID_SNMP
-    char *snmp_community;
-#endif
     PF *callback;
     void *callback_data;
 };
@@ -228,7 +258,16 @@ struct _SquidConfig {
     struct {
 	char *configFile;
 	char *agentInfo;
+	char *mibPath;
+	char *trap_community;
+	char *trap_sink;
 	u_short localPort;
+	int do_queueing;
+	int conf_authtraps;
+	wordlist *snmpconf;
+	viewEntry *views;
+	usecEntry *users;
+	communityEntry *communities;
     } Snmp;
 #endif
     char *as_whois_server;
@@ -338,7 +377,6 @@ struct _SquidConfig {
 	int offline;
 	int redir_rewrites_host;
 	int persistent_client_posts;
-	int prefer_direct;
     } onoff;
     acl *aclList;
     struct {
@@ -349,9 +387,6 @@ struct _SquidConfig {
 	acl_access *AlwaysDirect;
 	acl_access *ASlists;
 	acl_access *noCache;
-#if SQUID_SNMP
-	acl_access *snmp;
-#endif
     } accessList;
     acl_deny_info_list *denyInfoList;
     char *proxyAuthRealm;
@@ -907,19 +942,13 @@ struct _StoreDigestCBlock {
 };
 
 struct _DigestFetchState {
-    PeerDigest *pd;
+    peer *peer;
     StoreEntry *entry;
     StoreEntry *old_entry;
-    request_t *request;
     int offset;
     int mask_offset;
     time_t start_time;
-    time_t resp_time;
-    time_t expires;
-    struct {
-	int msg;
-	int bytes;
-    } sent, recv;
+    request_t *request;
 };
 
 /* statistics for cache digests and other hit "predictors" */
@@ -933,33 +962,24 @@ struct _cd_guess_stats {
 };
 
 struct _PeerDigest {
-    peer *peer;                 /* pointer back to peer structure, argh */
-    CacheDigest *cd;            /* actual digest structure */
-    String host;                /* copy of peer->host */
-    const char *req_result;	/* text status of the last request */
+    CacheDigest *cd;
     struct {
-	unsigned int needed:1;  /* there were requests for this digest */
-	unsigned int usable:1;	/* can be used for lookups */
+	unsigned int inited:1;	/* initialized */
+	unsigned int usable:1;	/* ready to use */
 	unsigned int requested:1;	/* in process of receiving [fresh] digest */
+	unsigned int disabled:1;	/* do not use/validate the digest */
+	unsigned int init_pending:1;
     } flags;
-    struct {
-	/* all times are absolute unless augmented with _delay */
-	time_t initialized;	/* creation */
-	time_t needed;		/* first lookup/use by a peer */
-	time_t next_check;	/* next scheduled check/refresh event */
-	time_t retry_delay;	/* delay before re-checking _invalid_ digest */
-	time_t requested;	/* requested a fresh copy of a digest */
-	time_t req_delay;       /* last request response time */
-	time_t received;	/* received the current copy of a digest */
-	time_t disabled;	/* disabled for good */
-    } times;
+    time_t last_fetch_resp_time;
+    time_t last_req_timestamp;
+    time_t last_dis_delay;	/* last disability delay */
     struct {
 	cd_guess_stats guess;
 	int used_count;
-	struct {
-	    int msgs;
-	    kb_t kbytes;
-	} sent, recv;
+	int msgs_sent;
+	int msgs_recv;
+	kb_t kbytes_sent;
+	kb_t kbytes_recv;
     } stats;
 };
 
@@ -1026,7 +1046,7 @@ struct _peer {
 	} flags;
     } mcast;
 #if USE_CACHE_DIGESTS
-    PeerDigest *digest;
+    PeerDigest digest;
 #endif
     int tcp_up;			/* 0 if a connect() fails */
     time_t last_fail_time;

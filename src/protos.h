@@ -190,7 +190,6 @@ extern void _db_print(const char *,...);
 #else
 extern void _db_print();
 #endif
-extern void xassert(const char *, const char *, int);
 
 /* packs, then prints an object using debug() */
 extern void debugObj(int section, int level, const char *label, void *obj, ObjPackMethod pm);
@@ -214,7 +213,6 @@ extern void eventRun(void);
 extern time_t eventNextTime(void);
 extern void eventDelete(EVH * func, void *arg);
 extern void eventInit(void);
-extern void eventFreeMemory(void);
 
 extern void fd_close(int fd);
 extern void fd_open(int fd, unsigned int type, const char *);
@@ -481,23 +479,15 @@ extern PF httpAccept;
 #ifdef SQUID_SNMP
 extern PF snmpHandleUdp;
 extern void snmpInit(void);
+extern int snmpInitConfig(void);
 extern void snmpConnectionOpen(void);
 extern void snmpConnectionShutdown(void);
 extern void snmpConnectionClose(void);
-extern void snmpDebugOid(int lvl, oid * Name, snint Len);
-extern void addr2oid(struct in_addr addr, oid * Dest);
-extern struct in_addr *oid2addr(oid * id);
-variable_list *snmp_basicFn(variable_list *, snint *);
-variable_list *snmp_confFn(variable_list *, snint *);
-variable_list *snmp_sysFn(variable_list *, snint *);
-variable_list *snmp_prfSysFn(variable_list *, snint *);
-variable_list *snmp_prfProtoFn(variable_list *, snint *);
-variable_list *snmp_prfPeerFn(variable_list *, snint *);
-variable_list *snmp_netIpFn(variable_list *, snint *);
-variable_list *snmp_netFqdnFn(variable_list *, snint *);
-variable_list *snmp_netDnsFn(variable_list *, snint *);
-variable_list *snmp_meshPtblFn(variable_list *, snint *);
-variable_list *snmp_meshCtblFn(variable_list *, snint *);
+extern int snmpCreateView(char **);
+extern int snmpCreateUser(char **);
+extern int snmpCreateCommunity(char **);
+extern void snmpTokenize(char *, char **, int);
+extern int snmpCompare(oid * name1, int len1, oid * name2, int len2);
 #endif /* SQUID_SNMP */
 
 extern void icpHandleIcpV3(int, struct sockaddr_in, char *, int);
@@ -596,7 +586,6 @@ extern peer *getAnyParent(request_t * request);
 extern lookup_t peerDigestLookup(peer * p, request_t * request, StoreEntry * entry);
 extern peer *neighborsDigestSelect(request_t * request, StoreEntry * entry);
 extern void peerNoteDigestLookup(request_t * request, peer * p, lookup_t lookup);
-extern void peerNoteDigestGone(peer *p);
 extern int neighborUp(const peer * e);
 extern void peerDestroy(peer * e);
 extern char *neighborTypeStr(const peer * e);
@@ -637,10 +626,7 @@ extern peer *peerGetSomeParent(request_t *, hier_code *);
 extern void peerSelectInit(void);
 
 /* peer_digest.c */
-extern PeerDigest *peerDigestCreate(peer *p);
-extern void peerDigestNeeded(PeerDigest *pd);
-extern void peerDigestNotePeerGone(PeerDigest *pd);
-extern void peerDigestStatsReport(const PeerDigest *pd, StoreEntry * e);
+extern EVH peerDigestInit;
 
 /* forward.c */
 extern void fwdStart(int, StoreEntry *, request_t *, struct in_addr);
@@ -683,9 +669,6 @@ extern void pconnHistCount(int, int);
 extern int stat5minClientRequests(void);
 extern double stat5minCPUUsage(void);
 extern const char *storeEntryFlags(const StoreEntry *);
-extern double statRequestHitRatio(int minutes);
-extern double statByteHitRatio(int minutes);
-
 
 
 /* StatHist */
@@ -1042,7 +1025,8 @@ extern void htcpSocketClose(void);
 #define strCaseCmp(s,str) strcasecmp(strBuf(s), (str))
 #define strNCaseCmp(s,str,n) strncasecmp(strBuf(s), (str), (n))
 #define strSet(s,ptr,ch) (s).buf[ptr-(s).buf] = (ch)
-#define strCut(s,pos) (s).buf[pos] = '\0'
+#define strCut(s,pos) (((s).len = pos) , ((s).buf[pos] = '\0'))
+#define strCutPtr(s,ptr) (((s).len = (ptr)-(s).buf) , ((s).buf[(s).len] = '\0'))
 /* #define strCat(s,str)  stringAppend(&(s), (str), strlen(str)+1) */
 extern void stringInit(String * s, const char *str);
 extern void stringLimitInit(String * s, const char *str, int len);

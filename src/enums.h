@@ -105,7 +105,7 @@ typedef enum {
     ACL_SRC_ASN,
     ACL_DST_ASN,
     ACL_SRC_ARP,
-    ACL_SNMP_COMMUNITY,
+    ACL_SNMP_COMM,
     ACL_NETDB_SRC_RTT,
     ACL_ENUM_MAX
 } squid_acl;
@@ -543,9 +543,6 @@ typedef enum {
     MEM_NET_DB_NAME,
     MEM_NET_DB_PEER,
     MEM_PEER,
-#if USE_CACHE_DIGESTS
-    MEM_PEER_DIGEST,
-#endif
     MEM_PINGERECHODATA,
     MEM_PINGERREPLYDATA,
     MEM_PS_STATE,
