@@ -65,6 +65,17 @@ static MemMeter StrVolumeMeter;
 
 /* local routines */
 
+/*
+ * we have a limit on _total_ amount of idle memory so we ignore
+ * max_pages for now
+ */
+static void
+memDataInit(mem_type type, const char *name, size_t size, int max_pages_notused)
+{
+    assert(name && size);
+    MemPools[type] = memPoolCreate(name, size);
+}
+
 static void
 memStringStats(StoreEntry * sentry)
 {
@@ -107,17 +118,6 @@ memStats(StoreEntry * sentry)
 /*
  * public routines
  */
-
-/*
- * we have a limit on _total_ amount of idle memory so we ignore
- * max_pages for now
- */
-void
-memDataInit(mem_type type, const char *name, size_t size, int max_pages_notused)
-{
-    assert(name && size);
-    MemPools[type] = memPoolCreate(name, size);
-}
 
 
 /* find appropriate pool and use it (pools always init buffer with 0s) */
@@ -177,6 +177,7 @@ void
 memInit(void)
 {
     int i;
+    mem_type t;
     memInitModule();
     /* set all pointers to null */
     memset(MemPools, '\0', sizeof(MemPools));
@@ -290,23 +291,7 @@ memInit(void)
 	sizeof(helper_request), 0);
     memDataInit(MEM_HELPER_SERVER, "helper_server",
 	sizeof(helper_server), 0);
-    memDataInit(MEM_STORE_IO, "storeIOState", sizeof(storeIOState), 0);
-    /* init string pools */
-    for (i = 0; i < mem_str_pool_count; i++) {
-	StrPools[i].pool = memPoolCreate(StrPoolsAttrs[i].name, StrPoolsAttrs[i].obj_size);
-    }
-    cachemgrRegister("mem",
-	"Memory Utilization",
-	memStats, 0, 1);
-}
-
-/*
- * Test that all entries are initialized
- */
-void
-memCheckInit(void)
-{
-    mem_type t;
+    /* test that all entries are initialized */
     for (t = MEM_NONE, t++; t < MEM_MAX; t++) {
 	if (MEM_DONTFREE == t)
 	    continue;
@@ -316,10 +301,17 @@ memCheckInit(void)
 	 */
 	assert(MemPools[t]);
     }
+    /* init string pools */
+    for (i = 0; i < mem_str_pool_count; i++) {
+	StrPools[i].pool = memPoolCreate(StrPoolsAttrs[i].name, StrPoolsAttrs[i].obj_size);
+    }
+    cachemgrRegister("mem",
+	"Memory Utilization",
+	memStats, 0, 1);
 }
 
 void
-memClean(void)
+memClean()
 {
     memCleanModule();
 }

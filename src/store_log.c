@@ -111,14 +111,14 @@ storeLogRotate(void)
 	i--;
 	snprintf(from, MAXPATHLEN, "%s.%d", fname, i - 1);
 	snprintf(to, MAXPATHLEN, "%s.%d", fname, i);
-	xrename(from, to);
+	rename(from, to);
     }
     /* Rotate the current log to .0 */
     if (Config.Log.rotateNumber > 0) {
 	snprintf(to, MAXPATHLEN, "%s.%d", fname, 0);
-	xrename(fname, to);
+	rename(fname, to);
     }
-    storelog_fd = file_open(fname, O_WRONLY | O_CREAT);
+    storelog_fd = file_open(fname, O_WRONLY | O_CREAT, NULL, NULL, NULL);
     if (storelog_fd < 0) {
 	debug(50, 0) ("storeLogRotate: %s: %s\n", fname, xstrerror());
 	debug(20, 1) ("Store logging disabled\n");
@@ -138,7 +138,11 @@ storeLogOpen(void)
     if (strcmp(Config.Log.store, "none") == 0)
 	storelog_fd = -1;
     else
-	storelog_fd = file_open(Config.Log.store, O_WRONLY | O_CREAT);
+	storelog_fd = file_open(Config.Log.store,
+	    O_WRONLY | O_CREAT,
+	    NULL,
+	    NULL,
+	    NULL);
     if (storelog_fd < 0)
 	debug(20, 1) ("Store logging disabled\n");
 }

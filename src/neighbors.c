@@ -506,15 +506,10 @@ neighborsUdpPing(request_t * request,
      */
     if (Config.Timeout.icp_query)
 	*timeout = Config.Timeout.icp_query;
-    else {
-	if (*exprep > 0)
-	    (*timeout) = 2 * (*timeout) / (*exprep);
-	else
-	    *timeout = 2000;	/* 2 seconds */
-	if (Config.Timeout.icp_query_max)
-	    if (*timeout > Config.Timeout.icp_query_max)
-		*timeout = Config.Timeout.icp_query_max;
-    }
+    else if (*exprep > 0)
+	(*timeout) = 2 * (*timeout) / (*exprep);
+    else
+	*timeout = 2000;	/* 2 seconds */
     return peers_pinged;
 }
 

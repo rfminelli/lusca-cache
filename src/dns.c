@@ -37,7 +37,6 @@
 
 static helper *dnsservers = NULL;
 
-#if USE_DNSSERVERS
 static void
 dnsStats(StoreEntry * sentry)
 {
@@ -45,12 +44,9 @@ dnsStats(StoreEntry * sentry)
     helperStats(sentry, dnsservers);
 }
 
-#endif
-
 void
 dnsInit(void)
 {
-#if USE_DNSSERVERS
     static int init = 0;
     wordlist *w;
     if (!Config.Program.dnsserver)
@@ -74,7 +70,6 @@ dnsInit(void)
 	    dnsStats, 0, 1);
     }
     init++;
-#endif
 }
 
 void
@@ -105,30 +100,29 @@ dnsSubmit(const char *lookup, HLPCB * callback, void *data)
 variable_list *
 snmp_netDnsFn(variable_list * Var, snint * ErrP)
 {
-    variable_list *Answer = NULL;
+    variable_list *Answer;
     debug(49, 5) ("snmp_netDnsFn: Processing request:\n", Var->name[LEN_SQ_NET +
 	    1]);
     snmpDebugOid(5, Var->name, Var->name_length);
+    Answer = snmp_var_new(Var->name, Var->name_length);
     *ErrP = SNMP_ERR_NOERROR;
+    Answer->val_len = sizeof(snint);
+    Answer->val.integer = xmalloc(Answer->val_len);
+    Answer->type = SMI_COUNTER32;
     switch (Var->name[LEN_SQ_NET + 1]) {
     case DNS_REQ:
-	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    dnsservers->stats.requests,
-	    SMI_COUNTER32);
+	*(Answer->val.integer) = dnsservers->stats.requests;
 	break;
     case DNS_REP:
-	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    dnsservers->stats.replies,
-	    SMI_COUNTER32);
+	*(Answer->val.integer) = dnsservers->stats.replies;
 	break;
     case DNS_SERVERS:
-	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    dnsservers->n_running,
-	    SMI_COUNTER32);
+	*(Answer->val.integer) = dnsservers->n_running;
 	break;
     default:
 	*ErrP = SNMP_ERR_NOSUCHNAME;
-	break;
+	snmp_var_free(Answer);
+	return (NULL);
     }
     return Answer;
 }

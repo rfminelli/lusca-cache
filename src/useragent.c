@@ -50,7 +50,7 @@ useragentOpenLog(void)
 	cache_useragent_log = NULL;
     }
     if (fname && strcmp(fname, "none") != 0) {
-	log_fd = file_open(fname, O_WRONLY | O_CREAT | O_APPEND);
+	log_fd = file_open(fname, O_WRONLY | O_CREAT | O_APPEND, NULL, NULL, NULL);
 	if (log_fd < 0) {
 	    debug(50, 0) ("useragentOpenLog: %s: %s\n", fname, xstrerror());
 	} else if ((cache_useragent_log = fdopen(log_fd, "a")) == NULL) {
@@ -87,7 +87,7 @@ useragentRotateLog(void)
 	i--;
 	snprintf(from, MAXPATHLEN, "%s.%d", fname, i - 1);
 	snprintf(to, MAXPATHLEN, "%s.%d", fname, i);
-	xrename(from, to);
+	rename(from, to);
     }
     if (cache_useragent_log) {
 	file_close(fileno(cache_useragent_log));
@@ -97,7 +97,7 @@ useragentRotateLog(void)
     /* Rotate the current log to .0 */
     if (Config.Log.rotateNumber > 0) {
 	snprintf(to, MAXPATHLEN, "%s.%d", fname, 0);
-	xrename(fname, to);
+	rename(fname, to);
     }
     useragentOpenLog();
 #endif

@@ -119,7 +119,7 @@ parse_rfc1123(const char *str)
 	s++;			/* or: Thu, 10 Jan 1993 01:29:59 GMT */
 	while (*s == ' ')
 	    s++;
-	if (xisdigit(*s) && !xisdigit(*(s + 1)))	/* backoff if only one digit */
+	if (xisdigit(*s) && !xisdigit(*(s+1))) /* backoff if only one digit */
 	    s--;
 	if (strchr(s, '-')) {	/* First format */
 	    if ((int) strlen(s) < 18)
@@ -237,16 +237,15 @@ mkhttpdlogtime(const time_t * t)
     gmt_yday = gmt->tm_yday;
 
     lt = localtime(t);
-
     day_offset = lt->tm_yday - gmt_yday;
+    min_offset = day_offset * 1440 + (lt->tm_hour - gmt_hour) * 60
+	+ (lt->tm_min - gmt_min);
+
     /* wrap round on end of year */
     if (day_offset > 1)
 	day_offset = -1;
     else if (day_offset < -1)
 	day_offset = 1;
-
-    min_offset = day_offset * 1440 + (lt->tm_hour - gmt_hour) * 60
-	+ (lt->tm_min - gmt_min);
 
     len = strftime(buf, 127 - 5, "%d/%b/%Y:%H:%M:%S ", lt);
     snprintf(buf + len, 128 - len, "%+03d%02d",

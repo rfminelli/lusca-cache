@@ -993,7 +993,7 @@ aclDecodeProxyAuth(const char *proxy_auth, char **user, char **password, char *b
 {
     char *sent_auth;
     char *cleartext;
-    debug(28, 6) ("aclDecodeProxyAuth: header = '%s'\n", proxy_auth);
+
     if (proxy_auth == NULL)
 	return 0;
     if (strlen(proxy_auth) < SKIP_BASIC_SZ)
@@ -1014,12 +1014,7 @@ aclDecodeProxyAuth(const char *proxy_auth, char **user, char **password, char *b
     if ((*password = strchr(*user, ':')) != NULL)
 	*(*password)++ = '\0';
     if (*password == NULL) {
-	debug(28, 1) ("aclDecodeProxyAuth: no password in proxy authorization header '%s'\n", proxy_auth);
-	return 0;
-    }
-    if (**password == '\0') {
-	debug(28, 1) ("aclDecodeProxyAuth: Disallowing empty password,"
-	    "user is '%s'\n", *user);
+	debug(28, 1) ("aclDecodeProxyAuth: no password in proxy authorization header\n");
 	return 0;
     }
     return 1;
@@ -1047,8 +1042,7 @@ aclMatchProxyAuth(wordlist * data, const char *proxy_auth, acl_proxy_auth_user *
     debug(28, 5) ("aclMatchProxyAuth: checking user '%s'\n", user);
 
     if (auth_user) {
-	/*
-	 * This should be optimized to a boolean argument indicating that the
+	/* This should be optimized to a boolean argument indicating that the
 	 * password is invalid, instead of passing full acl_proxy_auth_user
 	 * structures, and all messing with checklist->proxy_auth should
 	 * be restricted the functions that deal with the authenticator.
@@ -1062,11 +1056,8 @@ aclMatchProxyAuth(wordlist * data, const char *proxy_auth, acl_proxy_auth_user *
 	    debug(28, 4) ("aclMatchProxyAuth: authentication failed for user '%s'\n",
 		user);
 	    aclFreeProxyAuthUser(auth_user);
-	    /*
-	     * copy username to request for logging on client-side
-	     * unless ident is known (do not override ident with
-	     * false proxy auth names)
-	     */
+	    /* copy username to request for logging on client-side unless ident
+	     * is known (do not override ident with false proxy auth names) */
 	    if (!*checklist->request->user_ident)
 		xstrncpy(checklist->request->user_ident, user, USER_IDENT_SZ);
 	    return -2;
@@ -1944,18 +1935,16 @@ aclHostDomainCompare(const void *data, splayNode * n)
     l1 = strlen(h);
     l2 = strlen(d);
     /* h != d */
-    while (xtolower(h[l1]) == xtolower(d[l2])) {
+    while (xtolower(h[--l1]) == xtolower(d[--l2])) {
 	if (l1 == 0)
 	    break;
 	if (l2 == 0)
 	    break;
-	l1--;
-	l2--;
     }
     /* a '.' is a special case */
-    if ((h[l1] == '.') || (l1 == 0))
+    if ((h[l1] == '.') && (l1 == 0))
 	return -1;		/* domain(h) < d */
-    if ((d[l2] == '.') || (l2 == 0))
+    if ((d[l2] == '.') && (l2 == 0))
 	return 1;		/* domain(h) > d */
     return (xtolower(h[l1]) - xtolower(d[l2]));
 }
@@ -2398,7 +2387,7 @@ aclDumpArpListWalkee(void *node, void *state)
     static char buf[24];
     while (*W != NULL)
 	W = &(*W)->next;
-    snprintf(buf, sizeof(buf), "%02x:%02x:%02x:%02x:%02x:%02x",
+    snprintf(buf, sizeof(buf), "%02x:%02x:02x:02x:02x:02x",
 	arp->eth[0], arp->eth[1], arp->eth[2], arp->eth[3],
 	arp->eth[4], arp->eth[5]);
     wordlistAdd(state, buf);

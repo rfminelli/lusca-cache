@@ -401,7 +401,7 @@ mimeLoadIconFile(const char *icon)
     if (storeGetPublic(url, METHOD_GET))
 	return;
     snprintf(path, MAXPATHLEN, "%s/%s", Config.icons.directory, icon);
-    fd = file_open(path, O_RDONLY);
+    fd = file_open(path, O_RDONLY, NULL, NULL, NULL);
     if (fd < 0) {
 	debug(25, 0) ("mimeLoadIconFile: %s: %s\n", path, xstrerror());
 	return;
@@ -418,7 +418,6 @@ mimeLoadIconFile(const char *icon)
 	METHOD_GET);
     assert(e != NULL);
     storeSetPublicKey(e);
-    storeBuffer(e);
     e->mem_obj->request = requestLink(urlParse(METHOD_GET, url));
     httpReplyReset(reply = e->mem_obj->reply);
     httpReplySetHeaders(reply, 1.0, HTTP_OK, NULL,
@@ -427,16 +426,14 @@ mimeLoadIconFile(const char *icon)
     httpHdrCcSetMaxAge(reply->cache_control, 86400);
     httpHeaderPutCc(&reply->header, reply->cache_control);
     httpReplySwapOut(reply, e);
-    reply->hdr_sz = e->mem_obj->inmem_hi;	/* yuk */
     /* read the file into the buffer and append it to store */
     buf = memAllocate(MEM_4K_BUF);
     while ((n = read(fd, buf, 4096)) > 0)
 	storeAppend(e, buf, n);
     file_close(fd);
-    EBIT_SET(e->flags, ENTRY_SPECIAL);
-    storeBufferFlush(e);
     storeComplete(e);
     storeTimestampsSet(e);
+    EBIT_SET(e->flags, ENTRY_SPECIAL);
     debug(25, 3) ("Loaded icon %s\n", url);
     storeUnlockObject(e);
     memFree(buf, MEM_4K_BUF);

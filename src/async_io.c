@@ -53,6 +53,7 @@ typedef struct aio_ctrl_t {
     AIOCB *done_handler;
     void *done_handler_data;
     aio_result_t result;
+    void *tag;
 } aio_ctrl_t;
 
 struct {
@@ -75,16 +76,8 @@ static aio_ctrl_t *used_list = NULL;
 static int initialised = 0;
 static OBJH aioStats;
 static MemPool *aio_ctrl_pool;
-static void aioFDWasClosed(int fd);
 
 static void
-aioFDWasClosed(int fd)
-{
-    if (fd_table[fd].flags.closing)
-	fd_close(fd);
-}
-
-void
 aioInit()
 {
     if (initialised)
@@ -95,25 +88,26 @@ aioInit()
     initialised = 1;
 }
 
+
 void
-aioOpen(const char *path, int oflag, mode_t mode, AIOCB * callback, void *callback_data)
+aioOpen(const char *path, int oflag, mode_t mode, AIOCB * callback, void *callback_data, void *tag)
 {
     aio_ctrl_t *ctrlp;
     int ret;
 
-    assert(initialised);
+    if (!initialised)
+	aioInit();
     aio_counts.open++;
     ctrlp = memPoolAlloc(aio_ctrl_pool);
     ctrlp->fd = -2;
+    ctrlp->tag = tag;
     ctrlp->done_handler = callback;
     ctrlp->done_handler_data = callback_data;
     ctrlp->operation = _AIO_OPEN;
-    cbdataLock(callback_data);
-    if (aio_open(path, oflag, mode, &ctrlp->result) < 0) {
+    if (aio_open(path, oflag, mode, &(ctrlp->result)) < 0) {
 	ret = open(path, oflag, mode);
 	if (callback)
 	    (callback) (ctrlp->fd, callback_data, ret, errno);
-	cbdataUnlock(callback_data);
 	memPoolFree(aio_ctrl_pool, ctrlp);
 	return;
     }
@@ -127,18 +121,20 @@ aioClose(int fd)
 {
     aio_ctrl_t *ctrlp;
 
-    assert(initialised);
+    if (!initialised)
+	aioInit();
     aio_counts.close++;
-    aioCancel(fd);
+    aioCancel(fd, NULL);
     ctrlp = memPoolAlloc(aio_ctrl_pool);
     ctrlp->fd = fd;
+    ctrlp->tag = NULL;
     ctrlp->done_handler = NULL;
     ctrlp->done_handler_data = NULL;
     ctrlp->operation = _AIO_CLOSE;
-    if (aio_close(fd, &ctrlp->result) < 0) {
+    if (aio_close(fd, &(ctrlp->result)) < 0) {
 	close(fd);		/* Can't create thread - do a normal close */
 	memPoolFree(aio_ctrl_pool, ctrlp);
-	aioFDWasClosed(fd);
+	fd_was_closed(fd);
 	return;
     }
     ctrlp->next = used_list;
@@ -147,15 +143,14 @@ aioClose(int fd)
 }
 
 void
-aioCancel(int fd)
+aioCancel(int fd, void *tag)
 {
     aio_ctrl_t *curr;
     aio_ctrl_t *prev;
     aio_ctrl_t *next;
-    AIOCB *done_handler;
-    void *their_data;
 
-    assert(initialised);
+    if (!initialised)
+	aioInit();
     aio_counts.cancel++;
     prev = NULL;
     curr = used_list;
@@ -163,23 +158,19 @@ aioCancel(int fd)
 	while (curr != NULL) {
 	    if (curr->fd == fd)
 		break;
+	    if (tag != NULL && curr->tag == tag)
+		break;
 	    prev = curr;
 	    curr = curr->next;
 	}
 	if (curr == NULL)
 	    break;
 
-	aio_cancel(&curr->result);
+	aio_cancel(&(curr->result));
 
-	if ((done_handler = curr->done_handler)) {
-	    their_data = curr->done_handler_data;
-	    curr->done_handler = NULL;
-	    curr->done_handler_data = NULL;
-	    debug(0, 0) ("this be aioCancel\n");
-	    if (cbdataValid(their_data))
-		done_handler(fd, their_data, -2, -2);
-	    cbdataUnlock(their_data);
-	}
+	if (curr->done_handler)
+	    (curr->done_handler) (fd, curr->done_handler_data, -2, -2);
+
 	next = curr->next;
 	if (prev == NULL)
 	    used_list = next;
@@ -191,23 +182,19 @@ aioCancel(int fd)
 }
 
 
-/*
- * XXX Note, we don't do anything with 'free_func' here yet.  Maybe it
- * shouldn't be here anyway.  Can we free in storeAufsWriteDone()?
- */
 void
-aioWrite(int fd, int offset, char *bufp, int len, AIOCB * callback, void *callback_data, FREE * free_func)
+aioWrite(int fd, int offset, char *bufp, int len, AIOCB * callback, void *callback_data)
 {
     aio_ctrl_t *ctrlp;
     int seekmode;
 
-    assert(initialised);
+    if (!initialised)
+	aioInit();
     aio_counts.write++;
     for (ctrlp = used_list; ctrlp != NULL; ctrlp = ctrlp->next)
 	if (ctrlp->fd == fd)
 	    break;
     if (ctrlp != NULL) {
-	debug(0, 0) ("aioWrite: EWOULDBLOCK\n");
 	errno = EWOULDBLOCK;
 	if (callback)
 	    (callback) (fd, callback_data, -1, errno);
@@ -215,6 +202,7 @@ aioWrite(int fd, int offset, char *bufp, int len, AIOCB * callback, void *callba
     }
     ctrlp = memPoolAlloc(aio_ctrl_pool);
     ctrlp->fd = fd;
+    ctrlp->tag = NULL;
     ctrlp->done_handler = callback;
     ctrlp->done_handler_data = callback_data;
     ctrlp->operation = _AIO_WRITE;
@@ -224,13 +212,11 @@ aioWrite(int fd, int offset, char *bufp, int len, AIOCB * callback, void *callba
 	seekmode = SEEK_END;
 	offset = 0;
     }
-    cbdataLock(callback_data);
-    if (aio_write(fd, bufp, len, offset, seekmode, &ctrlp->result) < 0) {
+    if (aio_write(fd, bufp, len, offset, seekmode, &(ctrlp->result)) < 0) {
 	if (errno == ENOMEM || errno == EAGAIN || errno == EINVAL)
 	    errno = EWOULDBLOCK;
 	if (callback)
 	    (callback) (fd, callback_data, -1, errno);
-	cbdataUnlock(callback_data);
 	memPoolFree(aio_ctrl_pool, ctrlp);
 	return;
     }
@@ -246,7 +232,8 @@ aioRead(int fd, int offset, char *bufp, int len, AIOCB * callback, void *callbac
     aio_ctrl_t *ctrlp;
     int seekmode;
 
-    assert(initialised);
+    if (!initialised)
+	aioInit();
     aio_counts.read++;
     for (ctrlp = used_list; ctrlp != NULL; ctrlp = ctrlp->next)
 	if (ctrlp->fd == fd)
@@ -259,6 +246,7 @@ aioRead(int fd, int offset, char *bufp, int len, AIOCB * callback, void *callbac
     }
     ctrlp = memPoolAlloc(aio_ctrl_pool);
     ctrlp->fd = fd;
+    ctrlp->tag = NULL;
     ctrlp->done_handler = callback;
     ctrlp->done_handler_data = callback_data;
     ctrlp->operation = _AIO_READ;
@@ -268,13 +256,11 @@ aioRead(int fd, int offset, char *bufp, int len, AIOCB * callback, void *callbac
 	seekmode = SEEK_CUR;
 	offset = 0;
     }
-    cbdataLock(callback_data);
-    if (aio_read(fd, bufp, len, offset, seekmode, &ctrlp->result) < 0) {
+    if (aio_read(fd, bufp, len, offset, seekmode, &(ctrlp->result)) < 0) {
 	if (errno == ENOMEM || errno == EAGAIN || errno == EINVAL)
 	    errno = EWOULDBLOCK;
 	if (callback)
 	    (callback) (fd, callback_data, -1, errno);
-	cbdataUnlock(callback_data);
 	memPoolFree(aio_ctrl_pool, ctrlp);
 	return;
     }
@@ -284,24 +270,24 @@ aioRead(int fd, int offset, char *bufp, int len, AIOCB * callback, void *callbac
 }				/* aioRead */
 
 void
-aioStat(char *path, struct stat *sb, AIOCB * callback, void *callback_data)
+aioStat(char *path, struct stat *sb, AIOCB * callback, void *callback_data, void *tag)
 {
     aio_ctrl_t *ctrlp;
 
-    assert(initialised);
+    if (!initialised)
+	aioInit();
     aio_counts.stat++;
     ctrlp = memPoolAlloc(aio_ctrl_pool);
     ctrlp->fd = -2;
+    ctrlp->tag = tag;
     ctrlp->done_handler = callback;
     ctrlp->done_handler_data = callback_data;
     ctrlp->operation = _AIO_STAT;
-    cbdataLock(callback_data);
-    if (aio_stat(path, sb, &ctrlp->result) < 0) {
+    if (aio_stat(path, sb, &(ctrlp->result)) < 0) {
 	if (errno == ENOMEM || errno == EAGAIN || errno == EINVAL)
 	    errno = EWOULDBLOCK;
 	if (callback)
 	    (callback) (ctrlp->fd, callback_data, -1, errno);
-	cbdataUnlock(callback_data);
 	memPoolFree(aio_ctrl_pool, ctrlp);
 	return;
     }
@@ -315,7 +301,8 @@ aioUnlink(const char *pathname, AIOCB * callback, void *callback_data)
 {
     aio_ctrl_t *ctrlp;
     char *path;
-    assert(initialised);
+    if (!initialised)
+	aioInit();
     aio_counts.unlink++;
     ctrlp = memPoolAlloc(aio_ctrl_pool);
     ctrlp->fd = -2;
@@ -323,11 +310,9 @@ aioUnlink(const char *pathname, AIOCB * callback, void *callback_data)
     ctrlp->done_handler_data = callback_data;
     ctrlp->operation = _AIO_UNLINK;
     path = xstrdup(pathname);
-    cbdataLock(callback_data);
-    if (aio_unlink(path, &ctrlp->result) < 0) {
+    if (aio_unlink(path, &(ctrlp->result)) < 0) {
 	int ret = unlink(path);
 	(callback) (ctrlp->fd, callback_data, ret, errno);
-	cbdataUnlock(callback_data);
 	memPoolFree(aio_ctrl_pool, ctrlp);
 	xfree(path);
 	return;
@@ -344,17 +329,16 @@ aioCheckCallbacks()
     aio_result_t *resultp;
     aio_ctrl_t *ctrlp;
     aio_ctrl_t *prev;
-    AIOCB *done_handler;
-    void *their_data;
 
-    assert(initialised);
+    if (!initialised)
+	aioInit();
     aio_counts.check_callback++;
     for (;;) {
 	if ((resultp = aio_poll_done()) == NULL)
 	    break;
 	prev = NULL;
 	for (ctrlp = used_list; ctrlp != NULL; prev = ctrlp, ctrlp = ctrlp->next)
-	    if (&ctrlp->result == resultp)
+	    if (&(ctrlp->result) == resultp)
 		break;
 	if (ctrlp == NULL)
 	    continue;
@@ -362,17 +346,11 @@ aioCheckCallbacks()
 	    used_list = ctrlp->next;
 	else
 	    prev->next = ctrlp->next;
-	if ((done_handler = ctrlp->done_handler)) {
-	    their_data = ctrlp->done_handler_data;
-	    ctrlp->done_handler = NULL;
-	    ctrlp->done_handler_data = NULL;
-	    if (cbdataValid(their_data))
-		done_handler(ctrlp->fd, their_data,
-		    ctrlp->result.aio_return, ctrlp->result.aio_errno);
-	    cbdataUnlock(their_data);
-	}
+	if (ctrlp->done_handler)
+	    (ctrlp->done_handler) (ctrlp->fd, ctrlp->done_handler_data,
+		ctrlp->result.aio_return, ctrlp->result.aio_errno);
 	if (ctrlp->operation == _AIO_CLOSE)
-	    aioFDWasClosed(ctrlp->fd);
+	    fd_was_closed(ctrlp->fd);
 	memPoolFree(aio_ctrl_pool, ctrlp);
     }
 }
@@ -389,7 +367,6 @@ aioStats(StoreEntry * sentry)
     storeAppendPrintf(sentry, "stat\t%d\n", aio_counts.stat);
     storeAppendPrintf(sentry, "unlink\t%d\n", aio_counts.unlink);
     storeAppendPrintf(sentry, "check_callback\t%d\n", aio_counts.check_callback);
-    storeAppendPrintf(sentry, "queue\t%d\n", aio_get_queue_len());
 }
 
 /* Flush all pending I/O */
@@ -402,14 +379,8 @@ aioSync(void)
     debug(32, 1) ("aioSync: flushing pending I/O operations\n");
     do {
 	aioCheckCallbacks();
-    } while (aio_sync());
+    } while (aio_operations_pending());
     debug(32, 1) ("aioSync: done\n");
-}
-
-int
-aioQueueSize(void)
-{
-    return memPoolInUseCount(aio_ctrl_pool);
 }
 
 #endif /* USE_ASYNC_IO */

@@ -39,6 +39,12 @@
 #include <netinet/tcp.h>
 #endif
 
+#if USE_ASYNC_IO
+#define MAX_POLL_TIME 10
+#else
+#define MAX_POLL_TIME 1000
+#endif
+
 typedef struct {
     char *host;
     u_short port;
@@ -563,6 +569,9 @@ void
 comm_close(int fd)
 {
     fde *F = NULL;
+#if USE_ASYNC_IO
+    int doaioclose = 1;
+#endif
     debug(5, 5) ("comm_close: FD %d\n", fd);
     assert(fd >= 0);
     assert(fd < Squid_MaxFD);
@@ -573,13 +582,30 @@ comm_close(int fd)
 	return;
     assert(F->flags.open);
     assert(F->type != FD_FILE);
+#ifdef USE_ASYNC_IO
+    if (F->flags.nolinger && F->flags.nonblocking)
+	doaioclose = 0;
+#endif
     F->flags.closing = 1;
     CommWriteStateCallbackAndFree(fd, COMM_ERR_CLOSING);
     commCallCloseHandlers(fd);
     if (F->uses)		/* assume persistent connect count */
 	pconnHistCount(1, F->uses);
     fd_close(fd);		/* update fdstat */
+#if defined(_SQUID_LINUX_)
+    /*
+     * michael@metal.iinet.net.au sez close() on
+     * network sockets never blocks.
+     */
     close(fd);
+#elif USE_ASYNC_IO
+    if (doaioclose)
+	aioClose(fd);
+    else
+	close(fd);
+#else
+    close(fd);
+#endif
     Counter.syscalls.sock.closes++;
 }
 
@@ -837,7 +863,11 @@ comm_write(int fd, char *buf, int size, CWCB * handler, void *handler_data, FREE
     state->handler_data = handler_data;
     state->free_func = free_func;
     cbdataLock(handler_data);
+#ifdef OPTIMISTIC_IO
+    commHandleWrite(fd, state);
+#else
     commSetSelect(fd, COMM_SELECT_WRITE, commHandleWrite, state, 0);
+#endif
 }
 
 /* a wrapper around comm_write to allow for MemBuf to be comm_written in a snap */

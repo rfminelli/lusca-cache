@@ -85,7 +85,6 @@ typedef enum {
     ERR_FTP_FORBIDDEN,
     ERR_FTP_UNAVAILABLE,
     ERR_ONLY_IF_CACHED_MISS,	/* failure to satisfy only-if-cached request */
-    ERR_TOO_BIG,
     ERR_MAX
 } err_type;
 
@@ -312,9 +311,9 @@ typedef enum {
     ICP_DATAEND,
     ICP_SECHO,
     ICP_DECHO,
-    ICP_NOTIFY,
-    ICP_INVALIDATE,
-    ICP_DELETE,
+    ICP_UNUSED12,
+    ICP_UNUSED13,
+    ICP_UNUSED14,
     ICP_UNUSED15,
     ICP_UNUSED16,
     ICP_UNUSED17,
@@ -345,6 +344,7 @@ enum {
 
 enum {
     SWAPOUT_NONE,
+    SWAPOUT_OPENING,
     SWAPOUT_WRITING,
     SWAPOUT_DONE
 };
@@ -364,16 +364,6 @@ enum {
     METHOD_CONNECT,		/* 101 */
     METHOD_TRACE,		/* 110 */
     METHOD_PURGE,		/* 111 */
-    METHOD_OPTIONS,
-#ifndef RFC_2518
-    METHOD_PROPFIND,
-    METHOD_PROPPATCH,
-    METHOD_MKCOL,
-    METHOD_COPY,
-    METHOD_MOVE,
-    METHOD_LOCK,
-    METHOD_UNLOCK,
-#endif
     METHOD_ENUM_END
 };
 typedef unsigned int method_t;
@@ -565,11 +555,6 @@ typedef enum {
     MEM_SWAPDIR,
     MEM_USHORTLIST,
     MEM_WORDLIST,
-    MEM_STORE_IO,
-#if !USE_DNSSERVERS
-    MEM_IDNS_QUERY,
-#endif
-    MEM_EVENT,
     MEM_MAX
 } mem_type;
 
@@ -637,12 +622,3 @@ enum {
     NETDB_EX_RTT,
     NETDB_EX_HOPS
 };
-
-typedef enum {
-    SWAPDIR_UFS,
-    SWAPDIR_ASYNCUFS,
-#if USE_DISKD
-    SWAPDIR_DISKD,
-#endif
-    SWAPDIR_MAX
-} swapdir_t;

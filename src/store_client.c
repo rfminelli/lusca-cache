@@ -40,8 +40,9 @@
  *       'Body' refers to the swapfile body, which is the full
  *        HTTP reply (including HTTP headers and body).
  */
-static STRCB storeClientReadBody;
-static STRCB storeClientReadHeader;
+static DRCB storeClientReadBody;
+static DRCB storeClientReadHeader;
+static SIH storeClientFileOpened;
 static void storeClientCopy2(StoreEntry * e, store_client * sc);
 static void storeClientFileRead(store_client * sc);
 static EVH storeClientCopyEvent;
@@ -121,6 +122,7 @@ storeClientListAdd(StoreEntry * e, void *data)
     sc->callback_data = data;
     sc->seen_offset = 0;
     sc->copy_offset = 0;
+    sc->swapin_fd = -1;
     sc->flags.disk_io_pending = 0;
     sc->entry = e;
     sc->type = storeClientType(e);
@@ -230,6 +232,14 @@ storeClientCopy2(StoreEntry * e, store_client * sc)
      */
     if (storeClientNoMoreToSend(e, sc)) {
 	/* There is no more to send! */
+#if USE_ASYNC_IO
+	if (sc->flags.disk_io_pending) {
+	    if (sc->swapin_fd >= 0)
+		aioCancel(sc->swapin_fd, NULL);
+	    else
+		aioCancel(-1, sc);
+	}
+#endif
 	sc->flags.disk_io_pending = 0;
 	sc->callback = NULL;
 	callback(sc->callback_data, sc->copy_buf, 0);
@@ -240,10 +250,18 @@ storeClientCopy2(StoreEntry * e, store_client * sc)
 	/* What the client wants is in memory */
 	debug(20, 3) ("storeClientCopy2: Copying from memory\n");
 	sz = stmemCopy(&mem->data_hdr, sc->copy_offset, sc->copy_buf, sc->copy_size);
+#if USE_ASYNC_IO
+	if (sc->flags.disk_io_pending) {
+	    if (sc->swapin_fd >= 0)
+		aioCancel(sc->swapin_fd, NULL);
+	    else
+		aioCancel(-1, sc);
+	}
+#endif
 	sc->flags.disk_io_pending = 0;
 	sc->callback = NULL;
 	callback(sc->callback_data, sc->copy_buf, sz);
-    } else if (sc->swapin_sio == NULL) {
+    } else if (sc->swapin_fd < 0) {
 	debug(20, 3) ("storeClientCopy2: Need to open swap in file\n");
 	assert(sc->type == STORE_DISK_CLIENT);
 	/* gotta open the swapin file */
@@ -253,22 +271,15 @@ storeClientCopy2(StoreEntry * e, store_client * sc)
 	    callback(sc->callback_data, sc->copy_buf, -1);
 	} else if (!sc->flags.disk_io_pending) {
 	    sc->flags.disk_io_pending = 1;
-	    storeSwapInStart(sc);
-	    if (NULL == sc->swapin_sio) {
-		sc->flags.disk_io_pending = 0;
-		sc->callback = NULL;
-		callback(sc->callback_data, sc->copy_buf, -1);
-	    } else {
-		storeClientFileRead(sc);
-	    }
+	    storeSwapInStart(e, storeClientFileOpened, sc);
 	} else {
 	    debug(20, 2) ("storeClientCopy2: Averted multiple fd operation\n");
 	}
     } else {
-	debug(20, 3) ("storeClientCopy: reading from STORE\n");
+	debug(20, 3) ("storeClientCopy: reading from disk FD %d\n",
+	    sc->swapin_fd);
 	assert(sc->type == STORE_DISK_CLIENT);
 	if (!sc->flags.disk_io_pending) {
-	    sc->flags.disk_io_pending = 1;
 	    storeClientFileRead(sc);
 	} else {
 	    debug(20, 2) ("storeClientCopy2: Averted multiple fd operation\n");
@@ -279,12 +290,31 @@ storeClientCopy2(StoreEntry * e, store_client * sc)
 }
 
 static void
+storeClientFileOpened(int fd, void *data)
+{
+    store_client *sc = data;
+    STCB *callback = sc->callback;
+    if (fd < 0) {
+	debug(20, 3) ("storeClientFileOpened: failed\n");
+	sc->flags.disk_io_pending = 0;
+	sc->callback = NULL;
+	callback(sc->callback_data, sc->copy_buf, -1);
+	return;
+    }
+    sc->swapin_fd = fd;
+    storeClientFileRead(sc);
+}
+
+static void
 storeClientFileRead(store_client * sc)
 {
     MemObject *mem = sc->entry->mem_obj;
     assert(sc->callback != NULL);
+#ifdef OPTIMISTIC_IO
+    sc->flags.disk_io_pending = 1;
+#endif
     if (mem->swap_hdr_sz == 0) {
-	storeRead(sc->swapin_sio,
+	file_read(sc->swapin_fd,
 	    sc->copy_buf,
 	    sc->copy_size,
 	    0,
@@ -292,18 +322,21 @@ storeClientFileRead(store_client * sc)
 	    sc);
     } else {
 	if (sc->entry->swap_status == SWAPOUT_WRITING)
-	    assert(storeOffset(mem->swapout.sio) > sc->copy_offset + mem->swap_hdr_sz);
-	storeRead(sc->swapin_sio,
+	    assert(mem->swapout.done_offset > sc->copy_offset + mem->swap_hdr_sz);
+	file_read(sc->swapin_fd,
 	    sc->copy_buf,
 	    sc->copy_size,
 	    sc->copy_offset + mem->swap_hdr_sz,
 	    storeClientReadBody,
 	    sc);
     }
+#ifndef OPTIMISTIC_IO
+    sc->flags.disk_io_pending = 1;
+#endif
 }
 
 static void
-storeClientReadBody(void *data, const char *buf, ssize_t len)
+storeClientReadBody(int fd, const char *buf, int len, int flagnotused, void *data)
 {
     store_client *sc = data;
     MemObject *mem = sc->entry->mem_obj;
@@ -311,7 +344,7 @@ storeClientReadBody(void *data, const char *buf, ssize_t len)
     assert(sc->flags.disk_io_pending);
     sc->flags.disk_io_pending = 0;
     assert(sc->callback != NULL);
-    debug(20, 3) ("storeClientReadBody: len %d\n", len);
+    debug(20, 3) ("storeClientReadBody: FD %d, len %d\n", fd, len);
     if (sc->copy_offset == 0 && len > 0 && mem->reply->sline.status == 0)
 	httpReplyParse(mem->reply, sc->copy_buf);
     sc->callback = NULL;
@@ -319,7 +352,7 @@ storeClientReadBody(void *data, const char *buf, ssize_t len)
 }
 
 static void
-storeClientReadHeader(void *data, const char *buf, ssize_t len)
+storeClientReadHeader(int fd, const char *buf, int len, int flagnotused, void *data)
 {
     store_client *sc = data;
     StoreEntry *e = sc->entry;
@@ -332,9 +365,9 @@ storeClientReadHeader(void *data, const char *buf, ssize_t len)
     assert(sc->flags.disk_io_pending);
     sc->flags.disk_io_pending = 0;
     assert(sc->callback != NULL);
-    debug(20, 3) ("storeClientReadHeader: len %d\n", len);
+    debug(20, 3) ("storeClientReadHeader: FD %d, len %d\n", fd, len);
     if (len < 0) {
-	debug(20, 3) ("storeClientReadHeader: %s\n", xstrerror());
+	debug(20, 3) ("storeClientReadHeader: FD %d: %s\n", fd, xstrerror());
 	sc->callback = NULL;
 	callback(sc->callback_data, sc->copy_buf, len);
 	return;
@@ -418,11 +451,15 @@ storeUnregister(StoreEntry * e, void *data)
     mem->nclients--;
     sc->flags.disk_io_pending = 0;
     if (e->store_status == STORE_OK && e->swap_status != SWAPOUT_DONE)
-	storeSwapOut(e);
-    if (sc->swapin_sio) {
-	storeClose(sc->swapin_sio);
-	sc->swapin_sio = NULL;
+	storeCheckSwapOut(e);
+    if (sc->swapin_fd > -1) {
+	file_close(sc->swapin_fd);
+	store_open_disk_fd--;
     }
+#if USE_ASYNC_IO
+    else
+	aioCancel(-1, sc);
+#endif
     if ((callback = sc->callback) != NULL) {
 	/* callback with ssize = -1 to indicate unexpected termination */
 	debug(20, 3) ("storeUnregister: store_client for %s has a callback\n",

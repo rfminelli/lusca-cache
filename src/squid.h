@@ -344,10 +344,6 @@ struct rusage {
 #endif
 
 #include "hash.h"
-#include "rfc1035.h"
-#if HEAP_REPLACEMENT
-#include "heap.h"
-#endif
 
 #include "defines.h"
 #include "enums.h"
@@ -389,17 +385,9 @@ struct rusage {
 #define strdup +
 #endif
 
-/*
- * Hey dummy, don't be tempted to move this to lib/config.h.in again.  O_NONBLOCK
- * will not be defined there because you didn't #include <fcntl.h> yet.
- */
-#if defined(O_NONBLOCK) && !defined(_SQUID_SUNOS_) && !defined(_SQUID_SOLARIS_)
-#define SQUID_NONBLOCK O_NONBLOCK
-#else
-#define SQUID_NONBLOCK O_NDELAY
+#if SQUID_SNMP
+extern struct snmp_mib_tree *Mib;
 #endif
 
-#define SWAP_DIR_SHIFT 24
-#define SWAP_FILE_MASK 0x00FFFFFF
 
 #endif /* SQUID_H */

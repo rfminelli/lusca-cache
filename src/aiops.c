@@ -46,14 +46,10 @@
 #include	<sched.h>
 #endif
 
-#define RIDICULOUS_LENGTH	4096
-
-#if defined(_SQUID_LINUX_)
-/* Linux requires proper use of mutexes or it will segfault deep in the
- * thread libraries. Observed on Alpha SMP Linux 2.2.10-ac12.
- */
-#define USE_PROPER_MUTEX 1
+#ifndef NUMTHREADS
+#define	NUMTHREADS		16
 #endif
+#define RIDICULOUS_LENGTH	4096
 
 enum _aio_thread_status {
     _THREAD_STARTING = 0,
@@ -114,7 +110,6 @@ int aio_close(int, aio_result_t *);
 int aio_unlink(const char *, aio_result_t *);
 int aio_opendir(const char *, aio_result_t *);
 aio_result_t *aio_poll_done();
-int aio_sync(void);
 
 static void aio_init(void);
 static void aio_queue_request(aio_request_t *);
@@ -188,7 +183,7 @@ aio_init(void)
 	}
 	threadp->req = NULL;
 	threadp->processed_req = NULL;
-	if (pthread_create(&threadp->thread, &globattr, aio_thread_loop, threadp)) {
+	if (pthread_create(&(threadp->thread), &globattr, aio_thread_loop, threadp)) {
 	    fprintf(stderr, "Thread creation failed\n");
 	    threadp->status = _THREAD_FAILED;
 	    continue;
@@ -210,18 +205,15 @@ aio_init(void)
 static void *
 aio_thread_loop(void *ptr)
 {
-    aio_thread_t *threadp = ptr;
+    aio_thread_t *threadp = (aio_thread_t *) ptr;
     aio_request_t *request;
     sigset_t new;
 #if !AIO_PROPER_MUTEX
     struct timespec wait_time;
 #endif
 
-    /*
-     * Make sure to ignore signals which may possibly get sent to
-     * the parent squid thread.  Causes havoc with mutex's and
-     * condition waits otherwise
-     */
+    /* Make sure to ignore signals which may possibly get sent to the parent */
+    /* squid thread.  Causes havoc with mutex's and condition waits otherwise */
 
     sigemptyset(&new);
     sigaddset(&new, SIGPIPE);
@@ -244,7 +236,7 @@ aio_thread_loop(void *ptr)
 #if AIO_PROPER_MUTEX
 	while (threadp->req == NULL) {
 	    threadp->status = _THREAD_WAITING;
-	    pthread_cond_wait(&threadp->cond, &threadp->mutex);
+	    pthread_cond_wait(&(threadp->cond), &(threadp->mutex));
 	}
 #else
 	/* The timeout is used to unlock the race condition where
@@ -257,7 +249,8 @@ aio_thread_loop(void *ptr)
 	wait_time.tv_nsec = 0;
 	while (threadp->req == NULL) {
 	    threadp->status = _THREAD_WAITING;
-	    pthread_cond_timedwait(&threadp->cond, &threadp->mutex, &wait_time);
+	    pthread_cond_timedwait(&(threadp->cond), &(threadp->mutex),
+		&wait_time);
 	    wait_time.tv_sec += 3;	/* then wait 3 seconds between each check */
 	}
 #endif
@@ -299,7 +292,6 @@ aio_thread_loop(void *ptr)
 	}
 	threadp->req = NULL;	/* tells main thread that we are done */
     }				/* while */
-    return NULL;
 }				/* aio_thread_loop */
 
 static void
@@ -353,7 +345,7 @@ aio_queue_request(aio_request_t * requestp)
 	    queue_low = request_queue_len;
 	if (squid_curtime >= (last_warn + 15) &&
 	    squid_curtime >= (high_start + 1)) {
-	    debug(43, 1) ("aio_queue_request: WARNING - Running out of I/O threads\n");
+	    debug(43, 1) ("aio_queue_request: WARNING - Running out of I/O theads\n");
 	    debug(43, 2) ("aio_queue_request: Queue Length: current=%d, high=%d, low=%d, duration=%d\n",
 		request_queue_len, queue_high, queue_low, squid_curtime - high_start);
 	    debug(43, 1) ("aio_queue_request: Perhaps you should increase NUMTHREADS\n");
@@ -394,9 +386,8 @@ aio_queue_request(aio_request_t * requestp)
     }
     if (request_queue_len > RIDICULOUS_LENGTH) {
 	debug(43, 0) ("aio_queue_request: Async request queue growing uncontrollably!\n");
-	debug(43, 0) ("aio_queue_request: Syncing pending I/O operations.. (blocking)\n");
-	aio_sync();
-	debug(43, 0) ("aio_queue_request: Synced\n");
+	debug(43, 0) ("aio_queue_request: Possible infinite loop somewhere in squid. Restarting...\n");
+	abort();
     }
 }				/* aio_queue_request */
 
@@ -775,8 +766,8 @@ aio_poll_threads(void)
 	prev = NULL;
 	threadp = busy_threads_head;
 	while (threadp) {
-	    debug(43, 9) ("aio_poll_threads: %p: request type %d -> status %d\n",
-		threadp,
+	    debug(43, 5) ("%d: %d -> %d\n",
+		threadp->thread,
 		threadp->processed_req->request_type,
 		threadp->status);
 #if AIO_PROPER_MUTEX
@@ -847,38 +838,11 @@ aio_poll_done()
 int
 aio_operations_pending(void)
 {
-    return request_queue_len + (request_done_head != NULL) + (busy_threads_head != NULL);
-}
-
-int
-aio_overloaded(void)
-{
-    static time_t last_warn = 0;
-    if (aio_operations_pending() > RIDICULOUS_LENGTH / 4) {
-	if (squid_curtime >= (last_warn + 15)) {
-	    debug(43, 0) ("Warning: Async-IO overloaded\n");
-	    last_warn = squid_curtime;
-	}
+    if (request_done_head)
 	return 1;
-    }
+    if (busy_threads_head)
+	return 1;
     return 0;
-}
-
-int
-aio_sync(void)
-{
-    int loop_count = 0;
-    do {
-	aio_poll_threads();
-	assert(++loop_count < 10);
-    } while (request_queue_len > 0);
-    return aio_operations_pending();
-}
-
-int
-aio_get_queue_len(void)
-{
-    return request_queue_len;
 }
 
 static void

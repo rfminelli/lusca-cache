@@ -77,26 +77,18 @@ extern int aio_unlink(const char *, aio_result_t *);
 extern int aio_opendir(const char *, aio_result_t *);
 extern aio_result_t *aio_poll_done(void);
 extern int aio_operations_pending(void);
-extern int aio_overloaded(void);
-extern int aio_sync(void);
-extern int aio_get_queue_len(void);
 
-extern void aioInit(void);
-extern void aioCancel(int);
-extern void aioOpen(const char *, int, mode_t, AIOCB *, void *);
+extern void aioCancel(int, void *);
+extern void aioOpen(const char *, int, mode_t, AIOCB *, void *, void *);
 extern void aioClose(int);
-extern void aioWrite(int, int offset, char *, int size, AIOCB *, void *, FREE *);
+extern void aioWrite(int, int offset, char *, int size, AIOCB *, void *);
 extern void aioRead(int, int offset, char *, int size, AIOCB *, void *);
-extern void aioStat(char *, struct stat *, AIOCB *, void *);
+extern void aioStat(char *, struct stat *, AIOCB *, void *, void *);
 extern void aioUnlink(const char *, AIOCB *, void *);
 extern void aioCheckCallbacks(void);
 extern void aioSync(void);
-extern int aioQueueSize(void);
 #endif
 
-/*
- * cache_cf.c
- */
 extern int parseConfigFile(const char *file_name);
 extern void intlistDestroy(intlist **);
 extern int intlistFind(intlist * list, int i);
@@ -105,10 +97,6 @@ extern wordlist *wordlistDup(const wordlist *);
 extern void wordlistDestroy(wordlist **);
 extern void configFreeMemory(void);
 extern void wordlistCat(const wordlist *, MemBuf * mb);
-extern void allocate_new_swapdir(cacheSwap *);
-extern void self_destruct(void);
-extern int GetInteger(void);
-
 
 extern void cbdataInit(void);
 #if CBDATA_DEBUG
@@ -212,22 +200,17 @@ extern void xassert(const char *, const char *, int);
 extern void debugObj(int section, int level, const char *label, void *obj, ObjPackMethod pm);
 
 
-extern int file_open(const char *path, int mode);
+extern int file_open(const char *path, int mode, FOCB *, void *callback_data, void *tag);
 extern void file_close(int fd);
 extern void file_write(int, off_t, void *, int len, DWCB *, void *, FREE *);
 extern void file_write_mbuf(int fd, off_t, MemBuf mb, DWCB * handler, void *handler_data);
-extern void file_read(int, char *, int, off_t, DRCB *, void *);
+extern int file_read(int, char *, int, off_t, DRCB *, void *);
 extern void disk_init(void);
+extern int diskWriteIsComplete(int);
 
 extern void dnsShutdown(void);
 extern void dnsInit(void);
 extern void dnsSubmit(const char *lookup, HLPCB * callback, void *data);
-
-/* dns_internal.c */
-extern void idnsInit(void);
-extern void idnsShutdown(void);
-extern void idnsALookup(const char *, IDNSCB *, void *);
-extern void idnsPTRLookup(const struct in_addr, IDNSCB *, void *);
 
 extern void eventAdd(const char *name, EVH * func, void *arg, double when, int);
 extern void eventAddIsh(const char *name, EVH * func, void *arg, double delta_ish, int);
@@ -239,6 +222,9 @@ extern void eventFreeMemory(void);
 extern int eventFind(EVH *, void *);
 
 extern void fd_close(int fd);
+#if USE_ASYNC_IO
+extern void fd_was_closed(int fd);
+#endif
 extern void fd_open(int fd, unsigned int type, const char *);
 extern void fd_note(int fd, const char *);
 extern void fd_bytes(int fd, int len, unsigned int type);
@@ -474,7 +460,6 @@ extern const char *httpReplyContentType(const HttpReply * rep);
 extern time_t httpReplyExpires(const HttpReply * rep);
 extern int httpReplyHasCc(const HttpReply * rep, http_hdr_cc_type type);
 extern void httpRedirectReply(HttpReply *, http_status, const char *);
-extern int httpReplyBodySize(method_t, HttpReply *);
 
 /* Http Request */
 extern request_t *requestCreate(method_t, protocol_t, const char *urlpath);
@@ -525,13 +510,6 @@ extern variable_list *snmp_netDnsFn(variable_list *, snint *);
 extern variable_list *snmp_meshPtblFn(variable_list *, snint *);
 extern variable_list *snmp_meshCtblFn(variable_list *, snint *);
 #endif /* SQUID_SNMP */
-
-#if USE_WCCP
-extern void wccpInit(void);
-extern void wccpConnectionOpen(void);
-extern void wccpConnectionShutdown(void);
-extern void wccpConnectionClose(void);
-#endif /* USE_WCCP */
 
 extern void icpHandleIcpV3(int, struct sockaddr_in, char *, int);
 extern int icpCheckUdpHit(StoreEntry *, request_t * request);
@@ -699,7 +677,6 @@ extern void refreshAddToList(const char *, int, time_t, int, time_t);
 extern int refreshIsCachable(const StoreEntry *);
 extern int refreshCheckHTTP(const StoreEntry *, request_t *);
 extern int refreshCheckICP(const StoreEntry *, request_t *);
-extern int refreshCheckHTCP(const StoreEntry *, request_t *);
 extern int refreshCheckDigest(const StoreEntry *, time_t delta);
 extern time_t getMaxAge(const char *url);
 extern void refreshInit(void);
@@ -754,10 +731,10 @@ extern void memMeterSyncHWater(MemMeter * m);
 
 /* mem */
 extern void memInit(void);
-extern void memClean(void);
-extern void memInitModule(void);
-extern void memCleanModule(void);
-extern void memConfigure(void);
+extern void memClean();
+extern void memInitModule();
+extern void memCleanModule();
+extern void memConfigure();
 extern void *memAllocate(mem_type);
 extern void *memAllocBuf(size_t net_size, size_t * gross_size);
 extern CBDUNL memFree;
@@ -768,8 +745,6 @@ extern void memFree8K(void *);
 extern void memFreeDISK(void *);
 extern int memInUse(mem_type);
 extern size_t memTotalAllocated(void);
-extern void memDataInit(mem_type, const char *, size_t, int);
-extern void memCheckInit(void);
 
 /* MemPool */
 extern MemPool *memPoolCreate(const char *label, size_t obj_size);
@@ -807,6 +782,7 @@ extern int storeClientWaiting(const StoreEntry *);
 extern void storeAbort(StoreEntry *);
 extern void storeAppend(StoreEntry *, const char *, int);
 extern void storeLockObject(StoreEntry *);
+extern void storeSwapInStart(StoreEntry *, SIH *, void *data);
 extern void storeRelease(StoreEntry *);
 extern int storeUnlockObject(StoreEntry *);
 extern int storeUnregister(StoreEntry *, void *);
@@ -834,7 +810,7 @@ extern time_t storeExpiredReferenceAge(void);
 extern void storeRegisterAbort(StoreEntry * e, STABH * cb, void *);
 extern void storeUnregisterAbort(StoreEntry * e);
 extern void storeMemObjectDump(MemObject * mem);
-extern void storeEntryDump(const StoreEntry * e, int debug_lvl);
+extern void storeEntryDump(StoreEntry * e, int debug_lvl);
 extern const char *storeUrl(const StoreEntry *);
 extern void storeCreateMemObject(StoreEntry *, const char *, const char *);
 extern void storeCopyNotModifiedReplyHeaders(MemObject * O, MemObject * N);
@@ -849,54 +825,13 @@ extern void storeAppendPrintf();
 #endif
 extern void storeAppendVPrintf(StoreEntry *, const char *, va_list ap);
 extern int storeCheckCachable(StoreEntry * e);
+extern void storeUnlinkFileno(int fileno);
 extern void storeSetPrivateKey(StoreEntry *);
 extern int objectLen(const StoreEntry * e);
 extern int contentLen(const StoreEntry * e);
 extern HttpReply *storeEntryReply(StoreEntry *);
 extern int storeTooManyDiskFilesOpen(void);
 extern void storeEntryReset(StoreEntry *);
-extern void storeHeapPositionUpdate(StoreEntry *);
-
-/* store_io.c */
-extern STOBJOPEN storeOpen;
-extern STOBJCLOSE storeClose;
-extern STOBJREAD storeRead;
-extern STOBJWRITE storeWrite;
-extern STOBJUNLINK storeUnlink;
-extern off_t storeOffset(storeIOState *);
-
-/*
- * store_io_ufs.c
- */
-extern storeIOState *storeUfsOpen(sfileno, mode_t, STIOCB *, void *);
-extern void storeUfsClose(storeIOState * sio);
-extern void storeUfsRead(storeIOState *, char *, size_t, off_t, STRCB *, void *);
-extern void storeUfsWrite(storeIOState *, char *, size_t, off_t, FREE *);
-extern void storeUfsUnlink(int fileno);
-
-#if USE_ASYNC_IO
-/*
- * store_io_ufs.c
- */
-extern storeIOState *storeAufsOpen(sfileno, mode_t, STIOCB *, void *);
-extern void storeAufsClose(storeIOState * sio);
-extern void storeAufsRead(storeIOState *, char *, size_t, off_t, STRCB *, void *);
-extern void storeAufsWrite(storeIOState *, char *, size_t, off_t, FREE *);
-extern void storeAufsUnlink(int fileno);
-#endif
-
-#if USE_DISKD
-/*
- * diskd.c
- */
-extern storeIOState *storeDiskdOpen(sfileno, mode_t, STIOCB *, void *);
-extern void storeDiskdClose(storeIOState * sio);
-extern void storeDiskdRead(storeIOState *, char *, size_t, off_t, STRCB *, void *);
-extern void storeDiskdWrite(storeIOState *, char *, size_t, off_t, FREE *);
-extern void storeDiskdUnlink(int fileno);
-extern STINIT storeDiskdInit;
-extern void storeDiskdReadQueue(void);
-#endif
 
 /*
  * store_log.c
@@ -924,58 +859,47 @@ extern HASHHASH storeKeyHashHash;
 extern HASHCMP storeKeyHashCmp;
 
 /*
- * store_digest.c
+ * store_clean.c
  */
-extern void storeDigestInit(void);
-extern void storeDigestNoteStoreReady(void);
-extern void storeDigestScheduleRebuild(void);
+extern EVH storeDirClean;
+
+/* store_digest.c */
+extern void storeDigestInit();
+extern void storeDigestNoteStoreReady();
+extern void storeDigestScheduleRebuild();
 extern void storeDigestDel(const StoreEntry * entry);
-extern void storeDigestReport(StoreEntry *);
+extern void storeDigestReport();
 
 /*
  * store_dir.c
  */
-extern OBJH storeDirStats;
-extern char *storeDirSwapLogFile(int, const char *);
-extern char *storeSwapDir(int);
 extern char *storeSwapFullPath(int, char *);
 extern char *storeSwapSubSubDir(int, char *);
-extern const char *storeSwapPath(int);
-extern int storeDirMapAllocate(void);
-extern int storeDirMapBitTest(int fn);
-extern int storeDirMapBitsInUse(void);
-extern int storeDirNumber(int fileno);
-extern int storeDirProperFileno(int dirn, int fn);
-extern int storeDirValidFileno(int fn);
-extern int storeDirWriteCleanLogs(int reopen);
 extern int storeVerifySwapDirs(void);
-extern void storeCreateSwapDirectories(void);
-extern void storeDirCloseSwapLogs(void);
+extern const char *storeSwapPath(int);
+extern int storeDirMapBitTest(int fn);
+extern void storeDirMapBitSet(int fn);
+extern void storeDirMapBitReset(int fn);
+extern int storeDirMapAllocate(void);
+extern char *storeSwapDir(int);
+extern FILE *storeDirOpenTmpSwapLog(int dirn, int *clean, int *zero);
 extern void storeDirCloseTmpSwapLog(int dirn);
+extern void storeDirOpenSwapLogs(void);
+extern void storeDirCloseSwapLogs(void);
+extern char *storeDirSwapLogFile(int, const char *);
+extern void storeDirSwapLog(const StoreEntry *, int op);
+extern int storeDirNumber(int fileno);
+extern void storeDirUpdateSwapSize(int fn, size_t size, int sign);
+extern int storeDirProperFileno(int dirn, int fn);
+extern void storeCreateSwapDirectories(void);
+extern int storeVerifyCacheDirs(void);
+extern int storeDirWriteCleanLogs(int reopen);
+extern int storeDirValidFileno(int fn);
+extern int storeFilenoBelongsHere(int, int, int, int);
+extern OBJH storeDirStats;
+extern int storeDirMapBitsInUse(void);
 extern void storeDirConfigure(void);
 extern void storeDirDiskFull(int fn);
-extern void storeDirInit(void);
-extern void storeDirMapBitReset(int fn);
-extern void storeDirMapBitSet(int fn);
-extern void storeDirOpenSwapLogs(void);
-extern void storeDirSwapLog(const StoreEntry *, int op);
-extern void storeDirUpdateSwapSize(int fn, size_t size, int sign);
-
-/*
- * store_dir_ufs.c
- */
-extern OBJH storeUfsDirStats;
-extern void storeUfsDirParse(cacheSwap * swap);
-extern void storeUfsDirDump(StoreEntry * entry, const char *name, SwapDir * s);
-extern void storeUfsDirFree(SwapDir *);
-extern char *storeUfsFullPath(sfileno fn, char *fullpath);
-extern STINIT storeUfsDirInit;
-#if USE_ASYNC_IO
-extern void storeAufsDirParse(cacheSwap * swap);
-#endif
-#if USE_DISKD
-extern void storeDiskdDirParse(cacheSwap *);
-#endif
 
 
 /*
@@ -989,19 +913,23 @@ extern void storeSwapTLVFree(tlv * n);
 /*
  * store_rebuild.c
  */
+extern void storeDoRebuildFromSwapFiles(void *data);
+extern void storeValidate(StoreEntry *, STVLDCB *, void *, void *);
 extern void storeRebuildStart(void);
-extern void storeRebuildComplete(struct _store_rebuild_data *);
 
 /*
  * store_swapin.c
  */
-extern void storeSwapInStart(store_client *);
+extern void storeSwapInStart(StoreEntry * e, SIH * callback, void *callback_data);
+extern void storeSwapInValidateComplete(void *data, int retcode, int errcode);
+extern void storeSwapInFileOpened(void *data, int fd, int errcode);
 
 /*
  * store_swapout.c
  */
-extern void storeSwapOut(StoreEntry * e);
+extern void storeCheckSwapOut(StoreEntry * e);
 extern void storeSwapOutFileClose(StoreEntry * e);
+extern int storeSwapOutWriteQueued(MemObject * mem);
 extern int storeSwapOutAble(const StoreEntry * e);
 
 /*
@@ -1110,9 +1038,6 @@ extern double gb_to_double(const gb_t *);
 extern const char *gb_to_str(const gb_t *);
 extern void gb_flush(gb_t *);	/* internal, do not use this */
 extern int stringHasWhitespace(const char *);
-extern void linklistPush(link_list **, void *);
-extern void *linklistShift(link_list **);
-extern int xrename(const char *from, const char *to);
 
 #if USE_HTCP
 extern void htcpInit(void);
@@ -1174,7 +1099,6 @@ extern int internalStaticCheck(const char *urlpath);
 extern char *internalLocalUri(const char *dir, const char *name);
 extern char *internalRemoteUri(const char *, u_short, const char *, const char *);
 extern const char *internalHostname(void);
-extern int internalHostnameIs(const char *);
 
 #if USE_CARP
 extern void carpInit(void);
@@ -1184,11 +1108,11 @@ extern peer *carpSelectParent(request_t *);
 #if DELAY_POOLS
 extern void delayPoolsInit(void);
 extern void delayInitDelayData(unsigned short pools);
-extern void delayFreeDelayData(void);
+extern void delayFreeDelayData();
 extern void delayCreateDelayPool(unsigned short pool, u_char class);
 extern void delayInitDelayPool(unsigned short pool, u_char class, delaySpecSet * rates);
 extern void delayFreeDelayPool(unsigned short pool);
-extern void delayPoolsReconfigure(void);
+extern void delayPoolsReconfigure();
 extern void delaySetNoDelay(int fd);
 extern void delayClearNoDelay(int fd);
 extern int delayIsNoDelay(int fd);

@@ -58,6 +58,8 @@ static const char *const list_sep = ", \t\n\r";
 
 static int http_header_first = 0;
 
+static void self_destruct(void);
+
 static void configDoConfigure(void);
 static void parse_refreshpattern(refresh_t **);
 static int parseTimeUnits(const char *unit);
@@ -77,7 +79,7 @@ static void dump_http_header(StoreEntry * entry, const char *name, HttpHeaderMas
 static void parse_http_header(HttpHeaderMask * header);
 static void free_http_header(HttpHeaderMask * header);
 
-void
+static void
 self_destruct(void)
 {
     fatalf("Bungled %s line %d: %s",
@@ -155,17 +157,12 @@ intlistFind(intlist * list, int i)
  * defined
  */
 
-int
-GetInteger(void)
-{
-    char *token = strtok(NULL, w_space);
-    int i;
-    if (token == NULL)
-	self_destruct();
-    if (sscanf(token, "%d", &i) != 1)
-	self_destruct();
-    return i;
-}
+#define GetInteger(var) \
+	token = strtok(NULL, w_space); \
+	if( token == NULL) \
+		self_destruct(); \
+	if (sscanf(token, "%d", &var) != 1) \
+		self_destruct();
 
 int
 parseConfigFile(const char *file_name)
@@ -244,7 +241,7 @@ configDoConfigure(void)
     if (Config.Program.redirect) {
 	if (Config.redirectChildren < 1) {
 	    Config.redirectChildren = 0;
-	    wordlistDestroy(&Config.Program.redirect);
+	    safe_free(Config.Program.redirect);
 	} else if (Config.redirectChildren > DefaultRedirectChildrenMax) {
 	    debug(3, 0) ("WARNING: redirect_children was set to a bad value: %d\n",
 		Config.redirectChildren);
@@ -306,19 +303,15 @@ configDoConfigure(void)
 	debug(3, 0) ("WARNING: resetting 'maximum_single_addr_tries to 1\n");
 	Config.retry.maxtries = 1;
     }
-#if HEAP_REPLACEMENT
-    /* The non-LRU policies do not use referenceAge */
-#else
     if (Config.referenceAge < 300) {
 	debug(3, 0) ("WARNING: resetting 'reference_age' to 1 week\n");
 	Config.referenceAge = 86400 * 7;
     }
-#endif
     requirePathnameExists("MIME Config Table", Config.mimeTablePathname);
     requirePathnameExists("cache_dns_program", Config.Program.dnsserver);
     requirePathnameExists("unlinkd_program", Config.Program.unlinkd);
     if (Config.Program.redirect)
-	requirePathnameExists("redirect_program", Config.Program.redirect->key);
+	requirePathnameExists("redirect_program", Config.Program.redirect);
     if (Config.Program.authenticate)
 	requirePathnameExists("authenticate_program", Config.Program.authenticate->key);
     requirePathnameExists("Icon Directory", Config.icons.directory);
@@ -413,7 +406,7 @@ parseBytesLine(size_t * bptr, const char *units)
 	self_destruct();
     d = atof(token);
     m = u;			/* default to 'units' if none specified */
-    if (0.0 == d)
+    if (0 == d)
 	(void) 0;
     else if ((token = strtok(NULL, w_space)) == NULL)
 	debug(3, 0) ("WARNING: No units on '%s', assuming %f %s\n",
@@ -671,7 +664,7 @@ parse_delay_pool_rates(delayConfig * cfg)
 	if (sscanf(token, "%d", &i) != 1)
 	    self_destruct();
 	ptr->restore_bps = i;
-	i = GetInteger();
+	GetInteger(i);
 	ptr->max_bytes = i;
 	ptr++;
     }
@@ -759,16 +752,12 @@ dump_cachedir(StoreEntry * entry, const char *name, cacheSwap swap)
     int i;
     for (i = 0; i < swap.n_configured; i++) {
 	s = swap.swapDirs + i;
-	switch (s->type) {
-	case SWAPDIR_UFS:
-	case SWAPDIR_ASYNCUFS:
-	    storeUfsDirDump(entry, name, s);
-	    break;
-	default:
-	    debug(0, 0) ("dump_cachedir doesn't know about type %d\n",
-		(int) s->type);
-	    break;
-	}
+	storeAppendPrintf(entry, "%s %s %d %d %d\n",
+	    name,
+	    s->path,
+	    s->max_size >> 10,
+	    s->l1,
+	    s->l2);
     }
 }
 
@@ -784,42 +773,71 @@ check_null_string(char *s)
     return s == NULL;
 }
 
-void
-allocate_new_swapdir(cacheSwap * swap)
+static void
+parse_cachedir(cacheSwap * swap)
 {
+    char *token;
+    char *path;
+    int i;
+    int size;
+    int l1;
+    int l2;
+    unsigned int read_only = 0;
+    SwapDir *tmp = NULL;
+    if ((path = strtok(NULL, w_space)) == NULL)
+	self_destruct();
+    GetInteger(i);
+    size = i << 10;		/* Mbytes to kbytes */
+    if (size <= 0)
+	fatal("parse_cachedir: invalid size value");
+    GetInteger(i);
+    l1 = i;
+    if (l1 <= 0)
+	fatal("parse_cachedir: invalid level 1 directories value");
+    GetInteger(i);
+    l2 = i;
+    if (l2 <= 0)
+	fatal("parse_cachedir: invalid level 2 directories value");
+    if ((token = strtok(NULL, w_space)))
+	if (!strcasecmp(token, "read-only"))
+	    read_only = 1;
+    for (i = 0; i < swap->n_configured; i++) {
+	tmp = swap->swapDirs + i;
+	if (!strcmp(path, tmp->path)) {
+	    /* just reconfigure it */
+	    if (size == tmp->max_size)
+		debug(3, 1) ("Cache dir '%s' size remains unchanged at %d KB\n",
+		    path, size);
+	    else
+		debug(3, 1) ("Cache dir '%s' size changed to %d KB\n",
+		    path, size);
+	    tmp->max_size = size;
+	    if (tmp->flags.read_only != read_only)
+		debug(3, 1) ("Cache dir '%s' now %s\n",
+		    path, read_only ? "Read-Only" : "Read-Write");
+	    tmp->flags.read_only = read_only;
+	    return;
+	}
+    }
     if (swap->swapDirs == NULL) {
 	swap->n_allocated = 4;
 	swap->swapDirs = xcalloc(swap->n_allocated, sizeof(SwapDir));
     }
     if (swap->n_allocated == swap->n_configured) {
-	SwapDir *tmp;
 	swap->n_allocated <<= 1;
 	tmp = xcalloc(swap->n_allocated, sizeof(SwapDir));
 	xmemcpy(tmp, swap->swapDirs, swap->n_configured * sizeof(SwapDir));
 	xfree(swap->swapDirs);
 	swap->swapDirs = tmp;
     }
-}
-
-static void
-parse_cachedir(cacheSwap * swap)
-{
-    char *type_str;
-    if ((type_str = strtok(NULL, w_space)) == NULL)
-	self_destruct();
-    if (0 == strcasecmp(type_str, "ufs")) {
-	storeUfsDirParse(swap);
-#if USE_ASYNC_IO
-    } else if (0 == strcasecmp(type_str, "asyncufs")) {
-	storeAufsDirParse(swap);
-#endif
-#if USE_DISKD
-    } else if (0 == strcasecmp(type_str, "diskd")) {
-	storeDiskdDirParse(swap);
-#endif
-    } else {
-	fatalf("Unknown cache_dir type '%s'\n", type_str);
-    }
+    tmp = swap->swapDirs + swap->n_configured;
+    tmp->path = xstrdup(path);
+    tmp->max_size = size;
+    tmp->l1 = l1;
+    tmp->l2 = l2;
+    tmp->flags.read_only = read_only;
+    tmp->swaplog_fd = -1;
+    swap->n_configured++;
 }
 
 static void
@@ -832,15 +850,9 @@ free_cachedir(cacheSwap * swap)
 	return;
     for (i = 0; i < swap->n_configured; i++) {
 	s = swap->swapDirs + i;
-	switch (s->type) {
-	case SWAPDIR_UFS:
-	case SWAPDIR_ASYNCUFS:
-	    storeUfsDirFree(s);
-	    break;
-	default:
-	    debug(0, 0) ("dump_cachedir doesn't know about type %d\n",
-		(int) s->type);
-	    break;
+	if (s->swaplog_fd > -1) {
+	    file_close(s->swaplog_fd);
+	    s->swaplog_fd = -1;
 	}
 	xfree(s->path);
 	filemapFreeMemory(s->map);
@@ -924,9 +936,9 @@ parse_peer(peer ** head)
     if ((token = strtok(NULL, w_space)) == NULL)
 	self_destruct();
     p->type = parseNeighborType(token);
-    i = GetInteger();
+    GetInteger(i);
     p->http_port = (u_short) i;
-    i = GetInteger();
+    GetInteger(i);
     p->icp.port = (u_short) i;
     if (strcmp(p->host, me) == 0) {
 	for (u = Config.Port.http; u; u = u->next) {
@@ -979,8 +991,6 @@ parse_peer(peer ** head)
 #endif
 	} else if (!strncasecmp(token, "login=", 6)) {
 	    p->login = xstrdup(token + 6);
-	} else if (!strncasecmp(token, "connect-timeout=", 16)) {
-	    p->connect_timeout = atoi(token + 16);
 	} else {
 	    debug(3, 0) ("parse_peer: token='%s'\n", token);
 	    self_destruct();
@@ -1233,8 +1243,9 @@ dump_int(StoreEntry * entry, const char *name, int var)
 static void
 parse_int(int *var)
 {
+    char *token;
     int i;
-    i = GetInteger();
+    GetInteger(i);
     *var = i;
 }
 
@@ -1325,11 +1336,11 @@ parse_refreshpattern(refresh_t ** head)
     if (token == NULL)
 	self_destruct();
     pattern = xstrdup(token);
-    i = GetInteger();		/* token: min */
+    GetInteger(i);		/* token: min */
     min = (time_t) (i * 60);	/* convert minutes to seconds */
-    i = GetInteger();		/* token: pct */
+    GetInteger(i);		/* token: pct */
     pct = (double) i / 100.0;
-    i = GetInteger();		/* token: max */
+    GetInteger(i);		/* token: max */
     max = (time_t) (i * 60);	/* convert minutes to seconds */
     /* Options */
     while ((token = strtok(NULL, w_space)) != NULL) {
@@ -1471,8 +1482,9 @@ dump_kb_size_t(StoreEntry * entry, const char *name, size_t var)
 static void
 parse_size_t(size_t * var)
 {
+    char *token;
     int i;
-    i = GetInteger();
+    GetInteger(i);
     *var = (size_t) i;
 }
 
@@ -1514,9 +1526,10 @@ free_ushort(u_short * u)
 static void
 parse_ushort(u_short * var)
 {
+    char *token;
     int i;
 
-    i = GetInteger();
+    GetInteger(i);
     if (i < 0)
 	i = 0;
     *var = (u_short) i;

@@ -48,6 +48,9 @@ Thanks!\n"
 static void fatal_common(const char *);
 static void fatalvf(const char *fmt, va_list args);
 static void mail_warranty(void);
+#if USE_ASYNC_IO
+static AIOCB safeunlinkComplete;
+#endif
 #if MEM_GEN_TRACE
 extern void log_trace_done();
 extern void log_trace_init(char *);
@@ -188,7 +191,7 @@ rusage_maxrss(struct rusage *r)
     return r->ru_maxrss;
 #elif defined(BSD4_4)
     return r->ru_maxrss;
-#elif defined(HAVE_GETPAGESIZE) && HAVE_GETPAGESIZE != 0
+#elif HAVE_GETPAGESIZE
     return (r->ru_maxrss * getpagesize()) >> 10;
 #elif defined(PAGESIZE)
     return (r->ru_maxrss * PAGESIZE) >> 10;
@@ -213,10 +216,7 @@ PrintRusage(void)
 {
     struct rusage rusage;
     squid_getrusage(&rusage);
-    fprintf(debug_log, "CPU Usage: %.3f seconds = %.3f user + %.3f sys\n",
-	rusage_cputime(&rusage),
-	rusage.ru_utime.tv_sec + ((double) rusage.ru_utime.tv_usec / 1000000.0),
-	rusage.ru_stime.tv_sec + ((double) rusage.ru_stime.tv_usec / 1000000.0));
+    fprintf(debug_log, "CPU Usage: %.3f seconds\n", rusage_cputime(&rusage));
     fprintf(debug_log, "Maximum Resident Size: %d KB\n",
 	rusage_maxrss(&rusage));
     fprintf(debug_log, "Page faults with physical i/o: %d\n",
@@ -305,9 +305,9 @@ fatal_common(const char *message)
 #if HAVE_SYSLOG
     syslog(LOG_ALERT, "%s", message);
 #endif
-    fprintf(debug_log, "FATAL: pid %d %s\n", (int) getpid(), message);
+    fprintf(debug_log, "FATAL: %s\n", message);
     if (opt_debug_stderr && debug_log != stderr)
-	fprintf(stderr, "FATAL: pid %d %s\n", (int) getpid(), message);
+	fprintf(stderr, "FATAL: %s\n", message);
     fprintf(debug_log, "Squid Cache (Version %s): Terminated abnormally.\n",
 	version_string);
     fflush(debug_log);
@@ -320,10 +320,10 @@ void
 fatal(const char *message)
 {
     releaseServerSockets();
-    /* check for store_dirs_rebuilding because fatal() is often
+    /* check for store_rebuilding flag because fatal() is often
      * used in early initialization phases, long before we ever
      * get to the store log. */
-    if (0 == store_dirs_rebuilding)
+    if (!store_rebuilding)
 	storeDirWriteCleanLogs(0);
     fatal_common(message);
     exit(shutting_down ? 0 : 1);
@@ -411,46 +411,28 @@ getMyHostname(void)
     LOCAL_ARRAY(char, host, SQUIDHOSTNAMELEN + 1);
     static int present = 0;
     const struct hostent *h = NULL;
-    if (Config.visibleHostname != NULL)
-	return Config.visibleHostname;
-    /*
-     * If tcp_incoming is set then try to get the corresponding hostname
-     */
-    if (!present && Config.Addrs.tcp_incoming.s_addr != INADDR_ANY) {
-	host[0] = '\0';
-	h = gethostbyaddr((char *) &Config.Addrs.tcp_incoming,
-	    sizeof(Config.Addrs.tcp_incoming), AF_INET);
-	if (h != NULL) {
-	    /* DNS lookup successful */
-	    /* use the official name from DNS lookup */
-	    strcpy(host, h->h_name);
-	    debug(50, 4) ("getMyHostname: resolved tcp_incoming_addr to '%s'\n",
-		host);
-	    present = 1;
-	} else {
-	    debug(50, 6) ("getMyHostname: failed to resolve tcp_incoming_addr\n");
-	}
-    }
-    /*
-     * Get the host name and store it in host to return
-     */
+    char *t = NULL;
+
+    if ((t = Config.visibleHostname) != NULL)
+	return t;
+
+    /* Get the host name and store it in host to return */
     if (!present) {
 	host[0] = '\0';
 	if (gethostname(host, SQUIDHOSTNAMELEN) == -1) {
 	    debug(50, 1) ("getMyHostname: gethostname failed: %s\n",
 		xstrerror());
+	    return NULL;
 	} else {
 	    if ((h = gethostbyname(host)) != NULL) {
-		debug(50, 6) ("getMyHostname: '%s' resolved into '%s'\n",
-		    host, h->h_name);
 		/* DNS lookup successful */
 		/* use the official name from DNS lookup */
 		strcpy(host, h->h_name);
 	    }
+	    present = 1;
 	}
-	present = 1;
     }
-    return present ? host : NULL;
+    return host;
 }
 
 const char *
@@ -462,10 +444,30 @@ uniqueHostname(void)
 void
 safeunlink(const char *s, int quiet)
 {
+#if USE_ASYNC_IO
+    aioUnlink(s,
+	quiet ? NULL : safeunlinkComplete,
+	quiet ? NULL : xstrdup(s));
+#else
     Counter.syscalls.disk.unlinks++;
     if (unlink(s) < 0 && !quiet)
 	debug(50, 1) ("safeunlink: Couldn't delete %s: %s\n", s, xstrerror());
+#endif
 }
+
+#if USE_ASYNC_IO
+static void
+safeunlinkComplete(int fd, void *data, int retcode, int errcode)
+{
+    char *s = data;
+    if (retcode < 0) {
+	errno = errcode;
+	debug(50, 1) ("safeunlink: Couldn't delete %s. %s\n", s, xstrerror());
+	errno = 0;
+    }
+    xfree(s);
+}
+#endif
 
 /* leave a privilegied section. (Give up any privilegies)
  * Routines that need privilegies can rap themselves in enter_suid()
@@ -551,7 +553,7 @@ writePidFile(void)
 	return;
     enter_suid();
     old_umask = umask(022);
-    fd = file_open(f, O_WRONLY | O_CREAT | O_TRUNC);
+    fd = file_open(f, O_WRONLY | O_CREAT | O_TRUNC, NULL, NULL, NULL);
     umask(old_umask);
     leave_suid();
     if (fd < 0) {
@@ -774,7 +776,6 @@ dlinkDelete(dlink_node * m, dlink_list * list)
 	list->head = m->next;
     if (m == list->tail)
 	list->tail = m->prev;
-    m->next = m->prev = NULL;
 }
 
 void
@@ -840,46 +841,4 @@ int
 stringHasWhitespace(const char *s)
 {
     return (strcspn(s, w_space) != strlen(s));
-}
-
-void
-linklistPush(link_list ** L, void *p)
-{
-    link_list *l = xmalloc(sizeof(*l));
-    l->next = NULL;
-    l->ptr = p;
-    while (*L)
-	L = &(*L)->next;
-    *L = l;
-}
-
-void *
-linklistShift(link_list ** L)
-{
-    void *p;
-    link_list *l;
-    if (NULL == *L)
-	return NULL;
-    l = *L;
-    p = l->ptr;
-    *L = (*L)->next;
-    xfree(l);
-    return p;
-}
-
-
-/*
- * Same as rename(2) but complains if something goes wrong;
- * the caller is responsible for handing and explaining the 
- * consequences of errors.
- */
-int
-xrename(const char *from, const char *to)
-{
-    debug(21, 2) ("xrename: renaming %s to %s\n", from, to);
-    if (0 == rename(from, to))
-	return 0;
-    debug(21, errno == ENOENT ? 2 : 1) ("xrename: Cannot rename %s to %s: %s\n",
-	from, to, xstrerror());
-    return -1;
 }

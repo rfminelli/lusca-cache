@@ -112,7 +112,7 @@ fwdCheckRetry(FwdState * fwdState)
 	return 0;
     if (fwdState->flags.dont_retry)
 	return 0;
-    if (fwdState->request->content_length >= 0)
+    if (pumpMethod(fwdState->request->method))
 	if (0 == pumpRestart(fwdState->request))
 	    return 0;
     return 1;
@@ -217,19 +217,15 @@ fwdConnectStart(void *data)
     FwdServer *fs = fwdState->servers;
     const char *host;
     unsigned short port;
-    time_t ctimeout;
     assert(fs);
     assert(fwdState->server_fd == -1);
     debug(17, 3) ("fwdConnectStart: %s\n", url);
     if (fs->peer) {
 	host = fs->peer->host;
 	port = fs->peer->http_port;
-	ctimeout = fs->peer->connect_timeout > 0 ? fs->peer->connect_timeout
-	    : Config.Timeout.peer_connect;
     } else {
 	host = fwdState->request->host;
 	port = fwdState->request->port;
-	ctimeout = Config.Timeout.connect;
     }
     hierarchyNote(&fwdState->request->hier, fs->code, host);
     if ((fd = pconnPop(host, port)) >= 0) {
@@ -259,7 +255,7 @@ fwdConnectStart(void *data)
     fwdState->n_tries++;
     comm_add_close_handler(fd, fwdServerClosed, fwdState);
     commSetTimeout(fd,
-	ctimeout,
+	Config.Timeout.connect,
 	fwdConnectTimeout,
 	fwdState);
     commConnectStart(fd, host, port, fwdConnectDone, fwdState);
@@ -296,7 +292,6 @@ fwdDispatch(FwdState * fwdState)
     peer *p;
     request_t *request = fwdState->request;
     StoreEntry *entry = fwdState->entry;
-    ErrorState *err;
     debug(17, 3) ("fwdDispatch: FD %d: Fetching '%s %s'\n",
 	fwdState->client_fd,
 	RequestMethodStr[request->method],
@@ -314,7 +309,6 @@ fwdDispatch(FwdState * fwdState)
     assert(fwdState->server_fd > -1);
     if (fwdState->servers && (p = fwdState->servers->peer)) {
 	p->stats.fetches++;
-	fwdState->request->peer_login = p->login;
 	httpStart(fwdState);
     } else {
 	switch (request->protocol) {
@@ -341,20 +335,7 @@ fwdDispatch(FwdState * fwdState)
 	default:
 	    debug(17, 1) ("fwdDispatch: Cannot retrieve '%s'\n",
 		storeUrl(entry));
-	    err = errorCon(ERR_UNSUP_REQ, HTTP_BAD_REQUEST);
-	    err->request = requestLink(request);
-	    fwdFail(fwdState, err);
-	    /*
-	     * Force a persistent connection to be closed because
-	     * some Netscape browsers have a bug that sends CONNECT
-	     * requests as GET's over persistent connections.
-	     */
-	    request->flags.proxy_keepalive = 0;
-	    /*
-	     * Set the dont_retry flag becuase this is not a
-	     * transient (network) error; its a bug.
-	     */
-	    fwdState->flags.dont_retry = 1;
+	    fwdFail(fwdState, errorCon(ERR_UNSUP_REQ, HTTP_BAD_REQUEST));
 	    comm_close(fwdState->server_fd);
 	    break;
 	}
@@ -376,7 +357,7 @@ fwdReforward(FwdState * fwdState)
     }
     if (fwdState->n_tries > 9)
 	return 0;
-    if (fwdState->request->content_length >= 0)
+    if (pumpMethod(fwdState->request->method))
 	if (0 == pumpRestart(fwdState->request))
 	    return 0;
     assert(fs);

@@ -205,6 +205,8 @@
 
 #define STORE_ENTRY_WITH_MEMOBJ		1
 #define STORE_ENTRY_WITHOUT_MEMOBJ	0
+#define STORE_SWAP_BUF		DISK_PAGE_SIZE
+#define VM_WINDOW_SZ		DISK_PAGE_SIZE
 
 #define SKIP_BASIC_SZ ((size_t) 6)
 
@@ -244,10 +246,6 @@
  */
 #define INCOMING_ICP_MAX 15
 /*
- * Max number of DNS messages to receive per call to DNS read handler
- */
-#define INCOMING_DNS_MAX 15
-/*
  * Max number of HTTP connections to accept per call to httpAccept
  * and PER HTTP PORT
  */
@@ -271,8 +269,4 @@
 #define _PATH_DEVNULL "/dev/null"
 #endif
 
-#if USE_ASYNC_IO
-#ifndef NUMTHREADS
-#define NUMTHREADS 16
-#endif
-#endif
+#define USE_TRUNCATE_NOT_UNLINK 1

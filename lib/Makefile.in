@@ -23,7 +23,6 @@ AR_R		= @AR_R@
 INCLUDE		= -I../include -I$(top_srcdir)/include
 UTILOBJS	= rfc1123.o \
 		  rfc1738.o \
-		  rfc1035.o \
 		  util.o \
 		  getfullhostname.o \
 		  base64.o \
@@ -38,7 +37,6 @@ UTILOBJS	= rfc1123.o \
 		  Array.o \
 		  Stack.o \
 		  hash.o \
-		  heap.o \
 		  $(LIBOBJS)
 REGEXOBJS	= GNUregex.o
 DLMALLOCOBJS	= dlmalloc.o
@@ -70,7 +68,7 @@ clean:
 
 distclean: clean
 	-rm -f libregex.a
-	-rm -f Makefile Makefile.bak
+	-rm -f Makefile
 
 install: all
 

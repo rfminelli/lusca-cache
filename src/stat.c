@@ -269,11 +269,10 @@ statStoreEntry(StoreEntry * s, StoreEntry * e)
     if (mem != NULL) {
 	storeAppendPrintf(s, "\tinmem_lo: %d\n", (int) mem->inmem_lo);
 	storeAppendPrintf(s, "\tinmem_hi: %d\n", (int) mem->inmem_hi);
-	storeAppendPrintf(s, "\tswapout: %d bytes queued\n",
-	    (int) mem->swapout.queue_offset);
-	if (mem->swapout.sio)
-	    storeAppendPrintf(s, "\tswapout: %d bytes written\n",
-		(int) storeOffset(mem->swapout.sio));
+	storeAppendPrintf(s, "\tswapout: %d bytes done, %d queued, FD %d\n",
+	    (int) mem->swapout.done_offset,
+	    (int) mem->swapout.queue_offset,
+	    mem->swapout.fd);
 	for (i = 0, sc = &mem->clients[i]; sc != NULL; sc = sc->next, i++) {
 	    if (sc->callback_data == NULL)
 		continue;
@@ -284,6 +283,8 @@ statStoreEntry(StoreEntry * s, StoreEntry * e)
 		(int) sc->seen_offset);
 	    storeAppendPrintf(s, "\t\tcopy_size: %d\n",
 		(int) sc->copy_size);
+	    storeAppendPrintf(s, "\t\tswapin_fd: %d\n",
+		(int) sc->swapin_fd);
 	    storeAppendPrintf(s, "\t\tflags:");
 	    if (sc->flags.disk_io_pending)
 		storeAppendPrintf(s, " disk_io_pending");
@@ -368,8 +369,8 @@ statObjectsOpenfdFilter(const StoreEntry * e)
 {
     if (e->mem_obj == NULL)
 	return 0;
-    if (e->mem_obj->swapout.sio == NULL)
-	return 0;
+    if (e->mem_obj->swapout.fd < 0)
+	return 0;;
     return 1;
 }
 
@@ -488,12 +489,8 @@ info_get(StoreEntry * sentry)
 	store_swap_size);
     storeAppendPrintf(sentry, "\tStorage Mem size:\t%d KB\n",
 	(int) (store_mem_size >> 10));
-#if HEAP_REPLACEMENT
-    /* The non-LRU policies do not use referenceAge */
-#else
     storeAppendPrintf(sentry, "\tStorage LRU Expiration Age:\t%6.2f days\n",
 	(double) storeExpiredReferenceAge() / 86400.0);
-#endif
     storeAppendPrintf(sentry, "\tMean Object Size:\t%0.2f KB\n",
 	n_disk_objects ? (double) store_swap_size / n_disk_objects : 0.0);
     storeAppendPrintf(sentry, "\tRequests given to unlinkd:\t%d\n",
@@ -939,7 +936,6 @@ statCountersInitSpecial(StatCounters * C)
      */
     statHistEnumInit(&C->cd.on_xition_count, CacheDigestHashFuncCount);
     statHistEnumInit(&C->comm_icp_incoming, INCOMING_ICP_MAX);
-    statHistEnumInit(&C->comm_dns_incoming, INCOMING_DNS_MAX);
     statHistEnumInit(&C->comm_http_incoming, INCOMING_HTTP_MAX);
     statHistIntInit(&C->select_fds_hist, SQUID_MAXFD);
 }
@@ -1336,7 +1332,6 @@ statClientRequests(StoreEntry * s)
 		conn->defer.n, conn->defer.until);
 	}
 	storeAppendPrintf(s, "uri %s\n", http->uri);
-	storeAppendPrintf(s, "log_type %s\n", log_tags[http->log_type]);
 	storeAppendPrintf(s, "out.offset %d, out.size %d\n",
 	    http->out.offset, http->out.size);
 	storeAppendPrintf(s, "req_sz %d\n", http->req_sz);

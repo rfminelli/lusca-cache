@@ -92,7 +92,6 @@ extern int opt_store_doublecheck;	/* 0 */
 extern int syslog_enable;	/* 0 */
 extern int theInIcpConnection;	/* -1 */
 extern int theOutIcpConnection;	/* -1 */
-extern int DnsSocket;		/* -1 */
 #ifdef SQUID_SNMP
 extern int theInSnmpConnection;	/* -1 */
 extern int theOutSnmpConnection;	/* -1 */
@@ -112,7 +111,7 @@ extern struct timeval squid_start;
 extern time_t squid_curtime;	/* 0 */
 extern int shutting_down;	/* 0 */
 extern int reconfiguring;	/* 0 */
-extern int store_dirs_rebuilding;	/* 0 */
+extern int store_rebuilding;	/* 1 */
 extern int store_swap_size;	/* 0 */
 extern unsigned long store_mem_size;	/* 0 */
 extern time_t hit_only_mode_until;	/* 0 */
@@ -125,12 +124,7 @@ extern double request_failure_ratio;	/* 0.0 */
 extern double current_dtime;
 extern int store_hash_buckets;	/* 0 */
 extern hash_table *store_table;	/* NULL */
-#if HEAP_REPLACEMENT
-extern heap *store_heap;
-extern heap *inmem_heap;
-#else
 extern dlink_list store_list;
-#endif
 extern dlink_list ClientActiveRequests;
 extern const String StringNull;	/* { 0, 0, NULL } */
 extern const MemBuf MemBufNull;	/* MemBufNULL */
@@ -150,4 +144,3 @@ extern int refresh_nocache_hack;	/* 0 */
 #endif
 extern request_flags null_request_flags;
 extern int store_open_disk_fd;	/* 0 */
-extern const char *SwapDirType[];

@@ -165,15 +165,11 @@ httpHdrCcPackInto(const HttpHdrCc * cc, Packer * p)
     int pcount = 0;
     assert(cc && p);
     for (flag = 0; flag < CC_ENUM_END; flag++) {
-	if (EBIT_TEST(cc->mask, flag) && flag != CC_OTHER) {
-
-	    /* print option name */
+	if (flag == CC_MAX_AGE && cc->max_age >= 0) {
+	    packerPrintf(p, "max-age=%d", (int) cc->max_age);
+	    pcount++;
+	} else if (EBIT_TEST(cc->mask, flag) && flag != CC_OTHER) {
 	    packerPrintf(p, (pcount ? ", %s" : "%s"), strBuf(CcFieldsInfo[flag].name));
-
-	    /* handle options with values */
-	    if (flag == CC_MAX_AGE)
-		packerPrintf(p, "=%d", (int) cc->max_age);
-
 	    pcount++;
 	}
     }

@@ -115,8 +115,7 @@ snmp_var_new(oid * Name, int Len)
     printf("VARS: Creating.\n");
 #endif
 
-    New = xmalloc(sizeof(*New));
-    /* XXX xmalloc never returns NULL */
+    New = (struct variable_list *) xmalloc(sizeof(struct variable_list));
     if (New == NULL) {
 	snmp_set_api_error(SNMPERR_OS_ERR);
 	return (NULL);
@@ -132,7 +131,6 @@ snmp_var_new(oid * Name, int Len)
 	return (New);
     }
     New->name = (oid *) xmalloc(Len * sizeof(oid));
-    /* XXX xmalloc never returns NULL */
     if (New->name == NULL) {
 	xfree(New);
 	snmp_set_api_error(SNMPERR_OS_ERR);
@@ -147,17 +145,6 @@ snmp_var_new(oid * Name, int Len)
 	xmemcpy((char *) New->name, (char *) Name, Len * sizeof(oid));
 
     return (New);
-}
-
-struct variable_list *
-snmp_var_new_integer(oid * Name, int Len, int ival, unsigned char type)
-{
-    variable_list *v = snmp_var_new(Name, Len);
-    v->val_len = sizeof(int);
-    v->val.integer = xmalloc(sizeof(int));
-    v->type = type;
-    *(v->val.integer) = ival;
-    return v;
 }
 
 /* Clone a variable list.
@@ -227,7 +214,7 @@ snmp_var_clone(struct variable_list *Src)
 
 /* Free a variable_list.
  */
-void
+void 
 snmp_var_free(struct variable_list *Ptr)
 {
     if (Ptr->name && Ptr->name_length > 0)

@@ -48,7 +48,6 @@ static HLPCB redirectHandleReply;
 static void redirectStateFree(redirectStateData * r);
 static helper *redirectors = NULL;
 static OBJH redirectStats;
-static int n_bypassed = 0;
 
 static void
 redirectHandleReply(void *data, char *reply)
@@ -82,9 +81,6 @@ redirectStats(StoreEntry * sentry)
 {
     storeAppendPrintf(sentry, "Redirector Statistics:\n");
     helperStats(sentry, redirectors);
-    if (Config.onoff.redirector_bypass)
-	storeAppendPrintf(sentry, "\nNumber of requests bypassed "
-	    "because all redirectors were busy: %d\n", n_bypassed);
 }
 
 /**** PUBLIC FUNCTIONS ****/
@@ -103,19 +99,11 @@ redirectStart(clientHttpRequest * http, RH * handler, void *data)
 	handler(data, NULL);
 	return;
     }
-    if (Config.onoff.redirector_bypass && redirectors->stats.queue_size) {
-	/* Skip redirector if there is one request queued */
-	n_bypassed++;
-	handler(data, NULL);
-	return;
-    }
     r = xcalloc(1, sizeof(redirectStateData));
     cbdataAdd(r, cbdataXfree, 0);
     r->orig_url = xstrdup(http->uri);
     r->client_addr = conn->log_addr;
-    if (http->request->user_ident[0])
-	r->client_ident = http->request->user_ident;
-    else if (conn->ident == NULL || *conn->ident == '\0') {
+    if (conn->ident == NULL || *conn->ident == '\0') {
 	r->client_ident = dash_str;
     } else {
 	r->client_ident = conn->ident;
@@ -143,7 +131,7 @@ redirectInit(void)
 	return;
     if (redirectors == NULL)
 	redirectors = helperCreate("redirector");
-    redirectors->cmdline = Config.Program.redirect;
+    wordlistAdd(&redirectors->cmdline, Config.Program.redirect);
     redirectors->n_to_start = Config.redirectChildren;
     redirectors->ipc_type = IPC_TCP_SOCKET;
     helperOpenServers(redirectors);
@@ -161,6 +149,7 @@ redirectShutdown(void)
     if (!redirectors)
 	return;
     helperShutdown(redirectors);
+    wordlistDestroy(&redirectors->cmdline);
     if (!shutting_down)
 	return;
     helperFree(redirectors);

@@ -830,6 +830,14 @@ static void
 ftpReadComplete(FtpStateData * ftpState)
 {
     debug(9, 3) ("ftpReadComplete\n");
+    if (ftpState->data.fd > -1) {
+	/*
+	 * close data socket so it does not occupy resources while
+	 * we wait
+	 */
+	comm_close(ftpState->data.fd);
+	ftpState->data.fd = -1;
+    }
     /* Connection closed; retrieval done. */
     if (ftpState->flags.html_header_sent)
 	ftpListingFinish(ftpState);
@@ -1290,7 +1298,7 @@ ftpHandleControlReply(FtpStateData * ftpState)
     safe_free(ftpState->ctrl.last_reply);
     ftpState->ctrl.last_reply = (*W)->key;
     safe_free(*W);
-    debug(9, 8) ("ftpHandleControlReply: state=%d, code=%d\n", ftpState->state,
+    debug(9, 8) ("ftpReadControlReply: state=%d, code=%d\n", ftpState->state,
 	ftpState->ctrl.replycode);
     FTP_SM_FUNCS[ftpState->state] (ftpState);
 }
@@ -1364,13 +1372,13 @@ ftpReadPass(FtpStateData * ftpState)
 {
     int code = ftpState->ctrl.replycode;
     debug(9, 3) ("ftpReadPass\n");
+    if (ftpState->ctrl.message) {
+	if (ftpState->cwd_message)
+	    wordlistDestroy(&ftpState->cwd_message);
+	ftpState->cwd_message = ftpState->ctrl.message;
+	ftpState->ctrl.message = NULL;
+    }
     if (code == 230) {
-	if (ftpState->ctrl.message) {
-	    if (ftpState->cwd_message)
-		wordlistDestroy(&ftpState->cwd_message);
-	    ftpState->cwd_message = ftpState->ctrl.message;
-	    ftpState->ctrl.message = NULL;
-	}
 	ftpSendType(ftpState);
     } else {
 	ftpFail(ftpState);
