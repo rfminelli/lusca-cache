@@ -1,0 +1,193 @@
+#
+#  Makefile for the Squid Object Cache server
+#
+#  $Id$
+#
+#  Uncomment and customize the following to suit your needs:
+#
+HOST_OPT	= # -DCACHEMGR_HOSTNAME="getfullhostname()"
+AIO_OPT		= # -DUSE_ASYNC_IO=1
+AIO_LIBS	= # @AIO_LIBS@
+AUTH_OPT	= # -DUSE_PROXY_AUTH=1
+LOG_HDRS_OPT	= # -DLOG_FULL_HEADERS=1
+ICMP_OPT	= # -DUSE_ICMP=1
+DELAY_HACK      = # -DDELAY_HACK=1
+DEFINES		= $(HOST_OPT) $(AIO_OPT) $(AUTH_OPT) $(LOG_HDRS_OPT) $(ICMP_OPT) \
+		  $(DELAY_HACK)
+
+prefix		= @prefix@
+exec_prefix	= @exec_prefix@
+top_srcdir	= @top_srcdir@
+bindir		= @bindir@
+libexecdir      = @libexecdir@
+sysconfdir	= @sysconfdir@
+localstatedir   = @localstatedir@
+srcdir		= @srcdir@
+VPATH		= @srcdir@
+
+DEFAULT_CONFIG_FILE     = $(sysconfdir)/squid.conf
+DEFAULT_FTPGET          = $(libexecdir)/ftpget
+DEFAULT_DNSSERVER       = $(libexecdir)/dnsserver
+DEFAULT_CACHE_LOG       = $(localstatedir)/logs/cache.log
+DEFAULT_ACCESS_LOG      = $(localstatedir)/logs/access.log
+DEFAULT_STORE_LOG       = $(localstatedir)/logs/store.log
+DEFAULT_SWAP_DIR        = $(localstatedir)/cache
+
+CC		= @CC@
+INSTALL		= @INSTALL@
+INSTALL_BIN 	= @INSTALL_PROGRAM@
+INSTALL_FILE 	= @INSTALL_DATA@
+RANLIB		= @RANLIB@
+LN_S		= @LN_S@
+PERL            = @PERL@
+CRYPT_LIB	= @CRYPT_LIB@
+AC_CFLAGS	= @CFLAGS@
+LDFLAGS		= @LDFLAGS@
+XTRA_LIBS	= @XTRA_LIBS@
+XTRA_OBJS 	= @XTRA_OBJS@
+MV		= @MV@
+RM		= @RM@
+SHELL		= /bin/sh
+
+
+INCLUDE		= -I. -I../include -I$(srcdir)/../include
+CFLAGS 		= $(AC_CFLAGS) $(INCLUDE) $(DEFINES)
+LIBS		= -L../lib -lregex -lmiscutil $(XTRA_LIBS)
+CLIENT_LIBS	= -L../lib -lmiscutil $(XTRA_LIBS)
+
+PROGS           = squid client
+UTILS           = dnsserver ftpget
+CGIPROGS	= cachemgr.cgi
+OBJS	 	= acl.o async_io.o background.o cache_cf.o errorpage.o \
+		client_side.o comm.o debug.o disk.o dns.o \
+		fdstat.o filemap.o ftp.o fqdncache.o gopher.o \
+		hash.o http.o icmp.o icp.o ident.o ipcache.o \
+		main.o mime.o neighbors.o objcache.o \
+		proto.o redirect.o send-announce.o ssl.o stack.o stat.o stmem.o \
+		store.o store_clean.o storetoString.o tools.o ttl.o \
+		url.o wais.o $(XTRA_OBJS)
+
+DEFAULTS        = \
+	-DDEFAULT_CONFIG_FILE=\"$(DEFAULT_CONFIG_FILE)\" \
+	-DDEFAULT_FTPGET=\"$(DEFAULT_FTPGET)\" \
+	-DDEFAULT_DNSSERVER=\"$(DEFAULT_DNSSERVER)\" \
+	-DDEFAULT_CACHE_LOG=\"$(DEFAULT_CACHE_LOG)\" \
+	-DDEFAULT_ACCESS_LOG=\"$(DEFAULT_ACCESS_LOG)\" \
+	-DDEFAULT_STORE_LOG=\"$(DEFAULT_STORE_LOG)\" \
+	-DDEFAULT_SWAP_DIR=\"$(DEFAULT_SWAP_DIR)\"
+
+all:    squid.conf $(PROGS) $(UTILS) $(CGIPROGS)
+
+squid:	$(OBJS)
+	$(CC) -o $@ $(LDFLAGS) $(OBJS) $(CRYPT_LIB) $(LIBS) $(AIO_LIBS)
+
+cache_cf.o: cache_cf.c Makefile
+	$(CC) -c $< $(CFLAGS) $(DEFAULTS)
+
+client:	client.o
+	$(CC) -o $@ $(LDFLAGS) $@.o $(CLIENT_LIBS)
+
+dnsserver: dnsserver.o
+	$(CC) -o $@ $(LDFLAGS) $@.o $(LIBS)
+
+cachemgr.cgi:	cachemgr.o
+	$(CC) -o $@ $(LDFLAGS) cachemgr.o $(CLIENT_LIBS)
+
+ftpget: ftpget.o
+	$(CC) -o $@ $(LDFLAGS) ftpget.o $(LIBS)
+
+squid.conf: squid.conf.pre Makefile
+	sed "\
+	s%@DEFAULT_CONFIG_FILE@%$(DEFAULT_CONFIG_FILE)%g;\
+	s%@DEFAULT_FTPGET@%$(DEFAULT_FTPGET)%g;\
+	s%@DEFAULT_DNSSERVER@%$(DEFAULT_DNSSERVER)%g;\
+	s%@DEFAULT_CACHE_LOG@%$(DEFAULT_CACHE_LOG)%g;\
+	s%@DEFAULT_ACCESS_LOG@%$(DEFAULT_ACCESS_LOG)%g;\
+	s%@DEFAULT_STORE_LOG@%$(DEFAULT_STORE_LOG)%g;\
+	s%@DEFAULT_SWAP_DIR@%$(DEFAULT_SWAP_DIR)%g" < squid.conf.pre >$@
+
+install-mkdirs:
+	-@if test ! -d $(prefix); then \
+		echo "mkdir $(prefix)"; \
+		mkdir $(prefix); \
+	fi
+	-@if test ! -d $(exec_prefix); then \
+		echo "mkdir $(exec_prefix)"; \
+		mkdir $(exec_prefix); \
+	fi
+	-@if test ! -d $(bindir); then \
+		echo "mkdir $(bindir)"; \
+		mkdir $(bindir); \
+	fi
+	-@if test ! -d $(libexecdir); then \
+		echo "mkdir $(libexecdir)"; \
+		mkdir $(libexecdir); \
+	fi
+	-@if test ! -d $(sysconfdir); then \
+		echo "mkdir $(sysconfdir)"; \
+		mkdir $(sysconfdir); \
+	fi
+	-@if test ! -d $(localstatedir); then \
+		echo "mkdir $(localstatedir)"; \
+		mkdir $(localstatedir); \
+	fi
+	-@if test ! -d $(localstatedir)/logs; then \
+		echo "mkdir $(localstatedir)/logs"; \
+		mkdir $(localstatedir)/logs; \
+	fi
+
+# Michael Lupp <mike@nemesis.saar.de> wants to know about additions
+# to the install target.
+install: all install-mkdirs
+	@for f in $(PROGS); do \
+		if test -f $(bindir)/$$f; then \
+			echo $(MV) $(bindir)/$$f $(bindir)/-$$f; \
+			$(MV) $(bindir)/$$f $(bindir)/-$$f; \
+		fi; \
+		echo $(INSTALL_BIN) $$f $(bindir); \
+		$(INSTALL_BIN) $$f $(bindir); \
+		if test -f $(bindir)/-$$f; then \
+			echo $(RM) -f $(bindir)/-$$f; \
+			$(RM) $(bindir)/-$$f; \
+		fi; \
+	done
+	@for f in $(UTILS); do \
+		if test -f $(libexecdir)/$$f; then \
+			echo $(MV) $(libexecdir)/$$f $(libexecdir)/-$$f; \
+			$(MV) $(libexecdir)/$$f $(libexecdir)/-$$f; \
+		fi; \
+		echo $(INSTALL_BIN) $$f $(libexecdir); \
+		$(INSTALL_BIN) $$f $(libexecdir); \
+		if test -f $(libexecdir)/-$$f; then \
+			echo $(RM) -f $(libexecdir)/-$$f; \
+			$(RM) $(libexecdir)/-$$f; \
+		fi; \
+	done
+	@for f in $(CGIPROGS); do \
+		if test -f $(libexecdir)/$$f; then \
+			echo $(MV) $(libexecdir)/$$f $(libexecdir)/-$$f; \
+			$(MV) $(libexecdir)/$$f $(libexecdir)/-$$f; \
+		fi; \
+		echo $(INSTALL_BIN) $$f $(libexecdir); \
+		$(INSTALL_BIN) $$f $(libexecdir); \
+		if test -f $(libexecdir)/-$$f; then \
+			echo $(RM) -f $(libexecdir)/-$$f; \
+			$(RM) $(libexecdir)/-$$f; \
+		fi; \
+	done
+	$(INSTALL_FILE) squid.conf $(sysconfdir)/squid.conf.default
+	@if test -f $(sysconfdir)/squid.conf ; then \
+		echo "$@ will not overwrite existing $(sysconfdir)/squid.conf" ; \
+	else \
+		echo "$(INSTALL_FILE) squid.conf $(sysconfdir)"; \
+		$(INSTALL_FILE) squid.conf $(sysconfdir); \
+	fi
+
+clean: 
+	-rm -rf *.o *pure_* core $(PROGS) $(UTILS) $(CGIPROGS)
+
+realclean:	clean
+	-rm -f Makefile squid.conf squid.conf.pre
+
+tags:
+	ctags *.[ch] ../include/*.h ../lib/*.[ch]
