@@ -113,6 +113,7 @@ AC_CHECK_HEADERS( \
 	sys/select.h\
 	sys/time.h \
 	sys/types.h \
+	sys/syscall.h \
 	unistd.h \
 	regex.h \
 	syslog.h \
