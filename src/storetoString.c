@@ -110,8 +110,8 @@
 char *storeToString(e)
      StoreEntry *e;
 {
-    LOCAL_ARRAY(char, stsbuf, 16 << 10);	/* have to make this really big */
-    LOCAL_ARRAY(char, tmpbuf, 8 << 10);
+    static char stsbuf[16 << 10];	/* have to make this really big */
+    static char tmpbuf[8 << 10];
     time_t t;
 
     if (!e) {
@@ -347,10 +347,7 @@ char *storeToString(e)
     sprintf(tmpbuf, "SwapOffset: %u\n", e->mem_obj->swap_offset);
     strcat(stsbuf, tmpbuf);
 
-    sprintf(tmpbuf, "SwapOutFd: %d\n", e->mem_obj->swapout_fd);
-    strcat(stsbuf, tmpbuf);
-
-    sprintf(tmpbuf, "SwapInFd: %d\n", e->mem_obj->swapin_fd);
+    sprintf(tmpbuf, "SwapFd: %d\n", e->mem_obj->swap_fd);
     strcat(stsbuf, tmpbuf);
 
     sprintf(tmpbuf, "PendingListSize: %d\n", e->mem_obj->pending_list_size);

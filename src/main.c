@@ -124,7 +124,6 @@ char version_string[] = SQUID_VERSION;
 char appname[] = "squid";
 char localhost[] = "127.0.0.1";
 struct in_addr local_addr;
-int opt_log_fqdn = 1;
 
 /* for error reporting from xmalloc and friends */
 extern void (*failure_notify) _PARAMS((char *));
@@ -207,7 +206,6 @@ static void mainParseOptions(argc, argv)
 	case 'm':
 #if MALLOC_DBG
 	    malloc_debug_level = atoi(optarg);
-	    /* NOTREACHED */
 	    break;
 #else
 	    fatal("Need to add -DMALLOC_DBG when compiling to use -m option");
@@ -373,8 +371,7 @@ static void mainReinitialize()
     parseConfigFile(ConfigFile);
     _db_init(getCacheLogFile(), getDebugOptions());
     neighbors_init();
-    dnsOpenServers();
-    redirectOpenServers();
+    ipcacheOpenServers();
     serverConnectionsOpen();
     (void) ftpInitialize();
     if (theOutIcpConnection >= 0 && (!httpd_accel_mode || getAccelWithProxy()))
@@ -398,14 +395,6 @@ static void mainInitialize()
 
     leave_suid();		/* Run as non privilegied user */
 
-#if USE_ASYNC_IO
-#if HAVE_AIO_INIT
-    if (first_time)
-	aio_init();
-#endif
-    squid_signal(SIGIO, aioSigHandler, SA_RESTART);
-#endif
-
     if (httpPortNumOverride != 1)
 	setHttpPortNum((u_short) httpPortNumOverride);
     if (icpPortNumOverride != 1)
@@ -421,14 +410,10 @@ static void mainInitialize()
     debug(1, 1, "With %d file descriptors available\n", FD_SETSIZE);
 
     if (first_time) {
-	stmemInit();		/* stmem must go before at least redirect */
 	disk_init();		/* disk_init must go before ipcache_init() */
 	writePidFile();		/* write PID file */
     }
     ipcache_init();
-    fqdncache_init();
-    dnsOpenServers();
-    redirectOpenServers();
     neighbors_init();
     (void) ftpInitialize();
 
@@ -442,6 +427,7 @@ static void mainInitialize()
 	urlInitialize();
 	stat_init(&CacheInfo, getAccessLogFile());
 	storeInit();
+	stmemInit();
 
 	if (getEffectiveUser()) {
 	    /* we were probably started as root, so cd to a swap
@@ -477,22 +463,6 @@ int main(argc, argv)
     time_t last_announce = 0;
     time_t loop_delay;
 
-    /* call mallopt() before anything else */
-#if HAVE_MALLOPT
-#ifdef M_GRAIN
-    /* Round up all sizes to a multiple of this */
-    mallopt(M_GRAIN, 16);
-#endif
-#ifdef M_MXFAST
-    /* biggest size that is considered a small block */
-    mallopt(M_MXFAST, 256);
-#endif
-#ifdef M_NBLKS
-    /* allocate this many small blocks at once */
-    mallopt(M_NLBLKS, 32);
-#endif
-#endif /* HAVE_MALLOPT */
-
     memset(&local_addr, '\0', sizeof(struct in_addr));
     local_addr.s_addr = inet_addr(localhost);
 
@@ -508,6 +478,21 @@ int main(argc, argv)
     if (catch_signals)
 	for (n = FD_SETSIZE; n > 2; n--)
 	    close(n);
+
+#if HAVE_MALLOPT
+#ifdef M_GRAIN
+    /* Round up all sizes to a multiple of this */
+    mallopt(M_GRAIN, 16);
+#endif
+#ifdef M_MXFAST
+    /* biggest size that is considered a small block */
+    mallopt(M_MXFAST, 256);
+#endif
+#ifdef M_NBLKS
+    /* allocate this many small blocks at once */
+    mallopt(M_NLBLKS, 32);
+#endif
+#endif /* HAVE_MALLOPT */
 
     /*init comm module */
     comm_init();
@@ -599,5 +584,6 @@ int main(argc, argv)
 	}
     }
     /* NOTREACHED */
+    exit(0);
     return 0;
 }

@@ -174,7 +174,7 @@ static void waisReadReply(fd, waisState)
      int fd;
      WaisStateData *waisState;
 {
-    LOCAL_ARRAY(char, buf, 4096);
+    static char buf[4096];
     int len;
     StoreEntry *entry = NULL;
 
@@ -297,6 +297,7 @@ static void waisSendComplete(fd, buf, size, errflag, data)
 	    (void *) waisState,
 	    getReadTimeout());
     }
+    safe_free(buf);		/* Allocated by waisSendRequest. */
 }
 
 /* This will be called when connect completes. Write request. */
@@ -328,8 +329,7 @@ static void waisSendRequest(fd, waisState)
 	len,
 	30,
 	waisSendComplete,
-	(void *) waisState,
-	xfree);
+	(void *) waisState);
     if (BIT_TEST(waisState->entry->flag, CACHABLE))
 	storeSetPublicKey(waisState->entry);	/* Make it public */
 }

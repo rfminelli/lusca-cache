@@ -151,11 +151,12 @@ typedef struct gopher_ds {
     int HTML_header_added;
     int port;
     char type_id;
-    char request[MAX_URL + 1];
+    char request[MAX_URL];
     int data_in;
     int cso_recno;
     int len;
     char *buf;			/* pts to a 4k page */
+    char *icp_page_ptr;		/* Pts to gopherStart buffer that needs to be freed */
 } GopherData;
 
 GopherData *CreateGopherData();
@@ -183,7 +184,7 @@ static void gopher_mime_content(buf, name, def)
      char *name;
      char *def;
 {
-    LOCAL_ARRAY(char, temp, MAX_URL + 1);
+    static char temp[MAX_URL];
     char *ext1 = NULL;
     char *ext2 = NULL;
     char *str = NULL;
@@ -233,7 +234,7 @@ static void gopher_mime_content(buf, name, def)
 void gopherMimeCreate(data)
      GopherData *data;
 {
-    LOCAL_ARRAY(char, tempMIME, MAX_MIME);
+    static char tempMIME[MAX_MIME];
 
     sprintf(tempMIME, "\
 HTTP/1.0 200 OK Gatewaying\r\n\
@@ -288,8 +289,8 @@ int gopher_url_parser(url, host, port, type_id, request)
      char *type_id;
      char *request;
 {
-    LOCAL_ARRAY(char, proto, MAX_URL);
-    LOCAL_ARRAY(char, hostbuf, MAX_URL);
+    static char proto[MAX_URL];
+    static char hostbuf[MAX_URL];
     int t;
 
     proto[0] = hostbuf[0] = '\0';
@@ -354,7 +355,7 @@ int gopherCachable(url)
 void gopherEndHTML(data)
      GopherData *data;
 {
-    LOCAL_ARRAY(char, tmpbuf, TEMP_BUF_SIZE);
+    static char tmpbuf[TEMP_BUF_SIZE];
 
     if (!data->data_in) {
 	sprintf(tmpbuf, "<HR><H2><i>Server Return Nothing.</i></H2>\n");
@@ -374,9 +375,9 @@ void gopherToHTML(data, inbuf, len)
     char *pos = inbuf;
     char *lpos = NULL;
     char *tline = NULL;
-    LOCAL_ARRAY(char, line, TEMP_BUF_SIZE);
-    LOCAL_ARRAY(char, tmpbuf, TEMP_BUF_SIZE);
-    LOCAL_ARRAY(char, outbuf, TEMP_BUF_SIZE << 4);
+    static char line[TEMP_BUF_SIZE];
+    static char tmpbuf[TEMP_BUF_SIZE];
+    static char outbuf[TEMP_BUF_SIZE << 4];
     char *name = NULL;
     char *selector = NULL;
     char *host = NULL;
@@ -386,9 +387,9 @@ void gopherToHTML(data, inbuf, len)
     char gtype;
     StoreEntry *entry = NULL;
 
-    memset(outbuf, '\0', sizeof(outbuf));
-    memset(tmpbuf, '\0', sizeof(outbuf));
-    memset(line, '\0', sizeof(outbuf));
+    memset(outbuf, '\0', TEMP_BUF_SIZE << 4);
+    memset(tmpbuf, '\0', TEMP_BUF_SIZE);
+    memset(line, '\0', TEMP_BUF_SIZE);
 
     entry = data->entry;
 
@@ -592,7 +593,7 @@ void gopherToHTML(data, inbuf, len)
 		int t;
 		int code;
 		int recno;
-		LOCAL_ARRAY(char, result, MAX_CSO_RESULT);
+		static char result[MAX_CSO_RESULT];
 
 		tline = line;
 
@@ -668,6 +669,8 @@ int gopherReadReplyTimeout(fd, data)
     entry = data->entry;
     debug(10, 4, "GopherReadReplyTimeout: Timeout on %d\n url: %s\n", fd, entry->url);
     squid_error_entry(entry, ERR_READ_TIMEOUT, NULL);
+    if (data->icp_page_ptr)
+	put_free_4k_page(data->icp_page_ptr);
     comm_close(fd);
     return 0;
 }
@@ -681,6 +684,8 @@ void gopherLifetimeExpire(fd, data)
     entry = data->entry;
     debug(10, 4, "gopherLifeTimeExpire: FD %d: <URL:%s>\n", fd, entry->url);
     squid_error_entry(entry, ERR_LIFETIME_EXP, NULL);
+    if (data->icp_page_ptr)
+	put_free_4k_page(data->icp_page_ptr);
     comm_set_select_handler(fd,
 	COMM_SELECT_READ | COMM_SELECT_WRITE,
 	0,
@@ -767,7 +772,7 @@ int gopherReadReply(fd, data)
 	if (data->conversion != NORMAL)
 	    gopherEndHTML(data);
 	if (!(entry->flag & DELETE_BEHIND))
-	    ttlSet(entry);
+	    entry->expires = squid_curtime + ttlSet(entry);
 	BIT_RESET(entry->flag, DELAY_SENDING);
 	storeComplete(entry);
 	comm_close(fd);
@@ -894,6 +899,7 @@ void gopherSendComplete(fd, buf, size, errflag, data)
 
     if (buf)
 	put_free_4k_page(buf);	/* Allocated by gopherSendRequest. */
+    gopherState->icp_page_ptr = NULL;
 }
 
 /* This will be called when connect completes. Write request. */
@@ -902,8 +908,10 @@ void gopherSendRequest(fd, data)
      GopherData *data;
 {
     int len;
-    LOCAL_ARRAY(char, query, MAX_URL);
+    static char query[MAX_URL];
     char *buf = get_free_4k_page();
+
+    data->icp_page_ptr = buf;
 
     if (data->type_id == GOPHER_CSO) {
 	sscanf(data->request, "?%s", query);
@@ -927,8 +935,7 @@ void gopherSendRequest(fd, data)
 	len,
 	30,
 	gopherSendComplete,
-	(void *) data,
-	put_free_4k_page);
+	(void *) data);
     if (BIT_TEST(data->entry->flag, CACHABLE))
 	storeSetPublicKey(data->entry);		/* Make it public */
 }

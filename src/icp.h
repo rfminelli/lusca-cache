@@ -158,54 +158,21 @@ typedef struct wwd {
     log_type logcode;
 } icpUdpData;
 
-
-#define ICP_IDENT_SZ 63
-typedef struct iwd {
-    icp_common_t header;	/* Allows access to previous header */
-    int fd;
-    char *url;
-    char *inbuf;
-    int inbufsize;
-    method_t method;		/* GET, POST, ... */
-    request_t *request;		/* Parsed URL ... */
-    char *request_hdr;		/* Mime header */
-    StoreEntry *entry;
-    long offset;
-    int log_type;
-    int http_code;
-    struct sockaddr_in peer;
-    struct sockaddr_in me;
-    struct in_addr log_addr;
-    char *buf;
-    struct timeval start;
-    int flags;
-    int size;			/* hack for CONNECT which doesnt use sentry */
-    char ident[ICP_IDENT_SZ + 1];
-    int ident_fd;
-    aclCheck_t *aclChecklist;
-    void (*aclHandler) _PARAMS((struct iwd *, int answer));
-} icpStateData;
-
+extern char *icpWrite _PARAMS((int, char *, int, int, void (*handler) (), void *));
 extern int icpUdpSend _PARAMS((int,
 	char *,
 	icp_common_t *,
 	struct sockaddr_in *,
+	int flags,
 	icp_opcode,
 	log_type));
+
 extern int icpHandleUdp _PARAMS((int sock, void *data));
 extern int asciiHandleConn _PARAMS((int sock, void *data));
-extern int icpSendERROR _PARAMS((int fd,
-	log_type errorCode,
-	char *text,
-	icpStateData *,
-	int httpCode));
 extern void AppendUdp _PARAMS((icpUdpData *));
-extern void icpParseRequestHeaders _PARAMS((icpStateData *));
-extern void icpDetectClientClose _PARAMS((int fd, icpStateData *));
-extern void icp_hit_or_miss _PARAMS((int fd, icpStateData *));
 
 extern int neighbors_do_private_keys;
 extern char *IcpOpcodeStr[];
 extern int icpUdpReply _PARAMS((int fd, icpUdpData * queue));
 
-#endif /* ICP_H */
+#endif

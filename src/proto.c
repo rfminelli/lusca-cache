@@ -201,7 +201,7 @@ int protoDispatchDNSHandle(unused1, unused2, data)
 	if ((hp = ipcache_gethostbyname(req->host, 0)) == NULL) {
 	    debug(17, 1, "Unknown host: %s\n", req->host);
 	} else if (firewall_ip_list) {
-	    xmemcpy(&srv_addr, *(hp->h_addr_list + 0), hp->h_length);
+	    xmemcpy(&srv_addr, hp->h_addr_list[0], hp->h_length);
 	    if (ip_access_check(srv_addr, firewall_ip_list) == IP_DENY) {
 		hierarchy_log_append(entry,
 		    HIER_LOCAL_IP_DIRECT, 0,
@@ -210,7 +210,7 @@ int protoDispatchDNSHandle(unused1, unused2, data)
 		return 0;
 	    }
 	} else if (local_ip_list) {
-	    xmemcpy(&srv_addr, *(hp->h_addr_list + 0), hp->h_length);
+	    xmemcpy(&srv_addr, hp->h_addr_list[0], hp->h_length);
 	    if (ip_access_check(srv_addr, local_ip_list) == IP_DENY) {
 		hierarchy_log_append(entry,
 		    HIER_LOCAL_IP_DIRECT, 0,
@@ -369,33 +369,32 @@ int protoDispatch(fd, url, entry, request)
     return 0;
 }
 
-void protoUnregister(fd, entry, request, src_addr)
+/* Use to undispatch a particular url/fd from DNS pending list */
+/* I have it here because the code that understand protocol/url */
+/* should be here. */
+int protoUndispatch(fd, url, entry, request)
      int fd;
+     char *url;
      StoreEntry *entry;
      request_t *request;
-     struct in_addr src_addr;
 {
-    char *url = NULL;
-    if (entry)
-	url = entry->url;
     debug(17, 5, "protoUndispatch FD %d <URL:%s>\n", fd, url);
 
     /* Cache objects don't need to be unregistered  */
     if (request->protocol == PROTO_CACHEOBJ)
-	return;
+	return 0;
 
-    if (url)
-	(void) redirectUnregister(url, fd);
-    (void) fqdncacheUnregister(src_addr, fd);
+    /* clean up DNS pending list for this name/fd look up here */
     if (!ipcache_unregister(request->host, fd)) {
 	debug(17, 5, "protoUndispatch: ipcache failed to unregister '%s'\n",
 	    request->host);
-	return;
+	return 0;
     }
     /* The pending DNS lookup was cleared, now have to junk the entry */
-    debug(17, 5, "protoUndispatch: entry is stranded with pending DNS event\n");
+    debug(17, 5, "protoUndispatch: the entry is stranded with a pending DNS event\n");
     if (entry)
 	squid_error_entry(entry, ERR_CLIENT_ABORT, NULL);
+    return 1;
 }
 
 void protoCancelTimeout(fd, entry)
@@ -411,7 +410,7 @@ void protoCancelTimeout(fd, entry)
 	return;
     }
     debug(17, 2, "protoCancelTimeout: FD %d <URL:%s>\n", fd, entry->url);
-    if (fdstatGetType(fd) != FD_SOCKET) {
+    if (fdstat_type(fd) != FD_SOCKET) {
 	debug(17, 0, "FD %d: Someone called protoCancelTimeout() on a non-socket\n",
 	    fd);
 	fatal_dump(NULL);
@@ -536,7 +535,7 @@ static int protoNotImplemented(fd, url, entry)
      char *url;
      StoreEntry *entry;
 {
-    LOCAL_ARRAY(char, buf, 256);
+    static char buf[256];
 
     debug(17, 1, "protoNotImplemented: Cannot retrieve <URL:%s>\n", url);
 
@@ -555,7 +554,7 @@ static int protoCantFetchObject(fd, entry, reason)
      StoreEntry *entry;
      char *reason;
 {
-    LOCAL_ARRAY(char, buf, 2048);
+    static char buf[2048];
 
     debug(17, 1, "protoCantFetchObject: FD %d %s\n", fd, reason);
     debug(17, 1, "--> <URL:%s>\n", entry->url);

@@ -1,62 +1,22 @@
-Changes to squid-1.1.alpha6:
+Changes to squid-1.0.4 (July 24, 1996):
 
-	- Changed storage manager to use a two level directory
-	  structure.  This makes squid-1.1 incompatible with squid-1.0!
-	- Added last modification time to the StoreEntry structure, and
-	  the swap log.
-	- Changed how memory passed to comm_write() gets freed.  Now
-	  pass in a free handler function which gets called when the
-	  RWStateData structure is destroyed.
-	- Other misc cleanup.
-	- Added a reverse-address-lookup cache (``fqdncache'').
-	- Added support for threaded ACLs for destination IP addresses
-	  and source hostnames.
-	- Use aclMatchDomainList() instead of aclMatchWord() for domain names.
-	- Renamed cachemgr 'stats/general' to 'stats/ipcache'.
-	- Added 'log_fqdn' option to config file.
-	- Added 'client_netmask' to config file.
+	- Fixed ftpget logic/precedence bug
+	- Fixed ttlSet() to choose TTL as offset from when the object
+	  was originally served, not the current time.
+	- Fixed configure bug with setting GETTIMEOFDAY_NO_TZP.
+	- Removed unnecessary call to ipcache_gethostbyname() in
+	  sslConnect().
+	- Fixed stupid memset() bug in gopher.c causing
+	  a huge block of stack memory to be zeroed.
 
+Changes to squid-1.0.3 (July 18, 1996):
 
-Changes to squid-1.1.alpha5:
-
-	- Got Asynchronous I/O stuff to compile and run on IRIX 5.3
-	- Cleaned up diskHandleWrite()
-	- Added free() handler to struct dwrite_q so diskHandleWrite()
-	  can free memory after its been written.
-	- Changed file_open() to not allow files to be opened O_RDWR.
-	- Changed file_open() to always set O_APPEND for O_WRONLY files.
-	- Includes all squid-1.0 changes up to squid-1.0.2.
-
-Changes to squid-1.1.alpha4:
-
-	- Fixed Asynchronous Disk I/O routines to basically work.
-	- Fixed memory write bugs when using the redirector.
-	- Added support for non-anonymous FTP urls without needing a
-	  password in the URL.
-
-Changes to squid-1.1.alpha4:
-
-	- Changed cachemgr detailed filedescriptor info to be a separate item.
-	- 'no-cache' reload now discards bad IP cache entries too.
-	- Added 'echo request' URL hack:  http://cachehost:3128/echo
-	- Added URL redirector feature.
-	- Addeed 'ident_lookup' option to config file
-	- Fixed http to never rely on blocking IP cache lookups.
-	- Removed need for locked IP cache entries.
-	- Changed free page stacks to always free pages if more than
-	  'max' are allocated.
-
-Changes to squid-1.1.alpha3:
-
-	- Added Asynchronous Disk I/O routines from Pete Bentley.
-	  (NOTE, not yet working for IRIX 5.3).
-	- Made squid native access log the default format.
-
-Changes to squid-1.1.alpha2:
-
-	- Added support for RFC931/ident
-
-==============================================================================
+	- Fixed FTP to send 'Ascii' or 'Binary' based on MIME encoding,
+	  not content-type.
+	- Changed icpHierarchical() to allow IMS requests to neighbors
+	  if they all support Squid's private keys.
+	- Fixed icpUdpSend() to not ask for a HIT_OBJ reply if the
+	  HTTP request included 'Pragma: no-cache'.
 
 Changes to squid-1.0.2 (July 16, 1996):
 

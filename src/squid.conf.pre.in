@@ -299,13 +299,13 @@
 #	The Cache can emulate the log file format which many 'httpd'
 #	programs use.  To disable/enable this emulation, set 
 #	emulate_httpd_log to 'off' or 'on'.  The default 
-#	is to use the native log format.
+#	is to enable this emulation.
 #
-#emulate_httpd_log off
+#emulate_httpd_log on
 
 #  TAG: pid_filename
 #	A pathname to write the process-id to.  There is no default.
-#pid_filename
+#pid_filename /tmp/squid.pid
 
 #  TAG: debug_options
 #	Logging options are set as section,level where each source file
@@ -314,24 +314,7 @@
 #	log file, so be careful.  The magic word "ALL" sets debugging
 #	levels for all sections.  We recommend normally running with
 #	"ALL,1".
-debug_options ALL,1
-
-#  TAG: ident_lookup
-#	If you wish to make an RFC931/ident lookup of the client username
-#	for each connection, enable this.  It is off by default.
-#
-#ident_lookup off
-
-#  TAG: log_fqdn
-#	Turn this on if you wish to log fully qualified domain names
-#	in the access.log.
-#log_fqdn off
-
-#  TAG: client_netmask
-#	A netmask for client addresses in logfiles and cachemgr output.
-#	Change this to protect the privacy of your cache clients.
-#
-#client_netmask 255.255.255.255
+#debug_options ALL,1
 
 
 # OPTIONS FOR EXTERNAL SUPPORT PROGRAMS
@@ -376,19 +359,6 @@ debug_options ALL,1
 #	is 32.  The default is 5.
 #
 #dns_children 5
-
-#  TAG: redirect_program 
-#	Specify the location of the executable for the URL redirector.
-#	Currently, you must provide your own redirector program.
-#	See the Release-Notes for how to write one.
-#	By default, the redirector is not used.
-#
-#redirect_program /bin/false
-
-#  TAG: redirect_children
-#	The number of redirector processes to spawn.
-#
-#redirect_children 5
 
 
 # OPTIONS FOR TUNING THE CACHE
@@ -487,6 +457,7 @@ request_size 100
 #ttl_pattern    \.gif$                      2880        50%      43200
 #ttl_pattern    /cgi-bin/                      0         0%      43200
 
+
 #  TAG: quick_abort
 #	By default the cache continues to retrieve objects from
 #	aborted requests.  This may be undesirable on slow (e.g. SLIP)
@@ -579,16 +550,11 @@ shutdown_lifetime 30
 
 # Defining an Access List
 #
-# acl aclname acltype string1 ...
-#
-# acltype is one of src dst srcdomain dstdomain time pattern port
-#	            proto method
+# acl aclname src|domain|time|pattern|port|proto|method string1 ...
 # 
-# acl aclname src      ip-address/netmask ... (clients IP address)
-# acl aclname dst      ip-address/netmask ... (URL host's IP address)
-# acl aclname srcdomain   .foo.com ... (taken from reverse DNS lookup)
-# acl aclname dstdomain   .foo.com ... (taken from the URL)
-# acl aclname time     [day-abbrevs]  [h1:m1-h2:m2]
+# acl aclname src      ip-address/netmask ...
+# acl aclname domain   .foo.com ...
+# acl aclname time     day-abbrevs  h1:m1-h2:m2
 #	day-abbrevs:
 #		S - Sunday
 #		M - Monday
@@ -598,7 +564,7 @@ shutdown_lifetime 30
 #		F - Friday
 #		A - Saturday
 #	h1:m1 must be less than h2:m2
-# acl aclname pattern  \.gif$ ...	(URL-path only)
+# acl aclname pattern  \.gif$ ...
 # acl aclname port     80 70 21 ...
 # acl aclname proto    HTTP FTP ...
 # acl aclname method   GET POST ...

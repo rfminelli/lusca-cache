@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -33,8 +32,8 @@
 
 void send_announce()
 {
-    LOCAL_ARRAY(char, tbuf, 256);
-    LOCAL_ARRAY(char, sndbuf, BUFSIZ);
+    static char tbuf[256];
+    static char sndbuf[BUFSIZ];
     icpUdpData *qdata = NULL;
     struct hostent *hp = NULL;
     char *host = NULL;
@@ -83,7 +82,7 @@ void send_announce()
     qdata->len = strlen(sndbuf) + 1;
     qdata->address.sin_family = AF_INET;
     qdata->address.sin_port = htons(port);
-    xmemcpy(&qdata->address.sin_addr, *(hp->h_addr_list + 0), hp->h_length);
+    xmemcpy(&qdata->address.sin_addr, hp->h_addr_list[0], hp->h_length);
     AppendUdp(qdata);
     comm_set_select_handler(theOutIcpConnection,
 	COMM_SELECT_WRITE,

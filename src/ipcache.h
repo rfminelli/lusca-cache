@@ -127,6 +127,7 @@ typedef struct _ipcache_entry {
     time_t ttl;
     unsigned char addr_count;
     unsigned char alias_count;
+    unsigned char lock;
     struct hostent entry;
     struct _ip_pending *pending_head;
     char *error_message;
@@ -140,7 +141,7 @@ extern void ipcache_init _PARAMS((void));
 extern void stat_ipcache_get _PARAMS((StoreEntry *));
 extern void ipcacheShutdownServers _PARAMS((void));
 extern void ipcacheOpenServers _PARAMS((void));
-extern void ipcacheReleaseInvalid _PARAMS((char *));
+extern void ipcacheLockEntry _PARAMS((char *));
 
 extern char *dns_error_message;
 

@@ -339,8 +339,7 @@ static void sslConnInProgress(fd, sslState)
 		strlen(buf),
 		30,
 		sslErrorComplete,
-		sslState,
-		xfree);
+		sslState);
 	    return;
 	}
     }
@@ -357,7 +356,7 @@ static int sslConnect(fd, hp, sslState)
     request_t *request = sslState->request;
     int status;
     char *buf = NULL;
-    if (!ipcache_gethostbyname(request->host, 0)) {
+    if (hp == NULL) {
 	debug(26, 4, "sslConnect: Unknown host: %s\n", request->host);
 	buf = squid_error_url(sslState->url,
 	    request->method,
@@ -370,8 +369,7 @@ static int sslConnect(fd, hp, sslState)
 	    strlen(buf),
 	    30,
 	    sslErrorComplete,
-	    (void *) sslState,
-	    xfree);
+	    (void *) sslState);
 	return COMM_ERROR;
     }
     debug(26, 5, "sslConnect: client=%d server=%d\n",
@@ -404,8 +402,7 @@ static int sslConnect(fd, hp, sslState)
 		strlen(buf),
 		30,
 		sslErrorComplete,
-		(void *) sslState,
-		xfree);
+		(void *) sslState);
 	    return COMM_ERROR;
 	} else {
 	    debug(26, 5, "sslConnect: conn %d EINPROGRESS\n", fd);
@@ -451,8 +448,7 @@ int sslStart(fd, url, request, mime_hdr, size_ptr)
 	    strlen(buf),
 	    30,
 	    sslErrorComplete,
-	    (void *) sslState,
-	    xfree);
+	    (void *) sslState);
 	return COMM_ERROR;
     }
     sslState = xcalloc(1, sizeof(SslStateData));

@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -121,10 +120,13 @@ typedef struct _Ftpdata {
     char password[MAX_URL];
     char *reply_hdr;
     int ftp_fd;
+    char *icp_page_ptr;		/* Used to send proxy-http request: 
+				 * put_free_8k_page(me) if the lifetime
+				 * expires */
     int got_marker;		/* denotes end of successful request */
     int reply_hdr_state;
-    int authenticated;		/* This ftp request is authenticated */
 } FtpData;
+
 
 /* Local functions */
 static int ftpStateFree _PARAMS((int fd, FtpData * ftpState));
@@ -141,9 +143,6 @@ void ftpSendRequest _PARAMS((int fd, FtpData * data));
 void ftpConnInProgress _PARAMS((int fd, FtpData * data));
 void ftpServerClose _PARAMS((void));
 
-/* External functions */
-extern char *base64_decode _PARAMS((char *coded));
-
 static int ftpStateFree(fd, ftpState)
      int fd;
      FtpData *ftpState;
@@ -154,6 +153,10 @@ static int ftpStateFree(fd, ftpState)
     if (ftpState->reply_hdr) {
 	put_free_8k_page(ftpState->reply_hdr);
 	ftpState->reply_hdr = NULL;
+    }
+    if (ftpState->icp_page_ptr) {
+	put_free_8k_page(ftpState->icp_page_ptr);
+	ftpState->icp_page_ptr = NULL;
     }
     requestUnlink(ftpState->request);
     xfree(ftpState);
@@ -267,7 +270,7 @@ static void ftpProcessReplyHeader(data, buf, size)
 	case 301:		/* Moved Permanently */
 	case 410:		/* Gone */
 	    /* These can be cached for a long time, make the key public */
-	    ttlSet(entry);
+	    entry->expires = squid_curtime + ttlSet(entry);
 	    if (BIT_TEST(entry->flag, CACHABLE))
 		storeSetPublicKey(entry);
 	    break;
@@ -298,7 +301,7 @@ int ftpReadReply(fd, data)
      int fd;
      FtpData *data;
 {
-    LOCAL_ARRAY(char, buf, SQUID_TCP_SO_RCVBUF);
+    static char buf[SQUID_TCP_SO_RCVBUF];
     int len;
     int clen;
     int off;
@@ -336,10 +339,10 @@ int ftpReadReply(fd, data)
 	return 0;
     }
     errno = 0;
+    IOStats.Ftp.reads++;
     len = read(fd, buf, SQUID_TCP_SO_RCVBUF);
     debug(9, 5, "ftpReadReply: FD %d, Read %d bytes\n", fd, len);
     if (len > 0) {
-	IOStats.Ftp.reads++;
 	for (clen = len - 1, bin = 0; clen; bin++)
 	    clen >>= 1;
 	IOStats.Ftp.read_hist[bin]++;
@@ -375,7 +378,7 @@ int ftpReadReply(fd, data)
 	    BIT_RESET(entry->flag, CACHABLE);
 	    storeReleaseRequest(entry);
 	} else if (!(entry->flag & DELETE_BEHIND)) {
-	    ttlSet(entry);
+	    entry->expires = squid_curtime + ttlSet(entry);
 	}
 	/* update fdstat and fdtable */
 	storeComplete(entry);
@@ -437,6 +440,8 @@ void ftpSendComplete(fd, buf, size, errflag, data)
 	put_free_8k_page(buf);	/* Allocated by ftpSendRequest. */
 	buf = NULL;
     }
+    ftpState->icp_page_ptr = NULL;	/* So lifetime expire doesn't re-free */
+
     if (errflag) {
 	squid_error_entry(entry, ERR_CONNECT_FAIL, xstrerror());
 	comm_close(fd);
@@ -480,8 +485,8 @@ void ftpSendRequest(fd, data)
     char *path = NULL;
     char *mode = NULL;
     char *buf = NULL;
-    LOCAL_ARRAY(char, tbuf, BUFSIZ);
-    LOCAL_ARRAY(char, opts, BUFSIZ);
+    static char tbuf[BUFSIZ];
+    static char opts[BUFSIZ];
     static char *space = " ";
     char *s = NULL;
     int got_timeout = 0;
@@ -492,6 +497,7 @@ void ftpSendRequest(fd, data)
 
     buflen = strlen(data->request->urlpath) + 256;
     buf = (char *) get_free_8k_page();
+    data->icp_page_ptr = buf;
     memset(buf, '\0', buflen);
 
     path = data->request->urlpath;
@@ -526,9 +532,6 @@ void ftpSendRequest(fd, data)
 	sprintf(tbuf, "-H %s ", s);
 	strcat(buf, tbuf);
     }
-    if (data->authenticated) {
-	strcat(buf, "-a ");
-    }
     strcat(buf, "-h ");		/* httpify */
     strcat(buf, "- ");		/* stdout */
     strcat(buf, data->request->host);
@@ -547,8 +550,7 @@ void ftpSendRequest(fd, data)
 	strlen(buf),
 	30,
 	ftpSendComplete,
-	(void *) data,
-	put_free_8k_page);
+	(void *) data);
 }
 
 void ftpConnInProgress(fd, data)
@@ -589,13 +591,7 @@ int ftpStart(unusedfd, url, request, entry)
      request_t *request;
      StoreEntry *entry;
 {
-    LOCAL_ARRAY(char, realm, 8192);
     FtpData *data = NULL;
-    char *req_hdr = entry->mem_obj->mime_hdr;
-    char *auth_hdr;
-    char *response;
-    char *auth;
-
     int status;
 
     debug(9, 3, "FtpStart: FD %d <URL:%s>\n", unusedfd, url);
@@ -604,35 +600,8 @@ int ftpStart(unusedfd, url, request, entry)
     storeLockObject(data->entry = entry, NULL, NULL);
     data->request = requestLink(request);
 
-    auth_hdr = mime_get_header(req_hdr, "Authorization");
-    auth = NULL;
-    if (auth_hdr) {
-	if (strcasecmp(strtok(auth_hdr, " \t"), "Basic") == 0) {
-	    auth = base64_decode(strtok(NULL, " \t"));
-	}
-    }
     /* Parse login info. */
-    if (auth) {
-	ftp_login_parser(auth, data);
-	data->authenticated = 1;
-    } else {
-	ftp_login_parser(request->login, data);
-	if (*data->user && !*data->password) {
-	    /* This request is not fully authenticated */
-	    if (request->port == 21) {
-		sprintf(realm, "ftp %s", data->user);
-	    } else {
-		sprintf(realm, "ftp %s port %d",
-		    data->user, request->port);
-	    }
-	    response = authorization_needed_msg(request, realm);
-	    storeAppend(entry, response, strlen(response));
-	    httpParseHeaders(response, entry->mem_obj->reply);
-	    storeComplete(entry);
-	    ftpStateFree(-1, data);
-	    return COMM_OK;
-	}
-    }
+    ftp_login_parser(request->login, data);
 
     debug(9, 5, "FtpStart: FD %d, host=%s, path=%s, user=%s, passwd=%s\n",
 	unusedfd, data->request->host, data->request->urlpath,
@@ -729,12 +698,11 @@ int ftpInitialize()
     int cfd;
     int squid_to_ftpget[2];
     int ftpget_to_squid[2];
-    LOCAL_ARRAY(char, pbuf, 128);
+    static char pbuf[128];
     char *ftpget = getFtpProgram();
     struct sockaddr_in S;
     int len;
 
-    debug(9, 5, "ftpInitialize: Initializing...\n");
     if (pipe(squid_to_ftpget) < 0) {
 	debug(9, 0, "ftpInitialize: pipe: %s\n", xstrerror());
 	return -1;
@@ -747,7 +715,6 @@ int ftpInitialize()
 	local_addr,
 	0,
 	"ftpget -S socket");
-    debug(9, 5, "ftpget -S socket on FD %d\n", cfd);
     if (cfd == COMM_ERROR) {
 	debug(9, 0, "ftpInitialize: Failed to create socket\n");
 	return -1;

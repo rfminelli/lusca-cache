@@ -364,8 +364,6 @@ int o_readme = 1;		/* get README ? */
 int o_timeout = XFER_TIMEOUT;	/* data/command timeout, from config.h */
 int o_neg_ttl = 300;		/* negative TTL, default 5 min */
 int o_httpify = 0;		/* convert to HTTP */
-int o_showpass = 1;		/* Show password in generated URLs */
-int o_showlogin = 1;		/* Show login info in generated URLs */
 char *o_iconprefix = "internal-";	/* URL prefix for icons */
 char *o_iconsuffix = "";	/* URL suffix for icons */
 int o_list_width = 32;		/* size of filenames in directory list */
@@ -823,7 +821,7 @@ int connect_with_timeout(fd, S, len)
 
 int accept_with_timeout(fd, S, len)
      int fd;
-     struct sockaddr *S;
+     struct sockaddr_in *S;
      int *len;
 {
     int x;
@@ -850,7 +848,7 @@ int accept_with_timeout(fd, S, len)
 	}
 	if (FD_ISSET(0, &R))
 	    exit(1);
-	return accept(fd, S, len);
+	return accept(fd, (struct sockaddr *) S, len);
     }
     /* NOTREACHED */
 }
@@ -2185,7 +2183,7 @@ static int process_request(r)
 #endif
 	    break;
 	case CWD_OK:
-	    if (!r->flags & F_ISDIR)
+	    if (!(r->flags & F_ISDIR))
 		r->flags |= F_USEBASE;
 	    r->flags |= F_ISDIR;
 	    if (!(r->flags & F_BASEDIR)) {
@@ -2445,8 +2443,6 @@ void usage(argcount)
     fprintf(stderr, "\t-p path         Icon URL prefix\n");
     fprintf(stderr, "\t-s .ext         Icon URL suffix\n");
     fprintf(stderr, "\t-h              Convert to HTTP\n");
-    fprintf(stderr, "\t-a              Do not show password in generated URLs\n");
-    fprintf(stderr, "\t-A              Do not show login information in generated URLs\n");
     fprintf(stderr, "\t-H hostname     Visible hostname\n");
     fprintf(stderr, "\t-R              DON'T get README file\n");
     fprintf(stderr, "\t-w chars        Filename width in directory listing\n");
@@ -2519,10 +2515,6 @@ int main(argc, argv)
 	    !strcmp(*argv, "-h")) {
 	    o_httpify = 1;
 	    continue;
-	} else if (!strcmp(*argv, "-a")) {
-	    o_showpass = 0;
-	} else if (!strcmp(*argv, "-A")) {
-	    o_showlogin = 0;
 	} else if (!strcmp(*argv, "-S")) {
 	    if (--argc < 1)
 		usage(argc);
@@ -2677,13 +2669,9 @@ int main(argc, argv)
     *r->url = '\0';
     strcat(r->url, "ftp://");
     if (strcmp(r->user, "anonymous")) {
-	if (o_showlogin) {
-	    strcat(r->url, r->user);
-	    if (o_showpass) {
-		strcat(r->url, ":");
-		strcat(r->url, r->pass);
-	    }
-	}
+	strcat(r->url, r->user);
+	strcat(r->url, ":");
+	strcat(r->url, r->pass);
 	strcat(r->url, "@");
     }
     strcat(r->url, r->host);
