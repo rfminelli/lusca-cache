@@ -97,6 +97,7 @@ if test -z "$PRESET_CFLAGS"; then
 	    ;;
 	alpha-dec-osf4.*)
 	    # Mogul says DEC compilers take both -g and -O2
+	    CFLAGS=`echo $CFLAGS | sed -e 's/-g/-g3/'`
 	    CFLAGS="$CFLAGS -O2"
 	    ;;
 	*)
@@ -1078,7 +1079,12 @@ main() {
     }
 #endif /* RLIMIT_NOFILE */
 #endif /* HAVE_SETRLIMIT */
-#if HAVE_SYSCONF && defined(_SC_OPEN_MAX)
+#if HAVE_GETRLIMIT && defined(RLIMIT_NOFILE)
+	if (getrlimit(RLIMIT_NOFILE, &rl) < 0) {
+		perror("getrlimit: RLIMIT_NOFILE");
+	}
+	i = rl.rlim_cur;
+#elif HAVE_SYSCONF && defined(_SC_OPEN_MAX)
         i = sysconf(_SC_OPEN_MAX);
 #elif HAVE_GETDTABLESIZE && !defined(__linux__)
         i = getdtablesize();
@@ -1258,10 +1264,12 @@ if test "$INET_NTOA_RESULT" = "1.2.3.4" ; then
 	AC_MSG_RESULT("yes")
 else
 	AC_MSG_RESULT("no")
-	echo "WARNING: This looks bad, and probably prevents Squid from working."
-	echo "         If you're on IRIX and using GCC 2.8, you probably need"
-	echo "         to use the IRIX C compiler instead."
-	sleep 10
+	echo "Will use our own inet_ntoa()."
+	LIBOBJS="$LIBOBJS inet_ntoa.o"
+#	echo "WARNING: This looks bad, and probably prevents Squid from working."
+#	echo "         If you're on IRIX and using GCC 2.8, you probably need"
+#	echo "         to use the IRIX C compiler instead."
+#	sleep 10
 fi
 
 if test "$ac_cv_func_statvfs" = "yes" ; then
