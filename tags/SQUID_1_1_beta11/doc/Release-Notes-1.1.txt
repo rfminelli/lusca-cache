@@ -1,0 +1,286 @@
+$Id$
+
+Release Notes for version 1.1 of the Squid cache.
+
+TABLE OF CONTENTS:
+
+	Ident (RFC 931) lookups
+	Asynchronous Disk I/O
+	URL Redirector
+	Reverse IP Lookups, client hostname ACLs.
+	Cache directory structure changes
+        Getting true DNS TTL info into Squid's IP cache
+	Using a neighbor as both a parent and a sibling
+	Forcing your neighbors to use you as a sibling
+	Refresh Rules
+
+Ident (RFC 931) lookups
+==============================================================================
+Squid will make an RFC931/ident request for client connections if
+'ident_lookup' is enabled in the config file.  Currently, the ident
+value is only logged with the request in the access.log.  It is not
+currently (1.1.alpha6) possible to use the ident return value for
+access control purposes.
+
+Asynchronous Disk I/O
+==============================================================================
+Pete Bentley <pete@demon.net> has contributed a module for asynchronous
+disk I/O.  To enable, you must define USE_ASYNC_IO (e.g. in the
+Makefile, or include/config.h).  It should compile for both IRIX 5.3
+and Solaris 2.x.
+
+However, due to some of the underlying routines and structures in
+disk.[ch], asynchronous I/O is not be efficiently implemented yet.
+There can only be one outstanding aio_write() call per return from 
+the select loop.  The standard disk I/O routines write all pending
+blocks per return from select().  I do NOT recommend using these aio
+with Squid just yet.
+
+URL Redirector
+==============================================================================
+Squid now has the ability to rewrite requested URLs.  This is implemented
+as an external process, much like the dnsservers.  Every incoming URL
+is written to a 'redirector' process which then returns a new URL, or
+a blank line to inidicate no change.
+
+The redirector program is NOT provided in the Squid package.  Currently,
+it is up to the individual users to write their own implementation.  For
+testing, this very simple Perl script can be used:
+
+    #!/usr/local/bin/perl
+    $|=1;
+    print while (<>);
+
+The redirector program must read URLs (one per line) on standard input,
+and write rewritten URLs or blank lines on standard output.  Note that
+the redirector program can not use buffered I/O.  Additional information
+is written after the URL which a redirector can use to make a decision.
+The input line consists of four fields:
+
+    URL ip-address/fqdn ident method
+
+The ip-address is always written, the fqdn will be provided if
+available (otherwise it will be "-").  Similarly, the user ident will
+be provided if available (i.e. 'ident_lookup on' in config file).  The
+method is GET, POST, etc..
+
+Note that when used in conjunction with the -V option (on a virtual hosted
+machine) this provides a mechanism to use a single Squid cache as a front
+end to numerous servers on different machines.  URLs written to the
+redirector will look like:
+
+    http://192.0.0.1/foo
+    http://192.0.0.2/foo
+
+The redirector program might be this Perl script:
+
+    #!/usr/local/bin/perl
+    $|=1;
+    while (<>) {
+        s@http://192\.0\.0\.1@http://www1.foo.org@;
+        s@http://192\.0\.0\.2@http://www2.foo.org@;
+        print;
+    }
+
+
+You may receive statistics on the redirector usage by requesting the
+following 'cache_object' URL:
+
+    % client cache_object://localhost/stats/redirector
+
+
+
+Reverse IP Lookups, client hostname ACLs.
+==============================================================================
+Squid now has a address-to-hostname cache ("fqdncache") much like the
+name-to-address cache ("ipcache").  This means Squid can now write 
+client hostnames in the access log, and that client domain names can
+be used in ACL expressions.
+
+If you would like to log hostnames instead of addresses, enable
+'log_fqdn' in your config file.  This causes a reverse-lookup to be
+started just after the client connection has been accepted.  If the
+reverse lookup has completed by the time the entry gets logged, the
+fully qualified domain name will be used, otherwise the IP address
+is still logged.  Squid does not wait for the reverse lookup before
+logging the access (but this may be changed in the future).
+
+A new ACL type has been added for matching client hostnames:
+
+    acl Myusers srcdomain foo.org
+
+The use of this ACL type may cause noticable delay in serving objects
+through the cache.  However, so long as allowed clients are local, the
+reverse lookup should not take very long and the delay may not be
+noticed.
+
+Only the FQDN (i.e. the h_name field) is used for the comparison, 
+host aliases are *not* checked.
+
+If a reverse lookup fails, the word "none" will be used for the
+comparison.  If you wanted to deny access to clients which did not
+map back to valid names, you could use
+
+    acl BadClients srcdomain none
+    http_access deny BadClients
+
+NOTE: DNS has a number of known security problems.  Squid does not make
+any effort to guarantee the validity of data returned from gethostbyname()
+or gethostbyaddr() calls.
+
+
+Cache directory structure changes
+==============================================================================
+Squid-1.1 uses a different directory structure for cache files.
+Squid-1.0 used 100 directories for each 'cache_dir'.  Squid-1.1 uses a
+two level structure with 16 first-level directories, and 256 second
+level directories.  In addition, directory and file names are in
+hexadecimal, and fixed length.  These changes mean that Squid-1.1 will
+fail to reload metadata from a Squid-1.0 swap log.
+
+
+Getting true DNS TTL info into Squid's IP cache
+==============================================================================
+If you have source for BIND, you can modify it as indicated in the diff
+below.  It causes the global variable _dns_ttl_ to be set with the TTL
+of the most recent lookup.  Then, when you compile Squid, the configure
+script will look for the _dns_ttl_ symbol in libresolv.a.  If found, 
+dnsserver will return the TTL value for every lookup.
+
+This hack was contributed by Endre Balint Nagy <bne@CareNet.hu>
+
+diff -ru bind-4.9.4-orig/res/gethnamaddr.c bind-4.9.4/res/gethnamaddr.c
+--- bind-4.9.4-orig/res/gethnamaddr.c	Mon Aug  5 02:31:35 1996
++++ bind-4.9.4/res/gethnamaddr.c	Tue Aug 27 15:33:11 1996
+@@ -133,6 +133,7 @@
+ } align;
+ 
+ extern int h_errno;
++int _dns_ttl_;
+ 
+ #ifdef DEBUG
+ static void
+@@ -223,6 +224,7 @@
+ 	host.h_addr_list = h_addr_ptrs;
+ 	haveanswer = 0;
+ 	had_error = 0;
++	_dns_ttl_ = -1;
+ 	while (ancount-- > 0 && cp < eom && !had_error) {
+ 		n = dn_expand(answer->buf, eom, cp, bp, buflen);
+ 		if ((n < 0) || !(*name_ok)(bp)) {
+@@ -232,8 +234,11 @@
+ 		cp += n;			/* name */
+ 		type = _getshort(cp);
+  		cp += INT16SZ;			/* type */
+-		class = _getshort(cp);
+- 		cp += INT16SZ + INT32SZ;	/* class, TTL */
++		class = _getshort(cp);  
++		cp += INT16SZ;                  /* class */
++		if (qtype == T_A  && type == T_A)
++			_dns_ttl_ = _getlong(cp);
++		cp += INT32SZ;                  /* TTL */
+ 		n = _getshort(cp);
+ 		cp += INT16SZ;			/* len */
+ 		if (class != C_IN) {
+
+
+Using a neighbor as both a parent and a sibling
+==============================================================================
+Prior to version 1.1.beta5, a neighbor cache was always treated as
+either a sibling or a parent for all requests.  In some cases, it is
+desirable to use a neighbor as a parent for some domains and as a
+sibling for others.  This can now be accomplished by adding either the
+'parent' or 'sibling' keywords in the cache_host_domain config lines.
+For example, consider these configuration lines
+
+    cache_host cache.foo.org sibling 3128 3130
+    cache_host_domain cache.foo.org   parent   foo.org
+    cache_host_domain cache.foo.org   sibling  !foo.org
+
+These have the effect that cache.foo.org is queried for all requests.
+If the URL host domain is foo.org, then cache.foo.org is treated as a
+parent (and MISSES will be fetched through cache.foo.org).  Otherwise
+it will be treated as a sibling (and only HITS will be fetched from
+cache.foo.org).  Note that the third line is needed because when
+cache_host_domain rules are present, the neighbor is only used when one
+of the rules is matched.
+
+Note that the parent/sibling modifiers apply to all domains appearing
+after them on the same line.  In other words,
+
+    cache_host_domain cache.foo.org  parent foo.org bar.org
+
+Is equivalent to
+
+    cache_host_domain cache.foo.org  parent foo.org
+    cache_host_domain cache.foo.org  parent bar.org
+
+If a cache_host_domain line does not have a parent/sibling modifier,
+then it defaults to the neighbor type specified in the cache_host
+line.
+
+Forcing your neighbors to use you as a sibling
+==============================================================================
+In a distributed cache hierarchy, you may need to force your peer caches
+to use you as a sibling and not a parent.  I.e., its okay for them to 
+fetch HITs from you, but not okay to resolve MISSes through your
+cache (using your resources).
+
+This can be accomplished by using the 'miss_access' config line.  The
+miss_access ACL list is very similar to the 'http_access' list.  This
+functionality is implemented as a separate access list because when we
+check the http_access list, we don't yet know if the request will be a
+hit or miss.  The sequence of events goes something like this:
+
+	1. accept new connection
+	2. read request
+	3. check http_access
+	4. process request, check for hit or miss (IMS, etc)
+	5. check miss_access
+
+Note that in order to get to the point where miss_access is checked, the
+request must have also passed the http_access check.
+
+You probably only want to use 'src' type ACL's with miss_access, although
+you can use any of the access control types.
+
+If you are restricting your neighbors, be sure to allow miss_access
+to your local clients (e.g. users at browsers)!
+
+Refresh Rules
+==============================================================================
+As of version 1.1.beta10, Squid switched from a Time-To-Live based
+expiration model to a Refresh-Rate model.  Instead of assinging TTL's
+when the object enters the cache, we now check freshness requirements
+when objects are requested.  If an object is "fresh" it is given
+directly to the client.  If it is "stale" then we make an
+If-Modified-Since request for it.
+
+When checking the object freshness, we calculate these values:
+
+    AGE is how much the object has aged *since* it was retrieved:
+                
+	AGE = NOW - OBJECT_DATE
+
+    LM_AGE is how old the object was *when* it was retrieved:
+
+	LM_AGE = OBJECT_DATE - LAST_MODIFIED_TIME
+
+    LM_FACTOR is the ratio of AGE to LM_AGE:
+
+	LM_FACTOR = AGE / LM_AGE
+
+These values are compared with the parameters of the 'refresh_pattern'
+rules.  The refresh parameters are:
+
+	URL regular expression
+	MIN_AGE
+	PERCENT
+	MAX_AGE
+
+An object is considered "fresh" if it meets these requirements:
+
+    1) AGE <= MIN_AGE, or
+    2) NOW < EXPIRES, and
+       AGE <= AGE_MAX, and
+       LM_FACTOR <= PERCENT
