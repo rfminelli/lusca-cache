@@ -43,7 +43,7 @@ const char *RequestMethodStr[] =
     "PURGE"
 };
 
-const char *ProtocolStr[] =
+static char *ProtocolStr[] =
 {
     "NONE",
     "http",
@@ -56,6 +56,7 @@ const char *ProtocolStr[] =
 
 static int url_acceptable[256];
 static const char *const hex = "0123456789abcdef";
+static int urlDefaultPort _PARAMS((protocol_t p));
 
 /* convert %xx in url string to a character 
  * Allocate a new string and return a pointer to converted string */
@@ -97,7 +98,7 @@ urlInitialize(void)
     unsigned int i;
     char *good =
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789./-_$";
-    debug(23, 5) ("urlInitialize: Initializing...\n");
+    debug(23, 5, "urlInitialize: Initializing...\n");
     for (i = 0; i < 256; i++)
 	url_acceptable[i] = 0;
     for (; *good; good++)
@@ -171,7 +172,7 @@ urlParseProtocol(const char *s)
 }
 
 
-int
+static int
 urlDefaultPort(protocol_t p)
 {
     switch (p) {
@@ -207,7 +208,7 @@ urlParse(method_t method, char *url)
     if ((l = strlen(url)) + Config.appendDomainLen > (MAX_URL - 1)) {
 	/* terminate so it doesn't overflow other buffers */
 	*(url + (MAX_URL >> 1)) = '\0';
-	debug(23, 0) ("urlParse: URL too large (%d bytes)\n", l);
+	debug(23, 0, "urlParse: URL too large (%d bytes)\n", l);
 	return NULL;
     }
     if (method == METHOD_CONNECT) {
@@ -234,20 +235,28 @@ urlParse(method_t method, char *url)
     }
     for (t = host; *t; t++)
 	*t = tolower(*t);
+    l = strspn(host,
+	"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	"abcdefghijklmnopqrstuvwxyz"
+	"0123456789-.");
+    if (l != strlen(host)) {
+	debug(23, 0, "urlParse: Illegal character in hostname '%s'\n", host);
+	return NULL;
+    }
     /* remove trailing dots from hostnames */
     while ((l = strlen(host)) && host[--l] == '.')
 	host[l] = '\0';
     if (Config.appendDomain && !strchr(host, '.'))
 	strncat(host, Config.appendDomain, SQUIDHOSTNAMELEN);
     if (port == 0) {
-	debug(23, 0) ("urlParse: Invalid port == 0\n");
+	debug(23, 0, "urlParse: Invalid port == 0\n");
 	return NULL;
     }
 #ifdef HARDCODE_DENY_PORTS
     /* These ports are filtered in the default squid.conf, but
      * maybe someone wants them hardcoded... */
     if (port == 7 || port == 9 || port = 19) {
-	debug(23, 0) ("urlParse: Deny access to port %d\n", port);
+	debug(23, 0, "urlParse: Deny access to port %d\n", port);
 	return NULL;
     }
 #endif
@@ -352,7 +361,7 @@ requestUnlink(request_t * request)
     request->link_count--;
     if (request->link_count)
 	return;
-    safe_free(request->headers);
+    safe_free(request->hierarchy.host);
     put_free_request_t(request);
 }
 

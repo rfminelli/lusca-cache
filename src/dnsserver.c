@@ -269,6 +269,9 @@ main(int argc, char *argv[])
 
 #if HAVE_RES_INIT
     res_init();
+#ifdef RES_DEFAULT
+    _res.options = RES_DEFAULT;
+#endif
 #ifdef RES_DEFNAMES
     _res.options &= ~RES_DEFNAMES;
 #endif
@@ -321,8 +324,7 @@ main(int argc, char *argv[])
 	    exit(0);
 	}
 	if (strcmp(request, "$hello") == 0) {
-	    printf("$alive\n");
-	    printf("$end\n");
+	    printf("$alive\n$end\n");
 	    fflush(stdout);
 	    continue;
 	}
