@@ -41,6 +41,27 @@ static char *log_tags[] =
     "ERR_ZERO_SIZE_OBJECT"
 };
 
+typedef struct iwd {
+    icp_common_t header;	/* Allows access to previous header */
+    char *url;
+    char *inbuf;
+    int inbufsize;
+    int method;			/* GET, POST, ... */
+    request_t *request;		/* Parsed URL ... */
+    char *request_hdr;		/* Mime header */
+    StoreEntry *entry;
+    long offset;
+    int log_type;
+    int http_code;
+    struct sockaddr_in peer;
+    struct sockaddr_in me;
+    char *ptr_to_4k_page;
+    char *buf;
+    struct timeval start;
+    int flags;
+    int size;			/* hack for CONNECT which doesnt use sentry */
+} icpStateData;
+
 static icpUdpData *UdpQueueHead = NULL;
 static icpUdpData *UdpQueueTail = NULL;
 #define ICP_MAX_UDP_SIZE 4096
@@ -65,8 +86,6 @@ static void icpHandleStoreComplete _PARAMS((int, char *, int, int, icpStateData 
 static int icpProcessMISS _PARAMS((int, icpStateData *));
 static void CheckQuickAbort _PARAMS((icpStateData *));
 static void icpRead _PARAMS((int, int, char *, int, int, int, complete_handler, void *));
-
-extern void identStart _PARAMS((int, icpStateData *));
 
 static void icpFreeBufOrPage(icpState)
      icpStateData *icpState;
@@ -97,6 +116,10 @@ int icpStateFree(fdunused, icpState)
 	fatal_dump("icpStateFree: icpState->log_type out of range.");
     if (icpState->entry) {
 	size = icpState->entry->mem_obj->e_current_len;
+    } else {
+	size = icpState->size;	/* hack added for CONNECT objects */
+    }
+    if (icpState->entry) {
 	http_code = icpState->entry->mem_obj->reply->code;
     } else {
 	http_code = icpState->http_code;
@@ -109,10 +132,7 @@ int icpStateFree(fdunused, icpState)
 	log_tags[icpState->log_type],
 	RequestMethodStr[icpState->method],
 	http_code,
-	elapsed_msec,
-	icpState->ident);
-    if (icpState->ident_fd)
-	comm_close(icpState->ident_fd);
+	elapsed_msec);
     safe_free(icpState->inbuf);
     safe_free(icpState->url);
     safe_free(icpState->request_hdr);
@@ -326,7 +346,7 @@ void icpHandleWrite(fd, rwsm)
     /* A successful write, continue */
     rwsm->offset += len;
     if (rwsm->offset < rwsm->size) {
-	/* Reinstall the read handler and get some more */
+	/* Reinstall the read handler and write some more */
 	comm_set_select_handler(fd,
 	    COMM_SELECT_WRITE,
 	    (PF) icpHandleWrite,
@@ -418,7 +438,8 @@ int icpSendERROR(fd, errorCode, msg, state)
 	/* This file descriptor isn't bound to a socket anymore.
 	 * It probably timed out. */
 	debug(12, 2, "icpSendERROR: COMM_ERROR msg: %80.80s\n", msg);
-	comm_close(fd);
+	/* comm_close(fd); */
+	icpSendERRORComplete(fd, NULL, 0, 1, state);
 	return COMM_ERROR;
     }
     if (port != getAsciiPortNum()) {
@@ -535,7 +556,7 @@ static void icpHandleStore(fd, entry, state)
     icpSendMoreData(fd, state);
 }
 
-void icpHandleStoreComplete(fd, buf, size, errflag, state)
+static void icpHandleStoreComplete(fd, buf, size, errflag, state)
      int fd;
      char *buf;
      int size;
@@ -614,6 +635,11 @@ void icp_hit_or_miss(fd, usm)
 	RequestMethodStr[usm->method],
 	url);
 
+    if (usm->method == METHOD_CONNECT) {
+	usm->log_type = LOG_TCP_MISS;
+	sslStart(fd, url, usm->request, usm->request_hdr, &usm->size);
+	return;
+    }
     if (icpCachable(usm))
 	BIT_SET(usm->flags, REQ_CACHABLE);
     if (icpHierarchical(usm))
@@ -813,7 +839,7 @@ int icpUdpSend(fd, url, reqheaderp, to, opcode)
 	buf_len += sizeof(u_num32);
     buf = xcalloc(buf_len, 1);
 
-    headerp = (icp_common_t *) buf;
+    headerp = (icp_common_t *) (void *) buf;
     headerp->opcode = opcode;
     headerp->version = ICP_VERSION_CURRENT;
     headerp->length = htons(buf_len);
@@ -884,7 +910,7 @@ int icpHandleUdp(sock, not_used)
 	return result;
     }
     /* Get fields from incoming message. */
-    headerp = (icp_common_t *) buf;
+    headerp = (icp_common_t *) (void *) buf;
     header.opcode = headerp->opcode;
     header.version = headerp->version;
     header.length = ntohs(headerp->length);
@@ -906,8 +932,7 @@ int icpHandleUdp(sock, not_used)
 		log_tags[LOG_UDP_INVALID],
 		IcpOpcodeStr[header.opcode],
 		0,
-		0,
-		NULL);
+		0);
 	    break;
 	}
 	allow = aclCheck(ICPAccessList,
@@ -928,8 +953,7 @@ int icpHandleUdp(sock, not_used)
 		log_tags[LOG_UDP_DENIED],
 		IcpOpcodeStr[header.opcode],
 		0,
-		0,
-		NULL);
+		0);
 	    break;
 	}
 	/* The peer is allowed to use this cache */
@@ -946,8 +970,7 @@ int icpHandleUdp(sock, not_used)
 		log_tags[LOG_UDP_HIT],
 		IcpOpcodeStr[header.opcode],
 		0,
-		0,
-		NULL);
+		0);
 	    CacheInfo->proto_hit(CacheInfo,
 		CacheInfo->proto_id(entry->url));
 	    icpUdpSend(sock, url, &header, &from, ICP_OP_HIT);
@@ -961,8 +984,7 @@ int icpHandleUdp(sock, not_used)
 	    log_tags[LOG_UDP_MISS],
 	    IcpOpcodeStr[header.opcode],
 	    0,
-	    0,
-	    NULL);
+	    0);
 	CacheInfo->proto_miss(CacheInfo,
 	    CacheInfo->proto_id(url));
 	icpUdpSend(sock, url, &header, &from, ICP_OP_MISS);
@@ -1331,7 +1353,7 @@ void asciiProcessInput(fd, buf, size, flag, astm)
 	    k,			/* size */
 	    30,			/* timeout */
 	    TRUE,		/* handle immed */
-	    asciiProcessInput,
+	    (complete_handler) asciiProcessInput,
 	    (void *) astm);
     } else {
 	/* parser returned -1 */
@@ -1447,7 +1469,7 @@ int asciiHandleConn(sock, notused)
 	(void *) astm);
     comm_set_select_handler(fd,
 	COMM_SELECT_CLOSE,
-	icpStateFree,
+	(PF) icpStateFree,
 	(void *) astm);
     icpRead(fd,
 	FALSE,
@@ -1455,13 +1477,12 @@ int asciiHandleConn(sock, notused)
 	astm->inbufsize - 1,	/* size */
 	30,			/* timeout */
 	1,			/* handle immed */
-	asciiProcessInput,
+	(complete_handler) asciiProcessInput,
 	(void *) astm);
     comm_set_select_handler(sock,
 	COMM_SELECT_READ,
 	asciiHandleConn,
 	0);
-    identStart(-1, astm);
     return 0;
 }
 

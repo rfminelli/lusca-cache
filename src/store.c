@@ -435,13 +435,14 @@ int storeUnlockObject(e)
 {
     int e_lock_count;
 
-    debug(20, 3, "storeUnlockObject: key '%s' count=%d\n", e->key, e->lock_count);
 
     if ((int) e->lock_count > 0)
 	e->lock_count--;
     else if (e->lock_count == 0) {
 	debug(20, 0, "Entry lock count %d is out-of-whack\n", e->lock_count);
     }
+    debug(20, 3, "storeUnlockObject: key '%s' count=%d\n", e->key, e->lock_count);
+
     /* Prevent UMR if we end up freeing the entry */
     e_lock_count = (int) e->lock_count;
 
@@ -512,18 +513,22 @@ char *storeGeneratePublicKey(url, method)
     switch (method) {
     case METHOD_GET:
 	return url;
+	/* NOTREACHED */
 	break;
     case METHOD_POST:
 	sprintf(key_temp_buffer, "/post/%s", url);
 	return key_temp_buffer;
+	/* NOTREACHED */
 	break;
     case METHOD_HEAD:
 	sprintf(key_temp_buffer, "/head/%s", url);
 	return key_temp_buffer;
+	/* NOTREACHED */
 	break;
     case METHOD_CONNECT:
 	sprintf(key_temp_buffer, "/connect/%s", url);
 	return key_temp_buffer;
+	/* NOTREACHED */
 	break;
     default:
 	fatal_dump("storeGeneratePublicKey: Unsupported request method");
@@ -924,31 +929,6 @@ void storeAppend(e, data, len)
     if ((e->store_status != STORE_ABORTED) && !(e->flag & DELAY_SENDING))
 	InvokeHandlers(e);
 }
-
-#if defined(__STRICT_ANSI__)
-void storeAppendPrintf(StoreEntry * e, char *fmt,...)
-{
-    va_list args;
-    static char buf[4096];
-    va_start(args, fmt);
-#else
-void storeAppendPrintf(va_alist)
-     va_dcl
-{
-    va_list args;
-    StoreEntry *e = NULL;
-    char *fmt = NULL;
-    static char buf[4096];
-    va_start(args);
-    e = va_arg(args, StoreEntry *);
-    fmt = va_arg(args, char *);
-#endif
-    buf[0] = '\0';
-    vsprintf(buf, fmt, args);
-    storeAppend(e, buf, strlen(buf));
-    va_end(args);
-}
-
 
 /* add directory to swap disk */
 int storeAddSwapDisk(path)
@@ -1491,9 +1471,9 @@ void storeStartRebuildFromDisk()
 
     /* Start reading the log file */
     runInBackground("storeRebuild",
-	storeDoRebuildFromDisk,
+	(int (*)(void *)) storeDoRebuildFromDisk,
 	data,
-	storeRebuiltFromDisk);
+	(void (*)(void *)) storeRebuiltFromDisk);
 }
 
 /* return current swap size in kilo-bytes */
