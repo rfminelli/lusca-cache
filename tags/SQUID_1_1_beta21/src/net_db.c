@@ -1,0 +1,382 @@
+
+#include "squid.h"
+
+#if USE_ICMP
+
+static HashID addr_table;
+static HashID host_table;
+
+static struct in_addr networkFromInaddr _PARAMS((struct in_addr a));
+static void netdbRelease _PARAMS((netdbEntry * n));
+static netdbEntry *netdbGetFirst _PARAMS((HashID table));
+static netdbEntry *netdbGetNext _PARAMS((HashID table));
+static void netdbHashInsert _PARAMS((netdbEntry * n, struct in_addr addr));
+static void netdbHashDelete _PARAMS((const char *key));
+static void netdbHashLink _PARAMS((netdbEntry * n, const char *hostname));
+static void netdbHashUnlink _PARAMS((const char *key));
+static void netdbPurgeLRU _PARAMS((void));
+
+static void
+netdbHashInsert(netdbEntry * n, struct in_addr addr)
+{
+    xstrncpy(n->network, inet_ntoa(networkFromInaddr(addr)), 16);
+    n->key = n->network;
+    hash_join(addr_table, (hash_link *) n);
+    meta_data.netdb_addrs++;
+}
+
+static void
+netdbHashDelete(const char *key)
+{
+    hash_link *hptr = hash_lookup(addr_table, key);
+    if (hptr == NULL) {
+	debug_trap("netdbHashDelete: key not found");
+	return;
+    }
+    hash_remove_link(addr_table, hptr);
+    meta_data.netdb_addrs--;
+}
+
+static void
+netdbHashLink(netdbEntry * n, const char *hostname)
+{
+    struct _net_db_name *x = xcalloc(1, sizeof(struct _net_db_name));
+    x->name = xstrdup(hostname);
+    x->next = n->hosts;
+    n->hosts = x;
+    hash_insert(host_table, x->name, n);
+    n->link_count++;
+    meta_data.netdb_hosts++;
+}
+
+static void
+netdbHashUnlink(const char *key)
+{
+    netdbEntry *n;
+    hash_link *hptr = hash_lookup(host_table, key);
+    if (hptr == NULL) {
+	debug_trap("netdbHashUnlink: key not found");
+	return;
+    }
+    n = (netdbEntry *) hptr->item;
+    n->link_count--;
+    hash_delete_link(host_table, hptr);
+    meta_data.netdb_hosts--;
+}
+
+static netdbEntry *
+netdbLookupHost(const char *key)
+{
+    hash_link *hptr = hash_lookup(host_table, key);
+    return hptr ? (netdbEntry *) hptr->item : NULL;
+}
+
+static netdbEntry *
+netdbGetFirst(HashID table)
+{
+    return (netdbEntry *) hash_first(table);
+}
+
+static netdbEntry *
+netdbGetNext(HashID table)
+{
+    return (netdbEntry *) hash_next(table);
+}
+
+static void
+netdbRelease(netdbEntry * n)
+{
+    struct _net_db_name *x;
+    struct _net_db_name *next;
+    for (x = n->hosts; x; x = next) {
+	next = x->next;
+	netdbHashUnlink(x->name);
+	safe_free(x->name);
+	safe_free(x);
+    }
+    n->hosts = NULL;
+    if (n->link_count == 0) {
+	netdbHashDelete(n->network);
+	xfree(n);
+    }
+}
+
+static int
+netdbLRU(netdbEntry ** n1, netdbEntry ** n2)
+{
+    if ((*n1)->last_use_time > (*n2)->last_use_time)
+	return (1);
+    if ((*n1)->last_use_time < (*n2)->last_use_time)
+	return (-1);
+    return (0);
+}
+
+static void
+netdbPurgeLRU(void)
+{
+    netdbEntry *n;
+    netdbEntry **list;
+    int k = 0;
+    int list_count = 0;
+    int removed = 0;
+    list = xcalloc(meta_data.netdb_addrs, sizeof(netdbEntry *));
+    for (n = netdbGetFirst(addr_table); n; n = netdbGetNext(addr_table)) {
+	*(list + list_count) = n;
+	list_count++;
+	if (list_count > meta_data.netdb_addrs)
+	    fatal_dump("netdbPurgeLRU: list_count overflow");
+    }
+    qsort((char *) list,
+	list_count,
+	sizeof(netdbEntry *),
+	(QS) netdbLRU);
+    for (k = 0; k < list_count; k++) {
+	if (meta_data.netdb_addrs < Config.Netdb.low)
+	    break;
+	netdbRelease(*(list + k));
+	removed++;
+    }
+    xfree(list);
+}
+
+static netdbEntry *
+netdbLookupAddr(struct in_addr addr)
+{
+    char *key = inet_ntoa(networkFromInaddr(addr));
+    return (netdbEntry *) hash_lookup(addr_table, key);
+}
+
+static netdbEntry *
+netdbAdd(struct in_addr addr, const char *hostname)
+{
+    netdbEntry *n;
+    if (meta_data.netdb_addrs > Config.Netdb.high)
+	netdbPurgeLRU();
+    if ((n = netdbLookupAddr(addr)) == NULL) {
+	n = xcalloc(1, sizeof(netdbEntry));
+	netdbHashInsert(n, addr);
+    }
+    netdbHashLink(n, hostname);
+    return n;
+}
+
+static void
+netdbSendPing(int fdunused, const ipcache_addrs * ia, void *data)
+{
+    struct in_addr addr;
+    char *hostname = data;
+    netdbEntry *n;
+    if (ia == NULL) {
+	xfree(hostname);
+	return;
+    }
+    addr = ia->in_addrs[ia->cur];
+    if ((n = netdbLookupHost(hostname)) == NULL)
+	n = netdbAdd(addr, hostname);
+    debug(37, 3, "netdbSendPing: pinging %s\n", hostname);
+    icmpDomainPing(addr, hostname);
+    n->pings_sent++;
+    n->next_ping_time = squid_curtime + Config.Netdb.ttl;
+    n->last_use_time = squid_curtime;
+    xfree(hostname);
+}
+
+static struct in_addr
+networkFromInaddr(struct in_addr a)
+{
+    struct in_addr b;
+    b.s_addr = ntohl(a.s_addr);
+    if (IN_CLASSC(b.s_addr))
+	b.s_addr &= IN_CLASSC_NET;
+    else if (IN_CLASSB(b.s_addr))
+	b.s_addr &= IN_CLASSB_NET;
+    else if (IN_CLASSA(b.s_addr))
+	b.s_addr &= IN_CLASSA_NET;
+    b.s_addr = htonl(b.s_addr);
+    return b;
+}
+
+static int
+sortByHops(netdbEntry ** n1, netdbEntry ** n2)
+{
+    if ((*n1)->hops > (*n2)->hops)
+	return 1;
+    else if ((*n1)->hops < (*n2)->hops)
+	return -1;
+    else
+	return 0;
+}
+
+#endif /* USE_ICMP */
+
+/* PUBLIC FUNCTIONS */
+
+void
+netdbInit(void)
+{
+#if USE_ICMP
+    addr_table = hash_create((int (*)_PARAMS((const char *, const char *))) strcmp, 229, hash_string);
+    host_table = hash_create((int (*)_PARAMS((const char *, const char *))) strcmp, 467, hash_string);
+#endif
+}
+
+void
+netdbPingSite(const char *hostname)
+{
+#if USE_ICMP
+    netdbEntry *n;
+    if ((n = netdbLookupHost(hostname)) != NULL)
+	if (n->next_ping_time > squid_curtime)
+	    return;
+    ipcache_nbgethostbyname(hostname,
+	-1,
+	netdbSendPing,
+	(void *) xstrdup(hostname));
+#endif
+}
+
+void
+netdbHandlePingReply(const struct sockaddr_in *from, int hops, int rtt)
+{
+#if USE_ICMP
+    netdbEntry *n;
+    int N;
+    debug(37, 3, "netdbHandlePingReply: from %s\n", inet_ntoa(from->sin_addr));
+    if ((n = netdbLookupAddr(from->sin_addr)) == NULL)
+	return;
+    N = ++n->n;
+    if (N > 100)
+	N = 100;
+    n->hops = ((n->hops * (N - 1)) + hops) / N;
+    n->rtt = ((n->rtt * (N - 1)) + rtt) / N;
+    n->pings_recv++;
+    debug(37, 3, "netdbHandlePingReply: %s; rtt=%5.1f  hops=%4.1f\n",
+	n->network,
+	n->rtt,
+	n->hops);
+#endif
+}
+
+void
+netdbFreeMemory(void)
+{
+#if USE_ICMP
+    netdbEntry *n;
+    netdbEntry **L1;
+    hash_link *h;
+    hash_link **L2;
+    struct _net_db_name *x;
+    int i = 0;
+    int j;
+    L1 = xcalloc(meta_data.netdb_addrs, sizeof(netdbEntry *));
+    n = (netdbEntry *) hash_first(addr_table);
+    while (n && i < meta_data.netdb_addrs) {
+	*(L1 + i) = n;
+	i++;
+	n = (netdbEntry *) hash_next(addr_table);
+    }
+    for (j = 0; j < i; j++) {
+	n = *(L1 + j);
+	while ((x = n->hosts)) {
+	    n->hosts = x->next;
+	    safe_free(x);
+	}
+	xfree(n);
+    }
+    xfree(L1);
+    i = 0;
+    L2 = xcalloc(meta_data.netdb_hosts, sizeof(hash_link *));
+    h = hash_first(host_table);
+    while (h && i < meta_data.netdb_hosts) {
+	*(L2 + i) = h;
+	i++;
+	h = hash_next(host_table);
+    }
+    for (j = 0; j < i; j++) {
+	h = *(L2 + j);
+	xfree(h->key);
+	xfree(h);
+    }
+    xfree(L2);
+    hashFreeMemory(addr_table);
+    hashFreeMemory(host_table);
+#endif
+}
+
+int
+netdbHops(struct in_addr addr)
+{
+#if USE_ICMP
+    netdbEntry *n = netdbLookupAddr(addr);
+    if (n && n->pings_recv) {
+	n->last_use_time = squid_curtime;
+	return (int) (n->hops + 0.5);
+    }
+#endif
+    return 256;
+}
+
+void
+netdbDump(StoreEntry * sentry)
+{
+#if USE_ICMP
+    netdbEntry *n;
+    netdbEntry **list;
+    struct _net_db_name *x;
+    int k;
+    int i;
+    storeAppendPrintf(sentry, "{Network DB Statistics:\n");	/* } */
+    storeAppendPrintf(sentry, "{%-16.16s %9s %7s %5s %s}\n",
+	"Network",
+	"recv/sent",
+	"RTT",
+	"Hops",
+	"Hostnames");
+    list = xcalloc(meta_data.netdb_addrs, sizeof(netdbEntry *));
+    i = 0;
+    for (n = netdbGetFirst(addr_table); n; n = netdbGetNext(addr_table))
+	*(list + i++) = n;
+    if (i != meta_data.netdb_addrs)
+	debug(37, 0, "netdbDump: WARNING netdb_addrs count off, found %d, expected %d\n", i, meta_data.netdb_addrs);
+    qsort((char *) list,
+	i,
+	sizeof(netdbEntry *),
+	(QS) sortByHops);
+    for (k = 0; k < i; k++) {
+	n = *(list + k);
+	storeAppendPrintf(sentry, "{%-16.16s %4d/%4d %7.1f %5.1f",	/* } */
+	    n->network,
+	    n->pings_recv,
+	    n->pings_sent,
+	    n->rtt,
+	    n->hops);
+	for (x = n->hosts; x; x = x->next)
+	    storeAppendPrintf(sentry, " %s", x->name);
+	storeAppendPrintf(sentry, close_bracket);
+    }
+    storeAppendPrintf(sentry, close_bracket);
+    xfree(list);
+#endif
+}
+
+int
+netdbHostHops(const char *host)
+{
+#if USE_ICMP
+    netdbEntry *n = netdbLookupHost(host);
+    if (n)
+	return (int) (n->hops + 0.5);
+#endif
+    return 0xFFFF;
+}
+
+int
+netdbHostRtt(const char *host)
+{
+#if USE_ICMP
+    netdbEntry *n = netdbLookupHost(host);
+    if (n)
+	return (int) (n->rtt + 0.5);
+#endif
+    return 0xFFFF;
+}
