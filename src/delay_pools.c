@@ -644,19 +644,15 @@ delayMostBytesWanted(const MemObject * mem, int max)
 {
     int i = 0;
     int found = 0;
-    int wanted;
     store_client *sc;
     dlink_node *node;
     for (node = mem->clients.head; node; node = node->next) {
 	sc = (store_client *) node->data;
-	if (sc->callback_data == NULL)	/* not waiting for more data */
+	if (sc->callback_data == NULL)	/* open slot */
 	    continue;
 	if (sc->type != STORE_MEM_CLIENT)
 	    continue;
-	wanted = sc->copy_size;
-	if (wanted > max)
-	    wanted = max;
-	i = delayBytesWanted(sc->delay_id, i, wanted);
+	i = delayBytesWanted(sc->delay_id, i, max);
 	found = 1;
     }
     return found ? i : max;
@@ -672,11 +668,11 @@ delayMostBytesAllowed(const MemObject * mem)
     delay_id d = 0;
     for (node = mem->clients.head; node; node = node->next) {
 	sc = (store_client *) node->data;
-	if (sc->callback_data == NULL)	/* not waiting for more data */
+	if (sc->callback_data == NULL)	/* open slot */
 	    continue;
 	if (sc->type != STORE_MEM_CLIENT)
 	    continue;
-	j = delayBytesWanted(sc->delay_id, 0, sc->copy_size);
+	j = delayBytesWanted(sc->delay_id, 0, SQUID_TCP_SO_RCVBUF);
 	if (j > jmax) {
 	    jmax = j;
 	    d = sc->delay_id;

@@ -56,6 +56,7 @@ COMMENT_END
 NAME: http_port ascii_port
 TYPE: sockaddr_in_list
 DEFAULT: none
+DEFAULT_IF_NONE: 3128
 LOC: Config.Sockaddr.http
 DOC_START
 	Usage:	port
@@ -71,6 +72,8 @@ DOC_START
 	option.  Most likely, you do not need to bind to a specific
 	address, so you can use the port number alone.
 
+	The default port number is 3128.
+
 	If you are running Squid in accelerator mode, then you
 	probably want to listen on port 80 also, or instead.
 
@@ -84,11 +87,6 @@ DOC_START
 	and an external interface then we recommend you to specify the
 	internal address:port in http_port. This way Squid will only be
 	visible on the internal address.
-
-NOCOMMENT_START
-# Squid normally listens to port 3128
-http_port 3128
-NOCOMMENT_END
 DOC_END
 
 NAME: https_port
@@ -446,21 +444,6 @@ DOC_START
 	Normally the ICP query timeout is determined dynamically.  But
 	sometimes it can lead to very large values (say 5 seconds).
 	Use this option to put an upper limit on the dynamic timeout
-	value.  Do NOT use this option to always use a fixed (instead
-	of a dynamic) timeout value. To set a fixed timeout see the
-	'icp_query_timeout' directive.
-DOC_END
-
-NAME: minimum_icp_query_timeout
-COMMENT: (msec)
-DEFAULT: 5
-TYPE: int
-LOC: Config.Timeout.icp_query_max
-DOC_START
-	Normally the ICP query timeout is determined dynamically.  But
-	sometimes it can lead to very small timeouts, even lower than
-	the normal latency variance on your link due to traffic.
-	Use this option to put an lower limit on the dynamic timeout
 	value.  Do NOT use this option to always use a fixed (instead
 	of a dynamic) timeout value. To set a fixed timeout see the
 	'icp_query_timeout' directive.
@@ -2560,7 +2543,6 @@ LOC: Config.denyInfoList
 DEFAULT: none
 DOC_START
 	Usage:   deny_info err_page_name acl
-	or       deny_info http://... acl
 	Example: deny_info ERR_CUSTOM_ACCESS_DENIED bad_guys
 
 	This can be used to return a ERR_ page for requests which
@@ -2570,13 +2552,6 @@ DOC_START
 
 	You may use ERR_ pages that come with Squid or create your own pages
 	and put them into the configured errors/ directory.
-
-	Alternatively you can specify an error URL. The browsers will then
-	get redirected (302) to the specified URL. %s in the redirection
-	URL will be replaced by the requested URL.
-
-	Alternatively you can tell Squid to reset the TCP connection
-	by specifying TCP_RESET.
 DOC_END
 
 NAME: memory_pools

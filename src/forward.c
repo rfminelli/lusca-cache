@@ -72,7 +72,8 @@ fwdStateServerPeer(FwdState * fwdState)
 static void
 fwdServerFree(FwdServer * fs)
 {
-    cbdataReferenceDone(fs->peer);
+    if (fs->peer)
+	cbdataUnlock(fs->peer);
     memFree(fs, MEM_FWD_SERVER);
 }
 

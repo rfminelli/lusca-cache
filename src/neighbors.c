@@ -561,8 +561,6 @@ neighborsUdpPing(request_t * request,
 	if (Config.Timeout.icp_query_max)
 	    if (*timeout > Config.Timeout.icp_query_max)
 		*timeout = Config.Timeout.icp_query_max;
-	if (*timeout < Config.Timeout.icp_query_min)
-	    *timeout = Config.Timeout.icp_query_min;
     }
     return peers_pinged;
 }
@@ -957,7 +955,11 @@ peerDestroy(void *data)
     }
     safe_free(p->host);
 #if USE_CACHE_DIGESTS
-    cbdataReferenceDone(p->digest);
+    if (p->digest) {
+	PeerDigest *pd = p->digest;
+	p->digest = NULL;
+	cbdataUnlock(pd);
+    }
 #endif
 }
 
@@ -965,7 +967,11 @@ void
 peerNoteDigestGone(peer * p)
 {
 #if USE_CACHE_DIGESTS
-    cbdataReferenceDone(p->digest);
+    if (p->digest) {
+	PeerDigest *pd = p->digest;
+	p->digest = NULL;
+	cbdataUnlock(pd);
+    }
 #endif
 }
 

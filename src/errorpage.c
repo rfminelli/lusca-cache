@@ -67,10 +67,6 @@ static const struct {
 	    "<hr noshade size=1>\n"
 	    "Generated %T by %h (%s)\n"
 	    "</BODY></HTML>\n"
-    },
-    {
-	TCP_RESET,
-	    "reset"
     }
 };
 
@@ -119,11 +115,9 @@ errorInitialize(void)
 	    /* dynamic */
 	    ErrorDynamicPageInfo *info = ErrorDynamicPages.items[i - ERR_MAX];
 	    assert(info && info->id == i && info->page_name);
-	    if (strchr(info->page_name, ':') == NULL) {
-		/* Not on redirected errors... */
-		error_text[i] = errorLoadText(info->page_name);
-	    }
+	    error_text[i] = errorLoadText(info->page_name);
 	}
+	assert(error_text[i]);
     }
 }
 
@@ -212,32 +206,13 @@ errorDynamicPageInfoDestroy(ErrorDynamicPageInfo * info)
     xfree(info);
 }
 
-static int
-errorPageId(const char *page_name)
-{
-    int i;
-    for (i = 0; i < ERR_MAX; i++) {
-	if (strcmp(err_type_str[i], page_name) == 0)
-	    return i;
-    }
-    for (i = 0; i < ErrorDynamicPages.count; i++) {
-	if (strcmp(((ErrorDynamicPageInfo *) ErrorDynamicPages.items[i])->page_name, page_name) == 0)
-	    return i + ERR_MAX;
-    }
-    return ERR_NONE;
-}
-
 int
 errorReservePageId(const char *page_name)
 {
-    ErrorDynamicPageInfo *info;
-    int id = errorPageId(page_name);
-    if (id == ERR_NONE) {
-	info = errorDynamicPageInfoCreate(ERR_MAX + ErrorDynamicPages.count, page_name);
-	stackPush(&ErrorDynamicPages, info);
-	id = info->id;
-    }
-    return id;
+    ErrorDynamicPageInfo *info =
+    errorDynamicPageInfoCreate(ERR_MAX + ErrorDynamicPages.count, page_name);
+    stackPush(&ErrorDynamicPages, info);
+    return info->id;
 }
 
 static const char *
@@ -299,9 +274,9 @@ errorAppendEntry(StoreEntry * entry, ErrorState * err)
 	errorStateFree(err);
 	return;
     }
-    if (err->page_id == TCP_RESET) {
+    if (0 == strncmp(error_text[err->page_id], "reset", 5)) {
 	if (err->request) {
-	    debug(4, 2) ("RSTing this reply\n");
+	    debug(0, 0) ("RSTing this reply\n");
 	    err->request->flags.reset_tcp = 1;
 	}
     }
@@ -433,7 +408,7 @@ errorStateFree(ErrorState * err)
  * t - local time                               x
  * T - UTC                                      x
  * U - URL without password                     x
- * u - URL with password                        x
+ * u - URL without password, %2f added to path  x
  * w - cachemgr email address                   x
  * z - dns server error message                 x
  */
@@ -563,9 +538,6 @@ errorConvert(char token, ErrorState * err)
     case 'U':
 	p = r ? urlCanonicalClean(r) : err->url ? err->url : "[no URL]";
 	break;
-    case 'u':
-	p = r ? urlCanonical(r) : err->url ? err->url : "[no URL]";
-	break;
     case 'w':
 	if (Config.adminEmail)
 	    memBufPrintf(&mb, "%s", Config.adminEmail);
@@ -599,32 +571,23 @@ HttpReply *
 errorBuildReply(ErrorState * err)
 {
     HttpReply *rep = httpReplyCreate();
-    const char *name = errorPageName(err->page_id);
+    MemBuf content = errorBuildContent(err);
     http_version_t version;
     /* no LMT for error pages; error pages expire immediately */
     httpBuildVersion(&version, 1, 0);
-    if (strchr(name, ':')) {
-	/* Redirection */
-	char *quoted_url = rfc1738_escape_part(errorConvert('u', err));
-	httpReplySetHeaders(rep, version, HTTP_MOVED_TEMPORARILY, NULL, "text/html", 0, 0, squid_curtime);
-	httpHeaderPutStrf(&rep->header, HDR_LOCATION, name, quoted_url);
-	httpHeaderPutStrf(&rep->header, HDR_X_SQUID_ERROR, "%d %s\n", err->http_status, "Access Denied");
-    } else {
-	MemBuf content = errorBuildContent(err);
-	httpReplySetHeaders(rep, version, err->http_status, NULL, "text/html", content.size, 0, squid_curtime);
-	/*
-	 * include some information for downstream caches. Implicit
-	 * replaceable content. This isn't quite sufficient. xerrno is not
-	 * necessarily meaningful to another system, so we really should
-	 * expand it. Additionally, we should identify ourselves. Someone
-	 * might want to know. Someone _will_ want to know OTOH, the first
-	 * X-CACHE-MISS entry should tell us who.
-	 */
-	httpHeaderPutStrf(&rep->header, HDR_X_SQUID_ERROR, "%s %d",
-	    name, err->xerrno);
-	httpBodySet(&rep->body, &content);
-	/* do not memBufClean() the content, it was absorbed by httpBody */
-    }
+    httpReplySetHeaders(rep, version, err->http_status, NULL, "text/html", content.size, 0, squid_curtime);
+    /*
+     * include some information for downstream caches. Implicit
+     * replaceable content. This isn't quite sufficient. xerrno is not
+     * necessarily meaningful to another system, so we really should
+     * expand it. Additionally, we should identify ourselves. Someone
+     * might want to know. Someone _will_ want to know OTOH, the first
+     * X-CACHE-MISS entry should tell us who.
+     */
+    httpHeaderPutStrf(&rep->header, HDR_X_SQUID_ERROR, "%s %d",
+	errorPageName(err->page_id), err->xerrno);
+    httpBodySet(&rep->body, &content);
+    /* do not memBufClean() the content, it was absorbed by httpBody */
     return rep;
 }
 

@@ -112,6 +112,7 @@ typedef struct _Ftpdata {
 	char *buf;
 	size_t size;
 	off_t offset;
+	FREE *freefunc;
 	wordlist *message;
 	char *last_command;
 	char *last_reply;
@@ -122,6 +123,7 @@ typedef struct _Ftpdata {
 	char *buf;
 	size_t size;
 	off_t offset;
+	FREE *freefunc;
 	char *host;
 	u_short port;
     } data;
@@ -272,15 +274,21 @@ ftpStateFree(int fdnotused, void *data)
     storeUnlockObject(ftpState->entry);
     if (ftpState->reply_hdr) {
 	memFree(ftpState->reply_hdr, MEM_8K_BUF);
+	/* this seems unnecessary, but people report SEGV's
+	 * when freeing memory in this function */
 	ftpState->reply_hdr = NULL;
     }
     requestUnlink(ftpState->request);
     if (ftpState->ctrl.buf) {
-	memFreeBuf(ftpState->ctrl.size, ftpState->ctrl.buf);
+	ftpState->ctrl.freefunc(ftpState->ctrl.buf);
+	/* this seems unnecessary, but people report SEGV's
+	 * when freeing memory in this function */
 	ftpState->ctrl.buf = NULL;
     }
     if (ftpState->data.buf) {
-	memFreeBuf(ftpState->data.size, ftpState->data.buf);
+	ftpState->data.freefunc(ftpState->data.buf);
+	/* this seems unnecessary, but people report SEGV's
+	 * when freeing memory in this function */
 	ftpState->data.buf = NULL;
     }
     if (ftpState->pathcomps)
@@ -518,7 +526,7 @@ ftpListParseParts(const char *buf, struct _ftp_flags flags)
 	    snprintf(tbuf, 128, "%s %2s %-5s",
 		month, day, year);
 	if ((t = strstr(buf, tbuf))) {
-	    p->type = *tokens[0];
+	p->type = *tokens[0];
 	    p->size = atoi(size);
 	    p->date = xstrdup(tbuf);
 	    if (flags.skip_whitespace) {
@@ -1032,7 +1040,7 @@ ftpBuildTitleUrl(FtpStateData * ftpState)
 	    strCat(ftpState->base_href, rfc1738_escape_part(ftpState->password));
 	}
 	strCat(ftpState->base_href, "@");
-    }
+	}
     strCat(ftpState->base_href, request->host);
     if (request->port != urlDefaultPort(PROTO_FTP)) {
 	strCat(ftpState->base_href, ":");
@@ -1102,9 +1110,13 @@ ftpStart(FwdState * fwd)
 	ftpState->user, ftpState->password);
     ftpState->state = BEGIN;
     ftpState->ctrl.last_command = xstrdup("Connect to server");
-    ftpState->ctrl.buf = memAllocBuf(4096, &ftpState->ctrl.size);
+    ftpState->ctrl.buf = memAllocate(MEM_4K_BUF);
+    ftpState->ctrl.freefunc = memFree4K;
+    ftpState->ctrl.size = 4096;
     ftpState->ctrl.offset = 0;
-    ftpState->data.buf = memAllocBuf(SQUID_TCP_SO_RCVBUF, &ftpState->data.size);
+    ftpState->data.buf = xmalloc(SQUID_TCP_SO_RCVBUF);
+    ftpState->data.size = SQUID_TCP_SO_RCVBUF;
+    ftpState->data.freefunc = xfree;
     ftpScheduleReadControlReply(ftpState, 0);
 }
 
@@ -1286,6 +1298,7 @@ ftpReadControlReply(int fd, void *data)
 static void
 ftpHandleControlReply(FtpStateData * ftpState)
 {
+    char *oldbuf;
     wordlist **W;
     int bytes_used = 0;
     wordlistDestroy(&ftpState->ctrl.message);
@@ -1294,7 +1307,12 @@ ftpHandleControlReply(FtpStateData * ftpState)
     if (ftpState->ctrl.message == NULL) {
 	/* didn't get complete reply yet */
 	if (ftpState->ctrl.offset == ftpState->ctrl.size) {
-	    ftpState->ctrl.buf = memReallocBuf(ftpState->ctrl.buf, ftpState->ctrl.size << 1, &ftpState->ctrl.size);
+	    oldbuf = ftpState->ctrl.buf;
+	    ftpState->ctrl.buf = xcalloc(ftpState->ctrl.size << 1, 1);
+	    xmemcpy(ftpState->ctrl.buf, oldbuf, ftpState->ctrl.size);
+	    ftpState->ctrl.size <<= 1;
+	    ftpState->ctrl.freefunc(oldbuf);
+	    ftpState->ctrl.freefunc = xfree;
 	}
 	ftpScheduleReadControlReply(ftpState, 0);
 	return;
@@ -1759,7 +1777,7 @@ ftpReadPasv(FtpStateData * ftpState)
     if (Config.Ftp.sanitycheck) {
 	if (strcmp(fd_table[ftpState->ctrl.fd].ipaddr, ipaddr) != 0) {
 	    debug(9, 1) ("Unsafe PASV reply from %s: %s\n", fd_table[ftpState->ctrl.fd].ipaddr, ftpState->ctrl.last_reply);
-	    ftpSendPort(ftpState);
+	    ftpSendPort(ftpState); 
 	    return;
 	}
 	if (port < 1024) {
@@ -1904,7 +1922,7 @@ ftpAcceptDataConnection(int fd, void *data)
     if (Config.Ftp.sanitycheck) {
 	char *ipaddr = inet_ntoa(my_peer.sin_addr);
 	if (strcmp(fd_table[ftpState->ctrl.fd].ipaddr, ipaddr) != 0) {
-	    debug(9, 1) ("FTP data connection from unexpected server (%s:%d), expecting %s\n", ipaddr, (int) ntohs(my_peer.sin_port), fd_table[ftpState->ctrl.fd].ipaddr);
+	    debug(9, 1) ("FTP data connection from unexpected server (%s:%d), expecting %s\n", ipaddr, (int)ntohs(my_peer.sin_port), fd_table[ftpState->ctrl.fd].ipaddr);
 	    comm_close(fd);
 	    commSetSelect(ftpState->data.fd,
 		COMM_SELECT_READ,
@@ -2464,7 +2482,7 @@ ftpSendReply(FtpStateData * ftpState)
     err_type err_code = ERR_NONE;
     debug(9, 5) ("ftpSendReply: %s, code %d\n",
 	storeUrl(ftpState->entry), code);
-    if (cbdataReferenceValid(ftpState))
+    if (cbdataValid(ftpState))
 	debug(9, 5) ("ftpSendReply: ftpState (%p) is valid!\n", ftpState);
     if (code == 226) {
 	err_code = (ftpState->mdtm > 0) ? ERR_FTP_PUT_MODIFIED : ERR_FTP_PUT_CREATED;

@@ -440,11 +440,10 @@ static void
 idnsGrokReply(const char *buf, size_t sz)
 {
     int n;
+    int valid;
     rfc1035_rr *answers = NULL;
     unsigned short rid = 0xFFFF;
     idns_query *q;
-    IDNSCB *callback;
-    void *cbdata;
     n = rfc1035AnswersUnpack(buf,
 	sz,
 	&answers,
@@ -478,10 +477,10 @@ idnsGrokReply(const char *buf, size_t sz)
 	    return;
 	}
     }
-    callback = q->callback;
-    q->callback = NULL;
-    if (cbdataReferenceValidDone(q->callback_data, &cbdata))
-	callback(cbdata, answers, n);
+    valid = cbdataValid(q->callback_data);
+    cbdataUnlock(q->callback_data);
+    if (valid)
+	q->callback(q->callback_data, answers, n);
     rfc1035RRDestroy(answers, n);
     memFree(q, MEM_IDNS_QUERY);
 }
@@ -580,15 +579,13 @@ idnsCheckQueue(void *unused)
 	if (tvSubDsec(q->start_t, current_time) < Config.Timeout.idns_query) {
 	    idnsSendQuery(q);
 	} else {
-	    IDNSCB *callback;
-	    void *cbdata;
+	    int v = cbdataValid(q->callback_data);
 	    debug(78, 2) ("idnsCheckQueue: ID %x: giving up after %d tries and %5.1f seconds\n",
 		(int) q->id, q->nsends,
 		tvSubDsec(q->start_t, current_time));
-	    callback = q->callback;
-	    q->callback = NULL;
-	    if (cbdataReferenceValidDone(q->callback_data, &cbdata))
-		callback(cbdata, NULL, 0);
+	    cbdataUnlock(q->callback_data);
+	    if (v)
+		q->callback(q->callback_data, NULL, 0);
 	    memFree(q, MEM_IDNS_QUERY);
 	}
     }
@@ -692,7 +689,8 @@ idnsALookup(const char *name, IDNSCB * callback, void *data)
     debug(78, 3) ("idnsALookup: buf is %d bytes for %s, id = %#hx\n",
 	(int) q->sz, name, q->id);
     q->callback = callback;
-    q->callback_data = cbdataReference(data);
+    q->callback_data = data;
+    cbdataLock(q->callback_data);
     q->start_t = current_time;
     idnsSendQuery(q);
 }
@@ -706,7 +704,8 @@ idnsPTRLookup(const struct in_addr addr, IDNSCB * callback, void *data)
     debug(78, 3) ("idnsPTRLookup: buf is %d bytes for %s, id = %#hx\n",
 	(int) q->sz, inet_ntoa(addr), q->id);
     q->callback = callback;
-    q->callback_data = cbdataReference(data);
+    q->callback_data = data;
+    cbdataLock(q->callback_data);
     q->start_t = current_time;
     idnsSendQuery(q);
 }
