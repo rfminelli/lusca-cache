@@ -72,7 +72,8 @@ fwdStateServerPeer(FwdState * fwdState)
 static void
 fwdServerFree(FwdServer * fs)
 {
-    cbdataReferenceDone(fs->peer);
+    if (fs->peer)
+	cbdataUnlock(fs->peer);
     memFree(fs, MEM_FWD_SERVER);
 }
 
@@ -644,7 +645,7 @@ fwdCheckDeferRead(int fd, void *data)
 #endif
     if (EBIT_TEST(e->flags, ENTRY_FWD_HDR_WAIT))
 	return rc;
-    if (mem->inmem_hi - storeLowestMemReaderOffset(e) < Config.readAheadGap)
+    if (mem->inmem_hi - storeLowestMemReaderOffset(e) < READ_AHEAD_GAP)
 	return rc;
     return 1;
 }

@@ -50,15 +50,31 @@ static store_client_t storeClientType(StoreEntry *);
 static int CheckQuickAbort2(StoreEntry * entry);
 static void CheckQuickAbort(StoreEntry * entry);
 
+/* check if there is any client waiting for this object at all */
+/* return 1 if there is at least one client */
+int
+storeClientWaiting(const StoreEntry * e)
+{
+    MemObject *mem = e->mem_obj;
+    dlink_node *node;
+    store_client *sc;
+    for (node = mem->clients.head; node; node = node->next) {
+	sc = node->data;
+	if (sc->callback_data != NULL)
+	    return 1;
+    }
+    return 0;
+}
+
 #if STORE_CLIENT_LIST_DEBUG
-static store_client *
+store_client *
 storeClientListSearch(const MemObject * mem, void *data)
 {
     dlink_node *node;
     store_client *sc = NULL;
     for (node = mem->clients.head; node; node = node->next) {
 	sc = node->data;
-	if (sc->owner == data)
+	if (sc->callback_data == data)
 	    return sc;
     }
     return NULL;
@@ -118,11 +134,10 @@ storeClientListAdd(StoreEntry * e, void *data)
     e->refcount++;
     mem->nclients++;
     sc = cbdataAlloc(store_client);
-#if STORE_CLIENT_LIST_DEBUG
-    sc->owner = cbdataReference(data);
-#endif
+    cbdataLock(data);		/* locked while we point to it */
+    sc->callback_data = data;
+    sc->seen_offset = 0;
     sc->copy_offset = 0;
-    sc->cmp_offset = 0;
     sc->flags.disk_io_pending = 0;
     sc->entry = e;
     sc->type = storeClientType(e);
@@ -141,14 +156,12 @@ static void
 storeClientCallback(store_client * sc, ssize_t sz)
 {
     STCB *callback = sc->callback;
-    void *cbdata;
     char *buf = sc->copy_buf;
     assert(sc->callback);
-    sc->cmp_offset = sc->copy_offset + sz;
     sc->callback = NULL;
     sc->copy_buf = NULL;
-    if (cbdataReferenceValidDone(sc->callback_data, &cbdata))
-	callback(cbdata, buf, sz);
+    if (cbdataValid(sc->callback_data))
+	callback(sc->callback_data, buf, sz);
 }
 
 static void
@@ -162,19 +175,11 @@ storeClientCopyEvent(void *data)
     storeClientCopy2(sc->entry, sc);
 }
 
-void
-storeClientCopyOld(store_client * sc, StoreEntry * e, off_t seen_offset,
-    off_t copy_offset, size_t size, char *buf, STCB * callback, void *data)
-{
-    /* OLD API -- adrian */
-    fatal("storeClientCopyOld() has been called!\n");
-}
-
-
 /* copy bytes requested by the client */
 void
 storeClientCopy(store_client * sc,
     StoreEntry * e,
+    off_t seen_offset,
     off_t copy_offset,
     size_t size,
     char *buf,
@@ -182,8 +187,9 @@ storeClientCopy(store_client * sc,
     void *data)
 {
     assert(!EBIT_TEST(e->flags, ENTRY_ABORTED));
-    debug(20, 3) ("storeClientCopy: %s, want %d, size %d, cb %p, cbdata %p\n",
+    debug(20, 3) ("storeClientCopy: %s, seen %d, want %d, size %d, cb %p, cbdata %p\n",
 	storeKeyText(e->hash.key),
+	(int) seen_offset,
 	(int) copy_offset,
 	(int) size,
 	callback,
@@ -194,14 +200,12 @@ storeClientCopy(store_client * sc,
 #endif
     assert(sc->callback == NULL);
     assert(sc->entry == e);
-    assert(sc->cmp_offset == copy_offset);
     sc->copy_offset = copy_offset;
+    sc->seen_offset = seen_offset;
     sc->callback = callback;
-    sc->callback_data = cbdataReference(data);
     sc->copy_buf = buf;
     sc->copy_size = size;
     sc->copy_offset = copy_offset;
-
     storeClientCopy2(e, sc);
 }
 
@@ -230,9 +234,8 @@ storeClientNoMoreToSend(StoreEntry * e, store_client * sc)
 static void
 storeClientCopy2(StoreEntry * e, store_client * sc)
 {
-    if (sc->flags.copy_event_pending) {
+    if (sc->flags.copy_event_pending)
 	return;
-    }
     if (EBIT_TEST(e->flags, ENTRY_FWD_HDR_WAIT)) {
 	debug(20, 5) ("storeClientCopy2: returning because ENTRY_FWD_HDR_WAIT set\n");
 	return;
@@ -243,6 +246,7 @@ storeClientCopy2(StoreEntry * e, store_client * sc)
 	eventAdd("storeClientCopyEvent", storeClientCopyEvent, sc, 0.0, 0);
 	return;
     }
+    cbdataLock(sc);		/* ick, prevent sc from getting freed */
     sc->flags.store_copying = 1;
     debug(20, 3) ("storeClientCopy2: %s\n", storeKeyText(e->hash.key));
     assert(sc->callback != NULL);
@@ -253,14 +257,9 @@ storeClientCopy2(StoreEntry * e, store_client * sc)
      * if the server-side aborts, we want to give the client(s)
      * everything we got before the abort condition occurred.
      */
-    /* Warning: storeClientCopy3 may indirectly free sc in callbacks,
-     * hence the cbdata reference to keep it active for the duration of
-     * this function
-     */
-    cbdataInternalLock(sc);
     storeClientCopy3(e, sc);
     sc->flags.store_copying = 0;
-    cbdataInternalUnlock(sc);
+    cbdataUnlock(sc);		/* ick, allow sc to be freed */
 }
 
 static void
@@ -269,15 +268,13 @@ storeClientCopy3(StoreEntry * e, store_client * sc)
     MemObject *mem = e->mem_obj;
     size_t sz;
 
-    debug(33, 5) ("co: %ld, hi: %ld\n", (long int) sc->copy_offset, (long int) mem->inmem_hi);
-
     if (storeClientNoMoreToSend(e, sc)) {
 	/* There is no more to send! */
 	storeClientCallback(sc, 0);
 	return;
     }
-    /* Check that we actually have data */
-    if (e->store_status == STORE_PENDING && sc->copy_offset >= mem->inmem_hi) {
+    if (e->store_status == STORE_PENDING && sc->seen_offset >= mem->inmem_hi) {
+	/* client has already seen this, wait for more */
 	debug(20, 3) ("storeClientCopy3: Waiting for more\n");
 	return;
     }
@@ -292,7 +289,6 @@ storeClientCopy3(StoreEntry * e, store_client * sc)
      * is clientCacheHit) so that we can fall back to a cache miss
      * if needed.
      */
-
     if (STORE_DISK_CLIENT == sc->type && NULL == sc->swapin_sio) {
 	debug(20, 3) ("storeClientCopy3: Need to open swap in file\n");
 	/* gotta open the swapin file */
@@ -318,10 +314,9 @@ storeClientCopy3(StoreEntry * e, store_client * sc)
     }
     if (sc->copy_offset >= mem->inmem_lo && sc->copy_offset < mem->inmem_hi) {
 	/* What the client wants is in memory */
-	/* Old style */
-	debug(20, 3) ("storeClientCopy3: Copying normal from memory\n");
-	sz = stmemCopy(&mem->data_hdr, sc->copy_offset, sc->copy_buf,
-	    sc->copy_size);
+	debug(20, 3) ("storeClientCopy3: Copying from memory\n");
+	sz = stmemCopy(&mem->data_hdr,
+	    sc->copy_offset, sc->copy_buf, sc->copy_size);
 	storeClientCallback(sc, sz);
 	return;
     }
@@ -336,7 +331,6 @@ static void
 storeClientFileRead(store_client * sc)
 {
     MemObject *mem = sc->entry->mem_obj;
-
     assert(sc->callback != NULL);
     assert(!sc->flags.disk_io_pending);
     sc->flags.disk_io_pending = 1;
@@ -531,7 +525,8 @@ storeUnregister(store_client * sc, StoreEntry * e, void *data)
 	storeSwapOut(e);
     if (sc->swapin_sio) {
 	storeClose(sc->swapin_sio);
-	cbdataReferenceDone(sc->swapin_sio);
+	cbdataUnlock(sc->swapin_sio);
+	sc->swapin_sio = NULL;
 	statCounter.swap.ins++;
     }
     if (NULL != sc->callback) {
@@ -543,9 +538,8 @@ storeUnregister(store_client * sc, StoreEntry * e, void *data)
 #if DELAY_POOLS
     delayUnregisterDelayIdPtr(&sc->delay_id);
 #endif
-#if STORE_CLIENT_LIST_DEBUG
-    cbdataReferenceDone(sc->owner);
-#endif
+    cbdataUnlock(sc->callback_data);	/* we're done with it now */
+    /*assert(!sc->flags.disk_io_pending); */
     cbdataFree(sc);
     assert(e->lock_count > 0);
     if (mem->nclients == 0)
@@ -565,6 +559,8 @@ storeLowestMemReaderOffset(const StoreEntry * entry)
     for (node = mem->clients.head; node; node = nx) {
 	sc = node->data;
 	nx = node->next;
+	if (sc->callback_data == NULL)	/* open slot */
+	    continue;
 	if (sc->type != STORE_MEM_CLIENT)
 	    continue;
 	if (sc->type == STORE_DISK_CLIENT)

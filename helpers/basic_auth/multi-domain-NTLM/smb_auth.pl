@@ -42,7 +42,7 @@ while (<>) {
 		print "ERR\n";
 		next;
 	}
-        $domain=$1;
+	$domain=$1;
 	$user=$3;
 	$pass=$4;
 	$domain =~ s/%([0-9a-f][0-9a-f])/pack("H2",$1)/gie;
