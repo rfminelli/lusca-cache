@@ -1155,8 +1155,8 @@ parseConfigFile(const char *file_name)
 
 	else if (!strcmp(token, "pid_filename"))
 	    parsePathname(&Config.pidFilename, 0);
-        else if (!strcmp(token, "mime_table"))
-           parsePathname(&Config.mimeTablePathname, 1);
+	else if (!strcmp(token, "mime_table"))
+	    parsePathname(&Config.mimeTablePathname, 1);
 	else if (!strcmp(token, "visible_hostname"))
 	    parseVisibleHostnameLine();
 
