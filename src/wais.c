@@ -23,6 +23,7 @@ static int waisStateFree(fd, waisState)
 {
     if (waisState == NULL)
 	return 1;
+    storeUnlockObject(waisState->entry);
     xfree(waisState);
     return 0;
 }
@@ -205,7 +206,7 @@ void waisSendRequest(fd, data)
     if (data->mime_hdr)
 	len += strlen(data->mime_hdr);
 
-    buf = (char *) xcalloc(1, len + 1);
+    buf = xcalloc(1, len + 1);
 
     if (data->mime_hdr)
 	sprintf(buf, "%s %s %s\r\n", Method, data->request,
@@ -213,7 +214,7 @@ void waisSendRequest(fd, data)
     else
 	sprintf(buf, "%s %s\r\n", Method, data->request);
     debug(24, 6, "waisSendRequest - buf:%s\n", buf);
-    icpWrite(fd,
+    comm_write(fd,
 	buf,
 	len,
 	30,
@@ -244,18 +245,19 @@ int waisStart(unusedfd, url, method, mime_hdr, entry)
 	return COMM_ERROR;
     }
     /* Create socket. */
-    sock = comm_open(COMM_NONBLOCKING, 0, 0, url);
+    sock = comm_open(COMM_NONBLOCKING, getTcpOutgoingAddr(), 0, url);
     if (sock == COMM_ERROR) {
 	debug(24, 4, "waisStart: Failed because we're out of sockets.\n");
 	squid_error_entry(entry, ERR_NO_FDS, xstrerror());
 	return COMM_ERROR;
     }
-    data = (WAISData *) xcalloc(1, sizeof(WAISData));
-    data->entry = entry;
+    data = xcalloc(1, sizeof(WAISData));
+    storeLockObject(data->entry = entry, NULL, NULL);
     data->method = method;
     data->relayhost = getWaisRelayHost();
     data->relayport = getWaisRelayPort();
     data->mime_hdr = mime_hdr;
+    strncpy(data->request, url, MAX_URL);
     comm_set_select_handler(sock,
 	COMM_SELECT_CLOSE,
 	(PF) waisStateFree,
@@ -264,7 +266,7 @@ int waisStart(unusedfd, url, method, mime_hdr, entry)
     /* check if IP is already in cache. It must be. 
      * It should be done before this route is called. 
      * Otherwise, we cannot check return code for connect. */
-    if (!ipcache_gethostbyname(data->relayhost)) {
+    if (!ipcache_gethostbyname(data->relayhost, 0)) {
 	debug(24, 4, "waisstart: Called without IP entry in ipcache. OR lookup failed.\n");
 	squid_error_entry(entry, ERR_DNS_FAIL, dns_error_message);
 	comm_close(sock);

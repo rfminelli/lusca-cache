@@ -104,7 +104,7 @@ int hash_insert(hid, k, item)
 	return -1;
 
     /* Add to the given hash table 'hid' */
-    new = (hash_link *) xcalloc(1, sizeof(hash_link));
+    new = xcalloc(1, sizeof(hash_link));
     new->item = item;
     new->key = k;
 

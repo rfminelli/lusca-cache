@@ -9,9 +9,13 @@ struct icp_common_s {
     unsigned char version;	/* version number */
     unsigned short length;	/* total length (bytes) */
     u_num32 reqnum;		/* req number (req'd for UDP) */
-    u_num32 auth[ICP_AUTH_SIZE];	/* authenticator (future) */
+    u_num32 flags;
+    u_num32 pad;
+    /* u_num32 auth[ICP_AUTH_SIZE];     authenticator (old) */
     u_num32 shostid;		/* sender host id */
 };
+
+#define ICP_FLAG_HIT_OBJ 0x80000000
 
 #define ICP_COMMON_SZ (sizeof(icp_common_t))
 #define ICP_HDR_SZ (sizeof(icp_common_t)+sizeof(u_num32))
@@ -28,6 +32,18 @@ typedef enum {
     ICP_OP_DATAEND,		/* last data (sv<-cl) */
     ICP_OP_SECHO,		/* echo from source (sv<-os) */
     ICP_OP_DECHO,		/* echo from dumb cache (sv<-dc) */
+    ICP_OP_UNUSED0,
+    ICP_OP_UNUSED1,
+    ICP_OP_UNUSED2,
+    ICP_OP_UNUSED3,
+    ICP_OP_UNUSED4,
+    ICP_OP_UNUSED5,
+    ICP_OP_UNUSED6,
+    ICP_OP_UNUSED7,
+    ICP_OP_UNUSED8,
+    ICP_OP_UNUSED9,
+    ICP_OP_DENIED,		/* access denied (cl<-sv) */
+    ICP_OP_HIT_OBJ,		/* hit with object data (cl<-sv) */
     ICP_OP_END			/* marks end of opcodes */
 } icp_opcode;
 
@@ -141,16 +157,14 @@ typedef struct icp_message_s icp_message_t;
 #define ICP_MESSAGE_SZ (sizeof(icp_message_t))
 
 /* Version */
-#define ICP_VERSION_1		1	/* version 1 */
-#define ICP_VERSION_2		2	/* version 2 */
-#define ICP_VERSION_CURRENT	ICP_VERSION_2	/* current version */
+#define ICP_VERSION_1		1
+#define ICP_VERSION_2		2
+#define ICP_VERSION_CURRENT	ICP_VERSION_2
 
 extern int icp_proto_errno;	/* operation errors */
-extern int icp_query _PARAMS((int sock, u_num32 reqnum, u_num32 * auth, struct in_addr rid, char *url, char *hostname, int port));
 extern int icp_hit _PARAMS((int sock, u_num32 reqnum, u_num32 * auth, u_num32 size));
 extern int icp_miss _PARAMS((int sock, u_num32 reqnum, u_num32 * auth));
 extern int icp_error _PARAMS((int sock, u_num32 reqnum, u_num32 * auth, unsigned short errcode, char *errstr));
-extern int icp_send _PARAMS((int sock, u_num32 reqnum, u_num32 * auth, struct in_addr rid, char *url));
 extern int icp_databegin _PARAMS((int sock, u_num32 reqnum, u_num32 * auth, u_num32 ttl, u_num32 timestamp, char *data));
 extern int icp_data _PARAMS((int sock, u_num32 reqnum, u_num32 * auth, char *data));
 extern int icp_dataend _PARAMS((int sock, u_num32 reqnum, u_num32 * auth, char *data));
