@@ -46,6 +46,12 @@ typedef struct {
     size_t kb;
 } kb_t;
 
+typedef struct {
+    size_t count;
+    size_t bytes;
+    size_t gb;
+} gb_t;
+
 /*
  * grep '^struct' structs.h \
  * | perl -ne '($a,$b)=split;$c=$b;$c=~s/^_//; print "typedef struct $b $c;\n";'
@@ -65,12 +71,12 @@ typedef struct _authScheme authScheme;
 typedef struct _acl_user_data acl_user_data;
 typedef struct _acl_user_ip_data acl_user_ip_data;
 typedef struct _acl_arp_data acl_arp_data;
+typedef struct _acl acl;
 typedef struct _acl_snmp_comm acl_snmp_comm;
 typedef struct _acl_list acl_list;
 typedef struct _acl_access acl_access;
 typedef struct _acl_address acl_address;
 typedef struct _acl_tos acl_tos;
-typedef struct _acl acl;
 typedef struct _aclCheck_t aclCheck_t;
 typedef struct _wordlist wordlist;
 typedef struct _intlist intlist;
@@ -97,8 +103,6 @@ typedef struct _HttpHdrCc HttpHdrCc;
 typedef struct _HttpHdrRangeSpec HttpHdrRangeSpec;
 typedef struct _HttpHdrRange HttpHdrRange;
 typedef struct _HttpHdrRangeIter HttpHdrRangeIter;
-typedef struct _HttpHdrSc HttpHdrSc;
-typedef struct _HttpHdrScTarget HttpHdrScTarget;
 typedef struct _HttpHdrContRange HttpHdrContRange;
 typedef struct _TimeOrTag TimeOrTag;
 typedef struct _HttpHeaderEntry HttpHeaderEntry;
@@ -159,6 +163,9 @@ typedef struct _authConfig authConfig;
 typedef struct _cacheSwap cacheSwap;
 typedef struct _StatHist StatHist;
 typedef struct _String String;
+typedef struct _MemMeter MemMeter;
+typedef struct _MemPoolMeter MemPoolMeter;
+typedef struct _MemPool MemPool;
 typedef struct _ClientInfo ClientInfo;
 typedef struct _cd_guess_stats cd_guess_stats;
 typedef struct _CacheDigest CacheDigest;
@@ -185,6 +192,7 @@ typedef struct _RemovalPolicyWalker RemovalPolicyWalker;
 typedef struct _RemovalPurgeWalker RemovalPurgeWalker;
 typedef struct _RemovalPolicyNode RemovalPolicyNode;
 typedef struct _RemovalPolicySettings RemovalPolicySettings;
+
 typedef struct _http_version_t http_version_t;
 
 #if SQUID_SNMP
@@ -198,8 +206,8 @@ typedef struct _delaySpecSet delaySpecSet;
 typedef struct _delaySpec delaySpec;
 #endif
 
-typedef void CWCB(int fd, char *, size_t size, comm_err_t flag, void *data);
-typedef void CNCB(int fd, comm_err_t status, void *);
+typedef void CWCB(int fd, char *, size_t size, int flag, void *data);
+typedef void CNCB(int fd, int status, void *);
 
 typedef void FREE(void *);
 typedef void CBDUNL(void *);
@@ -226,7 +234,7 @@ typedef void UH(void *data, wordlist *);
 typedef int DEFER(int fd, void *data);
 typedef int READ_HANDLER(int, char *, int);
 typedef int WRITE_HANDLER(int, const char *, int);
-typedef void CBCB(char *buf, size_t size, void *data);
+typedef void CBCB(char *buf, ssize_t size, void *data);
 
 typedef void STIOCB(void *their_data, int errflag, storeIOState *);
 typedef void STFNCB(void *their_data, int errflag, storeIOState *);
@@ -234,17 +242,18 @@ typedef void STRCB(void *their_data, const char *buf, ssize_t len);
 
 typedef void SIH(storeIOState *, void *);	/* swap in */
 typedef int QS(const void *, const void *);	/* qsort */
+typedef void STCB(void *, char *, ssize_t);	/* store callback */
 typedef void STABH(void *);
 typedef void ERCB(int fd, void *, size_t);
 typedef void OBJH(StoreEntry *);
 typedef void SIGHDLR(int sig);
 typedef void STVLDCB(void *, int, int);
 typedef void HLPCB(void *, char *buf);
-typedef stateful_helper_callback_t HLPSCB(void *, void *lastserver, char *buf);
+typedef void HLPSCB(void *, void *lastserver, char *buf);
 typedef int HLPSAVAIL(void *);
-typedef void HLPSONEQ(void *);
+typedef void HLPSRESET(void *);
 typedef void HLPCMDOPTS(int *argc, char **argv);
-typedef void IDNSCB(void *, rfc1035_rr *, int);
+typedef void IDNSCB(void *, rfc1035_rr *, int, const char *);
 
 typedef void STINIT(SwapDir *);
 typedef void STNEWFS(SwapDir *);

@@ -13,6 +13,7 @@
  */
 
 #include "config.h"
+#include "squid_types.h"
 #include "ntlmauth.h"
 
 #include "ntlm.h"

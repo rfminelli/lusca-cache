@@ -211,7 +211,7 @@ rfc1035QuestionPack(char *buf,
     size_t sz,
     const char *name,
     unsigned short type,
-    unsigned short _class)
+    unsigned short class)
 {
     off_t off = 0;
     unsigned short s;
@@ -219,7 +219,7 @@ rfc1035QuestionPack(char *buf,
     s = htons(type);
     memcpy(buf + off, &s, sizeof(s));
     off += sizeof(s);
-    s = htons(_class);
+    s = htons(class);
     memcpy(buf + off, &s, sizeof(s));
     off += sizeof(s);
     assert(off <= sz);
@@ -312,7 +312,7 @@ rfc1035NameUnpack(const char *buf, size_t sz, off_t * off, char *name, size_t ns
 	    /* blasted compression */
 	    unsigned short s;
 	    off_t ptr;
-	    if (rdepth > 64)	/* infinite pointer loop */
+	    if (rdepth > 64)		/* infinite pointer loop */
 		return 1;
 	    memcpy(&s, buf + (*off), sizeof(s));
 	    s = ntohs(s);
@@ -337,7 +337,7 @@ rfc1035NameUnpack(const char *buf, size_t sz, off_t * off, char *name, size_t ns
 		break;
 	    if (len > (ns - no - 1))	/* label won't fit */
 		return 1;
-	    if ((*off) + len > sz)	/* message is too short */
+	    if ((*off) + len >= sz)	/* message is too short */
 		return 1;
 	    memcpy(name + no, buf + (*off), len);
 	    (*off) += len;
@@ -345,7 +345,10 @@ rfc1035NameUnpack(const char *buf, size_t sz, off_t * off, char *name, size_t ns
 	    *(name + (no++)) = '.';
 	}
     } while (c > 0 && no < ns);
-    *(name + no - 1) = '\0';
+    if (no)
+	*(name + no - 1) = '\0';
+    else
+	*name = '\0';
     /* make sure we didn't allow someone to overflow the name buffer */
     assert(no <= ns);
     return 0;
@@ -386,7 +389,7 @@ rfc1035RRUnpack(const char *buf, size_t sz, off_t * off, rfc1035_rr * RR)
     RR->type = ntohs(s);
     memcpy(&s, buf + (*off), sizeof(s));
     (*off) += sizeof(s);
-    RR->_class = ntohs(s);
+    RR->class = ntohs(s);
     memcpy(&i, buf + (*off), sizeof(i));
     (*off) += sizeof(i);
     RR->ttl = ntohl(i);
