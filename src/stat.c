@@ -288,6 +288,8 @@ statStoreEntry(StoreEntry * s, StoreEntry * e)
 	    storeAppendPrintf(s, "\tClient #%d, %p\n", i, sc->callback_data);
 	    storeAppendPrintf(s, "\t\tcopy_offset: %d\n",
 		(int) sc->copy_offset);
+	    storeAppendPrintf(s, "\t\tseen_offset: %d\n",
+		(int) sc->seen_offset);
 	    storeAppendPrintf(s, "\t\tcopy_size: %d\n",
 		(int) sc->copy_size);
 	    storeAppendPrintf(s, "\t\tflags:");
@@ -476,9 +478,9 @@ info_get(StoreEntry * sentry)
     storeAppendPrintf(sentry, "\tRequest failure ratio:\t%5.2f%%\n",
 	request_failure_ratio);
 
-    storeAppendPrintf(sentry, "\tAverage HTTP requests per minute since start:\t%.1f\n",
+    storeAppendPrintf(sentry, "\tHTTP requests per minute:\t%.1f\n",
 	statCounter.client_http.requests / (runtime / 60.0));
-    storeAppendPrintf(sentry, "\tAverage ICP messages per minute since start:\t%.1f\n",
+    storeAppendPrintf(sentry, "\tICP messages per minute:\t%.1f\n",
 	(statCounter.icp.pkts_sent + statCounter.icp.pkts_recv) / (runtime / 60.0));
     storeAppendPrintf(sentry, "\tSelect loop called: %d times, %0.3f ms avg\n",
 	statCounter.select_loops, 1000.0 * runtime / statCounter.select_loops);
@@ -571,13 +573,10 @@ info_get(StoreEntry * sentry)
 	mp.fordblks >> 10);
     t = mp.uordblks + mp.usmblks + mp.hblkhd;
     storeAppendPrintf(sentry, "\tTotal in use:          %6d KB %d%%\n",
-	t >> 10, percent(t, mp.arena + mp.hblkhd));
+	t >> 10, percent(t, mp.arena));
     t = mp.fsmblks + mp.fordblks;
     storeAppendPrintf(sentry, "\tTotal free:            %6d KB %d%%\n",
-	t >> 10, percent(t, mp.arena + mp.hblkhd));
-    t = mp.arena + mp.hblkhd;
-    storeAppendPrintf(sentry, "\tTotal size:            %6d KB\n",
-	t >> 10);
+	t >> 10, percent(t, mp.arena));
 #if HAVE_EXT_MALLINFO
     storeAppendPrintf(sentry, "\tmax size of small blocks:\t%d\n", mp.mxfast);
     storeAppendPrintf(sentry, "\tnumber of small blocks in a holding block:\t%d\n",
@@ -592,27 +591,13 @@ info_get(StoreEntry * sentry)
 #endif /* HAVE_EXT_MALLINFO */
 #endif /* HAVE_MALLINFO */
     storeAppendPrintf(sentry, "Memory accounted for:\n");
-#if !(HAVE_MSTATS && HAVE_GNUMALLOC_H) && HAVE_MALLINFO && HAVE_STRUCT_MALLINFO
-    storeAppendPrintf(sentry, "\tTotal accounted:       %6d KB %3d%%\n",
-	statMemoryAccounted() >> 10, percent(statMemoryAccounted(), t));
-#else
     storeAppendPrintf(sentry, "\tTotal accounted:       %6d KB\n",
 	statMemoryAccounted() >> 10);
-#endif
-    {
-	MemPoolGlobalStats mp_stats;
-	memPoolGetGlobalStats(&mp_stats);
-#if !(HAVE_MSTATS && HAVE_GNUMALLOC_H) && HAVE_MALLINFO && HAVE_STRUCT_MALLINFO
-	storeAppendPrintf(sentry, "\tmemPool accounted:     %6d KB %3d%%\n",
-	    mp_stats.TheMeter->alloc.level >> 10, percent(mp_stats.TheMeter->alloc.level, t));
-	storeAppendPrintf(sentry, "\tmemPool unaccounted:   %6d KB %3d%%\n",
-	    (t - mp_stats.TheMeter->alloc.level) >> 10, percent((t - mp_stats.TheMeter->alloc.level), t));
-#endif
-	storeAppendPrintf(sentry, "\tmemPoolAlloc calls: %9.0f\n",
-	    mp_stats.TheMeter->gb_saved.count);
-	storeAppendPrintf(sentry, "\tmemPoolFree calls:  %9.0f\n",
-	    mp_stats.TheMeter->gb_freed.count);
-    }
+    storeAppendPrintf(sentry, "\tmemPoolAlloc calls: %d\n",
+	mem_pool_alloc_calls);
+    storeAppendPrintf(sentry, "\tmemPoolFree calls: %d\n",
+	mem_pool_free_calls);
+
     storeAppendPrintf(sentry, "File descriptor usage for %s:\n", appname);
     storeAppendPrintf(sentry, "\tMaximum number of file descriptors:   %4d\n",
 	Squid_MaxFD);
@@ -816,10 +801,9 @@ statAvgDump(StoreEntry * sentry, int minutes, int hours)
     storeAppendPrintf(sentry, "aborted_requests = %f/sec\n",
 	XAVG(aborted_requests));
 
-#if USE_POLL
+#if HAVE_POLL
     storeAppendPrintf(sentry, "syscalls.polls = %f/sec\n", XAVG(syscalls.polls));
-#endif
-#if USE_SELECT
+#else
     storeAppendPrintf(sentry, "syscalls.selects = %f/sec\n", XAVG(syscalls.selects));
 #endif
     storeAppendPrintf(sentry, "syscalls.disk.opens = %f/sec\n", XAVG(syscalls.disk.opens));
@@ -1537,10 +1521,10 @@ statGraphDump(StoreEntry * e)
     GENGRAPH(cputime, "cputime", "CPU utilisation");
 }
 
-#endif /* STAT_GRAPHS */
-
 int
 statMemoryAccounted(void)
 {
-    return memPoolsTotalAllocated();
+    memTotalAllocated();
 }
+
+#endif /* STAT_GRAPHS */

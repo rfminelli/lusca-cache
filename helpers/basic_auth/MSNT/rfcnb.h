@@ -34,19 +34,15 @@
 
 /* Definition of routines we define */
 
-struct RFCNB_Con;
-
 void *RFCNB_Call(char *Called_Name, char *Calling_Name, char *Called_Address,
     int port);
 
-int RFCNB_Send(struct RFCNB_Con *Con_Handle, struct RFCNB_Pkt *Data, int Length);
+int RFCNB_Send(void *Con_Handle, struct RFCNB_Pkt *Data, int Length);
 
-int RFCNB_Recv(struct RFCNB_Con *Con_Handle, struct RFCNB_Pkt *Data, int Length);
+int RFCNB_Recv(void *Con_Handle, struct RFCNB_Pkt *Data, int Length);
 
-int RFCNB_Hangup(struct RFCNB_Con *Con_Handle);
+int RFCNB_Hangup(void *con_Handle);
+
+void *RFCNB_Listen();
 
 void RFCNB_Get_Error(char *buffer, int buf_len);
-int RFCNB_Get_Last_Error(void);
-int RFCNB_Get_Last_Errno(void);
-void RFCNB_Get_Error_Msg(int code, char *msg_buf, int len);
-

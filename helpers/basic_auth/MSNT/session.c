@@ -32,7 +32,6 @@ int RFCNB_saved_errno = 0;
 #include "rfcnb-priv.h"
 #include "rfcnb-util.h"
 #include "rfcnb-io.h"
-#include "rfcnb.h"
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -40,9 +39,7 @@ int RFCNB_saved_errno = 0;
 
 int RFCNB_Stats[RFCNB_MAX_STATS];
 
-#ifdef RFCNB_DEBUG
 void (*Prot_Print_Routine) () = NULL;	/* Pointer to print routine */
-#endif
 
 /* Set up a session with a remote name. We are passed Called_Name as a
  * string which we convert to a NetBIOS name, ie space terminated, up to
@@ -226,7 +223,7 @@ RFCNB_Send(struct RFCNB_Con *Con_Handle, struct RFCNB_Pkt *udata, int Length)
  * non-message packets ...                                           */
 
 int
-RFCNB_Recv(struct RFCNB_Con *con_Handle, struct RFCNB_Pkt *Data, int Length)
+RFCNB_Recv(void *con_Handle, struct RFCNB_Pkt *Data, int Length)
 {
     struct RFCNB_Pkt *pkt;
     int ret_len;
@@ -288,6 +285,27 @@ RFCNB_Hangup(struct RFCNB_Con *con_Handle)
 
 }
 
+/* Set TCP_NODELAY on the socket                                          */
+
+int
+RFCNB_Set_Sock_NoDelay(struct RFCNB_Con *con_Handle, BOOL yn)
+{
+
+    return (setsockopt(con_Handle->fd, IPPROTO_TCP, TCP_NODELAY,
+	    (char *) &yn, sizeof(yn)));
+
+}
+
+
+/* Listen for a connection on a port???, when                             */
+/* the connection comes in, we return with the connection                 */
+
+void
+RFCNB_Listen()
+{
+
+}
+
 /* Pick up the last error response as a string, hmmm, this routine should */
 /* have been different ...                                                */
 
@@ -307,7 +325,7 @@ RFCNB_Get_Error(char *buffer, int buf_len)
 /* Pick up the last error response and returns as a code                 */
 
 int
-RFCNB_Get_Last_Error(void)
+RFCNB_Get_Last_Error()
 {
 
     return (RFCNB_errno);
@@ -317,7 +335,7 @@ RFCNB_Get_Last_Error(void)
 /* Pick up saved errno as well */
 
 int
-RFCNB_Get_Last_Errno(void)
+RFCNB_Get_Last_Errno()
 {
 
     return (RFCNB_saved_errno);
@@ -336,7 +354,6 @@ RFCNB_Get_Error_Msg(int code, char *msg_buf, int len)
 
 /* Register a higher level protocol print routine */
 
-#ifdef RFCNB_DEBUG
 void
 RFCNB_Register_Print_Routine(void (*fn) ())
 {
@@ -344,4 +361,3 @@ RFCNB_Register_Print_Routine(void (*fn) ())
     Prot_Print_Routine = fn;
 
 }
-#endif

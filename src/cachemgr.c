@@ -537,7 +537,8 @@ process_request(cachemgr_request * req)
     if ((hp = gethostbyname(req->hostname)) != NULL) {
 	assert(hp->h_length <= sizeof(S.sin_addr.s_addr));
 	xmemcpy(&S.sin_addr.s_addr, hp->h_addr, hp->h_length);
-    } else if (safe_inet_addr(req->hostname, &S.sin_addr))
+    }
+    else if (safe_inet_addr(req->hostname, &S.sin_addr))
 	(void) 0;
     else {
 	snprintf(buf, 1024, "Unknown host: %s\n", req->hostname);

@@ -52,6 +52,6 @@
 
 /* Text strings for the error responses                                 */
 
-extern const char *RFCNB_Error_Strings[];
+extern char *RFCNB_Error_Strings[];
 
 #endif /* _RFCNB_ERROR_H_ */

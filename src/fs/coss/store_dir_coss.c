@@ -130,7 +130,7 @@ storeCossDirOpenSwapLog(SwapDir * sd)
     char *path;
     int fd;
     path = storeCossDirSwapLogFile(sd, NULL);
-    fd = file_open(path, O_WRONLY | O_CREAT | O_BINARY);
+    fd = file_open(path, O_WRONLY | O_CREAT);
     if (fd < 0) {
 	debug(81, 1) ("%s: %s\n", path, xstrerror());
 	fatal("storeCossDirOpenSwapLog: Failed to open swap log.");
@@ -390,7 +390,7 @@ storeCossDirCloseTmpSwapLog(SwapDir * sd)
     char *new_path = xstrdup(storeCossDirSwapLogFile(sd, ".new"));
     int fd;
     file_close(cs->swaplog_fd);
-#if defined (_SQUID_OS2_) || defined (_SQUID_CYGWIN_)
+#ifdef _SQUID_OS2_
     if (unlink(swaplog_path) < 0) {
 	debug(50, 0) ("%s: %s\n", swaplog_path, xstrerror());
 	fatal("storeCossDirCloseTmpSwapLog: unlink failed");
@@ -399,7 +399,7 @@ storeCossDirCloseTmpSwapLog(SwapDir * sd)
     if (xrename(new_path, swaplog_path) < 0) {
 	fatal("storeCossDirCloseTmpSwapLog: rename failed");
     }
-    fd = file_open(swaplog_path, O_WRONLY | O_CREAT | O_BINARY);
+    fd = file_open(swaplog_path, O_WRONLY | O_CREAT);
     if (fd < 0) {
 	debug(50, 1) ("%s: %s\n", swaplog_path, xstrerror());
 	fatal("storeCossDirCloseTmpSwapLog: Failed to open swap log.");
@@ -433,14 +433,14 @@ storeCossDirOpenTmpSwapLog(SwapDir * sd, int *clean_flag, int *zero_flag)
     if (cs->swaplog_fd >= 0)
 	file_close(cs->swaplog_fd);
     /* open a write-only FD for the new log */
-    fd = file_open(new_path, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY);
+    fd = file_open(new_path, O_WRONLY | O_CREAT | O_TRUNC);
     if (fd < 0) {
 	debug(50, 1) ("%s: %s\n", new_path, xstrerror());
 	fatal("storeDirOpenTmpSwapLog: Failed to open swap log.");
     }
     cs->swaplog_fd = fd;
     /* open a read-only stream of the old log */
-    fp = fopen(swaplog_path, "rb");
+    fp = fopen(swaplog_path, "r");
     if (fp == NULL) {
 	debug(50, 0) ("%s: %s\n", swaplog_path, xstrerror());
 	fatal("Failed to open swap log for reading");
@@ -484,7 +484,7 @@ storeCossDirWriteCleanStart(SwapDir * sd)
     struct stat sb;
 #endif
     state->new = xstrdup(storeCossDirSwapLogFile(sd, ".clean"));
-    state->fd = file_open(state->new, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY);
+    state->fd = file_open(state->new, O_WRONLY | O_CREAT | O_TRUNC);
     if (state->fd < 0) {
 	xfree(state->new);
 	xfree(state);
@@ -567,7 +567,6 @@ storeCossDirWriteCleanEntry(SwapDir * sd, const StoreEntry * e)
 static void
 storeCossDirWriteCleanDone(SwapDir * sd)
 {
-    int fd;
     struct _clean_state *state = sd->log.clean.state;
     if (NULL == state)
 	return;
@@ -588,26 +587,24 @@ storeCossDirWriteCleanDone(SwapDir * sd)
      * so we have to close before renaming.
      */
     storeCossDirCloseSwapLog(sd);
-    /* save the fd value for a later test */
-    fd = state->fd;
     /* rename */
     if (state->fd >= 0) {
-#if defined(_SQUID_OS2_) || defined (_SQUID_CYGWIN_)
+#ifdef _SQUID_OS2_
 	file_close(state->fd);
 	state->fd = -1;
-	if (unlink(state->cur) < 0)
+	if (unlink(cur) < 0)
 	    debug(50, 0) ("storeCossDirWriteCleanLogs: unlinkd failed: %s, %s\n",
-		xstrerror(), state->cur);
+		xstrerror(), cur);
 #endif
 	xrename(state->new, state->cur);
     }
     /* touch a timestamp file if we're not still validating */
     if (store_dirs_rebuilding)
 	(void) 0;
-    else if (fd < 0)
+    else if (state->fd < 0)
 	(void) 0;
     else
-	file_close(file_open(state->cln, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY));
+	file_close(file_open(state->cln, O_WRONLY | O_CREAT | O_TRUNC));
     /* close */
     safe_free(state->cur);
     safe_free(state->new);
@@ -884,8 +881,7 @@ storeCossDirPick(void)
 static void
 storeCossDirDone(void)
 {
-    memPoolDestroy(&coss_state_pool);
-/*  memPoolDestroy(&coss_index_pool);  XXX Should be here? */
+    memPoolDestroy(coss_state_pool);
     coss_initialised = 0;
 }
 

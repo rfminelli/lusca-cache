@@ -360,7 +360,8 @@ free_external_acl_data(void *data)
 {
     external_acl_data *p = data;
     wordlistDestroy(&p->arguments);
-    cbdataReferenceDone(p->def);
+    cbdataUnlock(p->def);
+    p->def = NULL;
 }
 
 void
@@ -376,7 +377,8 @@ aclParseExternal(void *dataptr)
     token = strtok(NULL, w_space);
     if (!token)
 	self_destruct();
-    data->def = cbdataReference(find_externalAclHelper(token));
+    data->def = find_externalAclHelper(token);
+    cbdataLock(data->def);
     if (!data->def)
 	self_destruct();
     while ((token = strtok(NULL, w_space))) {
@@ -401,12 +403,13 @@ aclMatchExternal(void *data, aclCheck_t * ch)
     debug(82, 9) ("aclMatchExternal: acl=\"%s\"\n", acl->def->name);
     entry = ch->extacl_entry;
     if (entry) {
-	if (cbdataReferenceValid(entry) && entry->def == acl->def &&
+	if (cbdataValid(entry) && entry->def == acl->def &&
 	    strcmp(entry->hash.key, key) == 0) {
 	    /* Ours, use it.. */
 	} else {
 	    /* Not valid, or not ours.. get rid of it */
-	    cbdataReferenceDone(ch->extacl_entry);
+	    cbdataUnlock(ch->extacl_entry);
+	    ch->extacl_entry = NULL;
 	    entry = NULL;
 	}
     }
@@ -440,7 +443,7 @@ aclMatchExternal(void *data, aclCheck_t * ch)
      * piggy backs on ident, and may fail if there is child proxies..
      * Register the username for logging purposes
      */
-    if (entry->user && cbdataReferenceValid(ch->conn) && !ch->conn->rfc931[0])
+    if (entry->user && cbdataValid(ch->conn) && !ch->conn->rfc931[0])
 	xstrncpy(ch->conn->rfc931, entry->user, USER_IDENT_SZ);
     return result;
 }
@@ -651,8 +654,8 @@ free_externalAclState(void *data)
 {
     externalAclState *state = data;
     safe_free(state->key);
-    cbdataReferenceDone(state->callback_data);
-    cbdataReferenceDone(state->def);
+    cbdataUnlock(state->callback_data);
+    cbdataUnlock(state->def);
 }
 
 /* FIXME: This should be moved to tools.c */
@@ -756,17 +759,19 @@ externalAclHandleReply(void *data, char *reply)
     }
 
     dlinkDelete(&state->list, &state->def->queue);
-    if (cbdataReferenceValid(state->def))
+    if (cbdataValid(state->def))
 	entry = external_acl_cache_add(state->def, state->key, result, user, error);
     else
 	entry = NULL;
 
     do {
-	void *cbdata;
-	cbdataReferenceDone(state->def);
+	cbdataUnlock(state->def);
+	state->def = NULL;
 
-	if (cbdataReferenceValidDone(state->callback_data, &cbdata))
-	    state->callback(cbdata, entry);
+	if (cbdataValid(state->callback_data))
+	    state->callback(state->callback_data, entry);
+	cbdataUnlock(state->callback_data);
+	state->callback_data = NULL;
 
 	next = state->queue;
 	cbdataFree(state);
@@ -790,10 +795,12 @@ externalAclLookup(aclCheck_t * ch, void *acl_data, EAH * callback, void *callbac
 	return;
     }
     state = cbdataAlloc(externalAclState);
-    state->def = cbdataReference(def);
+    state->def = def;
+    cbdataLock(state->def);
     state->callback = callback;
-    state->callback_data = cbdataReference(callback_data);
+    state->callback_data = callback_data;
     state->key = xstrdup(key);
+    cbdataLock(state->callback_data);
     if (entry && !external_acl_entry_expired(def, entry)) {
 	if (entry->result == -1) {
 	    /* There is a pending lookup. Hook into it */
