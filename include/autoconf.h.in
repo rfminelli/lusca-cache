@@ -280,16 +280,6 @@
  */
 #undef HEAP_REPLACEMENT
 
-/*
- * Use DISKD
- */
-#undef USE_DISKD
-
-/*
- * message type for message queues
- */
-#undef mtyp_t
-
 /* The number of bytes in a int.  */
 #undef SIZEOF_INT
 
@@ -388,6 +378,9 @@
 
 /* Define if you have the seteuid function.  */
 #undef HAVE_SETEUID
+
+/* Define if you have the setgroups function.  */
+#undef HAVE_SETGROUPS
 
 /* Define if you have the setpgrp function.  */
 #undef HAVE_SETPGRP
@@ -562,9 +555,6 @@
 
 /* Define if you have the <sys/ioctl.h> header file.  */
 #undef HAVE_SYS_IOCTL_H
-
-/* Define if you have the <sys/msg.h> header file.  */
-#undef HAVE_SYS_MSG_H
 
 /* Define if you have the <sys/ndir.h> header file.  */
 #undef HAVE_SYS_NDIR_H

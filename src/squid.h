@@ -81,8 +81,6 @@
 
 #if PURIFY
 #define assert(EX) ((void)0)
-#elif defined(NODEBUG)
-#define assert(EX) ((void)0)
 #elif STDC_HEADERS
 #define assert(EX)  ((EX)?((void)0):xassert( # EX , __FILE__, __LINE__))
 #else
@@ -316,14 +314,11 @@ struct rusage {
 
 #if CBDATA_DEBUG
 #define cbdataAdd(a,b,c)	cbdataAddDbg(a,b,c,__FILE__,__LINE__)
-#define cbdataLock(a)		cbdataLockDbg(a,__FILE__,__LINE__)
-#define cbdataUnlock(a)		cbdataUnlockDbg(a,__FILE__,__LINE__)
 #endif
 
 #if USE_LEAKFINDER
 #define leakAdd(p) leakAddFL(p,__FILE__,__LINE__)
 #define leakTouch(p) leakTouchFL(p,__FILE__,__LINE__)
-#define leakFree(p) leakFreeFL(p,__FILE__,__LINE__)
 #else
 #define leakAdd(p) p
 #define leakTouch(p) p

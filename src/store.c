@@ -109,30 +109,12 @@ static int store_swap_high = 0;
 static int store_swap_low = 0;
 static Stack LateReleaseStack;
 
-#if URL_CHECKSUM_DEBUG
-unsigned int
-url_checksum(const char *url)
-{
-    unsigned int ck;
-    MD5_CTX M;
-    static unsigned char digest[16];
-    MD5Init(&M);
-    MD5Update(&M, (unsigned char *) url, strlen(url));
-    MD5Final(digest, &M);
-    xmemcpy(&ck, digest, sizeof(ck));
-    return ck;
-}
-#endif
-
 static MemObject *
 new_MemObject(const char *url, const char *log_url)
 {
     MemObject *mem = memAllocate(MEM_MEMOBJECT);
     mem->reply = httpReplyCreate();
     mem->url = xstrdup(url);
-#if URL_CHECKSUM_DEBUG
-    mem->chksum = url_checksum(mem->url);
-#endif
     mem->log_url = xstrdup(log_url);
     mem->object_sz = -1;
     mem->fd = -1;
@@ -159,9 +141,6 @@ destroy_MemObject(StoreEntry * e)
     MemObject *mem = e->mem_obj;
     const Ctx ctx = ctx_enter(mem->url);
     debug(20, 3) ("destroy_MemObject: destroying %p\n", mem);
-#if URL_CHECKSUM_DEBUG
-    assert(mem->chksum == url_checksum(mem->url));
-#endif
     e->mem_obj = NULL;
     if (!shutting_down)
 	assert(mem->swapout.sio == NULL);
@@ -1271,9 +1250,24 @@ storeTimestampsSet(StoreEntry * entry)
 {
     const HttpReply *reply = entry->mem_obj->reply;
     time_t served_date = reply->date;
+    int age = httpHeaderGetInt(&reply->header, HDR_AGE);
+    /*
+     * The timestamp calculations below tries to mimic the properties
+     * of the age calculation in RFC2616 section 13.2.3. The implementaion
+     * isn't complete, and the most notable exception from the RFC is that
+     * this does not account for response_delay, but it probably does
+     * not matter much as this is calculated immediately when the headers
+     * are received, not when the whole response has been received.
+     */
     /* make sure that 0 <= served_date <= squid_curtime */
     if (served_date < 0 || served_date > squid_curtime)
 	served_date = squid_curtime;
+    /*
+     * Compensate with Age header if origin server clock is ahead of us
+     * and there is a cache in between us and the origin server
+     */
+    if (age > squid_curtime - served_date)
+	served_date = squid_curtime - age;
     entry->expires = reply->expires;
     entry->lastmod = reply->last_modified;
     entry->timestamp = served_date;

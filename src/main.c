@@ -72,8 +72,6 @@ extern void log_trace_init(char *);
 static EVH SquidShutdown;
 static void mainSetCwd(void);
 
-static const char *squid_start_script = "squid_start";
-
 #if TEST_ACCESS
 #include "test_access.c"
 #endif
@@ -431,6 +429,10 @@ mainSetCwd(void)
 static void
 mainInitialize(void)
 {
+    /* chroot if configured to run inside chroot */
+    if (Config.chroot_dir && chroot(Config.chroot_dir)) {
+	fatal("failed to chroot");
+    }
     if (opt_catch_signals) {
 	squid_signal(SIGSEGV, death, SA_NODEFER | SA_RESETHAND);
 	squid_signal(SIGBUS, death, SA_NODEFER | SA_RESETHAND);
@@ -511,6 +513,8 @@ mainInitialize(void)
 	else
 	    debug(1, 1) ("ICP port disabled in httpd_accelerator mode\n");
     }
+    if (Config.chroot_dir)
+	no_suid();
     if (!configured_once)
 	writePidFile();		/* write PID file */
 
@@ -621,10 +625,18 @@ main(int argc, char **argv)
 
     /* send signal to running copy and exit */
     if (opt_send_signal != -1) {
+	/* chroot if configured to run inside chroot */
+	if (Config.chroot_dir && chroot(Config.chroot_dir)) {
+	    fatal("failed to chroot");
+	}
 	sendSignal();
 	/* NOTREACHED */
     }
     if (opt_create_swap_dirs) {
+	/* chroot if configured to run inside chroot */
+	if (Config.chroot_dir && chroot(Config.chroot_dir)) {
+	    fatal("failed to chroot");
+	}
 	setEffectiveUser();
 	debug(0, 0) ("Creating Swap Directories\n");
 	storeCreateSwapDirectories();
@@ -729,43 +741,6 @@ sendSignal(void)
     exit(0);
 }
 
-/*
- * This function is run when Squid is in daemon mode, just
- * before the parent forks and starts up the child process.
- * It can be used for admin-specific tasks, such as notifying
- * someone that Squid is (re)started.
- */
-static void
-mainStartScript(const char *prog)
-{
-    char script[SQUID_MAXPATHLEN];
-    char *t;
-    size_t sl = 0;
-    pid_t cpid;
-    pid_t rpid;
-    xstrncpy(script, prog, MAXPATHLEN);
-    if ((t = strrchr(script, '/'))) {
-	*(++t) = '\0';
-	sl = strlen(script);
-    }
-    xstrncpy(&script[sl], squid_start_script, MAXPATHLEN - sl);
-    if ((cpid = fork()) == 0) {
-	/* child */
-	execl(script, squid_start_script, 0);
-	_exit(0);
-    } else {
-	do {
-#ifdef _SQUID_NEXT_
-	    union wait status;
-	    rpid = wait3(&status, 0, NULL);
-#else
-	    int status;
-	    rpid = waitpid(-1, &status, 0);
-#endif
-	} while (rpid != cpid);
-    }
-}
-
 static void
 watch_child(char *argv[])
 {
@@ -798,7 +773,6 @@ watch_child(char *argv[])
     for (i = 0; i < Squid_MaxFD; i++)
 	close(i);
     for (;;) {
-	mainStartScript(argv[0]);
 	if ((pid = fork()) == 0) {
 	    /* child */
 	    prog = xstrdup(argv[0]);

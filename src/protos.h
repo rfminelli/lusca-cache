@@ -110,14 +110,12 @@ extern int GetInteger(void);
 extern void cbdataInit(void);
 #if CBDATA_DEBUG
 extern void cbdataAddDbg(const void *p, CBDUNL *, int, const char *, int);
-extern void cbdataLockDbg(const void *p, const char *, int);
-extern void cbdataUnlockDbg(const void *p, const char *, int);
 #else
 extern void cbdataAdd(const void *p, CBDUNL *, int);
-extern void cbdataLock(const void *p);
-extern void cbdataUnlock(const void *p);
 #endif
 extern void cbdataFree(void *p);
+extern void cbdataLock(const void *p);
+extern void cbdataUnlock(const void *p);
 extern int cbdataValid(const void *p);
 extern CBDUNL cbdataXfree;
 
@@ -727,8 +725,6 @@ extern int stat5minClientRequests(void);
 extern double stat5minCPUUsage(void);
 extern const char *storeEntryFlags(const StoreEntry *);
 extern double statRequestHitRatio(int minutes);
-extern double statRequestHitMemoryRatio(int minutes);
-extern double statRequestHitDiskRatio(int minutes);
 extern double statByteHitRatio(int minutes);
 
 
@@ -890,19 +886,6 @@ extern void storeAufsWrite(storeIOState *, char *, size_t, off_t, FREE *);
 extern void storeAufsUnlink(int fileno);
 #endif
 
-#if USE_DISKD
-/*
- * diskd.c
- */
-extern storeIOState *storeDiskdOpen(sfileno, mode_t, STIOCB *, void *);
-extern void storeDiskdClose(storeIOState * sio);
-extern void storeDiskdRead(storeIOState *, char *, size_t, off_t, STRCB *, void *);
-extern void storeDiskdWrite(storeIOState *, char *, size_t, off_t, FREE *);
-extern void storeDiskdUnlink(int fileno);
-extern STINIT storeDiskdInit;
-extern void storeDiskdReadQueue(void);
-#endif
-
 /*
  * store_log.c
  */
@@ -974,12 +957,8 @@ extern void storeUfsDirParse(cacheSwap * swap);
 extern void storeUfsDirDump(StoreEntry * entry, const char *name, SwapDir * s);
 extern void storeUfsDirFree(SwapDir *);
 extern char *storeUfsFullPath(sfileno fn, char *fullpath);
-extern STINIT storeUfsDirInit;
 #if USE_ASYNC_IO
 extern void storeAufsDirParse(cacheSwap * swap);
-#endif
-#if USE_DISKD
-extern void storeDiskdDirParse(cacheSwap *);
 #endif
 
 
@@ -1221,7 +1200,7 @@ extern void helperFree(helper *);
 extern void leakInit(void);
 extern void *leakAddFL(void *, const char *, int);
 extern void *leakTouchFL(void *, const char *, int);
-extern void *leakFreeFL(void *, const char *, int);
+extern void *leakFree(void *);
 #endif
 
 /*
@@ -1232,8 +1211,4 @@ extern void *leakFreeFL(void *, const char *, int);
 extern int getrusage(int, struct rusage *);
 extern int getpagesize(void);
 extern int gethostname(char *, int);
-#endif
-
-#if URL_CHECKSUM_DEBUG
-extern unsigned int url_checksum(const char *url);
 #endif

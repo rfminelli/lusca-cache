@@ -603,9 +603,8 @@ xstrerror(void)
 {
     static char xstrerror_buf[BUFSIZ];
     if (errno < 0 || errno >= sys_nerr)
-	snprintf(xstrerror_buf, BUFSIZ, "(%d) Unknown", errno);
-    else
-        snprintf(xstrerror_buf, BUFSIZ, "(%d) %s", errno, strerror(errno));
+	return ("Unknown");
+    snprintf(xstrerror_buf, BUFSIZ, "(%d) %s", errno, strerror(errno));
     return xstrerror_buf;
 }
 

@@ -357,10 +357,11 @@ peerGetSomeNeighbor(ps_state * ps)
 static void
 peerGetSomeNeighborReplies(ps_state * ps)
 {
+    StoreEntry *entry = ps->entry;
     request_t *request = ps->request;
     peer *p = NULL;
     hier_code code = HIER_NONE;
-    assert(ps->entry->ping_status == PING_WAITING);
+    assert(entry->ping_status == PING_WAITING);
     assert(ps->direct != DIRECT_YES);
     if (peerCheckNetdbDirect(ps)) {
 	code = CLOSEST_DIRECT;

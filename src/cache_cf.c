@@ -742,8 +742,8 @@ parse_http_header(HttpHeaderMask * header)
     }
     while ((t = strtok(NULL, w_space))) {
 	if ((id = httpHeaderIdByNameDef(t, strlen(t))) == -1)
-	    id = HDR_OTHER;
-	if (allowed)
+	    debug(3, 0) ("parse_http_header: Ignoring unknown header '%s'\n", t);
+	else if (allowed)
 	    CBIT_CLR(*header, id);
 	else
 	    CBIT_SET(*header, id);
@@ -816,10 +816,6 @@ parse_cachedir(cacheSwap * swap)
 #if USE_ASYNC_IO
     } else if (0 == strcasecmp(type_str, "asyncufs")) {
 	storeAufsDirParse(swap);
-#endif
-#if USE_DISKD
-    } else if (0 == strcasecmp(type_str, "diskd")) {
-	storeDiskdDirParse(swap);
 #endif
     } else {
 	fatalf("Unknown cache_dir type '%s'\n", type_str);
@@ -1274,7 +1270,6 @@ parse_onoff(int *var)
 }
 
 #define free_onoff free_int
-#define free_httpanonymizer free_int
 #define dump_eol dump_string
 #define free_eol free_string
 

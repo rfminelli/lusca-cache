@@ -44,6 +44,8 @@ storeAufsOpen(sfileno f, mode_t mode, STIOCB * callback, void *callback_data)
      * we should detect some 'too many files open' condition and return
      * NULL here.
      */
+    while (aioQueueSize() > MAGIC1)
+	return NULL;
     sio = memAllocate(MEM_STORE_IO);
     cbdataAdd(sio, memFree, MEM_STORE_IO);
     sio->type.aufs.fd = -1;

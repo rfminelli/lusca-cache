@@ -476,12 +476,13 @@ struct _SquidConfig {
 #endif
     HttpHeaderMask anonymize_headers;
     char *coredump_dir;
+    char *chroot_dir;
 #if USE_CACHE_DIGESTS
     struct {
 	int bits_per_entry;
-	int rebuild_period;
-	int rewrite_period;
-	int swapout_chunk_size;
+	time_t rebuild_period;
+	time_t rewrite_period;
+	size_t swapout_chunk_size;
 	int rebuild_chunk_percentage;
     } digest;
 #endif
@@ -1276,9 +1277,6 @@ struct _MemObject {
     int id;
     ssize_t object_sz;
     size_t swap_hdr_sz;
-#if URL_CHECKSUM_DEBUG
-    unsigned int chksum;
-#endif
 };
 
 struct _StoreEntry {
@@ -1343,22 +1341,6 @@ struct _SwapDir {
 	    int l2;
 	    int swaplog_fd;
 	} ufs;
-#if USE_DISKD
-	struct {
-	    int l1;
-	    int l2;
-	    int swaplog_fd;
-	    int smsgid;
-	    int rmsgid;
-	    int wfd;
-	    int away;
-	    struct {
-		char *buf;
-		link_list *stack;
-		int id;
-	    } shm;
-	} diskd;
-#endif
     } u;
 };
 
@@ -1423,16 +1405,6 @@ struct _storeIOState {
 	    link_list *pending_writes;
 	    link_list *pending_reads;
 	} aufs;
-#if USE_DISKD
-	struct {
-	    int id;
-	    struct {
-		unsigned int reading:1;
-		unsigned int writing:1;
-	    } flags;
-	    char *read_buf;
-	} diskd;
-#endif
     } type;
 };
 
@@ -1549,8 +1521,6 @@ struct _StatCounters {
 	int clients;
 	int requests;
 	int hits;
-	int mem_hits;
-	int disk_hits;
 	int errors;
 	kb_t kbytes_in;
 	kb_t kbytes_out;
