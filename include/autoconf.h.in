@@ -127,6 +127,9 @@
 /* Define if you have the mktime function.  */
 #undef HAVE_MKTIME
 
+/* Define if you have the mstats function.  */
+#undef HAVE_MSTATS
+
 /* Define if you have the poll function.  */
 #undef HAVE_POLL
 
@@ -193,9 +196,6 @@
 /* Define if you have the <arpa/nameser.h> header file.  */
 #undef HAVE_ARPA_NAMESER_H
 
-/* Define if you have the <assert.h> header file.  */
-#undef HAVE_ASSERT_H
-
 /* Define if you have the <bstring.h> header file.  */
 #undef HAVE_BSTRING_H
 
@@ -219,6 +219,9 @@
 
 /* Define if you have the <getopt.h> header file.  */
 #undef HAVE_GETOPT_H
+
+/* Define if you have the <gnumalloc.h> header file.  */
+#undef HAVE_GNUMALLOC_H
 
 /* Define if you have the <grp.h> header file.  */
 #undef HAVE_GRP_H

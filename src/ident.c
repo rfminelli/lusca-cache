@@ -32,111 +32,109 @@
 
 #define IDENT_PORT 113
 
-static CWCB identRequestComplete;
-static PF identReadReply;
-static PF identClose;
-static CNCB identConnectDone;
-static void identCallback _PARAMS((ConnStateData * connState));
+static void identRequestComplete _PARAMS((int, char *, int, int, void *));
+static void identReadReply _PARAMS((int, icpStateData *));
+static void identClose _PARAMS((int, icpStateData *));
+static void identConnectDone _PARAMS((int fd, int status, void *data));
+static void identCallback _PARAMS((icpStateData * icpState));
 
 static void
-identClose(int fd, void *data)
+identClose(int fd, icpStateData * icpState)
 {
-    ConnStateData *connState = data;
-    connState->ident.fd = -1;
+    icpState->ident.fd = -1;
 }
 
 /* start a TCP connection to the peer host on port 113 */
 void
-identStart(int fd, ConnStateData * connState, IDCB * callback)
+identStart(int fd, icpStateData * icpState, void (*callback) _PARAMS((void *)))
 {
-    connState->ident.callback = callback;
-    connState->ident.state = IDENT_PENDING;
+    icpState->ident.callback = callback;
+    icpState->ident.state = IDENT_PENDING;
     if (fd < 0) {
 	fd = comm_open(SOCK_STREAM,
 	    0,
-	    connState->me.sin_addr,
+	    icpState->me.sin_addr,
 	    0,
 	    COMM_NONBLOCKING,
 	    "ident");
 	if (fd == COMM_ERROR) {
-	    identCallback(connState);
+	    identCallback(icpState);
 	    return;
 	}
     }
-    connState->ident.fd = fd;
+    icpState->ident.fd = fd;
     comm_add_close_handler(fd,
-	identClose,
-	connState);
+	(PF) identClose,
+	(void *) icpState);
     commConnectStart(fd,
-	inet_ntoa(connState->peer.sin_addr),
+	inet_ntoa(icpState->peer.sin_addr),
 	IDENT_PORT,
 	identConnectDone,
-	connState);
+	icpState);
 }
 
 static void
 identConnectDone(int fd, int status, void *data)
 {
-    ConnStateData *connState = data;
+    icpStateData *icpState = data;
     LOCAL_ARRAY(char, reqbuf, BUFSIZ);
     if (status == COMM_ERROR) {
 	comm_close(fd);
-	identCallback(connState);
+	identCallback(icpState);
 	return;
     }
     sprintf(reqbuf, "%d, %d\r\n",
-	ntohs(connState->peer.sin_port),
-	ntohs(connState->me.sin_port));
+	ntohs(icpState->peer.sin_port),
+	ntohs(icpState->me.sin_port));
     comm_write(fd,
 	reqbuf,
 	strlen(reqbuf),
+	5,			/* timeout */
 	identRequestComplete,
-	connState,
+	(void *) icpState,
 	NULL);
     commSetSelect(fd,
 	COMM_SELECT_READ,
-	identReadReply,
-	connState, 0);
+	(PF) identReadReply,
+	(void *) icpState, 0);
 }
 
 static void
 identRequestComplete(int fd, char *buf, int size, int errflag, void *data)
 {
-    debug(30, 5) ("identRequestComplete: FD %d: wrote %d bytes\n", fd, size);
+    debug(30, 5, "identRequestComplete: FD %d: wrote %d bytes\n", fd, size);
 }
 
 static void
-identReadReply(int fd, void *data)
+identReadReply(int fd, icpStateData * icpState)
 {
-    ConnStateData *connState = data;
     LOCAL_ARRAY(char, buf, BUFSIZ);
     char *t = NULL;
     int len = -1;
 
     buf[0] = '\0';
     len = read(fd, buf, BUFSIZ);
-    fd_bytes(fd, len, FD_READ);
     if (len > 0) {
 	if ((t = strchr(buf, '\r')))
 	    *t = '\0';
 	if ((t = strchr(buf, '\n')))
 	    *t = '\0';
-	debug(30, 5) ("identReadReply: FD %d: Read '%s'\n", fd, buf);
+	debug(30, 5, "identReadReply: FD %d: Read '%s'\n", fd, buf);
 	if (strstr(buf, "USERID")) {
 	    if ((t = strrchr(buf, ':'))) {
 		while (isspace(*++t));
-		xstrncpy(connState->ident.ident, t, ICP_IDENT_SZ);
+		xstrncpy(icpState->ident.ident, t, ICP_IDENT_SZ);
 	    }
 	}
     }
     comm_close(fd);
-    identCallback(connState);
+    identCallback(icpState);
 }
 
 static void
-identCallback(ConnStateData * connState)
+identCallback(icpStateData * icpState)
 {
-    connState->ident.state = IDENT_DONE;
-    if (connState->ident.callback)
-	connState->ident.callback(connState);
+    icpState->ident.state = IDENT_DONE;
+    if (icpState->ident.callback)
+	icpState->ident.callback(icpState);
 }

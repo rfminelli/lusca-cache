@@ -114,31 +114,22 @@ struct _acl_access {
 
 typedef enum {
     ACL_LOOKUP_NONE,
-    ACL_LOOKUP_NEEDED,
+    ACL_LOOKUP_NEED,
     ACL_LOOKUP_PENDING,
     ACL_LOOKUP_DONE
 } acl_lookup_state;
 
 struct _aclCheck_t {
-    const struct _acl_access *access_list;
     struct in_addr src_addr;
     struct in_addr dst_addr;
+    char src_fqdn[SQUIDHOSTNAMELEN];
     request_t *request;
     char ident[ICP_IDENT_SZ];
     char browser[BROWSERNAMELEN];
     acl_lookup_state state[ACL_ENUM_MAX];
-    PF *callback;
-    void *callback_data;
 };
 
-extern aclCheck_t *aclChecklistCreate _PARAMS((const struct _acl_access *,
-	request_t *,
-	struct in_addr src,
-	char *ua,
-	char *id));
-extern void aclNBCheck _PARAMS((aclCheck_t *, PF *, void *));
-extern int aclCheckFast _PARAMS((const struct _acl_access * A, aclCheck_t *));
-extern void aclChecklistFree _PARAMS((aclCheck_t *));
+extern int aclCheck _PARAMS((const struct _acl_access *, aclCheck_t *));
 extern int aclMatchAcl _PARAMS((struct _acl *, aclCheck_t *));
 extern void aclDestroyAccessList _PARAMS((struct _acl_access ** list));
 extern void aclDestroyAcls _PARAMS((void));
@@ -150,6 +141,7 @@ extern void aclParseDenyInfoLine _PARAMS((struct _acl_deny_info_list **));
 extern void aclDestroyDenyInfoList _PARAMS((struct _acl_deny_info_list **));
 extern void aclDestroyRegexList _PARAMS((struct _relist * data));
 extern int aclMatchRegex _PARAMS((relist * data, const char *word));
+
 extern void aclParseRegexList _PARAMS((void *curlist, int icase));
 
 extern struct _acl_access *HTTPAccessList;
@@ -157,3 +149,7 @@ extern struct _acl_access *MISSAccessList;
 extern struct _acl_access *ICPAccessList;
 extern struct _acl_deny_info_list *DenyInfoList;
 extern const char *AclMatchedName;
+
+#if DELAY_HACK
+extern struct _acl_access *DelayAccessList;
+#endif

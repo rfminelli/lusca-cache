@@ -112,35 +112,80 @@
 #define DISK_FILE_NOT_FOUND      (-5)
 #define DISK_NO_SPACE_LEFT       (-6)
 
+typedef int (*FILE_READ_HD) (int fd, char *buf, int size, int errflag,
+    void *data);
+typedef void (*FILE_WRITE_HD) (int, int, StoreEntry *);
+typedef int (*FILE_WALK_HD) (int fd, int errflag, void *data);
+typedef int (*FILE_WALK_LHD) (int fd, char *buf, int size, void *line_data);
+
+typedef struct _dwrite_q {
+    char *buf;
+    int len;
+    int cur_offset;
+    struct _dwrite_q *next;
+    void (*free) (void *);
+} dwrite_q;
+
 typedef struct _dread_ctrl {
     int fd;
     off_t offset;
     int req_len;
     char *buf;
+    int cur_len;
     int end_of_file;
-    DRCB *handler;
+    FILE_READ_HD handler;
     void *client_data;
 } dread_ctrl;
 
-typedef void FOCB _PARAMS((void *, int fd));
+typedef struct _FileEntry {
+    char filename[SQUID_MAXPATHLEN];
+    enum {
+	NO, YES
+    } at_eof;
+    enum {
+	FILE_NOT_OPEN, FILE_OPEN
+    } open_stat;
+    enum {
+	NOT_REQUEST, REQUEST
+    } close_request;
+    enum {
+	NOT_PRESENT, PRESENT
+    } write_daemon;
+    enum {
+	NO_WRT_PENDING, WRT_PENDING
+    } write_pending;
+    FILE_WRITE_HD wrt_handle;
+    void *wrt_handle_data;
+    dwrite_q *write_q;
+    dwrite_q *write_q_tail;
+} FileEntry;
 
-extern int file_open _PARAMS((const char *path, int mode, FOCB *, void *callback_data));
-extern void file_must_close _PARAMS((int fd));
-extern void file_close _PARAMS((int fd));
+extern FileEntry *file_table;
+
+extern int file_open _PARAMS((const char *path, int (*handler) _PARAMS((void)), int mode));
+extern int file_close _PARAMS((int fd));
 extern int file_write _PARAMS((int fd,
 	char *buf,
 	int len,
-	DWCB * handle,
+	FILE_WRITE_HD handle,
 	void *handle_data,
-	FREE *));
+	void       (*free) _PARAMS((void *))));
 extern int file_read _PARAMS((int fd,
 	char *buf,
 	int req_len,
 	int offset,
-	DRCB * handler,
+	FILE_READ_HD handler,
 	void *client_data));
-extern int file_walk _PARAMS((int fd, FILE_WALK_HD *, void *, FILE_WALK_LHD *, void *));
+extern int file_walk _PARAMS((int fd,
+	int       (*handler) _PARAMS((int fd, int errflag, void *data)),
+	void *client_data,
+	int       (*line_handler) _PARAMS((int fd, char *buf, int size, void *line_data)),
+	void *line_data));
 extern int disk_init _PARAMS((void));
 extern int diskWriteIsComplete _PARAMS((int));
+extern void diskFreeMemory _PARAMS((void));
+extern void file_open_fd _PARAMS((int fd, const char *name, File_Desc_Type type));
+extern char *diskFileName _PARAMS((int fd));
+
 
 #endif /* DISK_H */

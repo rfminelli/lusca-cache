@@ -48,7 +48,6 @@ static void netdbPurgeLRU _PARAMS((void));
 static net_db_peer *netdbPeerByName _PARAMS((const netdbEntry * n, const char *));
 static net_db_peer *netdbPeerAdd _PARAMS((netdbEntry * n, peer * e));
 static char *netdbPeerName _PARAMS((const char *name));
-static IPH netdbSendPing;
 
 /* We have to keep a local list of peer names.  The Peers structure
  * gets freed during a reconfigure.  We want this database to
@@ -56,6 +55,7 @@ static IPH netdbSendPing;
  * linked list */
 static wordlist *peer_names = NULL;
 static wordlist **peer_names_tail = &peer_names;
+static const char *const w_space = " \t\n\r";
 
 static void
 netdbHashInsert(netdbEntry * n, struct in_addr addr)
@@ -175,7 +175,7 @@ netdbPurgeLRU(void)
     qsort((char *) list,
 	list_count,
 	sizeof(netdbEntry *),
-	(QS *) netdbLRU);
+	(QS) netdbLRU);
     for (k = 0; k < list_count; k++) {
 	if (meta_data.netdb_addrs < Config.Netdb.low)
 	    break;
@@ -219,7 +219,7 @@ netdbSendPing(int fdunused, const ipcache_addrs * ia, void *data)
     addr = ia->in_addrs[ia->cur];
     if ((n = netdbLookupHost(hostname)) == NULL)
 	n = netdbAdd(addr, hostname);
-    debug(37, 3) ("netdbSendPing: pinging %s\n", hostname);
+    debug(37, 3, "netdbSendPing: pinging %s\n", hostname);
     icmpDomainPing(addr, hostname);
     n->pings_sent++;
     n->next_ping_time = squid_curtime + Config.Netdb.period;
@@ -284,7 +284,7 @@ netdbPeerAdd(netdbEntry * n, peer * e)
 	    n->n_peers_alloc = 2;
 	else
 	    n->n_peers_alloc <<= 1;
-	debug(37, 3) ("netdbPeerAdd: Growing peer list for '%s' to %d\n",
+	debug(37, 3, "netdbPeerAdd: Growing peer list for '%s' to %d\n",
 	    n->network, n->n_peers_alloc);
 	n->peers = xcalloc(n->n_peers_alloc, sizeof(net_db_peer));
 	meta_data.netdb_peers += n->n_peers_alloc;
@@ -322,10 +322,10 @@ netdbSaveState(void *foo)
     net_db_name *x;
     struct timeval start = current_time;
     int count = 0;
-    sprintf(path, "%s/netdb_state", storeSwapDir(0));
+    sprintf(path, "%s/netdb_state", swappath(0));
     fp = fopen(path, "w");
     if (fp == NULL) {
-	debug(50, 1) ("netdbSaveState: %s: %s\n", path, xstrerror());
+	debug(50, 1, "netdbSaveState: %s: %s\n", path, xstrerror());
 	return;
     }
     next = (netdbEntry *) hash_first(addr_table);
@@ -347,7 +347,8 @@ netdbSaveState(void *foo)
 	count++;
     }
     fclose(fp);
-    debug(37, 0) ("NETDB state saved; %d entries, %d msec\n",
+    getCurrentTime();
+    debug(37, 0, "NETDB state saved; %d entries, %d msec\n",
 	count, tvSubMsec(start, current_time));
     eventAdd("netdbSaveState", netdbSaveState, NULL, 3617);
 }
@@ -364,7 +365,7 @@ netdbReloadState(void)
     struct in_addr addr;
     int count = 0;
     struct timeval start = current_time;
-    sprintf(path, "%s/netdb_state", storeSwapDir(0));
+    sprintf(path, "%s/netdb_state", swappath(0));
     fp = fopen(path, "r");
     if (fp == NULL)
 	return;
@@ -398,7 +399,7 @@ netdbReloadState(void)
 	    continue;
 	N.last_use_time = (time_t) atoi(t);
 	n = xcalloc(1, sizeof(netdbEntry));
-	xmemcpy(n, &N, sizeof(netdbEntry));
+	memcpy(n, &N, sizeof(netdbEntry));
 	netdbHashInsert(n, addr);
 	while ((t = strtok(NULL, w_space)) != NULL)
 	    netdbHashLink(n, t);
@@ -406,7 +407,8 @@ netdbReloadState(void)
     }
     put_free_4k_page(buf);
     fclose(fp);
-    debug(37, 0) ("NETDB state reloaded; %d entries, %d msec\n",
+    getCurrentTime();
+    debug(37, 0, "NETDB state reloaded; %d entries, %d msec\n",
 	count, tvSubMsec(start, current_time));
 }
 
@@ -465,7 +467,7 @@ netdbHandlePingReply(const struct sockaddr_in *from, int hops, int rtt)
 #if USE_ICMP
     netdbEntry *n;
     int N;
-    debug(37, 3) ("netdbHandlePingReply: from %s\n", inet_ntoa(from->sin_addr));
+    debug(37, 3, "netdbHandlePingReply: from %s\n", inet_ntoa(from->sin_addr));
     if ((n = netdbLookupAddr(from->sin_addr)) == NULL)
 	return;
     N = ++n->pings_recv;
@@ -473,7 +475,7 @@ netdbHandlePingReply(const struct sockaddr_in *from, int hops, int rtt)
 	N = 5;
     n->hops = ((n->hops * (N - 1)) + hops) / N;
     n->rtt = ((n->rtt * (N - 1)) + rtt) / N;
-    debug(37, 3) ("netdbHandlePingReply: %s; rtt=%5.1f  hops=%4.1f\n",
+    debug(37, 3, "netdbHandlePingReply: %s; rtt=%5.1f  hops=%4.1f\n",
 	n->network,
 	n->rtt,
 	n->hops);
@@ -566,12 +568,12 @@ netdbDump(StoreEntry * sentry)
     for (n = netdbGetFirst(addr_table); n; n = netdbGetNext(addr_table))
 	*(list + i++) = n;
     if (i != meta_data.netdb_addrs)
-	debug(37, 0) ("WARNING: netdb_addrs count off, found %d, expected %d\n",
+	debug(37, 0, "WARNING: netdb_addrs count off, found %d, expected %d\n",
 	    i, meta_data.netdb_addrs);
     qsort((char *) list,
 	i,
 	sizeof(netdbEntry *),
-	(QS *) sortByRtt);
+	(QS) sortByRtt);
     for (k = 0; k < i; k++) {
 	n = *(list + k);
 	storeAppendPrintf(sentry, "{%-16.16s %4d/%4d %7.1f %5.1f",	/* } */
@@ -630,10 +632,10 @@ netdbUpdatePeer(request_t * r, peer * e, int irtt, int ihops)
     double rtt = (double) irtt;
     double hops = (double) ihops;
     net_db_peer *p;
-    debug(37, 3) ("netdbUpdatePeer: '%s', %d hops, %d rtt\n", r->host, ihops, irtt);
+    debug(37, 3, "netdbUpdatePeer: '%s', %d hops, %d rtt\n", r->host, ihops, irtt);
     n = netdbLookupHost(r->host);
     if (n == NULL) {
-	debug(37, 3) ("netdbUpdatePeer: host '%s' not found\n", r->host);
+	debug(37, 3, "netdbUpdatePeer: host '%s' not found\n", r->host);
 	return;
     }
     if ((p = netdbPeerByName(n, e->host)) == NULL)
@@ -646,6 +648,6 @@ netdbUpdatePeer(request_t * r, peer * e, int irtt, int ihops)
     qsort((char *) n->peers,
 	n->n_peers,
 	sizeof(net_db_peer),
-	(QS *) sortPeerByRtt);
+	(QS) sortPeerByRtt);
 #endif
 }

@@ -34,5 +34,5 @@ install:
 
 clean:
 
-distclean:
+realclean:
 	-rm -f RunCache RunAccel Makefile

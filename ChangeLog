@@ -1,63 +1,32 @@
-Changes to squid-1.2.alpha4 ():
+Changes to squid-1.1.11 (June 14, 1997):
 
-	- New MIME configuration, regular expression based
-	- Added request_timeout config option
-	- Multiple HTTP sockets (Lincoln Dale).
-	- Moved 'fds_are_n_free' check to httpAccept().
-	- s/USE_POLL/HAVE_POLL/; make poll() default if available.
-	- Changed storeRegister to use offsets and make immediate
-	  callbacks if appropriate.
-	- Removed icpDetectClientClose().  Some of that functionality
-	  goes into clientReadRequest() and the rest into
-	  httpRequestFree().
-	- Moved IP lookups to commConnect stuff.
-	- Added support for retrying connect().
-	- New inline debug() macro (David Luyer).
-	- Replace frequent gettimeofday() calls with alarm(3) based
-	  clock.  Need to add more gettimeofday() calls to get back
-	  high-resolution timestamp logging.
-
-Changes to squid-1.2.alpha3 ():
-
-	- Implemented persistent connections between clients and squid.
-	- Moved various FD tables (comm.c, fdstat.c, disk.c) to a single
-	  table in fd.c.
-	- Removed use of FD as an identifier in certain callback
-	  operations (ipcache, fqdncache).
-	- General code cleanup.
-	- Fixed typedefs for callback functions.
-	- Removed FD lifetime/timeout dichotomy.  Now we only have
-	  timeouts, however the lifetime concept/keyword may still
-	  linger in certain places.
-	- Change Makefile 'realclean' target to 'distclean'
-	- Changed config file parsing of time specifications to use
-	  parseTimeLine().
-	- Removed storetoString.c
-
-Changes to squid-1.2.alpha2 ():
-
-	- Merged squid-1.1.9, squid-1.1.10 changes
-
-Changes to squid-1.2.alpha1 ():
-
-	- Unified peer selection algorithm.
-	- aiops.c and aiops.h are a threaded implementation of
-	  asynchronous file operations (Stewart Forster).
-	- async_io.c and async_io.h are complete rewrites of the old
-	  versions (Stewart Forster).
-	- Rewrote all disk file operations of squid to support
-	  the idea of callbacks except where not required (Stewart
-	  Forster).
-	- Background validation of 'tainted' swap log entries (Stewart
-	  Forster).
-	- Modified storeWriteCleanLog to create the log file using the
-	  open/write rather than fopen/printf (Stewart Forster).
-	- Added the EINTR error response to handle badly interrupted
-	  system calls (Stewart Forster).
-	- UDP_HIT_OBJ not supported, removed.
-	- Different sized 'cache_dirs' supported.
-
-==============================================================================
+	- Clean up NeXTStep compiler warnings (Karsten Heinze, Ed Knowles).
+	- Don't forward 'Proxy-Authorization' headers (Chris Pascoe).
+	- Fixed up Host: header parsing (Henrik Nordstrom).
+	- Changed DefaultObjectsPerBucket to 20 in cache_cf.c.
+	- Fixed parsePathname() bug for magic word "none".
+	- Fixed ipcache_release to rename entries which get stuck with locks.
+	- Fixed "eventDelete(peerCheckConnect, e);" bug when the DNS lookup
+	  is pending.
+	- Add sys/types.h to lib/safe_inet_addr.c for NeXTSTEP (Timo
+	  Hennerich).
+	- Fixed cur_len decrement bug in diskHandleRead()
+	  (Michael O'Reilly).
+	- Added contrib/rredir.pl from Peter Eisenhauer.
+	- Always forward requests with 'Request-Range' headers (Ron Gomes).
+	- Fixed StoreEntry client offset bug which could trigger a
+	  fatal_dump().
+	- Fixed noticing that dnsservers have shut down during restart.
+	- Added contrib/nextstep installer package from Gerben Wierda.
+	- Modified storeDirClean() to remove swap files where the
+	  number is being used, but the file is in the wrong directory.
+	- Allow PURGE method on all protocols.
+	- Added 'icp_hit_stale' option.
+	- Fixed proxy auth refresh bug (Chris Pascoe).
+	- Don't check for other filename extensions if an FTP URL
+	  ends with .txt (Ed Knowles).
+	- Relocated ERR_NO_CLIENT_BIG_OBJ check to eliminate incorrect
+	  (but harmless) error message.
 
 Changes to squid-1.1.10 (April 24, 1997):
 

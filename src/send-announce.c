@@ -31,7 +31,8 @@
 
 #include "squid.h"
 
-static IPH send_announce;
+static void
+send_announce _PARAMS((int fd, const ipcache_addrs * ia, void *data));
 
 void
 start_announce(void *unused)
@@ -54,16 +55,16 @@ send_announce(int fd, const ipcache_addrs * ia, void *data)
     int l;
     int n;
     if (ia == NULL) {
-	debug(27, 1) ("send_announce: Unknown host '%s'\n", host);
+	debug(27, 1, "send_announce: Unknown host '%s'\n", host);
 	return;
     }
-    debug(27, 0) ("Sending Announcement to %s\n", host);
+    debug(27, 0, "Sending Announcement to %s\n", host);
     sndbuf[0] = '\0';
     sprintf(tbuf, "cache_version SQUID/%s\n", version_string);
     strcat(sndbuf, tbuf);
     sprintf(tbuf, "Running on %s %d %d\n",
 	getMyHostname(),
-	Config.Port.http[0],
+	Config.Port.http,
 	Config.Port.icp);
     strcat(sndbuf, tbuf);
     if (Config.adminEmail) {
@@ -76,14 +77,13 @@ send_announce(int fd, const ipcache_addrs * ia, void *data)
     strcat(sndbuf, tbuf);
     l = strlen(sndbuf);
     if ((file = Config.Announce.file)) {
-	fd = file_open(file, O_RDONLY, NULL, NULL);
+	fd = file_open(file, NULL, O_RDONLY);
 	if (fd > -1 && (n = read(fd, sndbuf + l, BUFSIZ - l - 1)) > 0) {
-	    fd_bytes(fd, n, FD_READ);
 	    l += n;
 	    sndbuf[l] = '\0';
 	    file_close(fd);
 	} else {
-	    debug(50, 1) ("send_announce: %s: %s\n", file, xstrerror());
+	    debug(50, 1, "send_announce: %s: %s\n", file, xstrerror());
 	}
     }
     qdata = xcalloc(1, sizeof(icpUdpData));
@@ -95,6 +95,6 @@ send_announce(int fd, const ipcache_addrs * ia, void *data)
     AppendUdp(qdata);
     commSetSelect(theOutIcpConnection,
 	COMM_SELECT_WRITE,
-	icpUdpReply,
-	qdata, 0);
+	(PF) icpUdpReply,
+	(void *) qdata, 0);
 }

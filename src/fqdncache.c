@@ -113,7 +113,8 @@
 #define FQDN_HIGH_WATER      95
 
 struct _fqdn_pending {
-    FQDNH *handler;
+    int fd;
+    FQDNH handler;
     void *handlerData;
     struct _fqdn_pending *next;
 };
@@ -148,9 +149,9 @@ static void fqdncache_call_pending _PARAMS((fqdncache_entry *));
 static void fqdncacheAddHostent _PARAMS((fqdncache_entry *, const struct hostent *));
 static int fqdncacheHasPending _PARAMS((const fqdncache_entry *));
 static fqdncache_entry *fqdncache_get _PARAMS((const char *));
-static FQDNH dummy_handler;
+static void dummy_handler _PARAMS((int, const char *, void *));
 static int fqdncacheExpiredEntry _PARAMS((const fqdncache_entry *));
-static void fqdncacheAddPending _PARAMS((fqdncache_entry *, FQDNH *, void *));
+static void fqdncacheAddPending _PARAMS((fqdncache_entry *, int fd, FQDNH, void *));
 static void fqdncacheEnqueue _PARAMS((fqdncache_entry *));
 static void *fqdncacheDequeue _PARAMS((void));
 static void fqdncache_dnsDispatch _PARAMS((dnsserver_t *, fqdncache_entry *));
@@ -172,6 +173,7 @@ static char fqdncache_status_char[] =
 
 static long fqdncache_low = 180;
 static long fqdncache_high = 200;
+static const char *const w_space = " \t\n\r";
 
 static void
 fqdncacheEnqueue(fqdncache_entry * f)
@@ -208,30 +210,28 @@ fqdncache_release(fqdncache_entry * f)
     int k;
 
     if ((table_entry = hash_lookup(fqdn_table, f->name)) == NULL) {
-	debug(35, 0) ("fqdncache_release: Could not find key '%s'\n", f->name);
+	debug(35, 0, "fqdncache_release: Could not find key '%s'\n", f->name);
 	return;
     }
     if (f != (fqdncache_entry *) table_entry)
 	fatal_dump("fqdncache_release: f != table_entry!");
     if (f->status == FQDN_PENDING) {
-	debug(35, 1) ("fqdncache_release: Someone called on a PENDING entry\n");
+	debug(35, 1, "fqdncache_release: Someone called on a PENDING entry\n");
 	return;
     }
     if (f->status == FQDN_DISPATCHED) {
-	debug(35, 1) ("fqdncache_release: Someone called on a DISPATCHED entry\n");
+	debug(35, 1, "fqdncache_release: Someone called on a DISPATCHED entry\n");
 	return;
     }
-    if (f->pending_head)
-	fatal_dump("fqdncache_release: still have pending clients");
     if (hash_remove_link(fqdn_table, table_entry)) {
-	debug(35, 0) ("fqdncache_release: hash_remove_link() failed for '%s'\n",
+	debug(35, 0, "fqdncache_release: hash_remove_link() failed for '%s'\n",
 	    f->name);
 	return;
     }
     if (f->status == FQDN_CACHED) {
 	for (k = 0; k < (int) f->name_count; k++)
 	    safe_free(f->names[k]);
-	debug(35, 5) ("fqdncache_release: Released FQDN record for '%s'.\n",
+	debug(35, 5, "fqdncache_release: Released FQDN record for '%s'.\n",
 	    f->name);
     }
     safe_free(f->name);
@@ -320,7 +320,7 @@ fqdncache_purgelru(void)
 	if (LRU_list_count >= LRU_cur_size) {
 	    /* have to realloc  */
 	    LRU_cur_size += 16;
-	    debug(35, 3) ("fqdncache_purgelru: Have to grow LRU_list to %d. This shouldn't happen.\n",
+	    debug(35, 3, "fqdncache_purgelru: Have to grow LRU_list to %d. This shouldn't happen.\n",
 		LRU_cur_size);
 	    LRU_list = xrealloc((char *) LRU_list,
 		LRU_cur_size * sizeof(fqdncache_entry *));
@@ -333,18 +333,18 @@ fqdncache_purgelru(void)
 	LRU_list[LRU_list_count++] = f;
     }
 
-    debug(35, 3) ("fqdncache_purgelru: fqdncache_count: %5d\n", meta_data.fqdncache_count);
-    debug(35, 3) ("                  actual count : %5d\n", local_fqdn_count);
-    debug(35, 3) ("                   high W mark : %5d\n", fqdncache_high);
-    debug(35, 3) ("                   low  W mark : %5d\n", fqdncache_low);
-    debug(35, 3) ("                   not pending : %5d\n", local_fqdn_notpending_count);
-    debug(35, 3) ("                LRU candidates : %5d\n", LRU_list_count);
+    debug(35, 3, "fqdncache_purgelru: fqdncache_count: %5d\n", meta_data.fqdncache_count);
+    debug(35, 3, "                  actual count : %5d\n", local_fqdn_count);
+    debug(35, 3, "                   high W mark : %5d\n", fqdncache_high);
+    debug(35, 3, "                   low  W mark : %5d\n", fqdncache_low);
+    debug(35, 3, "                   not pending : %5d\n", local_fqdn_notpending_count);
+    debug(35, 3, "                LRU candidates : %5d\n", LRU_list_count);
 
     /* sort LRU candidate list */
     qsort((char *) LRU_list,
 	LRU_list_count,
 	sizeof(fqdncache_entry *),
-	(QS *) fqdncache_compareLastRef);
+	(QS) fqdncache_compareLastRef);
     for (k = 0; k < LRU_list_count; k++) {
 	if (meta_data.fqdncache_count < fqdncache_low)
 	    break;
@@ -354,7 +354,7 @@ fqdncache_purgelru(void)
 	removed++;
     }
 
-    debug(35, 3) ("                       removed : %5d\n", removed);
+    debug(35, 3, "                       removed : %5d\n", removed);
     safe_free(LRU_list);
     return (removed > 0) ? 0 : -1;
 }
@@ -368,7 +368,7 @@ fqdncache_create(const char *name)
 
     if (meta_data.fqdncache_count > fqdncache_high) {
 	if (fqdncache_purgelru() < 0)
-	    debug(35, 0) ("HELP!! FQDN Cache is overflowing!\n");
+	    debug(35, 0, "HELP!! FQDN Cache is overflowing!\n");
     }
     meta_data.fqdncache_count++;
     new = xcalloc(1, sizeof(fqdncache_entry));
@@ -382,10 +382,10 @@ static void
 fqdncache_add_to_hash(fqdncache_entry * f)
 {
     if (hash_join(fqdn_table, (hash_link *) f)) {
-	debug(35, 1) ("fqdncache_add_to_hash: Cannot add %s (%p) to hash table %d.\n",
+	debug(35, 1, "fqdncache_add_to_hash: Cannot add %s (%p) to hash table %d.\n",
 	    f->name, f, fqdn_table);
     }
-    debug(35, 5) ("fqdncache_add_to_hash: name <%s>\n", f->name);
+    debug(35, 5, "fqdncache_add_to_hash: name <%s>\n", f->name);
 }
 
 static void
@@ -407,7 +407,7 @@ fqdncacheAddNew(const char *name, const struct hostent *hp, fqdncache_status_t s
     fqdncache_entry *f;
     if (fqdncache_get(name))
 	fatal_dump("fqdncacheAddNew: somebody adding a duplicate!");
-    debug(14, 10) ("fqdncacheAddNew: Adding '%s', status=%c\n",
+    debug(14, 10, "fqdncacheAddNew: Adding '%s', status=%c\n",
 	name,
 	fqdncache_status_char[status]);
     f = fqdncache_create(name);
@@ -434,13 +434,14 @@ fqdncache_call_pending(fqdncache_entry * f)
 	if (p->handler) {
 	    nhandler++;
 	    dns_error_message = f->error_message;
-	    p->handler((f->status == FQDN_CACHED) ? f->names[0] : NULL,
+	    p->handler(p->fd,
+		(f->status == FQDN_CACHED) ? f->names[0] : NULL,
 		p->handlerData);
 	}
 	safe_free(p);
     }
     f->pending_head = NULL;	/* nuke list */
-    debug(35, 10) ("fqdncache_call_pending: Called %d handlers.\n", nhandler);
+    debug(35, 10, "fqdncache_call_pending: Called %d handlers.\n", nhandler);
     fqdncacheUnlockEntry(f);
 }
 
@@ -453,7 +454,7 @@ fqdncache_parsebuffer(const char *inbuf, dnsserver_t * dnsData)
     int k;
     int ipcount;
     int aliascount;
-    debug(35, 5) ("fqdncache_parsebuffer: parsing:\n%s", inbuf);
+    debug(35, 5, "fqdncache_parsebuffer: parsing:\n%s", inbuf);
     memset(&f, '\0', sizeof(fqdncache_entry));
     f.expires = squid_curtime + Config.positiveDnsTtl;
     f.status = FQDN_DISPATCHED;
@@ -525,6 +526,7 @@ fqdncache_dnsHandleRead(int fd, void *data)
 {
     dnsserver_t *dnsData = data;
     int len;
+    int svc_time;
     int n;
     fqdncache_entry *f = NULL;
     fqdncache_entry *x = NULL;
@@ -532,19 +534,11 @@ fqdncache_dnsHandleRead(int fd, void *data)
     len = read(fd,
 	dnsData->ip_inbuf + dnsData->offset,
 	dnsData->size - dnsData->offset);
-    fd_bytes(fd, len, FD_READ);
-    debug(35, 5) ("fqdncache_dnsHandleRead: Result from DNS ID %d (%d bytes)\n",
+    debug(35, 5, "fqdncache_dnsHandleRead: Result from DNS ID %d (%d bytes)\n",
 	dnsData->id, len);
     if (len <= 0) {
-	if (len < 0 && (errno == EINTR || errno == EWOULDBLOCK || errno == EAGAIN)) {
-	    commSetSelect(fd,
-		COMM_SELECT_READ,
-		fqdncache_dnsHandleRead,
-		dnsData, 0);
-	    return;
-	}
-	debug(35, dnsData->flags & DNS_FLAG_CLOSING ? 5 : 1)
-	    ("FD %d: Connection from DNSSERVER #%d is closed, disabling\n",
+	debug(35, dnsData->flags & DNS_FLAG_CLOSING ? 5 : 1,
+	    "FD %d: Connection from DNSSERVER #%d is closed, disabling\n",
 	    fd, dnsData->id);
 	dnsData->flags = 0;
 	commSetSelect(fd,
@@ -564,12 +558,13 @@ fqdncache_dnsHandleRead(int fd, void *data)
 	fatal_dump("fqdncache_dnsHandleRead: bad status");
     if (strstr(dnsData->ip_inbuf, "$end\n")) {
 	/* end of record found */
-	FqdncacheStats.avg_svc_time =
-	    intAverage(FqdncacheStats.avg_svc_time,
-	    tvSubMsec(dnsData->dispatch_time, current_time),
-	    n, FQDNCACHE_AV_FACTOR);
+	svc_time = tvSubMsec(dnsData->dispatch_time, current_time);
+	if (n > FQDNCACHE_AV_FACTOR)
+	    n = FQDNCACHE_AV_FACTOR;
+	FqdncacheStats.avg_svc_time
+	    = (FqdncacheStats.avg_svc_time * (n - 1) + svc_time) / n;
 	if ((x = fqdncache_parsebuffer(dnsData->ip_inbuf, dnsData)) == NULL) {
-	    debug(35, 0) ("fqdncache_dnsHandleRead: fqdncache_parsebuffer failed?!\n");
+	    debug(35, 0, "fqdncache_dnsHandleRead: fqdncache_parsebuffer failed?!\n");
 	} else {
 	    dnsData->offset = 0;
 	    dnsData->ip_inbuf[0] = '\0';
@@ -596,11 +591,12 @@ fqdncache_dnsHandleRead(int fd, void *data)
 }
 
 static void
-fqdncacheAddPending(fqdncache_entry * f, FQDNH * handler, void *handlerData)
+fqdncacheAddPending(fqdncache_entry * f, int fd, FQDNH handler, void *handlerData)
 {
     struct _fqdn_pending *pending = xcalloc(1, sizeof(struct _fqdn_pending));
     struct _fqdn_pending **I = NULL;
     f->lastref = squid_curtime;
+    pending->fd = fd;
     pending->handler = handler;
     pending->handlerData = handlerData;
     for (I = &(f->pending_head); *I; I = &((*I)->next));
@@ -610,7 +606,7 @@ fqdncacheAddPending(fqdncache_entry * f, FQDNH * handler, void *handlerData)
 }
 
 void
-fqdncache_nbgethostbyaddr(struct in_addr addr, FQDNH * handler, void *handlerData)
+fqdncache_nbgethostbyaddr(struct in_addr addr, int fd, FQDNH handler, void *handlerData)
 {
     fqdncache_entry *f = NULL;
     dnsserver_t *dnsData = NULL;
@@ -619,12 +615,12 @@ fqdncache_nbgethostbyaddr(struct in_addr addr, FQDNH * handler, void *handlerDat
     if (!handler)
 	fatal_dump("fqdncache_nbgethostbyaddr: NULL handler");
 
-    debug(35, 4) ("fqdncache_nbgethostbyaddr: Name '%s'.\n", name);
+    debug(35, 4, "fqdncache_nbgethostbyaddr: FD %d: Name '%s'.\n", fd, name);
     FqdncacheStats.requests++;
 
     if (name == NULL || name[0] == '\0') {
-	debug(35, 4) ("fqdncache_nbgethostbyaddr: Invalid name!\n");
-	handler(NULL, handlerData);
+	debug(35, 4, "fqdncache_nbgethostbyaddr: Invalid name!\n");
+	handler(fd, NULL, handlerData);
 	return;
     }
     if ((f = fqdncache_get(name))) {
@@ -635,26 +631,26 @@ fqdncache_nbgethostbyaddr(struct in_addr addr, FQDNH * handler, void *handlerDat
     }
     if (f == NULL) {
 	/* MISS: No entry, create the new one */
-	debug(35, 5) ("fqdncache_nbgethostbyaddr: MISS for '%s'\n", name);
+	debug(35, 5, "fqdncache_nbgethostbyaddr: MISS for '%s'\n", name);
 	FqdncacheStats.misses++;
 	f = fqdncacheAddNew(name, NULL, FQDN_PENDING);
-	fqdncacheAddPending(f, handler, handlerData);
+	fqdncacheAddPending(f, fd, handler, handlerData);
     } else if (f->status == FQDN_CACHED || f->status == FQDN_NEGATIVE_CACHED) {
 	/* HIT */
-	debug(35, 4) ("fqdncache_nbgethostbyaddr: HIT for '%s'\n", name);
+	debug(35, 4, "fqdncache_nbgethostbyaddr: HIT for '%s'\n", name);
 	if (f->status == FQDN_NEGATIVE_CACHED)
 	    FqdncacheStats.negative_hits++;
 	else
 	    FqdncacheStats.hits++;
-	fqdncacheAddPending(f, handler, handlerData);
+	fqdncacheAddPending(f, fd, handler, handlerData);
 	fqdncache_call_pending(f);
 	return;
     } else if (f->status == FQDN_PENDING || f->status == FQDN_DISPATCHED) {
-	debug(35, 4) ("fqdncache_nbgethostbyaddr: PENDING for '%s'\n", name);
+	debug(35, 4, "fqdncache_nbgethostbyaddr: PENDING for '%s'\n", name);
 	FqdncacheStats.pending_hits++;
-	fqdncacheAddPending(f, handler, handlerData);
+	fqdncacheAddPending(f, fd, handler, handlerData);
 	if (squid_curtime - f->expires > 600) {
-	    debug(14, 0) ("fqdncache_nbgethostbyname: '%s' PENDING for %d seconds, aborting\n", name, squid_curtime + Config.negativeDnsTtl - f->expires);
+	    debug(14, 0, "fqdncache_nbgethostbyname: '%s' PENDING for %d seconds, aborting\n", name, squid_curtime + Config.negativeDnsTtl - f->expires);
 	    fqdncacheChangeKey(f);
 	    fqdncache_call_pending(f);
 	}
@@ -684,7 +680,7 @@ fqdncache_dnsDispatch(dnsserver_t * dns, fqdncache_entry * f)
     if (!BIT_TEST(dns->flags, DNS_FLAG_ALIVE))
 	debug_trap("Dispatching a dead DNS server");
     if (!fqdncacheHasPending(f)) {
-	debug(35, 0) ("fqdncache_dnsDispatch: skipping '%s' because no handler.\n",
+	debug(35, 0, "fqdncache_dnsDispatch: skipping '%s' because no handler.\n",
 	    f->name);
 	f->status = FQDN_NEGATIVE_CACHED;
 	fqdncache_release(f);
@@ -700,6 +696,7 @@ fqdncache_dnsDispatch(dnsserver_t * dns, fqdncache_entry * f)
     comm_write(dns->outpipe,
 	buf,
 	strlen(buf),
+	0,			/* timeout */
 	NULL,			/* Handler */
 	NULL,			/* Handler-data */
 	xfree);
@@ -708,7 +705,7 @@ fqdncache_dnsDispatch(dnsserver_t * dns, fqdncache_entry * f)
 	fqdncache_dnsHandleRead,
 	dns,
 	0);
-    debug(35, 5) ("fqdncache_dnsDispatch: Request sent to DNS server #%d.\n",
+    debug(35, 5, "fqdncache_dnsDispatch: Request sent to DNS server #%d.\n",
 	dns->id);
     dns->dispatch_time = current_time;
     DnsStats.requests++;
@@ -723,7 +720,7 @@ fqdncache_init(void)
 {
     if (fqdn_table)
 	return;
-    debug(35, 3) ("Initializing FQDN Cache...\n");
+    debug(35, 3, "Initializing FQDN Cache...\n");
     memset(&FqdncacheStats, '\0', sizeof(FqdncacheStats));
     /* small hash table */
     fqdn_table = hash_create(urlcmp, 229, hash4);
@@ -736,26 +733,26 @@ fqdncache_init(void)
 /* clean up the pending entries in dnsserver */
 /* return 1 if we found the host, 0 otherwise */
 int
-fqdncacheUnregister(struct in_addr addr, void *data)
+fqdncacheUnregister(struct in_addr addr, int fd)
 {
     char *name = inet_ntoa(addr);
     fqdncache_entry *f = NULL;
     struct _fqdn_pending *p = NULL;
     int n = 0;
-    debug(35, 3) ("fqdncacheUnregister: FD %d, name '%s'\n", name);
+
+    debug(35, 3, "fqdncache_unregister: FD %d, name '%s'\n", fd, name);
     if ((f = fqdncache_get(name)) == NULL)
 	return 0;
     if (f->status == FQDN_PENDING || f->status == FQDN_DISPATCHED) {
 	for (p = f->pending_head; p; p = p->next) {
-	    if (p->handlerData != data)
-		continue;
-	    p->handler = NULL;
-	    n++;
+	    if (p->fd == fd && p->handler != NULL) {
+		p->handler = NULL;
+		p->fd = -1;
+		n++;
+	    }
 	}
     }
-    if (n == 0)
-	debug_trap("fqdncacheUnregister: callback data not found");
-    debug(35, 3) ("fqdncacheUnregister: unregistered %d handlers\n", n);
+    debug(35, 3, "fqdncache_unregister: unregistered %d handlers\n", n);
     return n;
 }
 
@@ -799,7 +796,7 @@ fqdncache_gethostbyaddr(struct in_addr addr, int flags)
     FqdncacheStats.misses++;
     if (BIT_TEST(flags, FQDN_BLOCKING_LOOKUP)) {
 	if (NDnsServersAlloc)
-	    debug(14, 0) ("WARNING: blocking on gethostbyaddr() for '%s'\n", name);
+	    debug(14, 0, "WARNING: blocking on gethostbyaddr() for '%s'\n", name);
 	FqdncacheStats.ghba_calls++;
 	hp = gethostbyaddr((char *) &ip.s_addr, 4, AF_INET);
 	if (hp && hp->h_name && (hp->h_name[0] != '\0') && fqdn_table) {
@@ -825,7 +822,7 @@ fqdncache_gethostbyaddr(struct in_addr addr, int flags)
 	}
     }
     if (flags & FQDN_LOOKUP_IF_MISS)
-	fqdncache_nbgethostbyaddr(addr, dummy_handler, NULL);
+	fqdncache_nbgethostbyaddr(addr, -1, dummy_handler, NULL);
     return NULL;
 }
 
@@ -879,7 +876,7 @@ fqdnStats(StoreEntry * sentry)
 }
 
 static void
-dummy_handler(const char *u2, void *u3)
+dummy_handler(int u1, const char *u2, void *u3)
 {
     return;
 }
@@ -982,7 +979,7 @@ fqdncacheChangeKey(fqdncache_entry * f)
     LOCAL_ARRAY(char, new_key, 256);
     hash_link *table_entry = hash_lookup(fqdn_table, f->name);
     if (table_entry == NULL) {
-	debug(14, 0) ("fqdncacheChangeKey: Could not find key '%s'\n", f->name);
+	debug(14, 0, "fqdncacheChangeKey: Could not find key '%s'\n", f->name);
 	return;
     }
     if (f != (fqdncache_entry *) table_entry) {
@@ -995,7 +992,7 @@ fqdncacheChangeKey(fqdncache_entry * f)
     }
     sprintf(new_key, "%d/", ++index);
     strncat(new_key, f->name, 128);
-    debug(14, 1) ("fqdncacheChangeKey: from '%s' to '%s'\n", f->name, new_key);
+    debug(14, 1, "fqdncacheChangeKey: from '%s' to '%s'\n", f->name, new_key);
     safe_free(f->name);
     f->name = xstrdup(new_key);
     fqdncache_add_to_hash(f);

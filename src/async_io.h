@@ -3,7 +3,6 @@
  * $Id$
  *
  * AUTHOR: Pete Bentley <pete@demon.net>
- * AUTHOR: Stewart Forster <slf@connect.com.au>
  *
  * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * --------------------------------------------------------
@@ -29,13 +28,13 @@
  *  
  */
 
-typedef void AIOCB _PARAMS((void *, int aio_return, int aio_errno));
-
-extern void aioCancel _PARAMS((int));
-extern void aioOpen _PARAMS((const char *, int, mode_t, AIOCB *, void *));
-extern void aioClose _PARAMS((int));
-extern void aioWrite _PARAMS((int, char *, int, AIOCB *, void *));
-extern void aioRead _PARAMS((int, char *, int, AIOCB *, void *));
-extern void aioStat _PARAMS((char *, struct stat *, AIOCB *, void *));
-extern void aioUnlink _PARAMS((const char *, AIOCB *, void *));
-extern void aioCheckCallbacks _PARAMS((void));
+extern void aioExamine _PARAMS((void));
+extern void aioSigHandler _PARAMS((int sig));
+extern int aioFileWriteComplete _PARAMS((int ed, FileEntry * entry));
+extern int aioFileReadComplete _PARAMS((int fd, dread_ctrl * ctrl_dat));
+extern int aioFileQueueWrite _PARAMS((int,
+	int               (*)_PARAMS((int, FileEntry *)),
+	FileEntry *));
+extern int aioFileQueueRead _PARAMS((int,
+	int              (*)_PARAMS((int, dread_ctrl *)),
+	dread_ctrl *));

@@ -54,7 +54,6 @@ typedef enum {
     PROTO_GOPHER,
     PROTO_WAIS,
     PROTO_CACHEOBJ,
-    PROTO_ICP,
     PROTO_MAX
 } protocol_t;
 
@@ -74,10 +73,6 @@ struct _request {
     int imslen;
     int max_forwards;
     struct in_addr client_addr;
-    char *headers;
-    size_t headers_sz;
-    char *body;
-    size_t body_sz;
 };
 
 extern char *url_convert_hex _PARAMS((char *org_url, int allocate));
@@ -91,7 +86,6 @@ extern request_t *requestLink _PARAMS((request_t *));
 extern void requestUnlink _PARAMS((request_t *));
 extern int matchDomainName _PARAMS((const char *d, const char *h));
 extern int urlCheckRequest _PARAMS((const request_t *));
-extern int urlDefaultPort _PARAMS((protocol_t p));
 
 /* bitfields for the flags member */
 #define REQ_UNUSED1		0x01
