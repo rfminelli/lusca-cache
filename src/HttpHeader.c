@@ -1099,6 +1099,7 @@ httpHeaderEntryIsValid(const HttpHeaderEntry *e)
 	default:
 	    assert(0); /* query for invalid/unknown type */
     }
+    return 0; /* not reached */
 }
 
 static const char *
@@ -1144,6 +1145,7 @@ httpHeaderFieldDup(field_type type, field_store value)
 	default:
 	    assert(0); /* dup of invalid/unknown type */
     }
+    return NULL; /* not reached */
 }
 
 /*
