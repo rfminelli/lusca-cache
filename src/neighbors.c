@@ -336,6 +336,20 @@ getFirstUpParent(request_t * request)
 }
 
 peer *
+getAnyParent(request_t * request)
+{
+    peer *e = NULL;
+    for (e = Peers.peers_head; e; e = e->next) {
+	if (neighborType(e, request) != PEER_PARENT)
+	    continue;
+	if (!peerHTTPOkay(e, request))
+	    continue;
+	break;
+    }
+    return e;
+}
+
+peer *
 getRoundRobinParent(request_t * request)
 {
     peer *e;
