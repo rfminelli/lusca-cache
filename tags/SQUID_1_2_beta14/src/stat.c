@@ -1,0 +1,818 @@
+
+/*
+ * $Id$
+ *
+ * DEBUG: section 18    Cache Manager Statistics
+ * AUTHOR: Harvest Derived
+ *
+ * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
+ * --------------------------------------------------------
+ *
+ *  Squid is the result of efforts by numerous individuals from the
+ *  Internet community.  Development is led by Duane Wessels of the
+ *  National Laboratory for Applied Network Research and funded by
+ *  the National Science Foundation.
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *  
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *  
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *  
+ */
+
+/*
+ * Copyright (c) 1994, 1995.  All rights reserved.
+ *  
+ *   The Harvest software was developed by the Internet Research Task
+ *   Force Research Group on Resource Discovery (IRTF-RD):
+ *  
+ *         Mic Bowman of Transarc Corporation.
+ *         Peter Danzig of the University of Southern California.
+ *         Darren R. Hardy of the University of Colorado at Boulder.
+ *         Udi Manber of the University of Arizona.
+ *         Michael F. Schwartz of the University of Colorado at Boulder.
+ *         Duane Wessels of the University of Colorado at Boulder.
+ *  
+ *   This copyright notice applies to software in the Harvest
+ *   ``src/'' directory only.  Users should consult the individual
+ *   copyright notices in the ``components/'' subdirectories for
+ *   copyright information about other software bundled with the
+ *   Harvest source code distribution.
+ *  
+ * TERMS OF USE
+ *   
+ *   The Harvest software may be used and re-distributed without
+ *   charge, provided that the software origin and research team are
+ *   cited in any use of the system.  Most commonly this is
+ *   accomplished by including a link to the Harvest Home Page
+ *   (http://harvest.cs.colorado.edu/) from the query page of any
+ *   Broker you deploy, as well as in the query result pages.  These
+ *   links are generated automatically by the standard Broker
+ *   software distribution.
+ *   
+ *   The Harvest software is provided ``as is'', without express or
+ *   implied warranty, and with no support nor obligation to assist
+ *   in its use, correction, modification or enhancement.  We assume
+ *   no liability with respect to the infringement of copyrights,
+ *   trade secrets, or any patents, and are not responsible for
+ *   consequential damages.  Proper use of the Harvest software is
+ *   entirely the responsibility of the user.
+ *  
+ * DERIVATIVE WORKS
+ *  
+ *   Users may make derivative works from the Harvest software, subject 
+ *   to the following constraints:
+ *  
+ *     - You must include the above copyright notice and these 
+ *       accompanying paragraphs in all forms of derivative works, 
+ *       and any documentation and other materials related to such 
+ *       distribution and use acknowledge that the software was 
+ *       developed at the above institutions.
+ *  
+ *     - You must notify IRTF-RD regarding your distribution of 
+ *       the derivative work.
+ *  
+ *     - You must clearly notify users that your are distributing 
+ *       a modified version and not the original Harvest software.
+ *  
+ *     - Any derivative product is also subject to these copyright 
+ *       and use restrictions.
+ *  
+ *   Note that the Harvest software is NOT in the public domain.  We
+ *   retain copyright, as specified above.
+ *  
+ * HISTORY OF FREE SOFTWARE STATUS
+ *  
+ *   Originally we required sites to license the software in cases
+ *   where they were going to build commercial products/services
+ *   around Harvest.  In June 1995 we changed this policy.  We now
+ *   allow people to use the core Harvest software (the code found in
+ *   the Harvest ``src/'' directory) for free.  We made this change
+ *   in the interest of encouraging the widest possible deployment of
+ *   the technology.  The Harvest software is really a reference
+ *   implementation of a set of protocols and formats, some of which
+ *   we intend to standardize.  We encourage commercial
+ *   re-implementations of code complying to this set of standards.  
+ */
+
+
+#include "squid.h"
+
+/* LOCALS */
+static const char *describeStatuses(const StoreEntry *);
+static const char *describeFlags(const StoreEntry *);
+static const char *describeTimestamps(const StoreEntry *);
+static void statAvgTick(void *notused);
+static void statAvgDump(StoreEntry *, int minutes);
+static void statCountersDump(StoreEntry * sentry);
+
+#ifdef XMALLOC_STATISTICS
+static void info_get_mallstat(int, int, StoreEntry *);
+#endif
+
+#define PCONN_HIST_SZ 256
+int client_pconn_hist[PCONN_HIST_SZ];
+int server_pconn_hist[PCONN_HIST_SZ];
+
+/*
+ * An hour's worth, plus the 'current' counter
+ */
+#define N_COUNT_HIST 61
+static StatCounters CountHist[N_COUNT_HIST];
+static int NCountHist = 0;
+
+void
+stat_utilization_get(StoreEntry * e)
+{
+    /* MAKE SOMETHING UP */
+}
+
+void
+stat_io_get(StoreEntry * sentry)
+{
+    int i;
+
+    storeAppendPrintf(sentry, open_bracket);
+    storeAppendPrintf(sentry, "{HTTP I/O}\n");
+    storeAppendPrintf(sentry, "{number of reads: %d}\n", IOStats.Http.reads);
+    storeAppendPrintf(sentry, "{deferred reads: %d (%d%%)}\n",
+	IOStats.Http.reads_deferred,
+	percent(IOStats.Http.reads_deferred, IOStats.Http.reads));
+    storeAppendPrintf(sentry, "{Read Histogram:}\n");
+    for (i = 0; i < 16; i++) {
+	storeAppendPrintf(sentry, "{%5d-%5d: %9d %2d%%}\n",
+	    i ? (1 << (i - 1)) + 1 : 1,
+	    1 << i,
+	    IOStats.Http.read_hist[i],
+	    percent(IOStats.Http.read_hist[i], IOStats.Http.reads));
+    }
+
+    storeAppendPrintf(sentry, "{}\n");
+    storeAppendPrintf(sentry, "{FTP I/O}\n");
+    storeAppendPrintf(sentry, "{number of reads: %d}\n", IOStats.Ftp.reads);
+    storeAppendPrintf(sentry, "{deferred reads: %d (%d%%)}\n",
+	IOStats.Ftp.reads_deferred,
+	percent(IOStats.Ftp.reads_deferred, IOStats.Ftp.reads));
+    storeAppendPrintf(sentry, "{Read Histogram:}\n");
+    for (i = 0; i < 16; i++) {
+	storeAppendPrintf(sentry, "{%5d-%5d: %9d %2d%%}\n",
+	    i ? (1 << (i - 1)) + 1 : 1,
+	    1 << i,
+	    IOStats.Ftp.read_hist[i],
+	    percent(IOStats.Ftp.read_hist[i], IOStats.Ftp.reads));
+    }
+
+    storeAppendPrintf(sentry, "{}\n");
+    storeAppendPrintf(sentry, "{Gopher I/O}\n");
+    storeAppendPrintf(sentry, "{number of reads: %d}\n", IOStats.Gopher.reads);
+    storeAppendPrintf(sentry, "{deferred reads: %d (%d%%)}\n",
+	IOStats.Gopher.reads_deferred,
+	percent(IOStats.Gopher.reads_deferred, IOStats.Gopher.reads));
+    storeAppendPrintf(sentry, "{Read Histogram:}\n");
+    for (i = 0; i < 16; i++) {
+	storeAppendPrintf(sentry, "{%5d-%5d: %9d %2d%%}\n",
+	    i ? (1 << (i - 1)) + 1 : 1,
+	    1 << i,
+	    IOStats.Gopher.read_hist[i],
+	    percent(IOStats.Gopher.read_hist[i], IOStats.Gopher.reads));
+    }
+
+    storeAppendPrintf(sentry, "{}\n");
+    storeAppendPrintf(sentry, "{WAIS I/O}\n");
+    storeAppendPrintf(sentry, "{number of reads: %d}\n", IOStats.Wais.reads);
+    storeAppendPrintf(sentry, "{deferred reads: %d (%d%%)}\n",
+	IOStats.Wais.reads_deferred,
+	percent(IOStats.Wais.reads_deferred, IOStats.Wais.reads));
+    storeAppendPrintf(sentry, "{Read Histogram:}\n");
+    for (i = 0; i < 16; i++) {
+	storeAppendPrintf(sentry, "{%5d-%5d: %9d %2d%%}\n",
+	    i ? (1 << (i - 1)) + 1 : 1,
+	    1 << i,
+	    IOStats.Wais.read_hist[i],
+	    percent(IOStats.Wais.read_hist[i], IOStats.Wais.reads));
+    }
+
+    storeAppendPrintf(sentry, close_bracket);
+}
+
+static const char *
+describeStatuses(const StoreEntry * entry)
+{
+    LOCAL_ARRAY(char, buf, 256);
+    snprintf(buf, 256, "%-13s %-13s %-12s %-12s",
+	storeStatusStr[entry->store_status],
+	memStatusStr[entry->mem_status],
+	swapStatusStr[entry->swap_status],
+	pingStatusStr[entry->ping_status]);
+    return buf;
+}
+
+static const char *
+describeFlags(const StoreEntry * entry)
+{
+    LOCAL_ARRAY(char, buf, 256);
+    int flags = (int) entry->flag;
+    char *t;
+    buf[0] = '\0';
+    if (EBIT_TEST(flags, DELAY_SENDING))
+	strcat(buf, "DS,");
+    if (EBIT_TEST(flags, RELEASE_REQUEST))
+	strcat(buf, "RL,");
+    if (EBIT_TEST(flags, REFRESH_REQUEST))
+	strcat(buf, "RF,");
+    if (EBIT_TEST(flags, ENTRY_CACHABLE))
+	strcat(buf, "EC,");
+    if (EBIT_TEST(flags, ENTRY_DISPATCHED))
+	strcat(buf, "ED,");
+    if (EBIT_TEST(flags, KEY_PRIVATE))
+	strcat(buf, "KP,");
+    if (EBIT_TEST(flags, HIERARCHICAL))
+	strcat(buf, "HI,");
+    if (EBIT_TEST(flags, ENTRY_NEGCACHED))
+	strcat(buf, "NG,");
+    if ((t = strrchr(buf, ',')))
+	*t = '\0';
+    return buf;
+}
+
+static const char *
+describeTimestamps(const StoreEntry * entry)
+{
+    LOCAL_ARRAY(char, buf, 256);
+    snprintf(buf, 256, "LV:%-9d LU:%-9d LM:%-9d EX:%-9d",
+	(int) entry->timestamp,
+	(int) entry->lastref,
+	(int) entry->lastmod,
+	(int) entry->expires);
+    return buf;
+}
+
+/* process objects list */
+static void
+statObjects(StoreEntry * sentry, int vm_or_not)
+{
+    StoreEntry *entry = NULL;
+    StoreEntry *next = NULL;
+    MemObject *mem;
+    int N = 0;
+    int i;
+    struct _store_client *sc;
+    next = (StoreEntry *) hash_first(store_table);
+    while ((entry = next) != NULL) {
+	next = (StoreEntry *) hash_next(store_table);
+	mem = entry->mem_obj;
+	if (vm_or_not && mem == NULL)
+	    continue;
+	if ((++N & 0xFF) == 0) {
+	    debug(18, 3) ("stat_objects_get:  Processed %d objects...\n", N);
+	}
+	storeBuffer(sentry);
+	storeAppendPrintf(sentry, "KEY %s\n", storeKeyText(entry->key));
+	if (mem)
+	    storeAppendPrintf(sentry, "\t%s %s\n",
+		RequestMethodStr[mem->method], mem->url);
+	storeAppendPrintf(sentry, "\t%s\n", describeStatuses(entry));
+	storeAppendPrintf(sentry, "\t%s\n", describeFlags(entry));
+	storeAppendPrintf(sentry, "\t%s\n", describeTimestamps(entry));
+	storeAppendPrintf(sentry, "\t%d locks, %d clients, %d refs\n",
+	    (int) entry->lock_count,
+	    storePendingNClients(entry),
+	    (int) entry->refcount);
+	storeAppendPrintf(sentry, "\tSwap File %#08X\n",
+	    entry->swap_file_number);
+	if (mem == NULL)
+	    continue;
+	storeAppendPrintf(sentry, "\tinmem_lo: %d\n", (int) mem->inmem_lo);
+	storeAppendPrintf(sentry, "\tinmem_hi: %d\n", (int) mem->inmem_hi);
+	storeAppendPrintf(sentry, "\tswapout: %d bytes done, %d queued, FD %d\n",
+	    mem->swapout.done_offset,
+	    mem->swapout.queue_offset,
+	    mem->swapout.fd);
+	for (i = 0; i < mem->nclients; i++) {
+	    sc = &mem->clients[i];
+	    if (sc->callback_data == NULL)
+		continue;
+	    storeAppendPrintf(sentry, "\tClient #%d\n", i);
+	    storeAppendPrintf(sentry, "\t\tcopy_offset: %d\n",
+		(int) sc->copy_offset);
+	    storeAppendPrintf(sentry, "\t\tseen_offset: %d\n",
+		(int) sc->seen_offset);
+	    storeAppendPrintf(sentry, "\t\tcopy_size: %d\n",
+		(int) sc->copy_size);
+	    storeAppendPrintf(sentry, "\t\tswapin_fd: %d\n",
+		(int) sc->swapin_fd);
+	}
+	storeAppendPrintf(sentry, "\n");
+	storeBufferFlush(sentry);
+    }
+}
+
+void
+stat_objects_get(StoreEntry * e)
+{
+    statObjects(e, 0);
+}
+
+void
+stat_vmobjects_get(StoreEntry * e)
+{
+    statObjects(e, 1);
+}
+
+void
+server_list(StoreEntry * sentry)
+{
+    dump_peers(sentry, Config.peers);
+}
+
+void
+dump_peers(StoreEntry * sentry, peer * peers)
+{
+    peer *e = NULL;
+    struct _domain_ping *d = NULL;
+    icp_opcode op;
+    storeAppendPrintf(sentry, open_bracket);
+    if (peers == NULL)
+	storeAppendPrintf(sentry, "{There are no neighbors installed.}\n");
+    for (e = peers; e; e = e->next) {
+	assert(e->host != NULL);
+	storeAppendPrintf(sentry, "\n{%-11.11s: %s/%d/%d}\n",
+	    neighborTypeStr(e),
+	    e->host,
+	    e->http_port,
+	    e->icp_port);
+	storeAppendPrintf(sentry, "{Status     : %s}\n",
+	    neighborUp(e) ? "Up" : "Down");
+	storeAppendPrintf(sentry, "{AVG RTT    : %d msec}\n", e->stats.rtt);
+	storeAppendPrintf(sentry, "{LAST QUERY : %8d seconds ago}\n",
+	    (int) (squid_curtime - e->stats.last_query));
+	storeAppendPrintf(sentry, "{LAST REPLY : %8d seconds ago}\n",
+	    (int) (squid_curtime - e->stats.last_reply));
+	storeAppendPrintf(sentry, "{PINGS SENT : %8d}\n", e->stats.pings_sent);
+	storeAppendPrintf(sentry, "{PINGS ACKED: %8d %3d%%}\n",
+	    e->stats.pings_acked,
+	    percent(e->stats.pings_acked, e->stats.pings_sent));
+	storeAppendPrintf(sentry, "{FETCHES    : %8d %3d%%}\n",
+	    e->stats.fetches,
+	    percent(e->stats.fetches, e->stats.pings_acked));
+	storeAppendPrintf(sentry, "{IGNORED    : %8d %3d%%}\n",
+	    e->stats.ignored_replies,
+	    percent(e->stats.ignored_replies, e->stats.pings_acked));
+	storeAppendPrintf(sentry, "{Histogram of PINGS ACKED:}\n");
+	for (op = ICP_INVALID; op < ICP_END; op++) {
+	    if (e->stats.counts[op] == 0)
+		continue;
+	    storeAppendPrintf(sentry, "{    %12.12s : %8d %3d%%}\n",
+		icp_opcode_str[op],
+		e->stats.counts[op],
+		percent(e->stats.counts[op], e->stats.pings_acked));
+	}
+	if (e->last_fail_time) {
+	    storeAppendPrintf(sentry, "{Last failed connect() at: %s}\n",
+		mkhttpdlogtime(&(e->last_fail_time)));
+	}
+	storeAppendPrintf(sentry, "{DOMAIN LIST: ");
+	for (d = e->pinglist; d; d = d->next) {
+	    if (d->do_ping)
+		storeAppendPrintf(sentry, "%s ", d->domain);
+	    else
+		storeAppendPrintf(sentry, "!%s ", d->domain);
+	}
+	storeAppendPrintf(sentry, close_bracket);	/* } */
+	storeAppendPrintf(sentry, "{Keep-Alive Ratio: %d%%}\n",
+	    percent(e->stats.n_keepalives_recv, e->stats.n_keepalives_sent));
+    }
+    storeAppendPrintf(sentry, close_bracket);
+}
+
+#ifdef XMALLOC_STATISTICS
+static void
+info_get_mallstat(int size, int number, StoreEntry * sentry)
+{
+    if (number > 0)
+	storeAppendPrintf(sentry, "{\t%d = %d}\n", size, number);
+}
+#endif
+
+static const char *
+fdRemoteAddr(const fde * f)
+{
+    LOCAL_ARRAY(char, buf, 32);
+    if (f->type != FD_SOCKET)
+	return null_string;
+    snprintf(buf, 32, "%s.%d", f->ipaddr, (int) f->remote_port);
+    return buf;
+}
+
+void
+statFiledescriptors(StoreEntry * sentry)
+{
+    int i;
+    fde *f;
+    storeAppendPrintf(sentry, open_bracket);
+    storeAppendPrintf(sentry, "{Active file descriptors:}\n");
+    storeAppendPrintf(sentry, "{%-4s %-6s %-4s %-7s %-7s %-21s %s}\n",
+	"File",
+	"Type",
+	"Tout",
+	"Nread",
+	"Nwrite",
+	"Remote Address",
+	"Description");
+    storeAppendPrintf(sentry, "{---- ------ ---- ------- ------- --------------------- ------------------------------}\n");
+    for (i = 0; i < Squid_MaxFD; i++) {
+	f = &fd_table[i];
+	if (!f->open)
+	    continue;
+	storeAppendPrintf(sentry, "{%4d %-6.6s %4d %7d %7d %-21s %s}\n",
+	    i,
+	    fdstatTypeStr[f->type],
+	    f->timeout_handler ? (f->timeout - squid_curtime) / 60 : 0,
+	    f->bytes_read,
+	    f->bytes_written,
+	    fdRemoteAddr(f),
+	    f->desc);
+    }
+    storeAppendPrintf(sentry, close_bracket);
+}
+
+int
+statMemoryAccounted(void)
+{
+    return (int)
+	meta_data.store_keys +
+	meta_data.ipcache_count * sizeof(ipcache_entry) +
+	meta_data.fqdncache_count * sizeof(fqdncache_entry) +
+	hash_links_allocated * sizeof(hash_link) +
+	meta_data.netdb_peers * sizeof(struct _net_db_peer) +
+                 meta_data.client_info * client_info_sz +
+                 meta_data.misc;
+}
+
+void
+info_get(StoreEntry * sentry)
+{
+    struct rusage rusage;
+    double cputime;
+    double runtime;
+#if HAVE_MSTATS && HAVE_GNUMALLOC_H
+    struct mstats ms;
+#elif HAVE_MALLINFO
+    struct mallinfo mp;
+    int t;
+#endif
+
+    runtime = tvSubDsec(squid_start, current_time);
+    if (runtime == 0.0)
+	runtime = 1.0;
+    storeAppendPrintf(sentry, open_bracket);
+    storeAppendPrintf(sentry, "{Squid Object Cache: Version %s}\n",
+	version_string);
+    storeAppendPrintf(sentry, "{Start Time:\t%s}\n",
+	mkrfc1123(squid_start.tv_sec));
+    storeAppendPrintf(sentry, "{Current Time:\t%s}\n",
+	mkrfc1123(current_time.tv_sec));
+    storeAppendPrintf(sentry, "{Connection information for %s:}\n",
+	appname);
+    storeAppendPrintf(sentry, "{\tNumber of HTTP requests received:\t%u}\n",
+	Counter.client_http.requests);
+    storeAppendPrintf(sentry, "{\tNumber of ICP messages received:\t%u}\n",
+	Counter.icp.pkts_recv);
+    storeAppendPrintf(sentry, "{\tNumber of ICP messages sent:\t%u}\n",
+	Counter.icp.pkts_sent);
+    storeAppendPrintf(sentry, "{\tRequest failure ratio:\t%5.2f%%\n",
+	request_failure_ratio);
+
+    storeAppendPrintf(sentry, "{\tHTTP requests per minute:\t%.1f}\n",
+	Counter.client_http.requests / (runtime / 60.0));
+    storeAppendPrintf(sentry, "{\tICP messages per minute:\t%.1f}\n",
+	(Counter.icp.pkts_sent + Counter.icp.pkts_recv) / (runtime / 60.0));
+    storeAppendPrintf(sentry, "{\tSelect loop called: %d times, %0.3f ms avg}\n",
+	Counter.select_loops, 1000.0 * runtime / Counter.select_loops);
+
+    storeAppendPrintf(sentry, "{Cache information for %s:}\n",
+	appname);
+    storeAppendPrintf(sentry, "{\tStorage Swap size:\t%d KB}\n",
+	store_swap_size);
+    storeAppendPrintf(sentry, "{\tStorage Mem size:\t%d KB}\n",
+	store_mem_size >> 10);
+    storeAppendPrintf(sentry, "{\tStorage LRU Expiration Age:\t%6.2f days}\n",
+	(double) storeExpiredReferenceAge() / 86400.0);
+    storeAppendPrintf(sentry, "{\tRequests given to unlinkd:\t%d}\n",
+	Counter.unlink.requests);
+
+    squid_getrusage(&rusage);
+    cputime = rusage_cputime(&rusage);
+    storeAppendPrintf(sentry, "{Resource usage for %s:}\n", appname);
+    storeAppendPrintf(sentry, "{\tUP Time:\t%.3f seconds}\n", runtime);
+    storeAppendPrintf(sentry, "{\tCPU Time:\t%.3f seconds}\n", cputime);
+    storeAppendPrintf(sentry, "{\tCPU Usage:\t%.2f%%}\n",
+	dpercent(cputime, runtime));
+    storeAppendPrintf(sentry, "{\tMaximum Resident Size: %ld KB}\n",
+	rusage_maxrss(&rusage));
+    storeAppendPrintf(sentry, "{\tPage faults with physical i/o: %ld}\n",
+	rusage_pagefaults(&rusage));
+
+#if HAVE_MSTATS && HAVE_GNUMALLOC_H
+    ms = mstats();
+    storeAppendPrintf(sentry, "{Memory usage for %s via mstats():}\n",
+	appname);
+    storeAppendPrintf(sentry, "{\tTotal space in arena:  %6d KB}\n",
+	ms.bytes_total >> 10);
+    storeAppendPrintf(sentry, "{\tTotal free:            %6d KB %d%%}\n",
+	ms.bytes_free >> 10, percent(ms.bytes_free, ms.bytes_total));
+#elif HAVE_MALLINFO
+    mp = mallinfo();
+    storeAppendPrintf(sentry, "{Memory usage for %s via mallinfo():}\n",
+	appname);
+    storeAppendPrintf(sentry, "{\tTotal space in arena:  %6d KB}\n",
+	mp.arena >> 10);
+    storeAppendPrintf(sentry, "{\tOrdinary blocks:       %6d KB %6d blks}\n",
+	mp.uordblks >> 10, mp.ordblks);
+    storeAppendPrintf(sentry, "{\tSmall blocks:          %6d KB %6d blks}\n",
+	mp.usmblks >> 10, mp.smblks);
+    storeAppendPrintf(sentry, "{\tHolding blocks:        %6d KB %6d blks}\n",
+	mp.hblkhd >> 10, mp.hblks);
+    storeAppendPrintf(sentry, "{\tFree Small blocks:     %6d KB}\n",
+	mp.fsmblks >> 10);
+    storeAppendPrintf(sentry, "{\tFree Ordinary blocks:  %6d KB}\n",
+	mp.fordblks >> 10);
+    t = mp.uordblks + mp.usmblks + mp.hblkhd;
+    storeAppendPrintf(sentry, "{\tTotal in use:          %6d KB %d%%}\n",
+	t >> 10, percent(t, mp.arena));
+    t = mp.fsmblks + mp.fordblks;
+    storeAppendPrintf(sentry, "{\tTotal free:            %6d KB %d%%}\n",
+	t >> 10, percent(t, mp.arena));
+#if HAVE_EXT_MALLINFO
+    storeAppendPrintf(sentry, "{\tmax size of small blocks:\t%d}\n", mp.mxfast);
+    storeAppendPrintf(sentry, "{\tnumber of small blocks in a holding block:\t%d}\n",
+	mp.nlblks);
+    storeAppendPrintf(sentry, "{\tsmall block rounding factor:\t%d}\n", mp.grain);
+    storeAppendPrintf(sentry, "{\tspace (including overhead) allocated in ord. blks:\t%d}\n"
+	,mp.uordbytes);
+    storeAppendPrintf(sentry, "{\tnumber of ordinary blocks allocated:\t%d}\n",
+	mp.allocated);
+    storeAppendPrintf(sentry, "{\tbytes used in maintaining the free tree:\t%d}\n",
+	mp.treeoverhead);
+#endif /* HAVE_EXT_MALLINFO */
+#endif /* HAVE_MALLINFO */
+
+    storeAppendPrintf(sentry, "{File descriptor usage for %s:}\n", appname);
+    storeAppendPrintf(sentry, "{\tMaximum number of file descriptors:   %4d}\n",
+	Squid_MaxFD);
+    storeAppendPrintf(sentry, "{\tLargest file desc currently in use:   %4d}\n",
+	Biggest_FD);
+    storeAppendPrintf(sentry, "{\tNumber of file desc currently in use: %4d}\n",
+	Number_FD);
+    storeAppendPrintf(sentry, "{\tAvailable number of file descriptors: %4d}\n",
+	Squid_MaxFD - Number_FD);
+    storeAppendPrintf(sentry, "{\tReserved number of file descriptors:  %4d}\n",
+	RESERVED_FD);
+
+    storeAppendPrintf(sentry, "{Internal Data Structures:}\n");
+    storeAppendPrintf(sentry, "{\t%6d StoreEntries}\n",
+	memInUse(MEM_STOREENTRY));
+    storeAppendPrintf(sentry, "{\t%6d StoreEntries with MemObjects}\n",
+	memInUse(MEM_MEMOBJECT));
+    storeAppendPrintf(sentry, "{\t%6d StoreEntries with MemObject Data}\n",
+	memInUse(MEM_MEM_HDR));
+    storeAppendPrintf(sentry, "{\t%6d Hot Object Cache Items}\n",
+	meta_data.hot_vm);
+
+    storeAppendPrintf(sentry, "{\t%-25.25s                      = %6d KB}\n",
+	"StoreEntry Keys",
+	meta_data.store_keys >> 10);
+
+    storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB}\n",
+	"IPCacheEntry",
+	meta_data.ipcache_count,
+	(int) sizeof(ipcache_entry),
+	(int) (meta_data.ipcache_count * sizeof(ipcache_entry) >> 10));
+
+    storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB}\n",
+	"FQDNCacheEntry",
+	meta_data.fqdncache_count,
+	(int) sizeof(fqdncache_entry),
+	(int) (meta_data.fqdncache_count * sizeof(fqdncache_entry) >> 10));
+
+    storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB}\n",
+	"Hash link",
+	hash_links_allocated,
+	(int) sizeof(hash_link),
+	(int) (hash_links_allocated * sizeof(hash_link) >> 10));
+
+    storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB}\n",
+	"NetDB Peer Entries",
+	meta_data.netdb_peers,
+	(int) sizeof(struct _net_db_peer),
+	             (int) (meta_data.netdb_peers * sizeof(struct _net_db_peer) >> 10));
+
+    storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB}\n",
+	"ClientDB Entries",
+	meta_data.client_info,
+	client_info_sz,
+	(int) (meta_data.client_info * client_info_sz >> 10));
+
+    storeAppendPrintf(sentry, "{\t%-25.25s                      = %6d KB}\n",
+	"Miscellaneous",
+	meta_data.misc >> 10);
+
+    storeAppendPrintf(sentry, "{\t%-25.25s                      = %6d KB}\n",
+	"Total Accounted",
+	statMemoryAccounted() >> 10);
+
+#if XMALLOC_STATISTICS
+    storeAppendPrintf(sentry, "{Memory allocation statistics}\n");
+    malloc_statistics(info_get_mallstat, sentry);
+#endif
+
+    storeAppendPrintf(sentry, close_bracket);
+}
+
+static void
+statCountersDump(StoreEntry * sentry)
+{
+    StatCounters *f = &Counter;
+    struct rusage rusage;
+    squid_getrusage(&rusage);
+    f->page_faults = rusage_pagefaults(&rusage);
+    f->cputime = rusage_cputime(&rusage);
+    storeAppendPrintf(sentry, "client_http.requests = %d\n",
+	f->client_http.requests);
+    storeAppendPrintf(sentry, "client_http.hits = %d\n",
+	f->client_http.hits);
+    storeAppendPrintf(sentry, "client_http.errors = %d\n",
+	f->client_http.errors);
+    storeAppendPrintf(sentry, "client_http.kbytes_in = %d\n",
+	(int) f->client_http.kbytes_in.kb);
+    storeAppendPrintf(sentry, "client_http.kbytes_out = %d\n",
+	(int) f->client_http.kbytes_out.kb);
+    storeAppendPrintf(sentry, "icp.pkts_sent = %d\n",
+	f->icp.pkts_sent);
+    storeAppendPrintf(sentry, "icp.pkts_recv = %d\n",
+	f->icp.pkts_recv);
+    storeAppendPrintf(sentry, "icp.kbytes_sent = %d\n",
+	(int) f->icp.kbytes_sent.kb);
+    storeAppendPrintf(sentry, "icp.kbytes_recv = %d\n",
+	(int) f->icp.kbytes_recv.kb);
+    storeAppendPrintf(sentry, "unlink.requests = %d\n",
+	f->unlink.requests);
+    storeAppendPrintf(sentry, "page_faults = %d\n",
+	f->page_faults);
+    storeAppendPrintf(sentry, "select_loops = %d\n",
+	f->select_loops);
+    storeAppendPrintf(sentry, "cpu_time = %f\n",
+	f->cputime);
+    storeAppendPrintf(sentry, "wall_time = %f\n",
+	tvSubDsec(f->timestamp, current_time));
+}
+
+#define XAVG(X) (dt ? (double) (f->X - l->X) / dt : 0.0)
+static void
+statAvgDump(StoreEntry * sentry, int minutes)
+{
+    StatCounters *f;
+    StatCounters *l;
+    double dt;
+    double ct;
+    assert(N_COUNT_HIST > 1);
+    assert(minutes > 0);
+    f = &CountHist[0];
+    if (minutes > N_COUNT_HIST - 1)
+	minutes = N_COUNT_HIST - 1;
+    l = &CountHist[minutes];
+    dt = tvSubDsec(l->timestamp, f->timestamp);
+    ct = f->cputime - l->cputime;
+    storeAppendPrintf(sentry, "client_http.requests = %f/sec\n",
+	XAVG(client_http.requests));
+    storeAppendPrintf(sentry, "client_http.hits = %f/sec\n",
+	XAVG(client_http.hits));
+    storeAppendPrintf(sentry, "client_http.errors = %f/sec\n",
+	XAVG(client_http.errors));
+    storeAppendPrintf(sentry, "client_http.kbytes_in = %f/sec\n",
+	XAVG(client_http.kbytes_in.kb));
+    storeAppendPrintf(sentry, "client_http.kbytes_out = %f/sec\n",
+	XAVG(client_http.kbytes_out.kb));
+    storeAppendPrintf(sentry, "icp.pkts_sent = %f/sec\n",
+	XAVG(icp.pkts_sent));
+    storeAppendPrintf(sentry, "icp.pkts_recv = %f/sec\n",
+	XAVG(icp.pkts_recv));
+    storeAppendPrintf(sentry, "icp.kbytes_sent = %f/sec\n",
+	XAVG(icp.kbytes_sent.kb));
+    storeAppendPrintf(sentry, "icp.kbytes_recv = %f/sec\n",
+	XAVG(icp.kbytes_recv.kb));
+    storeAppendPrintf(sentry, "unlink.requests = %f/sec\n",
+	XAVG(unlink.requests));
+    storeAppendPrintf(sentry, "page_faults = %f/sec\n",
+	XAVG(page_faults));
+    storeAppendPrintf(sentry, "select_loops = %f/sec\n",
+	XAVG(select_loops));
+    storeAppendPrintf(sentry, "cpu_time = %f seconds\n", ct);
+    storeAppendPrintf(sentry, "wall_time = %f seconds\n", dt);
+    storeAppendPrintf(sentry, "cpu_usage = %f%%\n", dpercent(ct, dt));
+}
+
+void
+statInit(void)
+{
+    int i;
+    debug(18, 5) ("statInit: Initializing...\n");
+    for (i = 0; i < PCONN_HIST_SZ; i++) {
+	client_pconn_hist[i] = 0;
+	server_pconn_hist[i] = 0;
+    }
+    memset(CountHist, '\0', N_COUNT_HIST * sizeof(StatCounters));
+    for (i = 0; i < N_COUNT_HIST; i++)
+	CountHist[i].timestamp = current_time;
+    Counter.timestamp = current_time;
+    eventAdd("statAvgTick", statAvgTick, NULL, 60);
+}
+
+void
+pconnHistCount(int what, int i)
+{
+    if (i >= PCONN_HIST_SZ)
+	i = PCONN_HIST_SZ - 1;
+    /* what == 0 for client, 1 for server */
+    if (what == 0)
+	client_pconn_hist[i]++;
+    else if (what == 1)
+	server_pconn_hist[i]++;
+    else
+	assert(0);
+}
+
+void
+pconnHistDump(StoreEntry * e)
+{
+    int i;
+    storeAppendPrintf(e,
+	"Client-side persistent connection counts:\n"
+	"\n"
+	"\treq/\n"
+	"\tconn      count\n"
+	"\t----  ---------\n");
+    for (i = 0; i < PCONN_HIST_SZ; i++) {
+	if (client_pconn_hist[i] == 0)
+	    continue;
+	storeAppendPrintf(e, "\t%4d  %9d\n", i, client_pconn_hist[i]);
+    }
+    storeAppendPrintf(e,
+	"\n"
+	"Server-side persistent connection counts:\n"
+	"\n"
+	"\treq/\n"
+	"\tconn      count\n"
+	"\t----  ---------\n");
+    for (i = 0; i < PCONN_HIST_SZ; i++) {
+	if (server_pconn_hist[i] == 0)
+	    continue;
+	storeAppendPrintf(e, "\t%4d  %9d\n", i, server_pconn_hist[i]);
+    }
+}
+
+static void
+statAvgTick(void *notused)
+{
+    StatCounters *t = &CountHist[0];
+    StatCounters *p = &CountHist[1];
+    StatCounters *c = &Counter;
+    struct rusage rusage;
+    eventAdd("statAvgTick", statAvgTick, NULL, 60);
+    squid_getrusage(&rusage);
+    c->page_faults = rusage_pagefaults(&rusage);
+    c->cputime = rusage_cputime(&rusage);
+    c->timestamp = current_time;
+    xmemmove(p, t, (N_COUNT_HIST - 1) * sizeof(StatCounters));
+    memcpy(t, c, sizeof(StatCounters));
+    NCountHist++;
+}
+
+void
+statAvg5min(StoreEntry * e)
+{
+#if NOT_YET
+    statCountersDump(e);
+    storeAppendPrintf(e, "\n");
+#endif
+    statAvgDump(e, 5);
+}
+
+void
+statAvg60min(StoreEntry * e)
+{
+#if NOT_YET
+    statCountersDump(e);
+    storeAppendPrintf(e, "\n");
+#endif
+    statAvgDump(e, 60);
+}
