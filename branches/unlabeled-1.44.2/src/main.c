@@ -10,6 +10,7 @@ int theAsciiConnection = -1;
 int theUdpConnection = -1;
 int do_reuse = 1;
 int opt_unlink_on_reload = 0;
+int opt_zap_disk_store = 0;
 int catch_signals = 1;
 int do_dns_test = 1;
 int vhost_mode = 0;
@@ -94,7 +95,7 @@ static void mainParseOptions(argc, argv)
 	    malloc_debug_level = atoi(optarg);
 	    break;
 	case 'z':
-	    zap_disk_store = 1;
+	    opt_zap_disk_store = 1;
 	    break;
 	case '?':
 	case 'h':
@@ -319,7 +320,7 @@ int main(argc, argv)
 	    loop_delay = (time_t) 0;
 	switch (comm_select(loop_delay, next_cleaning)) {
 	case COMM_OK:
-	    /* do nothing */
+	    errcount = 0;	/* reset if successful */
 	    break;
 	case COMM_ERROR:
 	    errcount++;
