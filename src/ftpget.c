@@ -79,6 +79,9 @@
 #include <signal.h>
 #include <time.h>
 #include <sys/time.h>		/* for select(2) */
+#ifdef HAVE_SYS_SELECT_H
+#include <sys/select.h>
+#endif
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -2022,6 +2025,7 @@ int ftpget_srv_mode(port)
     int n;
     static char *w_space = " \t\n\r";
     static char buf[BUFSIZ];
+    int buflen;
 
     setsid();			/* become session leader */
 
@@ -2071,15 +2075,21 @@ int ftpget_srv_mode(port)
 	    log_errno2(__FILE__, __LINE__, "accept");
 	    exit(1);
 	}
-	buf[0] = '\0';
-	/* XXX Assume we get the whole request in one read! */
-	/* Probably okay since it should be coming on the loopback */
-	if ((n = read(c, buf, BUFSIZ)) <= 0) {
-	    log_errno2(__FILE__, __LINE__, "read");
+	if (fork()) {
+	    /* parent */
 	    close(c);
 	    continue;
 	}
-	buf[n] = '\0';		/* Must terminate it */
+	buflen = 0;
+	memset(buf, '\0', BUFSIZ);
+	do {
+	    if ((n = read(c, &buf[buflen], BUFSIZ - buflen - 1)) <= 0) {
+		log_errno2(__FILE__, __LINE__, "read");
+		close(c);
+		_exit(1);
+	    }
+	    buflen += n;
+	} while (!strchr(buf, '\n'));
 	i = 0;
 	t = strtok(buf, w_space);
 	while (t && i < MAX_ARGS - 1) {
@@ -2089,11 +2099,7 @@ int ftpget_srv_mode(port)
 	    i++;
 	}
 	args[i] = NULL;
-	if (fork()) {
-	    /* parent */
-	    close(c);
-	    continue;
-	}
+
 	dup2(c, 1);
 	close(c);
 	execvp(fullprogname, args);
@@ -2103,10 +2109,13 @@ int ftpget_srv_mode(port)
     return 1;
 }
 
-void usage()
+void usage(argcount)
+     int argcount;
 {
     fprintf(stderr, "usage: %s options filename host path A,I user pass\n",
 	progname);
+    if (argcount != 0)
+	return;
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "\t-c num[:delay]  Max connect attempts and retry delay\n");
     fprintf(stderr, "\t-l num[:delay]  Max login attempts and retry delay\n");
@@ -2186,16 +2195,16 @@ int main(argc, argv)
 	    continue;
 	} else if (!strcmp(*argv, "-S")) {
 	    if (--argc < 1)
-		usage();
+		usage(argc);
 	    argv++;
 	    j = atoi(*argv);
 	    Debug(26, 1, ("argv=%s j=%d\n", *argv, j));
 	    if (j > 0)
 		return (ftpget_srv_mode(j));
-	    usage();
+	    usage(argc);
 	} else if (!strcmp(*argv, "-t")) {
 	    if (--argc < 1)
-		usage();
+		usage(argc);
 	    argv++;
 	    j = atoi(*argv);
 	    if (j > 0)
@@ -2203,7 +2212,7 @@ int main(argc, argv)
 	    continue;
 	} else if (!strcmp(*argv, "-w")) {
 	    if (--argc < 1)
-		usage();
+		usage(argc);
 	    argv++;
 	    j = atoi(*argv);
 	    if (j > 0)
@@ -2211,7 +2220,7 @@ int main(argc, argv)
 	    continue;
 	} else if (!strcmp(*argv, "-n")) {
 	    if (--argc < 1)
-		usage();
+		usage(argc);
 	    argv++;
 	    j = atoi(*argv);
 	    if (j > 0)
@@ -2219,19 +2228,19 @@ int main(argc, argv)
 	    continue;
 	} else if (!strcmp(*argv, "-p")) {
 	    if (--argc < 1)
-		usage();
+		usage(argc);
 	    argv++;
 	    o_iconprefix = xstrdup(*argv);
 	    continue;
 	} else if (!strcmp(*argv, "-s")) {
 	    if (--argc < 1)
-		usage();
+		usage(argc);
 	    argv++;
 	    o_iconsuffix = xstrdup(*argv);
 	    continue;
 	} else if (!strcmp(*argv, "-c")) {
 	    if (--argc < 1)
-		usage();
+		usage(argc);
 	    argv++;
 	    j = k = 0;
 	    sscanf(*argv, "%d:%d", &j, &k);
@@ -2242,7 +2251,7 @@ int main(argc, argv)
 	    continue;
 	} else if (!strcmp(*argv, "-l")) {
 	    if (--argc < 1)
-		usage();
+		usage(argc);
 	    argv++;
 	    j = k = 0;
 	    sscanf(*argv, "%d:%d", &j, &k);
@@ -2253,7 +2262,7 @@ int main(argc, argv)
 	    continue;
 	} else if (!strcmp(*argv, "-r")) {
 	    if (--argc < 1)
-		usage();
+		usage(argc);
 	    argv++;
 	    j = k = 0;
 	    sscanf(*argv, "%d:%d", &j, &k);
@@ -2268,7 +2277,7 @@ int main(argc, argv)
 	    o_list_wrap = 1;
 	} else if (!strcmp(*argv, "-P")) {
 	    if (--argc < 1)
-		usage();
+		usage(argc);
 	    argv++;
 	    j = atoi(*argv);
 	    if (j > 0)
@@ -2278,14 +2287,14 @@ int main(argc, argv)
 	    printf("%s version %s\n", progname, SQUID_VERSION);
 	    exit(0);
 	} else {
-	    usage();
+	    usage(argc);
 	    exit(1);
 	}
     }
 
     if (argc != 6) {
-	fprintf(stderr, "Too many arguments left (%d)\n", argc);
-	usage();
+	fprintf(stderr, "Wrong number of arguments left (%d)\n", argc);
+	usage(argc);
     }
     r = (request_t *) xmalloc(sizeof(request_t));
     memset(r, '\0', sizeof(request_t));
@@ -2312,7 +2321,7 @@ int main(argc, argv)
 
     if (*(r->type) != 'A' && *(r->type) != 'I') {
 	errorlog("Invalid transfer type: %s\n", r->type);
-	usage();
+	usage(argc);
     }
     cleanup_path(r);
 

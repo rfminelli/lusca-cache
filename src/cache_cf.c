@@ -86,10 +86,10 @@ static struct {
 
 #define DefaultMemMaxSize 	(16 << 20)	/* 16 MB */
 #define DefaultMemHighWatherMark 90	/* 90% */
-#define DefaultMemLowWatherMark  60	/* 60% */
+#define DefaultMemLowWatherMark  75	/* 75% */
 #define DefaultSwapMaxSize	(100 << 10)	/* 100 MB (100*1024 kbytes) */
 #define DefaultSwapHighWaterMark 90	/* 90% */
-#define DefaultSwapLowWaterMark  60	/* 60% */
+#define DefaultSwapLowWaterMark  75	/* 75% */
 
 #define DefaultFtpDefaultTtl	(7 * 24 * 60 * 60)	/* 1 week */
 #define DefaultFtpMaxObjSize	(4 << 20)	/* 4 MB */
@@ -107,13 +107,13 @@ static struct {
 #define DefaultPositiveDnsTtl	(360 * 60)	/* 6 hours */
 #define DefaultReadTimeout	(15 * 60)	/* 15 min */
 #define DefaultLifetimeDefault	(200 * 60)	/* 3+ hours */
-#define DefaultLifetimeShutdown	30		/* 30 seconds */
+#define DefaultLifetimeShutdown	30	/* 30 seconds */
 #define DefaultConnectTimeout	(2 * 60)	/* 2 min */
 #define DefaultDefaultAgeMax	(3600 * 24 * 30)	/* 30 days */
 #define DefaultCleanRate	-1	/* disabled */
 #define DefaultDnsChildren	5	/* 3 processes */
 #define DefaultDnsChildrenMax	32	/* 32 processes */
-#define DefaultMaxRequestSize	(102400)	/* 100Kb */
+#define DefaultMaxRequestSize	(100 << 10)	/* 100Kb */
 #define DefaultHotVmFactor	0.0	/* disabled */
 
 #define DefaultAsciiPortNum	CACHE_HTTP_PORT
@@ -435,6 +435,8 @@ static void parseCacheHostLine()
 	    self_destruct();
 	}
     }
+    if (weight < 1)
+	weight = 1;
     neighbors_cf_add(hostname, type, ascii_port, udp_port, proxy_only, weight);
 }
 

@@ -1,4 +1,4 @@
-#ident "$Id$"
+/* "$Id$" */
 
 /*
  * DEBUG: Section 28          acl
@@ -478,7 +478,7 @@ int aclMatchTime(data, when)
     t = (time_t) (tm.tm_hour * 60 + tm.tm_min);
     if (t < data->start || t > data->stop)
 	return 0;
-    return data->weekbits & tm.tm_wday ? 1 : 0;
+    return data->weekbits & (1 << tm.tm_wday) ? 1 : 0;
 }
 
 static int aclMatchAcl(acl, c, m, pr, h, po, r)
