@@ -75,7 +75,7 @@ TYPE: ushort
 DEFAULT: 3130
 LOC: Config.Port.icp
 DOC_START
-	The port number where Squid sends and receives ICP queries to
+	The port number where Squid sends and receives ICP requests to
 	and from neighbor caches.  Default is 3130.  To disable use
 	"0".  May be overridden with -u on the command line.
 
@@ -88,7 +88,7 @@ TYPE: ushort
 DEFAULT: 4827
 LOC: Config.Port.htcp
 DOC_START
-	The port number where Squid sends and receives HTCP queries to
+	The port number where Squid sends and receives ICP requests to
 	and from neighbor caches.  Default is 4827.  To disable use
 	"0".
 
@@ -102,7 +102,7 @@ LOC: Config.mcast_group_list
 DEFAULT: none
 DOC_START
 	This tag specifies a list of multicast groups which your server
-	should join to receive multicasted ICP queries.
+	should join to receive multicasted ICP requests.
 
 	NOTE!  Be very careful what you put here!  Be sure you
 	understand the difference between an ICP _query_ and an ICP
@@ -231,7 +231,7 @@ DOC_START
 		     is 1, larger weights are favored more.
 
 		     use 'ttl=n' to specify a IP multicast TTL to use
-		     when sending an ICP queries to this address.
+		     when sending an ICP request to this address.
 		     Only useful when sending to a multicast group.
 		     Because we don't accept ICP replies from random
 		     hosts, you must configure other group members as
@@ -605,7 +605,7 @@ DEFAULT: @DEFAULT_ACCESS_LOG@
 LOC: Config.Log.access
 DOC_START
 	Logs the client request activity.  Contains an entry for
-	every HTTP and ICP queries received.
+	every HTTP and ICP request received.
 
 cache_access_log @DEFAULT_ACCESS_LOG@
 DOC_END
@@ -773,7 +773,7 @@ DOC_START
 
 	To enable ident lookups for specific client addresses, you
 	can follow this example:
-
+ 
 	acl ident_aware_hosts src 198.168.1.0/255.255.255.0
 	ident_lookup_access allow ident_aware_hosts
 	ident_lookup_access deny all
@@ -931,7 +931,7 @@ DOC_END
 
 
 NAME: redirect_program
-TYPE: wordlist
+TYPE: string
 LOC: Config.Program.redirect
 DEFAULT: none
 DOC_START
@@ -2089,7 +2089,7 @@ DOC_START
 	Lowering this value increases the total number of buckets and
 	also the storage maintenance rate.  The default is 20.
 
-store_objects_per_bucket 20
+store_objects_per_bucket 50
 DOC_END
 
 NAME: client_db
@@ -2278,7 +2278,7 @@ TYPE: http_header
 LOC: Config.anonymize_headers
 DEFAULT: none
 DOC_START
-	Usage: anonymize_headers allow|deny header_name ...
+        Usage: anonymize_headers allow|deny header_name ...
 
 	This option replaces the old 'http_anonymizer' option with
 	something that is much more configurable.  You may now
@@ -2348,7 +2348,7 @@ DEFAULT: @DEFAULT_ERROR_DIR@
 DOC_START
 	If you wish to create your own versions of the default
 	(English) error files, either to customise them to suit your
-	language or company copy the template english files to anther
+	language or company copy the template english files to another
 	directory and point this tag at them.
 DOC_END
 
@@ -2658,7 +2658,7 @@ TYPE: int
 DEFAULT: 8
 LOC: Config.comm_incoming.http_min_poll
 DOC_START
-	Heavy voodoo here.  I can't even beleve you are reading this.
+	Heavy voodoo here.  I can't even believe you are reading this.
 	Are you crazy?  Don't even think about adjusting these unless
 	you understand the algorithms in comm_select.c first!
 
@@ -2734,21 +2734,33 @@ IFDEF: MULTICAST_MISS_STREAM
 TYPE: address
 LOC: Config.mcast_miss.addr
 DEFAULT: 255.255.255.255
-DOC_NONE
+DOC_START
+	If you enable this option, every "cache miss" URL will
+	be sent out on the specified multicast address.
+
+	Do not enable this option unless you are are absolutely
+	certain you understand what you are doing.
+DOC_END
 
 NAME: mcast_miss_port
 IFDEF: MULTICAST_MISS_STREAM
 TYPE: ushort
 LOC: Config.mcast_miss.port
 DEFAULT: 3135
-DOC_NONE
+DOC_START
+	This is the port number to be used in conjuction with
+	'mcast_miss_addr'.
+DOC_END
 
 NAME: mcast_miss_encode_key
 IFDEF: MULTICAST_MISS_STREAM
 TYPE: string
 LOC: Config.mcast_miss.encode_key
 DEFAULT: XXXXXXXXXXXXXXXX
-DOC_NONE
+DOC_START
+	The URLs that are sent in the multicast miss stream are
+	encrypted.  This is the encryption key.
+DOC_END
 
 NAME: prefer_direct
 TYPE: onoff
@@ -2773,6 +2785,17 @@ DOC_START
 	By default, Squid strips query terms from requested URLs before
 	logging.  This protects your user's privacy.
 strip_query_terms on
+DOC_END
+
+NAME: coredump_dir
+TYPE: string
+LOC: Config.coredump_dir
+DEFAULT: none
+DOC_START
+	By default Squid leaves core files in the first cache_dir
+	directory.  If you set 'coredump_dir' to a directory
+	that exists, Squid will chdir() to that directory at startup
+	and coredump files will be left there.
 DOC_END
 
 EOF

@@ -77,8 +77,6 @@ extern int aio_unlink(const char *, aio_result_t *);
 extern int aio_opendir(const char *, aio_result_t *);
 extern aio_result_t *aio_poll_done(void);
 extern int aio_operations_pending(void);
-extern int aio_overloaded(void);
-extern int aio_sync(void);
 
 extern void aioCancel(int, void *);
 extern void aioOpen(const char *, int, mode_t, AIOCB *, void *, void *);
@@ -498,17 +496,18 @@ extern void snmpConnectionClose(void);
 extern void snmpDebugOid(int lvl, oid * Name, snint Len);
 extern void addr2oid(struct in_addr addr, oid * Dest);
 extern struct in_addr *oid2addr(oid * id);
-variable_list *snmp_basicFn(variable_list *, snint *);
-variable_list *snmp_confFn(variable_list *, snint *);
-variable_list *snmp_sysFn(variable_list *, snint *);
-variable_list *snmp_prfSysFn(variable_list *, snint *);
-variable_list *snmp_prfProtoFn(variable_list *, snint *);
-variable_list *snmp_prfPeerFn(variable_list *, snint *);
-variable_list *snmp_netIpFn(variable_list *, snint *);
-variable_list *snmp_netFqdnFn(variable_list *, snint *);
-variable_list *snmp_netDnsFn(variable_list *, snint *);
-variable_list *snmp_meshPtblFn(variable_list *, snint *);
-variable_list *snmp_meshCtblFn(variable_list *, snint *);
+extern struct in_addr *client_entry(struct in_addr *current);
+extern variable_list *snmp_basicFn(variable_list *, snint *);
+extern variable_list *snmp_confFn(variable_list *, snint *);
+extern variable_list *snmp_sysFn(variable_list *, snint *);
+extern variable_list *snmp_prfSysFn(variable_list *, snint *);
+extern variable_list *snmp_prfProtoFn(variable_list *, snint *);
+extern variable_list *snmp_prfPeerFn(variable_list *, snint *);
+extern variable_list *snmp_netIpFn(variable_list *, snint *);
+extern variable_list *snmp_netFqdnFn(variable_list *, snint *);
+extern variable_list *snmp_netDnsFn(variable_list *, snint *);
+extern variable_list *snmp_meshPtblFn(variable_list *, snint *);
+extern variable_list *snmp_meshCtblFn(variable_list *, snint *);
 #endif /* SQUID_SNMP */
 
 extern void icpHandleIcpV3(int, struct sockaddr_in, char *, int);
@@ -660,6 +659,7 @@ extern void fwdFail(FwdState *, ErrorState *);
 extern void fwdUnregister(int fd, FwdState *);
 extern void fwdComplete(FwdState * fwdState);
 extern void fwdInit(void);
+extern int fwdReforwardableStatus(http_status s);
 
 extern void urnStart(request_t *, StoreEntry *);
 
@@ -1122,6 +1122,8 @@ extern void delayBytesIn(delay_id, int qty);
 extern int delayMostBytesWanted(const MemObject * mem, int max);
 extern delay_id delayMostBytesAllowed(const MemObject * mem);
 extern void delaySetStoreClient(StoreEntry * e, void *data, delay_id delay_id);
+void delayRegisterDelayIdPtr(delay_id * loc);
+void delayUnregisterDelayIdPtr(delay_id * loc);
 #endif
 
 /* helper.c */

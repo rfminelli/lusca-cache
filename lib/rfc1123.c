@@ -93,9 +93,9 @@ make_month(const char *s)
     int i;
     char month[3];
 
-    month[0] = toupper(*s);
-    month[1] = tolower(*(s + 1));
-    month[2] = tolower(*(s + 2));
+    month[0] = xtoupper(*s);
+    month[1] = xtolower(*(s + 1));
+    month[2] = xtolower(*(s + 2));
 
     for (i = 0; i < 12; i++)
 	if (!strncmp(month_names[i], month, 3))
@@ -119,7 +119,7 @@ parse_rfc1123(const char *str)
 	s++;			/* or: Thu, 10 Jan 1993 01:29:59 GMT */
 	while (*s == ' ')
 	    s++;
-	if (isdigit(*s) && !isdigit(*(s + 1)))	/* backoff if only one digit */
+	if (xisdigit(*s) && !xisdigit(*(s+1))) /* backoff if only one digit */
 	    s--;
 	if (strchr(s, '-')) {	/* First format */
 	    if ((int) strlen(s) < 18)
@@ -237,16 +237,15 @@ mkhttpdlogtime(const time_t * t)
     gmt_yday = gmt->tm_yday;
 
     lt = localtime(t);
-
     day_offset = lt->tm_yday - gmt_yday;
+    min_offset = day_offset * 1440 + (lt->tm_hour - gmt_hour) * 60
+	+ (lt->tm_min - gmt_min);
+
     /* wrap round on end of year */
     if (day_offset > 1)
 	day_offset = -1;
     else if (day_offset < -1)
 	day_offset = 1;
-
-    min_offset = day_offset * 1440 + (lt->tm_hour - gmt_hour) * 60
-	+ (lt->tm_min - gmt_min);
 
     len = strftime(buf, 127 - 5, "%d/%b/%Y:%H:%M:%S ", lt);
     snprintf(buf + len, 128 - len, "%+03d%02d",

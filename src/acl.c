@@ -673,6 +673,7 @@ aclParseAclLine(acl ** head)
 	debug(28, 3) ("aclParseAclLine: Appending to '%s'\n", aclname);
 	new_acl = 0;
     }
+    AclMatchedName = aclname;	/* ugly */
     switch (A->type) {
     case ACL_SRC_IP:
     case ACL_DST_IP:
@@ -737,6 +738,7 @@ aclParseAclLine(acl ** head)
 	fatal("Bad ACL type");
 	break;
     }
+    AclMatchedName = NULL;	/* ugly */
     if (!new_acl)
 	return;
     if (A->data == NULL) {
@@ -987,7 +989,6 @@ aclDecodeProxyAuth(const char *proxy_auth, char **user, char **password, char *b
     char *sent_auth;
     char *cleartext;
 
-    debug(28, 6) ("aclDecodeProxyAuth: header = '%s'\n", proxy_auth);
     if (proxy_auth == NULL)
 	return 0;
     if (strlen(proxy_auth) < SKIP_BASIC_SZ)
@@ -997,7 +998,7 @@ aclDecodeProxyAuth(const char *proxy_auth, char **user, char **password, char *b
     /* Trim trailing \n before decoding */
     strtok(sent_auth, "\n");
     /* Trim leading whitespace before decoding */
-    while (isspace(*proxy_auth))
+    while (xisspace(*proxy_auth))
 	proxy_auth++;
     cleartext = uudecode(sent_auth);
     xfree(sent_auth);
@@ -1008,7 +1009,7 @@ aclDecodeProxyAuth(const char *proxy_auth, char **user, char **password, char *b
     if ((*password = strchr(*user, ':')) != NULL)
 	*(*password)++ = '\0';
     if (*password == NULL) {
-	debug(28, 1) ("aclDecodeProxyAuth: no password in proxy authorization header '%s'\n", proxy_auth);
+	debug(28, 1) ("aclDecodeProxyAuth: no password in proxy authorization header\n");
 	return 0;
     }
     return 1;
@@ -1786,8 +1787,6 @@ aclDestroyAcls(acl ** head)
 	    break;
 	case ACL_URL_REGEX:
 	case ACL_URLPATH_REGEX:
-	case ACL_SRC_DOM_REGEX:
-	case ACL_DST_DOM_REGEX:
 	case ACL_BROWSER:
 	    aclDestroyRegexList(a->data);
 	    break;
@@ -1886,10 +1885,18 @@ aclDomainCompare(const void *data, splayNode * n)
     while (d1[l1] == d2[l2]) {
 	if ((l1 == 0) && (l2 == 0))
 	    return 0;		/* d1 == d2 */
-	if (l1-- == 0)
+	if (l1-- == 0) {
+	    debug(28, 0) ("WARNING: %s is a subdomain of %s\n", d1, d2);
+	    debug(28, 0) ("WARNING: This may break Splay tree searching\n");
+	    debug(28, 0) ("WARNING: You should remove '%s' from the ACL named '%s'\n", d2, AclMatchedName);
 	    return -1;		/* d1 < d2 */
-	if (l2-- == 0)
+	}
+	if (l2-- == 0) {
+	    debug(28, 0) ("WARNING: %s is a subdomain of %s\n", d2, d1);
+	    debug(28, 0) ("WARNING: This may break Splay tree searching\n");
+	    debug(28, 0) ("WARNING: You should remove '%s' from the ACL named '%s'\n", d1, AclMatchedName);
 	    return 1;		/* d1 > d2 */
+	}
     }
     return (d1[l1] - d2[l2]);
 }
@@ -1908,7 +1915,7 @@ aclHostDomainCompare(const void *data, splayNode * n)
     l1 = strlen(h);
     l2 = strlen(d);
     /* h != d */
-    while (h[l1] == d[l2]) {
+    while (xtolower(h[l1]) == xtolower(d[l2])) {
 	if (l1 == 0)
 	    break;
 	if (l2 == 0)
@@ -1921,7 +1928,7 @@ aclHostDomainCompare(const void *data, splayNode * n)
 	return -1;		/* domain(h) < d */
     if ((d[l2] == '.') || (l2 == 0))
 	return 1;		/* domain(h) > d */
-    return (h[l1] - d[l2]);
+    return (xtolower(h[l1]) - xtolower(d[l2]));
 }
 
 /* compare two network specs

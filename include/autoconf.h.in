@@ -247,6 +247,9 @@
 /* The number of bytes in a long.  */
 #undef SIZEOF_LONG
 
+/* The number of bytes in a void *.  */
+#undef SIZEOF_VOID_P
+
 /* Define if you have the bcopy function.  */
 #undef HAVE_BCOPY
 
@@ -264,6 +267,9 @@
 
 /* Define if you have the getpagesize function.  */
 #undef HAVE_GETPAGESIZE
+
+/* Define if you have the getrlimit function.  */
+#undef HAVE_GETRLIMIT
 
 /* Define if you have the getrusage function.  */
 #undef HAVE_GETRUSAGE

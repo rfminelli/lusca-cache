@@ -81,8 +81,6 @@ static int clientOnlyIfCached(clientHttpRequest * http);
 static STCB clientSendMoreData;
 static STCB clientCacheHit;
 static void clientSetKeepaliveFlag(clientHttpRequest *);
-static void clientPackRangeHdr(const HttpReply *rep, const HttpHdrRangeSpec *spec, String boundary, MemBuf *mb);
-static void clientPackTermBound(String boundary, MemBuf *mb);
 static void clientInterpretRequestHeaders(clientHttpRequest *);
 static void clientProcessRequest(clientHttpRequest *);
 static void clientProcessExpired(void *data);
@@ -291,13 +289,18 @@ clientProcessExpired(void *data)
     }
     http->request->flags.refresh = 1;
     http->old_entry = http->entry;
+    /*
+     * Assert that 'http' is already a client of old_entry.  If 
+     * it is not, then the beginning of the object data might get
+     * freed from memory before we need to access it.
+     */
+    assert(storeClientListSearch(http->old_entry->mem_obj, http));
     entry = storeCreateEntry(url,
 	http->log_uri,
 	http->request->flags,
 	http->request->method);
     /* NOTE, don't call storeLockObject(), storeCreateEntry() does it */
     storeClientListAdd(entry, http);
-    storeClientListAdd(http->old_entry, http);
 #if DELAY_POOLS
     /* delay_id is already set on original store client */
     delaySetStoreClient(entry, http, delayClient(http->request));
@@ -364,17 +367,23 @@ clientHandleIMSReply(void *data, char *buf, ssize_t size)
 {
     clientHttpRequest *http = data;
     StoreEntry *entry = http->entry;
-    MemObject *mem = entry->mem_obj;
+    MemObject *mem;
     const char *url = storeUrl(entry);
     int unlink_request = 0;
     StoreEntry *oldentry;
     int recopy = 1;
-    const http_status status = mem->reply->sline.status;
+    http_status status;
     debug(33, 3) ("clientHandleIMSReply: %s, %d bytes\n", url, (int) size);
+    if (entry == NULL) {
+	memFree(buf, MEM_CLIENT_SOCK_BUF);
+	return;
+    }
     if (size < 0 && !EBIT_TEST(entry->flags, ENTRY_ABORTED)) {
 	memFree(buf, MEM_CLIENT_SOCK_BUF);
 	return;
     }
+    mem = entry->mem_obj;
+    status = mem->reply->sline.status;
     if (EBIT_TEST(entry->flags, ENTRY_ABORTED)) {
 	debug(33, 3) ("clientHandleIMSReply: ABORTED '%s'\n", url);
 	/* We have an existing entry, but failed to validate it */
@@ -605,20 +614,22 @@ httpRequestFree(void *data)
     clientHttpRequest *http = data;
     clientHttpRequest **H;
     ConnStateData *conn = http->conn;
-    StoreEntry *entry = http->entry;
+    StoreEntry *e;
     request_t *request = http->request;
     MemObject *mem = NULL;
-    debug(33, 3) ("httpRequestFree: %s\n", storeUrl(entry));
+    debug(33, 3) ("httpRequestFree: %s\n", storeUrl(http->entry));
     if (!clientCheckTransferDone(http)) {
-	if (entry)
-	    storeUnregister(entry, http);
-	entry = http->entry;	/* reset, IMS might have changed it */
-	if (entry && entry->ping_status == PING_WAITING)
-	    storeReleaseRequest(entry);
+	if ((e = http->entry)) {
+	    http->entry = NULL;
+	    storeUnregister(e, http);
+	    storeUnlockObject(e);
+	}
+	if (http->entry && http->entry->ping_status == PING_WAITING)
+	    storeReleaseRequest(http->entry);
     }
     assert(http->log_type < LOG_TYPE_MAX);
-    if (entry)
-	mem = entry->mem_obj;
+    if (http->entry)
+	mem = http->entry->mem_obj;
     if (http->out.size || http->log_type) {
 	http->al.icp.opcode = ICP_INVALID;
 	http->al.url = http->log_uri;
@@ -662,17 +673,17 @@ httpRequestFree(void *data)
     safe_free(http->al.headers.reply);
     safe_free(http->redirect.location);
     stringClean(&http->range_iter.boundary);
-    if (entry) {
+    if ((e = http->entry)) {
 	http->entry = NULL;
-	storeUnregister(entry, http);
-	storeUnlockObject(entry);
+	storeUnregister(e, http);
+	storeUnlockObject(e);
     }
     /* old_entry might still be set if we didn't yet get the reply
      * code in clientHandleIMSReply() */
-    if (http->old_entry) {
-	storeUnregister(http->old_entry, http);
-	storeUnlockObject(http->old_entry);
+    if ((e = http->old_entry)) {
 	http->old_entry = NULL;
+	storeUnregister(e, http);
+	storeUnlockObject(e);
     }
     requestUnlink(http->request);
     assert(http != http->next);
@@ -963,44 +974,6 @@ clientIfRangeMatch(clientHttpRequest * http, HttpReply * rep)
     return 0;
 }
 
-/* returns expected content length for multi-range replies
- * note: assumes that httpHdrRangeCanonize has already been called
- * warning: assumes that HTTP headers for individual ranges at the
- *          time of the actuall assembly will be exactly the same as
- *          the headers when clientMRangeCLen() is called */
-static int
-clientMRangeCLen(clientHttpRequest * http) {
-    int clen = 0;
-    HttpHdrRangePos pos = HttpHdrRangeInitPos;
-    const HttpHdrRangeSpec *spec;
-    MemBuf mb;
-
-    assert(http->entry->mem_obj);
-
-    memBufDefInit(&mb);
-    while ((spec = httpHdrRangeGetSpec(http->request->range, &pos))) {
-
-	/* account for headers for this range */
-	memBufReset(&mb);
-	clientPackRangeHdr(http->entry->mem_obj->reply,
-	    spec, http->range_iter.boundary, &mb);
-	clen += mb.size;
-
-	/* account for range content */
-	clen += spec->length;
-
-	debug(33, 6) ("clientMRangeCLen: (clen += %d + %d) == %d\n",
-	    mb.size, spec->length, clen);
-    }
-    /* account for the terminating boundary */
-    memBufReset(&mb);
-    clientPackTermBound(http->range_iter.boundary, &mb);
-    clen += mb.size;
-
-    memBufClean(&mb);
-    return clen;
-}
-
 /* adds appropriate Range headers if needed */
 static void
 clientBuildRangeHeader(clientHttpRequest * http, HttpReply * rep)
@@ -1032,9 +1005,7 @@ clientBuildRangeHeader(clientHttpRequest * http, HttpReply * rep)
 	http->request->range = NULL;
     } else {
 	const int spec_count = http->request->range->specs.count;
-	int actual_clen = -1;
-
-	debug(33, 2) ("clientBuildRangeHeader: range spec count: %d virgin clen: %d\n",
+	debug(33, 2) ("clientBuildRangeHeader: range spec count: %d clen: %d\n",
 	    spec_count, rep->content_length);
 	assert(spec_count > 0);
 	/* ETags should not be returned with Partial Content replies? */
@@ -1046,9 +1017,11 @@ clientBuildRangeHeader(clientHttpRequest * http, HttpReply * rep)
 	    assert(spec);
 	    /* append Content-Range */
 	    httpHeaderAddContRange(hdr, *spec, rep->content_length);
-	    /* set new Content-Length to the actual number of bytes
+	    /* set new Content-Length to the actual number of OCTETs
 	     * transmitted in the message-body */
-	    actual_clen = spec->length;
+	    httpHeaderDelById(hdr, HDR_CONTENT_LENGTH);
+	    httpHeaderPutInt(hdr, HDR_CONTENT_LENGTH, spec->length);
+	    debug(33, 2) ("clientBuildRangeHeader: actual content length: %d\n", spec->length);
 	} else {
 	    /* multipart! */
 	    /* generate boundary string */
@@ -1058,16 +1031,11 @@ clientBuildRangeHeader(clientHttpRequest * http, HttpReply * rep)
 	    httpHeaderPutStrf(hdr, HDR_CONTENT_TYPE,
 		"multipart/byteranges; boundary=\"%s\"",
 		strBuf(http->range_iter.boundary));
-	    /* Content-Length is not required in multipart responses
-	     * but it is always nice to have one */
-	    actual_clen = clientMRangeCLen(http);
+	    /* no need for Content-Length in multipart responses */
+	    /* but we must delete the original one if we cannot (yet)
+	     * calculate the actual length */
+	    httpHeaderDelById(hdr, HDR_CONTENT_LENGTH);
 	}
-
-	/* replace Content-Length header */
-	assert(actual_clen >= 0);
-	httpHeaderDelById(hdr, HDR_CONTENT_LENGTH);
-	httpHeaderPutInt(hdr, HDR_CONTENT_LENGTH, actual_clen);
-	debug(33, 2) ("clientBuildRangeHeader: actual content length: %d\n", actual_clen);
     }
 }
 
@@ -1339,41 +1307,6 @@ clientCacheHit(void *data, char *buf, ssize_t size)
     }
 }
 
-/* put terminating boundary for multiparts */
-static void
-clientPackTermBound(String boundary, MemBuf *mb)
-{
-    memBufPrintf(mb, "\r\n--%s--\r\n", strBuf(boundary));
-    debug(33, 6) ("clientPackTermBound: buf offset: %d\n", mb->size);
-}
-
-/* appends a "part" HTTP header (as in a multi-part/range reply) to the buffer */
-static void
-clientPackRangeHdr(const HttpReply *rep, const HttpHdrRangeSpec *spec, String boundary, MemBuf *mb)
-{
-    HttpHeader hdr;
-    Packer p;
-    assert(rep);
-    assert(spec);
-
-    /* put boundary */
-    debug(33, 5) ("clientPackRangeHdr: appending boundary: %s\n", strBuf(boundary));
-    /* rfc2046 requires to _prepend_ boundary with <crlf>! */
-    memBufPrintf(mb, "\r\n--%s\r\n", strBuf(boundary));
-
-    /* stuff the header with required entries and pack it */
-    httpHeaderInit(&hdr, hoReply);
-    if (httpHeaderHas(&rep->header, HDR_CONTENT_TYPE))
-        httpHeaderPutStr(&hdr, HDR_CONTENT_TYPE, httpHeaderGetStr(&rep->header, HDR_CONTENT_TYPE));
-    httpHeaderAddContRange(&hdr, *spec, rep->content_length);
-    packerToMemInit(&p, mb);
-    httpHeaderPackInto(&hdr, &p);
-    packerClean(&p);
-    httpHeaderClean(&hdr);
-
-    /* append <crlf> (we packed a header, not a reply) */
-    memBufPrintf(mb, crlf);
-}
 
 /* extracts a "range" from *buf and appends them to mb, updating all offsets and such */
 static void
@@ -1383,33 +1316,40 @@ clientPackRange(clientHttpRequest * http, HttpHdrRangeIter * i, const char **buf
     off_t body_off = http->out.offset - i->prefix_size;
     assert(*size > 0);
     assert(i->spec);
-
     /* intersection of "have" and "need" ranges must not be empty */
     assert(body_off < i->spec->offset + i->spec->length);
     assert(body_off + *size > i->spec->offset);
-
-    /* put boundary and headers at the beginning of a range in a multi-range */
+    /* put boundary and headers at the beginning of range in a multi-range */
     if (http->request->range->specs.count > 1 && i->debt_size == i->spec->length) {
-	assert(http->entry->mem_obj);
-	clientPackRangeHdr(
-	    http->entry->mem_obj->reply, /* original reply */
-	    i->spec,                     /* current range */
-	    i->boundary,                 /* boundary, the same for all */
-	    mb
-	);
+	HttpReply *rep = http->entry->mem_obj ?		/* original reply */
+	http->entry->mem_obj->reply : NULL;
+	HttpHeader hdr;
+	Packer p;
+	assert(rep);
+	/* put boundary */
+	debug(33, 5) ("clientPackRange: appending boundary: %s\n", strBuf(i->boundary));
+	/* rfc2046 requires to _prepend_ boundary with <crlf>! */
+	memBufPrintf(mb, "\r\n--%s\r\n", strBuf(i->boundary));
+	httpHeaderInit(&hdr, hoReply);
+	if (httpHeaderHas(&rep->header, HDR_CONTENT_TYPE))
+	    httpHeaderPutStr(&hdr, HDR_CONTENT_TYPE, httpHeaderGetStr(&rep->header, HDR_CONTENT_TYPE));
+	httpHeaderAddContRange(&hdr, *i->spec, rep->content_length);
+	packerToMemInit(&p, mb);
+	httpHeaderPackInto(&hdr, &p);
+	packerClean(&p);
+	httpHeaderClean(&hdr);
+	/* append <crlf> (we packed a header, not a reply */
+	memBufPrintf(mb, crlf);
     }
-
-    /* append content */
+    /* append */
     debug(33, 3) ("clientPackRange: appending %d bytes\n", copy_sz);
     memBufAppend(mb, *buf, copy_sz);
-
     /* update offsets */
     *size -= copy_sz;
     i->debt_size -= copy_sz;
     body_off += copy_sz;
     *buf += copy_sz;
     http->out.offset = body_off + i->prefix_size;	/* sync */
-
     /* paranoid check */
     assert(*size >= 0 && i->debt_size >= 0);
 }
@@ -1483,7 +1423,7 @@ clientPackMoreRanges(clientHttpRequest * http, const char *buf, ssize_t size, Me
 	    assert(body_off == i->spec->offset + i->spec->length - i->debt_size);
     } else if (http->request->range->specs.count > 1) {
 	/* put terminating boundary for multiparts */
-	clientPackTermBound(i->boundary, mb);
+	memBufPrintf(mb, "\r\n--%s--\r\n", strBuf(i->boundary));
     }
     http->out.offset = body_off + i->prefix_size;	/* sync */
     return i->debt_size > 0;
@@ -2020,19 +1960,19 @@ parseHttpRequest(ConnStateData * conn, method_t * method_p, int *status,
 	debug(33, 1) ("parseHttpRequest: Missing URL\n");
 	return parseHttpRequestAbort(conn, "error:missing-url");
     }
-    while (isspace(*url))
+    while (xisspace(*url))
 	url++;
     t = url + strlen(url);
     assert(*t == '\0');
     token = NULL;
     while (t > url) {
 	t--;
-	if (isspace(*t) && !strncmp(t + 1, "HTTP/", 5)) {
+	if (xisspace(*t) && !strncmp(t + 1, "HTTP/", 5)) {
 	    token = t + 1;
 	    break;
 	}
     }
-    while (t > url && isspace(*t))
+    while (t > url && xisspace(*t))
 	*(t--) = '\0';
     debug(33, 5) ("parseHttpRequest: URI is '%s'\n", url);
     if (token == NULL) {
@@ -2247,7 +2187,7 @@ clientReadRequest(int fd, void *data)
     while (conn->in.offset > 0) {
 	int nrequests;
 	size_t req_line_sz;
-	while (conn->in.offset > 0 && isspace(conn->in.buf[0])) {
+	while (conn->in.offset > 0 && xisspace(conn->in.buf[0])) {
 	    xmemmove(conn->in.buf, conn->in.buf + 1, conn->in.offset - 1);
 	    conn->in.offset--;
 	}
@@ -2316,9 +2256,9 @@ clientReadRequest(int fd, void *data)
 	    request->flags.accelerated = http->flags.accel;
 	    if (!http->flags.internal) {
 		if (internalCheck(strBuf(request->urlpath))) {
-		    if (0 == strcasecmp(request->host, internalHostname())) {
-			if (request->port == Config.Port.http->i)
-			    http->flags.internal = 1;
+		    if (0 == strcasecmp(request->host, internalHostname()) &&
+			request->port == Config.Port.http->i) {
+			http->flags.internal = 1;
 		    } else if (internalStaticCheck(strBuf(request->urlpath))) {
 			xstrncpy(request->host, internalHostname(), SQUIDHOSTNAMELEN);
 			request->port = Config.Port.http->i;
@@ -2512,6 +2452,7 @@ httpAccept(int sock, void *data)
 	commSetTimeout(fd, Config.Timeout.request, requestTimeout, connState);
 #if USE_IDENT
 	identChecklist.src_addr = peer.sin_addr;
+	identChecklist.my_addr = me.sin_addr;
 	if (aclCheckFast(Config.accessList.identLookup, &identChecklist))
 	    identStart(&me, &peer, clientIdentDone, connState);
 #endif

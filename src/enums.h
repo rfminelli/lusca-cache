@@ -81,6 +81,9 @@ typedef enum {
     ERR_FTP_PUT_CREATED,	/* !error,a note that the file was created */
     ERR_FTP_PUT_MODIFIED,	/* modified, !created */
     ERR_FTP_PUT_ERROR,
+    ERR_FTP_NOT_FOUND,
+    ERR_FTP_FORBIDDEN,
+    ERR_FTP_UNAVAILABLE,
     ERR_ONLY_IF_CACHED_MISS,	/* failure to satisfy only-if-cached request */
     ERR_MAX
 } err_type;
@@ -308,9 +311,9 @@ typedef enum {
     ICP_DATAEND,
     ICP_SECHO,
     ICP_DECHO,
-    ICP_NOTIFY,
-    ICP_INVALIDATE,
-    ICP_DELETE,
+    ICP_UNUSED12,
+    ICP_UNUSED13,
+    ICP_UNUSED14,
     ICP_UNUSED15,
     ICP_UNUSED16,
     ICP_UNUSED17,

@@ -1,6 +1,4 @@
 
-
-
 /*
  * $Id$
  *
@@ -42,7 +40,6 @@
 #endif
 
 /* Local functions */
-static int client_comm_bind(int, char *);
 static int client_comm_connect(int, char *, u_short, struct timeval *);
 static void usage(const char *progname);
 static int Now(struct timeval *);
@@ -58,7 +55,7 @@ static void
 usage(const char *progname)
 {
     fprintf(stderr,
-	"Usage: %s [-arsv] [-i IMS] [-h remote host] [-l local host] [-p port] [-m method] [-t count] [-I ping-interval] [-H 'strings'] url\n"
+	"Usage: %s [-arsv] [-i IMS] [-h host] [-p port] [-m method] [-t count] [-I ping-interval] [-H 'strings'] url\n"
 	"Options:\n"
 	"    -P file      PUT request.\n"
 	"    -a           Do NOT include Accept: header.\n"
@@ -67,7 +64,6 @@ usage(const char *progname)
 	"    -v           Verbose. Print outgoing message to stderr.\n"
 	"    -i IMS       If-Modified-Since time (in Epoch seconds).\n"
 	"    -h host      Retrieve URL from cache on hostname.  Default is localhost.\n"
-	"    -l host      Specify a local IP address to bind to.  Default is none.\n"
 	"    -p port      Port number of cache.  Default is %d.\n"
 	"    -m method    Request method, default is GET.\n"
 	"    -t count     Trace count cache-hops\n"
@@ -89,8 +85,7 @@ main(int argc, char *argv[])
     int opt_noaccept = 0;
     int opt_put = 0;
     int opt_verbose = 0;
-    char *hostname, *localhost;
-    char url[BUFSIZ], msg[BUFSIZ], buf[BUFSIZ];
+    char url[BUFSIZ], msg[BUFSIZ], buf[BUFSIZ], hostname[BUFSIZ];
     char extra_hdrs[BUFSIZ];
     const char *method = "GET";
     extern char *optarg;
@@ -102,8 +97,7 @@ main(int argc, char *argv[])
     long ping_min = 0, ping_max = 0, ping_sum = 0, ping_mean = 0;
 
     /* set the defaults */
-    hostname = "localhost";
-    localhost = NULL;
+    strcpy(hostname, "localhost");
     extra_hdrs[0] = '\0';
     port = CACHE_HTTP_PORT;
     to_stdout = 1;
@@ -118,18 +112,14 @@ main(int argc, char *argv[])
 	strcpy(url, argv[argc - 1]);
 	if (url[0] == '-')
 	    usage(argv[0]);
-	while ((c = getopt(argc, argv, "ah:l:P:i:km:p:rsvt:g:p:I:H:?")) != -1)
+	while ((c = getopt(argc, argv, "ah:P:i:km:p:rsvt:g:p:I:H:?")) != -1)
 	    switch (c) {
 	    case 'a':
 		opt_noaccept = 1;
 		break;
-	    case 'h':		/* remote host */
+	    case 'h':		/* host:arg */
 		if (optarg != NULL)
-		    hostname = optarg;
-		break;
-	    case 'l':		/* local host */
-		if (optarg != NULL)
-		    localhost = optarg;
+		    strcpy(hostname, optarg);
 		break;
 	    case 's':		/* silent */
 		to_stdout = 0;
@@ -260,10 +250,6 @@ main(int argc, char *argv[])
 	    perror("client: socket");
 	    exit(1);
 	}
-	if (localhost && client_comm_bind(conn, localhost) < 0) {
-	    perror("client: bind");
-	    exit(1);
-	}
 	if (client_comm_connect(conn, hostname, port, ping ? &tv1 : NULL) < 0) {
 	    if (errno == 0) {
 		fprintf(stderr, "client: ERROR: Cannot connect to %s:%d: Host unknown.\n", hostname, port);
@@ -347,25 +333,6 @@ main(int argc, char *argv[])
     exit(0);
     /*NOTREACHED */
     return 0;
-}
-
-static int
-client_comm_bind(int sock, char *local_host)
-{
-    static const struct hostent *hp = NULL;
-    static struct sockaddr_in from_addr;
-
-    /* Set up the source socket address from which to send. */
-    if (hp == NULL) {
-	from_addr.sin_family = AF_INET;
-
-	if ((hp = gethostbyname(local_host)) == 0) {
-	    return (-1);
-	}
-	xmemcpy(&from_addr.sin_addr, hp->h_addr, hp->h_length);
-	from_addr.sin_port = 0;
-    }
-    return bind(sock, (struct sockaddr *) &from_addr, sizeof(struct sockaddr_in));
 }
 
 static int
