@@ -643,7 +643,7 @@ statFiledescriptors(StoreEntry * sentry)
 	"Remote Address",
 	"Description");
     storeAppendPrintf(sentry, "{---- ------ ---- ---- --------------------- ------------------------------}\n");
-    for (i = 0; i < Squid_MaxFD; i++) {
+    for (i = 0; i < SQUID_MAXFD; i++) {
 	if (!fdstat_isopen(i))
 	    continue;
 	j = fdstatGetType(i);
@@ -821,7 +821,7 @@ info_get(const cacheinfo * obj, StoreEntry * sentry)
 
     storeAppendPrintf(sentry, "{File descriptor usage for %s:}\n", appname);
     storeAppendPrintf(sentry, "{\tMax number of file desc available:    %4d}\n",
-	Squid_MaxFD);
+	SQUID_MAXFD);
     storeAppendPrintf(sentry, "{\tLargest file desc currently in use:   %4d}\n",
 	fdstat_biggest_fd());
     storeAppendPrintf(sentry, "{\tAvailable number of file descriptors: %4d}\n",
@@ -941,13 +941,13 @@ parameter_get(const cacheinfo * obj, StoreEntry * sentry)
 	"{VM-High %d \"# High water mark hot-vm cache (%%)\"}\n",
 	Config.Mem.highWaterMark);
     storeAppendPrintf(sentry,
-	"{VM-Low %d \"# Low water mark hot-vm cache (%%)\"}\n",
+	"{VM-Low %d \"# Low water-mark hot-vm cache (%%)\"}\n",
 	Config.Mem.lowWaterMark);
     storeAppendPrintf(sentry,
 	"{Swap-Max %d \"# Maximum disk cache (MB)\"}\n",
 	Config.Swap.maxSize / (1 << 10));
     storeAppendPrintf(sentry,
-	"{Swap-High %d \"# High water mark disk cache (%%)\"}\n",
+	"{Swap-High %d \"# High Water mark disk cache (%%)\"}\n",
 	Config.Swap.highWaterMark);
     storeAppendPrintf(sentry,
 	"{Swap-Low %d \"# Low water mark disk cache (%%)\"}\n",

@@ -112,7 +112,7 @@ typedef struct _dwalk_ctrl {
     off_t offset;
     char *buf;			/* line buffer */
     int cur_len;		/* line len */
-    FILE_WALK_HD handler;
+    int (*handler) (int fd, int errflag, void *data);
     void *client_data;
     int (*line_handler) (int fd, char *buf, int size, void *line_data);
     void *line_data;
@@ -131,9 +131,9 @@ disk_init(void)
 {
     int fd;
 
-    file_table = xcalloc(Squid_MaxFD, sizeof(FileEntry));
-    meta_data.misc += Squid_MaxFD * sizeof(FileEntry);
-    for (fd = 0; fd < Squid_MaxFD; fd++) {
+    file_table = xcalloc(SQUID_MAXFD, sizeof(FileEntry));
+    meta_data.misc += SQUID_MAXFD * sizeof(FileEntry);
+    for (fd = 0; fd < SQUID_MAXFD; fd++) {
 	file_table[fd].filename[0] = '\0';
 	file_table[fd].at_eof = NO;
 	file_table[fd].open_stat = FILE_NOT_OPEN;
@@ -343,7 +343,7 @@ file_write(int fd,
     char *ptr_to_buf,
     int len,
     int access_code,
-    FILE_WRITE_HD handle,
+    void (*handle) _PARAMS((int, int, StoreEntry *)),
     void *handle_data,
     void (*free_func) _PARAMS((void *)))
 {

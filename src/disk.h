@@ -116,7 +116,6 @@
 
 typedef int (*FILE_READ_HD) (int fd, char *buf, int size, int errflag,
     void *data, int offset);
-typedef void (*FILE_WRITE_HD) (int, int, StoreEntry *);
 
 typedef int (*FILE_WALK_HD) (int fd, int errflag, void *data);
 
@@ -139,7 +138,8 @@ typedef struct _dread_ctrl {
     char *buf;
     int cur_len;
     int end_of_file;
-    FILE_READ_HD handler;
+    int (*handler) (int fd, char *buf, int size, int errflag, void *data,
+	int offset);
     void *client_data;
 } dread_ctrl;
 
@@ -178,7 +178,7 @@ extern int file_write _PARAMS((int fd,
 	char *buf,
 	int len,
 	int access_code,
-	FILE_WRITE_HD handle,
+	void       (*handle) _PARAMS((int, int, StoreEntry *)),
 	void *handle_data,
 	void       (*free) _PARAMS((void *))));
 extern int file_write_unlock _PARAMS((int fd, int access_code));
@@ -186,7 +186,12 @@ extern int file_read _PARAMS((int fd,
 	char *buf,
 	int req_len,
 	int offset,
-	FILE_READ_HD handler,
+	int       (*handler) _PARAMS((int fd,
+		char *buf,
+		int size,
+		int errflag,
+		void *data,
+		int offset)),
 	void *client_data));
 extern int file_walk _PARAMS((int fd,
 	int       (*handler) _PARAMS((int fd, int errflag, void *data)),

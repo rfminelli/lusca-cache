@@ -3,16 +3,15 @@
 require 'sys/socket.ph';
 
 $url = shift || die "usage: $0: url\n";
-$proxy = 'localhost';
+$host = 'localhost';
 $port = 3128;
 
 $url = "http://$url/" if ($url =~ /^[-\w\.]+$/);
 print "Querying cache path to $url\n";
-$host = $1 if ($url =~ /^[^:]+:\/\/([^\/:])+/);
 
 $sockaddr = 'S n a4 x8';
 ($name, $aliases, $proto) = getprotobyname("tcp");
-($fqdn, $aliases, $type, $len, $thataddr) = gethostbyname($proxy);
+($fqdn, $aliases, $type, $len, $thataddr) = gethostbyname($host);
 $thissock = pack($sockaddr, &AF_INET, 0, "\0\0\0\0");
 $that = pack($sockaddr, &AF_INET, $port, $thataddr);
 
@@ -29,11 +28,11 @@ sub try_http_11 {
                 socket (SOCK, &AF_INET, &SOCK_STREAM, $proto);
         die "bind: $!\n" unless
                 bind (SOCK, $thissock);
-        die "$proxy:$port: $!\n" unless
+        die "$host:$port: $!\n" unless
                 connect (SOCK, $that);
         select (SOCK); $| = 1;
         select (STDOUT);
-	print SOCK "TRACE $url HTTP/1.1\r\nHost: $host\r\nAccept: */*\r\n\r\n";
+	print SOCK "TRACE $url HTTP/1.1\r\nAccept: */*\r\n\r\n";
 	while (<SOCK>) {
 		s/\r//g;
 		s/\n//g;

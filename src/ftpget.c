@@ -310,7 +310,7 @@ static const char *socket_pathname = NULL;
 static int o_max_bps = 0;	/* max bytes/sec */
 static struct timeval starttime;
 static struct timeval currenttime;
-unsigned int inaddr_none;
+static unsigned int inaddr_none;
 
 char *rfc1738_escape _PARAMS((const char *));
 void rfc1738_unescape _PARAMS((char *));
@@ -2569,7 +2569,7 @@ main(int argc, char *argv[])
     const struct hostent *hp = NULL;
     int c;
 
-    inaddr_none = inet_addr("255.255.255.255");
+    inaddr_none = inet_addr("X");
     fullprogname = xstrdup(argv[0]);
     if ((t = strrchr(argv[0], '/'))) {
 	progname = xstrdup(t + 1);

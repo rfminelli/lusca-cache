@@ -261,7 +261,7 @@ main(int argc, char *argv[])
     int i;
     int c;
 
-    inaddr_none = inet_addr("255.255.255.255");
+    inaddr_none = inet_addr("X");
 
 #if HAVE_RES_INIT
     res_init();
