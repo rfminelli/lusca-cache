@@ -1,3 +1,10 @@
+	- Fixed HTTP code in access.log for TCP_IFMODSINCE requests.
+	- Fixed SSL to not read again until previous write is complete.
+	- Added CPU usage percentage in cachemgr 'info' output.
+	- Fixed bug when removing a neighbor.  Forgetting to decrement
+	  friends->n causes a duplicate ICP query to be sent in
+	  neighborsUdpPing().
+
 Changes to squid-1.0.1 (July 8, 1996):
 
 	- Fixed ftpget server looping on socket EOF condition.
