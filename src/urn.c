@@ -144,7 +144,11 @@ urnHandleReply(void *data, char *buf, ssize_t size)
     StoreEntry *e = urnState->entry;
     StoreEntry *urlres_e = urnState->urlres_e;
     char *s = NULL;
+#if 0
     char *hdr;
+#else
+    HttpResponse resp;
+#endif
     wordlist *w;
     wordlist *urls;
     wordlist *min_w;
@@ -233,7 +237,8 @@ urnHandleReply(void *data, char *buf, ssize_t size)
 	"</ADDRESS>\n",
 	appname, version_string, getMyHostname());
     stringAppend(S, line, l);
-    hdr = httpReplyHeader(1.0,
+#if 0 /* new interface */ 
+   hdr = httpReplyHeader(1.0,
 	HTTP_MOVED_TEMPORARILY,
 	"text/html",
 	stringLength(S),
@@ -249,6 +254,21 @@ urnHandleReply(void *data, char *buf, ssize_t size)
     }
     storeAppend(e, "\r\n", 2);
     storeAppend(e, S->buf, stringLength(S));
+#else
+    httpResponseInit(&resp);
+    httpResponseSetHeaders(&resp, 1.0, HTTP_MOVED_TEMPORARILY, NULL,
+	"text/html", stringLength(S), 0, squid_curtime);
+    httpResponseSumm(&resp, e->mem_obj->reply);
+    if (EBIT_TEST(urnState->flags, URN_FORCE_MENU)) {
+	debug(51, 3) ("urnHandleReply: forcing menu\n");
+    } else
+    if (min_w) {
+	httpHeaderAddStr(&resp.hdr, "Location", min_w->key);
+    }
+    httpBodySet(&resp.body, S->buf, stringLength(S));
+    httpResponseSwap(&resp, e);
+    httpResponseClean(&resp);
+#endif
     storeComplete(e);
     memFree(MEM_4K_BUF, buf);
     wordlistDestroy(&urls);

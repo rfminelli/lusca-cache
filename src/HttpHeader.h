@@ -125,9 +125,9 @@ extern int httpHeaderGetVia(const HttpHeader *hdr);
 
 
 /* http reply-header fields */
-extern size_t httpHeaderGetContentLength(const HttpHeader *hdr);
-extern size_t httpHeaderGetExpires(const HttpHeader *hdr);
-/* extern size_t httpHeaderGetLastModified(const HttpHeader *hdr); */
+extern int httpHeaderGetContentLength(const HttpHeader *hdr);
+extern time_t httpHeaderGetExpires(const HttpHeader *hdr);
+/* extern time_t httpHeaderGetLastModified(const HttpHeader *hdr); */
 
 
 /* http request-header fields */

@@ -32,6 +32,8 @@
 #include "MemPool.h"
 #include "HttpHeader.h"
 
+/* local constants and vars */
+
 static const char *KnownSplitableFields[] = {
     "Connection", "Range"
 };
@@ -42,6 +44,12 @@ static const int KnownSplitableFieldCount = sizeof(KnownSplitableFields)/sizeof(
 #define INIT_FIELDS_PER_HEADER 32
 static u_num32 shortHeadersCount = 0;
 static u_num32 longHeadersCount = 0;
+
+typedef struct {
+    const char *label;
+    int parsed;
+    int misc[HDR_MISC_END];
+} HttpHeaderStats;
 
 #if 0 /* not used, add them later @?@ */
 static struct {
@@ -112,6 +120,7 @@ static HttpHeaderField *httpHeaderFieldParseCreate(const char *field_start, cons
 static void httpHeaderFieldDestroy(HttpHeaderField *f);
 static size_t httpHeaderFieldBufSize(const HttpHeaderField *fld);
 static int httpHeaderFieldIsList(const HttpHeaderField *fld);
+static void httpHeaderStoreAReport(StoreEntry *e, HttpHeaderStats *stats);
 
 static char *dupShortString(const char *str);
 static char *dupShortBuf(const char *str, size_t len);
@@ -264,6 +273,13 @@ httpHeaderGetInt(const HttpHeader *hdr, const char *name, HttpHeaderPos *pos)
 }
 
 
+/* rfc1123 */
+time_t
+httpHeaderGetDate(const HttpHeader *hdr, const char *name, HttpHeaderPos *pos) {
+    const char *str = httpHeaderGetStr(hdr, name, pos);
+    return str ? parse_rfc1123(str) : -1;
+}
+
 HttpHeaderField *
 httpHeaderGetField(const HttpHeader *hdr, const char **name, const char **value, HttpHeaderPos *pos)
 {
@@ -403,6 +419,23 @@ httpHeaderAddDate(HttpHeader *hdr, const char *name, time_t value)
     return value;
 }
 
+int
+httpHeaderGetContentLength(const HttpHeader *hdr)
+{
+    /* do we need any special processing here? @?@ */
+    return httpHeaderGetInt(hdr, "Content-Length", NULL);
+}
+
+time_t
+httpHeaderGetExpires(const HttpHeader *hdr) {
+    time_t value = httpHeaderGetDate(hdr, "Expires", NULL);
+    /*
+     * The HTTP/1.0 specs says that robust implementations should consider bad
+     * or malformed Expires header as equivalent to "expires immediately."
+     */
+    return (value < 0) ? squid_curtime : value;
+}
+
 /* doubles the size of the fields index, starts with INIT_FIELDS_PER_HEADER */
 static void
 httpHeaderGrow(HttpHeader *hdr)
@@ -485,13 +518,17 @@ httpHeaderFieldIsList(const HttpHeaderField *fld) {
     return 0;
 }
 
-const char *
-httpHeaderReport()
+void
+httpHeaderStoreReport(StoreEntry *e)
 {
-    LOCAL_ARRAY(char, buf, 1024);
+    assert(e);
 
-    snprintf(buf, sizeof(buf),
-	"hdrs: %uld+%uld %s lstr: +%uld-%uld<(%uld=%uld)",
+    httpHeaderStoreRepReport(e);
+    httpHeaderStoreReqReport(e);
+
+    /* low level totals; reformat this? @?@ */
+    storeAppendPrintf(e,
+	"hdrs totals: %uld+%uld %s lstr: +%uld-%uld<(%uld=%uld)\n",
 	shortHeadersCount,
 	longHeadersCount,
 	memPoolReport(shortStrings),
@@ -499,7 +536,47 @@ httpHeaderReport()
 	longStrFreeCount,
 	longStrHighWaterCount,
 	longStrHighWaterSize);
-    return buf;
+}
+
+void
+httpHeaderStoreRepReport(StoreEntry *e)
+{
+    assert(e);
+#if 0 /* implement this */
+    httpHeaderStoreAReport(e, &ReplyHeaderStats);
+    for (i = SCC_PUBLIC; i < SCC_ENUM_END; i++)
+	storeAppendPrintf(entry, "Cache-Control %s: %d\n",
+	    HttpServerCCStr[i],
+	    ReplyHeaderStats.cc[i]);
+#endif
+}
+
+void
+httpHeaderStoreReqReport(StoreEntry *e)
+{
+    assert(e);
+#if 0 /* implement this */
+    httpHeaderStoreAReport(e, &RequestHeaderStats);
+#endif
+}
+
+static void
+httpHeaderStoreAReport(StoreEntry *e, HttpHeaderStats *stats)
+{
+    assert(e);
+    assert(stats);
+    assert(0);
+#if 0 /* implement this using stats pointer @?@ */
+    http_server_cc_t i;
+    http_hdr_misc_t j;
+    storeAppendPrintf(entry, "HTTP Reply Headers:\n");
+    storeAppendPrintf(entry, "       Headers parsed: %d\n",
+	ReplyHeaderStats.parsed);
+    for (j = HDR_AGE; j < HDR_MISC_END; j++)
+	storeAppendPrintf(entry, "%21.21s: %d\n",
+	    HttpHdrMiscStr[j],
+	    ReplyHeaderStats.misc[j]);
+#endif
 }
 
 /* "short string" routines below are trying to recycle memory for short strings */

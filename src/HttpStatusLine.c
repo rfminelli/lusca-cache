@@ -32,6 +32,7 @@
 
 
 /* local constants */
+const char *HttpStatusLineFormat = "HTTP/%3.1f %3d %s\r\n";
 
 /* local routines */
 static char *httpStatusString(http_status status);
@@ -67,10 +68,21 @@ void httpStatusLineSet(HttpStatusLine *sline, double version, http_status status
 	1;  /* terminating 0 */
 }
 
+int
+httpStatusLinePackInto(HttpStatusLine *sline, char *buf)
+{
+    int act_size;
+    assert(sline);
+    act_size = snprintf(buf, sline->packed_size, HttpStatusLineFormat,
+	sline->version, sline->status, sline->reason);
+    assert(act_size == sline->packed_size);
+    return act_size;
+}
+
 void
 httpStatusLineSwap(HttpStatusLine *sline, StoreEntry *e) {    
     assert(sline && e);
-    storeAppendPrintf(e, "HTTP/%3.1f %d %s\r\n",
+    storeAppendPrintf(e, HttpStatusLineFormat,
 	sline->version, sline->status, sline->reason);
 }
 

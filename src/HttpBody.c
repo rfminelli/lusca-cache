@@ -64,6 +64,14 @@ httpBodySet(HttpBody *body, const char *buf, int size)
     body->packed_size = size;
 }
 
+int
+httpBodyPackInto(HttpBody *body, char *buf)
+{
+    assert(body);
+    xmemcpy(buf, httpBodyPtr(body), body->packed_size);
+    return body->packed_size;
+}
+
 void
 httpBodySwap(const HttpBody *body, StoreEntry *entry)
 {
