@@ -1482,7 +1482,7 @@ ftpTraverseDirectory(FtpStateData * ftpState)
     w = ftpState->pathcomps;
     ftpState->filepath = w->key;
     ftpState->pathcomps = w->next;
-    memFree(w, MEM_WORDLIST);
+    xfree(w);
     /* Check if we are to CWD or RETR */
     if (ftpState->pathcomps != NULL || ftpState->flags.isdir) {
 	ftpSendCwd(ftpState);
