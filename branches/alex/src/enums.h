@@ -337,7 +337,9 @@ enum {
     REQ_PROXY_KEEPALIVE,
     REQ_PROXYING,
     REQ_REFRESH,
-    REQ_USED_PROXY_AUTH
+    REQ_USED_PROXY_AUTH,
+    REQ_IMSR, /* If-Range */
+	REQ_IGN_CLNT_RANGE /* ignore client's original Range headers when forwarding the request */
 };
 
 enum {
