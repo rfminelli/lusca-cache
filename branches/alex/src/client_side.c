@@ -31,6 +31,200 @@
 
 #include "squid.h"
 
+/* Local constants */
+
+/* Local functions */
+static PF connStateFree(int fd, void *data);
+static void requestTimeout(int fd, void *data);
+
+
+/* This is a handler normally called by comm_close() */
+static void
+connStateFree(int fd, void *data)
+{
+    ConnStateData *connState = data;
+    clientHttpRequest *http;
+    debug(12, 3) ("connStateFree: FD %d\n", fd);
+    assert(connState != NULL);
+    while ((http = connState->chr) != NULL) {
+	assert(http->conn == connState);
+	assert(connState->chr != connState->chr->next);
+	httpRequestFree(http);
+    }
+    if (connState->ident.fd > -1)
+	comm_close(connState->ident.fd);
+    safe_free(connState->in.buf);
+    meta_data.misc -= connState->in.size;
+    pconnHistCount(0, connState->nrequests);
+    cbdataFree(connState);
+}
+
+/* general lifetime handler for HTTP requests */
+static void
+requestTimeout(int fd, void *data)
+{
+    ConnStateData *conn = data;
+    ErrorState *err;
+    debug(12, 2) ("requestTimeout: FD %d: lifetime is expired.\n", fd);
+    if (fd_table[fd].rwstate) {
+	/*
+	 * Some data has been sent to the client, just close the FD
+	 */
+	comm_close(fd);
+    } else if (conn->nrequests) {
+	/*
+	 * assume its a persistent connection; just close it
+	 */
+	comm_close(fd);
+    } else {
+	/*
+	 * Generate an error
+	 */
+	err = errorCon(ERR_LIFETIME_EXP, HTTP_REQUEST_TIMEOUT);
+	err->url = xstrdup("N/A");
+	/*
+	 * Normally we shouldn't call errorSend() in client_side.c, but
+	 * it should be okay in this case.  Presumably if we get here
+	 * this is the first request for the connection, and no data
+	 * has been written yet
+	 */
+	assert(conn->chr == NULL);
+	errorSend(fd, err);
+	/*
+	 * if we don't close() here, we still need a timeout handler!
+	 */
+	commSetTimeout(fd, 30, requestTimeout, conn);
+    }
+}
+
+/*
+ * Accept a new connection on HTTP socket: 
+ *	- re-register this handler
+ *	- accept()
+ *	- allocate connState and init its members 
+ *      - register connStateFree as connState's destructor on connection close
+ *      - start fqdn lookup if needed
+ *	- register clientReadRequests as a handler for new connection
+ *	- register clientReadDefer for timiouts
+ * Produces a debug() message on accept() error
+ */
+void
+httpAccept(int sock, void *notused)
+{
+    int fd = -1;
+    ConnStateData *connState = NULL;
+    struct sockaddr_in peer;
+    struct sockaddr_in me;
+    memset(&peer, '\0', sizeof(struct sockaddr_in));
+    memset(&me, '\0', sizeof(struct sockaddr_in));
+    commSetSelect(sock, COMM_SELECT_READ, httpAccept, NULL, 0);
+    if ((fd = comm_accept(sock, &peer, &me)) < 0) {
+	debug(50, 1) ("httpAccept: FD %d: accept failure: %s\n",
+	    sock, xstrerror());
+	return;
+    }
+    debug(12, 4) ("httpAccept: FD %d: accepted\n", fd);
+    connState = xcalloc(1, sizeof(ConnStateData));
+    connState->peer = peer;
+    connState->log_addr = peer.sin_addr;
+    connState->log_addr.s_addr &= Config.Addrs.client_netmask.s_addr;
+    connState->me = me;
+    connState->fd = fd;
+    connState->ident.fd = -1;
+    connState->in.size = 0; /* no data yet */
+    connState->in.buf = NULL;
+    cbdataAdd(connState, MEM_NONE);
+    comm_add_close_handler(fd, connStateFree, connState);
+    if (Config.onoff.log_fqdn)
+	fqdncache_gethostbyaddr(peer.sin_addr, FQDN_LOOKUP_IF_MISS);
+    commSetTimeout(fd, Config.Timeout.request, requestTimeout, connState);
+    commSetSelect(fd, COMM_SELECT_READ, clientReadData, connState, 0);
+    commSetDefer(fd, clientReadDefer, connState);
+}
+
+/* tells comm module if the connection is currently deferred */
+static int
+clientReadDefer(int fdnotused, void *data)
+{
+    const ConnStateData *conn = data;
+    return conn->defer.until > squid_curtime;
+}
+
+extern
+clientCloseConn(conn, who-wants-to-close (http), 0 if client);
+
+in http.c
+extern
+httpNoteDone(req) { must push readReq to read more data if possible }
+
+/*
+ * Ok, we have a brand new connection from an http client. We have no idea how
+ * to handle http connections so our task is simple: We are responsible for
+ * reading the data into memory. The 'http' module is responsible for
+ * interpreting it.  We call httpHandleRequests in a virtual loop until no data
+ * is left.
+ */
+
+ /*
+  * The 'http' module may want to close the connection before we read all the
+  * data. This is done by calling clientCloseConn() function which closes
+  * the connection gracefully.
+  */
+
+static void
+clientReadData(int fd, void *data)
+{
+    ConnStateData *conn = data;
+    size_t size;
+    size_t free_space;
+
+    if (!conn -> buf)
+	clientAllocInBuf(conn);
+
+    /*
+     * Don't reset the timeout value here.  The timeout value will be set to
+     * Config.Timeout.request by httpAccept() and clientWriteComplete(), and
+     * should apply to the request as a whole, not individual read() calls.
+     * @?@: Plus, it breaks our lame half-close detection
+     */
+    /* we are still interested in this connection so register */
+    commSetSelect(fd, COMM_SELECT_READ, clientReadData, conn, 0);
+    /* estimate free space; spare one byte for terminating 0 */
+    size_t free_space = conn->in.size - conn->in.offset - 1;
+    debug(12, 4) ("clientReadData: FD %d: reading at most %d b...\n", fd, free_space);
+    if (free_space <= 0) return; /* no space to put data! */
+    size = read(fd, conn->in.buf + conn->in.offset, free_space);
+    fd_bytes(fd, size, FD_READ);
+
+    /* client closed the connection first */
+    if (!size) {
+	clientCloseConn(conn, 0);
+	/* @?@: "half-closed" stuff deleted, do we still need it? */
+	return;
+    } else
+    if (size < 0) {
+	if (!ignoreErrno(errno)) {
+	    debug(50, 2) ("clientReadData: FD %d: %s\n", fd, xstrerror());
+	    clientCloseConn(conn, 0);
+	    return;
+	}
+	return; /* no point in continuing now because nothing has changed */
+    }
+    /* account for arrived data */
+    conn->in.offset += size;
+    /* Terminate the buffer for string operations */
+    conn->in.buf[conn->in.offset] = '\0';
+    /*
+     * feed http module with fresh data; when it consumes some, it must flush
+     * the content to the left and decrement in.offset (@?@ not very nice)
+     */
+    httpHandleRequests(conn);
+}
+
+
+
+
+
 static const char *const crlf = "\r\n";
 static const char *const proxy_auth_line =
 "Proxy-Authenticate: Basic realm=\"Squid proxy-caching web server\"\r\n";
@@ -575,27 +769,6 @@ httpRequestFree(void *data)
     *H = http->next;
     http->next = NULL;
     cbdataFree(http);
-}
-
-/* This is a handler normally called by comm_close() */
-static void
-connStateFree(int fd, void *data)
-{
-    ConnStateData *connState = data;
-    clientHttpRequest *http;
-    debug(12, 3) ("connStateFree: FD %d\n", fd);
-    assert(connState != NULL);
-    while ((http = connState->chr) != NULL) {
-	assert(http->conn == connState);
-	assert(connState->chr != connState->chr->next);
-	httpRequestFree(http);
-    }
-    if (connState->ident.fd > -1)
-	comm_close(connState->ident.fd);
-    safe_free(connState->in.buf);
-    meta_data.misc -= connState->in.size;
-    pconnHistCount(0, connState->nrequests);
-    cbdataFree(connState);
 }
 
 static void
@@ -1528,260 +1701,11 @@ parseHttpRequest(ConnStateData * conn, method_t * method_p, int *status,
     return http;
 }
 
-static int
-clientReadDefer(int fdnotused, void *data)
-{
-    ConnStateData *conn = data;
-    return conn->defer.until > squid_curtime;
-}
-
-static void
-clientReadRequest(int fd, void *data)
-{
-    ConnStateData *conn = data;
-    int parser_return_code = 0;
-    int k;
-    request_t *request = NULL;
-    int size;
-    method_t method;
-    clientHttpRequest *http = NULL;
-    clientHttpRequest **H = NULL;
-    char *headers;
-    size_t headers_sz;
-    ErrorState *err = NULL;
-    fde *F = &fd_table[fd];
-    int len = conn->in.size - conn->in.offset - 1;
-    debug(12, 4) ("clientReadRequest: FD %d: reading request...\n", fd);
-    size = read(fd, conn->in.buf + conn->in.offset, len);
-    fd_bytes(fd, size, FD_READ);
-    /*
-     * Don't reset the timeout value here.  The timeout value will be
-     * set to Config.Timeout.request by httpAccept() and
-     * clientWriteComplete(), and should apply to the request as a
-     * whole, not individual read() calls.  Plus, it breaks our
-     * lame half-close detection
-     */
-    commSetSelect(fd, COMM_SELECT_READ, clientReadRequest, conn, 0);
-    if (size == 0) {
-	if (conn->chr == NULL) {
-	    /* no current or pending requests */
-	    comm_close(fd);
-	    return;
-	}
-	/* It might be half-closed, we can't tell */
-	debug(12, 5) ("clientReadRequest: FD %d closed?\n", fd);
-	EBIT_SET(F->flags, FD_SOCKET_EOF);
-	conn->defer.until = squid_curtime + 1;
-	conn->defer.n++;
-	fd_note(fd, "half-closed");
-	return;
-    } else if (size < 0) {
-	if (!ignoreErrno(errno)) {
-	    debug(50, 2) ("clientReadRequest: FD %d: %s\n", fd, xstrerror());
-	    comm_close(fd);
-	    return;
-	} else if (conn->in.offset == 0) {
-	    debug(50, 2) ("clientReadRequest: FD %d: no data to process\n");
-	    return;
-	}
-	/* Continue to process previously read data */
-	size = 0;
-    }
-    conn->in.offset += size;
-    conn->in.buf[conn->in.offset] = '\0';	/* Terminate the string */
-    while (conn->in.offset > 0) {
-	int nrequests;
-	/* Limit the number of concurrent requests to 2 */
-	for (H = &conn->chr, nrequests = 0; *H; H = &(*H)->next, nrequests++);
-	if (nrequests >= 2) {
-	    debug(12, 2) ("clientReadRequest: FD %d max concurrent requests reached\n", fd);
-	    debug(12, 5) ("clientReadRequest: FD %d defering new request until one is done\n", fd);
-	    conn->defer.until = squid_curtime + 100;	/* Reset when a request is complete */
-	    break;
-	}
-	/* Process request */
-	http = parseHttpRequest(conn,
-	    &method,
-	    &parser_return_code,
-	    &headers,
-	    &headers_sz);
-	if (http) {
-	    assert(http->req_sz > 0);
-	    conn->in.offset -= http->req_sz;
-	    assert(conn->in.offset >= 0);
-	    /*
-	     * If we read past the end of this request, move the remaining
-	     * data to the beginning
-	     */
-	    if (conn->in.offset > 0)
-		memmove(conn->in.buf, conn->in.buf + http->req_sz, conn->in.offset);
-	    /* add to the client request queue */
-	    for (H = &conn->chr; *H; H = &(*H)->next);
-	    *H = http;
-	    conn->nrequests++;
-	    Counter.client_http.requests++;
-	    commSetTimeout(fd, Config.Timeout.lifetime, NULL, NULL);
-	    if (parser_return_code < 0) {
-		debug(12, 1) ("clientReadRequest: FD %d Invalid Request\n", fd);
-		err = errorCon(ERR_INVALID_REQ, HTTP_BAD_REQUEST);
-		err->request_hdrs = xstrdup(conn->in.buf);
-		http->entry = clientCreateStoreEntry(http, method, 0);
-		errorAppendEntry(http->entry, err);
-		break;
-	    }
-	    if ((request = urlParse(method, http->uri)) == NULL) {
-		debug(12, 5) ("Invalid URL: %s\n", http->uri);
-		err = errorCon(ERR_INVALID_URL, HTTP_BAD_REQUEST);
-		err->src_addr = conn->peer.sin_addr;
-		err->url = xstrdup(http->uri);
-		http->al.http.code = err->http_status;
-		http->entry = clientCreateStoreEntry(http, method, 0);
-		errorAppendEntry(http->entry, err);
-		safe_free(headers);
-		break;
-	    }
-	    safe_free(http->log_uri);
-	    http->log_uri = xstrdup(urlCanonicalClean(request));
-	    request->client_addr = conn->peer.sin_addr;
-	    request->http_ver = http->http_ver;
-	    request->headers = headers;
-	    request->headers_sz = headers_sz;
-	    if (!urlCheckRequest(request)) {
-		err = errorCon(ERR_UNSUP_REQ, HTTP_NOT_IMPLEMENTED);
-		err->src_addr = conn->peer.sin_addr;
-		err->request = requestLink(request);
-		http->al.http.code = err->http_status;
-		http->entry = clientCreateStoreEntry(http, request->method, 0);
-		errorAppendEntry(http->entry, err);
-		break;
-	    }
-	    http->request = requestLink(request);
-	    clientAccessCheck(http);
-	    /*
-	     * break here for NON-GET because most likely there is a
-	     * reqeust body following and we don't want to parse it
-	     * as though it was new request
-	     */
-	    if (request->method != METHOD_GET) {
-		if (conn->in.offset) {
-		    request->body_sz = conn->in.offset;
-		    request->body = xmalloc(request->body_sz);
-		    xmemcpy(request->body, conn->in.buf, request->body_sz);
-		    conn->in.offset = 0;
-		}
-		break;
-	    }
-	    continue;		/* while offset > 0 */
-	} else if (parser_return_code == 0) {
-	    /*
-	     *    Partial request received; reschedule until parseHttpRequest()
-	     *    is happy with the input
-	     */
-	    k = conn->in.size - 1 - conn->in.offset;
-	    if (k == 0) {
-		if (conn->in.offset >= Config.maxRequestSize) {
-		    /* The request is too large to handle */
-		    debug(12, 0) ("Request won't fit in buffer.\n");
-		    debug(12, 0) ("Config 'request_size'= %d bytes.\n",
-			Config.maxRequestSize);
-		    debug(12, 0) ("This request = %d bytes.\n",
-			conn->in.offset);
-		    err = errorCon(ERR_INVALID_REQ, HTTP_REQUEST_ENTITY_TOO_LARGE);
-		    http->entry = clientCreateStoreEntry(http, request->method, 0);
-		    errorAppendEntry(http->entry, err);
-		    return;
-		}
-		/* Grow the request memory area to accomodate for a large request */
-		conn->in.size += REQUEST_BUF_SIZE;
-		conn->in.buf = xrealloc(conn->in.buf, conn->in.size);
-		meta_data.misc += REQUEST_BUF_SIZE;
-		debug(12, 2) ("Handling a large request, offset=%d inbufsize=%d\n",
-		    conn->in.offset, conn->in.size);
-		k = conn->in.size - 1 - conn->in.offset;
-	    }
-	    break;
-	}
-    }
-}
-
-/* general lifetime handler for HTTP requests */
-static void
-requestTimeout(int fd, void *data)
-{
-    ConnStateData *conn = data;
-    ErrorState *err;
-    debug(12, 2) ("requestTimeout: FD %d: lifetime is expired.\n", fd);
-    if (fd_table[fd].rwstate) {
-	/*
-	 * Some data has been sent to the client, just close the FD
-	 */
-	comm_close(fd);
-    } else if (conn->nrequests) {
-	/*
-	 * assume its a persistent connection; just close it
-	 */
-	comm_close(fd);
-    } else {
-	/*
-	 * Generate an error
-	 */
-	err = errorCon(ERR_LIFETIME_EXP, HTTP_REQUEST_TIMEOUT);
-	err->url = xstrdup("N/A");
-	/*
-	 * Normally we shouldn't call errorSend() in client_side.c, but
-	 * it should be okay in this case.  Presumably if we get here
-	 * this is the first request for the connection, and no data
-	 * has been written yet
-	 */
-	assert(conn->chr == NULL);
-	errorSend(fd, err);
-	/*
-	 * if we don't close() here, we still need a timeout handler!
-	 */
-	commSetTimeout(fd, 30, requestTimeout, conn);
-    }
-}
 
 int
 httpAcceptDefer(int fdnotused, void *notused)
 {
     return !fdstat_are_n_free_fd(RESERVED_FD);
-}
-
-/* Handle a new connection on HTTP socket. */
-void
-httpAccept(int sock, void *notused)
-{
-    int fd = -1;
-    ConnStateData *connState = NULL;
-    struct sockaddr_in peer;
-    struct sockaddr_in me;
-    memset(&peer, '\0', sizeof(struct sockaddr_in));
-    memset(&me, '\0', sizeof(struct sockaddr_in));
-    commSetSelect(sock, COMM_SELECT_READ, httpAccept, NULL, 0);
-    if ((fd = comm_accept(sock, &peer, &me)) < 0) {
-	debug(50, 1) ("httpAccept: FD %d: accept failure: %s\n",
-	    sock, xstrerror());
-	return;
-    }
-    debug(12, 4) ("httpAccept: FD %d: accepted\n", fd);
-    connState = xcalloc(1, sizeof(ConnStateData));
-    connState->peer = peer;
-    connState->log_addr = peer.sin_addr;
-    connState->log_addr.s_addr &= Config.Addrs.client_netmask.s_addr;
-    connState->me = me;
-    connState->fd = fd;
-    connState->ident.fd = -1;
-    connState->in.size = REQUEST_BUF_SIZE;
-    connState->in.buf = xcalloc(connState->in.size, 1);
-    cbdataAdd(connState, MEM_NONE);
-    meta_data.misc += connState->in.size;
-    comm_add_close_handler(fd, connStateFree, connState);
-    if (Config.onoff.log_fqdn)
-	fqdncache_gethostbyaddr(peer.sin_addr, FQDN_LOOKUP_IF_MISS);
-    commSetTimeout(fd, Config.Timeout.request, requestTimeout, connState);
-    commSetSelect(fd, COMM_SELECT_READ, clientReadRequest, connState, 0);
-    commSetDefer(fd, clientReadDefer, connState);
 }
 
 void

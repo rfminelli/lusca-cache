@@ -1,3 +1,9 @@
+ /*
+  * Launched requests are registered in ConnStateData. There maybe an artificial
+  * limit imposed on the number of requests we want to process concurrently.  We
+  * just stop calling httpHandleRequest for a while if we reach the limit.
+  */
+
 
 /*
  * $Id$
