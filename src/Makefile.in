@@ -106,6 +106,7 @@ OBJS	 	= \
 		multicast.o \
 		neighbors.o \
 		net_db.o \
+#  $Id$
 		Packer.o \
 		cache_manager.o \
 		pass.o \

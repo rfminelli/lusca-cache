@@ -201,7 +201,7 @@ mainParseOptions(int argc, char *argv[])
 	    httpPortNumOverride = atoi(optarg);
 	    break;
 	case 'd':
-	    opt_debug_stderr = 1;
+	    opt_debug_stderr = atoi(optarg);
 	    break;
 	case 'f':
 	    xfree(ConfigFile);
