@@ -463,7 +463,7 @@ void stmemInit()
     sm_stats.page_size = SM_PAGE_SIZE;
     sm_stats.total_pages_allocated = 0;
     sm_stats.n_pages_in_use = 0;
-    sm_stats.max_pages = (Config.Mem.maxSize / SM_PAGE_SIZE) >> 1;
+    sm_stats.max_pages = (getCacheMemMax() / SM_PAGE_SIZE) >> 1;
 
     disk_stats.page_size = DISK_PAGE_SIZE;
     disk_stats.total_pages_allocated = 0;
@@ -488,6 +488,12 @@ void stmemInit()
     mem_obj_pool.max_pages = 0;
 #endif
 
+    if (!opt_mem_pools) {
+	sm_stats.max_pages = 0;
+	disk_stats.max_pages = 0;
+	request_pool.max_pages = 0;
+	mem_obj_pool.max_pages = 0;
+    }
     init_stack(&sm_stats.free_page_stack, sm_stats.max_pages);
     init_stack(&disk_stats.free_page_stack, disk_stats.max_pages);
     init_stack(&request_pool.free_page_stack, request_pool.max_pages);

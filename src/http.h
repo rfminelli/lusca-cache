@@ -105,11 +105,16 @@
 
 #define HTTP_REPLY_FIELD_SZ 128
 
+#define HTTP_CC_PRIVATE		0x01
+#define HTTP_CC_NOCACHE		0x02
+#define HTTP_CC_CACHABLE	0x04
+
 struct _http_reply {
     double version;
     int code;
     int content_length;
     int hdr_sz;
+    int cache_control;
     char content_type[HTTP_REPLY_FIELD_SZ];
     char date[HTTP_REPLY_FIELD_SZ];
     char expires[HTTP_REPLY_FIELD_SZ];
@@ -124,6 +129,9 @@ typedef struct {
     StoreEntry *entry;
     request_t *request;
     char *req_hdr;
+    int buf_type;		/* BUF_TYPE_8K or BUF_TYPE_MALLOC */
+    char *reqbuf;		/* Holds the HTTP request being sent to
+				 * the neighbor/origin server. */
     char *icp_rwd_ptr;		/* When a lifetime expires during the
 				 * middle of an icpwrite, don't lose the
 				 * icpReadWriteData */

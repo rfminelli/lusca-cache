@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -216,27 +215,45 @@
 
 extern int h_errno;
 
-#if LIBRESOLV_DNS_TTL_HACK
-extern int _dns_ttl_;		/* this is a really *dirty* hack - bne */
-#endif
-
 int do_debug = 0;
 
 /* error messages from gethostbyname() */
-static char *my_h_msgs(x)
-     int x;
-{
-    if (x == HOST_NOT_FOUND)
-	return "Host not found (authoritative)";
-    else if (x == TRY_AGAIN)
-	return "Host not found (non-authoritative)";
-    else if (x == NO_RECOVERY)
-	return "Non recoverable errors";
-    else if (x == NO_DATA || x == NO_ADDRESS)
-	return "Valid name, no data record of requested type";
-    else
-	return "Unknown DNS problem";
-}
+#define my_h_msgs(x) (\
+	((x) == HOST_NOT_FOUND) ? \
+		"Host not found (authoritative)" : \
+	((x) == TRY_AGAIN) ? \
+		"Host not found (non-authoritative)" : \
+	((x) == NO_RECOVERY) ? \
+		"Non recoverable errors" : \
+	((x) == NO_DATA) ? \
+		"Valid name, no data record of requested type" : \
+	((x) == NO_ADDRESS) ? \
+		"No address, look for MX record" : \
+		"Unknown DNS problem")
+
+/* 
+ * Modified to use UNIX domain sockets between squid and the dnsservers to
+ * save an FD per DNS server, Hong Mei, USC.
+ * 
+ * Before forking a dnsserver, squid creates listens on a UNIX domain
+ * socket.  After the fork(), squid closes its end of the rendevouz socket
+ * but then immediately connects to it to establish the connection to the
+ * dnsserver process.  We use AF_UNIX to prevent other folks from
+ * connecting to our little dnsservers after we fork but before we connect
+ * to them.
+ * 
+ * Squid creates UNIX domain sockets named dns.PID.NN, e.g. dns.19215.11
+ * 
+ * In ipcache_init():
+ *       . dnssocket = ipcache_opensocket(getDnsProgram())
+ *       . dns_child_table[i]->inpipe = dnssocket
+ *       . dns_child_table[i]->outpipe = dnssocket
+ * 
+ * The dnsserver inherits socket(socket_from_ipcache) from squid which it
+ * uses to rendevouz with.  The child takes responsibility for cleaning up
+ * the UNIX domain pathnames by setting a few signal handlers.
+ * 
+ */
 
 int main(argc, argv)
      int argc;
@@ -254,6 +271,7 @@ int main(argc, argv)
     int addr_count = 0;
     int alias_count = 0;
     int i;
+    char *dnsServerPathname = NULL;
     int dnsServerTCP = 0;
     int c;
     extern char *optarg;
@@ -282,6 +300,9 @@ int main(argc, argv)
 	    if (!logfile)
 		fprintf(stderr, "Could not open dnsserver's log file\n");
 	    break;
+	case 'p':
+	    dnsServerPathname = xstrdup(optarg);
+	    break;
 	case 't':
 	    dnsServerTCP = 1;
 	    break;
@@ -295,13 +316,16 @@ int main(argc, argv)
     socket_from_cache = 3;
 
     /* accept DNS look up from ipcache */
-    if (dnsServerTCP) {
+    if (dnsServerPathname || dnsServerTCP) {
 	fd = accept(socket_from_cache, NULL, NULL);
+	if (dnsServerPathname)
+	    unlink(dnsServerPathname);
 	if (fd < 0) {
 	    fprintf(stderr, "dnsserver: accept: %s\n", xstrerror());
 	    exit(1);
 	}
 	close(socket_from_cache);
+
 	/* point stdout to fd */
 	dup2(fd, 1);
 	dup2(fd, 0);
@@ -309,8 +333,6 @@ int main(argc, argv)
 	    close(fd);
     }
     while (1) {
-	int retry_count = 0;
-	int addrbuf;
 	memset(request, '\0', 256);
 
 	/* read from ipcache */
@@ -329,11 +351,8 @@ int main(argc, argv)
 	    fflush(stdout);
 	    continue;
 	}
-	result = NULL;
-	start = time(NULL);
 	/* check if it's already an IP address in text form. */
 	if (inet_addr(request) != INADDR_NONE) {
-#if NO_REVERSE_LOOKUP
 	    printf("$name %s\n", request);
 	    printf("$h_name %s\n", request);
 	    printf("$h_len %d\n", 4);
@@ -343,24 +362,13 @@ int main(argc, argv)
 	    printf("$end\n");
 	    fflush(stdout);
 	    continue;
-#endif
-	    addrbuf = inet_addr(request);
-	    for (;;) {
-		result = gethostbyaddr((char *) &addrbuf, 4, AF_INET);
-		if (result || h_errno != TRY_AGAIN)
-		    break;
-		if (++retry_count == 2)
-		    break;
+	}
+	start = time(NULL);
+	result = gethostbyname(request);
+	if (!result) {
+	    if (h_errno == TRY_AGAIN) {
 		sleep(2);
-	    }
-	} else {
-	    for (;;) {
-		result = gethostbyname(request);
-		if (result || h_errno != TRY_AGAIN)
-		    break;
-		if (++retry_count == 2)
-		    break;
-		sleep(2);
+		result = gethostbyname(request);	/* try a little harder */
 	    }
 	}
 	stop = time(NULL);
@@ -368,7 +376,7 @@ int main(argc, argv)
 	msg[0] = '\0';
 	if (!result) {
 	    if (h_errno == TRY_AGAIN) {
-		sprintf(msg, "Name Server for domain '%s' is unavailable.\n",
+		sprintf(msg, "Name Server for domain '%s' is unavailable.",
 		    request);
 	    } else {
 		sprintf(msg, "DNS Domain '%s' is invalid: %s.\n",
@@ -410,19 +418,13 @@ int main(argc, argv)
 		printf("%s\n", result->h_aliases[i]);
 	    }
 
-#if LIBRESOLV_DNS_TTL_HACK
-	    /* DNS TTL handling - bne@CareNet.hu
-	     * for first try it's a dirty hack, by hacking getanswer
-	     * to place th e ttl in a global variable */
-	    if (_dns_ttl_ > -1)
-		printf("$ttl %d\n", _dns_ttl_);
-#endif
-
 	    printf("$end\n");
 	    fflush(stdout);
 	    continue;
 	}
     }
-    /* NOTREACHED */
+
+    exit(0);
+    /*NOTREACHED */
     return 0;
 }

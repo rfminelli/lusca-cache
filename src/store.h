@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -119,8 +118,6 @@
  * KEY_CHANGE           If the key for this URL has been changed
  */
 
-#define READ_DEFERRED		(1<<15)
-#define ENTRY_NEGCACHED		(1<<14)
 #define HIERARCHICAL 		(1<<13)		/* can we query neighbors? */
 #define KEY_PRIVATE 		(1<<12)		/* is the key currently private? */
 #define ENTRY_DISPATCHED 	(1<<11)
@@ -170,7 +167,7 @@ typedef struct _MemObject {
 
     int e_swap_access;
     char *e_abort_msg;
-    log_type abort_code;
+    int abort_code;
 
     int e_current_len;
     /* The lowest offset that store keep VM copy around
@@ -184,8 +181,7 @@ typedef struct _MemObject {
     /* use another field to avoid changing the existing code */
     struct pentry **pending;
 
-    short swapin_fd;
-    short swapout_fd;
+    short swap_fd;
     int fd_of_first_client;
     struct _http_reply *reply;
     request_t *request;
@@ -218,11 +214,6 @@ typedef enum {
     SWAP_OK
 } swap_status_t;
 
-extern char *memStatusStr[];
-extern char *pingStatusStr[];
-extern char *storeStatusStr[];
-extern char *swapStatusStr[];
-
 /* A cut down structure for store manager */
 struct sentry {
     /* first two items must be same as hash_link in hash.h */
@@ -235,10 +226,9 @@ struct sentry {
 
     u_num32 flag;
     u_num32 timestamp;
+    u_num32 lastref;
     u_num32 refcount;
-    time_t lastref;
-    time_t expires;
-    time_t lastmod;
+    u_num32 expires;
 
     int object_len;
     int swap_file_number;
@@ -277,10 +267,10 @@ extern int storeWalkThrough _PARAMS((int (*proc) (), void *data));
 extern int storePurgeOld _PARAMS((void));
 extern void storeSanityCheck _PARAMS(());
 extern void storeComplete _PARAMS((StoreEntry *));
-extern void storeInit _PARAMS(());
+extern int storeInit _PARAMS(());
 extern int storeReleaseEntry _PARAMS((StoreEntry *));
 extern int storeClientWaiting _PARAMS((StoreEntry *));
-extern void storeAbort _PARAMS((StoreEntry *, char *));
+extern int storeAbort _PARAMS((StoreEntry *, char *));
 extern void storeAppend _PARAMS((StoreEntry *, char *, int));
 extern int storeGetMemSize _PARAMS((void));
 extern int storeGetMemSpace _PARAMS((int, int));
@@ -314,9 +304,6 @@ extern void storeReleaseRequest _PARAMS((StoreEntry *));
 extern void storeRotateLog _PARAMS((void));
 extern unsigned int getKeyCounter _PARAMS((void));
 extern int storeGetLowestReaderOffset _PARAMS((StoreEntry *));
-extern void storeCloseLog _PARAMS((void));
-extern void storeConfigure _PARAMS((void));
-extern void storeNegativeCache _PARAMS((StoreEntry *));
 
 #if defined(__STRICT_ANSI__)
 extern void storeAppendPrintf _PARAMS((StoreEntry *, char *,...));
@@ -329,8 +316,7 @@ extern int store_rebuilding;
 #define STORE_REBUILDING_SLOW 1
 #define STORE_REBUILDING_FAST 2
 
-#define SWAP_DIRECTORIES_L1	16
-#define SWAP_DIRECTORIES_L2	256
+#define SWAP_DIRECTORIES	100
 extern int ncache_dirs;
 
 #endif

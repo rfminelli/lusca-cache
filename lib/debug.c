@@ -153,7 +153,7 @@ static void debug_enable(s, l)
 /*
  *  debug_disable() - Disables debugging output for section s, level l.
  */
-static void debug_disable(s)
+void debug_disable(s)
      int s;
 {
     if (s > MAX_DEBUG_LEVELS || s < 0)

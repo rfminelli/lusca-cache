@@ -141,9 +141,7 @@ typedef int HashID;
 
 /* init */
 extern void hash_init _PARAMS((int));
-extern HashID hash_create _PARAMS((int (*)_PARAMS((char *, char *)),
-	int,
-	int         (*)_PARAMS((char *, HashID))));
+extern HashID hash_create _PARAMS((int (*)(char *, char *), int));
 
 /* insert/delete */
 extern int hash_insert _PARAMS((HashID, char *, void *));
@@ -157,8 +155,6 @@ extern hash_link *hash_lookup _PARAMS((HashID, char *));
 extern hash_link *hash_first _PARAMS((HashID));
 extern hash_link *hash_next _PARAMS((HashID));
 extern hash_link *hash_get_bucket _PARAMS((HashID, unsigned int));
-extern int hash_url _PARAMS((char *, HashID));
-extern int hash_string _PARAMS((char *, HashID));
 
 extern int hash_links_allocated;
 

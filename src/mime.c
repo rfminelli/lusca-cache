@@ -110,7 +110,7 @@
 
 char *mime_get_header(char *mime, char *name)
 {
-    LOCAL_ARRAY(char, header, GET_HDR_SZ);
+    static char header[GET_HDR_SZ];
     char *p = NULL;
     char *q = NULL;
     char got = 0;
@@ -187,7 +187,7 @@ ext_table_entry *mime_ext_to_type(extension)
     int low;
     int high;
     int comp;
-    LOCAL_ARRAY(char, ext, 16);
+    static char ext[16];
     char *cp = NULL;
 
     if (!extension || strlen(extension) >= (sizeof(ext) - 1))
@@ -229,10 +229,10 @@ int mk_mime_hdr(result, ttl, size, lmt, type)
 {
     time_t expiretime;
     time_t t;
-    LOCAL_ARRAY(char, date, 100);
-    LOCAL_ARRAY(char, expires, 100);
-    LOCAL_ARRAY(char, last_modified, 100);
-    LOCAL_ARRAY(char, content_length, 100);
+    static char date[100];
+    static char expires[100];
+    static char last_modified[100];
+    static char content_length[100];
 
     if (result == NULL)
 	return 1;
@@ -240,11 +240,11 @@ int mk_mime_hdr(result, ttl, size, lmt, type)
     expiretime = ttl ? t + ttl : 0;
     date[0] = expires[0] = last_modified[0] = '\0';
     content_length[0] = result[0] = '\0';
-    sprintf(date, "Date: %s\r\n", mkrfc850(t));
+    sprintf(date, "Date: %s\r\n", mkrfc850(&t));
     if (ttl >= 0)
-	sprintf(expires, "Expires: %s\r\n", mkrfc850(expiretime));
+	sprintf(expires, "Expires: %s\r\n", mkrfc850(&expiretime));
     if (lmt)
-	sprintf(last_modified, "Last-Modified: %s\r\n", mkrfc850(lmt));
+	sprintf(last_modified, "Last-Modified: %s\r\n", mkrfc850(&lmt));
     if (size > 0)
 	sprintf(content_length, "Content-Length: %d\r\n", size);
     sprintf(result, "Server: %s/%s\r\n%s%s%sContent-Type: %s\r\n%s",
