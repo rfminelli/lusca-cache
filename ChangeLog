@@ -1,3 +1,5 @@
+	- Fixed MULTICAST typo bug (Oliver Boehmer).
+
 Changes to squid-1.0.22 (December 2, 1996):
 
 	- Fixed wrong number of args to whichEdge().

@@ -904,7 +904,7 @@ void neighbors_init()
 	e->http_port = t->http_port;
 	e->icp_port = t->icp_port;
 #ifdef USE_MULTICAST
-	e->mcast_ttl = t->mcast_ttl;
+	e->ttl = t->mcast_ttl;
 #endif /* USE_MULTICAST */
 	e->options = t->options;
 	e->weight = t->weight;

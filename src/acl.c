@@ -549,24 +549,6 @@ static int aclMatchIp(data, c)
     return 0;
 }
 
-#ifdef UNUSED_CODE
-static int aclMatchWord(data, word)
-     wordlist *data;
-     char *word;
-{
-    if (word == NULL)
-	return 0;
-    debug(28, 3, "aclMatchWord: checking '%s'\n", word);
-    while (data) {
-	debug(28, 3, "aclMatchWord: looking for '%s'\n", data->key);
-	if (strstr(word, data->key))
-	    return 1;
-	data = data->next;
-    }
-    return 0;
-}
-#endif
-
 static int aclMatchEndOfWord(data, word)
      wordlist *data;
      char *word;
