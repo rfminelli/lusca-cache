@@ -123,7 +123,7 @@ typedef enum {
     LOG_UDP_MISS,		/* 13 */
     LOG_UDP_DENIED,		/* 14 */
     LOG_UDP_INVALID,		/* 15 */
-    LOG_UDP_MISSNOFETCH,	/* 16 */
+    LOG_UDP_MISS_NOFETCH,	/* 16 */
     ERR_READ_TIMEOUT,		/* 17 */
     ERR_LIFETIME_EXP,		/* 18 */
     ERR_NO_CLIENTS_BIG_OBJ,	/* 19 */
@@ -152,7 +152,9 @@ typedef struct wwd {
     void *msg;
     size_t len;
     struct wwd *next;
+#ifndef LESS_TIMING
     struct timeval start;
+#endif
     log_type logcode;
     protocol_t proto;
 } icpUdpData;
@@ -166,8 +168,11 @@ typedef struct iwd {
     icp_common_t header;	/* for UDP_HIT_OBJ's */
     int fd;
     char *url;
-    char *inbuf;
-    int inbufsize;
+    struct {
+	char *buf;
+	size_t size;
+	off_t offset;
+    } in  , out;
     method_t method;		/* GET, POST, ... */
     request_t *request;		/* Parsed URL ... */
     char *request_hdr;		/* HTTP request header */
@@ -177,8 +182,6 @@ typedef struct iwd {
 #endif				/* LOG_FULL_HEADERS */
     StoreEntry *entry;
     StoreEntry *old_entry;
-    int in_offset;
-    int out_offset;
     log_type log_type;
     int http_code;
     struct sockaddr_in peer;
@@ -186,8 +189,8 @@ typedef struct iwd {
     struct in_addr log_addr;
     struct timeval start;
     int accel;
-    int size;			/* hack for CONNECT which doesnt use sentry */
-    PF aclHandler;
+    aclCheck_t *aclChecklist;
+    void (*aclHandler) (struct iwd *, int answer);
     float http_ver;
     struct {
 	int fd;
@@ -195,6 +198,9 @@ typedef struct iwd {
 	void (*callback) _PARAMS((void *));
 	int state;
     } ident;
+    short swapin_fd;
+    int ip_lookup_pending;
+    int redirect_state;
 } icpStateData;
 
 extern void *icpCreateMessage _PARAMS((icp_opcode opcode,
@@ -218,7 +224,7 @@ extern void AppendUdp _PARAMS((icpUdpData *));
 extern void icpParseRequestHeaders _PARAMS((icpStateData *));
 extern void icpDetectClientClose _PARAMS((int fd, void *data));
 extern void icpProcessRequest _PARAMS((int fd, icpStateData *));
-extern int icpSendMoreData _PARAMS((int fd, icpStateData *));
+extern void icpSendMoreData _PARAMS((int fd, void *data));
 extern int icpUdpReply _PARAMS((int fd, icpUdpData * queue));
 extern void vizHackSendPkt _PARAMS((const struct sockaddr_in * from, int type));
 extern void icpSendERRORComplete _PARAMS((int, char *, int, int, void *));

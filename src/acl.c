@@ -41,6 +41,15 @@
 /* Global */
 const char *AclMatchedName = NULL;
 
+/* These should never be referenced directly in this file! */
+struct _acl_deny_info_list *DenyInfoList = NULL;
+struct _acl_access *HTTPAccessList = NULL;
+struct _acl_access *ICPAccessList = NULL;
+struct _acl_access *MISSAccessList = NULL;
+#if DELAY_HACK
+struct _acl_access *DelayAccessList = NULL;
+#endif
+
 static struct _acl *AclList = NULL;
 static struct _acl **AclListTail = &AclList;
 static const char *const w_space = " \t\n\r";	/* Jasper sez so */
@@ -57,13 +66,6 @@ static int aclMatchIp _PARAMS((void *dataptr, struct in_addr c));
 static int aclMatchDomainList _PARAMS((void *dataptr, const char *));
 static squid_acl aclType _PARAMS((const char *s));
 static int decode_addr _PARAMS((const char *, struct in_addr *, struct in_addr *));
-static void aclCheck _PARAMS((aclCheck_t * checklist));
-
-static void aclCheckCallback _PARAMS((aclCheck_t * checklist, int answer));
-static void aclLookupDstIPDone _PARAMS((int fd, const ipcache_addrs * ia, void *data));
-static void aclLookupSrcFQDNDone _PARAMS((int fd, const char *fqdn, void *data));
-static void aclLookupDstFQDNDone _PARAMS((int fd, const char *fqdn, void *data));
-
 
 #if defined(USE_SPLAY_TREE)
 static int aclIpNetworkCompare _PARAMS((const void *, splayNode *));
@@ -234,16 +236,15 @@ aclParseMethodList(void *curlist)
 static int
 decode_addr(const char *asc, struct in_addr *addr, struct in_addr *mask)
 {
-    u_num32 a = 0;
+    u_num32 a;
     int a1 = 0, a2 = 0, a3 = 0, a4 = 0;
     struct hostent *hp = NULL;
 
     switch (sscanf(asc, "%d.%d.%d.%d", &a1, &a2, &a3, &a4)) {
     case 4:			/* a dotted quad */
-	if ((a = (u_num32) inet_addr(asc)) != inaddr_none ||
-	    !strcmp(asc, "255.255.255.255")) {
-	    addr->s_addr = a;
-	    /* inet_addr() outputs in network byte order */
+	if (!safe_inet_addr(asc, addr)) {
+	    debug(28, 0, "decode_addr: unsafe IP address: '%s'\n", asc);
+	    fatal("decode_addr: unsafe IP address");
 	}
 	break;
     case 1:			/* a significant bits value for a mask */
@@ -1058,7 +1059,8 @@ aclMatchAcl(struct _acl *acl, aclCheck_t * checklist)
 	ia = ipcache_gethostbyname(r->host, IP_LOOKUP_IF_MISS);
 	if (ia) {
 	    for (k = 0; k < (int) ia->count; k++) {
-		if (aclMatchIp(&acl->data, ia->in_addrs[k]))
+		checklist->dst_addr = ia->in_addrs[k];
+		if (aclMatchIp(&acl->data, checklist->dst_addr))
 		    return 1;
 	    }
 	    return 0;
@@ -1151,131 +1153,21 @@ aclMatchAclList(const struct _acl_list *list, aclCheck_t * checklist)
 }
 
 int
-aclCheckFast(const struct _acl_access *A, aclCheck_t * checklist)
+aclCheck(const struct _acl_access *A, aclCheck_t * checklist)
 {
     int allow = 0;
+
     while (A) {
+	debug(28, 3, "aclCheck: checking '%s'\n", A->cfgline);
 	allow = A->allow;
-	if (aclMatchAclList(A->acl_list, checklist))
+	if (aclMatchAclList(A->acl_list, checklist)) {
+	    debug(28, 3, "aclCheck: match found, returning %d\n", allow);
 	    return allow;
+	}
 	A = A->next;
     }
     return !allow;
 }
-
-static void
-aclCheck(aclCheck_t * checklist)
-{
-    int allow = 0;
-    const struct _acl_access *A;
-    ipcache_addrs *ia = NULL;
-    int match;
-    while ((A = checklist->access_list)) {
-	debug(28, 3, "aclCheck: checking '%s'\n", A->cfgline);
-	allow = A->allow;
-	match = aclMatchAclList(A->acl_list, checklist);
-	if (checklist->state[ACL_DST_IP] == ACL_LOOKUP_NEED) {
-	    checklist->state[ACL_DST_IP] = ACL_LOOKUP_PENDING;
-	    ipcache_nbgethostbyname(checklist->request->host,
-		-1,
-		aclLookupDstIPDone,
-		checklist);
-	    return;
-	} else if (checklist->state[ACL_SRC_DOMAIN] == ACL_LOOKUP_NEED) {
-	    checklist->state[ACL_SRC_DOMAIN] = ACL_LOOKUP_PENDING;
-	    fqdncache_nbgethostbyaddr(checklist->src_addr,
-		-1,
-		aclLookupSrcFQDNDone,
-		checklist);
-	    return;
-	} else if (checklist->state[ACL_DST_DOMAIN] == ACL_LOOKUP_NEED) {
-	    if ((ia = ipcacheCheckNumeric(checklist->request->host)) != NULL) {
-		checklist->state[ACL_DST_DOMAIN] = ACL_LOOKUP_PENDING;
-		fqdncache_nbgethostbyaddr(ia->in_addrs[0],
-		    -1,
-		    aclLookupDstFQDNDone,
-		    checklist);
-	    } else {
-		checklist->state[ACL_DST_DOMAIN] = ACL_LOOKUP_DONE;
-	    }
-	    return;
-	}
-	if (match) {
-	    debug(28, 3, "aclCheck: match found, returning %d\n", allow);
-	    aclCheckCallback(checklist, allow);
-	    return;
-	}
-	checklist->access_list = A->next;
-    }
-    debug(28, 3, "aclCheck: NO match found, returning %d\n", !allow);
-    aclCheckCallback(checklist, !allow);
-}
-
-
-static void
-aclCheckCallback(aclCheck_t * checklist, int answer)
-{
-    debug(28, 3, "aclCheckCallback: answer=%d\n", answer);
-    checklist->callback(answer, checklist->callback_data);
-    requestUnlink(checklist->request);
-    xfree(checklist);
-}
-
-static void
-aclLookupDstIPDone(int fd, const ipcache_addrs * ia, void *data)
-{
-    aclCheck_t *checklist = data;
-    checklist->state[ACL_DST_IP] = ACL_LOOKUP_DONE;
-    aclCheck(checklist);
-}
-
-static void
-aclLookupSrcFQDNDone(int fd, const char *fqdn, void *data)
-{
-    aclCheck_t *checklist = data;
-    checklist->state[ACL_SRC_DOMAIN] = ACL_LOOKUP_DONE;
-    aclCheck(checklist);
-}
-
-static void
-aclLookupDstFQDNDone(int fd, const char *fqdn, void *data)
-{
-    aclCheck_t *checklist = data;
-    checklist->state[ACL_SRC_DOMAIN] = ACL_LOOKUP_DONE;
-    aclCheck(checklist);
-}
-
-void
-aclNBCheck(const struct _acl_access *A,
-    request_t * request,
-    struct in_addr src_addr,
-    char *user_agent,
-    char *ident,
-    PF callback,
-    void *callback_data)
-{
-    aclCheck_t *checklist = xcalloc(1, sizeof(aclCheck_t));;
-    checklist->access_list = A;
-    checklist->request = requestLink(request);
-    checklist->src_addr = src_addr;
-    if (user_agent)
-	xstrncpy(checklist->browser, user_agent, BROWSERNAMELEN);
-    if (ident)
-	xstrncpy(checklist->ident, ident, ICP_IDENT_SZ);
-    checklist->callback = callback;
-    checklist->callback_data = callback_data;
-    aclCheck(checklist);
-}
-
-
-
-
-
-
-
-
-
-
 
 /*********************/
 /* Destroy functions */
@@ -1583,23 +1475,23 @@ networkCompare(struct _acl_ip_data *net, struct _acl_ip_data *data)
 static int
 aclIpNetworkCompare(const void *a, splayNode * n)
 {
-    struct in_addr *A = (struct in_addr *) a;
+    struct in_addr A = *(struct in_addr *) a;
     struct _acl_ip_data *q = n->data;
     struct in_addr B = q->addr1;
     struct in_addr C = q->addr2;
     int rc = 0;
-    A->s_addr &= q->mask.s_addr;	/* apply netmask */
+    A.s_addr &= q->mask.s_addr;	/* apply netmask */
     if (C.s_addr == 0) {	/* single address check */
-	if (ntohl(A->s_addr) > ntohl(B.s_addr))
+	if (ntohl(A.s_addr) > ntohl(B.s_addr))
 	    rc = 1;
-	else if (ntohl(A->s_addr) < ntohl(B.s_addr))
+	else if (ntohl(A.s_addr) < ntohl(B.s_addr))
 	    rc = -1;
 	else
 	    rc = 0;
     } else {			/* range address check */
-	if (ntohl(A->s_addr) > ntohl(C.s_addr))
+	if (ntohl(A.s_addr) > ntohl(C.s_addr))
 	    rc = 1;
-	else if (ntohl(A->s_addr) < ntohl(B.s_addr))
+	else if (ntohl(A.s_addr) < ntohl(B.s_addr))
 	    rc = -1;
 	else
 	    rc = 0;

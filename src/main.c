@@ -111,6 +111,7 @@ int theInIcpConnection = -1;
 int theOutIcpConnection = -1;
 int vizSock = -1;
 int do_reuse = 1;
+int opt_unlink_on_reload = 0;
 int opt_reload_hit_only = 0;	/* only UDP_HIT during store relaod */
 int opt_catch_signals = 1;
 int opt_dns_tests = 1;
@@ -120,11 +121,13 @@ int opt_syslog_enable = 0;	/* disabled by default */
 int opt_no_ipcache = 0;		/* use ipcache by default */
 static int opt_send_signal = -1;	/* no signal to send */
 int opt_udp_hit_obj = 0;	/* ask for HIT_OBJ's */
-int opt_mem_pools = 1;
+int opt_mem_pools = 0;
 int opt_forwarded_for = 1;
 int opt_accel_uses_host = 0;
 int vhost_mode = 0;
 int Squid_MaxFD = SQUID_MAXFD;
+int Biggest_FD = -1;
+int select_loops = 0;		/* how many times thru select loop */
 volatile int unbuffered_logs = 1;	/* debug and hierarchy unbuffered by default */
 volatile int shutdown_pending = 0;	/* set by SIGTERM handler (shut_down()) */
 volatile int reread_pending = 0;	/* set by SIGHUP handler */
@@ -137,7 +140,6 @@ struct in_addr theOutICPAddr;
 const char *const dash_str = "-";
 const char *const null_string = "";
 char ThisCache[SQUIDHOSTNAMELEN << 1];
-unsigned int inaddr_none;
 
 /* for error reporting from xmalloc and friends */
 extern void (*failure_notify) _PARAMS((const char *));
@@ -165,6 +167,7 @@ usage(void)
     fprintf(stderr,
 	"Usage: %s [-hsvzCDFRUVY] [-f config-file] [-[au] port] [-k signal]\n"
 	"       -a port   Specify ASCII port number (default: %d).\n"
+	"       -b        Buffer log output (default is unbuffered).\n"
 	"       -f file   Use given config-file instead of\n"
 	"                 %s\n"
 	"       -h        Print help message.\n"
@@ -181,7 +184,7 @@ usage(void)
 	"       -R        Do not set REUSEADDR on port.\n"
 	"       -U        Unlink expired objects on reload.\n"
 	"       -V        Virtual host httpd-accelerator.\n"
-	"       -Y        Only return UDP_HIT or UDP_MISSNOFETCH during fast reload.\n",
+	"       -Y        Only return UDP_HIT or UDP_MISS_NOFETCH during fast reload.\n",
 	appname, CACHE_HTTP_PORT, DefaultConfigFile, CACHE_ICP_PORT);
     exit(1);
 }
@@ -192,7 +195,7 @@ mainParseOptions(int argc, char *argv[])
     extern char *optarg;
     int c;
 
-    while ((c = getopt(argc, argv, "CDFRVYXa:bf:hik:m:su:vz?")) != -1) {
+    while ((c = getopt(argc, argv, "CDFRUVYXa:bf:hik:m:su:vz?")) != -1) {
 	switch (c) {
 	case 'C':
 	    opt_catch_signals = 0;
@@ -205,6 +208,9 @@ mainParseOptions(int argc, char *argv[])
 	    break;
 	case 'R':
 	    do_reuse = 0;
+	    break;
+	case 'U':
+	    opt_unlink_on_reload = 1;
 	    break;
 	case 'V':
 	    vhost_mode = 1;
@@ -373,7 +379,7 @@ serverConnectionsOpen(void)
 	    debug(1, 1, "Accepting ICP connections on FD %d.\n",
 		theInIcpConnection);
 
-	    if ((addr = Config.Addrs.udp_outgoing).s_addr != inaddr_none) {
+	    if ((addr = Config.Addrs.udp_outgoing).s_addr != no_addr.s_addr) {
 		enter_suid();
 		theOutIcpConnection = comm_open(SOCK_DGRAM,
 		    0,
@@ -455,7 +461,6 @@ serverConnectionsOpen(void)
     clientdbInit();
     icmpOpen();
     netdbInit();
-    peerSelectInit();
 }
 
 void
@@ -503,6 +508,8 @@ mainReinitialize(void)
     neighborsDestroy();
     parseConfigFile(ConfigFile);
     _db_init(Config.Log.log, Config.debugOptions);
+    ipcache_restart();		/* clear stuck entries */
+    fqdncache_restart();	/* sigh, fqdncache too */
     dnsOpenServers();
     redirectOpenServers();
     serverConnectionsOpen();
@@ -565,6 +572,7 @@ mainInitialize(void)
 #endif
 
     if (first_time) {
+	unlinkdInit();
 	/* module initialization */
 	urlInitialize();
 	stat_init(&HTTPCacheInfo, Config.Log.access);
@@ -574,8 +582,8 @@ mainInitialize(void)
 	if (Config.effectiveUser) {
 	    /* we were probably started as root, so cd to a swap
 	     * directory in case we dump core */
-	    if (chdir(storeSwapDir(0)) < 0) {
-		debug(50, 0, "%s: %s\n", storeSwapDir(0), xstrerror());
+	    if (chdir(swappath(0)) < 0) {
+		debug(50, 0, "%s: %s\n", swappath(0), xstrerror());
 		fatal_dump("Cannot cd to swap directory?");
 	    }
 	}
@@ -603,7 +611,6 @@ mainInitialize(void)
 	if (Config.Announce.on)
 	    eventAdd("start_announce", start_announce, NULL, 3600);
 	eventAdd("ipcache_purgelru", (EVH) ipcache_purgelru, NULL, 10);
-	eventAdd("peerUpdateFudge", peerUpdateFudge, NULL, 10);
     }
     first_time = 0;
 }
@@ -635,12 +642,11 @@ main(int argc, char **argv)
 #endif /* HAVE_MALLOPT */
 
     memset(&local_addr, '\0', sizeof(struct in_addr));
-    local_addr.s_addr = inet_addr(localhost);
+    safe_inet_addr(localhost, &local_addr);
     memset(&any_addr, '\0', sizeof(struct in_addr));
-    any_addr.s_addr = inet_addr("0.0.0.0");
+    safe_inet_addr("0.0.0.0", &any_addr);
     memset(&no_addr, '\0', sizeof(struct in_addr));
-    no_addr.s_addr = inet_addr("255.255.255.255");
-    inaddr_none = inet_addr("255.255.255.255");
+    safe_inet_addr("255.255.255.255", &no_addr);
 
 #if HAVE_SRANDOM
     srandom(time(NULL));
@@ -672,7 +678,7 @@ main(int argc, char **argv)
     comm_init();
 
     /* we have to init fdstat here. */
-    fdstat_init(PREOPEN_FD);
+    fdstat_init();
     fdstat_open(0, FD_LOG);
     fdstat_open(1, FD_LOG);
     fdstat_open(2, FD_LOG);
@@ -692,7 +698,7 @@ main(int argc, char **argv)
 	    ftpServerClose();
 	    icmpClose();
 	    _db_rotate_log();	/* cache.log */
-	    storeWriteCleanLogs();
+	    storeWriteCleanLog();
 	    storeRotateLog();	/* store.log */
 	    stat_rotate_log();	/* access.log */
 	    useragentRotateLog();	/* useragent.log */
