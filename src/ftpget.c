@@ -436,7 +436,7 @@ static const char *state_str[] =
 #define CACHED_RETRIEVE_ERROR_MSG "\
 <HTML><HEAD>\n\
 <TITLE>ERROR: The requested URL could not be retrieved</TITLE>\n\
-</HEAD><BODY><H1>ERROR</H1>\n\
+</HEAD><BODY BGCOLOR=#FFFFFF><H1>ERROR</H1>\n\
 <H2>The requested URL could not be retrieved</H2>\n\
 <HR>\n\
 <P>\n\
@@ -2144,7 +2144,7 @@ htmlify_listing(ftp_request_t * r)
     fprintf(wfp, "</TITLE>\n");
     if (r->flags & F_USEBASE)
 	fprintf(wfp, "<BASE HREF=\"%s\">\n", r->url_escaped);
-    fprintf(wfp, "</HEAD><BODY>\n");
+    fprintf(wfp, "</HEAD><BODY BGCOLOR=#FFFFFF>\n");
 
     if (r->cmd_msg) {		/* There was a message sent with the CWD cmd */
 	list_t *l;
