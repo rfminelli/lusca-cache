@@ -35,7 +35,6 @@
 
 #include "squid.h"
 #include "store_ufs.h"
-#include "ufscommon.h"
 
 
 static DRCB storeUfsReadDone;
@@ -52,7 +51,7 @@ storeUfsOpen(SwapDir * SD, StoreEntry * e, STFNCB * file_callback,
     STIOCB * callback, void *callback_data)
 {
     sfileno f = e->swap_filen;
-    char *path = commonUfsDirFullPath(SD, f, NULL);
+    char *path = storeUfsDirFullPath(SD, f, NULL);
     storeIOState *sio;
     struct stat sb;
     int fd;
@@ -71,7 +70,8 @@ storeUfsOpen(SwapDir * SD, StoreEntry * e, STFNCB * file_callback,
     sio->swap_dirn = SD->index;
     sio->mode = O_RDONLY | O_BINARY;
     sio->callback = callback;
-    sio->callback_data = cbdataReference(callback_data);
+    sio->callback_data = callback_data;
+    cbdataLock(callback_data);
     sio->e = e;
     ((ufsstate_t *) (sio->fsstate))->fd = fd;
     ((ufsstate_t *) (sio->fsstate))->flags.writing = 0;
@@ -92,16 +92,16 @@ storeUfsCreate(SwapDir * SD, StoreEntry * e, STFNCB * file_callback, STIOCB * ca
     int fd;
     int mode = (O_WRONLY | O_CREAT | O_TRUNC | O_BINARY);
     char *path;
-    squidufsinfo_t *ufsinfo = (squidufsinfo_t *) SD->fsdata;
+    ufsinfo_t *ufsinfo = (ufsinfo_t *) SD->fsdata;
     sfileno filn;
     sdirno dirn;
 
     /* Allocate a number */
     dirn = SD->index;
-    filn = commonUfsDirMapBitAllocate(SD);
+    filn = storeUfsDirMapBitAllocate(SD);
     ufsinfo->suggest = filn + 1;
     /* Shouldn't we handle a 'bitmap full' error here? */
-    path = commonUfsDirFullPath(SD, filn, NULL);
+    path = storeUfsDirFullPath(SD, filn, NULL);
 
     debug(79, 3) ("storeUfsCreate: fileno %08X\n", filn);
     fd = file_open(path, mode);
@@ -118,7 +118,8 @@ storeUfsCreate(SwapDir * SD, StoreEntry * e, STFNCB * file_callback, STIOCB * ca
     sio->swap_dirn = dirn;
     sio->mode = mode;
     sio->callback = callback;
-    sio->callback_data = cbdataReference(callback_data);
+    sio->callback_data = callback_data;
+    cbdataLock(callback_data);
     sio->e = (StoreEntry *) e;
     ((ufsstate_t *) (sio->fsstate))->fd = fd;
     ((ufsstate_t *) (sio->fsstate))->flags.writing = 0;
@@ -127,7 +128,7 @@ storeUfsCreate(SwapDir * SD, StoreEntry * e, STFNCB * file_callback, STIOCB * ca
     store_open_disk_fd++;
 
     /* now insert into the replacement policy */
-    commonUfsDirReplAdd(SD, e);
+    storeUfsDirReplAdd(SD, e);
     return sio;
 }
 
@@ -153,7 +154,8 @@ storeUfsRead(SwapDir * SD, storeIOState * sio, char *buf, size_t size, off_t off
     assert(sio->read.callback == NULL);
     assert(sio->read.callback_data == NULL);
     sio->read.callback = callback;
-    sio->read.callback_data = cbdataReference(callback_data);
+    sio->read.callback_data = callback_data;
+    cbdataLock(callback_data);
     debug(79, 3) ("storeUfsRead: dirno %d, fileno %08X, FD %d\n",
 	sio->swap_dirn, sio->swap_filen, ufsstate->fd);
     sio->offset = offset;
@@ -185,9 +187,9 @@ void
 storeUfsUnlink(SwapDir * SD, StoreEntry * e)
 {
     debug(79, 3) ("storeUfsUnlink: fileno %08X\n", e->swap_filen);
-    commonUfsDirReplRemove(e);
-    commonUfsDirMapBitReset(SD, e->swap_filen);
-    commonUfsDirUnlinkFile(SD, e->swap_filen);
+    storeUfsDirReplRemove(e);
+    storeUfsDirMapBitReset(SD, e->swap_filen);
+    storeUfsDirUnlinkFile(SD, e->swap_filen);
 }
 
 /*  === STATIC =========================================================== */
@@ -197,8 +199,8 @@ storeUfsReadDone(int fd, const char *buf, int len, int errflag, void *my_data)
 {
     storeIOState *sio = my_data;
     ufsstate_t *ufsstate = (ufsstate_t *) sio->fsstate;
-    STRCB *callback;
-    void *cbdata;
+    STRCB *callback = sio->read.callback;
+    void *their_data = sio->read.callback_data;
     ssize_t rlen;
 
     debug(79, 3) ("storeUfsReadDone: dirno %d, fileno %08X, FD %d, len %d\n",
@@ -211,12 +213,13 @@ storeUfsReadDone(int fd, const char *buf, int len, int errflag, void *my_data)
 	rlen = (ssize_t) len;
 	sio->offset += len;
     }
-    assert(sio->read.callback);
-    assert(sio->read.callback_data);
-    callback = sio->read.callback;
+    assert(callback);
+    assert(their_data);
     sio->read.callback = NULL;
-    if (cbdataReferenceValidDone(sio->read.callback_data, &cbdata))
-	callback(cbdata, buf, (size_t) rlen);
+    sio->read.callback_data = NULL;
+    if (cbdataValid(their_data))
+	callback(their_data, buf, (size_t) rlen);
+    cbdataUnlock(their_data);
 }
 
 static void
@@ -241,14 +244,15 @@ static void
 storeUfsIOCallback(storeIOState * sio, int errflag)
 {
     ufsstate_t *ufsstate = (ufsstate_t *) sio->fsstate;
-    void *cbdata;
     debug(79, 3) ("storeUfsIOCallback: errflag=%d\n", errflag);
     if (ufsstate->fd > -1) {
 	file_close(ufsstate->fd);
 	store_open_disk_fd--;
     }
-    if (cbdataReferenceValidDone(sio->callback_data, &cbdata))
-	sio->callback(cbdata, errflag, sio);
+    if (cbdataValid(sio->callback_data))
+	sio->callback(sio->callback_data, errflag, sio);
+    cbdataUnlock(sio->callback_data);
+    sio->callback_data = NULL;
     sio->callback = NULL;
     cbdataFree(sio);
 }

@@ -41,6 +41,7 @@ extern void (*failure_notify) (const char *);
 static int opt_send_signal = -1;
 static int opt_no_daemon = 0;
 static int opt_parse_cfg_only = 0;
+static int httpPortNumOverride = 1;
 static int icpPortNumOverride = 1;	/* Want to detect "-u 0" */
 static int configured_once = 0;
 #if MALLOC_DBG
@@ -54,6 +55,9 @@ static void mainRotate(void);
 static void mainReconfigure(void);
 static SIGHDLR rotate_logs;
 static SIGHDLR reconfigure;
+#if ALARM_UPDATES_TIME
+static SIGHDLR time_tick;
+#endif
 static void mainInitialize(void);
 static void usage(void);
 static void mainParseOptions(int, char **);
@@ -142,7 +146,7 @@ mainParseOptions(int argc, char *argv[])
 	    opt_reload_hit_only = 1;
 	    break;
 	case 'a':
-	    parse_sockaddr_in_list_token(&Config.Sockaddr.http, optarg);
+	    httpPortNumOverride = atoi(optarg);
 	    break;
 	case 'd':
 	    opt_debug_stderr = atoi(optarg);
@@ -239,6 +243,19 @@ rotate_logs(int sig)
 #endif
 }
 
+#if ALARM_UPDATES_TIME
+static void
+time_tick(int sig)
+{
+    getCurrentTime();
+    alarm(1);
+#if !HAVE_SIGACTION
+    signal(sig, time_tick);
+#endif
+}
+
+#endif
+
 /* ARGSUSED */
 static void
 reconfigure(int sig)
@@ -312,7 +329,7 @@ serverConnectionsClose(void)
 static void
 mainReconfigure(void)
 {
-    debug(1, 1) ("Restarting Squid Cache (version %s)...\n", version_string);
+    debug(1, 1) ("Reconfiguring Squid Cache (version %s)...\n", version_string);
     reconfiguring = 1;
     /* Already called serverConnectionsClose and ipcacheShutdownServers() */
     serverConnectionsClose();
@@ -335,6 +352,10 @@ mainReconfigure(void)
     authenticateShutdown();
     externalAclShutdown();
     storeDirCloseSwapLogs();
+    storeLogClose();
+    accessLogClose();
+    useragentLogClose();
+    refererCloseLog();
     errorClean();
     enter_suid();		/* root to read config file */
     parseConfigFile(ConfigFile);
@@ -345,6 +366,10 @@ mainReconfigure(void)
     fqdncache_restart();	/* sigh, fqdncache too */
     parseEtcHosts();
     errorInitialize();		/* reload error pages */
+    accessLogInit();
+    storeLogOpen();
+    useragentOpenLog();
+    refererOpenLog();
 #if USE_DNSSERVERS
     dnsInit();
 #else
@@ -451,6 +476,9 @@ mainInitialize(void)
     squid_signal(SIGCHLD, sig_child, SA_NODEFER | SA_RESTART);
 
     setEffectiveUser();
+    assert(Config.Sockaddr.http);
+    if (httpPortNumOverride != 1)
+	Config.Sockaddr.http->s.sin_port = htons(httpPortNumOverride);
     if (icpPortNumOverride != 1)
 	Config.Port.icp = (u_short) icpPortNumOverride;
 
@@ -538,6 +566,10 @@ mainInitialize(void)
     squid_signal(SIGHUP, reconfigure, SA_RESTART);
     squid_signal(SIGTERM, shut_down, SA_NODEFER | SA_RESETHAND | SA_RESTART);
     squid_signal(SIGINT, shut_down, SA_NODEFER | SA_RESETHAND | SA_RESTART);
+#if ALARM_UPDATES_TIME
+    squid_signal(SIGALRM, time_tick, SA_RESTART);
+    alarm(1);
+#endif
     memCheckInit();
     debug(1, 1) ("Ready to serve requests.\n");
     if (!configured_once) {
@@ -546,10 +578,6 @@ mainInitialize(void)
 	    eventAdd("start_announce", start_announce, NULL, 3600.0, 1);
 	eventAdd("ipcache_purgelru", ipcache_purgelru, NULL, 10.0, 1);
 	eventAdd("fqdncache_purgelru", fqdncache_purgelru, NULL, 15.0, 1);
-#if USE_XPROF_STATS
-	eventAdd("cpuProfiling", xprof_event, NULL, 1.0, 1);
-#endif
-	eventAdd("memPoolCleanIdlePools", memPoolCleanIdlePools, NULL, 15.0, 1);
     }
     configured_once = 1;
 }
@@ -706,19 +734,16 @@ main(int argc, char **argv)
 	    do_shutdown = 0;
 	    shutting_down = 1;
 	    serverConnectionsClose();
-#if USE_DNSSERVERS
-	    dnsShutdown();
-#else
-	    idnsShutdown();
-#endif
-	    redirectShutdown();
-	    externalAclShutdown();
 	    eventAdd("SquidShutdown", SquidShutdown, NULL, (double) (wait + 1), 1);
 	}
 	eventRun();
 	if ((loop_delay = eventNextTime()) < 0)
 	    loop_delay = 0;
+#if HAVE_POLL
+	switch (comm_poll(loop_delay)) {
+#else
 	switch (comm_select(loop_delay)) {
+#endif
 	case COMM_OK:
 	    errcount = 0;	/* reset if successful */
 	    break;
@@ -807,6 +832,10 @@ checkRunningPid(void)
 {
     pid_t pid;
     debug_log = stderr;
+    if (strcmp(Config.pidFilename, "none") == 0) {
+	debug(0, 1) ("No pid_filename specified. Trusting you know what you are doing.\n");
+	return 0;
+    }
     pid = readPidFile();
     if (pid < 2)
 	return 0;
@@ -856,6 +885,8 @@ watch_child(char *argv[])
      */
     /* Connect stdio to /dev/null in daemon mode */
     nullfd = open("/dev/null", O_RDWR | O_TEXT);
+    if (nullfd < 0)
+	fatalf("/dev/null: %s\n", xstrerror());
     dup2(nullfd, 0);
     if (opt_debug_stderr < 0) {
 	dup2(nullfd, 1);
@@ -926,6 +957,13 @@ static void
 SquidShutdown(void *unused)
 {
     debug(1, 1) ("Shutting down...\n");
+#if USE_DNSSERVERS
+    dnsShutdown();
+#else
+    idnsShutdown();
+#endif
+    redirectShutdown();
+    externalAclShutdown();
     icpConnectionClose();
 #if USE_HTCP
     htcpSocketClose();

@@ -43,6 +43,10 @@
 static void
 authenticateStateFree(authenticateStateData * r)
 {
+    if (r->auth_user_request) {
+	authenticateAuthUserRequestUnlock(r->auth_user_request);
+	r->auth_user_request = NULL;
+    }
     cbdataFree(r);
 }
 
@@ -120,7 +124,7 @@ authBasicDone(void)
 	helperFree(basicauthenticators);
     basicauthenticators = NULL;
     if (basic_data_pool) {
-	memPoolDestroy(&basic_data_pool);
+	memPoolDestroy(basic_data_pool);
 	basic_data_pool = NULL;
     }
     debug(29, 2) ("authBasicDone: Basic authentication Shutdown.\n");
@@ -212,7 +216,7 @@ authenticateBasicDirection(auth_user_request_t * auth_user_request)
     case 2:			/* paused while waiting for a username:password check on another request */
 	return -1;
     case 3:			/* authentication process failed. */
-	return -2;
+	return 0;
     }
     return -2;
 }
@@ -261,8 +265,8 @@ authenticateBasicHandleReply(void *data, char *reply)
     auth_user_t *auth_user;
     basic_data *basic_auth;
     auth_basic_queue_node *tmpnode;
+    int valid;
     char *t = NULL;
-    void *cbdata;
     debug(29, 9) ("authenticateBasicHandleReply: {%s}\n", reply ? reply : "<NULL>");
     if (reply) {
 	if ((t = strchr(reply, ' ')))
@@ -279,13 +283,16 @@ authenticateBasicHandleReply(void *data, char *reply)
     else
 	basic_auth->flags.credentials_ok = 3;
     basic_auth->credentials_checkedtime = squid_curtime;
-    if (cbdataReferenceValidDone(r->data, &cbdata))
-	r->handler(cbdata, NULL);
-    cbdataReferenceDone(r->data);
+    valid = cbdataValid(r->data);
+    if (valid)
+	r->handler(r->data, NULL);
+    cbdataUnlock(r->data);
     while (basic_auth->auth_queue) {
 	tmpnode = basic_auth->auth_queue->next;
-	if (cbdataReferenceValidDone(basic_auth->auth_queue->data, &cbdata))
-	    basic_auth->auth_queue->handler(cbdata, NULL);
+	valid = cbdataValid(basic_auth->auth_queue->data);
+	if (valid)
+	    basic_auth->auth_queue->handler(basic_auth->auth_queue->data, NULL);
+	cbdataUnlock(basic_auth->auth_queue->data);
 	xfree(basic_auth->auth_queue);
 	basic_auth->auth_queue = tmpnode;
     }
@@ -318,6 +325,7 @@ authBasicParse(authScheme * scheme, int n_configured, char *param_str)
 	scheme->scheme_data = xmalloc(sizeof(auth_basic_config));
 	memset(scheme->scheme_data, 0, sizeof(auth_basic_config));
 	basicConfig = scheme->scheme_data;
+	basicConfig->basicAuthRealm = xstrdup("Squid proxy-caching web server");
 	basicConfig->authenticateChildren = 5;
 	basicConfig->credentialsTTL = 2 * 60 * 60;	/* two hours */
     }
@@ -540,7 +548,7 @@ authBasicInit(authScheme * scheme)
 	    basicauthenticators = helperCreate("basicauthenticator");
 	basicauthenticators->cmdline = basicConfig->authenticate;
 	basicauthenticators->n_to_start = basicConfig->authenticateChildren;
-	basicauthenticators->ipc_type = IPC_STREAM;
+	basicauthenticators->ipc_type = IPC_TCP_SOCKET;
 	helperOpenServers(basicauthenticators);
 	if (!init) {
 	    cachemgrRegister("basicauthenticator",
@@ -580,15 +588,17 @@ authenticateBasicStart(auth_user_request_t * auth_user_request, RH * handler, vo
 	/* save the details */
 	node->next = basic_auth->auth_queue;
 	basic_auth->auth_queue = node;
-	node->auth_user_request = auth_user_request;
 	node->handler = handler;
-	node->data = cbdataReference(data);
+	node->data = data;
+	cbdataLock(data);
 	return;
     } else {
 	r = cbdataAlloc(authenticateStateData);
 	r->handler = handler;
-	r->data = cbdataReference(data);
+	cbdataLock(data);
+	r->data = data;
 	r->auth_user_request = auth_user_request;
+	authenticateAuthUserRequestLock(r->auth_user_request);
 	/* mark the user as haveing verification in progress */
 	basic_auth->flags.credentials_ok = 2;
 	xstrncpy(user, rfc1738_escape(basic_auth->username), sizeof(user));

@@ -147,10 +147,10 @@ log_quote(const char *header)
 #endif
 	    if (c <= 0x1F
 		|| c >= 0x7F
+		|| c == '%'
 #if OLD_LOG_MIME
 		|| c == '"'
 		|| c == '#'
-		|| c == '%'
 		|| c == ';'
 		|| c == '<'
 		|| c == '>'
@@ -210,6 +210,7 @@ username_quote(const char *header)
 	    *buf_cursor++ = 'n';
 	} else if (c <= 0x1F
 		|| c >= 0x7F
+		|| c == '%'
 	    || c == ' ') {
 	    *buf_cursor++ = '%';
 	    i = c * 2;
@@ -227,6 +228,8 @@ static char *
 accessLogFormatName(const char *name)
 {
     if (NULL == name)
+	return NULL;
+    if (name[0] == '\0')
 	return NULL;
     return username_quote(name);
 }
@@ -250,7 +253,7 @@ accessLogSquid(AccessLogEntry * al)
 	log_tags[al->cache.code],
 	al->http.code,
 	(long int) al->cache.size,
-	al->_private.method_str,
+	al->private.method_str,
 	al->url,
 	user && *user ? user : dash_str,
 	al->hier.ping.timedout ? "TIMEOUT_" : "",
@@ -276,7 +279,7 @@ accessLogCommon(AccessLogEntry * al)
 	user2 ? user2 : dash_str,
 	user1 ? user1 : dash_str,
 	mkhttpdlogtime(&squid_curtime),
-	al->_private.method_str,
+	al->private.method_str,
 	al->url,
 	al->http.version.major, al->http.version.minor,
 	al->http.code,
@@ -297,9 +300,9 @@ accessLogLog(AccessLogEntry * al)
     if (!al->http.content_type || *al->http.content_type == '\0')
 	al->http.content_type = dash_str;
     if (al->icp.opcode)
-	al->_private.method_str = icp_opcode_str[al->icp.opcode];
+	al->private.method_str = icp_opcode_str[al->icp.opcode];
     else
-	al->_private.method_str = RequestMethodStr[al->http.method];
+	al->private.method_str = RequestMethodStr[al->http.method];
     if (al->hier.host[0] == '\0')
 	xstrncpy(al->hier.host, dash_str, SQUIDHOSTNAMELEN);
 
@@ -605,32 +608,3 @@ headersLog(int cs, int pq, method_t m, void *data)
 }
 
 #endif
-
-void
-accessLogFreeMemory(AccessLogEntry * aLogEntry)
-{
-    safe_free(aLogEntry->headers.request);
-    safe_free(aLogEntry->headers.reply);
-    safe_free(aLogEntry->cache.authuser);
-}
-
-int
-logTypeIsATcpHit(log_type code)
-{
-    /* this should be a bitmap for better optimization */
-    if (code == LOG_TCP_HIT)
-	return 1;
-    if (code == LOG_TCP_IMS_HIT)
-	return 1;
-    if (code == LOG_TCP_REFRESH_FAIL_HIT)
-	return 1;
-    if (code == LOG_TCP_REFRESH_HIT)
-	return 1;
-    if (code == LOG_TCP_NEGATIVE_HIT)
-	return 1;
-    if (code == LOG_TCP_MEM_HIT)
-	return 1;
-    if (code == LOG_TCP_OFFLINE_HIT)
-	return 1;
-    return 0;
-}

@@ -178,6 +178,8 @@ aclStrToType(const char *s)
 	return ACL_MAX_USER_IP;
     if (!strcmp(s, "external"))
 	return ACL_EXTERNAL;
+    if (!strcmp(s, "urllogin"))
+	return ACL_URLLOGIN;
     return ACL_NONE;
 }
 
@@ -252,6 +254,8 @@ aclTypeToStr(squid_acl type)
 	return "max_user_ip";
     if (type == ACL_EXTERNAL)
 	return "external";
+    if (type == ACL_URLLOGIN)
+	return "urllogin";
     return "ERROR";
 }
 
@@ -340,7 +344,7 @@ aclParseMethodList(void *curlist)
 static int
 decode_addr(const char *asc, struct in_addr *addr, struct in_addr *mask)
 {
-    u_int32_t a;
+    u_num32 a;
     int a1 = 0, a2 = 0, a3 = 0, a4 = 0;
 
     switch (sscanf(asc, "%d.%d.%d.%d", &a1, &a2, &a3, &a4)) {
@@ -363,7 +367,7 @@ decode_addr(const char *asc, struct in_addr *addr, struct in_addr *mask)
     if (mask != NULL) {		/* mask == NULL if called to decode a netmask */
 
 	/* Guess netmask */
-	a = (u_int32_t) ntohl(addr->s_addr);
+	a = (u_num32) ntohl(addr->s_addr);
 	if (!(a & 0xFFFFFFFFul))
 	    mask->s_addr = htonl(0x00000000ul);
 	else if (!(a & 0x00FFFFFF))
@@ -622,25 +626,28 @@ aclParseUserList(void **current)
     splayNode *Top = NULL;
 
     debug(28, 2) ("aclParseUserList: parsing user list\n");
+    t = strtokFile();
+    if (!t) {
+	debug(28, 2) ("aclParseUserList: No data defined\n");
+	return;
+    }
+    debug(28, 5) ("aclParseUserList: First token is %s\n", t);
     if (*current == NULL) {
 	debug(28, 3) ("aclParseUserList: current is null. Creating\n");
 	*current = memAllocate(MEM_ACL_USER_DATA);
     }
     data = *current;
     Top = data->names;
-    if ((t = strtokFile())) {
-	debug(28, 5) ("aclParseUserList: First token is %s\n", t);
-	if (strcmp("-i", t) == 0) {
-	    debug(28, 5) ("aclParseUserList: Going case-insensitive\n");
-	    data->flags.case_insensitive = 1;
-	} else if (strcmp("REQUIRED", t) == 0) {
-	    debug(28, 5) ("aclParseUserList: REQUIRED-type enabled\n");
-	    data->flags.required = 1;
-	} else {
-	    if (data->flags.case_insensitive)
-		Tolower(t);
-	    Top = splay_insert(xstrdup(t), Top, (SPLAYCMP *) strcmp);
-	}
+    if (strcmp("-i", t) == 0) {
+	debug(28, 5) ("aclParseUserList: Going case-insensitive\n");
+	data->flags.case_insensitive = 1;
+    } else if (strcmp("REQUIRED", t) == 0) {
+	debug(28, 5) ("aclParseUserList: REQUIRED-type enabled\n");
+	data->flags.required = 1;
+    } else {
+	if (data->flags.case_insensitive)
+	    Tolower(t);
+	Top = splay_insert(xstrdup(t), Top, (SPLAYCMP *) strcmp);
     }
     debug(28, 3) ("aclParseUserList: Case-insensitive-switch is %d\n",
 	data->flags.case_insensitive);
@@ -737,6 +744,7 @@ aclParseAclLine(acl ** head)
 	aclParseTimeSpec(&A->data);
 	break;
     case ACL_URL_REGEX:
+    case ACL_URLLOGIN:
     case ACL_URLPATH_REGEX:
     case ACL_BROWSER:
     case ACL_REFERER_REGEX:
@@ -949,8 +957,8 @@ aclParseAccessLine(acl_access ** head)
 	cbdataFree(A);
 	return;
     }
-    aclParseAclList(&A->aclList);
-    if (A->aclList == NULL) {
+    aclParseAclList(&A->acl_list);
+    if (A->acl_list == NULL) {
 	debug(28, 0) ("%s line %d: %s\n",
 	    cfg_filename, config_lineno, config_input_line);
 	debug(28, 0) ("aclParseAccessLine: Access line contains no ACL's, skipping\n");
@@ -991,7 +999,7 @@ aclParseAclList(acl_list ** head)
 	    memFree(L, MEM_ACL_LIST);
 	    continue;
 	}
-	L->_acl = a;
+	L->acl = a;
 	*Tail = L;
 	Tail = &L->next;
     }
@@ -1080,7 +1088,7 @@ aclMatchUser(void *proxyauth_acl, char *user)
     debug(28, 8) ("Top is %p, Top->data is %s\n", Top,
 	(char *) (Top != NULL ? (Top)->data : "Unavailable"));
 
-    if (user == NULL)
+    if (user == NULL || strcmp(user, "-") == 0)
 	return 0;
 
     if (data->flags.required) {
@@ -1258,11 +1266,11 @@ int
 aclMatchUserMaxIP(void *data, auth_user_request_t * auth_user_request,
     struct in_addr src_addr)
 {
-    /*
-     * the logic for flush the ip list when the limit is hit vs keep
-     * it sorted in most recent access order and just drop the oldest
-     * one off is currently undecided
-     */
+/*
+ * the logic for flush the ip list when the limit is hit vs keep
+ * it sorted in most recent access order and just drop the oldest
+ * one off is currently undecided
+ */
     acl_user_ip_data *acldata = data;
 
     if (authenticateAuthUserRequestIPCount(auth_user_request) <= acldata->max)
@@ -1367,9 +1375,12 @@ aclMatchTime(acl_time_data * data, time_t when)
     debug(28, 3) ("aclMatchTime: checking %d in %d-%d, weekbits=%x\n",
 	(int) t, (int) data->start, (int) data->stop, data->weekbits);
 
-    if (t < data->start || t > data->stop)
-	return 0;
-    return data->weekbits & (1 << tm.tm_wday) ? 1 : 0;
+    while (data) {
+	if (t >= data->start && t <= data->stop && (data->weekbits & (1 << tm.tm_wday)))
+	    return 1;
+	data = data->next;
+    }
+    return 0;
 }
 
 #if SQUID_SNMP
@@ -1410,22 +1421,26 @@ aclAuthenticated(aclCheck_t * checklist)
 #endif
     }
     /* get authed here */
-    /* Note: this fills in checklist->auth_user_request when applicable */
+    /* Note: this fills in checklist->auth_user_request when applicable (auth incomplete) */
     switch (authenticateTryToAuthenticateAndSetAuthUser(&checklist->auth_user_request, headertype, checklist->request, checklist->conn, checklist->src_addr)) {
     case AUTH_ACL_CANNOT_AUTHENTICATE:
 	debug(28, 4) ("aclMatchAcl: returning  0 user authenticated but not authorised.\n");
 	return 0;
     case AUTH_AUTHENTICATED:
+	if (checklist->auth_user_request) {
+	    authenticateAuthUserRequestUnlock(checklist->auth_user_request);
+	    checklist->auth_user_request = NULL;
+	}
 	return 1;
 	break;
     case AUTH_ACL_HELPER:
 	debug(28, 4) ("aclMatchAcl: returning 0 sending credentials to helper.\n");
 	checklist->state[ACL_PROXY_AUTH] = ACL_LOOKUP_NEEDED;
-	return 0;
+	return -1;
     case AUTH_ACL_CHALLENGE:
 	debug(28, 4) ("aclMatchAcl: returning 0 sending authentication challenge.\n");
 	checklist->state[ACL_PROXY_AUTH] = ACL_PROXY_AUTH_NEEDED;
-	return 0;
+	return -1;
     default:
 	fatal("unexpected authenticateAuthenticate reply\n");
 	return -1;
@@ -1461,6 +1476,7 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
     case ACL_URLPATH_REGEX:
     case ACL_URL_PORT:
     case ACL_URL_REGEX:
+    case ACL_URLLOGIN:
 	/* These ACL types require checklist->request */
 	if (NULL == r) {
 	    debug(28, 1) ("WARNING: '%s' ACL is used but there is no"
@@ -1564,6 +1580,12 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	k = aclMatchRegex(ae->data, esc_buf);
 	safe_free(esc_buf);
 	return k;
+    case ACL_URLLOGIN:
+	esc_buf = xstrdup(r->login);
+	rfc1738_unescape(esc_buf);
+	k = aclMatchRegex(ae->data, esc_buf);
+	safe_free(esc_buf);
+	return k;
 	/* NOTREACHED */
     case ACL_MAXCONN:
 	k = clientdbEstablished(checklist->src_addr, 0);
@@ -1615,17 +1637,15 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
     case ACL_PROXY_AUTH_REGEX:
 	if ((ti = aclAuthenticated(checklist)) != 1)
 	    return ti;
-	ti = aclMatchProxyAuth(ae->data, checklist->auth_user_request,
+	ti = aclMatchProxyAuth(ae->data, r->auth_user_request,
 	    checklist, ae->type);
-	checklist->auth_user_request = NULL;
 	return ti;
 	/* NOTREACHED */
     case ACL_MAX_USER_IP:
 	if ((ti = aclAuthenticated(checklist)) != 1)
 	    return ti;
-	ti = aclMatchUserMaxIP(ae->data, checklist->auth_user_request,
+	ti = aclMatchUserMaxIP(ae->data, r->auth_user_request,
 	    checklist->src_addr);
-	checklist->auth_user_request = NULL;
 	return ti;
 	/* NOTREACHED */
 #if SQUID_SNMP
@@ -1688,20 +1708,29 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 int
 aclMatchAclList(const acl_list * list, aclCheck_t * checklist)
 {
-    PROF_start(aclMatchAclList);
     while (list) {
-	AclMatchedName = list->_acl->name;
+	int answer;
+	checklist->current_acl = list->acl;
+	AclMatchedName = list->acl->name;
 	debug(28, 3) ("aclMatchAclList: checking %s%s\n",
-	    list->op ? null_string : "!", list->_acl->name);
-	if (aclMatchAcl(list->_acl, checklist) != list->op) {
-	    debug(28, 3) ("aclMatchAclList: returning 0\n");
-	    PROF_stop(aclMatchAclList);
+	    list->op ? null_string : "!", list->acl->name);
+	answer = aclMatchAcl(list->acl, checklist);
+#if NOT_SURE_THIS_IS_GOOD
+	/* This will make access denied if an acl cannot be evaluated.
+	 * Normally Squid will just continue to the next rule
+	 */
+	if (answer < 0) {
+	    debug(28, 3) ("aclMatchAclList: failure. returning -1\n");
+	    return -1;
+	}
+#endif
+	if (answer != list->op) {
+	    debug(28, 3) ("aclMatchAclList: no match, returning 0\n");
 	    return 0;
 	}
 	list = list->next;
     }
     debug(28, 3) ("aclMatchAclList: returning 1\n");
-    PROF_stop(aclMatchAclList);
     return 1;
 }
 
@@ -1710,28 +1739,55 @@ aclCheckCleanup(aclCheck_t * checklist)
 {
     /* Cleanup temporary stuff used by the ACL checking */
     if (checklist->extacl_entry) {
-	cbdataReferenceDone(checklist->extacl_entry);
+	cbdataUnlock(checklist->extacl_entry);
+	checklist->extacl_entry = NULL;
     }
+    /* During reconfigure or if authentication is used in aclCheckFast without
+     * first being authenticated in http_access we can end up not finishing call
+     * sequences into the auth code. In such case we must make sure to forget
+     * the authentication state completely
+     */
+    if (checklist->auth_user_request) {
+	authenticateAuthUserRequestUnlock(checklist->auth_user_request);
+	checklist->auth_user_request = NULL;
+	if (checklist->request) {
+	    if (checklist->request->auth_user_request) {
+		authenticateAuthUserRequestUnlock(checklist->request->auth_user_request);
+		checklist->request->auth_user_request = NULL;
+	    }
+	}
+	/* it might have been connection based */
+	if (checklist->conn) {
+	    if (checklist->conn->auth_user_request) {
+		authenticateAuthUserRequestUnlock(checklist->conn->auth_user_request);
+		checklist->conn->auth_user_request = NULL;
+	    }
+	    assert(checklist->request);
+	    checklist->conn->auth_type = AUTH_BROKEN;
+	}
+    }
+    checklist->current_acl = NULL;
 }
 
 int
 aclCheckFast(const acl_access * A, aclCheck_t * checklist)
 {
     allow_t allow = ACCESS_DENIED;
-    PROF_start(aclCheckFast);
+    int answer;
     debug(28, 5) ("aclCheckFast: list: %p\n", A);
     while (A) {
 	allow = A->allow;
-	if (aclMatchAclList(A->aclList, checklist)) {
+	answer = aclMatchAclList(A->acl_list, checklist);
+	if (answer) {
+	    if (answer < 0)
+		return ACCESS_DENIED;
 	    aclCheckCleanup(checklist);
-	    PROF_stop(aclCheckFast);
 	    return allow == ACCESS_ALLOWED;
 	}
 	A = A->next;
     }
     debug(28, 5) ("aclCheckFast: no matches, returning: %d\n", allow == ACCESS_DENIED);
     aclCheckCleanup(checklist);
-    PROF_stop(aclCheckFast);
     return allow == ACCESS_DENIED;
 }
 
@@ -1742,22 +1798,22 @@ aclCheck(aclCheck_t * checklist)
     const acl_access *A;
     int match;
     ipcache_addrs *ia;
-    /* NOTE: This holds a cbdata reference to the current access_list
-     * entry, not the whole list.
-     */
-    while ((A = checklist->accessList) != NULL) {
+    while ((A = checklist->access_list) != NULL) {
 	/*
 	 * If the _acl_access is no longer valid (i.e. its been
 	 * freed because of a reconfigure), then bail on this
 	 * access check.  For now, return ACCESS_DENIED.
 	 */
-	if (!cbdataReferenceValid(A)) {
-	    cbdataReferenceDone(checklist->accessList);
+	if (!cbdataValid(A)) {
+	    cbdataUnlock(A);
+	    checklist->access_list = NULL;
 	    break;
 	}
 	debug(28, 3) ("aclCheck: checking '%s'\n", A->cfgline);
 	allow = A->allow;
-	match = aclMatchAclList(A->aclList, checklist);
+	match = aclMatchAclList(A->acl_list, checklist);
+	if (match == -1)
+	    allow = ACCESS_DENIED;
 	if (checklist->state[ACL_DST_IP] == ACL_LOOKUP_NEEDED) {
 	    checklist->state[ACL_DST_IP] = ACL_LOOKUP_PENDING;
 	    ipcache_nbgethostbyname(checklist->request->host,
@@ -1802,21 +1858,23 @@ aclCheck(aclCheck_t * checklist)
 #if USE_IDENT
 	else if (checklist->state[ACL_IDENT] == ACL_LOOKUP_NEEDED) {
 	    debug(28, 3) ("aclCheck: Doing ident lookup\n");
-	    if (checklist->conn && cbdataReferenceValid(checklist->conn)) {
+	    if (cbdataValid(checklist->conn)) {
 		identStart(&checklist->conn->me, &checklist->conn->peer,
 		    aclLookupIdentDone, checklist);
 		checklist->state[ACL_IDENT] = ACL_LOOKUP_PENDING;
 		return;
 	    } else {
 		debug(28, 1) ("aclCheck: Can't start ident lookup. No client connection\n");
-		cbdataReferenceDone(checklist->conn);
-		allow = 0;
+		cbdataUnlock(checklist->conn);
+		checklist->conn = NULL;
+		allow = ACCESS_DENIED;
 		match = -1;
 	    }
 	}
 #endif
 	else if (checklist->state[ACL_EXTERNAL] == ACL_LOOKUP_NEEDED) {
-	    acl *acl = aclFindByName(AclMatchedName);
+	    acl *acl = checklist->current_acl;
+	    assert(acl->type == ACL_EXTERNAL);
 	    externalAclLookup(checklist, acl->data, aclLookupExternalDone, checklist);
 	    return;
 	}
@@ -1827,15 +1885,18 @@ aclCheck(aclCheck_t * checklist)
 	 */
 	if (match) {
 	    debug(28, 3) ("aclCheck: match found, returning %d\n", allow);
-	    cbdataReferenceDone(checklist->accessList);		/* A */
+	    cbdataUnlock(A);
+	    checklist->access_list = NULL;
 	    aclCheckCallback(checklist, allow);
 	    return;
 	}
+	checklist->access_list = A->next;
 	/*
-	 * Reference the next _acl_access entry
+	 * Lock the next _acl_access entry
 	 */
-	checklist->accessList = cbdataReference(A->next);
-	cbdataReferenceDone(A);
+	if (A->next)
+	    cbdataLock(A->next);
+	cbdataUnlock(A);
     }
     debug(28, 3) ("aclCheck: NO match found, returning %d\n", allow != ACCESS_DENIED ? ACCESS_DENIED : ACCESS_ALLOWED);
     aclCheckCallback(checklist, allow != ACCESS_DENIED ? ACCESS_DENIED : ACCESS_ALLOWED);
@@ -1847,8 +1908,18 @@ aclChecklistFree(aclCheck_t * checklist)
     if (checklist->request)
 	requestUnlink(checklist->request);
     checklist->request = NULL;
-    cbdataReferenceDone(checklist->conn);
-    cbdataReferenceDone(checklist->accessList);
+    if (checklist->conn) {
+	cbdataUnlock(checklist->conn);
+	checklist->conn = NULL;
+    }
+    if (checklist->access_list) {
+	cbdataUnlock(checklist->access_list);
+	checklist->access_list = NULL;
+    }
+    if (checklist->callback_data) {
+	cbdataUnlock(checklist->callback_data);
+	checklist->callback_data = NULL;
+    }
     aclCheckCleanup(checklist);
     cbdataFree(checklist);
 }
@@ -1856,23 +1927,13 @@ aclChecklistFree(aclCheck_t * checklist)
 static void
 aclCheckCallback(aclCheck_t * checklist, allow_t answer)
 {
-    PF *callback;
-    void *cbdata;
     debug(28, 3) ("aclCheckCallback: answer=%d\n", answer);
-    /* During reconfigure, we can end up not finishing call sequences into the auth code */
-    if (checklist->auth_user_request) {
-	/* the checklist lock */
-	authenticateAuthUserRequestUnlock(checklist->auth_user_request);
-	/* it might have been connection based */
-	assert(checklist->conn);
-	checklist->conn->auth_user_request = NULL;
-	checklist->conn->auth_type = AUTH_BROKEN;
-	checklist->auth_user_request = NULL;
-    }
-    callback = checklist->callback;
+    aclCheckCleanup(checklist);
+    if (cbdataValid(checklist->callback_data))
+	checklist->callback(answer, checklist->callback_data);
+    cbdataUnlock(checklist->callback_data);
     checklist->callback = NULL;
-    if (cbdataReferenceValidDone(checklist->callback_data, &cbdata))
-	callback(answer, cbdata);
+    checklist->callback_data = NULL;
     aclChecklistFree(checklist);
 }
 
@@ -1893,7 +1954,7 @@ aclLookupIdentDone(const char *ident, void *data)
      * Cache the ident result in the connection, to avoid redoing ident lookup
      * over and over on persistent connections
      */
-    if (cbdataReferenceValid(checklist->conn) && !checklist->conn->rfc931[0])
+    if (cbdataValid(checklist->conn) && !checklist->conn->rfc931[0])
 	xstrncpy(checklist->conn->rfc931, checklist->rfc931, USER_IDENT_SZ);
     aclCheck(checklist);
 }
@@ -1943,11 +2004,14 @@ aclLookupProxyAuthDone(void *data, char *result)
 	 * restart the whole process */
 	/* OR the connection was closed, there's no way to continue */
 	authenticateAuthUserRequestUnlock(checklist->auth_user_request);
+	checklist->auth_user_request = NULL;
 	if (checklist->conn) {
-	    checklist->conn->auth_user_request = NULL;
+	    if (checklist->conn->auth_user_request) {
+		authenticateAuthUserRequestUnlock(checklist->conn->auth_user_request);
+		checklist->conn->auth_user_request = NULL;
+	    }
 	    checklist->conn->auth_type = AUTH_BROKEN;
 	}
-	checklist->auth_user_request = NULL;
     }
     aclCheck(checklist);
 }
@@ -1957,7 +2021,8 @@ aclLookupExternalDone(void *data, void *result)
 {
     aclCheck_t *checklist = data;
     checklist->state[ACL_EXTERNAL] = ACL_LOOKUP_DONE;
-    checklist->extacl_entry = cbdataReference(result);
+    checklist->extacl_entry = result;
+    cbdataLock(checklist->extacl_entry);
     aclCheck(checklist);
 }
 
@@ -1967,7 +2032,12 @@ aclChecklistCreate(const acl_access * A, request_t * request, const char *ident)
     int i;
     aclCheck_t *checklist;
     checklist = cbdataAlloc(aclCheck_t);
-    checklist->accessList = cbdataReference(A);
+    checklist->access_list = A;
+    /*
+     * aclCheck() makes sure checklist->access_list is a valid
+     * pointer, so lock it.
+     */
+    cbdataLock(A);
     if (request != NULL) {
 	checklist->request = requestLink(request);
 	checklist->src_addr = request->client_addr;
@@ -1988,7 +2058,8 @@ void
 aclNBCheck(aclCheck_t * checklist, PF * callback, void *callback_data)
 {
     checklist->callback = callback;
-    checklist->callback_data = cbdataReference(callback_data);
+    checklist->callback_data = callback_data;
+    cbdataLock(callback_data);
     aclCheck(checklist);
 }
 
@@ -2082,6 +2153,7 @@ aclDestroyAcls(acl ** head)
 #endif
 	case ACL_PROXY_AUTH_REGEX:
 	case ACL_URL_REGEX:
+	case ACL_URLLOGIN:
 	case ACL_URLPATH_REGEX:
 	case ACL_BROWSER:
 	case ACL_REFERER_REGEX:
@@ -2140,7 +2212,7 @@ aclDestroyAccessList(acl_access ** list)
     for (l = *list; l; l = next) {
 	debug(28, 3) ("aclDestroyAccessList: '%s'\n", l->cfgline);
 	next = l->next;
-	aclDestroyAclList(&l->aclList);
+	aclDestroyAclList(&l->acl_list);
 	safe_free(l->cfgline);
 	cbdataFree(l);
     }
@@ -2497,6 +2569,7 @@ aclDumpGeneric(const acl * a)
 	return aclDumpTimeSpecList(a->data);
     case ACL_PROXY_AUTH_REGEX:
     case ACL_URL_REGEX:
+    case ACL_URLLOGIN:
     case ACL_URLPATH_REGEX:
     case ACL_BROWSER:
     case ACL_REFERER_REGEX:
@@ -2543,10 +2616,10 @@ aclPurgeMethodInUse(acl_access * a)
 {
     acl_list *b;
     for (; a; a = a->next) {
-	for (b = a->aclList; b; b = b->next) {
-	    if (ACL_METHOD != b->_acl->type)
+	for (b = a->acl_list; b; b = b->next) {
+	    if (ACL_METHOD != b->acl->type)
 		continue;
-	    if (aclMatchInteger(b->_acl->data, METHOD_PURGE))
+	    if (aclMatchInteger(b->acl->data, METHOD_PURGE))
 		return 1;
 	}
     }
@@ -2591,9 +2664,12 @@ aclPurgeMethodInUse(acl_access * a)
 #include <sys/ioctl.h>
 #else
 #include <net/if_dl.h>
-#endif
 #include <net/route.h>
+#endif
 #include <net/if.h>
+#ifdef _SQUID_FREEBSD__
+#include <net/if_arp.h>
+#endif
 #if HAVE_NETINET_IF_ETHER_H
 #include <netinet/if_ether.h>
 #endif
@@ -2814,6 +2890,81 @@ aclMatchArp(void *dataptr, struct in_addr c)
 	    inet_ntoa(c), splayLastResult ? "NOT found" : "found");
 	return (0 == splayLastResult);
     }
+#elif defined(_SQUID_FREEBSD_)
+    struct arpreq arpReq;
+    struct sockaddr_in ipAddr;
+    unsigned char ifbuffer[sizeof(struct ifreq) * 64];
+    struct ifconf ifc;
+    struct ifreq *ifr;
+    int offset;
+    splayNode **Top = dataptr;
+
+    int mib[6];
+    size_t needed;
+    char *lim, *buf, *next;
+    struct rt_msghdr *rtm;
+    struct sockaddr_inarp *sin;
+    struct sockaddr_dl *sdl;
+
+    /*
+     * Set up structures for ARP lookup with blank interface name
+     */
+    ipAddr.sin_family = AF_INET;
+    ipAddr.sin_port = 0;
+    ipAddr.sin_addr = c;
+    memset(&arpReq, '\0', sizeof(arpReq));
+    xmemcpy(&arpReq.arp_pa, &ipAddr, sizeof(struct sockaddr_in));
+
+    /* Query ARP table */
+    mib[0] = CTL_NET;
+    mib[1] = PF_ROUTE;
+    mib[2] = 0;
+    mib[3] = AF_INET;
+    mib[4] = NET_RT_FLAGS;
+    mib[5] = RTF_LLINFO;
+    if (sysctl(mib, 6, NULL, &needed, NULL, 0) < 0) {
+	debug(28, 0) ("Can't estimate ARP table size!\n");
+	return 0;
+    }
+    if ((buf = xmalloc(needed)) == NULL) {
+	debug(28, 0) ("Can't allocate temporary ARP table!\n");
+	return 0;
+    }
+    if (sysctl(mib, 6, buf, &needed, NULL, 0) < 0) {
+	debug(28, 0) ("Can't retrieve ARP table!\n");
+	xfree(buf);
+	return 0;
+    }
+    lim = buf + needed;
+    for (next = buf; next < lim; next += rtm->rtm_msglen) {
+	rtm = (struct rt_msghdr *) next;
+	sin = (struct sockaddr_inarp *) (rtm + 1);
+	/*sdl = (struct sockaddr_dl *) (sin + 1); */
+#define ROUNDUP(a) \
+        ((a) > 0 ? (1 + (((a) - 1) | (sizeof(long) - 1))) : sizeof(long))
+	(char *) sdl = (char *) sin + ROUNDUP(sin->sin_len);
+	if (c.s_addr == sin->sin_addr.s_addr) {
+	    if (sdl->sdl_alen) {
+		arpReq.arp_ha.sa_len = sizeof(struct sockaddr);
+		arpReq.arp_ha.sa_family = AF_UNSPEC;
+		memcpy(arpReq.arp_ha.sa_data, LLADDR(sdl), sdl->sdl_alen);
+	    }
+	}
+    }
+    xfree(buf);
+    if (arpReq.arp_ha.sa_data[0] == 0 && arpReq.arp_ha.sa_data[1] == 0 &&
+	arpReq.arp_ha.sa_data[2] == 0 && arpReq.arp_ha.sa_data[3] == 0 &&
+	arpReq.arp_ha.sa_data[4] == 0 && arpReq.arp_ha.sa_data[5] == 0)
+	return 0;
+    debug(28, 4) ("Got address %02x:%02x:%02x:%02x:%02x:%02x\n",
+	arpReq.arp_ha.sa_data[0] & 0xff, arpReq.arp_ha.sa_data[1] & 0xff,
+	arpReq.arp_ha.sa_data[2] & 0xff, arpReq.arp_ha.sa_data[3] & 0xff,
+	arpReq.arp_ha.sa_data[4] & 0xff, arpReq.arp_ha.sa_data[5] & 0xff);
+    /* Do lookup */
+    *Top = splay_splay(&arpReq.arp_ha.sa_data, *Top, aclArpCompare);
+    debug(28, 3) ("aclMatchArp: '%s' %s\n",
+	inet_ntoa(c), splayLastResult ? "NOT found" : "found");
+    return (0 == splayLastResult);
 #else
     WRITE ME;
 #endif
@@ -2837,6 +2988,21 @@ aclArpCompare(const void *a, const void *b)
     if (d1[2] != d2[2])
 	return (d1[2] > d2[2]) ? 1 : -1;
 #elif defined(_SQUID_SOLARIS_)
+    const unsigned char *d1 = a;
+    const unsigned char *d2 = b;
+    if (d1[0] != d2[0])
+	return (d1[0] > d2[0]) ? 1 : -1;
+    if (d1[1] != d2[1])
+	return (d1[1] > d2[1]) ? 1 : -1;
+    if (d1[2] != d2[2])
+	return (d1[2] > d2[2]) ? 1 : -1;
+    if (d1[3] != d2[3])
+	return (d1[3] > d2[3]) ? 1 : -1;
+    if (d1[4] != d2[4])
+	return (d1[4] > d2[4]) ? 1 : -1;
+    if (d1[5] != d2[5])
+	return (d1[5] > d2[5]) ? 1 : -1;
+#elif defined(_SQUID_FREEBSD_)
     const unsigned char *d1 = a;
     const unsigned char *d2 = b;
     if (d1[0] != d2[0])

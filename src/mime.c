@@ -219,10 +219,17 @@ mimeGetIcon(const char *fn)
 const char *
 mimeGetIconURL(const char *fn)
 {
+    static MemBuf mb = MemBufNULL;
     char *icon = mimeGetIcon(fn);
     if (icon == NULL)
 	return null_string;
-    return internalLocalUri("/squid-internal-static/icons/", icon);
+    if (Config.icons.use_short_names) {
+	memBufReset(&mb);
+	memBufPrintf(&mb, "/squid-internal-static/icons/%s", icon);
+	return mb.buf;
+    } else {
+	return internalLocalUri("/squid-internal-static/icons/", icon);
+    }
 }
 
 char *
@@ -297,7 +304,7 @@ mimeInit(char *filename)
 	debug(25, 1) ("mimeInit: %s: %s\n", filename, xstrerror());
 	return;
     }
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
+#if defined (_SQUID_CYGWIN_)
     setmode(fileno(fp), O_TEXT);
 #endif
     mimeFreeMemory();

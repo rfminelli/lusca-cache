@@ -64,6 +64,8 @@ struct _idns_query {
     IDNSCB *callback;
     void *callback_data;
     int attempt;
+    const char *error;
+    int rcode;
 };
 
 struct _ns {
@@ -441,11 +443,10 @@ static void
 idnsGrokReply(const char *buf, size_t sz)
 {
     int n;
+    int valid;
     rfc1035_rr *answers = NULL;
     unsigned short rid = 0xFFFF;
     idns_query *q;
-    IDNSCB *callback;
-    void *cbdata;
     n = rfc1035AnswersUnpack(buf,
 	sz,
 	&answers,
@@ -464,9 +465,12 @@ idnsGrokReply(const char *buf, size_t sz)
     }
     dlinkDelete(&q->lru, &lru_list);
     idnsRcodeCount(n, q->attempt);
+    q->error = NULL;
     if (n < 0) {
 	debug(78, 3) ("idnsGrokReply: error %d\n", rfc1035_errno);
-	if (-2 == n && ++q->attempt < MAX_ATTEMPT) {
+	q->error = rfc1035_error_message;
+	q->rcode = -n;
+	if (q->rcode == 2 && ++q->attempt < MAX_ATTEMPT) {
 	    /*
 	     * RCODE 2 is "Server failure - The name server was
 	     * unable to process this query due to a problem with
@@ -479,10 +483,10 @@ idnsGrokReply(const char *buf, size_t sz)
 	    return;
 	}
     }
-    callback = q->callback;
-    q->callback = NULL;
-    if (cbdataReferenceValidDone(q->callback_data, &cbdata))
-	callback(cbdata, answers, n);
+    valid = cbdataValid(q->callback_data);
+    cbdataUnlock(q->callback_data);
+    if (valid)
+	q->callback(q->callback_data, answers, n, q->error);
     rfc1035RRDestroy(answers, n);
     memFree(q, MEM_IDNS_QUERY);
 }
@@ -572,7 +576,7 @@ idnsCheckQueue(void *unused)
 	    /* name servers went away; reconfiguring or shutting down */
 	    break;
 	q = n->data;
-	if (tvSubDsec(q->sent_t, current_time) < Config.Timeout.idns_retransmit * (1 << q->nsends % nns))
+	if (tvSubDsec(q->sent_t, current_time) < Config.Timeout.idns_retransmit * 1 << ((q->nsends - 1) / nns))
 	    break;
 	debug(78, 3) ("idnsCheckQueue: ID %#04x timeout\n",
 	    q->id);
@@ -581,15 +585,17 @@ idnsCheckQueue(void *unused)
 	if (tvSubDsec(q->start_t, current_time) < Config.Timeout.idns_query) {
 	    idnsSendQuery(q);
 	} else {
-	    IDNSCB *callback;
-	    void *cbdata;
+	    int v = cbdataValid(q->callback_data);
 	    debug(78, 2) ("idnsCheckQueue: ID %x: giving up after %d tries and %5.1f seconds\n",
 		(int) q->id, q->nsends,
 		tvSubDsec(q->start_t, current_time));
-	    callback = q->callback;
-	    q->callback = NULL;
-	    if (cbdataReferenceValidDone(q->callback_data, &cbdata))
-		callback(cbdata, NULL, 0);
+	    cbdataUnlock(q->callback_data);
+	    if (v) {
+		if (q->rcode != 0)
+		    q->callback(q->callback_data, NULL, -q->rcode, q->error);
+		else
+		    q->callback(q->callback_data, NULL, -16, "Timeout");
+	    }
 	    memFree(q, MEM_IDNS_QUERY);
 	}
     }
@@ -686,14 +692,15 @@ idnsALookup(const char *name, IDNSCB * callback, void *data)
     q->id = rfc1035BuildAQuery(name, q->buf, &q->sz);
     if (0 == q->id) {
 	/* problem with query data -- query not sent */
-	callback(data, NULL, 0);
+	callback(data, NULL, 0, "Internal error");
 	memFree(q, MEM_IDNS_QUERY);
 	return;
     }
     debug(78, 3) ("idnsALookup: buf is %d bytes for %s, id = %#hx\n",
 	(int) q->sz, name, q->id);
     q->callback = callback;
-    q->callback_data = cbdataReference(data);
+    q->callback_data = data;
+    cbdataLock(q->callback_data);
     q->start_t = current_time;
     idnsSendQuery(q);
 }
@@ -707,7 +714,8 @@ idnsPTRLookup(const struct in_addr addr, IDNSCB * callback, void *data)
     debug(78, 3) ("idnsPTRLookup: buf is %d bytes for %s, id = %#hx\n",
 	(int) q->sz, inet_ntoa(addr), q->id);
     q->callback = callback;
-    q->callback_data = cbdataReference(data);
+    q->callback_data = data;
+    cbdataLock(q->callback_data);
     q->start_t = current_time;
     idnsSendQuery(q);
 }
@@ -741,7 +749,7 @@ snmp_netIdnsFn(variable_list * Var, snint * ErrP)
 	break;
     case DNS_SERVERS:
 	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    nns,
+	    0,
 	    SMI_COUNTER32);
 	break;
     default:

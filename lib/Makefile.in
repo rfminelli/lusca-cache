@@ -73,7 +73,6 @@ CC = @CC@
 CGIEXT = @CGIEXT@
 CPP = @CPP@
 CRYPTLIB = @CRYPTLIB@
-CXX = @CXX@
 DEPDIR = @DEPDIR@
 DIGEST_AUTH_HELPERS = @DIGEST_AUTH_HELPERS@
 ERR_DEFAULT_LANGUAGE = @ERR_DEFAULT_LANGUAGE@
@@ -92,7 +91,6 @@ MKDIR = @MKDIR@
 MV = @MV@
 NTLM_AUTH_HELPERS = @NTLM_AUTH_HELPERS@
 OBJEXT = @OBJEXT@
-OPT_DEFAULT_HOSTS = @OPT_DEFAULT_HOSTS@
 PACKAGE = @PACKAGE@
 PERL = @PERL@
 RANLIB = @RANLIB@
@@ -101,6 +99,7 @@ REPL_LIBS = @REPL_LIBS@
 REPL_OBJS = @REPL_OBJS@
 REPL_POLICIES = @REPL_POLICIES@
 RM = @RM@
+SAMBASOURCES = @SAMBASOURCES@
 SH = @SH@
 SNMPLIB = @SNMPLIB@
 SSLLIB = @SSLLIB@
@@ -116,9 +115,6 @@ am__include = @am__include@
 am__quote = @am__quote@
 install_sh = @install_sh@
 makesnmplib = @makesnmplib@
-
-@ENABLE_XPROF_STATS_TRUE@XPROF_STATS_SOURCE = Profiler.c
-@ENABLE_XPROF_STATS_FALSE@XPROF_STATS_SOURCE = 
 
 @NEED_OWN_SNPRINTF_TRUE@SNPRINTFSOURCE = snprintf.c
 @NEED_OWN_SNPRINTF_FALSE@SNPRINTFSOURCE = 
@@ -137,11 +133,9 @@ noinst_LIBRARIES = \
 
 EXTRA_libmiscutil_a_SOURCES = \
 	md5.c \
-	Profiler.c \
 	snprintf.c
 
 libmiscutil_a_SOURCES = \
-	MemPool.c \
 	Array.c \
 	base64.c \
 	getfullhostname.c \
@@ -161,8 +155,7 @@ libmiscutil_a_SOURCES = \
 	Stack.c \
 	stub_memaccount.c \
 	util.c \
-	uudecode.c \
-	$(XPROF_STATS_SOURCE)
+	uudecode.c
 
 libmiscutil_a_LIBADD = \
 	@LIBOBJS@
@@ -198,16 +191,13 @@ libmiscutil_a_DEPENDENCIES = @LIBOBJS@
 @NEED_OWN_MD5_FALSE@am__objects_1 =
 @NEED_OWN_SNPRINTF_TRUE@am__objects_2 = snprintf.$(OBJEXT)
 @NEED_OWN_SNPRINTF_FALSE@am__objects_2 =
-@ENABLE_XPROF_STATS_TRUE@am__objects_3 = Profiler.$(OBJEXT)
-@ENABLE_XPROF_STATS_FALSE@am__objects_3 =
-am_libmiscutil_a_OBJECTS = MemPool.$(OBJEXT) Array.$(OBJEXT) \
-	base64.$(OBJEXT) getfullhostname.$(OBJEXT) hash.$(OBJEXT) \
-	heap.$(OBJEXT) html_quote.$(OBJEXT) iso3307.$(OBJEXT) \
-	$(am__objects_1) radix.$(OBJEXT) rfc1035.$(OBJEXT) \
-	rfc1123.$(OBJEXT) rfc1738.$(OBJEXT) rfc2617.$(OBJEXT) \
-	safe_inet_addr.$(OBJEXT) $(am__objects_2) splay.$(OBJEXT) \
-	Stack.$(OBJEXT) stub_memaccount.$(OBJEXT) util.$(OBJEXT) \
-	uudecode.$(OBJEXT) $(am__objects_3)
+am_libmiscutil_a_OBJECTS = Array.$(OBJEXT) base64.$(OBJEXT) \
+	getfullhostname.$(OBJEXT) hash.$(OBJEXT) heap.$(OBJEXT) \
+	html_quote.$(OBJEXT) iso3307.$(OBJEXT) $(am__objects_1) \
+	radix.$(OBJEXT) rfc1035.$(OBJEXT) rfc1123.$(OBJEXT) \
+	rfc1738.$(OBJEXT) rfc2617.$(OBJEXT) safe_inet_addr.$(OBJEXT) \
+	$(am__objects_2) splay.$(OBJEXT) Stack.$(OBJEXT) \
+	stub_memaccount.$(OBJEXT) util.$(OBJEXT) uudecode.$(OBJEXT)
 libmiscutil_a_OBJECTS = $(am_libmiscutil_a_OBJECTS)
 libntlmauth_a_AR = $(AR) cru
 libntlmauth_a_DEPENDENCIES = @LIBOBJS@
@@ -225,7 +215,6 @@ LDFLAGS = @LDFLAGS@
 LIBS = @LIBS@
 depcomp = $(SHELL) $(top_srcdir)/cfgaux/depcomp
 @AMDEP_TRUE@DEP_FILES = $(DEPDIR)/Array.Po $(DEPDIR)/GNUregex.Po \
-@AMDEP_TRUE@	$(DEPDIR)/MemPool.Po $(DEPDIR)/Profiler.Po \
 @AMDEP_TRUE@	$(DEPDIR)/Stack.Po $(DEPDIR)/base64.Po \
 @AMDEP_TRUE@	$(DEPDIR)/dlmalloc.Po $(DEPDIR)/drand48.Po \
 @AMDEP_TRUE@	$(DEPDIR)/getfullhostname.Po $(DEPDIR)/hash.Po \
@@ -292,8 +281,6 @@ distclean-compile:
 
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/Array.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/GNUregex.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/MemPool.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/Profiler.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/Stack.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/base64.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/dlmalloc.Po@am__quote@
