@@ -43,7 +43,7 @@ const char *RequestMethodStr[] =
     "PURGE"
 };
 
-const char *ProtocolStr[] =
+static char *ProtocolStr[] =
 {
     "NONE",
     "http",
@@ -51,27 +51,12 @@ const char *ProtocolStr[] =
     "gopher",
     "wais",
     "cache_object",
-    "icp",
-    "urn",
-    "whois",
     "TOTAL"
 };
 
-static int url_ok[256];
+static int url_acceptable[256];
 static const char *const hex = "0123456789abcdef";
-static request_t *urnParse(method_t method, char *urn);
-static const char *const valid_hostname_chars =
-#if ALLOW_HOSTNAME_UNDERSCORES
-"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-"abcdefghijklmnopqrstuvwxyz"
-"0123456789-._";
-#else
-"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-"abcdefghijklmnopqrstuvwxyz"
-"0123456789-.";
-#endif
-static const char *const valid_url_chars =
-"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789./-_$";
+static int urlDefaultPort _PARAMS((protocol_t p));
 
 /* convert %xx in url string to a character 
  * Allocate a new string and return a pointer to converted string */
@@ -83,9 +68,12 @@ url_convert_hex(char *org_url, int allocate)
     char *url = NULL;
     char *s = NULL;
     char *t = NULL;
+
     url = allocate ? (char *) xstrdup(org_url) : org_url;
+
     if ((int) strlen(url) < 3 || !strchr(url, '%'))
 	return url;
+
     for (s = t = url; *(s + 2); s++) {
 	if (*s == '%') {
 	    code[0] = *(++s);
@@ -101,16 +89,22 @@ url_convert_hex(char *org_url, int allocate)
     return url;
 }
 
+
+/* INIT Acceptable table. 
+ * Borrow from libwww2 with Mosaic2.4 Distribution   */
 void
 urlInitialize(void)
 {
-    int i;
-    debug(23, 5) ("urlInitialize: Initializing...\n");
-    assert(sizeof(ProtocolStr) == (PROTO_MAX + 1) * sizeof(char *));
+    unsigned int i;
+    char *good =
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789./-_$";
+    debug(23, 5, "urlInitialize: Initializing...\n");
     for (i = 0; i < 256; i++)
-	url_ok[i] = strchr(valid_url_chars, (char) i) ? 1 : 0;
-
+	url_acceptable[i] = 0;
+    for (; *good; good++)
+	url_acceptable[(unsigned int) *good] = 1;
 }
+
 
 /* Encode prohibited char in string */
 /* return the pointer to new (allocated) string */
@@ -120,9 +114,10 @@ url_escape(const char *url)
     const char *p;
     char *q;
     char *tmpline = xcalloc(1, MAX_URL);
+
     q = tmpline;
     for (p = url; *p; p++) {
-	if (url_ok[(int) (*p)])
+	if (url_acceptable[(int) (*p)])
 	    *q++ = *p;
 	else {
 	    *q++ = '%';		/* Means hex coming */
@@ -163,23 +158,21 @@ urlParseProtocol(const char *s)
 	return PROTO_HTTP;
     if (strncasecmp(s, "ftp", 3) == 0)
 	return PROTO_FTP;
+#ifndef NO_FTP_FOR_FILE
     if (strncasecmp(s, "file", 4) == 0)
 	return PROTO_FTP;
+#endif
     if (strncasecmp(s, "gopher", 6) == 0)
 	return PROTO_GOPHER;
     if (strncasecmp(s, "wais", 4) == 0)
 	return PROTO_WAIS;
     if (strncasecmp(s, "cache_object", 12) == 0)
 	return PROTO_CACHEOBJ;
-    if (strncasecmp(s, "urn", 3) == 0)
-	return PROTO_URN;
-    if (strncasecmp(s, "whois", 5) == 0)
-	return PROTO_WHOIS;
     return PROTO_NONE;
 }
 
 
-int
+static int
 urlDefaultPort(protocol_t p)
 {
     switch (p) {
@@ -193,8 +186,6 @@ urlDefaultPort(protocol_t p)
 	return 210;
     case PROTO_CACHEOBJ:
 	return CACHE_HTTP_PORT;
-    case PROTO_WHOIS:
-	return 43;
     default:
 	return 0;
     }
@@ -217,15 +208,13 @@ urlParse(method_t method, char *url)
     if ((l = strlen(url)) + Config.appendDomainLen > (MAX_URL - 1)) {
 	/* terminate so it doesn't overflow other buffers */
 	*(url + (MAX_URL >> 1)) = '\0';
-	debug(23, 0) ("urlParse: URL too large (%d bytes)\n", l);
+	debug(23, 0, "urlParse: URL too large (%d bytes)\n", l);
 	return NULL;
     }
     if (method == METHOD_CONNECT) {
 	port = CONNECT_PORT;
 	if (sscanf(url, "%[^:]:%d", host, &port) < 1)
 	    return NULL;
-    } else if (!strncmp(url, "urn:", 4)) {
-	return urnParse(method, url);
     } else {
 	if (sscanf(url, "%[^:]://%[^/]%s", proto, host, urlpath) < 2)
 	    return NULL;
@@ -246,56 +235,53 @@ urlParse(method_t method, char *url)
     }
     for (t = host; *t; t++)
 	*t = tolower(*t);
-    if (strspn(host, valid_hostname_chars) != strlen(host)) {
-	debug(23, 1) ("urlParse: Illegal character in hostname '%s'\n", host);
+#if ALLOW_HOSTNAME_UNDERSCORES
+    l = strspn(host,
+	"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	"abcdefghijklmnopqrstuvwxyz"
+	"0123456789-._");
+#else
+    l = strspn(host,
+	"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	"abcdefghijklmnopqrstuvwxyz"
+	"0123456789-.");
+#endif
+    if (l != strlen(host)) {
+	debug(23, 1, "urlParse: Illegal character in hostname '%s'\n", host);
 	return NULL;
     }
     /* remove trailing dots from hostnames */
-    while ((l = strlen(host)) > 0 && host[--l] == '.')
+    while ((l = strlen(host)) && host[--l] == '.')
 	host[l] = '\0';
     if (Config.appendDomain && !strchr(host, '.'))
 	strncat(host, Config.appendDomain, SQUIDHOSTNAMELEN);
     if (port == 0) {
-	debug(23, 0) ("urlParse: Invalid port == 0\n");
+	debug(23, 0, "urlParse: Invalid port == 0\n");
 	return NULL;
     }
 #ifdef HARDCODE_DENY_PORTS
     /* These ports are filtered in the default squid.conf, but
      * maybe someone wants them hardcoded... */
     if (port == 7 || port == 9 || port = 19) {
-	debug(23, 0) ("urlParse: Deny access to port %d\n", port);
+	debug(23, 0, "urlParse: Deny access to port %d\n", port);
 	return NULL;
     }
 #endif
-    request = memAllocate(MEM_REQUEST_T);
+#ifdef REMOVE_FTP_TRAILING_SLASHES
+    /* remove trailing slashes from FTP URLs */
+    if (protocol == PROTO_FTP) {
+	t = urlpath + strlen(urlpath);
+	while (t > urlpath && *(--t) == '/')
+	    *t = '\0';
+    }
+#endif
+    request = get_free_request_t();
     request->method = method;
     request->protocol = protocol;
     xstrncpy(request->host, host, SQUIDHOSTNAMELEN);
     xstrncpy(request->login, login, MAX_LOGIN_SZ);
     request->port = (u_short) port;
-#if OLD_CODE
     xstrncpy(request->urlpath, urlpath, MAX_URL);
-#else
-    stringReset(&request->urlpath, urlpath);
-#endif
-    request->max_age = -1;
-    request->max_forwards = -1;
-    return request;
-}
-
-static request_t *
-urnParse(method_t method, char *urn)
-{
-    request_t *request = NULL;
-    debug(50, 5) ("urnParse: %s\n", urn);
-    request = memAllocate(MEM_REQUEST_T);
-    request->method = method;
-    request->protocol = PROTO_URN;
-#if OLD_CODE
-    xstrncpy(request->urlpath, &urn[4], MAX_URL);
-#else
-    stringReset(&request->urlpath, urn+4);
-#endif
     request->max_age = -1;
     request->max_forwards = -1;
     return request;
@@ -308,26 +294,23 @@ urlCanonical(const request_t * request, char *buf)
     LOCAL_ARRAY(char, portbuf, 32);
     if (buf == NULL)
 	buf = urlbuf;
-    if (request->protocol == PROTO_URN) {
-	snprintf(buf, MAX_URL, "urn:%s", strBuf(request->urlpath));
-    } else
-	switch (request->method) {
-	case METHOD_CONNECT:
-	    snprintf(buf, MAX_URL, "%s:%d", request->host, request->port);
-	    break;
-	default:
-	    portbuf[0] = '\0';
-	    if (request->port != urlDefaultPort(request->protocol))
-		snprintf(portbuf, 32, ":%d", request->port);
-	    snprintf(buf, MAX_URL, "%s://%s%s%s%s%s",
-		ProtocolStr[request->protocol],
-		request->login,
-		*request->login ? "@" : null_string,
-		request->host,
-		portbuf,
-		strBuf(request->urlpath));
-	    break;
-	}
+    switch (request->method) {
+    case METHOD_CONNECT:
+	sprintf(buf, "%s:%d", request->host, request->port);
+	break;
+    default:
+	portbuf[0] = '\0';
+	if (request->port != urlDefaultPort(request->protocol))
+	    sprintf(portbuf, ":%d", request->port);
+	sprintf(buf, "%s://%s%s%s%s%s",
+	    ProtocolStr[request->protocol],
+	    request->login,
+	    *request->login ? "@" : null_string,
+	    request->host,
+	    portbuf,
+	    request->urlpath);
+	break;
+    }
     return buf;
 }
 
@@ -336,38 +319,39 @@ urlCanonicalClean(const request_t * request)
 {
     LOCAL_ARRAY(char, buf, MAX_URL);
     LOCAL_ARRAY(char, portbuf, 32);
-    LOCAL_ARRAY(char, loginbuf, MAX_LOGIN_SZ + 1);
     char *t;
-    if (request->protocol == PROTO_URN) {
-	snprintf(buf, MAX_URL, "urn:%s", strBuf(request->urlpath));
-    } else
-	switch (request->method) {
-	case METHOD_CONNECT:
-	    snprintf(buf, MAX_URL, "%s:%d", request->host, request->port);
-	    break;
-	default:
-	    portbuf[0] = '\0';
-	    if (request->port != urlDefaultPort(request->protocol))
-		snprintf(portbuf, 32, ":%d", request->port);
-	    loginbuf[0] = '\0';
-	    if ((int) strlen(request->login) > 0) {
-		strcpy(loginbuf, request->login);
-		if ((t = strchr(loginbuf, ':')))
-		    *t = '\0';
-		strcat(loginbuf, "@");
-	    }
-	    snprintf(buf, MAX_URL, "%s://%s%s%s%s",
-		ProtocolStr[request->protocol],
-		loginbuf,
-		request->host,
-		portbuf,
-		strBuf(request->urlpath));
-	    if ((t = strchr(buf, '?')))
-		*t = '\0';
-	    break;
-	}
+    switch (request->method) {
+    case METHOD_CONNECT:
+	sprintf(buf, "%s:%d", request->host, request->port);
+	break;
+    default:
+	portbuf[0] = '\0';
+	if (request->port != urlDefaultPort(request->protocol))
+	    sprintf(portbuf, ":%d", request->port);
+	sprintf(buf, "%s://%s%s%s",
+	    ProtocolStr[request->protocol],
+	    request->host,
+	    portbuf,
+	    request->urlpath);
+	if ((t = strchr(buf, '?')))
+	    *t = '\0';
+	break;
+    }
     return buf;
 }
+
+char *
+urlClean(char *dirty)
+{
+    char *clean;
+    request_t *r = urlParse(METHOD_GET, dirty);
+    if (r == NULL)
+	return dirty;
+    clean = urlCanonicalClean(r);
+    put_free_request_t(r);
+    return clean;
+}
+
 
 request_t *
 requestLink(request_t * request)
@@ -384,10 +368,8 @@ requestUnlink(request_t * request)
     request->link_count--;
     if (request->link_count)
 	return;
-    safe_free(request->headers);
-    safe_free(request->body);
-    stringClean(&request->urlpath);
-    memFree(MEM_REQUEST_T, request);
+    safe_free(request->hierarchy.host);
+    put_free_request_t(request);
 }
 
 int
@@ -418,20 +400,14 @@ urlCheckRequest(const request_t * r)
     if (r->method == METHOD_PURGE)
 	return 1;
     switch (r->protocol) {
-    case PROTO_URN:
     case PROTO_HTTP:
     case PROTO_CACHEOBJ:
 	rc = 1;
 	break;
     case PROTO_FTP:
-	if (r->method == METHOD_PUT)
-	    rc = 1;
     case PROTO_GOPHER:
     case PROTO_WAIS:
-    case PROTO_WHOIS:
 	if (r->method == METHOD_GET)
-	    rc = 1;
-	else if (r->method == METHOD_HEAD)
 	    rc = 1;
 	break;
     default:

@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -105,23 +104,9 @@
  */
 
 #include "squid.h"
+#include "mime_table.h"
 
 #define GET_HDR_SZ 1024
-
-typedef struct _mime_entry {
-    char *pattern;
-    regex_t compiled_pattern;
-    char *icon;
-    char *content_type;
-    char *content_encoding;
-    char transfer_mode;
-    struct _mime_entry *next;
-} mimeEntry;
-
-static mimeEntry *MimeTable = NULL;
-static mimeEntry **MimeTableTail = NULL;
-
-static void mimeLoadIconFile(const char *icon);
 
 char *
 mime_get_header(const char *mime, const char *name)
@@ -136,7 +121,7 @@ mime_get_header(const char *mime, const char *name)
     if (!mime || !name)
 	return NULL;
 
-    debug(25, 5) ("mime_get_header: looking for '%s'\n", name);
+    debug(25, 5, "mime_get_header: looking for '%s'\n", name);
 
     for (p = mime; *p; p += strcspn(p, "\n\r")) {
 	if (strcmp(p, "\r\n\r\n") == 0 || strcmp(p, "\n\n") == 0)
@@ -151,7 +136,7 @@ mime_get_header(const char *mime, const char *name)
 	if (l > GET_HDR_SZ)
 	    l = GET_HDR_SZ;
 	xstrncpy(header, p, l);
-	debug(25, 5) ("mime_get_header: checking '%s'\n", header);
+	debug(25, 5, "mime_get_header: checking '%s'\n", header);
 	q = header;
 	q += namelen;
 	if (*q == ':')
@@ -159,7 +144,7 @@ mime_get_header(const char *mime, const char *name)
 	while (isspace(*q))
 	    q++, got = 1;
 	if (got) {
-	    debug(25, 5) ("mime_get_header: returning '%s'\n", q);
+	    debug(25, 5, "mime_get_header: returning '%s'\n", q);
 	    return q;
 	}
     }
@@ -185,6 +170,36 @@ mime_headers_end(const char *mime)
 	end += (end == p1 ? 3 : 2);
 
     return (char *) end;
+}
+
+const ext_table_entry *
+mime_ext_to_type(const char *extension)
+{
+    int i;
+    int low;
+    int high;
+    int comp;
+    LOCAL_ARRAY(char, ext, 16);
+    char *cp = NULL;
+
+    if (!extension || strlen(extension) >= (sizeof(ext) - 1))
+	return NULL;
+    strcpy(ext, extension);
+    for (cp = ext; *cp; cp++)
+	if (isupper(*cp))
+	    *cp = tolower(*cp);
+    low = 0;
+    high = EXT_TABLE_LEN - 1;
+    while (low <= high) {
+	i = (low + high) / 2;
+	if ((comp = strcmp(ext, ext_mime_table[i].name)) == 0)
+	    return &ext_mime_table[i];
+	if (comp > 0)
+	    low = i + 1;
+	else
+	    high = i - 1;
+    }
+    return NULL;
 }
 
 /*
@@ -213,18 +228,14 @@ mk_mime_hdr(char *result, const char *type, int size, time_t ttl, time_t lmt)
     expiretime = ttl ? t + ttl : 0;
     date[0] = expires[0] = last_modified[0] = '\0';
     content_length[0] = result[0] = '\0';
-    snprintf(date, 100, "Date: %s\r\n", mkrfc1123(t));
+    sprintf(date, "Date: %s\r\n", mkrfc1123(t));
     if (ttl >= 0)
-	snprintf(expires, 100, "Expires: %s\r\n", mkrfc1123(expiretime));
+	sprintf(expires, "Expires: %s\r\n", mkrfc1123(expiretime));
     if (lmt)
-	snprintf(last_modified, 100, "Last-Modified: %s\r\n", mkrfc1123(lmt));
+	sprintf(last_modified, "Last-Modified: %s\r\n", mkrfc1123(lmt));
     if (size > 0)
-	snprintf(content_length, 100, "Content-Length: %d\r\n", size);
-
-    /* NOTE: don't know size of result thus didn't change
-     * to snprintf(). Should be done sometime! */
-
-    snprintf(result, MAX_MIME, "Server: %s/%s\r\n%s%s%sContent-Type: %s\r\n%s",
+	sprintf(content_length, "Content-Length: %d\r\n", size);
+    sprintf(result, "Server: %s/%s\r\n%s%s%sContent-Type: %s\r\n%s",
 	appname,
 	version_string,
 	date,
@@ -233,249 +244,4 @@ mk_mime_hdr(char *result, const char *type, int size, time_t ttl, time_t lmt)
 	type,
 	content_length);
     return 0;
-}
-
-
-const char *
-mime_get_auth(const char *hdr, const char *auth_scheme, const char **auth_field)
-{
-    char *auth_hdr;
-    char *t;
-    if (auth_field)
-	*auth_field = NULL;
-    if (hdr == NULL)
-	return NULL;
-    if ((auth_hdr = mime_get_header(hdr, "Authorization")) == NULL)
-	return NULL;
-    if (auth_field)
-	*auth_field = auth_hdr;
-    if ((t = strtok(auth_hdr, " \t")) == NULL)
-	return NULL;
-    if (strcasecmp(t, auth_scheme) != 0)
-	return NULL;
-    if ((t = strtok(NULL, " \t")) == NULL)
-	return NULL;
-    return base64_decode(t);
-}
-
-char *
-mimeGetIcon(const char *fn)
-{
-    mimeEntry *m;
-    for (m = MimeTable; m; m = m->next) {
-	if (m->icon == NULL)
-	    continue;
-	if (regexec(&m->compiled_pattern, fn, 0, 0, 0) == 0)
-	    break;
-    }
-    if (m == NULL)
-	return NULL;
-    if (!strcmp(m->icon, dash_str))
-	return NULL;
-    return m->icon;
-}
-
-char *
-mimeGetIconURL(const char *fn)
-{
-    char *icon = mimeGetIcon(fn);
-    static char iconurl[256];
-    if (icon == NULL)
-	return NULL;
-    snprintf(iconurl, 256, "http://%s:%d/squid-internal/icons/%s",
-	getMyHostname(),
-	Config.Port.http->i,
-	icon);
-    return iconurl;
-}
-
-char *
-mimeGetContentType(const char *fn)
-{
-    mimeEntry *m;
-    char *name = xstrdup(fn);
-    char *t;
-    if (mimeGetContentEncoding(name)) {
-	/* Assume we matched /\.\w$/ and cut off the last extension */
-	if ((t = strrchr(name, '.')))
-	    *t = '\0';
-    }
-    for (m = MimeTable; m; m = m->next) {
-	if (m->content_type == NULL)
-	    continue;
-	if (regexec(&m->compiled_pattern, name, 0, 0, 0) == 0)
-	    break;
-    }
-    xfree(name);
-    if (m == NULL)
-	return NULL;
-    if (!strcmp(m->content_type, dash_str))
-	return NULL;
-    return m->content_type;
-}
-
-char *
-mimeGetContentEncoding(const char *fn)
-{
-    mimeEntry *m;
-    for (m = MimeTable; m; m = m->next) {
-	if (m->content_encoding == NULL)
-	    continue;
-	if (regexec(&m->compiled_pattern, fn, 0, 0, 0) == 0)
-	    break;
-    }
-    if (m == NULL)
-	return NULL;
-    if (!strcmp(m->content_encoding, dash_str))
-	return NULL;
-    return m->content_encoding;
-}
-
-char
-mimeGetTransferMode(const char *fn)
-{
-    mimeEntry *m;
-    for (m = MimeTable; m; m = m->next) {
-	if (regexec(&m->compiled_pattern, fn, 0, 0, 0) == 0)
-	    break;
-    }
-    return m ? m->transfer_mode : 'I';
-}
-
-void
-mimeInit(char *filename)
-{
-    FILE *fp;
-    char buf[BUFSIZ];
-    char chopbuf[BUFSIZ];
-    char *t;
-    char *pattern;
-    char *icon;
-    char *type;
-    char *encoding;
-    char *mode;
-    regex_t re;
-    mimeEntry *m;
-    int re_flags = REG_EXTENDED | REG_NOSUB | REG_ICASE;
-    if (filename == NULL)
-	return;
-    if ((fp = fopen(filename, "r")) == NULL) {
-	debug(50, 1) ("mimeInit: %s: %s\n", filename, xstrerror());
-	return;
-    }
-    if (MimeTableTail == NULL)
-	MimeTableTail = &MimeTable;
-    while (fgets(buf, BUFSIZ, fp)) {
-	if ((t = strchr(buf, '#')))
-	    *t = '\0';
-	if ((t = strchr(buf, '\r')))
-	    *t = '\0';
-	if ((t = strchr(buf, '\n')))
-	    *t = '\0';
-	if (buf[0] == '\0')
-	    continue;
-	xstrncpy(chopbuf, buf, BUFSIZ);
-	if ((pattern = strtok(chopbuf, w_space)) == NULL) {
-	    debug(25, 1) ("mimeInit: parse error: '%s'\n", buf);
-	    continue;
-	}
-	if ((type = strtok(NULL, w_space)) == NULL) {
-	    debug(25, 1) ("mimeInit: parse error: '%s'\n", buf);
-	    continue;
-	}
-	if ((icon = strtok(NULL, w_space)) == NULL) {
-	    debug(25, 1) ("mimeInit: parse error: '%s'\n", buf);
-	    continue;
-	}
-	if ((encoding = strtok(NULL, w_space)) == NULL) {
-	    debug(25, 1) ("mimeInit: parse error: '%s'\n", buf);
-	    continue;
-	}
-	if ((mode = strtok(NULL, w_space)) == NULL) {
-	    debug(25, 1) ("mimeInit: parse error: '%s'\n", buf);
-	    continue;
-	}
-	if (regcomp(&re, pattern, re_flags) != 0) {
-	    debug(25, 1) ("mimeInit: regcomp error: '%s'\n", buf);
-	    continue;
-	}
-	m = xcalloc(1, sizeof(mimeEntry));
-	m->pattern = xstrdup(pattern);
-	m->content_type = xstrdup(type);
-	m->icon = xstrdup(icon);
-	m->content_encoding = xstrdup(encoding);
-	m->compiled_pattern = re;
-	if (!strcasecmp(mode, "ascii"))
-	    m->transfer_mode = 'A';
-	else if (!strcasecmp(mode, "text"))
-	    m->transfer_mode = 'A';
-	else
-	    m->transfer_mode = 'I';
-	*MimeTableTail = m;
-	MimeTableTail = &m->next;
-	debug(25, 5) ("mimeInit: added '%s'\n", buf);
-    }
-    fclose(fp);
-    /*
-     * Create Icon StoreEntry's
-     */
-    for (m = MimeTable; m != NULL; m = m->next)
-	mimeLoadIconFile(m->icon);
-    debug(25, 1) ("Loaded Icons.\n");
-}
-
-static void
-mimeLoadIconFile(const char *icon)
-{
-    int fd;
-    int n;
-    int flags;
-    struct stat sb;
-    StoreEntry *e;
-    LOCAL_ARRAY(char, path, MAXPATHLEN);
-    LOCAL_ARRAY(char, url, MAX_URL);
-    char *buf;
-    const cache_key *key;
-    const char *type = mimeGetContentType(icon);
-    if (type == NULL)
-	fatal("Unknown icon format while reading mime.conf\n");
-    snprintf(url, MAX_URL, "http://%s:%d/squid-internal/icons/%s",
-	getMyHostname(), Config.Port.http->i, icon);
-    key = storeKeyPublic(url, METHOD_GET);
-    if (storeGet(key))
-	return;
-    snprintf(path, MAXPATHLEN, "%s/%s", Config.icons.directory, icon);
-    fd = file_open(path, O_RDONLY, NULL, NULL, NULL);
-    if (fd < 0) {
-	debug(25, 0) ("mimeLoadIconFile: %s: %s\n", path, xstrerror());
-	return;
-    }
-    if (fstat(fd, &sb) < 0) {
-	debug(50, 0) ("mimeLoadIconFile: FD %d: fstat: %s\n", fd, xstrerror());
-	return;
-    }
-    flags = 0;
-    EBIT_SET(flags, REQ_CACHABLE);
-    e = storeCreateEntry(url,
-	url,
-	flags,
-	METHOD_GET);
-    assert(e != NULL);
-    e->mem_obj->request = requestLink(urlParse(METHOD_GET, url));
-    httpReplyReset(e->mem_obj->reply);
-    httpReplySetHeaders(e->mem_obj->reply, 1.0, 200, NULL,
-	type, (int) sb.st_size, sb.st_mtime, squid_curtime + 86400);
-    httpReplySwapOut(e->mem_obj->reply, e);
-    /* read the file into the buffer and append it to store */
-    buf = memAllocate(MEM_4K_BUF);
-    while ((n = read(fd, buf, 4096)) > 0)
-	storeAppend(e, buf, n);
-    file_close(fd);
-    storeSetPublicKey(e);
-    storeComplete(e);
-    storeTimestampsSet(e);
-    EBIT_SET(e->flag, ENTRY_SPECIAL);
-    debug(25, 3) ("Loaded icon %s\n", url);
-    storeUnlockObject(e);
-    memFree(MEM_4K_BUF, buf);
 }

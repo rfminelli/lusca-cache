@@ -1,722 +1,151 @@
-	- Added memory pools for variable size objects (strings).
-	  There are three pools; for small, medium, and large objects.  
-	- Extended String object to use memory pools.  Most fixed size char
-	  array fields will be replaced using string pools. Same for most
-	  malloc()-ed buffers.
-	- Changed icon handling to use the hostname and port of the squid
-	  server, instead of the special hostname "internal.squid".
-	- All icons are now configured in mime.conf. No hardcoded icons,
-	  including gohper icons.
-	- Fixed ICP bug when we send queries, but expect zero
-	  replies.
-	- Fixed alignment/casting bugs for ICP messages.
-	- A generic client-to-server "pump" was added to handle HTTP
-	  PUT as well as POST methods on the client-cache side. Based on
-	  "pump" PUT requests can be made to either HTTP or FTP url's.
-	  Code is still beta and interoperability with browsers etc has
-	  not been tested.
-	- Put #ifdefs around 'source_ping' code.
-	- Added missing typedef for _arp_ip_data (Wesha).
-	- Added regular-expression-based ACLs for client and server
-	  domain names (Henrik Nordstrom).
-	- Fixed ident-related coredumps from incorrect callback data.
-	- Fixed parse_rfc1123() "space" bug.
-	- Fixed xrealloc() XMALLOC_DEBUG bug (not calling check_free())..
-	- Fixed some src/asn.c end-of-reply bugs and memory leaks.
-	- Fixed some peer->options flag-setting bugs.
-	- Fixed single-parent feature to work again
-	- Removed 'single_parent_bypass' configuration option; instead
-	  just use 'no-query'.
-	- Surrounded 'source_ping' code with #ifdefs.
-	- Changed 'deny_info URL' to use a custom Error page.
-	- Modified src/client.c for testing POST requests.
+Changes to squid-1.1.21 (March 17, 1998):
 
-Changes to squid-1.2.beta16 (Mar 4, 1998):
+	- Fixed ftpget's "Generated" timestamp trailer on error
+	  messages (Oskar Pearson).
+	- Count (in the client_list database) DENIED ICP queries
+	  occuring after the 95% threshold, even though we don't
+	  transmit an ICP reply.
+	- Fixed bug causing 'ipcache_purgelru()' to be added to
+	  the event queue multiple times.
+	- Added ipcache and fqdncache average service times to
+	  cachemgr 'info' page.
+	- Fixed ACL parsing of hostnames to use all IP addresses,
+	  not just the first.
+	- Fixed how we handle ICP replies to misconfigured neighbors.
+	  Instead of cutting off at the first 100 ICP_DENIED replies, we
+	  now start sending replies again after ignoring them for 1
+	  hour.  This should cause the other cache to detect the
+	  excessive ICP_DENIED replies and disable itself.
+	- Changed sorting order for compareSize().  Apparently we were
+	  sorting in order of smallest to largest, when we really want to
+	  sort the other way when removing in-mem objects.
+	- Changed storeShouldPurgeMem() to use the high water mark
+	  instead of the low water mark.
+	- If a deny_info URL has 'cgi' in it, then append CGI args for
+	  client's IP address, requested URL, and the denying cache.
+	- Added configure check for broken setresuid().
+	- Updated contrib/nextstep directory (Gerben Wierda).
+	- Changed acl.c to check "unescaped" versions of URLs so
+	  that URL-escaping does not bypass access controls.
+	- Fixed double-call bug (and comm_remove_close_handler
+	  coredump?) for POST and SSL requests.
+	- Give the Host: header a higher precedence that the socket
+	  IP address for transparent proxying (Henrik Nordstrom).
+	- Don't call ntohl() conversion on ICP message 'shostid'
+	  field.
+	- Changed netdb structure so its easier to move hosts from one
+	  network to another.
+	- Fixed incorrect comparison order for store.c::compareSize()
+	  (Li Fan).
+	- Changed storeShouldPurgeMem() to check the in-memory
+	  high water mark instead of the low (Li Fan).
 
-	- Added Portuguese error messages from Pedro Lineu Orso
-	- Added a simple but very effective hack to cachemgr.cgi that tries to
-	  interpret lines with '\t' as table records and formats them
-	  accordingly. With a few exceptions (see source code), first line
-	  becomes a table heading ("<th>" html tag) and the rest is formated
-	  with "<td>" tags.
-	- Added "mem_pools_limit" configuration option. Semantics of
-	  "mem_pools" option has also changed a bit to reflect new memory
-	  management policy.
-	- Reorganized memory pools. Squid now supports a global pool
-	  limit instead of individual pool limits. Per-pool limits can be
-	  implemented on top of the current scheme if needed, but it is
-	  probably hard to guess their values.  Squid distributes pool
-	  memory among "frequently allocated" objects.  There is a
-	  configurable limit on the total amount of "idle" memory to be
-	  kept in reserve. All requests that exceed that amount are
-	  satisfied using malloc library.  Support for variable size
-	  objects (mostly strings) will be enabled soon.
-	- memAllocate() has now only one parameter. Objects are always
-	  reset with 0s. (We actually never used that parameter before;
-	  it was always set to "clear").
-	- Added Squid "signature" to all ERR_ pages. The signature is
-	  hardcoded and is added on-the-fly. The signature may use
-	  %-escapes.  Added interface to add more hard-coded responses if
-	  needed (see errorpage.c::error_hard_text).
-	- Both default and configured directories are searched for ERR_
-	  pages now. Configured directory is, of course, searched first.
-	  This allows you to customize a subset of ERR_ pages (in a
-	  separate directory) without danger of getting other copies out
-	  of sync.
-	- Security controls for the SNMP agent added. Besides
-	  communities (like password) and views (part of tree
-	  accessible), the snmp_acl config option can be used to do acl
-	  based access checks per community.
-	- SNMP agent was heavily re-written, based on cmu-snmpV1.8. You
-	  can now walk through the whole mib tree. Several new variables
-	  added under cacheProtoAggregateStats
-	- Added rudimental statistics for HTTP headers.
-	- Adjusted StatLogHist to a more generic/flexible StatHist.
-	  Moved StatHist implementation into a separate file.
-	- Added FTP support for PORT if PASV fails, also try the
-	  default FTP data port (Henrik Nordstrom).
-	- Fixed NULL pointer bug in clientGetHeadersForIMS when a
-	  request is cancelled for fails on the client side.
-	- Filled in some squid.conf comments (never_direct,
-	  always_direct).
-	- Added RES_DNSRCH to dnsserver's _res.options when the 
-	  -D command line option is given.
-	- Fixed repeated Detected DEAD/REVIVED Sibling messages when
-	  peer->tcp_up == 0 (Michael O'Reilly).
-	- Fixed storeGetNextFile's incorrect "directory does not exist"
-	  errors (Michael O'Reilly).
-	- Fixed aiops.c race condition (Michael O'Reilly, Stewart
-	  Forster).
-	- Added 'dns_nameservers' config option to specify non-default
-	  DNS nameserver addresses (Maxim Krasnyansky).
-	- Added lib/util.c code to show memory map as a tree
-	  (Henrik Nordstrom).
-	- Added HTTP and ICP median service times to Counters and
-	  cachemgr average stats.
-	- Changed "-d" command line option to take debugging level
-	  as argument.  Debugging equal-to or less-than the argument
-	  will be written to stderr.
-	- Removed unused urlClean() function from url.c.	
-	- Fixed a bug that allowed '?' parts of urls to be recorded in
-	  store.log.  Logged urls are now "clean".
-	- Cache Manager got new Web interface (cachemgr.cgi). New .cgi
-	  script forwards basic authentication from browser to squid.
-	  Authentication info is encoded within all dynamically generated
-	  pages so you do not have to type your password often.
-	  Authentication records expire after 3 hours (default) since
-	  last use. Cachemgr.cgi now recognizes "action protection" types
-	  described below.
-	- Added better recognition of available protection for actions
-	  in Cache Manager. Actions are classified as "public" (no
-	  password needed), "protected" (must specify a valid password),
-	  "disabled" (those with a "disable" password in squid.conf), and
-	  "hidden" (actions that require a password, but do not have
-	  corresponding cachemgr_passwd entry). If you manage to request
-	  a hidden, disabled, or unknown action, squid replies with
-	  "Invalid URL" message. If a password is needed, and you failed
-	  to provide one, squid replies with "Access Denied" message and
-	  asks you to authenticate yourself.
-	- Added "basic" authentication scheme for the Cache Manager.
-	  When a password protected function is accessed, Squid sends an
-	  HTTP_UNAUTHORIZED reply allowing the client to authorize itself
-	  by specifying "name" and "password" for the specified action.
-	  The user name is currently used for logging purposes only.  The
-	  password must be an appropriate "cachemgr_passwd" entry from
-	  squid.conf. The old interface (appending @password to the url)
-	  is still supported but discouraged.  Note: it is not possible
-	  to pass authentication information between squid and browser
-	  *via a web server*. The server will strip all authentication
-	  headers coming from the browser. A similar problem exists for
-	  Proxy-Authentication scheme.
-	- Added ERR_CACHE_MGR_ACCESS_DENIED page to notify of
-	  authentication failures when accessing Cache Manager.
-	- Added "-v" (Verbose) and "-H" (extra Headers) options to client.c.
-	- Added simple context-based debugging to debug.c. Currently,
-	  the context is defined as a constant string. Context reporting
-	  is triggered by debug() calls.  Context debugging routines
-	  print minimal amount of information sufficient to describe
-	  current context. The interface will be enhanced in the future.
-	- Replaced _http_reply with HttpReply. HttpReply is a
-	  stand-alone object that is responsible for parsing, swapping,
-	  and comm_writing of HTTP replies. Moved these functions from
-	  various modules into HttpReply module.
-	- Added HttpStatusLine, HttpHeader, HttpBody.
-	- All HTTP headers are now parsed and stored in a "compiled"
-	  form in the HttpHeader object.  This allows for a great
-	  flexibility in header processing and builds basis for support
-	  of yet unsupported HTTP headers.
-	- Added Packer, a memory/store redirector with a printf
-	  interface.  Packer allows to comm_write() or swap() an object
-	  using a single routine.
-	- Added MemBuf, a auto-growing memory buffer with printf
-	  capabilities.  MemBuf replaces most of old local buffers for
-	  compiling text messages.
-	- Added MemPool that maintains a pre-allocated pool of opaque
-	  objects.  Used to eliminate memory thrashing when allocating
-	  small objects (e.g.  field-names and field-value in http
-	  headers).
+Changes to squid-1.1.20 (January 9, 1998):
 
-Changes to squid-1.2.beta15 (Feb 13, 1998):
-
-	NOTE: This version has changes which may cause all or part
-	      of your cache to be lost.  However, you can problably
-	      save most of it by doing a slow restart.  Specifically:
-
-	1. Kill the running squid-1.2.beta14 process; wait for it to
-	   fully exit.
-	2. Remove all 'swap.state*' files, either in each cache_dir, or
-	   as defined in your squid.conf
-	3. Start squid-1.2.beta15.   The store will be rebuilt from the
-	   existing swap files, reading the directories and opening
-	   the files.
-
-	- Fixed some problems related to disk (and pipe) write error
-	  handling.  file_close() doesn't always close the file
-	  immediately; i.e. when there are pending buffers to write.
-	  StoreEntry->lock_count could become zero while a write is
-	  pending, then bad things happen during the callback.
-	- The file_write() callback data must now be in the callback
-	  database (cbdata).  We now use the swapout_ctrl_t structure
-	  for the callback data; it stays around for as long as we are
-	  swapping out.
-	- Changed the way write errors are handled by diskHandleWrite.
-	  If there is no callback function, now we exit with a fatal
-	  message under the assumption that the file in question is a
-	  log file or IPC pipe.  Otherwise, we flush all the pending
-	  write buffers (so we don't see multiple repeated write errors
-	  from the same descriptor) and let the upper layer decide how
-	  to handle the failure.
-	- Fixed storeDirWriteCleanLogs.  A write failure was leaving
-	  some empty swap.state files, even though it tells us that its
-	  "not replacing the file."  Don't flush/rename logs which we
-	  have prematurely closed due to write failures, indiciated by
-	  fd[dirn] == -1.  Close these files LAST, not before
-	  renaming.
-	- Fixed storeDirClean to clean directories in a more sensible
-	  order, instead of the new "MONOTONIC" order for swap files.
-	- Merged fdstat.c functions into fd.c.
-	- Cleaned up some debugging sections.  Some unrelated source
-	  files were using the same section.
-	- Removed curly brackets from all cachemgr output.
-	- Removed unused filemap->last_file_number_allocated member.
-	- Removed unused fde->lifetime_data member.
-	- Fixed incorrectly applying htonl() on icp_common_t->shostid.
-	- Call setsid() before exec() in ipc.c so that child processes
-	  don't receive SIGINT (etc) when running squid on a tty.
-	- Changed StoreEntry->object_len to ->swap_file_sz so we
-	  can verify the disk file size at restart.  Moved object_len
-	  to MemObject->object_sz.  Note object_sz is initialized
-	  to -1.  If object_sz < 0, then we need to open the swap
-	  file and read the swap metadata.
-	- Changed store_client->mem to ->entry because we need
-	  e->swap_file_sz to set mem->object_sz at swapin.
-	- Renamed storeSwapData structure to storeSwapLogData.
-	- Fixed storeGetNextFile to not increment d->dirn.  Added
-	  check for opendir() failure.
-	- Fixed storeRebuildStart to properly link the directory
-	  list for storeRebuildfromDirectory mode.
-	- Added -S command line option to double-check store
-	  consistency with disk files in storeCleanup().
-	- Fixed a problem with transactional logging.  In many
-	  cases we were adding the public cache key and then
-	  logging a delete for the private key.  This is worthless
-	  because during rebuild we could not locate the previous
-	  public-keyed entry.  Now we assert that only public-keyed
-	  entries can be logged to swap.state.  storeSetPublicKey()
-	  and storeSetPrivateKey() have been modified to log an
-	  ADD or DEL when the key changes.
-	- Fixed storeDirClean bug.  Needed to call
-	  storeDirProperFileno() so the "dirn bits" get set.
-	- Fixed a storeRebuildFromDirectory bug.  fullpath[] and
-	  fullfilename[] were static to that function and did
-	  not change when the "rebuild_dir" arg did.  Moved these
-	  buffers to the rebuild_dir structure.
-	- In storeRebuildFromSwapLog, we were calling storeRelease()
-	  for cache key collisions.  This only set the RELEASE_REQUEST
-	  bit and did not clear the swap_file_number in the filemap or
-	  in the StoreEntry, so the swap file could get unlinked later
-	  when it was really released.
-	- Fixed FTP so that ';type=X' specifically sets the HTTP reply
-	  content-type and content-encoding (Henrik Nordstrom).
-	- Removed 'icon_content_type' configuration option.  Content
-	  types now taken from mime.conf (Henrik Nordstrom).
-	- Added additional memory malloc tracing and memory leak
-	  detection.  Use --enable-xmalloc-debug-trace configure
-	  option and -m command line option  (Henrik Nordstrom).
-
-Changes to squid-1.2.beta14 (Feb 6, 1998):
-
-	- Replaced snmplib free() calls with xfree().
-	- Changed the 'net_db_name' hash table structure to
-	  make it easier to move names from one network to another
-	  (copied from 1.1 code).
-	- Filled in some of the config dump routines (dump_acl,
-	  dump_acl_access).
-	- Full memory debugging option (--enable-xmalloc-debug-trace)
-	  (Henrik Nordstrom).
-	- Filled-in and clarified many squid.conf comments (Oskar
-	  Pearson).
-	- Fixed up handling of SWAP_LOG_DEL swap.state entries.
-
-Changes to squid-1.2.beta13 (Feb 4, 1998):
-
-	- NOTE: With this version the "swap.state" file format has
-	  changed.  Running this version for the first time will
-	  cause your current cache contents to be lost!
-	- NOTE: this version still has the bug where we don't rewind
-	  a swapout file and rewrite the swap meta data.  Objects
-	  larger than 8KB will be lost when rebuilding from the swap
-	  files.
-	- Combined various interprocess communication setup functions
-	  into ipcCreate().
-	- Removed some leftover ICP_HIT_OBJ things.
-	- Removed cacheinfo and proto_count() and friends; these are to
-	  be replaced in functionality by StatCounters and 5/60 minute
-	  average views via cachemgr.
-	- Fixed --enable-acltree configure message (Masashi Fujita).
-	- Fixed no reference to @LIB_MALLOC@ in src/Makefile.in
-	  (Masashi Fujita).
-	- Fixed building outside of source tree (Masashi Fujita).
-	- FTP: Format NLST listings, and inform the user that the NLST
-	  (plain) format is available when we find a LIST listing that we
-	  don't understand (Henrik Nordstrom)
-	- FTP: Use SIZE on Binary transfers, and not ASCII. The
-	  condition was inversed, making squid use SIZE on ASCII
-	  transfers (Henrik Nordstrom).
-	- Enable virtual and Host: based acceleration in order to be
-	  able to use Squid as a transparent proxy without breaking
-	  either virtual servers or clients not sending Host: header
-	  the order of the virtual and Host: based acceleration needs
-	  to be swapped, giving Host: a higher precendence than virtual
-	  host (Henrik Nordstrom).
-	- Use memmove/bcopy as detected by configure Some systems does
-	  not have memmove, but have the older bcopy implementation
-	  (Henrik Nordstrom).
-	- Completely rewritten aiops.c that creates and manages a pool
-	  of threads so thread creation overhead is eliminated (SLF).
-	- Lots of mods to store.c to detect and cancel outstanding
-	  ASYNC ops.  Code is not proven exhaustive and there are
-	  definately still cases to be found where outstanding disk ops
-	  aren't cancelled properly (SLF).
-	- Changes to call interface to a few routines to support disk
-	  op `tagging', so operations can be cleanly cancelled on
-	  store_abort()s (SLF).
-	- Implementation of swap.state files as transaction logs.
-	  Removed objects are now noted with a negative object size.
-	  This allows reliatively clean rebuilds from non-clean
-	  shutdowns (SLF).
-	- Now that the swap.state files are transaction logs, there's
-	  now no need to validate by stat()ing.  All the validation
-	  procedure does is now just set the valid bit AFTER all the
-	  swap.state files have been read, because by that time, only
-	  valid objects can be left.  Object still need to be marked
-	  invalid when reading the swap.state file because there's no
-	  guarantee the file has been retaken or deleted (SLF).
-	- An fstat() call is now added after every
-	  storeSwapInFileOpened() so object sizes can be checked.   Added
-	  code to storeRelease() the object if the sizes don't match (SLF).
-        - #defining USE_ASYNC_IO now uses the async unlink() rather than
-          unlinkd() (SLF).
-	- #defining MONOTONIC_STORE will support the creation of disk
-	  objects clustered into directories.  This GREATLY improves disk
-	  performance (factor of 3) over old `write-over-old-object'
-	  method.  If using the MONOTONIC_STORE, the
-	  {get/put}_unusedFileno stack stuff is disabled.  This is
-	  actually a good thing and greatly reduces the risk of serving
-	  up bad objects (SLF).
-	- Fixed unlink() in storeWriteCleanLogs to be real unlink()
-	  rather than ASYNC/unlinkd unlinks.  swap.state.new files were
-	  being removed just after they were created due to delayed
-	  unlinks (SLF).
-	- Disabled various assertions and made these into debug warning
-	  messages to make the code more stable until the bugs can be
-	  tracked down (SLF).
-	- Added most of Michael O'Reilly's patches which included many
-	  bug fixes.  Ask him for full details (SLF).
-	- Moved aio_check_callbacks in comm_{poll|select}().  It was
-	  called after the fdset had been built which was wrong because
-	  the callbacks were changing the state of the read/write
-	  handlers prior to the poll/select() calls (SLF).
-	- Fixed ARP ACL memory leaks (Dale).
-	- Eliminated URL and SHA cache keys.  Cache keys will always
-	  be MD5's now.
-	- Fixed up store swap meta data.
-	- Changed swap.state logs to a binary format.
-	- The swap.state logs are written transaction-style.
-
-Changes to squid-1.2.beta12 (Jan 30, 1998):
-
-	- Added metadata headers to cache swap files.  This is an
-	  incompatible change with previous versions.  Running this
-	  version for the first time will cause your current cache
-	  contents to be lost.
-	- -D_REENTRANT when linking with -lpthreads (Henrik Nordstrom)
-	- Show symlink destinations as a hyperlink in FTP listings
-	  (Henrik Nordstrom)
-	- Fixed not allocating enough space for rewriting URLs with
-	  the Host: header (Eric Stern).
+	- Changed default 'average_object_size' to 13 KB.
+	- Changed number of allocated file numbers to twice
+	  the number estimated.
+	- Changed file_map_allocate() to not coredump when the filemap
+	  list becomes full.  Instead, a warning is logged and new
+	  objects will not be saved until some swap files become
+	  available.
 	- Year-2000 fixes (Arjan de Vet).
-	- Fixed looping for cache hits on HEAD requests.
-	- Fixed parseHttpRequest() coredump for 
-          "GET http://foo HTTP/1.0\r\n\r\n\r\n"
 
-Changes to squid-1.2.beta11 (Jan 6, 1998):
+Changes to squid-1.1.19 (December 18, 1997):
 
-	- Fixed fake 'struct rusage' definition which prevented compling
-	  on Solaris 2.4.
-	- Fixed copy-by-ref bug for request->headers in
-	  clientRedirectDone() (Michael O'Reilly).
-	- Workaround for Solaris pthreads closing FD 0 upon fork()
+	- Applied David Luyer's TCP retry algorithm: Give a parent (or
+	  peer) cache 10 chances before marking it truly dead, as soon
+	  as it fails the first time fire off a connection attempt and
+	  if that succeeds mark it back with 10 fresh chances.
+	- Re-fixed handling long lines in Gopher replies (John Line).
+	- Fixed dereference bug in BIN_TREE version of
+	  aclMatchDomainList().
+	- Added Date: and Expires: to proxy-auth message.
+	- Fixed using Proxy Auth and User based ACLs without any ident
+	  lookups; the ident field of the aclChecklist was never filled
+	  (Milton Ngan).
+	- Updated contrib/nextstep directory from Gerben Wierda.
+	- Added ability to generate HTTP redirect messages from
+	  the redirector output by prepending "301:" or "302:" to the
+	  new url.  See FAQ 4.16 for more details.
+	- Fixed errorpage.c buffer overrun.
+	- Changed storeInit() to allocate 1.5 times the estimated number
+	  of cache objects for the 'filemap' bitmap.
+
+Changes to squid-1.1.18 (October 31, 1997):
+
+	- Added fix for missing S_ISDIR macro on NEXTSTEP (Gerben Wierda).
+	- Fixed another ftpget content type bug (Yoshitane Tachibana)
+	- Fixed ftpget to handle EALREADY from non-blocking connect().
+	- Added ALLOW_HOSTNAME_UNDERSCORES option from Ron Gomes.
+	- Fixed bugs which allowed 302 Temporary Redirects to be cached.
+	- Fixed DST offset bug in parse_rfc1123().
+	- Fixed NEIGHBOR_CLOSEST_ONLY define which had the same value as 
+	  NEIGHBOR_MCAST_RESPONDER.
+	- Fixed handling long lines in Gopher replies (John Line).
+
+Changes to squid-1.1.17 (October 19, 1997):
+
+	- Fixed ftpget null pointer coredump for mime encodings.
+	- Fixed setuid() bug when creating swap directories.  Now
+	  change to 'effective_user' before making dirs.
+	- Fixed cachemgr.cgi to give 'unknown host' message if
+	  gethostbyname() fails.
+	- Fixed extra disk read() bug for swapins.  Now a disk
+	  read calls back immediately if any data was read instead
+	  of trying to fill the 8k buffer.
+	- Fixed asciiHandleConn().  The 'while (1)' loop broke things
+	  badly under very high loads.  Limit to 10 times through
+	  the loop, or until RESERVED_FD limit is reached.
+
+Changes to squid-1.1.16 (August 25, 1997):
+
+	- Added while loop around accept() (Michael O'Reilly).
+	- Exit if parseKilobytes() overflows (e.g. maximum_object_size).
+	- Added 'closest-only' cache_host option to accept only
+	  CLOSEST_PARENT_MISS but not FIRST_PARENT_MISS.
+	- Fixed ftpget to escape special characters in HTML output.
+	- Fixed ftpget to take the second-level filename extension
+	  content-type for 'x-gzip' and 'x-compress' encodings.
+	- Changed ftpget to check for whitespace in Windows listings
+	  (R. Scott Bailey).
+	- Fixed long URL coredump problem from the new 'log_url' scheme.
+	- PROXY_AUTH passwd security fix (David Luyer).
+
+Changes to squid-1.1.15 (August 11, 1997):
+
+	- Fixed bug in diskHandleWrite().  'break' should be 'continue'
 	  (Michael O'Reilly).
-	- Fixed shutdown bug with outgoing UDP sockets; we need to
-	  disable their read handlers.
-	- For comm_poll(), use the fast 50 msec timeout only when
-	  USE_ASYNC_IO is defined.
-	- Fixed pointer bug when freeing AS# ACL entries.
-	- Fixed forgetting to reset Config.npeers to zero in free_peer().
-	- Fixed ICP bug causing excessive TIMEOUTs with sibling
-	  neighbors.  We must call the ICP reply callback even for
-	  sibling misses.
-	- Fixed some dnsserver-related reconfigure bugs. Need to 
-	  use cbdataLock, etc in fqdncache.c.  Also don't want to
-	  use ipcacheQueueDrain() and fqdncacheQueueDrain().
-	- Fixed persistent connection bug.  We were incorrectly
-	  deciding that non-200 replies without content-length
-	  would not have a reply body.
-	- Fixed intAverage() precedence bug.
-	- Fixed memmove() 'len' arg bug.
-	- Changed algorithm for determining alive/dead state of peers.
-	  Instead of using a fixed number of unacknowledged ICP
-	  replies, it is now based on timeouts.  If there are no ICP
-	  replies received from a peer within 'dead_peer_timeout'
-	  seconds, then we call it dead.
-	- Added calls to getCurrentTime() in
-	  comm_{select,poll}_incoming() when ALARM_UPDATES_TIME is not
-	  being used.
-	- Fixed shutdown bug when the incoming and outgoing ICP socket
-	  is the same file descriptor.
-	- Added buffered writes for storeWriteCleanLogs() (Stewart
-	  Forster).
-	- Patches for Qnx4 (Jean-Claude MICHOT).
-	- Fixed returning void functions which seems to be a GCC-ism.
-	- New configure script options (Henrik Nordstrom):
-		--enable-new-storekey=[sha|md5(|url)] (was --enable-hashkey)
-		--enable-acltree
-		--enable-icmp
-		--enable-delay-hack
-		--enable-useragent-log
-		--enable-kill-parent  (this should be named -hack)
-		--enable-snmp
-		--enable-time-hack
-		--enable-cachemgr-hostname[=hostname]   (new)
-		--enable-arp-acl  (new)
-	- Added Doug Lea malloc-2.6.4 to the distribution, so that
-	  people easily can try a decent malloc package if they syspect
-	  their malloc is broken.  --enable-dlmalloc (Henrik Nordstrom).
-	- Made XMALLOC_DEBUG_COUNT working again. Requires a small stub
-	  function (Henrik Nordstrom).
-	- Removed top-level Makefile.  People must now run 'configure'
-	  before 'make'.
-	- Fixed checkFailureRatio() implementation.
-	- Made 'squid -z' behave like the 1.1 version.
-
-
-Changes to squid-1.2.beta10 (Jan 1, 1998):
-
-	- Fixed content-length bugs for 204 replies, 304 replies,
-	  and HEAD requests (Henrik Nordstrom).
-	- Fixed errorAppendEntry() bug in gopherReadReply().
-	- Basic support for FTP URL typecodes (;type=X).
-	- Support for access controls based on ethernet MAC addresses
-	  (Dale).
-	- Initial URN support; see
-	  http://squid.nlanr.net/Squid/urn-support.html
-	- Fixed client-side persistent connections for objects with
-	  bad content lengths (Henrik Nordstrom).
-	- Fixed bad call to storeDirUpdateSwapSize() for objects which
-	  never reach SWAPOUT_DONE state.
-	- Fixed up poll() #defines in squid.h (Stewart Forster).
-	- Changed poll() timeout from 1000 msec to 50 msec for
-	  better performance under low load (Stewart Forster).
-	- Changed storeWriteCleanLogs() to write objects in the LRU
-	  list order instead of the random hash table order.
-	- Fixed FTP bug when data socket connections fail or timeout.
-	- Reuse FTP data connection when possible (Henrik Nordstrom).
-	- Added configure options (Henrik Nordstrom)
-		--enable-store-key=sha|md5
-		--enable-xmalloc-statistics
-		--enable-xmalloc-debug
-		--enable-xmalloc-debug-count 
-		--async-io 
-	- Fixed confusing with the use/meaning of ERR_CANNOT_FORWARD
-	  by creating ERR_FORWARDING_DENIED and changing the
-	  content of the ERR_CANNOT_FORWARD text.
-	- Fixed pipeline request bug from using strdup() (Henrik
-	  Nordstrom).
-	- Call clientReadRequest() directly instead of commSetSelect()
-	  for pipelined requests (Henrik Nordstrom).
-	- Fixed 4k page leak in icpHandleIMSReply();
-	- Renamed 'icp*' functions to 'client*' names in client_side.c.
-
-Changes to squid-1.2.beta8 (Dec 2, 1997):
-
-	- Fixed accessLogLog() to log ident from Proxy-Authorization
-	  request header (BoB Miorelli).
-	- Fixed #includes, prototypes, etc. in SNMP source files.
-	- Moved 'POLLRDNORM' and 'POLLWRNORM' macro checks from
-	  include/config.h.in to src/squid.h
-	- Moved 'num32' typedefs from src/typedefs.h to
-	  include/config.h.in.
-	- Moved snmplib/md5.c to lib/md5.c.
-	- Added MD5 cache key support.
-	- Removed xmalloc() return check in uudeocde.c
-	- Added 'ifdef' support to cf_gen.c for optional code (e.g. SNMP)
-	- Changed 'client' program to provide easier cache manager access,
-	  e.g.:	'client mgr:info'
-	- Fixed 'client' to send 'Connection' instead of 'Proxy-Connection'
-	  for simulated keep-alive requests.
-	- Removed 'fd' arg from clientProcess* functions.
-	- Fixed bugs from using errorSend() on persistent/pipelined
-	  client connections.  A latter request should not be allowed to
-	  write to the client fd until the current request completes.
-	  Now use errorAppendEntry() for such situations.
-	- Fixed content-length bugs.  We were using content-length == 0
-	  to also indicate a lack of content-length reply header.  But
-	  'content-length: 0' might appear in a reply, so now use -1 to
-	  indicate that no content length given.
-	- Split up clientProcessRequest() into smaller chunks so it
-	  might be easier to follow.
-	- renamed various client_side.c functions to start with 'client'
-	  instead of 'icp'.
-	- Fixed a 'cbdata leak' from the comm.c close handlers.
-	- Fixed a 'cbdata leak' from the comm.c connect routines.
-	- Fixed comm_select() and comm_poll() to stop looping on the
-	  incoming HTTP/ICP sockets.  If there are fewer than 7 FD's
-	  ready for I/O, the incoming sockets might not get service, so
-	  comm_select() would be called for up to 7 times until the
-	  'incoming_counter' was incremented enough to trigger a call
-	  to comm_select_incoming().  Now we make sure
-	  comm_select_incoming() gets called if select returns less
-	  than 7 ready FD's.
-	- Added errorpage '%B' token to generate FTP URLs with a '%2f'
-	  inserted at the start of the url-path.  calls ftpUrlWith2f().
-	  (Henrik Nordstrom).
-	- Changed fqdncache.c to use LRU double-linked list instead of qsort()
-	  for replacement and cachemgr output.
-	- Changed ipcache.c to use LRU double-linked list instead of qsort()
-	- Changed hash_insert() and hash_join() to return void.
-	  for replacement and cachemgr output.
-	- Moved StoreEntry->method member to MemObject->method.
-	- Made StoreEntry->flags 16 bits.
-	- Made StoreEntry->refcount 16 bits.
-	- Changed URL-based public cache key to always include the request
-	  method.
-
-Changes to squid-1.2.beta7 (Nov 24, 1997):
-
-	- Fixed poll() for Linux (David Luyer).
-	- SHA optimizations (David Luyer).
-	- Fixed errno clashes with macro on Linux (David Luyer).
-	- Fixed storeDirCloseSwapLogs(); logs might not be open.
-	- Fixed storeClientCopy2() bug.  Detect when there is
-	  no more data to send for objects in STORE_OK state.
-	- Fixed FTP truncation bug when ftpState->size == 0, e.g.
-	  especially directory listings.
-	- Mega FTP fix from Henrik Nordstrom.  A better job of
-	  implementing the '%2f' hack.
-	- Fixed some pipelined request bugs.  storeClientCopy() was
-	  being given the wrong StoreEntry, and we had a race condition
-	  which is now handled by storeClientCopyPending().
-	- Added initial SNMP support.
-
-Changes to squid-1.2.beta6 (Nov 13, 1997):
-
-	- Fixed Authorized responses getting swapped out when they
-	  don't have Proxy-Revalidate reply header.
-	- Fixed Proxy Authentication support.  We never sent back
-	  a 407 reply, and were incorrectly incrementing the passwd
-	  before comparing it.
-	- Fixed stat()ing pathnames for default values before parsing
-	  config file (Ron Gomes).
-	- Fixed logging request and response headers on separate lines
-	  (Ron Gomes).
-	- Fixed FTP Authentication message (Henrik Nordstrom).
-	- Changed Proxy Authentication to trigger a reread of the passwd
-	  file if a password check fails (Henrik Nordstrom).
-	- Changed FTP to retry the first CWD with a leading slash if it
-	  fails without one.
-
-Changes to squid-1.2.beta5 (Nov 6, 1997):
-
-	- Track the 'keep-alive ratio' for a peer as the ratio of
-	  the number of replies including 'Proxy-Connection: Keep-Alive'
-	  compared to the number of requests sent.  If the peer does
-	  not support Persistent connections then this ratio will tend
-	  toward zero.  If the ratio is less than 50% after 10 requests
-	  then we'll stop sending Keep-Alive.
-	- Proper support for %nn escapes in FTP, and numerous
-	  other fixes (Henrik Nordstrom).
-	- Support for Secure Hash Algorithm and framework for other
-	  hash functions as cache keys.
-	- Fixed SSL snprintf() bug which broke SSL proxying.
-	- Fixed store_dir swap log bug from reconfigure (SIGHUP).
-	- Fixed LRU Reference Age bug.  The arg to pow() must be
-	  minutes, not seconds.
-
-Changes to squid-1.2.beta4 (Oct 30, 1997):
-
-	- Fixed DST bug in rfc1123.c
-	- Changed default http_accel_port to 80.
-	- added errorCon() as a ErrorState constructor function
-	  (Max Okumoto).
-	- Added ERR_FTP_FAILURE message for ftpFail().
-	- For FTP, the timeout callback must be moved to the 'data'
-	  descriptor when data transfer begins.  Otherwise we are
-	  likely to get a timeout on the control descriptor.
-	- Fixed double-free bug in httpRequestFree().
-	- Fixed store_swap_size counting bug in storeSwapOutHandle().
-
-Changes to squid-1.2.beta3 (Oct 29, 1997):
-
-	- Initialize _res.options to RES_DEFAULT in dnsserver.c.
-	- Fix assertions which assumed 4-byte pointers.
-	- Fix missing % in fqdncache.c snprintf().
-	
-Changes to squid-1.2.beta2 (Oct 28, 1997):
-
-	- Fixed aiops.c and async_io.c so that they actually compile
-	  with USE_ASYNC_IO (Arjan de Vet).
-	- Fixed errState->errno causing problems with some macros
-	  (Michael O'Reilly).
-	- Fixed memory leaks in pconn.c (Max Okumoto).
-	- Enhanced 'client' program with 'ping' behaviour (Ron Gomes).
-	- Fixed InvokeHandlers() from calling memCopy() for ALL
-	  store_client's with callbacks.  A store_client might be reading
-	  from disk.
-	- Rewrote storeMaintainSwapSpace().  No longer will we scan one
-	  bucket at a time.  Instead we'll maintain a single LRU
-	  list.  When an object is 'touched' we move it to the
-	  top of this list.  When we need disk space, we delete
-	  from the bottom.
-	- Removed storeGetSwapSpace().
-	
-Changes to squid-1.2.beta1 ():
-
-	- Reworked storage manager to not keep objects in memory during
-	  transit.  In other words, no separate NOVM distribution.
-	- Lots of cleanup and debugging for beta release.
-	- Use snprintf() everywhere instead of sprintf().
-	- The 'in_memory' hash table has been replaced with a
-	  doubly-linked list.  New objects are added to the head of
-	  the list.  When memory space is needed, old objects are
-	  purged from the tail of the list.
-
-Changes to squid-1.2.alpha7 ():
-
-	- fixes fixes fixes.
-	- Made Arjan's PROXY_AUTH ACL patch standard.
-
-Changes to squid-1.2.alpha6 ():
-
-	- Simpler cacheobj implementation.
-	- persistent connection histogram
-	- SERVER-SIDE PERSISTENT CONNECTIONS:
-        	- Added pconn.c 
-        	- Addec Cofig.Timeout.pconn; default 120 seconds
-        	- Added httpState->flags
-        	- Added flags arg to httpBuildRequestHeader()
-        	- Added HTTP_PROXYING and HTTP_KEEPALIVE flags
-        	- Added 'Connection' to allowed HTTP headers (http-anon.c)
-		- Added 'Proxy-Connection' to allowed HTTP headers
-		  (http-anon.c)
-		- Merged proxyhttpStart() with httpStart() and created
-		  new httpBuildState().
-		- New httpPconnTransferDone() detects end-of-data on
-		  persistent connections.
-
-Changes to squid-1.2.alpha5 ():
-
-	- New configuration system.  Everything is generated from
-	  'cf.data.pre', including the main parser, setting defaults,
-	  outputting current values, and freeing memory.  
-	  This also involved moving some of the local data structures
-	  (e.g. struct _acl *AclList in acl.c) to the Config
-	  structure.  (Max Okumoto)
-	- No more '/i' for regular expressions.  Now insert a '-i'
-	  to switch to case-insensitive.  Use '+i' for case-sensitive.
-	- When you have a variable named the same as its type, sizeof()
-	  gets the wrong one (fde).
-	- Need to flush unbuffered logs before fork().
-	- Added two fields swap log: refcount and e->flag.
-	- Removed all the .h files for each .c file.  Now #include stuff
-	  is in either: defines.h, enums.h, typedefs.h, structs.h,
-	  or protos.h, globals.h.  This greatly reduces dependencies
-	  between the various source files.
-	- globals.c is generated from globals.h by a Perl script.
-	- Started customizable error texts.
-
-Changes to squid-1.2.alpha4 ():
-
-	- New MIME configuration, regular expression based
-	- Added request_timeout config option
-	- Multiple HTTP sockets (Lincoln Dale).
-	- Moved 'fds_are_n_free' check to httpAccept().
-	- s/USE_POLL/HAVE_POLL/; make poll() default if available.
-	- Changed storeRegister to use offsets and make immediate
-	  callbacks if appropriate.
-	- Removed icpDetectClientClose().  Some of that functionality
-	  goes into clientReadRequest() and the rest into
-	  httpRequestFree().
-	- Moved IP lookups to commConnect stuff.
-	- Added support for retrying connect().
-	- New inline debug() macro (David Luyer).
-	- Replace frequent gettimeofday() calls with alarm(3) based
-	  clock.  Need to add more gettimeofday() calls to get back
-	  high-resolution timestamp logging (Andres Kroonmaa).
-	- Added support for Cache-control: proxy-revalidate;
-	  based on squid-1.1 patch from Mike Mitchell.
-
-Changes to squid-1.2.alpha3 ():
-
-	- Implemented persistent connections between clients and squid.
-	- Moved various FD tables (comm.c, fdstat.c, disk.c) to a single
-	  table in fd.c.
-	- Removed use of FD as an identifier in certain callback
-	  operations (ipcache, fqdncache).
-	- General code cleanup.
-	- Fixed typedefs for callback functions.
-	- Removed FD lifetime/timeout dichotomy.  Now we only have
-	  timeouts, however the lifetime concept/keyword may still
-	  linger in certain places.
-	- Change Makefile 'realclean' target to 'distclean'
-	- Changed config file parsing of time specifications to use
-	  parseTimeLine().
-	- Removed storetoString.c
-
-Changes to squid-1.2.alpha2 ():
-
-	- Merged squid-1.1.9, squid-1.1.10 changes
-
-Changes to squid-1.2.alpha1 ():
-
-	- Unified peer selection algorithm.
-	- aiops.c and aiops.h are a threaded implementation of
-	  asynchronous file operations (Stewart Forster).
-	- async_io.c and async_io.h are complete rewrites of the old
-	  versions (Stewart Forster).
-	- Rewrote all disk file operations of squid to support
-	  the idea of callbacks except where not required (Stewart
-	  Forster).
-	- Background validation of 'tainted' swap log entries (Stewart
-	  Forster).
-	- Modified storeWriteCleanLog to create the log file using the
-	  open/write rather than fopen/printf (Stewart Forster).
-	- Added the EINTR error response to handle badly interrupted
-	  system calls (Stewart Forster).
-	- UDP_HIT_OBJ not supported, removed.
-	- Different sized 'cache_dirs' supported.
-
-==============================================================================
+	- Fixed a storeDoRebuildFromDisk() bug; needed to check for
+	  swapfile < 0 earlier.
+	- HEAD requests should not be given to passStart() (Taketo Kabe).
+	- Generate an 'INVALID URL' error if a hostname contains
+	  illegal characters.
+	- Added keyword 'all' for inside_firewall option (Javier Achirica).
+	- Fixed logging of wrong URL for requests changed by a
+	  redirector.
+	- Added first-cut RELOAD_INTO_IMS feature.  #ifdef'd to
+	  protect the innocent.
+	- Fixed comm_select() to only check stall_delay for read
+	  handlers (Peter Wemm).
+	- IMPORTANT change to the -z option: Numerous people have lost
+	  their cache contents because Squid would automatically wipe
+	  out the cache if one of the cache directories did not exist.
+	  Squid will no longer do this.  Now, Squid tests all the
+	  'cache_dir' directories and all of the first-level swap
+	  directories underneath then.  If one of those directories
+	  does not exist, Squid exits and writes a message to stderr
+	  and to cache.log.  The message tells the administrator to run
+	  'squid -z' to create the swap directories, or to manually fix
+	  the problem.   This means that you must manually run 'squid -z'
+	  when setting up Squid for the first time.
+	- Fixed IP cache bug with popular hostnames which lose all
+	  their addresses to ipcacheRemoveBadAddr().  In 1.1.12 we
+	  required that IP cache entries could only be released if not
+	  referenced for one minute.  However, some names are so
+	  popular that they would never get released.  Now we also
+	  require that i->addrs.count > 0 if we're NOT going to release
+	  the expired entry (Joe Ramey).
 
 Changes to squid-1.1.14 (July 11, 1997):
 

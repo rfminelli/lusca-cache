@@ -1,4 +1,4 @@
-
+#define XTRA_DEBUG 1
 /*
  * $Id$
  *
@@ -124,45 +124,53 @@
 #define ALL_ONES (unsigned long) 0xFFFFFFFF
 #endif
 
+extern int storeGetSwapSpace _PARAMS((int));
+extern void fatal_dump _PARAMS((const char *));
+
+static fileMap *fm = NULL;
+
 fileMap *
 file_map_create(int n)
 {
-    fileMap *fm = xcalloc(1, sizeof(fileMap));
+    if (n <= 0)
+	fatal("file_map_create: invalid argument");
+    fm = xcalloc(1, sizeof(fileMap));
     fm->max_n_files = n;
     fm->nwords = n >> LONG_BIT_SHIFT;
-    debug(8, 3) ("file_map_create: creating space for %d files\n", n);
-    debug(8, 5) ("--> %d words of %d bytes each\n",
+    debug(8, 1, "file_map_create: creating space for %d objects\n", n);
+    debug(8, 5, "--> %d words of %d bytes each\n",
 	fm->nwords, sizeof(unsigned long));
     fm->file_map = xcalloc(fm->nwords, sizeof(unsigned long));
-    /* XXX account fm->file_map */
-    return fm;
+    meta_data.misc += fm->nwords * sizeof(unsigned long);
+    return (fm);
 }
 
 int
-file_map_bit_set(fileMap * fm, int file_number)
+file_map_bit_set(int file_number)
 {
     unsigned long bitmask = (1L << (file_number & LONG_BIT_MASK));
+#ifdef XTRA_DEBUG
+    if (fm->file_map[file_number >> LONG_BIT_SHIFT] & bitmask)
+	debug_trap("file_map_bit_set: WARNING: file number already used");
+#endif
     fm->file_map[file_number >> LONG_BIT_SHIFT] |= bitmask;
     fm->n_files_in_map++;
-    if (!fm->toggle && (fm->n_files_in_map > ((fm->max_n_files * 7) >> 3))) {
-	fm->toggle++;
-	debug(8, 0) ("You should increment MAX_SWAP_FILE\n");
-    } else if (fm->n_files_in_map > (fm->max_n_files - 100)) {
-	fatal("You've run out of swap file numbers.");
-    }
-    return (file_number);
+    if (fm->n_files_in_map > fm->max_n_files)
+	fatal_dump("fm->n_files_in_map > fm->max_n_files");
+    return file_number;
 }
 
 void
-file_map_bit_reset(fileMap * fm, int file_number)
+file_map_bit_reset(int file_number)
 {
     unsigned long bitmask = (1L << (file_number & LONG_BIT_MASK));
+
     fm->file_map[file_number >> LONG_BIT_SHIFT] &= ~bitmask;
     fm->n_files_in_map--;
 }
 
 int
-file_map_bit_test(fileMap * fm, int file_number)
+file_map_bit_test(int file_number)
 {
     unsigned long bitmask = (1L << (file_number & LONG_BIT_MASK));
     /* be sure the return value is an int, not a u_long */
@@ -170,15 +178,18 @@ file_map_bit_test(fileMap * fm, int file_number)
 }
 
 int
-file_map_allocate(fileMap * fm, int suggestion)
+file_map_allocate(int suggestion)
 {
     int word;
     int bit;
     int count;
+    static time_t warn_time = 0;
+
     if (suggestion > fm->max_n_files)
-	suggestion = 0;
-    if (!file_map_bit_test(fm, suggestion)) {
-	return file_map_bit_set(fm, suggestion);
+	suggestion %= fm->max_n_files;
+    if (!file_map_bit_test(suggestion)) {
+	fm->last_file_number_allocated = suggestion;
+	return file_map_bit_set(suggestion);
     }
     word = suggestion >> LONG_BIT_SHIFT;
     for (count = 0; count < fm->nwords; count++) {
@@ -186,21 +197,34 @@ file_map_allocate(fileMap * fm, int suggestion)
 	    break;
 	word = (word + 1) % fm->nwords;
     }
+
     for (bit = 0; bit < BITS_IN_A_LONG; bit++) {
 	suggestion = ((unsigned long) word << LONG_BIT_SHIFT) | bit;
-	if (!file_map_bit_test(fm, suggestion)) {
-	    return file_map_bit_set(fm, suggestion);
+	if (!file_map_bit_test(suggestion)) {
+	    fm->last_file_number_allocated = suggestion;
+	    return file_map_bit_set(suggestion);
 	}
     }
-    fatal("file_map_allocate: Exceeded filemap limit");
-    return 0;			/* NOTREACHED */
+    if (squid_curtime - warn_time > 3600) {
+	warn_time = squid_curtime;
+	debug(8, 0, "WARNING: All %d swap files are in use.\n", fm->max_n_files);
+	debug(8, 0, "         You should probably use a lower value for\n");
+	debug(8, 0, "         'store_avg_object_size' in squid.conf\n");
+    }
+    return -1;
 }
 
 void
-filemapFreeMemory(fileMap * fm)
+filemapFreeMemory(void)
 {
     safe_free(fm->file_map);
     safe_free(fm);
+}
+
+int
+filemapMax(void)
+{
+    return fm->max_n_files;
 }
 
 #ifdef TEST
@@ -214,7 +238,8 @@ main(argc, argv)
 
     for (i = 0; i < TEST_SIZE; ++i) {
 	file_map_bit_set(i);
-	assert(file_map_bit_test(i));
+	if (!file_map_bit_test(i))
+	    fatal_dump(NULL);
 	file_map_bit_reset(i);
     }
 }

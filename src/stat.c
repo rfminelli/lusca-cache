@@ -107,82 +107,122 @@
 
 #include "squid.h"
 
-/* LOCALS */
-static const char *describeStatuses(const StoreEntry *);
-static const char *describeFlags(const StoreEntry *);
-static const char *describeTimestamps(const StoreEntry *);
-static void statAvgTick(void *notused);
-static void statAvgDump(StoreEntry *, int minutes, int hours);
-#if STAT_GRAPHS
-static void statGraphDump(StoreEntry *);
+#define MAX_LINELEN (4096)
+#define max(a,b)  ((a)>(b)? (a): (b))
+
+#ifdef HIER_EXPERIMENT
+static FILE *hierexplog = NULL;
 #endif
-static void statCountersInit(StatCounters *);
-static void statCountersInitSpecial(StatCounters *);
-static void statCountersClean(StatCounters *);
-static void statCountersCopy(StatCounters * dest, const StatCounters * orig);
-static void statCountersDump(StoreEntry * sentry);
-static OBJH stat_io_get;
-static OBJH stat_objects_get;
-static OBJH stat_vmobjects_get;
-static OBJH info_get;
-static OBJH statFiledescriptors;
-static OBJH statCounters;
-static OBJH statAvg5min;
-static OBJH statAvg60min;
-static OBJH statUtilization;
+
+typedef struct _log_read_data_t {
+    StoreEntry *sentry;
+} log_read_data_t;
+
+typedef struct _squid_read_data_t {
+    StoreEntry *sentry;
+    int fd;
+} squid_read_data_t;
+
+/* GLOBALS */
+Meta_data meta_data;
+volatile unsigned long ntcpconn = 0;
+volatile unsigned long nudpconn = 0;
+struct _iostats IOStats;
+const char *const open_bracket = "{\n";
+const char *const close_bracket = "}\n";
+
+extern int unlinkd_count;
+extern int fileno_stack_count;
+
+/* LOCALS */
+static const char *describeStatuses _PARAMS((const StoreEntry *));
+static const char *describeFlags _PARAMS((const StoreEntry *));
+static const char *describeTimestamps _PARAMS((const StoreEntry *));
+static void dummyhandler _PARAMS((cacheinfo *, StoreEntry *));
+static void info_get _PARAMS((const cacheinfo *, StoreEntry *));
+static void logReadEndHandler _PARAMS((int, int, log_read_data_t *));
+static void log_clear _PARAMS((cacheinfo *, StoreEntry *));
+static void log_disable _PARAMS((cacheinfo *, StoreEntry *));
+static void log_enable _PARAMS((cacheinfo *, StoreEntry *));
+static void log_get_start _PARAMS((const cacheinfo *, StoreEntry *));
+static void log_status_get _PARAMS((const cacheinfo *, StoreEntry *));
+static void parameter_get _PARAMS((const cacheinfo *, StoreEntry *));
+static void proto_count _PARAMS((cacheinfo *, protocol_t, log_type));
+static void proto_newobject _PARAMS((cacheinfo *, protocol_t, int, int));
+static void proto_purgeobject _PARAMS((cacheinfo *, protocol_t, int));
+static void proto_touchobject _PARAMS((cacheinfo *, protocol_t, int));
+static void server_list _PARAMS((const cacheinfo *, StoreEntry *));
+static void squidReadEndHandler _PARAMS((int, int, squid_read_data_t *));
+static void squid_get_start _PARAMS((const cacheinfo *, StoreEntry *));
+static void statFiledescriptors _PARAMS((StoreEntry *));
+static void stat_get _PARAMS((const cacheinfo *, const char *req, StoreEntry *));
+static void stat_io_get _PARAMS((StoreEntry *));
+static void stat_objects_get _PARAMS((const cacheinfo *, StoreEntry *, int vm_or_not));
+static void stat_utilization_get _PARAMS((cacheinfo *, StoreEntry *, const char *desc));
+static int cache_size_get _PARAMS((const cacheinfo *));
+static int logReadHandler _PARAMS((int, const char *, int, log_read_data_t *));
+static int squidReadHandler _PARAMS((int, const char *, int, squid_read_data_t *));
+static int memoryAccounted _PARAMS((void));
 
 #ifdef XMALLOC_STATISTICS
-static void info_get_mallstat(int, int, StoreEntry *);
+static void info_get_mallstat _PARAMS((int, int, StoreEntry *));
 #endif
 
-StatCounters CountHist[N_COUNT_HIST];
-static int NCountHist = 0;
-static StatCounters CountHourHist[N_COUNT_HOUR_HIST];
-static int NCountHourHist = 0;
-
+/* process utilization information */
 static void
-statUtilization(StoreEntry * e)
+stat_utilization_get(cacheinfo * obj, StoreEntry * sentry, const char *desc)
 {
-    storeAppendPrintf(e, "Cache Utilisation:\n");
-    storeAppendPrintf(e, "\n");
-    storeAppendPrintf(e, "Last 5 minutes:\n");
-    if (NCountHist >= 5)
-	statAvgDump(e, 5, 0);
-    else
-	storeAppendPrintf(e, "(no values recorded yet)\n");
-    storeAppendPrintf(e, "\n");
-    storeAppendPrintf(e, "Last 15 minutes:\n");
-    if (NCountHist >= 15)
-	statAvgDump(e, 15, 0);
-    else
-	storeAppendPrintf(e, "(no values recorded yet)\n");
-    storeAppendPrintf(e, "\n");
-    storeAppendPrintf(e, "Last hour:\n");
-    if (NCountHist >= 60)
-	statAvgDump(e, 60, 0);
-    else
-	storeAppendPrintf(e, "(no values recorded yet)\n");
-    storeAppendPrintf(e, "\n");
-    storeAppendPrintf(e, "Last 8 hours:\n");
-    if (NCountHourHist >= 8)
-	statAvgDump(e, 0, 8);
-    else
-	storeAppendPrintf(e, "(no values recorded yet)\n");
-    storeAppendPrintf(e, "\n");
-    storeAppendPrintf(e, "Last day:\n");
-    if (NCountHourHist >= 24)
-	statAvgDump(e, 0, 24);
-    else
-	storeAppendPrintf(e, "(no values recorded yet)\n");
-    storeAppendPrintf(e, "\n");
-    storeAppendPrintf(e, "Last 3 days:\n");
-    if (NCountHourHist >= 72)
-	statAvgDump(e, 0, 72);
-    else
-	storeAppendPrintf(e, "(no values recorded yet)\n");
-    storeAppendPrintf(e, "\n");
-    storeAppendPrintf(e, "Totals since cache startup:\n");
-    statCountersDump(e);
+    protocol_t proto_id;
+    proto_stat *p = &obj->proto_stat_data[PROTO_MAX];
+    proto_stat *q = NULL;
+    int secs = 0;
+
+    secs = (int) (squid_curtime - squid_starttime);
+    storeAppendPrintf(sentry, "{ %s\n", desc);	/* } */
+    strcpy(p->protoname, "TOTAL");
+    p->object_count = 0;
+    p->kb.max = 0;
+    p->kb.min = 0;
+    p->kb.avg = 0;
+    p->kb.now = 0;
+    p->hit = 0;
+    p->miss = 0;
+    p->refcount = 0;
+    p->transferbyte = 0;
+    /* find the total */
+    for (proto_id = PROTO_NONE; proto_id < PROTO_MAX; ++proto_id) {
+	q = &obj->proto_stat_data[proto_id];
+	p->object_count += q->object_count;
+	p->kb.max += q->kb.max;
+	p->kb.min += q->kb.min;
+	p->kb.avg += q->kb.avg;
+	p->kb.now += q->kb.now;
+	p->hit += q->hit;
+	p->miss += q->miss;
+	p->refcount += q->refcount;
+	p->transferbyte += q->transferbyte;
+    }
+    /* dump it */
+    for (proto_id = PROTO_NONE; proto_id <= PROTO_MAX; ++proto_id) {
+	p = &obj->proto_stat_data[proto_id];
+	if (p->hit != 0) {
+	    p->hitratio =
+		(float) p->hit /
+		((float) p->hit +
+		(float) p->miss);
+	}
+	storeAppendPrintf(sentry, "{%8.8s %d %d %d %d %4.2f %d %d %d}\n",
+	    p->protoname,
+	    p->object_count,
+	    p->kb.max,
+	    p->kb.now,
+	    p->kb.min,
+	    p->hitratio,
+	    (secs ? p->transferbyte / secs : 0),
+	    p->refcount,
+	    p->transferbyte);
+    }
+    storeAppendPrintf(sentry, close_bracket);
 }
 
 static void
@@ -190,71 +230,89 @@ stat_io_get(StoreEntry * sentry)
 {
     int i;
 
-    storeAppendPrintf(sentry, "HTTP I/O\n");
-    storeAppendPrintf(sentry, "number of reads: %d\n", IOStats.Http.reads);
-    storeAppendPrintf(sentry, "deferred reads: %d (%d%%)\n",
+    storeAppendPrintf(sentry, open_bracket);
+    storeAppendPrintf(sentry, "{HTTP I/O}\n");
+    storeAppendPrintf(sentry, "{number of reads: %d}\n", IOStats.Http.reads);
+    storeAppendPrintf(sentry, "{deferred reads: %d (%d%%)}\n",
 	IOStats.Http.reads_deferred,
 	percent(IOStats.Http.reads_deferred, IOStats.Http.reads));
-    storeAppendPrintf(sentry, "Read Histogram:\n");
+    storeAppendPrintf(sentry, "{Read Histogram:}\n");
     for (i = 0; i < 16; i++) {
-	storeAppendPrintf(sentry, "%5d-%5d: %9d %2d%%\n",
+	storeAppendPrintf(sentry, "{%5d-%5d: %9d %2d%%}\n",
 	    i ? (1 << (i - 1)) + 1 : 1,
 	    1 << i,
 	    IOStats.Http.read_hist[i],
 	    percent(IOStats.Http.read_hist[i], IOStats.Http.reads));
     }
 
-    storeAppendPrintf(sentry, "\n");
-    storeAppendPrintf(sentry, "FTP I/O\n");
-    storeAppendPrintf(sentry, "number of reads: %d\n", IOStats.Ftp.reads);
-    storeAppendPrintf(sentry, "deferred reads: %d (%d%%)\n",
+    storeAppendPrintf(sentry, "{}\n");
+    storeAppendPrintf(sentry, "{FTP I/O}\n");
+    storeAppendPrintf(sentry, "{number of reads: %d}\n", IOStats.Ftp.reads);
+    storeAppendPrintf(sentry, "{deferred reads: %d (%d%%)}\n",
 	IOStats.Ftp.reads_deferred,
 	percent(IOStats.Ftp.reads_deferred, IOStats.Ftp.reads));
-    storeAppendPrintf(sentry, "Read Histogram:\n");
+    storeAppendPrintf(sentry, "{Read Histogram:}\n");
     for (i = 0; i < 16; i++) {
-	storeAppendPrintf(sentry, "%5d-%5d: %9d %2d%%\n",
+	storeAppendPrintf(sentry, "{%5d-%5d: %9d %2d%%}\n",
 	    i ? (1 << (i - 1)) + 1 : 1,
 	    1 << i,
 	    IOStats.Ftp.read_hist[i],
 	    percent(IOStats.Ftp.read_hist[i], IOStats.Ftp.reads));
     }
 
-    storeAppendPrintf(sentry, "\n");
-    storeAppendPrintf(sentry, "Gopher I/O\n");
-    storeAppendPrintf(sentry, "number of reads: %d\n", IOStats.Gopher.reads);
-    storeAppendPrintf(sentry, "deferred reads: %d (%d%%)\n",
+    storeAppendPrintf(sentry, "{}\n");
+    storeAppendPrintf(sentry, "{Gopher I/O}\n");
+    storeAppendPrintf(sentry, "{number of reads: %d}\n", IOStats.Gopher.reads);
+    storeAppendPrintf(sentry, "{deferred reads: %d (%d%%)}\n",
 	IOStats.Gopher.reads_deferred,
 	percent(IOStats.Gopher.reads_deferred, IOStats.Gopher.reads));
-    storeAppendPrintf(sentry, "Read Histogram:\n");
+    storeAppendPrintf(sentry, "{Read Histogram:}\n");
     for (i = 0; i < 16; i++) {
-	storeAppendPrintf(sentry, "%5d-%5d: %9d %2d%%\n",
+	storeAppendPrintf(sentry, "{%5d-%5d: %9d %2d%%}\n",
 	    i ? (1 << (i - 1)) + 1 : 1,
 	    1 << i,
 	    IOStats.Gopher.read_hist[i],
 	    percent(IOStats.Gopher.read_hist[i], IOStats.Gopher.reads));
     }
 
-    storeAppendPrintf(sentry, "\n");
-    storeAppendPrintf(sentry, "WAIS I/O\n");
-    storeAppendPrintf(sentry, "number of reads: %d\n", IOStats.Wais.reads);
-    storeAppendPrintf(sentry, "deferred reads: %d (%d%%)\n",
+    storeAppendPrintf(sentry, "{}\n");
+    storeAppendPrintf(sentry, "{WAIS I/O}\n");
+    storeAppendPrintf(sentry, "{number of reads: %d}\n", IOStats.Wais.reads);
+    storeAppendPrintf(sentry, "{deferred reads: %d (%d%%)}\n",
 	IOStats.Wais.reads_deferred,
 	percent(IOStats.Wais.reads_deferred, IOStats.Wais.reads));
-    storeAppendPrintf(sentry, "Read Histogram:\n");
+    storeAppendPrintf(sentry, "{Read Histogram:}\n");
     for (i = 0; i < 16; i++) {
-	storeAppendPrintf(sentry, "%5d-%5d: %9d %2d%%\n",
+	storeAppendPrintf(sentry, "{%5d-%5d: %9d %2d%%}\n",
 	    i ? (1 << (i - 1)) + 1 : 1,
 	    1 << i,
 	    IOStats.Wais.read_hist[i],
 	    percent(IOStats.Wais.read_hist[i], IOStats.Wais.reads));
     }
+
+    storeAppendPrintf(sentry, close_bracket);
+}
+
+
+/* return total bytes of all registered and known objects.
+ * may not reflect the retrieving object....
+ * something need to be done here to get more accurate cache size */
+static int
+cache_size_get(const cacheinfo * obj)
+{
+    int size = 0;
+    protocol_t proto_id;
+    /* sum all size, exclude total */
+    for (proto_id = PROTO_NONE; proto_id < PROTO_MAX; proto_id++)
+	size += obj->proto_stat_data[proto_id].kb.now;
+    return size;
 }
 
 static const char *
 describeStatuses(const StoreEntry * entry)
 {
     LOCAL_ARRAY(char, buf, 256);
-    snprintf(buf, 256, "%-13s %-13s %-12s %-12s",
+    sprintf(buf, "%-13s %-13s %-12s %-12s",
 	storeStatusStr[entry->store_status],
 	memStatusStr[entry->mem_status],
 	swapStatusStr[entry->swap_status],
@@ -269,22 +327,36 @@ describeFlags(const StoreEntry * entry)
     int flags = (int) entry->flag;
     char *t;
     buf[0] = '\0';
-    if (EBIT_TEST(flags, DELAY_SENDING))
+    if (BIT_TEST(flags, DELETE_BEHIND))
+	strcat(buf, "DB,");
+    if (BIT_TEST(flags, CLIENT_ABORT_REQUEST))
+	strcat(buf, "CA,");
+    if (BIT_TEST(flags, DELAY_SENDING))
 	strcat(buf, "DS,");
-    if (EBIT_TEST(flags, RELEASE_REQUEST))
+    if (BIT_TEST(flags, ABORT_MSG_PENDING))
+	strcat(buf, "AP,");
+    if (BIT_TEST(flags, RELEASE_REQUEST))
 	strcat(buf, "RL,");
-    if (EBIT_TEST(flags, REFRESH_REQUEST))
+    if (BIT_TEST(flags, REFRESH_REQUEST))
 	strcat(buf, "RF,");
-    if (EBIT_TEST(flags, ENTRY_CACHABLE))
+    if (BIT_TEST(flags, ENTRY_CACHABLE))
 	strcat(buf, "EC,");
-    if (EBIT_TEST(flags, ENTRY_DISPATCHED))
+    if (BIT_TEST(flags, KEY_CHANGE))
+	strcat(buf, "KC,");
+    if (BIT_TEST(flags, KEY_URL))
+	strcat(buf, "KU,");
+    if (BIT_TEST(flags, ENTRY_HTML))
+	strcat(buf, "HT,");
+    if (BIT_TEST(flags, ENTRY_DISPATCHED))
 	strcat(buf, "ED,");
-    if (EBIT_TEST(flags, KEY_PRIVATE))
+    if (BIT_TEST(flags, KEY_PRIVATE))
 	strcat(buf, "KP,");
-    if (EBIT_TEST(flags, HIERARCHICAL))
+    if (BIT_TEST(flags, HIERARCHICAL))
 	strcat(buf, "HI,");
-    if (EBIT_TEST(flags, ENTRY_NEGCACHED))
+    if (BIT_TEST(flags, ENTRY_NEGCACHED))
 	strcat(buf, "NG,");
+    if (BIT_TEST(flags, READ_DEFERRED))
+	strcat(buf, "RD,");
     if ((t = strrchr(buf, ',')))
 	*t = '\0';
     return buf;
@@ -294,7 +366,7 @@ static const char *
 describeTimestamps(const StoreEntry * entry)
 {
     LOCAL_ARRAY(char, buf, 256);
-    snprintf(buf, 256, "LV:%-9d LU:%-9d LM:%-9d EX:%-9d",
+    sprintf(buf, "LV:%-9d LU:%-9d LM:%-9d EX:%-9d",
 	(int) entry->timestamp,
 	(int) entry->lastref,
 	(int) entry->lastmod,
@@ -304,92 +376,254 @@ describeTimestamps(const StoreEntry * entry)
 
 /* process objects list */
 static void
-statObjects(StoreEntry * sentry, int vm_or_not)
+stat_objects_get(const cacheinfo * obj, StoreEntry * sentry, int vm_or_not)
 {
     StoreEntry *entry = NULL;
-    StoreEntry *next = NULL;
     MemObject *mem;
     int N = 0;
-    int i;
-    struct _store_client *sc;
-    next = (StoreEntry *) hash_first(store_table);
-    while ((entry = next) != NULL) {
-	next = (StoreEntry *) hash_next(store_table);
+
+    storeAppendPrintf(sentry, open_bracket);
+
+    for (entry = storeGetFirst(); entry != NULL; entry = storeGetNext()) {
 	mem = entry->mem_obj;
 	if (vm_or_not && mem == NULL)
 	    continue;
 	if ((++N & 0xFF) == 0) {
-	    debug(18, 3) ("statObjects:  Processed %d objects...\n", N);
+	    getCurrentTime();
+	    debug(18, 3, "stat_objects_get:  Processed %d objects...\n", N);
 	}
-	storeBuffer(sentry);
-	storeAppendPrintf(sentry, "KEY %s\n", storeKeyText(entry->key));
-	if (mem)
-	    storeAppendPrintf(sentry, "\t%s %s\n",
-		RequestMethodStr[mem->method], mem->log_url);
-	storeAppendPrintf(sentry, "\t%s\n", describeStatuses(entry));
-	storeAppendPrintf(sentry, "\t%s\n", describeFlags(entry));
-	storeAppendPrintf(sentry, "\t%s\n", describeTimestamps(entry));
-	storeAppendPrintf(sentry, "\t%d locks, %d clients, %d refs\n",
+	storeAppendPrintf(sentry, "{%s %dL %-25s %s %3d %2d %8d %s}\n",
+	    describeStatuses(entry),
 	    (int) entry->lock_count,
+	    describeFlags(entry),
+	    describeTimestamps(entry),
+	    (int) entry->refcount,
 	    storePendingNClients(entry),
-	    (int) entry->refcount);
-	storeAppendPrintf(sentry, "\tSwap File %#08X\n",
-	    entry->swap_file_number);
-	if (mem == NULL)
-	    continue;
-	storeAppendPrintf(sentry, "\tinmem_lo: %d\n", (int) mem->inmem_lo);
-	storeAppendPrintf(sentry, "\tinmem_hi: %d\n", (int) mem->inmem_hi);
-	storeAppendPrintf(sentry, "\tswapout: %d bytes done, %d queued, FD %d\n",
-	    mem->swapout.done_offset,
-	    mem->swapout.queue_offset,
-	    mem->swapout.fd);
-	for (i = 0; i < mem->nclients; i++) {
-	    sc = &mem->clients[i];
-	    if (sc->callback_data == NULL)
-		continue;
-	    storeAppendPrintf(sentry, "\tClient #%d\n", i);
-	    storeAppendPrintf(sentry, "\t\tcopy_offset: %d\n",
-		(int) sc->copy_offset);
-	    storeAppendPrintf(sentry, "\t\tseen_offset: %d\n",
-		(int) sc->seen_offset);
-	    storeAppendPrintf(sentry, "\t\tcopy_size: %d\n",
-		(int) sc->copy_size);
-	    storeAppendPrintf(sentry, "\t\tswapin_fd: %d\n",
-		(int) sc->swapin_fd);
-	}
-	storeAppendPrintf(sentry, "\n");
-	storeBufferFlush(sentry);
+	    mem ? mem->e_current_len : entry->object_len,
+	    entry->url);
+    }
+    storeAppendPrintf(sentry, close_bracket);
+}
+
+
+/* process a requested object into a manager format */
+static void
+stat_get(const cacheinfo * obj, const char *req, StoreEntry * sentry)
+{
+
+    if (strcmp(req, "objects") == 0) {
+	stat_objects_get(obj, sentry, 0);
+    } else if (strcmp(req, "vm_objects") == 0) {
+	stat_objects_get(obj, sentry, 1);
+    } else if (strcmp(req, "ipcache") == 0) {
+	stat_ipcache_get(sentry);
+    } else if (strcmp(req, "fqdncache") == 0) {
+	fqdnStats(sentry);
+    } else if (strcmp(req, "dns") == 0) {
+	dnsStats(sentry);
+    } else if (strcmp(req, "redirector") == 0) {
+	redirectStats(sentry);
+    } else if (strcmp(req, "utilization") == 0) {
+	stat_utilization_get(HTTPCacheInfo, sentry, "HTTP");
+	stat_utilization_get(ICPCacheInfo, sentry, "ICP");
+    } else if (strcmp(req, "io") == 0) {
+	stat_io_get(sentry);
+    } else if (strcmp(req, "reply_headers") == 0) {
+	httpReplyHeaderStats(sentry);
+    } else if (strcmp(req, "filedescriptors") == 0) {
+	statFiledescriptors(sentry);
+    } else if (strcmp(req, "netdb") == 0) {
+	netdbDump(sentry);
     }
 }
 
+
+/* generate logfile status information */
 static void
-stat_objects_get(StoreEntry * e)
+log_status_get(const cacheinfo * obj, StoreEntry * sentry)
 {
-    statObjects(e, 0);
+    if (obj->logfile_status == LOG_ENABLE) {
+	storeAppendPrintf(sentry, "{\"Logfile is Enabled. Filename: %s\"}\n",
+	    obj->logfilename);
+    } else {
+	storeAppendPrintf(sentry, "{\"Logfile is Disabled.\"}\n");
+    }
+}
+
+
+
+/* log convert handler */
+/* call for each line in file, use fileWalk routine */
+static int
+logReadHandler(int fd_unused, const char *buf, int size_unused, log_read_data_t * data)
+{
+    storeAppendPrintf(data->sentry, "{%s}\n", buf);
+    return 0;
+}
+
+/* log convert end handler */
+/* call when a walk is completed or error. */
+static void
+logReadEndHandler(int fd, int errflag_unused, log_read_data_t * data)
+{
+    storeAppendPrintf(data->sentry, close_bracket);
+    storeComplete(data->sentry);
+    safe_free(data);
+    file_close(fd);
+}
+
+
+
+/* start converting logfile to processed format */
+static void
+log_get_start(const cacheinfo * obj, StoreEntry * sentry)
+{
+    log_read_data_t *data = NULL;
+    int fd;
+
+    if (obj->logfile_status == LOG_DISABLE) {
+	/* Manufacture status when logging is disabled */
+	log_status_get(obj, sentry);
+	storeComplete(sentry);
+	return;
+    }
+    fd = file_open(obj->logfilename, NULL, O_RDONLY);
+    if (fd < 0) {
+	debug(50, 0, "Cannot open logfile: %s: %s\n",
+	    obj->logfilename, xstrerror());
+	return;
+    }
+    data = xcalloc(1, sizeof(log_read_data_t));
+    data->sentry = sentry;
+    storeAppendPrintf(sentry, "{\n");
+    file_walk(fd,
+	(FILE_WALK_HD) logReadEndHandler,
+	(void *) data,
+	(FILE_WALK_LHD) logReadHandler,
+	(void *) data);
+    return;
+}
+
+
+/* squid convert handler */
+/* call for each line in file, use fileWalk routine */
+static int
+squidReadHandler(int fd_unused, const char *buf, int size_unused, squid_read_data_t * data)
+{
+    storeAppendPrintf(data->sentry, "{\"%s\"}\n", buf);
+    return 0;
+}
+
+/* squid convert end handler */
+/* call when a walk is completed or error. */
+static void
+squidReadEndHandler(int fd_unused, int errflag_unused, squid_read_data_t * data)
+{
+    storeAppendPrintf(data->sentry, close_bracket);
+    storeComplete(data->sentry);
+    file_close(data->fd);
+    safe_free(data);
+}
+
+
+/* start convert squid.conf file to processed format */
+static void
+squid_get_start(const cacheinfo * obj, StoreEntry * sentry)
+{
+    squid_read_data_t *data;
+
+    data = xcalloc(1, sizeof(squid_read_data_t));
+    data->sentry = sentry;
+    data->fd = file_open(ConfigFile, NULL, O_RDONLY);
+    storeAppendPrintf(sentry, open_bracket);
+    file_walk(data->fd, (FILE_WALK_HD) squidReadEndHandler, (void *) data,
+	(FILE_WALK_LHD) squidReadHandler, (void *) data);
+}
+
+
+static void
+dummyhandler(cacheinfo * obj, StoreEntry * sentry)
+{
+    storeAppendPrintf(sentry, "{ \"Not_Implemented_yet.\"}\n");
 }
 
 static void
-stat_vmobjects_get(StoreEntry * e)
+server_list(const cacheinfo * obj, StoreEntry * sentry)
 {
-    statObjects(e, 1);
+    peer *e = NULL;
+    struct _domain_ping *d = NULL;
+    icp_opcode op;
+    int i;
+
+    storeAppendPrintf(sentry, open_bracket);
+
+    if (getFirstPeer() == NULL)
+	storeAppendPrintf(sentry, "{There are no neighbors installed.}\n");
+    for (e = getFirstPeer(); e; e = getNextPeer(e)) {
+	if (e->host == NULL)
+	    fatal_dump("Found an peer without a hostname!");
+	storeAppendPrintf(sentry, "\n{%-11.11s: %s/%d/%d}\n",
+	    neighborTypeStr(e),
+	    e->host,
+	    e->http_port,
+	    e->icp_port);
+	for (i = 0; i < e->n_addresses; i++) {
+	    storeAppendPrintf(sentry, "{Address[%d] : %s}\n", i,
+		inet_ntoa(e->addresses[i]));
+	}
+	storeAppendPrintf(sentry, "{Status     : %s}\n",
+	    neighborUp(e) ? "Up" : "Down");
+	storeAppendPrintf(sentry, "{AVG RTT    : %d msec}\n", e->stats.rtt);
+	storeAppendPrintf(sentry, "{ACK DEFICIT: %8d}\n", e->stats.ack_deficit);
+	storeAppendPrintf(sentry, "{PINGS SENT : %8d}\n", e->stats.pings_sent);
+	storeAppendPrintf(sentry, "{PINGS ACKED: %8d %3d%%}\n",
+	    e->stats.pings_acked,
+	    percent(e->stats.pings_acked, e->stats.pings_sent));
+	storeAppendPrintf(sentry, "{FETCHES    : %8d %3d%%}\n",
+	    e->stats.fetches,
+	    percent(e->stats.fetches, e->stats.pings_acked));
+	storeAppendPrintf(sentry, "{IGNORED    : %8d %3d%%}\n",
+	    e->stats.ignored_replies,
+	    percent(e->stats.ignored_replies, e->stats.pings_acked));
+	storeAppendPrintf(sentry, "{Histogram of PINGS ACKED:}\n");
+	for (op = ICP_OP_INVALID; op < ICP_OP_END; op++) {
+	    if (e->stats.counts[op] == 0)
+		continue;
+	    storeAppendPrintf(sentry, "{    %12.12s : %8d %3d%%}\n",
+		IcpOpcodeStr[op],
+		e->stats.counts[op],
+		percent(e->stats.counts[op], e->stats.pings_acked));
+	}
+	if (e->last_fail_time) {
+	    storeAppendPrintf(sentry, "{Last failed connect() at: %s}\n",
+		mkhttpdlogtime(&(e->last_fail_time)));
+	}
+	storeAppendPrintf(sentry, "{DOMAIN LIST: ");
+	for (d = e->pinglist; d; d = d->next) {
+	    if (d->do_ping)
+		storeAppendPrintf(sentry, "%s ", d->domain);
+	    else
+		storeAppendPrintf(sentry, "!%s ", d->domain);
+	}
+	storeAppendPrintf(sentry, close_bracket);	/* } */
+    }
+    storeAppendPrintf(sentry, close_bracket);
 }
 
-#ifdef XMALLOC_STATISTICS
+#if XMALLOC_STATISTICS
 static void
-info_get_mallstat(int size, int number, StoreEntry * sentry)
+info_get_mallstat(int size, number, StoreEntry * sentry)
 {
     if (number > 0)
-	storeAppendPrintf(sentry, "\t%d = %d\n", size, number);
+	storeAppendPrintf(sentry, "{\t%d = %d}\n", size, number);
 }
 #endif
 
 static const char *
-fdRemoteAddr(const fde * f)
+host_port_fmt(const char *host, u_short port)
 {
     LOCAL_ARRAY(char, buf, 32);
-    if (f->type != FD_SOCKET)
-	return null_string;
-    snprintf(buf, 32, "%s.%d", f->ipaddr, (int) f->remote_port);
+    sprintf(buf, "%s.%d", host, (int) port);
     return buf;
 }
 
@@ -397,38 +631,95 @@ static void
 statFiledescriptors(StoreEntry * sentry)
 {
     int i;
-    fde *f;
-    storeAppendPrintf(sentry, "Active file descriptors:\n");
-    storeAppendPrintf(sentry, "%-4s %-6s %-4s %-7s %-7s %-21s %s\n",
+    int j;
+    char *s = NULL;
+    int lft;
+    int to;
+    FD_ENTRY *f;
+
+    storeAppendPrintf(sentry, open_bracket);
+    storeAppendPrintf(sentry, "{Active file descriptors:}\n");
+    storeAppendPrintf(sentry, "{%-4s %-6s %-4s %-4s %-21s %s}\n",
 	"File",
 	"Type",
+	"Lftm",
 	"Tout",
-	"Nread",
-	"Nwrite",
 	"Remote Address",
 	"Description");
-    storeAppendPrintf(sentry, "---- ------ ---- ------- ------- --------------------- ------------------------------\n");
+    storeAppendPrintf(sentry, "{---- ------ ---- ---- --------------------- ------------------------------}\n");
     for (i = 0; i < Squid_MaxFD; i++) {
 	f = &fd_table[i];
-	if (!f->open)
+	if (!fdstat_isopen(i))
 	    continue;
-	storeAppendPrintf(sentry, "%4d %-6.6s %4d %7d %7d %-21s %s\n",
+	j = fdstatGetType(i);
+	storeAppendPrintf(sentry, "{%4d %-6s ",
 	    i,
-	    fdTypeStr[f->type],
-	    f->timeout_handler ? (f->timeout - squid_curtime) / 60 : 0,
-	    f->bytes_read,
-	    f->bytes_written,
-	    fdRemoteAddr(f),
-	    f->desc);
+	    fdstatTypeStr[j]);
+	switch (j) {
+	case FD_SOCKET:
+	    if ((lft = f->lifetime) < 0)
+		lft = 0;
+	    to = f->timeout_time;
+	    if (lft > 0)
+		lft = (lft - squid_curtime) / 60;
+	    if (to > 0)
+		to = (to - squid_curtime) / 60;
+	    if (fd_table[i].timeout_handler == NULL)
+		to = 0;
+	    storeAppendPrintf(sentry, "%4d %4d %-21s %s}\n",
+		lft,
+		to,
+		host_port_fmt(fd_table[i].ipaddr, fd_table[i].remote_port),
+		fd_note(i, NULL));
+	    break;
+	case FD_FILE:
+	    storeAppendPrintf(sentry, "%31s %s}\n",
+		null_string,
+		(s = diskFileName(i)) ? s : "-");
+	    break;
+	case FD_PIPE:
+	    storeAppendPrintf(sentry, "%31s %s}\n", null_string, fd_note(i, NULL));
+	    break;
+	case FD_LOG:
+	    storeAppendPrintf(sentry, "%31s %s}\n", null_string, fd_note(i, NULL));
+	    break;
+	case FD_UNKNOWN:
+	default:
+	    storeAppendPrintf(sentry, "%31s %s}\n", null_string, fd_note(i, NULL));
+	    break;
+	}
     }
+    storeAppendPrintf(sentry, close_bracket);
+}
+
+static int
+memoryAccounted(void)
+{
+    return (int)
+	meta_data.store_entries * sizeof(StoreEntry) +
+	meta_data.ipcache_count * sizeof(ipcache_entry) +
+	meta_data.fqdncache_count * sizeof(fqdncache_entry) +
+	hash_links_allocated * sizeof(hash_link) +
+	sm_stats.total_pages_allocated * sm_stats.page_size +
+	disk_stats.total_pages_allocated * disk_stats.page_size +
+	request_pool.total_pages_allocated * request_pool.page_size +
+	mem_obj_pool.total_pages_allocated * mem_obj_pool.page_size +
+	meta_data.url_strings +
+	meta_data.netdb_addrs * sizeof(netdbEntry) +
+	meta_data.netdb_hosts * sizeof(struct _net_db_name) +
+                 meta_data.netdb_peers * sizeof(struct _net_db_peer) +
+                 meta_data.client_info * client_info_sz +
+                 meta_data.misc;
 }
 
 static void
-info_get(StoreEntry * sentry)
+info_get(const cacheinfo * obj, StoreEntry * sentry)
 {
+    const char *tod = NULL;
+    float f;
+#if defined(HAVE_GETRUSAGE) && defined(RUSAGE_SELF)
     struct rusage rusage;
-    double cputime;
-    double runtime;
+#endif
 #if HAVE_MSTATS && HAVE_GNUMALLOC_H
     struct mstats ms;
 #elif HAVE_MALLINFO
@@ -436,638 +727,733 @@ info_get(StoreEntry * sentry)
     int t;
 #endif
 
-    runtime = tvSubDsec(squid_start, current_time);
-    if (runtime == 0.0)
-	runtime = 1.0;
-    storeAppendPrintf(sentry, "Squid Object Cache: Version %s\n",
+    storeAppendPrintf(sentry, open_bracket);
+    storeAppendPrintf(sentry, "{Squid Object Cache: Version %s}\n",
 	version_string);
-    storeAppendPrintf(sentry, "Start Time:\t%s\n",
-	mkrfc1123(squid_start.tv_sec));
-    storeAppendPrintf(sentry, "Current Time:\t%s\n",
-	mkrfc1123(current_time.tv_sec));
-    storeAppendPrintf(sentry, "Connection information for %s:\n",
+    tod = mkrfc1123(squid_starttime);
+    storeAppendPrintf(sentry, "{Start Time:\t%s}\n", tod);
+    tod = mkrfc1123(squid_curtime);
+    storeAppendPrintf(sentry, "{Current Time:\t%s}\n", tod);
+    storeAppendPrintf(sentry, "{Connection information for %s:}\n",
 	appname);
-    storeAppendPrintf(sentry, "\tNumber of HTTP requests received:\t%u\n",
-	Counter.client_http.requests);
-    storeAppendPrintf(sentry, "\tNumber of ICP messages received:\t%u\n",
-	Counter.icp.pkts_recv);
-    storeAppendPrintf(sentry, "\tNumber of ICP messages sent:\t%u\n",
-	Counter.icp.pkts_sent);
-    storeAppendPrintf(sentry, "\tRequest failure ratio:\t%5.2f%%\n",
-	request_failure_ratio);
+    storeAppendPrintf(sentry, "{\tNumber of TCP connections:\t%lu}\n",
+	ntcpconn);
+    storeAppendPrintf(sentry, "{\tNumber of UDP connections:\t%lu}\n",
+	nudpconn);
 
-    storeAppendPrintf(sentry, "\tHTTP requests per minute:\t%.1f\n",
-	Counter.client_http.requests / (runtime / 60.0));
-    storeAppendPrintf(sentry, "\tICP messages per minute:\t%.1f\n",
-	(Counter.icp.pkts_sent + Counter.icp.pkts_recv) / (runtime / 60.0));
-    storeAppendPrintf(sentry, "\tSelect loop called: %d times, %0.3f ms avg\n",
-	Counter.select_loops, 1000.0 * runtime / Counter.select_loops);
 
-    storeAppendPrintf(sentry, "Cache information for %s:\n",
+    f = (float) (squid_curtime - squid_starttime);
+    storeAppendPrintf(sentry, "{\tConnections per hour:\t%.1f}\n",
+	f == 0.0 ? 0.0 : ((ntcpconn + nudpconn) / (f / 3600.0)));
+    storeAppendPrintf(sentry, "{\tSelect loop called: %d times, %0.3f ms avg}\n",
+	select_loops, 1000.0 * f / select_loops);
+
+    storeAppendPrintf(sentry, "{Cache information for %s:}\n",
 	appname);
-    storeAppendPrintf(sentry, "\tStorage Swap size:\t%d KB\n",
-	store_swap_size);
-    storeAppendPrintf(sentry, "\tStorage Mem size:\t%d KB\n",
+    storeAppendPrintf(sentry, "{\tStorage Swap size:\t%d MB}\n",
+	storeGetSwapSize() >> 10);
+    storeAppendPrintf(sentry, "{\tStorage Mem size:\t%d KB}\n",
 	store_mem_size >> 10);
-    storeAppendPrintf(sentry, "\tStorage LRU Expiration Age:\t%6.2f days\n",
+    storeAppendPrintf(sentry, "{\tStorage LRU Expiration Age:\t%6.2f days}\n",
 	(double) storeExpiredReferenceAge() / 86400.0);
-    storeAppendPrintf(sentry, "\tRequests given to unlinkd:\t%d\n",
-	Counter.unlink.requests);
+    storeAppendPrintf(sentry, "{\tRequests given to unlinkd:\t%d}\n",
+	unlinkd_count);
+    storeAppendPrintf(sentry, "{\tUnused fileno stack count:\t%d}\n",
+	fileno_stack_count);
 
-    squid_getrusage(&rusage);
-    cputime = rusage_cputime(&rusage);
-    storeAppendPrintf(sentry, "Resource usage for %s:\n", appname);
-    storeAppendPrintf(sentry, "\tUP Time:\t%.3f seconds\n", runtime);
-    storeAppendPrintf(sentry, "\tCPU Time:\t%.3f seconds\n", cputime);
-    storeAppendPrintf(sentry, "\tCPU Usage:\t%.2f%%\n",
-	dpercent(cputime, runtime));
-    storeAppendPrintf(sentry, "\tMaximum Resident Size: %ld KB\n",
-	rusage_maxrss(&rusage));
-    storeAppendPrintf(sentry, "\tPage faults with physical i/o: %ld\n",
-	rusage_pagefaults(&rusage));
+#if HAVE_GETRUSAGE && defined(RUSAGE_SELF)
+    storeAppendPrintf(sentry, "{Resource usage for %s:}\n", appname);
+#ifdef _SQUID_SOLARIS_
+    /* Solaris 2.5 has getrusage() permission bug -- Arjan de Vet */
+    enter_suid();
+#endif
+    getrusage(RUSAGE_SELF, &rusage);
+#ifdef _SQUID_SOLARIS_
+    leave_suid();
+#endif
+    storeAppendPrintf(sentry, "{\tCPU Time: %d seconds (%d user %d sys)}\n",
+	(int) rusage.ru_utime.tv_sec + (int) rusage.ru_stime.tv_sec,
+	(int) rusage.ru_utime.tv_sec,
+	(int) rusage.ru_stime.tv_sec);
+    storeAppendPrintf(sentry, "{\tCPU Usage: %d%%}\n",
+	percent(rusage.ru_utime.tv_sec + rusage.ru_stime.tv_sec,
+	    squid_curtime - squid_starttime));
+#if defined(_SQUID_SGI_) || defined(_SQUID_OSF_) || defined(BSD4_4)
+    storeAppendPrintf(sentry, "{\tMaximum Resident Size: %ld KB}\n",
+	rusage.ru_maxrss);
+#else
+    storeAppendPrintf(sentry, "{\tMaximum Resident Size: %ld KB}\n",
+	(rusage.ru_maxrss * getpagesize()) >> 10);
+#endif
+    storeAppendPrintf(sentry, "{\tPage faults with physical i/o: %ld}\n",
+	rusage.ru_majflt);
+#endif
 
 #if HAVE_MSTATS && HAVE_GNUMALLOC_H
     ms = mstats();
-    storeAppendPrintf(sentry, "Memory usage for %s via mstats():\n",
+    storeAppendPrintf(sentry, "{Memory usage for %s via mstats():}\n",
 	appname);
-    storeAppendPrintf(sentry, "\tTotal space in arena:  %6d KB\n",
+    storeAppendPrintf(sentry, "{\tTotal space in arena:  %6d KB}\n",
 	ms.bytes_total >> 10);
-    storeAppendPrintf(sentry, "\tTotal free:            %6d KB %d%%\n",
+    storeAppendPrintf(sentry, "{\tTotal free:            %6d KB %d%%}\n",
 	ms.bytes_free >> 10, percent(ms.bytes_free, ms.bytes_total));
 #elif HAVE_MALLINFO
     mp = mallinfo();
-    storeAppendPrintf(sentry, "Memory usage for %s via mallinfo():\n",
+    storeAppendPrintf(sentry, "{Memory usage for %s via mallinfo():}\n",
 	appname);
-    storeAppendPrintf(sentry, "\tTotal space in arena:  %6d KB\n",
+    storeAppendPrintf(sentry, "{\tTotal space in arena:  %6d KB}\n",
 	mp.arena >> 10);
-    storeAppendPrintf(sentry, "\tOrdinary blocks:       %6d KB %6d blks\n",
+    storeAppendPrintf(sentry, "{\tOrdinary blocks:       %6d KB %6d blks}\n",
 	mp.uordblks >> 10, mp.ordblks);
-    storeAppendPrintf(sentry, "\tSmall blocks:          %6d KB %6d blks\n",
+    storeAppendPrintf(sentry, "{\tSmall blocks:          %6d KB %6d blks}\n",
 	mp.usmblks >> 10, mp.smblks);
-    storeAppendPrintf(sentry, "\tHolding blocks:        %6d KB %6d blks\n",
+    storeAppendPrintf(sentry, "{\tHolding blocks:        %6d KB %6d blks}\n",
 	mp.hblkhd >> 10, mp.hblks);
-    storeAppendPrintf(sentry, "\tFree Small blocks:     %6d KB\n",
+    storeAppendPrintf(sentry, "{\tFree Small blocks:     %6d KB}\n",
 	mp.fsmblks >> 10);
-    storeAppendPrintf(sentry, "\tFree Ordinary blocks:  %6d KB\n",
+    storeAppendPrintf(sentry, "{\tFree Ordinary blocks:  %6d KB}\n",
 	mp.fordblks >> 10);
     t = mp.uordblks + mp.usmblks + mp.hblkhd;
-    storeAppendPrintf(sentry, "\tTotal in use:          %6d KB %d%%\n",
+    storeAppendPrintf(sentry, "{\tTotal in use:          %6d KB %d%%}\n",
 	t >> 10, percent(t, mp.arena));
     t = mp.fsmblks + mp.fordblks;
-    storeAppendPrintf(sentry, "\tTotal free:            %6d KB %d%%\n",
+    storeAppendPrintf(sentry, "{\tTotal free:            %6d KB %d%%}\n",
 	t >> 10, percent(t, mp.arena));
 #if HAVE_EXT_MALLINFO
-    storeAppendPrintf(sentry, "\tmax size of small blocks:\t%d\n", mp.mxfast);
-    storeAppendPrintf(sentry, "\tnumber of small blocks in a holding block:\t%d\n",
+    storeAppendPrintf(sentry, "{\tmax size of small blocks:\t%d}\n", mp.mxfast);
+    storeAppendPrintf(sentry, "{\tnumber of small blocks in a holding block:\t%d}\n",
 	mp.nlblks);
-    storeAppendPrintf(sentry, "\tsmall block rounding factor:\t%d\n", mp.grain);
-    storeAppendPrintf(sentry, "\tspace (including overhead) allocated in ord. blks:\t%d\n"
+    storeAppendPrintf(sentry, "{\tsmall block rounding factor:\t%d}\n", mp.grain);
+    storeAppendPrintf(sentry, "{\tspace (including overhead) allocated in ord. blks:\t%d}\n"
 	,mp.uordbytes);
-    storeAppendPrintf(sentry, "\tnumber of ordinary blocks allocated:\t%d\n",
+    storeAppendPrintf(sentry, "{\tnumber of ordinary blocks allocated:\t%d}\n",
 	mp.allocated);
-    storeAppendPrintf(sentry, "\tbytes used in maintaining the free tree:\t%d\n",
+    storeAppendPrintf(sentry, "{\tbytes used in maintaining the free tree:\t%d}\n",
 	mp.treeoverhead);
 #endif /* HAVE_EXT_MALLINFO */
 #endif /* HAVE_MALLINFO */
 
-    storeAppendPrintf(sentry, "File descriptor usage for %s:\n", appname);
-    storeAppendPrintf(sentry, "\tMaximum number of file descriptors:   %4d\n",
+    storeAppendPrintf(sentry, "{File descriptor usage for %s:}\n", appname);
+    storeAppendPrintf(sentry, "{\tMaximum number of file descriptors:   %4d}\n",
 	Squid_MaxFD);
-    storeAppendPrintf(sentry, "\tLargest file desc currently in use:   %4d\n",
+    storeAppendPrintf(sentry, "{\tLargest file desc currently in use:   %4d}\n",
 	Biggest_FD);
-    storeAppendPrintf(sentry, "\tNumber of file desc currently in use: %4d\n",
+    storeAppendPrintf(sentry, "{\tNumber of file desc currently in use: %4d}\n",
 	Number_FD);
-    storeAppendPrintf(sentry, "\tAvailable number of file descriptors: %4d\n",
+    storeAppendPrintf(sentry, "{\tAvailable number of file descriptors: %4d}\n",
 	Squid_MaxFD - Number_FD);
-    storeAppendPrintf(sentry, "\tReserved number of file descriptors:  %4d\n",
+    storeAppendPrintf(sentry, "{\tReserved number of file descriptors:  %4d}\n",
 	RESERVED_FD);
 
-    storeAppendPrintf(sentry, "Internal Data Structures:\n");
-    storeAppendPrintf(sentry, "\t%6d StoreEntries\n",
-	memInUse(MEM_STOREENTRY));
-    storeAppendPrintf(sentry, "\t%6d StoreEntries with MemObjects\n",
-	memInUse(MEM_MEMOBJECT));
-    storeAppendPrintf(sentry, "\t%6d StoreEntries with MemObject Data\n",
-	memInUse(MEM_MEM_HDR));
-    storeAppendPrintf(sentry, "\t%6d Hot Object Cache Items\n",
-	hot_obj_count);
+    storeAppendPrintf(sentry, "{Internal Data Structures:}\n");
+    storeAppendPrintf(sentry, "{\t%6d StoreEntries}\n",
+	meta_data.store_entries);
+    storeAppendPrintf(sentry, "{\t%6d StoreEntries with MemObjects}\n",
+	meta_data.mem_obj_count);
+    storeAppendPrintf(sentry, "{\t%6d StoreEntries with MemObject Data}\n",
+	meta_data.mem_data_count);
+    storeAppendPrintf(sentry, "{\t%6d Hot Object Cache Items}\n",
+	meta_data.hot_vm);
+
+    storeAppendPrintf(sentry, "{Accounted Memory Usage:}\n");
+    storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB}\n",
+	"StoreEntry",
+	meta_data.store_entries,
+	(int) sizeof(StoreEntry),
+	(int) (meta_data.store_entries * sizeof(StoreEntry) >> 10));
+
+    storeAppendPrintf(sentry, "{\t%-25.25s                      = %6d KB}\n",
+	"URL strings",
+	meta_data.url_strings >> 10);
+
+    storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB}\n",
+	"IPCacheEntry",
+	meta_data.ipcache_count,
+	(int) sizeof(ipcache_entry),
+	(int) (meta_data.ipcache_count * sizeof(ipcache_entry) >> 10));
+
+    storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB}\n",
+	"FQDNCacheEntry",
+	meta_data.fqdncache_count,
+	(int) sizeof(fqdncache_entry),
+	(int) (meta_data.fqdncache_count * sizeof(fqdncache_entry) >> 10));
+
+    storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB}\n",
+	"Hash link",
+	hash_links_allocated,
+	(int) sizeof(hash_link),
+	(int) (hash_links_allocated * sizeof(hash_link) >> 10));
+
+    storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB (%6d free)}\n",
+	"Pool MemObject structures",
+	mem_obj_pool.total_pages_allocated,
+	mem_obj_pool.page_size,
+	mem_obj_pool.total_pages_allocated * mem_obj_pool.page_size >> 10,
+	(mem_obj_pool.total_pages_allocated - mem_obj_pool.n_pages_in_use) * mem_obj_pool.page_size >> 10);
+
+    storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB (%6d free)}\n",
+	"Pool for Request structures",
+	request_pool.total_pages_allocated,
+	request_pool.page_size,
+	request_pool.total_pages_allocated * request_pool.page_size >> 10,
+	(request_pool.total_pages_allocated - request_pool.n_pages_in_use) * request_pool.page_size >> 10);
+
+    storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB (%6d free)}\n",
+	"Pool for in-memory object data",
+	sm_stats.total_pages_allocated,
+	sm_stats.page_size,
+	sm_stats.total_pages_allocated * sm_stats.page_size >> 10,
+	(sm_stats.total_pages_allocated - sm_stats.n_pages_in_use) * sm_stats.page_size >> 10);
+
+    storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB (%6d free)}\n",
+	"Pool for disk I/O",
+	disk_stats.total_pages_allocated,
+	disk_stats.page_size,
+	disk_stats.total_pages_allocated * disk_stats.page_size >> 10,
+	(disk_stats.total_pages_allocated - disk_stats.n_pages_in_use) * disk_stats.page_size >> 10);
+
+    storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB}\n",
+	"NetDB Address Entries",
+	meta_data.netdb_addrs,
+	(int) sizeof(netdbEntry),
+	(int) (meta_data.netdb_addrs * sizeof(netdbEntry) >> 10));
+
+    storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB}\n",
+	"NetDB Host Entries",
+	meta_data.netdb_hosts,
+	(int) sizeof(struct _net_db_name),
+	             (int) (meta_data.netdb_hosts * sizeof(struct _net_db_name) >> 10));
+
+    storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB}\n",
+	"NetDB Peer Entries",
+	meta_data.netdb_peers,
+	(int) sizeof(struct _net_db_peer),
+	             (int) (meta_data.netdb_peers * sizeof(struct _net_db_peer) >> 10));
+
+    storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB}\n",
+	"ClientDB Entries",
+	meta_data.client_info,
+	client_info_sz,
+	(int) (meta_data.client_info * client_info_sz >> 10));
+
+    storeAppendPrintf(sentry, "{\t%-25.25s                      = %6d KB}\n",
+	"Miscellaneous",
+	meta_data.misc >> 10);
+
+    storeAppendPrintf(sentry, "{\t%-25.25s                      = %6d KB}\n",
+	"Total Accounted",
+	memoryAccounted() >> 10);
 
 #if XMALLOC_STATISTICS
-    storeAppendPrintf(sentry, "Memory allocation statistics\n");
+    storeAppendPrintf(sentry, "{Memory allocation statistics}\n");
     malloc_statistics(info_get_mallstat, sentry);
 #endif
+
+    storeAppendPrintf(sentry, "{Miscellaneous:}\n");
+    storeAppendPrintf(sentry, "{\tAverage Name-to-address lookup time:\t%f seconds}\n",
+	ipcacheAvgSvcTime() / 1000.0);
+    storeAppendPrintf(sentry, "{\tAverage Address-to-name lookup time:\t%f seconds}\n",
+	fqdncacheAvgSvcTime() / 1000.0);
+
+    storeAppendPrintf(sentry, close_bracket);
 }
 
-#define XAVG(X) (dt ? (double) (f->X - l->X) / dt : 0.0)
 static void
-statAvgDump(StoreEntry * sentry, int minutes, int hours)
+parameter_get(const cacheinfo * obj, StoreEntry * sentry)
 {
-    StatCounters *f;
-    StatCounters *l;
-    double dt;
-    double ct;
-    double x;
-    assert(N_COUNT_HIST > 1);
-    assert(minutes > 0 || hours > 0);
-    f = &CountHist[0];
-    l = f;
-    if (minutes > 0 && hours == 0) {
-	/* checking minute readings ... */
-	if (minutes > N_COUNT_HIST - 1)
-	    minutes = N_COUNT_HIST - 1;
-	l = &CountHist[minutes];
-    } else if (minutes == 0 && hours > 0) {
-	/* checking hour readings ... */
-	if (hours > N_COUNT_HOUR_HIST - 1)
-	    hours = N_COUNT_HOUR_HIST - 1;
-	l = &CountHourHist[hours];
-    } else {
-	debug(18, 1) ("statAvgDump: Invalid args, minutes=%d, hours=%d\n",
-	    minutes, hours);
-	return;
+    storeAppendPrintf(sentry, open_bracket);
+    storeAppendPrintf(sentry,
+	"{VM-Max %d \"# Maximum hot-vm cache (MB)\"}\n",
+	Config.Mem.maxSize / (1 << 20));
+    storeAppendPrintf(sentry,
+	"{VM-High %d \"# High water mark hot-vm cache (%%)\"}\n",
+	Config.Mem.highWaterMark);
+    storeAppendPrintf(sentry,
+	"{VM-Low %d \"# Low water mark hot-vm cache (%%)\"}\n",
+	Config.Mem.lowWaterMark);
+    storeAppendPrintf(sentry,
+	"{Swap-Max %d \"# Maximum disk cache (MB)\"}\n",
+	Config.Swap.maxSize / (1 << 10));
+    storeAppendPrintf(sentry,
+	"{Swap-High %d \"# High water mark disk cache (%%)\"}\n",
+	Config.Swap.highWaterMark);
+    storeAppendPrintf(sentry,
+	"{Swap-Low %d \"# Low water mark disk cache (%%)\"}\n",
+	Config.Swap.lowWaterMark);
+    storeAppendPrintf(sentry,
+	"{Neg-TTL %d \"# TTL for negative cache (s)\"}\n",
+	Config.negativeTtl);
+    storeAppendPrintf(sentry,
+	"{ReadTimeout %d \"# Maximum idle connection (s)\"}\n",
+	Config.readTimeout);
+    storeAppendPrintf(sentry,
+	"{ClientLifetime %d \"# Lifetime for incoming HTTP requests\"}\n",
+	Config.lifetimeDefault);
+    storeAppendPrintf(sentry,
+	"{CleanRate %d \"# Rate for periodic object expiring\"}\n",
+	Config.cleanRate);
+    /* Cachemgr.cgi expects an integer in the second field of the string */
+    storeAppendPrintf(sentry,
+	"{HttpAccelMode %d \"# Is operating as an HTTP accelerator\"}\n",
+	httpd_accel_mode);
+    storeAppendPrintf(sentry, close_bracket);
+}
+
+#if LOG_FULL_HEADERS
+static const char c2x[] =
+"000102030405060708090a0b0c0d0e0f"
+"101112131415161718191a1b1c1d1e1f"
+"202122232425262728292a2b2c2d2e2f"
+"303132333435363738393a3b3c3d3e3f"
+"404142434445464748494a4b4c4d4e4f"
+"505152535455565758595a5b5c5d5e5f"
+"606162636465666768696a6b6c6d6e6f"
+"707172737475767778797a7b7c7d7e7f"
+"808182838485868788898a8b8c8d8e8f"
+"909192939495969798999a9b9c9d9e9f"
+"a0a1a2a3a4a5a6a7a8a9aaabacadaeaf"
+"b0b1b2b3b4b5b6b7b8b9babbbcbdbebf"
+"c0c1c2c3c4c5c6c7c8c9cacbcccdcecf"
+"d0d1d2d3d4d5d6d7d8d9dadbdcdddedf"
+"e0e1e2e3e4e5e6e7e8e9eaebecedeeef"
+"f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff";
+
+/* log_quote -- URL-style encoding on MIME headers. */
+
+static char *
+log_quote(const char *header)
+{
+    int c, i;
+    char *buf, *buf_cursor;
+    if (header == NULL) {
+	buf = xcalloc(1, 1);
+	*buf = '\0';
+	return buf;
     }
-    dt = tvSubDsec(l->timestamp, f->timestamp);
-    ct = f->cputime - l->cputime;
+    buf = xcalloc((strlen(header) * 3) + 1, 1);
+    buf_cursor = buf;
+    /*
+     * We escape: \x00-\x1F"#%;<>?{}|\\\\^~`\[\]\x7F-\xFF 
+     * which is the default escape list for the CPAN Perl5 URI module
+     * modulo the inclusion of space (x40) to make the raw logs a bit
+     * more readable.
+     */
+    while ((c = *(const unsigned char *) header++)) {
+	if (c <= 0x1F
+	    || c >= 0x7F
+	    || c == '"'
+	    || c == '#'
+	    || c == '%'
+	    || c == ';'
+	    || c == '<'
+	    || c == '>'
+	    || c == '?'
+	    || c == '{'
+	    || c == '}'
+	    || c == '|'
+	    || c == '\\'
+	    || c == '^'
+	    || c == '~'
+	    || c == '`'
+	    || c == '['
+	    || c == ']') {
+	    *buf_cursor++ = '%';
+	    i = c * 2;
+	    *buf_cursor++ = c2x[i];
+	    *buf_cursor++ = c2x[i + 1];
+	} else {
+	    *buf_cursor++ = c;
+	}
+    }
+    *buf_cursor = '\0';
+    return buf;
+}
+#endif /* LOG_FULL_HEADERS */
 
-    storeAppendPrintf(sentry, "sample_start_time = %d.%d (%s)\n",
-	f->timestamp.tv_sec,
-	f->timestamp.tv_usec,
-	mkrfc1123(f->timestamp.tv_sec));
-    storeAppendPrintf(sentry, "sample_end_time = %d.%d (%s)\n",
-	l->timestamp.tv_sec,
-	l->timestamp.tv_usec,
-	mkrfc1123(l->timestamp.tv_sec));
 
-    storeAppendPrintf(sentry, "client_http.requests = %f/sec\n",
-	XAVG(client_http.requests));
-    storeAppendPrintf(sentry, "client_http.hits = %f/sec\n",
-	XAVG(client_http.hits));
-    storeAppendPrintf(sentry, "client_http.errors = %f/sec\n",
-	XAVG(client_http.errors));
-    storeAppendPrintf(sentry, "client_http.kbytes_in = %f/sec\n",
-	XAVG(client_http.kbytes_in.kb));
-    storeAppendPrintf(sentry, "client_http.kbytes_out = %f/sec\n",
-	XAVG(client_http.kbytes_out.kb));
+static void
+log_append(const cacheinfo * obj,
+    const char *url,
+    struct in_addr caddr,
+    int size,
+    const char *action,
+    const char *method,
+    int http_code,
+    int msec,
+    const char *ident,
+    const struct _hierarchyLogData *hierData,
+#if LOG_FULL_HEADERS
+    const char *request_hdr,
+    const char *reply_hdr,
+#endif				/* LOG_FULL_HEADERS */
+    const char *content_type
+)
+{
+#if LOG_FULL_HEADERS
+    LOCAL_ARRAY(char, tmp, 10000);	/* MAX_URL is 4096 */
+#else
+    LOCAL_ARRAY(char, tmp, 6000);	/* MAX_URL is 4096 */
+#endif /* LOG_FULL_HEADERS */
+    int x;
+    const char *client = NULL;
+    hier_code hier_code = HIER_NONE;
+    const char *hier_host = dash_str;
+    int hier_timeout = 0;
+#ifdef LOG_ICP_NUMBERS
+    int ns = 0;
+    int ne = 0;
+    int nr = 0;
+    int tt = 0;
+#endif
 
-    x = statHistDeltaMedian(&l->client_http.all_svc_time,
-	&f->client_http.all_svc_time);
-    storeAppendPrintf(sentry, "client_http.all_median_svc_time = %f seconds\n",
-	x / 1000.0);
-    x = statHistDeltaMedian(&l->client_http.miss_svc_time,
-	&f->client_http.miss_svc_time);
-    storeAppendPrintf(sentry, "client_http.miss_median_svc_time = %f seconds\n",
-	x / 1000.0);
-    x = statHistDeltaMedian(&l->client_http.nm_svc_time,
-	&f->client_http.nm_svc_time);
-    storeAppendPrintf(sentry, "client_http.nm_median_svc_time = %f seconds\n",
-	x / 1000.0);
-    x = statHistDeltaMedian(&l->client_http.hit_svc_time,
-	&f->client_http.hit_svc_time);
-    storeAppendPrintf(sentry, "client_http.hit_median_svc_time = %f seconds\n",
-	x / 1000.0);
+#if DOUBLECHECK
+    if (strlen(url) > MAX_URL)
+	debug_trap("log_append: URL too long");
+#endif
+    if (obj->logfile_status != LOG_ENABLE)
+	return;
 
-    storeAppendPrintf(sentry, "server.all.requests = %f/sec\n",
-	XAVG(server.all.requests));
-    storeAppendPrintf(sentry, "server.all.errors = %f/sec\n",
-	XAVG(server.all.errors));
-    storeAppendPrintf(sentry, "server.all.kbytes_in = %f/sec\n",
-	XAVG(server.all.kbytes_in.kb));
-    storeAppendPrintf(sentry, "server.all.kbytes_out = %f/sec\n",
-	XAVG(server.all.kbytes_out.kb));
+    if (Config.Log.log_fqdn)
+	client = fqdncache_gethostbyaddr(caddr, 0);
+    if (client == NULL)
+	client = inet_ntoa(caddr);
 
-    storeAppendPrintf(sentry, "server.http.requests = %f/sec\n",
-	XAVG(server.http.requests));
-    storeAppendPrintf(sentry, "server.http.errors = %f/sec\n",
-	XAVG(server.http.errors));
-    storeAppendPrintf(sentry, "server.http.kbytes_in = %f/sec\n",
-	XAVG(server.http.kbytes_in.kb));
-    storeAppendPrintf(sentry, "server.http.kbytes_out = %f/sec\n",
-	XAVG(server.http.kbytes_out.kb));
+    getCurrentTime();
 
-    storeAppendPrintf(sentry, "server.ftp.requests = %f/sec\n",
-	XAVG(server.ftp.requests));
-    storeAppendPrintf(sentry, "server.ftp.errors = %f/sec\n",
-	XAVG(server.ftp.errors));
-    storeAppendPrintf(sentry, "server.ftp.kbytes_in = %f/sec\n",
-	XAVG(server.ftp.kbytes_in.kb));
-    storeAppendPrintf(sentry, "server.ftp.kbytes_out = %f/sec\n",
-	XAVG(server.ftp.kbytes_out.kb));
+    if (!method)
+	method = dash_str;
+    if (!url)
+	url = dash_str;
+    if (!content_type || *content_type == '\0')
+	content_type = dash_str;
+    if (!ident || *ident == '\0')
+	ident = dash_str;
+    if (hierData) {
+	hier_code = hierData->code;
+	hier_host = hierData->host ? hierData->host : dash_str;
+	hier_timeout = hierData->timeout;
+#ifdef LOG_ICP_NUMBERS
+	tt = hierData->delay;
+	ns = hierData->n_sent;
+	ne = hierData->n_expect;
+	nr = hierData->n_recv;
+#endif
+    }
+    if (Config.commonLogFormat)
+	sprintf(tmp, "%s %s - [%s] \"%s %s\" %s:%s%s %d\n",
+	    client,
+	    ident,
+	    mkhttpdlogtime(&squid_curtime),
+	    method,
+	    url,
+	    action,
+	    hier_timeout ? "TIMEOUT_" : null_string,
+	    hier_strings[hier_code],
+	    size);
+    else
+#ifdef LOG_ICP_NUMBERS
+	sprintf(tmp, "%9d.%03d %6d %s %s/%03d %d %s %s %s %s%s/%s/%d/%d/%d/%d %s\n",
+#else
+	sprintf(tmp, "%9d.%03d %6d %s %s/%03d %d %s %s %s %s%s/%s %s\n",
+#endif
+	    (int) current_time.tv_sec,
+	    (int) current_time.tv_usec / 1000,
+	    msec,
+	    client,
+	    action,
+	    http_code,
+	    size,
+	    method,
+	    url,
+	    ident,
+	    hier_timeout ? "TIMEOUT_" : null_string,
+	    hier_strings[hier_code],
+	    hier_host,
+#ifdef LOG_ICP_NUMBERS
+	    ns, ne, nr, tt,
+#endif
+	    content_type);
+#if LOG_FULL_HEADERS
+    if (Config.logMimeHdrs) {
+	int msize = strlen(tmp);
+	char *ereq = log_quote(request_hdr);
+	char *erep = log_quote(reply_hdr);
 
-    storeAppendPrintf(sentry, "server.other.requests = %f/sec\n",
-	XAVG(server.other.requests));
-    storeAppendPrintf(sentry, "server.other.errors = %f/sec\n",
-	XAVG(server.other.errors));
-    storeAppendPrintf(sentry, "server.other.kbytes_in = %f/sec\n",
-	XAVG(server.other.kbytes_in.kb));
-    storeAppendPrintf(sentry, "server.other.kbytes_out = %f/sec\n",
-	XAVG(server.other.kbytes_out.kb));
+	if (msize + strlen(ereq) + strlen(erep) + 7 <= sizeof(tmp))
+	    sprintf(tmp + msize - 1, " [%s] [%s]\n", ereq, erep);
+	else
+	    debug(18, 1, "log_append: Long headers not logged.\n");
+	safe_free(ereq);
+	safe_free(erep);
+    }
+#endif /* LOG_FULL_HEADERS */
+    x = file_write(obj->logfile_fd,
+	xstrdup(tmp),
+	strlen(tmp),
+	NULL,
+	NULL,
+	xfree);
+    if (x != DISK_OK)
+	debug(18, 1, "log_append: File write failed.\n");
+}
 
-    storeAppendPrintf(sentry, "icp.pkts_sent = %f/sec\n",
-	XAVG(icp.pkts_sent));
-    storeAppendPrintf(sentry, "icp.pkts_recv = %f/sec\n",
-	XAVG(icp.pkts_recv));
-    storeAppendPrintf(sentry, "icp.kbytes_sent = %f/sec\n",
-	XAVG(icp.kbytes_sent.kb));
-    storeAppendPrintf(sentry, "icp.kbytes_recv = %f/sec\n",
-	XAVG(icp.kbytes_recv.kb));
-    x = statHistDeltaMedian(&l->icp.query_svc_time, &f->icp.query_svc_time);
-    storeAppendPrintf(sentry, "icp.query_median_svc_time = %f seconds\n",
-	x / 1000000.0);
-    x = statHistDeltaMedian(&l->icp.reply_svc_time, &f->icp.reply_svc_time);
-    storeAppendPrintf(sentry, "icp.reply_median_svc_time = %f seconds\n",
-	x / 1000000.0);
-    x = statHistDeltaMedian(&l->dns.svc_time, &f->dns.svc_time);
-    storeAppendPrintf(sentry, "dns.median_svc_time = %f seconds\n",
-	x / 1000.0);
-    storeAppendPrintf(sentry, "unlink.requests = %f/sec\n",
-	XAVG(unlink.requests));
-    storeAppendPrintf(sentry, "page_faults = %f/sec\n",
-	XAVG(page_faults));
-    storeAppendPrintf(sentry, "select_loops = %f/sec\n",
-	XAVG(select_loops));
-    storeAppendPrintf(sentry, "cpu_time = %f seconds\n", ct);
-    storeAppendPrintf(sentry, "wall_time = %f seconds\n", dt);
-    storeAppendPrintf(sentry, "cpu_usage = %f%%\n", dpercent(ct, dt));
+#ifdef HIER_EXPERIMENT
+extern int HierMethodHist[HIER_METHODS];
+void
+log_hier_expt(struct timeval s, struct _hierarchyLogData *h)
+{
+    int usec = tvSubUsec(s, current_time);
+    if (h == NULL)
+	return;
+    fprintf(hierexplog, "%d.%03d %d %10d %2d %2d %2d %10d %s\n",
+	(int) current_time.tv_sec,
+	(int) current_time.tv_usec / 1000,
+	h->hier_method,
+	usec,
+	h->n_sent,
+	h->n_expect,
+	h->n_recv,
+	h->delay,
+	hier_strings[h->code]);
+    HierMethodHist[h->hier_method]++;
+}
+
+#endif
+
+static void
+log_enable(cacheinfo * obj, StoreEntry * sentry)
+{
+    if (obj->logfile_status == LOG_DISABLE) {
+	obj->logfile_status = LOG_ENABLE;
+
+	/* open the logfile */
+	obj->logfile_fd = file_open(obj->logfilename, NULL, O_WRONLY | O_CREAT);
+	if (obj->logfile_fd == DISK_ERROR) {
+	    debug(18, 0, "Cannot open logfile: %s\n", obj->logfilename);
+	    obj->logfile_status = LOG_DISABLE;
+	}
+    }
+    /* at the moment, store one char to make a storage manager happy */
+    storeAppendPrintf(sentry, " ");
+}
+
+static void
+log_disable(cacheinfo * obj, StoreEntry * sentry)
+{
+    if (obj->logfile_status == LOG_ENABLE)
+	file_close(obj->logfile_fd);
+
+    obj->logfile_status = LOG_DISABLE;
+    /* at the moment, store one char to make a storage manager happy */
+    storeAppendPrintf(sentry, " ");
+}
+
+
+
+static void
+log_clear(cacheinfo * obj, StoreEntry * sentry)
+{
+    /* what should be done here. Erase file ??? or move it to another name?  At the moment, just erase it.  bug here need to be fixed. what if there are still data in memory. Need flush here */
+    if (obj->logfile_status == LOG_ENABLE)
+	file_close(obj->logfile_fd);
+
+    unlink(obj->logfilename);
+
+    /* reopen it anyway */
+    obj->logfile_fd = file_open(obj->logfilename, NULL, O_WRONLY | O_CREAT);
+    if (obj->logfile_fd == DISK_ERROR) {
+	debug(18, 0, "Cannot open logfile: %s\n", obj->logfilename);
+	obj->logfile_status = LOG_DISABLE;
+    }
+    /* at the moment, store one char to make a storage manager happy */
+    storeAppendPrintf(sentry, " ");
+}
+
+
+
+static void
+proto_newobject(cacheinfo * obj, protocol_t proto_id, int size, int restart)
+{
+    proto_stat *p = &obj->proto_stat_data[proto_id];
+
+    p->object_count++;
+
+    /* Account for 1KB granularity */
+    p->kb.now += ((size + 1023) >> 10);
+
+    if (p->kb.now > p->kb.max)
+	p->kb.max = p->kb.now;
+    if (restart)
+	p->kb.min = p->kb.now;
+}
+
+
+static void
+proto_purgeobject(cacheinfo * obj, protocol_t proto_id, int size)
+{
+    proto_stat *p = &obj->proto_stat_data[proto_id];
+
+    p->object_count--;
+
+    /* Scale down to KB */
+    p->kb.now -= ((size + 1023) >> 10);
+
+    if (p->kb.now < p->kb.min)
+	p->kb.min = p->kb.now;
+}
+
+/* update stat for each particular protocol when an object is fetched */
+static void
+proto_touchobject(cacheinfo * obj, protocol_t proto_id, int size)
+{
+    obj->proto_stat_data[proto_id].refcount++;
+    obj->proto_stat_data[proto_id].transferbyte += (1023 + size) >> 10;
+}
+
+static void
+proto_count(cacheinfo * obj, protocol_t proto_id, log_type type)
+{
+    switch (type) {
+    case LOG_TCP_HIT:
+    case LOG_TCP_IMS_HIT:
+    case LOG_TCP_REFRESH_HIT:
+    case LOG_TCP_REFRESH_FAIL_HIT:
+    case LOG_UDP_HIT:
+    case LOG_UDP_HIT_OBJ:
+	obj->proto_stat_data[proto_id].hit++;
+	break;
+    default:
+	obj->proto_stat_data[proto_id].miss++;
+	break;
+    }
+}
+
+
+void
+stat_init(cacheinfo ** object, const char *logfilename)
+{
+    cacheinfo *obj = NULL;
+    int i;
+
+    debug(18, 5, "stat_init: Initializing...\n");
+    obj = xcalloc(1, sizeof(cacheinfo));
+    obj->stat_get = stat_get;
+    obj->info_get = info_get;
+    obj->cache_size_get = cache_size_get;
+    obj->log_get_start = log_get_start;
+    obj->log_status_get = log_status_get;
+    obj->log_append = log_append;
+    obj->log_clear = log_clear;
+    obj->log_enable = log_enable;
+    obj->log_disable = log_disable;
+    obj->logfile_status = LOG_ENABLE;
+    obj->squid_get_start = squid_get_start;
+    obj->parameter_get = parameter_get;
+    obj->server_list = server_list;
+    if (logfilename) {
+	memset(obj->logfilename, '\0', SQUID_MAXPATHLEN);
+	xstrncpy(obj->logfilename, logfilename, SQUID_MAXPATHLEN);
+	obj->logfile_fd = file_open(obj->logfilename, NULL, O_WRONLY | O_CREAT);
+	if (obj->logfile_fd == DISK_ERROR) {
+	    debug(50, 0, "%s: %s\n", obj->logfilename, xstrerror());
+	    fatal("Cannot open logfile.");
+	}
+    }
+    obj->proto_id = urlParseProtocol;
+    obj->proto_newobject = proto_newobject;
+    obj->proto_purgeobject = proto_purgeobject;
+    obj->proto_touchobject = proto_touchobject;
+    obj->proto_count = proto_count;
+    obj->NotImplement = dummyhandler;
+    for (i = PROTO_NONE; i <= PROTO_MAX; i++) {
+	switch (i) {
+	case PROTO_HTTP:
+	    strcpy(obj->proto_stat_data[i].protoname, "HTTP");
+	    break;
+	case PROTO_GOPHER:
+	    strcpy(obj->proto_stat_data[i].protoname, "GOPHER");
+	    break;
+	case PROTO_FTP:
+	    strcpy(obj->proto_stat_data[i].protoname, "FTP");
+	    break;
+	case PROTO_WAIS:
+	    strcpy(obj->proto_stat_data[i].protoname, "WAIS");
+	    break;
+	case PROTO_CACHEOBJ:
+	    strcpy(obj->proto_stat_data[i].protoname, "CACHE_OBJ");
+	    break;
+	case PROTO_MAX:
+	    strcpy(obj->proto_stat_data[i].protoname, "TOTAL");
+	    break;
+	case PROTO_NONE:
+	default:
+	    strcpy(obj->proto_stat_data[i].protoname, "OTHER");
+	    break;
+	}
+	obj->proto_stat_data[i].object_count = 0;
+	obj->proto_stat_data[i].hit = 0;
+	obj->proto_stat_data[i].miss = 0;
+	obj->proto_stat_data[i].hitratio = 0.0;
+	obj->proto_stat_data[i].transferrate = 0;
+	obj->proto_stat_data[i].refcount = 0;
+	obj->proto_stat_data[i].transferbyte = 0;
+	obj->proto_stat_data[i].kb.max = 0;
+	obj->proto_stat_data[i].kb.min = 0;
+	obj->proto_stat_data[i].kb.avg = 0;
+	obj->proto_stat_data[i].kb.now = 0;
+    }
+    *object = obj;
+#ifdef HIER_EXPERIMENT
+    hierexplog = fopen("/usr/local/squid/logs/hierexp.log", "a");
+#endif
 }
 
 void
-statInit(void)
+stat_rotate_log(void)
 {
     int i;
-    debug(18, 5) ("statInit: Initializing...\n");
-    for (i = 0; i < N_COUNT_HIST; i++)
-	statCountersInit(&CountHist[i]);
-    for (i = 0; i < N_COUNT_HOUR_HIST; i++)
-	statCountersInit(&CountHourHist[i]);
-    statCountersInit(&Counter);
-    eventAdd("statAvgTick", statAvgTick, NULL, COUNT_INTERVAL);
-    cachemgrRegister("info",
-	"General Runtime Information",
-	info_get, 0);
-    cachemgrRegister("filedescriptors",
-	"Process Filedescriptor Allocation",
-	statFiledescriptors, 0);
-    cachemgrRegister("objects",
-	"All Cache Objects",
-	stat_objects_get, 0);
-    cachemgrRegister("vm_objects",
-	"In-Memory and In-Transit Objects",
-	stat_vmobjects_get, 0);
-    cachemgrRegister("io",
-	"Server-side network read() size histograms",
-	stat_io_get, 0);
-    cachemgrRegister("counters",
-	"Traffic and Resource Counters",
-	statCounters, 0);
-    cachemgrRegister("5min",
-	"5 Minute Average of Counters",
-	statAvg5min, 0);
-    cachemgrRegister("60min",
-	"60 Minute Average of Counters",
-	statAvg60min, 0);
-    cachemgrRegister("utilization",
-	"Cache Utilization",
-	statUtilization, 0);
-#if STAT_GRAPHS
-    cachemgrRegister("graph_variables",
-	"Display cache metrics graphically",
-	statGraphDump, 0);
-#endif
-}
-
-static void
-statAvgTick(void *notused)
-{
-    StatCounters *t = &CountHist[0];
-    StatCounters *p = &CountHist[1];
-    StatCounters *c = &Counter;
-    struct rusage rusage;
-    eventAdd("statAvgTick", statAvgTick, NULL, COUNT_INTERVAL);
-    squid_getrusage(&rusage);
-    c->page_faults = rusage_pagefaults(&rusage);
-    c->cputime = rusage_cputime(&rusage);
-    c->timestamp = current_time;
-    /* even if NCountHist is small, we already Init()ed the tail */
-    statCountersClean(CountHist + N_COUNT_HIST - 1);
-    xmemmove(p, t, (N_COUNT_HIST - 1) * sizeof(StatCounters));
-    statCountersCopy(t, c);
-    NCountHist++;
-
-    if ((NCountHist % COUNT_INTERVAL) == 0) {
-	/* we have an hours worth of readings.  store previous hour */
-	StatCounters *p = &CountHourHist[0];
-	StatCounters *t = &CountHourHist[1];
-	StatCounters *c = &CountHist[N_COUNT_HIST];
-	xmemmove(p, t, (N_COUNT_HOUR_HIST - 1) * sizeof(StatCounters));
-	memcpy(t, c, sizeof(StatCounters));
-	NCountHourHist++;
-    }
-}
-
-static void
-statCountersInit(StatCounters * C)
-{
-    assert(C);
-    memset(C, 0, sizeof(*C));
-    C->timestamp = current_time;
-    statCountersInitSpecial(C);
-}
-
-/* add special cases here as they arrive */
-static void
-statCountersInitSpecial(StatCounters * C)
-{
-    /*
-     * HTTP svc_time hist is kept in milli-seconds; max of 3 hours.
-     */
-    statHistLogInit(&C->client_http.all_svc_time, 300, 0.0, 3600000.0 * 3.0);
-    statHistLogInit(&C->client_http.miss_svc_time, 300, 0.0, 3600000.0 * 3.0);
-    statHistLogInit(&C->client_http.nm_svc_time, 300, 0.0, 3600000.0 * 3.0);
-    statHistLogInit(&C->client_http.hit_svc_time, 300, 0.0, 3600000.0 * 3.0);
-    /*
-     * ICP svc_time hist is kept in micro-seconds; max of 1 minute.
-     */
-    statHistLogInit(&C->icp.query_svc_time, 300, 0.0, 1000000.0 * 60.0);
-    statHistLogInit(&C->icp.reply_svc_time, 300, 0.0, 1000000.0 * 60.0);
-    /*
-     * DNS svc_time hist is kept in milli-seconds; max of 10 minutes.
-     */
-    statHistLogInit(&C->dns.svc_time, 300, 0.0, 60000.0 * 10.0);
-}
-
-/* add special cases here as they arrive */
-static void
-statCountersClean(StatCounters * C)
-{
-    assert(C);
-    statHistClean(&C->client_http.all_svc_time);
-    statHistClean(&C->client_http.miss_svc_time);
-    statHistClean(&C->client_http.nm_svc_time);
-    statHistClean(&C->client_http.hit_svc_time);
-    statHistClean(&C->icp.query_svc_time);
-    statHistClean(&C->icp.reply_svc_time);
-    statHistClean(&C->dns.svc_time);
-}
-
-/* add special cases here as they arrive */
-static void
-statCountersCopy(StatCounters * dest, const StatCounters * orig)
-{
-    assert(dest && orig);
-    /* this should take care of all the fields, but "special" ones */
-    memcpy(dest, orig, sizeof(*dest));
-    /* prepare space where to copy special entries */
-    statCountersInitSpecial(dest);
-    /* now handle special cases */
-    /* note: we assert that histogram capacities do not change */
-    statHistCopy(&dest->client_http.all_svc_time, &orig->client_http.all_svc_time);
-    statHistCopy(&dest->client_http.miss_svc_time, &orig->client_http.miss_svc_time);
-    statHistCopy(&dest->client_http.nm_svc_time, &orig->client_http.nm_svc_time);
-    statHistCopy(&dest->client_http.hit_svc_time, &orig->client_http.hit_svc_time);
-    statHistCopy(&dest->icp.query_svc_time, &orig->icp.query_svc_time);
-    statHistCopy(&dest->icp.reply_svc_time, &orig->icp.reply_svc_time);
-    statHistCopy(&dest->dns.svc_time, &orig->dns.svc_time);
-}
-
-static void
-statCountersDump(StoreEntry * sentry)
-{
-    StatCounters *f = &Counter;
-    struct rusage rusage;
-    squid_getrusage(&rusage);
-    f->page_faults = rusage_pagefaults(&rusage);
-    f->cputime = rusage_cputime(&rusage);
-
-    storeAppendPrintf(sentry, "sample_time = %d.%d (%s)\n",
-	f->timestamp.tv_sec,
-	f->timestamp.tv_usec,
-	mkrfc1123(f->timestamp.tv_sec));
-    storeAppendPrintf(sentry, "client_http.requests = %d\n",
-	f->client_http.requests);
-    storeAppendPrintf(sentry, "client_http.hits = %d\n",
-	f->client_http.hits);
-    storeAppendPrintf(sentry, "client_http.errors = %d\n",
-	f->client_http.errors);
-    storeAppendPrintf(sentry, "client_http.kbytes_in = %d\n",
-	(int) f->client_http.kbytes_in.kb);
-    storeAppendPrintf(sentry, "client_http.kbytes_out = %d\n",
-	(int) f->client_http.kbytes_out.kb);
-
-#if TOO_MUCH_OUTPUT
-    storeAppendPrintf(sentry, "client_http.all_svc_time histogram:\n");
-    statHistDump(&f->client_http.all_svc_time, sentry, NULL);
-    storeAppendPrintf(sentry, "client_http.miss_svc_time histogram:\n");
-    statHistDump(&f->client_http.miss_svc_time, sentry, NULL);
-    storeAppendPrintf(sentry, "client_http.nm_svc_time histogram:\n");
-    statHistDump(&f->client_http.nm_svc_time, sentry, NULL);
-    storeAppendPrintf(sentry, "client_http.hit_svc_time histogram:\n");
-    statHistDump(&f->client_http.hit_svc_time, sentry, NULL);
+    LOCAL_ARRAY(char, from, MAXPATHLEN);
+    LOCAL_ARRAY(char, to, MAXPATHLEN);
+    char *fname = NULL;
+#ifdef S_ISREG
+    struct stat sb;
 #endif
 
-    storeAppendPrintf(sentry, "server.all.requests = %d\n",
-	(int) f->server.all.requests);
-    storeAppendPrintf(sentry, "server.all.errors = %d\n",
-	(int) f->server.all.errors);
-    storeAppendPrintf(sentry, "server.all.kbytes_in = %d\n",
-	(int) f->server.all.kbytes_in.kb);
-    storeAppendPrintf(sentry, "server.all.kbytes_out = %d\n",
-	(int) f->server.all.kbytes_out.kb);
-
-    storeAppendPrintf(sentry, "server.http.requests = %d\n",
-	(int) f->server.http.requests);
-    storeAppendPrintf(sentry, "server.http.errors = %d\n",
-	(int) f->server.http.errors);
-    storeAppendPrintf(sentry, "server.http.kbytes_in = %d\n",
-	(int) f->server.http.kbytes_in.kb);
-    storeAppendPrintf(sentry, "server.http.kbytes_out = %d\n",
-	(int) f->server.http.kbytes_out.kb);
-
-    storeAppendPrintf(sentry, "server.ftp.requests = %d\n",
-	(int) f->server.ftp.requests);
-    storeAppendPrintf(sentry, "server.ftp.errors = %d\n",
-	(int) f->server.ftp.errors);
-    storeAppendPrintf(sentry, "server.ftp.kbytes_in = %d\n",
-	(int) f->server.ftp.kbytes_in.kb);
-    storeAppendPrintf(sentry, "server.ftp.kbytes_out = %d\n",
-	(int) f->server.ftp.kbytes_out.kb);
-
-    storeAppendPrintf(sentry, "server.other.requests = %d\n",
-	(int) f->server.other.requests);
-    storeAppendPrintf(sentry, "server.other.errors = %d\n",
-	(int) f->server.other.errors);
-    storeAppendPrintf(sentry, "server.other.kbytes_in = %d\n",
-	(int) f->server.other.kbytes_in.kb);
-    storeAppendPrintf(sentry, "server.other.kbytes_out = %d\n",
-	(int) f->server.other.kbytes_out.kb);
-
-    storeAppendPrintf(sentry, "icp.pkts_sent = %d\n",
-	f->icp.pkts_sent);
-    storeAppendPrintf(sentry, "icp.pkts_recv = %d\n",
-	f->icp.pkts_recv);
-    storeAppendPrintf(sentry, "icp.kbytes_sent = %d\n",
-	(int) f->icp.kbytes_sent.kb);
-    storeAppendPrintf(sentry, "icp.kbytes_recv = %d\n",
-	(int) f->icp.kbytes_recv.kb);
-
-#if TOO_MUCH_OUTPUT
-    storeAppendPrintf(sentry, "icp.query_svc_time histogram:\n");
-    statHistDump(&f->icp.query_svc_time, sentry, NULL);
-    storeAppendPrintf(sentry, "icp.reply_svc_time histogram:\n");
-    statHistDump(&f->icp.reply_svc_time, sentry, NULL);
-    storeAppendPrintf(sentry, "dns.svc_time histogram:\n");
-    statHistDump(&f->dns.svc_time, sentry, NULL);
+    if ((fname = HTTPCacheInfo->logfilename) == NULL)
+	return;
+#ifdef S_ISREG
+    if (stat(fname, &sb) == 0)
+	if (S_ISREG(sb.st_mode) == 0)
+	    return;
 #endif
 
-    storeAppendPrintf(sentry, "unlink.requests = %d\n",
-	f->unlink.requests);
-    storeAppendPrintf(sentry, "page_faults = %d\n",
-	f->page_faults);
-    storeAppendPrintf(sentry, "select_loops = %d\n",
-	f->select_loops);
-    storeAppendPrintf(sentry, "cpu_time = %f\n",
-	f->cputime);
-    storeAppendPrintf(sentry, "wall_time = %f\n",
-	tvSubDsec(f->timestamp, current_time));
-}
+    debug(18, 1, "stat_rotate_log: Rotating\n");
 
-static void
-statCounters(StoreEntry * e)
-{
-    statCountersDump(e);
-}
-
-static void
-statAvg5min(StoreEntry * e)
-{
-    statAvgDump(e, 5, 0);
-}
-
-static void
-statAvg60min(StoreEntry * e)
-{
-    statAvgDump(e, 60, 0);
-}
-
-enum {
-    HTTP_SVC, ICP_SVC, DNS_SVC
-};
-
-int
-get_median_svc(int interval, int which)
-{
-    StatCounters *f;
-    StatCounters *l;
-    double x;
-    assert(interval > 0);
-    if (interval > N_COUNT_HIST - 1)
-	interval = N_COUNT_HIST - 1;
-    f = &CountHist[0];
-    l = &CountHist[interval];
-    assert(f);
-    assert(l);
-    switch (which) {
-    case HTTP_SVC:
-	x = statHistDeltaMedian(&l->client_http.all_svc_time, &f->client_http.all_svc_time);
-	break;
-    case ICP_SVC:
-	x = statHistDeltaMedian(&l->icp.query_svc_time, &f->icp.query_svc_time);
-	break;
-    case DNS_SVC:
-	x = statHistDeltaMedian(&l->dns.svc_time, &f->dns.svc_time);
-	break;
-    default:
-	debug(49, 5) ("get_median_val: unknown type.\n");
-	x = 0;
+    /* Rotate numbers 0 through N up one */
+    for (i = Config.Log.rotateNumber; i > 1;) {
+	i--;
+	sprintf(from, "%s.%d", fname, i - 1);
+	sprintf(to, "%s.%d", fname, i);
+	rename(from, to);
     }
-    return (int) x;
-}
-
-StatCounters *
-snmpStatGet(int minutes)
-{
-    return &CountHist[minutes];
-}
-
-
-#if STAT_GRAPHS
-/*
- * urgh, i don't like these, but they do cut the amount of code down immensely
- */
-
-#define GRAPH_PER_MIN(Y) \
-    for (i=0;i<(N_COUNT_HIST-2);i++) { \
-	dt = tvSubDsec(CountHist[i].timestamp, CountHist[i+1].timestamp); \
-	if (dt <= 0.0) \
-	    break; \
-	storeAppendPrintf(e, "%lu,%0.2f:", \
-	    CountHist[i].timestamp.tv_sec, \
-	    ((CountHist[i].Y - CountHist[i+1].Y) / dt)); \
+    /* Rotate the current log to .0 */
+    if (Config.Log.rotateNumber > 0) {
+	sprintf(to, "%s.%d", fname, 0);
+	rename(fname, to);
     }
-
-#define GRAPH_PER_HOUR(Y) \
-    for (i=0;i<(N_COUNT_HOUR_HIST-2);i++) { \
-	dt = tvSubDsec(CountHourHist[i].timestamp, CountHourHist[i+1].timestamp); \
-	if (dt <= 0.0) \
-	    break; \
-	storeAppendPrintf(e, "%lu,%0.2f:", \
-	    CountHourHist[i].timestamp.tv_sec, \
-	    ((CountHourHist[i].Y - CountHourHist[i+1].Y) / dt)); \
+    /* Close and reopen the log.  It may have been renamed "manually"
+     * before HUP'ing us. */
+    file_close(HTTPCacheInfo->logfile_fd);
+    HTTPCacheInfo->logfile_fd = file_open(fname, NULL, O_WRONLY | O_CREAT);
+    if (HTTPCacheInfo->logfile_fd == DISK_ERROR) {
+	debug(18, 0, "stat_rotate_log: Cannot open logfile: %s\n", fname);
+	HTTPCacheInfo->logfile_status = LOG_DISABLE;
+	fatal("Cannot open logfile.");
     }
-
-#define GRAPH_TITLE(X,Y) storeAppendPrintf(e,"%s\t%s\t",X,Y);
-#define GRAPH_END storeAppendPrintf(e,"\n");
-
-#define GENGRAPH(X,Y,Z) \
-    GRAPH_TITLE(Y,Z) \
-    GRAPH_PER_MIN(X) \
-    GRAPH_PER_HOUR(X) \
-    GRAPH_END
-
-static void
-statGraphDump(StoreEntry * e)
-{
-    int i;
-    double dt;
-
-    GENGRAPH(client_http.requests, "client_http.requests", "Client HTTP requests/sec");
-    GENGRAPH(client_http.hits, "client_http.hits", "Client HTTP hits/sec");
-    GENGRAPH(client_http.errors, "client_http.errors", "Client HTTP errors/sec");
-    GENGRAPH(client_http.kbytes_in.kb, "client_http.kbytes_in", "Client HTTP kbytes_in/sec");
-    GENGRAPH(client_http.kbytes_out.kb, "client_http.kbytes_out", "Client HTTP kbytes_out/sec");
-
-    /* XXX todo: http median service times */
-
-    GENGRAPH(server.all.requests, "server.all.requests", "Server requests/sec");
-    GENGRAPH(server.all.errors, "server.all.errors", "Server errors/sec");
-    GENGRAPH(server.all.kbytes_in.kb, "server.all.kbytes_in", "Server total kbytes_in/sec");
-    GENGRAPH(server.all.kbytes_out.kb, "server.all.kbytes_out", "Server total kbytes_out/sec");
-
-    GENGRAPH(server.http.requests, "server.http.requests", "Server HTTP requests/sec");
-    GENGRAPH(server.http.errors, "server.http.errors", "Server HTTP errors/sec");
-    GENGRAPH(server.http.kbytes_in.kb, "server.http.kbytes_in", "Server HTTP kbytes_in/sec");
-    GENGRAPH(server.http.kbytes_out.kb, "server.http.kbytes_out", "Server HTTP kbytes_out/sec");
-
-    GENGRAPH(server.ftp.requests, "server.ftp.requests", "Server FTP requests/sec");
-    GENGRAPH(server.ftp.errors, "server.ftp.errors", "Server FTP errors/sec");
-    GENGRAPH(server.ftp.kbytes_in.kb, "server.ftp.kbytes_in", "Server FTP kbytes_in/sec");
-    GENGRAPH(server.ftp.kbytes_out.kb, "server.ftp.kbytes_out", "Server FTP kbytes_out/sec");
-
-    GENGRAPH(server.other.requests, "server.other.requests", "Server other requests/sec");
-    GENGRAPH(server.other.errors, "server.other.errors", "Server other errors/sec");
-    GENGRAPH(server.other.kbytes_in.kb, "server.other.kbytes_in", "Server other kbytes_in/sec");
-    GENGRAPH(server.other.kbytes_out.kb, "server.other.kbytes_out", "Server other kbytes_out/sec");
-
-    GENGRAPH(icp.pkts_sent, "icp.pkts_sent", "ICP packets sent/sec");
-    GENGRAPH(icp.pkts_recv, "icp.pkts_recv", "ICP packets received/sec");
-    GENGRAPH(icp.kbytes_sent.kb, "icp.kbytes_sent", "ICP kbytes_sent/sec");
-    GENGRAPH(icp.kbytes_recv.kb, "icp.kbytes_recv", "ICP kbytes_received/sec");
-
-    /* XXX todo: icp median service times */
-    /* XXX todo: dns median service times */
-
-    GENGRAPH(unlink.requests, "unlink.requests", "Cache File unlink requests/sec");
-    GENGRAPH(page_faults, "page_faults", "System Page Faults/sec");
-    GENGRAPH(select_loops, "select_loops", "System Select Loop calls/sec");
-    GENGRAPH(cputime, "cputime", "CPU utilisation");
 }
-#endif /* STAT_GRAPHS */
+
+void
+statCloseLog(void)
+{
+    file_close(HTTPCacheInfo->logfile_fd);
+}

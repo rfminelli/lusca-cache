@@ -31,17 +31,36 @@
 
 #include "squid.h"
 
-static hash_table *client_table = NULL;
-static ClientInfo *clientdbAdd(struct in_addr addr);
+typedef struct _client_info {
+    char *key;
+    struct client_info *next;
+    struct in_addr addr;
+    struct {
+	int result_hist[ERR_MAX];
+	int n_requests;
+    } Http, Icp;
+    struct {
+	time_t time;
+	int n_req;
+	int n_denied;
+    } cutoff;
+} ClientInfo;
+
+int client_info_sz;
+
+static HashID client_table = 0;
+
+static ClientInfo *clientdbAdd _PARAMS((struct in_addr addr));
 
 static ClientInfo *
 clientdbAdd(struct in_addr addr)
 {
     ClientInfo *c;
-    c = memAllocate(MEM_CLIENT_INFO);
+    c = xcalloc(1, sizeof(ClientInfo));
     c->key = xstrdup(inet_ntoa(addr));
     c->addr = addr;
     hash_join(client_table, (hash_link *) c);
+    meta_data.client_info++;
     return c;
 }
 
@@ -50,19 +69,18 @@ clientdbInit(void)
 {
     if (client_table)
 	return;
-    client_table = hash_create((HASHCMP *) strcmp, 229, hash_string);
-    cachemgrRegister("client_list",
-	"Cache Client List",
-	clientdbDump,
-	0);
+    client_table = hash_create((int (*)_PARAMS((const char *, const char *))) strcmp,
+	229,
+	hash_string);
+    client_info_sz = sizeof(ClientInfo);
 }
 
 void
-clientdbUpdate(struct in_addr addr, log_type log_type, protocol_t p)
+clientdbUpdate(struct in_addr addr, log_type log_type, u_short port)
 {
     char *key;
     ClientInfo *c;
-    if (!Config.onoff.client_db)
+    if (!Config.Options.client_db)
 	return;
     key = inet_ntoa(addr);
     c = (ClientInfo *) hash_lookup(client_table, key);
@@ -70,10 +88,10 @@ clientdbUpdate(struct in_addr addr, log_type log_type, protocol_t p)
 	c = clientdbAdd(addr);
     if (c == NULL)
 	debug_trap("clientdbUpdate: Failed to add entry");
-    if (p == PROTO_HTTP) {
+    if (port == Config.Port.http) {
 	c->Http.n_requests++;
 	c->Http.result_hist[log_type]++;
-    } else if (p == PROTO_ICP) {
+    } else if (port == Config.Port.icp) {
 	c->Icp.n_requests++;
 	c->Icp.result_hist[log_type]++;
     }
@@ -88,7 +106,7 @@ clientdbCutoffDenied(struct in_addr addr)
     int ND;
     double p;
     ClientInfo *c;
-    if (!Config.onoff.client_db)
+    if (!Config.Options.client_db)
 	return 0;
     key = inet_ntoa(addr);
     c = (ClientInfo *) hash_lookup(client_table, key);
@@ -110,9 +128,9 @@ clientdbCutoffDenied(struct in_addr addr)
     p = 100.0 * ND / NR;
     if (p < 95.0)
 	return 0;
-    debug(1, 0) ("WARNING: Probable misconfigured neighbor at %s\n", key);
-    debug(1, 0) ("WARNING: %d of the last %d ICP replies are DENIED\n", ND, NR);
-    debug(1, 0) ("WARNING: No replies will be sent for the next %d seconds\n",
+    debug(1, 0, "WARNING: Probable misconfigured neighbor at %s\n", key);
+    debug(1, 0, "WARNING: %d of the last %d ICP replies are DENIED\n", ND, NR);
+    debug(1, 0, "WARNING: No replies will be sent for the next %d seconds\n",
 	CUTOFF_SECONDS);
     c->cutoff.time = squid_curtime;
     c->cutoff.n_req = c->Icp.n_requests;
@@ -120,64 +138,40 @@ clientdbCutoffDenied(struct in_addr addr)
     return 1;
 }
 
-
 void
 clientdbDump(StoreEntry * sentry)
 {
     ClientInfo *c;
     log_type l;
-    storeAppendPrintf(sentry, "Cache Clients:\n");
+    storeAppendPrintf(sentry, "{Cache Clients:\n");
     c = (ClientInfo *) hash_first(client_table);
     while (c) {
-	storeAppendPrintf(sentry, "Address: %s\n", c->key);
-	storeAppendPrintf(sentry, "Name: %s\n", fqdnFromAddr(c->addr));
-	storeAppendPrintf(sentry, "    ICP Requests %d\n",
+	storeAppendPrintf(sentry, "{Address: %s}\n", c->key);
+	storeAppendPrintf(sentry, "{Name: %s}\n", fqdnFromAddr(c->addr));
+	storeAppendPrintf(sentry, "{    ICP Requests %d}\n",
 	    c->Icp.n_requests);
-	for (l = LOG_TAG_NONE; l < LOG_TYPE_MAX; l++) {
+	for (l = LOG_TAG_NONE; l < ERR_MAX; l++) {
 	    if (c->Icp.result_hist[l] == 0)
 		continue;
 	    storeAppendPrintf(sentry,
-		"        %-20.20s %7d %3d%%\n",
+		"{        %-20.20s %7d %3d%%}\n",
 		log_tags[l],
 		c->Icp.result_hist[l],
 		percent(c->Icp.result_hist[l], c->Icp.n_requests));
 	}
-	storeAppendPrintf(sentry, "    HTTP Requests %d\n",
+	storeAppendPrintf(sentry, "{    HTTP Requests %d}\n",
 	    c->Http.n_requests);
-	for (l = LOG_TAG_NONE; l < LOG_TYPE_MAX; l++) {
+	for (l = LOG_TAG_NONE; l < ERR_MAX; l++) {
 	    if (c->Http.result_hist[l] == 0)
 		continue;
 	    storeAppendPrintf(sentry,
-		"        %-20.20s %7d %3d%%\n",
+		"{        %-20.20s %7d %3d%%}\n",
 		log_tags[l],
 		c->Http.result_hist[l],
 		percent(c->Http.result_hist[l], c->Http.n_requests));
 	}
-	storeAppendPrintf(sentry, "\n");
+	storeAppendPrintf(sentry, "{}\n");
 	c = (ClientInfo *) hash_next(client_table);
     }
-}
-
-void
-clientdbFreeMemory(void)
-{
-    ClientInfo *c;
-    ClientInfo **C;
-    int i = 0;
-    int j;
-    int n = memInUse(MEM_CLIENT_INFO);
-    C = xcalloc(n, sizeof(ClientInfo *));
-    c = (ClientInfo *) hash_first(client_table);
-    while (c && i < n) {
-        *(C + i) = c;
-        i++;
-        c = (ClientInfo *) hash_next(client_table);
-    }
-    for (j = 0; j < i; j++) {
-        c = *(C + j);
-        memFree(MEM_CLIENT_INFO, c);
-    }
-    xfree(C);
-    hashFreeMemory(client_table);
-    client_table = NULL;
+    storeAppendPrintf(sentry, close_bracket);
 }

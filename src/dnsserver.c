@@ -210,8 +210,8 @@
 #include <resolv.h>
 #endif
 
+#include "ansiproto.h"
 #include "util.h"
-#include "snprintf.h"
 
 extern int h_errno;
 
@@ -264,8 +264,6 @@ main(int argc, char *argv[])
     int alias_count = 0;
     int i;
     int c;
-    int opt_s = 0;
-    extern char *optarg;
 
     safe_inet_addr("255.255.255.255", &no_addr);
 
@@ -282,39 +280,25 @@ main(int argc, char *argv[])
 #endif
 #endif
 
-    while ((c = getopt(argc, argv, "Ddhs:v")) != -1) {
+    while ((c = getopt(argc, argv, "vhdD")) != -1) {
 	switch (c) {
-	case 'D':
-#ifdef RES_DEFNAMES
-	    _res.options |= RES_DEFNAMES;
-#endif
-#ifdef RES_DNSRCH
-	    _res.options |= RES_DNSRCH;
-#endif
+	case 'v':
+	    printf("dnsserver version %s\n", SQUID_VERSION);
+	    exit(0);
 	    break;
 	case 'd':
-	    snprintf(buf, 256, "dnsserver.%d.log", (int) getpid());
+	    sprintf(buf, "dnsserver.%d.log", (int) getpid());
 	    logfile = fopen(buf, "a");
 	    do_debug++;
 	    if (!logfile)
 		fprintf(stderr, "Could not open dnsserver's log file\n");
 	    break;
+	case 'D':
+#ifdef RES_DEFNAMES
+	    _res.options |= RES_DEFNAMES;
+#endif
+	    break;
 	case 'h':
-	    fprintf(stderr, "usage: dnsserver -hvd\n");
-	    exit(1);
-	    break;
-	case 's':
-	    if (opt_s == 0) {
-		_res.nscount = 0;
-		_res.options |= RES_INIT;
-		opt_s = 1;
-	    }
-	    safe_inet_addr(optarg, &_res.nsaddr_list[_res.nscount++].sin_addr);
-	    break;
-	case 'v':
-	    printf("dnsserver version %s\n", SQUID_VERSION);
-	    exit(0);
-	    break;
 	default:
 	    fprintf(stderr, "usage: dnsserver -hvd\n");
 	    exit(1);
@@ -328,9 +312,8 @@ main(int argc, char *argv[])
 	memset(request, '\0', REQ_SZ);
 
 	/* read from ipcache */
-	if (fgets(request, REQ_SZ, stdin) == NULL) {
+	if (fgets(request, REQ_SZ, stdin) == NULL)
 	    exit(1);
-	}
 	t = strrchr(request, '\n');
 	if (t == NULL)		/* Ignore if no newline */
 	    continue;
@@ -341,8 +324,7 @@ main(int argc, char *argv[])
 	    exit(0);
 	}
 	if (strcmp(request, "$hello") == 0) {
-	    printf("$alive\n");
-	    printf("$end\n");
+	    printf("$alive\n$end\n");
 	    fflush(stdout);
 	    continue;
 	}
@@ -384,10 +366,10 @@ main(int argc, char *argv[])
 	msg[0] = '\0';
 	if (!result) {
 	    if (h_errno == TRY_AGAIN) {
-		snprintf(msg, 1024, "Name Server for domain '%s' is unavailable.\n",
+		sprintf(msg, "Name Server for domain '%s' is unavailable.\n",
 		    request);
 	    } else {
-		snprintf(msg, 1024, "DNS Domain '%s' is invalid: %s.\n",
+		sprintf(msg, "DNS Domain '%s' is invalid: %s.\n",
 		    request, my_h_msgs(h_errno));
 	    }
 	}
