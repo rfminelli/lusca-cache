@@ -247,6 +247,7 @@ static HttpHeaderEntry *httpHeaderGetEntry(const HttpHeader *hdr, HttpHeaderPos 
 static void httpHeaderDelAt(HttpHeader *hdr, HttpHeaderPos pos);
 static void httpHeaderAddParsedEntry(HttpHeader *hdr, HttpHeaderEntry *e);
 static void httpHeaderAddNewEntry(HttpHeader *hdr, const HttpHeaderEntry *e);
+static void httpHeaderSet(HttpHeader *hdr, http_hdr_type id, const field_store value);
 static void httpHeaderSyncMasks(HttpHeader *hdr, const HttpHeaderEntry *e, int add);
 static void httpHeaderSyncStats(HttpHeader *hdr, const HttpHeaderEntry *e);
 static int httpHeaderIdByName(const char *name, int name_len, const field_attrs_t *attrs, int end, int mask);
@@ -562,6 +563,7 @@ httpHeaderFindEntry(const HttpHeader *hdr, http_hdr_type id, HttpHeaderPos *pos)
     int is_absent;
     assert(hdr);
     assert_eid(id);
+    assert(id != HDR_OTHER);
 
     tmp_debug(here) ("finding entry %d in hdr %p\n", id, hdr);
     /* check mask first @?@ @?@ remove double checking and asserts when done */
@@ -709,6 +711,7 @@ int httpHeaderHas(const HttpHeader *hdr, http_hdr_type id)
 {
     assert(hdr);
     assert_eid(id);
+    assert(id != HDR_OTHER);
     tmp_debug(here) ("%p lookup for %d\n", hdr, id);
     return EBIT_TEST(hdr->emask, id);
 
@@ -721,6 +724,7 @@ int httpHeaderHas(const HttpHeader *hdr, http_hdr_type id)
 void httpHeaderDel(HttpHeader *hdr, http_hdr_type id)
 {
     HttpHeaderPos pos = HttpHeaderInitPos;
+    assert(id != HDR_OTHER);
     tmp_debug(here) ("%p del-by-id %d\n", hdr, id);
     if (httpHeaderFindEntry(hdr, id, &pos)) {
 	httpHeaderDelAt(hdr, pos);
@@ -732,7 +736,7 @@ void httpHeaderDel(HttpHeader *hdr, http_hdr_type id)
  * setting an invaid value is equivalent to deleting a field
  * (if field is not present, it is added; otherwise, old content is destroyed).
  */
-void
+static void
 httpHeaderSet(HttpHeader *hdr, http_hdr_type id, const field_store value)
 {
     HttpHeaderPos pos;
@@ -751,6 +755,25 @@ httpHeaderSet(HttpHeader *hdr, http_hdr_type id, const field_store value)
 	httpHeaderEntryClean(&e);
 }
 
+void
+httpHeaderSetInt(HttpHeader *hdr, http_hdr_type id, int number)
+{
+    field_store value;
+    assert_eid(id);
+    assert(Headers[id].type == ftInt); /* must be of an appropriatre type */
+    value.v_int = number;
+    httpHeaderSet(hdr, id, value);
+}
+
+void
+httpHeaderSetTime(HttpHeader *hdr, http_hdr_type id, time_t time)
+{
+    field_store value;
+    assert_eid(id);
+    assert(Headers[id].type == ftDate_1123); /* must be of an appropriatre type */
+    value.v_time = time;
+    httpHeaderSet(hdr, id, value);
+}
 void
 httpHeaderSetStr(HttpHeader *hdr, http_hdr_type id, const char *str)
 {

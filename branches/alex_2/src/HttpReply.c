@@ -209,15 +209,15 @@ httpReplySetHeaders(HttpReply *reply, double ver, http_status status, const char
     hdr = &reply->hdr;
     httpHeaderAddExt(hdr, "Server", full_appname_string);
     httpHeaderAddExt(hdr, "MIME-Version", "1.0"); /* do we need this? @?@ */
-    httpHeaderSet(hdr, HDR_DATE, squid_curtime);
+    httpHeaderSetTime(hdr, HDR_DATE, squid_curtime);
     if (ctype)
 	httpHeaderSetStr(hdr, HDR_CONTENT_TYPE, ctype);
     if (clen > 0)
-	httpHeaderSet(hdr, HDR_CONTENT_LENGTH, clen);
+	httpHeaderSetInt(hdr, HDR_CONTENT_LENGTH, clen);
     if (expires >= 0)
-	httpHeaderSet(hdr, HDR_EXPIRES, expires);
+	httpHeaderSetTime(hdr, HDR_EXPIRES, expires);
     if (lmt > 0) /* this used to be lmt != 0 @?@ */
-  	httpHeaderSet(hdr, HDR_LAST_MODIFIED, lmt);
+  	httpHeaderSetTime(hdr, HDR_LAST_MODIFIED, lmt);
 }
 
 void
@@ -247,11 +247,11 @@ httpReplyUpdateOnNotModified(HttpReply *rep, HttpReply *freshRep)
     rep->hdr = *httpHeaderClone(&freshRep->hdr);
     /* restore missing info if needed */
     if (!httpHeaderHas(&rep->hdr, HDR_DATE))
-	httpHeaderSet(&rep->hdr, HDR_DATE, date);
+	httpHeaderSetTime(&rep->hdr, HDR_DATE, date);
     if (!httpHeaderHas(&rep->hdr, HDR_EXPIRES))
-	httpHeaderSet(&rep->hdr, HDR_EXPIRES, expires);
+	httpHeaderSetTime(&rep->hdr, HDR_EXPIRES, expires);
     if (!httpHeaderHas(&rep->hdr, HDR_LAST_MODIFIED))
-	httpHeaderSet(&rep->hdr, HDR_LAST_MODIFIED, lmt);
+	httpHeaderSetTime(&rep->hdr, HDR_LAST_MODIFIED, lmt);
 }
 
 int

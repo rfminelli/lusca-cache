@@ -1123,6 +1123,7 @@ clientGetHeadersForIMS(void *data, char *buf, ssize_t size)
     StoreEntry *entry = http->entry;
     MemObject *mem;
 #if 0
+    MemObject *mem;
     char *reply = NULL;
 #endif
     debug(33, 3) ("clientGetHeadersForIMS: %s, %d bytes\n",

@@ -148,8 +148,8 @@ extern void httpHeaderDel(HttpHeader *hdr, http_hdr_type id);
  * Note: in most cases it is much better to use higher level
  * routines provided by HttpReply and HttpRequest
  */
-extern void httpHeaderSet(HttpHeader *hdr, http_hdr_type type, const field_store value);
-/* same, but with (const char *) to avoid compiler warnings */
+extern void httpHeaderSetInt(HttpHeader *hdr, http_hdr_type type, int number);
+extern void httpHeaderSetTime(HttpHeader *hdr, http_hdr_type type, time_t time);
 extern void httpHeaderSetStr(HttpHeader *hdr, http_hdr_type type, const char *str);
 
 /* add extension header (these fields are not parsed/analyzed/joined, etc.) */
