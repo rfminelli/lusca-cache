@@ -11,10 +11,10 @@
  *  Internet community.  Development is led by Duane Wessels of the
  *  National Laboratory for Applied Network Research and funded by the
  *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
- *  Duane Wessels and the University of California San Diego.  Please
- *  see the COPYRIGHT file for full details.  Squid incorporates
- *  software developed and/or copyrighted by other sources.  Please see
- *  the CREDITS file for full details.
+ *  the Regents of the University of California.  Please see the
+ *  COPYRIGHT file for full details.  Squid incorporates software
+ *  developed and/or copyrighted by other sources.  Please see the
+ *  CREDITS file for full details.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -33,7 +33,6 @@
  */
 
 #include "squid.h"
-#include "store_asyncufs.h"
 
 #include	<stdio.h>
 #include	<sys/types.h>
@@ -53,7 +52,7 @@
 /* Linux requires proper use of mutexes or it will segfault deep in the
  * thread libraries. Observed on Alpha SMP Linux 2.2.10-ac12.
  */
-#define AIO_PROPER_MUTEX 1
+#define USE_PROPER_MUTEX 1
 #endif
 
 enum _aio_thread_status {
@@ -71,7 +70,6 @@ enum _aio_request_type {
     _AIO_OP_WRITE,
     _AIO_OP_CLOSE,
     _AIO_OP_UNLINK,
-    _AIO_OP_TRUNCATE,
     _AIO_OP_OPENDIR,
     _AIO_OP_STAT
 };
@@ -114,7 +112,6 @@ int aio_read(int, char *, int, off_t, int, aio_result_t *);
 int aio_write(int, char *, int, off_t, int, aio_result_t *);
 int aio_close(int, aio_result_t *);
 int aio_unlink(const char *, aio_result_t *);
-int aio_truncate(const char *, off_t length, aio_result_t *);
 int aio_opendir(const char *, aio_result_t *);
 aio_result_t *aio_poll_done();
 int aio_sync(void);
@@ -130,7 +127,6 @@ static void aio_do_write(aio_request_t *);
 static void aio_do_close(aio_request_t *);
 static void aio_do_stat(aio_request_t *);
 static void aio_do_unlink(aio_request_t *);
-static void aio_do_truncate(aio_request_t *);
 #if AIO_OPENDIR
 static void *aio_do_opendir(aio_request_t *);
 #endif
@@ -164,7 +160,15 @@ aio_init(void)
 
     pthread_attr_init(&globattr);
 #if HAVE_PTHREAD_ATTR_SETSCOPE
+#if defined(_SQUID_SGI_)
+    /* 
+     * Erik Hofman <erik.hofman@a1.nl> suggests PTHREAD_SCOPE_PROCESS
+     * instead of PTHREAD_SCOPE_SYSTEM, esp for IRIX.
+     */
+    pthread_attr_setscope(&globattr, PTHREAD_SCOPE_PROCESS);
+#else
     pthread_attr_setscope(&globattr, PTHREAD_SCOPE_SYSTEM);
+#endif
 #endif
     globsched.sched_priority = 1;
     main_thread = pthread_self();
@@ -174,6 +178,9 @@ aio_init(void)
     globsched.sched_priority = 2;
 #if HAVE_PTHREAD_ATTR_SETSCHEDPARAM
     pthread_attr_setschedparam(&globattr, &globsched);
+#endif
+#if defined(_SQUID_SGI_)
+    pthread_setconcurrency(NUMTHREADS + 1);
 #endif
 
     /* Create threads and get them to sit in their wait loop */
@@ -241,7 +248,16 @@ aio_thread_loop(void *ptr)
     sigaddset(&new, SIGTERM);
     sigaddset(&new, SIGINT);
     sigaddset(&new, SIGALRM);
+#if HAVE_PTHREAD_SIGMASK
     pthread_sigmask(SIG_BLOCK, &new, NULL);
+#else
+    /*
+     * Some versions of AIX, 4.2 at least, do not have pthread_sigmask
+     * in the pthreads library.  They still use the older sigthreadmask
+     * routine. Daniel Ehrlich <ehrlich@TeleBeam.net>.
+     */
+    sigthreadmask(SIG_BLOCK, &new, NULL);
+#endif
 
     pthread_mutex_lock(&threadp->mutex);
     while (1) {
@@ -283,9 +299,6 @@ aio_thread_loop(void *ptr)
 		break;
 	    case _AIO_OP_UNLINK:
 		aio_do_unlink(request);
-		break;
-	    case _AIO_OP_TRUNCATE:
-		aio_do_truncate(request);
 		break;
 #if AIO_OPENDIR			/* Opendir not implemented yet */
 	    case _AIO_OP_OPENDIR:
@@ -384,9 +397,6 @@ aio_queue_request(aio_request_t * requestp)
 		case _AIO_OP_UNLINK:
 		    debug(43, 3) ("aio_queue_request: %d : unlink -> %s\n", i, rp->path);
 		    break;
-		case _AIO_OP_TRUNCATE:
-		    debug(43, 3) ("aio_queue_request: %d : truncate -> %s\n", i, rp->path);
-		    break;
 		case _AIO_OP_STAT:
 		    debug(43, 3) ("aio_queue_request: %d : stat -> %s\n", i, rp->path);
 		    break;
@@ -476,7 +486,6 @@ aio_cleanup_request(aio_request_t * requestp)
 	    close(requestp->fd);
 	break;
     case _AIO_OP_UNLINK:
-    case _AIO_OP_TRUNCATE:
     case _AIO_OP_OPENDIR:
 	xfree(requestp->path);
 	break;
@@ -745,42 +754,8 @@ aio_do_unlink(aio_request_t * requestp)
 {
     requestp->ret = unlink(requestp->path);
     requestp->err = errno;
-}
-
-int
-aio_truncate(const char *path, off_t length, aio_result_t * resultp)
-{
-    aio_request_t *requestp;
-    int len;
-
-    if (!aio_initialised)
-	aio_init();
-    if ((requestp = memPoolAlloc(aio_request_pool)) == NULL) {
-	errno = ENOMEM;
-	return -1;
-    }
-    len = strlen(path) + 1;
-    if ((requestp->path = (char *) xmalloc(len)) == NULL) {
-	memPoolFree(aio_request_pool, requestp);
-	errno = ENOMEM;
-	return -1;
-    }
-    requestp->offset = length;
-    strncpy(requestp->path, path, len);
-    requestp->resultp = resultp;
-    requestp->request_type = _AIO_OP_TRUNCATE;
-    requestp->cancelled = 0;
-
-    aio_do_request(requestp);
-    return 0;
-}
-
-
-static void
-aio_do_truncate(aio_request_t * requestp)
-{
-    requestp->ret = truncate(requestp->path, requestp->offset);
-    requestp->err = errno;
+    /* assume that postincrement is an atomic operation. */
+    Counter.unlink.requests++;
 }
 
 
@@ -945,9 +920,6 @@ aio_debug(aio_request_t * requestp)
 	debug(43, 5) ("CLOSE of fd: %d\n", requestp->fd);
 	break;
     case _AIO_OP_UNLINK:
-	debug(43, 5) ("UNLINK of %s\n", requestp->path);
-	break;
-    case _AIO_OP_TRUNCATE:
 	debug(43, 5) ("UNLINK of %s\n", requestp->path);
 	break;
     default:

@@ -37,6 +37,7 @@
 
 static helper *dnsservers = NULL;
 
+#if USE_DNSSERVERS
 static void
 dnsStats(StoreEntry * sentry)
 {
@@ -44,9 +45,12 @@ dnsStats(StoreEntry * sentry)
     helperStats(sentry, dnsservers);
 }
 
+#endif
+
 void
 dnsInit(void)
 {
+#if USE_DNSSERVERS
     static int init = 0;
     wordlist *w;
     if (!Config.Program.dnsserver)
@@ -70,6 +74,7 @@ dnsInit(void)
 	    dnsStats, 0, 1);
 	init = 1;
     }
+#endif
 }
 
 void
@@ -104,6 +109,7 @@ snmp_netDnsFn(variable_list * Var, snint * ErrP)
     debug(49, 5) ("snmp_netDnsFn: Processing request:\n", Var->name[LEN_SQ_NET + 1]);
     snmpDebugOid(5, Var->name, Var->name_length);
     *ErrP = SNMP_ERR_NOERROR;
+#if USE_DNSSERVERS
     switch (Var->name[LEN_SQ_NET + 1]) {
     case DNS_REQ:
 	Answer = snmp_var_new_integer(Var->name, Var->name_length,
@@ -124,6 +130,11 @@ snmp_netDnsFn(variable_list * Var, snint * ErrP)
 	*ErrP = SNMP_ERR_NOSUCHNAME;
 	break;
     }
+#else
+    Answer = snmp_var_new_integer(Var->name, Var->name_length,
+	0,
+	SMI_COUNTER32);
+#endif
     return Answer;
 }
 #endif /*SQUID_SNMP */

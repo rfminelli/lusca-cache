@@ -67,8 +67,11 @@
 
 #undef FORW_VIA_DB
 
+/* Define to use async disk I/O operations */
+#undef USE_ASYNC_IO
+
 /* Defines how many threads to use for async I/O */
-#undef ASYNC_IO_THREADS
+#undef NUMTHREADS
 
 /*
  * If you want to use Squid's ICMP features (highly recommended!) then
@@ -93,13 +96,6 @@
  * directory.
  */
 #undef USE_USERAGENT_LOG
-
-/*
- * If you want to log Referer request header values, define this.
- * By default, they are written to referer.log in the Squid log
- * directory.
- */
-#undef USE_REFERER_LOG
 
 /*
  * A dangerous feature which causes Squid to kill its parent process
@@ -280,21 +276,9 @@
 #undef ALLOW_HOSTNAME_UNDERSCORES
 
 /*
- * message type for message queues
+ * Use the heap-based replacement techniques
  */
-#undef mtyp_t
-
-/* Define if you want to set the COSS membuf size */
-#undef COSS_MEMBUF_SZ
-
-/* Print stacktraces on fatal errors */
-#undef PRINT_STACK_TRACE
-
-/*
- * Define this if unlinkd is required
- * (strongly recommended for ufs storage type)
- */
-#undef USE_UNLINKD
+#undef HEAP_REPLACEMENT
 
 /* The number of bytes in a int.  */
 #undef SIZEOF_INT
@@ -304,9 +288,6 @@
 
 /* The number of bytes in a void *.  */
 #undef SIZEOF_VOID_P
-
-/* Define if you have the backtrace_symbols_fd function.  */
-#undef HAVE_BACKTRACE_SYMBOLS_FD
 
 /* Define if you have the bcopy function.  */
 #undef HAVE_BCOPY
@@ -374,6 +355,9 @@
 /* Define if you have the pthread_setschedparam function.  */
 #undef HAVE_PTHREAD_SETSCHEDPARAM
 
+/* Define if you have the pthread_sigmask function.  */
+#undef HAVE_PTHREAD_SIGMASK
+
 /* Define if you have the putenv function.  */
 #undef HAVE_PUTENV
 
@@ -422,9 +406,6 @@
 /* Define if you have the srandom function.  */
 #undef HAVE_SRANDOM
 
-/* Define if you have the statfs function.  */
-#undef HAVE_STATFS
-
 /* Define if you have the strerror function.  */
 #undef HAVE_STRERROR
 
@@ -470,9 +451,6 @@
 /* Define if you have the <errno.h> header file.  */
 #undef HAVE_ERRNO_H
 
-/* Define if you have the <execinfo.h> header file.  */
-#undef HAVE_EXECINFO_H
-
 /* Define if you have the <fcntl.h> header file.  */
 #undef HAVE_FCNTL_H
 
@@ -490,6 +468,9 @@
 
 /* Define if you have the <ip_fil.h> header file.  */
 #undef HAVE_IP_FIL_H
+
+/* Define if you have the <ip_fil_compat.h> header file.  */
+#undef HAVE_IP_FIL_COMPAT_H
 
 /* Define if you have the <ip_nat.h> header file.  */
 #undef HAVE_IP_NAT_H
@@ -532,6 +513,9 @@
 
 /* Define if you have the <netinet/ip_fil.h> header file.  */
 #undef HAVE_NETINET_IP_FIL_H
+
+/* Define if you have the <netinet/ip_fil_compat.h> header file.  */
+#undef HAVE_NETINET_IP_FIL_COMPAT_H
 
 /* Define if you have the <netinet/ip_nat.h> header file.  */
 #undef HAVE_NETINET_IP_NAT_H
@@ -583,12 +567,6 @@
 
 /* Define if you have the <sys/ioctl.h> header file.  */
 #undef HAVE_SYS_IOCTL_H
-
-/* Define if you have the <sys/mount.h> header file.  */
-#undef HAVE_SYS_MOUNT_H
-
-/* Define if you have the <sys/msg.h> header file.  */
-#undef HAVE_SYS_MSG_H
 
 /* Define if you have the <sys/ndir.h> header file.  */
 #undef HAVE_SYS_NDIR_H

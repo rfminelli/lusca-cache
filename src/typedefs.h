@@ -31,15 +31,11 @@
  *
  */
 
-#ifndef _TYPEDEFS_H_
-#define _TYPEDEFS_H_
-
 typedef unsigned int store_status_t;
 typedef unsigned int mem_status_t;
 typedef unsigned int ping_status_t;
 typedef unsigned int swap_status_t;
 typedef int sfileno;
-typedef int sdirno;
 
 typedef struct {
     size_t bytes;
@@ -69,6 +65,7 @@ typedef struct _acl_snmp_comm acl_snmp_comm;
 typedef struct _acl_list acl_list;
 typedef struct _acl_access acl_access;
 typedef struct _aclCheck_t aclCheck_t;
+typedef struct _aio_result_t aio_result_t;
 typedef struct _wordlist wordlist;
 typedef struct _intlist intlist;
 typedef struct _intrange intrange;
@@ -168,15 +165,6 @@ typedef struct _helper_request helper_request;
 typedef struct _generic_cbdata generic_cbdata;
 typedef struct _storeIOState storeIOState;
 typedef struct _link_list link_list;
-typedef struct _storefs_entry storefs_entry_t;
-typedef struct _storerepl_entry storerepl_entry_t;
-typedef struct _diskd_queue diskd_queue;
-typedef struct _Logfile Logfile;
-typedef struct _RemovalPolicy RemovalPolicy;
-typedef struct _RemovalPolicyWalker RemovalPolicyWalker;
-typedef struct _RemovalPurgeWalker RemovalPurgeWalker;
-typedef struct _RemovalPolicyNode RemovalPolicyNode;
-typedef struct _RemovalPolicySettings RemovalPolicySettings;
 
 #if SQUID_SNMP
 typedef variable_list *(oid_ParseFn) (variable_list *, snint *);
@@ -189,6 +177,8 @@ typedef struct _delaySpecSet delaySpecSet;
 typedef struct _delaySpec delaySpec;
 #endif
 
+/* define AIOCB even without USE_ASYNC_IO */
+typedef void AIOCB(int fd, void *, int aio_return, int aio_errno);
 typedef void CWCB(int fd, char *, size_t size, int flag, void *data);
 typedef void CNCB(int fd, int status, void *);
 
@@ -197,16 +187,8 @@ typedef void CBDUNL(void *, int);
 typedef void FOCB(void *, int fd, int errcode);
 typedef void EVH(void *);
 typedef void PF(int, void *);
-
-/* disk.c / diskd.c callback typedefs */
-typedef void DRCB(int, const char *buf, int size, int errflag, void *data);
-							/* Disk read CB */
-typedef void DWCB(int, int, size_t, void *);	/* disk write CB */
-typedef void DOCB(int, int errflag, void *data);	/* disk open CB */
-typedef void DCCB(int, int errflag, void *data);	/* disk close CB */
-typedef void DUCB(int errflag, void *data);	/* disk unlink CB */
-typedef void DTCB(int errflag, void *data);	/* disk trunc CB */
-
+typedef void DRCB(int fd, const char *buf, int size, int errflag, void *data);
+typedef void DWCB(int, int, size_t, void *);
 typedef void FQDNH(const char *, void *);
 typedef void IDCB(const char *ident, void *data);
 typedef void IPH(const ipcache_addrs *, void *);
@@ -217,7 +199,6 @@ typedef void UH(void *data, wordlist *);
 typedef int DEFER(int fd, void *data);
 
 typedef void STIOCB(void *their_data, int errflag, storeIOState *);
-typedef void STFNCB(void *their_data, int errflag, storeIOState *);
 typedef void STRCB(void *their_data, const char *buf, ssize_t len);
 
 typedef void SIH(storeIOState *, void *);	/* swap in */
@@ -234,40 +215,16 @@ typedef void IDNSCB(void *, rfc1035_rr *, int);
 
 typedef void STINIT(SwapDir *);
 typedef void STNEWFS(SwapDir *);
-typedef void STDUMP(StoreEntry *, const char *, SwapDir *);
-typedef void STFREE(SwapDir *);
-typedef int STDBLCHECK(SwapDir *, StoreEntry *);
-typedef void STSTATFS(SwapDir *, StoreEntry *);
-typedef void STMAINTAINFS(SwapDir *);
-typedef int STCHECKOBJ(SwapDir *, const StoreEntry *);
-typedef void STREFOBJ(SwapDir *, StoreEntry *);
-typedef void STUNREFOBJ(SwapDir *, StoreEntry *);
-typedef void STSETUP(storefs_entry_t *);
-typedef void STDONE(void);
-typedef int STCALLBACK(SwapDir *);
-typedef void STSYNC(SwapDir *);
-
-typedef storeIOState *STOBJCREATE(SwapDir *, StoreEntry *, STFNCB *, STIOCB *, void *);
-typedef storeIOState *STOBJOPEN(SwapDir *, StoreEntry *, STFNCB *, STIOCB *, void *);
-typedef void STOBJCLOSE(SwapDir *, storeIOState *);
-typedef void STOBJREAD(SwapDir *, storeIOState *, char *, size_t, off_t, STRCB *, void *);
-typedef void STOBJWRITE(SwapDir *, storeIOState *, char *, size_t, off_t, FREE *);
-typedef void STOBJUNLINK(SwapDir *, StoreEntry *);
-
+typedef storeIOState *STOBJOPEN(sfileno, mode_t, STIOCB *, void *);
+typedef void STOBJCLOSE(storeIOState *);
+typedef void STOBJREAD(storeIOState *, char *, size_t, off_t, STRCB *, void *);
+typedef void STOBJWRITE(storeIOState *, char *, size_t, off_t, FREE *);
+typedef void STOBJUNLINK(sfileno);
 typedef void STLOGOPEN(SwapDir *);
 typedef void STLOGCLOSE(SwapDir *);
 typedef void STLOGWRITE(const SwapDir *, const StoreEntry *, int);
-typedef int STLOGCLEANSTART(SwapDir *);
-typedef const StoreEntry *STLOGCLEANNEXTENTRY(SwapDir *);
-typedef void STLOGCLEANWRITE(SwapDir *, const StoreEntry *);
-typedef void STLOGCLEANDONE(SwapDir *);
-
-/* Store dir configuration routines */
-/* SwapDir *sd, char *path ( + char *opt later when the strtok mess is gone) */
-typedef void STFSPARSE(SwapDir *, int, char *);
-typedef void STFSRECONFIGURE(SwapDir *, int, char *);
-typedef void STFSSTARTUP(void);
-typedef void STFSSHUTDOWN(void);
+typedef int STLOGCLEANOPEN(SwapDir *);
+typedef void STLOGCLEANWRITE(const StoreEntry *, SwapDir *);
 
 typedef double hbase_f(double);
 typedef void StatHistBinDumper(StoreEntry *, int idx, double val, double size, int count);
@@ -308,9 +265,3 @@ typedef unsigned int delay_id;
 #if USE_HTCP
 typedef struct _htcpReplyData htcpReplyData;
 #endif
-
-typedef RemovalPolicy *REMOVALPOLICYCREATE(wordlist * args);
-
-typedef int STDIRSELECT(const StoreEntry *);
-
-#endif /* _TYPEDEFS_H_ */

@@ -119,7 +119,7 @@ pconnRead(int fd, void *data)
     struct _pconn *p = data;
     int n;
     assert(table != NULL);
-    statCounter.syscalls.sock.reads++;
+    Counter.syscalls.sock.reads++;
     n = read(fd, buf, 256);
     debug(48, 3) ("pconnRead: %d bytes from FD %d, %s\n", n, fd, p->key);
     pconnRemoveFD(p, fd);

@@ -228,14 +228,14 @@ ipcCreate(int type, const char *prog, char *const args[], const char *name, int 
 	    return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
     }
     if (type == IPC_UDP_SOCKET) {
-	x = send(cwfd, hello_string, strlen(hello_string) + 1, 0);
+	x = send(cwfd, hello_string, strlen(hello_string), 0);
 	if (x < 0) {
 	    debug(50, 0) ("sendto FD %d: %s\n", cwfd, xstrerror());
 	    debug(50, 0) ("ipcCreate: CHILD: hello write test failed\n");
 	    _exit(1);
 	}
     } else {
-	if (write(cwfd, hello_string, strlen(hello_string) + 1) < 0) {
+	if (write(cwfd, hello_string, strlen(hello_string)) < 0) {
 	    debug(50, 0) ("write FD %d: %s\n", cwfd, xstrerror());
 	    debug(50, 0) ("ipcCreate: CHILD: hello write test failed\n");
 	    _exit(1);
@@ -268,14 +268,10 @@ ipcCreate(int type, const char *prog, char *const args[], const char *name, int 
     close(t1);
     close(t2);
     close(t3);
-    /* Make sure all other filedescriptors are closed */
-    for (x = 3; x < SQUID_MAXFD; x++)
-	close(x);
 #if HAVE_SETSID
     setsid();
 #endif
     execvp(prog, args);
-    debug_log = fdopen(2, "a+");
     debug(50, 0) ("ipcCreate: %s: %s\n", prog, xstrerror());
     _exit(1);
     return 0;

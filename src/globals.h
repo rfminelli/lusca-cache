@@ -32,6 +32,7 @@
  */
 
 extern FILE *debug_log;		/* NULL */
+extern FILE *cache_useragent_log;	/* NULL */
 extern SquidConfig Config;
 extern SquidConfig2 Config2;
 extern char *ConfigFile;	/* NULL */
@@ -98,6 +99,7 @@ extern int theOutSnmpConnection;	/* -1 */
 extern char *snmp_agentinfo;
 #endif
 extern int vhost_mode;		/* 0 */
+extern int vport_mode;		/* 0 */
 extern int n_disk_objects;	/* 0 */
 extern iostats IOStats;
 extern struct _acl_deny_info_list *DenyInfoList;	/* NULL */
@@ -115,7 +117,7 @@ extern int store_dirs_rebuilding;	/* 1 */
 extern int store_swap_size;	/* 0 */
 extern unsigned long store_mem_size;	/* 0 */
 extern time_t hit_only_mode_until;	/* 0 */
-extern StatCounters statCounter;
+extern StatCounters Counter;
 extern char *err_type_str[];
 extern char *icp_opcode_str[];
 extern char *swap_log_op_str[];
@@ -124,6 +126,12 @@ extern double request_failure_ratio;	/* 0.0 */
 extern double current_dtime;
 extern int store_hash_buckets;	/* 0 */
 extern hash_table *store_table;	/* NULL */
+#if HEAP_REPLACEMENT
+extern heap *store_heap;
+extern heap *inmem_heap;
+#else
+extern dlink_list store_list;
+#endif
 extern dlink_list ClientActiveRequests;
 extern const String StringNull;	/* { 0, 0, NULL } */
 extern const MemBuf MemBufNull;	/* MemBufNULL */
@@ -144,10 +152,3 @@ extern int refresh_nocache_hack;	/* 0 */
 extern request_flags null_request_flags;
 extern int store_open_disk_fd;	/* 0 */
 extern const char *SwapDirType[];
-extern storefs_entry_t *storefs_list;	/* NULL */
-extern storerepl_entry_t *storerepl_list;	/* NULL */
-extern int store_swap_low;	/* 0 */
-extern int store_swap_high;	/* 0 */
-extern int store_pages_max;	/* 0 */
-extern ssize_t store_maxobjsize;	/* -1 */
-extern RemovalPolicy *mem_policy;

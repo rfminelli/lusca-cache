@@ -2,7 +2,7 @@
 /*
  * $Id$
  *
- * DEBUG: section 80    WCCP Support
+ * DEBUG: section 80     WCCP Support
  * AUTHOR: Glenn Chisholm
  *
  * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
@@ -103,8 +103,6 @@ void
 wccpInit(void)
 {
     debug(80, 5) ("wccpInit: Called\n");
-    if (eventFind(wccpHereIam, NULL))
-	return;
     memset(&wccp_here_i_am, '\0', sizeof(wccp_here_i_am));
     wccp_here_i_am.type = htonl(WCCP_HERE_I_AM);
     wccp_here_i_am.version = htonl(Config.Wccp.version);
@@ -210,7 +208,7 @@ wccpHandleUdp(int sock, void *not_used)
 {
     struct sockaddr_in from;
     socklen_t from_len;
-    size_t len;
+    int len;
 
     debug(80, 6) ("wccpHandleUdp: Called.\n");
 
@@ -219,10 +217,10 @@ wccpHandleUdp(int sock, void *not_used)
     memset(&from, '\0', from_len);
     memset(&wccp_i_see_you, '\0', sizeof(wccp_i_see_you));
 
-    statCounter.syscalls.sock.recvfroms++;
+    Counter.syscalls.sock.recvfroms++;
 
     len = recvfrom(sock,
-	(void *) &wccp_i_see_you,
+	&wccp_i_see_you,
 	WCCP_RESPONSE_SIZE,
 	0,
 	(struct sockaddr *) &from,

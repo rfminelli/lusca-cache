@@ -188,6 +188,8 @@ httpMaybeRemovePublic(StoreEntry * e, http_status status)
     case METHOD_PROPPATCH:
     case METHOD_MKCOL:
     case METHOD_MOVE:
+    case METHOD_BMOVE:
+    case METHOD_BDELETE:
 	/*
 	 * Remove any cached GET object if it is beleived that the
 	 * object may have changed as a result of other methods
@@ -327,12 +329,10 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
     if (httpState->reply_hdr == NULL)
 	httpState->reply_hdr = memAllocate(MEM_8K_BUF);
     assert(httpState->reply_hdr_state == 0);
-    hdr_len = httpState->reply_hdr_size;
+    hdr_len = strlen(httpState->reply_hdr);
     room = 8191 - hdr_len;
-    xmemcpy(httpState->reply_hdr + hdr_len, buf, room < size ? room : size);
+    strncat(httpState->reply_hdr, buf, room < size ? room : size);
     hdr_len += room < size ? room : size;
-    httpState->reply_hdr[hdr_len] = '\0';
-    httpState->reply_hdr_size = hdr_len;
     if (hdr_len > 4 && strncmp(httpState->reply_hdr, "HTTP/", 5)) {
 	debug(11, 3) ("httpProcessReplyHeader: Non-HTTP-compliant header: '%s'\n", httpState->reply_hdr);
 	httpState->reply_hdr_state += 2;
@@ -395,9 +395,6 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 		httpState->request->host, skew);
     }
     ctx_exit(ctx);
-#if HEADERS_LOG
-    headersLog(1, 0, httpState->request->method, reply);
-#endif
 }
 
 static int
@@ -480,7 +477,7 @@ httpReadReply(int fd, void *data)
 #if DELAY_POOLS
     read_sz = delayBytesWanted(delay_id, 1, read_sz);
 #endif
-    statCounter.syscalls.sock.reads++;
+    Counter.syscalls.sock.reads++;
     len = read(fd, buf, read_sz);
     debug(11, 5) ("httpReadReply: FD %d: len %d.\n", fd, len);
     if (len > 0) {
@@ -488,8 +485,8 @@ httpReadReply(int fd, void *data)
 #if DELAY_POOLS
 	delayBytesIn(delay_id, len);
 #endif
-	kb_incr(&statCounter.server.all.kbytes_in, len);
-	kb_incr(&statCounter.server.http.kbytes_in, len);
+	kb_incr(&Counter.server.all.kbytes_in, len);
+	kb_incr(&Counter.server.http.kbytes_in, len);
 	commSetTimeout(fd, Config.Timeout.read, NULL, NULL);
 	IOStats.Http.reads++;
 	for (clen = len - 1, bin = 0; clen; bin++)
@@ -592,13 +589,10 @@ httpSendComplete(int fd, char *bufnotused, size_t size, int errflag, void *data)
     ErrorState *err;
     debug(11, 5) ("httpSendComplete: FD %d: size %d: errflag %d.\n",
 	fd, size, errflag);
-#if URL_CHECKSUM_DEBUG
-    assert(entry->mem_obj->chksum == url_checksum(entry->mem_obj->url));
-#endif
     if (size > 0) {
 	fd_bytes(fd, size, FD_WRITE);
-	kb_incr(&statCounter.server.all.kbytes_out, size);
-	kb_incr(&statCounter.server.http.kbytes_out, size);
+	kb_incr(&Counter.server.all.kbytes_out, size);
+	kb_incr(&Counter.server.http.kbytes_out, size);
     }
     if (errflag == COMM_ERR_CLOSING)
 	return;
@@ -661,14 +655,8 @@ httpBuildRequestHeader(request_t * request,
      *  serving this request, so it is better to forward ranges to 
      *  the server and fetch only the requested content) 
      */
-    if (NULL == orig_request->range)
-	we_do_ranges = 0;
-    else if (!orig_request->flags.cachable)
-	we_do_ranges = 0;
-    else if (orig_request->flags.we_dont_do_ranges)
-	we_do_ranges = 0;
-    else
-	we_do_ranges = 1;
+    we_do_ranges =
+	orig_request->range && orig_request->flags.cachable && !httpHdrRangeWillBeComplex(orig_request->range) && (Config.rangeOffsetLimit == -1 || httpHdrRangeFirstOffset(orig_request->range) <= Config.rangeOffsetLimit);
     debug(11, 8) ("httpBuildRequestHeader: range specs: %p, cachable: %d; we_do_ranges: %d\n",
 	orig_request->range, orig_request->flags.cachable, we_do_ranges);
 
@@ -874,8 +862,7 @@ httpSendRequest(HttpStateData * httpState)
     else if ((double) p->stats.n_keepalives_recv / (double) p->stats.n_keepalives_sent > 0.50)
 	httpState->flags.keepalive = 1;
     if (httpState->peer)
-	if (neighborType(httpState->peer, httpState->request) == PEER_SIBLING &&
-	    !httpState->peer->options.allow_miss)
+	if (neighborType(httpState->peer, httpState->request) == PEER_SIBLING)
 	    httpState->flags.only_if_cached = 1;
     memBufDefInit(&mb);
     httpBuildRequestPrefix(req,
@@ -935,8 +922,8 @@ httpStart(FwdState * fwd)
      * register the handler to free HTTP state data when the FD closes
      */
     comm_add_close_handler(fd, httpStateFree, httpState);
-    statCounter.server.all.requests++;
-    statCounter.server.http.requests++;
+    Counter.server.all.requests++;
+    Counter.server.http.requests++;
     httpSendRequest(httpState);
     /*
      * We used to set the read timeout here, but not any more.
@@ -955,8 +942,8 @@ httpSendRequestEntry(int fd, char *bufnotused, size_t size, int errflag, void *d
 	fd, size, errflag);
     if (size > 0) {
 	fd_bytes(fd, size, FD_WRITE);
-	kb_incr(&statCounter.server.all.kbytes_out, size);
-	kb_incr(&statCounter.server.http.kbytes_out, size);
+	kb_incr(&Counter.server.all.kbytes_out, size);
+	kb_incr(&Counter.server.http.kbytes_out, size);
     }
     if (errflag == COMM_ERR_CLOSING)
 	return;
@@ -986,8 +973,8 @@ httpSendRequestEntryDone(int fd, char *bufnotused, size_t size, int errflag, voi
 	fd, size, errflag);
     if (size > 0) {
 	fd_bytes(fd, size, FD_WRITE);
-	kb_incr(&statCounter.server.all.kbytes_out, size);
-	kb_incr(&statCounter.server.http.kbytes_out, size);
+	kb_incr(&Counter.server.all.kbytes_out, size);
+	kb_incr(&Counter.server.http.kbytes_out, size);
     }
     if (errflag == COMM_ERR_CLOSING)
 	return;

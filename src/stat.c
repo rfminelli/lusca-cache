@@ -253,7 +253,6 @@ statStoreEntry(StoreEntry * s, StoreEntry * e)
     MemObject *mem = e->mem_obj;
     int i;
     struct _store_client *sc;
-    dlink_node *node;
     storeAppendPrintf(s, "KEY %s\n", storeKeyText(e->key));
     if (mem)
 	storeAppendPrintf(s, "\t%s %s\n",
@@ -265,8 +264,8 @@ statStoreEntry(StoreEntry * s, StoreEntry * e)
 	(int) e->lock_count,
 	storePendingNClients(e),
 	(int) e->refcount);
-    storeAppendPrintf(s, "\tSwap Dir %d, File %#08X\n",
-	e->swap_dirn, e->swap_filen);
+    storeAppendPrintf(s, "\tSwap File %#08X\n",
+	e->swap_file_number);
     if (mem != NULL) {
 	storeAppendPrintf(s, "\tinmem_lo: %d\n", (int) mem->inmem_lo);
 	storeAppendPrintf(s, "\tinmem_hi: %d\n", (int) mem->inmem_hi);
@@ -275,8 +274,7 @@ statStoreEntry(StoreEntry * s, StoreEntry * e)
 	if (mem->swapout.sio)
 	    storeAppendPrintf(s, "\tswapout: %d bytes written\n",
 		(int) storeOffset(mem->swapout.sio));
-	for (i = 0, node = mem->clients.head; node; node = node->next, i++) {
-	    sc = (store_client *) node->data;
+	for (i = 0, sc = &mem->clients[i]; sc != NULL; sc = sc->next, i++) {
 	    if (sc->callback_data == NULL)
 		continue;
 	    storeAppendPrintf(s, "\tClient #%d, %p\n", i, sc->callback_data);
@@ -460,24 +458,24 @@ info_get(StoreEntry * sentry)
     storeAppendPrintf(sentry, "Connection information for %s:\n",
 	appname);
     storeAppendPrintf(sentry, "\tNumber of clients accessing cache:\t%u\n",
-	statCounter.client_http.clients);
+	Counter.client_http.clients);
     storeAppendPrintf(sentry, "\tNumber of HTTP requests received:\t%u\n",
-	statCounter.client_http.requests);
+	Counter.client_http.requests);
     storeAppendPrintf(sentry, "\tNumber of ICP messages received:\t%u\n",
-	statCounter.icp.pkts_recv);
+	Counter.icp.pkts_recv);
     storeAppendPrintf(sentry, "\tNumber of ICP messages sent:\t%u\n",
-	statCounter.icp.pkts_sent);
+	Counter.icp.pkts_sent);
     storeAppendPrintf(sentry, "\tNumber of queued ICP replies:\t%u\n",
-	statCounter.icp.replies_queued);
+	Counter.icp.replies_queued);
     storeAppendPrintf(sentry, "\tRequest failure ratio:\t%5.2f%%\n",
 	request_failure_ratio);
 
     storeAppendPrintf(sentry, "\tHTTP requests per minute:\t%.1f\n",
-	statCounter.client_http.requests / (runtime / 60.0));
+	Counter.client_http.requests / (runtime / 60.0));
     storeAppendPrintf(sentry, "\tICP messages per minute:\t%.1f\n",
-	(statCounter.icp.pkts_sent + statCounter.icp.pkts_recv) / (runtime / 60.0));
+	(Counter.icp.pkts_sent + Counter.icp.pkts_recv) / (runtime / 60.0));
     storeAppendPrintf(sentry, "\tSelect loop called: %d times, %0.3f ms avg\n",
-	statCounter.select_loops, 1000.0 * runtime / statCounter.select_loops);
+	Counter.select_loops, 1000.0 * runtime / Counter.select_loops);
 
     storeAppendPrintf(sentry, "Cache information for %s:\n",
 	appname);
@@ -487,20 +485,21 @@ info_get(StoreEntry * sentry)
     storeAppendPrintf(sentry, "\tByte Hit Ratios:\t5min: %3.1f%%, 60min: %3.1f%%\n",
 	statByteHitRatio(5),
 	statByteHitRatio(60));
-    storeAppendPrintf(sentry, "\tRequest Memory Hit Ratios:\t5min: %3.1f%%, 60min: %3.1f%%\n",
-	statRequestHitMemoryRatio(5),
-	statRequestHitMemoryRatio(60));
-    storeAppendPrintf(sentry, "\tRequest Disk Hit Ratios:\t5min: %3.1f%%, 60min: %3.1f%%\n",
-	statRequestHitDiskRatio(5),
-	statRequestHitDiskRatio(60));
     storeAppendPrintf(sentry, "\tStorage Swap size:\t%d KB\n",
 	store_swap_size);
     storeAppendPrintf(sentry, "\tStorage Mem size:\t%d KB\n",
 	(int) (store_mem_size >> 10));
+#if HEAP_REPLACEMENT
+    storeAppendPrintf(sentry, "\tStorage Replacement Threshold:\t%f\n",
+	heap_peepminkey(store_heap));
+#else
+    storeAppendPrintf(sentry, "\tStorage LRU Expiration Age:\t%6.2f days\n",
+	(double) storeExpiredReferenceAge() / 86400.0);
+#endif
     storeAppendPrintf(sentry, "\tMean Object Size:\t%0.2f KB\n",
 	n_disk_objects ? (double) store_swap_size / n_disk_objects : 0.0);
     storeAppendPrintf(sentry, "\tRequests given to unlinkd:\t%d\n",
-	statCounter.unlink.requests);
+	Counter.unlink.requests);
 
     storeAppendPrintf(sentry, "Median Service Times (seconds)  5 min    60 min:\n");
     storeAppendPrintf(sentry, "\tHTTP Requests (All):  %8.5f %8.5f\n",
@@ -611,6 +610,8 @@ info_get(StoreEntry * sentry)
 	memInUse(MEM_MEMOBJECT));
     storeAppendPrintf(sentry, "\t%6d Hot Object Cache Items\n",
 	hot_obj_count);
+    storeAppendPrintf(sentry, "\t%6d Filemap bits set\n",
+	storeDirMapBitsInUse());
     storeAppendPrintf(sentry, "\t%6d on-disk objects\n",
 	n_disk_objects);
 
@@ -779,12 +780,8 @@ statAvgDump(StoreEntry * sentry, int minutes, int hours)
 	: 0.0);
     x = statHistDeltaMedian(&l->select_fds_hist, &f->select_fds_hist);
     storeAppendPrintf(sentry, "median_select_fds = %f\n", x);
-    storeAppendPrintf(sentry, "swap.outs = %f/sec\n",
-	XAVG(swap.outs));
-    storeAppendPrintf(sentry, "swap.ins = %f/sec\n",
-	XAVG(swap.ins));
-    storeAppendPrintf(sentry, "swap.files_cleaned = %f/sec\n",
-	XAVG(swap.files_cleaned));
+    storeAppendPrintf(sentry, "swap_files_cleaned = %f/sec\n",
+	XAVG(swap_files_cleaned));
     storeAppendPrintf(sentry, "aborted_requests = %f/sec\n",
 	XAVG(aborted_requests));
 
@@ -824,7 +821,7 @@ statInit(void)
 	statCountersInit(&CountHist[i]);
     for (i = 0; i < N_COUNT_HOUR_HIST; i++)
 	statCountersInit(&CountHourHist[i]);
-    statCountersInit(&statCounter);
+    statCountersInit(&Counter);
     eventAdd("statAvgTick", statAvgTick, NULL, (double) COUNT_INTERVAL, 1);
     cachemgrRegister("info",
 	"General Runtime Information",
@@ -884,7 +881,7 @@ statAvgTick(void *notused)
 {
     StatCounters *t = &CountHist[0];
     StatCounters *p = &CountHist[1];
-    StatCounters *c = &statCounter;
+    StatCounters *c = &Counter;
     struct rusage rusage;
     eventAdd("statAvgTick", statAvgTick, NULL, (double) COUNT_INTERVAL, 1);
     squid_getrusage(&rusage);
@@ -906,32 +903,6 @@ statAvgTick(void *notused)
 	xmemmove(p, t, (N_COUNT_HOUR_HIST - 1) * sizeof(StatCounters));
 	statCountersCopy(t, c);
 	NCountHourHist++;
-    }
-    if (Config.warnings.high_rptm > 0) {
-	int i = (int) statMedianSvc(1, MEDIAN_HTTP);
-	if (Config.warnings.high_rptm < i)
-	    debug(18, 0) ("WARNING: Median response time is %d milliseconds\n", i);
-    }
-    if (Config.warnings.high_pf) {
-	int i = (CountHist[0].page_faults - CountHist[1].page_faults);
-	double dt = tvSubDsec(CountHist[0].timestamp, CountHist[1].timestamp);
-	if (i > 0 && dt > 0.0) {
-	    i /= (int) dt;
-	    if (Config.warnings.high_pf < i)
-		debug(18, 0) ("WARNING: Page faults occuring at %d/sec\n", i);
-	}
-    }
-    if (Config.warnings.high_memory) {
-	int i = 0;
-#if HAVE_MSTATS && HAVE_GNUMALLOC_H
-	struct mstats ms = mstats();
-	i = ms.bytes_total;
-#elif HAVE_MALLINFO && HAVE_STRUCT_MALLINFO
-	struct mallinfo mp = mallinfo();
-	i = mp.arena;
-#endif
-	if (Config.warnings.high_memory < i)
-	    debug(18, 0) ("WARNING: Memory usage at %d MB\n", i >> 20);
     }
 }
 
@@ -1000,7 +971,7 @@ statCountersCopy(StatCounters * dest, const StatCounters * orig)
 {
     assert(dest && orig);
     /* this should take care of all the fields, but "special" ones */
-    xmemcpy(dest, orig, sizeof(*dest));
+    memcpy(dest, orig, sizeof(*dest));
     /* prepare space where to copy special entries */
     statCountersInitSpecial(dest);
     /* now handle special cases */
@@ -1022,7 +993,7 @@ statCountersCopy(StatCounters * dest, const StatCounters * orig)
 static void
 statCountersHistograms(StoreEntry * sentry)
 {
-    StatCounters *f = &statCounter;
+    StatCounters *f = &Counter;
     storeAppendPrintf(sentry, "client_http.all_svc_time histogram:\n");
     statHistDump(&f->client_http.all_svc_time, sentry, NULL);
     storeAppendPrintf(sentry, "client_http.miss_svc_time histogram:\n");
@@ -1044,7 +1015,7 @@ statCountersHistograms(StoreEntry * sentry)
 static void
 statCountersDump(StoreEntry * sentry)
 {
-    StatCounters *f = &statCounter;
+    StatCounters *f = &Counter;
     struct rusage rusage;
     squid_getrusage(&rusage);
     f->page_faults = rusage_pagefaults(&rusage);
@@ -1161,12 +1132,8 @@ statCountersDump(StoreEntry * sentry)
 	f->cputime);
     storeAppendPrintf(sentry, "wall_time = %f\n",
 	tvSubDsec(f->timestamp, current_time));
-    storeAppendPrintf(sentry, "swap.outs = %d\n",
-	f->swap.outs);
-    storeAppendPrintf(sentry, "swap.ins = %d\n",
-	f->swap.ins);
-    storeAppendPrintf(sentry, "swap.files_cleaned = %d\n",
-	f->swap.files_cleaned);
+    storeAppendPrintf(sentry, "swap_files_cleaned = %d\n",
+	f->swap_files_cleaned);
     storeAppendPrintf(sentry, "aborted_requests = %d\n",
 	f->aborted_requests);
 }
@@ -1185,7 +1152,7 @@ static void
 statPeerSelect(StoreEntry * sentry)
 {
 #if USE_CACHE_DIGESTS
-    StatCounters *f = &statCounter;
+    StatCounters *f = &Counter;
     peer *peer;
     const int tot_used = f->cd.times_used + f->icp.times_used;
 
@@ -1301,7 +1268,7 @@ int
 stat5minClientRequests(void)
 {
     assert(N_COUNT_HIST > 5);
-    return statCounter.client_http.requests - CountHist[5].client_http.requests;
+    return Counter.client_http.requests - CountHist[5].client_http.requests;
 }
 
 static double
@@ -1320,26 +1287,6 @@ statRequestHitRatio(int minutes)
 	CountHist[minutes].client_http.hits,
 	CountHist[0].client_http.requests -
 	CountHist[minutes].client_http.requests);
-}
-
-extern double
-statRequestHitMemoryRatio(int minutes)
-{
-    assert(minutes < N_COUNT_HIST);
-    return dpercent(CountHist[0].client_http.mem_hits -
-	CountHist[minutes].client_http.mem_hits,
-	CountHist[0].client_http.hits -
-	CountHist[minutes].client_http.hits);
-}
-
-extern double
-statRequestHitDiskRatio(int minutes)
-{
-    assert(minutes < N_COUNT_HIST);
-    return dpercent(CountHist[0].client_http.disk_hits -
-	CountHist[minutes].client_http.disk_hits,
-	CountHist[0].client_http.hits -
-	CountHist[minutes].client_http.hits);
 }
 
 extern double

@@ -122,8 +122,9 @@ file_map_allocate(fileMap * fm, int suggestion)
     int count;
     if (suggestion >= fm->max_n_files)
 	suggestion = 0;
-    if (!file_map_bit_test(fm, suggestion))
-	return suggestion;
+    if (!file_map_bit_test(fm, suggestion)) {
+	return file_map_bit_set(fm, suggestion);
+    }
     word = suggestion >> LONG_BIT_SHIFT;
     for (count = 0; count < fm->nwords; count++) {
 	if (fm->file_map[word] != ALL_ONES)
@@ -133,7 +134,7 @@ file_map_allocate(fileMap * fm, int suggestion)
     for (bit = 0; bit < BITS_IN_A_LONG; bit++) {
 	suggestion = ((unsigned long) word << LONG_BIT_SHIFT) | bit;
 	if (!file_map_bit_test(fm, suggestion)) {
-	    return suggestion;
+	    return file_map_bit_set(fm, suggestion);
 	}
     }
     debug(8, 3) ("growing from file_map_allocate\n");

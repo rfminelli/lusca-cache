@@ -64,10 +64,11 @@ storeSwapTLVFree(tlv * n)
 tlv *
 storeSwapMetaBuild(StoreEntry * e)
 {
+    MemObject *mem = e->mem_obj;
     tlv *TLV = NULL;		/* we'll return this */
     tlv **T = &TLV;
     const char *url;
-    assert(e->mem_obj != NULL);
+    assert(mem != NULL);
     assert(e->swap_status == SWAPOUT_WRITING);
     url = storeUrl(e);
     debug(20, 3) ("storeSwapMetaBuild: %s\n", url);
@@ -122,7 +123,12 @@ storeSwapMetaUnpack(const char *buf, int *hdr_len)
 	return NULL;
     xmemcpy(&buflen, &buf[j], sizeof(int));
     j += sizeof(int);
-    assert(buflen > (sizeof(char) + sizeof(int)));
+    /*
+     * sanity check on 'buflen' value.  It should be at least big
+     * enough to hold one type and one length.
+     */
+    if (buflen <= (sizeof(char) + sizeof(int)))
+	    return NULL;
     while (buflen - j > (sizeof(char) + sizeof(int))) {
 	type = buf[j++];
 	if (type < STORE_META_VOID || type > STORE_META_END) {

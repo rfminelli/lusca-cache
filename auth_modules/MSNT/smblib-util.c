@@ -26,39 +26,6 @@
 #include "smblib-priv.h"
 
 #include "rfcnb.h"
-#include "rfcnb-priv.h"
-#include "rfcnb-util.h"
-
-#include <stdlib.h>
-#include <unistd.h>
-
-char *SMB_Prots[] = {"PC NETWORK PROGRAM 1.0",
-                            "MICROSOFT NETWORKS 1.03",
-                            "MICROSOFT NETWORKS 3.0",
-                            "DOS LANMAN1.0",
-                            "LANMAN1.0",
-                            "DOS LM1.2X002",
-                            "LM1.2X002",
-                            "DOS LANMAN2.1",
-                            "LANMAN2.1",
-                            "Samba",
-                            "NT LM 0.12",
-                            "NT LANMAN 1.0",
-                            NULL};
-
-int SMB_Types[] = {SMB_P_Core,
-                          SMB_P_CorePlus,
-                          SMB_P_DOSLanMan1,
-                          SMB_P_DOSLanMan1, 
-                          SMB_P_LanMan1,
-                          SMB_P_DOSLanMan2,  
-                          SMB_P_LanMan2,
-                          SMB_P_LanMan2_1,
-                          SMB_P_LanMan2_1,
-                          SMB_P_NT1,
-                          SMB_P_NT1,
-                          SMB_P_NT1, 
-                          -1};
 
 /* Print out an SMB pkt in all its gory detail ... */
 
@@ -228,7 +195,9 @@ int SMB_Figure_Protocol(char *dialects[], int prot_index)
 /* none acceptible, and our return value is 0 if ok, <0 if problems       */
 
 int SMB_Negotiate(SMB_Handle_Type Con_Handle, char *Prots[])
-{
+
+{ struct SMB_Neg_Prot_Def *prot_pkt;
+  struct SMB_Neg_Prot_Resp_Def *resp_pkt;
   struct RFCNB_Pkt *pkt;
   int prots_len, i, pkt_len, prot, alloc_len;
   char *p;
@@ -387,7 +356,7 @@ int SMB_Negotiate(SMB_Handle_Type Con_Handle, char *Prots[])
     Con_Handle -> Encrypt_Key_Len = SVAL(SMB_Hdr(pkt), SMB_negrLM_ekl_offset);
     
     p = (SMB_Hdr(pkt) + SMB_negrLM_buf_offset);
-    fprintf(stderr, "%d", (int)(SMB_Hdr(pkt) + SMB_negrLM_buf_offset));
+    fprintf(stderr, "%d", (char *)(SMB_Hdr(pkt) + SMB_negrLM_buf_offset));
     memcpy(Con_Handle->Encrypt_Key, p, 8);
 
     p = (SMB_Hdr(pkt) + SMB_negrLM_buf_offset + Con_Handle -> Encrypt_Key_Len);
@@ -441,7 +410,7 @@ int SMB_Negotiate(SMB_Handle_Type Con_Handle, char *Prots[])
 
 void SMB_Get_My_Name(char *name, int len)
 
-{
+{ int loc;
 
   if (gethostname(name, len) < 0) { /* Error getting name */
 
@@ -470,13 +439,13 @@ SMB_Tree_Handle SMB_TreeConnect(SMB_Handle_Type Con_Handle,
 				char *device)
 
 { struct RFCNB_Pkt *pkt;
-  int param_len, pkt_len;
+  int param_len, i, pkt_len;
   char *p;
   SMB_Tree_Handle tree;
 
   /* Figure out how much space is needed for path, password, dev ... */
 
-  if ((path == NULL) | (password == NULL) | (device == NULL)) {
+  if (path == NULL | password == NULL | device == NULL) {
 
 #ifdef DEBUG
     fprintf(stderr, "Bad parameter passed to SMB_TreeConnect\n");
@@ -618,8 +587,8 @@ SMB_Tree_Handle SMB_TreeConnect(SMB_Handle_Type Con_Handle,
 
   if (Con_Handle -> first_tree == NULL) {
 
-    Con_Handle -> first_tree = tree;
-    Con_Handle -> last_tree = tree;
+    Con_Handle -> first_tree == tree;
+    Con_Handle -> last_tree == tree;
 
   }
   else {
@@ -783,7 +752,7 @@ static char *SMBlib_Error_Messages[] = {
   "No such error code.",
   NULL};
 
-void SMB_Get_Error_Msg(int msg, char *msgbuf, int len)
+int SMB_Get_Error_Msg(int msg, char *msgbuf, int len)
 
 {
 

@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -49,8 +48,6 @@ main(int argc, char *argv[])
     int x;
     setbuf(stdin, NULL);
     setbuf(stdout, NULL);
-    close(2);
-    open("/dev/null", O_RDWR);
     while (fgets(buf, UNLINK_BUF_LEN, stdin)) {
 	if ((t = strchr(buf, '\n')))
 	    *t = '\0';
@@ -71,14 +68,17 @@ main(int argc, char *argv[])
 
 /* This code gets linked to Squid */
 
+#if USE_UNLINKD
 static int unlinkd_wfd = -1;
 static int unlinkd_rfd = -1;
+#endif
 
 #define UNLINKD_QUEUE_LIMIT 20
 
 void
 unlinkdUnlink(const char *path)
 {
+#if USE_UNLINKD
     char buf[MAXPATHLEN];
     int l;
     int x;
@@ -139,26 +139,29 @@ unlinkdUnlink(const char *path)
 	safeunlink(path, 0);
 	return;
     }
-    statCounter.unlink.requests++;
+    Counter.unlink.requests++;
     queuelen++;
+#endif
 }
 
 void
 unlinkdClose(void)
 {
-    if (unlinkd_wfd < 0)
-	return;
+#if USE_UNLINKD
+    assert(unlinkd_wfd > -1);
     debug(12, 1) ("Closing unlinkd pipe on FD %d\n", unlinkd_wfd);
     file_close(unlinkd_wfd);
     if (unlinkd_wfd != unlinkd_rfd)
 	file_close(unlinkd_rfd);
     unlinkd_wfd = -1;
     unlinkd_rfd = -1;
+#endif
 }
 
 void
 unlinkdInit(void)
 {
+#if USE_UNLINKD
     int x;
     char *args[2];
     struct timeval slp;
@@ -195,6 +198,9 @@ unlinkdInit(void)
     if (FD_PIPE == fd_table[unlinkd_wfd].type)
 	commUnsetNonBlocking(unlinkd_wfd);
     debug(12, 1) ("Unlinkd pipe opened on FD %d\n", unlinkd_wfd);
+#else
+    debug(12, 1) ("Unlinkd is disabled\n");
+#endif
 }
 
 #endif /* ndef UNLINK_DAEMON */

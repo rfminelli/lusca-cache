@@ -126,7 +126,7 @@ commBind(int s, struct in_addr in_addr, u_short port)
     S.sin_family = AF_INET;
     S.sin_port = htons(port);
     S.sin_addr = in_addr;
-    statCounter.syscalls.sock.binds++;
+    Counter.syscalls.sock.binds++;
     if (bind(s, (struct sockaddr *) &S, sizeof(S)) == 0)
 	return COMM_OK;
     debug(50, 0) ("commBind: Cannot bind socket FD %d to %s:%d: %s\n",
@@ -151,7 +151,7 @@ comm_open(int sock_type,
     fde *F = NULL;
 
     /* Create socket for accepting new connections. */
-    statCounter.syscalls.sock.sockets++;
+    Counter.syscalls.sock.sockets++;
     if ((new_socket = socket(AF_INET, sock_type, proto)) < 0) {
 	/* Increase the number of reserved fd's if calls to socket()
 	 * are failing because the open file table is full.  This
@@ -297,9 +297,9 @@ commResetFD(ConnectStateData * cs)
     int fd2;
     if (!cbdataValid(cs->data))
 	return 0;
-    statCounter.syscalls.sock.sockets++;
+    Counter.syscalls.sock.sockets++;
     fd2 = socket(AF_INET, SOCK_STREAM, 0);
-    statCounter.syscalls.sock.sockets++;
+    Counter.syscalls.sock.sockets++;
     if (fd2 < 0) {
 	debug(5, 0) ("commResetFD: socket: %s\n", xstrerror());
 	if (ENFILE == errno || EMFILE == errno)
@@ -420,7 +420,7 @@ comm_connect_addr(int sock, const struct sockaddr_in *address)
     errno = 0;
     if (!F->flags.called_connect) {
 	F->flags.called_connect = 1;
-	statCounter.syscalls.sock.connects++;
+	Counter.syscalls.sock.connects++;
 	x = connect(sock, (struct sockaddr *) address, sizeof(*address));
 	if (x < 0)
 	    debug(5, 9) ("connect FD %d: %s\n", sock, xstrerror());
@@ -479,7 +479,7 @@ comm_accept(int fd, struct sockaddr_in *pn, struct sockaddr_in *me)
     socklen_t Slen;
     fde *F = NULL;
     Slen = sizeof(P);
-    statCounter.syscalls.sock.accepts++;
+    Counter.syscalls.sock.accepts++;
     if ((sock = accept(fd, (struct sockaddr *) &P, &Slen)) < 0) {
 	if (ignoreErrno(errno)) {
 	    debug(50, 5) ("comm_accept: FD %d: %s\n", fd, xstrerror());
@@ -582,7 +582,7 @@ comm_close(int fd)
 	pconnHistCount(1, F->uses);
     fd_close(fd);		/* update fdstat */
     close(fd);
-    statCounter.syscalls.sock.closes++;
+    Counter.syscalls.sock.closes++;
 }
 
 /* Send a udp datagram to specified TO_ADDR. */
@@ -594,7 +594,7 @@ comm_udp_sendto(int fd,
     int len)
 {
     int x;
-    statCounter.syscalls.sock.sendtos++;
+    Counter.syscalls.sock.sendtos++;
     x = sendto(fd, buf, len, 0, (struct sockaddr *) to_addr, addr_len);
     if (x < 0) {
 #ifdef _SQUID_LINUX_
@@ -789,7 +789,7 @@ commHandleWrite(int fd, void *data)
     len = write(fd, state->buf + state->offset, nleft);
     debug(5, 5) ("commHandleWrite: write() returns %d\n", len);
     fd_bytes(fd, len, FD_WRITE);
-    statCounter.syscalls.sock.writes++;
+    Counter.syscalls.sock.writes++;
 
     if (len == 0) {
 	/* Note we even call write if nleft == 0 */

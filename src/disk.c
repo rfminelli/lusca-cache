@@ -65,7 +65,7 @@ file_open(const char *path, int mode)
     mode |= SQUID_NONBLOCK;
     errno = 0;
     fd = open(path, mode, 0644);
-    statCounter.syscalls.disk.opens++;
+    Counter.syscalls.disk.opens++;
     if (fd < 0) {
 	debug(50, 3) ("file_open: error opening file %s: %s\n", path,
 	    xstrerror());
@@ -118,7 +118,7 @@ file_close(int fd)
     debug(6, F->flags.close_request ? 2 : 5)
 	("file_close: FD %d, really closing\n", fd);
     fd_close(fd);
-    statCounter.syscalls.disk.closes++;
+    Counter.syscalls.disk.closes++;
 }
 
 /*
@@ -187,13 +187,11 @@ diskHandleWrite(int fd, void *notused)
     debug(6, 3) ("diskHandleWrite: FD %d writing %d bytes\n",
 	fd, (int) (fdd->write_q->len - fdd->write_q->buf_offset));
     errno = 0;
-    if (fdd->write_q->file_offset != -1)
-	lseek(fd, fdd->write_q->file_offset, SEEK_SET);
     len = write(fd,
 	fdd->write_q->buf + fdd->write_q->buf_offset,
 	fdd->write_q->len - fdd->write_q->buf_offset);
     debug(6, 3) ("diskHandleWrite: FD %d len = %d\n", fd, len);
-    statCounter.syscalls.disk.writes++;
+    Counter.syscalls.disk.writes++;
     fd_bytes(fd, len, FD_WRITE);
     if (len < 0) {
 	if (!ignoreErrno(errno)) {
@@ -348,14 +346,14 @@ diskHandleRead(int fd, void *data)
 	debug(6, 3) ("diskHandleRead: FD %d seeking to offset %d\n",
 	    fd, (int) ctrl_dat->offset);
 	lseek(fd, ctrl_dat->offset, SEEK_SET);	/* XXX ignore return? */
-	statCounter.syscalls.disk.seeks++;
+	Counter.syscalls.disk.seeks++;
 	F->disk.offset = ctrl_dat->offset;
     }
     errno = 0;
     len = read(fd, ctrl_dat->buf, ctrl_dat->req_len);
     if (len > 0)
 	F->disk.offset += len;
-    statCounter.syscalls.disk.reads++;
+    Counter.syscalls.disk.reads++;
     fd_bytes(fd, len, FD_READ);
     if (len < 0) {
 	if (ignoreErrno(errno)) {

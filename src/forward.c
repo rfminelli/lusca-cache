@@ -68,9 +68,6 @@ fwdStateFree(FwdState * fwdState)
     int sfd;
     debug(17, 3) ("fwdStateFree: %p\n", fwdState);
     assert(e->mem_obj);
-#if URL_CHECKSUM_DEBUG
-    assert(e->mem_obj->chksum == url_checksum(e->mem_obj->url));
-#endif
     if (e->store_status == STORE_PENDING) {
 	if (e->mem_obj->inmem_hi == 0) {
 	    assert(fwdState->err);
@@ -133,20 +130,13 @@ fwdServerClosed(int fd, void *data)
 	    fwdState->n_tries,
 	    (int) (squid_curtime - fwdState->start));
 	if (fwdState->servers->next) {
-	    /* use next, or cycle if origin server isn't last */
+	    /* cycle */
 	    FwdServer *fs = fwdState->servers;
-	    FwdServer **T, *T2 = NULL;
+	    FwdServer **T;
 	    fwdState->servers = fs->next;
-	    for (T = &fwdState->servers; *T; T2 = *T, T = &(*T)->next);
-	    if (T2 && T2->peer) {
-		/* cycle */
-		*T = fs;
-		fs->next = NULL;
-	    } else {
-		/* Use next. The last "direct" entry is retried multiple times */
-		fwdState->servers = fs->next;
-		fwdServerFree(fs);
-	    }
+	    for (T = &fwdState->servers; *T; T = &(*T)->next);
+	    *T = fs;
+	    fs->next = NULL;
 	}
 	/* use eventAdd to break potential call sequence loops */
 	eventAdd("fwdConnectStart", fwdConnectStart, fwdState, 0.0, 0);
@@ -189,20 +179,12 @@ fwdConnectDone(int server_fd, int status, void *data)
 	err->request = requestLink(request);
 	fwdFail(fwdState, err);
 	if (fs->peer)
-	    peerConnectFailed(fs->peer);
+	    peerCheckConnectStart(fs->peer);
 	comm_close(server_fd);
     } else {
 	debug(17, 3) ("fwdConnectDone: FD %d: '%s'\n", server_fd, storeUrl(fwdState->entry));
-	if (fs->peer)
-	    hierarchyNote(&fwdState->request->hier, fs->code, fs->peer->host);
-	else if (Config.onoff.log_ip_on_direct)
-	    hierarchyNote(&fwdState->request->hier, fs->code, fd_table[server_fd].ipaddr);
-	else
-	    hierarchyNote(&fwdState->request->hier, fs->code, request->host);
 	fd_note(server_fd, storeUrl(fwdState->entry));
 	fd_table[server_fd].uses++;
-	if (fs->peer)
-	    peerConnectSucceded(fs->peer);
 	fwdDispatch(fwdState);
     }
     current = NULL;
@@ -226,7 +208,7 @@ fwdConnectTimeout(int fd, void *data)
 	 */
 	if (fwdState->servers)
 	    if (fwdState->servers->peer)
-		peerConnectFailed(fwdState->servers->peer);
+		peerCheckConnectStart(fwdState->servers->peer);
     }
     comm_close(fd);
 }
@@ -250,16 +232,12 @@ fwdConnectStart(void *data)
 	port = fs->peer->http_port;
 	ctimeout = fs->peer->connect_timeout > 0 ? fs->peer->connect_timeout
 	    : Config.Timeout.peer_connect;
-    } else if (fwdState->request->flags.accelerated &&
-	Config.Accel.single_host && Config.Accel.host) {
-	host = Config.Accel.host;
-	port = Config.Accel.port;
-	ctimeout = Config.Timeout.connect;
     } else {
 	host = fwdState->request->host;
 	port = fwdState->request->port;
 	ctimeout = Config.Timeout.connect;
     }
+    hierarchyNote(&fwdState->request->hier, fs->code, host);
     if ((fd = pconnPop(host, port)) >= 0) {
 	debug(17, 3) ("fwdConnectStart: reusing pconn FD %d\n", fd);
 	fwdState->server_fd = fd;
@@ -268,9 +246,6 @@ fwdConnectStart(void *data)
 	fwdConnectDone(fd, COMM_OK, fwdState);
 	return;
     }
-#if URL_CHECKSUM_DEBUG
-    assert(fwdState->entry->mem_obj->chksum == url_checksum(url));
-#endif
     fd = comm_open(SOCK_STREAM,
 	0,
 	Config.Addrs.tcp_outgoing,
@@ -400,9 +375,6 @@ fwdReforward(FwdState * fwdState)
     http_status s;
     assert(e->store_status == STORE_PENDING);
     assert(e->mem_obj);
-#if URL_CHECKSUM_DEBUG
-    assert(e->mem_obj->chksum == url_checksum(e->mem_obj->url));
-#endif
     debug(17, 3) ("fwdReforward: %s?\n", storeUrl(e));
     if (!EBIT_TEST(e->flags, ENTRY_FWD_HDR_WAIT)) {
 	debug(17, 3) ("fwdReforward: No, ENTRY_FWD_HDR_WAIT isn't set\n");
@@ -470,9 +442,6 @@ fwdStart(int fd, StoreEntry * e, request_t * r)
     debug(17, 3) ("fwdStart: '%s'\n", storeUrl(e));
     e->mem_obj->request = requestLink(r);
     e->mem_obj->fd = fd;
-#if URL_CHECKSUM_DEBUG
-    assert(e->mem_obj->chksum == url_checksum(e->mem_obj->url));
-#endif
     if (shutting_down) {
 	/* more yuck */
 	err = errorCon(ERR_SHUTTING_DOWN, HTTP_SERVICE_UNAVAILABLE);
@@ -517,9 +486,6 @@ fwdCheckDeferRead(int fd, void *data)
     int rc = 0;
     if (mem == NULL)
 	return 0;
-#if URL_CHECKSUM_DEBUG
-    assert(e->mem_obj->chksum == url_checksum(e->mem_obj->url));
-#endif
 #if DELAY_POOLS
     if (fd < 0)
 	(void) 0;
@@ -593,9 +559,6 @@ fwdComplete(FwdState * fwdState)
     assert(e->store_status == STORE_PENDING);
     debug(17, 3) ("fwdComplete: %s\n\tstatus %d\n", storeUrl(e),
 	e->mem_obj->reply->sline.status);
-#if URL_CHECKSUM_DEBUG
-    assert(e->mem_obj->chksum == url_checksum(e->mem_obj->url));
-#endif
     fwdLogReplyStatus(fwdState->n_tries, e->mem_obj->reply->sline.status);
     if (fwdReforward(fwdState)) {
 	debug(17, 3) ("fwdComplete: re-forwarding %d %s\n",

@@ -31,11 +31,6 @@ int RFCNB_saved_errno = 0;
 #include <netinet/tcp.h>
 #include "rfcnb-priv.h"
 #include "rfcnb-util.h"
-#include "rfcnb-io.h"
-
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
 
 int RFCNB_Stats[RFCNB_MAX_STATS];
 
@@ -227,7 +222,7 @@ int RFCNB_Send(struct RFCNB_Con *Con_Handle, struct RFCNB_Pkt *udata, int Length
 
 int RFCNB_Recv(void *con_Handle, struct RFCNB_Pkt *Data, int Length)
 
-{ struct RFCNB_Pkt *pkt;
+{ struct RFCNB_Pkt *pkt; struct RFCNB_Hdr *hdr;
   int ret_len;
 
   if (con_Handle == NULL){
@@ -306,7 +301,7 @@ int RFCNB_Set_Sock_NoDelay(struct RFCNB_Con *con_Handle, BOOL yn)
 /* Listen for a connection on a port???, when                             */
 /* the connection comes in, we return with the connection                 */
 
-void RFCNB_Listen()
+void *RFCNB_Listen()
 
 {
 
@@ -351,7 +346,7 @@ int RFCNB_Get_Last_Errno()
 
 /* Pick up the last error response and return in string ...             */
 
-void RFCNB_Get_Error_Msg(int code, char *msg_buf, int len)
+int RFCNB_Get_Error_Msg(int code, char *msg_buf, int len)
 
 {
 

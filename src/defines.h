@@ -147,6 +147,7 @@
 #define LOG_DISABLE 0
 
 #define SM_PAGE_SIZE 4096
+#define DISK_PAGE_SIZE  8192
 
 #define EBIT_SET(flag, bit) 	((void)((flag) |= ((1L<<(bit)))))
 #define EBIT_CLR(flag, bit) 	((void)((flag) &= ~((1L<<(bit)))))
@@ -239,16 +240,28 @@
 /*
  * Max number of ICP messages to receive per call to icpHandleUdp
  */
+#ifdef _SQUID_MSWIN_
+#define INCOMING_ICP_MAX 1
+#else
 #define INCOMING_ICP_MAX 15
+#endif
 /*
  * Max number of DNS messages to receive per call to DNS read handler
  */
+#ifdef _SQUID_MSWIN_
+#define INCOMING_DNS_MAX 1
+#else
 #define INCOMING_DNS_MAX 15
+#endif
 /*
  * Max number of HTTP connections to accept per call to httpAccept
  * and PER HTTP PORT
  */
+#ifdef _SQUID_MSWIN_
+#define INCOMING_HTTP_MAX 1
+#else
 #define INCOMING_HTTP_MAX 10
+#endif
 #define INCOMING_TOTAL_MAX (INCOMING_ICP_MAX+INCOMING_HTTP_MAX)
 
 /*
@@ -267,4 +280,10 @@
 
 #ifndef _PATH_DEVNULL
 #define _PATH_DEVNULL "/dev/null"
+#endif
+
+#if USE_ASYNC_IO
+#ifndef NUMTHREADS
+#define NUMTHREADS 16
+#endif
 #endif

@@ -73,7 +73,11 @@
 void (*failure_notify) (const char *) = NULL;
 static char msg[128];
 
+#if !defined(__CYGWIN__)
 extern int sys_nerr;
+#else
+extern __declspec(dllimport) int sys_nerr;
+#endif
 
 #if MEM_GEN_TRACE
 
@@ -603,9 +607,8 @@ xstrerror(void)
 {
     static char xstrerror_buf[BUFSIZ];
     if (errno < 0 || errno >= sys_nerr)
-	snprintf(xstrerror_buf, BUFSIZ, "(%d) Unknown", errno);
-    else
-        snprintf(xstrerror_buf, BUFSIZ, "(%d) %s", errno, strerror(errno));
+	return ("Unknown");
+    snprintf(xstrerror_buf, BUFSIZ, "(%d) %s", errno, strerror(errno));
     return xstrerror_buf;
 }
 

@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -40,7 +39,6 @@
 struct _PumpStateData {
     FwdState *fwd;
     request_t *req;
-    store_client *sc;		/* The store client we're using */
     int c_fd;			/* client fd */
     int s_fd;			/* server end */
     int rcvd;			/* bytes received from client */
@@ -92,10 +90,10 @@ pumpInit(int fd, request_t * r, char *uri)
     snprintf(new_key, MAX_URL + 5, "%s|Pump", uri);
     cbdataAdd(p, cbdataXfree, 0);
     p->request_entry = storeCreateEntry(new_key, new_key, flags, r->method);
-    p->sc = storeClientListAdd(p->request_entry, p);
+    storeClientListAdd(p->request_entry, p);
     EBIT_SET(p->request_entry->flags, ENTRY_DONT_LOG);
 #if DELAY_POOLS
-    delaySetStoreClient(p->sc, delayClient(r));
+    delaySetStoreClient(p->request_entry, p, delayClient(r));
 #endif
     /*
      * initialize data structure
@@ -164,7 +162,7 @@ pumpStart(int s_fd, FwdState * fwd, CWCB * callback, void *cbdata)
     if (p->sent == p->req->content_length) {
 	pumpServerCopyComplete(p->s_fd, NULL, 0, DISK_OK, p);
     } else {
-	storeClientCopy(p->sc, p->request_entry, p->sent, p->sent, 4096,
+	storeClientCopy(p->request_entry, p->sent, p->sent, 4096,
 	    memAllocate(MEM_4K_BUF),
 	    pumpServerCopy, p);
     }
@@ -212,7 +210,7 @@ pumpServerCopyComplete(int fd, char *bufnotused, size_t size, int errflag, void 
     p->sent += size;
     assert(p->sent <= p->req->content_length);
     if (p->sent < p->req->content_length) {
-	storeClientCopy(p->sc, p->request_entry, p->sent, p->sent, 4096,
+	storeClientCopy(p->request_entry, p->sent, p->sent, 4096,
 	    memAllocate(MEM_4K_BUF),
 	    pumpServerCopy, p);
 	return;
@@ -229,12 +227,6 @@ pumpServerCopyComplete(int fd, char *bufnotused, size_t size, int errflag, void 
     cbdataUnlock(p->cbdata);
     storeUnlockObject(p->reply_entry);
     p->reply_entry = NULL;
-    /*
-     * and now we don't care about the client side either
-     * tear down the pump state.
-     */
-    comm_remove_close_handler(p->c_fd, pumpFree, p);
-    pumpFree(p->c_fd, p);
 }
 
 
@@ -247,7 +239,7 @@ pumpReadFromClient(int fd, void *data)
     int bytes_to_read = XMIN(p->req->content_length - p->rcvd, SQUID_TCP_SO_RCVBUF);
     int len = 0;
     errno = 0;
-    statCounter.syscalls.sock.reads++;
+    Counter.syscalls.sock.reads++;
     len = read(fd, buf, bytes_to_read);
     fd_bytes(fd, len, FD_READ);
     debug(61, 5) ("pumpReadFromClient: FD %d: len %d.\n", fd, len);
@@ -327,7 +319,7 @@ pumpClose(void *data)
     assert(!p->flags.closing);
     p->flags.closing = 1;
     if (req != NULL && req->store_status == STORE_PENDING) {
-	storeUnregister(p->sc, req, p);
+	storeUnregister(req, p);
     }
     if (rep != NULL && rep->store_status == STORE_PENDING) {
 	ErrorState *err = errorCon(ERR_READ_ERROR, HTTP_INTERNAL_SERVER_ERROR);
@@ -367,7 +359,7 @@ pumpFree(int fd, void *data)
     req = p->request_entry;
     rep = p->reply_entry;
     if (req != NULL) {
-	storeUnregister(p->sc, req, p);
+	storeUnregister(req, p);
 	storeUnlockObject(req);
 	p->request_entry = NULL;
     }

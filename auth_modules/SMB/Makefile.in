@@ -56,13 +56,12 @@ DEFINES		= -DSAMBAPREFIX=\"$(SAMBAPREFIX)\" -DHELPERSCRIPT=\"$(SMB_AUTH_HELPER_P
 
 INCLUDE		= -I. -I../../include -I$(top_srcdir)/include
 CFLAGS 		= $(AC_CFLAGS) $(INCLUDE) $(DEFINES)
-AUTH_LIBS	= $(XTRA_LIBS)
+AUTH_LIBS	= 
 
-LIBPROGS        = $(SMB_AUTH_EXE)
-LIBSCRIPTS	= $(SMB_AUTH_HELPER)
+LIBPROGS        = $(SMB_AUTH_EXE) $(SMB_AUTH_HELPER)
 OBJS	 	= smb_auth.o
 
-all:    $(LIBPROGS)
+all:    $(SMB_AUTH_EXE)
 
 $(SMB_AUTH_EXE): smb_auth.o
 	$(CC) $(LDFLAGS) smb_auth.o -o $@ $(AUTH_LIBS)
@@ -92,21 +91,9 @@ install: all install-mkdirs
 			$(RM) -f $(libexecdir)/-$$f; \
 		fi; \
 	done
-	@for f in $(LIBSCRIPTS); do \
-		if test -f $(libexecdir)/$$f; then \
-			echo $(MV) $(libexecdir)/$$f $(libexecdir)/-$$f; \
-			$(MV) $(libexecdir)/$$f $(libexecdir)/-$$f; \
-		fi; \
-		echo $(INSTALL_BIN) $$f $(libexecdir); \
-		$(INSTALL_BIN) $(srcdir)/$$f $(libexecdir); \
-		if test -f $(libexecdir)/-$$f; then \
-			echo $(RM) -f $(libexecdir)/-$$f; \
-			$(RM) -f $(libexecdir)/-$$f; \
-		fi; \
-	done
 
 clean: 
-	-rm -rf *.o *pure_* core $(LIBPROGS)
+	-rm -rf *.o *pure_* core $(PROGS)
 
 distclean:	clean
 	-rm -f Makefile

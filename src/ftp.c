@@ -873,15 +873,15 @@ ftpDataRead(int fd, void *data)
     read_sz = delayBytesWanted(delay_id, 1, read_sz);
 #endif
     memset(ftpState->data.buf + ftpState->data.offset, '\0', read_sz);
-    statCounter.syscalls.sock.reads++;
+    Counter.syscalls.sock.reads++;
     len = read(fd, ftpState->data.buf + ftpState->data.offset, read_sz);
     if (len > 0) {
 	fd_bytes(fd, len, FD_READ);
 #if DELAY_POOLS
 	delayBytesIn(delay_id, len);
 #endif
-	kb_incr(&statCounter.server.all.kbytes_in, len);
-	kb_incr(&statCounter.server.ftp.kbytes_in, len);
+	kb_incr(&Counter.server.all.kbytes_in, len);
+	kb_incr(&Counter.server.ftp.kbytes_in, len);
 	ftpState->data.offset += len;
     }
     debug(9, 5) ("ftpDataRead: FD %d, Read %d bytes\n", fd, len);
@@ -895,7 +895,7 @@ ftpDataRead(int fd, void *data)
 	ftpListingStart(ftpState);
     }
     if (len < 0) {
-	debug(50, ignoreErrno(errno) ? 3 : 1) ("ftpDataRead: read error: %s\n", xstrerror());
+	debug(50, 1) ("ftpDataRead: read error: %s\n", xstrerror());
 	if (ignoreErrno(errno)) {
 	    commSetSelect(fd,
 		COMM_SELECT_READ,
@@ -1042,8 +1042,8 @@ ftpStart(FwdState * fwd)
     const cache_key *key = NULL;
     cbdataAdd(ftpState, cbdataXfree, 0);
     debug(9, 3) ("ftpStart: '%s'\n", url);
-    statCounter.server.all.requests++;
-    statCounter.server.ftp.requests++;
+    Counter.server.all.requests++;
+    Counter.server.ftp.requests++;
     storeLockObject(entry);
     ftpState->entry = entry;
     ftpState->request = requestLink(request);
@@ -1126,8 +1126,8 @@ ftpWriteCommandCallback(int fd, char *bufnotused, size_t size, int errflag, void
     debug(9, 7) ("ftpWriteCommandCallback: wrote %d bytes\n", size);
     if (size > 0) {
 	fd_bytes(fd, size, FD_WRITE);
-	kb_incr(&statCounter.server.all.kbytes_out, size);
-	kb_incr(&statCounter.server.ftp.kbytes_out, size);
+	kb_incr(&Counter.server.all.kbytes_out, size);
+	kb_incr(&Counter.server.ftp.kbytes_out, size);
     }
     if (errflag == COMM_ERR_CLOSING)
 	return;
@@ -1240,18 +1240,18 @@ ftpReadControlReply(int fd, void *data)
 	return;
     }
     assert(ftpState->ctrl.offset < ftpState->ctrl.size);
-    statCounter.syscalls.sock.reads++;
+    Counter.syscalls.sock.reads++;
     len = read(fd,
 	ftpState->ctrl.buf + ftpState->ctrl.offset,
 	ftpState->ctrl.size - ftpState->ctrl.offset);
     if (len > 0) {
 	fd_bytes(fd, len, FD_READ);
-	kb_incr(&statCounter.server.all.kbytes_in, len);
-	kb_incr(&statCounter.server.ftp.kbytes_in, len);
+	kb_incr(&Counter.server.all.kbytes_in, len);
+	kb_incr(&Counter.server.ftp.kbytes_in, len);
     }
     debug(9, 5) ("ftpReadControlReply: FD %d, Read %d bytes\n", fd, len);
     if (len < 0) {
-	debug(50, ignoreErrno(errno) ? 3 : 1) ("ftpReadControlReply: read error: %s\n", xstrerror());
+	debug(50, 1) ("ftpReadControlReply: read error: %s\n", xstrerror());
 	if (ignoreErrno(errno)) {
 	    ftpScheduleReadControlReply(ftpState, 0);
 	} else {
@@ -1307,15 +1307,11 @@ ftpHandleControlReply(FtpStateData * ftpState)
 	xmemmove(ftpState->ctrl.buf, ftpState->ctrl.buf + bytes_used,
 	    ftpState->ctrl.offset);
     }
-    /* Move the last line of the reply message to ctrl.last_reply */
+    /* Find the last line of the reply message */
     for (W = &ftpState->ctrl.message; (*W)->next; W = &(*W)->next);
     safe_free(ftpState->ctrl.last_reply);
-    ftpState->ctrl.last_reply = xstrdup((*W)->key);
-    wordlistDestroy(W);
-    /* Copy the rest of the message to cwd_message to be printed in
-     * error messages
-     */
-    wordlistAddWl(&ftpState->cwd_message, ftpState->ctrl.message);
+    ftpState->ctrl.last_reply = (*W)->key;
+    safe_free(*W);
     debug(9, 8) ("ftpHandleControlReply: state=%d, code=%d\n", ftpState->state,
 	ftpState->ctrl.replycode);
     FTP_SM_FUNCS[ftpState->state] (ftpState);
@@ -1336,6 +1332,10 @@ ftpReadWelcome(FtpStateData * ftpState)
 	if (ftpState->ctrl.message) {
 	    if (strstr(ftpState->ctrl.message->key, "NetWare"))
 		ftpState->flags.skip_whitespace = 1;
+	    if (ftpState->cwd_message)
+		wordlistDestroy(&ftpState->cwd_message);
+	    ftpState->cwd_message = ftpState->ctrl.message;
+	    ftpState->ctrl.message = NULL;
 	}
 	ftpSendUser(ftpState);
     } else if (code == 120) {
@@ -1389,6 +1389,12 @@ ftpReadPass(FtpStateData * ftpState)
     int code = ftpState->ctrl.replycode;
     debug(9, 3) ("ftpReadPass\n");
     if (code == 230) {
+	if (ftpState->ctrl.message) {
+	    if (ftpState->cwd_message)
+		wordlistDestroy(&ftpState->cwd_message);
+	    ftpState->cwd_message = ftpState->ctrl.message;
+	    ftpState->ctrl.message = NULL;
+	}
 	ftpSendType(ftpState);
     } else {
 	ftpFail(ftpState);
@@ -1514,7 +1520,6 @@ ftpReadCwd(FtpStateData * ftpState)
     if (code >= 200 && code < 300) {
 	/* CWD OK */
 	ftpUnhack(ftpState);
-	/* Reset cwd_message to only include the last message */
 	if (ftpState->cwd_message)
 	    wordlistDestroy(&ftpState->cwd_message);
 	ftpState->cwd_message = ftpState->ctrl.message;
@@ -1644,14 +1649,6 @@ ftpSendPasv(FtpStateData * ftpState)
     int fd;
     struct sockaddr_in addr;
     socklen_t addr_len;
-    if (ftpState->request->method == METHOD_HEAD) {
-	/* Terminate here for HEAD requests */
-	ftpAppendSuccessHeader(ftpState);
-	storeTimestampsSet(ftpState->entry);
-	fwdComplete(ftpState->fwd);
-	ftpSendQuit(ftpState);
-	return;
-    }
     if (ftpState->data.fd >= 0) {
 	if (!ftpState->flags.datachannel_hack) {
 	    /* We are already connected, reuse this connection. */
@@ -1823,7 +1820,7 @@ ftpOpenListenSocket(FtpStateData * ftpState, int fallback)
 	return -1;
     }
     ftpState->data.fd = fd;
-    ftpState->data.port = comm_local_port(fd);
+    ftpState->data.port = comm_local_port(fd);;
     ftpState->data.host = NULL;
     return fd;
 }
@@ -1876,10 +1873,6 @@ ftpAcceptDataConnection(int fd, void *data)
     struct sockaddr_in my_peer, me;
     debug(9, 3) ("ftpAcceptDataConnection\n");
 
-    if (EBIT_TEST(ftpState->entry->flags, ENTRY_ABORTED)) {
-	comm_close(ftpState->ctrl.fd);
-	return;
-    }
     fd = comm_accept(fd, &my_peer, &me);
     if (fd < 0) {
 	debug(9, 1) ("ftpHandleDataAccept: comm_accept(%d): %s", fd, xstrerror());

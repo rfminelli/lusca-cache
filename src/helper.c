@@ -1,38 +1,3 @@
-
-/*
- * $Id$
- *
- * DEBUG: section 29    Helper process maintenance
- * AUTHOR: Harvest Derived?
- *
- * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
- * ----------------------------------------------------------
- *
- *  Squid is the result of efforts by numerous individuals from the
- *  Internet community.  Development is led by Duane Wessels of the
- *  National Laboratory for Applied Network Research and funded by the
- *  National Science Foundation.  Squid is Copyrighted (C) 1998 by
- *  the Regents of the University of California.  Please see the
- *  COPYRIGHT file for full details.  Squid incorporates software
- *  developed and/or copyrighted by other sources.  Please see the
- *  CREDITS file for full details.
- *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *  
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *  
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111, USA.
- *
- */
-
 #include "squid.h"
 
 #define HELPER_MAX_ARGS 64
@@ -161,18 +126,17 @@ helperStats(StoreEntry * sentry, helper * hlp)
     storeAppendPrintf(sentry, "avg service time: %d msec\n",
 	hlp->stats.avg_svc_time);
     storeAppendPrintf(sentry, "\n");
-    storeAppendPrintf(sentry, "%7s\t%7s\t%11s\t%s\t%7s\t%7s\t%7s\n",
+    storeAppendPrintf(sentry, "%7s\t%7s\t%11s\t%s\t%7s\t%7s\n",
 	"#",
 	"FD",
 	"# Requests",
 	"Flags",
 	"Time",
-	"Offset",
-	"Request");
+	"Offset");
     for (link = hlp->servers.head; link; link = link->next) {
 	srv = link->data;
 	tt = 0.001 * tvSubMsec(srv->dispatch_time, current_time);
-	storeAppendPrintf(sentry, "%7d\t%7d\t%11d\t%c%c%c%c\t%7.3f\t%7d\t%s\n",
+	storeAppendPrintf(sentry, "%7d\t%7d\t%11d\t%c%c%c%c\t%7.3f\t%7d\n",
 	    srv->index + 1,
 	    srv->rfd,
 	    srv->stats.uses,
@@ -181,8 +145,7 @@ helperStats(StoreEntry * sentry, helper * hlp)
 	    srv->flags.closing ? 'C' : ' ',
 	    srv->flags.shutdown ? 'S' : ' ',
 	    tt < 0.0 ? 0.0 : tt,
-	    (int) srv->offset,
-	    srv->request ? log_quote(srv->request->buf) : "(none)");
+	    (int) srv->offset);
     }
     storeAppendPrintf(sentry, "\nFlags key:\n\n");
     storeAppendPrintf(sentry, "   A = ALIVE\n");
@@ -216,8 +179,7 @@ helperShutdown(helper * hlp)
 	    continue;
 	}
 	srv->flags.closing = 1;
-	comm_close(srv->wfd);
-	srv->wfd = -1;
+	comm_close(srv->rfd);
     }
 }
 
@@ -261,7 +223,7 @@ helperServerFree(int fd, void *data)
 	helperRequestFree(r);
 	srv->request = NULL;
     }
-    if (srv->wfd != srv->rfd && srv->wfd != -1)
+    if (srv->wfd != srv->rfd)
 	comm_close(srv->wfd);
     dlinkDelete(&srv->link, &hlp->servers);
     hlp->n_running--;
@@ -286,7 +248,7 @@ helperHandleRead(int fd, void *data)
     helper *hlp = srv->parent;
     assert(fd == srv->rfd);
     assert(cbdataValid(data));
-    statCounter.syscalls.sock.reads++;
+    Counter.syscalls.sock.reads++;
     len = read(fd, srv->buf + srv->offset, srv->buf_sz - srv->offset);
     fd_bytes(fd, len, FD_READ);
     debug(29, 5) ("helperHandleRead: %d bytes from %s #%d.\n",
@@ -320,10 +282,9 @@ helperHandleRead(int fd, void *data)
 	    intAverage(hlp->stats.avg_svc_time,
 	    tvSubMsec(srv->dispatch_time, current_time),
 	    hlp->stats.replies, REDIRECT_AV_FACTOR);
-	if (srv->flags.shutdown) {
+	if (srv->flags.shutdown)
 	    comm_close(srv->wfd);
-	    srv->wfd = -1;
-	} else
+	else
 	    helperKickQueue(hlp);
     } else {
 	commSetSelect(srv->rfd, COMM_SELECT_READ, helperHandleRead, srv, 0);

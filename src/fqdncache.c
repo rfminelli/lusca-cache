@@ -1,4 +1,5 @@
 
+
 /*
  * $Id$
  *
@@ -333,7 +334,7 @@ fqdncacheHandleReply(void *data, rfc1035_rr * answers, int na)
     cbdataFree(c);
     c = NULL;
     n = ++FqdncacheStats.replies;
-    statHistCount(&statCounter.dns.svc_time,
+    statHistCount(&Counter.dns.svc_time,
 	tvSubMsec(f->request_time, current_time));
 #if USE_DNSSERVERS
     x = fqdncacheParse(reply);

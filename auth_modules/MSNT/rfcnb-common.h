@@ -23,9 +23,6 @@
    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#ifndef _RFCNB_COMMON_H_
-#define _RFCNB_COMMON_H_
-
 /* A data structure we need */
 
 typedef struct RFCNB_Pkt {
@@ -37,4 +34,3 @@ typedef struct RFCNB_Pkt {
 } RFCNB_Pkt;
 
 
-#endif /* _RFCNB_COMMON_H_ */

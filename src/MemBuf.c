@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -333,7 +332,7 @@ memBufGrow(MemBuf * mb, mb_size_t min_cap)
 
     /* copy and free old buffer if needed */
     if (old_mb.buf && old_mb.freefunc) {
-	xmemcpy(mb->buf, old_mb.buf, old_mb.size);
+	memcpy(mb->buf, old_mb.buf, old_mb.size);
 	(*old_mb.freefunc) (old_mb.buf);
     } else {
 	assert(!old_mb.buf && !old_mb.freefunc);

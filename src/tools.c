@@ -254,14 +254,6 @@ death(int sig)
 	fflush(stdout);
     }
 #endif /* _SQUID_SOLARIS_ */
-#if HAVE_BACKTRACE_SYMBOLS_FD
-    {
-	static void *(callarray[8192]);
-	int n;
-	n = backtrace(callarray, 8192);
-	backtrace_symbols_fd(callarray, n, fileno(debug_log));
-    }
-#endif
 #endif /* PRINT_STACK_TRACE */
 
 #if SA_RESETHAND == 0
@@ -476,7 +468,7 @@ uniqueHostname(void)
 void
 safeunlink(const char *s, int quiet)
 {
-    statCounter.syscalls.disk.unlinks++;
+    Counter.syscalls.disk.unlinks++;
     if (unlink(s) < 0 && !quiet)
 	debug(50, 1) ("safeunlink: Couldn't delete %s: %s\n", s, xstrerror());
 }
@@ -735,6 +727,8 @@ logsFlush(void)
 {
     if (debug_log)
 	fflush(debug_log);
+    if (cache_useragent_log)
+	fflush(cache_useragent_log);
 }
 
 char *
@@ -845,7 +839,7 @@ debugObj(int section, int level, const char *label, void *obj, ObjPackMethod pm)
 int
 stringHasWhitespace(const char *s)
 {
-    return strpbrk(s, w_space) != NULL;
+    return (strcspn(s, w_space) != strlen(s));
 }
 
 void
@@ -872,6 +866,7 @@ linklistShift(link_list ** L)
     xfree(l);
     return p;
 }
+
 
 /*
  * Same as rename(2) but complains if something goes wrong;

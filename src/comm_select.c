@@ -34,7 +34,11 @@
 
 #include "squid.h"
 
-static int MAX_POLL_TIME = 1000;	/* see also comm_quick_poll_required() */
+#if USE_ASYNC_IO
+#define MAX_POLL_TIME 10
+#else
+#define MAX_POLL_TIME 1000
+#endif
 
 #ifndef        howmany
 #define howmany(x, y)   (((x)+((y)-1))/(y))
@@ -223,7 +227,7 @@ comm_check_incoming_poll_handlers(int nfds, int *fds)
 #if !ALARM_UPDATES_TIME
     getCurrentTime();
 #endif
-    statCounter.syscalls.polls++;
+    Counter.syscalls.polls++;
     if (poll(pfds, npfds, 0) < 1)
 	return incame;
     for (i = 0; i < npfds; i++) {
@@ -272,7 +276,7 @@ comm_poll_icp_incoming(void)
 	incoming_icp_interval = MAX_INCOMING_INTERVAL;
     if (nevents > INCOMING_ICP_MAX)
 	nevents = INCOMING_ICP_MAX;
-    statHistCount(&statCounter.comm_icp_incoming, nevents);
+    statHistCount(&Counter.comm_icp_incoming, nevents);
 }
 
 static void
@@ -299,7 +303,7 @@ comm_poll_http_incoming(void)
 	incoming_http_interval = MAX_INCOMING_INTERVAL;
     if (nevents > INCOMING_HTTP_MAX)
 	nevents = INCOMING_HTTP_MAX;
-    statHistCount(&statCounter.comm_http_incoming, nevents);
+    statHistCount(&Counter.comm_http_incoming, nevents);
 }
 
 /* poll all sockets; call handlers for those that are ready. */
@@ -320,14 +324,15 @@ comm_poll(int msec)
     int calldns = 0;
     static time_t last_timeout = 0;
     double timeout = current_dtime + (msec / 1000.0);
-    double start;
     do {
 #if !ALARM_UPDATES_TIME
+	double start;
 	getCurrentTime();
 	start = current_dtime;
 #endif
-	/* Handle any fs callbacks that need doing */
-	storeDirCallback();
+#if USE_ASYNC_IO
+	aioCheckCallbacks();
+#endif
 #if DELAY_POOLS
 	FD_ZERO(&slowfds);
 #endif
@@ -377,9 +382,9 @@ comm_poll(int msec)
 	if (msec > MAX_POLL_TIME)
 	    msec = MAX_POLL_TIME;
 	for (;;) {
-	    statCounter.syscalls.polls++;
+	    Counter.syscalls.polls++;
 	    num = poll(pfds, nfds, msec);
-	    statCounter.select_loops++;
+	    Counter.select_loops++;
 	    if (num >= 0)
 		break;
 	    if (ignoreErrno(errno))
@@ -390,7 +395,7 @@ comm_poll(int msec)
 	    /* NOTREACHED */
 	}
 	debug(5, num ? 5 : 8) ("comm_poll: %d FDs ready\n", num);
-	statHistCount(&statCounter.select_fds_hist, num);
+	statHistCount(&Counter.select_fds_hist, num);
 	/* Check timeout handlers ONCE each second. */
 	if (squid_curtime > last_timeout) {
 	    last_timeout = squid_curtime;
@@ -430,7 +435,7 @@ comm_poll(int msec)
 		else {
 		    F->read_handler = NULL;
 		    hdl(fd, F->read_data);
-		    statCounter.select_fds++;
+		    Counter.select_fds++;
 		    if (commCheckICPIncoming)
 			comm_poll_icp_incoming();
 		    if (commCheckDNSIncoming)
@@ -444,7 +449,7 @@ comm_poll(int msec)
 		if ((hdl = F->write_handler)) {
 		    F->write_handler = NULL;
 		    hdl(fd, F->write_data);
-		    statCounter.select_fds++;
+		    Counter.select_fds++;
 		    if (commCheckICPIncoming)
 			comm_poll_icp_incoming();
 		    if (commCheckDNSIncoming)
@@ -491,7 +496,7 @@ comm_poll(int msec)
 	    if ((hdl = F->read_handler)) {
 		F->read_handler = NULL;
 		hdl(fd, F->read_data);
-		statCounter.select_fds++;
+		Counter.select_fds++;
 		if (commCheckICPIncoming)
 		    comm_poll_icp_incoming();
 		if (commCheckDNSIncoming)
@@ -503,7 +508,7 @@ comm_poll(int msec)
 #endif
 #if !ALARM_UPDATES_TIME
 	getCurrentTime();
-	statCounter.select_time += (current_dtime - start);
+	Counter.select_time += (current_dtime - start);
 #endif
 	return COMM_OK;
     }
@@ -544,7 +549,7 @@ comm_check_incoming_select_handlers(int nfds, int *fds)
 #if !ALARM_UPDATES_TIME
     getCurrentTime();
 #endif
-    statCounter.syscalls.selects++;
+    Counter.syscalls.selects++;
     if (select(maxfd, &read_mask, &write_mask, NULL, &zero_tv) < 1)
 	return incame;
     for (i = 0; i < nfds; i++) {
@@ -595,7 +600,7 @@ comm_select_icp_incoming(void)
 	incoming_icp_interval = MAX_INCOMING_INTERVAL;
     if (nevents > INCOMING_ICP_MAX)
 	nevents = INCOMING_ICP_MAX;
-    statHistCount(&statCounter.comm_icp_incoming, nevents);
+    statHistCount(&Counter.comm_icp_incoming, nevents);
 }
 
 static void
@@ -621,7 +626,7 @@ comm_select_http_incoming(void)
 	incoming_http_interval = MAX_INCOMING_INTERVAL;
     if (nevents > INCOMING_HTTP_MAX)
 	nevents = INCOMING_HTTP_MAX;
-    statHistCount(&statCounter.comm_http_incoming, nevents);
+    statHistCount(&Counter.comm_http_incoming, nevents);
 }
 
 #define DEBUG_FDBITS 0
@@ -652,16 +657,16 @@ comm_select(int msec)
     struct timeval poll_time;
     double timeout = current_dtime + (msec / 1000.0);
     fde *F;
-    int i;
     do {
 #if !ALARM_UPDATES_TIME
 	getCurrentTime();
 #endif
+#if USE_ASYNC_IO
+	aioCheckCallbacks();
+#endif
 #if DELAY_POOLS
 	FD_ZERO(&slowfds);
 #endif
-	/* Handle any fs callbacks that need doing */
-	storeDirCallback();
 	if (commCheckICPIncoming)
 	    comm_select_icp_incoming();
 	if (commCheckDNSIncoming)
@@ -729,9 +734,9 @@ comm_select(int msec)
 	for (;;) {
 	    poll_time.tv_sec = msec / 1000;
 	    poll_time.tv_usec = (msec % 1000) * 1000;
-	    statCounter.syscalls.selects++;
+	    Counter.syscalls.selects++;
 	    num = select(maxfd, &readfds, &writefds, NULL, &poll_time);
-	    statCounter.select_loops++;
+	    Counter.select_loops++;
 	    if (num >= 0)
 		break;
 	    if (ignoreErrno(errno))
@@ -746,7 +751,7 @@ comm_select(int msec)
 	    continue;
 	debug(5, num ? 5 : 8) ("comm_select: %d FDs ready at %d\n",
 	    num, (int) squid_curtime);
-	statHistCount(&statCounter.select_fds_hist, num);
+	statHistCount(&Counter.select_fds_hist, num);
 	/* Check lifetime and timeout handlers ONCE each second.
 	 * Replaces brain-dead check every time through the loop! */
 	if (squid_curtime > last_timeout) {
@@ -797,7 +802,7 @@ comm_select(int msec)
 		    F->read_handler = NULL;
 		    commUpdateReadBits(fd, NULL);
 		    hdl(fd, F->read_data);
-		    statCounter.select_fds++;
+		    Counter.select_fds++;
 		    if (commCheckICPIncoming)
 			comm_select_icp_incoming();
 		    if (commCheckDNSIncoming)
@@ -841,7 +846,7 @@ comm_select(int msec)
 		    F->write_handler = NULL;
 		    commUpdateWriteBits(fd, NULL);
 		    hdl(fd, F->write_data);
-		    statCounter.select_fds++;
+		    Counter.select_fds++;
 		    if (commCheckICPIncoming)
 			comm_select_icp_incoming();
 		    if (commCheckDNSIncoming)
@@ -865,7 +870,7 @@ comm_select(int msec)
 		F->read_handler = NULL;
 		commUpdateReadBits(fd, NULL);
 		hdl(fd, F->read_data);
-		statCounter.select_fds++;
+		Counter.select_fds++;
 		if (commCheckICPIncoming)
 		    comm_select_icp_incoming();
 		if (commCheckDNSIncoming)
@@ -911,7 +916,7 @@ comm_select_dns_incoming(void)
 	incoming_dns_interval = MAX_INCOMING_INTERVAL;
     if (nevents > INCOMING_DNS_MAX)
 	nevents = INCOMING_DNS_MAX;
-    statHistCount(&statCounter.comm_dns_incoming, nevents);
+    statHistCount(&Counter.comm_dns_incoming, nevents);
 }
 
 void
@@ -959,7 +964,7 @@ examine_select(fd_set * readfds, fd_set * writefds)
 	    FD_SET(fd, &write_x);
 	else
 	    continue;
-	statCounter.syscalls.selects++;
+	Counter.syscalls.selects++;
 	errno = 0;
 	if (!fstat(fd, &sb)) {
 	    debug(5, 5) ("FD %d is valid.\n", fd);
@@ -1025,7 +1030,7 @@ checkTimeouts(void)
 static void
 commIncomingStats(StoreEntry * sentry)
 {
-    StatCounters *f = &statCounter;
+    StatCounters *f = &Counter;
     storeAppendPrintf(sentry, "Current incoming_icp_interval: %d\n",
 	incoming_icp_interval >> INCOMING_FACTOR);
     storeAppendPrintf(sentry, "Current incoming_dns_interval: %d\n",
@@ -1076,11 +1081,4 @@ commUpdateWriteBits(int fd, PF * handler)
 	FD_CLR(fd, &global_writefds);
 	nwritefds--;
     }
-}
-
-/* Called by async-io or diskd to speed up the polling */
-void
-comm_quick_poll_required(void)
-{
-    MAX_POLL_TIME = 10;
 }

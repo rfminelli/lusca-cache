@@ -2,7 +2,6 @@
 /*
  * $Id$
  *
- * DEBUG: none          ETag parsing support
  * AUTHOR: Alex Rousskov
  *
  * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/

@@ -47,7 +47,7 @@ clientdbAdd(struct in_addr addr)
     c->key = xstrdup(inet_ntoa(addr));
     c->addr = addr;
     hash_join(client_table, (hash_link *) c);
-    statCounter.client_http.clients++;
+    Counter.client_http.clients++;
     return c;
 }
 

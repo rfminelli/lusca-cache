@@ -58,7 +58,6 @@ static const char *const list_sep = ", \t\n\r";
 static int http_header_first;
 static int http_header_allowed = 0;
 
-static void update_maxobjsize(void);
 static void configDoConfigure(void);
 static void parse_refreshpattern(refresh_t **);
 static int parseTimeUnits(const char *unit);
@@ -101,7 +100,7 @@ wordlistDestroy(wordlist ** list)
     *list = NULL;
 }
 
-const char *
+wordlist *
 wordlistAdd(wordlist ** list, const char *key)
 {
     while (*list)
@@ -109,28 +108,7 @@ wordlistAdd(wordlist ** list, const char *key)
     *list = memAllocate(MEM_WORDLIST);
     (*list)->key = xstrdup(key);
     (*list)->next = NULL;
-    return (*list)->key;
-}
-
-void
-wordlistJoin(wordlist ** list, wordlist ** wl)
-{
-    while (*list)
-	list = &(*list)->next;
-    *list = *wl;
-    *wl = NULL;
-}
-
-void
-wordlistAddWl(wordlist ** list, wordlist * wl)
-{
-    while (*list)
-	list = &(*list)->next;
-    for (; wl; wl = wl->next, list = &(*list)->next) {
-	*list = memAllocate(MEM_WORDLIST);
-	(*list)->key = xstrdup(wl->key);
-	(*list)->next = NULL;
-    }
+    return *list;
 }
 
 void
@@ -191,19 +169,6 @@ GetInteger(void)
     if (sscanf(token, "%d", &i) != 1)
 	self_destruct();
     return i;
-}
-
-static void
-update_maxobjsize(void)
-{
-    int i;
-    ssize_t ms = -1;
-
-    for (i = 0; i < Config.cacheSwap.n_configured; i++) {
-	if (Config.cacheSwap.swapDirs[i].max_objsize > ms)
-	    ms = Config.cacheSwap.swapDirs[i].max_objsize;
-    }
-    store_maxobjsize = ms;
 }
 
 int
@@ -316,8 +281,11 @@ configDoConfigure(void)
     if (Config.errHtmlText == NULL)
 	Config.errHtmlText = xstrdup(null_string);
     storeConfigure();
-    if (Config2.Accel.on && !strcmp(Config.Accel.host, "virtual"))
+    if (Config2.Accel.on && !strcmp(Config.Accel.host, "virtual")) {
 	vhost_mode = 1;
+	if (Config.Accel.port == 0)
+	    vport_mode = 1;
+    }
     if (Config.Sockaddr.http == NULL)
 	fatal("No http_port specified!");
     snprintf(ThisCache, sizeof(ThisCache), "%s:%d (%s)",
@@ -348,13 +316,19 @@ configDoConfigure(void)
 	debug(3, 0) ("WARNING: resetting 'maximum_single_addr_tries to 1\n");
 	Config.retry.maxtries = 1;
     }
+#if HEAP_REPLACEMENT
+    /* The non-LRU policies do not use referenceAge */
+#else
+    if (Config.referenceAge < 300) {
+	debug(3, 0) ("WARNING: resetting 'reference_age' to 1 week\n");
+	Config.referenceAge = 86400 * 7;
+    }
+#endif
     requirePathnameExists("MIME Config Table", Config.mimeTablePathname);
 #if USE_DNSSERVERS
     requirePathnameExists("cache_dns_program", Config.Program.dnsserver);
 #endif
-#if USE_UNLINKD
     requirePathnameExists("unlinkd_program", Config.Program.unlinkd);
-#endif
     if (Config.Program.redirect)
 	requirePathnameExists("redirect_program", Config.Program.redirect->key);
     if (Config.Program.authenticate)
@@ -413,7 +387,6 @@ configDoConfigure(void)
 		xstrerror());
 	Config2.effectiveGroupID = grp->gr_gid;
     }
-    urlExtMethodConfigure();
 }
 
 /* Parse a time specification from the config file.  Store the
@@ -834,7 +807,16 @@ dump_cachedir(StoreEntry * entry, const char *name, cacheSwap swap)
     int i;
     for (i = 0; i < swap.n_configured; i++) {
 	s = swap.swapDirs + i;
-	s->dump(entry, name, s);
+	switch (s->type) {
+	case SWAPDIR_UFS:
+	case SWAPDIR_ASYNCUFS:
+	    storeUfsDirDump(entry, name, s);
+	    break;
+	default:
+	    debug(0, 0) ("dump_cachedir doesn't know about type %d\n",
+		(int) s->type);
+	    break;
+	}
     }
 }
 
@@ -867,83 +849,21 @@ allocate_new_swapdir(cacheSwap * swap)
     }
 }
 
-static int
-find_fstype(char *type)
-{
-    int i;
-    for (i = 0; storefs_list[i].typestr != NULL; i++) {
-	if (strcasecmp(type, storefs_list[i].typestr) == 0) {
-	    return i;
-	}
-    }
-    return (-1);
-}
-
 static void
 parse_cachedir(cacheSwap * swap)
 {
     char *type_str;
-    char *path_str;
-    SwapDir *sd;
-    int i;
-    int fs;
-    ssize_t maxobjsize;
-
     if ((type_str = strtok(NULL, w_space)) == NULL)
 	self_destruct();
-
-    maxobjsize = (ssize_t) GetInteger();
-
-    if ((path_str = strtok(NULL, w_space)) == NULL)
-	self_destruct();
-
-    /*
-     * This bit of code is a little strange.
-     * See, if we find a path and type match for a given line, then
-     * as long as we're reconfiguring, we can just call its reconfigure
-     * function. No harm there.
-     *
-     * Trouble is, if we find a path match, but not a type match, we have
-     * a dilemma - we could gracefully shut down the fs, kill it, and
-     * create a new one of a new type in its place, BUT at this stage the
-     * fs is meant to be the *NEW* one, and so things go very strange. :-)
-     *
-     * So, we'll assume the person isn't going to change the fs type for now,
-     * and XXX later on we will make sure that its picked up.
-     *
-     * (moving around cache_dir lines will be looked at later in a little
-     * more sane detail..)
-     */
-
-    for (i = 0; i < swap->n_configured; i++) {
-	if (0 == strcasecmp(path_str, swap->swapDirs[i].path)) {
-	    /* This is a little weird, you'll appreciate it later */
-	    fs = find_fstype(type_str);
-	    if (fs < 0) {
-		fatalf("Unknown cache_dir type '%s'\n", type_str);
-	    }
-	    sd = swap->swapDirs + i;
-	    storefs_list[fs].reconfigurefunc(sd, i, path_str);
-	    sd->max_objsize = maxobjsize;
-	    update_maxobjsize();
-	    return;
-	}
-    }
-
-    fs = find_fstype(type_str);
-    if (fs < 0) {
-	/* If we get here, we didn't find a matching cache_dir type */
+    if (0 == strcasecmp(type_str, "ufs")) {
+	storeUfsDirParse(swap);
+#if USE_ASYNC_IO
+    } else if (0 == strcasecmp(type_str, "asyncufs")) {
+	storeAufsDirParse(swap);
+#endif
+    } else {
 	fatalf("Unknown cache_dir type '%s'\n", type_str);
     }
-    allocate_new_swapdir(swap);
-    sd = swap->swapDirs + swap->n_configured;
-    storefs_list[fs].parsefunc(sd, swap->n_configured, path_str);
-    /* XXX should we dupe the string here, in case it gets trodden on? */
-    sd->type = storefs_list[fs].typestr;
-    sd->max_objsize = maxobjsize;
-    swap->n_configured++;
-    /* Update the max object size */
-    update_maxobjsize();
 }
 
 static void
@@ -956,8 +876,18 @@ free_cachedir(cacheSwap * swap)
 	return;
     for (i = 0; i < swap->n_configured; i++) {
 	s = swap->swapDirs + i;
-	s->freefs(s);
+	switch (s->type) {
+	case SWAPDIR_UFS:
+	case SWAPDIR_ASYNCUFS:
+	    storeUfsDirFree(s);
+	    break;
+	default:
+	    debug(0, 0) ("dump_cachedir doesn't know about type %d\n",
+		(int) s->type);
+	    break;
+	}
 	xfree(s->path);
+	filemapFreeMemory(s->map);
     }
     safe_free(swap->swapDirs);
     swap->swapDirs = NULL;
@@ -1099,8 +1029,6 @@ parse_peer(peer ** head)
 	} else if (!strncasecmp(token, "digest-url=", 11)) {
 	    p->digest_url = xstrdup(token + 11);
 #endif
-	} else if (!strcasecmp(token, "allow-miss")) {
-	    p->options.allow_miss = 1;
 	} else {
 	    debug(3, 0) ("parse_peer: token='%s'\n", token);
 	    self_destruct();
@@ -1110,7 +1038,6 @@ parse_peer(peer ** head)
 	p->weight = 1;
     p->icp.version = ICP_VERSION_CURRENT;
     p->tcp_up = PEER_TCP_MAGIC_COUNT;
-    p->test_fd = -1;
 #if USE_CARP
 #define ROTATE_LEFT(x, n) (((x) << (n)) | ((x) >> ((sizeof(u_long)*8)-(n))))
     if (p->carp.load_factor) {
@@ -1134,7 +1061,6 @@ parse_peer(peer ** head)
 	head = &(*head)->next;
     *head = p;
     Config.npeers++;
-    peerClearRR(p);
 }
 
 static void
@@ -1513,12 +1439,6 @@ parse_refreshpattern(refresh_t ** head)
     safe_free(pattern);
 }
 
-static int
-check_null_refreshpattern(refresh_t * data)
-{
-    return data != NULL;
-}
-
 static void
 free_refreshpattern(refresh_t ** head)
 {
@@ -1724,40 +1644,6 @@ dump_uri_whitespace(StoreEntry * entry, const char *name, int var)
 	s = "strip";
     storeAppendPrintf(entry, "%s %s\n", name, s);
 }
-
-static void
-free_removalpolicy(RemovalPolicySettings ** settings)
-{
-    if (!*settings)
-	return;
-    free_string(&(*settings)->type);
-    free_wordlist(&(*settings)->args);
-    xfree(*settings);
-    *settings = NULL;
-}
-
-static void
-parse_removalpolicy(RemovalPolicySettings ** settings)
-{
-    if (*settings)
-	free_removalpolicy(settings);
-    *settings = xcalloc(1, sizeof(**settings));
-    parse_string(&(*settings)->type);
-    parse_wordlist(&(*settings)->args);
-}
-
-static void
-dump_removalpolicy(StoreEntry * entry, const char *name, RemovalPolicySettings * settings)
-{
-    wordlist *args;
-    storeAppendPrintf(entry, "%s %s", name, settings->type);
-    args = settings->args;
-    while (args) {
-	storeAppendPrintf(entry, " %s", args->key);
-	args = args->next;
-    }
-}
-
 
 #include "cf_parser.c"
 

@@ -30,20 +30,17 @@
 
 /* Create a handle to allow us to set/override some parameters ...       */
 
-SMB_Handle_Type SMB_Create_Con_Handle();
+void *SMB_Create_Con_Handle();
 
 /* Connect to a server, but do not do a tree con etc ... */
 
-SMB_Handle_Type SMB_Connect_Server(SMB_Handle_Type, char *server, char *NTdomain);
+void *SMB_Connect_Server(void *Con, char *server, char *NTdomain);
 
 /* Connect to a server and give us back a handle. If Con == NULL, create */
 /* The handle and populate it with defaults                              */
 
-SMB_Handle_Type SMB_Connect(SMB_Handle_Type Con_Handle,
-                            SMB_Tree_Handle *tree,
-                            char *service, 
-                            char *username, 
-                            char *password);
+void *SMB_Connect(void *Con, void **tree, 
+		  char *name, char *User, char *Password);
 
 /* Negotiate a protocol                                                  */
 
@@ -73,7 +70,7 @@ int SMB_Close(void *file_handle);
 /* Disconnect from server. Has flag to specify whether or not we keep the */
 /* handle.                                                                */
 
-int SMB_Discon(SMB_Handle_Type Con_Handle, BOOL KeepHandle);
+int SMB_Discon(void *Con, BOOL KeepHandle);
 
 void *SMB_Create(void *Tree_Handle,
 	       void *File_Handle, 
@@ -96,3 +93,5 @@ int SMB_Get_Error_Msg(int msg, char *msgbuf, int len);
 
 void *SMB_Logon_And_TCon(void *con, void *tree, char *user, char *pass,
 			 char *service, char *st);
+
+#define SMBLIB_DEFAULT_DOMAIN "anydom"

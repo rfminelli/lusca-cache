@@ -25,6 +25,7 @@
 
 /* Defines we need */
 
+typedef unsigned short uint16;
 
 #define GLOBAL extern
 

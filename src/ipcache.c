@@ -406,7 +406,7 @@ ipcacheHandleReply(void *data, rfc1035_rr * answers, int na)
     cbdataFree(c);
     c = NULL;
     n = ++IpcacheStats.replies;
-    statHistCount(&statCounter.dns.svc_time, tvSubMsec(i->request_time, current_time));
+    statHistCount(&Counter.dns.svc_time, tvSubMsec(i->request_time, current_time));
 #if USE_DNSSERVERS
     x = ipcacheParse(reply);
 #else
@@ -730,7 +730,7 @@ ipcacheCycleAddr(const char *name, ipcache_addrs * ia)
 	if (++ia->cur == ia->count)
 	    ia->cur = 0;
 	if (!ia->bad_mask[ia->cur])
-	    break;
+	    break;;
     }
     if (k == ia->count) {
 	/* All bad, reset to All good */

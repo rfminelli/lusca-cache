@@ -40,7 +40,6 @@
 typedef struct {
     peer *p;
     StoreEntry *e;
-    store_client *sc;
     request_t *r;
     off_t seen;
     off_t used;
@@ -61,7 +60,7 @@ static void netdbPurgeLRU(void);
 static netdbEntry *netdbLookupHost(const char *key);
 static net_db_peer *netdbPeerByName(const netdbEntry * n, const char *);
 static net_db_peer *netdbPeerAdd(netdbEntry * n, peer * e);
-static const char *netdbPeerName(const char *name);
+static char *netdbPeerName(const char *name);
 static IPH netdbSendPing;
 static QS sortPeerByRtt;
 static QS sortByRtt;
@@ -468,15 +467,16 @@ netdbReloadState(void)
 	count, tvSubMsec(start, current_time));
 }
 
-static const char *
+static char *
 netdbPeerName(const char *name)
 {
-    const wordlist *w;
+    wordlist *w;
     for (w = peer_names; w; w = w->next) {
 	if (!strcmp(w->key, name))
 	    return w->key;
     }
-    return wordlistAdd(&peer_names, name);
+    w = wordlistAdd(&peer_names, name);
+    return w->key;
 }
 
 static void
@@ -596,11 +596,11 @@ netdbExchangeHandleReply(void *data, char *buf, ssize_t size)
 	netdbExchangeDone(ex);
     } else if (ex->e->store_status == STORE_PENDING) {
 	debug(38, 3) ("netdbExchangeHandleReply: STORE_PENDING\n");
-	storeClientCopy(ex->sc, ex->e, ex->seen, ex->used, ex->buf_sz,
+	storeClientCopy(ex->e, ex->seen, ex->used, ex->buf_sz,
 	    ex->buf, netdbExchangeHandleReply, ex);
     } else if (ex->seen < ex->e->mem_obj->inmem_hi) {
 	debug(38, 3) ("netdbExchangeHandleReply: ex->e->mem_obj->inmem_hi\n");
-	storeClientCopy(ex->sc, ex->e, ex->seen, ex->used, ex->buf_sz,
+	storeClientCopy(ex->e, ex->seen, ex->used, ex->buf_sz,
 	    ex->buf, netdbExchangeHandleReply, ex);
     } else {
 	debug(38, 3) ("netdbExchangeHandleReply: Done\n");
@@ -615,7 +615,7 @@ netdbExchangeDone(void *data)
     debug(38, 3) ("netdbExchangeDone: %s\n", storeUrl(ex->e));
     memFree(ex->buf, MEM_4K_BUF);
     requestUnlink(ex->r);
-    storeUnregister(ex->sc, ex->e, ex);
+    storeUnregister(ex->e, ex);
     storeUnlockObject(ex->e);
     cbdataUnlock(ex->p);
     cbdataFree(ex);
@@ -970,11 +970,11 @@ netdbExchangeStart(void *data)
     assert(NULL != ex->r);
     ex->r->http_ver = 1.0;
     ex->e = storeCreateEntry(uri, uri, null_request_flags, METHOD_GET);
-    ex->buf_sz = 4096;
+    ex->buf_sz = 4096;;
     ex->buf = memAllocate(MEM_4K_BUF);
     assert(NULL != ex->e);
-    ex->sc = storeClientListAdd(ex->e, ex);
-    storeClientCopy(ex->sc, ex->e, ex->seen, ex->used, ex->buf_sz,
+    storeClientListAdd(ex->e, ex);
+    storeClientCopy(ex->e, ex->seen, ex->used, ex->buf_sz,
 	ex->buf, netdbExchangeHandleReply, ex);
     ex->r->flags.loopdetect = 1;	/* cheat! -- force direct */
     if (p->login)
