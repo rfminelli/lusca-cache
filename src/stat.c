@@ -88,7 +88,6 @@ StatCounters CountHist[N_COUNT_HIST];
 static int NCountHist = 0;
 static StatCounters CountHourHist[N_COUNT_HOUR_HIST];
 static int NCountHourHist = 0;
-CBDATA_TYPE(StatObjectsState);
 
 extern unsigned int mem_pool_alloc_calls;
 extern unsigned int mem_pool_free_calls;
@@ -344,11 +343,11 @@ statObjects(void *data)
 static void
 statObjectsStart(StoreEntry * sentry, STOBJFLT * filter)
 {
-    StatObjectsState *state;
-    state = cbdataAlloc(StatObjectsState);
+    StatObjectsState *state = xcalloc(1, sizeof(*state));
     state->sentry = sentry;
     state->filter = filter;
     storeLockObject(sentry);
+    cbdataAdd(state, cbdataXfree, 0);
     eventAdd("statObjects", statObjects, state, 0.0, 1);
 }
 
@@ -592,7 +591,7 @@ info_get(StoreEntry * sentry)
 #endif /* HAVE_MALLINFO */
     storeAppendPrintf(sentry, "Memory accounted for:\n");
     storeAppendPrintf(sentry, "\tTotal accounted:       %6d KB\n",
-	statMemoryAccounted() >> 10);
+	memTotalAllocated() >> 10);
     storeAppendPrintf(sentry, "\tmemPoolAlloc calls: %d\n",
 	mem_pool_alloc_calls);
     storeAppendPrintf(sentry, "\tmemPoolFree calls: %d\n",
@@ -833,7 +832,6 @@ statInit(void)
 {
     int i;
     debug(18, 5) ("statInit: Initializing...\n");
-    CBDATA_INIT_TYPE(StatObjectsState);
     for (i = 0; i < N_COUNT_HIST; i++)
 	statCountersInit(&CountHist[i]);
     for (i = 0; i < N_COUNT_HOUR_HIST; i++)
@@ -1299,14 +1297,11 @@ statMedianSvc(int interval, int which)
 /*
  * SNMP wants ints, ick
  */
-#if UNUSED_CODE
 int
 get_median_svc(int interval, int which)
 {
     return (int) statMedianSvc(interval, which);
 }
-
-#endif
 
 StatCounters *
 snmpStatGet(int minutes)
@@ -1418,6 +1413,8 @@ statClientRequests(StoreEntry * s)
 		ntohs(conn->me.sin_port));
 	    storeAppendPrintf(s, "\tnrequests: %d\n",
 		conn->nrequests);
+	    storeAppendPrintf(s, "\tpersistent: %d\n",
+		conn->persistent);
 	    storeAppendPrintf(s, "\tdefer: n %d, until %d\n",
 		conn->defer.n, conn->defer.until);
 	}
@@ -1517,12 +1514,6 @@ statGraphDump(StoreEntry * e)
     GENGRAPH(page_faults, "page_faults", "System Page Faults/sec");
     GENGRAPH(select_loops, "select_loops", "System Select Loop calls/sec");
     GENGRAPH(cputime, "cputime", "CPU utilisation");
-}
-
-int
-statMemoryAccounted(void)
-{
-    memTotalAllocated();
 }
 
 #endif /* STAT_GRAPHS */

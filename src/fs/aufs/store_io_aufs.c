@@ -20,9 +20,7 @@ static void storeAufsIOCallback(storeIOState * sio, int errflag);
 static AIOCB storeAufsOpenDone;
 static int storeAufsSomethingPending(storeIOState *);
 static int storeAufsKickWriteQueue(storeIOState * sio);
-static CBDUNL storeAufsIOFreeEntry;
-
-CBDATA_TYPE(storeIOState);
+static void storeAufsIOFreeEntry(void *, int);
 
 /* === PUBLIC =========================================================== */
 
@@ -47,14 +45,14 @@ storeAufsOpen(SwapDir * SD, StoreEntry * e, STFNCB * file_callback,
 	return NULL;
 #endif
 #if !ASYNC_OPEN
-    fd = file_open(path, O_RDONLY | O_BINARY);
+    fd = file_open(path, O_RDONLY);
     if (fd < 0) {
 	debug(78, 3) ("storeAufsOpen: got failude (%d)\n", errno);
 	return NULL;
     }
 #endif
-    CBDATA_INIT_TYPE_FREECB(storeIOState, storeAufsIOFreeEntry);
-    sio = cbdataAlloc(storeIOState);
+    sio = memAllocate(MEM_STORE_IO);
+    cbdataAdd(sio, storeAufsIOFreeEntry, MEM_STORE_IO);
     sio->fsstate = memPoolAlloc(aio_state_pool);
     ((aiostate_t *) (sio->fsstate))->fd = -1;
     ((aiostate_t *) (sio->fsstate))->flags.opening = 1;
@@ -67,7 +65,7 @@ storeAufsOpen(SwapDir * SD, StoreEntry * e, STFNCB * file_callback,
     cbdataLock(callback_data);
     Opening_FD++;
 #if ASYNC_OPEN
-    aioOpen(path, O_RDONLY | O_BINARY, 0644, storeAufsOpenDone, sio);
+    aioOpen(path, O_RDONLY, 0644, storeAufsOpenDone, sio);
 #else
     storeAufsOpenDone(fd, sio, fd, 0);
 #endif
@@ -102,27 +100,27 @@ storeAufsCreate(SwapDir * SD, StoreEntry * e, STFNCB * file_callback, STIOCB * c
 	return NULL;
 #endif
 #if !ASYNC_CREATE
-    fd = file_open(path, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY);
+    fd = file_open(path, O_WRONLY | O_CREAT | O_TRUNC);
     if (fd < 0) {
 	debug(78, 3) ("storeAufsCreate: got failude (%d)\n", errno);
 	return NULL;
     }
 #endif
-    CBDATA_INIT_TYPE_FREECB(storeIOState, storeAufsIOFreeEntry);
-    sio = cbdataAlloc(storeIOState);
+    sio = memAllocate(MEM_STORE_IO);
+    cbdataAdd(sio, storeAufsIOFreeEntry, MEM_STORE_IO);
     sio->fsstate = memPoolAlloc(aio_state_pool);
     ((aiostate_t *) (sio->fsstate))->fd = -1;
     ((aiostate_t *) (sio->fsstate))->flags.opening = 1;
     sio->swap_filen = filn;
     sio->swap_dirn = dirn;
-    sio->mode = O_WRONLY | O_BINARY;
+    sio->mode = O_WRONLY;
     sio->callback = callback;
     sio->callback_data = callback_data;
     sio->e = (StoreEntry *) e;
     cbdataLock(callback_data);
     Opening_FD++;
 #if ASYNC_CREATE
-    aioOpen(path, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0644, storeAufsOpenDone, sio);
+    aioOpen(path, O_WRONLY | O_CREAT | O_TRUNC, 0644, storeAufsOpenDone, sio);
 #else
     storeAufsOpenDone(fd, sio, fd, 0);
 #endif
@@ -221,6 +219,13 @@ storeAufsWrite(SwapDir * SD, storeIOState * sio, char *buf, size_t size, off_t o
 	return;
     }
     aiostate->flags.writing = 1;
+    /*
+     * XXX it might be nice if aioWrite() gave is immediate
+     * feedback here about EWOULDBLOCK instead of in the
+     * callback function
+     * XXX Should never give EWOULDBLOCK under normal operations
+     * if it does then the MAGIC1/2 tuning is wrong.
+     */
     aioWrite(aiostate->fd, offset, buf, size, storeAufsWriteDone, sio,
 	free_func);
 #else
@@ -294,6 +299,13 @@ storeAufsOpenDone(int unused, void *my_data, int fd, int errflag)
     debug(78, 3) ("storeAufsOpenDone: exiting\n");
 }
 
+/*
+ * XXX TODO
+ * if errflag == EWOULDBLOCK, then we'll need to re-queue the
+ * chunk at the beginning of the write_pending list and try
+ * again later.
+ * XXX Should not normally happen. 
+ */
 #if ASYNC_READ
 static void
 storeAufsReadDone(int fd, void *my_data, int len, int errflag)
@@ -341,6 +353,13 @@ storeAufsReadDone(int fd, int errflag, size_t len, void *my_data)
 	storeAufsIOCallback(sio, errflag);
 }
 
+/*
+ * XXX TODO
+ * if errflag == EWOULDBLOCK, then we'll need to re-queue the
+ * chunk at the beginning of the write_pending list and try
+ * again later.
+ * XXX Should not normally happen. 
+ */
 #if ASYNC_WRITE
 static void
 storeAufsWriteDone(int fd, void *my_data, int len, int errflag)
@@ -434,12 +453,12 @@ storeAufsSomethingPending(storeIOState * sio)
 
 
 /*      
- * Clean up references from the SIO before it gets released.
- * The actuall SIO is managed by cbdata so we do not need
- * to bother with that.
+ * We can't pass memFree() as a free function here, because we need to free
+ * the fsstate variable ..
  */
 static void
-storeAufsIOFreeEntry(void *sio)
+storeAufsIOFreeEntry(void *sio, int foo)
 {
     memPoolFree(aio_state_pool, ((storeIOState *) sio)->fsstate);
+    memFree(sio, MEM_STORE_IO);
 }

@@ -44,9 +44,7 @@
 
 static int storeDiskdSend(int, SwapDir *, int, storeIOState *, int, int, int);
 static void storeDiskdIOCallback(storeIOState * sio, int errflag);
-static CBDUNL storeDiskdIOFreeEntry;
-
-CBDATA_TYPE(storeIOState);
+static void storeDiskdIOFreeEntry(void *sio, int foo);
 
 /* === PUBLIC =========================================================== */
 
@@ -70,8 +68,8 @@ storeDiskdOpen(SwapDir * SD, StoreEntry * e, STFNCB * file_callback,
 	diskd_stats.open_fail_queue_len++;
 	return NULL;
     }
-    CBDATA_INIT_TYPE_FREECB(storeIOState, storeDiskdIOFreeEntry);
-    sio = cbdataAlloc(storeIOState);
+    sio = memAllocate(MEM_STORE_IO);
+    cbdataAdd(sio, storeDiskdIOFreeEntry, MEM_STORE_IO);
     sio->fsstate = diskdstate = memPoolAlloc(diskd_state_pool);
 
     sio->swap_filen = f;
@@ -129,8 +127,8 @@ storeDiskdCreate(SwapDir * SD, StoreEntry * e, STFNCB * file_callback,
     f = storeDiskdDirMapBitAllocate(SD);
     debug(81, 3) ("storeDiskdCreate: fileno %08X\n", f);
 
-    CBDATA_INIT_TYPE_FREECB(storeIOState, storeDiskdIOFreeEntry);
-    sio = cbdataAlloc(storeIOState);
+    sio = memAllocate(MEM_STORE_IO);
+    cbdataAdd(sio, storeDiskdIOFreeEntry, MEM_STORE_IO);
     sio->fsstate = diskdstate = memPoolAlloc(diskd_state_pool);
 
     sio->swap_filen = f;
@@ -521,7 +519,8 @@ storeDiskdSend(int mtype, SwapDir * sd, int id, storeIOState * sio, int size, in
  * the fsstate variable ..
  */
 static void
-storeDiskdIOFreeEntry(void *sio)
+storeDiskdIOFreeEntry(void *sio, int foo)
 {
     memPoolFree(diskd_state_pool, ((storeIOState *) sio)->fsstate);
+    memFree(sio, MEM_STORE_IO);
 }

@@ -49,20 +49,17 @@ static PF whoisReadReply;
 
 /* PUBLIC */
 
-CBDATA_TYPE(WhoisState);
-
 void
 whoisStart(FwdState * fwd)
 {
-    WhoisState *p;
+    WhoisState *p = xcalloc(1, sizeof(*p));
     int fd = fwd->server_fd;
     char *buf;
     size_t l;
-    CBDATA_INIT_TYPE(WhoisState);
-    p = cbdataAlloc(WhoisState);
     p->request = fwd->request;
     p->entry = fwd->entry;
     p->fwd = fwd;
+    cbdataAdd(p, cbdataXfree, 0);
     storeLockObject(p->entry);
     comm_add_close_handler(fd, whoisClose, p);
     l = strLen(p->request->urlpath) + 3;

@@ -109,7 +109,7 @@ peerSelectStateFree(ps_state * psstate)
     cbdataFree(psstate);
 }
 
-static int
+int
 peerSelectIcpPing(request_t * request, int direct, StoreEntry * entry)
 {
     int n;
@@ -134,12 +134,12 @@ peerSelect(request_t * request,
     PSC * callback,
     void *callback_data)
 {
-    ps_state *psstate;
+    ps_state *psstate = memAllocate(MEM_PS_STATE);
     if (entry)
 	debug(44, 3) ("peerSelect: %s\n", storeUrl(entry));
     else
 	debug(44, 3) ("peerSelect: %s\n", RequestMethodStr[request->method]);
-    psstate = cbdataAlloc(ps_state);
+    cbdataAdd(psstate, memFree, MEM_PS_STATE);
     psstate->request = requestLink(request);
     psstate->entry = entry;
     psstate->callback = callback;

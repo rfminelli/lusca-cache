@@ -169,9 +169,7 @@ static struct {
     NULL, &done_requests.head
 };
 static pthread_attr_t globattr;
-#if HAVE_SCHED_H
 static struct sched_param globsched;
-#endif
 static pthread_t main_thread;
 
 static MemPool *
@@ -256,17 +254,13 @@ aio_init(void)
 #if HAVE_PTHREAD_ATTR_SETSCOPE
     pthread_attr_setscope(&globattr, PTHREAD_SCOPE_SYSTEM);
 #endif
-#if HAVE_SCHED_H
     globsched.sched_priority = 1;
-#endif
     main_thread = pthread_self();
-#if HAVE_SCHED_H && HAVE_PTHREAD_SETSCHEDPARAM
+#if HAVE_PTHREAD_SETSCHEDPARAM
     pthread_setschedparam(main_thread, SCHED_OTHER, &globsched);
 #endif
-#if HAVE_SCHED_H
     globsched.sched_priority = 2;
-#endif
-#if HAVE_SCHED_H && HAVE_PTHREAD_ATTR_SETSCHEDPARAM
+#if HAVE_PTHREAD_ATTR_SETSCHEDPARAM
     pthread_attr_setschedparam(&globattr, &globsched);
 #endif
 
@@ -814,7 +808,6 @@ aio_poll_queues(void)
 	}
 	done_requests.tailp = &requests->next;
     }
-#if HAVE_SCHED_H
     /* Give up the CPU to allow the threads to do their work */
     /*
      * For Andres thoughts about yield(), see
@@ -825,7 +818,6 @@ aio_poll_queues(void)
 	sched_yield();
 #else
 	yield();
-#endif
 #endif
 }
 

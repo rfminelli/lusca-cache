@@ -1,23 +1,23 @@
 <HTML><HEAD>
-<TITLE>FEL: Beg&auml;rd URL kunde inte h&auml;mtas</TITLE>
+<TITLE>FEL: Begärd URL kunde inte hämtas</TITLE>
 </HEAD><BODY>
 <H1>FEL</H1>
-<H2>Beg&auml;rd URL kunde inte h&auml;mtas</H2>
+<H2>Begärd URL kunde inte hämtas</H2>
 <HR>
 <P>
-Vid f&ouml;rs&ouml;ket att h&auml;mta URL:
+Vid försöket att hämta URL:
 <A HREF="%U">%U</A>
 <P>
-Mottogs f&ouml;ljande fel:
+Mottogs följande fel:
 <UL>
 <LI>
 <STRONG>
-Ej st&ouml;d f&ouml;r beg&auml;rd metod och protokoll
+Ej stöd för begärd metod och protokoll
 </STRONG>
 </UL>
 
 <P>
-Squid st&ouml;djer inte alla fr&aring;gemetoder f&ouml;r alla protokoll.
-Till exempel, Ni kan inte POST'a en Gopher f&ouml;rfr&aring;gan.
+Squid stödjer inte alla frågemetoder för alla protokoll.
+Till exempel, Ni kan inte POST'a en Gopher förfrågan.
 </P>
 

@@ -24,7 +24,6 @@ INCLUDE		= -I../include -I$(top_srcdir)/include
 UTILOBJS	= rfc1123.o \
 		  rfc1738.o \
 		  rfc1035.o \
-		  rfc2617.o \
 		  util.o \
 		  getfullhostname.o \
 		  base64.o \
@@ -44,8 +43,7 @@ UTILOBJS	= rfc1123.o \
 		  $(LIBOBJS)
 REGEXOBJS	= GNUregex.o
 DLMALLOCOBJS	= dlmalloc.o
-NTLMAUTHOBJS = ntlmauth.o
-LIBS		= libmiscutil.a @LIBREGEX@ @LIBDLMALLOC@ libntlmauth.a
+LIBS		= libmiscutil.a @LIBREGEX@ @LIBDLMALLOC@
 
 CFLAGS		= $(AC_CFLAGS) $(INCLUDE)
 
@@ -66,11 +64,6 @@ libregex.a: $(REGEXOBJS)
 libdlmalloc.a: $(DLMALLOCOBJS)
 	$(RM) -f $@
 	$(AR_R) $@ $(DLMALLOCOBJS)
-	$(RANLIB) $@
-
-libntlmauth.a: $(NTLMAUTHOBJS)
-	$(RM) -f $@
-	$(AR_R) $@ $(NTLMAUTHOBJS)
 	$(RANLIB) $@
 
 clean:

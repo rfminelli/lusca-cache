@@ -1,15 +1,15 @@
 <HTML><HEAD>
-<TITLE>FEL: Beg&auml;rd URL kunde inte h&auml;mtas</TITLE>
+<TITLE>FEL: Begärd URL kunde inte hämtas</TITLE>
 </HEAD><BODY>
 <H1>FEL</H1>
-<H2>Beg&auml;rd URL kunde inte h&auml;mtas</H2>
+<H2>Begärd URL kunde inte hämtas</H2>
 <HR>
 <P>
-Ett FTP protokollfel intr&auml;ffade
-vid f&ouml;rs&ouml;ket att h&auml;mta URL:
+Ett FTP protokollfel inträffade
+vid försöket att hämta URL:
 <A HREF="%U">%U</A>
 <P>
-Squid s&auml;nde f&ouml;ljande FTP kommando:
+Squid sände följande FTP kommando:
 <blockquote><strong><pre>%f</pre></strong></blockquote>
 och fick till svar
 <blockquote><strong><pre>%F</pre></strong></blockquote>

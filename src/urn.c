@@ -42,7 +42,7 @@ typedef struct {
     request_t *request;
     request_t *urlres_r;
     struct {
-	unsigned int force_menu:1;
+	int force_menu:1;
     } flags;
 } UrnState;
 
@@ -60,7 +60,7 @@ static url_entry *urnParseReply(const char *inbuf, method_t);
 static const char *const crlf = "\r\n";
 static QS url_entry_sort;
 
-static url_entry *
+url_entry *
 urnFindMinRtt(url_entry * urls, method_t m, int *rtt_ret)
 {
     int min_rtt = 0;
@@ -95,7 +95,6 @@ urnFindMinRtt(url_entry * urls, method_t m, int *rtt_ret)
     return min_u;
 }
 
-CBDATA_TYPE(UrnState);
 void
 urnStart(request_t * r, StoreEntry * e)
 {
@@ -107,10 +106,10 @@ urnStart(request_t * r, StoreEntry * e)
     StoreEntry *urlres_e;
     ErrorState *err;
     debug(52, 3) ("urnStart: '%s'\n", storeUrl(e));
-    CBDATA_INIT_TYPE(UrnState);
-    urnState = cbdataAlloc(UrnState);
+    urnState = xcalloc(1, sizeof(UrnState));
     urnState->entry = e;
     urnState->request = requestLink(r);
+    cbdataAdd(urnState, cbdataXfree, 0);
     storeLockObject(urnState->entry);
     if (strncasecmp(strBuf(r->urlpath), "menu.", 5) == 0) {
 	char *new_path = xstrdup(strBuf(r->urlpath) + 5);

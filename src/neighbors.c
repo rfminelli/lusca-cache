@@ -189,9 +189,6 @@ peerHTTPOkay(const peer * p, request_t * request)
 	return 0;
     if (!neighborUp(p))
 	return 0;
-    if (p->max_conn)
-	if (p->stats.conn_open >= p->max_conn)
-	    return 0;
     return 1;
 }
 
@@ -932,7 +929,7 @@ neighborUp(const peer * p)
 }
 
 void
-peerDestroy(void *data)
+peerDestroy(void *data, int unused)
 {
     peer *p = data;
     struct _domain_ping *l = NULL;
@@ -952,6 +949,7 @@ peerDestroy(void *data)
 	cbdataUnlock(pd);
     }
 #endif
+    xfree(p);
 }
 
 void
@@ -1113,7 +1111,7 @@ static void
 peerCountMcastPeersStart(void *data)
 {
     peer *p = data;
-    ps_state *psstate;
+    ps_state *psstate = xcalloc(1, sizeof(ps_state));
     StoreEntry *fake;
     MemObject *mem;
     icp_common_t *query;
@@ -1123,12 +1121,12 @@ peerCountMcastPeersStart(void *data)
     p->mcast.flags.count_event_pending = 0;
     snprintf(url, MAX_URL, "http://%s/", inet_ntoa(p->in_addr.sin_addr));
     fake = storeCreateEntry(url, url, null_request_flags, METHOD_GET);
-    psstate = cbdataAlloc(ps_state);
     psstate->request = requestLink(urlParse(METHOD_GET, url));
     psstate->entry = fake;
     psstate->callback = NULL;
     psstate->callback_data = p;
     psstate->ping.start = current_time;
+    cbdataAdd(psstate, cbdataXfree, 0);
     mem = fake->mem_obj;
     mem->request = requestLink(psstate->request);
     mem->start_ping = current_time;
@@ -1263,7 +1261,6 @@ dump_peers(StoreEntry * sentry, peer * peers)
 	storeAppendPrintf(sentry, "Status     : %s\n",
 	    neighborUp(e) ? "Up" : "Down");
 	storeAppendPrintf(sentry, "AVG RTT    : %d msec\n", e->stats.rtt);
-	storeAppendPrintf(sentry, "OPEN CONNS : %d\n", e->stats.conn_open);
 	storeAppendPrintf(sentry, "LAST QUERY : %8d seconds ago\n",
 	    (int) (squid_curtime - e->stats.last_query));
 	storeAppendPrintf(sentry, "LAST REPLY : %8d seconds ago\n",
