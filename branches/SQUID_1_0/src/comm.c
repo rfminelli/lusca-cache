@@ -556,6 +556,12 @@ int comm_udp_recv(fd, buf, size, from_addr, from_size)
     int len = recvfrom(fd, buf, size, 0, (struct sockaddr *) from_addr,
 	from_size);
     if (len < 0) {
+#ifdef _SQUID_LINUX_
+        /* Some Linux systems seem to set the FD for reading and then
+         * return ECONNREFUSED when sendto() fails and generates an ICMP
+         * port unreachable message. */
+        if (errno != ECONNREFUSED)
+#endif
 	debug(5, 1, "comm_udp_recv: recvfrom failure: FD %d: %s\n", fd,
 	    xstrerror());
 	return COMM_ERROR;
