@@ -1,8 +1,8 @@
 /*
  * $Id$
  *
- * DEBUG: section 33    Client-side Routines
- * AUTHOR: Duane Wessels
+ * DEBUG: section ??    Server-side Routines
+ * AUTHOR:
  *
  * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * --------------------------------------------------------
@@ -35,27 +35,9 @@
 /* Local functions */
 
 
-/* Accept a new connection on HTTP socket */
+/* send request to a server (with possible queueing) */
 void
-clientAccept(int sock, void *notused)
+serverSendRequest(Request *req)
 {
-    /* re-register this handler */
-    commSetSelect(sock, COMM_SELECT_READ, httpAccept, NULL, 0);
-    if (!httpConnAccept(sock)) {
-    	debug(12, 1) ("httpAccept: FD %d: accept failure: %s\n",
-	    sock, xstrerror());
-	return; /* nothing left to be done */
-    }
-    debug(12, 4) ("httpAccept: FD %d: accepted\n", fd);
-    /* register this connection on this side @?@ add this? */
-}
-
-/* send reply to a client (with possible queueing at httpConn) */
-void
-clientSendReply(Reply *rep)
-{
-    assert(rep);
-    assert(rep->request);
-    assert(rep->request->conn);
-    httpConnWriteReply(rep->request->conn, rep);
+    assert(req);
 }
