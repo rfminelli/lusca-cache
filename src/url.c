@@ -43,7 +43,7 @@ char *url_convert_hex(org_url, allocate)
 
     url = allocate ? (char *) xstrdup(org_url) : org_url;
 
-    if (strlen(url) < 3 || !strchr(url, '%'))
+    if ((int) strlen(url) < 3 || !strchr(url, '%'))
 	return url;
 
     for (s = t = url; *(s + 2); s++) {
@@ -186,9 +186,10 @@ request_t *urlParse(method, url)
 	    *t = 0;
 	    strcpy(host, t + 1);
 	}
-	if ((t = strrchr(host, ':')) && *(t + 1) != '\0') {
-	    *t = '\0';
-	    port = atoi(t + 1);
+	if ((t = strrchr(host, ':'))) {
+	    *t++ = '\0';
+	    if (*t != '\0')
+		port = atoi(t);
 	}
     }
     for (t = host; *t; t++)
@@ -197,7 +198,7 @@ request_t *urlParse(method, url)
 	debug(23, 0, "urlParse: Invalid port == 0\n");
 	return NULL;
     }
-    request = (request_t *) xcalloc(1, sizeof(request_t));
+    request = get_free_request_t();
     request->method = method;
     request->protocol = protocol;
     strncpy(request->host, host, SQUIDHOSTNAMELEN);
@@ -233,4 +234,21 @@ char *urlCanonical(request, buf)
 	break;
     }
     return buf;
+}
+
+request_t *requestLink(request)
+     request_t *request;
+{
+    request->link_count++;
+    return request;
+}
+
+void requestUnlink(request)
+     request_t *request;
+{
+    if (request == NULL)
+	return;
+    request->link_count--;
+    if (request->link_count == 0)
+	put_free_request_t(request);
 }
