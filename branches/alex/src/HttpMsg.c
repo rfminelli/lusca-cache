@@ -52,6 +52,14 @@ httpMsgInit(HttpMsg *msg)
     msg->destroy = NULL;
 }
 
+/* "destroy" or "free" that does no de-allocate memory */
+void
+httpMsgClean(HttpMsg *msg)
+{
+    assert(msg);
+    httpHeaderClean(&msg->header);
+}
+
 void
 httpMsgClone(HttpMsg *msg, HttpMsg *clone)
 {
@@ -77,6 +85,7 @@ void
 httpMsgCheck(HttpMsg *msg)
 {
     assert(msg);
+    assert(msg->setRState);
     assert(msg->parseStart);
     assert(msg->noteError);
     assert(msg->noteException);
@@ -97,11 +106,15 @@ httpMsgNoteConnDataReady(HttpMsg *msg)
 }
 
 /* called when fresh data is available, returns size actually used */
-static size_t
+size_t
 httpMsgNoteDataReady(HttpMsg *msg, const char *buf, size_t size)
 {
     assert(msg && buff);
     return httpMsgParse(msg, buf, size) - buf;
+}
+
+size_t httpMsgNoteFileDataReady(void *data, char *buf, ssize_t size) {
+    return httpMsgNoteDataReady((HttpMsg*)data, buf, size);
 }
 
 /*

@@ -34,21 +34,39 @@
 #include "HttpConn.h" /* @?@ -> structs.h */
 #include "HttpHeader.h" /* @?@ -> structs.h */
 
+typedef enum { rsReadyToParse, rsParsedHeaders, rsDone } ReadState;
+
 /* generic http message (common portion of http Request and Reply) */
 struct _HttpMsg {
     /* common fields with http reply (hack) */
 #include "HttpMsgHack.h"
 };
 
-/* create/destroy */
-extern HttpMsg *httpMsgCreate();
-extern void httpMsgDestroy(HttpMsg *msg);
+/* init/clean */
+extern HttpMsg *httpMsgInit(HttpMsg *msg);
+extern void httpMsgClean(HttpMsg *msg);
+extern void httpMsgClone(HttpMsg *msg, HttpMsg *clone);
+
+/* check that all fields are initialized (used by Request and Reply) */
+extern void httpMsgCheck(HttpMsg *msg);
+
+/* default change state routine (used by Request and Reply) */
+extern void httpMsgSetRState(HttpMsg *msg, ReadState rstate);
+
+/* called when fresh data from file is available, returns size actually used */
+extern size_t httpMsgNoteFileDataReady(void *data, char *buf, size_t size);
+
+/* called when fresh data is available, returns size actually used */
+extern size_t httpMsgNoteDataReady(HttpMsg *msg, const char *buf, size_t size);
+
 
 /* parses a message initializing headers and such */
 extern int httpMsgParse(HttpMsg *msg, const char *buf);
 
 /* total size of the message (first_line + header + body) */
 extern size_t httpMsgGetTotalSize(HttpMsg *msg);
+
+
 
 /* puts report on current header usage and other stats into a static string */
 extern const char *httpMsgReport();

@@ -50,11 +50,19 @@ struct _HttpRequest {
 
     int flags;
 
+    int accel;          /* true if in acceleration mode. @?@ move to flags? */
+
+    HttpReply *reply;
+
     /* can be modified even for "const" requests */
     int link_count;     /* free when zero */
 
     struct in_addr client_addr;
     struct _HierarchyLogEntry hier;
+
+    aclCheck_t *acl_checklist;        /* need ptr back so we can unreg if needed @?@ */
+
+    log_type log_type;
 
 #if 0
     /* info from http request-line */
@@ -73,7 +81,6 @@ struct _HttpRequest {
     /* logging stuff */
     struct _AccessLogEntry al;
     char *log_uri;
-    log_type log_type;
     struct timeval start;
 
     /* protected, do not use these, use interface functions instead */
@@ -82,9 +89,12 @@ struct _HttpRequest {
 
 /* create/destroy */
 extern HttpRequest *httpRequestCreate();
-extern void httpRequestDestroy(HttpRequest *req);
+extern void httpRequestDestroy(HttpMsg *msg);
+extern HttpRequest *httpRequestClone(HttpRequest *orig);
 
 /* set pre-parsed uri info */
 extern void httpRequestSetUri(HttpRequest *, method_t, protocol_t, const char *host, u_short port, const char *login, const char *urlpath);
+
+int httpRequestIsConditional(HttpRequest *req);
 
 #endif /* ndef _HTTP_REQUEST_H_ */

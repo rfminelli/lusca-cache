@@ -40,7 +40,6 @@ storeSwapOutHandle(int fdnotused, int flag, size_t len, void *data)
 	e->swap_status = SWAPOUT_NONE;
 	if (e->swap_file_number > -1) {
 	    storeUnlinkFileno(e->swap_file_number);
-	    storeDirMapBitReset(e->swap_file_number);
 	    e->swap_file_number = -1;
 	}
 	if (flag == DISK_NO_SPACE_LEFT) {
@@ -195,16 +194,14 @@ void
 storeSwapOutFileClose(StoreEntry * e)
 {
     MemObject *mem = e->mem_obj;
-    assert(mem != NULL);
-    if (mem->swapout.fd > -1) {
+    if (mem->swapout.fd > -1)
 	file_close(mem->swapout.fd);
-	mem->swapout.fd = -1;
-	storeUnlockObject(e);
-    }
 #if USE_ASYNC_IO
     else
 	aioCancel(-1, e);	/* Make doubly certain pending ops are gone */
 #endif
+    mem->swapout.fd = -1;
+    storeUnlockObject(e);
 }
 
 static void

@@ -30,26 +30,40 @@
 
 #include "squid.h"
 #include "HttpRequest.h"
+#include "HttpReply.h"
 
 
 /* local constants */
 
 /* local routines */
+static int httpRequestParseStart(HttpMsg *msg, const char *blk_start, const char *blk_end);
+static void httpRequestSetRState(HttpMsg *msg, ReadState rstate);
+static void httpRequestNoteError(HttpMsg *msg, HttpReply *error);
+
 
 HttpRequest *
 httpRequestCreate()
 {
-    HttpRequest *req = memAllocate(MEM_REQUEST_T, 1);
-    httpMsgInit(req);
-    req->max_age = -1;
-    req->max_forwards = -1;
+    HttpRequest *req = memAllocate(MEM_HTTPREQUEST, 1);
+    httpMsgInit((HttpMsg*)req);
     /* custom methods */
-    req->httpRequestParseStart = &httpRequestParseStart;
+    req->parseStart = &httpRequestParseStart;
     req->setRState = &httpRequestSetRState;
     req->noteError = &httpRequestNoteError;
-    msg->destroy = httpRequestDestroy;
+    req->destroy = httpRequestDestroy;
     /* did we set everything? */
-    httpMsgCheck(req);
+    httpMsgCheck((HttpMsg*)req);
+    return req;
+}
+
+HttpRequest *
+httpRequestClone(HttpRequest *orig)
+{
+    HttpRequest *clone = memAllocate(MEM_HTTPREQUEST, 1);
+    httpMsgClone((HttpMsg*)orig, (HttpMsg*)clone);
+    /* did we set everything? */
+    httpMsgCheck((HttpMsg*)clone);
+    return clone;
 }
 
 void
@@ -57,17 +71,17 @@ httpRequestDestroy(HttpMsg *msg)
 {
     HttpRequest *req = (HttpRequest*)msg;
     assert(req);
-    httpMsgClean(req);
-    xfree(req->host);
-    xfree(req->login);
-    xfree(req->urlpath);
-    memFree(MEM_REQUEST_T, req);
+    httpMsgClean((HttpMsg*)req);
+    xfree((char*)req->host);
+    xfree((char*)req->login);
+    xfree((char*)req->urlpath);
+    memFree(MEM_HTTPREQUEST, req);
 }
 
 /* set pre-parsed uri info */
 void
 httpRequestSetUri(HttpRequest *req,
-    method_t method, protocol_t prot, const char *host, 
+    method_t method, protocol_t protocol, const char *host, 
     u_short port, const char *login, const char *urlpath)
 {
     assert(req);
@@ -84,11 +98,12 @@ httpRequestSetUri(HttpRequest *req,
  * parses http "request-line", returns true on success
  */
 static int
-httpRequestParseStart(HttpMsg *msg, char *blk_start, const char *blk_end)
+httpRequestParseStart(HttpMsg *msg, const char *blk_start, const char *blk_end)
 {
-    HttpReq *req = (HttpRequest*) msg;
+    HttpRequest *req = (HttpRequest*) msg;
     assert(req->rstate == rsReadyToParse); /* the only state we can be called in */
     assert(0); /* implement it here @?@ */
+    return 0;
 }
 
 
@@ -105,9 +120,20 @@ httpRequestNoteError(HttpMsg *msg, HttpReply *error)
 {
     HttpRequest *req = (HttpRequest*) msg;
     if (req->reply) { /* what to do if we already have a reply? @?@ */
-	httpReplyNoteReqError(error);   
-        httpReplyDestroy(error);
+	httpReplyNoteReqError(error, req);   
+        httpReplyDestroy((HttpMsg*)error);
     } else {
 	req->reply = error;
     }
+}
+
+int
+httpRequestIsConditional(HttpRequest *req)
+{
+    static const int CondMask = 
+	EBIT_MAKE(REQ_IMS) | 
+	EBIT_MAKE(REQ_IMSR);
+
+    assert(req);
+    return req->flags & CondMask;
 }

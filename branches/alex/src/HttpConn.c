@@ -553,7 +553,7 @@ checkAccelOnly(HttpConn *conn, HttpRequest *req)
 	return 0;
     if (req->protocol == PROTO_CACHEOBJ)
 	return 0;
-    if (conn->accel)
+    if (req->accel)
 	return 0;
     return 1;
 }
@@ -611,9 +611,11 @@ httpConnSendReply(HttpConn *conn, HttpReply *rep)
 }
 
 static void
-httpConnAccessCheck(HttpConn *conn, HttpRequest *req)
+httpConnAccessCheck(HttpConn *conn)
 {
+    HttpRequest *req = (HttpRequest *) conn->reader;
     const char *browser;
+    assert(req);
     if (Config.onoff.ident_lookup && conn->ident.state == IDENT_NONE) {
 	identStart(-1, conn, httpConnAccessCheck);
 	return;
@@ -622,13 +624,13 @@ httpConnAccessCheck(HttpConn *conn, HttpRequest *req)
 	clientAccessCheckDone(0, conn);
 	return;
     }
-    browser = mime_get_header(httpHeaderGetStrField(&request->headers, "User-Agent");
-    http->acl_checklist = aclChecklistCreate(Config.accessList.http,
-	http->request,
+    browser = httpHeaderGetStr(&req->header, "User-Agent", NULL);
+    req->acl_checklist = aclChecklistCreate(Config.accessList.http,
+	req,
 	conn->addr.peer.sin_addr,
 	browser,
 	conn->ident.ident);
-    aclNBCheck(http->acl_checklist, clientAccessCheckDone, http);
+    aclNBCheck(req->acl_checklist, clientAccessCheckDone, conn);
 }
 
 
@@ -659,7 +661,7 @@ httpConnGetRepReader(HttpConn *conn)
 
     rep = httpReplyCreate(conn, req);
     conn->rep_count++;
-    (HttMsg*)return rep;
+    return (HttpMsg*)rep;
 }
 
 /* accepts a request */

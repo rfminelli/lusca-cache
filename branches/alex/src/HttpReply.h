@@ -30,6 +30,8 @@
 #ifndef _HTTP_REPLY_H_
 #define _HTTP_REPLY_H_
 
+#include "HttpMsg.h"
+
 /* generic http message (common portion of http Request and Reply) */
 struct _HttpReply {
     /* common fields with http reply (hack) */
@@ -61,6 +63,16 @@ struct _HttpReply {
 
 /* create/destroy */
 extern HttpReply *httpReplyCreate();
-extern void httpReplyDestroy(HttpReply *req);
+extern void httpReplyDestroy(HttpMsg *msg);
+
+/* sets http reply status line (first line in a reply) */
+extern void httpReplySetStatus(HttpReply *rep, float httpVer, http_status status);
+
+/* called when corresponding request aborts */
+void httpReplyNoteReqError(HttpReply *rep, HttpRequest *req);
+
+/* standard replies */
+HttpReply *httpReplyCreateTrace(HttpRequest *req);
+
 
 #endif /* ndef _HTTP_REPLY_H_ */
