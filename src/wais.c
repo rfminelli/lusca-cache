@@ -119,7 +119,6 @@ typedef struct {
 } WaisStateData;
 
 static int waisStateFree _PARAMS((int, WaisStateData *));
-static void waisStartComplete _PARAMS((void *, int));
 static void waisReadReplyTimeout _PARAMS((int, WaisStateData *));
 static void waisLifetimeExpire _PARAMS((int, WaisStateData *));
 static void waisReadReply _PARAMS((int, WaisStateData *));
@@ -230,7 +229,7 @@ waisReadReply(int fd, WaisStateData * waisState)
     }
     if (len < 0) {
 	debug(50, 1, "waisReadReply: FD %d: read failure: %s.\n", xstrerror());
-	if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+	if (errno == EAGAIN || errno == EWOULDBLOCK) {
 	    /* reinstall handlers */
 	    /* XXX This may loop forever */
 	    commSetSelect(fd, COMM_SELECT_READ,
@@ -329,11 +328,11 @@ waisSendRequest(int fd, WaisStateData * waisState)
 }
 
 int
-waisStart(method_t method, char *mime_hdr, StoreEntry * entry)
+waisStart(int unusedfd, const char *url, method_t method, char *mime_hdr, StoreEntry * entry)
 {
     WaisStateData *waisState = NULL;
     int fd;
-    char *url = entry->url;
+
     debug(24, 3, "waisStart: \"%s %s\"\n", RequestMethodStr[method], url);
     debug(24, 4, "            header: %s\n", mime_hdr);
     if (!Config.Wais.relayHost) {
@@ -353,23 +352,13 @@ waisStart(method_t method, char *mime_hdr, StoreEntry * entry)
 	return COMM_ERROR;
     }
     waisState = xcalloc(1, sizeof(WaisStateData));
+    storeLockObject(waisState->entry = entry, NULL, NULL);
     waisState->method = method;
     waisState->relayhost = Config.Wais.relayHost;
     waisState->relayport = Config.Wais.relayPort;
     waisState->mime_hdr = mime_hdr;
     waisState->fd = fd;
-    waisState->entry = entry;
     xstrncpy(waisState->request, url, MAX_URL);
-    storeLockObject(entry, waisStartComplete, waisState);
-    return COMM_OK;
-}
-
-
-static void
-waisStartComplete(void *data, int status)
-{
-    WaisStateData *waisState = (WaisStateData *) data;
-
     comm_add_close_handler(waisState->fd,
 	(PF) waisStateFree,
 	(void *) waisState);
@@ -377,6 +366,7 @@ waisStartComplete(void *data, int status)
 	waisState->fd,
 	waisConnect,
 	waisState);
+    return COMM_OK;
 }
 
 

@@ -162,8 +162,7 @@ typedef struct _FileEntry {
 
 extern FileEntry *file_table;
 
-extern int file_open _PARAMS((const char *path, int (*handler) _PARAMS((void)), int mode, void (*callback) (), void *callback_data));
-extern int file_must_close _PARAMS((int fd));
+extern int file_open _PARAMS((const char *path, int (*handler) _PARAMS((void)), int mode));
 extern int file_close _PARAMS((int fd));
 extern int file_write _PARAMS((int fd,
 	char *buf,
@@ -185,5 +184,8 @@ extern int file_walk _PARAMS((int fd,
 extern int disk_init _PARAMS((void));
 extern int diskWriteIsComplete _PARAMS((int));
 extern void diskFreeMemory _PARAMS((void));
+extern void file_open_fd _PARAMS((int fd, const char *name, File_Desc_Type type));
+extern char *diskFileName _PARAMS((int fd));
+
 
 #endif /* DISK_H */

@@ -77,7 +77,7 @@ send_announce(int fd, const ipcache_addrs * ia, void *data)
     strcat(sndbuf, tbuf);
     l = strlen(sndbuf);
     if ((file = Config.Announce.file)) {
-	fd = file_open(file, NULL, O_RDONLY, NULL, NULL);
+	fd = file_open(file, NULL, O_RDONLY);
 	if (fd > -1 && (n = read(fd, sndbuf + l, BUFSIZ - l - 1)) > 0) {
 	    l += n;
 	    sndbuf[l] = '\0';

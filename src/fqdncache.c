@@ -526,13 +526,6 @@ fqdncache_dnsHandleRead(int fd, void *data)
     debug(35, 5, "fqdncache_dnsHandleRead: Result from DNS ID %d (%d bytes)\n",
 	dnsData->id, len);
     if (len <= 0) {
-	if (len < 0 && (errno == EINTR || errno == EWOULDBLOCK || errno == EAGAIN)) {
-	    commSetSelect(fd,
-		COMM_SELECT_READ,
-		fqdncache_dnsHandleRead,
-		dnsData, 0);
-	    return;
-	}
 	debug(35, dnsData->flags & DNS_FLAG_CLOSING ? 5 : 1,
 	    "FD %d: Connection from DNSSERVER #%d is closed, disabling\n",
 	    fd, dnsData->id);
@@ -922,4 +915,27 @@ fqdncacheFreeMemory(void)
     }
     xfree(list);
     hashFreeMemory(fqdn_table);
+}
+
+/* call during reconfigure phase to clear out all the
+ * pending and dispatched reqeusts that got lost */
+void
+fqdncache_restart(void)
+{
+    fqdncache_entry *this;
+    fqdncache_entry *next;
+    if (fqdn_table == 0)
+	fatal_dump("fqdncache_restart: fqdn_table == 0\n");
+    next = (fqdncache_entry *) hash_first(fqdn_table);
+    while ((this = next)) {
+	next = (fqdncache_entry *) hash_next(fqdn_table);
+	if (this->status == FQDN_CACHED)
+	    continue;
+	if (this->status == FQDN_NEGATIVE_CACHED)
+	    continue;
+	/* else its PENDING or DISPATCHED; there are no dnsservers
+	 * running, so abort it */
+	this->status = FQDN_NEGATIVE_CACHED;
+	fqdncache_release(this);
+    }
 }

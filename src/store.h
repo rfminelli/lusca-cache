@@ -1,3 +1,6 @@
+
+
+
 /*
  * $Id$
  *
@@ -121,7 +124,6 @@
  * KEY_CHANGE           If the key for this URL has been changed
  */
 
-#define ENTRY_VALIDATED		(1<<16)
 #define READ_DEFERRED		(1<<15)
 #define ENTRY_NEGCACHED		(1<<14)
 #define HIERARCHICAL 		(1<<13)		/* can we query neighbors? */
@@ -151,29 +153,51 @@ struct _store_client {
 };
 
 
+/* --------------- SPLIT STORE STRUCTURE ----------------- */
+/* Split 'StoreEntry' into two structure, when object is purged out from
+ * memory, one structure can be freed for saving memory
+ */
+
 /* This structure can be freed while object is purged out from memory */
 struct _MemObject {
     char *mime_hdr;		/* Mime header info */
     mem_ptr data;
+
+/* These items are mutually exclusive */
     char *e_swap_buf;
+    peer *e_pings_first_miss;
     int w_rtt;			/* weighted RTT in msec */
+    peer *e_pings_closest_parent;	/* parent with best RTT to source */
+    int p_rtt;			/* parent's RTT to source */
+    struct timeval start_ping;
+
+/* These items are also mutually exclusive */
     int e_swap_buf_len;
+    unsigned char e_pings_n_pings;
+    unsigned char e_pings_n_acks;
+
+    /* move here for alignment of memory */
     unsigned char pending_list_size;
+
     char *e_abort_msg;
     log_type abort_code;
+
     int e_current_len;
+    /* The lowest offset that store keep VM copy around
+     * use for "delete_behind" mechanism for a big object */
     int e_lowest_offset;
     struct _store_client *clients;
     int nclients;
+
     u_num32 swap_offset;
+
     short swapin_fd;
     short swapout_fd;
     struct _http_reply *reply;
     request_t *request;
+    SIH swapin_complete_handler;
+    void *swapin_complete_data;
     int mime_hdr_sz;
-    struct timeval start_ping;
-    IRCB icp_reply_callback;
-    void *ircb_data;
 };
 
 enum {
@@ -217,21 +241,31 @@ struct sentry {
     char *key;
     struct sentry *next;
     char *url;
+
+    /* to stru which can be freed while object is purged out from memory */
     MemObject *mem_obj;
+
     u_num32 flag;
     u_num32 refcount;
     time_t timestamp;
     time_t lastref;
     time_t expires;
     time_t lastmod;
+
     int object_len;
     int swap_file_number;
+
     mem_status_t mem_status:3;
     ping_status_t ping_status:3;
     store_status_t store_status:3;
     swap_status_t swap_status:3;
     method_t method:4;
-    unsigned char lock_count;	/* Assume < 256! */
+
+    /* WARNING: Explicit assummption that fewer than 256
+     * WARNING:  clients all hop onto the same object.  The code
+     * WARNING:  doesn't deal with this case.  */
+    unsigned char lock_count;
+
 };
 
 /* ----------------------------------------------------------------- */
@@ -253,12 +287,14 @@ extern void storeAppend _PARAMS((StoreEntry *, const char *, int));
 extern int storeGetMemSize _PARAMS((void));
 extern int storeGetSwapSize _PARAMS((void));
 extern int storeGetSwapSpace _PARAMS((int));
-extern void storeLockObject _PARAMS((StoreEntry *, SIH, void *));
+extern int storeLockObject _PARAMS((StoreEntry *, SIH, void *));
+extern int storeOriginalKey _PARAMS((const StoreEntry *));
 extern int storeRelease _PARAMS((StoreEntry *));
 extern int storeUnlockObject _PARAMS((StoreEntry *));
 extern int storeUnregister _PARAMS((StoreEntry *, int));
 extern const char *storeGeneratePublicKey _PARAMS((const char *, method_t));
 extern const char *storeGeneratePrivateKey _PARAMS((const char *, method_t, int));
+extern const char *swappath _PARAMS((int));
 extern void storeStartDeleteBehind _PARAMS((StoreEntry *));
 extern int storeClientCopy _PARAMS((StoreEntry *, int, int, char *, int *, int));
 extern int storePendingNClients _PARAMS((const StoreEntry *));
@@ -294,6 +330,7 @@ extern int store_rebuilding;
 #define STORE_REBUILDING_SLOW 1
 #define STORE_REBUILDING_FAST 2
 
+extern int ncache_dirs;
 extern unsigned long store_mem_size;
 
 #endif

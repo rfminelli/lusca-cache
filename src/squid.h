@@ -264,17 +264,17 @@ typedef unsigned long u_num32;
 #include <regex.h>
 #endif
 
-typedef void (*SIH) (void *, int);	/* swap in */
+typedef void (*SIH) (int, void *);	/* swap in */
 typedef int (*QS) (const void *, const void *);
 
 #include "cache_cf.h"
 #include "comm.h"
 #include "debug.h"
-#include "disk.h"
 #include "fdstat.h"
+#include "disk.h"
+#include "filemap.h"
 #include "hash.h"
 #include "proto.h"		/* must go before neighbors.h */
-#include "peer_select.h"	/* must go before neighbors.h */
 #include "neighbors.h"		/* must go before url.h */
 #include "url.h"
 #include "icp.h"
@@ -303,6 +303,7 @@ typedef int (*QS) (const void *, const void *);
 #include "client_db.h"
 #include "objcache.h"
 #include "refresh.h"
+#include "unlinkd.h"
 
 #if !HAVE_TEMPNAM
 #include "tempnam.h"
@@ -320,6 +321,7 @@ extern int theOutIcpConnection;	/* main.c */
 extern int vizSock;
 extern volatile int shutdown_pending;	/* main.c */
 extern volatile int reread_pending;	/* main.c */
+extern int opt_unlink_on_reload;	/* main.c */
 extern int opt_reload_hit_only;	/* main.c */
 extern int opt_dns_tests;	/* main.c */
 extern int opt_foreground_rebuild;	/* main.c */
@@ -329,6 +331,7 @@ extern int opt_catch_signals;	/* main.c */
 extern int opt_no_ipcache;	/* main.c */
 extern int vhost_mode;		/* main.c */
 extern int Squid_MaxFD;		/* main.c */
+extern int Biggest_FD;		/* main.c */
 extern const char *const version_string;	/* main.c */
 extern const char *const appname;	/* main.c */
 extern struct in_addr local_addr;	/* main.c */
@@ -342,7 +345,7 @@ extern int opt_forwarded_for;	/* main.c */
 extern int opt_accel_uses_host;	/* main.c */
 extern char ThisCache[];	/* main.c */
 
-/* Prototypes and definitions which don't really deserve a seaprate
+/* Prototypes and definitions which don't really deserve a separate
  * include file */
 
 #define  CONNECT_PORT        443
@@ -350,7 +353,7 @@ extern char ThisCache[];	/* main.c */
 extern void start_announce _PARAMS((void *unused));
 extern int sslStart _PARAMS((int fd, const char *, request_t *, char *, int *sz));
 extern const char *storeToString _PARAMS((const StoreEntry *));
-extern int waisStart _PARAMS((method_t, char *, StoreEntry *));
+extern int waisStart _PARAMS((int, const char *, method_t, char *, StoreEntry *));
 extern void storeDirClean _PARAMS((void *unused));
 extern int passStart _PARAMS((int fd,
 	const char *url,

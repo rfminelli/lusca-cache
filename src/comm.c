@@ -105,7 +105,6 @@
  */
 
 #include "squid.h"
-#include <errno.h>
 
 #ifdef HAVE_NETINET_TCP_H
 #include <netinet/tcp.h>
@@ -153,8 +152,8 @@ static void commSetTcpNoDelay _PARAMS((int));
 static void commSetTcpRcvbuf _PARAMS((int, int));
 static void commConnectFree _PARAMS((int fd, void *data));
 static void commConnectHandle _PARAMS((int fd, void *data));
+static void commHandleWrite _PARAMS((int fd, RWStateData * state));
 
-static int *fd_lifetime = NULL;
 static struct timeval zero_tv;
 
 void
@@ -274,6 +273,8 @@ comm_open(int sock_type,
     if (note)
 	fd_note(new_socket, note);
     conn->openned = 1;
+    conn->lifetime = -1;
+
     if (!BIT_TEST(flags, COMM_NOCLOEXEC))
 	commSetCloseOnExec(new_socket);
     if (port > (u_short) 0) {
@@ -385,33 +386,19 @@ commConnectHandle(int fd, void *data)
 int
 comm_set_fd_lifetime(int fd, int lifetime)
 {
+    FD_ENTRY *f;
     debug(5, 3, "comm_set_fd_lifetime: FD %d lft %d\n", fd, lifetime);
     if (fd < 0 || fd > Squid_MaxFD)
 	return 0;
+    f = &fd_table[fd];
     if (lifetime < 0)
-	return fd_lifetime[fd] = -1;
+	return f->lifetime = -1;
     if (shutdown_pending || reread_pending) {
 	/* don't increase the lifetime if something pending */
-	if (fd_lifetime[fd] > -1 && (fd_lifetime[fd] - squid_curtime) < lifetime)
-	    return fd_lifetime[fd];
+	if (f->lifetime > -1 && (f->lifetime - squid_curtime) < lifetime)
+	    return f->lifetime;
     }
-    return fd_lifetime[fd] = (int) squid_curtime + lifetime;
-}
-
-int
-comm_get_fd_lifetime(int fd)
-{
-    if (fd < 0)
-	return 0;
-    return fd_lifetime[fd];
-}
-
-int
-comm_get_fd_timeout(int fd)
-{
-    if (fd < 0)
-	return 0;
-    return fd_table[fd].timeout_time;
+    return f->lifetime = (int) squid_curtime + lifetime;
 }
 
 int
@@ -439,7 +426,6 @@ comm_connect_addr(int sock, const struct sockaddr_in *address)
 #if EAGAIN != EWOULDBLOCK
 	case EAGAIN:
 #endif
-	case EINTR:
 	case EWOULDBLOCK:
 	case EINPROGRESS:
 	    status = COMM_INPROGRESS;
@@ -495,8 +481,9 @@ comm_accept(int fd, struct sockaddr_in *peer, struct sockaddr_in *me)
 	case EAGAIN:
 #endif
 	case EWOULDBLOCK:
-	case EINTR:
 	    return COMM_NOMESSAGE;
+	case EINTR:
+	    break;		/* if accept interrupted, try again */
 	case ENFILE:
 	case EMFILE:
 	    Reserve_More_FDs();
@@ -558,15 +545,11 @@ comm_close(int fd)
     }
     conn->openned = 0;
     RWStateCallbackAndFree(fd, COMM_ERROR);
-    comm_set_fd_lifetime(fd, -1);	/* invalidate the lifetime */
     fdstat_close(fd);		/* update fdstat */
     commCallCloseHandlers(fd);
     memset(conn, '\0', sizeof(FD_ENTRY));
-#if USE_ASYNC_IO
-    aioClose(fd);
-#else
+    conn->lifetime = -1;
     close(fd);
-#endif
 }
 
 /* use to clean up fdtable when socket is closed without
@@ -649,7 +632,7 @@ comm_select_incoming(void)
 {
     int fd = 0;
     int fds[4];
-    struct pollfd pfds[4];
+    struct pollfd pfds[3];
     unsigned long N = 0;
     unsigned long i = 0;
     int dopoll = 0;
@@ -680,25 +663,22 @@ comm_select_incoming(void)
     }
     if (!dopoll)
 	return;
-    poll(pfds, N, 0);
+    if (poll(pfds, N, 0) < 1)
+	return;
     getCurrentTime();
     for (i = 0; i < N; i++) {
-	if (pfds[i].fd == -1)
+	if ((pfds[i].revents == 0) || (pfds[i].fd == -1))
 	    continue;
 	fd = fds[i];
-	if (fd_table[fd].read_handler) {
-	    if (pfds[i].revents & (POLLRDNORM | POLLIN | POLLHUP | POLLERR)) {
-		hdl = fd_table[fd].read_handler;
-		fd_table[fd].read_handler = 0;
-		hdl(fd, fd_table[fd].read_data);
-	    }
+	if (pfds[i].revents & (POLLRDNORM | POLLIN | POLLHUP | POLLERR)) {
+	    hdl = fd_table[fd].read_handler;
+	    fd_table[fd].read_handler = 0;
+	    hdl(fd, fd_table[fd].read_data);
 	}
-	if (fd_table[fd].write_handler) {
-	    if (pfds[i].revents & (POLLWRNORM | POLLOUT | POLLHUP | POLLERR)) {
-		hdl = fd_table[fd].write_handler;
-		fd_table[fd].write_handler = 0;
-		hdl(fd, fd_table[fd].write_data);
-	    }
+	if (pfds[i].revents & (POLLWRNORM | POLLOUT | POLLHUP | POLLERR)) {
+	    hdl = fd_table[fd].write_handler;
+	    fd_table[fd].write_handler = 0;
+	    hdl(fd, fd_table[fd].write_data);
 	}
     }
     /* TO FIX: repoll ICP connection here */
@@ -767,7 +747,7 @@ comm_select_incoming(void)
 int
 comm_select(time_t sec)
 {
-    struct pollfd pfds[SQUID_MAXFD];
+    struct pollfd pfds[FD_SETSIZE];
     PF hdl = NULL;
     int fd;
     int i;
@@ -775,8 +755,8 @@ comm_select(time_t sec)
     unsigned long nfds;
     int incnfd;
     int num;
+    int httpindex;
     static time_t last_timeout = 0;
-    static time_t pending_time;
     int poll_time = 0;
     time_t timeout;
     struct close_handler *ch = NULL;
@@ -800,71 +780,65 @@ comm_select(time_t sec)
 	    else
 		setSocketShutdownLifetimes(0);
 	}
-	maxfd = fdstat_biggest_fd() + 1;
-	for (nfds = 0, i = 0; i < maxfd; i++) {
-	    pfds[i].fd = i;
-	    pfds[i].events = 0;
-	    if (i == theHttpConnection && !fdstat_are_n_free_fd(RESERVED_FD))
-		continue;
+	nfds = 0;
+	maxfd = Biggest_FD + 1;
+	httpindex = -1;
+	for (i = 0; i < maxfd; i++) {
+	    pfds[nfds].fd = -1;
+	    pfds[nfds].events = 0;
 	    /* Check each open socket for a handler. */
 	    incnfd = 0;
-	    if (fd_table[i].read_handler
-		&& fd_table[i].stall_until <= squid_curtime) {
-		pfds[i].events |= POLLRDNORM;
+	    if (fd_table[i].read_handler && fd_table[i].stall_until <= squid_curtime) {
+		pfds[nfds].events |= POLLRDNORM;
+		pfds[nfds].fd = i;
 		incnfd = 1;
 	    }
 	    if (fd_table[i].write_handler) {
-		pfds[i].events |= POLLWRNORM;
+		pfds[nfds].events |= POLLWRNORM;
+		pfds[nfds].fd = i;
 		incnfd = 1;
 	    }
-	    if (incnfd)
+	    if (incnfd == 1) {
+		if (i == theHttpConnection)
+		    httpindex = nfds;
 		nfds++;
-	    if (pfds[i].events == 0)
-		pfds[i].fd = -1;
-	}
-	if (shutdown_pending || reread_pending) {
-	    debug(5, 2, "comm_select: Still waiting on %d FDs\n", nfds);
-	    if (pending_time == 0)
-		pending_time = squid_curtime;
-	    if ((squid_curtime - pending_time) > (Config.lifetimeShutdown + 5)) {
-		pending_time = 0;
-		for (i = 1; i < maxfd; i++) {
-		    if ((fd = pfds[i].fd) < 0)
-			continue;
-		    if (fdstatGetType(fd) == FD_FILE)
-			file_must_close(fd);
-		    else
-			comm_close(fd);
-		    pfds[fd].fd = -1;
-		}
 	    }
-	} else
-	    pending_time = 0;
+	}
+	/* If we're out of free fd's, don't poll the http incoming fd */
+	if (!fdstat_are_n_free_fd(RESERVED_FD) && httpindex >= 0) {
+	    pfds[httpindex].fd = -1;
+	    pfds[httpindex].events = 0;
+	}
+	pfds[nfds].fd = -1;	/* just in case */
+	pfds[nfds].events = 0;
+	if (shutdown_pending || reread_pending)
+	    debug(5, 2, "comm_select: Still waiting on %d FDs\n", nfds);
 	if (nfds == 0)
 	    return COMM_SHUTDOWN;
-	poll_time = sec > 0 ? 100 : 0;
-#if USE_ASYNC_IO
-	aioCheckCallbacks();
-#endif
 	for (;;) {
-	    num = poll(pfds, maxfd, poll_time);
+	    poll_time = sec > 0 ? 1000 : 0;
+	    num = poll(pfds, nfds, poll_time);
+	    getCurrentTime();
 	    if (num >= 0)
 		break;
 	    if (errno == EINTR)
-		continue;
+		break;
 	    debug(5, 0, "comm_select: poll failure: %s\n",
 		xstrerror());
 	    if (errno == EINVAL) {
 		/* nfds greater than OPEN_MAX?? How possible? Time */
 		/* to bail - write out nfds to cache.log and start */
 		/* emergency shutdown by sending SIGTERM to self */
-		debug(20, 1, "Poll returned EINVAL. Polled %d FD's\n", nfds);
+		debug(20, 1, "  Poll died with EINVAL. Tried to poll %d FD's\n", nfds);
 		kill(getpid(), SIGTERM);
 	    }
+	    /* examine_select is handled below and efficiently too */
+	    /*examine_select(&readfds, &writefds); XXXXX TO FIX */
 	    return COMM_ERROR;
 	    /* NOTREACHED */
 	}
-	getCurrentTime();
+	if (num < 0)
+	    continue;		/* redo the top loop */
 	debug(5, num ? 5 : 8, "comm_select: %d sockets ready at %d\n",
 	    num, (int) squid_curtime);
 	/* Check lifetime and timeout handlers ONCE each second.
@@ -879,28 +853,38 @@ comm_select(time_t sec)
 	/* scan each socket but the accept socket. Poll this 
 	 * more frequently to minimize losses due to the 5 connect 
 	 * limit in SunOS */
-	for (i = 0; i < maxfd; i++) {
-	    if ((fd = pfds[i].fd) == -1)
+	for (i = 0; i < nfds; i++) {
+	    fd = pfds[i].fd;
+	    if ((fd == -1) || (pfds[i].revents == 0))
 		continue;
 	    /*
 	     * Admit more connections quickly until we hit the hard limit.
 	     * Don't forget to keep the UDP acks coming and going.
 	     */
-	    if ((i % 2) == 0)
-		comm_select_incoming();
-	    if ((fd == theInIcpConnection) || (fd == theHttpConnection) || (fd == theOutIcpConnection) || (fd == 0))
+	    comm_select_incoming();
+	    if (fd == theInIcpConnection)
 		continue;
-	    if (fd_table[fd].read_handler && (pfds[i].revents & (POLLRDNORM | POLLIN | POLLHUP | POLLERR))) {
+	    if (fd == theOutIcpConnection)
+		continue;
+	    if (fd == theHttpConnection)
+		continue;
+	    if (pfds[i].revents & (POLLRDNORM | POLLIN | POLLHUP | POLLERR)) {
 		debug(5, 6, "comm_select: FD %d ready for reading\n", fd);
-		hdl = fd_table[fd].read_handler;
-		fd_table[fd].read_handler = 0;
-		hdl(fd, fd_table[fd].read_data);
+		if (fd_table[fd].read_handler) {
+		    hdl = fd_table[fd].read_handler;
+		    fd_table[fd].read_handler = 0;
+		    hdl(fd, fd_table[fd].read_data);
+		    comm_select_incoming();
+		}
 	    }
-	    if (fd_table[fd].write_handler && (pfds[i].revents & (POLLWRNORM | POLLOUT | POLLHUP | POLLERR))) {
+	    if (pfds[i].revents & (POLLWRNORM | POLLOUT | POLLHUP | POLLERR)) {
 		debug(5, 5, "comm_select: FD %d ready for writing\n", fd);
-		hdl = fd_table[fd].write_handler;
-		fd_table[fd].write_handler = 0;
-		hdl(fd, fd_table[fd].write_data);
+		if (fd_table[fd].write_handler) {
+		    hdl = fd_table[fd].write_handler;
+		    fd_table[fd].write_handler = 0;
+		    hdl(fd, fd_table[fd].write_data);
+		    comm_select_incoming();
+		}
 	    }
 	    if (pfds[i].revents & POLLNVAL) {
 		f = &fd_table[fd];
@@ -981,7 +965,7 @@ comm_select(time_t sec)
 		setSocketShutdownLifetimes(0);
 	}
 	nfds = 0;
-	maxfd = fdstat_biggest_fd() + 1;
+	maxfd = Biggest_FD + 1;
 	for (i = 0; i < maxfd; i++) {
 	    /* Check each open socket for a handler. */
 	    if (fd_table[i].stall_until > squid_curtime)
@@ -995,16 +979,13 @@ comm_select(time_t sec)
 		FD_SET(i, &writefds);
 	    }
 	}
-	if (!fdstat_are_n_free_fd(RESERVED_FD)) {
+	if (!fdstat_are_n_free_fd(RESERVED_FD) && theHttpConnection >= 0) {
 	    FD_CLR(theHttpConnection, &readfds);
 	}
 	if (shutdown_pending || reread_pending)
 	    debug(5, 2, "comm_select: Still waiting on %d FDs\n", nfds);
 	if (nfds == 0)
 	    return COMM_SHUTDOWN;
-#if USE_ASYNC_IO
-	aioCheckCallbacks();
-#endif
 	for (;;) {
 	    poll_time.tv_sec = sec > 0 ? 1 : 0;
 	    poll_time.tv_usec = 0;
@@ -1309,7 +1290,6 @@ comm_init(void)
      * Since Squid_MaxFD can be as high as several thousand, don't waste them */
     RESERVED_FD = min(100, Squid_MaxFD / 4);
     /* hardwired lifetimes */
-    fd_lifetime = xmalloc(sizeof(int) * Squid_MaxFD);
     for (i = 0; i < Squid_MaxFD; i++)
 	comm_set_fd_lifetime(i, -1);	/* denotes invalid */
     meta_data.misc += Squid_MaxFD * sizeof(int);
@@ -1414,8 +1394,10 @@ checkTimeouts(void)
     FD_ENTRY *f = NULL;
     void *data;
     /* scan for timeout */
-    for (fd = 0; fd < Squid_MaxFD; ++fd) {
+    for (fd = 0; fd <= Biggest_FD; fd++) {
 	f = &fd_table[fd];
+	if (!f->openned)
+	    continue;
 	if ((hdl = f->timeout_handler) == NULL)
 	    continue;
 	if (f->timeout_time > squid_curtime)
@@ -1432,18 +1414,19 @@ static void
 checkLifetimes(void)
 {
     int fd;
-    time_t lft;
     FD_ENTRY *fde = NULL;
 
     PF hdl = NULL;
 
-    for (fd = 0; fd < Squid_MaxFD; fd++) {
-	if ((lft = comm_get_fd_lifetime(fd)) == -1)
+    for (fd = 0; fd <= Biggest_FD; fd++) {
+	fde = &fd_table[fd];
+	if (!fde->openned)
 	    continue;
-	if (lft > squid_curtime)
+	if (fde->lifetime < 0)
+	    continue;
+	if (fde->lifetime > squid_curtime)
 	    continue;
 	debug(5, 5, "checkLifetimes: FD %d Expired\n", fd);
-	fde = &fd_table[fd];
 	if ((hdl = fde->lifetime_handler) != NULL) {
 	    debug(5, 5, "checkLifetimes: FD %d: Calling lifetime handler\n", fd);
 	    hdl(fd, fde->lifetime_data);
@@ -1506,7 +1489,7 @@ commHandleWrite(int fd, RWStateData * state)
 	RWStateCallbackAndFree(fd, nleft ? COMM_ERROR : COMM_OK);
     } else if (len < 0) {
 	/* An error */
-	if (errno == EWOULDBLOCK || errno == EAGAIN || errno == EINTR) {
+	if (errno == EWOULDBLOCK || errno == EAGAIN) {
 	    debug(50, 10, "commHandleWrite: FD %d: write failure: %s.\n",
 		fd, xstrerror());
 	    commSetSelect(fd,
@@ -1572,5 +1555,4 @@ void
 commFreeMemory(void)
 {
     safe_free(fd_table);
-    safe_free(fd_lifetime);
 }

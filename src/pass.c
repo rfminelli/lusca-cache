@@ -63,8 +63,7 @@ static void passClose _PARAMS((PassStateData * passState));
 static void passClientClosed _PARAMS((int fd, void *));
 static void passConnectDone _PARAMS((int fd, int status, void *data));
 static void passStateFree _PARAMS((int fd, void *data));
-static void passPeerSelectComplete _PARAMS((peer * p, void *data));
-static void passPeerSelectFail _PARAMS((peer * p, void *data));
+static void passSelectNeighbor _PARAMS((int, const ipcache_addrs *, void *));
 
 static void
 passClose(PassStateData * passState)
@@ -142,7 +141,7 @@ passReadServer(int fd, void *data)
     if (len < 0) {
 	debug(50, 2, "passReadServer: FD %d: read failure: %s\n",
 	    passState->server.fd, xstrerror());
-	if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+	if (errno == EAGAIN || errno == EWOULDBLOCK) {
 	    /* reinstall handlers */
 	    /* XXX This may loop forever */
 	    commSetSelect(passState->server.fd,
@@ -182,7 +181,7 @@ passReadClient(int fd, void *data)
     if (len < 0) {
 	debug(50, 2, "passReadClient: FD %d: read failure: %s\n",
 	    fd, xstrerror());
-	if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+	if (errno == EAGAIN || errno == EWOULDBLOCK) {
 	    /* reinstall handlers */
 	    /* XXX This may loop forever */
 	    commSetSelect(passState->client.fd,
@@ -216,13 +215,6 @@ passWriteServer(int fd, void *data)
 	passState->client.len - passState->client.offset);
     debug(39, 5, "passWriteServer FD %d, wrote %d bytes\n", fd, len);
     if (len < 0) {
-	if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-	    commSetSelect(passState->server.fd,
-		COMM_SELECT_WRITE,
-		passWriteServer,
-		(void *) passState, 0);
-	    return;
-	}
 	debug(50, 2, "passWriteServer: FD %d: write failure: %s.\n",
 	    passState->server.fd, xstrerror());
 	passClose(passState);
@@ -263,13 +255,6 @@ passWriteClient(int fd, void *data)
 	passState->server.len - passState->server.offset);
     debug(39, 5, "passWriteClient FD %d, wrote %d bytes\n", fd, len);
     if (len < 0) {
-	if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-	    commSetSelect(passState->client.fd,
-		COMM_SELECT_WRITE,
-		passWriteClient,
-		(void *) passState, 0);
-	    return;
-	}
 	debug(50, 2, "passWriteClient: FD %d: write failure: %s.\n",
 	    passState->client.fd, xstrerror());
 	passClose(passState);
@@ -486,27 +471,55 @@ passStart(int fd,
 	COMM_SELECT_READ,
 	NULL,
 	NULL, 0);
-    peerSelect(request,
-	NULL,
-	passPeerSelectComplete,
-	passPeerSelectFail,
-	passState);
+    if (Config.firewall_ip_list) {
+	/* must look up IP address */
+	ipcache_nbgethostbyname(passState->host,
+	    passState->server.fd,
+	    passSelectNeighbor,
+	    passState);
+    } else {
+	/* can decide now */
+	passSelectNeighbor(passState->server.fd,
+	    NULL,
+	    (void *) passState);
+    }
     return COMM_OK;
 }
 
 static void
-passPeerSelectComplete(peer * p, void *data)
+passSelectNeighbor(int u1, const ipcache_addrs * ia, void *data)
 {
     PassStateData *passState = data;
     request_t *request = passState->request;
+    peer *e = NULL;
     peer *g = NULL;
-    passState->proxying = p ? 1 : 0;
-    passState->host = p ? p->host : request->host;
-    if (p == NULL) {
+    int fw_ip_match = IP_ALLOW;
+    if (ia && Config.firewall_ip_list)
+	fw_ip_match = ip_access_check(ia->in_addrs[ia->cur], Config.firewall_ip_list);
+    if (matchInsideFirewall(request->host)) {
+	hierarchyNote(request, HIER_DIRECT, 0, request->host);
+    } else if (fw_ip_match == IP_DENY) {
+	hierarchyNote(request, HIER_FIREWALL_IP_DIRECT, 0, request->host);
+    } else if ((e = Config.passProxy)) {
+	hierarchyNote(request, HIER_PASS_PARENT, 0, e->host);
+    } else if ((e = getDefaultParent(request))) {
+	hierarchyNote(request, HIER_DEFAULT_PARENT, 0, e->host);
+    } else if ((e = getSingleParent(request))) {
+	hierarchyNote(request, HIER_SINGLE_PARENT, 0, e->host);
+    } else if ((e = getRoundRobinParent(request))) {
+	hierarchyNote(request, HIER_ROUNDROBIN_PARENT, 0, e->host);
+    } else if ((e = getFirstUpParent(request))) {
+	hierarchyNote(request, HIER_FIRSTUP_PARENT, 0, e->host);
+    } else {
+	hierarchyNote(request, HIER_DIRECT, 0, request->host);
+    }
+    passState->proxying = e ? 1 : 0;
+    passState->host = e ? e->host : request->host;
+    if (e == NULL) {
 	passState->port = request->port;
-    } else if (p->http_port != 0) {
-	passState->port = p->http_port;
-    } else if ((g = neighborFindByName(p->host))) {
+    } else if (e->http_port != 0) {
+	passState->port = e->http_port;
+    } else if ((g = neighborFindByName(e->host))) {
 	passState->port = g->http_port;
     } else {
 	passState->port = CACHE_HTTP_PORT;
@@ -515,12 +528,4 @@ passPeerSelectComplete(peer * p, void *data)
 	passState->server.fd,
 	passConnect,
 	passState);
-}
-
-static void
-passPeerSelectFail(peer * p, void *data)
-{
-    PassStateData *passState = data;
-    squid_error_request(passState->url, ERR_CANNOT_FETCH, 400);
-    passClose(passState);
 }

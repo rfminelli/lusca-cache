@@ -115,11 +115,12 @@ struct SquidConfig Config;
 #define DefaultSwapLowWaterMark  90	/* 90% */
 #define DefaultNetdbHigh	1000	/* counts, not percents */
 #define DefaultNetdbLow		 900
+#define DefaultNetdbPeriod       300	/* 5 minutes */
 
 #define DefaultWaisRelayHost	(char *)NULL
 #define DefaultWaisRelayPort	0
 
-#define DefaultReferenceAge	0	/* disabled */
+#define DefaultReferenceAge	(86400*365)	/* 1 year */
 #define DefaultNegativeTtl	(5 * 60)	/* 5 min */
 #define DefaultNegativeDnsTtl	(2 * 60)	/* 2 min */
 #define DefaultPositiveDnsTtl	(360 * 60)	/* 6 hours */
@@ -152,6 +153,7 @@ struct SquidConfig Config;
 #define DefaultFtpgetOptions	""
 #define DefaultDnsserverProgram DEFAULT_DNSSERVER
 #define DefaultPingerProgram    DEFAULT_PINGER
+#define DefaultUnlinkdProgram   DEFAULT_UNLINKD
 #define DefaultRedirectProgram  (char *)NULL	/* default NONE */
 #define DefaultEffectiveUser	(char *)NULL	/* default NONE */
 #define DefaultEffectiveGroup	(char *)NULL	/* default NONE */
@@ -199,8 +201,13 @@ struct SquidConfig Config;
 #define DefaultAvgObjectSize	20	/* 20k */
 #define DefaultObjectsPerBucket	50
 
+#define DefaultLevelOneDirs	16
+#define DefaultLevelTwoDirs	256
 #define DefaultOptionsLogUdp	1	/* on */
 #define DefaultOptionsEnablePurge 0	/* default off */
+#define DefaultOptionsClientDb	1	/* default on */
+#define DefaultOptionsQueryIcmp	0	/* default off */
+
 
 int httpd_accel_mode = 0;	/* for fast access */
 const char *DefaultSwapDir = DEFAULT_SWAP_DIR;
@@ -215,6 +222,8 @@ int config_lineno = 0;
 
 static char fatal_str[BUFSIZ];
 static char *safe_xstrdup _PARAMS((const char *p));
+static int ip_acl_match _PARAMS((struct in_addr, const ip_acl *));
+static void addToIPACL _PARAMS((ip_acl **, const char *, ip_access_type));
 static void parseOnOff _PARAMS((int *));
 static void parseIntegerValue _PARAMS((int *));
 static void parseString _PARAMS((char **));
@@ -240,7 +249,10 @@ static void parseHostDomainLine _PARAMS((void));
 static void parseHostDomainTypeLine _PARAMS((void));
 static void parseHttpPortLine _PARAMS((void));
 static void parseHttpdAccelLine _PARAMS((void));
+static void parseIPLine _PARAMS((ip_acl ** list));
 static void parseIcpPortLine _PARAMS((void));
+static void parseLocalDomainFile _PARAMS((const char *fname));
+static void parseLocalDomainLine _PARAMS((void));
 static void parseMcastGroupLine _PARAMS((void));
 static void parseMemLine _PARAMS((void));
 static void parseMgrLine _PARAMS((void));
@@ -250,10 +262,13 @@ static void parseRefreshPattern _PARAMS((int icase));
 static void parseVisibleHostnameLine _PARAMS((void));
 static void parseWAISRelayLine _PARAMS((void));
 static void parseMinutesLine _PARAMS((int *));
+static void ip_acl_destroy _PARAMS((ip_acl **));
 static void parseCachemgrPasswd _PARAMS((void));
 static void parsePathname _PARAMS((char **));
 static void parseProxyLine _PARAMS((peer **));
 static void parseHttpAnonymizer _PARAMS((int *));
+static int parseTimeUnits _PARAMS((const char *unit));
+static void parseTimeLine _PARAMS((int *iptr, const char *units));
 
 static void
 self_destruct(void)
@@ -261,6 +276,140 @@ self_destruct(void)
     sprintf(fatal_str, "Bungled %s line %d: %s",
 	cfg_filename, config_lineno, config_input_line);
     fatal(fatal_str);
+}
+
+static int
+ip_acl_match(struct in_addr c, const ip_acl * a)
+{
+    static struct in_addr h;
+
+    h.s_addr = c.s_addr & a->mask.s_addr;
+    if (h.s_addr == a->addr.s_addr)
+	return 1;
+    else
+	return 0;
+}
+
+static void
+ip_acl_destroy(ip_acl ** a)
+{
+    ip_acl *b;
+    ip_acl *n;
+    for (b = *a; b; b = n) {
+	n = b->next;
+	safe_free(b);
+    }
+    *a = NULL;
+}
+
+ip_access_type
+ip_access_check(struct in_addr address, const ip_acl * list)
+{
+    static int init = 0;
+    static struct in_addr localhost;
+    const ip_acl *p = NULL;
+    struct in_addr naddr;	/* network byte-order IP addr */
+
+    if (!list)
+	return IP_ALLOW;
+
+    if (!init) {
+	memset(&localhost, '\0', sizeof(struct in_addr));
+	localhost.s_addr = inet_addr("127.0.0.1");
+	init = 1;
+    }
+    naddr.s_addr = address.s_addr;
+    if (naddr.s_addr == localhost.s_addr)
+	return IP_ALLOW;
+
+    debug(3, 5, "ip_access_check: using %s\n", inet_ntoa(naddr));
+
+    for (p = list; p; p = p->next) {
+	if (ip_acl_match(naddr, p))
+	    return p->access;
+    }
+    return IP_ALLOW;
+}
+
+
+static void
+addToIPACL(ip_acl ** list, const char *ip_str, ip_access_type access)
+{
+    ip_acl *p, *q;
+    int a1, a2, a3, a4;
+    int m1, m2, m3, m4;
+    struct in_addr lmask;
+    int inv = 0;
+    int c;
+
+    if (!ip_str) {
+	return;
+    }
+    if (!(*list)) {
+	/* empty list */
+	*list = xcalloc(1, sizeof(ip_acl));
+	(*list)->next = NULL;
+	q = *list;
+    } else {
+	/* find end of list */
+	p = *list;
+	while (p->next)
+	    p = p->next;
+	q = xcalloc(1, sizeof(ip_acl));
+	q->next = NULL;
+	p->next = q;
+    }
+
+    /* decode ip address */
+    if (*ip_str == '!') {
+	ip_str++;
+	inv = 1;
+    }
+    if (!strcasecmp(ip_str, "all")) {
+	a1 = a2 = a3 = a4 = 0;
+	lmask.s_addr = 0;
+    } else {
+	a1 = a2 = a3 = a4 = 0;
+	c = sscanf(ip_str, "%d.%d.%d.%d/%d.%d.%d.%d", &a1, &a2, &a3, &a4,
+	    &m1, &m2, &m3, &m4);
+
+	switch (c) {
+	case 4:
+	    if (a1 == 0 && a2 == 0 && a3 == 0 && a4 == 0)	/* world   */
+		lmask.s_addr = 0x00000000ul;
+	    else if (a2 == 0 && a3 == 0 && a4 == 0)	/* class A */
+		lmask.s_addr = htonl(0xff000000ul);
+	    else if (a3 == 0 && a4 == 0)	/* class B */
+		lmask.s_addr = htonl(0xffff0000ul);
+	    else if (a4 == 0)	/* class C */
+		lmask.s_addr = htonl(0xffffff00ul);
+	    else
+		lmask.s_addr = 0xfffffffful;
+	    break;
+
+	case 5:
+	    if (m1 < 0 || m1 > 32) {
+		debug(3, 0, "addToIPACL: Ignoring invalid IP acl line '%s'\n",
+		    ip_str);
+		return;
+	    }
+	    lmask.s_addr = m1 ? htonl(0xfffffffful << (32 - m1)) : 0;
+	    break;
+
+	case 8:
+	    lmask.s_addr = htonl(m1 * 0x1000000 + m2 * 0x10000 + m3 * 0x100 + m4);
+	    break;
+
+	default:
+	    debug(3, 0, "addToIPACL: Ignoring invalid IP acl line '%s'\n",
+		ip_str);
+	    return;
+	}
+    }
+
+    q->access = inv ? (access == IP_ALLOW ? IP_DENY : IP_ALLOW) : access;
+    q->addr.s_addr = htonl(a1 * 0x1000000 + a2 * 0x10000 + a3 * 0x100 + a4);
+    q->mask.s_addr = lmask.s_addr;
 }
 
 void
@@ -618,6 +767,15 @@ parseWAISRelayLine(void)
 }
 
 static void
+parseIPLine(ip_acl ** list)
+{
+    char *token;
+    while ((token = strtok(NULL, w_space))) {
+	addToIPACL(list, token, IP_DENY);
+    }
+}
+
+static void
 parseWordlist(wordlist ** list)
 {
     char *token;
@@ -652,6 +810,46 @@ parseAddressLine(struct in_addr *addr)
 	*addr = inaddrFromHostent(hp);
     else
 	self_destruct();
+}
+
+static void
+parseLocalDomainFile(const char *fname)
+{
+    LOCAL_ARRAY(char, tmp_line, BUFSIZ);
+    FILE *fp = NULL;
+    char *t = NULL;
+    if ((fp = fopen(fname, "r")) == NULL) {
+	debug(50, 1, "parseLocalDomainFile: %s: %s\n", fname, xstrerror());
+	return;
+    }
+    memset(tmp_line, '\0', BUFSIZ);
+    while (fgets(tmp_line, BUFSIZ, fp)) {
+	if (tmp_line[0] == '#')
+	    continue;
+	if (tmp_line[0] == '\0')
+	    continue;
+	if (tmp_line[0] == '\n')
+	    continue;
+	for (t = strtok(tmp_line, w_space); t; t = strtok(NULL, w_space)) {
+	    debug(3, 1, "parseLocalDomainFileLine: adding %s\n", t);
+	    wordlistAdd(&Config.local_domain_list, t);
+	}
+    }
+    fclose(fp);
+}
+
+static void
+parseLocalDomainLine(void)
+{
+    char *token = NULL;
+    struct stat sb;
+    while ((token = strtok(NULL, w_space))) {
+	if (stat(token, &sb) < 0) {
+	    wordlistAdd(&Config.local_domain_list, token);
+	} else {
+	    parseLocalDomainFile(token);
+	}
+    }
 }
 
 static void
@@ -853,31 +1051,6 @@ parseHttpAnonymizer(int *iptr)
 	*iptr = ANONYMIZER_STANDARD;
 }
 
-static void
-parseCacheDir(void)
-{
-    char *token;
-    char *dir;
-    int i;
-    int size;
-    int l1;
-    int l2;
-    int readonly = 0;
-    if ((token = strtok(NULL, w_space)) == NULL)
-	self_destruct();
-    dir = token;
-    GetInteger(i);
-    size = i;
-    GetInteger(i);
-    l1 = i;
-    GetInteger(i);
-    l2 = i;
-    if ((token = strtok(NULL, w_space)))
-	if (!strcasecmp(token, "read-only"))
-	    readonly = 1;
-    storeAddSwapDisk(dir, size, l1, l2, readonly);
-}
-
 int
 parseConfigFile(const char *file_name)
 {
@@ -888,12 +1061,13 @@ parseConfigFile(const char *file_name)
     configFreeMemory();
     configSetFactoryDefaults();
     aclDestroyAcls();
-    aclDestroyDenyInfoList(&Config.denyInfoList);
-    aclDestroyAccessList(&Config.accessList.HTTP);
-    aclDestroyAccessList(&Config.accessList.ICP);
-    aclDestroyAccessList(&Config.accessList.MISS);
-    aclDestroyAccessList(&Config.accessList.NeverDirect);
-    aclDestroyAccessList(&Config.accessList.AlwaysDirect);
+    aclDestroyDenyInfoList(&DenyInfoList);
+    aclDestroyAccessList(&HTTPAccessList);
+    aclDestroyAccessList(&MISSAccessList);
+    aclDestroyAccessList(&ICPAccessList);
+#if DELAY_HACK
+    aclDestroyAccessList(&DelayAccessList);
+#endif
     aclDestroyRegexList(Config.cache_stop_relist);
     Config.cache_stop_relist = NULL;
 
@@ -936,7 +1110,7 @@ parseConfigFile(const char *file_name)
 	    parseIntegerValue(&Config.neighborTimeout);
 
 	else if (!strcmp(token, "cache_dir"))
-	    parseCacheDir();
+	    parseWordlist(&Config.cache_dirs);
 
 	else if (!strcmp(token, "cache_log"))
 	    parsePathname(&Config.Log.log);
@@ -995,18 +1169,16 @@ parseConfigFile(const char *file_name)
 	    aclParseAclLine();
 
 	else if (!strcmp(token, "deny_info"))
-	    aclParseDenyInfoLine(&Config.denyInfoList);
+	    aclParseDenyInfoLine(&DenyInfoList);
 
 	else if (!strcmp(token, "http_access"))
-	    aclParseAccessLine(&Config.accessList.HTTP);
-	else if (!strcmp(token, "icp_access"))
-	    aclParseAccessLine(&Config.accessList.ICP);
+	    aclParseAccessLine(&HTTPAccessList);
+
 	else if (!strcmp(token, "miss_access"))
-	    aclParseAccessLine(&Config.accessList.MISS);
-	else if (!strcmp(token, "never_direct"))
-	    aclParseAccessLine(&Config.accessList.NeverDirect);
-	else if (!strcmp(token, "always_direct"))
-	    aclParseAccessLine(&Config.accessList.AlwaysDirect);
+	    aclParseAccessLine(&MISSAccessList);
+
+	else if (!strcmp(token, "icp_access"))
+	    aclParseAccessLine(&ICPAccessList);
 
 	else if (!strcmp(token, "hierarchy_stoplist"))
 	    parseWordlist(&Config.hierarchy_stoplist);
@@ -1017,6 +1189,11 @@ parseConfigFile(const char *file_name)
 	    aclParseRegexList(&Config.cache_stop_relist, 0);
 	else if (!strcmp(token, "cache_stoplist_pattern/i"))
 	    aclParseRegexList(&Config.cache_stop_relist, 1);
+
+#if DELAY_HACK
+	else if (!strcmp(token, "delay_access"))
+	    aclParseAccessLine(&DelayAccessList);
+#endif
 
 	else if (!strcmp(token, "refresh_pattern"))
 	    parseRefreshPattern(0);
@@ -1039,7 +1216,7 @@ parseConfigFile(const char *file_name)
 	else if (!strcmp(token, "client_lifetime"))
 	    parseMinutesLine(&Config.lifetimeDefault);
 	else if (!strcmp(token, "reference_age"))
-	    parseMinutesLine(&Config.referenceAge);
+	    parseTimeLine(&Config.referenceAge, "minutes");
 
 	else if (!strcmp(token, "shutdown_lifetime"))
 	    parseIntegerValue(&Config.lifetimeShutdown);
@@ -1090,8 +1267,8 @@ parseConfigFile(const char *file_name)
 #if LOG_FULL_HEADERS
 	else if (!strcmp(token, "log_mime_hdrs"))
 	    parseOnOff(&Config.logMimeHdrs);
-#endif /* LOG_FULL_HEADERS */
 
+#endif /* LOG_FULL_HEADERS */
 	else if (!strcmp(token, "ident_lookup"))
 	    parseOnOff(&Config.identLookup);
 
@@ -1100,6 +1277,15 @@ parseConfigFile(const char *file_name)
 
 	else if (!strcmp(token, "wais_relay"))
 	    parseWAISRelayLine();
+
+	else if (!strcmp(token, "local_ip"))
+	    parseIPLine(&Config.local_ip_list);
+
+	else if (!strcmp(token, "firewall_ip"))
+	    parseIPLine(&Config.firewall_ip_list);
+
+	else if (!strcmp(token, "local_domain"))
+	    parseLocalDomainLine();
 
 	else if (!strcmp(token, "mcast_groups"))
 	    parseMcastGroupLine();
@@ -1136,6 +1322,9 @@ parseConfigFile(const char *file_name)
 
 	else if (!strcmp(token, "icp_port") || !strcmp(token, "udp_port"))
 	    parseIcpPortLine();
+
+	else if (!strcmp(token, "inside_firewall"))
+	    parseWordlist(&Config.inside_firewall_list);
 
 	else if (!strcmp(token, "dns_testnames"))
 	    parseWordlist(&Config.dns_testname_list);
@@ -1188,6 +1377,10 @@ parseConfigFile(const char *file_name)
 	    parseOnOff(&Config.Options.log_udp);
 	else if (!strcmp(token, "http_anonymizer"))
 	    parseHttpAnonymizer(&Config.Options.anonymizer);
+	else if (!strcmp(token, "client_db"))
+	    parseOnOff(&Config.Options.client_db);
+	else if (!strcmp(token, "query_icmp"))
+	    parseOnOff(&Config.Options.query_icmp);
 
 	else if (!strcmp(token, "minimum_direct_hops"))
 	    parseIntegerValue(&Config.minDirectHops);
@@ -1205,12 +1398,17 @@ parseConfigFile(const char *file_name)
 	else if (!strcmp(token, "viz_hack_addr"))
 	    parseVizHackLine();
 
+	else if (!strcmp(token, "swap_level1_dirs"))
+	    parseIntegerValue(&Config.levelOneDirs);
+	else if (!strcmp(token, "swap_level2_dirs"))
+	    parseIntegerValue(&Config.levelTwoDirs);
+
 	else if (!strcmp(token, "netdb_high"))
 	    parseIntegerValue(&Config.Netdb.high);
 	else if (!strcmp(token, "netdb_low"))
 	    parseIntegerValue(&Config.Netdb.low);
-	else if (!strcmp(token, "netdb_ttl"))
-	    parseIntegerValue(&Config.Netdb.ttl);
+	else if (!strcmp(token, "netdb_ping_period"))
+	    parseTimeLine(&Config.Netdb.period, "seconds");
 
 	/* If unknown, treat as a comment line */
 	else {
@@ -1288,6 +1486,7 @@ configFreeMemory(void)
     safe_free(Config.Program.ftpget_opts);
     safe_free(Config.Program.dnsserver);
     safe_free(Config.Program.redirect);
+    safe_free(Config.Program.unlinkd);
     safe_free(Config.Program.pinger);
     safe_free(Config.Accel.host);
     safe_free(Config.Accel.prefix);
@@ -1306,10 +1505,15 @@ configFreeMemory(void)
     safe_free(Config.errHtmlText);
     peerDestroy(Config.sslProxy);
     peerDestroy(Config.passProxy);
+    wordlistDestroy(&Config.cache_dirs);
     wordlistDestroy(&Config.hierarchy_stoplist);
+    wordlistDestroy(&Config.local_domain_list);
     wordlistDestroy(&Config.mcast_group_list);
+    wordlistDestroy(&Config.inside_firewall_list);
     wordlistDestroy(&Config.dns_testname_list);
     wordlistDestroy(&Config.cache_stoplist);
+    ip_acl_destroy(&Config.local_ip_list);
+    ip_acl_destroy(&Config.firewall_ip_list);
     objcachePasswdDestroy(&Config.passwd_list);
     refreshFreeMemory();
 }
@@ -1327,6 +1531,7 @@ configSetFactoryDefaults(void)
     Config.Swap.lowWaterMark = DefaultSwapLowWaterMark;
     Config.Netdb.high = DefaultNetdbHigh;
     Config.Netdb.low = DefaultNetdbLow;
+    Config.Netdb.period = DefaultNetdbPeriod;
 
     Config.Wais.relayHost = safe_xstrdup(DefaultWaisRelayHost);
     Config.Wais.relayPort = DefaultWaisRelayPort;
@@ -1377,6 +1582,7 @@ configSetFactoryDefaults(void)
     Config.Program.dnsserver = safe_xstrdup(DefaultDnsserverProgram);
     Config.Program.redirect = safe_xstrdup(DefaultRedirectProgram);
     Config.Program.pinger = safe_xstrdup(DefaultPingerProgram);
+    Config.Program.unlinkd = safe_xstrdup(DefaultUnlinkdProgram);
     Config.Accel.host = safe_xstrdup(DefaultAccelHost);
     Config.Accel.prefix = safe_xstrdup(DefaultAccelPrefix);
     Config.Accel.port = DefaultAccelPort;
@@ -1409,10 +1615,14 @@ configSetFactoryDefaults(void)
     Config.Store.maxObjectSize = DefaultMaxObjectSize;
     Config.Store.avgObjectSize = DefaultAvgObjectSize;
     Config.Store.objectsPerBucket = DefaultObjectsPerBucket;
+    Config.levelOneDirs = DefaultLevelOneDirs;
+    Config.levelTwoDirs = DefaultLevelTwoDirs;
     Config.Options.log_udp = DefaultOptionsLogUdp;
     Config.Options.res_defnames = DefaultOptionsResDefnames;
     Config.Options.anonymizer = DefaultOptionsAnonymizer;
     Config.Options.enable_purge = DefaultOptionsEnablePurge;
+    Config.Options.client_db = DefaultOptionsClientDb;
+    Config.Options.query_icmp = DefaultOptionsQueryIcmp;
 }
 
 static void
@@ -1438,4 +1648,51 @@ configDoConfigure(void)
 	Config.appendDomainLen = strlen(Config.appendDomain);
     else
 	Config.appendDomainLen = 0;
+}
+
+/* Parse a time specification from the config file.  Store the
+ * result in 'iptr', after converting it to 'units' */
+static void
+parseTimeLine(int *iptr, const char *units)
+{
+    char *token;
+    double d;
+    int m;
+    int u;
+    if ((u = parseTimeUnits(units)) == 0)
+	self_destruct();
+    if ((token = strtok(NULL, w_space)) == NULL)
+	self_destruct();
+    d = atof(token);
+    m = u;			/* default to 'units' if none specified */
+    if ((token = strtok(NULL, w_space)) != NULL) {
+	if ((m = parseTimeUnits(token)) == 0)
+	    self_destruct();
+    }
+    *iptr = m * d / u;
+}
+
+static int
+parseTimeUnits(const char *unit)
+{
+    if (!strncasecmp(unit, "second", 6))
+	return 1;
+    if (!strncasecmp(unit, "minute", 6))
+	return 60;
+    if (!strncasecmp(unit, "hour", 4))
+	return 3600;
+    if (!strncasecmp(unit, "day", 3))
+	return 86400;
+    if (!strncasecmp(unit, "week", 4))
+	return 86400 * 7;
+    if (!strncasecmp(unit, "fortnight", 9))
+	return 86400 * 14;
+    if (!strncasecmp(unit, "month", 5))
+	return 86400 * 30;
+    if (!strncasecmp(unit, "year", 4))
+	return 86400 * 365.2522;
+    if (!strncasecmp(unit, "decade", 6))
+	return 86400 * 365.2522 * 10;
+    debug(3, 1, "parseTimeUnits: unknown time unit '%s'\n", unit);
+    return 0;
 }
