@@ -113,8 +113,6 @@
 #define DISK_FILE_NOT_FOUND      (-5)
 #define DISK_NO_SPACE_LEFT       (-6)
 
-#define MAX_FILE_NAME_LEN 256
-
 typedef int (*FILE_READ_HD) _PARAMS((int fd, char *buf, int size, int errflag,
 	void *data, int offset));
 
@@ -142,58 +140,5 @@ extern int file_walk _PARAMS((int fd,
 extern int file_update_open _PARAMS((int fd, char *path));
 extern int file_write_lock _PARAMS((int fd));
 extern int disk_init _PARAMS((void));
-
-typedef struct _dwrite_q {
-    char *buf;
-    int len;
-    int cur_offset;
-    struct _dwrite_q *next;
-} dwrite_q;
-
-typedef struct _dread_ctrl {
-    int fd;
-    off_t offset;
-    int req_len;
-    char *buf;
-    int cur_len;
-    int end_of_file;
-    int (*handler) _PARAMS((int fd, char *buf, int size, int errflag, void *data,
-	    int offset));
-    void *client_data;
-} dread_ctrl;
-
-typedef struct _FileEntry {
-    char filename[MAX_FILE_NAME_LEN];
-    enum {
-	NO, YES
-    } at_eof;
-    enum {
-	FILE_NOT_OPEN, FILE_OPEN
-    } open_stat;
-    enum {
-	NOT_REQUEST, REQUEST
-    } close_request;
-    enum {
-	NOT_PRESENT, PRESENT
-    } write_daemon;
-    enum {
-	UNLOCK, LOCK
-    } write_lock;
-    int access_code;		/* use to verify write lock */
-    enum {
-	NO_WRT_PENDING, WRT_PENDING
-    } write_pending;
-    void (*wrt_handle) ();
-    void *wrt_handle_data;
-    dwrite_q *write_q;
-    dwrite_q *write_q_tail;
-#if USE_ASYNC_IO		/* Data for asynchronous reads */
-    struct aiocb aio_cb;	/* Control block */
-    int (*aio_handler) _PARAMS((int fd, void *data));
-    void *aio_data;		/* state, either FileEntry or ctrl_dat */
-#endif
-} FileEntry;
-
-extern FileEntry *file_table;
 
 #endif /* DISK_H */

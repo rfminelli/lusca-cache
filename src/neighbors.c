@@ -337,7 +337,6 @@ void neighborRemove(target)
     }
     if (e) {
 	*E = e->next;
-	safe_free(e->host);
 	safe_free(e);
 	friends->n--;
     }
@@ -353,6 +352,7 @@ void neighborsDestroy()
     for (e = friends->edges_head; e; e = next) {
 	next = e->next;
 	safe_free(e->host);
+	/* XXX I think we need to free e->domains too -DW */
 	safe_free(e);
     }
     safe_free(friends);
@@ -415,6 +415,7 @@ void neighbors_open(fd)
 	    safe_free(e);
 	    continue;
 	}
+	ipcacheLockEntry(e->host);
 	e->n_addresses = 0;
 	for (j = 0; *list && j < EDGE_MAX_ADDRESSES; j++) {
 	    ina = &e->addresses[j];

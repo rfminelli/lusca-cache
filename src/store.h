@@ -189,6 +189,7 @@ typedef struct _MemObject {
     void *swapin_complete_data;
     hier_code hierarchy_code;
 } MemObject;
+
 typedef enum {
     NOT_IN_MEMORY,
     SWAPPING_IN,

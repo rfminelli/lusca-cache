@@ -27,7 +27,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *  
  */
-
+ 
 /*
  * Copyright (c) 1994, 1995.  All rights reserved.
  *  
@@ -171,8 +171,8 @@ void malloc_statistics(func, data)
 
 
 #if XMALLOC_DEBUG
-#define DBG_ARRY_SZ (1<<10)
-#define DBG_ARRY_BKTS (1<<8)
+#define DBG_ARRY_SZ (2<<8)
+#define DBG_ARRY_BKTS (2<<8)
 static void *malloc_ptrs[DBG_ARRY_BKTS][DBG_ARRY_SZ];
 static int malloc_size[DBG_ARRY_BKTS][DBG_ARRY_SZ];
 static int dbg_initd = 0;
@@ -183,7 +183,7 @@ static void *Q;
 
 static void check_init()
 {
-    for (B = 0; B < DBG_ARRY_BKTS; B++) {
+    for (B = 0; B < DBG_ARRY_SZ; B++) {
 	for (I = 0; I < DBG_ARRY_SZ; I++) {
 	    malloc_ptrs[B][I] = NULL;
 	    malloc_size[B][I] = 0;
@@ -213,9 +213,9 @@ static void check_malloc(p, sz)
      void *p;
      size_t sz;
 {
+    B = (((int) p) >> 4) & 0xFF;
     if (!dbg_initd)
 	check_init();
-    B = (((int) p) >> 4) & 0xFF;
     for (I = 0; I < DBG_ARRY_SZ; I++) {
 	if ((P = malloc_ptrs[B][I]) == NULL)
 	    continue;
@@ -237,37 +237,6 @@ static void check_malloc(p, sz)
 	(*failure_notify) ("xmalloc: debug out of array space!");
 }
 #endif
-
-#if XMALLOC_COUNT && !HAVE_MALLOCBLKSIZE
-int mallocblksize(p)
-     void *p;
-{
-    B = (((int) p) >> 4) & 0xFF;
-    for (I = 0; I < DBG_ARRY_SZ; I++) {
-	if (malloc_ptrs[B][I] == p)
-	    return malloc_size[B][I];
-    }
-    return 0;
-}
-#endif
-
-#ifdef XMALLOC_COUNT
-static void xmalloc_count(p, sign)
-     void *p;
-     int sign;
-{
-    size_t sz;
-    static size_t total = 0;
-    int memoryAccounted();
-    int mallinfoTotal();
-    sz = mallocblksize(p) * sign;
-    total += sz;
-    fprintf(stderr, "xmalloc_count=%9d  accounted=%9d  mallinfo=%9d\n",
-	(int) total,
-	memoryAccounted(),
-	mallinfoTotal());
-}
-#endif /* XMALLOC_COUNT */
 
 /*
  *  xmalloc() - same as malloc(3).  Used for portability.
@@ -296,9 +265,6 @@ void *xmalloc(sz)
 #if XMALLOC_STATISTICS
     malloc_stat(sz);
 #endif
-#if XMALLOC_COUNT
-    xmalloc_count(p, 1);
-#endif
     return (p);
 }
 
@@ -308,9 +274,6 @@ void *xmalloc(sz)
 void xfree(s)
      void *s;
 {
-#if XMALLOC_COUNT
-    xmalloc_count(s, -1);
-#endif
 #if XMALLOC_DEBUG
     check_free(s);
 #endif
@@ -322,9 +285,6 @@ void xfree(s)
 void xxfree(s)
      void *s;
 {
-#if XMALLOC_COUNT
-    xmalloc_count(s, -1);
-#endif
 #if XMALLOC_DEBUG
     check_free(s);
 #endif
@@ -340,10 +300,6 @@ void *xrealloc(s, sz)
      size_t sz;
 {
     static void *p;
-
-#if XMALLOC_COUNT
-    xmalloc_count(s, -1);
-#endif
 
     if (sz < 1)
 	sz = 1;
@@ -362,9 +318,6 @@ void *xrealloc(s, sz)
 #endif
 #if XMALLOC_STATISTICS
     malloc_stat(sz);
-#endif
-#if XMALLOC_COUNT
-    xmalloc_count(p, 1);
 #endif
     return (p);
 }
@@ -398,9 +351,6 @@ void *xcalloc(n, sz)
 #endif
 #if XMALLOC_STATISTICS
     malloc_stat(sz);
-#endif
-#if XMALLOC_COUNT
-    xmalloc_count(p, 1);
 #endif
     return (p);
 }

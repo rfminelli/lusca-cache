@@ -372,7 +372,6 @@ static void mainReinitialize()
     _db_init(getCacheLogFile(), getDebugOptions());
     neighbors_init();
     ipcacheOpenServers();
-    redirectOpenServers();
     serverConnectionsOpen();
     (void) ftpInitialize();
     if (theOutIcpConnection >= 0 && (!httpd_accel_mode || getAccelWithProxy()))
@@ -389,11 +388,6 @@ static void mainInitialize()
     }
     squid_signal(SIGPIPE, SIG_IGN, SA_RESTART);
     squid_signal(SIGCHLD, sig_child, SA_NODEFER | SA_RESTART);
-#if USE_ASYNC_IO
-    if (first_time)
-	aio_init();
-    squid_signal(SIGIO, aioSigHandler, SA_RESTART);
-#endif
 
     if (ConfigFile == NULL)
 	ConfigFile = xstrdup(DefaultConfigFile);
@@ -416,12 +410,10 @@ static void mainInitialize()
     debug(1, 1, "With %d file descriptors available\n", FD_SETSIZE);
 
     if (first_time) {
-	stmemInit();		/* stmem must go before at least redirect */
 	disk_init();		/* disk_init must go before ipcache_init() */
 	writePidFile();		/* write PID file */
     }
     ipcache_init();
-    redirectOpenServers();
     neighbors_init();
     (void) ftpInitialize();
 
@@ -435,6 +427,7 @@ static void mainInitialize()
 	urlInitialize();
 	stat_init(&CacheInfo, getAccessLogFile());
 	storeInit();
+	stmemInit();
 
 	if (getEffectiveUser()) {
 	    /* we were probably started as root, so cd to a swap
@@ -470,22 +463,6 @@ int main(argc, argv)
     time_t last_announce = 0;
     time_t loop_delay;
 
-    /* call mallopt() before anything else */
-#if HAVE_MALLOPT
-#ifdef M_GRAIN
-    /* Round up all sizes to a multiple of this */
-    mallopt(M_GRAIN, 16);
-#endif
-#ifdef M_MXFAST
-    /* biggest size that is considered a small block */
-    mallopt(M_MXFAST, 256);
-#endif
-#ifdef M_NBLKS
-    /* allocate this many small blocks at once */
-    mallopt(M_NLBLKS, 32);
-#endif
-#endif /* HAVE_MALLOPT */
-
     memset(&local_addr, '\0', sizeof(struct in_addr));
     local_addr.s_addr = inet_addr(localhost);
 
@@ -501,6 +478,21 @@ int main(argc, argv)
     if (catch_signals)
 	for (n = FD_SETSIZE; n > 2; n--)
 	    close(n);
+
+#if HAVE_MALLOPT
+#ifdef M_GRAIN
+    /* Round up all sizes to a multiple of this */
+    mallopt(M_GRAIN, 16);
+#endif
+#ifdef M_MXFAST
+    /* biggest size that is considered a small block */
+    mallopt(M_MXFAST, 256);
+#endif
+#ifdef M_NBLKS
+    /* allocate this many small blocks at once */
+    mallopt(M_NLBLKS, 32);
+#endif
+#endif /* HAVE_MALLOPT */
 
     /*init comm module */
     comm_init();

@@ -244,12 +244,6 @@ int objcacheStart(fd, url, entry)
 	BIT_RESET(data->entry->flag, DELAY_SENDING);
 	storeComplete(data->entry);
 
-    } else if (strcmp(data->request, "stats/redirector") == 0) {
-	BIT_SET(data->entry->flag, DELAY_SENDING);
-	CacheInfo->stat_get(CacheInfo, "redirector", data->entry);
-	BIT_RESET(data->entry->flag, DELAY_SENDING);
-	storeComplete(data->entry);
-
     } else if (strcmp(data->request, "stats/io") == 0) {
 	BIT_SET(data->entry->flag, DELAY_SENDING);
 	CacheInfo->stat_get(CacheInfo, "io", data->entry);
@@ -259,12 +253,6 @@ int objcacheStart(fd, url, entry)
     } else if (strcmp(data->request, "stats/reply_headers") == 0) {
 	BIT_SET(data->entry->flag, DELAY_SENDING);
 	CacheInfo->stat_get(CacheInfo, "reply_headers", data->entry);
-	BIT_RESET(data->entry->flag, DELAY_SENDING);
-	storeComplete(data->entry);
-
-    } else if (strcmp(data->request, "stats/filedescriptors") == 0) {
-	BIT_SET(data->entry->flag, DELAY_SENDING);
-	CacheInfo->stat_get(CacheInfo, "filedescriptors", data->entry);
 	BIT_RESET(data->entry->flag, DELAY_SENDING);
 	storeComplete(data->entry);
 

@@ -1,33 +1,13 @@
-Changes to squid-1.1.alpha4:
+Changes to squid-1.0.2 (July 16, 1996):
 
-	- Fixed Asynchronous Disk I/O routines to basically work.
-	- Fixed memory write bugs when using the redirector.
-	- Added support for non-anonymous FTP urls without needing a
-	  password in the URL.
-
-Changes to squid-1.1.alpha4:
-
-	- Changed cachemgr detailed filedescriptor info to be a separate item.
-	- 'no-cache' reload now discards bad IP cache entries too.
-	- Added 'echo request' URL hack:  http://cachehost:3128/echo
-	- Added URL redirector feature.
-	- Addeed 'ident_lookup' option to config file
-	- Fixed http to never rely on blocking IP cache lookups.
-	- Removed need for locked IP cache entries.
-	- Changed free page stacks to always free pages if more than
-	  'max' are allocated.
-
-Changes to squid-1.1.alpha3:
-
-	- Added Asynchronous Disk I/O routines from Pete Bentley.
-	  (NOTE, not yet working for IRIX 5.3).
-	- Made squid native access log the default format.
-
-Changes to squid-1.1.alpha2:
-
-	- Added support for RFC931/ident
-
-==============================================================================
+	- Fixed HTTP code in access.log for TCP_IFMODSINCE requests.
+	- Fixed SSL to not read again until previous write is complete.
+	- Added CPU usage percentage in cachemgr 'info' output.
+	- Fixed bug when removing a neighbor.  Forgetting to decrement
+	  friends->n causes a duplicate ICP query to be sent in
+	  neighborsUdpPing().
+	- Increased some MAX_URL sized character buffers to prevent
+	  overflows.
 
 Changes to squid-1.0.1 (July 8, 1996):
 

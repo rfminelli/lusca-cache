@@ -6,9 +6,7 @@
 #  Uncomment and customize the following to suit your needs:
 #
 HOST_OPT	= # -DCACHEMGR_HOSTNAME="getfullhostname()"
-AIO_OPT		= # -DUSE_ASYNC_IO=1
-AIO_LIB		= # -labi
-DEFINES         = $(HOST_OPT) $(AIO_OPT)
+DEFINES         = $(HOST_OPT)
 
 prefix		= @prefix@
 exec_prefix	= @exec_prefix@
@@ -39,7 +37,7 @@ PERL            = @PERL@
 CRYPT_LIB	= @CRYPT_LIB@
 AC_CFLAGS	= @CFLAGS@
 LDFLAGS		= @LDFLAGS@
-XTRA_LIBS	= @XTRA_LIBS@ $(AIO_LIB)
+XTRA_LIBS	= @XTRA_LIBS@
 XTRA_OBJS 	= @XTRA_OBJS@
 MV		= @MV@
 RM		= @RM@
@@ -54,13 +52,12 @@ CLIENT_LIBS	= -L../lib -lmiscutil $(XTRA_LIBS)
 PROGS           = squid client
 UTILS           = dnsserver ftpget
 CGIPROGS	= cachemgr.cgi
-OBJS	 	= acl.o async_io.o background.o cache_cf.o errorpage.o \
-		comm.o debug.o disk.o dynamic_array.o \
+OBJS	 	= acl.o background.o cache_cf.o errorpage.o comm.o \
+		debug.o disk.o dynamic_array.o \
 		fdstat.o filemap.o ftp.o gopher.o \
-		hash.o http.o icp.o ident.o ipcache.o \
+		hash.o http.o icp.o ipcache.o \
 		main.o mime.o neighbors.o objcache.o \
-		proto.o redirect.o send-announce.o ssl.o stack.o \
-		stat.o stmem.o \
+		proto.o send-announce.o ssl.o stack.o stat.o stmem.o \
 		store.o storetoString.o tools.o ttl.o \
 		url.o wais.o $(XTRA_OBJS)
 
@@ -188,3 +185,4 @@ realclean:	clean
 
 tags:
 	ctags *.[ch] ../include/*.h ../lib/*.[ch]
+

@@ -127,8 +127,8 @@ typedef struct _Ftpdata {
 				 * expires */
     int got_marker;		/* denotes end of successful request */
     int reply_hdr_state;
-    int authenticated;		/* This ftp request is authenticated */
 } FtpData;
+
 
 /* Local functions */
 static int ftpStateFree _PARAMS((int fd, FtpData * ftpState));
@@ -143,9 +143,6 @@ void ftpSendComplete _PARAMS((int fd, char *buf, int size, int errflag, void *ft
 void ftpSendRequest _PARAMS((int fd, FtpData * data));
 void ftpConnInProgress _PARAMS((int fd, FtpData * data));
 void ftpServerClose _PARAMS((void));
-
-/* External functions */
-extern char *base64_decode _PARAMS((char *coded));
 
 static int ftpStateFree(fd, ftpState)
      int fd;
@@ -530,9 +527,6 @@ void ftpSendRequest(fd, data)
 	sprintf(tbuf, "-H %s ", s);
 	strcat(buf, tbuf);
     }
-    if (data->authenticated) {
-	strcat(buf, "-a ");
-    }
     strcat(buf, "-h ");		/* httpify */
     strcat(buf, "- ");		/* stdout */
     strcat(buf, data->request->host);
@@ -592,13 +586,7 @@ int ftpStart(unusedfd, url, request, entry)
      request_t *request;
      StoreEntry *entry;
 {
-    static char realm[8192];
     FtpData *data = NULL;
-    char *req_hdr = entry->mem_obj->mime_hdr;
-    char *auth_hdr;
-    char *response;
-    char *auth;
-
     int status;
 
     debug(9, 3, "FtpStart: FD %d <URL:%s>\n", unusedfd, url);
@@ -607,35 +595,8 @@ int ftpStart(unusedfd, url, request, entry)
     storeLockObject(data->entry = entry, NULL, NULL);
     data->request = requestLink(request);
 
-    auth_hdr = mime_get_header(req_hdr, "Authorization");
-    auth = NULL;
-    if (auth_hdr) {
-	if (strcasecmp(strtok(auth_hdr, " \t"), "Basic") == 0) {
-	    auth = base64_decode(strtok(NULL, " \t"));
-	}
-    }
     /* Parse login info. */
-    if (auth) {
-	ftp_login_parser(auth, data);
-	data->authenticated = 1;
-    } else {
-	ftp_login_parser(request->login, data);
-	if (*data->user && !*data->password) {
-	    /* This request is not fully authenticated */
-	    if (request->port == 21) {
-		sprintf(realm, "ftp %s", data->user);
-	    } else {
-		sprintf(realm, "ftp %s port %d",
-		    data->user, request->port);
-	    }
-	    response = authorization_needed_msg(request, realm);
-	    storeAppend(entry, response, strlen(response));
-	    httpParseHeaders(response, entry->mem_obj->reply);
-	    storeComplete(entry);
-	    ftpStateFree(-1, data);
-	    return COMM_OK;
-	}
-    }
+    ftp_login_parser(request->login, data);
 
     debug(9, 5, "FtpStart: FD %d, host=%s, path=%s, user=%s, passwd=%s\n",
 	unusedfd, data->request->host, data->request->urlpath,
@@ -737,7 +698,6 @@ int ftpInitialize()
     struct sockaddr_in S;
     int len;
 
-    debug(9, 5, "ftpInitialize: Initializing...\n");
     if (pipe(squid_to_ftpget) < 0) {
 	debug(9, 0, "ftpInitialize: pipe: %s\n", xstrerror());
 	return -1;
@@ -750,7 +710,6 @@ int ftpInitialize()
 	local_addr,
 	0,
 	"ftpget -S socket");
-    debug(9, 5, "ftpget -S socket on FD %d\n", cfd);
     if (cfd == COMM_ERROR) {
 	debug(9, 0, "ftpInitialize: Failed to create socket\n");
 	return -1;

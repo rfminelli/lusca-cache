@@ -105,15 +105,14 @@
 
 #include "squid.h"
 
-#define MAX_HTABLE 10
+#define MAX_HTABLE 4
 
 int hash_links_allocated;
 
 struct master_table {
     int valid;
     hash_link **buckets;
-    int (*cmp) _PARAMS((char *, char *));
-    int (*hash) _PARAMS((char *, HashID));
+    int (*cmp) (char *, char *);
     int size;
     int current_slot;
     hash_link *current_ptr;
@@ -130,29 +129,15 @@ extern void *xcalloc _PARAMS((int, size_t));
  *  Adapted from code written by Mic Bowman.  -Darren
  *  Generates a standard deviation = 15.73
  */
-int hash_url(s, hid)
+static int hash_url(s, hid)
      char *s;
      HashID hid;
 {
     unsigned int i, j, n;
+
     j = strlen(s);
     for (i = j / 2, n = 0; i < j; i++)
 	n ^= 271 * (unsigned) s[i];
-    i = n ^ (j * 271);
-    return (uhash(i, hid));
-}
-
-int hash_string(s, hid)
-     char *s;
-     HashID hid;
-{
-    unsigned int n = 0;
-    unsigned int j = 0;
-    unsigned int i = 0;
-    while (*s) {
-	j++;
-	n ^= 271 * (unsigned) *s++;
-    }
     i = n ^ (j * 271);
     return (uhash(i, hid));
 }
@@ -175,10 +160,9 @@ void hash_init(hash_sz)
  *  to compare keys.  Returns the identification for the hash table;
  *  otherwise returns a negative number on error.
  */
-HashID hash_create(cmp_func, hash_sz, hash_func)
-     int (*cmp_func) _PARAMS((char *, char *));
+HashID hash_create(cmp_func, hash_sz)
+     int (*cmp_func) (char *, char *);
      int hash_sz;
-     int (*hash_func) _PARAMS((char *, HashID));
 {
     int hid;
 
@@ -197,7 +181,6 @@ HashID hash_create(cmp_func, hash_sz, hash_func)
     /* allocate and null the buckets */
     htbl[hid].buckets = xcalloc(htbl[hid].size, sizeof(hash_link *));
     htbl[hid].cmp = cmp_func;
-    htbl[hid].hash = hash_func;
     htbl[hid].current_ptr = NULL;
     htbl[hid].current_slot = 0;
     htbl[hid].valid = 1;
@@ -229,7 +212,7 @@ int hash_insert(hid, k, item)
 
     ++hash_links_allocated;
 
-    i = (htbl[hid].hash) (k, hid);
+    i = hash_url(k, hid);	/* use the URL-based hash */
 
     if (htbl[hid].buckets[i] == NULL) {		/* first item */
 	htbl[hid].buckets[i] = new;
@@ -256,7 +239,7 @@ int hash_join(hid, lnk)
     if (!htbl[hid].valid)
 	return -1;
 
-    i = (htbl[hid].hash) (lnk->key, hid);
+    i = hash_url(lnk->key, hid);	/* use the URL-based hash */
 
     if (htbl[hid].buckets[i] == NULL) {		/* first item */
 	htbl[hid].buckets[i] = lnk;
@@ -278,15 +261,16 @@ hash_link *hash_lookup(hid, k)
      char *k;
 {
     static hash_link *walker;
-    int b;
 
     if (!htbl[hid].valid)
 	return NULL;
-    if (k == NULL)
+
+    if (k == (char *) NULL)
 	return NULL;
-    b = (htbl[hid].hash) (k, hid);
-    for (walker = htbl[hid].buckets[b]; walker != NULL; walker = walker->next) {
-	if ((htbl[hid].cmp) (k, walker->key) == 0)
+
+    for (walker = htbl[hid].buckets[hash_url(k, hid)]; walker != NULL;
+	walker = walker->next) {
+	if (htbl[hid].cmp(k, walker->key) == 0)
 	    return (walker);
 	if (walker == walker->next)
 	    break;
@@ -370,7 +354,7 @@ int hash_unlink(hid, hl, FreeLink)
     if (!htbl[hid].valid || hl == NULL)
 	return 1;
 
-    i = (htbl[hid].hash) (hl->key, hid);
+    i = hash_url(hl->key, hid);
     for (prev = NULL, walker = htbl[hid].buckets[i];
 	walker != NULL; prev = walker, walker = walker->next) {
 	if (walker == hl) {

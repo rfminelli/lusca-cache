@@ -106,6 +106,19 @@
 #include "squid.h"
 
 #define DISK_LINE_LEN  1024
+#define MAX_FILE_NAME_LEN 256
+
+typedef struct _dread_ctrl {
+    int fd;
+    off_t offset;
+    int req_len;
+    char *buf;
+    int cur_len;
+    int end_of_file;
+    int (*handler) _PARAMS((int fd, char *buf, int size, int errflag, void *data,
+	    int offset));
+    void *client_data;
+} dread_ctrl;
 
 typedef struct _dwalk_ctrl {
     int fd;
@@ -117,6 +130,40 @@ typedef struct _dwalk_ctrl {
     int (*line_handler) _PARAMS((int fd, char *buf, int size, void *line_data));
     void *line_data;
 } dwalk_ctrl;
+
+typedef struct _dwrite_q {
+    char *buf;
+    int len;
+    int cur_offset;
+    struct _dwrite_q *next;
+} dwrite_q;
+
+typedef struct _FileEntry {
+    char filename[MAX_FILE_NAME_LEN];
+    enum {
+	NO, YES
+    } at_eof;
+    enum {
+	NOT_OPEN, OPEN
+    } open_stat;
+    enum {
+	NOT_REQUEST, REQUEST
+    } close_request;
+    enum {
+	NOT_PRESENT, PRESENT
+    } write_daemon;
+    enum {
+	UNLOCK, LOCK
+    } write_lock;
+    int access_code;		/* use to verify write lock */
+    enum {
+	NO_WRT_PENDING, WRT_PENDING
+    } write_pending;
+    void (*wrt_handle) ();
+    void *wrt_handle_data;
+    dwrite_q *write_q;
+    dwrite_q *write_q_tail;
+} FileEntry;
 
 /* table for FILE variable, write lock and queue. Indexed by fd. */
 FileEntry *file_table;
@@ -131,7 +178,7 @@ int disk_init()
     for (fd = 0; fd < FD_SETSIZE; fd++) {
 	file_table[fd].filename[0] = '\0';
 	file_table[fd].at_eof = NO;
-	file_table[fd].open_stat = FILE_NOT_OPEN;
+	file_table[fd].open_stat = NOT_OPEN;
 	file_table[fd].close_request = NOT_REQUEST;
 	file_table[fd].write_daemon = NOT_PRESENT;
 	file_table[fd].write_lock = UNLOCK;
@@ -163,7 +210,7 @@ int file_open(path, handler, mode)
     /* init table */
     strncpy(file_table[fd].filename, path, MAX_FILE_NAME_LEN);
     file_table[fd].at_eof = NO;
-    file_table[fd].open_stat = FILE_OPEN;
+    file_table[fd].open_stat = OPEN;
     file_table[fd].close_request = NOT_REQUEST;
     file_table[fd].write_lock = UNLOCK;
     file_table[fd].write_pending = NO_WRT_PENDING;
@@ -191,7 +238,7 @@ int file_update_open(fd, path)
     /* init table */
     strncpy(file_table[fd].filename, path, MAX_FILE_NAME_LEN);
     file_table[fd].at_eof = NO;
-    file_table[fd].open_stat = FILE_OPEN;
+    file_table[fd].open_stat = OPEN;
     file_table[fd].close_request = NOT_REQUEST;
     file_table[fd].write_lock = UNLOCK;
     file_table[fd].write_pending = NO_WRT_PENDING;
@@ -216,19 +263,19 @@ int file_close(fd)
      * close it */
     /* save it for later */
 
-    if (file_table[fd].open_stat == FILE_NOT_OPEN) {
+    if (file_table[fd].open_stat == NOT_OPEN) {
 	debug(6, 3, "file_close: FD %d is not OPEN\n", fd);
     } else if (file_table[fd].write_daemon == PRESENT) {
 	debug(6, 3, "file_close: FD %d has a write daemon PRESENT\n", fd);
     } else if (file_table[fd].write_pending == WRT_PENDING) {
 	debug(6, 3, "file_close: FD %d has a write PENDING\n", fd);
     } else {
-	file_table[fd].open_stat = FILE_NOT_OPEN;
+	file_table[fd].open_stat = NOT_OPEN;
 	file_table[fd].write_lock = UNLOCK;
 	file_table[fd].write_daemon = NOT_PRESENT;
 	file_table[fd].filename[0] = '\0';
 
-	if (fdstatGetType(fd) == FD_SOCKET) {
+	if (fdstat_type(fd) == FD_SOCKET) {
 	    debug(6, 0, "FD %d: Someone called file_close() on a socket\n", fd);
 	    fatal_dump(NULL);
 	}
@@ -400,10 +447,11 @@ int file_write(fd, ptr_to_buf, len, access_code, handle, handle_data)
      void (*handle) ();
      void *handle_data;
 {
-    dwrite_q *wq = NULL;
+    dwrite_q *wq;
 
-    if (file_table[fd].open_stat == FILE_NOT_OPEN)
+    if (file_table[fd].open_stat != OPEN) {
 	return DISK_ERROR;
+    }
     if ((file_table[fd].write_lock == LOCK) &&
 	(file_table[fd].access_code != access_code)) {
 	debug(6, 0, "file write: FD %d access code checked failed.\n", fd);
@@ -431,20 +479,12 @@ int file_write(fd, ptr_to_buf, len, access_code, handle, handle_data)
 	file_table[fd].write_q_tail = wq;
     }
 
-    if (file_table[fd].write_daemon == PRESENT)
-	return DISK_OK;
-    /* got to start write routine for this fd */
-#if USE_ASYNC_IO
-    return aioFileQueueWrite(fd,
-	aioFileWriteComplete,
-	&file_table[fd]);
-#else
-    comm_set_select_handler(fd,
-	COMM_SELECT_WRITE,
-	(PF) diskHandleWrite,
-	(void *) &file_table[fd]);
+    if (file_table[fd].write_daemon == NOT_PRESENT) {
+	/* got to start write routine for this fd */
+	comm_set_select_handler(fd, COMM_SELECT_WRITE, (PF) diskHandleWrite,
+	    (void *) &file_table[fd]);
+    }
     return DISK_OK;
-#endif
 }
 
 
@@ -531,15 +571,12 @@ int file_read(fd, buf, req_len, offset, handler, client_data)
     ctrl_dat->handler = handler;
     ctrl_dat->client_data = client_data;
 
-#if USE_ASYNC_IO
-    return aioFileQueueRead(fd, aioFileReadComplete, ctrl_dat);
-#else
     comm_set_select_handler(fd,
 	COMM_SELECT_READ,
 	(PF) diskHandleRead,
 	(void *) ctrl_dat);
+
     return DISK_OK;
-#endif
 }
 
 
