@@ -1,0 +1,25 @@
+<HTML><HEAD>
+<TITLE>FEL: Beg&auml;rd URL kunde ej h&auml;mtas</TITLE>
+</HEAD><BODY>
+<H1>FEL</H1>
+<H2>Beg&auml;rd URL kunde ej h&auml;mtas</H2>
+<HR>
+<P>
+Vid f&ouml;rs&ouml;ket att h&auml;mta URL:
+<A HREF="%U">%U</A>
+<P>
+Mottogs f&ouml;ljande fel:
+<UL>
+<LI>
+<STRONG>
+Anslutningen Misslyckades
+</STRONG>
+</UL>
+
+<P>
+Systemet returnerade:
+<PRE><I>    %E</I></PRE>
+
+<P>
+Beg&auml;rd v&auml;rd eller n&auml;tverk kan vara nere.  V&auml;nligen f&ouml;rs&ouml;k igen.
+</P>
