@@ -97,7 +97,6 @@ OBJS	 	= \
 		@DELAY_OBJS@ \
 		disk.o \
 		dns.o \
-		dns_internal.o \
 		errorpage.o \
 		ETag.o \
 		event.o \
@@ -152,13 +151,10 @@ OBJS	 	= \
 		String.o \
 		stmem.o \
 		store.o \
-		store_io.o \
-		store_io_ufs.o \
 		store_clean.o \
 		store_client.o \
 		store_digest.o \
 		store_dir.o \
-		store_dir_ufs.o \
 		store_key_md5.o \
 		store_log.o \
 		store_rebuild.o \
@@ -172,7 +168,6 @@ OBJS	 	= \
 		urn.o \
 		useragent.o \
 		wais.o \
-		@WCCP_OBJS@ \
 		whois.o \
 		$(XTRA_OBJS)
 
@@ -190,9 +185,6 @@ ASYNC_OBJS	= \
 
 LEAKFINDER_OBJS	= \
 		leakfinder.o
-
-WCCP_OBJS	= \
-		wccp.o
 
 DEFAULTS        = \
 	-DDEFAULT_CONFIG_FILE=\"$(DEFAULT_CONFIG_FILE)\"
@@ -369,7 +361,6 @@ clean:
 
 distclean:	clean
 	-rm -f Makefile squid.conf squid.conf.pre
-	-rm -f Makefile.in
 
 tags:
 	ctags *.[ch] ../include/*.h ../lib/*.[ch]

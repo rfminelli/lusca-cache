@@ -48,6 +48,9 @@ Thanks!\n"
 static void fatal_common(const char *);
 static void fatalvf(const char *fmt, va_list args);
 static void mail_warranty(void);
+#if USE_ASYNC_IO
+static AIOCB safeunlinkComplete;
+#endif
 #if MEM_GEN_TRACE
 extern void log_trace_done();
 extern void log_trace_init(char *);
@@ -188,7 +191,7 @@ rusage_maxrss(struct rusage *r)
     return r->ru_maxrss;
 #elif defined(BSD4_4)
     return r->ru_maxrss;
-#elif defined(HAVE_GETPAGESIZE) && HAVE_GETPAGESIZE != 0
+#elif HAVE_GETPAGESIZE
     return (r->ru_maxrss * getpagesize()) >> 10;
 #elif defined(PAGESIZE)
     return (r->ru_maxrss * PAGESIZE) >> 10;
@@ -408,46 +411,28 @@ getMyHostname(void)
     LOCAL_ARRAY(char, host, SQUIDHOSTNAMELEN + 1);
     static int present = 0;
     const struct hostent *h = NULL;
-    if (Config.visibleHostname != NULL)
-	return Config.visibleHostname;
-    /*
-     * If tcp_incoming is set then try to get the corresponding hostname
-     */
-    if (!present && Config.Addrs.tcp_incoming.s_addr != INADDR_ANY) {
-	host[0] = '\0';
-	h = gethostbyaddr((char *) &Config.Addrs.tcp_incoming,
-	    sizeof(Config.Addrs.tcp_incoming), AF_INET);
-	if (h != NULL) {
-	    /* DNS lookup successful */
-	    /* use the official name from DNS lookup */
-	    strcpy(host, h->h_name);
-	    debug(50, 4) ("getMyHostname: resolved tcp_incoming_addr to '%s'\n",
-		host);
-	    present = 1;
-	} else {
-	    debug(50, 6) ("getMyHostname: failed to resolve tcp_incoming_addr\n");
-	}
-    }
-    /*
-     * Get the host name and store it in host to return
-     */
+    char *t = NULL;
+
+    if ((t = Config.visibleHostname) != NULL)
+	return t;
+
+    /* Get the host name and store it in host to return */
     if (!present) {
 	host[0] = '\0';
 	if (gethostname(host, SQUIDHOSTNAMELEN) == -1) {
 	    debug(50, 1) ("getMyHostname: gethostname failed: %s\n",
 		xstrerror());
+	    return NULL;
 	} else {
 	    if ((h = gethostbyname(host)) != NULL) {
-		debug(50, 6) ("getMyHostname: '%s' resolved into '%s'\n",
-		    host, h->h_name);
 		/* DNS lookup successful */
 		/* use the official name from DNS lookup */
 		strcpy(host, h->h_name);
 	    }
+	    present = 1;
 	}
-	present = 1;
     }
-    return present ? host : NULL;
+    return host;
 }
 
 const char *
@@ -459,10 +444,30 @@ uniqueHostname(void)
 void
 safeunlink(const char *s, int quiet)
 {
+#if USE_ASYNC_IO
+    aioUnlink(s,
+	quiet ? NULL : safeunlinkComplete,
+	quiet ? NULL : xstrdup(s));
+#else
     Counter.syscalls.disk.unlinks++;
     if (unlink(s) < 0 && !quiet)
 	debug(50, 1) ("safeunlink: Couldn't delete %s: %s\n", s, xstrerror());
+#endif
 }
+
+#if USE_ASYNC_IO
+static void
+safeunlinkComplete(int fd, void *data, int retcode, int errcode)
+{
+    char *s = data;
+    if (retcode < 0) {
+	errno = errcode;
+	debug(50, 1) ("safeunlink: Couldn't delete %s. %s\n", s, xstrerror());
+	errno = 0;
+    }
+    xfree(s);
+}
+#endif
 
 /* leave a privilegied section. (Give up any privilegies)
  * Routines that need privilegies can rap themselves in enter_suid()
@@ -771,7 +776,6 @@ dlinkDelete(dlink_node * m, dlink_list * list)
 	list->head = m->next;
     if (m == list->tail)
 	list->tail = m->prev;
-    m->next = m->prev = NULL;
 }
 
 void
@@ -807,6 +811,8 @@ gb_to_str(const gb_t * g)
     static int call_id = 0;
     double value = gb_to_double(g);
     char *buf = bufs[call_id++];
+    if (call_id >= max_cc_calls)
+	call_id = 0;
     /* select format */
     if (value < 1e9)
 	snprintf(buf, sizeof(GbBuf), "%.2f MB", value / 1e6);

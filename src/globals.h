@@ -92,17 +92,10 @@ extern int opt_store_doublecheck;	/* 0 */
 extern int syslog_enable;	/* 0 */
 extern int theInIcpConnection;	/* -1 */
 extern int theOutIcpConnection;	/* -1 */
-extern int DnsSocket;		/* -1 */
 #ifdef SQUID_SNMP
 extern int theInSnmpConnection;	/* -1 */
 extern int theOutSnmpConnection;	/* -1 */
 extern char *snmp_agentinfo;
-#endif
-#ifdef WCCP
-extern int theInWccpConnection;	/* -1 */
-extern int theOutWccpConnection;	/* -1 */
-extern int theInGreConnection;	/* -1 */
-extern int theOutGreConnection;	/* -1 */
 #endif
 extern int vhost_mode;		/* 0 */
 extern int n_disk_objects;	/* 0 */

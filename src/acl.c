@@ -994,7 +994,6 @@ aclDecodeProxyAuth(const char *proxy_auth, char **user, char **password, char *b
     char *sent_auth;
     char *cleartext;
 
-    debug(28, 6) ("aclDecodeProxyAuth: header = '%s'\n", proxy_auth);
     if (proxy_auth == NULL)
 	return 0;
     if (strlen(proxy_auth) < SKIP_BASIC_SZ)
@@ -1015,7 +1014,7 @@ aclDecodeProxyAuth(const char *proxy_auth, char **user, char **password, char *b
     if ((*password = strchr(*user, ':')) != NULL)
 	*(*password)++ = '\0';
     if (*password == NULL) {
-	debug(28, 1) ("aclDecodeProxyAuth: no password in proxy authorization header '%s'\n", proxy_auth);
+	debug(28, 1) ("aclDecodeProxyAuth: no password in proxy authorization header\n");
 	return 0;
     }
     return 1;
@@ -1353,7 +1352,9 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	return aclMatchRegex(ae->data, checklist->browser);
 	/* NOTREACHED */
     case ACL_PROXY_AUTH:
-	if (!r->flags.accelerated) {
+	if (NULL == r) {
+	    return -1;
+	} else if (!r->flags.accelerated) {
 	    /* Proxy authorization on proxy requests */
 	    header = httpHeaderGetStr(&checklist->request->header,
 		HDR_PROXY_AUTHORIZATION);
@@ -1889,33 +1890,21 @@ aclDomainCompare(const void *data, splayNode * n)
 {
     const char *d1 = data;
     const char *d2 = n->data;
-    int l1;
-    int l2;
-    while ('.' == *d1)
-	d1++;
-    while ('.' == *d2)
-	d2++;
-    l1 = strlen(d1);
-    l2 = strlen(d2);
+    int l1 = strlen(d1);
+    int l2 = strlen(d2);
     while (d1[l1] == d2[l2]) {
 	if ((l1 == 0) && (l2 == 0))
 	    return 0;		/* d1 == d2 */
-	l1--;
-	l2--;
-	if (0 == l1) {
-	    if ('.' == d2[l2 - 1]) {
-		debug(28, 0) ("WARNING: %s is a subdomain of %s\n", d1, d2);
-		debug(28, 0) ("WARNING: This may break Splay tree searching\n");
-		debug(28, 0) ("WARNING: You should remove '%s' from the ACL named '%s'\n", d2, AclMatchedName);
-	    }
+	if (l1-- == 0) {
+	    debug(28, 0) ("WARNING: %s is a subdomain of %s\n", d1, d2);
+	    debug(28, 0) ("WARNING: This may break Splay tree searching\n");
+	    debug(28, 0) ("WARNING: You should remove '%s' from the ACL named '%s'\n", d2, AclMatchedName);
 	    return -1;		/* d1 < d2 */
 	}
-	if (0 == l2) {
-	    if ('.' == d1[l1 - 1]) {
-		debug(28, 0) ("WARNING: %s is a subdomain of %s\n", d2, d1);
-		debug(28, 0) ("WARNING: This may break Splay tree searching\n");
-		debug(28, 0) ("WARNING: You should remove '%s' from the ACL named '%s'\n", d1, AclMatchedName);
-	    }
+	if (l2-- == 0) {
+	    debug(28, 0) ("WARNING: %s is a subdomain of %s\n", d2, d1);
+	    debug(28, 0) ("WARNING: This may break Splay tree searching\n");
+	    debug(28, 0) ("WARNING: You should remove '%s' from the ACL named '%s'\n", d1, AclMatchedName);
 	    return 1;		/* d1 > d2 */
 	}
     }

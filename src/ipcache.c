@@ -50,20 +50,12 @@ static struct {
 static dlink_list lru_list;
 
 static FREE ipcacheFreeEntry;
-#if USE_DNSSERVERS
 static HLPCB ipcacheHandleReply;
-#else
-static IDNSCB ipcacheHandleReply;
-#endif
 static IPH dummy_handler;
 static int ipcacheExpiredEntry(ipcache_entry *);
 static int ipcache_testname(void);
 static ipcache_entry *ipcacheAddNew(const char *, const struct hostent *, ipcache_status_t);
-#if USE_DNSSERVERS
 static ipcache_entry *ipcacheParse(const char *buf);
-#else
-static ipcache_entry *ipcacheParse(rfc1035_rr *, int);
-#endif
 static ipcache_entry *ipcache_create(const char *name);
 static ipcache_entry *ipcache_get(const char *);
 static void ipcacheAddHostent(ipcache_entry *, const struct hostent *);
@@ -263,7 +255,6 @@ ipcache_call_pending(ipcache_entry * i)
 }
 
 static ipcache_entry *
-#if USE_DNSSERVERS
 ipcacheParse(const char *inbuf)
 {
     LOCAL_ARRAY(char, buf, DNS_INBUF_SZ);
@@ -332,69 +323,9 @@ ipcacheParse(const char *inbuf)
     i.addrs.count = (unsigned char) j;
     return &i;
 }
-#else
-ipcacheParse(rfc1035_rr * answers, int nr)
-{
-    static ipcache_entry i;
-    int k;
-    int j;
-    int na = 0;
-    memset(&i, '\0', sizeof(i));
-    i.expires = squid_curtime;
-    i.status = IP_NEGATIVE_CACHED;
-    if (nr < 0) {
-	debug(14, 3) ("ipcacheParse: Lookup failed (error %d)\n",
-	    rfc1035_errno);
-	assert(rfc1035_error_message);
-	i.error_message = xstrdup(rfc1035_error_message);
-	return &i;
-    }
-    if (nr == 0) {
-	debug(14, 3) ("ipcacheParse: No DNS records\n");
-	i.error_message = xstrdup("No DNS records");
-	return &i;
-    }
-    assert(answers);
-    for (j = 0, k = 0; k < nr; k++) {
-	if (answers[k].type != RFC1035_TYPE_A)
-	    continue;
-	if (answers[k].class != RFC1035_CLASS_IN)
-	    continue;
-	na++;
-    }
-    if (na == 0) {
-	debug(14, 1) ("ipcacheParse: No Address records\n");
-	i.error_message = xstrdup("No Address records");
-	return &i;
-    }
-    i.status = IP_CACHED;
-    i.addrs.in_addrs = xcalloc(na, sizeof(struct in_addr));
-    i.addrs.bad_mask = xcalloc(na, sizeof(unsigned char));
-    i.addrs.count = (unsigned char) na;
-    for (j = 0, k = 0; k < nr; k++) {
-	if (answers[k].type != RFC1035_TYPE_A)
-	    continue;
-	if (answers[k].class != RFC1035_CLASS_IN)
-	    continue;
-	if (j == 0)
-	    i.expires = squid_curtime + answers[k].ttl;
-	assert(answers[k].rdlength == 4);
-	xmemcpy(&i.addrs.in_addrs[j++], answers[k].rdata, 4);
-	debug(14, 3) ("ipcacheParse: #%d %s\n",
-	    j - 1,
-	    inet_ntoa(i.addrs.in_addrs[j - 1]));
-    }
-    assert(j == na);
-    return &i;
-}
-#endif
 
 static void
-#if USE_DNSSERVERS
 ipcacheHandleReply(void *data, char *reply)
-#else
-ipcacheHandleReply(void *data, rfc1035_rr * answers, int na)
-#endif
 {
     int n;
     generic_cbdata *c = data;
@@ -406,11 +337,7 @@ ipcacheHandleReply(void *data, rfc1035_rr * answers, int na)
     c = NULL;
     n = ++IpcacheStats.replies;
     statHistCount(&Counter.dns.svc_time, tvSubMsec(i->request_time, current_time));
-#if USE_DNSSERVERS
     x = ipcacheParse(reply);
-#else
-    x = ipcacheParse(answers, na);
-#endif
     assert(x);
     i->status = x->status;
     i->addrs = x->addrs;
@@ -493,11 +420,7 @@ ipcache_nbgethostbyname(const char *name, IPH * handler, void *handlerData)
     cbdataAdd(c, cbdataXfree, 0);
     i->status = IP_DISPATCHED;
     ipcacheLockEntry(i);
-#if USE_DNSSERVERS
     dnsSubmit(i->name, ipcacheHandleReply, c);
-#else
-    idnsALookup(i->name, ipcacheHandleReply, c);
-#endif
 }
 
 /* initialize the ipcache */

@@ -241,7 +241,7 @@ configDoConfigure(void)
     if (Config.Program.redirect) {
 	if (Config.redirectChildren < 1) {
 	    Config.redirectChildren = 0;
-	    wordlistDestroy(&Config.Program.redirect);
+	    safe_free(Config.Program.redirect);
 	} else if (Config.redirectChildren > DefaultRedirectChildrenMax) {
 	    debug(3, 0) ("WARNING: redirect_children was set to a bad value: %d\n",
 		Config.redirectChildren);
@@ -311,7 +311,7 @@ configDoConfigure(void)
     requirePathnameExists("cache_dns_program", Config.Program.dnsserver);
     requirePathnameExists("unlinkd_program", Config.Program.unlinkd);
     if (Config.Program.redirect)
-	requirePathnameExists("redirect_program", Config.Program.redirect->key);
+	requirePathnameExists("redirect_program", Config.Program.redirect);
     if (Config.Program.authenticate)
 	requirePathnameExists("authenticate_program", Config.Program.authenticate->key);
     requirePathnameExists("Icon Directory", Config.icons.directory);
@@ -406,7 +406,7 @@ parseBytesLine(size_t * bptr, const char *units)
 	self_destruct();
     d = atof(token);
     m = u;			/* default to 'units' if none specified */
-    if (0.0 == d)
+    if (0 == d)
 	(void) 0;
     else if ((token = strtok(NULL, w_space)) == NULL)
 	debug(3, 0) ("WARNING: No units on '%s', assuming %f %s\n",
@@ -991,8 +991,6 @@ parse_peer(peer ** head)
 #endif
 	} else if (!strncasecmp(token, "login=", 6)) {
 	    p->login = xstrdup(token + 6);
-	} else if (!strncasecmp(token, "connect-timeout=", 16)) {
-	    p->connect_timeout = atoi(token + 16);
 	} else {
 	    debug(3, 0) ("parse_peer: token='%s'\n", token);
 	    self_destruct();

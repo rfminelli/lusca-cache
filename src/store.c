@@ -49,7 +49,6 @@ const char *pingStatusStr[] =
 {
     "PING_NONE",
     "PING_WAITING",
-    "PING_TIMEOUT",
     "PING_DONE"
 };
 
@@ -62,6 +61,7 @@ const char *storeStatusStr[] =
 const char *swapStatusStr[] =
 {
     "SWAPOUT_NONE",
+    "SWAPOUT_OPENING",
     "SWAPOUT_WRITING",
     "SWAPOUT_DONE"
 };
@@ -97,6 +97,7 @@ static int store_pages_max = 0;
 static int store_swap_high = 0;
 static int store_swap_low = 0;
 static int store_swap_mid = 0;
+static int store_maintain_rate;
 static Stack LateReleaseStack;
 
 static MemObject *
@@ -106,6 +107,7 @@ new_MemObject(const char *url, const char *log_url)
     mem->reply = httpReplyCreate();
     mem->url = xstrdup(url);
     mem->log_url = xstrdup(log_url);
+    mem->swapout.fd = -1;
     mem->object_sz = -1;
     mem->fd = -1;
     /* XXX account log_url */
@@ -133,7 +135,7 @@ destroy_MemObject(StoreEntry * e)
     debug(20, 3) ("destroy_MemObject: destroying %p\n", mem);
     e->mem_obj = NULL;
     if (!shutting_down)
-	assert(mem->swapout.sio == NULL);
+	assert(mem->swapout.fd == -1);
     stmemFree(&mem->data_hdr);
     mem->inmem_hi = 0;
     /* XXX account log_url */
@@ -406,8 +408,14 @@ storeAppend(StoreEntry * e, const char *buf, int len)
     }
     if (EBIT_TEST(e->flags, DELAY_SENDING))
 	return;
+#ifdef OPTIMISTIC_IO
+    storeLockObject(e);
+#endif
     InvokeHandlers(e);
-    storeSwapOut(e);
+    storeCheckSwapOut(e);
+#ifdef OPTIMISTIC_IO
+    storeUnlockObject(e);
+#endif
 }
 
 void
@@ -506,10 +514,6 @@ storeCheckCachable(StoreEntry * e)
 	 * out the object yet.
 	 */
 	return 1;
-#if USE_ASYNC_IO
-    } else if (aio_overloaded()) {
-	debug(20, 2) ("storeCheckCachable: NO: Async-IO overloaded\n");
-#endif
     } else if (storeTooManyDiskFilesOpen()) {
 	debug(20, 2) ("storeCheckCachable: NO: too many disk files open\n");
 	store_check_cachable_hist.no.too_many_open_files++;
@@ -584,9 +588,7 @@ storeComplete(StoreEntry * e)
 	e->mem_obj->request->hier.store_complete_stop = current_time;
 #endif
     InvokeHandlers(e);
-    storeSwapOut(e);
-    if (e->mem_obj->swapout.sio)
-	storeClose(e->mem_obj->swapout.sio);
+    storeCheckSwapOut(e);
 }
 
 /*
@@ -606,6 +608,8 @@ storeAbort(StoreEntry * e)
     storeReleaseRequest(e);
     EBIT_SET(e->flags, ENTRY_ABORTED);
     storeSetMemStatus(e, NOT_IN_MEMORY);
+    /* No DISK swap for negative cached object */
+    e->swap_status = SWAPOUT_NONE;
     e->store_status = STORE_OK;
     /*
      * We assign an object length here.  The only other place we assign
@@ -636,7 +640,9 @@ storeAbort(StoreEntry * e)
 	if (mem->swapout.fd >= 0)
 	    aioCancel(mem->swapout.fd, NULL);
 #endif
-	storeSwapOutFileClose(e);
+	/* we have to close the disk file if there is no write pending */
+	if (!storeSwapOutWriteQueued(mem))
+	    storeSwapOutFileClose(e);
     }
     storeUnlockObject(e);	/* unlock */
 }
@@ -796,7 +802,7 @@ storeRelease(StoreEntry * e)
     }
     storeLog(STORE_LOG_RELEASE, e);
     if (e->swap_file_number > -1) {
-	storeUnlink(e->swap_file_number);
+	storeUnlinkFileno(e->swap_file_number);
 	storeDirMapBitReset(e->swap_file_number);
 	if (e->swap_status == SWAPOUT_DONE)
 	    if (EBIT_TEST(e->flags, ENTRY_VALIDATED))
@@ -836,6 +842,8 @@ static int
 storeEntryLocked(const StoreEntry * e)
 {
     if (e->lock_count)
+	return 1;
+    if (e->swap_status == SWAPOUT_OPENING)
 	return 1;
     if (e->swap_status == SWAPOUT_WRITING)
 	return 1;
@@ -906,7 +914,12 @@ storeInitHashValues(void)
     /* ideally the full scan period should be configurable, for the
      * moment it remains at approximately 24 hours.  */
     store_hash_buckets = storeKeyHashBuckets(i);
-    debug(20, 1) ("Using %d Store buckets\n", store_hash_buckets);
+    store_maintain_rate = 86400 / store_hash_buckets;
+    assert(store_maintain_rate > 0);
+    debug(20, 1) ("Using %d Store buckets, replacement runs every %d second%s\n",
+	store_hash_buckets,
+	store_maintain_rate,
+	store_maintain_rate == 1 ? null_string : "s");
     debug(20, 1) ("Max Mem  size: %d KB\n", Config.memMaxSize >> 10);
     debug(20, 1) ("Max Swap size: %d KB\n", Config.Swap.maxSize);
 }
@@ -920,11 +933,20 @@ storeInit(void)
 	store_hash_buckets, storeKeyHashHash);
     storeDigestInit();
     storeLogOpen();
+    if (storeVerifyCacheDirs() < 0) {
+	xstrncpy(tmp_error_buf,
+	    "\tFailed to verify one of the swap directories, Check cache.log\n"
+	    "\tfor details.  Run 'squid -z' to create swap directories\n"
+	    "\tif needed, or if running Squid for the first time.",
+	    ERROR_BUF_SZ);
+	fatal(tmp_error_buf);
+    }
+    storeDirOpenSwapLogs();
     store_list.head = store_list.tail = NULL;
     inmem_list.head = inmem_list.tail = NULL;
     stackInit(&LateReleaseStack);
     eventAdd("storeLateRelease", storeLateRelease, NULL, 1.0, 1);
-    storeDirInit();
+    storeRebuildStart();
     cachemgrRegister("storedir",
 	"Store Directory Stats",
 	storeDirStats, 0, 1);
@@ -1041,10 +1063,10 @@ storeEntryValidToSend(StoreEntry * e)
 void
 storeTimestampsSet(StoreEntry * entry)
 {
+    time_t served_date = -1;
     const HttpReply *reply = entry->mem_obj->reply;
-    time_t served_date = reply->date;
-    /* make sure that 0 <= served_date <= squid_curtime */
-    if (served_date < 0 || served_date > squid_curtime)
+    served_date = reply->date;
+    if (served_date < 0)
 	served_date = squid_curtime;
     entry->expires = reply->expires;
     entry->lastmod = reply->last_modified;
@@ -1089,6 +1111,8 @@ storeMemObjectDump(MemObject * mem)
 	mem->clients);
     debug(20, 1) ("MemObject->nclients: %d\n",
 	mem->nclients);
+    debug(20, 1) ("MemObject->swapout.fd: %d\n",
+	mem->swapout.fd);
     debug(20, 1) ("MemObject->reply: %p\n",
 	mem->reply);
     debug(20, 1) ("MemObject->request: %p\n",
@@ -1170,7 +1194,18 @@ storeBufferFlush(StoreEntry * e)
 {
     EBIT_CLR(e->flags, DELAY_SENDING);
     InvokeHandlers(e);
-    storeSwapOut(e);
+    storeCheckSwapOut(e);
+}
+
+void
+storeUnlinkFileno(int fileno)
+{
+    debug(20, 5) ("storeUnlinkFileno: %08X\n", fileno);
+#if USE_ASYNC_IO
+    safeunlink(storeSwapFullPath(fileno, NULL), 1);
+#else
+    unlinkdUnlink(storeSwapFullPath(fileno, NULL));
+#endif
 }
 
 int
@@ -1203,7 +1238,7 @@ storeEntryReset(StoreEntry * e)
 {
     MemObject *mem = e->mem_obj;
     debug(20, 3) ("storeEntryReset: %s\n", storeUrl(e));
-    assert(mem->swapout.sio == NULL);
+    assert(mem->swapout.fd == -1);
     stmemFree(&mem->data_hdr);
     mem->inmem_hi = mem->inmem_lo = 0;
     httpReplyDestroy(mem->reply);

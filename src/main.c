@@ -280,9 +280,6 @@ serverConnectionsOpen(void)
 #ifdef SQUID_SNMP
     snmpConnectionOpen();
 #endif
-#ifdef WCCP
-    wccpConnectionOpen();
-#endif
     clientdbInit();
     icmpOpen();
     netdbInit();
@@ -306,9 +303,6 @@ serverConnectionsClose(void)
 #ifdef SQUID_SNMP
     snmpConnectionShutdown();
 #endif
-#ifdef WCCP
-    wccpConnectionShutdown();
-#endif
     asnFreeMemory();
 }
 
@@ -326,11 +320,7 @@ mainReconfigure(void)
 #ifdef SQUID_SNMP
     snmpConnectionClose();
 #endif
-#ifdef WCCP
-    wccpConnectionClose();
-#endif
     dnsShutdown();
-    idnsShutdown();
     redirectShutdown();
     authenticateShutdown();
     storeDirCloseSwapLogs();
@@ -341,7 +331,6 @@ mainReconfigure(void)
     fqdncache_restart();	/* sigh, fqdncache too */
     errorInitialize();		/* reload error pages */
     dnsInit();
-    idnsInit();
     redirectInit();
     authenticateInit();
     serverConnectionsOpen();
@@ -446,7 +435,6 @@ mainInitialize(void)
     ipcache_init();
     fqdncache_init();
     dnsInit();
-    idnsInit();
     redirectInit();
     authenticateInit();
     useragentOpenLog();
@@ -460,9 +448,7 @@ mainInitialize(void)
 #ifdef SQUID_SNMP
     snmpInit();
 #endif
-#ifdef WCCP
-    wccpInit();
-#endif
+
 #if MALLOC_DBG
     malloc_debug(0, malloc_debug_level);
 #endif
@@ -471,7 +457,6 @@ mainInitialize(void)
 	unlinkdInit();
 	urlInitialize();
 	cachemgrInit();
-	eventInit();		/* eventInit() before statInit() */
 	statInit();
 	storeInit();
 	mainSetCwd();
@@ -479,6 +464,7 @@ mainInitialize(void)
 	do_mallinfo = 1;
 	mimeInit(Config.mimeTablePathname);
 	pconnInit();
+	eventInit();
 	refreshInit();
 #if DELAY_POOLS
 	delayPoolsInit();
@@ -509,8 +495,8 @@ mainInitialize(void)
     squid_signal(SIGALRM, time_tick, SA_RESTART);
     alarm(1);
 #endif
-    memCheckInit();
     debug(1, 1) ("Ready to serve requests.\n");
+
     if (!configured_once) {
 	eventAdd("storeMaintain", storeMaintainSwapSpace, NULL, 1.0, 1);
 	eventAdd("storeDirClean", storeDirClean, NULL, 15.0, 1);
@@ -518,10 +504,6 @@ mainInitialize(void)
 	    eventAdd("start_announce", start_announce, NULL, 3600.0, 1);
 	eventAdd("ipcache_purgelru", ipcache_purgelru, NULL, 10.0, 1);
 	eventAdd("fqdncache_purgelru", fqdncache_purgelru, NULL, 15.0, 1);
-#ifdef WCCP
-	if (Config.Wccp.router.s_addr != inet_addr("0.0.0.0"))
-	    eventAdd("wccpHereIam", wccpHereIam, NULL, 10.0, 1);
-#endif
     }
     configured_once = 1;
 }
@@ -634,7 +616,6 @@ main(int argc, char **argv)
 	    shutting_down = 1;
 	    serverConnectionsClose();
 	    dnsShutdown();
-	    idnsShutdown();
 	    redirectShutdown();
 	    authenticateShutdown();
 	    eventAdd("SquidShutdown", SquidShutdown, NULL, (double) (wait + 1), 1);
@@ -724,7 +705,9 @@ watch_child(char *argv[])
 #endif
     for (i = 0; i < Squid_MaxFD; i++)
 	close(i);
+#if NOT_NEEDED
     umask(0);
+#endif
     for (;;) {
 	if ((pid = fork()) == 0) {
 	    /* child */
@@ -786,9 +769,6 @@ SquidShutdown(void *unused)
 #endif
 #ifdef SQUID_SNMP
     snmpConnectionClose();
-#endif
-#ifdef WCCP
-    wccpConnectionClose();
 #endif
     releaseServerSockets();
     commCloseAllSockets();

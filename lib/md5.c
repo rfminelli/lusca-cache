@@ -358,5 +358,4 @@ MD5_memset(char *output, int value, unsigned int len)
     for (i = 0; i < len; i++)
 	output[i] = (char) value;
 }
-
 #endif

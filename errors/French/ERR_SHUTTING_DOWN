@@ -1,17 +1,17 @@
 <HTML><HEAD>
-<TITLE>ERREUR: La requete demandee n'a pu etre trait&eacute;e</TITLE>
+<TITLE>ERROR: The requested URL could not be retrieved</TITLE>
 </HEAD><BODY>
-<H1>ERREUR</H1>
-<H2>La requete demand&eacute;e n'a pu etre trait&eacute;e</H2>
+<H1>ERROR</H1>
+<H2>The requested URL could not be retrieved</H2>
 <HR>
 <P>
-En tentant de r&eacute;soudre l'URL:
+While trying to retrieve the URL:
 <A HREF="%U">%U</A>
 <P>
-L'erreur suivante a &eacute;t&eacute; rencontr&eacute;e:
+The following error was encountered:
 <UL>
 <P>
-La mise hors-service de ce cache est en cours et il est impossible
-de traiter votre requete actuellement. Veuillez
-r&eacute;it&eacute;rer votre requete ult&eacute;rieurement.
+This cache is in the process of shutting down and can not
+service your request at this time.  Please retry your
+request again soon.
 </P>

@@ -55,16 +55,13 @@ static int examine_select(fd_set *, fd_set *);
 #endif
 static int fdIsHttp(int fd);
 static int fdIsIcp(int fd);
-static int fdIsDns(int fd);
 static int commDeferRead(int fd);
 static void checkTimeouts(void);
 static OBJH commIncomingStats;
 #if HAVE_POLL
 static int comm_check_incoming_poll_handlers(int nfds, int *fds);
-static void comm_poll_dns_incoming(void);
 #else
 static int comm_check_incoming_select_handlers(int nfds, int *fds);
-static void comm_select_dns_incoming(void);
 #endif
 
 static struct timeval zero_tv;
@@ -125,13 +122,10 @@ static int nwritefds;
 #define INCOMING_FACTOR 5
 #define MAX_INCOMING_INTERVAL (MAX_INCOMING_INTEGER << INCOMING_FACTOR)
 static int icp_io_events = 0;
-static int dns_io_events = 0;
 static int http_io_events = 0;
 static int incoming_icp_interval = 16 << INCOMING_FACTOR;
-static int incoming_dns_interval = 16 << INCOMING_FACTOR;
 static int incoming_http_interval = 16 << INCOMING_FACTOR;
 #define commCheckICPIncoming (++icp_io_events > (incoming_icp_interval>> INCOMING_FACTOR))
-#define commCheckDNSIncoming (++dns_io_events > (incoming_dns_interval>> INCOMING_FACTOR))
 #define commCheckHTTPIncoming (++http_io_events > (incoming_http_interval>> INCOMING_FACTOR))
 
 static int
@@ -149,14 +143,6 @@ fdIsIcp(int fd)
     if (fd == theInIcpConnection)
 	return 1;
     if (fd == theOutIcpConnection)
-	return 1;
-    return 0;
-}
-
-static int
-fdIsDns(int fd)
-{
-    if (fd == DnsSocket)
 	return 1;
     return 0;
 }
@@ -198,7 +184,7 @@ comm_check_incoming_poll_handlers(int nfds, int *fds)
 	}
     }
     if (!nfds)
-	return -1;
+	return incame;
 #if !ALARM_UPDATES_TIME
     getCurrentTime();
 #endif
@@ -214,16 +200,14 @@ comm_check_incoming_poll_handlers(int nfds, int *fds)
 		fd_table[fd].read_handler = NULL;
 		hdl(fd, &incame);
 	    } else
-		debug(5, 1) ("comm_poll_incoming: FD %d NULL read handler\n",
-		    fd);
+		debug(5, 1) ("comm_poll_incoming: NULL read handler\n");
 	}
 	if (revents & (POLLWRNORM | POLLOUT | POLLHUP | POLLERR)) {
 	    if ((hdl = fd_table[fd].write_handler)) {
 		fd_table[fd].write_handler = NULL;
 		hdl(fd, &incame);
 	    } else
-		debug(5, 1) ("comm_poll_incoming: FD %d NULL write_handler\n",
-		    fd);
+		debug(5, 1) ("comm_poll_incoming: NULL write handler\n");
 	}
     }
     return incame;
@@ -293,7 +277,6 @@ comm_poll(int msec)
     unsigned long nfds;
     int num;
     int callicp = 0, callhttp = 0;
-    int calldns = 0;
     static time_t last_timeout = 0;
     double timeout = current_dtime + (msec / 1000.0);
     double start;
@@ -307,11 +290,9 @@ comm_poll(int msec)
 #endif
 	if (commCheckICPIncoming)
 	    comm_poll_icp_incoming();
-	if (commCheckDNSIncoming)
-	    comm_poll_dns_incoming();
 	if (commCheckHTTPIncoming)
 	    comm_poll_http_incoming();
-	callicp = calldns = callhttp = 0;
+	callicp = callhttp = 0;
 	nfds = 0;
 	maxfd = Biggest_FD + 1;
 	for (i = 0; i < maxfd; i++) {
@@ -369,10 +350,6 @@ comm_poll(int msec)
 		callicp = 1;
 		continue;
 	    }
-	    if (fdIsDns(fd)) {
-		calldns = 1;
-		continue;
-	    }
 	    if (fdIsHttp(fd)) {
 		callhttp = 1;
 		continue;
@@ -387,8 +364,6 @@ comm_poll(int msec)
 		}
 		if (commCheckICPIncoming)
 		    comm_poll_icp_incoming();
-		if (commCheckDNSIncoming)
-		    comm_poll_dns_incoming();
 		if (commCheckHTTPIncoming)
 		    comm_poll_http_incoming();
 	    }
@@ -401,8 +376,6 @@ comm_poll(int msec)
 		}
 		if (commCheckICPIncoming)
 		    comm_poll_icp_incoming();
-		if (commCheckDNSIncoming)
-		    comm_poll_dns_incoming();
 		if (commCheckHTTPIncoming)
 		    comm_poll_http_incoming();
 	    }
@@ -433,8 +406,6 @@ comm_poll(int msec)
 	}
 	if (callicp)
 	    comm_poll_icp_incoming();
-	if (calldns)
-	    comm_poll_dns_incoming();
 	if (callhttp)
 	    comm_poll_http_incoming();
 #if !ALARM_UPDATES_TIME
@@ -442,8 +413,7 @@ comm_poll(int msec)
 	Counter.select_time += (current_dtime - start);
 #endif
 	return COMM_OK;
-    }
-    while (timeout > current_dtime);
+    } while (timeout > current_dtime);
     debug(5, 8) ("comm_poll: time out: %d.\n", squid_curtime);
     return COMM_TIMEOUT;
 }
@@ -476,7 +446,7 @@ comm_check_incoming_select_handlers(int nfds, int *fds)
 	}
     }
     if (maxfd++ == 0)
-	return -1;
+	return incame;
 #if !ALARM_UPDATES_TIME
     getCurrentTime();
 #endif
@@ -491,8 +461,7 @@ comm_check_incoming_select_handlers(int nfds, int *fds)
 		commUpdateReadBits(fd, NULL);
 		hdl(fd, &incame);
 	    } else {
-		debug(5, 1) ("comm_select_incoming: FD %d NULL read handler\n",
-		    fd);
+		debug(5, 1) ("comm_select_incoming: NULL read handler\n");
 	    }
 	}
 	if (FD_ISSET(fd, &write_mask)) {
@@ -501,8 +470,7 @@ comm_check_incoming_select_handlers(int nfds, int *fds)
 		commUpdateWriteBits(fd, NULL);
 		hdl(fd, &incame);
 	    } else {
-		debug(5, 1) ("comm_select_incoming: FD %d NULL write handler\n",
-		    fd);
+		debug(5, 1) ("comm_select_incoming: NULL write handler\n");
 	    }
 	}
     }
@@ -572,7 +540,6 @@ comm_select(int msec)
     int maxfd;
     int num;
     int callicp = 0, callhttp = 0;
-    int calldns = 0;
     int maxindex;
     int k;
     int j;
@@ -594,11 +561,9 @@ comm_select(int msec)
 #endif
 	if (commCheckICPIncoming)
 	    comm_select_icp_incoming();
-	if (commCheckDNSIncoming)
-	    comm_select_dns_incoming();
 	if (commCheckHTTPIncoming)
 	    comm_select_http_incoming();
-	callicp = calldns = callhttp = 0;
+	callicp = callhttp = 0;
 	maxfd = Biggest_FD + 1;
 	xmemcpy(&readfds, &global_readfds,
 	    howmany(maxfd, FD_MASK_BITS) * FD_MASK_BYTES);
@@ -688,10 +653,6 @@ comm_select(int msec)
 		    callicp = 1;
 		    continue;
 		}
-		if (fdIsDns(fd)) {
-		    calldns = 1;
-		    continue;
-		}
 		if (fdIsHttp(fd)) {
 		    callhttp = 1;
 		    continue;
@@ -707,8 +668,6 @@ comm_select(int msec)
 		}
 		if (commCheckICPIncoming)
 		    comm_select_icp_incoming();
-		if (commCheckDNSIncoming)
-		    comm_select_dns_incoming();
 		if (commCheckHTTPIncoming)
 		    comm_select_http_incoming();
 		EBIT_CLR(tmask, k);	/* this bit is done */
@@ -733,10 +692,6 @@ comm_select(int msec)
 		    callicp = 1;
 		    continue;
 		}
-		if (fdIsDns(fd)) {
-		    calldns = 1;
-		    continue;
-		}
 		if (fdIsHttp(fd)) {
 		    callhttp = 1;
 		    continue;
@@ -752,8 +707,6 @@ comm_select(int msec)
 		}
 		if (commCheckICPIncoming)
 		    comm_select_icp_incoming();
-		if (commCheckDNSIncoming)
-		    comm_select_dns_incoming();
 		if (commCheckHTTPIncoming)
 		    comm_select_http_incoming();
 		EBIT_CLR(tmask, k);	/* this bit is done */
@@ -763,48 +716,14 @@ comm_select(int msec)
 	}
 	if (callicp)
 	    comm_select_icp_incoming();
-	if (calldns)
-	    comm_select_dns_incoming();
 	if (callhttp)
 	    comm_select_http_incoming();
 	return COMM_OK;
-    }
-    while (timeout > current_dtime);
+    } while (timeout > current_dtime);
     debug(5, 8) ("comm_select: time out: %d\n", (int) squid_curtime);
     return COMM_TIMEOUT;
 }
 #endif
-
-static void
-#if HAVE_POLL
-comm_poll_dns_incoming(void)
-#else
-comm_select_dns_incoming(void)
-#endif
-{
-    int nfds = 0;
-    int fds[2];
-    int nevents;
-    dns_io_events = 0;
-    if (DnsSocket < 0)
-	return;
-    fds[nfds++] = DnsSocket;
-#if HAVE_POLL
-    nevents = comm_check_incoming_poll_handlers(nfds, fds);
-#else
-    nevents = comm_check_incoming_select_handlers(nfds, fds);
-#endif
-    if (nevents < 0)
-	return;
-    incoming_dns_interval += Config.comm_incoming.dns_average - nevents;
-    if (incoming_dns_interval < Config.comm_incoming.dns_min_poll)
-	incoming_dns_interval = Config.comm_incoming.dns_min_poll;
-    if (incoming_dns_interval > MAX_INCOMING_INTERVAL)
-	incoming_dns_interval = MAX_INCOMING_INTERVAL;
-    if (nevents > INCOMING_DNS_MAX)
-	nevents = INCOMING_DNS_MAX;
-    statHistCount(&Counter.comm_dns_incoming, nevents);
-}
 
 void
 comm_select_init(void)
@@ -920,8 +839,6 @@ commIncomingStats(StoreEntry * sentry)
     StatCounters *f = &Counter;
     storeAppendPrintf(sentry, "Current incoming_icp_interval: %d\n",
 	incoming_icp_interval >> INCOMING_FACTOR);
-    storeAppendPrintf(sentry, "Current incoming_dns_interval: %d\n",
-	incoming_dns_interval >> INCOMING_FACTOR);
     storeAppendPrintf(sentry, "Current incoming_http_interval: %d\n",
 	incoming_http_interval >> INCOMING_FACTOR);
     storeAppendPrintf(sentry, "\n");
@@ -932,12 +849,6 @@ commIncomingStats(StoreEntry * sentry)
     storeAppendPrintf(sentry, "ICP Messages handled per comm_select_icp_incoming() call:\n");
 #endif
     statHistDump(&f->comm_icp_incoming, sentry, statHistIntDumper);
-#ifdef HAVE_POLL
-    storeAppendPrintf(sentry, "DNS Messages handled per comm_poll_dns_incoming() call:\n");
-#else
-    storeAppendPrintf(sentry, "DNS Messages handled per comm_select_dns_incoming() call:\n");
-#endif
-    statHistDump(&f->comm_dns_incoming, sentry, statHistIntDumper);
 #ifdef HAVE_POLL
     storeAppendPrintf(sentry, "HTTP Messages handled per comm_poll_http_incoming() call:\n");
 #else

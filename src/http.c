@@ -374,7 +374,6 @@ httpPconnTransferDone(HttpStateData * httpState)
     /* return 1 if we got the last of the data on a persistent connection */
     MemObject *mem = httpState->entry->mem_obj;
     HttpReply *reply = mem->reply;
-    int clen;
     debug(11, 3) ("httpPconnTransferDone: FD %d\n", httpState->fd);
     /*
      * If we didn't send a keep-alive request header, then this
@@ -398,21 +397,40 @@ httpPconnTransferDone(HttpStateData * httpState)
 	return 0;
     debug(11, 5) ("httpPconnTransferDone: content_length=%d\n",
 	reply->content_length);
-    /* If we haven't seen the end of reply headers, we are not done */
+    /*
+     * Deal with gross HTTP stuff
+     *    - If we haven't seen the end of the reply headers, we can't
+     *      be persistent.
+     *    - For HEAD requests we're done.
+     *    - For "200 OK" check the content-length in the next block.
+     *    - For "204 No Content" (even with content-length) we're done.
+     *    - For "304 Not Modified" (even with content-length) we're done.
+     *    - 1XX replies never have a body; we're done.
+     *    - For all other replies, check content length in next block.
+     */
     if (httpState->reply_hdr_state < 2)
 	return 0;
-    clen = httpReplyBodySize(httpState->request->method, reply);
-    /* If there is no message body, we can be persistent */
-    if (0 == clen)
+    else if (httpState->request->method == METHOD_HEAD)
 	return 1;
-    /* If the body size is unknown we must wait for EOF */
-    if (clen < 0)
+    else if (reply->sline.status == HTTP_OK)
+	(void) 0;		/* common case, continue */
+    else if (reply->sline.status == HTTP_NO_CONTENT)
+	return 1;
+    else if (reply->sline.status == HTTP_NOT_MODIFIED)
+	return 1;
+    else if (reply->sline.status < HTTP_OK)
+	return 1;
+    /*
+     * If there is no content-length, then we can't be
+     * persistent.  If there is a content length, then we must
+     * wait until we've seen the end of the body.
+     */
+    if (reply->content_length < 0)
 	return 0;
-    /* If the body size is known, we must wait until we've gotten all of it.  */
-    if (mem->inmem_hi < reply->content_length + reply->hdr_sz)
+    else if (mem->inmem_hi < reply->content_length + reply->hdr_sz)
 	return 0;
-    /* We got it all */
-    return 1;
+    else
+	return 1;
 }
 
 /* This will be called when data is ready to be read from fd.  Read until

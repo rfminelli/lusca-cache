@@ -124,58 +124,45 @@ if test -z "$PRESET_LDFLAGS"; then
     fi
 fi
 
+if test "x$ac_cv_enabled_dlmalloc" = "x"; then
+    case "$host" in
+	i386-*-solaris2.*)
+		echo "Enabling dlmalloc for $host"
+		ac_cv_enabled_dlmalloc="yes"
+		;;
+    esac
+fi
 
 dnl Enable optional modules
 AC_ARG_ENABLE(dlmalloc,
 [  --enable-dlmalloc[=LIB] Compile & use the malloc package by Doug Lea],
 [
+ if test "x$ac_cv_enabled_dlmalloc" = "xyes"; then
+   # Ok. dlmalloc was enabled before, but state may be changed.
+   # we have to test these again
+   unset ac_cv_func_mallinfo
+   unset ac_cv_func_mallocblksize
+   unset ac_cv_func_free
+   unset ac_cv_func_realloc
+   unset ac_cv_func_memalign
+   unset ac_cv_func_valloc
+   unset ac_cv_func_pvalloc
+   unset ac_cv_func_calloc
+   unset ac_cv_func_cfree
+   unset ac_cv_func_malloc_trim
+   unset ac_cv_func_malloc_usable_size
+   unset ac_cv_func_malloc_stats
+   unset ac_cv_func_mallinfo
+   unset ac_cv_func_mallopt
+   unset ac_cv_lib_gnumalloc
+   unset ac_cv_header_gnumalloc_h
+   unset ac_cv_lib_malloc
+   unset ac_cv_enabled_dlmalloc
+ fi
  case "$enableval" in
  'yes')
-    use_dlmalloc="yes"
     LIBDLMALLOC="libdlmalloc.a"
     LIB_MALLOC="-L../lib -ldlmalloc"
-    echo "dlmalloc enabled"
-    ;;
- 'no')
-    use_dlmalloc="no"
-    echo "dlmalloc disabled"
-    ;;
- *) use_dlmalloc="yes"
-    LIB_MALLOC="$enableval"
-    echo "dlmalloc enabled with $LIB_MALLOC"
- esac
-])
-if test "${use_dlmalloc-unset}" = unset; then
-    case "$host" in
-	i386-*-solaris2.*)
-		echo "Enabling dlmalloc for $host"
-		use_dlmalloc="yes"
-		;;
-    esac
-fi
-if test "x$ac_cv_enabled_dlmalloc" = "xyes"; then
-    # Ok. dlmalloc was enabled before, but state may be changed.
-    # we have to test these again
-    unset ac_cv_func_mallinfo
-    unset ac_cv_func_mallocblksize
-    unset ac_cv_func_free
-    unset ac_cv_func_realloc
-    unset ac_cv_func_memalign
-    unset ac_cv_func_valloc
-    unset ac_cv_func_pvalloc
-    unset ac_cv_func_calloc
-    unset ac_cv_func_cfree
-    unset ac_cv_func_malloc_trim
-    unset ac_cv_func_malloc_usable_size
-    unset ac_cv_func_malloc_stats
-    unset ac_cv_func_mallinfo
-    unset ac_cv_func_mallopt
-    unset ac_cv_lib_gnumalloc
-    unset ac_cv_header_gnumalloc_h
-    unset ac_cv_lib_malloc
-    unset ac_cv_enabled_dlmalloc
-fi
-if test "$use_dlmalloc" = yes; then
     ac_cv_func_mallinfo="yes"
     ac_cv_func_mallocblksize="no"
     ac_cv_func_free="yes"
@@ -194,8 +181,60 @@ if test "$use_dlmalloc" = yes; then
     ac_cv_header_gnumalloc_h="no"
     ac_cv_lib_malloc="no"
     ac_cv_enabled_dlmalloc="yes"
-fi
-
+    echo "dlmalloc build enabled"
+    ;;
+ 'no')
+    # Disabled explicitly.
+    echo "dlmalloc disabled."
+    ;;
+ *)
+    # Use already installed dlmalloc library.
+    LIB_MALLOC="${enableval}"
+    ac_cv_func_mallinfo="yes"
+    ac_cv_func_mallocblksize="no"
+    ac_cv_func_free="yes"
+    ac_cv_func_realloc="yes"
+    ac_cv_func_memalign="yes"
+    ac_cv_func_valloc="yes"
+    ac_cv_func_pvalloc="yes"
+    ac_cv_func_calloc="yes"
+    ac_cv_func_cfree="yes"
+    ac_cv_func_malloc_trim="yes"
+    ac_cv_func_malloc_usable_size="yes"
+    ac_cv_func_malloc_stats="yes"
+    ac_cv_func_mallinfo="yes"
+    ac_cv_func_mallopt="yes"
+    ac_cv_lib_gnumalloc="no"
+    ac_cv_header_gnumalloc_h="no"
+    ac_cv_lib_malloc="no"
+    ac_cv_enabled_dlmalloc="yes"
+    echo "Use installed dlmalloc."
+    ;;
+ esac
+ ],[
+ if test "x$ac_cv_enabled_dlmalloc" = "xyes"; then
+   # Ok. dlmalloc was enabled before, but now disabled.
+   # we have to test these again
+   unset ac_cv_func_mallinfo
+   unset ac_cv_func_mallocblksize
+   unset ac_cv_func_free
+   unset ac_cv_func_realloc
+   unset ac_cv_func_memalign
+   unset ac_cv_func_valloc
+   unset ac_cv_func_pvalloc
+   unset ac_cv_func_calloc
+   unset ac_cv_func_cfree
+   unset ac_cv_func_malloc_trim
+   unset ac_cv_func_malloc_usable_size
+   unset ac_cv_func_malloc_stats
+   unset ac_cv_func_mallinfo
+   unset ac_cv_func_mallopt
+   unset ac_cv_lib_gnumalloc
+   unset ac_cv_header_gnumalloc_h
+   unset ac_cv_lib_malloc
+   unset ac_cv_enabled_dlmalloc
+ fi
+ ])
 AC_SUBST(LIBDLMALLOC)
 AC_SUBST(LIB_MALLOC)
 
@@ -294,16 +333,6 @@ AC_ARG_ENABLE(useragent_log,
     AC_DEFINE(USE_USERAGENT_LOG)
   fi
 ])
-
-AC_ARG_ENABLE(wccp,  
-[  --enable-wccp       Enable Web Cache Coordination Protocol],
-[ if test "$enableval" = "yes" ; then
-    echo "Web Cache Coordination Protocol enabled"
-    WCCP_OBJS='$(WCCP_OBJS)'
-    AC_DEFINE(WCCP)
-  fi
-])      
-AC_SUBST(WCCP_OBJS)
 
 AC_ARG_ENABLE(kill_parent_hack,
 [  --enable-kill-parent-hack
@@ -870,6 +899,7 @@ dnl Check for library functions
 AC_CHECK_FUNCS(\
 	bcopy \
 	crypt \
+	drand48 \
 	fchmod \
 	getdtablesize \
 	getpagesize \
@@ -903,6 +933,7 @@ AC_CHECK_FUNCS(\
 	srandom \
 	sysconf \
 	syslog \
+	tempnam \
 	timegm \
 	vsnprintf \
 )
@@ -1038,7 +1069,8 @@ main() {
      * Number of fds is virtually unlimited in cygwin (sys/param.h)
      */
     i = NOFILE;
-#elif HAVE_SETRLIMIT
+#else
+#if HAVE_SETRLIMIT
     struct rlimit rl;
 #if defined(RLIMIT_NOFILE)
     if (getrlimit(RLIMIT_NOFILE, &rl) < 0) {
@@ -1060,19 +1092,27 @@ main() {
     }
 #endif /* RLIMIT_NOFILE */
 #endif /* HAVE_SETRLIMIT */
-	/* by starting at 2^14, we will never get higher
-	than 2^15 for SQUID_MAXFD */
-        i = j = 1<<14;
-        while (j) {
-                j >>= 1;
-                if (dup2(0, i) < 0) { 
-                        i -= j;
-                } else {
-                        close(i);
-                        i += j;
-                }
-        }
-        i++;
+#if defined(__linux__) && HAVE_GETRLIMIT && defined(RLIMIT_NOFILE)
+	if (getrlimit(RLIMIT_NOFILE, &rl) < 0) {
+		perror("getrlimit: RLIMIT_NOFILE");
+	}
+	i = rl.rlim_cur;
+#elif HAVE_SYSCONF && defined(_SC_OPEN_MAX)
+        i = sysconf(_SC_OPEN_MAX);
+#elif HAVE_GETDTABLESIZE && !defined(__linux__)
+        i = getdtablesize();
+#elif defined(OPEN_MAX)
+        i = OPEN_MAX;
+#elif defined(NOFILE)
+        i = NOFILE;
+#elif defined(_NFILE)
+        i = _NFILE;
+#else
+	while((j=open("/dev/null", 0)) > 0) i=j;
+        close(i); close(i-1);
+	i++;
+#endif
+#endif /* __CYGWIN32__ */
 	fp = fopen("conftestval", "w");
 	fprintf (fp, "%d\n", i);
 	exit(0);
@@ -1359,7 +1399,5 @@ AC_OUTPUT(\
 	./errors/Makefile \
 	./auth_modules/dummy \
 	./auth_modules/NCSA/Makefile \
-	./auth_modules/PAM/Makefile \
-	./auth_modules/SMB/Makefile
 	./auth_modules/getpwnam/Makefile \
 )

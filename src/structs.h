@@ -240,7 +240,6 @@ struct _SquidConfig {
 	time_t read;
 	time_t lifetime;
 	time_t connect;
-	time_t peer_connect;
 	time_t request;
 	time_t pconn;
 	time_t siteSelect;
@@ -251,9 +250,7 @@ struct _SquidConfig {
 	time_t ident;
 #endif
     } Timeout;
-    size_t maxRequestHeaderSize;
-    size_t maxRequestBodySize;
-    size_t maxReplyBodySize;
+    size_t maxRequestSize;
     struct {
 	ushortlist *http;
 	u_short icp;
@@ -271,11 +268,6 @@ struct _SquidConfig {
 	u_short localPort;
     } Snmp;
 #endif
-#if WCCP
-    struct {
-	struct in_addr router;
-    } Wccp;
-#endif
     char *as_whois_server;
     struct {
 	char *log;
@@ -290,7 +282,7 @@ struct _SquidConfig {
     char *effectiveGroup;
     struct {
 	char *dnsserver;
-	wordlist *redirect;
+	char *redirect;
 	wordlist *authenticate;
 	char *pinger;
 	char *unlinkd;
@@ -325,10 +317,6 @@ struct _SquidConfig {
 #if SQUID_SNMP
 	struct in_addr snmp_incoming;
 	struct in_addr snmp_outgoing;
-#endif
-#if WCCP
-	struct in_addr wccp_incoming;
-	struct in_addr wccp_outgoing;
 #endif
 	struct in_addr client_netmask;
     } Addrs;
@@ -436,10 +424,8 @@ struct _SquidConfig {
 #endif
     struct {
 	int icp_average;
-	int dns_average;
 	int http_average;
 	int icp_min_poll;
-	int dns_min_poll;
 	int http_min_poll;
     } comm_incoming;
     int max_open_disk_fds;
@@ -532,6 +518,9 @@ struct _fde {
 	unsigned int nonblocking:1;
 	unsigned int ipc:1;
 	unsigned int called_connect:1;
+#ifdef OPTIMISTIC_IO
+	unsigned int calling_io_handler:1;
+#endif
     } flags;
     int bytes_read;
     int bytes_written;
@@ -1071,7 +1060,6 @@ struct _peer {
     } carp;
 #endif
     char *login;		/* Proxy authorization */
-    time_t connect_timeout;
 };
 
 struct _net_db_name {
@@ -1195,7 +1183,7 @@ struct _store_client {
     STCB *callback;
     void *callback_data;
     StoreEntry *entry;		/* ptr to the parent StoreEntry, argh! */
-    storeIOState *swapin_sio;
+    int swapin_fd;
     struct {
 	unsigned int disk_io_pending:1;
 	unsigned int store_copying:1;
@@ -1219,8 +1207,9 @@ struct _MemObject {
     int nclients;
     struct {
 	off_t queue_offset;	/* relative to in-mem data */
-	storeIOState *sio;
-	FREE *free_write_buf;
+	off_t done_offset;	/* relative to swap file with meta headers! */
+	int fd;
+	void *ctrl;
     } swapout;
     HttpReply *reply;
     request_t *request;
@@ -1251,7 +1240,7 @@ struct _StoreEntry {
     size_t swap_file_sz;
     u_short refcount;
     u_short flags;
-    sfileno swap_file_number;
+    int swap_file_number;
     dlink_node lru;
     u_short lock_count;		/* Assume < 65536! */
     mem_status_t mem_status:3;
@@ -1294,32 +1283,6 @@ struct _request_flags {
 #endif
     unsigned int accelerated:1;
     unsigned int internal:1;
-};
-
-struct _storeIOState {
-    int fd;
-    sfileno swap_file_number;
-    mode_t mode;
-    size_t st_size;		/* do stat(2) after read open */
-    off_t offset;		/* current offset pointer */
-    STIOCB *callback;
-    void *callback_data;
-    struct {
-	STRCB *callback;
-	void *callback_data;
-    } read;
-    struct {
-	unsigned int closing:1;	/* debugging aid */
-    } flags;
-    union {
-	struct {
-	    struct {
-		unsigned int close_request:1;
-		unsigned int reading:1;
-		unsigned int writing:1;
-	    } flags;
-	} ufs;
-    } type;
 };
 
 struct _request_t {
@@ -1499,7 +1462,6 @@ struct _StatCounters {
     double cputime;
     struct timeval timestamp;
     StatHist comm_icp_incoming;
-    StatHist comm_dns_incoming;
     StatHist comm_http_incoming;
     StatHist select_fds_hist;
     struct {
@@ -1557,7 +1519,7 @@ struct _tlv {
 
 struct _storeSwapLogData {
     char op;
-    sfileno swap_file_number;
+    int swap_file_number;
     time_t timestamp;
     time_t lastref;
     time_t expires;

@@ -224,19 +224,15 @@ fwdConnectStart(void *data)
     FwdServer *fs = fwdState->servers;
     const char *host;
     unsigned short port;
-    time_t ctimeout;
     assert(fs);
     assert(fwdState->server_fd == -1);
     debug(17, 3) ("fwdConnectStart: %s\n", url);
     if (fs->peer) {
 	host = fs->peer->host;
 	port = fs->peer->http_port;
-	ctimeout = fs->peer->connect_timeout > 0 ? fs->peer->connect_timeout
-	    : Config.Timeout.peer_connect;
     } else {
 	host = fwdState->request->host;
 	port = fwdState->request->port;
-	ctimeout = Config.Timeout.connect;
     }
     hierarchyNote(&fwdState->request->hier, fs->code, host);
     if ((fd = pconnPop(host, port)) >= 0) {
@@ -266,7 +262,7 @@ fwdConnectStart(void *data)
     fwdState->n_tries++;
     comm_add_close_handler(fd, fwdServerClosed, fwdState);
     commSetTimeout(fd,
-	ctimeout,
+	Config.Timeout.connect,
 	fwdConnectTimeout,
 	fwdState);
     commConnectStart(fd, host, port, fwdConnectDone, fwdState);
@@ -462,10 +458,12 @@ fwdCheckDeferRead(int fd, void *data)
     if (mem == NULL)
 	return 0;
 #if DELAY_POOLS
-    if (fd > -1)
-	if (!delayIsNoDelay(fd))
-	    if (delayMostBytesWanted(mem, 1) == 0)
-		return 1;
+    if (fd < 0)
+	(void) 0;
+    else if (delayIsNoDelay(fd))
+	(void) 0;
+    else if (delayMostBytesWanted(mem, 1) == 0)
+	return 1;
 #endif
     if (EBIT_TEST(e->flags, ENTRY_FWD_HDR_WAIT))
 	return 0;

@@ -85,7 +85,6 @@ typedef enum {
     ERR_FTP_FORBIDDEN,
     ERR_FTP_UNAVAILABLE,
     ERR_ONLY_IF_CACHED_MISS,	/* failure to satisfy only-if-cached request */
-    ERR_TOO_BIG,
     ERR_MAX
 } err_type;
 
@@ -312,9 +311,9 @@ typedef enum {
     ICP_DATAEND,
     ICP_SECHO,
     ICP_DECHO,
-    ICP_NOTIFY,
-    ICP_INVALIDATE,
-    ICP_DELETE,
+    ICP_UNUSED12,
+    ICP_UNUSED13,
+    ICP_UNUSED14,
     ICP_UNUSED15,
     ICP_UNUSED16,
     ICP_UNUSED17,
@@ -335,7 +334,6 @@ enum {
 enum {
     PING_NONE,
     PING_WAITING,
-    PING_TIMEOUT,
     PING_DONE
 };
 
@@ -346,6 +344,7 @@ enum {
 
 enum {
     SWAPOUT_NONE,
+    SWAPOUT_OPENING,
     SWAPOUT_WRITING,
     SWAPOUT_DONE
 };
@@ -556,9 +555,6 @@ typedef enum {
     MEM_SWAPDIR,
     MEM_USHORTLIST,
     MEM_WORDLIST,
-    MEM_STORE_IO,
-    MEM_IDNS_QUERY,
-    MEM_EVENT,
     MEM_MAX
 } mem_type;
 
