@@ -203,6 +203,7 @@ static void httpProcessReplyHeader(data, buf, size)
 	    if (!BIT_TEST(entry->flag, ENTRY_PRIVATE))
 		storeSetPublicKey(entry);
 	    break;
+	case 304:		/* Not Modified -- just in case */
 	case 401:		/* Unauthorized */
 	case 407:		/* Proxy Authentication Required */
 	    /* These should never be cached at all */
