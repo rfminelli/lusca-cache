@@ -77,6 +77,7 @@ static const HttpHeaderFieldAttrs HeadersAttrs[] =
     {"Cache-Control", HDR_CACHE_CONTROL, ftPCc},
     {"Connection", HDR_CONNECTION, ftStr},
     {"Content-Base", HDR_CONTENT_BASE, ftStr},
+    {"Content-Disposition", HDR_CONTENT_DISPOSITION, ftStr},
     {"Content-Encoding", HDR_CONTENT_ENCODING, ftStr},
     {"Content-Language", HDR_CONTENT_LANGUAGE, ftStr},
     {"Content-Length", HDR_CONTENT_LENGTH, ftInt},
@@ -178,9 +179,10 @@ static http_hdr_type GeneralHeadersArr[] =
 /* entity-headers */
 static http_hdr_type EntityHeadersArr[] =
 {
-    HDR_ALLOW, HDR_CONTENT_BASE, HDR_CONTENT_ENCODING, HDR_CONTENT_LANGUAGE,
-    HDR_CONTENT_LENGTH, HDR_CONTENT_LOCATION, HDR_CONTENT_MD5,
-    HDR_CONTENT_RANGE, HDR_CONTENT_TYPE, HDR_ETAG, HDR_EXPIRES, HDR_LAST_MODIFIED, HDR_LINK,
+    HDR_ALLOW, HDR_CONTENT_BASE, HDR_CONTENT_DISPOSITION,
+    HDR_CONTENT_ENCODING, HDR_CONTENT_LANGUAGE, HDR_CONTENT_LENGTH,
+    HDR_CONTENT_LOCATION, HDR_CONTENT_MD5, HDR_CONTENT_RANGE,
+    HDR_CONTENT_TYPE, HDR_ETAG, HDR_EXPIRES, HDR_LAST_MODIFIED, HDR_LINK,
     HDR_OTHER
 };
 
@@ -229,7 +231,7 @@ static int HeaderEntryParsedCount = 0;
  * local routines
  */
 
-#define assert_eid(id) assert((id) >= 0 && (id) < HDR_ENUM_END)
+#define assert_eid(id) assert((id) < HDR_ENUM_END)
 
 static HttpHeaderEntry *httpHeaderEntryCreate(http_hdr_type id, const char *name, const char *value);
 static void httpHeaderEntryDestroy(HttpHeaderEntry * e);
@@ -325,17 +327,28 @@ httpHeaderClean(HttpHeader * hdr)
     assert(hdr->owner > hoNone && hdr->owner <= hoReply);
     debug(55, 7) ("cleaning hdr: %p owner: %d\n", hdr, hdr->owner);
 
-    statHistCount(&HttpHeaderStats[hdr->owner].hdrUCountDistr, hdr->entries.count);
+    /*
+     * An unfortunate bug.  The hdr->entries array is initialized
+     * such that count is set to zero.  httpHeaderClean() seems to
+     * be called both when 'hdr' is created, and destroyed.  Thus,
+     * we accumulate a large number of zero counts for 'hdr' before
+     * it is ever used.  Can't think of a good way to fix it, except
+     * adding a state variable that indicates whether or not 'hdr'
+     * has been used.  As a hack, just never count zero-sized header
+     * arrays.
+     */
+    if (0 != hdr->entries.count)
+	statHistCount(&HttpHeaderStats[hdr->owner].hdrUCountDistr, hdr->entries.count);
     HttpHeaderStats[hdr->owner].destroyedCount++;
     HttpHeaderStats[hdr->owner].busyDestroyedCount += hdr->entries.count > 0;
     while ((e = httpHeaderGetEntry(hdr, &pos))) {
 	/* tmp hack to try to avoid coredumps */
-	if (e->id < 0 || e->id >= HDR_ENUM_END) {
+	if (e->id >= HDR_ENUM_END) {
 	    debug(55, 0) ("httpHeaderClean BUG: entry[%d] is invalid (%d). Ignored.\n",
 		(int) pos, e->id);
 	} else {
 	    statHistCount(&HttpHeaderStats[hdr->owner].fieldTypeDistr, e->id);
-	    /* yes, this destroy() leaves us in an incosistent state */
+	    /* yes, this destroy() leaves us in an inconsistent state */
 	    httpHeaderEntryDestroy(e);
 	}
     }
@@ -380,7 +393,7 @@ httpHeaderUpdate(HttpHeader * old, const HttpHeader * fresh, const HttpHeaderMas
 int
 httpHeaderReset(HttpHeader * hdr)
 {
-    http_hdr_owner_type ho;
+    http_hdr_owner_type ho = hdr->owner;
     assert(hdr);
     ho = hdr->owner;
     httpHeaderClean(hdr);
@@ -538,7 +551,7 @@ httpHeaderDelById(HttpHeader * hdr, http_hdr_type id)
     debug(55, 8) ("%p del-by-id %d\n", hdr, id);
     assert(hdr);
     assert_eid(id);
-    assert_eid(id != HDR_OTHER);	/* does not make sense */
+    assert(id != HDR_OTHER);	/* does not make sense */
     if (!CBIT_TEST(hdr->mask, id))
 	return 0;
     while ((e = httpHeaderGetEntry(hdr, &pos))) {
@@ -663,7 +676,9 @@ httpHeaderGetByName(const HttpHeader * hdr, const char *name)
 }
 
 /*
- * Returns a the value of the specified list member, if any.
+ * returns a pointer to a specified entry if any 
+ * note that we return one entry so it does not make much sense to ask for
+ * "list" headers
  */
 String
 httpHeaderGetByNameListMember(const HttpHeader * hdr, const char *name, const char *member, const char separator)
@@ -703,7 +718,7 @@ httpHeaderGetListMember(const HttpHeader * hdr, http_hdr_type id, const char *me
     int mlen = strlen(member);
 
     assert(hdr);
-    assert(id >= 0);
+    assert_eid(id);
 
     header = httpHeaderGetStrOrList(hdr, id);
 
@@ -1230,5 +1245,5 @@ httpHeaderNameById(int id)
     if (!Headers)
 	Headers = httpHeaderBuildFieldsInfo(HeadersAttrs, HDR_ENUM_END);
     assert(id >= 0 && id < HDR_ENUM_END);
-    return HeadersAttrs[id].name;
+    return strBuf(Headers[id].name);
 }

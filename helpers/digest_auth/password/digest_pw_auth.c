@@ -12,7 +12,7 @@
  * - empty or blank lines are possible;
  * - file format is username:password
  * 
- * To build a directory integrated backend, you need to be able to
+ * To build a directory integrated backend, you need to be able to 
  * calculate the HA1 returned to squid. To avoid storing a plaintext
  * password you can calculate MD5(username:realm:password) when the
  * user changes their password, and store the tuple username:realm:HA1.

@@ -121,7 +121,6 @@ new_MemObject(const char *url, const char *log_url)
 #endif
     mem->log_url = xstrdup(log_url);
     mem->object_sz = -1;
-    mem->fd = -1;
     /* XXX account log_url */
     debug(20, 3) ("new_MemObject: returning %p\n", mem);
     return mem;
@@ -155,11 +154,13 @@ destroy_MemObject(StoreEntry * e)
 	assert(mem->swapout.sio == NULL);
     stmemFree(&mem->data_hdr);
     mem->inmem_hi = 0;
+#if 0
     /*
      * There is no way to abort FD-less clients, so they might
-     * still have mem->clients set if mem->fd == -1
+     * still have mem->clients set.
      */
-    assert(mem->fd == -1 || mem->clients.head == NULL);
+    assert(mem->clients.head == NULL);
+#endif
     httpReplyDestroy(mem->reply);
     requestUnlink(mem->request);
     mem->request = NULL;
@@ -316,12 +317,8 @@ storeUnlockObject(StoreEntry * e)
 StoreEntry *
 storeGet(const cache_key * key)
 {
-    void *p;
-    PROF_start(storeGet);
     debug(20, 3) ("storeGet: looking up %s\n", storeKeyText(key));
-    p = hash_lookup(store_table, key);
-    PROF_stop(storeGet);
-    return (StoreEntry *) p;
+    return (StoreEntry *) hash_lookup(store_table, key);
 }
 
 StoreEntry *
@@ -446,6 +443,7 @@ storeSetPublicKey(StoreEntry * e)
 	    }
 #endif
 	    storeSetPublicKey(pe);
+	    storeBuffer(pe);
 	    httpReplySwapOut(pe->mem_obj->reply, pe);
 	    storeBufferFlush(pe);
 	    storeTimestampsSet(pe);
@@ -622,15 +620,15 @@ storeCheckCachable(StoreEntry * e)
 	store_check_cachable_hist.no.non_get++;
     } else
 #endif
-    if (!EBIT_TEST(e->flags, ENTRY_CACHABLE)) {
-	debug(20, 2) ("storeCheckCachable: NO: not cachable\n");
-	store_check_cachable_hist.no.not_entry_cachable++;
+    if (e->store_status == STORE_OK && EBIT_TEST(e->flags, ENTRY_BAD_LENGTH)) {
+	debug(20, 2) ("storeCheckCachable: NO: wrong content-length\n");
+	store_check_cachable_hist.no.wrong_content_length++;
     } else if (EBIT_TEST(e->flags, RELEASE_REQUEST)) {
 	debug(20, 2) ("storeCheckCachable: NO: release requested\n");
 	store_check_cachable_hist.no.release_request++;
-    } else if (e->store_status == STORE_OK && EBIT_TEST(e->flags, ENTRY_BAD_LENGTH)) {
-	debug(20, 2) ("storeCheckCachable: NO: wrong content-length\n");
-	store_check_cachable_hist.no.wrong_content_length++;
+    } else if (!EBIT_TEST(e->flags, ENTRY_CACHABLE)) {
+	debug(20, 2) ("storeCheckCachable: NO: not cachable\n");
+	store_check_cachable_hist.no.not_entry_cachable++;
     } else if (EBIT_TEST(e->flags, ENTRY_NEGCACHED)) {
 	debug(20, 3) ("storeCheckCachable: NO: negative cached\n");
 	store_check_cachable_hist.no.negative_cached++;
@@ -825,7 +823,6 @@ storeMaintainSwapSpace(void *datanotused)
     SwapDir *SD;
     static time_t last_warn_time = 0;
 
-    PROF_start(storeMaintainSwapSpace);
     /* walk each fs */
     for (i = 0; i < Config.cacheSwap.n_configured; i++) {
 	/* call the maintain function .. */
@@ -845,7 +842,6 @@ storeMaintainSwapSpace(void *datanotused)
     }
     /* Reregister a maintain event .. */
     eventAdd("MaintainSwapSpace", storeMaintainSwapSpace, NULL, 1.0, 1);
-    PROF_stop(storeMaintainSwapSpace);
 }
 
 
@@ -853,7 +849,6 @@ storeMaintainSwapSpace(void *datanotused)
 void
 storeRelease(StoreEntry * e)
 {
-    PROF_start(storeRelease);
     debug(20, 3) ("storeRelease: Releasing: '%s'\n", storeKeyText(e->hash.key));
     /* If, for any reason we can't discard this object because of an
      * outstanding request, mark it for pending release */
@@ -861,7 +856,6 @@ storeRelease(StoreEntry * e)
 	storeExpireNow(e);
 	debug(20, 3) ("storeRelease: Only setting RELEASE_REQUEST bit\n");
 	storeReleaseRequest(e);
-	PROF_stop(storeRelease);
 	return;
     }
     if (store_dirs_rebuilding && e->swap_filen > -1) {
@@ -878,7 +872,6 @@ storeRelease(StoreEntry * e)
 	    e->lock_count++;
 	    EBIT_SET(e->flags, RELEASE_REQUEST);
 	    stackPush(&LateReleaseStack, e);
-	    PROF_stop(storeRelease);
 	    return;
 	} else {
 	    destroy_StoreEntry(e);
@@ -899,7 +892,6 @@ storeRelease(StoreEntry * e)
     }
     storeSetMemStatus(e, NOT_IN_MEMORY);
     destroy_StoreEntry(e);
-    PROF_stop(storeRelease);
 }
 
 static void
@@ -993,16 +985,16 @@ storeInitHashValues(void)
     long int i;
     /* Calculate size of hash table (maximum currently 64k buckets).  */
     i = Config.Swap.maxSize / Config.Store.avgObjectSize;
-    debug(20, 1) ("Swap maxSize %ld KB, estimated %ld objects\n",
-	(long int) Config.Swap.maxSize, i);
+    debug(20, 1) ("Swap maxSize %lu KB, estimated %ld objects\n",
+	(unsigned long int) Config.Swap.maxSize, i);
     i /= Config.Store.objectsPerBucket;
     debug(20, 1) ("Target number of buckets: %ld\n", i);
     /* ideally the full scan period should be configurable, for the
      * moment it remains at approximately 24 hours.  */
     store_hash_buckets = storeKeyHashBuckets(i);
     debug(20, 1) ("Using %d Store buckets\n", store_hash_buckets);
-    debug(20, 1) ("Max Mem  size: %ld KB\n", (long int) Config.memMaxSize >> 10);
-    debug(20, 1) ("Max Swap size: %ld KB\n", (long int) Config.Swap.maxSize);
+    debug(20, 1) ("Max Mem  size: %lu KB\n", (unsigned long int) (Config.memMaxSize >> 10));
+    debug(20, 1) ("Max Swap size: %lu KB\n", (unsigned long int) Config.Swap.maxSize);
 }
 
 void
@@ -1049,18 +1041,6 @@ storeKeepInMemory(const StoreEntry * e)
     if (mem->data_hdr.head == NULL)
 	return 0;
     return mem->inmem_lo == 0;
-}
-
-int
-storeCheckNegativeHit(StoreEntry * e)
-{
-    if (!EBIT_TEST(e->flags, ENTRY_NEGCACHED))
-	return 0;
-    if (e->expires <= squid_curtime)
-	return 0;
-    if (e->store_status != STORE_OK)
-	return 0;
-    return 1;
 }
 
 void
