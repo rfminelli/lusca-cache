@@ -193,7 +193,12 @@ passReadClient(int fd, void *data)
 	}
     } else if (len == 0) {
 	/* Connection closed; retrieval done. */
+#if DONT
+	/*
+	 * client-side might be shutdown()
+	 */
 	passClose(passState);
+#endif
     } else {
 	passState->client.offset = 0;
 	passState->client.len = len;
