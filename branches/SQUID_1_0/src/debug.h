@@ -19,8 +19,8 @@ void _db_print();
 /* always define debug, but DEBUG not define set the db_level to 0 */
 
 #define debug \
-	if ((_db_file = __FILE__) && \
-	    (_db_line = __LINE__)) \
+	if (((_db_file = __FILE__)) && \
+	    ((_db_line = __LINE__))) \
         _db_print
 
 #define safe_free(x)	if (x) { xxfree(x); x = NULL; }

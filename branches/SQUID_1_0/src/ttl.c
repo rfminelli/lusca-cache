@@ -50,15 +50,13 @@ void ttlAddToList(pattern, abs_ttl, pct_age, age_max)
     pct_age = pct_age < 0 ? 0 : pct_age > 100 ? 100 : pct_age;
     age_max = age_max < 0 ? 0 : age_max;
 
-    t = (ttl_t *) xmalloc(sizeof(ttl_t));
-    memset((char *) t, '\0', sizeof(ttl_t));
-
+    t = xcalloc(1, sizeof(ttl_t));
     t->pattern = (char *) xstrdup(pattern);
     t->compiled_pattern = comp;
     t->abs_ttl = abs_ttl;
     t->pct_age = pct_age;
     t->age_max = age_max;
-    t->next = (ttl_t *) NULL;
+    t->next = NULL;
 
     if (!TTL_tbl)
 	TTL_tbl = t;
@@ -145,7 +143,7 @@ time_t ttlSet(entry)
     else if (!strncmp(entry->url, "gopher:", 7))
 	default_ttl = getGopherTTL();
 
-    match = (ttl_t *) NULL;
+    match = NULL;
     for (t = TTL_tbl; t; t = t->next) {
 	if (regexec(&(t->compiled_pattern), entry->url, 0, 0, 0) == 0) {
 	    match = t;
