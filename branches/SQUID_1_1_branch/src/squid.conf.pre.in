@@ -325,6 +325,10 @@ cache_stoplist cgi-bin ?
 
 #  TAG: no_cache
 #
+#	NOTE: To use this feature you must define NO_CACHE_ACL when
+#	compiling.  You may set this option near the top of
+#	src/Makefile.
+#
 #	Use ACL elements to specify uncachable objects.  For example,
 #	this prevents caching of objects downloaded from servers whose
 #	IP addresses are in the 192.172.226.0 network:
