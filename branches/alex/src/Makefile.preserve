@@ -1,0 +1,1836 @@
+# Generated automatically from Makefile.in by configure.
+#
+#  Makefile for the Squid Object Cache server
+#
+#  $Id$
+#
+#  Uncomment and customize the following to suit your needs:
+#
+
+prefix		= /local/squid-1.2
+exec_prefix	= ${prefix}
+top_srcdir	= ..
+bindir		= ${exec_prefix}/bin
+libexecdir      = ${bindir}
+sysconfdir	= ${prefix}/etc
+localstatedir   = ${prefix}
+srcdir		= .
+
+DEFAULT_CONFIG_FILE     = $(sysconfdir)/squid.conf
+DEFAULT_MIME_TABLE	= $(sysconfdir)/mime.conf
+DEFAULT_DNSSERVER       = $(libexecdir)/dnsserver
+DEFAULT_CACHE_LOG       = $(localstatedir)/logs/cache.log
+DEFAULT_ACCESS_LOG      = $(localstatedir)/logs/access.log
+DEFAULT_STORE_LOG       = $(localstatedir)/logs/store.log
+DEFAULT_PID_FILE        = $(localstatedir)/logs/squid.pid
+DEFAULT_SWAP_DIR        = $(localstatedir)/cache
+DEFAULT_PINGER		= $(libexecdir)/pinger
+DEFAULT_UNLINKD		= $(libexecdir)/unlinkd
+DEFAULT_ICON_DIR	= $(sysconfdir)/icons
+DEFAULT_ERROR_DIR	= $(sysconfdir)/errors
+DEFAULT_MIB_PATH	= $(sysconfdir)/mib.txt
+
+CC		= gcc
+MAKEDEPEND	= /usr/bin/X11/makedepend
+INSTALL		= /local/gnu/bin/ginstall -c
+INSTALL_BIN 	= ${INSTALL}
+INSTALL_FILE 	= ${INSTALL} -m 644
+INSTALL_SUID	= ${INSTALL} -o root -m 4755
+RANLIB		= ranlib
+LN_S		= ln -s
+PERL            = /local/bin/perl
+CRYPTLIB	= -lcrypt
+REGEXLIB	= 
+PTHREADLIB	= 
+SNMPLIB		= 
+AC_CFLAGS	= -g -O2 -Wall
+LDFLAGS		= -g
+XTRA_LIBS	= -lm  -lmalloc
+XTRA_OBJS 	= 
+MV		= /usr/bin/mv
+RM		= /usr/bin/rm
+SHELL		= /bin/sh
+
+
+INCLUDE		= -I. -I../include -I$(srcdir)/../include
+CFLAGS 		= $(AC_CFLAGS) $(INCLUDE) $(DEFINES)
+SQUID_LIBS	= -L../lib $(CRYPTLIB) $(REGEXLIB)  \
+		  $(SNMPLIB) -lmiscutil $(XTRA_LIBS)
+CLIENT_LIBS	= -L../lib -lmiscutil $(XTRA_LIBS)
+DNSSERVER_LIBS	= -L../lib -lmiscutil $(XTRA_LIBS)
+PINGER_LIBS	= -L../lib -lmiscutil $(XTRA_LIBS)
+
+PROGS           = squid client
+UTILS           = dnsserver unlinkd
+SUID_UTILS	= pinger
+CGIPROGS	= cachemgr.cgi
+
+# deleted for now:
+# errorpage.o
+# ftp.o
+# gopher.o
+# store.o
+
+# removed for good:
+# http.o
+# pass.o
+
+OBJS	 	= \
+		access_log.o \
+		acl.o \
+		asn.o \
+		 \
+		cache_cf.o \
+		cbdata.o \
+		client_db.o \
+		client_side.o \
+		comm.o \
+		debug.o \
+		disk.o \
+		dns.o \
+		event.o \
+		fd.o \
+		fdstat.o \
+		filemap.o \
+		fqdncache.o \
+		 \
+		globals.o \
+		 \
+		hash.o \
+		 \
+		http-anon.o \
+		icmp.o \
+		icp_v2.o \
+		icp_v3.o \
+		ident.o \
+		ipcache.o \
+		main.o \
+		mem.o \
+		mime.o \
+		multicast.o \
+		neighbors.o \
+		net_db.o \
+		objcache.o \
+		 \
+		pconn.o \
+		peer_select.o \
+		proto.o \
+		redirect.o \
+		refresh.o \
+		send-announce.o \
+		ssl.o \
+		stat.o \
+		stmem.o \
+		 \
+		store_clean.o \
+		store_dir.o \
+		store_key_url.o \
+		string_arrays.o \
+		tools.o \
+		unlinkd.o \
+		url.o \
+		urn.o \
+		useragent.o \
+		wais.o \
+		HttpHeader.o IOBuffer.o HttpConn.o HttpRequest.o HttpReply.o cache_engine.o \
+		$(XTRA_OBJS)
+
+#	stack.o
+
+SNMP_OBJS	= \
+		snmp.o \
+                snmp_vars.o \
+                snmp_agent.o \
+                snmp_config.o 
+
+ASYNC_OBJS	= \
+		aiops.o \
+		async_io.o
+
+DEFAULTS        = \
+	-DDEFAULT_CONFIG_FILE=\"$(DEFAULT_CONFIG_FILE)\"
+
+all:    squid.conf $(PROGS) $(UTILS) $(SUID_UTILS) $(CGIPROGS)
+
+$(OBJS): ../include/version.h
+
+squid:	$(OBJS)
+	$(CC) -o $@ $(LDFLAGS) $(OBJS) $(SQUID_LIBS)
+
+globals.o: globals.c Makefile
+	$(CC) -c $< $(CFLAGS) $(DEFAULTS)
+
+globals.c: globals.h mk-globals-c.pl
+	$(PERL) mk-globals-c.pl < globals.h > $@
+
+string_arrays.c: enums.h mk-string-arrays.pl
+	$(PERL) mk-string-arrays.pl < enums.h > $@
+
+client:	client.o
+	$(CC) -o $@ $(LDFLAGS) $@.o $(CLIENT_LIBS)
+
+dnsserver: dnsserver.o
+	$(CC) -o $@ $(LDFLAGS) $@.o $(DNSSERVER_LIBS)
+
+cachemgr.cgi:	cachemgr.o
+	$(CC) -o $@ $(LDFLAGS) cachemgr.o $(CLIENT_LIBS)
+
+pinger: pinger.o
+	$(CC) -o $@ $(LDFLAGS) pinger.o debug.o globals.o $(PINGER_LIBS)
+
+unlinkd: unlinkd.c
+	$(CC) $(CFLAGS) -DUNLINK_DAEMON $(srcdir)/unlinkd.c -o $@ $(LDFLAGS)
+
+cache_cf.o: cf_parser.c
+
+squid.conf cf_parser.c: cf.data cf_gen
+	./cf_gen cf.data
+
+cf_gen: cf_gen.o
+	$(CC) -o $@ cf_gen.o
+
+cf.data: cf.data.pre Makefile
+	sed "\
+	s%@DEFAULT_MIME_TABLE@%$(DEFAULT_MIME_TABLE)%g;\
+	s%@DEFAULT_DNSSERVER@%$(DEFAULT_DNSSERVER)%g;\
+	s%@DEFAULT_UNLINKD@%$(DEFAULT_UNLINKD)%g;\
+	s%@DEFAULT_PINGER@%$(DEFAULT_PINGER)%g;\
+	s%@DEFAULT_CACHE_LOG@%$(DEFAULT_CACHE_LOG)%g;\
+	s%@DEFAULT_ACCESS_LOG@%$(DEFAULT_ACCESS_LOG)%g;\
+	s%@DEFAULT_STORE_LOG@%$(DEFAULT_STORE_LOG)%g;\
+	s%@DEFAULT_PID_FILE@%$(DEFAULT_PID_FILE)%g;\
+	s%@DEFAULT_SWAP_DIR@%$(DEFAULT_SWAP_DIR)%g;\
+	s%@DEFAULT_ICON_DIR@%$(DEFAULT_ICON_DIR)%g;\
+        s%@DEFAULT_MIB_PATH@%$(DEFAULT_MIB_PATH)%g;\
+	s%@DEFAULT_ERROR_DIR@%$(DEFAULT_ERROR_DIR)%g" < cf.data.pre >$@
+
+install-mkdirs:
+	-@if test ! -d $(prefix); then \
+		echo "mkdir $(prefix)"; \
+		mkdir $(prefix); \
+	fi
+	-@if test ! -d $(exec_prefix); then \
+		echo "mkdir $(exec_prefix)"; \
+		mkdir $(exec_prefix); \
+	fi
+	-@if test ! -d $(bindir); then \
+		echo "mkdir $(bindir)"; \
+		mkdir $(bindir); \
+	fi
+	-@if test ! -d $(libexecdir); then \
+		echo "mkdir $(libexecdir)"; \
+		mkdir $(libexecdir); \
+	fi
+	-@if test ! -d $(sysconfdir); then \
+		echo "mkdir $(sysconfdir)"; \
+		mkdir $(sysconfdir); \
+	fi
+	-@if test ! -d $(localstatedir); then \
+		echo "mkdir $(localstatedir)"; \
+		mkdir $(localstatedir); \
+	fi
+	-@if test ! -d $(localstatedir)/logs; then \
+		echo "mkdir $(localstatedir)/logs"; \
+		mkdir $(localstatedir)/logs; \
+	fi
+
+# Michael Lupp <mike@nemesis.saar.de> wants to know about additions
+# to the install target.
+install: all install-mkdirs
+	@for f in $(PROGS); do \
+		if test -f $(bindir)/$$f; then \
+			echo $(MV) $(bindir)/$$f $(bindir)/-$$f; \
+			$(MV) $(bindir)/$$f $(bindir)/-$$f; \
+		fi; \
+		echo $(INSTALL_BIN) $$f $(bindir); \
+		$(INSTALL_BIN) $$f $(bindir); \
+		if test -f $(bindir)/-$$f; then \
+			echo $(RM) -f $(bindir)/-$$f; \
+			$(RM) -f $(bindir)/-$$f; \
+		fi; \
+	done
+	@for f in $(UTILS); do \
+		if test -f $(libexecdir)/$$f; then \
+			echo $(MV) $(libexecdir)/$$f $(libexecdir)/-$$f; \
+			$(MV) $(libexecdir)/$$f $(libexecdir)/-$$f; \
+		fi; \
+		echo $(INSTALL_BIN) $$f $(libexecdir); \
+		$(INSTALL_BIN) $$f $(libexecdir); \
+		if test -f $(libexecdir)/-$$f; then \
+			echo $(RM) -f $(libexecdir)/-$$f; \
+			$(RM) -f $(libexecdir)/-$$f; \
+		fi; \
+	done
+	@for f in $(CGIPROGS); do \
+		if test -f $(libexecdir)/$$f; then \
+			echo $(MV) $(libexecdir)/$$f $(libexecdir)/-$$f; \
+			$(MV) $(libexecdir)/$$f $(libexecdir)/-$$f; \
+		fi; \
+		echo $(INSTALL_BIN) $$f $(libexecdir); \
+		$(INSTALL_BIN) $$f $(libexecdir); \
+		if test -f $(libexecdir)/-$$f; then \
+			echo $(RM) -f $(libexecdir)/-$$f; \
+			$(RM) -f $(libexecdir)/-$$f; \
+		fi; \
+	done
+	$(INSTALL_FILE) mib.txt $(DEFAULT_MIB_PATH)
+	$(INSTALL_FILE) squid.conf $(sysconfdir)/squid.conf.default
+	@if test -f $(sysconfdir)/squid.conf ; then \
+		echo "$@ will not overwrite existing $(sysconfdir)/squid.conf" ; \
+	else \
+		echo "$(INSTALL_FILE) squid.conf $(sysconfdir)"; \
+		$(INSTALL_FILE) squid.conf $(sysconfdir); \
+	fi
+
+	$(INSTALL_FILE) mime.conf $(sysconfdir)/mime.conf.default
+	@if test -f $(sysconfdir)/mime.conf ; then \
+		echo "$@ will not overwrite existing $(sysconfdir)/mime.conf" ; \
+	else \
+		echo "$(INSTALL_FILE) mime.conf $(sysconfdir)"; \
+		$(INSTALL_FILE) mime.conf $(sysconfdir); \
+	fi
+
+install-pinger:
+	@f=pinger; \
+	if test -f $(libexecdir)/$$f; then \
+		echo $(MV) $(libexecdir)/$$f $(libexecdir)/-$$f; \
+		$(MV) $(libexecdir)/$$f $(libexecdir)/-$$f; \
+	fi; \
+	echo $(INSTALL_SUID) $$f $(libexecdir); \
+	$(INSTALL_SUID) $$f $(libexecdir) || exit 1; \
+	if test -f $(libexecdir)/-$$f; then \
+		echo $(RM) -f $(libexecdir)/-$$f; \
+		$(RM) -f $(libexecdir)/-$$f; \
+	fi
+
+clean: 
+	-rm -rf *.o *pure_* core $(PROGS) $(UTILS) $(CGIPROGS) $(SUID_UTILS)
+	-rm -f cf_gen cf_parser.c cf.data globals.c string_arrays.c
+
+distclean:	clean
+	-rm -f Makefile squid.conf squid.conf.pre
+
+tags:
+	ctags *.[ch] ../include/*.h ../lib/*.[ch]
+
+depend:
+	$(MAKEDEPEND) -I../include -I. -fMakefile *.c
+# DO NOT DELETE
+
+HttpHeader.o: squid.h ../include/config.h ../include/autoconf.h
+HttpHeader.o: ../include/version.h /usr/include/unistd.h
+HttpHeader.o: /usr/include/standards.h /usr/include/stdlib.h
+HttpHeader.o: /usr/include/sgidefs.h /usr/include/stdio.h
+HttpHeader.o: /usr/include/sys/types.h /usr/include/ctype.h
+HttpHeader.o: /usr/include/errno.h /usr/include/sys/errno.h
+HttpHeader.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h
+HttpHeader.o: /usr/include/grp.h /usr/include/malloc.h /usr/include/memory.h
+HttpHeader.o: /usr/include/netdb.h /usr/include/pwd.h /usr/include/signal.h
+HttpHeader.o: /usr/include/sys/signal.h /usr/include/time.h
+HttpHeader.o: /usr/include/sys/param.h /usr/include/sys/time.h
+HttpHeader.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+HttpHeader.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+HttpHeader.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+HttpHeader.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+HttpHeader.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+HttpHeader.o: /usr/include/sys/syscall.h /usr/include/string.h
+HttpHeader.o: /usr/include/strings.h /usr/include/bstring.h
+HttpHeader.o: /usr/include/crypt.h /usr/include/getopt.h
+HttpHeader.o: /usr/include/assert.h /usr/include/stdarg.h
+HttpHeader.o: /usr/include/syslog.h /usr/include/sys/syslog.h
+HttpHeader.o: /usr/include/math.h /usr/include/regex.h defines.h enums.h
+HttpHeader.o: typedefs.h structs.h protos.h globals.h ../include/util.h
+HttpHeader.o: ../include/radix.h ../include/snprintf.h ../include/MemPool.h
+HttpHeader.o: ../include/Stack.h HttpHeader.h
+access_log.o: squid.h ../include/config.h ../include/autoconf.h
+access_log.o: ../include/version.h /usr/include/unistd.h
+access_log.o: /usr/include/standards.h /usr/include/stdlib.h
+access_log.o: /usr/include/sgidefs.h /usr/include/stdio.h
+access_log.o: /usr/include/sys/types.h /usr/include/ctype.h
+access_log.o: /usr/include/errno.h /usr/include/sys/errno.h
+access_log.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h
+access_log.o: /usr/include/grp.h /usr/include/malloc.h /usr/include/memory.h
+access_log.o: /usr/include/netdb.h /usr/include/pwd.h /usr/include/signal.h
+access_log.o: /usr/include/sys/signal.h /usr/include/time.h
+access_log.o: /usr/include/sys/param.h /usr/include/sys/time.h
+access_log.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+access_log.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+access_log.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+access_log.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+access_log.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+access_log.o: /usr/include/sys/syscall.h /usr/include/string.h
+access_log.o: /usr/include/strings.h /usr/include/bstring.h
+access_log.o: /usr/include/crypt.h /usr/include/getopt.h
+access_log.o: /usr/include/assert.h /usr/include/stdarg.h
+access_log.o: /usr/include/syslog.h /usr/include/sys/syslog.h
+access_log.o: /usr/include/math.h /usr/include/regex.h defines.h enums.h
+access_log.o: typedefs.h structs.h protos.h globals.h ../include/util.h
+access_log.o: ../include/radix.h ../include/snprintf.h
+acl.o: squid.h ../include/config.h ../include/autoconf.h ../include/version.h
+acl.o: /usr/include/unistd.h /usr/include/standards.h /usr/include/stdlib.h
+acl.o: /usr/include/sgidefs.h /usr/include/stdio.h /usr/include/sys/types.h
+acl.o: /usr/include/ctype.h /usr/include/errno.h /usr/include/sys/errno.h
+acl.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/grp.h
+acl.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+acl.o: /usr/include/pwd.h /usr/include/signal.h /usr/include/sys/signal.h
+acl.o: /usr/include/time.h /usr/include/sys/param.h /usr/include/sys/time.h
+acl.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+acl.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+acl.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+acl.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h /usr/include/sys/un.h
+acl.o: /usr/include/sys/wait.h /usr/include/sys/syscall.h
+acl.o: /usr/include/string.h /usr/include/strings.h /usr/include/bstring.h
+acl.o: /usr/include/crypt.h /usr/include/getopt.h /usr/include/assert.h
+acl.o: /usr/include/stdarg.h /usr/include/syslog.h /usr/include/sys/syslog.h
+acl.o: /usr/include/math.h /usr/include/regex.h defines.h enums.h typedefs.h
+acl.o: structs.h protos.h globals.h ../include/util.h ../include/radix.h
+acl.o: ../include/snprintf.h
+aiops.o: squid.h ../include/config.h ../include/autoconf.h
+aiops.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+aiops.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+aiops.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+aiops.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+aiops.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+aiops.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+aiops.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+aiops.o: /usr/include/sys/param.h /usr/include/sys/time.h
+aiops.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+aiops.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+aiops.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+aiops.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+aiops.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+aiops.o: /usr/include/sys/syscall.h /usr/include/string.h
+aiops.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+aiops.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+aiops.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+aiops.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h protos.h
+aiops.o: globals.h ../include/util.h ../include/radix.h ../include/snprintf.h
+aiops.o: /usr/include/dirent.h /usr/include/sys/dirent.h
+asn.o: squid.h ../include/config.h ../include/autoconf.h ../include/version.h
+asn.o: /usr/include/unistd.h /usr/include/standards.h /usr/include/stdlib.h
+asn.o: /usr/include/sgidefs.h /usr/include/stdio.h /usr/include/sys/types.h
+asn.o: /usr/include/ctype.h /usr/include/errno.h /usr/include/sys/errno.h
+asn.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/grp.h
+asn.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+asn.o: /usr/include/pwd.h /usr/include/signal.h /usr/include/sys/signal.h
+asn.o: /usr/include/time.h /usr/include/sys/param.h /usr/include/sys/time.h
+asn.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+asn.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+asn.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+asn.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h /usr/include/sys/un.h
+asn.o: /usr/include/sys/wait.h /usr/include/sys/syscall.h
+asn.o: /usr/include/string.h /usr/include/strings.h /usr/include/bstring.h
+asn.o: /usr/include/crypt.h /usr/include/getopt.h /usr/include/assert.h
+asn.o: /usr/include/stdarg.h /usr/include/syslog.h /usr/include/sys/syslog.h
+asn.o: /usr/include/math.h /usr/include/regex.h defines.h enums.h typedefs.h
+asn.o: structs.h protos.h globals.h ../include/util.h ../include/radix.h
+asn.o: ../include/snprintf.h
+async_io.o: squid.h ../include/config.h ../include/autoconf.h
+async_io.o: ../include/version.h /usr/include/unistd.h
+async_io.o: /usr/include/standards.h /usr/include/stdlib.h
+async_io.o: /usr/include/sgidefs.h /usr/include/stdio.h
+async_io.o: /usr/include/sys/types.h /usr/include/ctype.h
+async_io.o: /usr/include/errno.h /usr/include/sys/errno.h
+async_io.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/grp.h
+async_io.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+async_io.o: /usr/include/pwd.h /usr/include/signal.h
+async_io.o: /usr/include/sys/signal.h /usr/include/time.h
+async_io.o: /usr/include/sys/param.h /usr/include/sys/time.h
+async_io.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+async_io.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+async_io.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+async_io.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+async_io.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+async_io.o: /usr/include/sys/syscall.h /usr/include/string.h
+async_io.o: /usr/include/strings.h /usr/include/bstring.h
+async_io.o: /usr/include/crypt.h /usr/include/getopt.h /usr/include/assert.h
+async_io.o: /usr/include/stdarg.h /usr/include/syslog.h
+async_io.o: /usr/include/sys/syslog.h /usr/include/math.h
+async_io.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h
+async_io.o: protos.h globals.h ../include/util.h ../include/radix.h
+async_io.o: ../include/snprintf.h
+cache_cf.o: squid.h ../include/config.h ../include/autoconf.h
+cache_cf.o: ../include/version.h /usr/include/unistd.h
+cache_cf.o: /usr/include/standards.h /usr/include/stdlib.h
+cache_cf.o: /usr/include/sgidefs.h /usr/include/stdio.h
+cache_cf.o: /usr/include/sys/types.h /usr/include/ctype.h
+cache_cf.o: /usr/include/errno.h /usr/include/sys/errno.h
+cache_cf.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/grp.h
+cache_cf.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+cache_cf.o: /usr/include/pwd.h /usr/include/signal.h
+cache_cf.o: /usr/include/sys/signal.h /usr/include/time.h
+cache_cf.o: /usr/include/sys/param.h /usr/include/sys/time.h
+cache_cf.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+cache_cf.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+cache_cf.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+cache_cf.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+cache_cf.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+cache_cf.o: /usr/include/sys/syscall.h /usr/include/string.h
+cache_cf.o: /usr/include/strings.h /usr/include/bstring.h
+cache_cf.o: /usr/include/crypt.h /usr/include/getopt.h /usr/include/assert.h
+cache_cf.o: /usr/include/stdarg.h /usr/include/syslog.h
+cache_cf.o: /usr/include/sys/syslog.h /usr/include/math.h
+cache_cf.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h
+cache_cf.o: protos.h globals.h ../include/util.h ../include/radix.h
+cache_cf.o: ../include/snprintf.h cf_parser.c
+cachemgr.o: ../include/config.h ../include/autoconf.h ../include/version.h
+cachemgr.o: /usr/include/unistd.h /usr/include/standards.h
+cachemgr.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+cachemgr.o: /usr/include/sys/types.h /usr/include/ctype.h
+cachemgr.o: /usr/include/errno.h /usr/include/sys/errno.h
+cachemgr.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/grp.h
+cachemgr.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+cachemgr.o: /usr/include/pwd.h /usr/include/signal.h
+cachemgr.o: /usr/include/sys/signal.h /usr/include/time.h
+cachemgr.o: /usr/include/sys/param.h /usr/include/sys/time.h
+cachemgr.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+cachemgr.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+cachemgr.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+cachemgr.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+cachemgr.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+cachemgr.o: /usr/include/string.h /usr/include/strings.h
+cachemgr.o: /usr/include/bstring.h /usr/include/crypt.h ../include/util.h
+cachemgr.o: ../include/snprintf.h /usr/include/stdarg.h
+cbdata.o: squid.h ../include/config.h ../include/autoconf.h
+cbdata.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+cbdata.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+cbdata.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+cbdata.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+cbdata.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+cbdata.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+cbdata.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+cbdata.o: /usr/include/sys/param.h /usr/include/sys/time.h
+cbdata.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+cbdata.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+cbdata.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+cbdata.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+cbdata.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+cbdata.o: /usr/include/sys/syscall.h /usr/include/string.h
+cbdata.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+cbdata.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+cbdata.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+cbdata.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h
+cbdata.o: protos.h globals.h ../include/util.h ../include/radix.h
+cbdata.o: ../include/snprintf.h
+cf_gen.o: ../include/config.h ../include/autoconf.h ../include/version.h
+cf_gen.o: /usr/include/stdio.h /usr/include/standards.h
+cf_gen.o: /usr/include/sgidefs.h /usr/include/string.h /usr/include/stdlib.h
+cf_gen.o: /usr/include/ctype.h /usr/include/assert.h
+client.o: squid.h ../include/config.h ../include/autoconf.h
+client.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+client.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+client.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+client.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+client.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+client.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+client.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+client.o: /usr/include/sys/param.h /usr/include/sys/time.h
+client.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+client.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+client.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+client.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+client.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+client.o: /usr/include/sys/syscall.h /usr/include/string.h
+client.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+client.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+client.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+client.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h
+client.o: protos.h globals.h ../include/util.h ../include/radix.h
+client.o: ../include/snprintf.h
+client_db.o: squid.h ../include/config.h ../include/autoconf.h
+client_db.o: ../include/version.h /usr/include/unistd.h
+client_db.o: /usr/include/standards.h /usr/include/stdlib.h
+client_db.o: /usr/include/sgidefs.h /usr/include/stdio.h
+client_db.o: /usr/include/sys/types.h /usr/include/ctype.h
+client_db.o: /usr/include/errno.h /usr/include/sys/errno.h
+client_db.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/grp.h
+client_db.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+client_db.o: /usr/include/pwd.h /usr/include/signal.h
+client_db.o: /usr/include/sys/signal.h /usr/include/time.h
+client_db.o: /usr/include/sys/param.h /usr/include/sys/time.h
+client_db.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+client_db.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+client_db.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+client_db.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+client_db.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+client_db.o: /usr/include/sys/syscall.h /usr/include/string.h
+client_db.o: /usr/include/strings.h /usr/include/bstring.h
+client_db.o: /usr/include/crypt.h /usr/include/getopt.h /usr/include/assert.h
+client_db.o: /usr/include/stdarg.h /usr/include/syslog.h
+client_db.o: /usr/include/sys/syslog.h /usr/include/math.h
+client_db.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h
+client_db.o: protos.h globals.h ../include/util.h ../include/radix.h
+client_db.o: ../include/snprintf.h
+client_side.o: squid.h ../include/config.h ../include/autoconf.h
+client_side.o: ../include/version.h /usr/include/unistd.h
+client_side.o: /usr/include/standards.h /usr/include/stdlib.h
+client_side.o: /usr/include/sgidefs.h /usr/include/stdio.h
+client_side.o: /usr/include/sys/types.h /usr/include/ctype.h
+client_side.o: /usr/include/errno.h /usr/include/sys/errno.h
+client_side.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h
+client_side.o: /usr/include/grp.h /usr/include/malloc.h /usr/include/memory.h
+client_side.o: /usr/include/netdb.h /usr/include/pwd.h /usr/include/signal.h
+client_side.o: /usr/include/sys/signal.h /usr/include/time.h
+client_side.o: /usr/include/sys/param.h /usr/include/sys/time.h
+client_side.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+client_side.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+client_side.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+client_side.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+client_side.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+client_side.o: /usr/include/sys/syscall.h /usr/include/string.h
+client_side.o: /usr/include/strings.h /usr/include/bstring.h
+client_side.o: /usr/include/crypt.h /usr/include/getopt.h
+client_side.o: /usr/include/assert.h /usr/include/stdarg.h
+client_side.o: /usr/include/syslog.h /usr/include/sys/syslog.h
+client_side.o: /usr/include/math.h /usr/include/regex.h defines.h enums.h
+client_side.o: typedefs.h structs.h protos.h globals.h ../include/util.h
+client_side.o: ../include/radix.h ../include/snprintf.h
+comm.o: squid.h ../include/config.h ../include/autoconf.h
+comm.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+comm.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+comm.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+comm.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+comm.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+comm.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+comm.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+comm.o: /usr/include/sys/param.h /usr/include/sys/time.h
+comm.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+comm.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+comm.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+comm.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+comm.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+comm.o: /usr/include/sys/syscall.h /usr/include/string.h
+comm.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+comm.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+comm.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+comm.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h protos.h
+comm.o: globals.h ../include/util.h ../include/radix.h ../include/snprintf.h
+comm.o: /usr/include/netinet/tcp.h
+debug.o: squid.h ../include/config.h ../include/autoconf.h
+debug.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+debug.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+debug.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+debug.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+debug.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+debug.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+debug.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+debug.o: /usr/include/sys/param.h /usr/include/sys/time.h
+debug.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+debug.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+debug.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+debug.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+debug.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+debug.o: /usr/include/sys/syscall.h /usr/include/string.h
+debug.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+debug.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+debug.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+debug.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h protos.h
+debug.o: globals.h ../include/util.h ../include/radix.h ../include/snprintf.h
+disk.o: squid.h ../include/config.h ../include/autoconf.h
+disk.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+disk.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+disk.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+disk.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+disk.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+disk.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+disk.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+disk.o: /usr/include/sys/param.h /usr/include/sys/time.h
+disk.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+disk.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+disk.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+disk.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+disk.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+disk.o: /usr/include/sys/syscall.h /usr/include/string.h
+disk.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+disk.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+disk.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+disk.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h protos.h
+disk.o: globals.h ../include/util.h ../include/radix.h ../include/snprintf.h
+dns.o: squid.h ../include/config.h ../include/autoconf.h ../include/version.h
+dns.o: /usr/include/unistd.h /usr/include/standards.h /usr/include/stdlib.h
+dns.o: /usr/include/sgidefs.h /usr/include/stdio.h /usr/include/sys/types.h
+dns.o: /usr/include/ctype.h /usr/include/errno.h /usr/include/sys/errno.h
+dns.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/grp.h
+dns.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+dns.o: /usr/include/pwd.h /usr/include/signal.h /usr/include/sys/signal.h
+dns.o: /usr/include/time.h /usr/include/sys/param.h /usr/include/sys/time.h
+dns.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+dns.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+dns.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+dns.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h /usr/include/sys/un.h
+dns.o: /usr/include/sys/wait.h /usr/include/sys/syscall.h
+dns.o: /usr/include/string.h /usr/include/strings.h /usr/include/bstring.h
+dns.o: /usr/include/crypt.h /usr/include/getopt.h /usr/include/assert.h
+dns.o: /usr/include/stdarg.h /usr/include/syslog.h /usr/include/sys/syslog.h
+dns.o: /usr/include/math.h /usr/include/regex.h defines.h enums.h typedefs.h
+dns.o: structs.h protos.h globals.h ../include/util.h ../include/radix.h
+dns.o: ../include/snprintf.h
+dnsserver.o: ../include/config.h ../include/autoconf.h ../include/version.h
+dnsserver.o: /usr/include/unistd.h /usr/include/standards.h
+dnsserver.o: /usr/include/stdlib.h /usr/include/sgidefs.h
+dnsserver.o: /usr/include/stdio.h /usr/include/sys/types.h
+dnsserver.o: /usr/include/ctype.h /usr/include/errno.h
+dnsserver.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+dnsserver.o: /usr/include/sys/fcntl.h /usr/include/grp.h
+dnsserver.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+dnsserver.o: /usr/include/pwd.h /usr/include/signal.h
+dnsserver.o: /usr/include/sys/signal.h /usr/include/time.h
+dnsserver.o: /usr/include/sys/param.h /usr/include/sys/time.h
+dnsserver.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+dnsserver.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+dnsserver.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+dnsserver.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+dnsserver.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+dnsserver.o: /usr/include/sys/syscall.h /usr/include/string.h
+dnsserver.o: /usr/include/strings.h /usr/include/bstring.h
+dnsserver.o: /usr/include/crypt.h /usr/include/arpa/nameser.h
+dnsserver.o: /usr/include/sys/cdefs.h /usr/include/resolv.h ../include/util.h
+dnsserver.o: ../include/snprintf.h /usr/include/stdarg.h
+errorpage.o: squid.h ../include/config.h ../include/autoconf.h
+errorpage.o: ../include/version.h /usr/include/unistd.h
+errorpage.o: /usr/include/standards.h /usr/include/stdlib.h
+errorpage.o: /usr/include/sgidefs.h /usr/include/stdio.h
+errorpage.o: /usr/include/sys/types.h /usr/include/ctype.h
+errorpage.o: /usr/include/errno.h /usr/include/sys/errno.h
+errorpage.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/grp.h
+errorpage.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+errorpage.o: /usr/include/pwd.h /usr/include/signal.h
+errorpage.o: /usr/include/sys/signal.h /usr/include/time.h
+errorpage.o: /usr/include/sys/param.h /usr/include/sys/time.h
+errorpage.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+errorpage.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+errorpage.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+errorpage.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+errorpage.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+errorpage.o: /usr/include/sys/syscall.h /usr/include/string.h
+errorpage.o: /usr/include/strings.h /usr/include/bstring.h
+errorpage.o: /usr/include/crypt.h /usr/include/getopt.h /usr/include/assert.h
+errorpage.o: /usr/include/stdarg.h /usr/include/syslog.h
+errorpage.o: /usr/include/sys/syslog.h /usr/include/math.h
+errorpage.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h
+errorpage.o: protos.h globals.h ../include/util.h ../include/radix.h
+errorpage.o: ../include/snprintf.h
+event.o: squid.h ../include/config.h ../include/autoconf.h
+event.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+event.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+event.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+event.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+event.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+event.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+event.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+event.o: /usr/include/sys/param.h /usr/include/sys/time.h
+event.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+event.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+event.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+event.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+event.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+event.o: /usr/include/sys/syscall.h /usr/include/string.h
+event.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+event.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+event.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+event.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h protos.h
+event.o: globals.h ../include/util.h ../include/radix.h ../include/snprintf.h
+fd.o: squid.h ../include/config.h ../include/autoconf.h ../include/version.h
+fd.o: /usr/include/unistd.h /usr/include/standards.h /usr/include/stdlib.h
+fd.o: /usr/include/sgidefs.h /usr/include/stdio.h /usr/include/sys/types.h
+fd.o: /usr/include/ctype.h /usr/include/errno.h /usr/include/sys/errno.h
+fd.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/grp.h
+fd.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+fd.o: /usr/include/pwd.h /usr/include/signal.h /usr/include/sys/signal.h
+fd.o: /usr/include/time.h /usr/include/sys/param.h /usr/include/sys/time.h
+fd.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+fd.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+fd.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+fd.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h /usr/include/sys/un.h
+fd.o: /usr/include/sys/wait.h /usr/include/sys/syscall.h
+fd.o: /usr/include/string.h /usr/include/strings.h /usr/include/bstring.h
+fd.o: /usr/include/crypt.h /usr/include/getopt.h /usr/include/assert.h
+fd.o: /usr/include/stdarg.h /usr/include/syslog.h /usr/include/sys/syslog.h
+fd.o: /usr/include/math.h /usr/include/regex.h defines.h enums.h typedefs.h
+fd.o: structs.h protos.h globals.h ../include/util.h ../include/radix.h
+fd.o: ../include/snprintf.h
+fdstat.o: squid.h ../include/config.h ../include/autoconf.h
+fdstat.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+fdstat.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+fdstat.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+fdstat.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+fdstat.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+fdstat.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+fdstat.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+fdstat.o: /usr/include/sys/param.h /usr/include/sys/time.h
+fdstat.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+fdstat.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+fdstat.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+fdstat.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+fdstat.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+fdstat.o: /usr/include/sys/syscall.h /usr/include/string.h
+fdstat.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+fdstat.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+fdstat.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+fdstat.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h
+fdstat.o: protos.h globals.h ../include/util.h ../include/radix.h
+fdstat.o: ../include/snprintf.h
+filemap.o: squid.h ../include/config.h ../include/autoconf.h
+filemap.o: ../include/version.h /usr/include/unistd.h
+filemap.o: /usr/include/standards.h /usr/include/stdlib.h
+filemap.o: /usr/include/sgidefs.h /usr/include/stdio.h
+filemap.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+filemap.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+filemap.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+filemap.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+filemap.o: /usr/include/signal.h /usr/include/sys/signal.h
+filemap.o: /usr/include/time.h /usr/include/sys/param.h
+filemap.o: /usr/include/sys/time.h /usr/include/sys/resource.h
+filemap.o: /usr/include/sys/socket.h /usr/include/sys/bsd_types.h
+filemap.o: /usr/include/sys/select.h /usr/include/netinet/in.h
+filemap.o: /usr/include/sys/endian.h /usr/include/arpa/inet.h
+filemap.o: /usr/include/sys/stat.h /usr/include/sys/un.h
+filemap.o: /usr/include/sys/wait.h /usr/include/sys/syscall.h
+filemap.o: /usr/include/string.h /usr/include/strings.h
+filemap.o: /usr/include/bstring.h /usr/include/crypt.h /usr/include/getopt.h
+filemap.o: /usr/include/assert.h /usr/include/stdarg.h /usr/include/syslog.h
+filemap.o: /usr/include/sys/syslog.h /usr/include/math.h /usr/include/regex.h
+filemap.o: defines.h enums.h typedefs.h structs.h protos.h globals.h
+filemap.o: ../include/util.h ../include/radix.h ../include/snprintf.h
+fqdncache.o: squid.h ../include/config.h ../include/autoconf.h
+fqdncache.o: ../include/version.h /usr/include/unistd.h
+fqdncache.o: /usr/include/standards.h /usr/include/stdlib.h
+fqdncache.o: /usr/include/sgidefs.h /usr/include/stdio.h
+fqdncache.o: /usr/include/sys/types.h /usr/include/ctype.h
+fqdncache.o: /usr/include/errno.h /usr/include/sys/errno.h
+fqdncache.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/grp.h
+fqdncache.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+fqdncache.o: /usr/include/pwd.h /usr/include/signal.h
+fqdncache.o: /usr/include/sys/signal.h /usr/include/time.h
+fqdncache.o: /usr/include/sys/param.h /usr/include/sys/time.h
+fqdncache.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+fqdncache.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+fqdncache.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+fqdncache.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+fqdncache.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+fqdncache.o: /usr/include/sys/syscall.h /usr/include/string.h
+fqdncache.o: /usr/include/strings.h /usr/include/bstring.h
+fqdncache.o: /usr/include/crypt.h /usr/include/getopt.h /usr/include/assert.h
+fqdncache.o: /usr/include/stdarg.h /usr/include/syslog.h
+fqdncache.o: /usr/include/sys/syslog.h /usr/include/math.h
+fqdncache.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h
+fqdncache.o: protos.h globals.h ../include/util.h ../include/radix.h
+fqdncache.o: ../include/snprintf.h
+ftp.o: squid.h ../include/config.h ../include/autoconf.h ../include/version.h
+ftp.o: /usr/include/unistd.h /usr/include/standards.h /usr/include/stdlib.h
+ftp.o: /usr/include/sgidefs.h /usr/include/stdio.h /usr/include/sys/types.h
+ftp.o: /usr/include/ctype.h /usr/include/errno.h /usr/include/sys/errno.h
+ftp.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/grp.h
+ftp.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+ftp.o: /usr/include/pwd.h /usr/include/signal.h /usr/include/sys/signal.h
+ftp.o: /usr/include/time.h /usr/include/sys/param.h /usr/include/sys/time.h
+ftp.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+ftp.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+ftp.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+ftp.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h /usr/include/sys/un.h
+ftp.o: /usr/include/sys/wait.h /usr/include/sys/syscall.h
+ftp.o: /usr/include/string.h /usr/include/strings.h /usr/include/bstring.h
+ftp.o: /usr/include/crypt.h /usr/include/getopt.h /usr/include/assert.h
+ftp.o: /usr/include/stdarg.h /usr/include/syslog.h /usr/include/sys/syslog.h
+ftp.o: /usr/include/math.h /usr/include/regex.h defines.h enums.h typedefs.h
+ftp.o: structs.h protos.h globals.h ../include/util.h ../include/radix.h
+ftp.o: ../include/snprintf.h
+globals.o: squid.h ../include/config.h ../include/autoconf.h
+globals.o: ../include/version.h /usr/include/unistd.h
+globals.o: /usr/include/standards.h /usr/include/stdlib.h
+globals.o: /usr/include/sgidefs.h /usr/include/stdio.h
+globals.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+globals.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+globals.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+globals.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+globals.o: /usr/include/signal.h /usr/include/sys/signal.h
+globals.o: /usr/include/time.h /usr/include/sys/param.h
+globals.o: /usr/include/sys/time.h /usr/include/sys/resource.h
+globals.o: /usr/include/sys/socket.h /usr/include/sys/bsd_types.h
+globals.o: /usr/include/sys/select.h /usr/include/netinet/in.h
+globals.o: /usr/include/sys/endian.h /usr/include/arpa/inet.h
+globals.o: /usr/include/sys/stat.h /usr/include/sys/un.h
+globals.o: /usr/include/sys/wait.h /usr/include/sys/syscall.h
+globals.o: /usr/include/string.h /usr/include/strings.h
+globals.o: /usr/include/bstring.h /usr/include/crypt.h /usr/include/getopt.h
+globals.o: /usr/include/assert.h /usr/include/stdarg.h /usr/include/syslog.h
+globals.o: /usr/include/sys/syslog.h /usr/include/math.h /usr/include/regex.h
+globals.o: defines.h enums.h typedefs.h structs.h protos.h globals.h
+globals.o: ../include/util.h ../include/radix.h ../include/snprintf.h
+gopher.o: squid.h ../include/config.h ../include/autoconf.h
+gopher.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+gopher.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+gopher.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+gopher.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+gopher.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+gopher.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+gopher.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+gopher.o: /usr/include/sys/param.h /usr/include/sys/time.h
+gopher.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+gopher.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+gopher.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+gopher.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+gopher.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+gopher.o: /usr/include/sys/syscall.h /usr/include/string.h
+gopher.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+gopher.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+gopher.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+gopher.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h
+gopher.o: protos.h globals.h ../include/util.h ../include/radix.h
+gopher.o: ../include/snprintf.h
+hash.o: squid.h ../include/config.h ../include/autoconf.h
+hash.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+hash.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+hash.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+hash.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+hash.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+hash.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+hash.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+hash.o: /usr/include/sys/param.h /usr/include/sys/time.h
+hash.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+hash.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+hash.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+hash.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+hash.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+hash.o: /usr/include/sys/syscall.h /usr/include/string.h
+hash.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+hash.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+hash.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+hash.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h protos.h
+hash.o: globals.h ../include/util.h ../include/radix.h ../include/snprintf.h
+http-anon.o: squid.h ../include/config.h ../include/autoconf.h
+http-anon.o: ../include/version.h /usr/include/unistd.h
+http-anon.o: /usr/include/standards.h /usr/include/stdlib.h
+http-anon.o: /usr/include/sgidefs.h /usr/include/stdio.h
+http-anon.o: /usr/include/sys/types.h /usr/include/ctype.h
+http-anon.o: /usr/include/errno.h /usr/include/sys/errno.h
+http-anon.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/grp.h
+http-anon.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+http-anon.o: /usr/include/pwd.h /usr/include/signal.h
+http-anon.o: /usr/include/sys/signal.h /usr/include/time.h
+http-anon.o: /usr/include/sys/param.h /usr/include/sys/time.h
+http-anon.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+http-anon.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+http-anon.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+http-anon.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+http-anon.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+http-anon.o: /usr/include/sys/syscall.h /usr/include/string.h
+http-anon.o: /usr/include/strings.h /usr/include/bstring.h
+http-anon.o: /usr/include/crypt.h /usr/include/getopt.h /usr/include/assert.h
+http-anon.o: /usr/include/stdarg.h /usr/include/syslog.h
+http-anon.o: /usr/include/sys/syslog.h /usr/include/math.h
+http-anon.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h
+http-anon.o: protos.h globals.h ../include/util.h ../include/radix.h
+http-anon.o: ../include/snprintf.h
+http.o: squid.h ../include/config.h ../include/autoconf.h
+http.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+http.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+http.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+http.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+http.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+http.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+http.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+http.o: /usr/include/sys/param.h /usr/include/sys/time.h
+http.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+http.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+http.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+http.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+http.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+http.o: /usr/include/sys/syscall.h /usr/include/string.h
+http.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+http.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+http.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+http.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h protos.h
+http.o: globals.h ../include/util.h ../include/radix.h ../include/snprintf.h
+icmp.o: squid.h ../include/config.h ../include/autoconf.h
+icmp.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+icmp.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+icmp.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+icmp.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+icmp.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+icmp.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+icmp.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+icmp.o: /usr/include/sys/param.h /usr/include/sys/time.h
+icmp.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+icmp.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+icmp.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+icmp.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+icmp.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+icmp.o: /usr/include/sys/syscall.h /usr/include/string.h
+icmp.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+icmp.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+icmp.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+icmp.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h protos.h
+icmp.o: globals.h ../include/util.h ../include/radix.h ../include/snprintf.h
+icp_v2.o: squid.h ../include/config.h ../include/autoconf.h
+icp_v2.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+icp_v2.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+icp_v2.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+icp_v2.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+icp_v2.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+icp_v2.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+icp_v2.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+icp_v2.o: /usr/include/sys/param.h /usr/include/sys/time.h
+icp_v2.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+icp_v2.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+icp_v2.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+icp_v2.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+icp_v2.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+icp_v2.o: /usr/include/sys/syscall.h /usr/include/string.h
+icp_v2.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+icp_v2.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+icp_v2.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+icp_v2.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h
+icp_v2.o: protos.h globals.h ../include/util.h ../include/radix.h
+icp_v2.o: ../include/snprintf.h
+icp_v3.o: squid.h ../include/config.h ../include/autoconf.h
+icp_v3.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+icp_v3.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+icp_v3.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+icp_v3.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+icp_v3.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+icp_v3.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+icp_v3.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+icp_v3.o: /usr/include/sys/param.h /usr/include/sys/time.h
+icp_v3.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+icp_v3.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+icp_v3.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+icp_v3.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+icp_v3.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+icp_v3.o: /usr/include/sys/syscall.h /usr/include/string.h
+icp_v3.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+icp_v3.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+icp_v3.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+icp_v3.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h
+icp_v3.o: protos.h globals.h ../include/util.h ../include/radix.h
+icp_v3.o: ../include/snprintf.h
+ident.o: squid.h ../include/config.h ../include/autoconf.h
+ident.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+ident.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+ident.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+ident.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+ident.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+ident.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+ident.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+ident.o: /usr/include/sys/param.h /usr/include/sys/time.h
+ident.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+ident.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+ident.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+ident.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+ident.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+ident.o: /usr/include/sys/syscall.h /usr/include/string.h
+ident.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+ident.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+ident.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+ident.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h protos.h
+ident.o: globals.h ../include/util.h ../include/radix.h ../include/snprintf.h
+ipcache.o: squid.h ../include/config.h ../include/autoconf.h
+ipcache.o: ../include/version.h /usr/include/unistd.h
+ipcache.o: /usr/include/standards.h /usr/include/stdlib.h
+ipcache.o: /usr/include/sgidefs.h /usr/include/stdio.h
+ipcache.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+ipcache.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+ipcache.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+ipcache.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+ipcache.o: /usr/include/signal.h /usr/include/sys/signal.h
+ipcache.o: /usr/include/time.h /usr/include/sys/param.h
+ipcache.o: /usr/include/sys/time.h /usr/include/sys/resource.h
+ipcache.o: /usr/include/sys/socket.h /usr/include/sys/bsd_types.h
+ipcache.o: /usr/include/sys/select.h /usr/include/netinet/in.h
+ipcache.o: /usr/include/sys/endian.h /usr/include/arpa/inet.h
+ipcache.o: /usr/include/sys/stat.h /usr/include/sys/un.h
+ipcache.o: /usr/include/sys/wait.h /usr/include/sys/syscall.h
+ipcache.o: /usr/include/string.h /usr/include/strings.h
+ipcache.o: /usr/include/bstring.h /usr/include/crypt.h /usr/include/getopt.h
+ipcache.o: /usr/include/assert.h /usr/include/stdarg.h /usr/include/syslog.h
+ipcache.o: /usr/include/sys/syslog.h /usr/include/math.h /usr/include/regex.h
+ipcache.o: defines.h enums.h typedefs.h structs.h protos.h globals.h
+ipcache.o: ../include/util.h ../include/radix.h ../include/snprintf.h
+main.o: squid.h ../include/config.h ../include/autoconf.h
+main.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+main.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+main.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+main.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+main.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+main.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+main.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+main.o: /usr/include/sys/param.h /usr/include/sys/time.h
+main.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+main.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+main.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+main.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+main.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+main.o: /usr/include/sys/syscall.h /usr/include/string.h
+main.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+main.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+main.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+main.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h protos.h
+main.o: globals.h ../include/util.h ../include/radix.h ../include/snprintf.h
+mem.o: squid.h ../include/config.h ../include/autoconf.h ../include/version.h
+mem.o: /usr/include/unistd.h /usr/include/standards.h /usr/include/stdlib.h
+mem.o: /usr/include/sgidefs.h /usr/include/stdio.h /usr/include/sys/types.h
+mem.o: /usr/include/ctype.h /usr/include/errno.h /usr/include/sys/errno.h
+mem.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/grp.h
+mem.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+mem.o: /usr/include/pwd.h /usr/include/signal.h /usr/include/sys/signal.h
+mem.o: /usr/include/time.h /usr/include/sys/param.h /usr/include/sys/time.h
+mem.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+mem.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+mem.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+mem.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h /usr/include/sys/un.h
+mem.o: /usr/include/sys/wait.h /usr/include/sys/syscall.h
+mem.o: /usr/include/string.h /usr/include/strings.h /usr/include/bstring.h
+mem.o: /usr/include/crypt.h /usr/include/getopt.h /usr/include/assert.h
+mem.o: /usr/include/stdarg.h /usr/include/syslog.h /usr/include/sys/syslog.h
+mem.o: /usr/include/math.h /usr/include/regex.h defines.h enums.h typedefs.h
+mem.o: structs.h protos.h globals.h ../include/util.h ../include/radix.h
+mem.o: ../include/snprintf.h
+mime.o: squid.h ../include/config.h ../include/autoconf.h
+mime.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+mime.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+mime.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+mime.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+mime.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+mime.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+mime.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+mime.o: /usr/include/sys/param.h /usr/include/sys/time.h
+mime.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+mime.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+mime.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+mime.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+mime.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+mime.o: /usr/include/sys/syscall.h /usr/include/string.h
+mime.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+mime.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+mime.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+mime.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h protos.h
+mime.o: globals.h ../include/util.h ../include/radix.h ../include/snprintf.h
+multicast.o: squid.h ../include/config.h ../include/autoconf.h
+multicast.o: ../include/version.h /usr/include/unistd.h
+multicast.o: /usr/include/standards.h /usr/include/stdlib.h
+multicast.o: /usr/include/sgidefs.h /usr/include/stdio.h
+multicast.o: /usr/include/sys/types.h /usr/include/ctype.h
+multicast.o: /usr/include/errno.h /usr/include/sys/errno.h
+multicast.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/grp.h
+multicast.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+multicast.o: /usr/include/pwd.h /usr/include/signal.h
+multicast.o: /usr/include/sys/signal.h /usr/include/time.h
+multicast.o: /usr/include/sys/param.h /usr/include/sys/time.h
+multicast.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+multicast.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+multicast.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+multicast.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+multicast.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+multicast.o: /usr/include/sys/syscall.h /usr/include/string.h
+multicast.o: /usr/include/strings.h /usr/include/bstring.h
+multicast.o: /usr/include/crypt.h /usr/include/getopt.h /usr/include/assert.h
+multicast.o: /usr/include/stdarg.h /usr/include/syslog.h
+multicast.o: /usr/include/sys/syslog.h /usr/include/math.h
+multicast.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h
+multicast.o: protos.h globals.h ../include/util.h ../include/radix.h
+multicast.o: ../include/snprintf.h
+neighbors.o: squid.h ../include/config.h ../include/autoconf.h
+neighbors.o: ../include/version.h /usr/include/unistd.h
+neighbors.o: /usr/include/standards.h /usr/include/stdlib.h
+neighbors.o: /usr/include/sgidefs.h /usr/include/stdio.h
+neighbors.o: /usr/include/sys/types.h /usr/include/ctype.h
+neighbors.o: /usr/include/errno.h /usr/include/sys/errno.h
+neighbors.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/grp.h
+neighbors.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+neighbors.o: /usr/include/pwd.h /usr/include/signal.h
+neighbors.o: /usr/include/sys/signal.h /usr/include/time.h
+neighbors.o: /usr/include/sys/param.h /usr/include/sys/time.h
+neighbors.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+neighbors.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+neighbors.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+neighbors.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+neighbors.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+neighbors.o: /usr/include/sys/syscall.h /usr/include/string.h
+neighbors.o: /usr/include/strings.h /usr/include/bstring.h
+neighbors.o: /usr/include/crypt.h /usr/include/getopt.h /usr/include/assert.h
+neighbors.o: /usr/include/stdarg.h /usr/include/syslog.h
+neighbors.o: /usr/include/sys/syslog.h /usr/include/math.h
+neighbors.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h
+neighbors.o: protos.h globals.h ../include/util.h ../include/radix.h
+neighbors.o: ../include/snprintf.h
+net_db.o: squid.h ../include/config.h ../include/autoconf.h
+net_db.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+net_db.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+net_db.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+net_db.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+net_db.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+net_db.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+net_db.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+net_db.o: /usr/include/sys/param.h /usr/include/sys/time.h
+net_db.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+net_db.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+net_db.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+net_db.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+net_db.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+net_db.o: /usr/include/sys/syscall.h /usr/include/string.h
+net_db.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+net_db.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+net_db.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+net_db.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h
+net_db.o: protos.h globals.h ../include/util.h ../include/radix.h
+net_db.o: ../include/snprintf.h
+objcache.o: squid.h ../include/config.h ../include/autoconf.h
+objcache.o: ../include/version.h /usr/include/unistd.h
+objcache.o: /usr/include/standards.h /usr/include/stdlib.h
+objcache.o: /usr/include/sgidefs.h /usr/include/stdio.h
+objcache.o: /usr/include/sys/types.h /usr/include/ctype.h
+objcache.o: /usr/include/errno.h /usr/include/sys/errno.h
+objcache.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/grp.h
+objcache.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+objcache.o: /usr/include/pwd.h /usr/include/signal.h
+objcache.o: /usr/include/sys/signal.h /usr/include/time.h
+objcache.o: /usr/include/sys/param.h /usr/include/sys/time.h
+objcache.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+objcache.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+objcache.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+objcache.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+objcache.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+objcache.o: /usr/include/sys/syscall.h /usr/include/string.h
+objcache.o: /usr/include/strings.h /usr/include/bstring.h
+objcache.o: /usr/include/crypt.h /usr/include/getopt.h /usr/include/assert.h
+objcache.o: /usr/include/stdarg.h /usr/include/syslog.h
+objcache.o: /usr/include/sys/syslog.h /usr/include/math.h
+objcache.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h
+objcache.o: protos.h globals.h ../include/util.h ../include/radix.h
+objcache.o: ../include/snprintf.h objcache_opcodes.h
+pass.o: squid.h ../include/config.h ../include/autoconf.h
+pass.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+pass.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+pass.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+pass.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+pass.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+pass.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+pass.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+pass.o: /usr/include/sys/param.h /usr/include/sys/time.h
+pass.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+pass.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+pass.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+pass.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+pass.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+pass.o: /usr/include/sys/syscall.h /usr/include/string.h
+pass.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+pass.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+pass.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+pass.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h protos.h
+pass.o: globals.h ../include/util.h ../include/radix.h ../include/snprintf.h
+pconn.o: squid.h ../include/config.h ../include/autoconf.h
+pconn.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+pconn.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+pconn.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+pconn.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+pconn.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+pconn.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+pconn.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+pconn.o: /usr/include/sys/param.h /usr/include/sys/time.h
+pconn.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+pconn.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+pconn.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+pconn.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+pconn.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+pconn.o: /usr/include/sys/syscall.h /usr/include/string.h
+pconn.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+pconn.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+pconn.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+pconn.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h protos.h
+pconn.o: globals.h ../include/util.h ../include/radix.h ../include/snprintf.h
+peer_select.o: squid.h ../include/config.h ../include/autoconf.h
+peer_select.o: ../include/version.h /usr/include/unistd.h
+peer_select.o: /usr/include/standards.h /usr/include/stdlib.h
+peer_select.o: /usr/include/sgidefs.h /usr/include/stdio.h
+peer_select.o: /usr/include/sys/types.h /usr/include/ctype.h
+peer_select.o: /usr/include/errno.h /usr/include/sys/errno.h
+peer_select.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h
+peer_select.o: /usr/include/grp.h /usr/include/malloc.h /usr/include/memory.h
+peer_select.o: /usr/include/netdb.h /usr/include/pwd.h /usr/include/signal.h
+peer_select.o: /usr/include/sys/signal.h /usr/include/time.h
+peer_select.o: /usr/include/sys/param.h /usr/include/sys/time.h
+peer_select.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+peer_select.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+peer_select.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+peer_select.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+peer_select.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+peer_select.o: /usr/include/sys/syscall.h /usr/include/string.h
+peer_select.o: /usr/include/strings.h /usr/include/bstring.h
+peer_select.o: /usr/include/crypt.h /usr/include/getopt.h
+peer_select.o: /usr/include/assert.h /usr/include/stdarg.h
+peer_select.o: /usr/include/syslog.h /usr/include/sys/syslog.h
+peer_select.o: /usr/include/math.h /usr/include/regex.h defines.h enums.h
+peer_select.o: typedefs.h structs.h protos.h globals.h ../include/util.h
+peer_select.o: ../include/radix.h ../include/snprintf.h
+pinger.o: squid.h ../include/config.h ../include/autoconf.h
+pinger.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+pinger.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+pinger.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+pinger.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+pinger.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+pinger.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+pinger.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+pinger.o: /usr/include/sys/param.h /usr/include/sys/time.h
+pinger.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+pinger.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+pinger.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+pinger.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+pinger.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+pinger.o: /usr/include/sys/syscall.h /usr/include/string.h
+pinger.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+pinger.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+pinger.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+pinger.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h
+pinger.o: protos.h globals.h ../include/util.h ../include/radix.h
+pinger.o: ../include/snprintf.h
+proto.o: squid.h ../include/config.h ../include/autoconf.h
+proto.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+proto.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+proto.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+proto.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+proto.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+proto.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+proto.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+proto.o: /usr/include/sys/param.h /usr/include/sys/time.h
+proto.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+proto.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+proto.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+proto.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+proto.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+proto.o: /usr/include/sys/syscall.h /usr/include/string.h
+proto.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+proto.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+proto.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+proto.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h protos.h
+proto.o: globals.h ../include/util.h ../include/radix.h ../include/snprintf.h
+range.o: range.h
+recv-announce.o: /usr/include/stdio.h /usr/include/standards.h
+recv-announce.o: /usr/include/sgidefs.h /usr/include/fcntl.h
+recv-announce.o: /usr/include/sys/types.h /usr/include/sys/fcntl.h
+recv-announce.o: /usr/include/stdlib.h /usr/include/string.h
+recv-announce.o: /usr/include/sys/socket.h /usr/include/sys/bsd_types.h
+recv-announce.o: /usr/include/sys/select.h /usr/include/netinet/in.h
+recv-announce.o: /usr/include/sys/endian.h /usr/include/arpa/inet.h
+recv-announce.o: /usr/include/netdb.h /usr/include/unistd.h
+recv-announce.o: /usr/include/signal.h /usr/include/sys/signal.h
+redirect.o: squid.h ../include/config.h ../include/autoconf.h
+redirect.o: ../include/version.h /usr/include/unistd.h
+redirect.o: /usr/include/standards.h /usr/include/stdlib.h
+redirect.o: /usr/include/sgidefs.h /usr/include/stdio.h
+redirect.o: /usr/include/sys/types.h /usr/include/ctype.h
+redirect.o: /usr/include/errno.h /usr/include/sys/errno.h
+redirect.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/grp.h
+redirect.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+redirect.o: /usr/include/pwd.h /usr/include/signal.h
+redirect.o: /usr/include/sys/signal.h /usr/include/time.h
+redirect.o: /usr/include/sys/param.h /usr/include/sys/time.h
+redirect.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+redirect.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+redirect.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+redirect.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+redirect.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+redirect.o: /usr/include/sys/syscall.h /usr/include/string.h
+redirect.o: /usr/include/strings.h /usr/include/bstring.h
+redirect.o: /usr/include/crypt.h /usr/include/getopt.h /usr/include/assert.h
+redirect.o: /usr/include/stdarg.h /usr/include/syslog.h
+redirect.o: /usr/include/sys/syslog.h /usr/include/math.h
+redirect.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h
+redirect.o: protos.h globals.h ../include/util.h ../include/radix.h
+redirect.o: ../include/snprintf.h
+refresh.o: squid.h ../include/config.h ../include/autoconf.h
+refresh.o: ../include/version.h /usr/include/unistd.h
+refresh.o: /usr/include/standards.h /usr/include/stdlib.h
+refresh.o: /usr/include/sgidefs.h /usr/include/stdio.h
+refresh.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+refresh.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+refresh.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+refresh.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+refresh.o: /usr/include/signal.h /usr/include/sys/signal.h
+refresh.o: /usr/include/time.h /usr/include/sys/param.h
+refresh.o: /usr/include/sys/time.h /usr/include/sys/resource.h
+refresh.o: /usr/include/sys/socket.h /usr/include/sys/bsd_types.h
+refresh.o: /usr/include/sys/select.h /usr/include/netinet/in.h
+refresh.o: /usr/include/sys/endian.h /usr/include/arpa/inet.h
+refresh.o: /usr/include/sys/stat.h /usr/include/sys/un.h
+refresh.o: /usr/include/sys/wait.h /usr/include/sys/syscall.h
+refresh.o: /usr/include/string.h /usr/include/strings.h
+refresh.o: /usr/include/bstring.h /usr/include/crypt.h /usr/include/getopt.h
+refresh.o: /usr/include/assert.h /usr/include/stdarg.h /usr/include/syslog.h
+refresh.o: /usr/include/sys/syslog.h /usr/include/math.h /usr/include/regex.h
+refresh.o: defines.h enums.h typedefs.h structs.h protos.h globals.h
+refresh.o: ../include/util.h ../include/radix.h ../include/snprintf.h
+send-announce.o: squid.h ../include/config.h ../include/autoconf.h
+send-announce.o: ../include/version.h /usr/include/unistd.h
+send-announce.o: /usr/include/standards.h /usr/include/stdlib.h
+send-announce.o: /usr/include/sgidefs.h /usr/include/stdio.h
+send-announce.o: /usr/include/sys/types.h /usr/include/ctype.h
+send-announce.o: /usr/include/errno.h /usr/include/sys/errno.h
+send-announce.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h
+send-announce.o: /usr/include/grp.h /usr/include/malloc.h
+send-announce.o: /usr/include/memory.h /usr/include/netdb.h
+send-announce.o: /usr/include/pwd.h /usr/include/signal.h
+send-announce.o: /usr/include/sys/signal.h /usr/include/time.h
+send-announce.o: /usr/include/sys/param.h /usr/include/sys/time.h
+send-announce.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+send-announce.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+send-announce.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+send-announce.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+send-announce.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+send-announce.o: /usr/include/sys/syscall.h /usr/include/string.h
+send-announce.o: /usr/include/strings.h /usr/include/bstring.h
+send-announce.o: /usr/include/crypt.h /usr/include/getopt.h
+send-announce.o: /usr/include/assert.h /usr/include/stdarg.h
+send-announce.o: /usr/include/syslog.h /usr/include/sys/syslog.h
+send-announce.o: /usr/include/math.h /usr/include/regex.h defines.h enums.h
+send-announce.o: typedefs.h structs.h protos.h globals.h ../include/util.h
+send-announce.o: ../include/radix.h ../include/snprintf.h
+snmp.o: squid.h ../include/config.h ../include/autoconf.h
+snmp.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+snmp.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+snmp.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+snmp.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+snmp.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+snmp.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+snmp.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+snmp.o: /usr/include/sys/param.h /usr/include/sys/time.h
+snmp.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+snmp.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+snmp.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+snmp.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+snmp.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+snmp.o: /usr/include/sys/syscall.h /usr/include/string.h
+snmp.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+snmp.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+snmp.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+snmp.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h protos.h
+snmp.o: globals.h ../include/util.h ../include/radix.h ../include/snprintf.h
+snmp.o: ../include/mib_module.h ../include/mib.h ../include/snmp_api.h
+snmp.o: ../include/asn1.h ../include/snmp.h ../include/snmp_impl.h
+snmp.o: ../include/snmp_vars.h ../include/cache_snmp.h
+snmp_agent.o: squid.h ../include/config.h ../include/autoconf.h
+snmp_agent.o: ../include/version.h /usr/include/unistd.h
+snmp_agent.o: /usr/include/standards.h /usr/include/stdlib.h
+snmp_agent.o: /usr/include/sgidefs.h /usr/include/stdio.h
+snmp_agent.o: /usr/include/sys/types.h /usr/include/ctype.h
+snmp_agent.o: /usr/include/errno.h /usr/include/sys/errno.h
+snmp_agent.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h
+snmp_agent.o: /usr/include/grp.h /usr/include/malloc.h /usr/include/memory.h
+snmp_agent.o: /usr/include/netdb.h /usr/include/pwd.h /usr/include/signal.h
+snmp_agent.o: /usr/include/sys/signal.h /usr/include/time.h
+snmp_agent.o: /usr/include/sys/param.h /usr/include/sys/time.h
+snmp_agent.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+snmp_agent.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+snmp_agent.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+snmp_agent.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+snmp_agent.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+snmp_agent.o: /usr/include/sys/syscall.h /usr/include/string.h
+snmp_agent.o: /usr/include/strings.h /usr/include/bstring.h
+snmp_agent.o: /usr/include/crypt.h /usr/include/getopt.h
+snmp_agent.o: /usr/include/assert.h /usr/include/stdarg.h
+snmp_agent.o: /usr/include/syslog.h /usr/include/sys/syslog.h
+snmp_agent.o: /usr/include/math.h /usr/include/regex.h defines.h enums.h
+snmp_agent.o: typedefs.h structs.h protos.h globals.h ../include/util.h
+snmp_agent.o: ../include/radix.h ../include/snprintf.h ../include/snmp.h
+snmp_agent.o: ../include/snmp_api.h ../include/asn1.h ../include/snmp_impl.h
+snmp_agent.o: ../include/snmp_client.h ../include/mib.h
+snmp_agent.o: ../include/snmp_groupvars.h
+snmp_config.o: squid.h ../include/config.h ../include/autoconf.h
+snmp_config.o: ../include/version.h /usr/include/unistd.h
+snmp_config.o: /usr/include/standards.h /usr/include/stdlib.h
+snmp_config.o: /usr/include/sgidefs.h /usr/include/stdio.h
+snmp_config.o: /usr/include/sys/types.h /usr/include/ctype.h
+snmp_config.o: /usr/include/errno.h /usr/include/sys/errno.h
+snmp_config.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h
+snmp_config.o: /usr/include/grp.h /usr/include/malloc.h /usr/include/memory.h
+snmp_config.o: /usr/include/netdb.h /usr/include/pwd.h /usr/include/signal.h
+snmp_config.o: /usr/include/sys/signal.h /usr/include/time.h
+snmp_config.o: /usr/include/sys/param.h /usr/include/sys/time.h
+snmp_config.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+snmp_config.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+snmp_config.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+snmp_config.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+snmp_config.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+snmp_config.o: /usr/include/sys/syscall.h /usr/include/string.h
+snmp_config.o: /usr/include/strings.h /usr/include/bstring.h
+snmp_config.o: /usr/include/crypt.h /usr/include/getopt.h
+snmp_config.o: /usr/include/assert.h /usr/include/stdarg.h
+snmp_config.o: /usr/include/syslog.h /usr/include/sys/syslog.h
+snmp_config.o: /usr/include/math.h /usr/include/regex.h defines.h enums.h
+snmp_config.o: typedefs.h structs.h protos.h globals.h ../include/util.h
+snmp_config.o: ../include/radix.h ../include/snprintf.h ../include/mib.h
+snmp_config.o: ../include/snmp_api.h ../include/asn1.h ../include/snmp.h
+snmp_config.o: ../include/snmp_impl.h ../include/snmp_client.h
+snmp_vars.o: squid.h ../include/config.h ../include/autoconf.h
+snmp_vars.o: ../include/version.h /usr/include/unistd.h
+snmp_vars.o: /usr/include/standards.h /usr/include/stdlib.h
+snmp_vars.o: /usr/include/sgidefs.h /usr/include/stdio.h
+snmp_vars.o: /usr/include/sys/types.h /usr/include/ctype.h
+snmp_vars.o: /usr/include/errno.h /usr/include/sys/errno.h
+snmp_vars.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/grp.h
+snmp_vars.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+snmp_vars.o: /usr/include/pwd.h /usr/include/signal.h
+snmp_vars.o: /usr/include/sys/signal.h /usr/include/time.h
+snmp_vars.o: /usr/include/sys/param.h /usr/include/sys/time.h
+snmp_vars.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+snmp_vars.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+snmp_vars.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+snmp_vars.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+snmp_vars.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+snmp_vars.o: /usr/include/sys/syscall.h /usr/include/string.h
+snmp_vars.o: /usr/include/strings.h /usr/include/bstring.h
+snmp_vars.o: /usr/include/crypt.h /usr/include/getopt.h /usr/include/assert.h
+snmp_vars.o: /usr/include/stdarg.h /usr/include/syslog.h
+snmp_vars.o: /usr/include/sys/syslog.h /usr/include/math.h
+snmp_vars.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h
+snmp_vars.o: protos.h globals.h ../include/util.h ../include/radix.h
+snmp_vars.o: ../include/snprintf.h ../include/mib_module.h ../include/mib.h
+snmp_vars.o: ../include/snmp_api.h ../include/asn1.h ../include/snmp.h
+snmp_vars.o: ../include/snmp_impl.h ../include/snmp_vars.h
+ssl.o: squid.h ../include/config.h ../include/autoconf.h ../include/version.h
+ssl.o: /usr/include/unistd.h /usr/include/standards.h /usr/include/stdlib.h
+ssl.o: /usr/include/sgidefs.h /usr/include/stdio.h /usr/include/sys/types.h
+ssl.o: /usr/include/ctype.h /usr/include/errno.h /usr/include/sys/errno.h
+ssl.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/grp.h
+ssl.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+ssl.o: /usr/include/pwd.h /usr/include/signal.h /usr/include/sys/signal.h
+ssl.o: /usr/include/time.h /usr/include/sys/param.h /usr/include/sys/time.h
+ssl.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+ssl.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+ssl.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+ssl.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h /usr/include/sys/un.h
+ssl.o: /usr/include/sys/wait.h /usr/include/sys/syscall.h
+ssl.o: /usr/include/string.h /usr/include/strings.h /usr/include/bstring.h
+ssl.o: /usr/include/crypt.h /usr/include/getopt.h /usr/include/assert.h
+ssl.o: /usr/include/stdarg.h /usr/include/syslog.h /usr/include/sys/syslog.h
+ssl.o: /usr/include/math.h /usr/include/regex.h defines.h enums.h typedefs.h
+ssl.o: structs.h protos.h globals.h ../include/util.h ../include/radix.h
+ssl.o: ../include/snprintf.h
+stack.o: squid.h ../include/config.h ../include/autoconf.h
+stack.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+stack.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+stack.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+stack.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+stack.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+stack.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+stack.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+stack.o: /usr/include/sys/param.h /usr/include/sys/time.h
+stack.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+stack.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+stack.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+stack.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+stack.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+stack.o: /usr/include/sys/syscall.h /usr/include/string.h
+stack.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+stack.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+stack.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+stack.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h protos.h
+stack.o: globals.h ../include/util.h ../include/radix.h ../include/snprintf.h
+stat.o: squid.h ../include/config.h ../include/autoconf.h
+stat.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+stat.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+stat.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+stat.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+stat.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+stat.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+stat.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+stat.o: /usr/include/sys/param.h /usr/include/sys/time.h
+stat.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+stat.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+stat.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+stat.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+stat.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+stat.o: /usr/include/sys/syscall.h /usr/include/string.h
+stat.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+stat.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+stat.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+stat.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h protos.h
+stat.o: globals.h ../include/util.h ../include/radix.h ../include/snprintf.h
+stmem.o: squid.h ../include/config.h ../include/autoconf.h
+stmem.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+stmem.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+stmem.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+stmem.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+stmem.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+stmem.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+stmem.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+stmem.o: /usr/include/sys/param.h /usr/include/sys/time.h
+stmem.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+stmem.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+stmem.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+stmem.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+stmem.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+stmem.o: /usr/include/sys/syscall.h /usr/include/string.h
+stmem.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+stmem.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+stmem.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+stmem.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h protos.h
+stmem.o: globals.h ../include/util.h ../include/radix.h ../include/snprintf.h
+store.o: squid.h ../include/config.h ../include/autoconf.h
+store.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+store.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+store.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+store.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+store.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+store.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+store.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+store.o: /usr/include/sys/param.h /usr/include/sys/time.h
+store.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+store.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+store.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+store.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+store.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+store.o: /usr/include/sys/syscall.h /usr/include/string.h
+store.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+store.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+store.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+store.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h protos.h
+store.o: globals.h ../include/util.h ../include/radix.h ../include/snprintf.h
+store.o: /usr/include/dirent.h /usr/include/sys/dirent.h
+store_clean.o: squid.h ../include/config.h ../include/autoconf.h
+store_clean.o: ../include/version.h /usr/include/unistd.h
+store_clean.o: /usr/include/standards.h /usr/include/stdlib.h
+store_clean.o: /usr/include/sgidefs.h /usr/include/stdio.h
+store_clean.o: /usr/include/sys/types.h /usr/include/ctype.h
+store_clean.o: /usr/include/errno.h /usr/include/sys/errno.h
+store_clean.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h
+store_clean.o: /usr/include/grp.h /usr/include/malloc.h /usr/include/memory.h
+store_clean.o: /usr/include/netdb.h /usr/include/pwd.h /usr/include/signal.h
+store_clean.o: /usr/include/sys/signal.h /usr/include/time.h
+store_clean.o: /usr/include/sys/param.h /usr/include/sys/time.h
+store_clean.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+store_clean.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+store_clean.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+store_clean.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+store_clean.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+store_clean.o: /usr/include/sys/syscall.h /usr/include/string.h
+store_clean.o: /usr/include/strings.h /usr/include/bstring.h
+store_clean.o: /usr/include/crypt.h /usr/include/getopt.h
+store_clean.o: /usr/include/assert.h /usr/include/stdarg.h
+store_clean.o: /usr/include/syslog.h /usr/include/sys/syslog.h
+store_clean.o: /usr/include/math.h /usr/include/regex.h defines.h enums.h
+store_clean.o: typedefs.h structs.h protos.h globals.h ../include/util.h
+store_clean.o: ../include/radix.h ../include/snprintf.h /usr/include/dirent.h
+store_clean.o: /usr/include/sys/dirent.h
+store_dir.o: squid.h ../include/config.h ../include/autoconf.h
+store_dir.o: ../include/version.h /usr/include/unistd.h
+store_dir.o: /usr/include/standards.h /usr/include/stdlib.h
+store_dir.o: /usr/include/sgidefs.h /usr/include/stdio.h
+store_dir.o: /usr/include/sys/types.h /usr/include/ctype.h
+store_dir.o: /usr/include/errno.h /usr/include/sys/errno.h
+store_dir.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/grp.h
+store_dir.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+store_dir.o: /usr/include/pwd.h /usr/include/signal.h
+store_dir.o: /usr/include/sys/signal.h /usr/include/time.h
+store_dir.o: /usr/include/sys/param.h /usr/include/sys/time.h
+store_dir.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+store_dir.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+store_dir.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+store_dir.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+store_dir.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+store_dir.o: /usr/include/sys/syscall.h /usr/include/string.h
+store_dir.o: /usr/include/strings.h /usr/include/bstring.h
+store_dir.o: /usr/include/crypt.h /usr/include/getopt.h /usr/include/assert.h
+store_dir.o: /usr/include/stdarg.h /usr/include/syslog.h
+store_dir.o: /usr/include/sys/syslog.h /usr/include/math.h
+store_dir.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h
+store_dir.o: protos.h globals.h ../include/util.h ../include/radix.h
+store_dir.o: ../include/snprintf.h
+store_key_md5.o: squid.h ../include/config.h ../include/autoconf.h
+store_key_md5.o: ../include/version.h /usr/include/unistd.h
+store_key_md5.o: /usr/include/standards.h /usr/include/stdlib.h
+store_key_md5.o: /usr/include/sgidefs.h /usr/include/stdio.h
+store_key_md5.o: /usr/include/sys/types.h /usr/include/ctype.h
+store_key_md5.o: /usr/include/errno.h /usr/include/sys/errno.h
+store_key_md5.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h
+store_key_md5.o: /usr/include/grp.h /usr/include/malloc.h
+store_key_md5.o: /usr/include/memory.h /usr/include/netdb.h
+store_key_md5.o: /usr/include/pwd.h /usr/include/signal.h
+store_key_md5.o: /usr/include/sys/signal.h /usr/include/time.h
+store_key_md5.o: /usr/include/sys/param.h /usr/include/sys/time.h
+store_key_md5.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+store_key_md5.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+store_key_md5.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+store_key_md5.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+store_key_md5.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+store_key_md5.o: /usr/include/sys/syscall.h /usr/include/string.h
+store_key_md5.o: /usr/include/strings.h /usr/include/bstring.h
+store_key_md5.o: /usr/include/crypt.h /usr/include/getopt.h
+store_key_md5.o: /usr/include/assert.h /usr/include/stdarg.h
+store_key_md5.o: /usr/include/syslog.h /usr/include/sys/syslog.h
+store_key_md5.o: /usr/include/math.h /usr/include/regex.h defines.h enums.h
+store_key_md5.o: typedefs.h structs.h protos.h globals.h ../include/util.h
+store_key_md5.o: ../include/radix.h ../include/snprintf.h
+store_key_sha.o: squid.h ../include/config.h ../include/autoconf.h
+store_key_sha.o: ../include/version.h /usr/include/unistd.h
+store_key_sha.o: /usr/include/standards.h /usr/include/stdlib.h
+store_key_sha.o: /usr/include/sgidefs.h /usr/include/stdio.h
+store_key_sha.o: /usr/include/sys/types.h /usr/include/ctype.h
+store_key_sha.o: /usr/include/errno.h /usr/include/sys/errno.h
+store_key_sha.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h
+store_key_sha.o: /usr/include/grp.h /usr/include/malloc.h
+store_key_sha.o: /usr/include/memory.h /usr/include/netdb.h
+store_key_sha.o: /usr/include/pwd.h /usr/include/signal.h
+store_key_sha.o: /usr/include/sys/signal.h /usr/include/time.h
+store_key_sha.o: /usr/include/sys/param.h /usr/include/sys/time.h
+store_key_sha.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+store_key_sha.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+store_key_sha.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+store_key_sha.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+store_key_sha.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+store_key_sha.o: /usr/include/sys/syscall.h /usr/include/string.h
+store_key_sha.o: /usr/include/strings.h /usr/include/bstring.h
+store_key_sha.o: /usr/include/crypt.h /usr/include/getopt.h
+store_key_sha.o: /usr/include/assert.h /usr/include/stdarg.h
+store_key_sha.o: /usr/include/syslog.h /usr/include/sys/syslog.h
+store_key_sha.o: /usr/include/math.h /usr/include/regex.h defines.h enums.h
+store_key_sha.o: typedefs.h structs.h protos.h globals.h ../include/util.h
+store_key_sha.o: ../include/radix.h ../include/snprintf.h
+store_key_url.o: squid.h ../include/config.h ../include/autoconf.h
+store_key_url.o: ../include/version.h /usr/include/unistd.h
+store_key_url.o: /usr/include/standards.h /usr/include/stdlib.h
+store_key_url.o: /usr/include/sgidefs.h /usr/include/stdio.h
+store_key_url.o: /usr/include/sys/types.h /usr/include/ctype.h
+store_key_url.o: /usr/include/errno.h /usr/include/sys/errno.h
+store_key_url.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h
+store_key_url.o: /usr/include/grp.h /usr/include/malloc.h
+store_key_url.o: /usr/include/memory.h /usr/include/netdb.h
+store_key_url.o: /usr/include/pwd.h /usr/include/signal.h
+store_key_url.o: /usr/include/sys/signal.h /usr/include/time.h
+store_key_url.o: /usr/include/sys/param.h /usr/include/sys/time.h
+store_key_url.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+store_key_url.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+store_key_url.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+store_key_url.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+store_key_url.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+store_key_url.o: /usr/include/sys/syscall.h /usr/include/string.h
+store_key_url.o: /usr/include/strings.h /usr/include/bstring.h
+store_key_url.o: /usr/include/crypt.h /usr/include/getopt.h
+store_key_url.o: /usr/include/assert.h /usr/include/stdarg.h
+store_key_url.o: /usr/include/syslog.h /usr/include/sys/syslog.h
+store_key_url.o: /usr/include/math.h /usr/include/regex.h defines.h enums.h
+store_key_url.o: typedefs.h structs.h protos.h globals.h ../include/util.h
+store_key_url.o: ../include/radix.h ../include/snprintf.h
+tools.o: squid.h ../include/config.h ../include/autoconf.h
+tools.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+tools.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+tools.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+tools.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+tools.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+tools.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+tools.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+tools.o: /usr/include/sys/param.h /usr/include/sys/time.h
+tools.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+tools.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+tools.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+tools.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+tools.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+tools.o: /usr/include/sys/syscall.h /usr/include/string.h
+tools.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+tools.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+tools.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+tools.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h protos.h
+tools.o: globals.h ../include/util.h ../include/radix.h ../include/snprintf.h
+unlinkd.o: squid.h ../include/config.h ../include/autoconf.h
+unlinkd.o: ../include/version.h /usr/include/unistd.h
+unlinkd.o: /usr/include/standards.h /usr/include/stdlib.h
+unlinkd.o: /usr/include/sgidefs.h /usr/include/stdio.h
+unlinkd.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+unlinkd.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+unlinkd.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+unlinkd.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+unlinkd.o: /usr/include/signal.h /usr/include/sys/signal.h
+unlinkd.o: /usr/include/time.h /usr/include/sys/param.h
+unlinkd.o: /usr/include/sys/time.h /usr/include/sys/resource.h
+unlinkd.o: /usr/include/sys/socket.h /usr/include/sys/bsd_types.h
+unlinkd.o: /usr/include/sys/select.h /usr/include/netinet/in.h
+unlinkd.o: /usr/include/sys/endian.h /usr/include/arpa/inet.h
+unlinkd.o: /usr/include/sys/stat.h /usr/include/sys/un.h
+unlinkd.o: /usr/include/sys/wait.h /usr/include/sys/syscall.h
+unlinkd.o: /usr/include/string.h /usr/include/strings.h
+unlinkd.o: /usr/include/bstring.h /usr/include/crypt.h /usr/include/getopt.h
+unlinkd.o: /usr/include/assert.h /usr/include/stdarg.h /usr/include/syslog.h
+unlinkd.o: /usr/include/sys/syslog.h /usr/include/math.h /usr/include/regex.h
+unlinkd.o: defines.h enums.h typedefs.h structs.h protos.h globals.h
+unlinkd.o: ../include/util.h ../include/radix.h ../include/snprintf.h
+url.o: squid.h ../include/config.h ../include/autoconf.h ../include/version.h
+url.o: /usr/include/unistd.h /usr/include/standards.h /usr/include/stdlib.h
+url.o: /usr/include/sgidefs.h /usr/include/stdio.h /usr/include/sys/types.h
+url.o: /usr/include/ctype.h /usr/include/errno.h /usr/include/sys/errno.h
+url.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/grp.h
+url.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+url.o: /usr/include/pwd.h /usr/include/signal.h /usr/include/sys/signal.h
+url.o: /usr/include/time.h /usr/include/sys/param.h /usr/include/sys/time.h
+url.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+url.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+url.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+url.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h /usr/include/sys/un.h
+url.o: /usr/include/sys/wait.h /usr/include/sys/syscall.h
+url.o: /usr/include/string.h /usr/include/strings.h /usr/include/bstring.h
+url.o: /usr/include/crypt.h /usr/include/getopt.h /usr/include/assert.h
+url.o: /usr/include/stdarg.h /usr/include/syslog.h /usr/include/sys/syslog.h
+url.o: /usr/include/math.h /usr/include/regex.h defines.h enums.h typedefs.h
+url.o: structs.h protos.h globals.h ../include/util.h ../include/radix.h
+url.o: ../include/snprintf.h
+urn.o: squid.h ../include/config.h ../include/autoconf.h ../include/version.h
+urn.o: /usr/include/unistd.h /usr/include/standards.h /usr/include/stdlib.h
+urn.o: /usr/include/sgidefs.h /usr/include/stdio.h /usr/include/sys/types.h
+urn.o: /usr/include/ctype.h /usr/include/errno.h /usr/include/sys/errno.h
+urn.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/grp.h
+urn.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+urn.o: /usr/include/pwd.h /usr/include/signal.h /usr/include/sys/signal.h
+urn.o: /usr/include/time.h /usr/include/sys/param.h /usr/include/sys/time.h
+urn.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+urn.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+urn.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+urn.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h /usr/include/sys/un.h
+urn.o: /usr/include/sys/wait.h /usr/include/sys/syscall.h
+urn.o: /usr/include/string.h /usr/include/strings.h /usr/include/bstring.h
+urn.o: /usr/include/crypt.h /usr/include/getopt.h /usr/include/assert.h
+urn.o: /usr/include/stdarg.h /usr/include/syslog.h /usr/include/sys/syslog.h
+urn.o: /usr/include/math.h /usr/include/regex.h defines.h enums.h typedefs.h
+urn.o: structs.h protos.h globals.h ../include/util.h ../include/radix.h
+urn.o: ../include/snprintf.h
+useragent.o: squid.h ../include/config.h ../include/autoconf.h
+useragent.o: ../include/version.h /usr/include/unistd.h
+useragent.o: /usr/include/standards.h /usr/include/stdlib.h
+useragent.o: /usr/include/sgidefs.h /usr/include/stdio.h
+useragent.o: /usr/include/sys/types.h /usr/include/ctype.h
+useragent.o: /usr/include/errno.h /usr/include/sys/errno.h
+useragent.o: /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/grp.h
+useragent.o: /usr/include/malloc.h /usr/include/memory.h /usr/include/netdb.h
+useragent.o: /usr/include/pwd.h /usr/include/signal.h
+useragent.o: /usr/include/sys/signal.h /usr/include/time.h
+useragent.o: /usr/include/sys/param.h /usr/include/sys/time.h
+useragent.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+useragent.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+useragent.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+useragent.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+useragent.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+useragent.o: /usr/include/sys/syscall.h /usr/include/string.h
+useragent.o: /usr/include/strings.h /usr/include/bstring.h
+useragent.o: /usr/include/crypt.h /usr/include/getopt.h /usr/include/assert.h
+useragent.o: /usr/include/stdarg.h /usr/include/syslog.h
+useragent.o: /usr/include/sys/syslog.h /usr/include/math.h
+useragent.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h
+useragent.o: protos.h globals.h ../include/util.h ../include/radix.h
+useragent.o: ../include/snprintf.h
+wais.o: squid.h ../include/config.h ../include/autoconf.h
+wais.o: ../include/version.h /usr/include/unistd.h /usr/include/standards.h
+wais.o: /usr/include/stdlib.h /usr/include/sgidefs.h /usr/include/stdio.h
+wais.o: /usr/include/sys/types.h /usr/include/ctype.h /usr/include/errno.h
+wais.o: /usr/include/sys/errno.h /usr/include/fcntl.h
+wais.o: /usr/include/sys/fcntl.h /usr/include/grp.h /usr/include/malloc.h
+wais.o: /usr/include/memory.h /usr/include/netdb.h /usr/include/pwd.h
+wais.o: /usr/include/signal.h /usr/include/sys/signal.h /usr/include/time.h
+wais.o: /usr/include/sys/param.h /usr/include/sys/time.h
+wais.o: /usr/include/sys/resource.h /usr/include/sys/socket.h
+wais.o: /usr/include/sys/bsd_types.h /usr/include/sys/select.h
+wais.o: /usr/include/netinet/in.h /usr/include/sys/endian.h
+wais.o: /usr/include/arpa/inet.h /usr/include/sys/stat.h
+wais.o: /usr/include/sys/un.h /usr/include/sys/wait.h
+wais.o: /usr/include/sys/syscall.h /usr/include/string.h
+wais.o: /usr/include/strings.h /usr/include/bstring.h /usr/include/crypt.h
+wais.o: /usr/include/getopt.h /usr/include/assert.h /usr/include/stdarg.h
+wais.o: /usr/include/syslog.h /usr/include/sys/syslog.h /usr/include/math.h
+wais.o: /usr/include/regex.h defines.h enums.h typedefs.h structs.h protos.h
+wais.o: globals.h ../include/util.h ../include/radix.h ../include/snprintf.h
