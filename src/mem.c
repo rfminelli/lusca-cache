@@ -127,9 +127,9 @@ memAllocate(mem_type type)
     return memPoolAlloc(MemPools[type]);
 }
 
-/* give memory back to the pool */
+/* find appropriate pool and use it */
 void
-memFree(void *p, int type)
+memFree(mem_type type, void *p)
 {
     memPoolFree(MemPools[type], p);
 }
@@ -216,9 +216,6 @@ memInit(void)
     memDataInit(MEM_COMMWRITESTATEDATA, "CommWriteStateData",
 	sizeof(CommWriteStateData), 0);
     memDataInit(MEM_CONNSTATEDATA, "ConnStateData", sizeof(ConnStateData), 0);
-#if USE_CACHE_DIGESTS
-    memDataInit(MEM_DIGEST_FETCH_STATE, "DigestFetchState", sizeof(DigestFetchState), 0);
-#endif
     memDataInit(MEM_DISK_BUF, "Disk I/O Buffer", DISK_PAGE_SIZE, 200);
     memDataInit(MEM_DLINK_LIST, "dlink_list", sizeof(dlink_list), 10);
     memDataInit(MEM_DLINK_NODE, "dlink_node", sizeof(dlink_node), 10);
@@ -260,11 +257,10 @@ memInit(void)
     memDataInit(MEM_NETDBENTRY, "netdbEntry", sizeof(netdbEntry), 0);
     memDataInit(MEM_NET_DB_NAME, "net_db_name", sizeof(net_db_name), 0);
     memDataInit(MEM_NET_DB_PEER, "net_db_peer", sizeof(net_db_peer), 0);
-    memDataInit(MEM_PEER, "peer", sizeof(peer), 0);
 #if USE_CACHE_DIGESTS
-    memDataInit(MEM_PEER_DIGEST, "PeerDigest", sizeof(PeerDigest), 0);
     memDataInit(MEM_DIGEST_FETCH_STATE, "DigestFetchState", sizeof(DigestFetchState), 0);
 #endif
+    memDataInit(MEM_PEER, "peer", sizeof(peer), 0);
     memDataInit(MEM_PINGERECHODATA, "pingerEchoData",
 	sizeof(pingerEchoData), 0);
     memDataInit(MEM_PINGERREPLYDATA, "pingerReplyData",
@@ -297,7 +293,7 @@ memInit(void)
 	    continue;
 	/*
 	 * If you hit this assertion, then you forgot to add a
-	 * memDataInit() line for type 't'.
+	 * memDataInit() line for type 't' above.
 	 */
 	assert(MemPools[t]);
     }
@@ -327,23 +323,23 @@ memInUse(mem_type type)
 void
 memFree2K(void *p)
 {
-    memFree(p, MEM_2K_BUF);
+    memFree(MEM_2K_BUF, p);
 }
 
 void
 memFree4K(void *p)
 {
-    memFree(p, MEM_4K_BUF);
+    memFree(MEM_4K_BUF, p);
 }
 
 void
 memFree8K(void *p)
 {
-    memFree(p, MEM_8K_BUF);
+    memFree(MEM_8K_BUF, p);
 }
 
 void
 memFreeDISK(void *p)
 {
-    memFree(p, MEM_DISK_BUF);
+    memFree(MEM_DISK_BUF, p);
 }

@@ -44,6 +44,7 @@ const char *hier_strings[] =
     "DEFAULT_PARENT",
     "SINGLE_PARENT",
     "FIRST_UP_PARENT",
+    "NO_PARENT_DIRECT",
     "FIRST_PARENT_MISS",
     "CLOSEST_PARENT_MISS",
     "CLOSEST_PARENT",
@@ -53,6 +54,7 @@ const char *hier_strings[] =
     "ROUNDROBIN_PARENT",
 #if USE_CACHE_DIGESTS
     "CACHE_DIGEST_HIT",
+    "NO_CACHE_DIGEST_DIRECT",
 #endif
 #if USE_CARP
     "CARP",
@@ -67,7 +69,6 @@ static struct {
 
 static char *DirectStr[] =
 {
-    "DIRECT_UNKNOWN",
     "DIRECT_NO",
     "DIRECT_MAYBE",
     "DIRECT_YES"
@@ -75,7 +76,7 @@ static char *DirectStr[] =
 
 static void peerSelectFoo(ps_state *);
 static void peerPingTimeout(void *data);
-static void peerSelectCallback(ps_state * psstate);
+static void peerSelectCallbackFail(ps_state * psstate);
 static IRCB peerHandlePingReply;
 static void peerSelectStateFree(ps_state * psstate);
 static void peerIcpParentMiss(peer *, icp_common_t *, ps_state *);
@@ -84,11 +85,6 @@ static void peerHtcpParentMiss(peer *, htcpReplyData *, ps_state *);
 static void peerHandleHtcpReply(peer *, peer_t, htcpReplyData *, void *);
 #endif
 static int peerCheckNetdbDirect(ps_state * psstate);
-static void peerGetSomeNeighbor(ps_state *);
-static void peerGetSomeNeighborReplies(ps_state *);
-static void peerGetSomeDirect(ps_state *);
-static void peerGetSomeParent(ps_state *);
-static void peerAddFwdServer(FwdServer **, peer *, hier_code);
 
 static void
 peerSelectStateFree(ps_state * psstate)
@@ -111,10 +107,12 @@ int
 peerSelectIcpPing(request_t * request, int direct, StoreEntry * entry)
 {
     int n;
-    assert(entry);
-    assert(entry->ping_status == PING_NONE);
-    assert(direct != DIRECT_YES);
+    if (entry == NULL)
+	return 0;
     debug(44, 3) ("peerSelectIcpPing: %s\n", storeUrl(entry));
+    if (entry->ping_status != PING_NONE)
+	return 0;
+    assert(direct != DIRECT_YES);
     if (!request->flags.hierarchical && direct != DIRECT_NO)
 	return 0;
     if (EBIT_TEST(entry->flags, KEY_PRIVATE) && !neighbors_do_private_keys)
@@ -126,10 +124,37 @@ peerSelectIcpPing(request_t * request, int direct, StoreEntry * entry)
 }
 
 
+peer *
+peerGetSomeParent(request_t * request, hier_code * code)
+{
+    peer *p;
+    debug(44, 3) ("peerGetSomeParent: %s %s\n",
+	RequestMethodStr[request->method],
+	request->host);
+    if ((p = getDefaultParent(request))) {
+	*code = DEFAULT_PARENT;
+	return p;
+    }
+    if ((p = getRoundRobinParent(request))) {
+	*code = ROUNDROBIN_PARENT;
+	return p;
+    }
+    if ((p = getFirstUpParent(request))) {
+	*code = FIRSTUP_PARENT;
+	return p;
+    }
+    if ((p = getAnyParent(request))) {
+	*code = ANY_OLD_PARENT;
+	return p;
+    }
+    return NULL;
+}
+
 void
 peerSelect(request_t * request,
     StoreEntry * entry,
     PSC * callback,
+    PSC * fail_callback,
     void *callback_data)
 {
     ps_state *psstate = xcalloc(1, sizeof(ps_state));
@@ -137,12 +162,12 @@ peerSelect(request_t * request,
 	debug(44, 3) ("peerSelect: %s\n", storeUrl(entry));
     else
 	debug(44, 3) ("peerSelect: %s\n", RequestMethodStr[request->method]);
-    cbdataAdd(psstate, cbdataXfree, 0);
+    cbdataAdd(psstate, MEM_NONE);
     psstate->request = requestLink(request);
     psstate->entry = entry;
     psstate->callback = callback;
+    psstate->fail_callback = fail_callback;
     psstate->callback_data = callback_data;
-    psstate->direct = DIRECT_UNKNOWN;
 #if USE_CACHE_DIGESTS
     request->hier.peer_select_start = current_time;
 #endif
@@ -173,10 +198,9 @@ peerCheckAlwaysDirectDone(int answer, void *data)
 }
 
 static void
-peerSelectCallback(ps_state * psstate)
+peerSelectCallback(ps_state * psstate, peer * p)
 {
     StoreEntry *entry = psstate->entry;
-    FwdServer *fs = psstate->servers;
     void *data = psstate->callback_data;
     if (entry) {
 	debug(44, 3) ("peerSelectCallback: %s\n", storeUrl(entry));
@@ -184,17 +208,27 @@ peerSelectCallback(ps_state * psstate)
 	    eventDelete(peerPingTimeout, psstate);
 	entry->ping_status = PING_DONE;
     }
-    if (fs == NULL) {
-	debug(44, 1) ("Failed to select source for '%s'\n", storeUrl(entry));
-	debug(44, 1) ("  always_direct = %d\n", psstate->always_direct);
-	debug(44, 1) ("   never_direct = %d\n", psstate->never_direct);
-	debug(44, 1) ("       timedout = %d\n", psstate->ping.timedout);
-    }
     psstate->ping.stop = current_time;
-    if (cbdataValid(data)) {
-	psstate->servers = NULL;
-	psstate->callback(fs, data);
-    }
+    if (cbdataValid(data))
+	psstate->callback(p, data);
+    cbdataUnlock(data);
+    peerSelectStateFree(psstate);
+}
+
+static void
+peerSelectCallbackFail(ps_state * psstate)
+{
+    request_t *request = psstate->request;
+    void *data = psstate->callback_data;
+    const char *url = psstate->entry ? storeUrl(psstate->entry) : urlCanonical(request);
+    if (psstate->entry)
+	psstate->entry->ping_status = PING_DONE;
+    debug(44, 1) ("Failed to select source for '%s'\n", url);
+    debug(44, 1) ("  always_direct = %d\n", psstate->always_direct);
+    debug(44, 1) ("   never_direct = %d\n", psstate->never_direct);
+    debug(44, 1) ("       timedout = %d\n", psstate->ping.timedout);
+    if (cbdataValid(data))
+	psstate->fail_callback(NULL, data);
     cbdataUnlock(data);
     peerSelectStateFree(psstate);
 }
@@ -223,210 +257,146 @@ peerCheckNetdbDirect(ps_state * psstate)
 }
 
 static void
-peerSelectFoo(ps_state * ps)
+peerSelectFoo(ps_state * psstate)
 {
-    StoreEntry *entry = ps->entry;
-    request_t *request = ps->request;
+    peer *p;
+    hier_code code;
+    StoreEntry *entry = psstate->entry;
+    request_t *request = psstate->request;
+    int direct;
     debug(44, 3) ("peerSelectFoo: '%s %s'\n",
 	RequestMethodStr[request->method],
 	request->host);
-    if (ps->direct == DIRECT_UNKNOWN) {
-	if (ps->always_direct == 0 && Config.accessList.AlwaysDirect) {
-	    ps->acl_checklist = aclChecklistCreate(
-		Config.accessList.AlwaysDirect,
-		request,
-		request->client_addr,
-		NULL,		/* user agent */
-		NULL);		/* ident */
-	    aclNBCheck(ps->acl_checklist,
-		peerCheckAlwaysDirectDone,
-		ps);
-	    return;
-	} else if (ps->always_direct > 0) {
-	    ps->direct = DIRECT_YES;
-	} else if (ps->never_direct == 0 && Config.accessList.NeverDirect) {
-	    ps->acl_checklist = aclChecklistCreate(
-		Config.accessList.NeverDirect,
-		request,
-		request->client_addr,
-		NULL,		/* user agent */
-		NULL);		/* ident */
-	    aclNBCheck(ps->acl_checklist,
-		peerCheckNeverDirectDone,
-		ps);
-	    return;
-	} else if (ps->never_direct > 0) {
-	    ps->direct = DIRECT_NO;
-	} else if (request->flags.loopdetect) {
-	    ps->direct = DIRECT_YES;
-	} else {
-	    ps->direct = DIRECT_MAYBE;
-	}
-	debug(44, 3) ("ps: direct = %s\n",
-	    DirectStr[ps->direct]);
+    if (psstate->always_direct == 0 && Config.accessList.AlwaysDirect) {
+	psstate->acl_checklist = aclChecklistCreate(
+	    Config.accessList.AlwaysDirect,
+	    request,
+	    request->client_addr,
+	    NULL,		/* user agent */
+	    NULL);		/* ident */
+	aclNBCheck(psstate->acl_checklist,
+	    peerCheckAlwaysDirectDone,
+	    psstate);
+	return;
+    } else if (psstate->always_direct > 0) {
+	direct = DIRECT_YES;
+    } else if (psstate->never_direct == 0 && Config.accessList.NeverDirect) {
+	psstate->acl_checklist = aclChecklistCreate(
+	    Config.accessList.NeverDirect,
+	    request,
+	    request->client_addr,
+	    NULL,		/* user agent */
+	    NULL);		/* ident */
+	aclNBCheck(psstate->acl_checklist,
+	    peerCheckNeverDirectDone,
+	    psstate);
+	return;
+    } else if (psstate->never_direct > 0) {
+	direct = DIRECT_NO;
+    } else if (request->flags.loopdetect) {
+	direct = DIRECT_YES;
+    } else {
+	direct = DIRECT_MAYBE;
     }
-    if (entry->ping_status == PING_NONE) {
-	peerGetSomeNeighbor(ps);
-	if (entry->ping_status == PING_WAITING)
-	    return;
-    } else if (entry->ping_status == PING_WAITING) {
-	peerGetSomeNeighborReplies(ps);
-	entry->ping_status = PING_DONE;
+    debug(44, 3) ("peerSelectFoo: direct = %s\n", DirectStr[direct]);
+    if (direct == DIRECT_YES) {
+	debug(44, 3) ("peerSelectFoo: DIRECT\n");
+	hierarchyNote(&request->hier, DIRECT, &psstate->ping, request->host);
+	peerSelectCallback(psstate, NULL);
+	return;
     }
-    if (Config.onoff.prefer_direct)
-	peerGetSomeDirect(ps);
-    peerGetSomeParent(ps);
-    if (!Config.onoff.prefer_direct)
-	peerGetSomeDirect(ps);
-    peerSelectCallback(ps);
-}
-
-/*
- * peerGetSomeNeighbor
- * 
- * Selects a neighbor (parent or sibling) based on one of the
- * following methods:
- *      Cache Digests
- *      CARP
- *      Netdb RTT estimates
- *      ICP/HTCP queries
- */
-static void
-peerGetSomeNeighbor(ps_state * ps)
-{
-    StoreEntry *entry = ps->entry;
-    request_t *request = ps->request;
-    peer *p;
-    hier_code code = HIER_NONE;
-    assert(entry->ping_status == PING_NONE);
-    if (ps->direct == DIRECT_YES) {
-	entry->ping_status = PING_DONE;
+    if ((p = getSingleParent(request))) {
+	code = SINGLE_PARENT;
+	debug(44, 3) ("peerSelectFoo: %s/%s\n", hier_strings[code], p->host);
+	hierarchyNote(&request->hier, code, &psstate->ping, p->host);
+	peerSelectCallback(psstate, p);
+	return;
+    }
+    if (!request->flags.hierarchical && direct != DIRECT_NO) {
+	debug(44, 3) ("peerSelectFoo: DIRECT for non-hierarchical request\n");
+	hierarchyNote(&request->hier, DIRECT, &psstate->ping, request->host);
+	peerSelectCallback(psstate, NULL);
 	return;
     }
 #if USE_CACHE_DIGESTS
-    if ((p = neighborsDigestSelect(request, entry))) {
+    else if ((p = neighborsDigestSelect(request, entry))) {
+	debug(44, 2) ("peerSelect: Using Cache Digest\n");
+	request->hier.alg = PEER_SA_DIGEST;
 	code = CACHE_DIGEST_HIT;
-    } else
+	debug(44, 2) ("peerSelect: %s/%s\n", hier_strings[code], p->host);
+	hierarchyNote(&request->hier, code, &psstate->ping, p->host);
+	peerSelectCallback(psstate, p);
+	return;
+    }
 #endif
 #if USE_CARP
-    if ((p = carpSelectParent(request))) {
-	code = CARP;
-    } else
+    else if ((p = carpSelectParent(request))) {
+	hierarchyNote(&request->hier, CARP, &psstate->ping, p->host);
+	peerSelectCallback(psstate, p);
+	return;
+    }
 #endif
-    if ((p = netdbClosestParent(request))) {
+    else if ((p = netdbClosestParent(request))) {
+	request->hier.alg = PEER_SA_NETDB;
 	code = CLOSEST_PARENT;
-    } else if (peerSelectIcpPing(request, ps->direct, entry)) {
+	debug(44, 2) ("peerSelect: %s/%s\n", hier_strings[code], p->host);
+	hierarchyNote(&request->hier, code, &psstate->ping, p->host);
+	peerSelectCallback(psstate, p);
+	return;
+    } else if (peerSelectIcpPing(request, direct, entry)) {
+	assert(entry->ping_status == PING_NONE);
+	request->hier.alg = PEER_SA_ICP;
 	debug(44, 3) ("peerSelect: Doing ICP pings\n");
-	ps->ping.start = current_time;
-	ps->ping.n_sent = neighborsUdpPing(request,
+	psstate->ping.start = current_time;
+	psstate->ping.n_sent = neighborsUdpPing(request,
 	    entry,
 	    peerHandlePingReply,
-	    ps,
-	    &ps->ping.n_replies_expected,
-	    &ps->ping.timeout);
-	if (ps->ping.n_sent == 0)
+	    psstate,
+	    &psstate->ping.n_replies_expected,
+	    &psstate->ping.timeout);
+	if (psstate->ping.n_sent == 0)
 	    debug(44, 0) ("WARNING: neighborsUdpPing returned 0\n");
-	debug(44, 3) ("peerSelect: %d ICP replies expected, RTT %d msec\n",
-	    ps->ping.n_replies_expected, ps->ping.timeout);
-	if (ps->ping.n_replies_expected > 0) {
+	debug(44, 3) ("peerSelectFoo: %d ICP replies expected, RTT %d msec\n",
+	    psstate->ping.n_replies_expected, psstate->ping.timeout);
+	if (psstate->ping.n_replies_expected > 0) {
 	    entry->ping_status = PING_WAITING;
 	    eventAdd("peerPingTimeout",
 		peerPingTimeout,
-		ps,
-		0.001 * ps->ping.timeout,
+		psstate,
+		0.001 * psstate->ping.timeout,
 		0);
 	    return;
 	}
     }
-    if (code != HIER_NONE) {
-	assert(p);
-	debug(44, 3) ("peerSelect: %s/%s\n", hier_strings[code], p->host);
-	peerAddFwdServer(&ps->servers, p, code);
-    }
-    entry->ping_status = PING_DONE;
-}
-
-/*
- * peerGetSomeNeighborReplies
- * 
- * Selects a neighbor (parent or sibling) based on ICP/HTCP replies.
- */
-static void
-peerGetSomeNeighborReplies(ps_state * ps)
-{
-    StoreEntry *entry = ps->entry;
-    request_t *request = ps->request;
-    peer *p = NULL;
-    hier_code code = HIER_NONE;
-    assert(entry->ping_status == PING_WAITING);
-    assert(ps->direct != DIRECT_YES);
-    if (peerCheckNetdbDirect(ps)) {
+    debug(44, 3) ("peerSelectFoo: After peerSelectIcpPing.\n");
+    if (peerCheckNetdbDirect(psstate)) {
 	code = CLOSEST_DIRECT;
 	debug(44, 3) ("peerSelect: %s/%s\n", hier_strings[code], request->host);
-	peerAddFwdServer(&ps->servers, NULL, code);
-	return;
-    }
-    if ((p = ps->hit)) {
-	code = ps->hit_type == PEER_PARENT ? PARENT_HIT : SIBLING_HIT;
-    } else
-#if ALLOW_SOURCE_PING
-    if ((p = ps->secho)) {
-	code = SOURCE_FASTEST;
-    } else
-#endif
-    if (ps->closest_parent_miss.sin_addr.s_addr != any_addr.s_addr) {
-	p = whichPeer(&ps->closest_parent_miss);
+	hierarchyNote(&request->hier, code, &psstate->ping, request->host);
+	peerSelectCallback(psstate, NULL);
+    } else if ((p = whichPeer(&psstate->closest_parent_miss))) {
 	code = CLOSEST_PARENT_MISS;
-    } else if (ps->first_parent_miss.sin_addr.s_addr != any_addr.s_addr) {
-	p = whichPeer(&ps->first_parent_miss);
+	debug(44, 3) ("peerSelect: %s/%s\n", hier_strings[code], p->host);
+	hierarchyNote(&request->hier, code, &psstate->ping, p->host);
+	peerSelectCallback(psstate, p);
+    } else if ((p = whichPeer(&psstate->first_parent_miss))) {
 	code = FIRST_PARENT_MISS;
-    }
-    if (p && code != HIER_NONE) {
 	debug(44, 3) ("peerSelect: %s/%s\n", hier_strings[code], p->host);
-	peerAddFwdServer(&ps->servers, p, code);
-    }
-}
-
-
-/*
- * peerGetSomeDirect
- * 
- * Simply adds a 'direct' entry to the FwdServers list if this
- * request can be forwarded directly to the origin server
- */
-static void
-peerGetSomeDirect(ps_state * ps)
-{
-    if (ps->direct == DIRECT_NO)
-	return;
-    if (ps->request->protocol == PROTO_WAIS)
-	/* Its not really DIRECT, now is it? */
-	peerAddFwdServer(&ps->servers, Config.Wais.peer, DIRECT);
-    else
-	peerAddFwdServer(&ps->servers, NULL, DIRECT);
-}
-
-static void
-peerGetSomeParent(ps_state * ps)
-{
-    peer *p;
-    request_t *request = ps->request;
-    hier_code code = HIER_NONE;
-    debug(44, 3) ("peerGetSomeParent: %s %s\n",
-	RequestMethodStr[request->method],
-	request->host);
-    if ((p = getDefaultParent(request))) {
-	code = DEFAULT_PARENT;
-    } else if ((p = getRoundRobinParent(request))) {
-	code = ROUNDROBIN_PARENT;
-    } else if ((p = getFirstUpParent(request))) {
-	code = FIRSTUP_PARENT;
-    } else if ((p = getAnyParent(request))) {
-	code = ANY_OLD_PARENT;
-    }
-    if (code != HIER_NONE) {
+	hierarchyNote(&request->hier, code, &psstate->ping, p->host);
+	peerSelectCallback(psstate, p);
+    } else if (direct != DIRECT_NO) {
+	code = DIRECT;
+	debug(44, 3) ("peerSelect: %s/%s\n", hier_strings[code], request->host);
+	hierarchyNote(&request->hier, code, &psstate->ping, request->host);
+	peerSelectCallback(psstate, NULL);
+    } else if ((p = peerGetSomeParent(request, &code))) {
 	debug(44, 3) ("peerSelect: %s/%s\n", hier_strings[code], p->host);
-	peerAddFwdServer(&ps->servers, p, code);
+	hierarchyNote(&request->hier, code, &psstate->ping, p->host);
+	peerSelectCallback(psstate, p);
+    } else {
+	code = NO_DIRECT_FAIL;
+	hierarchyNote(&request->hier, code, &psstate->ping, NULL);
+	peerSelectCallbackFail(psstate);
     }
 }
 
@@ -491,6 +461,7 @@ peerHandleIcpReply(peer * p, peer_t type, icp_common_t * header, void *data)
 {
     ps_state *psstate = data;
     icp_opcode op = header->opcode;
+    request_t *request = psstate->request;
     debug(44, 3) ("peerHandleIcpReply: %s %s\n",
 	icp_opcode_str[op],
 	storeUrl(psstate->entry));
@@ -505,18 +476,20 @@ peerHandleIcpReply(peer * p, peer_t type, icp_common_t * header, void *data)
 	if (type == PEER_PARENT)
 	    peerIcpParentMiss(p, header, psstate);
     } else if (op == ICP_HIT) {
-	psstate->hit = p;
-	psstate->hit_type = type;
-	peerSelectFoo(psstate);
+	hierarchyNote(&request->hier,
+	    type == PEER_PARENT ? PARENT_HIT : SIBLING_HIT,
+	    &psstate->ping,
+	    p->host);
+	peerSelectCallback(psstate, p);
+	return;
+    } else if (op == ICP_SECHO) {
+	hierarchyNote(&request->hier,
+	    SOURCE_FASTEST,
+	    &psstate->ping,
+	    request->host);
+	peerSelectCallback(psstate, NULL);
 	return;
     }
-#if ALLOW_SOURCE_PING
-    else if (op == ICP_SECHO) {
-	psstate->secho = p;
-	peerSelectFoo(psstate);
-	return;
-    }
-#endif
     if (psstate->ping.n_recv < psstate->ping.n_replies_expected)
 	return;
     peerSelectFoo(psstate);
@@ -533,9 +506,11 @@ peerHandleHtcpReply(peer * p, peer_t type, htcpReplyData * htcp, void *data)
 	storeUrl(psstate->entry));
     psstate->ping.n_recv++;
     if (htcp->hit) {
-	psstate->hit = p;
-	psstate->hit_type = type;
-	peerSelectFoo(psstate);
+	hierarchyNote(&request->hier,
+	    type == PEER_PARENT ? PARENT_HIT : SIBLING_HIT,
+	    &psstate->ping,
+	    p->host);
+	peerSelectCallback(psstate, p);
 	return;
     }
     if (type == PEER_PARENT)
@@ -586,19 +561,4 @@ peerHandlePingReply(peer * p, peer_t type, protocol_t proto, void *pingdata, voi
 #endif
     else
 	debug(44, 1) ("peerHandlePingReply: unknown protocol_t %d\n", (int) proto);
-}
-
-static void
-peerAddFwdServer(FwdServer ** FS, peer * p, hier_code code)
-{
-    FwdServer *fs = memAllocate(MEM_FWD_SERVER);
-    debug(44, 5) ("peerAddFwdServer: adding %s %s\n",
-	p ? p->host : "DIRECT",
-	hier_strings[code]);
-    fs->peer = p;
-    fs->code = code;
-    cbdataLock(fs->peer);
-    while (*FS)
-	FS = &(*FS)->next;
-    *FS = fs;
 }

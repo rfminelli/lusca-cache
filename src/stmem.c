@@ -41,7 +41,7 @@ stmemFree(mem_hdr * mem)
     mem_node *p;
     while ((p = mem->head)) {
 	mem->head = p->next;
-	memFree(p->data, MEM_STMEM_BUF);
+	memFree(MEM_STMEM_BUF, p->data);
 	store_mem_size -= SM_PAGE_SIZE;
 	safe_free(p);
     }
@@ -65,7 +65,7 @@ stmemFreeDataUpto(mem_hdr * mem, int target_offset)
 	    lastp = p;
 	    p = p->next;
 	    current_offset += lastp->len;
-	    memFree(lastp->data, MEM_STMEM_BUF);
+	    memFree(MEM_STMEM_BUF, lastp->data);
 	    store_mem_size -= SM_PAGE_SIZE;
 	    safe_free(lastp);
 	}

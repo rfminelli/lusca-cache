@@ -35,9 +35,17 @@
 
 
 #include "squid.h"
+
+#include "snmp.h"
+#include "snmp_impl.h"
+#include "asn1.h"
+#include "snmp_api.h"
+#include "snmp_vars.h"
+#include "snmp_oidlist.h"
 #include "cache_snmp.h"
 
 extern StatCounters *snmpStatGet(int);
+
 
 /************************************************************************
 
@@ -420,9 +428,6 @@ snmp_prfProtoFn(variable_list * Var, snint * ErrP)
 	case PERF_PROTOSTAT_AGGR_CURSWAP:
 	    *(Answer->val.integer) = (snint) store_swap_size;
 	    break;
-	case PERF_PROTOSTAT_AGGR_CLIENTS:
-	    *(Answer->val.integer) = (snint) Counter.client_http.clients;
-	    break;
 	default:
 	    *ErrP = SNMP_ERR_NOSUCHNAME;
 	    snmp_var_free(Answer);
@@ -471,12 +476,6 @@ snmp_prfProtoFn(variable_list * Var, snint * ErrP)
 	    break;
 	case PERF_MEDIAN_DNS:
 	    x = statHistDeltaMedian(&l->dns.svc_time, &f->dns.svc_time);
-	    break;
-	case PERF_MEDIAN_RHR:
-	    x = statRequestHitRatio(minutes);
-	    break;
-	case PERF_MEDIAN_BHR:
-	    x = statByteHitRatio(minutes);
 	    break;
 	default:
 	    *ErrP = SNMP_ERR_NOSUCHNAME;

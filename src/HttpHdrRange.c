@@ -119,7 +119,7 @@ httpHdrRangeSpecParseCreate(const char *field, int flen)
 static void
 httpHdrRangeSpecDestroy(HttpHdrRangeSpec * spec)
 {
-    memFree(spec, MEM_HTTP_HDR_RANGE_SPEC);
+    memFree(MEM_HTTP_HDR_RANGE_SPEC, spec);
 }
 
 
@@ -265,7 +265,7 @@ httpHdrRangeDestroy(HttpHdrRange * range)
     while (range->specs.count)
 	httpHdrRangeSpecDestroy(stackPop(&range->specs));
     stackClean(&range->specs);
-    memFree(range, MEM_HTTP_HDR_RANGE);
+    memFree(MEM_HTTP_HDR_RANGE, range);
 }
 
 HttpHdrRange *

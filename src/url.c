@@ -66,7 +66,6 @@ const char *ProtocolStr[] =
     "TOTAL"
 };
 
-static const char *const hex = "0123456789abcdef";
 static request_t *urnParse(method_t method, char *urn);
 static const char *const valid_hostname_chars =
 #if ALLOW_HOSTNAME_UNDERSCORES
@@ -257,7 +256,7 @@ urlParse(method_t method, char *url)
     }
 #endif
     if (stringHasWhitespace(urlpath)) {
-	debug(23, 2) ("urlParse: URI has whitespace: {%s}\n", url);
+	debug(23, 1) ("urlParse: URI has whitespace: {%s}\n", url);
 	switch (Config.uri_whitespace) {
 	case URI_WHITESPACE_DENY:
 	    return NULL;

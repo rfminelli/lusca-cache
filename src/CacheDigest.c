@@ -88,7 +88,7 @@ cacheDigestDestroy(CacheDigest * cd)
 {
     assert(cd);
     cacheDigestClean(cd);
-    memFree(cd, MEM_CACHE_DIGEST);
+    memFree(MEM_CACHE_DIGEST, cd);
 }
 
 CacheDigest *
@@ -249,13 +249,10 @@ cacheDigestGuessStatsReport(const cd_guess_stats * stats, StoreEntry * sentry, c
     assert(label);
     assert(tot_count == hit_count + miss_count);	/* paranoid */
 
-    if (!tot_count) {
-	storeAppendPrintf(sentry, "no guess stats for %s available\n", label);
-	return;
-    }
     storeAppendPrintf(sentry, "Digest guesses stats for %s:\n", label);
     storeAppendPrintf(sentry, "guess\t hit\t\t miss\t\t total\t\t\n");
     storeAppendPrintf(sentry, " \t #\t %%\t #\t %%\t #\t %%\t\n");
+
     storeAppendPrintf(sentry, "true\t %d\t %.2f\t %d\t %.2f\t %d\t %.2f\n",
 	stats->true_hits, xpercent(stats->true_hits, tot_count),
 	stats->true_misses, xpercent(stats->true_misses, tot_count),

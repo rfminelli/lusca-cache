@@ -40,10 +40,8 @@ extern void (*failure_notify) (const char *);
 
 static int opt_send_signal = -1;
 static int opt_no_daemon = 0;
-static int opt_parse_cfg_only = 0;
 static int httpPortNumOverride = 1;
 static int icpPortNumOverride = 1;	/* Want to detect "-u 0" */
-static int configured_once = 0;
 #if MALLOC_DBG
 static int malloc_debug_level = 0;
 #endif
@@ -81,9 +79,8 @@ usage(void)
 	"       -f file   Use given config-file instead of\n"
 	"                 %s\n"
 	"       -h        Print help message.\n"
-	"       -k reconfigure|rotate|shutdown|interrupt|kill|debug|check|parse\n"
-	"                 Parse configuration file, then send signal to \n"
-	"                 running copy (except -k parse) and exit.\n"
+	"       -k reconfigure|rotate|shutdown|interrupt|kill|debug|check\n"
+	"                 Send signal to running copy and exit.\n"
 	"       -s        Enable logging to syslog.\n"
 	"       -u port   Specify ICP port number (default: %d), disable with 0.\n"
 	"       -v        Print version.\n"
@@ -174,8 +171,6 @@ mainParseOptions(int argc, char *argv[])
 		opt_send_signal = SIGKILL;
 	    else if (!strncmp(optarg, "check", strlen(optarg)))
 		opt_send_signal = 0;	/* SIGNULL */
-	    else if (!strncmp(optarg, "parse", strlen(optarg)))
-		opt_parse_cfg_only = 1;		/* parse cfg file only */
 	    else
 		usage();
 	    break;
@@ -379,6 +374,14 @@ mainInitialize(void)
     squid_signal(SIGPIPE, SIG_IGN, SA_RESTART);
     squid_signal(SIGCHLD, sig_child, SA_NODEFER | SA_RESTART);
 
+    if (!configured_once) {
+	cbdataInit();
+	memInit();		/* memInit must go before config parsing */
+    }
+    if (ConfigFile == NULL)
+	ConfigFile = xstrdup(DefaultConfigFile);
+    parseConfigFile(ConfigFile);
+
     setEffectiveUser();
     assert(Config.Port.http);
     if (httpPortNumOverride != 1)
@@ -520,27 +523,17 @@ main(int argc, char **argv)
 
     mainParseOptions(argc, argv);
 
-    /* parse configuration file
-     * note: in "normal" case this used to be called from mainInitialize() */
-    {
-	int parse_err;
-	if (!ConfigFile)
-	    ConfigFile = xstrdup(DefaultConfigFile);
-	assert(!configured_once);
-	cbdataInit();
-	memInit();		/* memInit is required for config parsing */
-	parse_err = parseConfigFile(ConfigFile);
-
-	if (opt_parse_cfg_only)
-	    return parse_err;
-    }
-
     /* send signal to running copy and exit */
     if (opt_send_signal != -1) {
 	sendSignal();
 	/* NOTREACHED */
     }
     if (opt_create_swap_dirs) {
+	if (ConfigFile == NULL)
+	    ConfigFile = xstrdup(DefaultConfigFile);
+	cbdataInit();
+	memInit();		/* memInit is required for config parsing */
+	parseConfigFile(ConfigFile);
 	setEffectiveUser();
 	debug(0, 0) ("Creating Swap Directories\n");
 	storeCreateSwapDirectories();
@@ -554,16 +547,15 @@ main(int argc, char **argv)
 	for (n = Squid_MaxFD; n > 2; n--)
 	    close(n);
 
-    /* init comm module */
+    /*init comm module */
     comm_init();
     comm_select_init();
 
-    if (opt_no_daemon) {
-	/* we have to init fdstat here. */
-	fd_open(0, FD_LOG, "stdin");
-	fd_open(1, FD_LOG, "stdout");
-	fd_open(2, FD_LOG, "stderr");
-    }
+    /* we have to init fdstat here. */
+    fd_open(0, FD_LOG, "stdin");
+    fd_open(1, FD_LOG, "stdout");
+    fd_open(2, FD_LOG, "stderr");
+
     mainInitialize();
 
     /* main loop */
@@ -624,6 +616,11 @@ sendSignal(void)
 {
     pid_t pid;
     debug_log = stderr;
+    if (ConfigFile == NULL)
+	ConfigFile = xstrdup(DefaultConfigFile);
+    cbdataInit();
+    memInit();
+    parseConfigFile(ConfigFile);
     pid = readPidFile();
     if (pid > 1) {
 	if (kill(pid, opt_send_signal) &&
@@ -655,62 +652,32 @@ watch_child(char *argv[])
     int status;
 #endif
     pid_t pid;
-    int i;
     if (*(argv[0]) == '(')
 	return;
-    openlog(appname, LOG_PID | LOG_NDELAY | LOG_CONS, LOG_LOCAL4);
-    if ((pid = fork()) < 0)
-	syslog(LOG_ALERT, "fork failed: %s", xstrerror());
-    else if (pid > 0)
-	exit(0);
-    if (setsid() < 0)
-	syslog(LOG_ALERT, "setsid failed: %s", xstrerror());
-#ifdef TIOCNOTTY
-    if ((i = open("/dev/tty", O_RDWR)) >= 0) {
-	ioctl(i, TIOCNOTTY, NULL);
-	close(i);
-    }
-#endif
-    for (i = 0; i < Squid_MaxFD; i++)
-	close(i);
-    umask(0);
     for (;;) {
-	if ((pid = fork()) == 0) {
+	if (fork() == 0) {
 	    /* child */
 	    prog = xstrdup(argv[0]);
 	    argv[0] = xstrdup("(squid)");
 	    execvp(prog, argv);
-	    syslog(LOG_ALERT, "execvp failed: %s", xstrerror());
+	    fatal("execvp failed");
 	}
-	/* parent */
-	syslog(LOG_NOTICE, "Squid Parent: child process %d started", pid);
-	time(&start);
-	squid_signal(SIGINT, SIG_IGN, SA_RESTART);
+	/* parent */ time(&start);
+	do {
+	    squid_signal(SIGINT, SIG_IGN, SA_RESTART);
 #ifdef _SQUID_NEXT_
-	pid = wait3(&status, 0, NULL);
+	    pid = wait3(&status, 0, NULL);
 #else
-	pid = waitpid(-1, &status, 0);
+	    pid = waitpid(-1, &status, 0);
 #endif
+	} while (pid > 0);
 	time(&stop);
-	if (WIFEXITED(status)) {
-	    syslog(LOG_NOTICE,
-		"Squid Parent: child process %d exited with status %d",
-		pid, WEXITSTATUS(status));
-	} else if (WIFSIGNALED(status)) {
-	    syslog(LOG_NOTICE,
-		"Squid Parent: child process %d exited due to signal %d",
-		pid, WTERMSIG(status));
-	} else {
-	    syslog(LOG_NOTICE, "Squid Parent: child process %d exited", pid);
-	}
 	if (stop - start < 10)
 	    failcount++;
 	else
 	    failcount = 0;
-	if (failcount == 5) {
-	    syslog(LOG_ALERT, "Exiting due to repeated, frequent failures");
+	if (failcount == 5)
 	    exit(1);
-	}
 	if (WIFEXITED(status))
 	    if (WEXITSTATUS(status) == 0)
 		exit(0);
@@ -755,17 +722,14 @@ SquidShutdown(void *unused)
     clientdbFreeMemory();
     httpHeaderCleanModule();
     statFreeMemory();
-    eventFreeMemory();
     mimeFreeMemory();
     errorClean();
 #endif
     memClean();
 #if !XMALLOC_TRACE
-    if (opt_no_daemon) {
-	file_close(0);
-	file_close(1);
-	file_close(2);
-    }
+    file_close(0);
+    file_close(1);
+    file_close(2);
 #endif
     fdDumpOpen();
     fdFreeMemory();

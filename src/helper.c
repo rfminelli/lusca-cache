@@ -59,7 +59,7 @@ helperOpenServers(helper * hlp)
 	}
 	hlp->n_running++;
 	srv = memAllocate(MEM_HELPER_SERVER);
-	cbdataAdd(srv, memFree, MEM_HELPER_SERVER);
+	cbdataAdd(srv, MEM_HELPER_SERVER);
 	srv->flags.alive = 1;
 	srv->index = k;
 	srv->rfd = rfd;
@@ -185,7 +185,7 @@ helper *
 helperCreate(const char *name)
 {
     helper *hlp = memAllocate(MEM_HELPER);
-    cbdataAdd(hlp, memFree, MEM_HELPER);
+    cbdataAdd(hlp, MEM_HELPER);
     hlp->id_name = name;
     return hlp;
 }
@@ -209,17 +209,10 @@ helperServerFree(int fd, void *data)
 {
     helper_server *srv = data;
     helper *hlp = srv->parent;
-    helper_request *r;
     assert(srv->rfd == fd);
     if (srv->buf) {
-	memFree(srv->buf, MEM_8K_BUF);
+	memFree(MEM_8K_BUF, srv->buf);
 	srv->buf = NULL;
-    }
-    if ((r = srv->request)) {
-	if (cbdataValid(r->data))
-	    r->callback(r->data, srv->buf);
-	helperRequestFree(r);
-	srv->request = NULL;
     }
     if (srv->wfd != srv->rfd)
 	comm_close(srv->wfd);
@@ -275,7 +268,6 @@ helperHandleRead(int fd, void *data)
 	srv->flags.busy = 0;
 	srv->offset = 0;
 	helperRequestFree(r);
-	srv->request = NULL;
 	hlp->stats.replies++;
 	hlp->stats.avg_svc_time =
 	    intAverage(hlp->stats.avg_svc_time,
@@ -318,7 +310,7 @@ Dequeue(helper * hlp)
     if ((link = hlp->queue.head)) {
 	r = link->data;
 	dlinkDelete(link, &hlp->queue);
-	memFree(link, MEM_DLINK_NODE);
+	memFree(MEM_DLINK_NODE, link);
 	hlp->stats.queue_size--;
     }
     return r;
@@ -385,5 +377,5 @@ helperRequestFree(helper_request * r)
 {
     cbdataUnlock(r->data);
     xfree(r->buf);
-    memFree(r, MEM_HELPER_REQUEST);
+    memFree(MEM_HELPER_REQUEST, r);
 }

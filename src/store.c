@@ -157,7 +157,7 @@ destroy_MemObject(StoreEntry * e)
     ctx_exit(ctx);		/* must exit before we free mem->url */
     safe_free(mem->url);
     safe_free(mem->log_url);
-    memFree(mem, MEM_MEMOBJECT);
+    memFree(MEM_MEMOBJECT, mem);
 }
 
 static void
@@ -170,7 +170,7 @@ destroy_StoreEntry(void *data)
 	destroy_MemObject(e);
     storeHashDelete(e);
     assert(e->key == NULL);
-    memFree(e, MEM_STOREENTRY);
+    memFree(MEM_STOREENTRY, e);
 }
 
 /* ----- INTERFACE BETWEEN STORAGE MANAGER AND HASH TABLE FUNCTIONS --------- */
@@ -283,7 +283,10 @@ storeGet(const cache_key * key)
 StoreEntry *
 storeGetPublic(const char *uri, const method_t method)
 {
-    return storeGet(storeKeyPublic(uri, method));
+    StoreEntry *e = storeGet(storeKeyPublic(uri, method));
+    if (e == NULL && squid_curtime < 920000000)
+	e = storeGet(storeKeyPublicOld(uri, method));
+    return e;
 }
 
 static int
@@ -384,6 +387,9 @@ storeCreateEntry(const char *url, const char *log_url, request_flags flags, meth
     e->timestamp = 0;		/* set in storeTimestampsSet() */
     e->ping_status = PING_NONE;
     EBIT_SET(e->flags, ENTRY_VALIDATED);
+#ifdef PPNR_WIP
+    EBIT_SET(e->flags, ENTRY_FWD_HDR_WAIT);
+#endif /* PPNR_WIP */
     return e;
 }
 
@@ -464,7 +470,6 @@ struct _store_check_cachable_hist {
 	int too_big;
 	int private_key;
 	int too_many_open_files;
-	int too_many_open_fds;
 	int lru_age_too_low;
     } no;
     struct {
@@ -513,9 +518,6 @@ storeCheckCachable(StoreEntry * e)
     } else if (storeTooManyDiskFilesOpen()) {
 	debug(20, 2) ("storeCheckCachable: NO: too many disk files open\n");
 	store_check_cachable_hist.no.too_many_open_files++;
-    } else if (fdNFree() < RESERVED_FD) {
-	debug(20, 2) ("storeCheckCachable: NO: too FD's open\n");
-	store_check_cachable_hist.no.too_many_open_fds++;
     } else if (storeExpiredReferenceAge() < 300) {
 	debug(20, 2) ("storeCheckCachable: NO: LRU Age = %d\n",
 	    storeExpiredReferenceAge());
@@ -532,8 +534,6 @@ storeCheckCachable(StoreEntry * e)
 static void
 storeCheckCachableStats(StoreEntry * sentry)
 {
-    storeAppendPrintf(sentry, "Category\t Count\n");
-
     storeAppendPrintf(sentry, "no.non_get\t%d\n",
 	store_check_cachable_hist.no.non_get);
     storeAppendPrintf(sentry, "no.not_entry_cachable\t%d\n",
@@ -550,8 +550,6 @@ storeCheckCachableStats(StoreEntry * sentry)
 	store_check_cachable_hist.no.private_key);
     storeAppendPrintf(sentry, "no.too_many_open_files\t%d\n",
 	store_check_cachable_hist.no.too_many_open_files);
-    storeAppendPrintf(sentry, "no.too_many_open_fds\t%d\n",
-	store_check_cachable_hist.no.too_many_open_fds);
     storeAppendPrintf(sentry, "no.lru_age_too_low\t%d\n",
 	store_check_cachable_hist.no.lru_age_too_low);
     storeAppendPrintf(sentry, "yes.default\t%d\n",
@@ -578,6 +576,16 @@ storeComplete(StoreEntry * e)
     InvokeHandlers(e);
     storeCheckSwapOut(e);
 }
+
+#ifdef PPNR_WIP
+void
+storePPNR(StoreEntry * e)
+{
+    assert(EBIT_TEST(e->flags, ENTRY_FWD_HDR_WAIT));
+    EBIT_CLR(e->flags, ENTRY_FWD_HDR_WAIT);
+}
+
+#endif /* PPNR_WIP */
 
 /*
  * Someone wants to abort this transfer.  Set the reason in the
@@ -819,7 +827,7 @@ storeLateRelease(void *unused)
 	e = stackPop(&LateReleaseStack);
 	if (e == NULL) {
 	    /* done! */
-	    debug(20, 0) ("storeLateRelease: released %d objects\n", n);
+	    debug(20, 1) ("storeLateRelease: released %d objects\n", n);
 	    return;
 	}
 	storeUnlockObject(e);
@@ -840,8 +848,12 @@ storeEntryLocked(const StoreEntry * e)
 	return 1;
     if (e->store_status == STORE_PENDING)
 	return 1;
+    /*
+     * SPECIAL, PUBLIC entries should be "locked"
+     */
     if (EBIT_TEST(e->flags, ENTRY_SPECIAL))
-	return 1;
+	if (!EBIT_TEST(e->flags, KEY_PRIVATE))
+	    return 1;
     return 0;
 }
 
@@ -1227,16 +1239,4 @@ storeEntryReply(StoreEntry * e)
     if (NULL == e->mem_obj)
 	return NULL;
     return e->mem_obj->reply;
-}
-
-void
-storeEntryReset(StoreEntry * e)
-{
-    MemObject *mem = e->mem_obj;
-    debug(20, 3) ("storeEntryReset: %s\n", storeUrl(e));
-    assert(mem->swapout.fd == -1);
-    stmemFree(&mem->data_hdr);
-    mem->inmem_hi = mem->inmem_lo = 0;
-    httpReplyDestroy(mem->reply);
-    mem->reply = httpReplyCreate();
 }

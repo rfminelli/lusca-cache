@@ -162,7 +162,7 @@ void
 httpHdrContRangeDestroy(HttpHdrContRange * range)
 {
     assert(range);
-    memFree(range, MEM_HTTP_HDR_CONTENT_RANGE);
+    memFree(MEM_HTTP_HDR_CONTENT_RANGE, range);
 }
 
 HttpHdrContRange *

@@ -141,7 +141,7 @@ httpReplyParse(HttpReply * rep, const char *buf)
     /* put a 0-terminator */
     xstrncpy(headers, buf, 4096);
     success = httpReplyParseStep(rep, headers, 0);
-    memFree(headers, MEM_4K_BUF);
+    memFree(MEM_4K_BUF, headers);
     return success == 1;
 }
 
@@ -279,7 +279,7 @@ httpReplyUpdateOnNotModified(HttpReply * rep, HttpReply * freshRep)
 static void
 httpReplyDoDestroy(HttpReply * rep)
 {
-    memFree(rep, MEM_HTTP_REPLY);
+    memFree(MEM_HTTP_REPLY, rep);
 }
 
 /* sync this routine when you update HttpReply struct */

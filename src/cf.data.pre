@@ -668,21 +668,6 @@ DOC_START
 	a directory. Since this is the index for the whole object
 	list you CANNOT periodically rotate it!
 
-	If you have more than one 'cache_dir', these swap logs will
-	have names such as:
-
-		cache_swap_log.00
-		cache_swap_log.01
-		cache_swap_log.02
-
-	The numbered extension (which is added automatically)
-	corresponds to the order of the 'cache_dir' lines in this
-	configuration file.  If you change the order of the 'cache_dir'
-	lines in this file, then these log files will NOT correspond to
-	the correct 'cache_dir' entry (unless you manually rename
-	them).  We recommend that you do NOT use this option.  It is
-	better to keep these log files in each 'cache_dir' directory.
-
 cache_swap_log
 DOC_END
 
@@ -1460,12 +1445,6 @@ DOC_START
 	  # WARNING: proxy_auth can't be used in a transparent proxy. It
 	  # collides with any authentication done by origin servers. It may
 	  # seem like it works at first, but it doesn't.
-
-	acl aclname snmp_community string ...
-	  # A community string to limit access to your SNMP Agent
-	  # Example:
-	  # 
-	  #	acl snmppublic snmp_community public
 
 
 Examples:
@@ -2369,6 +2348,19 @@ DOC_START
 snmp_port 3401
 DOC_END
 
+NAME: snmp_do_queueing
+TYPE: onoff
+LOC: Config.Snmp.do_queueing
+DEFAULT: on
+IFDEF: SQUID_SNMP
+DOC_START
+	If disabled, snmp packets will not be queued but delivered
+	immediately. This could be useful when you want to monitor a
+	cache in trouble, but this could also make Squid block, slowing
+	connections and possibly worsening the cache status.
+snmp_do_queueing on
+DOC_END
+
 NAME: forward_snmpd_port
 TYPE: ushort
 LOC: Config.Snmp.localPort
@@ -2390,26 +2382,73 @@ DOC_START
 forward_snmpd_port 0
 DOC_END
 
-NAME: snmp_access
-TYPE: acl_access
-LOC: Config.accessList.snmp
+NAME: snmp_mib_path
+TYPE: string
+LOC: Config.Snmp.mibPath
+DEFAULT: @DEFAULT_MIB_PATH@
+IFDEF: SQUID_SNMP
+DOC_START
+	The location of Squid's mib.
+snmp_mib_path @DEFAULT_MIB_PATH@
+DOC_END
+
+NAME: trap_sink
+TYPE: string
+LOC: Config.Snmp.trap_sink
+DEFAULT: 127.0.0.1
+IFDEF: SQUID_SNMP
+DOC_START
+	Hostname or ip address of trap sink for snmp
+trap_sink 127.0.0.1
+DOC_END
+
+NAME: snmp_trap_community
+TYPE: string
+LOC: Config.Snmp.trap_community
+DEFAULT: public
+IFDEF: SQUID_SNMP
+DOC_START
+	Community name for traps.
+snmp_trap_community public
+DOC_END
+
+NAME: snmp_enable_authen_traps
+TYPE: onoff
+LOC: Config.Snmp.conf_authtraps
+DEFAULT: off
+IFDEF: SQUID_SNMP
+DOC_START
+	Enable SNMP authenticated traps. Set to 'off' or 'on'.
+snmp_enable_authen_traps off
+DOC_END
+
+NAME: snmp_agent_conf
+TYPE: stringlist
+LOC: Config.Snmp.snmpconf
 DEFAULT: none
 IFDEF: SQUID_SNMP
 DOC_START
-	Allowing or denying access to the SNMP port.
+	Define snmp views, users and communities 
+	Example:
+		snmp_agent_conf view all .1.3.6	included
+		snmp_agent_conf view squid .1.3.6 included
+		snmp_agent_conf user squid - all all public
+		snmp_agent_conf user all all all all  squid
+		snmp_agent_conf community public squid squid
+		snmp_agent_conf community readwrite all all
+DOC_END
 
-	All access to the agent is denied by default.
-	usage:
-
-	snmp_access allow|deny [!]aclname ...
-
-Example:
-snmp_access allow public localhost
-snmp_access deny all
-
-NOCOMMENT_START
-snmp_access deny all
-NOCOMMENT_END
+NAME: snmp_acl
+TYPE: snmp_access
+LOC: Config.Snmp.communities
+DEFAULT: none
+IFDEF: SQUID_SNMP
+DOC_START
+	Define access controls per community:
+	snmp_access communityname allow|deny [!]aclname ...
+	Example:
+		snmp_acl public allow adminsubnet
+		snmp_acl public deny all
 DOC_END
 
 NAME: snmp_incoming_address
@@ -2719,20 +2758,4 @@ DOC_START
 	additional CRLF pair from broken web clients.
 persistent_client_posts on
 DOC_END
-
-NAME: prefer_direct
-TYPE: onoff
-LOC: Config.onoff.prefer_direct
-DEFAULT: on
-DOC_START
-	By default, if the ICP, HTCP, Cache Digest, etc. techniques
-	do not yield a parent cache, Squid gives higher preference
-	to forwarding the request direct to origin servers, rather
-	than selecting a parent cache anyway.
-
-	If you want Squid to give higher precedence to a parent
-	cache, instead of going direct, then turn this option off.
-prefer_direct on
-DOC_END
-
 EOF

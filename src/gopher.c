@@ -87,7 +87,6 @@ typedef struct gopher_ds {
     int len;
     char *buf;			/* pts to a 4k page */
     int fd;
-    FwdState *fwdState;
 } GopherStateData;
 
 static PF gopherStateFree;
@@ -118,7 +117,7 @@ gopherStateFree(int fdnotused, void *data)
     if (gopherState->entry) {
 	storeUnlockObject(gopherState->entry);
     }
-    memFree(gopherState->buf, MEM_4K_BUF);
+    memFree(MEM_4K_BUF, gopherState->buf);
     gopherState->buf = NULL;
     cbdataFree(gopherState);
 }
@@ -655,7 +654,7 @@ gopherReadReply(int fd, void *data)
 	    gopherEndHTML(data);
 	storeTimestampsSet(entry);
 	storeBufferFlush(entry);
-	fwdComplete(gopherState->fwdState);
+	storeComplete(entry);
 	comm_close(fd);
     } else {
 	if (gopherState->conversion != NORMAL) {
@@ -668,7 +667,7 @@ gopherReadReply(int fd, void *data)
 	    gopherReadReply,
 	    data, 0);
     }
-    memFree(buf, MEM_4K_BUF);
+    memFree(MEM_4K_BUF, buf);
     return;
 }
 
@@ -696,7 +695,7 @@ gopherSendComplete(int fd, char *buf, size_t size, int errflag, void *data)
 	errorAppendEntry(entry, err);
 	comm_close(fd);
 	if (buf)
-	    memFree(buf, MEM_4K_BUF);	/* Allocated by gopherSendRequest. */
+	    memFree(MEM_4K_BUF, buf);	/* Allocated by gopherSendRequest. */
 	return;
     }
     /* 
@@ -731,7 +730,7 @@ gopherSendComplete(int fd, char *buf, size_t size, int errflag, void *data)
     commSetSelect(fd, COMM_SELECT_READ, gopherReadReply, gopherState, 0);
     commSetDefer(fd, fwdCheckDeferRead, entry);
     if (buf)
-	memFree(buf, MEM_4K_BUF);	/* Allocated by gopherSendRequest. */
+	memFree(MEM_4K_BUF, buf);	/* Allocated by gopherSendRequest. */
 }
 
 /* This will be called when connect completes. Write request. */
@@ -764,10 +763,8 @@ gopherSendRequest(int fd, void *data)
 }
 
 void
-gopherStart(FwdState * fwdState)
+gopherStart(StoreEntry * entry, int fd)
 {
-    int fd = fwdState->server_fd;
-    StoreEntry *entry = fwdState->entry;
     GopherStateData *gopherState = CreateGopherStateData();
     storeLockObject(entry);
     gopherState->entry = entry;
@@ -800,12 +797,11 @@ gopherStart(FwdState * fwdState)
 	    }
 	}
 	gopherToHTML(gopherState, (char *) NULL, 0);
-	fwdComplete(gopherState->fwdState);
+	storeComplete(entry);
 	comm_close(fd);
 	return;
     }
     gopherState->fd = fd;
-    gopherState->fwdState = fwdState;
     commSetSelect(fd, COMM_SELECT_WRITE, gopherSendRequest, gopherState, 0);
     commSetTimeout(fd, Config.Timeout.read, gopherTimeout, gopherState);
 }
@@ -814,7 +810,7 @@ static GopherStateData *
 CreateGopherStateData(void)
 {
     GopherStateData *gd = xcalloc(1, sizeof(GopherStateData));
-    cbdataAdd(gd, cbdataXfree, 0);
+    cbdataAdd(gd, MEM_NONE);
     gd->buf = memAllocate(MEM_4K_BUF);
     return (gd);
 }

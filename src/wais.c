@@ -42,7 +42,6 @@ typedef struct {
     const HttpHeader *request_hdr;
     char url[MAX_URL];
     request_t *request;
-    FwdState *fwd;
 } WaisStateData;
 
 static PF waisStateFree;
@@ -142,7 +141,7 @@ waisReadReply(int fd, void *data)
     } else if (len == 0) {
 	/* Connection closed; retrieval done. */
 	entry->expires = squid_curtime;
-	fwdComplete(waisState->fwd);
+	storeComplete(entry);
 	comm_close(fd);
     } else {
 	storeAppend(entry, buf, len);
@@ -210,26 +209,22 @@ waisSendRequest(int fd, void *data)
 }
 
 void
-waisStart(FwdState * fwd)
+waisStart(request_t * request, StoreEntry * entry, int fd)
 {
     WaisStateData *waisState = NULL;
-    request_t *request = fwd->request;
-    StoreEntry *entry = fwd->entry;
-    int fd = fwd->server_fd;
     const char *url = storeUrl(entry);
     method_t method = request->method;
     debug(24, 3) ("waisStart: \"%s %s\"\n", RequestMethodStr[method], url);
     Counter.server.all.requests++;
     Counter.server.other.requests++;
     waisState = xcalloc(1, sizeof(WaisStateData));
-    cbdataAdd(waisState, cbdataXfree, 0);
+    cbdataAdd(waisState, MEM_NONE);
     waisState->method = method;
     waisState->request_hdr = &request->header;
     waisState->fd = fd;
     waisState->entry = entry;
     xstrncpy(waisState->url, url, MAX_URL);
     waisState->request = requestLink(request);
-    waisState->fwd = fwd;
     comm_add_close_handler(waisState->fd, waisStateFree, waisState);
     storeLockObject(entry);
     commSetSelect(fd, COMM_SELECT_WRITE, waisSendRequest, waisState, 0);

@@ -189,7 +189,7 @@ clientdbFreeItem(void *data)
 {
     ClientInfo *c = data;
     safe_free(c->key);
-    memFree(c, MEM_CLIENT_INFO);
+    memFree(MEM_CLIENT_INFO, c);
 }
 
 void

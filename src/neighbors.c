@@ -317,7 +317,7 @@ neighborRemove(peer * target)
     }
     if (p) {
 	*P = p->next;
-	cbdataUnlock(p);
+	peerDestroy(p);
 	Config.npeers--;
     }
     first_ping = Config.peers;
@@ -438,18 +438,6 @@ neighborsUdpPing(request_t * request,
 	     * last query
 	     */
 	    p->stats.last_reply = squid_curtime;
-	    /*
-	     * We used to not expect a reply in this case; we assumed
-	     * the peer was DEAD if we hadn't queried it in a long
-	     * time.  However, the number of people whining to
-	     * squid-users that ICP is broken became unbearable.  They
-	     * tried a single request which, to their amazement, was
-	     * forwarded directly to the origin server, even thought
-	     * they KNEW it was in a neighbor cache.  Ok, I give up, you
-	     * win!
-	     */
-	    (*exprep)++;
-	    (*timeout) += 1000;
 	} else if (neighborUp(p)) {
 	    /* its alive, expect a reply from it */
 	    (*exprep)++;
@@ -522,28 +510,31 @@ peerDigestLookup(peer * p, request_t * request, StoreEntry * entry)
     assert(request);
     debug(15, 5) ("peerDigestLookup: peer %s\n", p->host);
     /* does the peeer have a valid digest? */
-    if (!p->digest) {
-	debug(15, 5) ("peerDigestLookup: gone!\n");
+    if (p->digest.flags.disabled) {
+	debug(15, 5) ("peerDigestLookup: Disabled!\n");
 	return LOOKUP_NONE;
     } else if (!peerHTTPOkay(p, request)) {
-	debug(15, 5) ("peerDigestLookup: !peerHTTPOkay\n");
+	debug(15, 5) ("peerDigestLookup: !peerHTTPOkay()\n");
 	return LOOKUP_NONE;
-    } else if (p->digest->flags.usable) {
-	debug(15, 5) ("peerDigestLookup: usable\n");
+    } else if (p->digest.flags.usable) {
+	debug(15, 5) ("peerDigestLookup: Usable!\n");
 	/* fall through; put here to have common case on top */ ;
-    } else if (!p->digest->flags.needed) {
-	debug(15, 5) ("peerDigestLookup: note need\n");
-	peerDigestNeeded(p->digest);
+    } else if (!p->digest.flags.inited) {
+	debug(15, 5) ("peerDigestLookup: !initialized\n");
+	if (!p->digest.flags.init_pending) {
+	    p->digest.flags.init_pending = 1;
+	    cbdataLock(p);
+	    eventAdd("peerDigestInit", peerDigestInit, p, 0.0, 1);
+	}
 	return LOOKUP_NONE;
     } else {
-	debug(15, 5) ("peerDigestLookup: !ready && %srequested\n",
-	    p->digest->flags.requested ? "" : "!");
+	debug(15, 5) ("peerDigestLookup: Whatever!\n");
 	return LOOKUP_NONE;
     }
     debug(15, 5) ("peerDigestLookup: OK to lookup peer %s\n", p->host);
-    assert(p->digest->cd);
+    assert(p->digest.cd);
     /* does digest predict a hit? */
-    if (!cacheDigestTest(p->digest->cd, key))
+    if (!cacheDigestTest(p->digest.cd, key))
 	return LOOKUP_MISS;
     debug(15, 5) ("peerDigestLookup: peer %s says HIT!\n", p->host);
     return LOOKUP_HIT;
@@ -853,20 +844,6 @@ peerFindByName(const char *name)
     return p;
 }
 
-peer *
-peerFindByNameAndPort(const char *name, unsigned short port)
-{
-    peer *p = NULL;
-    for (p = Config.peers; p; p = p->next) {
-	if (strcasecmp(name, p->host))
-	    continue;
-	if (port != p->http_port)
-	    continue;
-	break;
-    }
-    return p;
-}
-
 int
 neighborUp(const peer * p)
 {
@@ -880,9 +857,8 @@ neighborUp(const peer * p)
 }
 
 void
-peerDestroy(void *data, int unused)
+peerDestroy(peer * p)
 {
-    peer *p = data;
     struct _domain_ping *l = NULL;
     struct _domain_ping *nl = NULL;
     if (p == NULL)
@@ -893,26 +869,7 @@ peerDestroy(void *data, int unused)
 	safe_free(l);
     }
     safe_free(p->host);
-#if USE_CACHE_DIGESTS
-    if (p->digest) {
-	if (cbdataValid(p->digest))
-	    peerDigestNotePeerGone(p->digest);
-	cbdataUnlock(p->digest);
-	p->digest = NULL;
-    }
-#endif
-    xfree(p);
-}
-
-void
-peerNoteDigestGone(peer * p)
-{
-#if USE_CACHE_DIGESTS
-    if (p->digest) {
-	cbdataUnlock(p->digest);
-	p->digest = NULL;
-    }
-#endif
+    cbdataFree(p);
 }
 
 static void
@@ -1055,9 +1012,10 @@ peerCountMcastPeersStart(void *data)
     psstate->request = requestLink(urlParse(METHOD_GET, url));
     psstate->entry = fake;
     psstate->callback = NULL;
+    psstate->fail_callback = NULL;
     psstate->callback_data = p;
     psstate->ping.start = current_time;
-    cbdataAdd(psstate, cbdataXfree, 0);
+    cbdataAdd(psstate, MEM_NONE);
     mem = fake->mem_obj;
     mem->request = requestLink(psstate->request);
     mem->start_ping = current_time;

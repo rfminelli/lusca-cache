@@ -71,6 +71,7 @@ extern int NHttpSockets;	/* 0 */
 extern int RESERVED_FD;
 extern int Squid_MaxFD;		/* SQUID_MAXFD */
 extern int config_lineno;	/* 0 */
+extern int configured_once;	/* 0 */
 extern int debugLevels[MAX_DEBUG_SECTIONS];
 extern int do_mallinfo;		/* 0 */
 extern int opt_reuseaddr;	/* 1 */
@@ -129,10 +130,10 @@ extern int hot_obj_count;	/* 0 */
 extern int _db_level;
 extern const int CacheDigestHashFuncCount;	/* 4 */
 extern CacheDigest *store_digest;	/* NULL */
-extern const char *StoreDigestFileName;		/* "store_digest" */
+extern const char *StoreDigestUrlPath;	/* "store_digest" */
 extern const char *StoreDigestMimeStr;	/* "application/cache-digest" */
 #if USE_CACHE_DIGESTS
-extern const Version CacheDigestVer;	/* { 5, 3 } */
+extern const Version CacheDigestVer;	/* { 4, 3 } */
 #endif
 extern const char *MultipartMsgBoundaryStr;	/* "Unique-Squid-Separator" */
 extern icpUdpData *IcpQueueHead;	/* NULL */

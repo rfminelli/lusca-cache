@@ -148,10 +148,8 @@ void
 asnInit(void)
 {
     extern int max_keylen;
-    static int inited = 0;
     max_keylen = 40;
-    if (0 == inited++)
-	rn_init();
+    rn_init();
     rn_inithead((void **) &AS_tree_head, 8);
     asnAclInitialize(Config.aclList);
     cachemgrRegister("asndb", "AS Number Database", asnStats, 0, 1);
@@ -181,7 +179,7 @@ asnCacheStart(int as)
     StoreEntry *e;
     request_t *req;
     ASState *asState = xcalloc(1, sizeof(ASState));
-    cbdataAdd(asState, cbdataXfree, 0);
+    cbdataAdd(asState, MEM_NONE);
     debug(53, 3) ("asnCacheStart: AS %d\n", as);
     snprintf(asres, 4096, "whois://%s/!gAS%d", Config.as_whois_server, as);
     asState->as_number = as;
@@ -217,17 +215,17 @@ asHandleReply(void *data, char *buf, ssize_t size)
     char *t;
     debug(53, 3) ("asHandleReply: Called with size=%d\n", size);
     if (e->store_status == STORE_ABORTED) {
-	memFree(buf, MEM_4K_BUF);
+	memFree(MEM_4K_BUF, buf);
 	asStateFree(asState);
 	return;
     }
     if (size == 0 && e->mem_obj->inmem_hi > 0) {
-	memFree(buf, MEM_4K_BUF);
+	memFree(MEM_4K_BUF, buf);
 	asStateFree(asState);
 	return;
     } else if (size < 0) {
 	debug(53, 1) ("asHandleReply: Called with size=%d\n", size);
-	memFree(buf, MEM_4K_BUF);
+	memFree(MEM_4K_BUF, buf);
 	asStateFree(asState);
 	return;
     }
@@ -272,7 +270,7 @@ asHandleReply(void *data, char *buf, ssize_t size)
 	    asState);
     } else {
 	debug(53, 3) ("asHandleReply: Done: %s\n", storeUrl(e));
-	memFree(buf, MEM_4K_BUF);
+	memFree(MEM_4K_BUF, buf);
 	asStateFree(asState);
     }
 }

@@ -109,7 +109,7 @@ urnStart(request_t * r, StoreEntry * e)
     urnState = xcalloc(1, sizeof(UrnState));
     urnState->entry = e;
     urnState->request = requestLink(r);
-    cbdataAdd(urnState, cbdataXfree, 0);
+    cbdataAdd(urnState, MEM_NONE);
     storeLockObject(urnState->entry);
     if (strncasecmp(strBuf(r->urlpath), "menu.", 5) == 0) {
 	char *new_path = xstrdup(strBuf(r->urlpath) + 5);
@@ -192,14 +192,14 @@ urnHandleReply(void *data, char *buf, ssize_t size)
 
     debug(52, 3) ("urnHandleReply: Called with size=%d.\n", size);
     if (urlres_e->store_status == STORE_ABORTED) {
-	memFree(buf, MEM_4K_BUF);
+	memFree(MEM_4K_BUF, buf);
 	return;
     }
     if (size == 0) {
-	memFree(buf, MEM_4K_BUF);
+	memFree(MEM_4K_BUF, buf);
 	return;
     } else if (size < 0) {
-	memFree(buf, MEM_4K_BUF);
+	memFree(MEM_4K_BUF, buf);
 	return;
     }
     if (urlres_e->store_status == STORE_PENDING && size < SM_PAGE_SIZE) {
@@ -286,7 +286,7 @@ urnHandleReply(void *data, char *buf, ssize_t size)
     httpBodySet(&rep->body, &mb);
     httpReplySwapOut(rep, e);
     storeComplete(e);
-    memFree(buf, MEM_4K_BUF);
+    memFree(MEM_4K_BUF, buf);
     for (i = 0; i < urlcnt; i++) {
 	safe_free(urls[i].url);
 	safe_free(urls[i].host);

@@ -95,7 +95,7 @@ authenticateStart(acl_proxy_auth_user * auth_user, RH * handler, void *data)
 	return;
     }
     r = xcalloc(1, sizeof(authenticateStateData));
-    cbdataAdd(r, cbdataXfree, 0);
+    cbdataAdd(r, MEM_NONE);
     r->handler = handler;
     cbdataLock(data);
     r->data = data;

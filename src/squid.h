@@ -69,11 +69,8 @@
 #endif
 
 #if PURIFY
-#define assert(EX) ((void)0)
-#elif __STDC__
-#define assert(EX)  ((EX)?((void)0):xassert( # EX , __FILE__, __LINE__))
-#else
-#define assert(EX)  ((EX)?((void)0):xassert("EX", __FILE__, __LINE__))
+/* disable assert() under purify */
+#define NODEBUG
 #endif
 
 #if HAVE_UNISTD_H
@@ -174,6 +171,11 @@
 #endif
 #if HAVE_GETOPT_H
 #include <getopt.h>
+#endif
+#if HAVE_ASSERT_H
+#include <assert.h>
+#else
+#define assert(X) ((void)0)
 #endif
 
 #if HAVE_DIRENT_H

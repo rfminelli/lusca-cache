@@ -125,7 +125,6 @@ typedef struct _Ftpdata {
 	u_short port;
     } data;
     struct _ftp_flags flags;
-    FwdState *fwd;
 } FtpStateData;
 
 typedef struct {
@@ -261,7 +260,7 @@ ftpStateFree(int fdnotused, void *data)
     storeUnregisterAbort(ftpState->entry);
     storeUnlockObject(ftpState->entry);
     if (ftpState->reply_hdr) {
-	memFree(ftpState->reply_hdr, MEM_8K_BUF);
+	memFree(MEM_8K_BUF, ftpState->reply_hdr);
 	ftpState->reply_hdr = NULL;
     }
     requestUnlink(ftpState->request);
@@ -771,7 +770,7 @@ ftpParseListing(FtpStateData * ftpState)
 	xstrncpy(ftpState->data.buf, line, ftpState->data.size);
 	ftpState->data.offset = strlen(ftpState->data.buf);
     }
-    memFree(line, MEM_4K_BUF);
+    memFree(MEM_4K_BUF, line);
     xfree(sbuf);
 }
 
@@ -784,7 +783,7 @@ ftpReadComplete(FtpStateData * ftpState)
 	ftpListingFinish(ftpState);
     if (!ftpState->flags.put) {
 	storeTimestampsSet(ftpState->entry);
-	fwdComplete(ftpState->fwd);
+	storeComplete(ftpState->entry);
     }
     /* expect the "transfer complete" message on the control socket */
     ftpScheduleReadControlReply(ftpState, 1);
@@ -954,19 +953,16 @@ ftpBuildTitleUrl(FtpStateData * ftpState)
 }
 
 void
-ftpStart(FwdState * fwd)
+ftpStart(request_t * request, StoreEntry * entry, int fd)
 {
-    request_t *request = fwd->request;
-    StoreEntry *entry = fwd->entry;
-    int fd = fwd->server_fd;
     LOCAL_ARRAY(char, realm, 8192);
     const char *url = storeUrl(entry);
     FtpStateData *ftpState = xcalloc(1, sizeof(FtpStateData));
     HttpReply *reply;
     StoreEntry *pe = NULL;
     const cache_key *key = NULL;
-    cbdataAdd(ftpState, cbdataXfree, 0);
-    debug(9, 3) ("ftpStart: '%s'\n", url);
+    cbdataAdd(ftpState, MEM_NONE);
+    debug(9, 3) ("FtpStart: '%s'\n", url);
     Counter.server.all.requests++;
     Counter.server.ftp.requests++;
     storeLockObject(entry);
@@ -977,7 +973,6 @@ ftpStart(FwdState * fwd)
     ftpState->size = -1;
     ftpState->flags.pasv_supported = 1;
     ftpState->flags.rest_supported = 1;
-    ftpState->fwd = fwd;
     if (ftpState->request->method == METHOD_PUT)
 	ftpState->flags.put = 1;
     if (!ftpCheckAuth(ftpState, &request->header)) {
@@ -998,13 +993,13 @@ ftpStart(FwdState * fwd)
 	/* create appropriate reply */
 	ftpAuthRequired(reply, request, realm);
 	httpReplySwapOut(reply, entry);
-	fwdComplete(ftpState->fwd);
+	storeComplete(entry);
 	ftpStateFree(-1, ftpState);
 	return;
     }
     ftpCheckUrlpath(ftpState);
     ftpBuildTitleUrl(ftpState);
-    debug(9, 5) ("ftpStart: host=%s, path=%s, user=%s, passwd=%s\n",
+    debug(9, 5) ("FtpStart: host=%s, path=%s, user=%s, passwd=%s\n",
 	ftpState->request->host, strBuf(ftpState->request->urlpath),
 	ftpState->user, ftpState->password);
     comm_add_close_handler(fd, ftpStateFree, ftpState);

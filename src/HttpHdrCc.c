@@ -144,7 +144,7 @@ void
 httpHdrCcDestroy(HttpHdrCc * cc)
 {
     assert(cc);
-    memFree(cc, MEM_HTTP_HDR_CC);
+    memFree(MEM_HTTP_HDR_CC, cc);
 }
 
 HttpHdrCc *

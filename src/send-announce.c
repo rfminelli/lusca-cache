@@ -45,7 +45,7 @@ start_announce(void *datanotused)
 	return;
     if (theOutIcpConnection < 0)
 	return;
-    cbdataAdd(junk = xmalloc(1), cbdataXfree, 0);
+    cbdataAdd(junk = xmalloc(1), MEM_NONE);
     ipcache_nbgethostbyname(Config.Announce.host, send_announce, junk);
     eventAdd("send_announce", start_announce, NULL, (double) Config.Announce.period, 1);
 }

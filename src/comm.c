@@ -155,6 +155,7 @@ comm_open(int sock_type,
 {
     int new_socket;
     fde *F = NULL;
+    int tcp_rcv_bufsz = Config.tcpRcvBufsz;
 
     /* Create socket for accepting new connections. */
     Counter.syscalls.sock.sockets++;
@@ -201,8 +202,8 @@ comm_open(int sock_type,
     if (sock_type == SOCK_STREAM)
 	commSetTcpNoDelay(new_socket);
 #endif
-    if (Config.tcpRcvBufsz > 0 && sock_type == SOCK_STREAM)
-	commSetTcpRcvbuf(new_socket, Config.tcpRcvBufsz);
+    if (tcp_rcv_bufsz > 0 && sock_type == SOCK_STREAM)
+	commSetTcpRcvbuf(new_socket, tcp_rcv_bufsz);
     return new_socket;
 }
 
@@ -231,7 +232,7 @@ commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *
 {
     ConnectStateData *cs = xcalloc(1, sizeof(ConnectStateData));
     debug(5, 3) ("commConnectStart: FD %d, %s:%d\n", fd, host, (int) port);
-    cbdataAdd(cs, cbdataXfree, 0);
+    cbdataAdd(cs, MEM_NONE);
     cs->fd = fd;
     cs->host = xstrdup(host);
     cs->port = port;
@@ -410,8 +411,7 @@ comm_connect_addr(int sock, const struct sockaddr_in *address)
 	F->flags.called_connect = 1;
 	Counter.syscalls.sock.connects++;
 	x = connect(sock, (struct sockaddr *) address, sizeof(*address));
-	if (x < 0)
-	    debug(5, 9) ("connect FD %d: %s\n", sock, xstrerror());
+	debug(5, 9) ("connect FD %d: %s\n", sock, xstrerror());
     } else {
 	errlen = sizeof(err);
 	x = getsockopt(sock, SOL_SOCKET, SO_ERROR, &err, &errlen);

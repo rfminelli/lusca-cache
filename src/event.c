@@ -175,18 +175,6 @@ eventDump(StoreEntry * sentry)
     }
 }
 
-void
-eventFreeMemory(void)
-{
-    struct ev_entry *event;
-    while ((event = tasks)) {
-	if (NULL != event->arg)
-	    cbdataUnlock(event->arg);
-	xfree(event);
-    }
-    tasks = NULL;
-}
-
 int
 eventFind(EVH * func, void *arg)
 {

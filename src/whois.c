@@ -39,7 +39,7 @@
 typedef struct {
     StoreEntry *entry;
     request_t *request;
-    FwdState *fwd;
+    FwdState *fwdState;
 } WhoisState;
 
 static PF whoisClose;
@@ -49,16 +49,15 @@ static PF whoisReadReply;
 /* PUBLIC */
 
 void
-whoisStart(FwdState * fwd)
+whoisStart(FwdState * fwdState, int fd)
 {
     WhoisState *p = xcalloc(1, sizeof(*p));
-    int fd = fwd->server_fd;
     char *buf;
     size_t l;
-    p->request = fwd->request;
-    p->entry = fwd->entry;
-    p->fwd = fwd;
-    cbdataAdd(p, cbdataXfree, 0);
+    p->request = fwdState->request;
+    p->entry = fwdState->entry;
+    p->fwdState = fwdState;
+    cbdataAdd(p, MEM_NONE);
     storeLockObject(p->entry);
     comm_add_close_handler(fd, whoisClose, p);
     l = strLen(p->request->urlpath) + 3;
@@ -103,18 +102,18 @@ whoisReadReply(int fd, void *data)
 	if (ignoreErrno(errno)) {
 	    commSetSelect(fd, COMM_SELECT_READ, whoisReadReply, p, Config.Timeout.read);
 	} else if (entry->mem_obj->inmem_hi == 0) {
-	    fwdFail(p->fwd, ERR_READ_ERROR, HTTP_INTERNAL_SERVER_ERROR, errno);
+	    fwdFail(p->fwdState, ERR_READ_ERROR, HTTP_INTERNAL_SERVER_ERROR, errno);
 	    comm_close(fd);
 	} else {
 	    storeAbort(entry, 0);
 	    comm_close(fd);
 	}
     } else {
-	fwdComplete(p->fwd);
+	storeComplete(entry);
 	debug(75, 3) ("whoisReadReply: Done: %s\n", storeUrl(entry));
 	comm_close(fd);
     }
-    memFree(buf, MEM_4K_BUF);
+    memFree(MEM_4K_BUF, buf);
 }
 
 static void

@@ -897,7 +897,7 @@ httpHeaderEntryDestroy(HttpHeaderEntry * e)
     assert(Headers[e->id].stat.aliveCount);
     Headers[e->id].stat.aliveCount--;
     e->id = -1;
-    memFree(e, MEM_HTTP_HDR_ENTRY);
+    memFree(MEM_HTTP_HDR_ENTRY, e);
 }
 
 /* parses and inits header entry, returns new entry on success */

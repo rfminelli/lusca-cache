@@ -126,7 +126,7 @@ ipcache_release(ipcache_entry * i)
     }
     safe_free(i->name);
     safe_free(i->error_message);
-    memFree(i, MEM_IPCACHE_ENTRY);
+    memFree(MEM_IPCACHE_ENTRY, i);
     return;
 }
 
@@ -175,7 +175,7 @@ ipcache_purgelru(void *voidnotused)
 	ipcache_release(i);
 	removed++;
     }
-    debug(14, 9) ("ipcache_purgelru: removed %d entries\n", removed);
+    debug(14, 3) ("ipcache_purgelru: removed %d entries\n", removed);
 }
 
 /* create blank ipcache_entry */
@@ -247,7 +247,7 @@ ipcache_call_pending(ipcache_entry * i)
 	    }
 	    cbdataUnlock(p->handlerData);
 	}
-	memFree(p, MEM_IPCACHE_PENDING);
+	memFree(MEM_IPCACHE_PENDING, p);
     }
     i->pending_head = NULL;	/* nuke list */
     debug(14, 10) ("ipcache_call_pending: Called %d handlers.\n", nhandler);
@@ -270,11 +270,10 @@ ipcacheParse(const char *inbuf)
     i.status = IP_NEGATIVE_CACHED;
     if (inbuf == NULL) {
 	debug(14, 1) ("ipcacheParse: Got <NULL> reply\n");
-	i.error_message = xstrdup("Internal Squid Error");
 	return &i;
     }
     xstrncpy(buf, inbuf, DNS_INBUF_SZ);
-    debug(14, 5) ("ipcacheParse: parsing: {%s}\n", buf);
+    debug(14, 5) ("ipcacheParse: parsing:%s\n", buf);
     token = strtok(buf, w_space);
     if (NULL == token) {
 	debug(14, 1) ("ipcacheParse: Got <NULL>, expecting '$addr'\n");
@@ -417,7 +416,7 @@ ipcache_nbgethostbyname(const char *name, IPH * handler, void *handlerData)
     /* for HIT, PENDING, DISPATCHED we've returned.  For MISS we submit */
     c = xcalloc(1, sizeof(*c));
     c->data = i;
-    cbdataAdd(c, cbdataXfree, 0);
+    cbdataAdd(c, MEM_NONE);
     i->status = IP_DISPATCHED;
     ipcacheLockEntry(i);
     dnsSubmit(i->name, ipcacheHandleReply, c);
@@ -723,13 +722,13 @@ ipcacheFreeEntry(void *data)
     ip_pending *p;
     while ((p = i->pending_head)) {
 	i->pending_head = p->next;
-	memFree(p, MEM_IPCACHE_PENDING);
+	memFree(MEM_IPCACHE_PENDING, p);
     }
     safe_free(i->addrs.in_addrs);
     safe_free(i->addrs.bad_mask);
     safe_free(i->name);
     safe_free(i->error_message);
-    memFree(i, MEM_IPCACHE_ENTRY);
+    memFree(MEM_IPCACHE_ENTRY, i);
 }
 
 void
@@ -826,6 +825,12 @@ snmp_netIpFn(variable_list * Var, snint * ErrP)
     case IP_LOC:
 	*(Answer->val.integer) = IpcacheStats.release_locked;
 	break;
+#if DELETE_ME
+    case IP_LENG:
+	*(Answer->val.integer) = queue_length;
+	Answer->type = SMI_GAUGE32;
+	break;
+#endif
     default:
 	*ErrP = SNMP_ERR_NOSUCHNAME;
 	snmp_var_free(Answer);

@@ -75,8 +75,7 @@ typedef struct _cbdata {
     struct _cbdata *next;
     int valid;
     int locks;
-    CBDUNL *unlock_func;
-    int id;
+    mem_type mem_type;
 #if CBDATA_DEBUG
     const char *file;
     int line;
@@ -86,7 +85,6 @@ typedef struct _cbdata {
 static HASHCMP cbdata_cmp;
 static HASHHASH cbdata_hash;
 static void cbdataReallyFree(cbdata * c);
-static OBJH cbdataDump;
 
 static int
 cbdata_cmp(const void *p1, const void *p2)
@@ -113,9 +111,9 @@ cbdataInit(void)
 
 void
 #if CBDATA_DEBUG
-cbdataAddDbg(const void *p, CBDUNL * unlock_func, int id, const char *file, int line)
+cbdataAddDbg(const void *p, mem_type mem_type, const char *file, int line)
 #else
-cbdataAdd(const void *p, CBDUNL * unlock_func, int id)
+cbdataAdd(const void *p, mem_type mtype)
 #endif
 {
     cbdata *c;
@@ -126,8 +124,7 @@ cbdataAdd(const void *p, CBDUNL * unlock_func, int id)
     c = xcalloc(1, sizeof(cbdata));
     c->key = p;
     c->valid = 1;
-    c->unlock_func = unlock_func;
-    c->id = id;
+    c->mem_type = mtype;
 #if CBDATA_DEBUG
     c->file = file;
     c->line = line;
@@ -139,15 +136,18 @@ cbdataAdd(const void *p, CBDUNL * unlock_func, int id)
 static void
 cbdataReallyFree(cbdata * c)
 {
-    CBDUNL *unlock_func = c->unlock_func;
+    mem_type mtype = c->mem_type;
     void *p = (void *) c->key;
-    int id = c->id;
     hash_remove_link(htable, (hash_link *) c);
     cbdataCount--;
     xfree(c);
+    if (mtype == MEM_DONTFREE)
+	return;
     debug(45, 3) ("cbdataReallyFree: Freeing %p\n", p);
-    if (unlock_func)
-	unlock_func(p, id);
+    if (mtype == MEM_NONE)
+	xfree(p);
+    else
+	memFree(mtype, p);
 }
 
 void
@@ -208,14 +208,8 @@ cbdataValid(const void *p)
     return c->valid;
 }
 
+
 void
-cbdataXfree(void *p, int unused)
-{
-    xfree(p);
-}
-
-
-static void
 cbdataDump(StoreEntry * sentry)
 {
     hash_link *hptr;

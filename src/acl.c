@@ -47,6 +47,7 @@ static void aclParseWordList(void *curlist);
 static void aclParseProtoList(void *curlist);
 static void aclParseMethodList(void *curlist);
 static void aclParseTimeSpec(void *curlist);
+static void aclParseSnmpComm(void *curlist);
 static void aclParseIntRange(void *curlist);
 static char *strtokFile(void);
 static void aclDestroyAclList(acl_list * list);
@@ -60,9 +61,6 @@ static int aclMatchUser(wordlist * data, const char *ident);
 static int aclMatchIp(void *dataptr, struct in_addr c);
 static int aclMatchDomainList(void *dataptr, const char *);
 static int aclMatchIntegerRange(intrange * data, int i);
-#if SQUID_SNMP
-static int aclMatchWordList(wordlist *, const char *);
-#endif
 static squid_acl aclStrToType(const char *s);
 static int decode_addr(const char *, struct in_addr *, struct in_addr *);
 static void aclCheck(aclCheck_t * checklist);
@@ -183,10 +181,8 @@ aclStrToType(const char *s)
 	return ACL_SRC_ASN;
     if (!strcmp(s, "dst_as"))
 	return ACL_DST_ASN;
-#if SQUID_SNMP
     if (!strcmp(s, "snmp_community"))
-	return ACL_SNMP_COMMUNITY;
-#endif
+	return ACL_SNMP_COMM;
     if (!strcmp(s, "src_rtt"))
 	return ACL_NETDB_SRC_RTT;
 #if USE_ARP_ACL
@@ -233,10 +229,8 @@ aclTypeToStr(squid_acl type)
 	return "src_as";
     if (type == ACL_DST_ASN)
 	return "dst_as";
-#if SQUID_SNMP
-    if (type == ACL_SNMP_COMMUNITY)
+    if (type == ACL_SNMP_COMM)
 	return "snmp_community";
-#endif
     if (type == ACL_NETDB_SRC_RTT)
 	return "src_rtt";
 #if USE_ARP_ACL
@@ -615,6 +609,23 @@ aclParseDomainList(void *curlist)
     }
 }
 
+static void
+aclParseSnmpComm(void *data)
+{
+    acl_snmp_comm **q = data;
+    acl_snmp_comm *p;
+    char *t;
+    t = strtok(NULL, w_space);
+    if (t) {
+	p = xcalloc(1, sizeof(acl_snmp_comm));
+	p->name = xstrdup(t);
+	p->community = NULL;
+	*q = p;
+    }
+    t = strtok(NULL, w_space);
+    return;
+}
+
 void
 aclParseAclLine(acl ** head)
 {
@@ -708,11 +719,9 @@ aclParseAclLine(acl ** head)
 	    assert(proxy_auth_cache);
 	}
 	break;
-#if SQUID_SNMP
-    case ACL_SNMP_COMMUNITY:
-        aclParseWordList(&A->data);
+    case ACL_SNMP_COMM:
+	aclParseSnmpComm(&A->data);
 	break;
-#endif  
 #if USE_ARP_ACL
     case ACL_SRC_ARP:
 	aclParseArpList(&A->data);
@@ -878,7 +887,7 @@ aclParseAccessLine(acl_access ** head)
     for (B = *head, T = head; B; T = &B->next, B = B->next);
     *T = A;
     /* We lock _acl_access structures in aclCheck() */
-    cbdataAdd(A, memFree, MEM_ACL_ACCESS);
+    cbdataAdd(A, MEM_ACL_ACCESS);
 }
 
 /**************/
@@ -1166,21 +1175,6 @@ aclMatchTime(acl_time_data * data, time_t when)
     return data->weekbits & (1 << tm.tm_wday) ? 1 : 0;
 }
 
-#if SQUID_SNMP
-static int
-aclMatchWordList(wordlist * w, const char *word)
-{
-    debug(28, 3) ("aclMatchWordList: looking for '%s'\n", word);
-    while (w != NULL) {
-	debug(28, 3) ("aclMatchWordList: checking '%s'\n", w->key);
-	if (!strcmp(w->key, word))
-	    return 1;
-	w = w->next;
-    }
-    return 0;
-}
-#endif
-
 static int
 aclMatchAcl(acl * ae, aclCheck_t * checklist)
 {
@@ -1346,10 +1340,8 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	    return 0;
 	}
 	/* NOTREACHED */
-#if SQUID_SNMP
-    case ACL_SNMP_COMMUNITY:
-	return aclMatchWordList(ae->data, checklist->snmp_community);
-#endif
+    case ACL_SNMP_COMM:
+	return asnMatchIp(ae->data, checklist->src_addr);
     case ACL_SRC_ASN:
 	return asnMatchIp(ae->data, checklist->src_addr);
     case ACL_DST_ASN:
@@ -1584,7 +1576,7 @@ aclChecklistCreate(const acl_access * A,
 {
     int i;
     aclCheck_t *checklist = memAllocate(MEM_ACLCHECK_T);
-    cbdataAdd(checklist, memFree, MEM_ACLCHECK_T);
+    cbdataAdd(checklist, MEM_ACLCHECK_T);
     checklist->access_list = A;
     /*
      * aclCheck() makes sure checklist->access_list is a valid
@@ -1629,7 +1621,7 @@ aclDestroyTimeList(acl_time_data * data)
     acl_time_data *next = NULL;
     for (; data; data = next) {
 	next = data->next;
-	memFree(data, MEM_ACL_TIME_DATA);
+	memFree(MEM_ACL_TIME_DATA, data);
     }
 }
 
@@ -1641,7 +1633,7 @@ aclDestroyRegexList(relist * data)
 	next = data->next;
 	regfree(&data->regex);
 	safe_free(data->pattern);
-	memFree(data, MEM_RELIST);
+	memFree(MEM_RELIST, data);
     }
 }
 
@@ -1651,13 +1643,13 @@ aclFreeProxyAuthUser(void *data)
     acl_proxy_auth_user *u = data;
     xfree(u->user);
     xfree(u->passwd);
-    memFree(u, MEM_ACL_PROXY_AUTH_USER);
+    memFree(MEM_ACL_PROXY_AUTH_USER, u);
 }
 
 static void
 aclFreeIpData(void *p)
 {
-    memFree(p, MEM_ACL_IP_DATA);
+    memFree(MEM_ACL_IP_DATA, p);
 }
 
 void
@@ -1678,9 +1670,6 @@ aclDestroyAcls(acl ** head)
 	case ACL_SRC_DOMAIN:
 	    splay_destroy(a->data, xfree);
 	    break;
-#if SQUID_SNMP
-	case ACL_SNMP_COMMUNITY:
-#endif
 	case ACL_IDENT:
 	case ACL_PROXY_AUTH:
 	    wordlistDestroy((wordlist **) & a->data);
@@ -1708,7 +1697,7 @@ aclDestroyAcls(acl ** head)
 	    break;
 	}
 	safe_free(a->cfgline);
-	memFree(a, MEM_ACL);
+	memFree(MEM_ACL, a);
     }
     *head = NULL;
 }
@@ -1719,7 +1708,7 @@ aclDestroyAclList(acl_list * list)
     acl_list *next = NULL;
     for (; list; list = next) {
 	next = list->next;
-	memFree(list, MEM_ACL_LIST);
+	memFree(MEM_ACL_LIST, list);
     }
 }
 
@@ -2002,9 +1991,6 @@ aclDumpGeneric(const acl * a)
 	break;
     case ACL_SRC_DOMAIN:
     case ACL_DST_DOMAIN:
-#if SQUID_SNMP
-    case ACL_SNMP_COMMUNITY:
-#endif
     case ACL_IDENT:
     case ACL_PROXY_AUTH:
 	return aclDumpDomainList(a->data);
@@ -2070,6 +2056,8 @@ aclDumpGeneric(const acl * a)
  * NOTE: Linux code by David Luyer <luyer@ucs.uwa.edu.au>.
  *       Original (BSD-specific) code no longer works.
  */
+
+#include "squid.h"
 
 #include <sys/sysctl.h>
 #ifdef _SQUID_LINUX_

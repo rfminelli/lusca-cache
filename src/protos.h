@@ -96,15 +96,15 @@ extern void wordlistCat(const wordlist *, MemBuf * mb);
 
 extern void cbdataInit(void);
 #if CBDATA_DEBUG
-extern void cbdataAddDbg(const void *p, CBDUNL *, int, const char *, int);
+extern void cbdataAddDbg(const void *p, mem_type, const char *, int);
 #else
-extern void cbdataAdd(const void *p, CBDUNL *, int);
+extern void cbdataAdd(const void *p, mem_type);
 #endif
 extern void cbdataFree(void *p);
 extern void cbdataLock(const void *p);
 extern void cbdataUnlock(const void *p);
 extern int cbdataValid(const void *p);
-extern CBDUNL cbdataXfree;
+extern void cbdataDump(StoreEntry *);
 
 extern void clientdbInit(void);
 extern void clientdbUpdate(struct in_addr, log_type, protocol_t, size_t);
@@ -190,7 +190,6 @@ extern void _db_print(const char *,...);
 #else
 extern void _db_print();
 #endif
-extern void xassert(const char *, const char *, int);
 
 /* packs, then prints an object using debug() */
 extern void debugObj(int section, int level, const char *label, void *obj, ObjPackMethod pm);
@@ -214,7 +213,6 @@ extern void eventRun(void);
 extern time_t eventNextTime(void);
 extern void eventDelete(EVH * func, void *arg);
 extern void eventInit(void);
-extern void eventFreeMemory(void);
 extern int eventFind(EVH *, void *);
 
 extern void fd_close(int fd);
@@ -247,17 +245,17 @@ extern void fqdncacheFreeMemory(void);
 extern void fqdncache_restart(void);
 extern EVH fqdncache_purgelru;
 
-extern void ftpStart(FwdState *);
+extern void ftpStart(request_t * req, StoreEntry * entry, int);
 extern char *ftpUrlWith2f(const request_t *);
 
-extern void gopherStart(FwdState *);
+extern void gopherStart(StoreEntry *, int fd);
 extern int gopherCachable(const char *);
 
 
-extern void whoisStart(FwdState *);
+extern void whoisStart(FwdState *, int fd);
 
 extern int httpCachable(method_t);
-extern void httpStart(FwdState *);
+extern void httpStart(FwdState *, int fd);
 extern void httpParseReplyHeaders(const char *, http_reply *);
 extern void httpProcessReplyHeader(HttpStateData *, const char *, int);
 extern size_t httpBuildRequestPrefix(request_t * request,
@@ -482,23 +480,15 @@ extern PF httpAccept;
 #ifdef SQUID_SNMP
 extern PF snmpHandleUdp;
 extern void snmpInit(void);
+extern int snmpInitConfig(void);
 extern void snmpConnectionOpen(void);
 extern void snmpConnectionShutdown(void);
 extern void snmpConnectionClose(void);
-extern void snmpDebugOid(int lvl, oid * Name, snint Len);
-extern void addr2oid(struct in_addr addr, oid * Dest);
-extern struct in_addr *oid2addr(oid * id);
-variable_list *snmp_basicFn(variable_list *, snint *);
-variable_list *snmp_confFn(variable_list *, snint *);
-variable_list *snmp_sysFn(variable_list *, snint *);
-variable_list *snmp_prfSysFn(variable_list *, snint *);
-variable_list *snmp_prfProtoFn(variable_list *, snint *);
-variable_list *snmp_prfPeerFn(variable_list *, snint *);
-variable_list *snmp_netIpFn(variable_list *, snint *);
-variable_list *snmp_netFqdnFn(variable_list *, snint *);
-variable_list *snmp_netDnsFn(variable_list *, snint *);
-variable_list *snmp_meshPtblFn(variable_list *, snint *);
-variable_list *snmp_meshCtblFn(variable_list *, snint *);
+extern int snmpCreateView(char **);
+extern int snmpCreateUser(char **);
+extern int snmpCreateCommunity(char **);
+extern void snmpTokenize(char *, char **, int);
+extern int snmpCompare(oid * name1, int len1, oid * name2, int len2);
 #endif /* SQUID_SNMP */
 
 extern void icpHandleIcpV3(int, struct sockaddr_in, char *, int);
@@ -591,16 +581,14 @@ extern void neighborsUdpAck(const cache_key *, icp_common_t *, const struct sock
 extern void neighborAdd(const char *, const char *, int, int, int, int, int);
 extern void neighbors_open(int);
 extern peer *peerFindByName(const char *);
-extern peer *peerFindByNameAndPort(const char *, unsigned short);
 extern peer *getDefaultParent(request_t * request);
 extern peer *getRoundRobinParent(request_t * request);
 extern peer *getAnyParent(request_t * request);
 extern lookup_t peerDigestLookup(peer * p, request_t * request, StoreEntry * entry);
 extern peer *neighborsDigestSelect(request_t * request, StoreEntry * entry);
 extern void peerNoteDigestLookup(request_t * request, peer * p, lookup_t lookup);
-extern void peerNoteDigestGone(peer * p);
 extern int neighborUp(const peer * e);
-extern CBDUNL peerDestroy;
+extern void peerDestroy(peer * e);
 extern char *neighborTypeStr(const peer * e);
 extern peer_t neighborType(const peer *, const request_t *);
 extern void peerCheckConnectStart(peer *);
@@ -634,14 +622,12 @@ extern void cachemgrStart(int fd, request_t * request, StoreEntry * entry);
 extern void cachemgrRegister(const char *, const char *, OBJH *, int, int);
 extern void cachemgrInit(void);
 
-extern void peerSelect(request_t *, StoreEntry *, PSC *, void *data);
+extern void peerSelect(request_t *, StoreEntry *, PSC *, PSC *, void *data);
+extern peer *peerGetSomeParent(request_t *, hier_code *);
 extern void peerSelectInit(void);
 
 /* peer_digest.c */
-extern PeerDigest *peerDigestCreate(peer * p);
-extern void peerDigestNeeded(PeerDigest * pd);
-extern void peerDigestNotePeerGone(PeerDigest * pd);
-extern void peerDigestStatsReport(const PeerDigest * pd, StoreEntry * e);
+extern EVH peerDigestInit;
 
 /* forward.c */
 extern void fwdStart(int, StoreEntry *, request_t *, struct in_addr);
@@ -649,8 +635,6 @@ extern DEFER fwdCheckDeferRead;
 extern void fwdFail(FwdState *, int, http_status, int);
 extern STABH fwdAbort;
 extern void fwdUnregister(int fd, FwdState *);
-extern void fwdComplete(FwdState * fwdState);
-
 
 extern void urnStart(request_t *, StoreEntry *);
 
@@ -675,7 +659,8 @@ extern void shut_down(int);
 
 extern void start_announce(void *unused);
 extern void sslStart(int fd, const char *, request_t *, size_t * sz);
-extern void waisStart(FwdState *);
+extern void waisStart(request_t *, StoreEntry *, int fd);
+extern void passStart(int, const char *, request_t *, size_t *);
 extern void identStart(int, ConnStateData *, IDCB * callback, void *);
 
 extern void statInit(void);
@@ -685,9 +670,6 @@ extern void pconnHistCount(int, int);
 extern int stat5minClientRequests(void);
 extern double stat5minCPUUsage(void);
 extern const char *storeEntryFlags(const StoreEntry *);
-extern double statRequestHitRatio(int minutes);
-extern double statByteHitRatio(int minutes);
-
 
 
 /* StatHist */
@@ -720,7 +702,7 @@ extern void memCleanModule();
 extern void memConfigure();
 extern void *memAllocate(mem_type);
 extern void *memAllocBuf(size_t net_size, size_t * gross_size);
-extern CBDUNL memFree;
+extern void memFree(mem_type, void *);
 extern void memFreeBuf(size_t size, void *);
 extern void memFree2K(void *);
 extern void memFree4K(void *);
@@ -760,6 +742,9 @@ extern StoreEntry *storeGetPublic(const char *uri, const method_t method);
 extern StoreEntry *storeCreateEntry(const char *, const char *, request_flags, method_t);
 extern void storeSetPublicKey(StoreEntry *);
 extern void storeComplete(StoreEntry *);
+#ifdef PPNR_WIP
+extern void storePPNR(StoreEntry *);
+#endif /* PPNR_WIP */
 extern void storeInit(void);
 extern int storeClientWaiting(const StoreEntry *);
 extern void storeAbort(StoreEntry *, int);
@@ -814,7 +799,6 @@ extern int objectLen(const StoreEntry * e);
 extern int contentLen(const StoreEntry * e);
 extern HttpReply *storeEntryReply(StoreEntry *);
 extern int storeTooManyDiskFilesOpen(void);
-extern void storeEntryReset(StoreEntry *);
 
 /*
  * store_log.c
@@ -834,6 +818,7 @@ extern void storeKeyFree(const cache_key *);
 extern const cache_key *storeKeyScan(const char *);
 extern const char *storeKeyText(const cache_key *);
 extern const cache_key *storeKeyPublic(const char *, const method_t);
+extern const cache_key *storeKeyPublicOld(const char *, const method_t);
 extern const cache_key *storeKeyPrivate(const char *, method_t, int);
 extern int storeKeyHashBuckets(int);
 extern int storeKeyNull(const cache_key *);
