@@ -1190,7 +1190,7 @@ void stat_rotate_log()
     if ((fname = CacheInfo->logfilename) == NULL)
 	return;
 
-    debug(18, 1, "stat_rotate_log: Rotating\n");
+    debug(18, 1, "stat_rotate_log: Rotating.\n");
 
     /* Rotate numbers 0 through N up one */
     for (i = getLogfileRotateNumber(); i > 1;) {
