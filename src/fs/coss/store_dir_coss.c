@@ -881,8 +881,7 @@ storeCossDirPick(void)
 static void
 storeCossDirDone(void)
 {
-    memPoolDestroy(&coss_state_pool);
-/*  memPoolDestroy(&coss_index_pool);  XXX Should be here? */
+    memPoolDestroy(coss_state_pool);
     coss_initialised = 0;
 }
 

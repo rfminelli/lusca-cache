@@ -1672,7 +1672,7 @@ storeUfsDirParse(SwapDir * sd, int index, char *path)
 static void
 storeUfsDirDone(void)
 {
-    memPoolDestroy(&ufs_state_pool);
+    memPoolDestroy(ufs_state_pool);
     ufs_initialised = 0;
 }
 

@@ -385,9 +385,8 @@ storeDiskdDirInit(SwapDir * sd)
 	debug(50, 0) ("storeDiskdInit: msgget: %s\n", xstrerror());
 	fatal("msgget failed");
     }
-    diskdinfo->shm.nbufs = diskdinfo->magic2 * 1.3;
     diskdinfo->shm.id = shmget((key_t) (ikey + 2),
-	diskdinfo->shm.nbufs * SHMBUF_BLKSZ, 0600 | IPC_CREAT);
+	SHMBUFS * SHMBUF_BLKSZ, 0600 | IPC_CREAT);
     if (diskdinfo->shm.id < 0) {
 	debug(50, 0) ("storeDiskdInit: shmget: %s\n", xstrerror());
 	fatal("shmget failed");
@@ -397,9 +396,9 @@ storeDiskdDirInit(SwapDir * sd)
 	debug(50, 0) ("storeDiskdInit: shmat: %s\n", xstrerror());
 	fatal("shmat failed");
     }
-    diskdinfo->shm.inuse_map = xcalloc((diskdinfo->shm.nbufs + 7) / 8, 1);
-    diskd_stats.shmbuf_count += diskdinfo->shm.nbufs;
-    for (i = 0; i < diskdinfo->shm.nbufs; i++) {
+    diskdinfo->shm.inuse_map = xcalloc((SHMBUFS + 7) / 8, 1);
+    diskd_stats.shmbuf_count += SHMBUFS;
+    for (i = 0; i < SHMBUFS; i++) {
 	CBIT_SET(diskdinfo->shm.inuse_map, i);
 	storeDiskdShmPut(sd, i * SHMBUF_BLKSZ);
     }
@@ -411,7 +410,12 @@ storeDiskdDirInit(SwapDir * sd)
     args[2] = skey2;
     args[3] = skey3;
     args[4] = NULL;
-    x = ipcCreate(IPC_STREAM,
+#if HAVE_POLL && defined(_SQUID_OSF_)
+    /* pipes and poll() don't get along on DUNIX -DW */
+    x = ipcCreate(IPC_TCP_SOCKET,
+#else
+    x = ipcCreate(IPC_FIFO,
+#endif
 	Config.Program.diskd,
 	args,
 	"diskd",
@@ -1636,7 +1640,7 @@ storeDiskdShmGet(SwapDir * sd, off_t * shm_offset)
     char *buf = NULL;
     diskdinfo_t *diskdinfo = sd->fsdata;
     int i;
-    for (i = 0; i < diskdinfo->shm.nbufs; i++) {
+    for (i = 0; i < SHMBUFS; i++) {
 	if (CBIT_TEST(diskdinfo->shm.inuse_map, i))
 	    continue;
 	CBIT_SET(diskdinfo->shm.inuse_map, i);
@@ -1646,7 +1650,7 @@ storeDiskdShmGet(SwapDir * sd, off_t * shm_offset)
     }
     assert(buf);
     assert(buf >= diskdinfo->shm.buf);
-    assert(buf < diskdinfo->shm.buf + (diskdinfo->shm.nbufs * SHMBUF_BLKSZ));
+    assert(buf < diskdinfo->shm.buf + (SHMBUFS * SHMBUF_BLKSZ));
     diskd_stats.shmbuf_count++;
     if (diskd_stats.max_shmuse < diskd_stats.shmbuf_count)
 	diskd_stats.max_shmuse = diskd_stats.shmbuf_count;
@@ -1659,9 +1663,9 @@ storeDiskdShmPut(SwapDir * sd, off_t offset)
     int i;
     diskdinfo_t *diskdinfo = sd->fsdata;
     assert(offset >= 0);
-    assert(offset < diskdinfo->shm.nbufs * SHMBUF_BLKSZ);
+    assert(offset < SHMBUFS * SHMBUF_BLKSZ);
     i = offset / SHMBUF_BLKSZ;
-    assert(i < diskdinfo->shm.nbufs);
+    assert(i < SHMBUFS);
     assert(CBIT_TEST(diskdinfo->shm.inuse_map, i));
     CBIT_CLR(diskdinfo->shm.inuse_map, i);
     diskd_stats.shmbuf_count--;
@@ -1716,21 +1720,7 @@ storeDiskdDirParseQ1(SwapDir * sd, const char *name, const char *value, int reco
     diskdinfo_t *diskdinfo = sd->fsdata;
     int old_magic1 = diskdinfo->magic1;
     diskdinfo->magic1 = atoi(value);
-    if (!reconfiguring)
-	return;
-    if (old_magic1 < diskdinfo->magic1) {
-       /*
-	* This is because shm.nbufs is computed at startup, when
-	* we call shmget().  We can't increase the Q1/Q2 parameters
-	* beyond their initial values because then we might have
-	* more "Q2 messages" than shared memory chunks, and this
-	* will cause an assertion in storeDiskdShmGet().
-	*/
-       debug(3, 1) ("WARNING: cannot increase cache_dir '%s' Q1 value while Squid is running.\n", sd->path);
-       diskdinfo->magic1 = old_magic1;
-       return;
-    }
-    if (old_magic1 != diskdinfo->magic1)
+    if (reconfiguring && old_magic1 != diskdinfo->magic1)
 	debug(3, 1) ("cache_dir '%s' new Q1 value '%d'\n",
 	    sd->path, diskdinfo->magic1);
 }
@@ -1748,15 +1738,7 @@ storeDiskdDirParseQ2(SwapDir * sd, const char *name, const char *value, int reco
     diskdinfo_t *diskdinfo = sd->fsdata;
     int old_magic2 = diskdinfo->magic2;
     diskdinfo->magic2 = atoi(value);
-    if (!reconfiguring)
-       return;
-    if (old_magic2 < diskdinfo->magic2) {
-       /* See comments in Q1 function above */
-       debug(3, 1) ("WARNING: cannot increase cache_dir '%s' Q2 value while Squid is running.\n", sd->path);
-       diskdinfo->magic2 = old_magic2;
-       return;
-    }
-    if (old_magic2 != diskdinfo->magic2)
+    if (reconfiguring && old_magic2 != diskdinfo->magic2)
 	debug(3, 1) ("cache_dir '%s' new Q2 value '%d'\n",
 	    sd->path, diskdinfo->magic2);
 }
@@ -1967,7 +1949,7 @@ storeDiskdDirParse(SwapDir * sd, int index, char *path)
 static void
 storeDiskdDirDone(void)
 {
-    memPoolDestroy(&diskd_state_pool);
+    memPoolDestroy(diskd_state_pool);
     diskd_initialised = 0;
 }
 
