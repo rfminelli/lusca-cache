@@ -1,11 +1,20 @@
-/* $Id$ */
-
 /*
- * DEBUG: Section 27          send-announce
+ * $Id$
+ *
+ * DEBUG: section 27	Cache Announcer
+ * AUTHOR: Duane Wessels
+ *
+ * SQUID Internet Object Cache  http://www.nlanr.net/Squid/
+ * --------------------------------------------------------
+ *
+ *   Squid is the result of efforts by numerous individuals from the
+ *   Internet community.  Development is led by Duane Wessels of the
+ *   National Laboratory for Applied Network Research and funded by
+ *   the National Science Foundation.
+ * 
  */
 
 #include "squid.h"
-
 
 void send_announce()
 {
@@ -15,7 +24,7 @@ void send_announce()
     struct hostent *hp = NULL;
     char *host = NULL;
     char *file = NULL;
-    int port;
+    u_short port;
     int fd;
     int l;
     int n;
@@ -23,7 +32,7 @@ void send_announce()
     host = getAnnounceHost();
     port = getAnnouncePort();
 
-    if ((hp = ipcache_gethostbyname(host)) == NULL) {
+    if ((hp = ipcache_gethostbyname(host, IP_BLOCKING_LOOKUP)) == NULL) {
 	debug(27, 1, "send_announce: Unknown host '%s'\n", host);
 	return;
     }
@@ -32,8 +41,8 @@ void send_announce()
     strcat(sndbuf, tbuf);
     sprintf(tbuf, "Running on %s %d %d\n",
 	getMyHostname(),
-	getAsciiPortNum(),
-	getUdpPortNum());
+	getHttpPortNum(),
+	getIcpPortNum());
     strcat(sndbuf, tbuf);
     if (getAdminEmail()) {
 	sprintf(tbuf, "cache_admin: %s\n", getAdminEmail());
@@ -54,14 +63,14 @@ void send_announce()
 	    debug(27, 1, "send_announce: %s: %s\n", file, xstrerror());
 	}
     }
-    qdata = (icpUdpData *) xcalloc(1, sizeof(icpUdpData));
+    qdata = xcalloc(1, sizeof(icpUdpData));
     qdata->msg = xstrdup(sndbuf);
     qdata->len = strlen(sndbuf) + 1;
     qdata->address.sin_family = AF_INET;
     qdata->address.sin_port = htons(port);
-    memcpy(&qdata->address.sin_addr, hp->h_addr_list[0], hp->h_length);
+    xmemcpy(&qdata->address.sin_addr, hp->h_addr_list[0], hp->h_length);
     AppendUdp(qdata);
-    comm_set_select_handler(theUdpConnection,
+    comm_set_select_handler(theOutIcpConnection,
 	COMM_SELECT_WRITE,
 	(PF) icpUdpReply,
 	(void *) qdata);

@@ -1,8 +1,97 @@
-
-/*  $Id$ */
+/*
+ * $Id$
+ *
+ * AUTHOR: Harvest Derived
+ *
+ * SQUID Internet Object Cache  http://www.nlanr.net/Squid/
+ * --------------------------------------------------------
+ *
+ *   Squid is the result of efforts by numerous individuals from the
+ *   Internet community.  Development is led by Duane Wessels of the
+ *   National Laboratory for Applied Network Research and funded by
+ *   the National Science Foundation.
+ * 
+ */
+ 
+#ifdef HARVEST_COPYRIGHT
+Copyright (c) 1994, 1995.  All rights reserved.
+ 
+  The Harvest software was developed by the Internet Research Task
+  Force Research Group on Resource Discovery (IRTF-RD):
+ 
+        Mic Bowman of Transarc Corporation.
+        Peter Danzig of the University of Southern California.
+        Darren R. Hardy of the University of Colorado at Boulder.
+        Udi Manber of the University of Arizona.
+        Michael F. Schwartz of the University of Colorado at Boulder.
+        Duane Wessels of the University of Colorado at Boulder.
+ 
+  This copyright notice applies to software in the Harvest
+  ``src/'' directory only.  Users should consult the individual
+  copyright notices in the ``components/'' subdirectories for
+  copyright information about other software bundled with the
+  Harvest source code distribution.
+ 
+TERMS OF USE
+  
+  The Harvest software may be used and re-distributed without
+  charge, provided that the software origin and research team are
+  cited in any use of the system.  Most commonly this is
+  accomplished by including a link to the Harvest Home Page
+  (http://harvest.cs.colorado.edu/) from the query page of any
+  Broker you deploy, as well as in the query result pages.  These
+  links are generated automatically by the standard Broker
+  software distribution.
+  
+  The Harvest software is provided ``as is'', without express or
+  implied warranty, and with no support nor obligation to assist
+  in its use, correction, modification or enhancement.  We assume
+  no liability with respect to the infringement of copyrights,
+  trade secrets, or any patents, and are not responsible for
+  consequential damages.  Proper use of the Harvest software is
+  entirely the responsibility of the user.
+ 
+DERIVATIVE WORKS
+ 
+  Users may make derivative works from the Harvest software, subject 
+  to the following constraints:
+ 
+    - You must include the above copyright notice and these 
+      accompanying paragraphs in all forms of derivative works, 
+      and any documentation and other materials related to such 
+      distribution and use acknowledge that the software was 
+      developed at the above institutions.
+ 
+    - You must notify IRTF-RD regarding your distribution of 
+      the derivative work.
+ 
+    - You must clearly notify users that your are distributing 
+      a modified version and not the original Harvest software.
+ 
+    - Any derivative product is also subject to these copyright 
+      and use restrictions.
+ 
+  Note that the Harvest software is NOT in the public domain.  We
+  retain copyright, as specified above.
+ 
+HISTORY OF FREE SOFTWARE STATUS
+ 
+  Originally we required sites to license the software in cases
+  where they were going to build commercial products/services
+  around Harvest.  In June 1995 we changed this policy.  We now
+  allow people to use the core Harvest software (the code found in
+  the Harvest ``src/'' directory) for free.  We made this change
+  in the interest of encouraging the widest possible deployment of
+  the technology.  The Harvest software is really a reference
+  implementation of a set of protocols and formats, some of which
+  we intend to standardize.  We encourage commercial
+  re-implementations of code complying to this set of standards.  
+#endif
 
 #ifndef _CACHE_CONFIG_H_
 #define _CACHE_CONFIG_H_
+
+#define DefaultDnsChildrenMax	32	/* 32 processes */
 
 typedef struct _wordlist {
     char *key;
@@ -50,7 +139,7 @@ extern wordlist *bind_addr_list;
 extern wordlist *ftp_stoplist;
 extern wordlist *gopher_stoplist;
 extern wordlist *http_stoplist;
-
+extern char ForwardedBy[];
 
 /* Global Functions */
 extern char *getAccelPrefix _PARAMS((void));
@@ -74,9 +163,7 @@ extern char *getVisibleHostname _PARAMS((void));
 extern char *getWaisRelayHost _PARAMS((void));
 extern double getCacheHotVmFactor _PARAMS((void));
 extern int getAccelWithProxy _PARAMS((void));
-extern int getAnnouncePort _PARAMS((void));
 extern int getAnnounceRate _PARAMS((void));
-extern int getAsciiPortNum _PARAMS((void));
 extern int getBehindFirewall _PARAMS((void));
 extern int getCacheMemHighWaterMark _PARAMS((void));
 extern int getCacheMemLowWaterMark _PARAMS((void));
@@ -88,7 +175,6 @@ extern int getCacheSwapMax _PARAMS((void));
 extern int getCleanRate _PARAMS((void));
 extern int getClientLifetime _PARAMS((void));
 extern int getConnectTimeout _PARAMS((void));
-extern int getDnSChildren _PARAMS((void));
 extern int getDnsChildren _PARAMS((void));
 extern int getFtpMax _PARAMS((void));
 extern int getFtpTTL _PARAMS((void));
@@ -102,28 +188,39 @@ extern int getNegativeDNSTTL _PARAMS((void));
 extern int getNegativeTTL _PARAMS((void));
 extern int getQuickAbort _PARAMS((void));
 extern int getReadTimeout _PARAMS((void));
+extern int getShutdownLifetime _PARAMS((void));
 extern int getSourcePing _PARAMS((void));
 extern int getStallDelay _PARAMS((void));
-extern int getUdpPortNum _PARAMS((void));
 extern int getWAISMax _PARAMS((void));
-extern int getWaisRelayPort _PARAMS((void));
 extern int ip_acl_match _PARAMS((struct in_addr, ip_acl *));
 extern int parseConfigFile _PARAMS((char *file_name));
-extern int setAsciiPortNum _PARAMS((int));
 extern int setCacheSwapMax _PARAMS((int size));
-extern int setUdpPortNum _PARAMS((int));
 extern ip_access_type ip_access_check _PARAMS((struct in_addr, ip_acl *));
+extern u_short getAccelPort _PARAMS((void));
+extern u_short getAnnouncePort _PARAMS((void));
+extern u_short getHttpPortNum _PARAMS((void));
+extern u_short getIcpPortNum _PARAMS((void));
+extern u_short getWaisRelayPort _PARAMS((void));
+extern u_short setHttpPortNum _PARAMS((int));
+extern u_short setIcpPortNum _PARAMS((int));
 extern void intlistDestroy _PARAMS((intlist **));
 extern void wordlistDestroy _PARAMS((wordlist **));
-wordlist *getBindAddrList _PARAMS((void));
-wordlist *getCacheDirs _PARAMS((void));
-wordlist *getFtpStoplist _PARAMS((void));
-wordlist *getGopherStoplist _PARAMS((void));
-wordlist *getHttpStoplist _PARAMS((void));
-wordlist *getInsideFirewallList _PARAMS((void));
-wordlist *getLocalDomainList _PARAMS((void));
-wordlist *getDnsTestnameList _PARAMS((void));
-extern int getShutdownLifetime _PARAMS((void));
+extern struct in_addr getTcpIncomingAddr _PARAMS((void));
+extern struct in_addr getTcpOutgoingAddr _PARAMS((void));
+extern struct in_addr getUdpIncomingAddr _PARAMS((void));
+extern struct in_addr getUdpOutgoingAddr _PARAMS((void));
+extern wordlist *getCacheDirs _PARAMS((void));
+extern wordlist *getDnsTestnameList _PARAMS((void));
+extern wordlist *getFtpStoplist _PARAMS((void));
+extern wordlist *getGopherStoplist _PARAMS((void));
+extern wordlist *getHttpStoplist _PARAMS((void));
+extern wordlist *getHierarchyStoplist _PARAMS((void));
+extern wordlist *getInsideFirewallList _PARAMS((void));
+extern wordlist *getLocalDomainList _PARAMS((void));
+#if REDIRECT_IN_PROGRESS
+extern int getRedirectChildren _PARAMS((void));
+extern char *getRedirectProgram _PARAMS((void));
+#endif
 
 
 #endif /* ndef  _CACHE_CONFIG_H_ */
