@@ -473,10 +473,23 @@ static void
 sslProxyConnected(int fd, void *data)
 {
     SslStateData *sslState = data;
+    LOCAL_ARRAY(char, line, MAX_URL);
+    char *s;
+    int o = 0;
     debug(26, 3, "sslProxyConnected: FD %d sslState=%p\n", fd, sslState);
-    sprintf(sslState->client.buf, "CONNECT %s HTTP/1.0\r\n\r\n", sslState->url);
-    debug(26, 3, "sslProxyConnected: Sending 'CONNECT %s HTTP/1.0'\n", sslState->url);
-    sslState->client.len = strlen(sslState->client.buf);
+    sslState->client.buf[o] = '\0';
+    sprintf(line, "CONNECT %s HTTP/1.0\r\n", sslState->url);
+    xstrncpy(sslState->client.buf, line, MAX_URL - o);
+    o += strlen(line);
+    if ((s = mime_get_header(sslState->mime_hdr, "Proxy-authorization:"))) {
+	sprintf(line, "Proxy-Authorization: %s\r\n", s);
+	xstrncpy(sslState->client.buf, line, MAX_URL - o);
+	o += strlen(line);
+    }
+    xstrncpy(sslState->client.buf, "\r\n", MAX_URL - o);
+    o += 2;
+    debug(26, 3, "sslProxyConnected: Sending {%s}\n", sslState->client.buf);
+    sslState->client.len = o;
     sslState->client.offset = 0;
     commSetSelect(sslState->server.fd,
 	COMM_SELECT_WRITE,

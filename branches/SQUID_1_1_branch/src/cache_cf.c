@@ -263,6 +263,7 @@ static void parseKilobytes _PARAMS((int *));
 static void parseSwapLine _PARAMS((void));
 static void parseRefreshPattern _PARAMS((int icase));
 static void parseVisibleHostnameLine _PARAMS((void));
+static void parseUniqueHostnameLine _PARAMS((void));
 static void parseWAISRelayLine _PARAMS((void));
 static void parseMinutesLine _PARAMS((int *));
 static void ip_acl_destroy _PARAMS((ip_acl **));
@@ -895,6 +896,17 @@ parseVisibleHostnameLine(void)
 }
 
 static void
+parseUniqueHostnameLine(void)
+{
+    char *token;
+    token = strtok(NULL, w_space);
+    safe_free(Config.uniqueHostname);
+    if (token == NULL)
+	self_destruct();
+    Config.uniqueHostname = xstrdup(token);
+}
+
+static void
 parseFtpUserLine(void)
 {
     char *token;
@@ -1335,6 +1347,9 @@ parseConfigFile(const char *file_name)
 	else if (!strcmp(token, "visible_hostname"))
 	    parseVisibleHostnameLine();
 
+	else if (!strcmp(token, "unique_hostname"))
+	    parseUniqueHostnameLine();
+
 	else if (!strcmp(token, "ftp_user"))
 	    parseFtpUserLine();
 
@@ -1637,6 +1652,7 @@ configSetFactoryDefaults(void)
     Config.Accel.withProxy = DefaultAccelWithProxy;
     Config.pidFilename = safe_xstrdup(DefaultPidFilename);
     Config.visibleHostname = safe_xstrdup(DefaultVisibleHostname);
+    Config.uniqueHostname = safe_xstrdup(DefaultVisibleHostname);
 #if USE_PROXY_AUTH
     Config.proxyAuth.File = safe_xstrdup(DefaultProxyAuthFile);
 /*    Config.proxyAuth.IgnoreDomains = safe_xstrdup(DefaultproxyAuthIgnoreDomains); */
@@ -1695,7 +1711,7 @@ configDoConfigure(void)
     if (httpd_accel_mode && !strcmp(Config.Accel.host, "virtual"))
 	vhost_mode = 1;
     sprintf(ThisCache, "%s:%d (Squid/%s)",
-	getMyHostname(),
+	uniqueHostname(),
 	(int) Config.Port.http,
 	SQUID_VERSION);
     if (!Config.udpMaxHitObjsz || Config.udpMaxHitObjsz > SQUID_UDP_SO_SNDBUF)
