@@ -104,22 +104,22 @@ snmp_confFn(variable_list * Var, snint * ErrP)
     case CONF_STORAGE:
 	switch (Var->name[LEN_SQ_CONF + 1]) {
 	case CONF_ST_MMAXSZ:
-	    snmp_var_new_integer(Var->name, Var->name_length,
+	    Answer = snmp_var_new_integer(Var->name, Var->name_length,
 		(snint) Config.memMaxSize >> 20,
 		ASN_INTEGER);
 	    break;
 	case CONF_ST_SWMAXSZ:
-	    snmp_var_new_integer(Var->name, Var->name_length,
+	    Answer = snmp_var_new_integer(Var->name, Var->name_length,
 		(snint) Config.Swap.maxSize >> 10,
 		ASN_INTEGER);
 	    break;
 	case CONF_ST_SWHIWM:
-	    snmp_var_new_integer(Var->name, Var->name_length,
+	    Answer = snmp_var_new_integer(Var->name, Var->name_length,
 		(snint) Config.Swap.highWaterMark,
 		ASN_INTEGER);
 	    break;
 	case CONF_ST_SWLOWM:
-	    snmp_var_new_integer(Var->name, Var->name_length,
+	    Answer = snmp_var_new_integer(Var->name, Var->name_length,
 		(snint) Config.Swap.lowWaterMark,
 		ASN_INTEGER);
 	    break;
@@ -279,9 +279,12 @@ snmp_prfSysFn(variable_list * Var, snint * ErrP)
 	    ASN_INTEGER);
 	break;
     case PERF_SYS_CURLRUEXP:
-	/* No global LRU info anymore */
 	Answer = snmp_var_new_integer(Var->name, Var->name_length,
+#if !HEAP_REPLACEMENT
+	    (snint) (storeExpiredReferenceAge() * 100),
+#else
 	    0,
+#endif
 	    SMI_TIMETICKS);
 	break;
     case PERF_SYS_CURUNLREQ:

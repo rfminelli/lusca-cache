@@ -422,11 +422,10 @@ ftpListingFinish(FtpStateData * ftpState)
     }
     storeAppendPrintf(e, "<HR>\n");
     storeAppendPrintf(e, "<ADDRESS>\n");
-    storeAppendPrintf(e, "Generated %s by %s (<a href=\"http://squid.nlanr.net/Squid/\">%s</a>)\n",
+    storeAppendPrintf(e, "Generated %s by %s (%s)\n",
 	mkrfc1123(squid_curtime),
 	getMyHostname(),
-	full_appname_string,
-	version_string);
+	full_appname_string);
     storeAppendPrintf(e, "</ADDRESS></BODY></HTML>\n");
     storeBufferFlush(e);
 }
@@ -896,7 +895,7 @@ ftpDataRead(int fd, void *data)
 	ftpListingStart(ftpState);
     }
     if (len < 0) {
-	debug(50, ignoreErrno(errno) ? 3 : 1) ("ftpDataRead: read error: %s\n", xstrerror());
+	debug(50, 1) ("ftpDataRead: read error: %s\n", xstrerror());
 	if (ignoreErrno(errno)) {
 	    commSetSelect(fd,
 		COMM_SELECT_READ,
@@ -1052,7 +1051,12 @@ ftpStart(FwdState * fwd)
     ftpState->data.fd = -1;
     ftpState->size = -1;
     ftpState->mdtm = -1;
-    ftpState->flags.pasv_supported = !fwd->flags.ftp_pasv_failed;
+    if (!Config.Ftp.passive)
+	ftpState->flags.rest_supported = 0;
+    else if (fwd->flags.ftp_pasv_failed)
+	ftpState->flags.pasv_supported = 0;
+    else
+	ftpState->flags.pasv_supported = 1;
     ftpState->flags.rest_supported = 1;
     ftpState->fwd = fwd;
     comm_add_close_handler(fd, ftpStateFree, ftpState);
@@ -1247,7 +1251,7 @@ ftpReadControlReply(int fd, void *data)
     }
     debug(9, 5) ("ftpReadControlReply: FD %d, Read %d bytes\n", fd, len);
     if (len < 0) {
-	debug(50, ignoreErrno(errno) ? 3 : 1) ("ftpReadControlReply: read error: %s\n", xstrerror());
+	debug(50, 1) ("ftpReadControlReply: read error: %s\n", xstrerror());
 	if (ignoreErrno(errno)) {
 	    ftpScheduleReadControlReply(ftpState, 0);
 	} else {
@@ -1303,15 +1307,11 @@ ftpHandleControlReply(FtpStateData * ftpState)
 	xmemmove(ftpState->ctrl.buf, ftpState->ctrl.buf + bytes_used,
 	    ftpState->ctrl.offset);
     }
-    /* Move the last line of the reply message to ctrl.last_reply */
+    /* Find the last line of the reply message */
     for (W = &ftpState->ctrl.message; (*W)->next; W = &(*W)->next);
     safe_free(ftpState->ctrl.last_reply);
-    ftpState->ctrl.last_reply = xstrdup((*W)->key);
-    wordlistDestroy(W);
-    /* Copy the rest of the message to cwd_message to be printed in
-     * error messages
-     */
-    wordlistAddWl(&ftpState->cwd_message, ftpState->ctrl.message);
+    ftpState->ctrl.last_reply = (*W)->key;
+    safe_free(*W);
     debug(9, 8) ("ftpHandleControlReply: state=%d, code=%d\n", ftpState->state,
 	ftpState->ctrl.replycode);
     FTP_SM_FUNCS[ftpState->state] (ftpState);
@@ -1332,6 +1332,10 @@ ftpReadWelcome(FtpStateData * ftpState)
 	if (ftpState->ctrl.message) {
 	    if (strstr(ftpState->ctrl.message->key, "NetWare"))
 		ftpState->flags.skip_whitespace = 1;
+	    if (ftpState->cwd_message)
+		wordlistDestroy(&ftpState->cwd_message);
+	    ftpState->cwd_message = ftpState->ctrl.message;
+	    ftpState->ctrl.message = NULL;
 	}
 	ftpSendUser(ftpState);
     } else if (code == 120) {
@@ -1385,6 +1389,12 @@ ftpReadPass(FtpStateData * ftpState)
     int code = ftpState->ctrl.replycode;
     debug(9, 3) ("ftpReadPass\n");
     if (code == 230) {
+	if (ftpState->ctrl.message) {
+	    if (ftpState->cwd_message)
+		wordlistDestroy(&ftpState->cwd_message);
+	    ftpState->cwd_message = ftpState->ctrl.message;
+	    ftpState->ctrl.message = NULL;
+	}
 	ftpSendType(ftpState);
     } else {
 	ftpFail(ftpState);
@@ -1510,7 +1520,6 @@ ftpReadCwd(FtpStateData * ftpState)
     if (code >= 200 && code < 300) {
 	/* CWD OK */
 	ftpUnhack(ftpState);
-	/* Reset cwd_message to only include the last message */
 	if (ftpState->cwd_message)
 	    wordlistDestroy(&ftpState->cwd_message);
 	ftpState->cwd_message = ftpState->ctrl.message;
@@ -1640,14 +1649,6 @@ ftpSendPasv(FtpStateData * ftpState)
     int fd;
     struct sockaddr_in addr;
     socklen_t addr_len;
-    if (ftpState->request->method == METHOD_HEAD) {
-	/* Terminate here for HEAD requests */
-	ftpAppendSuccessHeader(ftpState);
-	storeTimestampsSet(ftpState->entry);
-	fwdComplete(ftpState->fwd);
-	ftpSendQuit(ftpState);
-	return;
-    }
     if (ftpState->data.fd >= 0) {
 	if (!ftpState->flags.datachannel_hack) {
 	    /* We are already connected, reuse this connection. */
@@ -1869,10 +1870,10 @@ static void
 ftpAcceptDataConnection(int fd, void *data)
 {
     FtpStateData *ftpState = data;
-    struct sockaddr_in peer, me;
+    struct sockaddr_in my_peer, me;
     debug(9, 3) ("ftpAcceptDataConnection\n");
 
-    fd = comm_accept(fd, &peer, &me);
+    fd = comm_accept(fd, &my_peer, &me);
     if (fd < 0) {
 	debug(9, 1) ("ftpHandleDataAccept: comm_accept(%d): %s", fd, xstrerror());
 	/* XXX Need to set error message */
@@ -1883,8 +1884,8 @@ ftpAcceptDataConnection(int fd, void *data)
     comm_close(ftpState->data.fd);
     debug(9, 3) ("ftpAcceptDataConnection: Connected data socket on FD %d\n", fd);
     ftpState->data.fd = fd;
-    ftpState->data.port = ntohs(peer.sin_port);
-    ftpState->data.host = xstrdup(inet_ntoa(peer.sin_addr));
+    ftpState->data.port = ntohs(my_peer.sin_port);
+    ftpState->data.host = xstrdup(inet_ntoa(my_peer.sin_addr));
     commSetTimeout(ftpState->ctrl.fd, -1, NULL, NULL);
     commSetTimeout(ftpState->data.fd, Config.Timeout.read, ftpTimeout,
 	ftpState);
@@ -2341,8 +2342,8 @@ ftpFailedErrorMessage(FtpStateData * ftpState, err_type error)
 	err = errorCon(ERR_FTP_FAILURE, HTTP_BAD_GATEWAY);
     err->xerrno = errno;
     err->request = requestLink(ftpState->request);
-    err->ftp.server_msg = ftpState->cwd_message;
-    ftpState->cwd_message = NULL;
+    err->ftp.server_msg = ftpState->ctrl.message;
+    ftpState->ctrl.message = NULL;
     if (ftpState->old_request)
 	command = ftpState->old_request;
     else

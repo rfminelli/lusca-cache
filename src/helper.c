@@ -126,18 +126,17 @@ helperStats(StoreEntry * sentry, helper * hlp)
     storeAppendPrintf(sentry, "avg service time: %d msec\n",
 	hlp->stats.avg_svc_time);
     storeAppendPrintf(sentry, "\n");
-    storeAppendPrintf(sentry, "%7s\t%7s\t%11s\t%s\t%7s\t%7s\t%7s\n",
+    storeAppendPrintf(sentry, "%7s\t%7s\t%11s\t%s\t%7s\t%7s\n",
 	"#",
 	"FD",
 	"# Requests",
 	"Flags",
 	"Time",
-	"Offset",
-	"Request");
+	"Offset");
     for (link = hlp->servers.head; link; link = link->next) {
 	srv = link->data;
 	tt = 0.001 * tvSubMsec(srv->dispatch_time, current_time);
-	storeAppendPrintf(sentry, "%7d\t%7d\t%11d\t%c%c%c%c\t%7.3f\t%7d\t%s\n",
+	storeAppendPrintf(sentry, "%7d\t%7d\t%11d\t%c%c%c%c\t%7.3f\t%7d\n",
 	    srv->index + 1,
 	    srv->rfd,
 	    srv->stats.uses,
@@ -146,8 +145,7 @@ helperStats(StoreEntry * sentry, helper * hlp)
 	    srv->flags.closing ? 'C' : ' ',
 	    srv->flags.shutdown ? 'S' : ' ',
 	    tt < 0.0 ? 0.0 : tt,
-	    (int) srv->offset,
-	    srv->request ? log_quote(srv->request->buf) : "(none)");
+	    (int) srv->offset);
     }
     storeAppendPrintf(sentry, "\nFlags key:\n\n");
     storeAppendPrintf(sentry, "   A = ALIVE\n");
@@ -181,8 +179,7 @@ helperShutdown(helper * hlp)
 	    continue;
 	}
 	srv->flags.closing = 1;
-	comm_close(srv->wfd);
-	srv->wfd = -1;
+	comm_close(srv->rfd);
     }
 }
 
@@ -226,7 +223,7 @@ helperServerFree(int fd, void *data)
 	helperRequestFree(r);
 	srv->request = NULL;
     }
-    if (srv->wfd != srv->rfd && srv->wfd != -1)
+    if (srv->wfd != srv->rfd)
 	comm_close(srv->wfd);
     dlinkDelete(&srv->link, &hlp->servers);
     hlp->n_running--;
@@ -285,10 +282,9 @@ helperHandleRead(int fd, void *data)
 	    intAverage(hlp->stats.avg_svc_time,
 	    tvSubMsec(srv->dispatch_time, current_time),
 	    hlp->stats.replies, REDIRECT_AV_FACTOR);
-	if (srv->flags.shutdown) {
+	if (srv->flags.shutdown)
 	    comm_close(srv->wfd);
-	    srv->wfd = -1;
-	} else
+	else
 	    helperKickQueue(hlp);
     } else {
 	commSetSelect(srv->rfd, COMM_SELECT_READ, helperHandleRead, srv, 0);

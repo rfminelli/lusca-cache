@@ -62,7 +62,6 @@ struct _as_info {
 
 struct _ASState {
     StoreEntry *entry;
-    store_client *sc;
     request_t *request;
     int as_number;
     off_t seen;
@@ -196,17 +195,16 @@ asnCacheStart(int as)
     asState->request = requestLink(req);
     if ((e = storeGetPublic(asres, METHOD_GET)) == NULL) {
 	e = storeCreateEntry(asres, asres, null_request_flags, METHOD_GET);
-	asState->sc = storeClientListAdd(e, asState);
+	storeClientListAdd(e, asState);
 	fwdStart(-1, e, asState->request);
     } else {
 	storeLockObject(e);
-	asState->sc = storeClientListAdd(e, asState);
+	storeClientListAdd(e, asState);
     }
     asState->entry = e;
     asState->seen = 0;
     asState->offset = 0;
-    storeClientCopy(asState->sc,
-	e,
+    storeClientCopy(e,
 	asState->seen,
 	asState->offset,
 	4096,
@@ -237,6 +235,12 @@ asHandleReply(void *data, char *buf, ssize_t size)
 	memFree(buf, MEM_4K_BUF);
 	asStateFree(asState);
 	return;
+    } else if (HTTP_OK != e->mem_obj->reply->sline.status) {
+	debug(53, 1) ("WARNING: AS %d whois request failed\n",
+	    asState->as_number);
+	memFree(buf, MEM_4K_BUF);
+	asStateFree(asState);
+	return;
     }
     s = buf;
     while (s - buf < size && *s != '\0') {
@@ -261,8 +265,7 @@ asHandleReply(void *data, char *buf, ssize_t size)
 	asState->seen, asState->offset);
     if (e->store_status == STORE_PENDING) {
 	debug(53, 3) ("asHandleReply: store_status == STORE_PENDING: %s\n", storeUrl(e));
-	storeClientCopy(asState->sc,
-	    e,
+	storeClientCopy(e,
 	    asState->seen,
 	    asState->offset,
 	    SM_PAGE_SIZE,
@@ -271,8 +274,7 @@ asHandleReply(void *data, char *buf, ssize_t size)
 	    asState);
     } else if (asState->seen < e->mem_obj->inmem_hi) {
 	debug(53, 3) ("asHandleReply: asState->seen < e->mem_obj->inmem_hi %s\n", storeUrl(e));
-	storeClientCopy(asState->sc,
-	    e,
+	storeClientCopy(e,
 	    asState->seen,
 	    asState->offset,
 	    SM_PAGE_SIZE,
@@ -291,7 +293,7 @@ asStateFree(void *data)
 {
     ASState *asState = data;
     debug(53, 3) ("asnStateFree: %s\n", storeUrl(asState->entry));
-    storeUnregister(asState->sc, asState->entry, asState);
+    storeUnregister(asState->entry, asState);
     storeUnlockObject(asState->entry);
     requestUnlink(asState->request);
     cbdataFree(asState);

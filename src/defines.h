@@ -147,6 +147,7 @@
 #define LOG_DISABLE 0
 
 #define SM_PAGE_SIZE 4096
+#define DISK_PAGE_SIZE  8192
 
 #define EBIT_SET(flag, bit) 	((void)((flag) |= ((1L<<(bit)))))
 #define EBIT_CLR(flag, bit) 	((void)((flag) &= ~((1L<<(bit)))))
@@ -267,4 +268,10 @@
 
 #ifndef _PATH_DEVNULL
 #define _PATH_DEVNULL "/dev/null"
+#endif
+
+#if USE_ASYNC_IO
+#ifndef NUMTHREADS
+#define NUMTHREADS 16
+#endif
 #endif

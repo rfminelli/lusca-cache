@@ -108,20 +108,17 @@ typedef enum {
     ACL_MY_PORT,
 #if USE_IDENT
     ACL_IDENT,
-    ACL_IDENT_REGEX,
 #endif
     ACL_PROTO,
     ACL_METHOD,
     ACL_BROWSER,
     ACL_PROXY_AUTH,
-    ACL_PROXY_AUTH_REGEX,
     ACL_SRC_ASN,
     ACL_DST_ASN,
     ACL_SRC_ARP,
     ACL_SNMP_COMMUNITY,
     ACL_NETDB_SRC_RTT,
     ACL_MAXCONN,
-    ACL_REQ_MIME_TYPE,
     ACL_ENUM_MAX
 } squid_acl;
 
@@ -507,6 +504,7 @@ typedef enum {
     MEM_ACL_NAME_LIST,
     MEM_ACL_PROXY_AUTH_USER,
     MEM_ACL_TIME_DATA,
+    MEM_AIO_RESULT_T,
     MEM_CACHEMGR_PASSWD,
 #if USE_CACHE_DIGESTS
     MEM_CACHE_DIGEST,
@@ -520,6 +518,7 @@ typedef enum {
 #if USE_CACHE_DIGESTS
     MEM_DIGEST_FETCH_STATE,
 #endif
+    MEM_DISK_BUF,
     MEM_DLINK_LIST,
     MEM_DLINK_NODE,
     MEM_DNSSERVER_T,
@@ -569,10 +568,8 @@ typedef enum {
 #if USE_CACHE_DIGESTS
     MEM_PEER_DIGEST,
 #endif
-#if USE_ICMP
     MEM_PINGERECHODATA,
     MEM_PINGERREPLYDATA,
-#endif
     MEM_PS_STATE,
     MEM_REFRESH_T,
     MEM_RELIST,
@@ -658,3 +655,9 @@ enum {
     NETDB_EX_RTT,
     NETDB_EX_HOPS
 };
+
+typedef enum {
+    SWAPDIR_UFS,
+    SWAPDIR_ASYNCUFS,
+    SWAPDIR_MAX
+} swapdir_t;

@@ -40,10 +40,36 @@ static struct timeval rebuild_start;
 static void storeCleanup(void *);
 
 static int
-storeCleanupDoubleCheck(StoreEntry * e)
+storeCleanupDoubleCheck(const StoreEntry * e)
 {
-    SwapDir *SD = &Config.cacheSwap.swapDirs[e->swap_dirn];
-    return (SD->dblcheck(SD, e));
+    /* XXX too UFS specific */
+    struct stat sb;
+    int dirn = e->swap_file_number >> SWAP_DIR_SHIFT;
+    if (Config.cacheSwap.swapDirs[dirn].type == SWAPDIR_UFS)
+	(void) 0;
+    if (Config.cacheSwap.swapDirs[dirn].type == SWAPDIR_ASYNCUFS)
+	(void) 0;
+    else
+	return 0;
+    if (stat(storeUfsFullPath(e->swap_file_number, NULL), &sb) < 0) {
+	debug(20, 0) ("storeCleanup: MISSING SWAP FILE\n");
+	debug(20, 0) ("storeCleanup: FILENO %08X\n", e->swap_file_number);
+	debug(20, 0) ("storeCleanup: PATH %s\n",
+	    storeUfsFullPath(e->swap_file_number, NULL));
+	storeEntryDump(e, 0);
+	return -1;
+    }
+    if (e->swap_file_sz != sb.st_size) {
+	debug(20, 0) ("storeCleanup: SIZE MISMATCH\n");
+	debug(20, 0) ("storeCleanup: FILENO %08X\n", e->swap_file_number);
+	debug(20, 0) ("storeCleanup: PATH %s\n",
+	    storeUfsFullPath(e->swap_file_number, NULL));
+	debug(20, 0) ("storeCleanup: ENTRY SIZE: %d, FILE SIZE: %d\n",
+	    e->swap_file_sz, (int) sb.st_size);
+	storeEntryDump(e, 0);
+	return -1;
+    }
+    return 0;
 }
 
 static void
@@ -57,7 +83,7 @@ storeCleanup(void *datanotused)
     hash_link *link_ptr = NULL;
     hash_link *link_next = NULL;
     validnum_start = validnum;
-    while (validnum - validnum_start < 500) {
+    while (validnum - validnum_start < 50) {
 	if (++bucketnum >= store_hash_buckets) {
 	    debug(20, 1) ("  Completed Validation Procedure\n");
 	    debug(20, 1) ("  Validated %d Entries\n", validnum);
@@ -80,7 +106,7 @@ storeCleanup(void *datanotused)
 	     * Calling storeRelease() has no effect because we're
 	     * still in 'store_rebuilding' state
 	     */
-	    if (e->swap_filen < 0)
+	    if (e->swap_file_number < 0)
 		continue;
 	    if (opt_store_doublecheck)
 		if (storeCleanupDoubleCheck(e))
@@ -90,7 +116,7 @@ storeCleanup(void *datanotused)
 	     * Only set the file bit if we know its a valid entry
 	     * otherwise, set it in the validation procedure
 	     */
-	    storeDirUpdateSwapSize(&Config.cacheSwap.swapDirs[e->swap_dirn], e->swap_file_sz, 1);
+	    storeDirUpdateSwapSize(e->swap_file_number, e->swap_file_sz, 1);
 	    if ((++validnum & 0x3FFFF) == 0)
 		debug(20, 1) ("  %7d Entries Validated so far.\n", validnum);
 	}

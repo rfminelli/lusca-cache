@@ -44,6 +44,8 @@
 #define DOMAIN_PORT 53
 #endif
 
+#define IDNS_MAX_TRIES 20
+
 typedef struct _idns_query idns_query;
 typedef struct _ns ns;
 
@@ -87,6 +89,11 @@ static void idnsTickleQueue(void);
 static void
 idnsAddNameserver(const char *buf)
 {
+    struct in_addr A;
+    if (!safe_inet_addr(buf, &A)) {
+	debug(78, 0) ("WARNING: rejecting '%s' as a name server, because it is not a numeric IP address\n", buf);
+	return;
+    }
     if (nns == nns_alloc) {
 	int oldalloc = nns_alloc;
 	ns *oldptr = nameservers;
@@ -103,7 +110,7 @@ idnsAddNameserver(const char *buf)
     assert(nns < nns_alloc);
     nameservers[nns].S.sin_family = AF_INET;
     nameservers[nns].S.sin_port = htons(DOMAIN_PORT);
-    nameservers[nns].S.sin_addr.s_addr = inet_addr(buf);
+    nameservers[nns].S.sin_addr.s_addr = A.s_addr;
     debug(78, 3) ("idnsAddNameserver: Added nameserver #%d: %s\n",
 	nns, inet_ntoa(nameservers[nns].S.sin_addr));
     nns++;
@@ -139,15 +146,15 @@ idnsParseResolvConf(void)
     }
     while (fgets(buf, 512, fp)) {
 	t = strtok(buf, w_space);
-	if (NULL == t)
+	if (t == NULL)
+	    continue;;
+	if (strcasecmp(t, "nameserver"))
 	    continue;
-	if (strcasecmp(t, "nameserver") == 0) {
-	    t = strtok(NULL, w_space);
-	    if (t == NULL)
-		continue;;
-	    debug(78, 1) ("Adding nameserver %s from %s\n", t, _PATH_RESOLV_CONF);
-	    idnsAddNameserver(t);
-	}
+	t = strtok(NULL, w_space);
+	if (t == NULL)
+	    continue;;
+	debug(78, 1) ("Adding nameserver %s from %s\n", t, _PATH_RESOLV_CONF);
+	idnsAddNameserver(t);
     }
     fclose(fp);
 }
@@ -205,24 +212,21 @@ idnsSendQuery(idns_query * q)
     assert(nns > 0);
     assert(q->lru.next == NULL);
     assert(q->lru.prev == NULL);
-  try_again:
     ns = q->nsends % nns;
     x = comm_udp_sendto(DnsSocket,
 	&nameservers[ns].S,
 	sizeof(nameservers[ns].S),
 	q->buf,
 	q->sz);
-    q->nsends++;
-    q->sent_t = current_time;
     if (x < 0) {
 	debug(50, 1) ("idnsSendQuery: FD %d: sendto: %s\n",
 	    DnsSocket, xstrerror());
-	if (q->nsends % nns != 0)
-	    goto try_again;
     } else {
 	fd_bytes(DnsSocket, x, FD_WRITE);
 	commSetSelect(DnsSocket, COMM_SELECT_READ, idnsRead, NULL, 0);
     }
+    q->nsends++;
+    q->sent_t = current_time;
     nameservers[ns].nqueries++;
     dlinkAdd(q, &q->lru, &lru_list);
     idnsTickleQueue();
@@ -322,7 +326,6 @@ idnsRead(int fd, void *data)
 	    break;
 	}
 	fd_bytes(DnsSocket, len, FD_READ);
-	assert(N);
 	(*N)++;
 	debug(78, 3) ("idnsRead: FD %d: received %d bytes from %s.\n",
 	    fd,
@@ -355,13 +358,13 @@ idnsCheckQueue(void *unused)
     event_queued = 0;
     for (n = lru_list.tail; n; n = p) {
 	q = n->data;
-	if (tvSubDsec(q->sent_t, current_time) < Config.Timeout.idns_retransmit * (1 << q->nsends % nns))
+	if (tvSubDsec(q->sent_t, current_time) < 5.0)
 	    break;
 	debug(78, 3) ("idnsCheckQueue: ID %#04x timeout\n",
 	    q->id);
 	p = n->prev;
 	dlinkDelete(&q->lru, &lru_list);
-	if (tvSubDsec(q->start_t, current_time) < Config.Timeout.idns_query) {
+	if (q->nsends < IDNS_MAX_TRIES) {
 	    idnsSendQuery(q);
 	} else {
 	    int v = cbdataValid(q->callback_data);
@@ -423,12 +426,6 @@ idnsALookup(const char *name, IDNSCB * callback, void *data)
     idns_query *q = memAllocate(MEM_IDNS_QUERY);
     q->sz = sizeof(q->buf);
     q->id = rfc1035BuildAQuery(name, q->buf, &q->sz);
-    if (0 == q->id) {
-	/* problem with query data -- query not sent */
-	callback(data, NULL, 0);
-	memFree(q, MEM_IDNS_QUERY);
-	return;
-    }
     debug(78, 3) ("idnsALookup: buf is %d bytes for %s, id = %#hx\n",
 	(int) q->sz, name, q->id);
     q->callback = callback;

@@ -253,7 +253,6 @@ statStoreEntry(StoreEntry * s, StoreEntry * e)
     MemObject *mem = e->mem_obj;
     int i;
     struct _store_client *sc;
-    dlink_node *node;
     storeAppendPrintf(s, "KEY %s\n", storeKeyText(e->key));
     if (mem)
 	storeAppendPrintf(s, "\t%s %s\n",
@@ -265,8 +264,8 @@ statStoreEntry(StoreEntry * s, StoreEntry * e)
 	(int) e->lock_count,
 	storePendingNClients(e),
 	(int) e->refcount);
-    storeAppendPrintf(s, "\tSwap Dir %d, File %#08X\n",
-	e->swap_dirn, e->swap_filen);
+    storeAppendPrintf(s, "\tSwap File %#08X\n",
+	e->swap_file_number);
     if (mem != NULL) {
 	storeAppendPrintf(s, "\tinmem_lo: %d\n", (int) mem->inmem_lo);
 	storeAppendPrintf(s, "\tinmem_hi: %d\n", (int) mem->inmem_hi);
@@ -275,8 +274,7 @@ statStoreEntry(StoreEntry * s, StoreEntry * e)
 	if (mem->swapout.sio)
 	    storeAppendPrintf(s, "\tswapout: %d bytes written\n",
 		(int) storeOffset(mem->swapout.sio));
-	for (i = 0, node = mem->clients.head; node; node = node->next, i++) {
-	    sc = (store_client *) node->data;
+	for (i = 0, sc = &mem->clients[i]; sc != NULL; sc = sc->next, i++) {
 	    if (sc->callback_data == NULL)
 		continue;
 	    storeAppendPrintf(s, "\tClient #%d, %p\n", i, sc->callback_data);
@@ -487,16 +485,17 @@ info_get(StoreEntry * sentry)
     storeAppendPrintf(sentry, "\tByte Hit Ratios:\t5min: %3.1f%%, 60min: %3.1f%%\n",
 	statByteHitRatio(5),
 	statByteHitRatio(60));
-    storeAppendPrintf(sentry, "\tRequest Memory Hit Ratios:\t5min: %3.1f%%, 60min: %3.1f%%\n",
-	statRequestHitMemoryRatio(5),
-	statRequestHitMemoryRatio(60));
-    storeAppendPrintf(sentry, "\tRequest Disk Hit Ratios:\t5min: %3.1f%%, 60min: %3.1f%%\n",
-	statRequestHitDiskRatio(5),
-	statRequestHitDiskRatio(60));
     storeAppendPrintf(sentry, "\tStorage Swap size:\t%d KB\n",
 	store_swap_size);
     storeAppendPrintf(sentry, "\tStorage Mem size:\t%d KB\n",
 	(int) (store_mem_size >> 10));
+#if HEAP_REPLACEMENT
+    storeAppendPrintf(sentry, "\tStorage Replacement Threshold:\t%f\n",
+	heap_peepminkey(store_heap));
+#else
+    storeAppendPrintf(sentry, "\tStorage LRU Expiration Age:\t%6.2f days\n",
+	(double) storeExpiredReferenceAge() / 86400.0);
+#endif
     storeAppendPrintf(sentry, "\tMean Object Size:\t%0.2f KB\n",
 	n_disk_objects ? (double) store_swap_size / n_disk_objects : 0.0);
     storeAppendPrintf(sentry, "\tRequests given to unlinkd:\t%d\n",
@@ -611,6 +610,8 @@ info_get(StoreEntry * sentry)
 	memInUse(MEM_MEMOBJECT));
     storeAppendPrintf(sentry, "\t%6d Hot Object Cache Items\n",
 	hot_obj_count);
+    storeAppendPrintf(sentry, "\t%6d Filemap bits set\n",
+	storeDirMapBitsInUse());
     storeAppendPrintf(sentry, "\t%6d on-disk objects\n",
 	n_disk_objects);
 
@@ -1286,26 +1287,6 @@ statRequestHitRatio(int minutes)
 	CountHist[minutes].client_http.hits,
 	CountHist[0].client_http.requests -
 	CountHist[minutes].client_http.requests);
-}
-
-extern double
-statRequestHitMemoryRatio(int minutes)
-{
-    assert(minutes < N_COUNT_HIST);
-    return dpercent(CountHist[0].client_http.mem_hits -
-	CountHist[minutes].client_http.mem_hits,
-	CountHist[0].client_http.hits -
-	CountHist[minutes].client_http.hits);
-}
-
-extern double
-statRequestHitDiskRatio(int minutes)
-{
-    assert(minutes < N_COUNT_HIST);
-    return dpercent(CountHist[0].client_http.disk_hits -
-	CountHist[minutes].client_http.disk_hits,
-	CountHist[0].client_http.hits -
-	CountHist[minutes].client_http.hits);
 }
 
 extern double

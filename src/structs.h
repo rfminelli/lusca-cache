@@ -49,6 +49,12 @@ struct _acl_ip_data {
     acl_ip_data *next;		/* used for parsing, not for storing */
 };
 
+struct _acl_snmp_comm {
+    char *name;
+    void *community;
+    acl_snmp_comm *next;
+};
+
 struct _acl_time_data {
     int weekbits;
     int start;
@@ -153,6 +159,11 @@ struct _aclCheck_t {
     void *callback_data;
 };
 
+struct _aio_result_t {
+    int aio_return;
+    int aio_errno;
+};
+
 struct _wordlist {
     char *key;
     wordlist *next;
@@ -255,10 +266,6 @@ struct _SquidConfig {
 #if USE_IDENT
 	time_t ident;
 #endif
-#if !USE_DNSSERVERS
-	time_t idns_retransmit;
-	time_t idns_query;
-#endif
     } Timeout;
     size_t maxRequestHeaderSize;
     size_t maxRequestBodySize;
@@ -286,6 +293,7 @@ struct _SquidConfig {
 	struct in_addr router;
 	struct in_addr incoming;
 	struct in_addr outgoing;
+	int version;
     } Wccp;
 #endif
     char *as_whois_server;
@@ -294,9 +302,7 @@ struct _SquidConfig {
 	char *access;
 	char *store;
 	char *swap;
-#if USE_USERAGENT_LOG
 	char *useragent;
-#endif
 	int rotateNumber;
     } Log;
     char *adminEmail;
@@ -308,9 +314,7 @@ struct _SquidConfig {
 #endif
 	wordlist *redirect;
 	wordlist *authenticate;
-#if USE_ICMP
 	char *pinger;
-#endif
 	char *unlinkd;
     } Program;
 #if USE_DNSSERVERS
@@ -318,10 +322,9 @@ struct _SquidConfig {
 #endif
     int redirectChildren;
     int authenticateChildren;
-    time_t authenticateTTL;
-    time_t authenticateIpTTL;
+    int authenticateTTL;
+    int authenticateIpTTL;
     struct {
-	int single_host;
 	char *host;
 	u_short port;
     } Accel;
@@ -372,6 +375,7 @@ struct _SquidConfig {
 	int objectsPerBucket;
 	size_t avgObjectSize;
 	size_t maxObjectSize;
+	size_t minObjectSize;
     } Store;
     struct {
 	int high;
@@ -405,7 +409,6 @@ struct _SquidConfig {
 	int offline;
 	int redir_rewrites_host;
 	int prefer_direct;
-	int nonhierarchical_direct;
 	int strip_query_terms;
 	int redirector_bypass;
 	int ignore_unknown_nameservers;
@@ -414,8 +417,6 @@ struct _SquidConfig {
 #if USE_CACHE_DIGESTS
 	int digest_generation;
 #endif
-	int log_ip_on_direct;
-	int authenticateIpTTLStrict;
     } onoff;
     acl *aclList;
     struct {
@@ -441,6 +442,7 @@ struct _SquidConfig {
 	size_t list_width;
 	int list_wrap;
 	char *anon_user;
+	int passive;
     } Ftp;
     refresh_t *Refresh;
     struct _cacheSwap {
@@ -504,6 +506,8 @@ struct _SquidConfig2 {
     struct {
 	int enable_purge;
     } onoff;
+    uid_t effectiveUserID;
+    gid_t effectiveGroupID;
 };
 
 struct _close_handler {
@@ -766,7 +770,6 @@ struct _HttpStateData {
     StoreEntry *entry;
     request_t *request;
     char *reply_hdr;
-    size_t reply_hdr_size;
     int reply_hdr_state;
     peer *peer;			/* peer request made to */
     int eof;			/* reached end-of-object? */
@@ -844,8 +847,6 @@ struct _AccessLogEntry {
 struct _clientHttpRequest {
     ConnStateData *conn;
     request_t *request;		/* Parsed URL ... */
-    store_client *sc;		/* The store_client we're using */
-    store_client *old_sc;	/* ... for entry to be validated */
     char *uri;
     char *log_uri;
     struct {
@@ -985,8 +986,6 @@ struct _DigestFetchState {
     PeerDigest *pd;
     StoreEntry *entry;
     StoreEntry *old_entry;
-    store_client *sc;
-    store_client *old_sc;
     request_t *request;
     int offset;
     int mask_offset;
@@ -1054,11 +1053,8 @@ struct _peer {
 	int ignored_replies;
 	int n_keepalives_sent;
 	int n_keepalives_recv;
-	time_t probe_start;
 	time_t last_query;
 	time_t last_reply;
-	time_t last_connect_failure;
-	time_t last_connect_probe;
 	int logged_state;	/* so we can print dead/revived msgs */
     } stats;
     struct {
@@ -1092,7 +1088,6 @@ struct _peer {
 #if DELAY_POOLS
 	unsigned int no_delay:1;
 #endif
-	unsigned int allow_miss:1;
     } options;
     int weight;
     struct {
@@ -1111,10 +1106,10 @@ struct _peer {
     char *digest_url;
 #endif
     int tcp_up;			/* 0 if a connect() fails */
+    time_t last_fail_time;
     struct in_addr addresses[10];
     int n_addresses;
     int rr_count;
-    int rr_lastcount;
     peer *next;
     int test_fd;
 #if USE_CARP
@@ -1136,7 +1131,7 @@ struct _net_db_name {
 };
 
 struct _net_db_peer {
-    const char *peername;
+    char *peername;
     double hops;
     double rtt;
     time_t expires;
@@ -1191,7 +1186,6 @@ struct _ps_state {
     aclCheck_t *acl_checklist;
 };
 
-#if USE_ICMP
 struct _pingerEchoData {
     struct in_addr to;
     unsigned char opcode;
@@ -1207,8 +1201,6 @@ struct _pingerReplyData {
     int psize;
     char payload[PINGER_PAYLOAD_SZ];
 };
-
-#endif
 
 struct _icp_common_t {
     unsigned char opcode;	/* opcode */
@@ -1258,10 +1250,10 @@ struct _store_client {
 	unsigned int store_copying:1;
 	unsigned int copy_event_pending:1;
     } flags;
+    store_client *next;
 #if DELAY_POOLS
     delay_id delay_id;
 #endif
-    dlink_node node;
 };
 
 
@@ -1272,11 +1264,10 @@ struct _MemObject {
     mem_hdr data_hdr;
     off_t inmem_hi;
     off_t inmem_lo;
-    dlink_list clients;
+    store_client *clients;
     int nclients;
     struct {
 	off_t queue_offset;	/* relative to in-mem data */
-	mem_node *memnode;	/* which node we're currently paging out */
 	storeIOState *sio;
     } swapout;
     HttpReply *reply;
@@ -1301,9 +1292,6 @@ struct _MemObject {
     int id;
     ssize_t object_sz;
     size_t swap_hdr_sz;
-#if URL_CHECKSUM_DEBUG
-    unsigned int chksum;
-#endif
 };
 
 struct _StoreEntry {
@@ -1318,14 +1306,12 @@ struct _StoreEntry {
     size_t swap_file_sz;
     u_short refcount;
     u_short flags;
-    sdirno swap_dirn;
-    sfileno swap_filen;
-    union {
-#ifdef HEAP_REPLACEMENT
-	heap_node *node;
+    sfileno swap_file_number;
+#if HEAP_REPLACEMENT
+    heap_node *node;
+#else
+    dlink_node lru;
 #endif
-	dlink_node lru;
-    } repl;
     u_short lock_count;		/* Assume < 65536! */
     mem_status_t mem_status:3;
     ping_status_t ping_status:3;
@@ -1334,46 +1320,20 @@ struct _StoreEntry {
 };
 
 struct _SwapDir {
-    char *type;
+    swapdir_t type;
+    fileMap *map;
     int cur_size;
-    int low_size;
     int max_size;
     char *path;
     int index;			/* This entry's index into the swapDirs array */
     int suggest;
-    size_t max_objsize;
-    union {
-#ifdef HEAP_REPLACEMENT
-	struct {
-	    heap *heap;
-	} heap;
-#endif
-	struct {
-	    dlink_list list;
-	    dlink_node *walker;
-	} lru;
-    } repl;
-    int removals;
-    int scanned;
     struct {
 	unsigned int selected:1;
 	unsigned int read_only:1;
     } flags;
-    STINIT *init;		/* Initialise the fs */
-    STNEWFS *newfs;		/* Create a new fs */
-    STDUMP *dump;		/* Dump fs config snippet */
-    STFREE *freefs;		/* Free the fs data */
-    STDBLCHECK *dblcheck;	/* Double check the obj integrity */
-    STSTATFS *statfs;		/* Dump fs statistics */
-    STMAINTAINFS *maintainfs;	/* Replacement maintainence */
-    STCHECKOBJ *checkobj;	/* Check if the fs will store an object */
-    /* These two are notifications */
-    STREFOBJ *refobj;		/* Reference this object */
-    STUNREFOBJ *unrefobj;	/* Unreference this object */
-    STCALLBACK *callback;	/* Handle pending callbacks */
-    STSYNC *sync;		/* Sync the directory */
+    STINIT *init;
+    STNEWFS *newfs;
     struct {
-	STOBJCREATE *create;
 	STOBJOPEN *open;
 	STOBJCLOSE *close;
 	STOBJREAD *read;
@@ -1390,7 +1350,13 @@ struct _SwapDir {
 	    void *state;
 	} clean;
     } log;
-    void *fsdata;
+    union {
+	struct {
+	    int l1;
+	    int l2;
+	    int swaplog_fd;
+	} ufs;
+    } u;
 };
 
 struct _request_flags {
@@ -1420,13 +1386,10 @@ struct _link_list {
 };
 
 struct _storeIOState {
-    sdirno swap_dirn;
-    sfileno swap_filen;
-    StoreEntry *e;		/* Need this so the FS layers can play god */
+    sfileno swap_file_number;
     mode_t mode;
     size_t st_size;		/* do stat(2) after read open */
-    off_t offset;		/* current on-disk offset pointer */
-    STFNCB *file_callback;	/* called on delayed sfileno assignments */
+    off_t offset;		/* current offset pointer */
     STIOCB *callback;
     void *callback_data;
     struct {
@@ -1436,7 +1399,28 @@ struct _storeIOState {
     struct {
 	unsigned int closing:1;	/* debugging aid */
     } flags;
-    void *fsstate;
+    union {
+	struct {
+	    int fd;
+	    struct {
+		unsigned int close_request:1;
+		unsigned int reading:1;
+		unsigned int writing:1;
+	    } flags;
+	} ufs;
+	struct {
+	    int fd;
+	    struct {
+		unsigned int close_request:1;
+		unsigned int reading:1;
+		unsigned int writing:1;
+		unsigned int opening:1;
+	    } flags;
+	    const char *read_buf;
+	    link_list *pending_writes;
+	    link_list *pending_reads;
+	} aufs;
+    } type;
 };
 
 struct _request_t {
@@ -1552,8 +1536,6 @@ struct _StatCounters {
 	int clients;
 	int requests;
 	int hits;
-	int mem_hits;
-	int disk_hits;
 	int errors;
 	kb_t kbytes_in;
 	kb_t kbytes_out;
@@ -1678,13 +1660,9 @@ struct _tlv {
     tlv *next;
 };
 
-/*
- * Do we need to have the dirn in here? I don't think so, since we already
- * know the dirn .. 
- */
 struct _storeSwapLogData {
     char op;
-    sfileno swap_filen;
+    sfileno swap_file_number;
     time_t timestamp;
     time_t lastref;
     time_t expires;
@@ -1852,41 +1830,4 @@ struct _store_rebuild_data {
     int badflags;		/* # bad e->flags */
     int bad_log_op;
     int zero_object_sz;
-};
-
-/*
- * This defines an fs type
- */
-
-struct _storefs_entry {
-    char *typestr;
-    STFSPARSE *parsefunc;
-    STFSRECONFIGURE *reconfigurefunc;
-    STFSSHUTDOWN *donefunc;
-};
-
-/*
- * Async disk IO - this defines a async disk io queue
- */
-
-struct _diskd_queue {
-    int smsgid;			/* send sysvmsg id */
-    int rmsgid;			/* recv sysvmsg id */
-    int wfd;			/* queue file descriptor ? */
-    int away;			/* number of requests away */
-    int sent_count;		/* number of messages sent */
-    int recv_count;		/* number of messages received */
-    struct {
-	char *buf;		/* shm buffer */
-	link_list *stack;
-	int id;			/* sysvshm id */
-    } shm;
-};
-
-struct _Logfile {
-    int fd;
-    char path[MAXPATHLEN];
-    char *buf;
-    size_t bufsz;
-    off_t offset;
 };

@@ -73,8 +73,6 @@ static EVH SquidShutdown;
 static void mainSetCwd(void);
 static int checkRunningPid(void);
 
-static const char *squid_start_script = "squid_start";
-
 #if TEST_ACCESS
 #include "test_access.c"
 #endif
@@ -101,7 +99,6 @@ usage(void)
 	"       -F        Don't serve any requests until store is rebuilt.\n"
 	"       -N        No daemon mode.\n"
 	"       -R        Do not set REUSEADDR on port.\n"
-	"       -S        Double-check swap during rebuild.\n"
 	"       -V        Virtual host httpd-accelerator.\n"
 	"       -X        Force full debugging.\n"
 	"       -Y        Only return UDP_HIT or UDP_MISS_NOFETCH during fast reload.\n",
@@ -378,18 +375,12 @@ static void
 mainRotate(void)
 {
     icmpClose();
-    dnsShutdown();
-    redirectShutdown();
-    authenticateShutdown();
     _db_rotate_log();		/* cache.log */
     storeDirWriteCleanLogs(1);
     storeLogRotate();		/* store.log */
     accessLogRotate();		/* access.log */
     useragentRotateLog();	/* useragent.log */
     icmpOpen();
-    dnsInit();
-    redirectInit();
-    authenticateInit();
 }
 
 static void
@@ -494,6 +485,9 @@ mainInitialize(void)
 #endif
 
     if (!configured_once) {
+#if USE_ASYNC_IO
+	aioInit();
+#endif
 	unlinkdInit();
 	urlInitialize();
 	cachemgrInit();
@@ -616,7 +610,6 @@ main(int argc, char **argv)
 #endif
 	memInit();		/* memInit is required for config parsing */
 	eventInit();		/* eventInit() is required for config parsing */
-	storeFsInit();		/* required for config parsing */
 	parse_err = parseConfigFile(ConfigFile);
 
 	if (opt_parse_cfg_only)
@@ -752,43 +745,6 @@ sendSignal(void)
     exit(0);
 }
 
-/*
- * This function is run when Squid is in daemon mode, just
- * before the parent forks and starts up the child process.
- * It can be used for admin-specific tasks, such as notifying
- * someone that Squid is (re)started.
- */
-static void
-mainStartScript(const char *prog)
-{
-    char script[SQUID_MAXPATHLEN];
-    char *t;
-    size_t sl = 0;
-    pid_t cpid;
-    pid_t rpid;
-    xstrncpy(script, prog, MAXPATHLEN);
-    if ((t = strrchr(script, '/'))) {
-	*(++t) = '\0';
-	sl = strlen(script);
-    }
-    xstrncpy(&script[sl], squid_start_script, MAXPATHLEN - sl);
-    if ((cpid = fork()) == 0) {
-	/* child */
-	execl(script, squid_start_script, 0);
-	_exit(0);
-    } else {
-	do {
-#ifdef _SQUID_NEXT_
-	    union wait status;
-	    rpid = wait3(&status, 0, NULL);
-#else
-	    int status;
-	    rpid = waitpid(-1, &status, 0);
-#endif
-	} while (rpid != cpid);
-    }
-}
-
 static int
 checkRunningPid(void)
 {
@@ -836,7 +792,6 @@ watch_child(char *argv[])
     for (i = 0; i < Squid_MaxFD; i++)
 	close(i);
     for (;;) {
-	mainStartScript(argv[0]);
 	if ((pid = fork()) == 0) {
 	    /* child */
 	    openlog(appname, LOG_PID | LOG_NDELAY | LOG_CONS, LOG_LOCAL4);
@@ -906,16 +861,21 @@ SquidShutdown(void *unused)
     releaseServerSockets();
     commCloseAllSockets();
     unlinkdClose();
-    storeDirSync();		/* Flush pending object writes/unlinks */
+#if USE_ASYNC_IO
+    aioSync();			/* flush pending object writes / unlinks */
+#endif
     storeDirWriteCleanLogs(0);
     PrintRusage();
     dumpMallocStats();
-    storeDirSync();		/* Flush log writes */
+#if USE_ASYNC_IO
+    aioSync();			/* flush log writes */
+#endif
     storeLogClose();
     accessLogClose();
-    storeDirSync();		/* Flush log close */
+#if USE_ASYNC_IO
+    aioSync();			/* flush log close */
+#endif
 #if PURIFY || XMALLOC_TRACE
-    storeFsDone();
     configFreeMemory();
     storeFreeMemory();
     /*stmemFreeMemory(); */

@@ -89,7 +89,6 @@ static void peerGetSomeNeighbor(ps_state *);
 static void peerGetSomeNeighborReplies(ps_state *);
 static void peerGetSomeDirect(ps_state *);
 static void peerGetSomeParent(ps_state *);
-static void peerGetAllParents(ps_state *);
 static void peerAddFwdServer(FwdServer **, peer *, hier_code);
 
 static void
@@ -210,8 +209,6 @@ peerCheckNetdbDirect(ps_state * psstate)
     int myhops;
     if (p == NULL)
 	return 0;
-    if (psstate->direct == DIRECT_NO)
-	return 0;
     myrtt = netdbHostRtt(psstate->request->host);
     debug(44, 3) ("peerCheckNetdbDirect: MY RTT = %d msec\n", myrtt);
     debug(44, 3) ("peerCheckNetdbDirect: closest_parent_miss RTT = %d msec\n",
@@ -276,23 +273,11 @@ peerSelectFoo(ps_state * ps)
 	peerGetSomeNeighborReplies(ps);
 	entry->ping_status = PING_DONE;
     }
-    switch (ps->direct) {
-    case DIRECT_YES:
+    if (Config.onoff.prefer_direct)
 	peerGetSomeDirect(ps);
-	break;
-    case DIRECT_NO:
-	peerGetSomeParent(ps);
-	peerGetAllParents(ps);
-	break;
-    default:
-	if (Config.onoff.prefer_direct)
-	    peerGetSomeDirect(ps);
-	if (request->flags.hierarchical || !Config.onoff.nonhierarchical_direct)
-	    peerGetSomeParent(ps);
-	if (!Config.onoff.prefer_direct)
-	    peerGetSomeDirect(ps);
-	break;
-    }
+    peerGetSomeParent(ps);
+    if (!Config.onoff.prefer_direct)
+	peerGetSomeDirect(ps);
     peerSelectCallback(ps);
 }
 
@@ -372,10 +357,11 @@ peerGetSomeNeighbor(ps_state * ps)
 static void
 peerGetSomeNeighborReplies(ps_state * ps)
 {
+    StoreEntry *entry = ps->entry;
     request_t *request = ps->request;
     peer *p = NULL;
     hier_code code = HIER_NONE;
-    assert(ps->entry->ping_status == PING_WAITING);
+    assert(entry->ping_status == PING_WAITING);
     assert(ps->direct != DIRECT_YES);
     if (peerCheckNetdbDirect(ps)) {
 	code = CLOSEST_DIRECT;
@@ -446,35 +432,6 @@ peerGetSomeParent(ps_state * ps)
     if (code != HIER_NONE) {
 	debug(44, 3) ("peerSelect: %s/%s\n", hier_strings[code], p->host);
 	peerAddFwdServer(&ps->servers, p, code);
-    }
-}
-
-/* Adds alive parents. Used as a last resort for never_direct.
- */
-static void
-peerGetAllParents(ps_state * ps)
-{
-    peer *p;
-    request_t *request = ps->request;
-    /* Add all alive parents */
-    for (p = Config.peers; p; p = p->next) {
-	/* XXX: neighbors.c lacks a public interface for enumerating
-	 * parents to a request so we have to dig some here..
-	 */
-	if (neighborType(p, request) != PEER_PARENT)
-	    continue;
-	if (!peerHTTPOkay(p, request))
-	    continue;
-	debug(15, 3) ("peerGetAllParents: adding alive parent %s\n", p->host);
-	peerAddFwdServer(&ps->servers, p, ANY_OLD_PARENT);
-    }
-    /* XXX: should add dead parents here, but it is currently
-     * not possible to find out which parents are dead or which
-     * simply are not configured to handle the request.
-     */
-    /* Add default parent as a last resort */
-    if ((p = getDefaultParent(request))) {
-	peerAddFwdServer(&ps->servers, p, DEFAULT_PARENT);
     }
 }
 

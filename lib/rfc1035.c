@@ -93,11 +93,6 @@ struct _rfc1035_header {
     unsigned short arcount;
 };
 
-static const char *Alphanum =
-"abcdefghijklmnopqrstuvwxyz"
-"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-"0123456789";
-
 /*
  * rfc1035HeaderPack()
  * 
@@ -281,7 +276,7 @@ rfc1035NameUnpack(const char *buf, size_t sz, off_t off, char *name, size_t ns)
     do {
 	c = *(buf + off);
 	if (c > RFC1035_MAXLABELSZ) {
-	    /* blasted compression */
+	    /* fucking compression */
 	    unsigned short s;
 	    off_t ptr;
 	    memcpy(&s, buf + off, sizeof(s));
@@ -367,39 +362,6 @@ rfc1035Qid(void)
     return qid;
 }
 
-static void
-rfc1035SetErrno(int n)
-{
-    switch (rfc1035_errno = n) {
-    case 0:
-	rfc1035_error_message = "No error condition";
-	break;
-    case 1:
-	rfc1035_error_message = "Format Error: The name server was "
-	    "unable to interpret the query.";
-	break;
-    case 2:
-	rfc1035_error_message = "Server Failure: The name server was "
-	    "unable to process this query.";
-	break;
-    case 3:
-	rfc1035_error_message = "Name Error: The domain name does "
-	    "not exist.";
-	break;
-    case 4:
-	rfc1035_error_message = "Not Implemented: The name server does "
-	    "not support the requested kind of query.";
-	break;
-    case 5:
-	rfc1035_error_message = "Refused: The name server refuses to "
-	    "perform the specified operation.";
-	break;
-    default:
-	rfc1035_error_message = "Unknown Error";
-	break;
-    }
-}
-
 void
 rfc1035RRDestroy(rfc1035_rr * rr, int n)
 {
@@ -431,7 +393,35 @@ rfc1035AnswersUnpack(const char *buf,
     rfc1035_errno = 0;
     rfc1035_error_message = NULL;
     if (hdr.rcode) {
-	rfc1035SetErrno((int) hdr.rcode);
+	rfc1035_errno = (int) hdr.rcode;
+	switch (rfc1035_errno) {
+	case 0:
+	    rfc1035_error_message = "No error condition";
+	    break;
+	case 1:
+	    rfc1035_error_message = "Format Error: The name server was "
+		"unable to interpret the query.";
+	    break;
+	case 2:
+	    rfc1035_error_message = "Server Failure: The name server was "
+		"unable to process this query.";
+	    break;
+	case 3:
+	    rfc1035_error_message = "Name Error: The domain name does "
+		"not exist.";
+	    break;
+	case 4:
+	    rfc1035_error_message = "Not Implemented: The name server does "
+		"not support the requested kind of query.";
+	    break;
+	case 5:
+	    rfc1035_error_message = "Refused: The name server refuses to "
+		"perform the specified operation.";
+	    break;
+	default:
+	    rfc1035_error_message = "Unknown Error";
+	    break;
+	}
 	return -rfc1035_errno;
     }
     i = (int) hdr.qdcount;
@@ -481,11 +471,6 @@ rfc1035BuildAQuery(const char *hostname, char *buf, size_t * szp)
     off_t offset = 0;
     size_t sz = *szp;
     memset(&h, '\0', sizeof(h));
-    /* the first char of hostname must be alphanmeric */
-    if (NULL == strchr(Alphanum, *hostname)) {
-	rfc1035SetErrno(3);
-	return 0;
-    }
     h.id = rfc1035Qid();
     h.qr = 0;
     h.rd = 1;

@@ -182,8 +182,6 @@ aclStrToType(const char *s)
 #if USE_IDENT
     if (!strcmp(s, "ident"))
 	return ACL_IDENT;
-    if (!strcmp(s, "ident_regex"))
-	return ACL_IDENT_REGEX;
 #endif
     if (!strncmp(s, "proto", 5))
 	return ACL_PROTO;
@@ -193,8 +191,6 @@ aclStrToType(const char *s)
 	return ACL_BROWSER;
     if (!strcmp(s, "proxy_auth"))
 	return ACL_PROXY_AUTH;
-    if (!strcmp(s, "proxy_auth_regex"))
-	return ACL_PROXY_AUTH_REGEX;
     if (!strcmp(s, "src_as"))
 	return ACL_SRC_ASN;
     if (!strcmp(s, "dst_as"))
@@ -209,8 +205,6 @@ aclStrToType(const char *s)
     if (!strcmp(s, "arp"))
 	return ACL_SRC_ARP;
 #endif
-    if (!strcmp(s, "req_mime_type"))
-	return ACL_REQ_MIME_TYPE;
     return ACL_NONE;
 }
 
@@ -246,8 +240,6 @@ aclTypeToStr(squid_acl type)
 #if USE_IDENT
     if (type == ACL_IDENT)
 	return "ident";
-    if (type == ACL_IDENT_REGEX)
-	return "ident_regex";
 #endif
     if (type == ACL_PROTO)
 	return "proto";
@@ -257,8 +249,6 @@ aclTypeToStr(squid_acl type)
 	return "browser";
     if (type == ACL_PROXY_AUTH)
 	return "proxy_auth";
-    if (type == ACL_PROXY_AUTH_REGEX)
-	return "proxy_auth_regex";
     if (type == ACL_SRC_ASN)
 	return "src_as";
     if (type == ACL_DST_ASN)
@@ -273,8 +263,6 @@ aclTypeToStr(squid_acl type)
     if (type == ACL_SRC_ARP)
 	return "arp";
 #endif
-    if (type == ACL_REQ_MIME_TYPE)
-	return "req_mime_type";
     return "ERROR";
 }
 
@@ -730,9 +718,6 @@ aclParseAclLine(acl ** head)
     case ACL_IDENT:
 	aclParseWordList(&A->data);
 	break;
-    case ACL_IDENT_REGEX:
-	aclParseRegexList(&A->data);
-	break;
 #endif
     case ACL_PROTO:
 	aclParseProtoList(&A->data);
@@ -742,14 +727,6 @@ aclParseAclLine(acl ** head)
 	break;
     case ACL_PROXY_AUTH:
 	aclParseWordList(&A->data);
-	if (!proxy_auth_cache) {
-	    /* First time around, 7921 should be big enough */
-	    proxy_auth_cache = hash_create((HASHCMP *) strcmp, 7921, hash_string);
-	    assert(proxy_auth_cache);
-	}
-	break;
-    case ACL_PROXY_AUTH_REGEX:
-	aclParseRegexList(&A->data);
 	if (!proxy_auth_cache) {
 	    /* First time around, 7921 should be big enough */
 	    proxy_auth_cache = hash_create((HASHCMP *) strcmp, 7921, hash_string);
@@ -766,9 +743,6 @@ aclParseAclLine(acl ** head)
 	aclParseArpList(&A->data);
 	break;
 #endif
-    case ACL_REQ_MIME_TYPE:
-	aclParseWordList(&A->data);
-	break;
     case ACL_NONE:
     default:
 	fatal("Bad ACL type");
@@ -1075,7 +1049,7 @@ aclDecodeProxyAuth(const char *proxy_auth, char **user, char **password, char *b
  */
 
 static int
-aclMatchProxyAuth(void *data, const char *proxy_auth, acl_proxy_auth_user * auth_user, aclCheck_t * checklist, squid_acl acltype)
+aclMatchProxyAuth(wordlist * data, const char *proxy_auth, acl_proxy_auth_user * auth_user, aclCheck_t * checklist)
 {
     /* checklist is used to register user name when identified, nothing else */
     LOCAL_ARRAY(char, login_buf, USER_IDENT_SZ);
@@ -1142,31 +1116,15 @@ aclMatchProxyAuth(void *data, const char *proxy_auth, acl_proxy_auth_user * auth
 	    auth_user->ipaddr = checklist->src_addr;
 	    /* copy username to request for logging on client-side */
 	    xstrncpy(checklist->request->user_ident, user, USER_IDENT_SZ);
-	    switch (acltype) {
-	    case ACL_PROXY_AUTH:
-		return aclMatchUser(data, user);
-	    case ACL_PROXY_AUTH_REGEX:
-		return aclMatchRegex(data, user);
-	    default:
-		fatal("aclMatchProxyAuth: unknown ACL type");
-		return 0;	/* NOTREACHED */
-	    }
+	    return aclMatchUser(data, user);
 	} else {
-	    if (Config.onoff.authenticateIpTTLStrict) {
-		/* Access from some other IP address than the one owning
-		 * this user ID. Deny access
-		 */
-		debug(28, 1) ("aclMatchProxyAuth: user '%s' tries to use multple IP addresses!\n", user);
-		return 0;
-	    } else {
-		/* user has switched to another IP addr */
-		debug(28, 1) ("aclMatchProxyAuth: user '%s' has changed IP address\n", user);
-		/* remove this user from the hash, making him unknown */
-		hash_remove_link(proxy_auth_cache, (hash_link *) auth_user);
-		aclFreeProxyAuthUser(auth_user);
-		/* require the user to reauthenticate */
-		return -2;
-	    }
+	    /* user has switched to another IP addr */
+	    debug(28, 1) ("aclMatchProxyAuth: user '%s' has changed IP address\n", user);
+	    /* remove this user from the hash, making him unknown */
+	    hash_remove_link(proxy_auth_cache, (hash_link *) auth_user);
+	    aclFreeProxyAuthUser(auth_user);
+	    /* require the user to reauthenticate */
+	    return -2;
 	}
     } else {
 	/* password mismatch/timeout */
@@ -1431,14 +1389,6 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	    return 0;
 	}
 	/* NOTREACHED */
-    case ACL_IDENT_REGEX:
-	if (checklist->ident[0]) {
-	    return aclMatchRegex(ae->data, checklist->ident);
-	} else {
-	    checklist->state[ACL_IDENT] = ACL_LOOKUP_NEEDED;
-	    return 0;
-	}
-	/* NOTREACHED */
 #endif
     case ACL_PROTO:
 	return aclMatchInteger(ae->data, r->protocol);
@@ -1453,7 +1403,6 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	return aclMatchRegex(ae->data, browser);
 	/* NOTREACHED */
     case ACL_PROXY_AUTH:
-    case ACL_PROXY_AUTH_REGEX:
 	if (NULL == r) {
 	    return -1;
 	} else if (!r->flags.accelerated) {
@@ -1483,8 +1432,7 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	switch (aclMatchProxyAuth(ae->data,
 		header,
 		checklist->auth_user,
-		checklist,
-		ae->type)) {
+		checklist)) {
 	case 0:
 	    /* Correct password, but was not allowed in this ACL */
 	    return 0;
@@ -1533,13 +1481,6 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
     case ACL_SRC_ARP:
 	return aclMatchArp(&ae->data, checklist->src_addr);
 #endif
-    case ACL_REQ_MIME_TYPE:
-	header = httpHeaderGetStr(&checklist->request->header,
-	    HDR_CONTENT_TYPE);
-	if (NULL == header)
-	    header = "";
-	return aclMatchRegex(ae->data, header);
-	/* NOTREACHED */
     case ACL_NONE:
     default:
 	debug(28, 0) ("aclMatchAcl: '%s' has bad type %d\n",
@@ -1899,10 +1840,6 @@ aclDestroyAcls(acl ** head)
 	case ACL_TIME:
 	    aclDestroyTimeList(a->data);
 	    break;
-#if USE_IDENT
-	case ACL_IDENT_REGEX:
-#endif
-	case ACL_PROXY_AUTH_REGEX:
 	case ACL_URL_REGEX:
 	case ACL_URLPATH_REGEX:
 	case ACL_BROWSER:
@@ -2001,23 +1938,37 @@ aclDestroyIntRange(intrange * list)
 static int
 aclDomainCompare(const void *a, const void *b)
 {
-    const char *d1;
-    const char *d2;
-    int ret;
-    d1 = b;
-    d2 = a;
-    ret = aclHostDomainCompare(d1, d2);
-    if (ret != 0) {
-	d1 = a;
-	d2 = b;
-	ret = aclHostDomainCompare(d1, d2);
+    const char *d1 = a;
+    const char *d2 = b;
+    int l1;
+    int l2;
+    while ('.' == *d1)
+	d1++;
+    while ('.' == *d2)
+	d2++;
+    l1 = strlen(d1);
+    l2 = strlen(d2);
+    while (d1[--l1] == d2[--l2]) {
+	if ((l1 == 0) && (l2 == 0))
+	    return 0;		/* d1 == d2 */
+	if (0 == l1) {
+	    if ('.' == d2[l2 - 1]) {
+		debug(28, 0) ("WARNING: %s is a subdomain of %s\n", d2, d1);
+		debug(28, 0) ("WARNING: This may break Splay tree searching\n");
+		debug(28, 0) ("WARNING: You should remove '%s' from the ACL named '%s'\n", d2, AclMatchedName);
+	    }
+	    return -1;		/* d1 < d2 */
+	}
+	if (0 == l2) {
+	    if ('.' == d1[l1 - 1]) {
+		debug(28, 0) ("WARNING: %s is a subdomain of %s\n", d1, d2);
+		debug(28, 0) ("WARNING: This may break Splay tree searching\n");
+		debug(28, 0) ("WARNING: You should remove '%s' from the ACL named '%s'\n", d1, AclMatchedName);
+	    }
+	    return 1;		/* d1 > d2 */
+	}
     }
-    if (ret == 0) {
-	debug(28, 0) ("WARNING: '%s' is a subdomain of '%s'\n", d1, d2);
-	debug(28, 0) ("WARNING: because of this '%s' is ignored to keep splay tree searching predictable\n", a);
-	debug(28, 0) ("WARNING: You should probably remove '%s' from the ACL named '%s'\n", d1, AclMatchedName);
-    }
-    return ret;
+    return (d1[l1] - d2[l2]);
 }
 
 /* compare a host and a domain */
@@ -2214,11 +2165,6 @@ aclDumpGeneric(const acl * a)
 #endif
 #if USE_IDENT
     case ACL_IDENT:
-	return wordlistDup(a->data);
-	break;
-    case ACL_IDENT_REGEX:
-	return aclDumpRegexList(a->data);
-	break;
 #endif
     case ACL_PROXY_AUTH:
 	return wordlistDup(a->data);
@@ -2226,7 +2172,6 @@ aclDumpGeneric(const acl * a)
     case ACL_TIME:
 	return aclDumpTimeSpecList(a->data);
 	break;
-    case ACL_PROXY_AUTH_REGEX:
     case ACL_URL_REGEX:
     case ACL_URLPATH_REGEX:
     case ACL_BROWSER:
@@ -2308,14 +2253,9 @@ aclPurgeMethodInUse(acl_access * a)
  *
  * NOTE: Linux code by David Luyer <luyer@ucs.uwa.edu.au>.
  *       Original (BSD-specific) code no longer works.
- *       Solaris code by R. Gancarz <radekg@solaris.elektrownia-lagisza.com.pl>
  */
 
-#ifdef _SQUID_SOLARIS_
-#include <sys/sockio.h>
-#else
 #include <sys/sysctl.h>
-#endif
 #ifdef _SQUID_LINUX_
 #include <net/if_arp.h>
 #include <sys/ioctl.h>
@@ -2390,10 +2330,10 @@ aclParseArpList(void *curlist)
 /***************/
 /* aclMatchArp */
 /***************/
+#ifdef _SQUID_LINUX_
 static int
 aclMatchArp(void *dataptr, struct in_addr c)
 {
-#if defined(_SQUID_LINUX_)
     struct arpreq arpReq;
     struct sockaddr_in ipAddr;
     unsigned char ifbuffer[sizeof(struct ifreq) * 64];
@@ -2507,48 +2447,6 @@ aclMatchArp(void *dataptr, struct in_addr c)
 	 * exist on multiple interfaces?
 	 */
     }
-#elif defined(_SQUID_SOLARIS_)
-    struct arpreq arpReq;
-    struct sockaddr_in ipAddr;
-    unsigned char ifbuffer[sizeof(struct ifreq) * 64];
-    struct ifconf ifc;
-    struct ifreq *ifr;
-    int offset;
-    splayNode **Top = dataptr;
-    /*
-     * Set up structures for ARP lookup with blank interface name
-     */
-    ipAddr.sin_family = AF_INET;
-    ipAddr.sin_port = 0;
-    ipAddr.sin_addr = c;
-    memset(&arpReq, '\0', sizeof(arpReq));
-    memcpy(&arpReq.arp_pa, &ipAddr, sizeof(struct sockaddr_in));
-    /* Query ARP table */
-    if (ioctl(HttpSockets[0], SIOCGARP, &arpReq) != -1) {
-	/*
-	 *  Solaris (at least 2.6/x86) does not use arp_ha.sa_family -
-	 * it returns 00:00:00:00:00:00 for non-ethernet media 
-	 */
-	if (arpReq.arp_ha.sa_data[0] == 0 &&
-	    arpReq.arp_ha.sa_data[1] == 0 &&
-	    arpReq.arp_ha.sa_data[2] == 0 &&
-	    arpReq.arp_ha.sa_data[3] == 0 &&
-	    arpReq.arp_ha.sa_data[4] == 0 &&
-	    arpReq.arp_ha.sa_data[5] == 0)
-	    return 0;
-	debug(28, 4) ("Got address %02x:%02x:%02x:%02x:%02x:%02x\n",
-	    arpReq.arp_ha.sa_data[0] & 0xff, arpReq.arp_ha.sa_data[1] & 0xff,
-	    arpReq.arp_ha.sa_data[2] & 0xff, arpReq.arp_ha.sa_data[3] & 0xff,
-	    arpReq.arp_ha.sa_data[4] & 0xff, arpReq.arp_ha.sa_data[5] & 0xff);
-	/* Do lookup */
-	*Top = splay_splay(&arpReq.arp_ha.sa_data, *Top, aclArpCompare);
-	debug(28, 3) ("aclMatchArp: '%s' %s\n",
-	    inet_ntoa(c), splayLastResult ? "NOT found" : "found");
-	return (0 == splayLastResult);
-    }
-#else
-    WRITE ME;
-#endif
     /*
      * Address was not found on any interface
      */
@@ -2559,7 +2457,6 @@ aclMatchArp(void *dataptr, struct in_addr c)
 static int
 aclArpCompare(const void *a, const void *b)
 {
-#if defined(_SQUID_LINUX_)
     const unsigned short *d1 = a;
     const unsigned short *d2 = b;
     if (d1[0] != d2[0])
@@ -2568,28 +2465,22 @@ aclArpCompare(const void *a, const void *b)
 	return (d1[1] > d2[1]) ? 1 : -1;
     if (d1[2] != d2[2])
 	return (d1[2] > d2[2]) ? 1 : -1;
-#elif defined(_SQUID_SOLARIS_)
-    const unsigned char *d1 = a;
-    const unsigned char *d2 = b;
-    if (d1[0] != d2[0])
-	return (d1[0] > d2[0]) ? 1 : -1;
-    if (d1[1] != d2[1])
-	return (d1[1] > d2[1]) ? 1 : -1;
-    if (d1[2] != d2[2])
-	return (d1[2] > d2[2]) ? 1 : -1;
-    if (d1[3] != d2[3])
-	return (d1[3] > d2[3]) ? 1 : -1;
-    if (d1[4] != d2[4])
-	return (d1[4] > d2[4]) ? 1 : -1;
-    if (d1[5] != d2[5])
-	return (d1[5] > d2[5]) ? 1 : -1;
-#else
-    WRITE ME;
-#endif
     return 0;
 }
+#else
 
-#if UNUSED_CODE
+static int
+aclMatchArp(void *dataptr, struct in_addr c)
+{
+    WRITE ME;
+}
+
+static int
+aclArpCompare(const void *data, splayNode * n)
+{
+    WRITE ME;
+}
+
 /**********************************************************************
 * This is from the pre-splay-tree code for BSD
 * I suspect the Linux approach will work on most O/S and be much

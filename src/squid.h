@@ -81,8 +81,6 @@
 
 #if PURIFY
 #define assert(EX) ((void)0)
-#elif defined(NODEBUG)
-#define assert(EX) ((void)0)
 #elif STDC_HEADERS
 #define assert(EX)  ((EX)?((void)0):xassert( # EX , __FILE__, __LINE__))
 #else
@@ -316,14 +314,11 @@ struct rusage {
 
 #if CBDATA_DEBUG
 #define cbdataAdd(a,b,c)	cbdataAddDbg(a,b,c,__FILE__,__LINE__)
-#define cbdataLock(a)		cbdataLockDbg(a,__FILE__,__LINE__)
-#define cbdataUnlock(a)		cbdataUnlockDbg(a,__FILE__,__LINE__)
 #endif
 
 #if USE_LEAKFINDER
 #define leakAdd(p) leakAddFL(p,__FILE__,__LINE__)
 #define leakTouch(p) leakTouchFL(p,__FILE__,__LINE__)
-#define leakFree(p) leakFreeFL(p,__FILE__,__LINE__)
 #else
 #define leakAdd(p) p
 #define leakTouch(p) p
@@ -338,6 +333,12 @@ struct rusage {
 #include "GNUregex.h"
 #elif HAVE_REGEX_H
 #include <regex.h>
+#endif
+
+#if USE_ASYNC_IO
+#undef USE_UNLINKD
+#else
+#define USE_UNLINKD 1
 #endif
 
 #include "md5.h"
@@ -420,13 +421,7 @@ struct rusage {
 #define SQUID_NONBLOCK O_NDELAY
 #endif
 
-#include <sys/param.h>
-#include <sys/mount.h>
-
-/*
- * I'm sick of having to keep doing this ..
- */
-
-#define INDEXSD(i)   (&Config.cacheSwap.swapDirs[(i)])
+#define SWAP_DIR_SHIFT 24
+#define SWAP_FILE_MASK 0x00FFFFFF
 
 #endif /* SQUID_H */

@@ -37,12 +37,10 @@
 
 #include "squid.h"
 
-static void accessLogSquid(AccessLogEntry * al);
-static void accessLogCommon(AccessLogEntry * al);
-static Logfile *logfile = NULL;
-#if HEADERS_LOG
-static Logfile *headerslog = NULL;
-#endif
+static void accessLogOpen(const char *fname);
+static char *log_quote(const char *header);
+static void accessLogSquid(AccessLogEntry * al, MemBuf * mb);
+static void accessLogCommon(AccessLogEntry * al, MemBuf * mb);
 
 #if MULTICAST_MISS_STREAM
 static int mcast_miss_fd = -1;
@@ -95,6 +93,8 @@ static void fvdbClear(void);
 #endif
 
 static int LogfileStatus = LOG_DISABLE;
+static int LogfileFD = -1;
+static char LogfileName[SQUID_MAXPATHLEN];
 #define LOG_BUF_SZ (MAX_URL<<2)
 
 static const char c2x[] =
@@ -117,7 +117,7 @@ static const char c2x[] =
 
 /* log_quote -- URL-style encoding on MIME headers. */
 
-char *
+static char *
 log_quote(const char *header)
 {
     int c;
@@ -185,14 +185,14 @@ log_quote(const char *header)
 }
 
 static void
-accessLogSquid(AccessLogEntry * al)
+accessLogSquid(AccessLogEntry * al, MemBuf * mb)
 {
     const char *client = NULL;
     if (Config.onoff.log_fqdn)
 	client = fqdncache_gethostbyaddr(al->cache.caddr, FQDN_LOOKUP_IF_MISS);
     if (client == NULL)
 	client = inet_ntoa(al->cache.caddr);
-    logfilePrintf(logfile, "%9d.%03d %6d %s %s/%03d %d %s %s %s %s%s/%s %s",
+    memBufPrintf(mb, "%9d.%03d %6d %s %s/%03d %d %s %s %s %s%s/%s %s",
 	(int) current_time.tv_sec,
 	(int) current_time.tv_usec / 1000,
 	al->cache.msec,
@@ -210,14 +210,14 @@ accessLogSquid(AccessLogEntry * al)
 }
 
 static void
-accessLogCommon(AccessLogEntry * al)
+accessLogCommon(AccessLogEntry * al, MemBuf * mb)
 {
     const char *client = NULL;
     if (Config.onoff.log_fqdn)
 	client = fqdncache_gethostbyaddr(al->cache.caddr, 0);
     if (client == NULL)
 	client = inet_ntoa(al->cache.caddr);
-    logfilePrintf(logfile, "%s %s - [%s] \"%s %s HTTP/%.1f\" %d %d %s:%s",
+    memBufPrintf(mb, "%s %s - [%s] \"%s %s HTTP/%.1f\" %d %d %s:%s",
 	client,
 	al->cache.ident,
 	mkhttpdlogtime(&squid_curtime),
@@ -230,9 +230,36 @@ accessLogCommon(AccessLogEntry * al)
 	hier_strings[al->hier.code]);
 }
 
+static void
+accessLogOpen(const char *fname)
+{
+    assert(fname);
+    xstrncpy(LogfileName, fname, SQUID_MAXPATHLEN);
+    LogfileFD = file_open(LogfileName, O_WRONLY | O_CREAT);
+    if (LogfileFD == DISK_ERROR) {
+	if (ENOENT == errno) {
+	    fatalf("%s cannot be created, since the\n"
+		"\tdirectory it is to reside in does not exist."
+		"\t(%s)\n", LogfileName, xstrerror());
+	} else if (EACCES == errno) {
+	    fatalf("cannot create %s:\n"
+		"\t%s.\n"
+		"\tThe directory access.log is to reside in needs to be\n"
+		"\twriteable by the user %s, the cache_effective_user\n"
+		"\tset in squid.conf.",
+		LogfileName, xstrerror(), Config.effectiveUser);
+	} else {
+	    debug(50, 0) ("%s: %s\n", LogfileName, xstrerror());
+	    fatalf("Cannot open %s: %s", LogfileName, xstrerror());
+	}
+    }
+    LogfileStatus = LOG_ENABLE;
+}
+
 void
 accessLogLog(AccessLogEntry * al)
 {
+    MemBuf mb;
     LOCAL_ARRAY(char, ident_buf, USER_IDENT_SZ);
 
     if (LogfileStatus != LOG_ENABLE)
@@ -254,20 +281,22 @@ accessLogLog(AccessLogEntry * al)
     if (al->hier.host[0] == '\0')
 	xstrncpy(al->hier.host, dash_str, SQUIDHOSTNAMELEN);
 
+    memBufDefInit(&mb);
+
     if (Config.onoff.common_log)
-	accessLogCommon(al);
+	accessLogCommon(al, &mb);
     else
-	accessLogSquid(al);
+	accessLogSquid(al, &mb);
     if (Config.onoff.log_mime_hdrs) {
 	char *ereq = log_quote(al->headers.request);
 	char *erep = log_quote(al->headers.reply);
-	logfilePrintf(logfile, " [%s] [%s]\n", ereq, erep);
+	memBufPrintf(&mb, " [%s] [%s]\n", ereq, erep);
 	safe_free(ereq);
 	safe_free(erep);
     } else {
-	logfilePrintf(logfile, "\n");
+	memBufPrintf(&mb, "\n");
     }
-    logfileFlush(logfile);
+    file_write_mbuf(LogfileFD, -1, mb, NULL, NULL);
 #if MULTICAST_MISS_STREAM
     if (al->cache.code != LOG_TCP_MISS)
 	(void) 0;
@@ -294,26 +323,48 @@ accessLogLog(AccessLogEntry * al)
 void
 accessLogRotate(void)
 {
+    int i;
+    LOCAL_ARRAY(char, from, MAXPATHLEN);
+    LOCAL_ARRAY(char, to, MAXPATHLEN);
+    char *fname = NULL;
+    struct stat sb;
 #if FORW_VIA_DB
     fvdbClear();
 #endif
-    if (NULL == logfile)
+    if ((fname = LogfileName) == NULL)
 	return;
-    logfileRotate(logfile);
-#if HEADERS_LOG
-    logfileRotate(headerslog);
+#ifdef S_ISREG
+    if (stat(fname, &sb) == 0)
+	if (S_ISREG(sb.st_mode) == 0)
+	    return;
 #endif
+    debug(46, 1) ("accessLogRotate: Rotating\n");
+    /* Rotate numbers 0 through N up one */
+    for (i = Config.Log.rotateNumber; i > 1;) {
+	i--;
+	snprintf(from, MAXPATHLEN, "%s.%d", fname, i - 1);
+	snprintf(to, MAXPATHLEN, "%s.%d", fname, i);
+	xrename(from, to);
+    }
+    /* Rotate the current log to .0 */
+    file_close(LogfileFD);	/* always close */
+    if (Config.Log.rotateNumber > 0) {
+	snprintf(to, MAXPATHLEN, "%s.%d", fname, 0);
+	xrename(fname, to);
+    }
+    /* Reopen the log.  It may have been renamed "manually" */
+    LogfileFD = file_open(fname, O_WRONLY | O_CREAT);
+    if (LogfileFD == DISK_ERROR) {
+	debug(46, 0) ("accessLogRotate: Cannot open logfile: %s\n", fname);
+	LogfileStatus = LOG_DISABLE;
+	fatalf("Cannot open %s: %s", fname, xstrerror());
+    }
 }
 
 void
 accessLogClose(void)
 {
-    logfileClose(logfile);
-    logfile = NULL;
-#if HEADERS_LOG
-    logfileClose(headerslog);
-    headerslog = NULL;
-#endif
+    file_close(LogfileFD);
 }
 
 void
@@ -330,12 +381,7 @@ void
 accessLogInit(void)
 {
     assert(sizeof(log_tags) == (LOG_TYPE_MAX + 1) * sizeof(char *));
-    logfile = logfileOpen(Config.Log.access, MAX_URL << 1);
-    LogfileStatus = LOG_ENABLE;
-#if HEADERS_LOG
-    headerslog = logfileOpen("/usr/local/squid/logs/headers.log", 512);
-    assert(NULL != headerslog);
-#endif
+    accessLogOpen(Config.Log.access);
 #if FORW_VIA_DB
     fvdbInit();
 #endif
@@ -498,57 +544,6 @@ mcast_encode(unsigned int *ibuf, size_t isize, const unsigned int *key)
 	ibuf[i] = htonl(y);
 	ibuf[i + 1] = htonl(z);
     }
-}
-
-#endif
-
-#if HEADERS_LOG
-void
-headersLog(int cs, int pq, method_t m, void *data)
-{
-    HttpReply *rep;
-    request_t *req;
-    unsigned short magic = 0;
-    unsigned char M = (unsigned char) m;
-    unsigned short S;
-    char *hmask;
-    int ccmask = 0;
-    if (0 == pq) {
-	/* reply */
-	rep = data;
-	req = NULL;
-	magic = 0x0050;
-	hmask = rep->header.mask;
-	if (rep->cache_control)
-	    ccmask = rep->cache_control->mask;
-    } else {
-	/* request */
-	req = data;
-	rep = NULL;
-	magic = 0x0051;
-	hmask = req->header.mask;
-	if (req->cache_control)
-	    ccmask = req->cache_control->mask;
-    }
-    if (0 == cs) {
-	/* client */
-	magic |= 0x4300;
-    } else {
-	/* server */
-	magic |= 0x5300;
-    }
-    magic = htons(magic);
-    ccmask = htonl(ccmask);
-    if (0 == pq)
-	S = (unsigned short) rep->sline.status;
-    else
-	S = (unsigned short) HTTP_STATUS_NONE;
-    logfileWrite(headerslog, &magic, sizeof(magic));
-    logfileWrite(headerslog, &M, sizeof(M));
-    logfileWrite(headerslog, &S, sizeof(S));
-    logfileWrite(headerslog, hmask, sizeof(HttpHeaderMask));
-    logfileWrite(headerslog, &ccmask, sizeof(int));
-    logfileFlush(headerslog);
 }
 
 #endif

@@ -2,7 +2,7 @@
 /*
  * $Id$
  *
- * DEBUG: section 80    WCCP Support
+ * DEBUG: section 80     WCCP Support
  * AUTHOR: Glenn Chisholm
  *
  * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
@@ -37,7 +37,6 @@
 #if USE_WCCP
 
 #define WCCP_PORT 2048
-#define WCCP_VERSION 4
 #define WCCP_REVISION 0
 #define WCCP_RESPONSE_SIZE 12448
 #define WCCP_ACTIVE_CACHES 32
@@ -108,7 +107,7 @@ wccpInit(void)
 	return;
     memset(&wccp_here_i_am, '\0', sizeof(wccp_here_i_am));
     wccp_here_i_am.type = htonl(WCCP_HERE_I_AM);
-    wccp_here_i_am.version = htonl(WCCP_VERSION);
+    wccp_here_i_am.version = htonl(Config.Wccp.version);
     wccp_here_i_am.revision = htonl(WCCP_REVISION);
     change = 0;
     if (Config.Wccp.router.s_addr != any_addr.s_addr)
@@ -211,7 +210,7 @@ wccpHandleUdp(int sock, void *not_used)
 {
     struct sockaddr_in from;
     socklen_t from_len;
-    size_t len;
+    int len;
 
     debug(80, 6) ("wccpHandleUdp: Called.\n");
 
@@ -223,7 +222,7 @@ wccpHandleUdp(int sock, void *not_used)
     Counter.syscalls.sock.recvfroms++;
 
     len = recvfrom(sock,
-	(void *) &wccp_i_see_you,
+	&wccp_i_see_you,
 	WCCP_RESPONSE_SIZE,
 	0,
 	(struct sockaddr *) &from,
@@ -232,7 +231,7 @@ wccpHandleUdp(int sock, void *not_used)
 	return;
     if (Config.Wccp.router.s_addr != from.sin_addr.s_addr)
 	return;
-    if (ntohl(wccp_i_see_you.version) != WCCP_VERSION)
+    if (ntohl(wccp_i_see_you.version) != Config.Wccp.version)
 	return;
     if (ntohl(wccp_i_see_you.type) != WCCP_I_SEE_YOU)
 	return;

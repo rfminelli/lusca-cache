@@ -149,6 +149,8 @@ if test "${use_dlmalloc-unset}" = unset; then
 	i386-*-solaris2.*)
 		echo "Enabling dlmalloc for $host"
 		use_dlmalloc="yes"
+		LIBDLMALLOC="libdlmalloc.a"
+		LIB_MALLOC="-L../lib -ldlmalloc"
 		;;
     esac
 fi
@@ -236,89 +238,45 @@ AC_ARG_ENABLE(carp,
   fi
 ])
 
-AC_ARG_ENABLE(async-io,
+AC_ARG_ENABLE(async_io,
 [  --enable-async-io[=N_THREADS]
-                          Shorthand for
-                          --with-aio-threads=N_THREADS
-                          --with-pthreads
-                          --enable-storeio=ufs,aufs],
-[ case $enableval in
+                          Do ASYNC disk I/O using threads.
+                          N_THREADS is the number of worker threads
+                          defaults to 16. See also src/squid.h for
+                          some additional platform tuning],
+[ case "$enableval" in
   yes)
-  	with_pthreads=yes
-	STORE_MODULES="ufs aufs"
+    async_io=yes
     ;;
   no)
+    async_io=''
     ;;
   *)
-  	async_io_threads=$enableval
-	with_pthreads=yes
-	STORE_MODULES="ufs aufs"
+    async_io=yes
+    AC_DEFINE_UNQUOTED(NUMTHREADS, $enableval)
     ;;
   esac
 ])
 
-AC_ARG_WITH(aio-threads,
-[  --with-aio-threads=N_THREADS
-                          Tune the number of worker threads for the aufs object
-                          store.],
-[ async_io_threads=$withval ])
-if test "$async_io_threads"; then
-    echo "With $async_io_threads AIO threads"
-    with_pthreads=yes
-    AC_DEFINE_UNQUOTED(ASYNC_IO_THREADS,$async_io_threads)
-fi
-
-AC_ARG_WITH(pthreads,
-[  --with-pthreads         Use POSIX Threads],
-[ if test "$enableval" = "yes"; then
-    with_pthreads=yes
-  fi
-])
-if test "$with_pthreads"; then
-    echo "With pthreads"
+if test -n "$async_io" ; then
+    echo "Async I/O enabled"
+    async_io=yes
+    AC_DEFINE(USE_ASYNC_IO)
+    ASYNC_OBJS='$(ASYNC_OBJS)'
     SQUID_PTHREAD_LIB='$(PTHREADLIB)'
     CFLAGS="$CFLAGS -D_REENTRANT"
     case "$host" in
     i386-unknown-freebsd*)
-        if test "$GCC" = "yes" ; then
-            if test -z "$PRESET_LDFLAGS"; then
-                LDFLAGS="$LDFLAGS -pthread"
-            fi
-        fi
-    ;;
+    	if test "$GCC" = "yes" ; then
+	    if test -z "$PRESET_LDFLAGS"; then
+		LDFLAGS="$LDFLAGS -pthread"
+	    fi
+	fi
+	;;
     esac
 fi
+AC_SUBST(ASYNC_OBJS)
 AC_SUBST(SQUID_PTHREAD_LIB)
-
-AC_ARG_ENABLE(storeio,
-[  --enable-storeio=\"list of modules\"
-                          Build support for the list of store I/O modules.
-                          The default is only to build the "ufs" module.
-                          See src/fs for a list of available modules, or
-                          Programmers Guide section <not yet written>
-                          for details on how to build your custom store module],
-[ case $enableval in
-  yes)
-	for module in $srcdir/src/fs/*; do
-	    if test -f $module/Makefile.in; then
-		STORE_MODULES="$STORE_MODULES `basename $module`"
-	    fi
-	done
-  	;;
-  no)
-  	;;
-  *)	STORE_MODULES="`echo $enableval| sed -e 's/,/ /g;s/  */ /g'`"
-	;;
-  esac
-],
-[ if test -z "$STORE_MODULES"; then
-    STORE_MODULES="ufs"
-  fi
-])
-echo "Store modules built: $STORE_MODULES"
-AC_SUBST(STORE_MODULES)
-STORE_OBJS="fs/`echo $STORE_MODULES|sed -e's% %.a fs/%g'`.a"
-AC_SUBST(STORE_OBJS)
 
 AC_ARG_ENABLE(icmp,
 [  --enable-icmp           Enable ICMP pinging],
@@ -472,15 +430,6 @@ AC_ARG_ENABLE(err-language,
 ],[ERR_LANGUAGE="English"])
 AC_SUBST(ERR_LANGUAGE)
 
-dnl Size of COSS memory buffer
-AC_ARG_WITH(coss-membuf-size,
-[  --with-coss-membuf-size COSS membuf size (default 1048576 bytes) ],
-[  if test "$with_coss_membuf_size"; then
-      echo "Setting COSS membuf size to $with_coss_membuf_size bytes"
-      AC_DEFINE_UNQUOTED(COSS_MEMBUF_SZ, $with_coss_membuf_size)
-   fi
-])
-
 dnl Enable poll()
 AC_ARG_ENABLE(poll,
 [  --enable-poll           Enable poll() instead of select().  Normally poll
@@ -599,39 +548,13 @@ AC_ARG_ENABLE(heap-replacement,
 [  --enable-heap-replacement
                           This option allows you to use various cache
                           replacement algorithms, instead of the standard
-                          LRU algorithm.],
+                          LRU algorithm.
+                          ],
 [ if test "$enableval" = "yes" ; then
     echo "Enabling HEAP_REPLACEMENT"
     AC_DEFINE(HEAP_REPLACEMENT, 1)
   fi
 ])
-
-dnl Select auth modules to build
-AUTH_MODULES=
-AC_ARG_ENABLE(auth-modules,
-[  --enable-auth-modules=\"list of modules\"
-                          This option selects wich proxy_auth helper modules
-                          to build and install as part of the normal build
-                          process. For a list of available modules see
-                          the auth_modules directory.],
-[ case "$enableval" in
-  yes) 
-    for module in $srcdir/auth_modules/*; do
-	if test -f $module/Makefile.in; then
-	    AUTH_MODULES="$AUTH_MODULES `basename $module`"
-	fi
-    done
-    ;;
-  no)
-    ;;
-  *)
-    AUTH_MODULES="`echo $enableval| sed -e 's/,/ /g;s/  */ /g'`"
-  esac
-])
-if test -n "$AUTH_MODULES"; then
-    echo "Auth moules built: $AUTH_MODULES"
-fi
-AC_SUBST(AUTH_MODULES)
 
 # Force some compilers to use ANSI features
 #
@@ -732,15 +655,12 @@ AC_CHECK_HEADERS( \
 	strings.h \
 	sys/file.h \
 	sys/ioctl.h \
-	sys/mount.h \
-	sys/msg.h \
 	sys/param.h \
 	sys/resource.h \
 	sys/select.h\
 	sys/socket.h \
 	sys/stat.h \
 	sys/statvfs.h \
-	sys/vfs.h \
 	sys/syscall.h \
 	sys/time.h \
 	sys/types.h \
@@ -861,7 +781,6 @@ AC_CHECK_TYPE(ssize_t, int)
 AC_CHECK_TYPE(off_t, int)
 AC_CHECK_TYPE(mode_t, u_short)
 AC_CHECK_TYPE(fd_mask, int)
-AC_CHECK_TYPE(mtyp_t, long)
 
 dnl Check for type in sys/socket.h
 AC_CACHE_CHECK(for socklen_t, ac_cv_type_socklen_t, [
@@ -992,6 +911,18 @@ dnl during compile.
 		;;
 esac
 
+# Remove optimization for GCC 2.95.[12]
+# gcc -O[2] on *BSD and Linux (x86) causes pointers to magically become NULL
+if test "$GCC" = "yes"; then
+	GCCVER=`$CC -v 2>&1 | awk '$2 ==  "version" {print $3}'`
+	case "$GCCVER" in
+	[2.95.[12]])
+		echo "Removing -O for gcc on $host with GCC $GCCVER"
+		CFLAGS="`echo $CFLAGS | sed -e 's/-O[[0-9]]*//'`"
+		;;
+	esac
+fi
+
 # Recommended by Balint Nagy Endre <bne@CareNet.hu>
 case "$host" in
 	*-univel-sysv4.2MP)
@@ -1060,9 +991,6 @@ AC_CHECK_FUNCS(\
 	mktime \
 	mstats \
 	poll \
-	pthread_attr_setscope \
-	pthread_setschedparam \
-	pthread_attr_setschedparam \
 	putenv \
 	random \
 	regcomp \
@@ -1080,12 +1008,19 @@ AC_CHECK_FUNCS(\
 	snprintf \
 	srand48 \
 	srandom \
-	statfs \
 	sysconf \
 	syslog \
 	timegm \
 	vsnprintf \
 )
+
+if test "$async_io" = "yes" ; then
+	AC_CHECK_FUNCS(\
+		pthread_attr_setscope \
+		pthread_setschedparam \
+		pthread_attr_setschedparam \
+	)
+fi
 
 dnl Yay!  Another Linux brokenness.  Its not good enough
 dnl to know that setresuid() exists, because RedHat 5.0 declares
@@ -1539,20 +1474,14 @@ AC_OUTPUT(\
 	./scripts/RunCache \
 	./scripts/RunAccel \
 	./src/Makefile \
-	./src/fs/Makefile \
-	./src/fs/ufs/Makefile \
-	./src/fs/aufs/Makefile \
-	./src/fs/coss/Makefile \
-	./src/fs/diskd/Makefile \
 	./contrib/Makefile \
 	$SNMP_MAKEFILE \
 	./icons/Makefile \
 	./errors/Makefile \
-	./auth_modules/Makefile \
+	./auth_modules/dummy \
 	./auth_modules/NCSA/Makefile \
 	./auth_modules/PAM/Makefile \
-	./auth_modules/SMB/Makefile \
-	./auth_modules/MSNT/Makefile \
+	./auth_modules/SMB/Makefile
 	./auth_modules/getpwnam/Makefile \
 	./auth_modules/LDAP/Makefile \
 )
