@@ -1,6 +1,6 @@
 Special thanks go to people who have volunteered their time, effort, and ideas to make this software available.
 
-	Henrik Nordstrom <hno@hem.passagen.se>
+	Henrik Nordstrom <henrik.nordstrom@ida.his.se>
 	Mark Treacy <mark@aone.com.au>
 	Daniel O'Callaghan <danny@miriworld.its.unimelb.EDU.AU>
 	George Michaelson <ggm@connect.com.au>
@@ -54,18 +54,11 @@ Special thanks go to people who have volunteered their time, effort, and ideas t
 	Mukaigawa Shin'ichi <shin@nff.ncl.omron.co.jp>
 	Lutz Donnerhacke <lutz@iks-jena.de>
 	Gerben Wierda <Gerben_Wierda@RnA.nl>
-	Oskar Pearson <oskar@is.co.za>
-	Michael O'Reilly <michael@metal.iinet.net.au>
-	Max Okumoto <okumoto@ucsd.edu>
-	Pierre-Louis BRENAC <brenacp@esiee.fr>
-	Dale <dale@server.ctam.bitmcnit.bryansk.su>
-
 
 Development of this caching software is funded by the National Science
 Foundation (grant NCR-9521745).  Paid staff members on the caching
 project are:
 
 	Duane Wessels <wessels@nlanr.net>
-	Kostas Anagnostakis <kostas@nlanr.net>
 	K Claffy <kc@nlanr.net>
 	Hans-Werner Braun <hwb@nlanr.net>

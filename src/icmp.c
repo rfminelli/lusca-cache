@@ -31,6 +31,9 @@
 
 
 #include "squid.h"
+#include "pinger.h"
+
+int icmp_sock = -1;
 
 #if USE_ICMP
 
@@ -42,15 +45,17 @@ typedef struct _icmpQueueData {
     char *msg;
     int len;
     struct _icmpQueueData *next;
-    void (*free_func) (void *);
+    void (*free_func) _PARAMS((void *));
 } icmpQueueData;
 
 static icmpQueueData *IcmpQueueHead = NULL;
 
-static PF icmpRecv;
-static void icmpQueueSend(pingerEchoData * pkt, int len, FREE * free_func);
-static PF icmpSend;
-static void icmpHandleSourcePing(const struct sockaddr_in *from, const char *buf);
+static void icmpRecv _PARAMS((int, void *));
+static void icmpQueueSend _PARAMS((pingerEchoData * pkt,
+	int len,
+	void          (*free_func) _PARAMS((void *))));
+static void icmpSend _PARAMS((int fd, icmpQueueData * queue));
+static void icmpHandleSourcePing _PARAMS((const struct sockaddr_in * from, const char *buf));
 
 static void
 icmpSendEcho(struct in_addr to, int opcode, const char *payload, int len)
@@ -72,14 +77,17 @@ icmpRecv(int unused1, void *unused2)
     static int fail_count = 0;
     pingerReplyData preply;
     static struct sockaddr_in F;
-    commSetSelect(icmp_sock, COMM_SELECT_READ, icmpRecv, NULL, 0);
+    commSetSelect(icmp_sock,
+	COMM_SELECT_READ,
+	(PF) icmpRecv,
+	(void *) -1, 0);
     memset(&preply, '\0', sizeof(pingerReplyData));
     n = recv(icmp_sock,
 	(char *) &preply,
 	sizeof(pingerReplyData),
 	0);
     if (n < 0) {
-	debug(50, 0) ("icmpRecv: recv: %s\n", xstrerror());
+	debug(50, 0, "icmpRecv: recv: %s\n", xstrerror());
 	if (++fail_count == 10 || errno == ECONNREFUSED)
 	    icmpClose();
 	return;
@@ -100,13 +108,15 @@ icmpRecv(int unused1, void *unused2)
 	netdbHandlePingReply(&F, preply.hops, preply.rtt);
 	break;
     default:
-	debug(37, 0) ("icmpRecv: Bad opcode: %d\n", (int) preply.opcode);
+	debug(37, 0, "icmpRecv: Bad opcode: %d\n", (int) preply.opcode);
 	break;
     }
 }
 
 static void
-icmpQueueSend(pingerEchoData * pkt, int len, FREE * free_func)
+icmpQueueSend(pingerEchoData * pkt,
+    int len,
+    void (*free_func) _PARAMS((void *)))
 {
     icmpQueueData *q = NULL;
     icmpQueueData **H = NULL;
@@ -115,20 +125,22 @@ icmpQueueSend(pingerEchoData * pkt, int len, FREE * free_func)
 	    free_func(pkt);
 	return;
     }
-    debug(37, 3) ("icmpQueueSend: Queueing %d bytes\n", len);
+    debug(37, 3, "icmpQueueSend: Queueing %d bytes\n", len);
     q = xcalloc(1, sizeof(icmpQueueData));
     q->msg = (char *) pkt;
     q->len = len;
     q->free_func = free_func;
     for (H = &IcmpQueueHead; *H; H = &(*H)->next);
     *H = q;
-    commSetSelect(icmp_sock, COMM_SELECT_WRITE, icmpSend, IcmpQueueHead, 0);
+    commSetSelect(icmp_sock,
+	COMM_SELECT_WRITE,
+	(PF) icmpSend,
+	(void *) IcmpQueueHead, 0);
 }
 
 static void
-icmpSend(int fd, void *data)
+icmpSend(int fd, icmpQueueData * queue)
 {
-    icmpQueueData *queue = data;
     int x;
     while ((queue = IcmpQueueHead)) {
 	x = send(icmp_sock,
@@ -136,15 +148,15 @@ icmpSend(int fd, void *data)
 	    queue->len,
 	    0);
 	if (x < 0) {
-	    if (ignoreErrno(errno))
+	    if (errno == EWOULDBLOCK || errno == EAGAIN)
 		break;		/* don't de-queue */
-	    debug(50, 0) ("icmpSend: send: %s\n", xstrerror());
+	    debug(50, 0, "icmpSend: send: %s\n", xstrerror());
 	    if (errno == ECONNREFUSED) {
 		icmpClose();
 		return;
 	    }
 	} else if (x != queue->len) {
-	    debug(37, 0) ("icmpSend: Wrote %d of %d bytes\n", x, queue->len);
+	    debug(37, 0, "icmpSend: Wrote %d of %d bytes\n", x, queue->len);
 	}
 	IcmpQueueHead = queue->next;
 	if (queue->free_func)
@@ -153,9 +165,15 @@ icmpSend(int fd, void *data)
     }
     /* Reinstate handler if needed */
     if (IcmpQueueHead) {
-	commSetSelect(fd, COMM_SELECT_WRITE, icmpSend, IcmpQueueHead, 0);
+	commSetSelect(fd,
+	    COMM_SELECT_WRITE,
+	    (PF) icmpSend,
+	    (void *) IcmpQueueHead, 0);
     } else {
-	commSetSelect(fd, COMM_SELECT_WRITE, NULL, NULL, 0);
+	commSetSelect(fd,
+	    COMM_SELECT_WRITE,
+	    NULL,
+	    NULL, 0);
     }
 }
 
@@ -169,11 +187,11 @@ icmpHandleSourcePing(const struct sockaddr_in *from, const char *buf)
     xmemcpy(&header, buf, sizeof(icp_common_t));
     url = buf + sizeof(icp_common_t);
     if (neighbors_do_private_keys && header.reqnum) {
-	key = storeKeyPrivate(url, METHOD_GET, header.reqnum);
+	key = storeGeneratePrivateKey(url, METHOD_GET, header.reqnum);
     } else {
-	key = storeKeyPublic(url, METHOD_GET);
+	key = storeGeneratePublicKey(url, METHOD_GET);
     }
-    debug(37, 3) ("icmpHandleSourcePing: from %s, key=%s\n",
+    debug(37, 3, "icmpHandleSourcePing: from %s, key=%s\n",
 	inet_ntoa(from->sin_addr),
 	key);
     if ((entry = storeGet(key)) == NULL)
@@ -181,7 +199,13 @@ icmpHandleSourcePing(const struct sockaddr_in *from, const char *buf)
     if (entry->lock_count == 0)
 	return;
     /* call neighborsUdpAck even if ping_status != PING_WAITING */
-    neighborsUdpAck(url, &header, from, entry);
+    neighborsUdpAck(icmp_sock,
+	url,
+	&header,
+	from,
+	entry,
+	NULL,
+	0);
 }
 #endif /* USE_ICMP */
 
@@ -200,7 +224,7 @@ icmpSourcePing(struct in_addr to, const icp_common_t * header, const char *url)
     char *payload;
     int len;
     int ulen;
-    debug(37, 3) ("icmpSourcePing: '%s'\n", url);
+    debug(37, 3, "icmpSourcePing: '%s'\n", url);
     if ((ulen = strlen(url)) > MAX_URL)
 	return;
     payload = get_free_8k_page();
@@ -217,7 +241,7 @@ void
 icmpDomainPing(struct in_addr to, const char *domain)
 {
 #if USE_ICMP
-    debug(37, 3) ("icmpDomainPing: '%s'\n", domain);
+    debug(37, 3, "icmpDomainPing: '%s'\n", domain);
     icmpSendEcho(to, S_ICMP_DOM, domain, 0);
 #endif
 }
@@ -237,7 +261,7 @@ icmpOpen(void)
 	COMM_NONBLOCKING,
 	"Pinger Socket");
     if (icmp_sock < 0) {
-	debug(50, 0) ("icmpOpen: icmp_sock: %s\n", xstrerror());
+	debug(50, 0, "icmpOpen: icmp_sock: %s\n", xstrerror());
 	return;
     }
     child_sock = comm_open(SOCK_DGRAM,
@@ -247,27 +271,24 @@ icmpOpen(void)
 	0,
 	"ICMP Socket");
     if (child_sock < 0) {
-	debug(50, 0) ("icmpOpen: child_sock: %s\n", xstrerror());
+	debug(50, 0, "icmpOpen: child_sock: %s\n", xstrerror());
 	return;
     }
     getsockname(icmp_sock, (struct sockaddr *) &S, &namelen);
     if (comm_connect_addr(child_sock, &S) != COMM_OK)
-	fatal(xstrerror());
+	fatal_dump(xstrerror());
     getsockname(child_sock, (struct sockaddr *) &S, &namelen);
     if (comm_connect_addr(icmp_sock, &S) != COMM_OK)
-	fatal(xstrerror());
-    /* flush or else we get dup data if unbuffered_logs is set */
-    logsFlush();
+	fatal_dump(xstrerror());
     if ((pid = fork()) < 0) {
-	debug(50, 0) ("icmpOpen: fork: %s\n", xstrerror());
+	debug(50, 0, "icmpOpen: fork: %s\n", xstrerror());
 	comm_close(icmp_sock);
 	comm_close(child_sock);
 	return;
     }
     if (pid == 0) {		/* child */
-	int tmp_s;
-	char *x = xcalloc((tmp_s = strlen(Config.debugOptions) + 32), 1);
-	snprintf(x, tmp_s, "SQUID_DEBUG=%s", Config.debugOptions);
+	char *x = xcalloc(strlen(Config.debugOptions) + 32, 1);
+	sprintf(x, "SQUID_DEBUG=%s", Config.debugOptions);
 	putenv(x);
 	comm_close(icmp_sock);
 	dup2(child_sock, 0);
@@ -277,13 +298,16 @@ icmpOpen(void)
 	fclose(debug_log);
 	enter_suid();
 	execlp(Config.Program.pinger, "(pinger)", NULL);
-	debug(50, 0) ("icmpOpen: %s: %s\n", Config.Program.pinger, xstrerror());
+	debug(50, 0, "icmpOpen: %s: %s\n", Config.Program.pinger, xstrerror());
 	_exit(1);
     }
     comm_close(child_sock);
-    commSetSelect(icmp_sock, COMM_SELECT_READ, icmpRecv, NULL, 0);
-    commSetTimeout(icmp_sock, -1, NULL, NULL);
-    debug(29, 0) ("Pinger socket opened on FD %d\n", icmp_sock);
+    commSetSelect(icmp_sock,
+	COMM_SELECT_READ,
+	(PF) icmpRecv,
+	(void *) -1, 0);
+    comm_set_fd_lifetime(icmp_sock, -1);
+    debug(29, 0, "Pinger socket opened on FD %d\n", icmp_sock);
 #endif
 }
 
@@ -294,7 +318,7 @@ icmpClose(void)
     icmpQueueData *queue;
     if (icmp_sock < 0)
 	return;
-    debug(29, 0) ("Closing ICMP socket on FD %d\n", icmp_sock);
+    debug(29, 0, "Closing ICMP socket on FD %d\n", icmp_sock);
     comm_close(icmp_sock);
     icmp_sock = -1;
     while ((queue = IcmpQueueHead)) {

@@ -45,6 +45,72 @@
 #define REFRESH_DEFAULT_PCT	(time_t)20
 #define REFRESH_DEFAULT_MAX	(time_t)259200
 
+typedef struct _refresh_t {
+    char *pattern;
+    regex_t compiled_pattern;
+    time_t min;
+    int pct;
+    time_t max;
+    struct _refresh_t *next;
+} refresh_t;
+
+static refresh_t *Refresh_tbl = NULL;
+static refresh_t *Refresh_tail = NULL;
+
+static void
+refreshFreeList(refresh_t * t)
+{
+    refresh_t *tnext;
+
+    for (; t; t = tnext) {
+	tnext = t->next;
+	safe_free(t->pattern);
+	regfree(&t->compiled_pattern);
+	safe_free(t);
+    }
+}
+
+void
+refreshFreeMemory(void)
+{
+    refreshFreeList(Refresh_tbl);
+    Refresh_tail = Refresh_tbl = NULL;
+}
+
+void
+refreshAddToList(const char *pattern, int opts, time_t min, int pct, time_t max)
+{
+    refresh_t *t;
+    regex_t comp;
+    int errcode;
+    int flags = REG_EXTENDED | REG_NOSUB;
+    if (opts & REFRESH_ICASE)
+	flags |= REG_ICASE;
+    if ((errcode = regcomp(&comp, pattern, flags)) != 0) {
+	char errbuf[256];
+	regerror(errcode, &comp, errbuf, sizeof errbuf);
+	debug(22, 0, "%s line %d: %s\n",
+	    cfg_filename, config_lineno, config_input_line);
+	debug(22, 0, "refreshAddToList: Invalid regular expression '%s': %s\n",
+	    pattern, errbuf);
+	return;
+    }
+    pct = pct < 0 ? 0 : pct;
+    max = max < 0 ? 0 : max;
+    t = xcalloc(1, sizeof(refresh_t));
+    t->pattern = (char *) xstrdup(pattern);
+    t->compiled_pattern = comp;
+    t->min = min;
+    t->pct = pct;
+    t->max = max;
+    t->next = NULL;
+    if (!Refresh_tbl)
+	Refresh_tbl = t;
+    if (Refresh_tail)
+	Refresh_tail->next = t;
+    Refresh_tail = t;
+}
+
 /*
  * refreshCheck():
  *     return 1 if its time to revalidate this entry, 0 otherwise
@@ -60,13 +126,9 @@ refreshCheck(const StoreEntry * entry, const request_t * request, time_t delta)
     time_t age;
     int factor;
     time_t check_time = squid_curtime + delta;
-    debug(22, 3) ("refreshCheck: '%s'\n", storeUrl(entry));
-    if (EBIT_TEST(entry->flag, ENTRY_REVALIDATE)) {
-	debug(22, 3) ("refreshCheck: YES: Required Authorization\n");
-	return 1;
-    }
-    for (R = Config.Refresh; R; R = R->next) {
-	if (regexec(&(R->compiled_pattern), storeUrl(entry), 0, 0, 0) != 0)
+    debug(22, 3, "refreshCheck: '%s'\n", entry->url);
+    for (R = Refresh_tbl; R; R = R->next) {
+	if (regexec(&(R->compiled_pattern), entry->url, 0, 0, 0) != 0)
 	    continue;
 	min = R->min;
 	pct = R->pct;
@@ -74,45 +136,45 @@ refreshCheck(const StoreEntry * entry, const request_t * request, time_t delta)
 	pattern = R->pattern;
 	break;
     }
-    debug(22, 3) ("refreshCheck: Matched '%s %d %d%% %d'\n",
+    debug(22, 3, "refreshCheck: Matched '%s %d %d%% %d'\n",
 	pattern, (int) min, pct, (int) max);
     age = check_time - entry->timestamp;
-    debug(22, 3) ("refreshCheck: age = %d\n", (int) age);
+    debug(22, 3, "refreshCheck: age = %d\n", (int) age);
     if (request->max_age > -1) {
 	if (age > request->max_age) {
-	    debug(22, 3) ("refreshCheck: YES: age > client-max-age\n");
+	    debug(22, 3, "refreshCheck: YES: age > client-max-age\n");
 	    return 1;
 	}
     }
     if (age <= min) {
-	debug(22, 3) ("refreshCheck: NO: age < min\n");
+	debug(22, 3, "refreshCheck: NO: age < min\n");
 	return 0;
     }
     if (-1 < entry->expires) {
 	if (entry->expires <= check_time) {
-	    debug(22, 3) ("refreshCheck: YES: expires <= curtime\n");
+	    debug(22, 3, "refreshCheck: YES: expires <= curtime\n");
 	    return 1;
 	} else {
-	    debug(22, 3) ("refreshCheck: NO: expires > curtime\n");
+	    debug(22, 3, "refreshCheck: NO: expires > curtime\n");
 	    return 0;
 	}
     }
     if (age > max) {
-	debug(22, 3) ("refreshCheck: YES: age > max\n");
+	debug(22, 3, "refreshCheck: YES: age > max\n");
 	return 1;
     }
     if (entry->timestamp <= entry->lastmod) {
 	if (request->protocol != PROTO_HTTP) {
-	    debug(22, 3) ("refreshCheck: NO: non-HTTP request\n");
+	    debug(22, 3, "refreshCheck: NO: non-HTTP request\n");
 	    return 0;
 	}
-	debug(22, 3) ("refreshCheck: YES: lastvalid <= lastmod\n");
+	debug(22, 3, "refreshCheck: YES: lastvalid <= lastmod\n");
 	return 1;
     }
     factor = 100 * age / (entry->timestamp - entry->lastmod);
-    debug(22, 3) ("refreshCheck: factor = %d\n", factor);
+    debug(22, 3, "refreshCheck: factor = %d\n", factor);
     if (factor < pct) {
-	debug(22, 3) ("refreshCheck: NO: factor < pct\n");
+	debug(22, 3, "refreshCheck: NO: factor < pct\n");
 	return 0;
     }
     return 1;
@@ -122,8 +184,8 @@ time_t
 getMaxAge(const char *url)
 {
     refresh_t *R;
-    debug(22, 3) ("getMaxAge: '%s'\n", url);
-    for (R = Config.Refresh; R; R = R->next) {
+    debug(22, 3, "getMaxAge: '%s'\n", url);
+    for (R = Refresh_tbl; R; R = R->next) {
 	if (regexec(&(R->compiled_pattern), url, 0, 0, 0) == 0)
 	    return R->max;
     }

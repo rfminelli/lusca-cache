@@ -36,13 +36,16 @@ typedef struct _client_info {
     struct client_info *next;
     struct in_addr addr;
     struct {
-	int result_hist[LOG_TYPE_MAX];
+	int result_hist[ERR_MAX];
 	int n_requests;
     } Http, Icp;
 } ClientInfo;
 
-static hash_table *client_table = NULL;
-static ClientInfo *clientdbAdd(struct in_addr addr);
+int client_info_sz;
+
+static HashID client_table = 0;
+
+static ClientInfo *clientdbAdd _PARAMS((struct in_addr addr));
 
 static ClientInfo *
 clientdbAdd(struct in_addr addr)
@@ -61,16 +64,18 @@ clientdbInit(void)
 {
     if (client_table)
 	return;
-    client_table = hash_create((HASHCMP *) strcmp, 229, hash_string);
+    client_table = hash_create((int (*)_PARAMS((const char *, const char *))) strcmp,
+	229,
+	hash_string);
     client_info_sz = sizeof(ClientInfo);
 }
 
 void
-clientdbUpdate(struct in_addr addr, log_type log_type, protocol_t p)
+clientdbUpdate(struct in_addr addr, log_type log_type, u_short port)
 {
     char *key;
     ClientInfo *c;
-    if (!Config.onoff.client_db)
+    if (!Config.Options.client_db)
 	return;
     key = inet_ntoa(addr);
     c = (ClientInfo *) hash_lookup(client_table, key);
@@ -78,10 +83,10 @@ clientdbUpdate(struct in_addr addr, log_type log_type, protocol_t p)
 	c = clientdbAdd(addr);
     if (c == NULL)
 	debug_trap("clientdbUpdate: Failed to add entry");
-    if (p == PROTO_HTTP) {
+    if (port == Config.Port.http) {
 	c->Http.n_requests++;
 	c->Http.result_hist[log_type]++;
-    } else if (p == PROTO_ICP) {
+    } else if (port == Config.Port.icp) {
 	c->Icp.n_requests++;
 	c->Icp.result_hist[log_type]++;
     }
@@ -93,7 +98,7 @@ clientdbDeniedPercent(struct in_addr addr)
     char *key;
     int n = 100;
     ClientInfo *c;
-    if (!Config.onoff.client_db)
+    if (!Config.Options.client_db)
 	return 0;
     key = inet_ntoa(addr);
     c = (ClientInfo *) hash_lookup(client_table, key);
@@ -116,7 +121,7 @@ clientdbDump(StoreEntry * sentry)
 	storeAppendPrintf(sentry, "{Name: %s}\n", fqdnFromAddr(c->addr));
 	storeAppendPrintf(sentry, "{    ICP Requests %d}\n",
 	    c->Icp.n_requests);
-	for (l = LOG_TAG_NONE; l < LOG_TYPE_MAX; l++) {
+	for (l = LOG_TAG_NONE; l < ERR_MAX; l++) {
 	    if (c->Icp.result_hist[l] == 0)
 		continue;
 	    storeAppendPrintf(sentry,
@@ -127,7 +132,7 @@ clientdbDump(StoreEntry * sentry)
 	}
 	storeAppendPrintf(sentry, "{    HTTP Requests %d}\n",
 	    c->Http.n_requests);
-	for (l = LOG_TAG_NONE; l < LOG_TYPE_MAX; l++) {
+	for (l = LOG_TAG_NONE; l < ERR_MAX; l++) {
 	    if (c->Http.result_hist[l] == 0)
 		continue;
 	    storeAppendPrintf(sentry,
