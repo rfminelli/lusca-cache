@@ -111,11 +111,11 @@
 #endif
 
 /* Local functions */
-static int client_comm_connect __P((int sock, char *dest_host, u_short dest_port));
-static void usage __P((char *progname));
+static int client_comm_connect();
+static void usage();
 
-static void
-usage(char *progname)
+static void usage(progname)
+     char *progname;
 {
     fprintf(stderr, "\
 Usage: %s [-rs] [-i IMS_time] [-h host] [-p port] [-m method] url\n\
@@ -130,8 +130,9 @@ Options:\n\
     exit(1);
 }
 
-int
-main(int argc, char *argv[])
+int main(argc, argv)
+     int argc;
+     char *argv[];
 {
     int conn, c, len, bytesWritten;
     int port, to_stdout, reload;
@@ -208,7 +209,7 @@ main(int argc, char *argv[])
     sprintf(buf, "Accept: */*\r\n");
     strcat(msg, buf);
     if (ims) {
-	sprintf(buf, "If-Modified-Since: %s\r\n", mkrfc850(ims));
+	sprintf(buf, "If-Modified-Since: %s\r\n", mkrfc850(&ims));
 	strcat(msg, buf);
     }
     sprintf(buf, "\r\n");
@@ -234,8 +235,10 @@ main(int argc, char *argv[])
     return 0;
 }
 
-static int
-client_comm_connect(int sock, char *dest_host, u_short dest_port)
+static int client_comm_connect(sock, dest_host, dest_port)
+     int sock;			/* Type of communication to use. */
+     char *dest_host;		/* Server's host name. */
+     u_short dest_port;		/* Server's port. */
 {
     struct hostent *hp;
     static struct sockaddr_in to_addr;

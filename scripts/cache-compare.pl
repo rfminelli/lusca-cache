@@ -8,21 +8,21 @@
 # from a number of different caches.
 #
 # stdin is a list of URLs.  Set the @getfrom array to a list of caches
-# to fetch each URL from.  Include 'SOURCE' in @getfrom to fetch from
+# to fetch each URL from.  Include 'SOURCE' is @getfrom to fetch from
 # the source host also.  For each URL, print the byte count, elapsed
 # time and average data rate.  At the end print out some averages.
 #
 # NOTE: uses the Perl function syscall() to implement gettimeofday(2).
-# Assumes that gettimeofday is syscall #116 on the system
+# Assumes # that gettimeofday is syscall #116 on the system
 # (see /usr/include/sys/syscall.h).
 #
 # BUGS:
 # Should probably cache the gethostbyname() calls.
 
-@getfrom = ('SOURCE', 'localhost:3128', 'bo:3128');
+@getfrom = ('SOURCE', 'localhost:3128');
 
 require 'sys/socket.ph';
-$gettimeofday = 1128;    	# cheating, should use require syscall.ph
+$gettimeofday = 116;    	# cheating, should use require syscall.ph
 
 while (<>) {
 	chop ($url = $_);

@@ -33,15 +33,14 @@
 #define MAX_URL  4096
 #define MAX_LOGIN_SZ  128
 
-enum {
-    METHOD_NONE,		/* 000 */
-    METHOD_GET,			/* 001 */
-    METHOD_POST,		/* 010 */
-    METHOD_PUT,			/* 011 */
-    METHOD_HEAD,		/* 100 */
-    METHOD_CONNECT		/* 101 */
-};
-typedef unsigned int method_t;
+typedef enum {
+    METHOD_NONE,
+    METHOD_GET,
+    METHOD_POST,
+    METHOD_PUT,
+    METHOD_HEAD,
+    METHOD_CONNECT
+} method_t;
 
 extern char *RequestMethodStr[];
 
@@ -65,22 +64,9 @@ struct _request {
     int port;
     char urlpath[MAX_URL + 1];
     int link_count;		/* free when zero */
-    struct _hierarchyLogData hierarchy;
+    hier_code hierarchy_code;
     int flags;
 };
-
-extern char *url_convert_hex __P((char *org_url, int allocate));
-extern char *url_escape __P((char *url));
-extern protocol_t urlParseProtocol __P((char *));
-extern method_t urlParseMethod __P((char *));
-extern int urlDefaultPort __P((protocol_t));
-extern void urlInitialize __P((void));
-extern request_t *urlParse __P((method_t, char *));
-extern char *urlCanonical __P((request_t *, char *));
-extern request_t *requestLink __P((request_t *));
-extern void requestUnlink __P((request_t *));
-extern int matchDomainName __P((char *d, char *h));
-extern int urlCheckRequest __P((request_t *));
 
 /* bitfields for the flags member */
 #define		REQ_UNUSED1	0x01
@@ -91,5 +77,18 @@ extern int urlCheckRequest __P((request_t *));
 #define 	REQ_UNUSED2	0x20
 #define 	REQ_HIERARCHICAL 0x40
 #define 	REQ_LOOPDETECT  0x80
+
+extern char *url_convert_hex _PARAMS((char *org_url, int allocate));
+extern char *url_escape _PARAMS((char *url));
+extern protocol_t urlParseProtocol _PARAMS((char *));
+extern method_t urlParseMethod _PARAMS((char *));
+extern int urlDefaultPort _PARAMS((protocol_t));
+extern void urlInitialize _PARAMS((void));
+extern request_t *urlParse _PARAMS((method_t, char *));
+extern char *urlCanonical _PARAMS((request_t *, char *));
+extern request_t *requestLink _PARAMS((request_t *));
+extern void requestUnlink _PARAMS((request_t *));
+extern int matchDomainName _PARAMS((char *d, char *h));
+extern int urlCheckRequest _PARAMS((request_t *));
 
 #endif /* _URL_HEADER_ */

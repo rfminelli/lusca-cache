@@ -1,6 +1,8 @@
+
 /*
  * $Id$
  *
+ * DEBUG: 
  * AUTHOR: Harvest Derived
  *
  * SQUID Internet Object Cache  http://www.nlanr.net/Squid/
@@ -102,46 +104,20 @@
  *   re-implementations of code complying to this set of standards.  
  */
 
-#ifndef _DNS_H_
-#define _DNS_H_
+#ifndef _DYNAMIC_ARRAY_H
+#define _DYNAMIC_ARRAY_H
 
-#define DNS_FLAG_ALIVE          0x01
-#define DNS_FLAG_BUSY           0x02
-#define DNS_FLAG_CLOSING        0x04
+typedef struct _dynamic_array {
+    void **collection;
+    int size;			/* array size */
+    int delta;			/* amount to increase while run out of space */
+    int index;			/* index for inserting entry into collection */
+} dynamic_array;
 
-#define DNS_INBUF_SZ 4096
 
-typedef struct _dnsserver {
-    int id;
-    int flags;
-    int inpipe;
-    int outpipe;
-    time_t lastcall;
-    time_t answer;
-    unsigned int offset;
-    unsigned int size;
-    char *ip_inbuf;
-    struct timeval dispatch_time;
-    void *data;
-} dnsserver_t;
+extern dynamic_array *create_dynamic_array _PARAMS((int size, int delta));
+extern int cut_dynamic_array _PARAMS((dynamic_array * ary, unsigned int new_size));
+extern int insert_dynamic_array _PARAMS((dynamic_array * ary, void *entry));
+extern void destroy_dynamic_array _PARAMS((dynamic_array * ary));
 
-struct _dnsStats {
-    int requests;
-    int replies;
-    int hist[DefaultDnsChildrenMax];
-};
-
-extern void statDns __P((StoreEntry *));
-extern void dnsShutdownServers __P((void));
-extern void dnsOpenServers __P((void));
-extern void dnsEnqueue __P((void *));
-extern void *dnsDequeue __P((void));
-extern dnsserver_t *dnsGetFirstAvailable __P((void));
-extern void dnsStats __P((StoreEntry *));
-
-extern char *dns_error_message;
-extern struct _dnsStats DnsStats;
-
-#define IPCACHE_AV_FACTOR 1000
-
-#endif /* _DNS_H_ */
+#endif

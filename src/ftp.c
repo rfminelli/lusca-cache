@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -121,31 +120,32 @@ typedef struct _Ftpdata {
     char password[MAX_URL];
     char *reply_hdr;
     int ftp_fd;
+    char *icp_page_ptr;		/* Used to send proxy-http request: 
+				 * put_free_8k_page(me) if the lifetime
+				 * expires */
     int got_marker;		/* denotes end of successful request */
     int reply_hdr_state;
-    int authenticated;		/* This ftp request is authenticated */
 } FtpData;
 
+
 /* Local functions */
-static int ftpStateFree __P((int fd, FtpData * ftpState));
-static void ftpProcessReplyHeader __P((FtpData * data, char *buf, int size));
-static void ftpServerClosed __P((int fd, void *nodata));
-static void ftp_login_parser __P((char *login, FtpData * data));
-static char *ftpTransferMode __P((char *urlpath));
+static int ftpStateFree _PARAMS((int fd, FtpData * ftpState));
+static void ftpProcessReplyHeader _PARAMS((FtpData * data, char *buf, int size));
+static void ftpServerClosed _PARAMS((int fd, void *nodata));
+static void ftp_login_parser _PARAMS((char *login, FtpData * data));
+static char *ftpTransferMode _PARAMS((char *urlpath));
 
 /* Global functions not declared in ftp.h */
-void ftpLifetimeExpire(int fd, FtpData * data);
-int ftpReadReply(int fd, FtpData * data);
-void ftpSendComplete(int fd, char *buf, int size, int errflag, void *ftpData);
-void ftpSendRequest(int fd, FtpData * data);
-void ftpConnInProgress(int fd, FtpData * data);
-void ftpServerClose(void);
+void ftpLifetimeExpire _PARAMS((int fd, FtpData * data));
+int ftpReadReply _PARAMS((int fd, FtpData * data));
+void ftpSendComplete _PARAMS((int fd, char *buf, int size, int errflag, void *ftpData));
+void ftpSendRequest _PARAMS((int fd, FtpData * data));
+void ftpConnInProgress _PARAMS((int fd, FtpData * data));
+void ftpServerClose _PARAMS((void));
 
-/* External functions */
-extern char *base64_decode __P((char *coded));
-
-static int
-ftpStateFree(int fd, FtpData * ftpState)
+static int ftpStateFree(fd, ftpState)
+     int fd;
+     FtpData *ftpState;
 {
     if (ftpState == NULL)
 	return 1;
@@ -154,13 +154,18 @@ ftpStateFree(int fd, FtpData * ftpState)
 	put_free_8k_page(ftpState->reply_hdr);
 	ftpState->reply_hdr = NULL;
     }
+    if (ftpState->icp_page_ptr) {
+	put_free_8k_page(ftpState->icp_page_ptr);
+	ftpState->icp_page_ptr = NULL;
+    }
     requestUnlink(ftpState->request);
     xfree(ftpState);
     return 0;
 }
 
-static void
-ftp_login_parser(char *login, FtpData * data)
+static void ftp_login_parser(login, data)
+     char *login;
+     FtpData *data;
 {
     char *user = data->user;
     char *password = data->password;
@@ -177,13 +182,29 @@ ftp_login_parser(char *login, FtpData * data)
 
     if (!*user && !*password) {
 	strcpy(user, "anonymous");
-	strcpy(password, Config.ftpUser);
+	strcpy(password, getFtpUser());
     }
 }
 
+int ftpCachable(url)
+     char *url;
+{
+    wordlist *p = NULL;
+
+    /* scan stop list */
+    for (p = getFtpStoplist(); p; p = p->next) {
+	if (strstr(url, p->key))
+	    return 0;
+    }
+
+    /* else cachable */
+    return 1;
+}
+
 /* This will be called when socket lifetime is expired. */
-void
-ftpLifetimeExpire(int fd, FtpData * data)
+void ftpLifetimeExpire(fd, data)
+     int fd;
+     FtpData *data;
 {
     StoreEntry *entry = NULL;
     entry = data->entry;
@@ -195,8 +216,10 @@ ftpLifetimeExpire(int fd, FtpData * data)
 
 /* This is too much duplicated code from httpProcessReplyHeader.  Only
  * difference is FtpData vs HttpData. */
-static void
-ftpProcessReplyHeader(FtpData * data, char *buf, int size)
+static void ftpProcessReplyHeader(data, buf, size)
+     FtpData *data;
+     char *buf;			/* chunk just read by ftpReadReply() */
+     int size;
 {
     char *t = NULL;
     StoreEntry *entry = data->entry;
@@ -247,7 +270,7 @@ ftpProcessReplyHeader(FtpData * data, char *buf, int size)
 	case 301:		/* Moved Permanently */
 	case 410:		/* Gone */
 	    /* These can be cached for a long time, make the key public */
-	    ttlSet(entry);
+	    entry->expires = squid_curtime + ttlSet(entry);
 	    if (BIT_TEST(entry->flag, ENTRY_CACHABLE))
 		storeSetPublicKey(entry);
 	    break;
@@ -263,7 +286,7 @@ ftpProcessReplyHeader(FtpData * data, char *buf, int size)
 	    break;
 	default:
 	    /* These can be negative cached, make key public */
-	    storeNegativeCache(entry);
+	    entry->expires = squid_curtime + getNegativeTTL();
 	    if (BIT_TEST(entry->flag, ENTRY_CACHABLE))
 		storeSetPublicKey(entry);
 	    break;
@@ -274,10 +297,11 @@ ftpProcessReplyHeader(FtpData * data, char *buf, int size)
 
 /* This will be called when data is ready to be read from fd.  Read until
  * error or connection closed. */
-int
-ftpReadReply(int fd, FtpData * data)
+int ftpReadReply(fd, data)
+     int fd;
+     FtpData *data;
 {
-    LOCAL_ARRAY(char, buf, SQUID_TCP_SO_RCVBUF);
+    static char buf[SQUID_TCP_SO_RCVBUF];
     int len;
     int clen;
     int off;
@@ -309,21 +333,16 @@ ftpReadReply(int fd, FtpData * data)
 	    COMM_SELECT_READ,
 	    (PF) ftpReadReply,
 	    (void *) data);
-	if (!BIT_TEST(entry->flag, READ_DEFERRED)) {
-	    /* NOTE there is no read timeout handler to disable */
-	    BIT_SET(entry->flag, READ_DEFERRED);
-	}
+	/* NOTE there is no read timeout handler to disable */
 	/* dont try reading again for a while */
-	comm_set_stall(fd, Config.stallDelay);
+	comm_set_stall(fd, getStallDelay());
 	return 0;
-    } else {
-	BIT_RESET(entry->flag, READ_DEFERRED);
     }
     errno = 0;
+    IOStats.Ftp.reads++;
     len = read(fd, buf, SQUID_TCP_SO_RCVBUF);
     debug(9, 5, "ftpReadReply: FD %d, Read %d bytes\n", fd, len);
     if (len > 0) {
-	IOStats.Ftp.reads++;
 	for (clen = len - 1, bin = 0; clen; bin++)
 	    clen >>= 1;
 	IOStats.Ftp.read_hist[bin]++;
@@ -355,16 +374,16 @@ ftpReadReply(int fd, FtpData * data)
 	     * failed and arrange so the object gets ejected and
 	     * never gets to disk. */
 	    debug(9, 1, "ftpReadReply: Purging '%s'\n", entry->url);
-	    storeNegativeCache(entry);
+	    entry->expires = squid_curtime + getNegativeTTL();
 	    BIT_RESET(entry->flag, ENTRY_CACHABLE);
 	    storeReleaseRequest(entry);
 	} else if (!(entry->flag & DELETE_BEHIND)) {
-	    ttlSet(entry);
+	    entry->expires = squid_curtime + ttlSet(entry);
 	}
 	/* update fdstat and fdtable */
 	storeComplete(entry);
 	comm_close(fd);
-    } else if (((entry->mem_obj->e_current_len + len) > Config.Ftp.maxObjSize) &&
+    } else if (((entry->mem_obj->e_current_len + len) > getFtpMax()) &&
 	!(entry->flag & DELETE_BEHIND)) {
 	/*  accept data, but start to delete behind it */
 	storeStartDeleteBehind(entry);
@@ -398,13 +417,17 @@ ftpReadReply(int fd, FtpData * data)
 	    COMM_SELECT_TIMEOUT,
 	    (PF) ftpLifetimeExpire,
 	    (void *) data,
-	    Config.readTimeout);
+	    getReadTimeout());
     }
     return 0;
 }
 
-void
-ftpSendComplete(int fd, char *buf, int size, int errflag, void *data)
+void ftpSendComplete(fd, buf, size, errflag, data)
+     int fd;
+     char *buf;
+     int size;
+     int errflag;
+     void *data;
 {
     FtpData *ftpState = (FtpData *) data;
     StoreEntry *entry = NULL;
@@ -417,6 +440,8 @@ ftpSendComplete(int fd, char *buf, int size, int errflag, void *data)
 	put_free_8k_page(buf);	/* Allocated by ftpSendRequest. */
 	buf = NULL;
     }
+    ftpState->icp_page_ptr = NULL;	/* So lifetime expire doesn't re-free */
+
     if (errflag) {
 	squid_error_entry(entry, ERR_CONNECT_FAIL, xstrerror());
 	comm_close(fd);
@@ -429,12 +454,12 @@ ftpSendComplete(int fd, char *buf, int size, int errflag, void *data)
 	comm_set_select_handler_plus_timeout(ftpState->ftp_fd,
 	    COMM_SELECT_TIMEOUT,
 	    (PF) ftpLifetimeExpire,
-	    (void *) ftpState, Config.readTimeout);
+	    (void *) ftpState, getReadTimeout());
     }
 }
 
-static char *
-ftpTransferMode(char *urlpath)
+static char *ftpTransferMode(urlpath)
+     char *urlpath;
 {
     static char ftpASCII[] = "A";
     static char ftpBinary[] = "I";
@@ -453,34 +478,37 @@ ftpTransferMode(char *urlpath)
     return ftpBinary;
 }
 
-void
-ftpSendRequest(int fd, FtpData * data)
+void ftpSendRequest(fd, data)
+     int fd;
+     FtpData *data;
 {
     char *path = NULL;
     char *mode = NULL;
     char *buf = NULL;
-    LOCAL_ARRAY(char, tbuf, BUFSIZ);
-    LOCAL_ARRAY(char, opts, BUFSIZ);
+    static char tbuf[BUFSIZ];
+    static char opts[BUFSIZ];
     static char *space = " ";
     char *s = NULL;
     int got_timeout = 0;
     int got_negttl = 0;
     int buflen;
+    struct in_addr outgoingTcpAddr;
 
     debug(9, 5, "ftpSendRequest: FD %d\n", fd);
 
     buflen = strlen(data->request->urlpath) + 256;
     buf = (char *) get_free_8k_page();
+    data->icp_page_ptr = buf;
     memset(buf, '\0', buflen);
 
     path = data->request->urlpath;
     mode = ftpTransferMode(path);
 
     /* Start building the buffer ... */
-    strcat(buf, Config.Program.ftpget);
+    strcat(buf, getFtpProgram());
     strcat(buf, space);
 
-    strncpy(opts, Config.Program.ftpget_opts, BUFSIZ);
+    strncpy(opts, getFtpOptions(), BUFSIZ);
     for (s = strtok(opts, w_space); s; s = strtok(NULL, w_space)) {
 	strcat(buf, s);
 	strcat(buf, space);
@@ -490,26 +518,24 @@ ftpSendRequest(int fd, FtpData * data)
 	    got_negttl = 1;
     }
     if (!got_timeout) {
-	sprintf(tbuf, "-t %d ", Config.readTimeout);
+	sprintf(tbuf, "-t %d ", getReadTimeout());
 	strcat(buf, tbuf);
     }
     if (!got_negttl) {
-	sprintf(tbuf, "-n %d ", Config.negativeTtl);
+	sprintf(tbuf, "-n %d ", getNegativeTTL());
 	strcat(buf, tbuf);
     }
     if (data->request->port) {
 	sprintf(tbuf, "-P %d ", data->request->port);
 	strcat(buf, tbuf);
     }
-    if ((s = Config.visibleHostname)) {
+    if ((s = getVisibleHostname())) {
 	sprintf(tbuf, "-H %s ", s);
 	strcat(buf, tbuf);
     }
-    if (data->authenticated) {
-	strcat(buf, "-a ");
-    }
-    if (Config.Addrs.tcp_outgoing.s_addr != INADDR_NONE) {
-	sprintf(tbuf, "-o %s ", inet_ntoa(Config.Addrs.tcp_outgoing));
+    outgoingTcpAddr = getTcpOutgoingAddr();
+    if (outgoingTcpAddr.s_addr != INADDR_NONE) {
+	sprintf(tbuf, "-o %s ", inet_ntoa(outgoingTcpAddr));
 	strcat(buf, tbuf);
     }
     strcat(buf, "-h ");		/* httpify */
@@ -530,12 +556,12 @@ ftpSendRequest(int fd, FtpData * data)
 	strlen(buf),
 	30,
 	ftpSendComplete,
-	(void *) data,
-	put_free_8k_page);
+	(void *) data);
 }
 
-void
-ftpConnInProgress(int fd, FtpData * data)
+void ftpConnInProgress(fd, data)
+     int fd;
+     FtpData *data;
 {
     StoreEntry *entry = data->entry;
 
@@ -562,21 +588,16 @@ ftpConnInProgress(int fd, FtpData * data)
 	COMM_SELECT_WRITE,
 	(PF) ftpSendRequest,
 	(void *) data);
-    if (opt_no_ipcache)
-	ipcacheInvalidate(data->request->host);
 }
 
 
-int
-ftpStart(int unusedfd, char *url, request_t * request, StoreEntry * entry)
+int ftpStart(unusedfd, url, request, entry)
+     int unusedfd;
+     char *url;
+     request_t *request;
+     StoreEntry *entry;
 {
-    LOCAL_ARRAY(char, realm, 8192);
     FtpData *data = NULL;
-    char *req_hdr = entry->mem_obj->mime_hdr;
-    char *auth_hdr;
-    char *response;
-    char *auth;
-
     int status;
 
     debug(9, 3, "FtpStart: FD %d <URL:%s>\n", unusedfd, url);
@@ -585,45 +606,16 @@ ftpStart(int unusedfd, char *url, request_t * request, StoreEntry * entry)
     storeLockObject(data->entry = entry, NULL, NULL);
     data->request = requestLink(request);
 
-    auth_hdr = mime_get_header(req_hdr, "Authorization");
-    auth = NULL;
-    if (auth_hdr) {
-	if (strcasecmp(strtok(auth_hdr, " \t"), "Basic") == 0) {
-	    auth = base64_decode(strtok(NULL, " \t"));
-	}
-    }
     /* Parse login info. */
-    if (auth) {
-	ftp_login_parser(auth, data);
-	data->authenticated = 1;
-    } else {
-	ftp_login_parser(request->login, data);
-	if (*data->user && !*data->password) {
-	    /* This request is not fully authenticated */
-	    if (request->port == 21) {
-		sprintf(realm, "ftp %s", data->user);
-	    } else {
-		sprintf(realm, "ftp %s port %d",
-		    data->user, request->port);
-	    }
-	    response = authorization_needed_msg(request, realm);
-	    storeAppend(entry, response, strlen(response));
-	    httpParseHeaders(response, entry->mem_obj->reply);
-	    storeComplete(entry);
-	    ftpStateFree(-1, data);
-	    return COMM_OK;
-	}
-    }
+    ftp_login_parser(request->login, data);
 
     debug(9, 5, "FtpStart: FD %d, host=%s, path=%s, user=%s, passwd=%s\n",
 	unusedfd, data->request->host, data->request->urlpath,
 	data->user, data->password);
 
-    data->ftp_fd = comm_open(SOCK_STREAM,
-	0,
+    data->ftp_fd = comm_open(COMM_NONBLOCKING,
 	local_addr,
 	0,
-	COMM_NONBLOCKING,
 	url);
     if (data->ftp_fd == COMM_ERROR) {
 	squid_error_entry(entry, ERR_CONNECT_FAIL, xstrerror());
@@ -663,18 +655,17 @@ ftpStart(int unusedfd, char *url, request_t * request, StoreEntry * entry)
 	(PF) ftpSendRequest,
 	(void *) data);
     comm_set_fd_lifetime(data->ftp_fd,
-	Config.lifetimeDefault);
+	getClientLifetime());
     comm_set_select_handler(data->ftp_fd,
 	COMM_SELECT_LIFETIME,
 	(PF) ftpLifetimeExpire,
 	(void *) data);
-    if (opt_no_ipcache)
-	ipcacheInvalidate(data->request->host);
     return COMM_OK;
 }
 
-static void
-ftpServerClosed(int fd, void *nodata)
+static void ftpServerClosed(fd, nodata)
+     int fd;
+     void *nodata;
 {
     static time_t last_restart = 0;
     comm_close(fd);
@@ -688,8 +679,7 @@ ftpServerClosed(int fd, void *nodata)
     (void) ftpInitialize();
 }
 
-void
-ftpServerClose(void)
+void ftpServerClose()
 {
     /* NOTE: this function will be called repeatedly while shutdown is
      * pending */
@@ -708,20 +698,17 @@ ftpServerClose(void)
 }
 
 
-int
-ftpInitialize(void)
+int ftpInitialize()
 {
     int pid;
     int cfd;
     int squid_to_ftpget[2];
     int ftpget_to_squid[2];
-    LOCAL_ARRAY(char, pbuf, 128);
-    char *ftpget = Config.Program.ftpget;
+    static char pbuf[128];
+    char *ftpget = getFtpProgram();
     struct sockaddr_in S;
     int len;
-    struct timeval slp;
 
-    debug(9, 5, "ftpInitialize: Initializing...\n");
     if (pipe(squid_to_ftpget) < 0) {
 	debug(9, 0, "ftpInitialize: pipe: %s\n", xstrerror());
 	return -1;
@@ -730,13 +717,10 @@ ftpInitialize(void)
 	debug(9, 0, "ftpInitialize: pipe: %s\n", xstrerror());
 	return -1;
     }
-    cfd = comm_open(SOCK_STREAM,
-	0,
+    cfd = comm_open(COMM_NOCLOEXEC,
 	local_addr,
 	0,
-	COMM_NOCLOEXEC,
 	"ftpget -S socket");
-    debug(9, 5, "ftpget -S socket on FD %d\n", cfd);
     if (cfd == COMM_ERROR) {
 	debug(9, 0, "ftpInitialize: Failed to create socket\n");
 	return -1;
@@ -763,8 +747,8 @@ ftpInitialize(void)
 	fdstat_open(ftpget_to_squid[0], FD_PIPE);
 	fd_note(squid_to_ftpget[1], "ftpget -S");
 	fd_note(ftpget_to_squid[0], "ftpget -S");
-	commSetCloseOnExec(squid_to_ftpget[1]);
-	commSetCloseOnExec(ftpget_to_squid[0]);
+	fcntl(squid_to_ftpget[1], F_SETFD, 1);	/* set close-on-exec */
+	fcntl(ftpget_to_squid[0], F_SETFD, 1);	/* set close-on-exec */
 	/* if ftpget -S goes away, this handler should get called */
 	comm_set_select_handler(ftpget_to_squid[0],
 	    COMM_SELECT_READ,
@@ -772,9 +756,6 @@ ftpInitialize(void)
 	    (void *) NULL);
 	ftpget_server_write = squid_to_ftpget[1];
 	ftpget_server_read = ftpget_to_squid[0];
-	slp.tv_sec = 0;
-	slp.tv_usec = 250000;
-	select(0, NULL, NULL, NULL, &slp);
 	return 0;
     }
     /* child */

@@ -111,7 +111,7 @@
 typedef enum {
     HIER_NONE,
     HIER_DIRECT,
-    HIER_SIBLING_HIT,
+    HIER_NEIGHBOR_HIT,
     HIER_PARENT_HIT,
     HIER_SINGLE_PARENT,
     HIER_FIRSTUP_PARENT,
@@ -119,10 +119,13 @@ typedef enum {
     HIER_FIRST_PARENT_MISS,
     HIER_LOCAL_IP_DIRECT,
     HIER_FIREWALL_IP_DIRECT,
+    HIER_DEAD_PARENT,
+    HIER_DEAD_NEIGHBOR,
+    HIER_REVIVE_PARENT,
+    HIER_REVIVE_NEIGHBOR,
     HIER_NO_DIRECT_FAIL,
     HIER_SOURCE_FASTEST,
-    HIER_SIBLING_UDP_HIT_OBJ,
-    HIER_PARENT_UDP_HIT_OBJ,
+    HIER_UDP_HIT_OBJ,
     HIER_MAX
 } hier_code;
 
@@ -194,27 +197,21 @@ struct neighbor_cf {
     struct neighbor_cf *next;
 };
 
-struct _hierarchyLogData {
-    hier_code code;
-    char *host;
-    int timeout;
-};
-
-extern edge *getFirstEdge __P((void));
-extern edge *getFirstUpParent __P((request_t *));
-extern edge *getNextEdge __P((edge *));
-extern edge *getSingleParent __P((request_t *, int *n));
-extern int neighborsUdpPing __P((protodispatch_data *));
-extern void neighbors_cf_domain __P((char *, char *));
-extern void neighbors_cf_acl __P((char *, char *));
-extern neighbors *neighbors_create __P((void));
-extern void hierarchyNote __P((request_t *, hier_code, int, char *));
-extern void neighborsUdpAck __P((int, char *, icp_common_t *, struct sockaddr_in *, StoreEntry *, char *, int));
-extern void neighbors_cf_add __P((char *, char *, int, int, int, int));
-extern void neighbors_init __P((void));
-extern void neighbors_open __P((int));
-extern void neighborsDestroy __P((void));
-extern edge *neighborFindByName __P((char *));
+extern edge *getFirstEdge _PARAMS((void));
+extern edge *getFirstUpParent _PARAMS((request_t *));
+extern edge *getNextEdge _PARAMS((edge *));
+extern edge *getSingleParent _PARAMS((request_t *, int *n));
+extern int neighborsUdpPing _PARAMS((protodispatch_data *));
+extern void neighbors_cf_domain _PARAMS((char *, char *));
+extern void neighbors_cf_acl _PARAMS((char *, char *));
+extern neighbors *neighbors_create _PARAMS(());
+extern void hierarchy_log_append _PARAMS((StoreEntry *, hier_code, int, char *));
+extern void neighborsUdpAck _PARAMS((int, char *, icp_common_t *, struct sockaddr_in *, StoreEntry *, char *, int));
+extern void neighbors_cf_add _PARAMS((char *, char *, int, int, int, int));
+extern void neighbors_init _PARAMS((void));
+extern void neighbors_open _PARAMS((int));
+extern void neighbors_rotate_log _PARAMS((void));
+extern void neighborsDestroy _PARAMS((void));
 
 extern char *hier_strings[];
 

@@ -129,6 +129,9 @@ typedef struct {
     StoreEntry *entry;
     request_t *request;
     char *req_hdr;
+    int buf_type;		/* BUF_TYPE_8K or BUF_TYPE_MALLOC */
+    char *reqbuf;		/* Holds the HTTP request being sent to
+				 * the neighbor/origin server. */
     char *icp_rwd_ptr;		/* When a lifetime expires during the
 				 * middle of an icpwrite, don't lose the
 				 * icpReadWriteData */
@@ -137,9 +140,9 @@ typedef struct {
     edge *neighbor;		/* neighbor request made to */
 } HttpStateData;
 
-extern int httpCachable __P((char *, int));
-extern int proxyhttpStart __P((edge *, char *, StoreEntry *));
-extern int httpStart __P((int, char *, request_t *, char *, StoreEntry *));
-extern void httpParseHeaders __P((char *, struct _http_reply *));
-extern void httpProcessReplyHeader __P((HttpStateData *, char *, int));
-extern void httpReplyHeaderStats __P((StoreEntry *));
+extern int httpCachable _PARAMS((char *, int));
+extern int proxyhttpStart _PARAMS((edge *, char *, StoreEntry *));
+extern int httpStart _PARAMS((int, char *, request_t *, char *, StoreEntry *));
+extern void httpParseHeaders _PARAMS((char *, struct _http_reply *));
+extern void httpProcessReplyHeader _PARAMS((HttpStateData *, char *, int));
+extern void httpReplyHeaderStats _PARAMS((StoreEntry *));

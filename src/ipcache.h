@@ -105,15 +105,14 @@
 #ifndef _IPCACHE_H_
 #define _IPCACHE_H_
 
-typedef void (*IPH) (int, struct hostent *, void *);
+typedef int (*IPH) _PARAMS((int, struct hostent *, void *));
 
-enum {
+typedef enum {
     IP_CACHED,
     IP_NEGATIVE_CACHED,
     IP_PENDING,			/* waiting to be dispatched */
     IP_DISPATCHED		/* waiting for reply from dnsserver */
-};
-typedef unsigned int ipcache_status_t;
+} ipcache_status_t;
 
 #define IP_BLOCKING_LOOKUP	0x01
 #define IP_LOOKUP_IF_MISS	0x02
@@ -124,30 +123,24 @@ typedef struct _ipcache_entry {
     char *name;
     struct _ipcache_entry *next;
     time_t lastref;
-    time_t expires;
+    time_t ttl;
     unsigned char addr_count;
     unsigned char alias_count;
+    unsigned char lock;
     struct hostent entry;
     struct _ip_pending *pending_head;
     char *error_message;
-    unsigned char locks;
     ipcache_status_t status:3;
 } ipcache_entry;
 
-extern void ipcache_nbgethostbyname __P((char *name,
-	int fd,
-	IPH handler,
-	void *handlerData));
-extern int ipcache_purgelru __P((void));
-extern int ipcache_unregister __P((char *, int));
-extern struct hostent *ipcache_gethostbyname __P((char *, int flags));
-extern void ipcacheInvalidate __P((char *));
-extern void ipcacheReleaseInvalid __P((char *));
-extern void ipcacheOpenServers __P((void));
-extern void ipcacheShutdownServers __P((void));
-extern void ipcache_init __P((void));
-extern void stat_ipcache_get __P((StoreEntry *));
-extern int ipcacheQueueDrain __P((void));
+extern void ipcache_nbgethostbyname _PARAMS((char *name, int fd, IPH handler, void *handlerData));
+extern int ipcache_unregister _PARAMS((char *, int));
+extern struct hostent *ipcache_gethostbyname _PARAMS((char *, int flags));
+extern void ipcache_init _PARAMS((void));
+extern void stat_ipcache_get _PARAMS((StoreEntry *));
+extern void ipcacheShutdownServers _PARAMS((void));
+extern void ipcacheOpenServers _PARAMS((void));
+extern void ipcacheLockEntry _PARAMS((char *));
 
 extern char *dns_error_message;
 

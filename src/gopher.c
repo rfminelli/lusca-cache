@@ -151,39 +151,22 @@ typedef struct gopher_ds {
     int HTML_header_added;
     int port;
     char type_id;
-    char request[MAX_URL + 1];
+    char request[MAX_URL];
     int data_in;
     int cso_recno;
     int len;
     char *buf;			/* pts to a 4k page */
-} GopherStateData;
+    char *icp_page_ptr;		/* Pts to gopherStart buffer that needs to be freed */
+} GopherData;
 
-static int gopherStateFree __P((int fd, GopherStateData *));
-static void gopher_mime_content __P((char *buf, char *name, char *def));
-static void gopherMimeCreate __P((GopherStateData *));
-static int gopher_url_parser(char *url,
-    char *host,
-    int *port,
-    char *type_id,
-    char *request);
-static void gopherEndHTML __P((GopherStateData *));
-static void gopherToHTML __P((GopherStateData *, char *inbuf, int len));
-static int gopherReadReplyTimeout __P((int fd, GopherStateData *));
-static void gopherLifetimeExpire __P((int fd, GopherStateData *));
-static void gopherReadReply __P((int fd, GopherStateData *));
-static void gopherSendComplete(int fd,
-    char *buf,
-    int size,
-    int errflag,
-    void *data);
-static void gopherSendRequest __P((int fd, GopherStateData *));
-static GopherStateData *CreateGopherStateData __P((void));
+GopherData *CreateGopherData();
 
-static char def_gopher_bin[] = "www/unknown";
-static char def_gopher_text[] = "text/plain";
+char def_gopher_bin[] = "www/unknown";
+char def_gopher_text[] = "text/plain";
 
-static int
-gopherStateFree(int fd, GopherStateData * gopherState)
+static int gopherStateFree(fd, gopherState)
+     int fd;
+     GopherData *gopherState;
 {
     if (gopherState == NULL)
 	return 1;
@@ -196,10 +179,12 @@ gopherStateFree(int fd, GopherStateData * gopherState)
 
 
 /* figure out content type from file extension */
-static void
-gopher_mime_content(char *buf, char *name, char *def)
+static void gopher_mime_content(buf, name, def)
+     char *buf;
+     char *name;
+     char *def;
 {
-    LOCAL_ARRAY(char, temp, MAX_URL + 1);
+    static char temp[MAX_URL];
     char *ext1 = NULL;
     char *ext2 = NULL;
     char *str = NULL;
@@ -246,17 +231,17 @@ gopher_mime_content(char *buf, char *name, char *def)
 
 
 /* create MIME Header for Gopher Data */
-static void
-gopherMimeCreate(GopherStateData * data)
+void gopherMimeCreate(data)
+     GopherData *data;
 {
-    LOCAL_ARRAY(char, tempMIME, MAX_MIME);
+    static char tempMIME[MAX_MIME];
 
     sprintf(tempMIME, "\
 HTTP/1.0 200 OK Gatewaying\r\n\
 Server: Squid/%s\r\n\
 Date: %s\r\n\
 MIME-version: 1.0\r\n",
-	version_string, mkrfc850(squid_curtime));
+	version_string, mkrfc850(&squid_curtime));
 
     switch (data->type_id) {
 
@@ -299,11 +284,15 @@ MIME-version: 1.0\r\n",
 }
 
 /* Parse a gopher url into components.  By Anawat. */
-static int
-gopher_url_parser(char *url, char *host, int *port, char *type_id, char *request)
+int gopher_url_parser(url, host, port, type_id, request)
+     char *url;
+     char *host;
+     int *port;
+     char *type_id;
+     char *request;
 {
-    LOCAL_ARRAY(char, proto, MAX_URL);
-    LOCAL_ARRAY(char, hostbuf, MAX_URL);
+    static char proto[MAX_URL];
+    static char hostbuf[MAX_URL];
     int t;
 
     proto[0] = hostbuf[0] = '\0';
@@ -332,19 +321,24 @@ gopher_url_parser(char *url, char *host, int *port, char *type_id, char *request
     return 0;
 }
 
-int
-gopherCachable(char *url)
+int gopherCachable(url)
+     char *url;
 {
-    GopherStateData *data = NULL;
+    wordlist *p = NULL;
+    GopherData *data = NULL;
     int cachable = 1;
+
+    /* scan stop list */
+    for (p = getGopherStoplist(); p; p = p->next)
+	if (strstr(url, p->key))
+	    return 0;
+
     /* use as temp data structure to parse gopher URL */
-    data = CreateGopherStateData();
+    data = CreateGopherData();
+
     /* parse to see type */
-    gopher_url_parser(url,
-	data->host,
-	&data->port,
-	&data->type_id,
-	data->request);
+    gopher_url_parser(url, data->host, &data->port, &data->type_id, data->request);
+
     switch (data->type_id) {
     case GOPHER_INDEX:
     case GOPHER_CSO:
@@ -356,13 +350,14 @@ gopherCachable(char *url)
 	cachable = 1;
     }
     gopherStateFree(-1, data);
+
     return cachable;
 }
 
-static void
-gopherEndHTML(GopherStateData * data)
+void gopherEndHTML(data)
+     GopherData *data;
 {
-    LOCAL_ARRAY(char, tmpbuf, TEMP_BUF_SIZE);
+    static char tmpbuf[TEMP_BUF_SIZE];
 
     if (!data->data_in) {
 	sprintf(tmpbuf, "<HTML><HEAD><TITLE>Server Return Nothing.</TITLE>\n\
@@ -375,15 +370,17 @@ gopherEndHTML(GopherStateData * data)
 
 /* Convert Gopher to HTML */
 /* Borrow part of code from libwww2 came with Mosaic distribution */
-static void
-gopherToHTML(GopherStateData * data, char *inbuf, int len)
+void gopherToHTML(data, inbuf, len)
+     GopherData *data;
+     char *inbuf;
+     int len;
 {
     char *pos = inbuf;
     char *lpos = NULL;
     char *tline = NULL;
-    LOCAL_ARRAY(char, line, TEMP_BUF_SIZE);
-    LOCAL_ARRAY(char, tmpbuf, TEMP_BUF_SIZE);
-    LOCAL_ARRAY(char, outbuf, TEMP_BUF_SIZE << 4);
+    static char line[TEMP_BUF_SIZE];
+    static char tmpbuf[TEMP_BUF_SIZE];
+    static char outbuf[TEMP_BUF_SIZE << 4];
     char *name = NULL;
     char *selector = NULL;
     char *host = NULL;
@@ -608,7 +605,7 @@ gopherToHTML(GopherStateData * data, char *inbuf, int len)
 		int t;
 		int code;
 		int recno;
-		LOCAL_ARRAY(char, result, MAX_CSO_RESULT);
+		static char result[MAX_CSO_RESULT];
 
 		tline = line;
 
@@ -675,25 +672,32 @@ gopherToHTML(GopherStateData * data, char *inbuf, int len)
     return;
 }
 
-static int
-gopherReadReplyTimeout(int fd, GopherStateData * data)
+
+int gopherReadReplyTimeout(fd, data)
+     int fd;
+     GopherData *data;
 {
     StoreEntry *entry = NULL;
     entry = data->entry;
     debug(10, 4, "GopherReadReplyTimeout: Timeout on %d\n url: %s\n", fd, entry->url);
     squid_error_entry(entry, ERR_READ_TIMEOUT, NULL);
+    if (data->icp_page_ptr)
+	put_free_4k_page(data->icp_page_ptr);
     comm_close(fd);
     return 0;
 }
 
 /* This will be called when socket lifetime is expired. */
-static void
-gopherLifetimeExpire(int fd, GopherStateData * data)
+void gopherLifetimeExpire(fd, data)
+     int fd;
+     GopherData *data;
 {
     StoreEntry *entry = NULL;
     entry = data->entry;
     debug(10, 4, "gopherLifeTimeExpire: FD %d: <URL:%s>\n", fd, entry->url);
     squid_error_entry(entry, ERR_LIFETIME_EXP, NULL);
+    if (data->icp_page_ptr)
+	put_free_4k_page(data->icp_page_ptr);
     comm_set_select_handler(fd,
 	COMM_SELECT_READ | COMM_SELECT_WRITE,
 	0,
@@ -706,83 +710,63 @@ gopherLifetimeExpire(int fd, GopherStateData * data)
 
 /* This will be called when data is ready to be read from fd.  Read until
  * error or connection closed. */
-static void
-gopherReadReply(int fd, GopherStateData * data)
+int gopherReadReply(fd, data)
+     int fd;
+     GopherData *data;
 {
     char *buf = NULL;
     int len;
     int clen;
     int off;
     StoreEntry *entry = NULL;
-    int bin;
 
     entry = data->entry;
-    if (entry->flag & DELETE_BEHIND && !storeClientWaiting(entry)) {
-	/* we can terminate connection right now */
-	squid_error_entry(entry, ERR_NO_CLIENTS_BIG_OBJ, NULL);
-	comm_close(fd);
-	return;
-    }
-    /* check if we want to defer reading */
-    clen = entry->mem_obj->e_current_len;
-    off = storeGetLowestReaderOffset(entry);
-    if ((clen - off) > GOPHER_DELETE_GAP) {
-	if (entry->flag & CLIENT_ABORT_REQUEST) {
-	    squid_error_entry(entry, ERR_CLIENT_ABORT, NULL);
+    if (entry->flag & DELETE_BEHIND) {
+	if (storeClientWaiting(entry)) {
+	    clen = entry->mem_obj->e_current_len;
+	    off = entry->mem_obj->e_lowest_offset;
+	    if ((clen - off) > GOPHER_DELETE_GAP) {
+		debug(10, 3, "gopherReadReply: Read deferred for Object: %s\n",
+		    entry->url);
+		debug(10, 3, "                Current Gap: %d bytes\n",
+		    clen - off);
+
+		/* reschedule, so it will automatically reactivated when
+		 * Gap is big enough.  */
+		comm_set_select_handler(fd,
+		    COMM_SELECT_READ,
+		    (PF) gopherReadReply,
+		    (void *) data);
+		/* don't install read timeout until we are below the GAP */
+		comm_set_select_handler_plus_timeout(fd,
+		    COMM_SELECT_TIMEOUT,
+		    (PF) NULL,
+		    (void *) NULL,
+		    (time_t) 0);
+		comm_set_stall(fd, getStallDelay());	/* dont try reading again for a while */
+		return 0;
+	    }
+	} else {
+	    /* we can terminate connection right now */
+	    squid_error_entry(entry, ERR_NO_CLIENTS_BIG_OBJ, NULL);
 	    comm_close(fd);
-	    return;
+	    return 0;
 	}
-	IOStats.Gopher.reads_deferred++;
-	debug(10, 3, "gopherReadReply: Read deferred for Object: %s\n",
-	    entry->url);
-	debug(10, 3, "                Current Gap: %d bytes\n", clen - off);
-	/* reschedule, so it will automatically reactivated when
-	 * Gap is big enough.  */
-	comm_set_select_handler(fd,
-	    COMM_SELECT_READ,
-	    (PF) gopherReadReply,
-	    (void *) data);
-	/* don't install read timeout until we are below the GAP */
-	comm_set_select_handler_plus_timeout(fd,
-	    COMM_SELECT_TIMEOUT,
-	    (PF) NULL,
-	    (void *) NULL,
-	    (time_t) 0);
-	if (!BIT_TEST(entry->flag, READ_DEFERRED)) {
-	    comm_set_fd_lifetime(fd, 3600);	/* limit during deferring */
-	    BIT_SET(entry->flag, READ_DEFERRED);
-	}
-	/* dont try reading again for a while */
-	comm_set_stall(fd, Config.stallDelay);
-	return;
-    } else {
-	BIT_RESET(entry->flag, READ_DEFERRED);
     }
     buf = get_free_4k_page();
     errno = 0;
-    /* leave one space for \0 in gopherToHTML */
-    len = read(fd, buf, TEMP_BUF_SIZE - 1);
+    len = read(fd, buf, TEMP_BUF_SIZE - 1);	/* leave one space for \0 in gopherToHTML */
     debug(10, 5, "gopherReadReply: FD %d read len=%d\n", fd, len);
-    if (len > 0) {
-	IOStats.Gopher.reads++;
-	for (clen = len - 1, bin = 0; clen; bin++)
-	    clen >>= 1;
-	IOStats.Gopher.read_hist[bin]++;
-    }
+
     if (len < 0) {
 	debug(10, 1, "gopherReadReply: error reading: %s\n", xstrerror());
 	if (errno == EAGAIN || errno == EWOULDBLOCK) {
 	    /* reinstall handlers */
 	    /* XXX This may loop forever */
-	    comm_set_select_handler(fd,
-		COMM_SELECT_READ,
-		(PF) gopherReadReply,
-		(void *) data);
-	    comm_set_select_handler_plus_timeout(fd,
-		COMM_SELECT_TIMEOUT,
-		(PF) gopherReadReplyTimeout,
-		(void *) data,
-		Config.readTimeout);
+	    comm_set_select_handler(fd, COMM_SELECT_READ,
+		(PF) gopherReadReply, (void *) data);
+	    comm_set_select_handler_plus_timeout(fd, COMM_SELECT_TIMEOUT,
+		(PF) gopherReadReplyTimeout, (void *) data, getReadTimeout());
 	} else {
 	    BIT_RESET(entry->flag, ENTRY_CACHABLE);
 	    storeReleaseRequest(entry);
@@ -800,14 +784,15 @@ gopherReadReply(int fd, GopherStateData * data)
 	if (data->conversion != NORMAL)
 	    gopherEndHTML(data);
 	if (!(entry->flag & DELETE_BEHIND))
-	    ttlSet(entry);
+	    entry->expires = squid_curtime + ttlSet(entry);
 	BIT_RESET(entry->flag, DELAY_SENDING);
 	storeComplete(entry);
 	comm_close(fd);
-    } else if (((entry->mem_obj->e_current_len + len) > Config.Gopher.maxObjSize) &&
+    } else if (((entry->mem_obj->e_current_len + len) > getGopherMax()) &&
 	!(entry->flag & DELETE_BEHIND)) {
 	/*  accept data, but start to delete behind it */
 	storeStartDeleteBehind(entry);
+
 	if (data->conversion != NORMAL) {
 	    gopherToHTML(data, buf, len);
 	} else {
@@ -821,7 +806,7 @@ gopherReadReply(int fd, GopherStateData * data)
 	    COMM_SELECT_TIMEOUT,
 	    (PF) gopherReadReplyTimeout,
 	    (void *) data,
-	    Config.readTimeout);
+	    getReadTimeout());
     } else if (entry->flag & CLIENT_ABORT_REQUEST) {
 	/* append the last bit of info we got */
 	if (data->conversion != NORMAL) {
@@ -848,18 +833,22 @@ gopherReadReply(int fd, GopherStateData * data)
 	    COMM_SELECT_TIMEOUT,
 	    (PF) gopherReadReplyTimeout,
 	    (void *) data,
-	    Config.readTimeout);
+	    getReadTimeout());
     }
     put_free_4k_page(buf);
-    return;
+    return 0;
 }
 
 /* This will be called when request write is complete. Schedule read of
  * reply. */
-static void
-gopherSendComplete(int fd, char *buf, int size, int errflag, void *data)
+void gopherSendComplete(fd, buf, size, errflag, data)
+     int fd;
+     char *buf;
+     int size;
+     int errflag;
+     void *data;
 {
-    GopherStateData *gopherState = (GopherStateData *) data;
+    GopherData *gopherState = (GopherData *) data;
     StoreEntry *entry = NULL;
     entry = gopherState->entry;
     debug(10, 5, "gopherSendComplete: FD %d size: %d errflag: %d\n",
@@ -917,20 +906,24 @@ gopherSendComplete(int fd, char *buf, int size, int errflag, void *data)
 	COMM_SELECT_TIMEOUT,
 	(PF) gopherReadReplyTimeout,
 	(void *) gopherState,
-	Config.readTimeout);
+	getReadTimeout());
     comm_set_fd_lifetime(fd, 86400);	/* extend lifetime */
 
     if (buf)
 	put_free_4k_page(buf);	/* Allocated by gopherSendRequest. */
+    gopherState->icp_page_ptr = NULL;
 }
 
 /* This will be called when connect completes. Write request. */
-static void
-gopherSendRequest(int fd, GopherStateData * data)
+void gopherSendRequest(fd, data)
+     int fd;
+     GopherData *data;
 {
     int len;
-    LOCAL_ARRAY(char, query, MAX_URL);
+    static char query[MAX_URL];
     char *buf = get_free_4k_page();
+
+    data->icp_page_ptr = buf;
 
     if (data->type_id == GOPHER_CSO) {
 	sscanf(data->request, "?%s", query);
@@ -954,18 +947,19 @@ gopherSendRequest(int fd, GopherStateData * data)
 	len,
 	30,
 	gopherSendComplete,
-	(void *) data,
-	put_free_4k_page);
+	(void *) data);
     if (BIT_TEST(data->entry->flag, ENTRY_CACHABLE))
 	storeSetPublicKey(data->entry);		/* Make it public */
 }
 
-int
-gopherStart(int unusedfd, char *url, StoreEntry * entry)
+int gopherStart(unusedfd, url, entry)
+     int unusedfd;
+     char *url;
+     StoreEntry *entry;
 {
     /* Create state structure. */
     int sock, status;
-    GopherStateData *data = CreateGopherStateData();
+    GopherData *data = CreateGopherData();
 
     storeLockObject(data->entry = entry, NULL, NULL);
 
@@ -979,12 +973,7 @@ gopherStart(int unusedfd, char *url, StoreEntry * entry)
 	return COMM_ERROR;
     }
     /* Create socket. */
-    sock = comm_open(SOCK_STREAM,
-	0,
-	Config.Addrs.tcp_outgoing,
-	0,
-	COMM_NONBLOCKING,
-	url);
+    sock = comm_open(COMM_NONBLOCKING, getTcpOutgoingAddr(), 0, url);
     if (sock == COMM_ERROR) {
 	debug(10, 4, "gopherStart: Failed because we're out of sockets.\n");
 	squid_error_entry(entry, ERR_NO_FDS, xstrerror());
@@ -1036,8 +1025,6 @@ gopherStart(int unusedfd, char *url, StoreEntry * entry)
 	}
     }
     /* Install connection complete handler. */
-    if (opt_no_ipcache)
-	ipcacheInvalidate(data->host);
     comm_set_select_handler(sock,
 	COMM_SELECT_LIFETIME,
 	(PF) gopherLifetimeExpire,
@@ -1050,10 +1037,9 @@ gopherStart(int unusedfd, char *url, StoreEntry * entry)
 }
 
 
-static GopherStateData *
-CreateGopherStateData(void)
+GopherData *CreateGopherData()
 {
-    GopherStateData *gd = xcalloc(1, sizeof(GopherStateData));
+    GopherData *gd = xcalloc(1, sizeof(GopherData));
     gd->buf = get_free_4k_page();
     return (gd);
 }

@@ -27,7 +27,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *  
  */
-
+ 
 /*
  * Copyright (c) 1994, 1995.  All rights reserved.
  *  
@@ -112,7 +112,6 @@
 #include <string.h>
 #endif
 
-#include "ansiproto.h"
 #include "util.h"
 #define BIG_BUFSIZ (BUFSIZ * 4)
 
@@ -144,8 +143,8 @@ static char rfc1738_unsafe_chars[] =
  *  rfc1738_escape - Returns a static buffer contains the RFC 1738 
  *  compliant, escaped version of the given url.
  */
-char *
-rfc1738_escape(char *url)
+char *rfc1738_escape(url)
+     char *url;
 {
     static char buf[BIG_BUFSIZ];
     char *p, *q;
@@ -162,7 +161,7 @@ rfc1738_escape(char *url)
 	    }
 	}
 	/* RFC 1738 says any control chars (0x00-0x1F) are encoded */
-	if ((unsigned char) *p <= (unsigned char) 0x1F) {
+	if (*p <= (char) 0x1F) {
 	    do_escape = 1;
 	}
 	/* RFC 1738 says 0x7f is encoded */
@@ -170,8 +169,7 @@ rfc1738_escape(char *url)
 	    do_escape = 1;
 	}
 	/* RFC 1738 says any non-US-ASCII are encoded */
-	if (((unsigned char) *p >= (unsigned char) 0x80) &&
-	    ((unsigned char) *p <= (unsigned char) 0xFF)) {
+	if ((*p >= (char) 0x80) && (*p <= (char) 0xFF)) {
 	    do_escape = 1;
 	}
 	/* Do the triplet encoding, or just copy the char */
@@ -190,8 +188,8 @@ rfc1738_escape(char *url)
  *  rfc1738_unescape() - Converts escaped characters (%xy numbers) in 
  *  given the string.  %% is a %. %ab is the 8-bit hexadecimal number "ab"
  */
-void
-rfc1738_unescape(char *s)
+void rfc1738_unescape(s)
+     char *s;
 {
     char hexnum[3];
     int i, j;			/* i is write, j is read */
