@@ -3,7 +3,7 @@
  * $Id$
  *
  * DEBUG: section 12      HTTP Connection
- * AUTHOR:
+ * AUTHOR: Duane Wessels & Alex Rousskov
  *
  * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
  * --------------------------------------------------------
@@ -31,20 +31,25 @@
 
 #include "squid.h"
 
-/* queue of HttpRe's */
-struct _HttpReQueue {
-    HttpRe *head;
-    HttpRe *tail;
-    HttpRe *pending;
-    int allow_pending_id; /* re with this id is allowed to become pending */
-    int last_pending_id;  /* when re with this id is processed, the connection is closed */
+struct _HttpConn {
+    IOBuffer in_buf;
+    IOBuffer out_buf;
+
+    HttpMsg *reader;        /* current reader or NULL */
+    HttpMsg *writer;        /* current writer or NULL */
+
+    CCB get_reader;         /* called when new reader is needed */
+    CCB get_writer;         /* called when new writer is needed */
+
+    int cc_level;           /* concurrency level: #concurrent xactions being processed */
+    int req_count;          /* number of requests created or admitted */
+    int rep_count;          /* number of replies processed */
+
+    HttpConnIndex index;    /* keeps pending writers, searches by HttpMsg->id */
+    HttpConnDIndex deps;    /* keeps all HttpMsgs that depend on this connection */
 };
 
-struct _HttpConn {
-    HttpReQueue read_queue;
-    HttpReQueue write_queue;
-    int is_passive;   /* true if we accept requests (and, thus, send replies) */
-};
+
 
 /* Local constants */
 
@@ -53,6 +58,9 @@ struct _HttpConn {
 
 /* how long to wait if connection timeouted, but we could not close it immediately (sec) */
 #define CONN_TIMEOUT_AFTER_TIMEOUT 30
+
+/* maximum concurrency level for passive connections */
+#define MAX_PASSIVE_CC_LEVEL 2
 
 /* Local functions */
 static void httpConnClosed(int fd, void *data);
@@ -220,18 +228,6 @@ httpConnClosed(int fd, void *data)
     httpConnDestroy(conn);
 }
 
-{.. move it to ioBuffer
-	ioBufferWriteOpen(conn->in_buf);
-    meta_data.misc +-= conn->in.size; <-- put this into ioBufferWriteOpen/Close
-	size = read(fd, conn->in_buf->write_ptr, conn->in_buf->free_space);
-	if (size > 0) { 
-		ioBufferWrote(conn->in_buf, size);
-		fd_bytes(fd, size, FD_READ);
-	}
-	ioBufferWriteClose(conn->in_buf);
-	return size;
-}
-
 /* tells comm module if the connection is currently deferred */
 static int
 httpConnDefer(int fdnotused, void *data)
@@ -292,15 +288,23 @@ httpConnReadSocket(HttpConn *conn)
     	    return; /* exit, we did not change anything */
     	}
     }
-    /* notify pending reader (if any) about new data (if any) */
-    if (conn->read_queue->head && buf->size)
-    	conn->read_queue->head->noteDataReady(); /* it has a pointer to buf */
-    /*
-     * start readers while (a) we have data in the buffer, (b) buffer is not
-     * locked, (c) admission policy OKs
-     */
-    while (buf->size && !buf->read_lock && httpConnCanAdmitReader(conn)) {
-    	conn->start_reader(conn);
+    /* notify pending reader about new data */
+    httpConnPushData(conn);
+}
+
+/*
+ * pushes data towards pending reader; gets called whenever we may have new data
+ * in the buffer OR new pending reader
+ */
+static void
+httpConnPushData(HttpConn *conn)
+{
+    assert(conn);
+    if (!ioBufferIsEmpty(conn->in_buf)) { /* we have data */
+	if (!conn->reader) /* no reader to read data */
+	    conn->reader = conn->get_reader(conn); /* may do nothing because of load control, etc. */
+	if (!ioBufferIsEmpty(conn->in_buf) && conn->reader) /* double check */
+	    conn->reader->noteDataReady(conn);
     }
 }
 
@@ -320,16 +324,6 @@ httpConnWriteSocket(HttpConn *conn)
     fd = conn->fd;
     assert(buf);
 
-    /* notify pending writer (if any) about new buffer space (if any) */
-    if (conn->write_queue->head && buf->free_space)
-	conn->write_queue->head->noteConnReady(); /* it has a pointer to out_buf */
-    /*
-     * start writers while (a) we have space in the buffer, (b) buffer is not
-     * locked, (c) admission policy OKs
-     */
-    while (buf->free_space && !buf->write_lock && httpConnCanAdmitWriter(conn)) {
-	conn->start_writerer(conn);
-    }
     /* register our interest to write more @?@ may not need it if no writers left? */
     commSetSelect(fd, COMM_SELECT_WRITE, conn->write_socket, conn, 0);
     /* write data from the buffer (if any) to the socket */
@@ -361,9 +355,29 @@ httpConnWriteSocket(HttpConn *conn)
     	    return; /* exit, we did not change anything */
     	}
     }
-    /* nothing to be done here? */
+    /*
+     * notify pending writer about new buffer space; it may be confusing: when
+     * we write to fd we actually read from buffer(!), thus we free some space
+     * in the buffer
+     */
+    httpConnPullData(conn);
 }
 
+/*
+ * pulls data from pending writer; gets called whenever we may have new free
+ * space in the write buffer OR new pending reader
+ */
+static void
+httpConnPullData(HttpConn *conn)
+{
+    assert(conn);
+    if (!ioBufferIsFull(conn->in_buf)) { /* we have free space */
+	if (!conn->writer) /* no writer to write data */
+	    conn->writer = conn->get_writer(conn); /* may fail because nobody is waiting, etc. */
+	if (!ioBufferIsFull(conn->in_buf) && conn->writer) /* double check */
+	    conn->writer->noteSpaceReady(conn);
+    }
+}
 
 /* general lifetime handler for HTTP requests */
 
@@ -436,4 +450,122 @@ httpConnNoteException(HttpConn *conn, int status)
     }
     /* notify dependents */
     httpConnBroadcastException(conn, status);
+}
+
+/* add dependent */
+void
+httpConnAddDep(HttpConn *conn, httpMsg *dep) {
+    assert(conn);
+    assert(dep);
+    httpConnDIndexAdd(&conn->deps, dep);
+}
+
+/* forget about dependent */
+void
+httpConnDelDep(HttpConn *conn, httpMsg *dep) {
+    assert(conn);
+    assert(dep);
+    assert(dep != conn->reader && dep != conn->writer);
+    assert(!httpConnIndexIsMember(&conn->index, dep));
+    httpConnDIndexDel(&conn->deps, dep));
+}
+
+
+/* readers call this when they are done reading */
+void
+httpConnNoteReaderDone(HttpConn *conn, httpMsg *msg) {
+    assert(conn);
+    assert(msg && msg == conn->reader);
+    conn->reader = NULL;
+    httpConnPushData(conn);
+}
+
+/*
+ * Custom routines for passive HTTP connections (Client -> Proxy)
+ */
+
+/* returns true if new request reader can be admitted */
+static void
+httpConnCanAdmitReqReader(HttpConn *conn)
+{
+    assert(conn);
+    return conn->cc_level < MAX_PASSIVE_CC_LEVEL;
+}
+
+/* creates a new httpRequest if possible */
+static HttpMsg *
+httpConnGetReqReader(HttpConn *conn)
+{
+    assert(conn);
+
+    if (httpConnCanAdmitReq(conn)) {
+	conn->cc_level++;
+	return httpReqCreate(conn, conn->req_count++);
+    }
+    return NULL;
+}
+
+/* checks if writer is available and returns it */
+static HttpMsg *
+httpConnGetRepWriter(HttpConn *conn)
+{
+    assert(conn);
+
+    /* to preserve the order reply.request.id must match what we are waiting for */
+    return httpConnIndexMatchOut(&conn->index, conn->rep_count); /* may return NULL */
+}
+
+/* accepts a reply to a previous request */
+void
+httpConnSendReply(HttpConn *conn, HttpReply *rep)
+{
+    assert(conn);
+    assert(rep);
+    assert(rep->request); /* all replies must have requests */
+
+    httpConnIndexAdd(conn->index, rep);
+    httpConnPullData(conn); /* this will pull reply out of the table if needed */
+}
+
+
+/*
+ * Custom routines for active HTTP connections (Proxy -> Server)
+ */
+
+/* checks if writer is available and returns it */
+static HttpMsg *
+httpConnGetReqWriter(HttpConn *conn)
+{
+    assert(conn);
+
+    /* pop next request */
+    return httpConnIndexFirstOut(&conn->index); /* may return NULL */
+}
+
+/* creates a new httpReply and ties it with corresponding httpRequest */
+static HttpMsg *
+httpConnGetRepReader(HttpConn *conn)
+{
+    HttpRequest *req;
+    HttpReply *rep;
+    assert(conn);
+
+    req = httpConnIndexMatchOut(&conn->index, conn->rep_count);
+    assert(req); /* if we want to read a reply, we must have the corresponding request */
+
+    rep = httpRepCreate(conn, req);
+    conn->rep_count++;
+    return rep;
+}
+
+/* accepts a request */
+void
+httpConnSendRequest(HttpConn *conn, HttpRequest *req)
+{
+    assert(conn);
+    assert(req);
+
+    httpMsgSetId(req, conn->req_count++);
+    httpConnIndexAdd(&conn->index, req);
+    httpConnPullData(conn); /* this will pull request out of the table if needed */
 }

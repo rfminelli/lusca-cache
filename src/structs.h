@@ -772,6 +772,7 @@ struct _Meta_data {
     int misc;
     int client_info;
     int store_keys;
+	int io_buffers;
 };
 
 struct _cacheinfo {

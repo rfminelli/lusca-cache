@@ -91,8 +91,11 @@ ioBufferGrow(IOBuffer *iob, void *writer, size_t new_capacity)
     assert(iob);
     assert(writer && iob->wlock == writer && !iob->block);
     assert(new_capacity > iob->capacity);
-    if (iob->buf)
+    if (iob->buf) {
         iob->buf = xrealloc(iob->buf, new_capacity);
+	meta_data.io_buffers -= iob->capacity;
+	meta_data.io_buffers += new_capacity;
+    }
     iob->capacity = new_capacity;
 }
 
@@ -154,7 +157,7 @@ ioBufferStartWriting(IOBuffer *iob, void *writer, size_t *sizep)
     iob->block = writer;
     if (!iob->buf)
 	ioBufferExpand();
-   if (*sizep)
+    if (*sizep)
 	*sizep = ioBufferWSize(iob);
     return ioBufferWPtr(iob);
 }
@@ -165,12 +168,13 @@ ioBufferDoneReading(IOBuffer *iob, void *reader, size_t size);
 {
     assert(iob);
     assert(reader && iob->rlock == reader && iob->block == reader);
+    assert(size >= 0);
     iob->rsize -= size;
     assert(iob->rsize >= 0);
     if (!iob->rsize)
 	ioBufferCollapse(iob); /* nothing to keep */
     else
-        memmove(iob->buf, iob->buf+size, iob->rsize);
+	memmove(iob->buf, iob->buf+size, iob->rsize);
     iob->block = NULL;
 }
 
@@ -180,6 +184,7 @@ ioBufferDoneWriting(IOBuffer *iob, void *writer, size_t size)
 {
     assert(iob);
     assert(writer && iob->wlock == writer && iob->block == writer);
+    assert(size >= 0);
     iob->rsize += size;
     assert(iob->rsize <= iob->capacity);
     if (!iob->rsize)
@@ -187,19 +192,59 @@ ioBufferDoneWriting(IOBuffer *iob, void *writer, size_t size)
     iob->block = NULL;
 }
 
-/* internal function; all checks must be made before calling it */
+/* if you are lasy: start()+read+done(); locking is left for you */
+size_t
+ioBufferRead(IOBuffer *iob, int fd, void *reader)
+{
+    size_t size = 0;
+    char *buf = ioBufferStartReading(iob, reader, &size);
+    if (size > 0) {
+	size = read(fd, buf, size);
+	if (size > 0)
+	    fd_bytes(fd, size, FD_READ);
+    }
+    ioBufferDoneReading(iob, reader, size > 0 ? size : 0);
+    return size;
+}
+
+/* if you are lasy: start()+write+done(); locking is left for you */
+size_t
+ioBufferWrite(IOBuffer *iob, int fd, void *writer);
+{
+    size_t size = 0;
+    char *buf = ioBufferStartWriting(iob, writer, &size);
+    if (size > 0) {
+	size = write(fd, buf, size);
+	if (size > 0)
+	    fd_bytes(fd, size, FD_WRITE);
+    }
+    ioBufferDoneWriting(iob, writer, size > 0 ? size : 0);
+    return size;
+}
+
+
+
+/*
+ * internal functions; all checks must be made before calling these
+ */
+
+/* see also ioBufferGrow() if you change memory accounting here     */
+
 static void
 ioBufferCollapse(IOBuffer *iob)
 {
     if (iob->buf) {
         xfree(iob->buf);
         iob->buf = NULL;
+	meta_data.io_buffers -= iob->capacity;
     }
 }
 
 static void
 ioBufferExpand(IOBuffer *iob)
 {
-    if (!iob->buf)
+    if (!iob->buf) {
         iob->buf = xcalloc(iob->capacity);
+	meta_data.io_buffers += iob->capacity;
+    }
 }

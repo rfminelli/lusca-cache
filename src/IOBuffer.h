@@ -84,5 +84,17 @@ extern char *ioBufferStartWriting(IOBuffer *iob, void *writer, size_t *sizep);
 extern void ioBufferDoneReading(IOBuffer *iob, void *reader, size_t size);
 extern void ioBufferDoneWriting(IOBuffer *iob, void *writer, size_t size);
 
+/* if you are lasy: start()+read/write+done(); locking is left for you */
+extern size_t ioBufferRead(IOBuffer *iob, int fd, void *reader);
+extern size_t ioBufferWrite(IOBuffer *iob, int fd, void *writer);
+
+/*
+ * inline functions to test buffer state;
+ * do not require locking or start()/done() brackets 
+ * note: these can become real functions at any time if needed
+ */
+
+/* test if there is data in the buffer */
+#define ioBufferIsEmpty(iob) (!(iob) || !(iob)->rsize)
 
 #endif /* ndef _IO_BUFFER_H_ */
