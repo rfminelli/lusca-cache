@@ -10,10 +10,10 @@
  * specified username.
  *
  * Returns `OK' if the user belongs to a group or `ERR' otherwise, as
- * described on http://devel.squid-cache.org/ external_acl/config.html
+ * described on http://devel.squid-cache.org/external_acl/config.html
  *
  * Requires Samba 2.2.4 or later with Winbindd.
- * 
+ *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation; either version 2 of the License, or
@@ -276,14 +276,14 @@ main (int argc, char *argv[])
 	    warn("Oversized message\n");
 	    goto error;
 	}
-
+	
 	if ((p = strchr(buf, '\n')) != NULL)
 	    *p = '\0';		/* strip \n */
 	if ((p = strchr(buf, '\r')) != NULL)
 	    *p = '\0';		/* strip \r */
 
 	debug("Got '%s' from Squid (length: %d).\n",buf,sizeof(buf));
-
+	
 	if (buf[0] == '\0') {
 	    warn("Invalid Request\n");
 	    goto error;

@@ -90,7 +90,6 @@ MKDIR = @MKDIR@
 MV = @MV@
 NTLM_AUTH_HELPERS = @NTLM_AUTH_HELPERS@
 OBJEXT = @OBJEXT@
-OPT_DEFAULT_HOSTS = @OPT_DEFAULT_HOSTS@
 OPT_DISKD_EXE = @OPT_DISKD_EXE@
 OPT_DNSSERVER_EXE = @OPT_DNSSERVER_EXE@
 OPT_PINGER = @OPT_PINGER@
@@ -298,7 +297,7 @@ $(ICON1):
 	@$(SHELL) "$(srcdir)/icons.shar"
 
 icons.shar:
-	shar --no-timestamp $(ICON1) $(ICON2) > $@
+	shar $(ICON1) $(ICON2) > $@
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.
 .NOEXPORT:
