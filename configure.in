@@ -15,9 +15,7 @@ AC_CONFIG_AUX_DIR(aux)
 
 AC_CANONICAL_HOST
 
-CRYPTLIB=''
-REGEXLIB=''	# -lregex
-LIBREGEX=''	# libregex.a
+CRYPT_LIB=''
 
 dnl use directory structure of cached as default (hack)
 if test "$libexecdir" = '${exec_prefix}/libexec'; then
@@ -32,10 +30,14 @@ fi
 if test -z "$CACHE_ICP_PORT"; then
 	CACHE_ICP_PORT="3130"
 fi
+if test -z "$CACHE_FTP_PORT"; then
+	CACHE_FTP_PORT="3132"
+fi
 
 dnl Subsitutions
 AC_SUBST(CACHE_HTTP_PORT)
 AC_SUBST(CACHE_ICP_PORT)
+AC_SUBST(CACHE_FTP_PORT)
 
 AC_DEFINE_UNQUOTED(CONFIG_HOST_TYPE, "$host")
 
@@ -44,7 +46,7 @@ if test -z "$LDFLAGS"; then
 	LDFLAGS="-g"
 fi
 
-PRESET_CFLAGS="$CFLAGS"
+PREST_CFLAGS="$CFLAGS"
 
 dnl Check for GNU cc
 AC_PROG_CC
@@ -86,6 +88,14 @@ if test -z "$PRESET_CFLAGS"; then
     dnl Check if ANSI compile options are needed
     dnl
     case "$host" in
+	*-sgi-irix*)
+		echo "Adding ANSI compile flags for IRIX..."
+    		if test "$GCC" = "yes"; then
+			[CFLAGS="$CFLAGS -ansi"]
+		else
+			[CFLAGS="$CFLAGS -D__STRICT_ANSI__"]
+		fi
+		;;
 	*-hp-hpux*)
 		echo "Disabling 'ranlib' for HP-UX..."
 		RANLIB=":"
@@ -109,14 +119,11 @@ AC_PROG_CPP
 AC_PROG_INSTALL
 AC_PROG_RANLIB
 AC_PROG_LN_S
-AC_PATH_PROG(FALSE, false, /usr/bin/false)
-AC_PATH_PROG(TRUE, true, /usr/bin/true)
-AC_PATH_PROG(RM, rm, $FALSE)
-AC_PATH_PROG(MV, mv, $FALSE)
-AC_PATH_PROG(MKDIR, mkdir, $FALSE)
+AC_PATH_PROG(RM, rm, /bin/false)
+AC_PATH_PROG(MV, mv, /bin/false)
+AC_PATH_PROG(MKDIR, mkdir, /bin/false)
 AC_PATH_PROG(LN, ln, cp)
 AC_PATH_PROG(PERL, perl, /usr/local/bin/perl)
-AC_PATH_PROG(MAKEDEPEND, makedepend, $TRUE)
 
 
 dnl Check for headers
@@ -126,7 +133,6 @@ AC_HEADER_STDC
 
 AC_CHECK_HEADERS( \
 	alloca.h \
-	aio.h \
 	arpa/inet.h \
 	arpa/nameser.h \
 	bstring.h \
@@ -135,7 +141,6 @@ AC_CHECK_HEADERS( \
 	ctype.h \
 	errno.h \
 	fcntl.h \
-	getopt.h \
 	grp.h \
 	libc.h \
 	malloc.h \
@@ -171,15 +176,6 @@ AC_CHECK_HEADERS( \
 	varargs.h \
 )
 
-AC_C_CONST
-
-AC_MSG_CHECKING(if ANSI prototypes work)
-AC_TRY_COMPILE([int foo(char *); int foo (char *bar) { }],
-[return 1;],
-[AC_DEFINE(HAVE_ANSI_PROTOTYPES)
-AC_MSG_RESULT(yes)],
-AC_MSG_RESULT(no))
-
 AC_MSG_CHECKING(for tm->tm_gmtoff)
 AC_TRY_COMPILE([#include <time.h>
 #include <sys/time.h>],
@@ -198,17 +194,6 @@ foo.mxfast = 0;],
 AC_MSG_RESULT(yes)],
 AC_MSG_RESULT(no))
 
-AC_MSG_CHECKING(for ip->ip_hl)
-AC_TRY_COMPILE([#include <sys/types.h>
-#include <netinet/in.h>
-#include <netinet/in_systm.h>
-#include <netinet/ip.h>],
-[struct ip ip;
-ip.ip_hl= 0;],
-[AC_DEFINE(HAVE_IP_HL)
-AC_MSG_RESULT(yes)],
-AC_MSG_RESULT(no))
-
 dnl Check for typedefs
 AC_CHECK_SIZEOF(int)
 AC_CHECK_SIZEOF(long)
@@ -216,17 +201,12 @@ AC_CHECK_SIZEOF(long)
 dnl Check for special functions
 AC_FUNC_ALLOCA
 
-AC_CHECK_TYPE(pid_t, int)
-AC_CHECK_TYPE(size_t, int)
-AC_CHECK_TYPE(off_t, int)
-
 dnl Check for needed libraries
 AC_CHECK_LIB(nsl, main)
 AC_CHECK_LIB(socket, main)
 AC_CHECK_LIB(malloc, main, [HAVE_LIBMALLOC="yes"; LIBS="$LIBS -lmalloc"])
 AC_CHECK_LIB(resolv, main)
 AC_CHECK_LIB(bsd, main)
-AC_CHECK_LIB(regex, main, [REGEXLIB="-lregex"])
 
 dnl We found a version of libresolv on SunOS 4.x which requires -l44bsd
 dnl We have to first check to see if -l44bsd is present and has the
@@ -236,29 +216,11 @@ AC_CHECK_LIB(resolv, inet_aton, [if test "$HAVE_LIB44BSD" = "yes"; then LIBS="$L
 
 dnl Check for libcrypt
 dnl We use crypt(3) which may be in libc, or in libcrypt (eg FreeBSD)
-AC_CHECK_LIB(crypt, crypt, [CRYPTLIB="-lcrypt"])
-AC_SUBST(CRYPTLIB)
+AC_CHECK_LIB(crypt, crypt, [CRYPT_LIB="-lcrypt"])
+AC_SUBST(CRYPT_LIB)
 
 dnl Check for libshadow which is needed by the shadow password suite
 AC_CHECK_LIB(shadow, main)
-
-dnl Check for libs needed for aio_read()/aio_write()
-AIO_LIBS=""
-AC_CHECK_LIB(abi, main, [HAVE_LIBABI="yes"])
-AC_CHECK_LIB(posix4, main, [HAVE_LIBPOSIX4="yes"])
-case "$host" in
-	*-sgi-irix*)
-		if test "$HAVE_LIBABI" = "yes"; then
-			AIO_LIBS="-labi"
-		fi
-		;;
-	*-*-solaris*)
-		if test "$HAVE_LIBPOSIX4" = "yes"; then
-			AIO_LIBS="-lposix4"
-		fi
-		;;
-esac
-AC_SUBST(AIO_LIBS)
 
 dnl System-specific library modifications
 dnl
@@ -284,16 +246,21 @@ case "$host" in
         	LIBS=`echo $LIBS | sed -e s/-lsocket//`
         	echo "Removing -lnsl for IRIX..."
         	LIBS=`echo $LIBS | sed -e s/-lnsl//`
-		echo "Removing -lbsd for IRIX..."
-		LIBS=`echo $LIBS | sed -e s/-lbsd//`
+        	echo "Removing -lbsd for IRIX..."
+        	LIBS=`echo $LIBS | sed -e s/-lbsd//`
 		;;
 dnl From: c0032033@ws.rz.tu-bs.de (Joerg Schumacher)
 dnl Date: Thu, 17 Oct 1996 04:09:30 +0200
 dnl Please change your configure script.  AIX doesn't need -lbsd.
 	*-ibm-aix*)
-		echo "Removing -lbsd for AIX..."
-		LIBS=`echo $LIBS | sed -e s/-lbsd//`
+        	echo "Removing -lbsd for AIX..."
+        	LIBS=`echo $LIBS | sed -e s/-lbsd//`
 		;;
+esac
+
+dnl Some O/S's don't have tzp arg to gettimeofday()
+dnl
+case "$host" in
 	*m88k*)
 		CFLAGS="$CFLAGS -D_SQUID_MOTOROLA_"
 		AC_DEFINE(GETTIMEOFDAY_NO_TZP)
@@ -303,21 +270,23 @@ dnl Please change your configure script.  AIX doesn't need -lbsd.
 		;;
 esac
 
+dnl Unixware doesn't like storeDirClean()
+dnl
+case "$host" in
+	i386-univel-sysv4*)
+		CFLAGS="$CFLAGS -D_SQUID_UNIXWARE_"
+		;;
+esac
+
 dnl Check for library functions
 AC_CHECK_FUNCS(\
-	aio_init \
 	bcopy \
 	getdtablesize \
 	getrusage \
-	getspnam \
 	lrand48 \
 	mallinfo \
-	mallocblksize \
 	mallopt \
-	memcpy \
 	memmove \
-	mktime \
-	pw_encrypt \
 	regcomp \
 	regexec \
 	regfree \
@@ -328,35 +297,13 @@ AC_CHECK_FUNCS(\
 	setrlimit \
 	setsid \
 	sigaction \
+	socketpair \
 	srand48 \
-	strerror \
+	strdup \
 	sysconf \
 	syslog \
 	tempnam \
 	timegm \
-)
-
-AC_MSG_CHECKING(if GNUregex needs to be compiled)
-if test "$ac_cv_func_regcomp" = "no" ; then
-	COMPILE_GNUREGEX="yes"
-else
-	COMPILE_GNUREGEX="no"
-fi
-case "$host" in
-	*-sun-solaris2.[0-4])
-	COMPILE_GNUREGEX="yes"
-	;;
-esac
-AC_MSG_RESULT($COMPILE_GNUREGEX)
-if test "$COMPILE_GNUREGEX" = "yes"; then
-	REGEXLIB="-lregex"
-	LIBREGEX="libregex.a"
-fi
-AC_SUBST(REGEXLIB)
-AC_SUBST(LIBREGEX)
-
-AC_REPLACE_FUNCS(\
-	tempnam \
 )
 
 AC_MSG_CHECKING(Maximum number of filedescriptors we can open)
@@ -408,11 +355,11 @@ main() {
 	exit(0);
 }
 ],
-SQUID_MAXFD=`cat conftestval`,
-SQUID_MAXFD=256,
-SQUID_MAXFD=256)
-AC_MSG_RESULT($SQUID_MAXFD)
-AC_DEFINE_UNQUOTED(SQUID_MAXFD, $SQUID_MAXFD)
+SQUID_FD_SETSIZE=`cat conftestval`,
+SQUID_FD_SETSIZE=256,
+SQUID_FD_SETSIZE=256)
+AC_MSG_RESULT($SQUID_FD_SETSIZE)
+AC_DEFINE_UNQUOTED(SQUID_FD_SETSIZE, $SQUID_FD_SETSIZE)
 
 AC_MSG_CHECKING(Default UDP send buffer size)
 AC_TRY_RUN([
@@ -505,12 +452,6 @@ AC_MSG_RESULT(yes),
 [AC_MSG_RESULT(no)
 AC_DEFINE(NEED_SYS_ERRLIST)])
 
-AC_MSG_CHECKING(for libresolv _dns_ttl_ hack)
-AC_TRY_LINK(extern int _dns_ttl_;,return _dns_ttl_;,
-[AC_MSG_RESULT(yes)
-AC_DEFINE(LIBRESOLV_DNS_TTL_HACK)],
-AC_MSG_RESULT(no))
-
 dnl Need the debugging version of malloc if available
 XTRA_OBJS=''
 if test "$HAVE_LIBMALLOC" = "yes" ; then
@@ -523,11 +464,10 @@ if test "$HAVE_LIBMALLOC" = "yes" ; then
 fi
 AC_SUBST(XTRA_OBJS)
 
-if test -z "$XTRA_LIBS"; then
-	XTRA_LIBS="$LIBS"
-	LIBS=''
-fi
+XTRA_LIBS="$LIBS"
+LIBS=''
 AC_SUBST(XTRA_LIBS)
+
 
 dnl Clean up after OSF/1 core dump bug
 rm -f core 
@@ -541,5 +481,4 @@ AC_OUTPUT(\
 	./scripts/RunAccel \
 	./src/Makefile \
 	./src/squid.conf.pre \
-	./contrib/Makefile \
 )

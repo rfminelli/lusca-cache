@@ -7,7 +7,7 @@
 #undef HAVE_EXT_MALLINFO
 
 /* Maximum number of open filedescriptors */
-#undef SQUID_MAXFD
+#undef SQUID_FD_SETSIZE
 
 /* UDP send buffer size */
 #undef SQUID_UDP_SO_SNDBUF
@@ -29,12 +29,3 @@
 
 /* If gettimeofday is known to take only one argument */
 #undef GETTIMEOFDAY_NO_TZP
-
-/* If libresolv.a has been hacked to export _dns_ttl_ */
-#undef LIBRESOLV_DNS_TTL_HACK
-
-/* Define if struct ip has ip_hl member */
-#undef HAVE_IP_HL
-
-/* Define if your compiler supports prototyping */
-#undef HAVE_ANSI_PROTOTYPES

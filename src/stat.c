@@ -1,11 +1,10 @@
-
 /*
  * $Id$
  *
  * DEBUG: section 18    Cache Manager Statistics
  * AUTHOR: Harvest Derived
  *
- * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
+ * SQUID Internet Object Cache  http://www.nlanr.net/Squid/
  * --------------------------------------------------------
  *
  *  Squid is the result of efforts by numerous individuals from the
@@ -107,6 +106,8 @@
 
 #include "squid.h"
 
+extern int emulate_httpd_log;
+
 #define MAX_LINELEN (4096)
 #define max(a,b)  ((a)>(b)? (a): (b))
 
@@ -121,55 +122,25 @@ typedef struct _squid_read_data_t {
 
 /* GLOBALS */
 Meta_data meta_data;
-volatile unsigned long ntcpconn = 0;
-volatile unsigned long nudpconn = 0;
+unsigned long ntcpconn = 0;
+unsigned long nudpconn = 0;
 struct _iostats IOStats;
-const char *const open_bracket = "{\n";
-const char *const close_bracket = "}\n";
 
-extern char *diskFileName _PARAMS((int));
+char *stat_describe();
+char *mem_describe();
+char *ttl_describe();
+char *flags_describe();
+char *elapsed_time();
+char *diskFileName();
 
 /* LOCALS */
-static const char *describeStatuses _PARAMS((const StoreEntry *));
-static const char *describeFlags _PARAMS((const StoreEntry *));
-static const char *describeTimestamps _PARAMS((const StoreEntry *));
-static void dummyhandler _PARAMS((cacheinfo *, StoreEntry *));
-static void info_get _PARAMS((const cacheinfo *, StoreEntry *));
-static void logReadEndHandler _PARAMS((int, int, log_read_data_t *));
-static void log_clear _PARAMS((cacheinfo *, StoreEntry *));
-static void log_disable _PARAMS((cacheinfo *, StoreEntry *));
-static void log_enable _PARAMS((cacheinfo *, StoreEntry *));
-static void log_get_start _PARAMS((const cacheinfo *, StoreEntry *));
-static void log_status_get _PARAMS((const cacheinfo *, StoreEntry *));
-static void parameter_get _PARAMS((const cacheinfo *, StoreEntry *));
-static void proto_count _PARAMS((cacheinfo *, protocol_t, log_type));
-static void proto_newobject _PARAMS((cacheinfo *, protocol_t, int, int));
-static void proto_purgeobject _PARAMS((cacheinfo *, protocol_t, int));
-static void proto_touchobject _PARAMS((cacheinfo *, protocol_t, int));
-static void server_list _PARAMS((const cacheinfo *, StoreEntry *));
-static void squidReadEndHandler _PARAMS((int, int, squid_read_data_t *));
-static void squid_get_start _PARAMS((const cacheinfo *, StoreEntry *));
-static void statFiledescriptors _PARAMS((StoreEntry *));
-static void stat_get _PARAMS((const cacheinfo *, const char *req, StoreEntry *));
-static void stat_io_get _PARAMS((StoreEntry *));
-static void stat_objects_get _PARAMS((const cacheinfo *, StoreEntry *, int vm_or_not));
-static void stat_utilization_get _PARAMS((cacheinfo *, StoreEntry *, const char *desc));
-static int cache_size_get _PARAMS((const cacheinfo *));
-static int logReadHandler _PARAMS((int, const char *, int, log_read_data_t *));
-static int squidReadHandler _PARAMS((int, const char *, int, squid_read_data_t *));
-static int memoryAccounted _PARAMS((void));
-
-#ifdef UNUSED_CODE
-static int mallinfoTotal _PARAMS((void));
-#endif
-
-#ifdef XMALLOC_STATISTICS
-static void info_get_mallstat _PARAMS((int, int, StoreEntry *));
-#endif
+char *open_bracket = "{\n";
+char *close_bracket = "}\n";
 
 /* process utilization information */
-static void
-stat_utilization_get(cacheinfo * obj, StoreEntry * sentry, const char *desc)
+void stat_utilization_get(obj, sentry)
+     cacheinfo *obj;
+     StoreEntry *sentry;
 {
     protocol_t proto_id;
     proto_stat *p = &obj->proto_stat_data[PROTO_MAX];
@@ -177,7 +148,9 @@ stat_utilization_get(cacheinfo * obj, StoreEntry * sentry, const char *desc)
     int secs = 0;
 
     secs = (int) (squid_curtime - squid_starttime);
-    storeAppendPrintf(sentry, "{ %s\n", desc);	/* } */
+
+    storeAppendPrintf(sentry, open_bracket);
+
     strcpy(p->protoname, "TOTAL");
     p->object_count = 0;
     p->kb.max = 0;
@@ -188,9 +161,12 @@ stat_utilization_get(cacheinfo * obj, StoreEntry * sentry, const char *desc)
     p->miss = 0;
     p->refcount = 0;
     p->transferbyte = 0;
+
+
     /* find the total */
     for (proto_id = PROTO_NONE; proto_id < PROTO_MAX; ++proto_id) {
 	q = &obj->proto_stat_data[proto_id];
+
 	p->object_count += q->object_count;
 	p->kb.max += q->kb.max;
 	p->kb.min += q->kb.min;
@@ -201,6 +177,7 @@ stat_utilization_get(cacheinfo * obj, StoreEntry * sentry, const char *desc)
 	p->refcount += q->refcount;
 	p->transferbyte += q->transferbyte;
     }
+
     /* dump it */
     for (proto_id = PROTO_NONE; proto_id <= PROTO_MAX; ++proto_id) {
 	p = &obj->proto_stat_data[proto_id];
@@ -221,11 +198,12 @@ stat_utilization_get(cacheinfo * obj, StoreEntry * sentry, const char *desc)
 	    p->refcount,
 	    p->transferbyte);
     }
+
     storeAppendPrintf(sentry, close_bracket);
 }
 
-static void
-stat_io_get(StoreEntry * sentry)
+void stat_io_get(sentry)
+     StoreEntry *sentry;
 {
     int i;
 
@@ -259,36 +237,6 @@ stat_io_get(StoreEntry * sentry)
 	    percent(IOStats.Ftp.read_hist[i], IOStats.Ftp.reads));
     }
 
-    storeAppendPrintf(sentry, "{}\n");
-    storeAppendPrintf(sentry, "{Gopher I/O}\n");
-    storeAppendPrintf(sentry, "{number of reads: %d}\n", IOStats.Gopher.reads);
-    storeAppendPrintf(sentry, "{deferred reads: %d (%d%%)}\n",
-	IOStats.Gopher.reads_deferred,
-	percent(IOStats.Gopher.reads_deferred, IOStats.Gopher.reads));
-    storeAppendPrintf(sentry, "{Read Histogram:}\n");
-    for (i = 0; i < 16; i++) {
-	storeAppendPrintf(sentry, "{%5d-%5d: %9d %2d%%}\n",
-	    i ? (1 << (i - 1)) + 1 : 1,
-	    1 << i,
-	    IOStats.Gopher.read_hist[i],
-	    percent(IOStats.Gopher.read_hist[i], IOStats.Gopher.reads));
-    }
-
-    storeAppendPrintf(sentry, "{}\n");
-    storeAppendPrintf(sentry, "{WAIS I/O}\n");
-    storeAppendPrintf(sentry, "{number of reads: %d}\n", IOStats.Wais.reads);
-    storeAppendPrintf(sentry, "{deferred reads: %d (%d%%)}\n",
-	IOStats.Wais.reads_deferred,
-	percent(IOStats.Wais.reads_deferred, IOStats.Wais.reads));
-    storeAppendPrintf(sentry, "{Read Histogram:}\n");
-    for (i = 0; i < 16; i++) {
-	storeAppendPrintf(sentry, "{%5d-%5d: %9d %2d%%}\n",
-	    i ? (1 << (i - 1)) + 1 : 1,
-	    1 << i,
-	    IOStats.Wais.read_hist[i],
-	    percent(IOStats.Wais.read_hist[i], IOStats.Wais.reads));
-    }
-
     storeAppendPrintf(sentry, close_bracket);
 }
 
@@ -296,8 +244,8 @@ stat_io_get(StoreEntry * sentry)
 /* return total bytes of all registered and known objects.
  * may not reflect the retrieving object....
  * something need to be done here to get more accurate cache size */
-static int
-cache_size_get(const cacheinfo * obj)
+int cache_size_get(obj)
+     cacheinfo *obj;
 {
     int size = 0;
     protocol_t proto_id;
@@ -307,141 +255,82 @@ cache_size_get(const cacheinfo * obj)
     return size;
 }
 
-static const char *
-describeStatuses(const StoreEntry * entry)
-{
-    LOCAL_ARRAY(char, buf, 256);
-    sprintf(buf, "%-13s %-13s %-12s %-12s",
-	storeStatusStr[entry->store_status],
-	memStatusStr[entry->mem_status],
-	swapStatusStr[entry->swap_status],
-	pingStatusStr[entry->ping_status]);
-    return buf;
-}
-
-static const char *
-describeFlags(const StoreEntry * entry)
-{
-    LOCAL_ARRAY(char, buf, 256);
-    int flags = (int) entry->flag;
-    char *t;
-    buf[0] = '\0';
-    if (BIT_TEST(flags, IP_LOOKUP_PENDING))
-	strcat(buf, "IP,");
-    if (BIT_TEST(flags, DELETE_BEHIND))
-	strcat(buf, "DB,");
-    if (BIT_TEST(flags, CLIENT_ABORT_REQUEST))
-	strcat(buf, "CA,");
-    if (BIT_TEST(flags, DELAY_SENDING))
-	strcat(buf, "DS,");
-    if (BIT_TEST(flags, ABORT_MSG_PENDING))
-	strcat(buf, "AP,");
-    if (BIT_TEST(flags, RELEASE_REQUEST))
-	strcat(buf, "RL,");
-    if (BIT_TEST(flags, REFRESH_REQUEST))
-	strcat(buf, "RF,");
-    if (BIT_TEST(flags, ENTRY_CACHABLE))
-	strcat(buf, "EC,");
-    if (BIT_TEST(flags, KEY_CHANGE))
-	strcat(buf, "KC,");
-    if (BIT_TEST(flags, KEY_URL))
-	strcat(buf, "KU,");
-    if (BIT_TEST(flags, ENTRY_HTML))
-	strcat(buf, "HT,");
-    if (BIT_TEST(flags, ENTRY_DISPATCHED))
-	strcat(buf, "ED,");
-    if (BIT_TEST(flags, KEY_PRIVATE))
-	strcat(buf, "KP,");
-    if (BIT_TEST(flags, HIERARCHICAL))
-	strcat(buf, "HI,");
-    if (BIT_TEST(flags, ENTRY_NEGCACHED))
-	strcat(buf, "NG,");
-    if (BIT_TEST(flags, READ_DEFERRED))
-	strcat(buf, "RD,");
-    if ((t = strrchr(buf, ',')))
-	*t = '\0';
-    return buf;
-}
-
-static const char *
-describeTimestamps(const StoreEntry * entry)
-{
-    LOCAL_ARRAY(char, buf, 256);
-    sprintf(buf, "LV:%-9d LU:%-9d LM:%-9d EX:%-9d",
-	(int) entry->timestamp,
-	(int) entry->lastref,
-	(int) entry->lastmod,
-	(int) entry->expires);
-    return buf;
-}
-
 /* process objects list */
-static void
-stat_objects_get(const cacheinfo * obj, StoreEntry * sentry, int vm_or_not)
+void stat_objects_get(obj, sentry, vm_or_not)
+     cacheinfo *obj;
+     StoreEntry *sentry;
+     int vm_or_not;
 {
+    static char tempbuf[MAX_LINELEN];
+    static char space[40];
+    static char space2[40];
+    int npend = 0;
     StoreEntry *entry = NULL;
-    MemObject *mem;
     int N = 0;
+    int obj_size;
 
     storeAppendPrintf(sentry, open_bracket);
 
-    for (entry = storeGetFirst(); entry != NULL; entry = storeGetNext()) {
-	mem = entry->mem_obj;
-	if (vm_or_not && mem == NULL)
+    for (entry = storeGetFirst();
+	entry != NULL;
+	entry = storeGetNext()) {
+	if (vm_or_not && (entry->mem_status == NOT_IN_MEMORY) &&
+	    (entry->swap_status == SWAP_OK))
 	    continue;
 	if ((++N & 0xFF) == 0) {
 	    getCurrentTime();
 	    debug(18, 3, "stat_objects_get:  Processed %d objects...\n", N);
 	}
-	storeAppendPrintf(sentry, "{%s %dL %-25s %s %3d %2d %8d %s}\n",
-	    describeStatuses(entry),
-	    (int) entry->lock_count,
-	    describeFlags(entry),
-	    describeTimestamps(entry),
+	obj_size = entry->object_len;
+	npend = storePendingNClients(entry);
+	if (entry->mem_obj)
+	    obj_size = entry->mem_obj->e_current_len;
+	tempbuf[0] = '\0';
+	storeAppendPrintf(sentry, "{ %s %d %s %s %s %s %d %d %s %s }\n",
+	    entry->url,
+	    obj_size,
+	    elapsed_time(entry, (int) entry->timestamp, space),
+	    flags_describe(entry),
+	    elapsed_time(entry, (int) entry->lastref, space2),
+	    ttl_describe(entry),
+	    npend,
 	    (int) entry->refcount,
-	    storePendingNClients(entry),
-	    mem ? mem->e_current_len : entry->object_len,
-	    entry->url);
+	    mem_describe(entry),
+	    stat_describe(entry));
     }
     storeAppendPrintf(sentry, close_bracket);
 }
 
 
 /* process a requested object into a manager format */
-static void
-stat_get(const cacheinfo * obj, const char *req, StoreEntry * sentry)
+void stat_get(obj, req, sentry)
+     cacheinfo *obj;
+     char *req;
+     StoreEntry *sentry;
 {
 
     if (strcmp(req, "objects") == 0) {
 	stat_objects_get(obj, sentry, 0);
     } else if (strcmp(req, "vm_objects") == 0) {
 	stat_objects_get(obj, sentry, 1);
-    } else if (strcmp(req, "ipcache") == 0) {
+    } else if (strcmp(req, "general") == 0) {
 	stat_ipcache_get(sentry);
-    } else if (strcmp(req, "fqdncache") == 0) {
-	fqdnStats(sentry);
-    } else if (strcmp(req, "dns") == 0) {
-	dnsStats(sentry);
-    } else if (strcmp(req, "redirector") == 0) {
-	redirectStats(sentry);
+    } else if (strcmp(req, "general") == 0) {
+	stat_ipcache_get(sentry);
     } else if (strcmp(req, "utilization") == 0) {
-	stat_utilization_get(HTTPCacheInfo, sentry, "HTTP");
-	stat_utilization_get(ICPCacheInfo, sentry, "ICP");
+	stat_utilization_get(obj, sentry);
     } else if (strcmp(req, "io") == 0) {
 	stat_io_get(sentry);
     } else if (strcmp(req, "reply_headers") == 0) {
 	httpReplyHeaderStats(sentry);
-    } else if (strcmp(req, "filedescriptors") == 0) {
-	statFiledescriptors(sentry);
-    } else if (strcmp(req, "netdb") == 0) {
-	netdbDump(sentry);
     }
 }
 
 
 /* generate logfile status information */
-static void
-log_status_get(const cacheinfo * obj, StoreEntry * sentry)
+void log_status_get(obj, sentry)
+     cacheinfo *obj;
+     StoreEntry *sentry;
 {
     if (obj->logfile_status == LOG_ENABLE) {
 	storeAppendPrintf(sentry, "{\"Logfile is Enabled. Filename: %s\"}\n",
@@ -455,8 +344,11 @@ log_status_get(const cacheinfo * obj, StoreEntry * sentry)
 
 /* log convert handler */
 /* call for each line in file, use fileWalk routine */
-static int
-logReadHandler(int fd_unused, const char *buf, int size_unused, log_read_data_t * data)
+int logReadHandler(fd_unused, buf, size_unused, data)
+     int fd_unused;
+     char *buf;
+     int size_unused;
+     log_read_data_t *data;
 {
     storeAppendPrintf(data->sentry, "{%s}\n", buf);
     return 0;
@@ -464,23 +356,25 @@ logReadHandler(int fd_unused, const char *buf, int size_unused, log_read_data_t 
 
 /* log convert end handler */
 /* call when a walk is completed or error. */
-static void
-logReadEndHandler(int fd, int errflag_unused, log_read_data_t * data)
+void logReadEndHandler(fd_unused, errflag_unused, data)
+     int fd_unused;
+     int errflag_unused;
+     log_read_data_t *data;
 {
     storeAppendPrintf(data->sentry, close_bracket);
     storeComplete(data->sentry);
     safe_free(data);
-    file_close(fd);
 }
 
 
 
 /* start converting logfile to processed format */
-static void
-log_get_start(const cacheinfo * obj, StoreEntry * sentry)
+void log_get_start(obj, sentry)
+     cacheinfo *obj;
+     StoreEntry *sentry;
 {
+    char tmp[3];
     log_read_data_t *data = NULL;
-    int fd;
 
     if (obj->logfile_status == LOG_DISABLE) {
 	/* Manufacture status when logging is disabled */
@@ -488,37 +382,36 @@ log_get_start(const cacheinfo * obj, StoreEntry * sentry)
 	storeComplete(sentry);
 	return;
     }
-    fd = file_open(obj->logfilename, NULL, O_RDONLY);
-    if (fd < 0) {
-	debug(50, 0, "Cannot open logfile: %s: %s\n",
-	    obj->logfilename, xstrerror());
-	return;
-    }
     data = xcalloc(1, sizeof(log_read_data_t));
     data->sentry = sentry;
-    storeAppendPrintf(sentry, "{\n");
-    file_walk(fd,
-	(FILE_WALK_HD) logReadEndHandler,
-	(void *) data,
-	(FILE_WALK_LHD) logReadHandler,
-	(void *) data);
+    strcpy(tmp, open_bracket);
+    storeAppend(sentry, tmp, 2);
+    file_walk(obj->logfile_fd, (FILE_WALK_HD) logReadEndHandler,
+	(void *) data, (FILE_WALK_LHD) logReadHandler, (void *) data);
     return;
 }
 
 
 /* squid convert handler */
 /* call for each line in file, use fileWalk routine */
-static int
-squidReadHandler(int fd_unused, const char *buf, int size_unused, squid_read_data_t * data)
+int squidReadHandler(fd_unused, buf, size_unused, data)
+     int fd_unused;
+     char *buf;
+     int size_unused;
+     squid_read_data_t *data;
 {
+    static char tempbuf[MAX_LINELEN];
+    tempbuf[0] = '\0';
     storeAppendPrintf(data->sentry, "{\"%s\"}\n", buf);
     return 0;
 }
 
 /* squid convert end handler */
 /* call when a walk is completed or error. */
-static void
-squidReadEndHandler(int fd_unused, int errflag_unused, squid_read_data_t * data)
+void squidReadEndHandler(fd_unused, errflag_unused, data)
+     int fd_unused;
+     int errflag_unused;
+     squid_read_data_t *data;
 {
     storeAppendPrintf(data->sentry, close_bracket);
     storeComplete(data->sentry);
@@ -528,31 +421,34 @@ squidReadEndHandler(int fd_unused, int errflag_unused, squid_read_data_t * data)
 
 
 /* start convert squid.conf file to processed format */
-static void
-squid_get_start(const cacheinfo * obj, StoreEntry * sentry)
+void squid_get_start(obj, sentry)
+     cacheinfo *obj;
+     StoreEntry *sentry;
 {
     squid_read_data_t *data;
 
     data = xcalloc(1, sizeof(squid_read_data_t));
     data->sentry = sentry;
-    data->fd = file_open(ConfigFile, NULL, O_RDONLY);
+    data->fd = file_open((char *) ConfigFile, NULL, O_RDONLY);
     storeAppendPrintf(sentry, open_bracket);
     file_walk(data->fd, (FILE_WALK_HD) squidReadEndHandler, (void *) data,
 	(FILE_WALK_LHD) squidReadHandler, (void *) data);
 }
 
 
-static void
-dummyhandler(cacheinfo * obj, StoreEntry * sentry)
+void dummyhandler(obj, sentry)
+     cacheinfo *obj;
+     StoreEntry *sentry;
 {
     storeAppendPrintf(sentry, "{ \"Not_Implemented_yet.\"}\n");
 }
 
-static void
-server_list(const cacheinfo * obj, StoreEntry * sentry)
+void server_list(obj, sentry)
+     cacheinfo *obj;
+     StoreEntry *sentry;
 {
     edge *e = NULL;
-    struct _domain_ping *d = NULL;
+    dom_list *d = NULL;
     icp_opcode op;
 
     storeAppendPrintf(sentry, open_bracket);
@@ -568,16 +464,14 @@ server_list(const cacheinfo * obj, StoreEntry * sentry)
 	    e->http_port,
 	    e->icp_port);
 	storeAppendPrintf(sentry, "{Status     : %s}\n",
-	    neighborUp(e) ? "Up" : "Down");
+	    e->neighbor_up ? "Up" : "Down");
 	storeAppendPrintf(sentry, "{AVG RTT    : %d msec}\n", e->stats.rtt);
+
 	storeAppendPrintf(sentry, "{ACK DEFICIT: %8d}\n", e->stats.ack_deficit);
 	storeAppendPrintf(sentry, "{PINGS SENT : %8d}\n", e->stats.pings_sent);
 	storeAppendPrintf(sentry, "{PINGS ACKED: %8d %3d%%}\n",
 	    e->stats.pings_acked,
 	    percent(e->stats.pings_acked, e->stats.pings_sent));
-	storeAppendPrintf(sentry, "{IGNORED    : %8d %3d%%}\n",
-	    e->stats.ignored_replies,
-	    percent(e->stats.ignored_replies, e->stats.pings_acked));
 	storeAppendPrintf(sentry, "{Histogram of PINGS ACKED:}\n");
 	for (op = ICP_OP_INVALID; op < ICP_OP_END; op++) {
 	    if (e->stats.counts[op] == 0)
@@ -596,7 +490,7 @@ server_list(const cacheinfo * obj, StoreEntry * sentry)
 		mkhttpdlogtime(&(e->last_fail_time)));
 	}
 	storeAppendPrintf(sentry, "{DOMAIN LIST: ");
-	for (d = e->pinglist; d; d = d->next) {
+	for (d = e->domains; d; d = d->next) {
 	    if (d->do_ping)
 		storeAppendPrintf(sentry, "%s ", d->domain);
 	    else
@@ -608,124 +502,25 @@ server_list(const cacheinfo * obj, StoreEntry * sentry)
 }
 
 #if XMALLOC_STATISTICS
-static void
-info_get_mallstat(int size, number, StoreEntry * sentry)
+void info_get_mallstat(size, number, sentry)
+     int size, number;
+     StoreEntry *sentry;
 {
+    static char line[MAX_LINELEN];
     if (number > 0)
 	storeAppendPrintf(sentry, "{\t%d = %d}\n", size, number);
 }
 #endif
 
-static const char *
-host_port_fmt(const char *host, u_short port)
-{
-    LOCAL_ARRAY(char, buf, 32);
-    sprintf(buf, "%s.%d", host, (int) port);
-    return buf;
-}
 
-static void
-statFiledescriptors(StoreEntry * sentry)
+void info_get(obj, sentry)
+     cacheinfo *obj;
+     StoreEntry *sentry;
 {
-    int i;
-    int j;
-    char *s = NULL;
-    int lft;
-    int to;
-
-    storeAppendPrintf(sentry, open_bracket);
-    storeAppendPrintf(sentry, "{Active file descriptors:}\n");
-    storeAppendPrintf(sentry, "{%-4s %-6s %-4s %-4s %-21s %s}\n",
-	"File",
-	"Type",
-	"Lftm",
-	"Tout",
-	"Remote Address",
-	"Description");
-    storeAppendPrintf(sentry, "{---- ------ ---- ---- --------------------- ------------------------------}\n");
-    for (i = 0; i < FD_SETSIZE; i++) {
-	if (!fdstat_isopen(i))
-	    continue;
-	j = fdstatGetType(i);
-	storeAppendPrintf(sentry, "{%4d %-6s ",
-	    i,
-	    fdstatTypeStr[j]);
-	switch (j) {
-	case FD_SOCKET:
-	    if ((lft = comm_get_fd_lifetime(i)) < 0)
-		lft = 0;
-	    to = comm_get_fd_timeout(i);
-	    if (lft > 0)
-		lft = (lft - squid_curtime) / 60;
-	    if (to > 0)
-		to = (to - squid_curtime) / 60;
-	    if (fd_table[i].timeout_handler == NULL)
-		to = 0;
-	    storeAppendPrintf(sentry, "%4d %4d %-21s %s}\n",
-		lft,
-		to,
-		host_port_fmt(fd_table[i].ipaddr, fd_table[i].remote_port),
-		fd_note(i, NULL));
-	    break;
-	case FD_FILE:
-	    storeAppendPrintf(sentry, "%31s %s}\n",
-		null_string,
-		(s = diskFileName(i)) ? s : "-");
-	    break;
-	case FD_PIPE:
-	    storeAppendPrintf(sentry, "%31s %s}\n", null_string, fd_note(i, NULL));
-	    break;
-	case FD_LOG:
-	    storeAppendPrintf(sentry, "%31s %s}\n", null_string, fd_note(i, NULL));
-	    break;
-	case FD_UNKNOWN:
-	default:
-	    storeAppendPrintf(sentry, "%31s %s}\n", null_string, fd_note(i, NULL));
-	    break;
-	}
-    }
-    storeAppendPrintf(sentry, close_bracket);
-}
-
-static int
-memoryAccounted(void)
-{
-    return (int)
-	meta_data.store_entries * sizeof(StoreEntry) +
-	meta_data.ipcache_count * sizeof(ipcache_entry) +
-	meta_data.fqdncache_count * sizeof(fqdncache_entry) +
-	hash_links_allocated * sizeof(hash_link) +
-	sm_stats.total_pages_allocated * sm_stats.page_size +
-	disk_stats.total_pages_allocated * disk_stats.page_size +
-	request_pool.total_pages_allocated * request_pool.page_size +
-	mem_obj_pool.total_pages_allocated * mem_obj_pool.page_size +
-	meta_data.url_strings +
-	meta_data.netdb_addrs * sizeof(netdbEntry) +
-	meta_data.netdb_hosts * sizeof(struct _net_db_name) +
-                 meta_data.client_info * client_info_sz +
-                 meta_data.misc;
-}
-
-#ifdef UNUSED_CODE
-static int
-mallinfoTotal(void)
-{
-    int total = 0;
-#if HAVE_MALLINFO
-    struct mallinfo mp;
-    mp = mallinfo();
-    total = mp.arena;
-#endif
-    return total;
-}
-#endif
-
-static void
-info_get(const cacheinfo * obj, StoreEntry * sentry)
-{
-    const char *tod = NULL;
-    float f;
-#if HAVE_MALLINFO
+    char *tod = NULL;
+    static char line[MAX_LINELEN];
+    wordlist *p = NULL;
+#ifdef HAVE_MALLINFO
     int t;
 #endif
 
@@ -737,33 +532,46 @@ info_get(const cacheinfo * obj, StoreEntry * sentry)
     struct mallinfo mp;
 #endif
 
+    memset(line, '\0', SM_PAGE_SIZE);
+
     storeAppendPrintf(sentry, open_bracket);
-    storeAppendPrintf(sentry, "{Squid Object Cache: Version %s}\n",
-	version_string);
-    tod = mkrfc1123(squid_starttime);
+    storeAppendPrintf(sentry, "{Squid Object Cache: Version %s}\n", version_string);
+    tod = mkrfc850(&squid_starttime);
     storeAppendPrintf(sentry, "{Start Time:\t%s}\n", tod);
-    tod = mkrfc1123(squid_curtime);
+    tod = mkrfc850(&squid_curtime);
     storeAppendPrintf(sentry, "{Current Time:\t%s}\n", tod);
-    storeAppendPrintf(sentry, "{Connection information for %s:}\n",
-	appname);
-    storeAppendPrintf(sentry, "{\tNumber of TCP connections:\t%lu}\n",
-	ntcpconn);
-    storeAppendPrintf(sentry, "{\tNumber of UDP connections:\t%lu}\n",
-	nudpconn);
 
-    f = (float) (squid_curtime - squid_starttime);
-    storeAppendPrintf(sentry, "{\tConnections per hour:\t%.1f}\n",
-	f == 0.0 ? 0.0 : ((ntcpconn + nudpconn) / (f / 3600.0)));
+    /* -------------------------------------------------- */
 
-    storeAppendPrintf(sentry, "{Cache information for %s:}\n",
-	appname);
-    storeAppendPrintf(sentry, "{\tStorage Swap size:\t%d MB}\n",
-	storeGetSwapSize() >> 10);
-    storeAppendPrintf(sentry, "{\tStorage Mem size:\t%d KB}\n",
-	store_mem_size >> 10);
+    storeAppendPrintf(sentry, "{Connection information for %s:}\n", appname);
+
+    storeAppendPrintf(sentry, "{\tNumber of TCP connections:\t%lu}\n", ntcpconn);
+
+    storeAppendPrintf(sentry, "{\tNumber of UDP connections:\t%lu}\n", nudpconn);
+
+    {
+	float f;
+	f = squid_curtime - squid_starttime;
+	storeAppendPrintf(sentry, "{\tConnections per hour:\t%.1f}\n", f == 0.0 ? 0.0 :
+	    ((ntcpconn + nudpconn) / (f / 3600)));
+    }
+
+    /* -------------------------------------------------- */
+
+
+
+    storeAppendPrintf(sentry, "{Cache information for %s:}\n", appname);
+
+    storeAppendPrintf(sentry, "{\tStorage Swap size:\t%d MB}\n", storeGetSwapSize() >> 10);
+
+    storeAppendPrintf(sentry, "{\tStorage Mem size:\t%d KB}\n", storeGetMemSize() >> 10);
+
+    tod = mkrfc850(&next_cleaning);
+    storeAppendPrintf(sentry, "{\tStorage Expiration at:\t%s}\n", tod);
 
 #if HAVE_GETRUSAGE && defined(RUSAGE_SELF)
     storeAppendPrintf(sentry, "{Resource usage for %s:}\n", appname);
+
     getrusage(RUSAGE_SELF, &rusage);
     storeAppendPrintf(sentry, "{\tCPU Time: %d seconds (%d user %d sys)}\n",
 	(int) rusage.ru_utime.tv_sec + (int) rusage.ru_stime.tv_sec,
@@ -772,21 +580,17 @@ info_get(const cacheinfo * obj, StoreEntry * sentry)
     storeAppendPrintf(sentry, "{\tCPU Usage: %d%%}\n",
 	percent(rusage.ru_utime.tv_sec + rusage.ru_stime.tv_sec,
 	    squid_curtime - squid_starttime));
-#if defined(_SQUID_SGI_) || defined(_SQUID_OSF_)
     storeAppendPrintf(sentry, "{\tProcess Size: rss %ld KB}\n",
-	rusage.ru_maxrss);
-#else /* _SQUID_SGI_ */
-    storeAppendPrintf(sentry, "{\tProcess Size: rss %ld KB}\n",
-	(rusage.ru_maxrss * getpagesize()) >> 10);
-#endif /* _SQUID_SGI_ */
+	rusage.ru_maxrss * getpagesize() >> 10);
+
     storeAppendPrintf(sentry, "{\tPage faults with physical i/o: %ld}\n",
 	rusage.ru_majflt);
+
 #endif
 
 #if HAVE_MALLINFO
     mp = mallinfo();
-    storeAppendPrintf(sentry, "{Memory usage for %s via mallinfo():}\n",
-	appname);
+    storeAppendPrintf(sentry, "{Memory usage for %s via mallinfo():}\n", appname);
     storeAppendPrintf(sentry, "{\tTotal space in arena:  %6d KB}\n",
 	mp.arena >> 10);
     storeAppendPrintf(sentry, "{\tOrdinary blocks:       %6d KB %6d blks}\n",
@@ -805,6 +609,10 @@ info_get(const cacheinfo * obj, StoreEntry * sentry)
     t = mp.fsmblks + mp.fordblks;
     storeAppendPrintf(sentry, "{\tTotal free:            %6d KB %d%%}\n",
 	t >> 10, percent(t, mp.arena));
+#ifdef WE_DONT_USE_KEEP
+    storeAppendPrintf(sentry, "{\tKeep option:           %6d KB}\n",
+	mp.keepcost >> 10);
+#endif
 #if HAVE_EXT_MALLINFO
     storeAppendPrintf(sentry, "{\tmax size of small blocks:\t%d}\n", mp.mxfast);
     storeAppendPrintf(sentry, "{\tnumber of small blocks in a holding block:\t%d}\n",
@@ -829,26 +637,82 @@ info_get(const cacheinfo * obj, StoreEntry * sentry)
     storeAppendPrintf(sentry, "{\tReserved number of file descriptors:  %4d}\n",
 	RESERVED_FD);
 
-    storeAppendPrintf(sentry, "{Internal Data Structures:}\n");
-    storeAppendPrintf(sentry, "{\t%6d StoreEntries}\n",
-	meta_data.store_entries);
-    storeAppendPrintf(sentry, "{\t%6d StoreEntries with MemObjects}\n",
-	meta_data.mem_obj_count);
-    storeAppendPrintf(sentry, "{\t%6d StoreEntries with MemObject Data}\n",
-	meta_data.mem_data_count);
-    storeAppendPrintf(sentry, "{\t%6d Hot Object Cache Items}\n",
-	meta_data.hot_vm);
+    {
+	int i;
+	char *s = NULL;
 
-    storeAppendPrintf(sentry, "{Accounted Memory Usage:}\n");
+	storeAppendPrintf(sentry, "{\tActive file descriptors:}\n");
+
+	for (i = 0; i < FD_SETSIZE; i++) {
+	    int lft, to;
+	    if (!fdstat_isopen(i))
+		continue;
+	    line[0] = '\0';
+	    switch (fdstat_type(i)) {
+	    case FD_SOCKET:
+		/* the lifetime should be greater than curtime */
+		lft = comm_get_fd_lifetime(i);
+		to = comm_get_fd_timeout(i);
+		storeAppendPrintf(sentry, "{\t\t(%3d = %3d, %3d) NET %s}\n",
+		    i,
+		    (int) (lft > 0 ? lft - squid_curtime : -1),
+		    (int) max((to - squid_curtime), 0),
+		    fd_note(i, NULL));
+		break;
+	    case FD_FILE:
+		storeAppendPrintf(sentry, "{\t\t(%3d = FILE) %s}\n", i,
+		    (s = diskFileName(i)) ? s : "Unknown");
+		break;
+	    case FD_PIPE:
+		storeAppendPrintf(sentry, "{\t\t(%3d = PIPE) %s}\n", i, fd_note(i, NULL));
+		break;
+	    case FD_LOG:
+		storeAppendPrintf(sentry, "{\t\t(%3d = LOG) %s}\n", i, fd_note(i, NULL));
+		break;
+	    case FD_UNKNOWN:
+	    default:
+		storeAppendPrintf(sentry, "{\t\t(%3d = UNKNOWN) %s}\n", i, fd_note(i, NULL));
+		break;
+	    }
+	}
+    }
+
+
+    storeAppendPrintf(sentry, "{Stop List:}\n");
+    if ((p = getHttpStoplist())) {
+	storeAppendPrintf(sentry, "{\tHTTP:}\n");
+	while (p) {
+	    storeAppendPrintf(sentry, "{\t\t%s}\n", p->key);
+	    p = p->next;
+	}
+    }
+    if ((p = getGopherStoplist())) {
+	storeAppendPrintf(sentry, "{\tGOPHER:}\n");
+	while (p) {
+	    storeAppendPrintf(sentry, "{\t\t%s}\n", p->key);
+	    p = p->next;
+	}
+    }
+    if ((p = getFtpStoplist())) {
+	storeAppendPrintf(sentry, "{\tFTP:}\n");
+	while (p) {
+	    storeAppendPrintf(sentry, "{\t\t%s}\n", p->key);
+	    p = p->next;
+	}
+    }
+    storeAppendPrintf(sentry, "{Internal Data Structures:}\n");
+    storeAppendPrintf(sentry, "{\tHot Object Cache Items %d}\n",
+	meta_data.hot_vm);
+    storeAppendPrintf(sentry, "{\tStoreEntries with MemObjects %d}\n",
+	meta_data.store_in_mem_objects);
+
+    storeAppendPrintf(sentry, "{Meta Data:}\n");
+
     storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB}\n",
 	"StoreEntry",
 	meta_data.store_entries,
 	(int) sizeof(StoreEntry),
 	(int) (meta_data.store_entries * sizeof(StoreEntry) >> 10));
-
-    storeAppendPrintf(sentry, "{\t%-25.25s                      = %6d KB}\n",
-	"URL strings",
-	meta_data.url_strings >> 10);
 
     storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB}\n",
 	"IPCacheEntry",
@@ -857,16 +721,14 @@ info_get(const cacheinfo * obj, StoreEntry * sentry)
 	(int) (meta_data.ipcache_count * sizeof(ipcache_entry) >> 10));
 
     storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB}\n",
-	"FQDNCacheEntry",
-	meta_data.fqdncache_count,
-	(int) sizeof(fqdncache_entry),
-	(int) (meta_data.fqdncache_count * sizeof(fqdncache_entry) >> 10));
-
-    storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB}\n",
 	"Hash link",
-	hash_links_allocated,
+	meta_data.hash_links = hash_links_allocated,
 	(int) sizeof(hash_link),
-	(int) (hash_links_allocated * sizeof(hash_link) >> 10));
+	(int) (meta_data.hash_links * sizeof(hash_link) >> 10));
+
+    storeAppendPrintf(sentry, "{\t%-25.25s                      = %6d KB}\n",
+	"URL strings",
+	meta_data.url_strings >> 10);
 
     storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB (%6d free)}\n",
 	"Pool MemObject structures",
@@ -896,31 +758,21 @@ info_get(const cacheinfo * obj, StoreEntry * sentry)
 	disk_stats.total_pages_allocated * disk_stats.page_size >> 10,
 	(disk_stats.total_pages_allocated - disk_stats.n_pages_in_use) * disk_stats.page_size >> 10);
 
-    storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB}\n",
-	"NetDB Address Entries",
-	meta_data.netdb_addrs,
-	(int) sizeof(netdbEntry),
-	(int) (meta_data.netdb_addrs * sizeof(netdbEntry) >> 10));
-
-    storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB}\n",
-	"NetDB Host Entries",
-	meta_data.netdb_hosts,
-	(int) sizeof(struct _net_db_name),
-	             (int) (meta_data.netdb_hosts * sizeof(struct _net_db_name) >> 10));
-
-    storeAppendPrintf(sentry, "{\t%-25.25s %7d x %4d bytes = %6d KB}\n",
-	"ClientDB Entries",
-	meta_data.client_info,
-	client_info_sz,
-	(int) (meta_data.client_info * client_info_sz >> 10));
-
     storeAppendPrintf(sentry, "{\t%-25.25s                      = %6d KB}\n",
 	"Miscellaneous",
 	meta_data.misc >> 10);
 
     storeAppendPrintf(sentry, "{\t%-25.25s                      = %6d KB}\n",
 	"Total Accounted",
-	memoryAccounted() >> 10);
+	(int) (meta_data.store_entries * sizeof(StoreEntry) +
+	    meta_data.ipcache_count * sizeof(ipcache_entry) +
+	    meta_data.hash_links * sizeof(hash_link) +
+	    sm_stats.total_pages_allocated * sm_stats.page_size +
+	    disk_stats.total_pages_allocated * disk_stats.page_size +
+	    request_pool.total_pages_allocated * request_pool.page_size +
+	    mem_obj_pool.total_pages_allocated * mem_obj_pool.page_size +
+	    meta_data.url_strings +
+	    meta_data.misc) >> 10);
 
 #if XMALLOC_STATISTICS
     storeAppendPrintf(sentry, "{Memory allocation statistics}\n");
@@ -930,226 +782,142 @@ info_get(const cacheinfo * obj, StoreEntry * sentry)
     storeAppendPrintf(sentry, close_bracket);
 }
 
-static void
-parameter_get(const cacheinfo * obj, StoreEntry * sentry)
+
+void parameter_get(obj, sentry)
+     cacheinfo *obj;
+     StoreEntry *sentry;
+
 {
+    /* be careful if an object is bigger than 4096, 
+     * need more malloc here */
+    static char line[MAX_LINELEN];
+
+    memset(line, '\0', MAX_LINELEN);
+
     storeAppendPrintf(sentry, open_bracket);
-    storeAppendPrintf(sentry,
-	"{VM-Max %d \"# Maximum hot-vm cache (MB)\"}\n",
-	Config.Mem.maxSize / (1 << 20));
-    storeAppendPrintf(sentry,
-	"{VM-High %d \"# High water mark hot-vm cache (%%)\"}\n",
-	Config.Mem.highWaterMark);
-    storeAppendPrintf(sentry,
-	"{VM-Low %d \"# Low water-mark hot-vm cache (%%)\"}\n",
-	Config.Mem.lowWaterMark);
-    storeAppendPrintf(sentry,
-	"{Swap-Max %d \"# Maximum disk cache (MB)\"}\n",
-	Config.Swap.maxSize / (1 << 10));
-    storeAppendPrintf(sentry,
-	"{Swap-High %d \"# High Water mark disk cache (%%)\"}\n",
-	Config.Swap.highWaterMark);
-    storeAppendPrintf(sentry,
-	"{Swap-Low %d \"# Low water mark disk cache (%%)\"}\n",
-	Config.Swap.lowWaterMark);
-    storeAppendPrintf(sentry,
-	"{Neg-TTL %d \"# TTL for negative cache (s)\"}\n",
-	Config.negativeTtl);
-    storeAppendPrintf(sentry,
-	"{ReadTimeout %d \"# Maximum idle connection (s)\"}\n",
-	Config.readTimeout);
-    storeAppendPrintf(sentry,
-	"{ClientLifetime %d \"# Lifetime for incoming HTTP requests\"}\n",
-	Config.lifetimeDefault);
-    storeAppendPrintf(sentry,
-	"{CleanRate %d \"# Rate for periodic object expiring\"}\n",
-	Config.cleanRate);
+
+    storeAppendPrintf(sentry, "{VM-Max %d \"# Maximum hot-vm cache (MB)\"}\n",
+	getCacheMemMax() / (1 << 20));
+
+    storeAppendPrintf(sentry, "{VM-High %d \"# High water mark hot-vm cache (%%)\"}\n",
+	getCacheMemHighWaterMark());
+
+    storeAppendPrintf(sentry, "{VM-Low %d \"# Low water-mark hot-vm cache (%%)\"}\n",
+	getCacheMemLowWaterMark());
+
+    storeAppendPrintf(sentry, "{Swap-Max %d \"# Maximum disk cache (MB)\"}\n",
+	getCacheSwapMax() / (1 << 10));
+
+    storeAppendPrintf(sentry, "{Swap-High %d \"# High Water mark disk cache (%%)\"}\n",
+	getCacheSwapHighWaterMark());
+
+    storeAppendPrintf(sentry, "{Swap-Low %d \"# Low water mark disk cache (%%)\"}\n",
+	getCacheSwapLowWaterMark());
+
+    storeAppendPrintf(sentry, "{HTTP-Max %d\"# Maximum size HTTP objects (KB)\"}\n",
+	getHttpMax() / (1 << 10));
+
+    storeAppendPrintf(sentry, "{HTTP-TTL %d \"# Http object default TTL (hrs)\"}\n", getHttpTTL() / 3600);
+
+    storeAppendPrintf(sentry, "{Gopher-Max %d \"# Maximum size gopher objects (KB)\"}\n",
+	getGopherMax() / (1 << 10));
+
+    storeAppendPrintf(sentry, "{Gopher-TTL %d \"# TTL for gopher objects (hrs)\"}\n", getGopherTTL() / 3600);
+
+    storeAppendPrintf(sentry, "{FTP-Max %d \"# Maximum size FTP objects (KB)\"}\n",
+	getFtpMax() / (1 << 10));
+
+    storeAppendPrintf(sentry, "{FTP-TTL %d \"# TTL for FTP objects (hrs)\"}\n", getFtpTTL() / 3600);
+
+    storeAppendPrintf(sentry, "{Neg-TTL %d \"# TTL for negative cache (s)\"}\n",
+	getNegativeTTL());
+
+    storeAppendPrintf(sentry, "{ReadTimeout %d \"# Maximum idle connection (s)\"}\n", getReadTimeout());
+
+    storeAppendPrintf(sentry, "{ClientLifetime %d \"# Lifetime for incoming HTTP requests or outgoing clients (s)\"}\n", getClientLifetime());
+
+    storeAppendPrintf(sentry, "{CleanRate %d \"# Rate for periodic object expiring\"}\n",
+	getCleanRate());
+
     /* Cachemgr.cgi expects an integer in the second field of the string */
-    storeAppendPrintf(sentry,
-	"{HttpAccelMode %d \"# Is operating as an HTTP accelerator\"}\n",
+    storeAppendPrintf(sentry, "{HttpAccelMode %d \"# Is operating as an HTTP accelerator\"}\n",
 	httpd_accel_mode);
+
+    /* end of stats */
     storeAppendPrintf(sentry, close_bracket);
 }
 
-#if LOG_FULL_HEADERS
-static const char c2x[] =
-"000102030405060708090a0b0c0d0e0f"
-"101112131415161718191a1b1c1d1e1f"
-"202122232425262728292a2b2c2d2e2f"
-"303132333435363738393a3b3c3d3e3f"
-"404142434445464748494a4b4c4d4e4f"
-"505152535455565758595a5b5c5d5e5f"
-"606162636465666768696a6b6c6d6e6f"
-"707172737475767778797a7b7c7d7e7f"
-"808182838485868788898a8b8c8d8e8f"
-"909192939495969798999a9b9c9d9e9f"
-"a0a1a2a3a4a5a6a7a8a9aaabacadaeaf"
-"b0b1b2b3b4b5b6b7b8b9babbbcbdbebf"
-"c0c1c2c3c4c5c6c7c8c9cacbcccdcecf"
-"d0d1d2d3d4d5d6d7d8d9dadbdcdddedf"
-"e0e1e2e3e4e5e6e7e8e9eaebecedeeef"
-"f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff";
 
-/* log_quote -- URL-style encoding on MIME headers. */
-
-static char *
-log_quote(const char *header)
+void log_append(obj, url, id, size, action, method, http_code, msec, hier)
+     cacheinfo *obj;
+     char *url;
+     char *id;
+     int size;
+     char *action;
+     char *method;
+     int http_code;
+     int msec;
+     hier_code hier;
 {
-    int c, i;
-    char *buf, *buf_cursor;
-    if (header == NULL) {
-	buf = xcalloc(1, 1);
-	*buf = '\0';
-	return buf;
-    }
-    buf = xcalloc((strlen(header) * 3) + 1, 1);
-    buf_cursor = buf;
-    /*
-     * We escape: \x00-\x1F"#%;<>?{}|\\\\^~`\[\]\x7F-\xFF 
-     * which is the default escape list for the CPAN Perl5 URI module
-     * modulo the inclusion of space (x40) to make the raw logs a bit
-     * more readable.
-     */
-    while ((c = *(const unsigned char *) header++)) {
-	if (c <= 0x1F
-	    || c >= 0x7F
-	    || c == '"'
-	    || c == '#'
-	    || c == '%'
-	    || c == ';'
-	    || c == '<'
-	    || c == '>'
-	    || c == '?'
-	    || c == '{'
-	    || c == '}'
-	    || c == '|'
-	    || c == '\\'
-	    || c == '^'
-	    || c == '~'
-	    || c == '`'
-	    || c == '['
-	    || c == ']') {
-	    *buf_cursor++ = '%';
-	    i = c * 2;
-	    *buf_cursor++ = c2x[i];
-	    *buf_cursor++ = c2x[i + 1];
-	} else {
-	    *buf_cursor++ = c;
-	}
-    }
-    *buf_cursor = '\0';
-    return buf;
-}
-#endif /* LOG_FULL_HEADERS */
-
-
-static void
-log_append(const cacheinfo * obj,
-    const char *url,
-    struct in_addr caddr,
-    int size,
-    const char *action,
-    const char *method,
-    int http_code,
-    int msec,
-    const char *ident,
-#if !LOG_FULL_HEADERS
-    const struct _hierarchyLogData *hierData
-#else
-    const struct _hierarchyLogData *hierData,
-    const char *request_hdr,
-    const char *reply_hdr
-#endif				/* LOG_FULL_HEADERS */
-)
-{
-#if LOG_FULL_HEADERS
-    LOCAL_ARRAY(char, tmp, 10000);	/* MAX_URL is 4096 */
-#else
-    LOCAL_ARRAY(char, tmp, 6000);	/* MAX_URL is 4096 */
-#endif /* LOG_FULL_HEADERS */
-    int x;
-    const char *client = NULL;
-    hier_code hier_code = HIER_NONE;
-    const char *hier_host = dash_str;
-    int hier_timeout = 0;
-
-    if (Config.Log.log_fqdn)
-	client = fqdncache_gethostbyaddr(caddr, 0);
-    if (client == NULL)
-	client = inet_ntoa(caddr);
+    static char tmp[6000];	/* MAX_URL is 4096 */
+    char *buf = NULL;
 
     getCurrentTime();
 
-    if (!method)
-	method = dash_str;
-    if (!url)
-	url = dash_str;
-    if (!ident || ident[0] == '\0')
-	ident = dash_str;
-    if (hierData) {
-	hier_code = hierData->code;
-	hier_host = hierData->host ? hierData->host : dash_str;
-	hier_timeout = hierData->timeout;
+#ifdef LOG_FQDN
+    /* ENABLE THIS IF YOU WANT A *SLOW* CACHE, OR
+     * JUST WRITE A PERL SCRIPT TO MUCK YOUR LOGS */
+    {
+	int ipx[4];
+	unsigned long ipy;
+	struct hostent *h = NULL;
+	if (sscanf(id, "%d.%d.%d.%d", &ipx[0], &ipx[1], &ipx[2], &ipx[3]) == 4) {
+	    ipy = inet_addr(id);
+	    if (h = gethostbyaddr((char *) &ipy, 4, AF_INET)) {
+		id = xstrdup(h->h_name);
+	    }
+	}
     }
+#endif
+
+    if (!method)
+	method = "-";
+    if (!url)
+	url = "-";
+
     if (obj->logfile_status == LOG_ENABLE) {
-	if (Config.commonLogFormat)
-	    sprintf(tmp, "%s %s - [%s] \"%s %s\" %s %d\n",
-		client,
-		ident,
-		mkhttpdlogtime(&squid_curtime),
-		method,
-		url,
-		action,
-		size);
+	if (emulate_httpd_log)
+	    sprintf(tmp, "%s - - [%s] \"%s %s\" %s %d\n",
+		id, mkhttpdlogtime(&squid_curtime), method, url, action, size);
 	else
-	    sprintf(tmp, "%9d.%03d %6d %s %s/%03d %d %s %s %s %s%s/%s\n",
+	    sprintf(tmp, "%9d.%03d %6d %s %s/%03d/%s %d %s %s\n",
 		(int) current_time.tv_sec,
 		(int) current_time.tv_usec / 1000,
 		msec,
-		client,
+		id,
 		action,
 		http_code,
+		hier_strings[hier],
 		size,
 		method,
-		url,
-		ident,
-		hier_timeout ? "TIMEOUT_" : null_string,
-		hier_strings[hier_code],
-		hier_host);
-#if LOG_FULL_HEADERS
-	if (Config.logMimeHdrs) {
-	    int msize = strlen(tmp);
-	    char *ereq = log_quote(request_hdr);
-	    char *erep = log_quote(reply_hdr);
-
-	    if (msize + strlen(ereq) + strlen(erep) + 7 <= sizeof(tmp))
-		sprintf(tmp + msize - 1, " [%s] [%s]\n", ereq, erep);
-	    else
-		debug(18, 1, "log_append: Long headers not logged.\n");
-	    safe_free(ereq);
-	    safe_free(erep);
-	}
-#endif /* LOG_FULL_HEADERS */
-	x = file_write(obj->logfile_fd,
-	    xstrdup(tmp),
-	    strlen(tmp),
-	    obj->logfile_access,
-	    NULL,
-	    NULL,
-	    xfree);
-	if (x != DISK_OK)
+		url);
+	if (file_write(obj->logfile_fd, buf = xstrdup(tmp), strlen(tmp),
+		obj->logfile_access, NULL, NULL) != DISK_OK) {
 	    debug(18, 1, "log_append: File write failed.\n");
+	    safe_free(buf);
+	}
     }
 }
 
-static void
-log_enable(cacheinfo * obj, StoreEntry * sentry)
+void log_enable(obj, sentry)
+     cacheinfo *obj;
+     StoreEntry *sentry;
 {
     if (obj->logfile_status == LOG_DISABLE) {
 	obj->logfile_status = LOG_ENABLE;
 
 	/* open the logfile */
-	obj->logfile_fd = file_open(obj->logfilename, NULL, O_WRONLY | O_CREAT);
+	obj->logfile_fd = file_open(obj->logfilename, NULL, O_RDWR | O_CREAT);
 	if (obj->logfile_fd == DISK_ERROR) {
 	    debug(18, 0, "Cannot open logfile: %s\n", obj->logfilename);
 	    obj->logfile_status = LOG_DISABLE;
@@ -1161,8 +929,9 @@ log_enable(cacheinfo * obj, StoreEntry * sentry)
     storeAppendPrintf(sentry, " ");
 }
 
-static void
-log_disable(cacheinfo * obj, StoreEntry * sentry)
+void log_disable(obj, sentry)
+     cacheinfo *obj;
+     StoreEntry *sentry;
 {
     if (obj->logfile_status == LOG_ENABLE)
 	file_close(obj->logfile_fd);
@@ -1174,8 +943,9 @@ log_disable(cacheinfo * obj, StoreEntry * sentry)
 
 
 
-static void
-log_clear(cacheinfo * obj, StoreEntry * sentry)
+void log_clear(obj, sentry)
+     cacheinfo *obj;
+     StoreEntry *sentry;
 {
     /* what should be done here. Erase file ??? or move it to another name?  At the moment, just erase it.  bug here need to be fixed. what if there are still data in memory. Need flush here */
     if (obj->logfile_status == LOG_ENABLE)
@@ -1184,7 +954,7 @@ log_clear(cacheinfo * obj, StoreEntry * sentry)
     unlink(obj->logfilename);
 
     /* reopen it anyway */
-    obj->logfile_fd = file_open(obj->logfilename, NULL, O_WRONLY | O_CREAT);
+    obj->logfile_fd = file_open(obj->logfilename, NULL, O_RDWR | O_CREAT);
     if (obj->logfile_fd == DISK_ERROR) {
 	debug(18, 0, "Cannot open logfile: %s\n", obj->logfilename);
 	obj->logfile_status = LOG_DISABLE;
@@ -1195,8 +965,11 @@ log_clear(cacheinfo * obj, StoreEntry * sentry)
 
 
 
-static void
-proto_newobject(cacheinfo * obj, protocol_t proto_id, int size, int restart)
+void proto_newobject(obj, proto_id, size, restart)
+     cacheinfo *obj;
+     protocol_t proto_id;
+     int size;
+     int restart;
 {
     proto_stat *p = &obj->proto_stat_data[proto_id];
 
@@ -1212,8 +985,10 @@ proto_newobject(cacheinfo * obj, protocol_t proto_id, int size, int restart)
 }
 
 
-static void
-proto_purgeobject(cacheinfo * obj, protocol_t proto_id, int size)
+void proto_purgeobject(obj, proto_id, size)
+     cacheinfo *obj;
+     protocol_t proto_id;
+     int size;
 {
     proto_stat *p = &obj->proto_stat_data[proto_id];
 
@@ -1227,39 +1002,37 @@ proto_purgeobject(cacheinfo * obj, protocol_t proto_id, int size)
 }
 
 /* update stat for each particular protocol when an object is fetched */
-static void
-proto_touchobject(cacheinfo * obj, protocol_t proto_id, int size)
+void proto_touchobject(obj, proto_id, size)
+     cacheinfo *obj;
+     protocol_t proto_id;
+     int size;
 {
     obj->proto_stat_data[proto_id].refcount++;
     obj->proto_stat_data[proto_id].transferbyte += (1023 + size) >> 10;
 }
 
-static void
-proto_count(cacheinfo * obj, protocol_t proto_id, log_type type)
+void proto_hit(obj, proto_id)
+     cacheinfo *obj;
+     protocol_t proto_id;
 {
-    switch (type) {
-    case LOG_TCP_HIT:
-    case LOG_TCP_IMS_HIT:
-    case LOG_TCP_REFRESH_HIT:
-    case LOG_TCP_REFRESH_FAIL_HIT:
-    case LOG_UDP_HIT:
-    case LOG_UDP_HIT_OBJ:
-	obj->proto_stat_data[proto_id].hit++;
-	break;
-    default:
-	obj->proto_stat_data[proto_id].miss++;
-	break;
-    }
+    obj->proto_stat_data[proto_id].hit++;
+}
+
+void proto_miss(obj, proto_id)
+     cacheinfo *obj;
+     protocol_t proto_id;
+{
+    obj->proto_stat_data[proto_id].miss++;
 }
 
 
-void
-stat_init(cacheinfo ** object, const char *logfilename)
+void stat_init(object, logfilename)
+     cacheinfo **object;
+     char *logfilename;
 {
     cacheinfo *obj = NULL;
     int i;
 
-    debug(18, 5, "stat_init: Initializing...\n");
     obj = xcalloc(1, sizeof(cacheinfo));
     obj->stat_get = stat_get;
     obj->info_get = info_get;
@@ -1274,22 +1047,23 @@ stat_init(cacheinfo ** object, const char *logfilename)
     obj->squid_get_start = squid_get_start;
     obj->parameter_get = parameter_get;
     obj->server_list = server_list;
-    if (logfilename) {
-	memset(obj->logfilename, '0', SQUID_MAXPATHLEN);
-	xstrncpy(obj->logfilename, logfilename, SQUID_MAXPATHLEN);
-	obj->logfile_fd = file_open(obj->logfilename, NULL, O_WRONLY | O_CREAT);
-	if (obj->logfile_fd == DISK_ERROR) {
-	    debug(50, 0, "%s: %s\n", obj->logfilename, xstrerror());
-	    fatal("Cannot open logfile.");
-	}
-	obj->logfile_access = file_write_lock(obj->logfile_fd);
+
+    xmemcpy(obj->logfilename, logfilename, (int) (strlen(logfilename) + 1) % 256);
+    obj->logfile_fd = file_open(obj->logfilename, NULL, O_RDWR | O_CREAT);
+    if (obj->logfile_fd == DISK_ERROR) {
+	debug(18, 0, "%s: %s\n", obj->logfilename, xstrerror());
+	fatal("Cannot open logfile.");
     }
+    obj->logfile_access = file_write_lock(obj->logfile_fd);
+
     obj->proto_id = urlParseProtocol;
     obj->proto_newobject = proto_newobject;
     obj->proto_purgeobject = proto_purgeobject;
     obj->proto_touchobject = proto_touchobject;
-    obj->proto_count = proto_count;
+    obj->proto_hit = proto_hit;
+    obj->proto_miss = proto_miss;
     obj->NotImplement = dummyhandler;
+
     for (i = PROTO_NONE; i <= PROTO_MAX; i++) {
 	switch (i) {
 	case PROTO_HTTP:
@@ -1322,53 +1096,197 @@ stat_init(cacheinfo ** object, const char *logfilename)
 	obj->proto_stat_data[i].transferrate = 0;
 	obj->proto_stat_data[i].refcount = 0;
 	obj->proto_stat_data[i].transferbyte = 0;
+
 	obj->proto_stat_data[i].kb.max = 0;
 	obj->proto_stat_data[i].kb.min = 0;
 	obj->proto_stat_data[i].kb.avg = 0;
 	obj->proto_stat_data[i].kb.now = 0;
+
     }
+
     *object = obj;
 }
 
-void
-stat_rotate_log(void)
+char *stat_describe(entry)
+     StoreEntry *entry;
+{
+    static char state[256];
+
+    state[0] = '\0';
+    switch (entry->store_status) {
+    case STORE_OK:
+	strncat(state, "STORE-OK", sizeof(state));
+	break;
+    case STORE_PENDING:
+	strncat(state, "ST-PEND", sizeof(state));
+	break;
+    case STORE_ABORTED:
+	strncat(state, "ABORTED", sizeof(state));
+	break;
+    default:
+	strncat(state, "YEEHAH", sizeof(state));
+	break;
+    }
+    strncat(state, "/", sizeof(state));
+
+    switch (entry->ping_status) {
+    case PING_WAITING:
+	strncat(state, "PING-WAIT", sizeof(state));
+	break;
+    case PING_TIMEOUT:
+	strncat(state, "PING-TIMEOUT", sizeof(state));
+	break;
+    case PING_DONE:
+	strncat(state, "PING-DONE", sizeof(state));
+	break;
+    case PING_NONE:
+	strncat(state, "NO-PING", sizeof(state));
+	break;
+    default:
+	strncat(state, "HELP!!", sizeof(state));
+	break;
+    }
+    return (state);
+}
+
+char *mem_describe(entry)
+     StoreEntry *entry;
+{
+    static char where[100];
+
+    where[0] = '\0';
+    if (entry->swap_file_number >= 0)
+	sprintf(where, "D%d", entry->swap_file_number);
+    if (entry->swap_status == SWAPPING_OUT)
+	strncat(where, "/SWAP-OUT", sizeof(where));
+    if (entry->swap_status == SWAP_OK)
+	strncat(where, "/SWAP-OK", sizeof(where));
+    else
+	strncat(where, "/NO-SWAP", sizeof(where));
+
+    if (entry->mem_status == SWAPPING_IN)
+	strncat(where, "/SWAP-IN", sizeof(where));
+    else if (entry->mem_status == IN_MEMORY)
+	strncat(where, "/IN-MEM", sizeof(where));
+    else			/* STORE_PENDING */
+	strncat(where, "/OUT-MEM", sizeof(where));
+    return (where);
+}
+
+
+char *ttl_describe(entry)
+     StoreEntry *entry;
+{
+    int hh, mm, ss;
+    static char TTL[60];
+    int ttl;
+
+    TTL[0] = '\0';
+    strcpy(TTL, "UNKNOWN");	/* sometimes the TTL isn't set below */
+    ttl = entry->expires - squid_curtime;
+    if (ttl < 0)
+	strcpy(TTL, "EXPIRED");
+    else {
+
+	hh = ttl / 3600;
+	ttl -= hh * 3600;
+	mm = ttl / 60;
+	ttl -= mm * 60;
+	ss = ttl;
+
+	sprintf(TTL, "% 6d:%02d:%02d", hh, mm, ss);
+    }
+    return (TTL);
+}
+
+char *elapsed_time(entry, since, TTL)
+     StoreEntry *entry;
+     int since;
+     char *TTL;
+{
+    int hh, mm, ss, ttl;
+
+    TTL[0] = '\0';
+    strcpy(TTL, "UNKNOWN");	/* sometimes TTL doesn't get set */
+    ttl = squid_curtime - since;
+    if (since == 0) {
+	strcpy(TTL, "NEVER");
+    } else if (ttl < 0) {
+	strcpy(TTL, "EXPIRED");
+    } else {
+	hh = ttl / 3600;
+	ttl -= hh * 3600;
+	mm = ttl / 60;
+	ttl -= mm * 60;
+	ss = ttl;
+	sprintf(TTL, "% 6d:%02d:%02d", hh, mm, ss);
+    }
+    return (TTL);
+}
+
+
+char *flags_describe(entry)
+     StoreEntry *entry;
+{
+    static char FLAGS[32];
+    char LOCK_CNT[32];
+
+    strcpy(FLAGS, "F:");
+    if (BIT_TEST(entry->flag, KEY_CHANGE))
+	strncat(FLAGS, "K", sizeof(FLAGS) - 1);
+    if (BIT_TEST(~entry->flag, ENTRY_CACHABLE))
+	strncat(FLAGS, "C", sizeof(FLAGS) - 1);
+    if (BIT_TEST(entry->flag, REFRESH_REQUEST))
+	strncat(FLAGS, "R", sizeof(FLAGS) - 1);
+    if (BIT_TEST(entry->flag, RELEASE_REQUEST))
+	strncat(FLAGS, "Z", sizeof(FLAGS) - 1);
+    if (BIT_TEST(entry->flag, ABORT_MSG_PENDING))
+	strncat(FLAGS, "A", sizeof(FLAGS) - 1);
+    if (BIT_TEST(entry->flag, DELAY_SENDING))
+	strncat(FLAGS, "D", sizeof(FLAGS) - 1);
+    if (BIT_TEST(entry->flag, IP_LOOKUP_PENDING))
+	strncat(FLAGS, "P", sizeof(FLAGS) - 1);
+    if (entry->lock_count)
+	strncat(FLAGS, "L", sizeof(FLAGS) - 1);
+    if (entry->lock_count) {
+	sprintf(LOCK_CNT, "%d", entry->lock_count);
+	strncat(FLAGS, LOCK_CNT, sizeof(FLAGS) - 1);
+    }
+    return (FLAGS);
+}
+
+void stat_rotate_log()
 {
     int i;
-    LOCAL_ARRAY(char, from, MAXPATHLEN);
-    LOCAL_ARRAY(char, to, MAXPATHLEN);
+    static char from[MAXPATHLEN];
+    static char to[MAXPATHLEN];
     char *fname = NULL;
 
-    if ((fname = HTTPCacheInfo->logfilename) == NULL)
+    if ((fname = CacheInfo->logfilename) == NULL)
 	return;
 
     debug(18, 1, "stat_rotate_log: Rotating\n");
 
     /* Rotate numbers 0 through N up one */
-    for (i = Config.Log.rotateNumber; i > 1;) {
+    for (i = getLogfileRotateNumber(); i > 1;) {
 	i--;
 	sprintf(from, "%s.%d", fname, i - 1);
 	sprintf(to, "%s.%d", fname, i);
 	rename(from, to);
     }
     /* Rotate the current log to .0 */
-    if (Config.Log.rotateNumber > 0) {
+    if (getLogfileRotateNumber() > 0) {
 	sprintf(to, "%s.%d", fname, 0);
 	rename(fname, to);
     }
     /* Close and reopen the log.  It may have been renamed "manually"
      * before HUP'ing us. */
-    file_close(HTTPCacheInfo->logfile_fd);
-    HTTPCacheInfo->logfile_fd = file_open(fname, NULL, O_WRONLY | O_CREAT);
-    if (HTTPCacheInfo->logfile_fd == DISK_ERROR) {
+    file_close(CacheInfo->logfile_fd);
+    CacheInfo->logfile_fd = file_open(fname, NULL, O_RDWR | O_CREAT | O_APPEND);
+    if (CacheInfo->logfile_fd == DISK_ERROR) {
 	debug(18, 0, "stat_rotate_log: Cannot open logfile: %s\n", fname);
-	HTTPCacheInfo->logfile_status = LOG_DISABLE;
+	CacheInfo->logfile_status = LOG_DISABLE;
 	fatal("Cannot open logfile.");
     }
-    HTTPCacheInfo->logfile_access = file_write_lock(HTTPCacheInfo->logfile_fd);
-}
-
-void
-statCloseLog(void)
-{
-    file_close(HTTPCacheInfo->logfile_fd);
+    CacheInfo->logfile_access = file_write_lock(CacheInfo->logfile_fd);
 }

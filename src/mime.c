@@ -4,7 +4,7 @@
  * DEBUG: section 25    MIME Parsing
  * AUTHOR: Harvest Derived
  *
- * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
+ * SQUID Internet Object Cache  http://www.nlanr.net/Squid/
  * --------------------------------------------------------
  *
  *  Squid is the result of efforts by numerous individuals from the
@@ -108,15 +108,13 @@
 
 #define GET_HDR_SZ 1024
 
-char *
-mime_get_header(const char *mime, const char *name)
+char *mime_get_header(char *mime, char *name)
 {
-    LOCAL_ARRAY(char, header, GET_HDR_SZ);
-    const char *p = NULL;
+    static char header[GET_HDR_SZ];
+    char *p = NULL;
     char *q = NULL;
     char got = 0;
     int namelen = strlen(name);
-    int l;
 
     if (!mime || !name)
 	return NULL;
@@ -132,11 +130,10 @@ mime_get_header(const char *mime, const char *name)
 	    continue;
 	if (!isspace(p[namelen]) && p[namelen] != ':')
 	    continue;
-	l = strcspn(p, "\n\r") + 1;
-	if (l > GET_HDR_SZ)
-	    l = GET_HDR_SZ;
-	xstrncpy(header, p, l);
+	strncpy(header, p, GET_HDR_SZ);
 	debug(25, 5, "mime_get_header: checking '%s'\n", header);
+	header[GET_HDR_SZ - 1] = 0;
+	header[strcspn(header, "\n\r")] = 0;
 	q = header;
 	q += namelen;
 	if (*q == ':')
@@ -153,11 +150,10 @@ mime_get_header(const char *mime, const char *name)
 
 /* need to take the lowest, non-zero pointer to the end of the headers.
  * The headers end at the first empty line */
-char *
-mime_headers_end(const char *mime)
+char *mime_headers_end(char *mime)
 {
-    const char *p1, *p2;
-    const char *end = NULL;
+    char *p1, *p2;
+    char *end = NULL;
 
     p1 = strstr(mime, "\r\n\r\n");
     p2 = strstr(mime, "\n\n");
@@ -169,13 +165,12 @@ mime_headers_end(const char *mime)
     if (end)
 	end += (end == p1 ? 4 : 2);
 
-    return (char *) end;
+    return end;
 }
 
-int
-mime_headers_size(const char *mime)
+int mime_headers_size(char *mime)
 {
-    const char *end;
+    char *end;
 
     end = mime_headers_end(mime);
 
@@ -185,14 +180,14 @@ mime_headers_size(const char *mime)
 	return 0;
 }
 
-const ext_table_entry *
-mime_ext_to_type(const char *extension)
+ext_table_entry *mime_ext_to_type(extension)
+     char *extension;
 {
     int i;
     int low;
     int high;
     int comp;
-    LOCAL_ARRAY(char, ext, 16);
+    static char ext[16];
     char *cp = NULL;
 
     if (!extension || strlen(extension) >= (sizeof(ext) - 1))
@@ -225,15 +220,19 @@ mime_ext_to_type(const char *extension)
  *  Returns the MIME header in the provided 'result' buffer, and
  *  returns non-zero on error, or 0 on success.
  */
-int
-mk_mime_hdr(char *result, const char *type, int size, time_t ttl, time_t lmt)
+int mk_mime_hdr(result, ttl, size, lmt, type)
+     char *result;
+     char *type;
+     int size;
+     time_t ttl;
+     time_t lmt;
 {
     time_t expiretime;
     time_t t;
-    LOCAL_ARRAY(char, date, 100);
-    LOCAL_ARRAY(char, expires, 100);
-    LOCAL_ARRAY(char, last_modified, 100);
-    LOCAL_ARRAY(char, content_length, 100);
+    static char date[100];
+    static char expires[100];
+    static char last_modified[100];
+    static char content_length[100];
 
     if (result == NULL)
 	return 1;
@@ -241,11 +240,11 @@ mk_mime_hdr(char *result, const char *type, int size, time_t ttl, time_t lmt)
     expiretime = ttl ? t + ttl : 0;
     date[0] = expires[0] = last_modified[0] = '\0';
     content_length[0] = result[0] = '\0';
-    sprintf(date, "Date: %s\r\n", mkrfc1123(t));
+    sprintf(date, "Date: %s\r\n", mkrfc850(&t));
     if (ttl >= 0)
-	sprintf(expires, "Expires: %s\r\n", mkrfc1123(expiretime));
+	sprintf(expires, "Expires: %s\r\n", mkrfc850(&expiretime));
     if (lmt)
-	sprintf(last_modified, "Last-Modified: %s\r\n", mkrfc1123(lmt));
+	sprintf(last_modified, "Last-Modified: %s\r\n", mkrfc850(&lmt));
     if (size > 0)
 	sprintf(content_length, "Content-Length: %d\r\n", size);
     sprintf(result, "Server: %s/%s\r\n%s%s%sContent-Type: %s\r\n%s",

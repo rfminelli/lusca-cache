@@ -3,7 +3,7 @@
  *
  * AUTHOR: Harvest Derived
  *
- * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
+ * SQUID Internet Object Cache  http://www.nlanr.net/Squid/
  * --------------------------------------------------------
  *
  *  Squid is the result of efforts by numerous individuals from the
@@ -117,8 +117,7 @@ struct icp_common_s {
     u_num32 shostid;		/* sender host id */
 };
 
-#define ICP_FLAG_HIT_OBJ     0x80000000ul
-#define ICP_FLAG_NETDB_GUNK   0x40000000ul
+#define ICP_FLAG_HIT_OBJ 0x80000000
 
 #define ICP_COMMON_SZ (sizeof(icp_common_t))
 #define ICP_HDR_SZ (sizeof(icp_common_t)+sizeof(u_num32))
@@ -265,7 +264,6 @@ typedef struct icp_message_s icp_message_t;
 #define ICP_VERSION_3		3
 #define ICP_VERSION_CURRENT	ICP_VERSION_2
 
-#if 0
 extern int icp_proto_errno;	/* operation errors */
 extern int icp_hit _PARAMS((int sock, u_num32 reqnum, u_num32 * auth, u_num32 size));
 extern int icp_miss _PARAMS((int sock, u_num32 reqnum, u_num32 * auth));
@@ -273,7 +271,6 @@ extern int icp_error _PARAMS((int sock, u_num32 reqnum, u_num32 * auth, unsigned
 extern int icp_databegin _PARAMS((int sock, u_num32 reqnum, u_num32 * auth, u_num32 ttl, u_num32 timestamp, char *data));
 extern int icp_data _PARAMS((int sock, u_num32 reqnum, u_num32 * auth, char *data));
 extern int icp_dataend _PARAMS((int sock, u_num32 reqnum, u_num32 * auth, char *data));
-#endif
 
 typedef struct _protodispatch_data {
     int fd;
@@ -286,21 +283,17 @@ typedef struct _protodispatch_data {
     int query_neighbors;
     int n_edges;
     struct _edge *single_parent;
-    struct _edge *default_parent;
 #if DELAY_HACK
     int delay_fetch;
 #endif
 } protodispatch_data;
 
+extern int proto_cachable _PARAMS((char *url, int method));
 extern int protoDispatch _PARAMS((int, char *, StoreEntry *, request_t *));
-extern int protoUnregister _PARAMS((int fd,
-	StoreEntry *,
-	request_t *,
-	struct in_addr));
+extern int protoUndispatch _PARAMS((int, char *, StoreEntry *, request_t *));
 extern int getFromDefaultSource _PARAMS((int, StoreEntry *));
-extern int protoStart _PARAMS((int, StoreEntry *, edge *, request_t *));
+extern int getFromCache _PARAMS((int, StoreEntry *, edge *, request_t *));
 extern void protoCancelTimeout _PARAMS((int fd, StoreEntry *));
-extern int matchInsideFirewall _PARAMS((const char *));
 
 #define DIRECT_NO    0
 #define DIRECT_MAYBE 1

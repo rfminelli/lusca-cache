@@ -1,10 +1,9 @@
-
 /*
  * $Id$
  *
  * AUTHOR: Harvest Derived
  *
- * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
+ * SQUID Internet Object Cache  http://www.nlanr.net/Squid/
  * --------------------------------------------------------
  *
  *  Squid is the result of efforts by numerous individuals from the
@@ -115,10 +114,9 @@ typedef struct {
 } Stack;
 
 extern void *pop _PARAMS((Stack *));
-extern int empty_stack _PARAMS((const Stack *));
-extern int full_stack _PARAMS((const Stack *));
+extern int empty_stack _PARAMS((Stack *));
+extern int full_stack _PARAMS((Stack *));
 extern void push _PARAMS((Stack *, void *));
 extern void init_stack _PARAMS((Stack *, int));
-extern void stackFreeMemory _PARAMS((Stack *));
 
 #endif /* _STACK_H_ */
