@@ -12,7 +12,7 @@ msntauth: $(OBJECTS)
 	$(CC) $(CFLAGS) -o msntauth $(OBJECTS)
 
 install: msntauth
-	install msntauth $(INSTALLBIN)
+	install -m 0111 msntauth $(INSTALLBIN)
 
 clean:
 	rm -f msntauth libsmbvalid.a $(OBJECTS)

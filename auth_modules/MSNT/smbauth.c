@@ -47,36 +47,16 @@ int main()
 {
   char username[256];
   char password[256];
-  char wstr[256];
 
   while (1)
   {
-    // Read whole line from standard input. Terminate on break.
-    if (fgets(wstr, 255, stdin) == NULL)    
-       break;
-
-    // Clear any current settings
-    username[0] = '\0';
-    password[0] = '\0';
-    sscanf(wstr, "%s %s", username, password);          // Extract parameters
-
-    // Check for invalid or blank entries
-    if ((username[0] == '\0') || (password[0] == '\0'))
-    {
-       puts("ERR");
-       fflush(stdout);
-       continue;
-    }
+    scanf("%s %s", username, password);
 
     if (Valid_User(username, password, PRIMARY_DC, BACKUP_DC, NTDOMAIN) == 0)
        puts("OK");
     else
        puts("ERR");
-       
-    fflush(stdout);
   }
-  
-  return 0;
 }
 
 /* Valid_User return codes -
