@@ -79,6 +79,9 @@
 #include <signal.h>
 #include <time.h>
 #include <sys/time.h>		/* for select(2) */
+#ifdef HAVE_SYS_SELECT_H
+#include <sys/select.h>
+#endif
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
