@@ -437,12 +437,11 @@ icpCachable(icpStateData * icpState)
 	    return 0;
 #ifdef NO_CACHE_ACL
     ia = ipcache_gethostbyname(req->host, 0);
-    if (ia != NULL) {
+    if (ia != NULL)
 	checklist.dst_addr = ia->in_addrs[ia->cur];
-	checklist.request = req;
-	if (!aclCheck(UncacheableList, &checklist))
-	    return 0;
-    }
+    checklist.request = req;
+    if (!aclCheck(UncacheableList, &checklist))
+	return 0;
 #endif /* NO_CACHE_ACL */
     if (req->protocol == PROTO_HTTP)
 	return httpCachable(request, method);
