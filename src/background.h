@@ -113,7 +113,7 @@
  *
  * Add func to the list of background processes
  */
-extern void runInBackground(char *name, int (*func) (void *), void *arg, void (*done) _PARAMS((void *)));
+extern void runInBackground _PARAMS((char *name, int (*func) (void *), void *arg, void (*done) (void *)));
 
 /* int doBackgroundProcessing()
  * Call one background processing function

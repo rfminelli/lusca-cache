@@ -33,15 +33,14 @@
 #define MAX_URL  4096
 #define MAX_LOGIN_SZ  128
 
-enum {
-    METHOD_NONE,		/* 000 */
-    METHOD_GET,			/* 001 */
-    METHOD_POST,		/* 010 */
-    METHOD_PUT,			/* 011 */
-    METHOD_HEAD,		/* 100 */
-    METHOD_CONNECT		/* 101 */
-};
-typedef unsigned int method_t;
+typedef enum {
+    METHOD_NONE,
+    METHOD_GET,
+    METHOD_POST,
+    METHOD_PUT,
+    METHOD_HEAD,
+    METHOD_CONNECT
+} method_t;
 
 extern char *RequestMethodStr[];
 
@@ -65,9 +64,19 @@ struct _request {
     int port;
     char urlpath[MAX_URL + 1];
     int link_count;		/* free when zero */
-    struct _hierarchyLogData hierarchy;
+    hier_code hierarchy_code;
     int flags;
 };
+
+/* bitfields for the flags member */
+#define		REQ_UNUSED1	0x01
+#define		REQ_NOCACHE	0x02
+#define		REQ_IMS		0x04
+#define		REQ_AUTH	0x08
+#define		REQ_CACHABLE	0x10
+#define 	REQ_UNUSED2	0x20
+#define 	REQ_HIERARCHICAL 0x40
+#define 	REQ_LOOPDETECT  0x80
 
 extern char *url_convert_hex _PARAMS((char *org_url, int allocate));
 extern char *url_escape _PARAMS((char *url));
@@ -81,15 +90,5 @@ extern request_t *requestLink _PARAMS((request_t *));
 extern void requestUnlink _PARAMS((request_t *));
 extern int matchDomainName _PARAMS((char *d, char *h));
 extern int urlCheckRequest _PARAMS((request_t *));
-
-/* bitfields for the flags member */
-#define		REQ_UNUSED1	0x01
-#define		REQ_NOCACHE	0x02
-#define		REQ_IMS		0x04
-#define		REQ_AUTH	0x08
-#define		REQ_CACHABLE	0x10
-#define 	REQ_UNUSED2	0x20
-#define 	REQ_HIERARCHICAL 0x40
-#define 	REQ_LOOPDETECT  0x80
 
 #endif /* _URL_HEADER_ */

@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -103,50 +102,16 @@
  *   re-implementations of code complying to this set of standards.  
  */
 
-#ifndef _FQDNCACHE_H_
-#define _FQDNCACHE_H_
+#ifndef _ANSIHELP_H_
+#define _ANSIHELP_H_
 
-typedef void (*FQDNH) (int, char *, void *);
+/* functions available in proto library */
+#ifndef _PARAMS
+#if defined(__STDC__) || defined(__cplusplus) || defined(__STRICT_ANSI__)
+#define _PARAMS(ARGS) ARGS
+#else /* Traditional C */
+#define _PARAMS(ARGS) ()
+#endif /* __STDC__ */
+#endif /* _PARAMS */
 
-enum {
-    FQDN_CACHED,
-    FQDN_NEGATIVE_CACHED,
-    FQDN_PENDING,		/* waiting to be dispatched */
-    FQDN_DISPATCHED		/* waiting for reply from dnsserver */
-};
-typedef unsigned int fqdncache_status_t;
-
-#define FQDN_BLOCKING_LOOKUP	0x01
-#define FQDN_LOOKUP_IF_MISS	0x02
-#define FQDN_LOCK_ENTRY		0x04
-
-#define FQDN_MAX_NAMES 5
-typedef struct _fqdncache_entry {
-    /* first two items must be equivalent to hash_link in hash.h */
-    char *name;
-    struct _fqdncache_entry *next;
-    time_t lastref;
-    time_t expires;
-    unsigned char name_count;
-    char *names[FQDN_MAX_NAMES + 1];
-    struct _fqdn_pending *pending_head;
-    char *error_message;
-    fqdncache_status_t status:3;
-} fqdncache_entry;
-
-extern int fqdncache_nbgethostbyaddr _PARAMS((struct in_addr, int fd, FQDNH handler, void *handlerData));
-extern int fqdncacheUnregister _PARAMS((struct in_addr, int));
-extern char *fqdncache_gethostbyaddr _PARAMS((struct in_addr, int flags));
-extern void fqdncache_init _PARAMS((void));
-extern void fqdnStats _PARAMS((StoreEntry *));
-extern void fqdncacheShutdownServers _PARAMS((void));
-extern void fqdncacheOpenServers _PARAMS((void));
-extern void fqdncacheReleaseInvalid _PARAMS((char *));
-extern char *fqdnFromAddr _PARAMS((struct in_addr));
-extern int fqdncacheQueueDrain _PARAMS((void));
-
-extern char *dns_error_message;
-
-#define FQDNCACHE_AV_FACTOR 1000
-
-#endif
+#endif /* _ANSIHELP_H_ */

@@ -105,11 +105,96 @@
 
 #include "squid.h"
 
-struct SquidConfig Config;
+static struct {
+    struct {
+	int maxSize;
+	int highWatherMark;
+	int lowWaterMark;
+    } Mem , Swap;
+    struct {
+	int maxObjSize;
+	int defaultTtl;
+    } Gopher, Http, Ftp;
+    struct {
+	int maxObjSize;
+	int defaultTtl;
+	char *relayHost;
+	u_short relayPort;
+    } Wais;
+    int negativeTtl;
+    int negativeDnsTtl;
+    int positiveDnsTtl;
+    int readTimeout;
+    int lifetimeDefault;
+    int lifetimeShutdown;
+    int connectTimeout;
+    int ageMaxDefault;
+    int cleanRate;
+    int dnsChildren;
+    int maxRequestSize;
+    double hotVmFactor;
+    struct {
+	u_short http;
+	u_short icp;
+    } Port;
+    struct {
+	char *log;
+	char *access;
+	char *hierarchy;
+	char *store;
+	int rotateNumber;
+    } Log;
+    char *adminEmail;
+    char *effectiveUser;
+    char *effectiveGroup;
+    struct {
+	char *ftpget;
+	char *ftpget_opts;
+	char *dnsserver;
+    } Program;
+    int sourcePing;
+    int quickAbort;
+    int commonLogFormat;
+    int neighborTimeout;
+    int stallDelay;
+    int singleParentBypass;
+    struct {
+	char *host;
+	char *prefix;
+	u_short port;
+	int withProxy;
+    } Accel;
+    char *appendDomain;
+    char *debugOptions;
+    char *pidFilename;
+    char *visibleHostname;
+    char *ftpUser;
+    char *errHtmlText;
+    struct {
+	char *host;
+	u_short port;
+	char *file;
+	int rate;
+    } Announce;
+    struct {
+	struct in_addr tcp_incoming;
+	struct in_addr tcp_outgoing;
+	struct in_addr udp_incoming;
+	struct in_addr udp_outgoing;
+    } Addrs;
+    wordlist *cache_dirs;
+    wordlist *http_stoplist;
+    wordlist *gopher_stoplist;
+    wordlist *ftp_stoplist;
+    wordlist *hierarchy_stoplist;
+    wordlist *local_domain_list;
+    wordlist *inside_firewall_list;
+    wordlist *dns_testname_list;
+} Config;
 
 #define DefaultMemMaxSize 	(16 << 20)	/* 16 MB */
-#define DefaultMemHighWaterMark 90	/* 90% */
-#define DefaultMemLowWaterMark  75	/* 75% */
+#define DefaultMemHighWatherMark 90	/* 90% */
+#define DefaultMemLowWatherMark  75	/* 75% */
 #define DefaultSwapMaxSize	(100 << 10)	/* 100 MB (100*1024 kbytes) */
 #define DefaultSwapHighWaterMark 90	/* 90% */
 #define DefaultSwapLowWaterMark  75	/* 75% */
@@ -125,7 +210,6 @@ struct SquidConfig Config;
 #define DefaultWaisRelayHost	(char *)NULL
 #define DefaultWaisRelayPort	0
 
-#define DefaultExpireAge	(86400 * 7)	/* 1 week */
 #define DefaultNegativeTtl	(5 * 60)	/* 5 min */
 #define DefaultNegativeDnsTtl	(2 * 60)	/* 2 min */
 #define DefaultPositiveDnsTtl	(360 * 60)	/* 6 hours */
@@ -135,27 +219,22 @@ struct SquidConfig Config;
 #define DefaultConnectTimeout	(2 * 60)	/* 2 min */
 #define DefaultDefaultAgeMax	(3600 * 24 * 30)	/* 30 days */
 #define DefaultCleanRate	-1	/* disabled */
-#define DefaultDnsChildren	5	/* 5 processes */
-#define DefaultRedirectChildren	5	/* 5 processes */
+#define DefaultDnsChildren	5	/* 3 processes */
 #define DefaultMaxRequestSize	(100 << 10)	/* 100Kb */
+#define DefaultHotVmFactor	0.0	/* disabled */
 
 #define DefaultHttpPortNum	CACHE_HTTP_PORT
 #define DefaultIcpPortNum	CACHE_ICP_PORT
 
 #define DefaultCacheLogFile	DEFAULT_CACHE_LOG
 #define DefaultAccessLogFile	DEFAULT_ACCESS_LOG
+#define DefaultHierarchyLogFile DEFAULT_HIERARCHY_LOG
 #define DefaultStoreLogFile	DEFAULT_STORE_LOG
-#if USE_PROXY_AUTH
-#define DefaultProxyAuthFile    (char *)NULL	/* default NONE */
-#define DefaultProxyAuthIgnoreDomain (char *)NULL	/* default NONE */
-#endif /* USE_PROXY_AUTH */
 #define DefaultLogRotateNumber  10
 #define DefaultAdminEmail	"webmaster"
 #define DefaultFtpgetProgram	DEFAULT_FTPGET
 #define DefaultFtpgetOptions	""
 #define DefaultDnsserverProgram DEFAULT_DNSSERVER
-#define DefaultPingerProgram    DEFAULT_PINGER
-#define DefaultRedirectProgram  (char *)NULL	/* default NONE */
 #define DefaultEffectiveUser	(char *)NULL	/* default NONE */
 #define DefaultEffectiveGroup	(char *)NULL	/* default NONE */
 #define DefaultAppendDomain	(char *)NULL	/* default NONE */
@@ -167,14 +246,8 @@ struct SquidConfig Config;
 #define DefaultAccelPort	0	/* default off */
 #define DefaultAccelWithProxy	0	/* default off */
 #define DefaultSourcePing	0	/* default off */
-#define DefaultCommonLogFormat	0	/* default off */
-#if LOG_FULL_HEADERS
-#define DefaultLogMimeHdrs	0	/* default off */
-#endif /* LOG_FULL_HEADERS */
-#define DefaultIdentLookup	0	/* default off */
-#define DefaultQuickAbortMin	-1	/* default off */
-#define DefaultQuickAbortPct	0	/* default off */
-#define DefaultQuickAbortMax	0	/* default off */
+#define DefaultCommonLogFormat	1	/* default on */
+#define DefaultQuickAbort	0	/* default off */
 #define DefaultNeighborTimeout  2	/* 2 seconds */
 #define DefaultStallDelay	1	/* 1 seconds */
 #define DefaultSingleParentBypass 0	/* default off */
@@ -185,20 +258,20 @@ struct SquidConfig Config;
 #define DefaultAnnouncePort	3131
 #define DefaultAnnounceFile	(char *)NULL	/* default NONE */
 #define DefaultAnnounceRate	0	/* Default off */
-#define DefaultTcpRcvBufsz	0	/* use system default */
 #define DefaultTcpIncomingAddr	INADDR_ANY
 #define DefaultTcpOutgoingAddr	INADDR_NONE
 #define DefaultUdpIncomingAddr	INADDR_ANY
 #define DefaultUdpOutgoingAddr	INADDR_NONE
-#define DefaultClientNetmask    0xFFFFFFFFul
-#define DefaultSslProxyPort	0
-#define DefaultSslProxyHost	(char *)NULL
-#define DefaultIpcacheSize	1024
-#define DefaultIpcacheLow	90
-#define DefaultIpcacheHigh	95
-#define DefaultMaxHotvmObjSize	(12<<10)	/* 12k */
 
+ip_acl *local_ip_list = NULL;
+ip_acl *firewall_ip_list = NULL;
+
+int zap_disk_store = 0;		/* off, try to rebuild from disk */
 int httpd_accel_mode = 0;	/* for fast access */
+int emulate_httpd_log = DefaultCommonLogFormat;		/* for fast access */
+time_t neighbor_timeout = DefaultNeighborTimeout;	/* for fast access */
+int single_parent_bypass = 0;
+int DnsPositiveTtl = DefaultPositiveDnsTtl;
 char *DefaultSwapDir = DEFAULT_SWAP_DIR;
 char *DefaultConfigFile = DEFAULT_CONFIG_FILE;
 char *ConfigFile = NULL;	/* the whole thing */
@@ -210,10 +283,7 @@ char config_input_line[BUFSIZ];
 int config_lineno = 0;
 
 static char *safe_xstrdup _PARAMS((char *p));
-static void parseOnOff _PARAMS((int *));
-static void parseIntegerValue _PARAMS((int *));
 static char fatal_str[BUFSIZ];
-
 static void configDoConfigure _PARAMS((void));
 static void configFreeMemory _PARAMS((void));
 static void configSetFactoryDefaults _PARAMS((void));
@@ -223,48 +293,71 @@ static void parseAnnounceToLine _PARAMS((void));
 static void parseAppendDomainLine _PARAMS((void));
 static void parseCacheAnnounceLine _PARAMS((void));
 static void parseCacheHostLine _PARAMS((void));
+static void parseCleanRateLine _PARAMS((void));
+static void parseConnectTimeout _PARAMS((void));
 static void parseDebugOptionsLine _PARAMS((void));
+static void parseDirLine _PARAMS((void));
+static void parseDnsChildrenLine _PARAMS((void));
 static void parseDnsProgramLine _PARAMS((void));
+static void parseDnsTestnameLine _PARAMS((void));
 static void parseEffectiveUserLine _PARAMS((void));
 static void parseErrHtmlLine _PARAMS((void));
 static void parseFtpLine _PARAMS((void));
 static void parseFtpOptionsLine _PARAMS((void));
 static void parseFtpProgramLine _PARAMS((void));
+static void parseFtpStopLine _PARAMS((void));
 static void parseFtpUserLine _PARAMS((void));
 static void parseGopherLine _PARAMS((void));
-static void parseWordlist _PARAMS((wordlist **));
+static void parseGopherStopLine _PARAMS((void));
+static void parseHierachyLogLine _PARAMS((void));
+static void parseHierarchyStoplistLine _PARAMS((void));
 static void parseHostAclLine _PARAMS((void));
 static void parseHostDomainLine _PARAMS((void));
+static void parseHotVmFactorLine _PARAMS((void));
 static void parseHttpLine _PARAMS((void));
 static void parseHttpPortLine _PARAMS((void));
+static void parseHttpStopLine _PARAMS((void));
 static void parseHttpdAccelLine _PARAMS((void));
 static void parseIPLine _PARAMS((ip_acl ** list));
 static void parseIcpPortLine _PARAMS((void));
+static void parseInsideFirewallLine _PARAMS((void));
+static void parseLifetimeLine _PARAMS((void));
 static void parseLocalDomainFile _PARAMS((char *fname));
 static void parseLocalDomainLine _PARAMS((void));
 static void parseLogLine _PARAMS((void));
+static void parseLogfileRotateLine _PARAMS((void));
+static void parseMemHighLine _PARAMS((void));
 static void parseMemLine _PARAMS((void));
+static void parseMemLowLine _PARAMS((void));
 static void parseMgrLine _PARAMS((void));
+static void parseNegativeDnsLine _PARAMS((void));
+static void parseNegativeLine _PARAMS((void));
+static void parseNeighborTimeout _PARAMS((void));
 static void parsePidFilenameLine _PARAMS((void));
+static void parsePositiveDnsLine _PARAMS((void));
+static void parseReadTimeoutLine _PARAMS((void));
 static void parseRequestSizeLine _PARAMS((void));
+static void parseShutdownLifetimeLine _PARAMS((void));
 static void parseStoreLogLine _PARAMS((void));
+static void parseSwapHighLine _PARAMS((void));
 static void parseSwapLine _PARAMS((void));
-static void parseTTLPattern _PARAMS((int icase, int force));
+static void parseSwapLowLine _PARAMS((void));
+static void parseTTLPattern _PARAMS((int icase));
 static void parseVisibleHostnameLine _PARAMS((void));
 static void parseWAISRelayLine _PARAMS((void));
-static void parseMinutesLine _PARAMS((int *));
+static void parseOnOff _PARAMS((int *));
 static void ip_acl_destroy _PARAMS((ip_acl **));
 
-void
-self_destruct(void)
+void self_destruct()
 {
     sprintf(fatal_str, "Bungled %s line %d: %s",
 	cfg_filename, config_lineno, config_input_line);
     fatal(fatal_str);
 }
 
-int
-ip_acl_match(struct in_addr c, ip_acl * a)
+int ip_acl_match(c, a)
+     struct in_addr c;
+     ip_acl *a;
 {
     static struct in_addr h;
 
@@ -275,8 +368,8 @@ ip_acl_match(struct in_addr c, ip_acl * a)
 	return 0;
 }
 
-static void
-ip_acl_destroy(ip_acl ** a)
+static void ip_acl_destroy(a)
+     ip_acl **a;
 {
     ip_acl *b;
     ip_acl *n;
@@ -287,8 +380,9 @@ ip_acl_destroy(ip_acl ** a)
     *a = NULL;
 }
 
-ip_access_type
-ip_access_check(struct in_addr address, ip_acl * list)
+ip_access_type ip_access_check(address, list)
+     struct in_addr address;
+     ip_acl *list;
 {
     static int init = 0;
     static struct in_addr localhost;
@@ -321,8 +415,10 @@ ip_access_check(struct in_addr address, ip_acl * list)
 }
 
 
-void
-addToIPACL(ip_acl ** list, char *ip_str, ip_access_type access)
+void addToIPACL(list, ip_str, access)
+     ip_acl **list;
+     char *ip_str;
+     ip_access_type access;
 {
     ip_acl *p, *q;
     int a1, a2, a3, a4;
@@ -361,15 +457,15 @@ addToIPACL(ip_acl ** list, char *ip_str, ip_access_type access)
 	switch (c) {
 	case 4:
 	    if (a1 == 0 && a2 == 0 && a3 == 0 && a4 == 0)	/* world   */
-		lmask.s_addr = 0x00000000ul;
+		lmask.s_addr = 0x00000000;
 	    else if (a2 == 0 && a3 == 0 && a4 == 0)	/* class A */
-		lmask.s_addr = htonl(0xff000000ul);
+		lmask.s_addr = htonl(0xff000000);
 	    else if (a3 == 0 && a4 == 0)	/* class B */
-		lmask.s_addr = htonl(0xffff0000ul);
+		lmask.s_addr = htonl(0xffff0000);
 	    else if (a4 == 0)	/* class C */
-		lmask.s_addr = htonl(0xffffff00ul);
+		lmask.s_addr = htonl(0xffffff00);
 	    else
-		lmask.s_addr = 0xfffffffful;
+		lmask.s_addr = 0xffffffff;
 	    break;
 
 	case 5:
@@ -378,7 +474,7 @@ addToIPACL(ip_acl ** list, char *ip_str, ip_access_type access)
 		    ip_str);
 		return;
 	    }
-	    lmask.s_addr = htonl(0xfffffffful << (32 - m1));
+	    lmask.s_addr = htonl(0xffffffff << (32 - m1));
 	    break;
 
 	case 8:
@@ -397,8 +493,8 @@ addToIPACL(ip_acl ** list, char *ip_str, ip_access_type access)
     q->mask.s_addr = lmask.s_addr;
 }
 
-void
-wordlistDestroy(wordlist ** list)
+void wordlistDestroy(list)
+     wordlist **list;
 {
     wordlist *w = NULL;
     wordlist *n = NULL;
@@ -411,8 +507,9 @@ wordlistDestroy(wordlist ** list)
     *list = NULL;
 }
 
-void
-wordlistAdd(wordlist ** list, char *key)
+void wordlistAdd(list, key)
+     wordlist **list;
+     char *key;
 {
     wordlist *p = NULL;
     wordlist *q = NULL;
@@ -433,8 +530,8 @@ wordlistAdd(wordlist ** list, char *key)
     }
 }
 
-void
-intlistDestroy(intlist ** list)
+void intlistDestroy(list)
+     intlist **list;
 {
     intlist *w = NULL;
     intlist *n = NULL;
@@ -448,7 +545,8 @@ intlistDestroy(intlist ** list)
 
 
 /* Use this #define in all the parse*() functions.  Assumes 
- * char *token is defined */
+ * ** char *token is defined
+ */
 
 #define GetInteger(var) \
 	token = strtok(NULL, w_space); \
@@ -458,8 +556,7 @@ intlistDestroy(intlist ** list)
 		self_destruct();
 
 
-static void
-parseCacheHostLine(void)
+static void parseCacheHostLine()
 {
     char *type = NULL;
     char *hostname = NULL;
@@ -470,6 +567,7 @@ parseCacheHostLine(void)
     int weight = 1;
     int i;
 
+    /* Parse a cache_host line */
     if (!(hostname = strtok(NULL, w_space)))
 	self_destruct();
     if (!(type = strtok(NULL, w_space)))
@@ -496,8 +594,7 @@ parseCacheHostLine(void)
     neighbors_cf_add(hostname, type, http_port, icp_port, options, weight);
 }
 
-static void
-parseHostDomainLine(void)
+static void parseHostDomainLine()
 {
     char *host = NULL;
     char *domain = NULL;
@@ -507,8 +604,7 @@ parseHostDomainLine(void)
 	neighbors_cf_domain(host, domain);
 }
 
-static void
-parseHostAclLine(void)
+static void parseHostAclLine()
 {
     char *host = NULL;
     char *aclname = NULL;
@@ -518,8 +614,7 @@ parseHostAclLine(void)
 	neighbors_cf_acl(host, aclname);
 }
 
-static void
-parseMemLine(void)
+static void parseMemLine()
 {
     char *token;
     int i;
@@ -527,8 +622,38 @@ parseMemLine(void)
     Config.Mem.maxSize = i << 20;
 }
 
-static void
-parseSwapLine(void)
+static void parseMemHighLine()
+{
+    char *token;
+    int i;
+    GetInteger(i);
+    Config.Mem.highWatherMark = i;
+}
+
+static void parseMemLowLine()
+{
+    char *token;
+    int i;
+    GetInteger(i);
+    Config.Mem.lowWaterMark = i;
+}
+
+static void parseHotVmFactorLine()
+{
+    char *token = NULL;
+    double d;
+
+    token = strtok(NULL, w_space);
+    if (token == NULL)
+	self_destruct();
+    if (sscanf(token, "%lf", &d) != 1)
+	self_destruct();
+    if (d < 0)
+	self_destruct();
+    Config.hotVmFactor = d;
+}
+
+static void parseSwapLine()
 {
     char *token;
     int i;
@@ -536,8 +661,23 @@ parseSwapLine(void)
     Config.Swap.maxSize = i << 10;
 }
 
-static void
-parseHttpLine(void)
+static void parseSwapHighLine()
+{
+    char *token;
+    int i;
+    GetInteger(i);
+    Config.Swap.highWatherMark = i;
+}
+
+static void parseSwapLowLine()
+{
+    char *token;
+    int i;
+    GetInteger(i);
+    Config.Swap.lowWaterMark = i;
+}
+
+static void parseHttpLine()
 {
     char *token;
     int i;
@@ -547,8 +687,7 @@ parseHttpLine(void)
     Config.Http.defaultTtl = i * 60;
 }
 
-static void
-parseGopherLine(void)
+static void parseGopherLine()
 {
     char *token;
     int i;
@@ -558,8 +697,7 @@ parseGopherLine(void)
     Config.Gopher.defaultTtl = i * 60;
 }
 
-static void
-parseFtpLine(void)
+static void parseFtpLine()
 {
     char *token;
     int i;
@@ -569,8 +707,8 @@ parseFtpLine(void)
     Config.Ftp.defaultTtl = i * 60;
 }
 
-static void
-parseTTLPattern(int icase, int force)
+static void parseTTLPattern(icase)
+     int icase;
 {
     char *token;
     char *pattern;
@@ -591,54 +729,91 @@ parseTTLPattern(int icase, int force)
     if (token != (char *) NULL) {	/* pct_age is optional */
 	if (sscanf(token, "%d", &pct_age) != 1)
 	    self_destruct();
-
-	token = strtok(NULL, w_space);	/* token: age_max */
-	if (token != (char *) NULL) {	/* age_max is optional */
-	    if (sscanf(token, "%d", &i) != 1)
-		self_destruct();
-	    age_max = (time_t) (i * 60);	/* convert minutes to seconds */
-	}
     }
-    ttlAddToList(pattern, icase, force, abs_ttl, pct_age, age_max);
+    token = strtok(NULL, w_space);	/* token: age_max */
+    if (token != (char *) NULL) {	/* age_max is optional */
+	if (sscanf(token, "%d", &i) != 1)
+	    self_destruct();
+	age_max = (time_t) (i * 60);	/* convert minutes to seconds */
+    }
+    ttlAddToList(pattern, icase, abs_ttl, pct_age, age_max);
+
     safe_free(pattern);
 }
 
-static void
-parseQuickAbort(void)
-{
-    char *token;
-    int i;
-    token = strtok(NULL, w_space);
-    if (!strcasecmp(token, "on")) {
-	Config.quickAbort.min = 10 << 10;	/* 10k */
-	Config.quickAbort.pct = 64;	/* 50% */
-	Config.quickAbort.max = 100 << 10;	/* 100k */
-    } else if (!strcasecmp(token, "off")) {
-	Config.quickAbort.min = -1;
-	Config.quickAbort.pct = 0;
-	Config.quickAbort.max = 0;
-    } else {
-	if (sscanf(token, "%d", &i) != 1)
-	    self_destruct();
-	Config.quickAbort.min = i * 1024;
-	GetInteger(i);
-	Config.quickAbort.pct = i * 128 / 100;	/* 128 is full scale */
-	GetInteger(i);
-	Config.quickAbort.max = i * 1024;
-    }
-}
-
-static void
-parseMinutesLine(int *iptr)
+static void parseNegativeLine()
 {
     char *token;
     int i;
     GetInteger(i);
-    *iptr = i * 60;
+    Config.negativeTtl = i * 60;
 }
 
-static void
-parseRequestSizeLine(void)
+static void parseNegativeDnsLine()
+{
+    char *token;
+    int i;
+    GetInteger(i);
+    Config.negativeDnsTtl = i * 60;
+}
+
+static void parsePositiveDnsLine()
+{
+    char *token;
+    int i;
+    GetInteger(i);
+    Config.positiveDnsTtl = i * 60;
+}
+
+static void parseReadTimeoutLine()
+{
+    char *token;
+    int i;
+    GetInteger(i);
+    Config.readTimeout = i * 60;
+}
+
+static void parseLifetimeLine()
+{
+    char *token;
+    int i;
+    GetInteger(i);
+    Config.lifetimeDefault = i * 60;
+}
+
+static void parseShutdownLifetimeLine()
+{
+    char *token;
+    int i;
+    GetInteger(i);
+    Config.lifetimeShutdown = i;
+}
+
+static void parseConnectTimeout()
+{
+    char *token;
+    int i;
+    GetInteger(i);
+    Config.connectTimeout = i;
+}
+
+static void parseCleanRateLine()
+{
+    char *token;
+    int i;
+    GetInteger(i);
+    Config.cleanRate = i * 60;
+}
+
+static void parseDnsChildrenLine()
+{
+    char *token;
+    int i;
+    GetInteger(i);
+    Config.dnsChildren = i;
+}
+
+static void parseRequestSizeLine()
 {
     char *token;
     int i;
@@ -646,8 +821,7 @@ parseRequestSizeLine(void)
     Config.maxRequestSize = i * 1024;
 }
 
-static void
-parseMgrLine(void)
+static void parseMgrLine()
 {
     char *token;
     token = strtok(NULL, w_space);
@@ -657,28 +831,20 @@ parseMgrLine(void)
     Config.adminEmail = xstrdup(token);
 }
 
-#if USE_PROXY_AUTH
-static void
-parseProxyAuthLine(void)
+static void parseDirLine()
 {
     char *token;
 
     token = strtok(NULL, w_space);
     if (token == NULL)
 	self_destruct();
-    safe_free(Config.proxyAuthFile);
-    safe_free(Config.proxyAuthIgnoreDomain);
-    Config.proxyAuthFile = xstrdup(token);
-    if ((token = strtok(NULL, w_space)))
-	Config.proxyAuthIgnoreDomain = xstrdup(token);
+    wordlistAdd(&Config.cache_dirs, token);
 }
-#endif /* USE_PROXY_AUTH */
 
-static void
-parseHttpdAccelLine(void)
+static void parseHttpdAccelLine()
 {
     char *token;
-    LOCAL_ARRAY(char, buf, BUFSIZ);
+    static char buf[BUFSIZ];
     int i;
 
     token = strtok(NULL, w_space);
@@ -694,8 +860,7 @@ parseHttpdAccelLine(void)
     httpd_accel_mode = 1;
 }
 
-static void
-parseEffectiveUserLine(void)
+static void parseEffectiveUserLine()
 {
     char *token;
 
@@ -712,8 +877,7 @@ parseEffectiveUserLine(void)
     Config.effectiveGroup = xstrdup(token);
 }
 
-static void
-parseLogLine(void)
+static void parseLogLine()
 {
     char *token;
     token = strtok(NULL, w_space);
@@ -723,8 +887,7 @@ parseLogLine(void)
     Config.Log.log = xstrdup(token);
 }
 
-static void
-parseAccessLogLine(void)
+static void parseAccessLogLine()
 {
     char *token;
     token = strtok(NULL, w_space);
@@ -734,8 +897,17 @@ parseAccessLogLine(void)
     Config.Log.access = xstrdup(token);
 }
 
-static void
-parseStoreLogLine(void)
+static void parseHierachyLogLine()
+{
+    char *token;
+    token = strtok(NULL, w_space);
+    if (token == NULL)
+	self_destruct();
+    safe_free(Config.Log.hierarchy);
+    Config.Log.hierarchy = xstrdup(token);
+}
+
+static void parseStoreLogLine()
 {
     char *token;
     token = strtok(NULL, w_space);
@@ -745,8 +917,15 @@ parseStoreLogLine(void)
     Config.Log.store = xstrdup(token);
 }
 
-static void
-parseFtpProgramLine(void)
+static void parseLogfileRotateLine()
+{
+    char *token;
+    int i;
+    GetInteger(i);
+    Config.Log.rotateNumber = i;
+}
+
+static void parseFtpProgramLine()
 {
     char *token;
     token = strtok(NULL, w_space);
@@ -756,8 +935,7 @@ parseFtpProgramLine(void)
     Config.Program.ftpget = xstrdup(token);
 }
 
-static void
-parseFtpOptionsLine(void)
+static void parseFtpOptionsLine()
 {
     char *token;
     token = strtok(NULL, "");	/* Note "", don't separate these */
@@ -767,8 +945,7 @@ parseFtpOptionsLine(void)
     Config.Program.ftpget_opts = xstrdup(token);
 }
 
-static void
-parseDnsProgramLine(void)
+static void parseDnsProgramLine()
 {
     char *token;
     token = strtok(NULL, w_space);
@@ -778,32 +955,7 @@ parseDnsProgramLine(void)
     Config.Program.dnsserver = xstrdup(token);
 }
 
-static void
-parseRedirectProgramLine(void)
-{
-    char *token;
-    token = strtok(NULL, w_space);
-    if (token == NULL)
-	self_destruct();
-    safe_free(Config.Program.redirect);
-    Config.Program.redirect = xstrdup(token);
-}
-
-static void
-parseOnOff(int *var)
-{
-    char *token;
-    token = strtok(NULL, w_space);
-    if (token == NULL)
-	self_destruct();
-    if (!strcasecmp(token, "on") || !strcasecmp(token, "enable"))
-	*var = 1;
-    else
-	*var = 0;
-}
-
-static void
-parseWAISRelayLine(void)
+static void parseWAISRelayLine()
 {
     char *token;
     int i;
@@ -818,8 +970,8 @@ parseWAISRelayLine(void)
     Config.Wais.maxObjSize = i << 20;
 }
 
-static void
-parseIPLine(ip_acl ** list)
+static void parseIPLine(list)
+     ip_acl **list;
 {
     char *token;
     while ((token = strtok(NULL, w_space))) {
@@ -827,16 +979,39 @@ parseIPLine(ip_acl ** list)
     }
 }
 
-static void
-parseWordlist(wordlist ** list)
+static void parseHttpStopLine()
+{
+    char *token;
+    token = strtok(NULL, w_space);
+    if (token == NULL)
+	return;
+    wordlistAdd(&Config.http_stoplist, token);
+}
+
+static void parseGopherStopLine()
+{
+    char *token;
+    token = strtok(NULL, w_space);
+    if (token == NULL)
+	return;
+    wordlistAdd(&Config.gopher_stoplist, token);
+}
+static void parseFtpStopLine()
+{
+    char *token;
+    token = strtok(NULL, w_space);
+    if (token == NULL)
+	return;
+    wordlistAdd(&Config.ftp_stoplist, token);
+}
+static void parseHierarchyStoplistLine()
 {
     char *token;
     while ((token = strtok(NULL, w_space)))
-	wordlistAdd(list, token);
+	wordlistAdd(&Config.hierarchy_stoplist, token);
 }
 
-static void
-parseAppendDomainLine(void)
+static void parseAppendDomainLine()
 {
     char *token;
     token = strtok(NULL, w_space);
@@ -848,8 +1023,8 @@ parseAppendDomainLine(void)
     Config.appendDomain = xstrdup(token);
 }
 
-static void
-parseAddressLine(struct in_addr *addr)
+static void parseAddressLine(addr)
+     struct in_addr *addr;
 {
     char *token;
     struct hostent *hp = NULL;
@@ -859,15 +1034,15 @@ parseAddressLine(struct in_addr *addr)
     if (inet_addr(token) != INADDR_NONE)
 	(*addr).s_addr = inet_addr(token);
     else if ((hp = gethostbyname(token)))
-	*addr = inaddrFromHostent(hp);
+	xmemcpy(addr, hp->h_addr, hp->h_length);
     else
 	self_destruct();
 }
 
-static void
-parseLocalDomainFile(char *fname)
+static void parseLocalDomainFile(fname)
+     char *fname;
 {
-    LOCAL_ARRAY(char, tmp_line, BUFSIZ);
+    static char tmp_line[BUFSIZ];
     FILE *fp = NULL;
     char *t = NULL;
 
@@ -891,8 +1066,7 @@ parseLocalDomainFile(char *fname)
     fclose(fp);
 }
 
-static void
-parseLocalDomainLine(void)
+static void parseLocalDomainLine()
 {
     char *token = NULL;
     struct stat sb;
@@ -905,8 +1079,23 @@ parseLocalDomainLine(void)
     }
 }
 
-static void
-parseHttpPortLine(void)
+static void parseInsideFirewallLine()
+{
+    char *token;
+    while ((token = strtok(NULL, w_space))) {
+	wordlistAdd(&Config.inside_firewall_list, token);
+    }
+}
+
+static void parseDnsTestnameLine()
+{
+    char *token;
+    while ((token = strtok(NULL, w_space))) {
+	wordlistAdd(&Config.dns_testname_list, token);
+    }
+}
+
+static void parseHttpPortLine()
 {
     char *token;
     int i;
@@ -916,8 +1105,7 @@ parseHttpPortLine(void)
     Config.Port.http = (u_short) i;
 }
 
-static void
-parseIcpPortLine(void)
+static void parseIcpPortLine()
 {
     char *token;
     int i;
@@ -927,8 +1115,15 @@ parseIcpPortLine(void)
     Config.Port.icp = (u_short) i;
 }
 
-static void
-parseDebugOptionsLine(void)
+static void parseNeighborTimeout()
+{
+    char *token;
+    int i;
+    GetInteger(i);
+    Config.neighborTimeout = i;
+}
+
+static void parseDebugOptionsLine()
 {
     char *token;
     token = strtok(NULL, "");	/* Note "", don't separate these */
@@ -940,8 +1135,7 @@ parseDebugOptionsLine(void)
     Config.debugOptions = xstrdup(token);
 }
 
-static void
-parsePidFilenameLine(void)
+static void parsePidFilenameLine()
 {
     char *token;
     token = strtok(NULL, w_space);
@@ -951,8 +1145,7 @@ parsePidFilenameLine(void)
     Config.pidFilename = xstrdup(token);
 }
 
-static void
-parseVisibleHostnameLine(void)
+static void parseVisibleHostnameLine()
 {
     char *token;
     token = strtok(NULL, w_space);
@@ -962,8 +1155,7 @@ parseVisibleHostnameLine(void)
     Config.visibleHostname = xstrdup(token);
 }
 
-static void
-parseFtpUserLine(void)
+static void parseFtpUserLine()
 {
     char *token;
     token = strtok(NULL, w_space);
@@ -973,8 +1165,7 @@ parseFtpUserLine(void)
     Config.ftpUser = xstrdup(token);
 }
 
-static void
-parseCacheAnnounceLine(void)
+static void parseCacheAnnounceLine()
 {
     char *token;
     int i;
@@ -982,8 +1173,7 @@ parseCacheAnnounceLine(void)
     Config.Announce.rate = i * 3600;	/* hours to seconds */
 }
 
-static void
-parseAnnounceToLine(void)
+static void parseAnnounceToLine()
 {
     char *token;
     int i;
@@ -1004,51 +1194,36 @@ parseAnnounceToLine(void)
     Config.Announce.file = xstrdup(token);
 }
 
-static void
-parseSslProxyLine(void)
-{
-    char *token;
-    char *t;
-    token = strtok(NULL, w_space);
-    if (token == NULL)
-	self_destruct();
-    safe_free(Config.sslProxy.host);
-    Config.sslProxy.port = 0;
-    if ((t = strchr(token, ':'))) {
-	*t++ = '\0';
-	Config.sslProxy.port = atoi(t);
-    }
-    Config.sslProxy.host = xstrdup(token);
-}
-
-static void
-parseIntegerValue(int *iptr)
-{
-    char *token;
-    int i;
-    GetInteger(i);
-    *iptr = i;
-}
-
-static void
-parseErrHtmlLine(void)
+static void parseErrHtmlLine()
 {
     char *token;
     if ((token = strtok(NULL, "")))
 	Config.errHtmlText = xstrdup(token);
 }
 
-int
-parseConfigFile(char *file_name)
+static void parseOnOff(var)
+     int *var;
+{
+    char *token;
+    token = strtok(NULL, w_space);
+    if (token == NULL)
+	self_destruct();
+    if (!strcasecmp(token, "on") || !strcasecmp(token, "enable"))
+	*var = 1;
+    else
+	*var = 0;
+}
+
+int parseConfigFile(file_name)
+     char *file_name;
 {
     FILE *fp = NULL;
     char *token = NULL;
-    LOCAL_ARRAY(char, tmp_line, BUFSIZ);
+    static char tmp_line[BUFSIZ];
 
     configFreeMemory();
     configSetFactoryDefaults();
     aclDestroyAcls();
-    aclDestroyDenyInfoList(&DenyInfoList);
     aclDestroyAccessList(&HTTPAccessList);
     aclDestroyAccessList(&ICPAccessList);
 #if DELAY_HACK
@@ -1078,69 +1253,93 @@ parseConfigFile(char *file_name)
 	if ((token = strtok(tmp_line, w_space)) == NULL)
 	    continue;
 
+	/* Parse a cache_host line */
 	if (!strcmp(token, "cache_host"))
 	    parseCacheHostLine();
 
+	/* Parse a cache_host_domain line */
 	else if (!strcmp(token, "cache_host_domain"))
 	    parseHostDomainLine();
 	else if (!strcmp(token, "cache_host_acl"))
 	    parseHostAclLine();
 
+	/* Parse a neighbor_timeout line */
 	else if (!strcmp(token, "neighbor_timeout"))
-	    parseIntegerValue(&Config.neighborTimeout);
+	    parseNeighborTimeout();
 	else if (!strcmp(token, "neighbour_timeout"))	/* alternate spelling */
-	    parseIntegerValue(&Config.neighborTimeout);
+	    parseNeighborTimeout();
 
+	/* Parse a cache_dir line */
 	else if (!strcmp(token, "cache_dir"))
-	    parseWordlist(&Config.cache_dirs);
+	    parseDirLine();
 
+	/* Parse a cache_log line */
 	else if (!strcmp(token, "cache_log"))
 	    parseLogLine();
 
+	/* Parse a cache_access_log line */
 	else if (!strcmp(token, "cache_access_log"))
 	    parseAccessLogLine();
 
+	/* Parse a cache_hierarchy_log line */
+	else if (!strcmp(token, "cache_hierarchy_log"))
+	    parseHierachyLogLine();
+
+	/* Parse a cache_store_log line */
 	else if (!strcmp(token, "cache_store_log"))
 	    parseStoreLogLine();
 
+	/* Parse a logfile_rotate line */
 	else if (!strcmp(token, "logfile_rotate"))
-	    parseIntegerValue(&Config.Log.rotateNumber);
+	    parseLogfileRotateLine();
 
+	/* Parse a httpd_accel_with_proxy line */
 	else if (!strcmp(token, "httpd_accel_with_proxy"))
 	    parseOnOff(&Config.Accel.withProxy);
 
+	/* Parse a httpd_accel line */
 	else if (!strcmp(token, "httpd_accel"))
 	    parseHttpdAccelLine();
 
+	/* Parse a cache_effective_user line */
 	else if (!strcmp(token, "cache_effective_user"))
 	    parseEffectiveUserLine();
 
+	/* Parse a cache_mem_high line */
 	else if (!strcmp(token, "cache_swap_high"))
-	    parseIntegerValue(&Config.Swap.highWaterMark);
+	    parseSwapHighLine();
 
+	/* Parse a cache_mem_low line */
 	else if (!strcmp(token, "cache_swap_low"))
-	    parseIntegerValue(&Config.Swap.lowWaterMark);
+	    parseSwapLowLine();
 
+	/* Parse a cache_mem_high line */
 	else if (!strcmp(token, "cache_mem_high"))
-	    parseIntegerValue(&Config.Mem.highWaterMark);
+	    parseMemHighLine();
 
+	/* Parse a cache_mem_low line */
 	else if (!strcmp(token, "cache_mem_low"))
-	    parseIntegerValue(&Config.Mem.lowWaterMark);
+	    parseMemLowLine();
 
+	/* Parse a cache_hot_vm_factor line */
+	else if (!strcmp(token, "cache_hot_vm_factor"))
+	    parseHotVmFactorLine();
+
+	/* Parse a cache_mem line */
+	/* XXX: this must be AFTER cache_mem_low, etc. */
 	else if (!strcmp(token, "cache_mem"))
 	    parseMemLine();
 
+	/* Parse a cache_swap line */
 	else if (!strcmp(token, "cache_swap"))
 	    parseSwapLine();
 
+	/* Parse a cache_mgr line */
 	else if (!strcmp(token, "cache_mgr"))
 	    parseMgrLine();
 
 	else if (!strcmp(token, "acl"))
 	    aclParseAclLine();
-
-	else if (!strcmp(token, "deny_info"))
-	    aclParseDenyInfoLine(&DenyInfoList);
 
 	else if (!strcmp(token, "http_access"))
 	    aclParseAccessLine(&HTTPAccessList);
@@ -1148,98 +1347,107 @@ parseConfigFile(char *file_name)
 	else if (!strcmp(token, "icp_access"))
 	    aclParseAccessLine(&ICPAccessList);
 
-	else if (!strcmp(token, "hierarchy_stoplist"))
-	    parseWordlist(&Config.hierarchy_stoplist);
-
-	else if (!strcmp(token, "cache_stoplist"))
-	    parseWordlist(&Config.cache_stoplist);
-
 #if DELAY_HACK
 	else if (!strcmp(token, "delay_access"))
 	    aclParseAccessLine(&DelayAccessList);
 #endif
 
+	/* Parse a http_stop line */
+	else if (!strcmp(token, "http_stop"))
+	    parseHttpStopLine();
+
+	/* Parse a gopher_stop line */
+	else if (!strcmp(token, "gopher_stop"))
+	    parseGopherStopLine();
+
+	/* Parse a ftp_stop line */
+	else if (!strcmp(token, "ftp_stop"))
+	    parseFtpStopLine();
+
+	/* Parse a hierarchy_stoplist line */
+	else if (!strcmp(token, "hierarchy_stoplist"))
+	    parseHierarchyStoplistLine();
+
+	/* Parse a gopher protocol line */
 	else if (!strcmp(token, "gopher"))
 	    parseGopherLine();
 
+	/* Parse a http protocol line */
 	else if (!strcmp(token, "http"))
 	    parseHttpLine();
 
+	/* Parse a ftp protocol line */
 	else if (!strcmp(token, "ftp"))
 	    parseFtpLine();
 
 	else if (!strcmp(token, "ttl_pattern"))
-	    parseTTLPattern(0, 0);
+	    parseTTLPattern(0);
 	else if (!strcmp(token, "ttl_pattern/i"))
-	    parseTTLPattern(1, 0);
-	else if (!strcmp(token, "ttl_force_pattern"))
-	    parseTTLPattern(0, 1);
-	else if (!strcmp(token, "ttl_force_pattern/i"))
-	    parseTTLPattern(1, 1);
+	    parseTTLPattern(1);
 
-	else if (!strcmp(token, "quick_abort"))
-	    parseQuickAbort();
-
+	/* Parse a negative_ttl line */
 	else if (!strcmp(token, "negative_ttl"))
-	    parseMinutesLine(&Config.negativeTtl);
+	    parseNegativeLine();
+
+	/* Parse a negative_dns_ttl line */
 	else if (!strcmp(token, "negative_dns_ttl"))
-	    parseMinutesLine(&Config.negativeDnsTtl);
+	    parseNegativeDnsLine();
+
+	/* Parse a positive_dns_ttl line */
 	else if (!strcmp(token, "positive_dns_ttl"))
-	    parseMinutesLine(&Config.positiveDnsTtl);
+	    parsePositiveDnsLine();
+
+	/* Parse a read_timeout line */
 	else if (!strcmp(token, "read_timeout"))
-	    parseMinutesLine(&Config.readTimeout);
+	    parseReadTimeoutLine();
+
+	/* Parse a clean_rate line */
 	else if (!strcmp(token, "clean_rate"))
-	    parseMinutesLine(&Config.cleanRate);
+	    parseCleanRateLine();
+
+	/* Parse a client_lifetime line */
 	else if (!strcmp(token, "client_lifetime"))
-	    parseMinutesLine(&Config.lifetimeDefault);
-	else if (!strcmp(token, "expire_age"))
-	    parseMinutesLine(&Config.expireAge);
+	    parseLifetimeLine();
 
+	/* Parse a client_lifetime line */
 	else if (!strcmp(token, "shutdown_lifetime"))
-	    parseIntegerValue(&Config.lifetimeShutdown);
+	    parseShutdownLifetimeLine();
 
+	/* Parse a request_size line */
 	else if (!strcmp(token, "request_size"))
 	    parseRequestSizeLine();
 
+	/* Parse a connect_timeout line */
 	else if (!strcmp(token, "connect_timeout"))
-	    parseIntegerValue(&Config.connectTimeout);
+	    parseConnectTimeout();
 
+	/* Parse a cache_ftp_program line */
 	else if (!strcmp(token, "cache_ftp_program"))
 	    parseFtpProgramLine();
 
+	/* Parse a cache_ftp_options line */
 	else if (!strcmp(token, "cache_ftp_options"))
 	    parseFtpOptionsLine();
 
+	/* Parse a cache_dns_program line */
 	else if (!strcmp(token, "cache_dns_program"))
 	    parseDnsProgramLine();
 
+	/* Parse a cache_dns_program line */
 	else if (!strcmp(token, "dns_children"))
-	    parseIntegerValue(&Config.dnsChildren);
+	    parseDnsChildrenLine();
 
-	else if (!strcmp(token, "redirect_program"))
-	    parseRedirectProgramLine();
-
-	else if (!strcmp(token, "redirect_children"))
-	    parseIntegerValue(&Config.redirectChildren);
-
-#if USE_PROXY_AUTH
-	else if (!strcmp(token, "proxy_auth"))
-	    parseProxyAuthLine();
-#endif /* USE_PROXY_AUTH */
-
+	/* Parse source_ping line */
 	else if (!strcmp(token, "source_ping"))
 	    parseOnOff(&Config.sourcePing);
 
+	/* Parse quick_abort line */
+	else if (!strcmp(token, "quick_abort"))
+	    parseOnOff(&Config.quickAbort);
+
+	/* Parse emulate_httpd_log line */
 	else if (!strcmp(token, "emulate_httpd_log"))
 	    parseOnOff(&Config.commonLogFormat);
-
-#if LOG_FULL_HEADERS
-	else if (!strcmp(token, "log_mime_hdrs"))
-	    parseOnOff(&Config.logMimeHdrs);
-
-#endif /* LOG_FULL_HEADERS */
-	else if (!strcmp(token, "ident_lookup"))
-	    parseOnOff(&Config.identLookup);
 
 	else if (!strcmp(token, "append_domain"))
 	    parseAppendDomainLine();
@@ -1248,11 +1456,12 @@ parseConfigFile(char *file_name)
 	    parseWAISRelayLine();
 
 	else if (!strcmp(token, "local_ip"))
-	    parseIPLine(&Config.local_ip_list);
+	    parseIPLine(&local_ip_list);
 
 	else if (!strcmp(token, "firewall_ip"))
-	    parseIPLine(&Config.firewall_ip_list);
+	    parseIPLine(&firewall_ip_list);
 
+	/* Parse a local_domain line */
 	else if (!strcmp(token, "local_domain"))
 	    parseLocalDomainLine();
 
@@ -1268,32 +1477,25 @@ parseConfigFile(char *file_name)
 	else if (!strcmp(token, "udp_outgoing_address"))
 	    parseAddressLine(&Config.Addrs.udp_outgoing);
 
-	else if (!strcmp(token, "client_netmask"))
-	    parseAddressLine(&Config.Addrs.client_netmask);
-
-	else if (!strcmp(token, "tcp_recv_bufsize"))
-	    parseIntegerValue(&Config.tcpRcvBufsz);
-
-	else if (!strcmp(token, "log_fqdn"))
-	    parseOnOff(&Config.Log.log_fqdn);
-
 	else if (!strcmp(token, "bind_address"))
 	    parseAddressLine(&Config.Addrs.tcp_incoming);
 
 	else if (!strcmp(token, "outbound_address"))
 	    parseAddressLine(&Config.Addrs.tcp_outgoing);
 
+	/* Parse a http_port line */
 	else if (!strcmp(token, "http_port") || !strcmp(token, "ascii_port"))
 	    parseHttpPortLine();
 
+	/* Parse a icp_port line */
 	else if (!strcmp(token, "icp_port") || !strcmp(token, "udp_port"))
 	    parseIcpPortLine();
 
 	else if (!strcmp(token, "inside_firewall"))
-	    parseWordlist(&Config.inside_firewall_list);
+	    parseInsideFirewallLine();
 
 	else if (!strcmp(token, "dns_testnames"))
-	    parseWordlist(&Config.dns_testname_list);
+	    parseDnsTestnameLine();
 
 	else if (!strcmp(token, "single_parent_bypass"))
 	    parseOnOff(&Config.singleParentBypass);
@@ -1316,18 +1518,8 @@ parseConfigFile(char *file_name)
 	else if (!strcmp(token, "announce_to"))
 	    parseAnnounceToLine();
 
-	else if (!strcmp(token, "ssl_proxy"))
-	    parseSslProxyLine();
-
 	else if (!strcmp(token, "err_html_text"))
 	    parseErrHtmlLine();
-
-	else if (!strcmp(token, "ipcache_size"))
-	    parseIntegerValue(&Config.ipcache.size);
-	else if (!strcmp(token, "ipcache_low"))
-	    parseIntegerValue(&Config.ipcache.low);
-	else if (!strcmp(token, "ipcache_high"))
-	    parseIntegerValue(&Config.ipcache.high);
 
 	else if (!strcmp(token, "memory_pools"))
 	    parseOnOff(&opt_mem_pools);
@@ -1335,9 +1527,6 @@ parseConfigFile(char *file_name)
 	    parseOnOff(&opt_udp_hit_obj);
 	else if (!strcmp(token, "forwarded_for"))
 	    parseOnOff(&opt_forwarded_for);
-
-	else if (!strcmp(token, "max_hotvm_obj_size"))
-	    parseIntegerValue(&Config.maxHotvmObjSize);
 
 	/* If unknown, treat as a comment line */
 	else {
@@ -1348,44 +1537,39 @@ parseConfigFile(char *file_name)
     }
 
     /* Sanity checks */
-    if (Config.lifetimeDefault < Config.readTimeout) {
+    if (getClientLifetime() < getReadTimeout()) {
 	printf("WARNING: client_lifetime (%d seconds) is less than read_timeout (%d seconds).\n",
-	    Config.lifetimeDefault, Config.readTimeout);
+	    getClientLifetime(), getReadTimeout());
 	printf("         This may cause serious problems with your cache!!!\n");
 	printf("         Change your configuration file.\n");
 	fflush(stdout);		/* print message */
     }
-    if (Config.Swap.maxSize < (Config.Mem.maxSize >> 10)) {
-	printf("WARNING: cache_swap (%d kbytes) is less than cache_mem (%d bytes).\n", Config.Swap.maxSize, Config.Mem.maxSize);
+    if (getCacheSwapMax() < (getCacheMemMax() >> 10)) {
+	printf("WARNING: cache_swap (%d kbytes) is less than cache_mem (%d bytes).\n", getCacheSwapMax(), getCacheMemMax());
 	printf("         This will cause serious problems with your cache!!!\n");
 	printf("         Change your configuration file.\n");
+	Config.Swap.maxSize = getCacheMemMax() >> 10;
+	printf("         For this run, however, %s will use %d kbytes for cache_swap.\n", appname, getCacheSwapMax());
 	fflush(stdout);		/* print message */
     }
-    if (Config.cleanRate < 1)
-	Config.cleanRate = 86400 * 365;		/* one year */
-    if (Config.Announce.rate < 1)
-	Config.Announce.rate = 86400 * 365;	/* one year */
-    if (Config.dnsChildren < 1) {
+    if (getCleanRate() > -1 && getCleanRate() < 60) {
+	Config.cleanRate = (30 * 60);
+	printf("WARNING: clean_rate is less than one minute.\n");
+	printf("         This will cause serious problems with your cache!!!\n");
+	printf("         Change your configuration file.\n");
+	printf("         For this run, however, %s will use %d minutes for clean_rate.\n", appname, (int) (getCleanRate() / 60));
+	fflush(stdout);		/* print message */
+    }
+    if (getDnsChildren() < 1) {
 	printf("WARNING: dns_children was set to a bad value: %d\n",
-	    Config.dnsChildren);
-	Config.dnsChildren = DefaultDnsChildren;
-	printf("Setting it to the default (%d).\n", DefaultDnsChildren);
-    } else if (Config.dnsChildren > DefaultDnsChildrenMax) {
+	    getDnsChildren());
+	printf("Setting it to the default (3).\n");
+	Config.dnsChildren = 3;
+    } else if (getDnsChildren() > DefaultDnsChildrenMax) {
 	printf("WARNING: dns_children was set to a bad value: %d\n",
-	    Config.dnsChildren);
+	    getDnsChildren());
 	printf("Setting it to the maximum (%d).\n", DefaultDnsChildrenMax);
 	Config.dnsChildren = DefaultDnsChildrenMax;
-    }
-    if (Config.redirectChildren < 1) {
-	printf("WARNING: redirect_children was set to a bad value: %d\n",
-	    Config.redirectChildren);
-	Config.redirectChildren = DefaultRedirectChildren;
-	printf("Setting it to the default (%d).\n", DefaultRedirectChildren);
-    } else if (Config.redirectChildren > DefaultRedirectChildrenMax) {
-	printf("WARNING: redirect_children was set to a bad value: %d\n",
-	    Config.redirectChildren);
-	printf("Setting it to the maximum (%d).\n", DefaultRedirectChildrenMax);
-	Config.redirectChildren = DefaultRedirectChildrenMax;
     }
     fclose(fp);
 
@@ -1393,29 +1577,302 @@ parseConfigFile(char *file_name)
     return 0;
 }
 
-u_short
-setHttpPortNum(u_short port)
+
+
+int getHttpMax()
+{
+    return Config.Http.maxObjSize;
+}
+int getHttpTTL()
+{
+    return Config.Http.defaultTtl;
+}
+int getGopherMax()
+{
+    return Config.Gopher.maxObjSize;
+}
+int getGopherTTL()
+{
+    return Config.Gopher.defaultTtl;
+}
+int getWAISMax()
+{
+    return Config.Wais.maxObjSize;
+}
+char *getWaisRelayHost()
+{
+    return Config.Wais.relayHost;
+}
+u_short getWaisRelayPort()
+{
+    return Config.Wais.relayPort;
+}
+int getFtpMax()
+{
+    return Config.Ftp.maxObjSize;
+}
+int getFtpTTL()
+{
+    return Config.Ftp.defaultTtl;
+}
+int getNegativeTTL()
+{
+    return Config.negativeTtl;
+}
+int getNegativeDNSTTL()
+{
+    return Config.negativeDnsTtl;
+}
+int getCacheMemMax()
+{
+    return Config.Mem.maxSize;
+}
+int getCacheMemHighWaterMark()
+{
+    return Config.Mem.highWatherMark;
+}
+int getCacheMemLowWaterMark()
+{
+    return Config.Mem.lowWaterMark;
+}
+double getCacheHotVmFactor()
+{
+    return Config.hotVmFactor;
+}
+int getCacheSwapHighWaterMark()
+{
+    return Config.Swap.highWatherMark;
+}
+int getCacheSwapLowWaterMark()
+{
+    return Config.Swap.lowWaterMark;
+}
+int getCacheSwapMax()
+{
+    return Config.Swap.maxSize;
+}
+int setCacheSwapMax(size)
+     int size;
+{
+    Config.Swap.maxSize = size;
+    return Config.Swap.maxSize;
+}
+int getReadTimeout()
+{
+    return Config.readTimeout;
+}
+int getClientLifetime()
+{
+    return Config.lifetimeDefault;
+}
+int getShutdownLifetime()
+{
+    return Config.lifetimeShutdown;
+}
+int getMaxRequestSize()
+{
+    return Config.maxRequestSize;
+}
+int getConnectTimeout()
+{
+    return Config.connectTimeout;
+}
+int getCleanRate()
+{
+    return Config.cleanRate;
+}
+int getSourcePing()
+{
+    return Config.sourcePing;
+}
+int getDnsChildren()
+{
+    return Config.dnsChildren;
+}
+int getQuickAbort()
+{
+    return Config.quickAbort;
+}
+char *getAccelPrefix()
+{
+    return Config.Accel.prefix;
+}
+u_short getAccelPort()
+{
+    return Config.Accel.port;
+}
+int getAccelWithProxy()
+{
+    return Config.Accel.withProxy;
+}
+char *getAccessLogFile()
+{
+    return Config.Log.access;
+}
+char *getHierarchyLogFile()
+{
+    return Config.Log.hierarchy;
+}
+char *getStoreLogFile()
+{
+    return Config.Log.store;
+}
+int getLogfileRotateNumber()
+{
+    return Config.Log.rotateNumber;
+}
+char *getCacheLogFile()
+{
+    return Config.Log.log;
+}
+u_short getHttpPortNum()
+{
+    return Config.Port.http;
+}
+u_short getIcpPortNum()
+{
+    return Config.Port.icp;
+}
+char *getDnsProgram()
+{
+    return Config.Program.dnsserver;
+}
+char *getFtpProgram()
+{
+    return Config.Program.ftpget;
+}
+char *getFtpOptions()
+{
+    return Config.Program.ftpget_opts;
+}
+char *getAdminEmail()
+{
+    return Config.adminEmail;
+}
+char *getDebugOptions()
+{
+    return Config.debugOptions;
+}
+int getStallDelay()
+{
+    return Config.stallDelay;
+}
+char *getAppendDomain()
+{
+    return Config.appendDomain;
+}
+char *getEffectiveUser()
+{
+    return Config.effectiveUser;
+}
+char *getEffectiveGroup()
+{
+    return Config.effectiveGroup;
+}
+char *getPidFilename()
+{
+    return Config.pidFilename;
+}
+char *getVisibleHostname()
+{
+    return Config.visibleHostname;
+}
+char *getFtpUser()
+{
+    return Config.ftpUser;
+}
+char *getAnnounceHost()
+{
+    return Config.Announce.host;
+}
+u_short getAnnouncePort()
+{
+    return Config.Announce.port;
+}
+char *getAnnounceFile()
+{
+    return Config.Announce.file;
+}
+int getAnnounceRate()
+{
+    return Config.Announce.rate;
+}
+wordlist *getHttpStoplist()
+{
+    return Config.http_stoplist;
+}
+wordlist *getFtpStoplist()
+{
+    return Config.ftp_stoplist;
+}
+wordlist *getHierarchyStoplist()
+{
+    return Config.hierarchy_stoplist;
+}
+wordlist *getGopherStoplist()
+{
+    return Config.gopher_stoplist;
+}
+wordlist *getLocalDomainList()
+{
+    return Config.local_domain_list;
+}
+wordlist *getCacheDirs()
+{
+    return Config.cache_dirs;
+}
+wordlist *getInsideFirewallList()
+{
+    return Config.inside_firewall_list;
+}
+wordlist *getDnsTestnameList()
+{
+    return Config.dns_testname_list;
+}
+struct in_addr getTcpIncomingAddr()
+{
+    return Config.Addrs.tcp_incoming;
+}
+struct in_addr getTcpOutgoingAddr()
+{
+    return Config.Addrs.tcp_outgoing;
+}
+struct in_addr getUdpIncomingAddr()
+{
+    return Config.Addrs.udp_incoming;
+}
+struct in_addr getUdpOutgoingAddr()
+{
+    return Config.Addrs.udp_outgoing;
+}
+
+u_short setHttpPortNum(port)
+     u_short port;
 {
     return (Config.Port.http = port);
 }
-u_short
-setIcpPortNum(u_short port)
+u_short setIcpPortNum(port)
+     u_short port;
 {
     return (Config.Port.icp = port);
 }
+char *getErrHtmlText()
+{
+    return Config.errHtmlText ? Config.errHtmlText : "";
+}
 
-static char *
-safe_xstrdup(char *p)
+static char *safe_xstrdup(p)
+     char *p;
 {
     return p ? xstrdup(p) : p;
 }
 
-static void
-configFreeMemory(void)
+static void configFreeMemory()
 {
     safe_free(Config.Wais.relayHost);
     safe_free(Config.Log.log);
     safe_free(Config.Log.access);
+    safe_free(Config.Log.hierarchy);
     safe_free(Config.Log.store);
     safe_free(Config.adminEmail);
     safe_free(Config.effectiveUser);
@@ -1423,7 +1880,6 @@ configFreeMemory(void)
     safe_free(Config.Program.ftpget);
     safe_free(Config.Program.ftpget_opts);
     safe_free(Config.Program.dnsserver);
-    safe_free(Config.Program.redirect);
     safe_free(Config.Accel.host);
     safe_free(Config.Accel.prefix);
     safe_free(Config.appendDomain);
@@ -1431,33 +1887,29 @@ configFreeMemory(void)
     safe_free(Config.pidFilename);
     safe_free(Config.visibleHostname);
     safe_free(Config.ftpUser);
-#if USE_PROXY_AUTH
-    safe_free(Config.proxyAuthFile);
-    safe_free(Config.proxyAuthIgnoreDomain);
-#endif /* USE_PROXY_AUTH */
     safe_free(Config.Announce.host);
     safe_free(Config.Announce.file);
     safe_free(Config.errHtmlText);
-    safe_free(Config.sslProxy.host);
     wordlistDestroy(&Config.cache_dirs);
+    wordlistDestroy(&Config.http_stoplist);
+    wordlistDestroy(&Config.gopher_stoplist);
+    wordlistDestroy(&Config.ftp_stoplist);
     wordlistDestroy(&Config.hierarchy_stoplist);
     wordlistDestroy(&Config.local_domain_list);
     wordlistDestroy(&Config.inside_firewall_list);
     wordlistDestroy(&Config.dns_testname_list);
-    ip_acl_destroy(&Config.local_ip_list);
-    ip_acl_destroy(&Config.firewall_ip_list);
-    ttlFreeList();
+    ip_acl_destroy(&local_ip_list);
+    ip_acl_destroy(&firewall_ip_list);
 }
 
 
-static void
-configSetFactoryDefaults(void)
+static void configSetFactoryDefaults()
 {
     Config.Mem.maxSize = DefaultMemMaxSize;
-    Config.Mem.highWaterMark = DefaultMemHighWaterMark;
-    Config.Mem.lowWaterMark = DefaultMemLowWaterMark;
+    Config.Mem.highWatherMark = DefaultMemHighWatherMark;
+    Config.Mem.lowWaterMark = DefaultMemLowWatherMark;
     Config.Swap.maxSize = DefaultSwapMaxSize;
-    Config.Swap.highWaterMark = DefaultSwapHighWaterMark;
+    Config.Swap.highWatherMark = DefaultSwapHighWaterMark;
     Config.Swap.lowWaterMark = DefaultSwapLowWaterMark;
 
     Config.Ftp.defaultTtl = DefaultFtpDefaultTtl;
@@ -1471,7 +1923,6 @@ configSetFactoryDefaults(void)
     Config.Wais.relayHost = safe_xstrdup(DefaultWaisRelayHost);
     Config.Wais.relayPort = DefaultWaisRelayPort;
 
-    Config.expireAge = DefaultExpireAge;
     Config.negativeTtl = DefaultNegativeTtl;
     Config.negativeDnsTtl = DefaultNegativeDnsTtl;
     Config.positiveDnsTtl = DefaultPositiveDnsTtl;
@@ -1483,15 +1934,10 @@ configSetFactoryDefaults(void)
     Config.ageMaxDefault = DefaultDefaultAgeMax;
     Config.cleanRate = DefaultCleanRate;
     Config.dnsChildren = DefaultDnsChildren;
-    Config.redirectChildren = DefaultRedirectChildren;
+    Config.hotVmFactor = DefaultHotVmFactor;
     Config.sourcePing = DefaultSourcePing;
-    Config.quickAbort.min = DefaultQuickAbortMin;
-    Config.quickAbort.pct = DefaultQuickAbortPct;
-    Config.quickAbort.max = DefaultQuickAbortMax;
+    Config.quickAbort = DefaultQuickAbort;
     Config.commonLogFormat = DefaultCommonLogFormat;
-#if LOG_FULL_HEADERS
-    Config.logMimeHdrs = DefaultLogMimeHdrs;
-#endif /* LOG_FULL_HEADERS */
     Config.debugOptions = safe_xstrdup(DefaultDebugOptions);
     Config.neighborTimeout = DefaultNeighborTimeout;
     Config.stallDelay = DefaultStallDelay;
@@ -1506,49 +1952,48 @@ configSetFactoryDefaults(void)
     Config.Port.icp = DefaultIcpPortNum;
     Config.Log.log = safe_xstrdup(DefaultCacheLogFile);
     Config.Log.access = safe_xstrdup(DefaultAccessLogFile);
+    Config.Log.hierarchy = safe_xstrdup(DefaultHierarchyLogFile);
     Config.Log.store = safe_xstrdup(DefaultStoreLogFile);
     Config.Log.rotateNumber = DefaultLogRotateNumber;
     Config.Program.ftpget = safe_xstrdup(DefaultFtpgetProgram);
     Config.Program.ftpget_opts = safe_xstrdup(DefaultFtpgetOptions);
     Config.Program.dnsserver = safe_xstrdup(DefaultDnsserverProgram);
-    Config.Program.redirect = safe_xstrdup(DefaultRedirectProgram);
-    Config.Program.pinger = safe_xstrdup(DefaultPingerProgram);
     Config.Accel.host = safe_xstrdup(DefaultAccelHost);
     Config.Accel.prefix = safe_xstrdup(DefaultAccelPrefix);
     Config.Accel.port = DefaultAccelPort;
     Config.Accel.withProxy = DefaultAccelWithProxy;
     Config.pidFilename = safe_xstrdup(DefaultPidFilename);
     Config.visibleHostname = safe_xstrdup(DefaultVisibleHostname);
-#if USE_PROXY_AUTH
-    Config.proxyAuthFile = safe_xstrdup(DefaultProxyAuthFile);
-    Config.proxyAuthIgnoreDomain = safe_xstrdup(DefaultProxyAuthIgnoreDomain);
-#endif /* USE_PROXY_AUTH */
     Config.ftpUser = safe_xstrdup(DefaultFtpUser);
     Config.Announce.host = safe_xstrdup(DefaultAnnounceHost);
     Config.Announce.port = DefaultAnnouncePort;
     Config.Announce.file = safe_xstrdup(DefaultAnnounceFile);
     Config.Announce.rate = DefaultAnnounceRate;
-    Config.tcpRcvBufsz = DefaultTcpRcvBufsz;
     Config.Addrs.tcp_outgoing.s_addr = DefaultTcpOutgoingAddr;
     Config.Addrs.tcp_incoming.s_addr = DefaultTcpIncomingAddr;
     Config.Addrs.udp_outgoing.s_addr = DefaultUdpOutgoingAddr;
     Config.Addrs.udp_incoming.s_addr = DefaultUdpIncomingAddr;
-    Config.Addrs.client_netmask.s_addr = DefaultClientNetmask;
-    Config.sslProxy.port = DefaultSslProxyPort;
-    Config.sslProxy.host = safe_xstrdup(DefaultSslProxyHost);
-    Config.ipcache.size = DefaultIpcacheSize;
-    Config.ipcache.low = DefaultIpcacheLow;
-    Config.ipcache.high = DefaultIpcacheHigh;
-    Config.maxHotvmObjSize = DefaultMaxHotvmObjSize;
 }
 
-static void
-configDoConfigure(void)
+static void configDoConfigure()
 {
     httpd_accel_mode = Config.Accel.prefix ? 1 : 0;
+    emulate_httpd_log = Config.commonLogFormat;
+    neighbor_timeout = (time_t) Config.neighborTimeout;
+    single_parent_bypass = Config.singleParentBypass;
+    DnsPositiveTtl = Config.positiveDnsTtl;
     sprintf(ForwardedBy, "Forwarded: by http://%s:%d/",
-	getMyHostname(), Config.Port.http);
-    if (Config.errHtmlText == NULL)
-	Config.errHtmlText = xstrdup("");
-    storeConfigure();
+	getMyHostname(), getHttpPortNum());
+
+
+#if !ALLOW_HOT_CACHE
+    if (!httpd_accel_mode || Config.Accel.withProxy) {
+	/* Not running strict httpd_accel--force hot_vm_factor to be 0 */
+	if (Config.hotVmFactor != 0.0) {
+	    printf("WARNING: Non-zero hot_vm_factor not allowed unless running only\n");
+	    printf("         in httpd_accel mode.  Setting hot_vm_factor to 0.\n");
+	    Config.hotVmFactor = 0.0;
+	}
+    }
+#endif /* !ALLOW_HOT_CACHE */
 }

@@ -120,8 +120,8 @@ static void *get_free_thing _PARAMS((stmem_stats * thing));
 static void put_free_thing _PARAMS((stmem_stats * thing, void *p));
 
 
-void
-memFree(mem_ptr mem)
+void memFree(mem)
+     mem_ptr mem;
 {
     mem_node lastp, p = mem->head;
 
@@ -144,8 +144,8 @@ memFree(mem_ptr mem)
     safe_free(mem);
 }
 
-void
-memFreeData(mem_ptr mem)
+void memFreeData(mem)
+     mem_ptr mem;
 {
     mem_node lastp, p = mem->head;
 
@@ -165,8 +165,9 @@ memFreeData(mem_ptr mem)
     mem->origin_offset = 0;
 }
 
-int
-memFreeDataUpto(mem_ptr mem, int target_offset)
+int memFreeDataUpto(mem, target_offset)
+     mem_ptr mem;
+     int target_offset;
 {
     int current_offset = mem->origin_offset;
     mem_node lastp, p = mem->head;
@@ -203,8 +204,10 @@ memFreeDataUpto(mem_ptr mem, int target_offset)
 
 
 /* Append incoming data. */
-int
-memAppend(mem_ptr mem, char *data, int len)
+int memAppend(mem, data, len)
+     mem_ptr mem;
+     char *data;
+     int len;
 {
     mem_node p;
     int avail_len;
@@ -247,8 +250,64 @@ memAppend(mem_ptr mem, char *data, int len)
     return len;
 }
 
-int
-memCopy(mem_ptr mem, int offset, char *buf, int size)
+#ifdef UNUSED_CODE
+int memGrep(mem, string, nbytes)
+     mem_ptr mem;
+     char *string;
+     int nbytes;
+{
+    mem_node p = mem->head;
+    char *str_i, *mem_i;
+    int i = 0, blk_idx = 0, state, goal;
+
+    debug(19, 6, "memGrep: looking for %s in less than %d bytes.\n",
+	string, nbytes);
+
+    if (!p)
+	return 0;
+
+    if (mem->origin_offset != 0) {
+	debug(19, 1, "memGrep: Some lower chunk of data has been erased. Can't do memGrep!\n");
+	return 0;
+    }
+    str_i = string;
+    mem_i = p->data;
+    state = 1;
+    goal = strlen(string);
+
+    while (i < nbytes) {
+	if (tolower(*mem_i++) == tolower(*str_i++))
+	    state++;
+	else {
+	    state = 1;
+	    str_i = string;
+	}
+
+	i++;
+	blk_idx++;
+
+	/* Return offset of byte beyond the matching string */
+	if (state == goal)
+	    return (i + 1);
+
+	if (blk_idx >= p->len) {
+	    if (p->next) {
+		p = p->next;
+		mem_i = p->data;
+		blk_idx = 0;
+	    } else
+		break;
+	}
+    }
+    return 0;
+}
+#endif
+
+int memCopy(mem, offset, buf, size)
+     mem_ptr mem;
+     int offset;
+     char *buf;
+     int size;
 {
     mem_node p = mem->head;
     int t_off = mem->origin_offset;
@@ -305,8 +364,7 @@ memCopy(mem_ptr mem, int offset, char *buf, int size)
 
 
 /* Do whatever is necessary to begin storage of new object */
-mem_ptr
-memInit(void)
+mem_ptr memInit()
 {
     mem_ptr new = xcalloc(1, sizeof(Mem_Hdr));
     new->tail = new->head = NULL;
@@ -315,11 +373,14 @@ memInit(void)
     new->mem_free_data_upto = memFreeDataUpto;
     new->mem_append = memAppend;
     new->mem_copy = memCopy;
+#ifdef UNUSED_CODE
+    new->mem_grep = memGrep;
+#endif
     return new;
 }
 
-static void *
-get_free_thing(stmem_stats * thing)
+static void *get_free_thing(thing)
+     stmem_stats *thing;
 {
     void *p = NULL;
     if (!empty_stack(&thing->free_page_stack)) {
@@ -335,32 +396,29 @@ get_free_thing(stmem_stats * thing)
     return p;
 }
 
-void *
-get_free_request_t(void)
+void *get_free_request_t()
 {
     return get_free_thing(&request_pool);
 }
 
-void *
-get_free_mem_obj(void)
+void *get_free_mem_obj()
 {
     return get_free_thing(&mem_obj_pool);
 }
 
-char *
-get_free_4k_page(void)
+char *get_free_4k_page()
 {
     return (char *) get_free_thing(&sm_stats);
 }
 
-char *
-get_free_8k_page(void)
+char *get_free_8k_page()
 {
     return (char *) get_free_thing(&disk_stats);
 }
 
-static void
-put_free_thing(stmem_stats * thing, void *p)
+static void put_free_thing(thing, p)
+     stmem_stats *thing;
+     void *p;
 {
     if (p == NULL)
 	fatal_dump("Somebody is putting a NULL pointer!");
@@ -376,37 +434,36 @@ put_free_thing(stmem_stats * thing, void *p)
     }
 }
 
-void
-put_free_request_t(void *req)
+void put_free_request_t(req)
+     void *req;
 {
     put_free_thing(&request_pool, req);
 }
 
-void
-put_free_mem_obj(void *mem)
+void put_free_mem_obj(mem)
+     void *mem;
 {
     put_free_thing(&mem_obj_pool, mem);
 }
 
-void
-put_free_4k_page(void *page)
+void put_free_4k_page(page)
+     void *page;
 {
     put_free_thing(&sm_stats, page);
 }
 
-void
-put_free_8k_page(void *page)
+void put_free_8k_page(page)
+     void *page;
 {
     put_free_thing(&disk_stats, page);
 }
 
-void
-stmemInit(void)
+void stmemInit()
 {
     sm_stats.page_size = SM_PAGE_SIZE;
     sm_stats.total_pages_allocated = 0;
     sm_stats.n_pages_in_use = 0;
-    sm_stats.max_pages = (Config.Mem.maxSize / SM_PAGE_SIZE) >> 1;
+    sm_stats.max_pages = (getCacheMemMax() / SM_PAGE_SIZE) >> 1;
 
     disk_stats.page_size = DISK_PAGE_SIZE;
     disk_stats.total_pages_allocated = 0;
@@ -430,6 +487,7 @@ stmemInit(void)
     request_pool.max_pages = 0;
     mem_obj_pool.max_pages = 0;
 #endif
+
     if (!opt_mem_pools) {
 	sm_stats.max_pages = 0;
 	disk_stats.max_pages = 0;

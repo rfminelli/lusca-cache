@@ -107,11 +107,11 @@
 
 /* convert store entry content to string. Use for debugging */
 /* return pointer to static buffer containing string */
-char *
-storeToString(StoreEntry * e)
+char *storeToString(e)
+     StoreEntry *e;
 {
-    LOCAL_ARRAY(char, stsbuf, 16 << 10);	/* have to make this really big */
-    LOCAL_ARRAY(char, tmpbuf, 8 << 10);
+    static char stsbuf[16 << 10];	/* have to make this really big */
+    static char tmpbuf[8 << 10];
     time_t t;
 
     if (!e) {
@@ -162,29 +162,100 @@ storeToString(StoreEntry * e)
     strcat(stsbuf, tmpbuf);
 
     t = (time_t) e->lastref;
-    sprintf(tmpbuf, "Lastref  : %9d [%s]\n", (int) t, mkhttpdlogtime(&t));
+    sprintf(tmpbuf, "Lastref  : %9d [%s]\n", (int) e->lastref,
+	mkhttpdlogtime(&t));
     strcat(stsbuf, tmpbuf);
 
     t = (time_t) e->expires;
-    sprintf(tmpbuf, "Expires  : %9d [%s]\n", (int) t, mkhttpdlogtime(&t));
+    sprintf(tmpbuf, "Expires  : %9d [%s]\n", (int) e->expires,
+	mkhttpdlogtime(&t));
     strcat(stsbuf, tmpbuf);
 
-    sprintf(tmpbuf, "ObjectLen: %d\n", (int) e->object_len);
+    sprintf(tmpbuf, "ObjectLen: %d\n", e->object_len);
     strcat(stsbuf, tmpbuf);
 
     sprintf(tmpbuf, "SwapFileNumber: %d\n", e->swap_file_number);
     strcat(stsbuf, tmpbuf);
 
-    sprintf(tmpbuf, "StoreStatus: %s\n", storeStatusStr[e->store_status]);
+    sprintf(tmpbuf, "Status: ");
+    switch (e->store_status) {
+
+    case STORE_OK:
+	strcat(tmpbuf, "STORE_OK\n");
+	break;
+
+    case STORE_PENDING:
+	strcat(tmpbuf, "STORE_PENDING\n");
+	break;
+
+    case STORE_ABORTED:
+	strcat(tmpbuf, "STORE_ABORTED\n");
+	break;
+
+    default:
+	strcat(tmpbuf, "UNKNOWN\n");
+	break;
+    }
     strcat(stsbuf, tmpbuf);
 
-    sprintf(tmpbuf, "MemStatus: %s\n", memStatusStr[e->mem_status]);
+    sprintf(tmpbuf, "MemStatus: ");
+    switch (e->mem_status) {
+
+    case NOT_IN_MEMORY:
+	strcat(tmpbuf, "NOT_IN_MEMORY\n");
+	break;
+
+    case SWAPPING_IN:
+	strcat(tmpbuf, "SWAPPING_IN\n");
+	break;
+
+    case IN_MEMORY:
+	strcat(tmpbuf, "IN_MEMORY\n");
+	break;
+
+    default:
+	strcat(tmpbuf, "UNKNOWN\n");
+	break;
+    }
     strcat(stsbuf, tmpbuf);
 
-    sprintf(tmpbuf, "PingStatus: %s\n", pingStatusStr[e->ping_status]);
+
+    sprintf(tmpbuf, "PingStatus: ");
+    switch (e->ping_status) {
+    case PING_WAITING:
+	strcat(tmpbuf, "WAITING\n");
+	break;
+    case PING_TIMEOUT:
+	strcat(tmpbuf, "TIMEOUT\n");
+	break;
+    case PING_DONE:
+	strcat(tmpbuf, "DONE\n");
+	break;
+    case PING_NONE:
+	strcat(tmpbuf, "NOPING\n");
+	break;
+    default:
+	strcat(tmpbuf, "UNKNOWN\n");
+	break;
+    }
     strcat(stsbuf, tmpbuf);
 
-    sprintf(tmpbuf, "SwapStatus: %s\n", swapStatusStr[e->swap_status]);
+
+    sprintf(tmpbuf, "SwapStatus: ");
+    switch (e->swap_status) {
+    case NO_SWAP:
+	strcat(tmpbuf, "NO_SWAP\n");
+	break;
+    case SWAPPING_OUT:
+	strcat(tmpbuf, "SWAPPING_OUT\n");
+	break;
+    case SWAP_OK:
+	strcat(tmpbuf, "SWAP_OK\n");
+	break;
+    default:
+	strcat(tmpbuf, "UNKNOWN\n");
+	break;
+    }
     strcat(stsbuf, tmpbuf);
 
     sprintf(tmpbuf, "Method: %s\n", RequestMethodStr[e->method]);
@@ -276,10 +347,7 @@ storeToString(StoreEntry * e)
     sprintf(tmpbuf, "SwapOffset: %u\n", e->mem_obj->swap_offset);
     strcat(stsbuf, tmpbuf);
 
-    sprintf(tmpbuf, "SwapOutFd: %d\n", e->mem_obj->swapout_fd);
-    strcat(stsbuf, tmpbuf);
-
-    sprintf(tmpbuf, "SwapInFd: %d\n", e->mem_obj->swapin_fd);
+    sprintf(tmpbuf, "SwapFd: %d\n", e->mem_obj->swap_fd);
     strcat(stsbuf, tmpbuf);
 
     sprintf(tmpbuf, "PendingListSize: %d\n", e->mem_obj->pending_list_size);

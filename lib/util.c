@@ -114,9 +114,6 @@
 #if HAVE_STRING_H
 #include <string.h>
 #endif
-#if HAVE_CTYPE_H
-#include <ctype.h>
-#endif
 #if HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -127,7 +124,6 @@
 #include <errno.h>
 #endif
 
-#include "ansiproto.h"
 #include "util.h"
 
 void (*failure_notify) _PARAMS((char *)) = NULL;
@@ -146,8 +142,7 @@ extern char *sys_errlist[];
 static int malloc_sizes[DBG_MAXINDEX + 1];
 static int dbg_stat_init = 0;
 
-static void
-stat_init(void)
+static void stat_init()
 {
     int i;
     for (i = 0; i <= DBG_MAXINDEX; i++)
@@ -155,16 +150,17 @@ stat_init(void)
     dbg_stat_init = 1;
 }
 
-static int
-malloc_stat(int sz)
+static int malloc_stat(sz)
+     int sz;
 {
     if (!dbg_stat_init)
 	stat_init();
     return malloc_sizes[DBG_INDEX(sz)] += 1;
 }
 
-void
-malloc_statistics(void (*func) (int, int, void *), void *data)
+void malloc_statistics(func, data)
+     void (*func) _PARAMS((int, int, void *));
+     void *data;
 {
     int i;
     for (i = 0; i <= DBG_MAXSIZE; i += DBG_GRAIN)
@@ -185,8 +181,7 @@ static int I = 0;
 static void *P;
 static void *Q;
 
-static void
-check_init(void)
+static void check_init()
 {
     for (B = 0; B < DBG_ARRY_BKTS; B++) {
 	for (I = 0; I < DBG_ARRY_SZ; I++) {
@@ -197,8 +192,8 @@ check_init(void)
     dbg_initd = 1;
 }
 
-static void
-check_free(void *s)
+static void check_free(s)
+     void *s;
 {
     B = (((int) s) >> 4) & 0xFF;
     for (I = 0; I < DBG_ARRY_SZ; I++) {
@@ -214,12 +209,13 @@ check_free(void *s)
     }
 }
 
-static void
-check_malloc(void *p, size_t sz)
+static void check_malloc(p, sz)
+     void *p;
+     size_t sz;
 {
+    B = (((int) p) >> 4) & 0xFF;
     if (!dbg_initd)
 	check_init();
-    B = (((int) p) >> 4) & 0xFF;
     for (I = 0; I < DBG_ARRY_SZ; I++) {
 	if ((P = malloc_ptrs[B][I]) == NULL)
 	    continue;
@@ -242,43 +238,12 @@ check_malloc(void *p, size_t sz)
 }
 #endif
 
-#if XMALLOC_COUNT && !HAVE_MALLOCBLKSIZE
-int
-mallocblksize(void *p)
-{
-    B = (((int) p) >> 4) & 0xFF;
-    for (I = 0; I < DBG_ARRY_SZ; I++) {
-	if (malloc_ptrs[B][I] == p)
-	    return malloc_size[B][I];
-    }
-    return 0;
-}
-#endif
-
-#ifdef XMALLOC_COUNT
-static void
-xmalloc_count(void *p, int sign)
-{
-    size_t sz;
-    static size_t total = 0;
-    int memoryAccounted();
-    int mallinfoTotal();
-    sz = mallocblksize(p) * sign;
-    total += sz;
-    fprintf(stderr, "xmalloc_count=%9d  accounted=%9d  mallinfo=%9d\n",
-	(int) total,
-	memoryAccounted(),
-	mallinfoTotal());
-}
-
-#endif /* XMALLOC_COUNT */
-
 /*
  *  xmalloc() - same as malloc(3).  Used for portability.
  *  Never returns NULL; fatal on error.
  */
-void *
-xmalloc(size_t sz)
+void *xmalloc(sz)
+     size_t sz;
 {
     static void *p;
 
@@ -300,21 +265,15 @@ xmalloc(size_t sz)
 #if XMALLOC_STATISTICS
     malloc_stat(sz);
 #endif
-#if XMALLOC_COUNT
-    xmalloc_count(p, 1);
-#endif
     return (p);
 }
 
 /*
  *  xfree() - same as free(3).  Will not call free(3) if s == NULL.
  */
-void
-xfree(void *s)
+void xfree(s)
+     void *s;
 {
-#if XMALLOC_COUNT
-    xmalloc_count(s, -1);
-#endif
 #if XMALLOC_DEBUG
     check_free(s);
 #endif
@@ -323,12 +282,9 @@ xfree(void *s)
 }
 
 /* xxfree() - like xfree(), but we already know s != NULL */
-void
-xxfree(void *s)
+void xxfree(s)
+     void *s;
 {
-#if XMALLOC_COUNT
-    xmalloc_count(s, -1);
-#endif
 #if XMALLOC_DEBUG
     check_free(s);
 #endif
@@ -339,14 +295,11 @@ xxfree(void *s)
  *  xrealloc() - same as realloc(3). Used for portability.
  *  Never returns NULL; fatal on error.
  */
-void *
-xrealloc(void *s, size_t sz)
+void *xrealloc(s, sz)
+     void *s;
+     size_t sz;
 {
     static void *p;
-
-#if XMALLOC_COUNT
-    xmalloc_count(s, -1);
-#endif
 
     if (sz < 1)
 	sz = 1;
@@ -366,9 +319,6 @@ xrealloc(void *s, size_t sz)
 #if XMALLOC_STATISTICS
     malloc_stat(sz);
 #endif
-#if XMALLOC_COUNT
-    xmalloc_count(p, 1);
-#endif
     return (p);
 }
 
@@ -376,8 +326,9 @@ xrealloc(void *s, size_t sz)
  *  xcalloc() - same as calloc(3).  Used for portability.
  *  Never returns NULL; fatal on error.
  */
-void *
-xcalloc(int n, size_t sz)
+void *xcalloc(n, sz)
+     int n;
+     size_t sz;
 {
     static void *p;
 
@@ -401,9 +352,6 @@ xcalloc(int n, size_t sz)
 #if XMALLOC_STATISTICS
     malloc_stat(sz);
 #endif
-#if XMALLOC_COUNT
-    xmalloc_count(p, 1);
-#endif
     return (p);
 }
 
@@ -411,8 +359,8 @@ xcalloc(int n, size_t sz)
  *  xstrdup() - same as strdup(3).  Used for portability.
  *  Never returns NULL; fatal on error.
  */
-char *
-xstrdup(char *s)
+char *xstrdup(s)
+     char *s;
 {
     static char *p = NULL;
     size_t sz;
@@ -435,31 +383,30 @@ xstrdup(char *s)
 /*
  * xstrerror() - return sys_errlist[errno];
  */
-char *
-xstrerror(void)
+char *xstrerror()
 {
     static char xstrerror_buf[BUFSIZ];
+
     if (errno < 0 || errno >= sys_nerr)
 	return ("Unknown");
-#if HAVE_STRERROR
-    sprintf(xstrerror_buf, "(%d) %s", errno, strerror(errno));
-#else
     sprintf(xstrerror_buf, "(%d) %s", errno, sys_errlist[errno]);
-#endif /* HAVE_STRERROR */
     return xstrerror_buf;
+    /* return (sys_errlist[errno]); */
 }
 
 #if !HAVE_STRDUP
 /* define for systems that don't have strdup */
-char *
-strdup(char *s)
+char *strdup(s)
+     char *s;
 {
     return (xstrdup(s));
 }
 #endif
 
-void
-xmemcpy(void *from, void *to, int len)
+void xmemcpy(from, to, len)
+     void *from;
+     void *to;
+     int len;
 {
 #if HAVE_MEMMOVE
     (void) memmove(from, to, len);
@@ -468,21 +415,4 @@ xmemcpy(void *from, void *to, int len)
 #else
     (void) memcpy(from, to, len);
 #endif
-}
-
-void
-Tolower(char *q)
-{
-    char *s = q;
-    while (*s) {
-	*s = tolower((unsigned char) *s);
-	s++;
-    }
-}
-
-int
-tvSubMsec(struct timeval t1, struct timeval t2)
-{
-    return (t2.tv_sec - t1.tv_sec) * 1000 +
-        (t2.tv_usec - t1.tv_usec) / 1000;
 }
