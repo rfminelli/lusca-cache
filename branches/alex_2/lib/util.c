@@ -501,11 +501,10 @@ xstrdup(const char *s)
 	}
 	exit(1);
     }
-    sz = strlen(s);
-    p = xmalloc((size_t) sz + 1);
-    memcpy(p, s, sz);		/* copy string */
-    p[sz] = '\0';		/* terminate string */
-    return (p);
+    sz = strlen(s)+1;
+    p = xmalloc(sz);
+    memcpy(p, s, sz);		/* copy string, including terminating character */
+    return p;
 }
 
 /*
