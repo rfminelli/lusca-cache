@@ -1,0 +1,99 @@
+Changes to squid-1.0.beta1 (Apr 19, 1996) from Harvest cached-1.4.pl3:
+
+	- Added a "server mode" to ftpget.  Now the (much smaller)
+	  ftpget process forks for each FTP request.
+	- Added support for If-Modified-Since GET requests.
+	- Added support for SSL and https objects.
+	- Added background processing for rebuilding the disk store
+	  while serving requests.  Cache can now serve requests immediately.
+	- Added a 'reconfigure' feature activated by SIGHUP.  The config
+	  file is re-read and most changes will take effect.
+	- Added an internal flag for using private keys with ICP queries
+	  to neighbors.  If any neighbor returns a reqnum field of zero,
+	  then disable using private keys.  But still use private
+	  keys for things with bypass the ICP query step (such as POST
+	  and IMS-GET).
+	- Added a function to verify content-lengths.  Objects with
+	  mismatched (but non-zero) content lenghts will be ejected.
+	- Added clean shutdown mode.  On SIGTERM the incoming HTTP socket
+	  is closed.  Active clients are given a lifetime of 30 seconds
+	  (configurable).  Process exits when all sockets are closed.
+	- Added support for large POST objects.
+	- Added "store.log" which logs RELEASE/SWAPIN/SWAPOUT events.
+	- Added announce feature to squid; no longer external program.
+	  If enabled, a running cache will announce itself every 24 hrs.
+	- Added support for FTP URLs with non-default ports.
+	- Added new Access Control List scheme.
+	- Added Forwarded: header to proxy HTTP requests (HTTP/1.1 feature).
+	- Added weights neighbors.
+	- Added urlParse() which strips off default ports and 
+	  makes hostnames all lowercase.
+	- Added (section,level) debugging and 'debug_options' config line.
+	- Added 'pid_filename' to configuration file.
+	- Added 'visible_hostname' to configuration file.
+	- added 'ftp_user' to configuration file.
+	- added 'dns_positive_ttl' to configuration file.
+	- added 'dns_negative_ttl' to configuration file.
+	- Added 'shutdown_lifetime' to configuration file.
+	- Fixed bug where cache process would "spin" on large objects
+	  being deferred.
+	- Fixed byte order conversion bug on setting echo port.
+	- Changed meaning of command line -b (buffered logs) option.
+	  Now the default behaviour is unbuffered logs, use -b to make
+	  them buffered.
+	- Changed WAIS code to always be fully compiled in.
+	- Changed the storage manager to use the notion of private and
+	  public keys.  Requests are now private until the reply headers
+	  have been read.
+	- Changed access logging significantly.  Entries to "access.log"
+	  are written when the client connection closes.  Every connection
+	  is logged exactly once, always with a valid size.
+	- Changed access log format (non-common) to include request
+	  method and sub-second timestamps.
+	- Changed handing of ECONNRESET (connection reset) errors.
+	  Now treated like any other read error.
+	- Changed 'rotate logs' to be activated by SIGUSR1.
+	- Changed configure script to look specifically for tm_gmtoff
+	  and set HAVE_TM_GMTOFF.
+	- Changed configure script to look specifically extended mallinfo
+	  structure and set HAVE_EXT_MALLINFO
+	- Changed ICP reply code to use negative TTL value as UDP_HIT
+	  threshold so we never return a HIT on neg-cached objects.
+	- Changed ftpget to use select(2) on I/O for timeouts.  ftpget
+	  now exits immediately if stdin goes away.
+	- Changed handling of '-z' option.  Now only execute 'rm -rf ...' if
+	  -U option also given.
+	- Removed the command line -d (debug) option.  Use 'debug_options'
+	  in config file.
+	- Removed all code and references to binary port.
+	- Removed dual logging to stderr/cache.log.
+	- Removed old IP access controls ('proxy_allow', etc.)
+
+Changes to 1.0.beta2:
+
+	- Fixed /bin/csh "$#argv" leftover in RunCache.
+	- Fixed ACL day-of-week bitmask bug.
+	- Fixed missing checks for WAIS in some places.
+	- Fixed chdir(swappath(0)) bug; do chdir() after storeInit().
+	- Changed enumerated structure members to be defined outside
+	  of the structure itself (for AIX).
+	- Changed ftpget to fork before reading the request and make
+	  sure the entire request is read.
+
+Changes to 1.0.beta3:
+
+	- Added ftpget '-C minport:maxport' option
+	- Fixed PROTO_MAX fencepost bug in stat_init().
+	- Fixed Fixed CheckQuickAbort() coredump.
+	- Fixed disabling store.log and hierarchy.log when set to "none"
+	- Fixed numerous problems related to setuid().
+	- Fixed 'check_cache.pl' to use new swaplog format (without "FILE").
+	- Fixed ACL coredumps when checking NULL words.
+	- Changed pid_filename to be written and unlinked as root.
+	- Added "-i seconds" option to 'client' for testing IMS GET.
+	- Fixed a bug where an IMS request caused the valid object to
+	  get ejected from the cache.
+	- Fixed continual DEAD_PARENT/REVIVE bug
+	- Fixed ERR_INVALID_URL bug for URLs with a password field.
+	- Added to Release-Notes info about converting 'cache/log' and
+	  difference between stoplists and ttl_pattern.
