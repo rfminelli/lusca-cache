@@ -17,8 +17,8 @@ INSTALL         	= @INSTALL@
 INSTALL_FILE    	= @INSTALL_DATA@
 DEFAULT_ICON_DIR        = $(sysconfdir)/icons
 
-ICON1		= anthony-binhex.gif
-ICON2		= anthony-bomb.gif \
+ICONS		= anthony-binhex.gif \
+		  anthony-bomb.gif \
 		  anthony-box.gif \
 		  anthony-box2.gif \
 		  anthony-c.gif \
@@ -44,15 +44,11 @@ ICON2		= anthony-bomb.gif \
 		  anthony-unknown.gif \
 		  anthony-xbm.gif \
 		  anthony-xpm.gif
-ICONS = $(ICON1) $(ICON2)
 
 all: $(ICONS)
 
-# The magic with ICON1,2 is to have a single dependency
-# for all of the icons.
-$(ICON2): $(ICON1)
-$(ICON1):
-	@$(SHELL) -c "cd $(srcdir); $(SHELL) icons.shar"
+$(ICONS):
+	@$(SHELL) -c "$(SHELL) $(srcdir)/icons.shar"
 
 icons.shar:
 	shar --no-timestamp $(ICONS) > $@

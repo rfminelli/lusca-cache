@@ -93,6 +93,9 @@ static void asStateFree(void *data);
 static void destroyRadixNodeInfo(as_info *);
 static OBJH asnStats;
 
+extern struct radix_node *rn_lookup(void *, void *, void *);
+
+
 /* PUBLIC */
 
 int
@@ -148,14 +151,12 @@ asnAclInitialize(acl * acls)
 
 /* initialize the radix tree structure */
 
-CBDATA_TYPE(ASState);
 void
 asnInit(void)
 {
     extern int max_keylen;
     static int inited = 0;
     max_keylen = 40;
-    CBDATA_INIT_TYPE(ASState);
     if (0 == inited++)
 	rn_init();
     rn_inithead((void **) &AS_tree_head, 8);
@@ -186,8 +187,8 @@ asnCacheStart(int as)
     LOCAL_ARRAY(char, asres, 4096);
     StoreEntry *e;
     request_t *req;
-    ASState *asState;
-    asState = cbdataAlloc(ASState);
+    ASState *asState = xcalloc(1, sizeof(ASState));
+    cbdataAdd(asState, cbdataXfree, 0);
     debug(53, 3) ("asnCacheStart: AS %d\n", as);
     snprintf(asres, 4096, "whois://%s/!gAS%d", Config.as_whois_server, as);
     asState->as_number = as;
@@ -407,7 +408,7 @@ destroyRadixNodeInfo(as_info * e_info)
     xfree(data);
 }
 
-static int
+int
 mask_len(int mask)
 {
     int len = 32;

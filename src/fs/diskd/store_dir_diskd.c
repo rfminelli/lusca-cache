@@ -128,8 +128,6 @@ static int storeDiskdDirValidFileno(SwapDir *, sfileno, int);
 static void storeDiskdStats(StoreEntry * sentry);
 static void storeDiskdDirSync(SwapDir *);
 
-/* The only externally visible interface */
-STSETUP storeFsSetup_diskd;
 
 /*
  * These functions were ripped straight out of the heart of store_dir.c.
@@ -138,7 +136,7 @@ STSETUP storeFsSetup_diskd;
  * XXX this evilness should be tidied up at a later date!
  */
 
-static int
+int
 storeDiskdDirMapBitTest(SwapDir * SD, int fn)
 {
     sfileno filn = fn;
@@ -147,7 +145,7 @@ storeDiskdDirMapBitTest(SwapDir * SD, int fn)
     return file_map_bit_test(diskdinfo->map, filn);
 }
 
-static void
+void
 storeDiskdDirMapBitSet(SwapDir * SD, int fn)
 {
     sfileno filn = fn;
@@ -167,7 +165,7 @@ storeDiskdDirMapBitReset(SwapDir * SD, int fn)
      * file_map_bit_reset doesn't do bounds checking.  It assumes
      * filn is a valid file number, but it might not be because
      * the map is dynamic in size.  Also clearing an already clear
-     * bit puts the map counter of-of-whack.
+     * bit puts the map counter out-of-whack.
      */
     if (file_map_bit_test(diskdinfo->map, filn))
 	file_map_bit_reset(diskdinfo->map, filn);
@@ -1010,18 +1008,14 @@ storeDiskdDirAddDiskRestore(SwapDir * SD, const cache_key * key,
     return e;
 }
 
-CBDATA_TYPE(RebuildState);
-
 static void
 storeDiskdDirRebuild(SwapDir * sd)
 {
-    RebuildState *rb;
+    RebuildState *rb = xcalloc(1, sizeof(*rb));
     int clean = 0;
     int zero = 0;
     FILE *fp;
     EVH *func = NULL;
-    CBDATA_INIT_TYPE(RebuildState);
-    rb = cbdataAlloc(RebuildState);
     rb->sd = sd;
     rb->speed = opt_foreground_rebuild ? 1 << 30 : 50;
     /*
@@ -1045,6 +1039,7 @@ storeDiskdDirRebuild(SwapDir * sd)
     debug(20, 1) ("Rebuilding storage in %s (%s)\n",
 	sd->path, clean ? "CLEAN" : "DIRTY");
     store_dirs_rebuilding++;
+    cbdataAdd(rb, cbdataXfree, 0);
     eventAdd("storeRebuild", func, rb, 0.0, 1);
 }
 
@@ -1148,8 +1143,8 @@ storeDiskdDirWriteCleanStart(SwapDir * sd)
     struct stat sb;
     sd->log.clean.write = NULL;
     sd->log.clean.state = NULL;
-    state->new = xstrdup(storeDiskdDirSwapLogFile(sd, ".clean"));
     state->cur = xstrdup(storeDiskdDirSwapLogFile(sd, NULL));
+    state->new = xstrdup(storeDiskdDirSwapLogFile(sd, ".clean"));
     state->cln = xstrdup(storeDiskdDirSwapLogFile(sd, ".last-clean"));
     state->outbuf = xcalloc(CLEAN_BUF_SZ, 1);
     state->outbuf_offset = 0;
@@ -1157,13 +1152,8 @@ storeDiskdDirWriteCleanStart(SwapDir * sd)
     unlink(state->new);
     unlink(state->cln);
     state->fd = file_open(state->new, O_WRONLY | O_CREAT | O_TRUNC);
-    if (state->fd < 0) {
-	xfree(state->new);
-	xfree(state->cur);
-	xfree(state->cln);
-	xfree(state);
+    if (state->fd < 0)
 	return -1;
-    }
     debug(20, 3) ("storeDirWriteCleanLogs: opened %s, FD %d\n",
 	state->new, state->fd);
 #if HAVE_FCHMOD
@@ -1712,7 +1702,7 @@ storeDiskdDirStats(SwapDir * SD, StoreEntry * sentry)
     storeAppendPrintf(sentry, "Pending operations: %d\n", diskdinfo->away);
 }
 
-static void
+static void 
 storeDiskdDirParseQ1(SwapDir * sd, const char *name, const char *value, int reconfiguring)
 {
     diskdinfo_t *diskdinfo = sd->fsdata;
@@ -1722,7 +1712,7 @@ storeDiskdDirParseQ1(SwapDir * sd, const char *name, const char *value, int reco
 	debug(3, 1) ("cache_dir '%s' new Q1 value '%d'\n", diskdinfo->magic1);
 }
 
-static void
+static void 
 storeDiskdDirParseQ2(SwapDir * sd, const char *name, const char *value, int reconfiguring)
 {
     diskdinfo_t *diskdinfo = sd->fsdata;
@@ -1748,7 +1738,7 @@ struct cache_dir_option options[] =
  *
  * This routine is called when the given swapdir needs reconfiguring 
  */
-static void
+void
 storeDiskdDirReconfigure(SwapDir * sd, int index, char *path)
 {
     int i;
@@ -1837,6 +1827,7 @@ static int
 storeDiskdCleanupDoubleCheck(SwapDir * sd, StoreEntry * e)
 {
     struct stat sb;
+
     if (stat(storeDiskdDirFullPath(sd, e->swap_filen, NULL), &sb) < 0) {
 	debug(20, 0) ("storeDiskdCleanupDoubleCheck: MISSING SWAP FILE\n");
 	debug(20, 0) ("storeDiskdCleanupDoubleCheck: FILENO %08X\n", e->swap_filen);
@@ -1863,7 +1854,7 @@ storeDiskdCleanupDoubleCheck(SwapDir * sd, StoreEntry * e)
  *
  * Called when a *new* fs is being setup.
  */
-static void
+void
 storeDiskdDirParse(SwapDir * sd, int index, char *path)
 {
     int i;
@@ -1930,7 +1921,7 @@ storeDiskdDirParse(SwapDir * sd, int index, char *path)
 /*
  * Initial setup / end destruction
  */
-static void
+void
 storeDiskdDirDone(void)
 {
     memPoolDestroy(diskd_state_pool);

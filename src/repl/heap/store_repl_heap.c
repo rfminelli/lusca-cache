@@ -119,7 +119,7 @@ struct _HeapWalkData {
     int current;
 };
 
-static const StoreEntry *
+const StoreEntry *
 heap_walkNext(RemovalPolicyWalker * walker)
 {
     HeapWalkData *heap_walk = walker->_data;
@@ -151,13 +151,14 @@ heap_walkInit(RemovalPolicy * policy)
     RemovalPolicyWalker *walker;
     HeapWalkData *heap_walk;
     heap->nwalkers += 1;
-    walker = cbdataAlloc(RemovalPolicyWalker);
+    walker = xcalloc(1, sizeof(*walker));
     heap_walk = xcalloc(1, sizeof(*heap_walk));
     heap_walk->current = 0;
     walker->_policy = policy;
     walker->_data = heap_walk;
     walker->Next = heap_walkNext;
     walker->Done = heap_walkDone;
+    cbdataAdd(walker, cbdataXfree, 0);
     return walker;
 }
 
@@ -224,7 +225,7 @@ heap_purgeInit(RemovalPolicy * policy, int max_scan)
     RemovalPurgeWalker *walker;
     HeapPurgeData *heap_walk;
     heap->nwalkers += 1;
-    walker = cbdataAlloc(RemovalPurgeWalker);
+    walker = xcalloc(1, sizeof(*walker));
     heap_walk = xcalloc(1, sizeof(*heap_walk));
     heap_walk->min_age = 0.0;
     heap_walk->locked_entries = NULL;
@@ -233,6 +234,7 @@ heap_purgeInit(RemovalPolicy * policy, int max_scan)
     walker->max_scan = max_scan;
     walker->Next = heap_purgeNext;
     walker->Done = heap_purgeDone;
+    cbdataAdd(walker, cbdataXfree, 0);
 #if HEAP_REPLACEMENT_DEBUG
     if (!verify_heap_property(heap->heap)) {
 	debug(81, 1) ("Heap property violated!\n");
@@ -262,8 +264,10 @@ createRemovalPolicy_heap(wordlist * args)
     HeapPolicyData *heap_data;
     char *keytype;
     /* Allocate the needed structures */
-    policy = cbdataAlloc(RemovalPolicy);
+    policy = xcalloc(1, sizeof(*policy));
     heap_data = xcalloc(1, sizeof(*heap_data));
+    /* cbdata register the policy */
+    cbdataAdd(policy, cbdataXfree, 0);
     /* Initialize the policy data */
     heap_data->policy = policy;
     if (args) {

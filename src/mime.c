@@ -49,7 +49,7 @@ typedef struct _mime_entry {
 } mimeEntry;
 
 static mimeEntry *MimeTable = NULL;
-static mimeEntry **MimeTableTail = &MimeTable;
+static mimeEntry **MimeTableTail = NULL;
 
 static void mimeLoadIconFile(const char *icon);
 
@@ -268,11 +268,6 @@ mimeGetViewOption(const char *fn)
     return m ? m->view_option : 0;
 }
 
-/* Initializes/reloads the mime table
- * Note: Due to Solaris STDIO problems the caller should NOT
- * call mimeFreeMemory on reconfigure. This way, if STDIO
- * fails we at least have the old copy loaded.
- */
 void
 mimeInit(char *filename)
 {
@@ -297,10 +292,11 @@ mimeInit(char *filename)
 	debug(50, 1) ("mimeInit: %s: %s\n", filename, xstrerror());
 	return;
     }
+    if (MimeTableTail == NULL)
+	MimeTableTail = &MimeTable;
 #if defined (_SQUID_CYGWIN_)
     setmode(fileno(fp), O_TEXT);
 #endif
-    mimeFreeMemory();
     while (fgets(buf, BUFSIZ, fp)) {
 	if ((t = strchr(buf, '#')))
 	    *t = '\0';

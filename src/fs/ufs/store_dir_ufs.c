@@ -116,8 +116,6 @@ static void storeUfsDirStats(SwapDir *, StoreEntry *);
 static void storeUfsDirInitBitmap(SwapDir *);
 static int storeUfsDirValidFileno(SwapDir *, sfileno, int);
 
-STSETUP storeFsSetup_ufs;
-
 /*
  * These functions were ripped straight out of the heart of store_dir.c.
  * They assume that the given filenum is on a ufs partiton, which may or
@@ -125,7 +123,7 @@ STSETUP storeFsSetup_ufs;
  * XXX this evilness should be tidied up at a later date!
  */
 
-static int
+int
 storeUfsDirMapBitTest(SwapDir * SD, int fn)
 {
     sfileno filn = fn;
@@ -134,7 +132,7 @@ storeUfsDirMapBitTest(SwapDir * SD, int fn)
     return file_map_bit_test(ufsinfo->map, filn);
 }
 
-static void
+void
 storeUfsDirMapBitSet(SwapDir * SD, int fn)
 {
     sfileno filn = fn;
@@ -815,17 +813,14 @@ storeUfsDirAddDiskRestore(SwapDir * SD, const cache_key * key,
     return e;
 }
 
-CBDATA_TYPE(RebuildState);
 static void
 storeUfsDirRebuild(SwapDir * sd)
 {
-    RebuildState *rb;
+    RebuildState *rb = xcalloc(1, sizeof(*rb));
     int clean = 0;
     int zero = 0;
     FILE *fp;
     EVH *func = NULL;
-    CBDATA_INIT_TYPE(RebuildState);
-    rb = cbdataAlloc(RebuildState);
     rb->sd = sd;
     rb->speed = opt_foreground_rebuild ? 1 << 30 : 50;
     /*
@@ -849,6 +844,7 @@ storeUfsDirRebuild(SwapDir * sd)
     debug(20, 1) ("Rebuilding storage in %s (%s)\n",
 	sd->path, clean ? "CLEAN" : "DIRTY");
     store_dirs_rebuilding++;
+    cbdataAdd(rb, cbdataXfree, 0);
     eventAdd("storeRebuild", func, rb, 0.0, 1);
 }
 
@@ -955,14 +951,8 @@ storeUfsDirWriteCleanStart(SwapDir * sd)
     struct stat sb;
     sd->log.clean.write = NULL;
     sd->log.clean.state = NULL;
-    state->new = xstrdup(storeUfsDirSwapLogFile(sd, ".clean"));
-    state->fd = file_open(state->new, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY);
-    if (state->fd < 0) {
-	xfree(state->new);
-	xfree(state);
-	return -1;
-    }
     state->cur = xstrdup(storeUfsDirSwapLogFile(sd, NULL));
+    state->new = xstrdup(storeUfsDirSwapLogFile(sd, ".clean"));
     state->cln = xstrdup(storeUfsDirSwapLogFile(sd, ".last-clean"));
     state->outbuf = xcalloc(CLEAN_BUF_SZ, 1);
     state->outbuf_offset = 0;
@@ -971,6 +961,9 @@ storeUfsDirWriteCleanStart(SwapDir * sd)
     unlink(state->new);
 #endif
     unlink(state->cln);
+    state->fd = file_open(state->new, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY);
+    if (state->fd < 0)
+	return -1;		/* state not free'd - possible leak */
     debug(20, 3) ("storeDirWriteCleanLogs: opened %s, FD %d\n",
 	state->new, state->fd);
 #if HAVE_FCHMOD
@@ -1503,7 +1496,7 @@ static struct cache_dir_option options[] =
  *
  * This routine is called when the given swapdir needs reconfiguring 
  */
-static void
+void
 storeUfsDirReconfigure(SwapDir * sd, int index, char *path)
 {
     int i;
@@ -1593,6 +1586,7 @@ static int
 storeUfsCleanupDoubleCheck(SwapDir * sd, StoreEntry * e)
 {
     struct stat sb;
+
     if (stat(storeUfsDirFullPath(sd, e->swap_filen, NULL), &sb) < 0) {
 	debug(20, 0) ("storeUfsCleanupDoubleCheck: MISSING SWAP FILE\n");
 	debug(20, 0) ("storeUfsCleanupDoubleCheck: FILENO %08X\n", e->swap_filen);
@@ -1619,7 +1613,7 @@ storeUfsCleanupDoubleCheck(SwapDir * sd, StoreEntry * e)
  *
  * Called when a *new* fs is being setup.
  */
-static void
+void
 storeUfsDirParse(SwapDir * sd, int index, char *path)
 {
     int i;
@@ -1688,7 +1682,7 @@ storeUfsDirParse(SwapDir * sd, int index, char *path)
 /*
  * Initial setup / end destruction
  */
-static void
+void
 storeUfsDirDone(void)
 {
     memPoolDestroy(ufs_state_pool);
