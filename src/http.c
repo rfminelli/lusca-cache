@@ -327,6 +327,7 @@ httpCachableReply(HttpStateData * httpState)
 const char *
 httpMakeVaryMark(request_t * request, HttpReply * reply)
 {
+    int ok = 1;
     String vary, hdr;
     const char *pos = NULL;
     const char *item;
@@ -374,7 +375,7 @@ httpMakeVaryMark(request_t * request, HttpReply * reply)
     }
     stringClean(&vary);
 #endif
-    debug(11, 3) ("httpMakeVaryMark: %s\n", strBuf(vstr));
+    debug(11, 3) ("httpMakeVaryMark: %d / %s\n", ok, strBuf(vstr));
     return strBuf(vstr);
 }
 

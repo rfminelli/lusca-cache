@@ -214,8 +214,6 @@ squid_SOURCES = \
 	client_side.c \
 	comm.c \
 	comm_select.c \
-	comm_poll.c \
-	comm_kqueue.c \
 	debug.c \
 	defines.h \
 	$(DELAY_POOL_SOURCE) \
@@ -460,10 +458,9 @@ am_squid_OBJECTS = access_log.$(OBJEXT) acl.$(OBJEXT) asn.$(OBJEXT) \
 	authenticate.$(OBJEXT) cache_cf.$(OBJEXT) CacheDigest.$(OBJEXT) \
 	cache_manager.$(OBJEXT) carp.$(OBJEXT) cbdata.$(OBJEXT) \
 	client_db.$(OBJEXT) client_side.$(OBJEXT) comm.$(OBJEXT) \
-	comm_select.$(OBJEXT) comm_poll.$(OBJEXT) comm_kqueue.$(OBJEXT) \
-	debug.$(OBJEXT) $(am__objects_3) disk.$(OBJEXT) \
-	$(am__objects_4) errorpage.$(OBJEXT) ETag.$(OBJEXT) \
-	event.$(OBJEXT) fd.$(OBJEXT) filemap.$(OBJEXT) \
+	comm_select.$(OBJEXT) debug.$(OBJEXT) $(am__objects_3) \
+	disk.$(OBJEXT) $(am__objects_4) errorpage.$(OBJEXT) \
+	ETag.$(OBJEXT) event.$(OBJEXT) fd.$(OBJEXT) filemap.$(OBJEXT) \
 	forward.$(OBJEXT) fqdncache.$(OBJEXT) ftp.$(OBJEXT) \
 	gopher.$(OBJEXT) helper.$(OBJEXT) $(am__objects_5) \
 	http.$(OBJEXT) HttpStatusLine.$(OBJEXT) HttpHdrCc.$(OBJEXT) \
@@ -525,8 +522,7 @@ depcomp = $(SHELL) $(top_srcdir)/cfgaux/depcomp
 @AMDEP_TRUE@	$(DEPDIR)/carp.Po $(DEPDIR)/cbdata.Po \
 @AMDEP_TRUE@	$(DEPDIR)/cf_gen.Po $(DEPDIR)/client.Po \
 @AMDEP_TRUE@	$(DEPDIR)/client_db.Po $(DEPDIR)/client_side.Po \
-@AMDEP_TRUE@	$(DEPDIR)/comm.Po $(DEPDIR)/comm_kqueue.Po \
-@AMDEP_TRUE@	$(DEPDIR)/comm_poll.Po $(DEPDIR)/comm_select.Po \
+@AMDEP_TRUE@	$(DEPDIR)/comm.Po $(DEPDIR)/comm_select.Po \
 @AMDEP_TRUE@	$(DEPDIR)/debug.Po $(DEPDIR)/delay_pools.Po \
 @AMDEP_TRUE@	$(DEPDIR)/disk.Po $(DEPDIR)/dns.Po \
 @AMDEP_TRUE@	$(DEPDIR)/dns_internal.Po $(DEPDIR)/dnsserver.Po \
@@ -705,8 +701,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/client_db.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/client_side.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/comm.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/comm_kqueue.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/comm_poll.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/comm_select.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/debug.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/delay_pools.Po@am__quote@

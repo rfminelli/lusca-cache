@@ -814,7 +814,7 @@ struct _MemBuf {
     /* private, stay away; use interface function instead */
     mb_size_t max_capacity;	/* when grows: assert(new_capacity <= max_capacity) */
     mb_size_t capacity;		/* allocated space */
-    unsigned stolen:1;		/* the buffer has been stolen for use by someone else */
+    FREE *freefunc;		/* what to use to free the buffer, NULL after memBufFreeFunc() is called */
 };
 
 /* see Packer.c for description */

@@ -1,11 +1,8 @@
-#ifndef SQUID_SNMP_H
-#define SQUID_SNMP_H
+/* -*- c++ -*- */
+#ifndef SQUID_SNMP_COMPAT_H
+#define SQUID_SNMP_COMPAT_H
 
-/*
- * Definitions for the Simple Network Management Protocol (RFC 1067).
- *
- */
-/**********************************************************************
+/***************************************************************************
  *
  *           Copyright 1997 by Carnegie Mellon University
  * 
@@ -27,49 +24,27 @@
  * ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
  * SOFTWARE.
  * 
+ * Author: Ryan Troll <ryan+@andrew.cmu.edu>
+ * 
  * $Id$
  * 
- **********************************************************************/
+ ***************************************************************************/
 
-#if HAVE_SYS_TYPES_H
-#include <sys/types.h>
+/* SMI Types */
+#ifndef INTEGER
+#define INTEGER     ASN_INTEGER
+#define STRING      ASN_OCTET_STR
+#define OBJID       ASN_OBJECT_ID
+#define NULLOBJ     ASN_NULL
 #endif
-#if HAVE_NETINET_IN_H
-#include <netinet/in.h>
-#endif
+/* PDU Types */
 
-/* These come first */
-#include "asn1.h"
-#include "snmp_error.h"
-#if 0
-#include "mibii.h"
-#include "snmp_extra.h"
-#include "snmp_dump.h"
-#endif
+#define GET_REQ_MSG	    (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x0)
+#define GETNEXT_REQ_MSG     (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x1)
+#define GET_RSP_MSG         (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x2)
+#define SET_REQ_MSG         (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x3)
+#define TRP_REQ_MSG	    (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x4)	/*Obsolete */
 
-/* I didn't touch this */
-#include "snmp_session.h"
+#define INFORM_REQ_MSG      (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x6)
 
-/* The various modules */
-#include "snmp_vars.h"
-#include "snmp_pdu.h"
-#include "snmp_msg.h"
-
-/* Other functions */
-#include "snmp_coexist.h"
-#include "version.h"
-#include "snmp_error.h"
-#include "snmp_api_error.h"
-/* Other stuff I didn't touch */
-#include "snmp_impl.h"
-#include "snmp_api.h"
-#if 0
-#include "snmp_client.h"
-#include "mib.h"
-#endif
-#include "snmp-internal.h"
-#include "parse.h"
-#include "snmp_compat.h"
-#include "snmp_debug.h"
-
-#endif /* SQUID_SNMP_H */
+#endif /* SQUID_SNMP_COMPAT_H */

@@ -611,6 +611,7 @@ typedef enum {
     MEM_EVENT,
     MEM_TLV,
     MEM_SWAP_LOG_DATA,
+    MEM_CLIENT_REQ_BUF,
     MEM_MAX
 } mem_type;
 

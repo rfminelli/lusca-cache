@@ -817,7 +817,6 @@ httpRequestFree(void *data)
     safe_free(http->log_uri);
     safe_free(http->al.headers.request);
     safe_free(http->al.headers.reply);
-    safe_free(http->al.cache.authuser);
     safe_free(http->redirect.location);
     stringClean(&http->range_iter.boundary);
     if ((e = http->entry)) {
@@ -869,7 +868,11 @@ connStateFree(int fd, void *data)
 	authenticateAuthUserRequestUnlock(connState->auth_user_request);
     connState->auth_user_request = NULL;
     authenticateOnCloseConnection(connState);
-    memFreeBuf(connState->in.size, connState->in.buf);
+    if (connState->in.size == CLIENT_REQ_BUF_SZ)
+	memFree(connState->in.buf, MEM_CLIENT_REQ_BUF);
+    else
+	safe_free(connState->in.buf);
+    /* XXX account connState->in.buf */
     pconnHistCount(0, connState->nrequests);
     cbdataFree(connState);
 #ifdef _SQUID_LINUX_
@@ -2719,6 +2722,7 @@ clientReadRequest(int fd, void *data)
     int parser_return_code = 0;
     request_t *request = NULL;
     int size;
+    void *p;
     method_t method;
     clientHttpRequest *http = NULL;
     clientHttpRequest **H = NULL;
@@ -2730,7 +2734,15 @@ clientReadRequest(int fd, void *data)
     commSetSelect(fd, COMM_SELECT_READ, clientReadRequest, conn, 0);
     if (len == 0) {
 	/* Grow the request memory area to accomodate for a large request */
-	conn->in.buf = memReallocBuf(conn->in.buf, conn->in.size * 2, &conn->in.size);
+	conn->in.size += CLIENT_REQ_BUF_SZ;
+	if (conn->in.size == 2 * CLIENT_REQ_BUF_SZ) {
+	    p = conn->in.buf;	/* get rid of fixed size Pooled buffer */
+	    conn->in.buf = xcalloc(2, CLIENT_REQ_BUF_SZ);
+	    xmemcpy(conn->in.buf, p, CLIENT_REQ_BUF_SZ);
+	    memFree(p, MEM_CLIENT_REQ_BUF);
+	} else
+	    conn->in.buf = xrealloc(conn->in.buf, conn->in.size);
+	/* XXX account conn->in.buf */
 	debug(33, 2) ("growing request buffer: offset=%ld size=%ld\n",
 	    (long) conn->in.offset, (long) conn->in.size);
 	len = conn->in.size - conn->in.offset - 1;
@@ -3186,7 +3198,9 @@ httpAccept(int sock, void *data)
 	connState->log_addr.s_addr &= Config.Addrs.client_netmask.s_addr;
 	connState->me = me;
 	connState->fd = fd;
-	connState->in.buf = memAllocBuf(CLIENT_REQ_BUF_SZ, &connState->in.size);
+	connState->in.size = CLIENT_REQ_BUF_SZ;
+	connState->in.buf = memAllocate(MEM_CLIENT_REQ_BUF);
+	/* XXX account connState->in.buf */
 	comm_add_close_handler(fd, connStateFree, connState);
 	if (Config.onoff.log_fqdn)
 	    fqdncache_gethostbyaddr(peer.sin_addr, FQDN_LOOKUP_IF_MISS);
@@ -3299,7 +3313,8 @@ httpsAccept(int sock, void *data)
 	connState->log_addr.s_addr &= Config.Addrs.client_netmask.s_addr;
 	connState->me = me;
 	connState->fd = fd;
-	connState->in.buf = memAllocBuf(CLIENT_REQ_BUF_SZ, &connState->in.size);
+	connState->in.size = CLIENT_REQ_BUF_SZ;
+	connState->in.buf = memAllocate(MEM_CLIENT_REQ_BUF);
 	/* XXX account connState->in.buf */
 	comm_add_close_handler(fd, connStateFree, connState);
 	if (Config.onoff.log_fqdn)

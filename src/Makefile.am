@@ -113,8 +113,6 @@ squid_SOURCES = \
 	client_side.c \
 	comm.c \
 	comm_select.c \
-	comm_poll.c \
-	comm_kqueue.c \
 	debug.c \
 	defines.h \
 	$(DELAY_POOL_SOURCE) \
