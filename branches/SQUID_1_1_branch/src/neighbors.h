@@ -251,6 +251,7 @@ extern peer *neighborFindByName _PARAMS((const char *));
 extern void neighbors_init _PARAMS((void));
 extern peer *getDefaultParent _PARAMS((request_t * request));
 extern peer *getRoundRobinParent _PARAMS((request_t * request));
+extern peer *getAnyParent _PARAMS((request_t * request));
 extern int neighborUp _PARAMS((const peer * e));
 extern void peerDestroy _PARAMS((peer * e));
 extern char *neighborTypeStr _PARAMS((const peer * e));
