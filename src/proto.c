@@ -148,11 +148,18 @@ char *IcpOpcodeStr[] =
     "ICP_OP_UNUSED6",
     "ICP_OP_UNUSED7",
     "ICP_OP_UNUSED8",
-    "ICP_OP_UNUSED9",
+    "ICP_RELOADING",		/* access denied while store is reloading */
     "ICP_DENIED",
     "ICP_HIT_OBJ",
     "ICP_END"
 };
+
+
+extern int httpd_accel_mode;
+extern ip_acl *local_ip_list;
+extern ip_acl *firewall_ip_list;
+extern time_t neighbor_timeout;
+extern single_parent_bypass;
 
 static void protoDataFree(fdunused, protoData)
      int fdunused;
@@ -190,21 +197,21 @@ int protoDispatchDNSHandle(unused1, unused2, data)
 	getFromCache(protoData->fd, entry, NULL, req);
 	return 0;
     }
-    if (protoData->direct_fetch == DIRECT_MAYBE && (Config.local_ip_list || Config.firewall_ip_list)) {
+    if (protoData->direct_fetch == DIRECT_MAYBE && (local_ip_list || firewall_ip_list)) {
 	if ((hp = ipcache_gethostbyname(req->host, 0)) == NULL) {
 	    debug(17, 1, "Unknown host: %s\n", req->host);
-	} else if (Config.firewall_ip_list) {
-	    xmemcpy(&srv_addr, *(hp->h_addr_list + 0), hp->h_length);
-	    if (ip_access_check(srv_addr, Config.firewall_ip_list) == IP_DENY) {
+	} else if (firewall_ip_list) {
+	    xmemcpy(&srv_addr, hp->h_addr_list[0], hp->h_length);
+	    if (ip_access_check(srv_addr, firewall_ip_list) == IP_DENY) {
 		hierarchy_log_append(entry,
 		    HIER_LOCAL_IP_DIRECT, 0,
 		    req->host);
 		getFromCache(protoData->fd, entry, NULL, req);
 		return 0;
 	    }
-	} else if (Config.local_ip_list) {
-	    xmemcpy(&srv_addr, *(hp->h_addr_list + 0), hp->h_length);
-	    if (ip_access_check(srv_addr, Config.local_ip_list) == IP_DENY) {
+	} else if (local_ip_list) {
+	    xmemcpy(&srv_addr, hp->h_addr_list[0], hp->h_length);
+	    if (ip_access_check(srv_addr, local_ip_list) == IP_DENY) {
 		hierarchy_log_append(entry,
 		    HIER_LOCAL_IP_DIRECT, 0,
 		    req->host);
@@ -214,7 +221,7 @@ int protoDispatchDNSHandle(unused1, unused2, data)
 	}
     }
     if ((e = protoData->single_parent) &&
-	(Config.singleParentBypass || protoData->direct_fetch == DIRECT_NO)) {
+	(single_parent_bypass || protoData->direct_fetch == DIRECT_NO)) {
 	/* Only one parent for this host, and okay to skip pinging stuff */
 	hierarchy_log_append(entry, HIER_SINGLE_PARENT, 0, e->host);
 	getFromCache(protoData->fd, entry, e, req);
@@ -244,7 +251,7 @@ int protoDispatchDNSHandle(unused1, unused2, data)
 	    COMM_SELECT_TIMEOUT,
 	    (PF) getFromDefaultSource,
 	    (void *) entry,
-	    Config.neighborTimeout);
+	    neighbor_timeout);
 	return 0;
     }
     if (protoData->direct_fetch == DIRECT_NO) {
@@ -314,9 +321,9 @@ int protoDispatch(fd, url, entry, request)
 	protoData->source_ping = 0;
 	protoData->direct_fetch = DIRECT_NO;
 	protoDispatchDNSHandle(fd, (struct hostent *) NULL, protoData);
-    } else if (Config.firewall_ip_list) {
+    } else if (firewall_ip_list) {
 	/* Have to look up the url address so we can compare it */
-	protoData->source_ping = Config.sourcePing;
+	protoData->source_ping = getSourcePing();
 	protoData->direct_fetch = DIRECT_MAYBE;
 	ipcache_nbgethostbyname(request->host,
 	    fd,
@@ -336,23 +343,23 @@ int protoDispatch(fd, url, entry, request)
 	    fd,
 	    protoDispatchDNSHandle,
 	    (void *) protoData);
-    } else if (Config.local_ip_list) {
+    } else if (local_ip_list) {
 	/* Have to look up the url address so we can compare it */
-	protoData->source_ping = Config.sourcePing;
+	protoData->source_ping = getSourcePing();
 	protoData->direct_fetch = DIRECT_MAYBE;
 	ipcache_nbgethostbyname(request->host,
 	    fd,
 	    protoDispatchDNSHandle,
 	    (void *) protoData);
-    } else if (protoData->single_parent && Config.singleParentBypass &&
-	!(protoData->source_ping = Config.sourcePing)) {
+    } else if (protoData->single_parent && single_parent_bypass &&
+	!(protoData->source_ping = getSourcePing())) {
 	/* will fetch from single parent */
 	protoData->direct_fetch = DIRECT_MAYBE;
 	BIT_RESET(protoData->entry->flag, IP_LOOKUP_PENDING);
 	protoDispatchDNSHandle(fd, (struct hostent *) NULL, protoData);
     } else {
 	/* will use ping resolution */
-	protoData->source_ping = Config.sourcePing;
+	protoData->source_ping = getSourcePing();
 	protoData->direct_fetch = DIRECT_MAYBE;
 	ipcache_nbgethostbyname(request->host,
 	    fd,
@@ -362,33 +369,32 @@ int protoDispatch(fd, url, entry, request)
     return 0;
 }
 
-void protoUnregister(fd, entry, request, src_addr)
+/* Use to undispatch a particular url/fd from DNS pending list */
+/* I have it here because the code that understand protocol/url */
+/* should be here. */
+int protoUndispatch(fd, url, entry, request)
      int fd;
+     char *url;
      StoreEntry *entry;
      request_t *request;
-     struct in_addr src_addr;
 {
-    char *url = NULL;
-    if (entry)
-	url = entry->url;
     debug(17, 5, "protoUndispatch FD %d <URL:%s>\n", fd, url);
 
     /* Cache objects don't need to be unregistered  */
     if (request->protocol == PROTO_CACHEOBJ)
-	return;
+	return 0;
 
-    if (url)
-	(void) redirectUnregister(url, fd);
-    (void) fqdncacheUnregister(src_addr, fd);
+    /* clean up DNS pending list for this name/fd look up here */
     if (!ipcache_unregister(request->host, fd)) {
 	debug(17, 5, "protoUndispatch: ipcache failed to unregister '%s'\n",
 	    request->host);
-	return;
+	return 0;
     }
     /* The pending DNS lookup was cleared, now have to junk the entry */
-    debug(17, 5, "protoUndispatch: entry is stranded with pending DNS event\n");
+    debug(17, 5, "protoUndispatch: the entry is stranded with a pending DNS event\n");
     if (entry)
 	squid_error_entry(entry, ERR_CLIENT_ABORT, NULL);
+    return 1;
 }
 
 void protoCancelTimeout(fd, entry)
@@ -404,7 +410,7 @@ void protoCancelTimeout(fd, entry)
 	return;
     }
     debug(17, 2, "protoCancelTimeout: FD %d <URL:%s>\n", fd, entry->url);
-    if (fdstatGetType(fd) != FD_SOCKET) {
+    if (fdstat_type(fd) != FD_SOCKET) {
 	debug(17, 0, "FD %d: Someone called protoCancelTimeout() on a non-socket\n",
 	    fd);
 	fatal_dump(NULL);
@@ -529,7 +535,7 @@ static int protoNotImplemented(fd, url, entry)
      char *url;
      StoreEntry *entry;
 {
-    LOCAL_ARRAY(char, buf, 256);
+    static char buf[256];
 
     debug(17, 1, "protoNotImplemented: Cannot retrieve <URL:%s>\n", url);
 
@@ -548,7 +554,7 @@ static int protoCantFetchObject(fd, entry, reason)
      StoreEntry *entry;
      char *reason;
 {
-    LOCAL_ARRAY(char, buf, 2048);
+    static char buf[2048];
 
     debug(17, 1, "protoCantFetchObject: FD %d %s\n", fd, reason);
     debug(17, 1, "--> <URL:%s>\n", entry->url);
@@ -577,7 +583,7 @@ static int protoDNSError(fd, entry)
 static int matchInsideFirewall(host)
      char *host;
 {
-    wordlist *s = Config.inside_firewall_list;
+    wordlist *s = getInsideFirewallList();
     char *key = NULL;
     int result;
     if (!s)
@@ -606,7 +612,7 @@ static int matchLocalDomain(host)
      char *host;
 {
     wordlist *s = NULL;
-    for (s = Config.local_domain_list; s; s = s->next) {
+    for (s = getLocalDomainList(); s; s = s->next) {
 	if (matchDomainName(s->key, host))
 	    return 1;
     }

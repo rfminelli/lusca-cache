@@ -134,7 +134,6 @@ typedef struct _meta_data_stat {
     int store_entries;
     int store_in_mem_objects;
     int ipcache_count;
-    int fqdncache_count;
     int hash_links;
     int url_strings;
     int misc;
@@ -171,17 +170,8 @@ struct _cacheinfo {
     /* statistic update method */
 
     /* add a transaction to system log */
-    void (*log_append) _PARAMS((struct _cacheinfo * obj,
-	    char *url,
-	    struct in_addr,
-	    int size,
-	    char *action,
-	    char *method,
-	    int http_code,
-	    int msec,
-	    char *ident,
-	    hier_code,
-	    char *hierarchy_host));
+    void (*log_append) _PARAMS((struct _cacheinfo * obj, char *url, char *id,
+	    int size, char *action, char *method, int http_code, int msec, hier_code));
 
     /* clear logfile */
     void (*log_clear) _PARAMS((struct _cacheinfo * obj, StoreEntry * sentry));
@@ -246,8 +236,6 @@ extern char *close_bracket;
 
 extern void stat_init _PARAMS((cacheinfo **, char *));
 extern void stat_rotate_log _PARAMS((void));
-extern int memoryAccounted _PARAMS((void));
-extern int mallinfoTotal _PARAMS((void));
 
 
 #endif /*STAT_H */

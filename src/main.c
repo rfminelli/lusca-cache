@@ -116,7 +116,6 @@ int opt_reload_hit_only = 0;	/* only UDP_HIT during store relaod */
 int catch_signals = 1;
 int opt_dns_tests = 1;
 int opt_foreground_rebuild = 0;
-int opt_zap_disk_store = 0;
 int vhost_mode = 0;
 int unbuffered_logs = 1;	/* debug and hierarhcy unbuffered by default */
 int shutdown_pending = 0;	/* set by SIGTERM handler (shut_down()) */
@@ -156,7 +155,7 @@ Usage: %s [-hsvzCDFRUVY] [-f config-file] [-[au] port]\n\
        -R        Do not set REUSEADDR on port.\n\
        -U        Unlink expired objects on reload.\n\
        -V        Virtual host httpd-accelerator.\n\
-       -Y        Only return UDP_HIT or UDP_DENIED during fast store reload.\n",
+       -Y        Only return UDP_HIT or UDP_RELOADING during fast reload.\n",
 	appname, CACHE_HTTP_PORT, DefaultConfigFile, CACHE_ICP_PORT);
     exit(1);
 }
@@ -207,7 +206,6 @@ static void mainParseOptions(argc, argv)
 	case 'm':
 #if MALLOC_DBG
 	    malloc_debug_level = atoi(optarg);
-	    /* NOTREACHED */
 	    break;
 #else
 	    fatal("Need to add -DMALLOC_DBG when compiling to use -m option");
@@ -225,7 +223,7 @@ static void mainParseOptions(argc, argv)
 	    exit(0);
 	    /* NOTREACHED */
 	case 'z':
-	    opt_zap_disk_store = 1;
+	    zap_disk_store = 1;
 	    break;
 	case '?':
 	default:
@@ -250,7 +248,7 @@ void reconfigure(sig)
 {
     debug(21, 1, "reconfigure: SIGHUP received\n");
     debug(21, 1, "Waiting %d seconds for active connections to finish\n",
-	Config.lifetimeShutdown);
+	getShutdownLifetime());
     reread_pending = 1;
 #if !HAVE_SIGACTION
     signal(sig, reconfigure);
@@ -263,7 +261,7 @@ void shut_down(sig)
     debug(21, 1, "Preparing for shutdown after %d connections\n",
 	ntcpconn + nudpconn);
     debug(21, 1, "Waiting %d seconds for active connections to finish\n",
-	Config.lifetimeShutdown);
+	getShutdownLifetime());
     shutdown_pending = 1;
 }
 
@@ -276,8 +274,8 @@ void serverConnectionsOpen()
     /* Open server ports */
     enter_suid();
     theHttpConnection = comm_open(COMM_NONBLOCKING,
-	Config.Addrs.tcp_incoming,
-	Config.Port.http,
+	getTcpIncomingAddr(),
+	getHttpPortNum(),
 	"HTTP Port");
     leave_suid();
     if (theHttpConnection < 0) {
@@ -292,10 +290,10 @@ void serverConnectionsOpen()
     debug(1, 1, "Accepting HTTP connections on FD %d.\n",
 	theHttpConnection);
 
-    if (!httpd_accel_mode || Config.Accel.withProxy) {
-	if ((port = Config.Port.icp) > 0) {
+    if (!httpd_accel_mode || getAccelWithProxy()) {
+	if ((port = getIcpPortNum()) > 0) {
 	    theInIcpConnection = comm_open(COMM_NONBLOCKING | COMM_DGRAM,
-		Config.Addrs.udp_incoming,
+		getUdpIncomingAddr(),
 		port,
 		"ICP Port");
 	    if (theInIcpConnection < 0)
@@ -308,7 +306,7 @@ void serverConnectionsOpen()
 	    debug(1, 1, "Accepting ICP connections on FD %d.\n",
 		theInIcpConnection);
 
-	    if ((addr = Config.Addrs.udp_outgoing).s_addr != INADDR_NONE) {
+	    if ((addr = getUdpOutgoingAddr()).s_addr != INADDR_NONE) {
 		theOutIcpConnection = comm_open(COMM_NONBLOCKING | COMM_DGRAM,
 		    addr,
 		    port,
@@ -371,13 +369,12 @@ static void mainReinitialize()
     neighborsDestroy();
 
     parseConfigFile(ConfigFile);
-    _db_init(Config.Log.log, Config.debugOptions);
+    _db_init(getCacheLogFile(), getDebugOptions());
     neighbors_init();
-    dnsOpenServers();
-    redirectOpenServers();
+    ipcacheOpenServers();
     serverConnectionsOpen();
     (void) ftpInitialize();
-    if (theOutIcpConnection >= 0 && (!httpd_accel_mode || Config.Accel.withProxy))
+    if (theOutIcpConnection >= 0 && (!httpd_accel_mode || getAccelWithProxy()))
 	neighbors_open(theOutIcpConnection);
     debug(1, 0, "Ready to serve requests.\n");
 }
@@ -398,22 +395,14 @@ static void mainInitialize()
 
     leave_suid();		/* Run as non privilegied user */
 
-#if USE_ASYNC_IO
-#if HAVE_AIO_INIT
-    if (first_time)
-	aio_init();
-#endif
-    squid_signal(SIGIO, aioSigHandler, SA_RESTART);
-#endif
-
     if (httpPortNumOverride != 1)
 	setHttpPortNum((u_short) httpPortNumOverride);
     if (icpPortNumOverride != 1)
 	setIcpPortNum((u_short) icpPortNumOverride);
 
-    _db_init(Config.Log.log, Config.debugOptions);
+    _db_init(getCacheLogFile(), getDebugOptions());
     fdstat_open(fileno(debug_log), FD_LOG);
-    fd_note(fileno(debug_log), Config.Log.log);
+    fd_note(fileno(debug_log), getCacheLogFile());
 
     debug(1, 0, "Starting Squid Cache version %s for %s...\n",
 	version_string,
@@ -421,14 +410,10 @@ static void mainInitialize()
     debug(1, 1, "With %d file descriptors available\n", FD_SETSIZE);
 
     if (first_time) {
-	stmemInit();		/* stmem must go before at least redirect */
 	disk_init();		/* disk_init must go before ipcache_init() */
 	writePidFile();		/* write PID file */
     }
     ipcache_init();
-    fqdncache_init();
-    dnsOpenServers();
-    redirectOpenServers();
     neighbors_init();
     (void) ftpInitialize();
 
@@ -440,10 +425,11 @@ static void mainInitialize()
 	first_time = 0;
 	/* module initialization */
 	urlInitialize();
-	stat_init(&CacheInfo, Config.Log.access);
+	stat_init(&CacheInfo, getAccessLogFile());
 	storeInit();
+	stmemInit();
 
-	if (Config.effectiveUser) {
+	if (getEffectiveUser()) {
 	    /* we were probably started as root, so cd to a swap
 	     * directory in case we dump core */
 	    if (chdir(swappath(0)) < 0) {
@@ -455,7 +441,7 @@ static void mainInitialize()
 	do_mallinfo = 1;
     }
     serverConnectionsOpen();
-    if (theOutIcpConnection >= 0 && (!httpd_accel_mode || Config.Accel.withProxy))
+    if (theOutIcpConnection >= 0 && (!httpd_accel_mode || getAccelWithProxy()))
 	neighbors_open(theOutIcpConnection);
 
     squid_signal(SIGUSR1, rotate_logs, SA_RESTART);
@@ -477,22 +463,6 @@ int main(argc, argv)
     time_t last_announce = 0;
     time_t loop_delay;
 
-    /* call mallopt() before anything else */
-#if HAVE_MALLOPT
-#ifdef M_GRAIN
-    /* Round up all sizes to a multiple of this */
-    mallopt(M_GRAIN, 16);
-#endif
-#ifdef M_MXFAST
-    /* biggest size that is considered a small block */
-    mallopt(M_MXFAST, 256);
-#endif
-#ifdef M_NBLKS
-    /* allocate this many small blocks at once */
-    mallopt(M_NLBLKS, 32);
-#endif
-#endif /* HAVE_MALLOPT */
-
     memset(&local_addr, '\0', sizeof(struct in_addr));
     local_addr.s_addr = inet_addr(localhost);
 
@@ -508,6 +478,21 @@ int main(argc, argv)
     if (catch_signals)
 	for (n = FD_SETSIZE; n > 2; n--)
 	    close(n);
+
+#if HAVE_MALLOPT
+#ifdef M_GRAIN
+    /* Round up all sizes to a multiple of this */
+    mallopt(M_GRAIN, 16);
+#endif
+#ifdef M_MXFAST
+    /* biggest size that is considered a small block */
+    mallopt(M_MXFAST, 256);
+#endif
+#ifdef M_NBLKS
+    /* allocate this many small blocks at once */
+    mallopt(M_NLBLKS, 32);
+#endif
+#endif /* HAVE_MALLOPT */
 
     /*init comm module */
     comm_init();
@@ -531,8 +516,8 @@ int main(argc, argv)
     mainInitialize();
 
     /* main loop */
-    if (Config.cleanRate > 0)
-	next_cleaning = time(NULL) + Config.cleanRate;
+    if (getCleanRate() > 0)
+	next_cleaning = time(NULL) + getCleanRate();
     for (;;) {
 	loop_delay = (time_t) 10;
 	/* maintain cache storage */
@@ -564,13 +549,13 @@ int main(argc, argv)
 		fatal_dump("Select Loop failed!");
 	    break;
 	case COMM_TIMEOUT:
-	    if (Config.cleanRate > 0 && squid_curtime >= next_cleaning) {
+	    if (getCleanRate() > 0 && squid_curtime >= next_cleaning) {
 		debug(1, 1, "Performing a garbage collection...\n");
 		n = storePurgeOld();
 		debug(1, 1, "Garbage collection done, %d objects removed\n", n);
-		next_cleaning = squid_curtime + Config.cleanRate;
+		next_cleaning = squid_curtime + getCleanRate();
 	    }
-	    if ((n = Config.Announce.rate) > 0) {
+	    if ((n = getAnnounceRate()) > 0) {
 		if (squid_curtime > last_announce + n)
 		    send_announce();
 		last_announce = squid_curtime;
@@ -599,5 +584,6 @@ int main(argc, argv)
 	}
     }
     /* NOTREACHED */
+    exit(0);
     return 0;
 }

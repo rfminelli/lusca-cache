@@ -181,16 +181,14 @@ typedef struct _MemObject {
     /* use another field to avoid changing the existing code */
     struct pentry **pending;
 
-    short swapin_fd;
-    short swapout_fd;
+    short swap_fd;
     int fd_of_first_client;
     struct _http_reply *reply;
     request_t *request;
     SIH swapin_complete_handler;
     void *swapin_complete_data;
-    hier_code hierarchy_code;
-    char *hierarchy_host;
 } MemObject;
+
 typedef enum {
     NOT_IN_MEMORY,
     SWAPPING_IN,
@@ -228,10 +226,9 @@ struct sentry {
 
     u_num32 flag;
     u_num32 timestamp;
+    u_num32 lastref;
     u_num32 refcount;
-    time_t lastref;
-    time_t expires;
-    time_t lastmod;
+    u_num32 expires;
 
     int object_len;
     int swap_file_number;

@@ -339,8 +339,7 @@ static void sslConnInProgress(fd, sslState)
 		strlen(buf),
 		30,
 		sslErrorComplete,
-		sslState,
-		xfree);
+		sslState);
 	    return;
 	}
     }
@@ -357,7 +356,7 @@ static int sslConnect(fd, hp, sslState)
     request_t *request = sslState->request;
     int status;
     char *buf = NULL;
-    if (!ipcache_gethostbyname(request->host, 0)) {
+    if (hp == NULL) {
 	debug(26, 4, "sslConnect: Unknown host: %s\n", request->host);
 	buf = squid_error_url(sslState->url,
 	    request->method,
@@ -370,8 +369,7 @@ static int sslConnect(fd, hp, sslState)
 	    strlen(buf),
 	    30,
 	    sslErrorComplete,
-	    (void *) sslState,
-	    xfree);
+	    (void *) sslState);
 	return COMM_ERROR;
     }
     debug(26, 5, "sslConnect: client=%d server=%d\n",
@@ -404,8 +402,7 @@ static int sslConnect(fd, hp, sslState)
 		strlen(buf),
 		30,
 		sslErrorComplete,
-		(void *) sslState,
-		xfree);
+		(void *) sslState);
 	    return COMM_ERROR;
 	} else {
 	    debug(26, 5, "sslConnect: conn %d EINPROGRESS\n", fd);
@@ -437,7 +434,7 @@ int sslStart(fd, url, request, mime_hdr, size_ptr)
 	RequestMethodStr[request->method], url);
 
     /* Create socket. */
-    sock = comm_open(COMM_NONBLOCKING, Config.Addrs.tcp_outgoing, 0, url);
+    sock = comm_open(COMM_NONBLOCKING, getTcpOutgoingAddr(), 0, url);
     if (sock == COMM_ERROR) {
 	debug(26, 4, "sslStart: Failed because we're out of sockets.\n");
 	buf = squid_error_url(url,
@@ -451,15 +448,14 @@ int sslStart(fd, url, request, mime_hdr, size_ptr)
 	    strlen(buf),
 	    30,
 	    sslErrorComplete,
-	    (void *) sslState,
-	    xfree);
+	    (void *) sslState);
 	return COMM_ERROR;
     }
     sslState = xcalloc(1, sizeof(SslStateData));
     sslState->url = xstrdup(url);
     sslState->request = requestLink(request);
     sslState->mime_hdr = mime_hdr;
-    sslState->timeout = Config.readTimeout;
+    sslState->timeout = getReadTimeout();
     sslState->size_ptr = size_ptr;
     sslState->client.fd = fd;
     sslState->server.fd = sock;

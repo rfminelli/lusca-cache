@@ -122,7 +122,7 @@ void init_stack(stack, size)
      int size;
 {
     stack->stack_size = size;
-    stack->base = xcalloc(size, sizeof(void **));
+    stack->base = xcalloc(size, sizeof(generic_ptr *));
     stack->top = &stack->base[0];
 }
 
@@ -140,7 +140,7 @@ void init_stack(stack, size)
 --------------------------------------------------------------------------*/
 void push(stack, data)
      Stack *stack;
-     void *data;
+     generic_ptr data;
 {
     if (current_stacksize(stack) == stack->stack_size) {
 	safe_free(data);
@@ -196,7 +196,7 @@ int full_stack(stack)
 --  Output:   None.
 --
 --------------------------------------------------------------------------*/
-void *pop(stack)
+char *pop(stack)
      Stack *stack;
 {
     if (empty_stack(stack) == 1)

@@ -119,21 +119,22 @@ typedef enum {
     LOG_UDP_MISS,		/* 10 */
     LOG_UDP_DENIED,		/* 11 */
     LOG_UDP_INVALID,		/* 12 */
-    ERR_READ_TIMEOUT,		/* 13 */
-    ERR_LIFETIME_EXP,		/* 14 */
-    ERR_NO_CLIENTS_BIG_OBJ,	/* 15 */
-    ERR_READ_ERROR,		/* 16 */
-    ERR_CLIENT_ABORT,		/* 17 */
-    ERR_CONNECT_FAIL,		/* 18 */
-    ERR_INVALID_REQ,		/* 19 */
-    ERR_INVALID_URL,		/* 20 */
-    ERR_NO_FDS,			/* 21 */
-    ERR_DNS_FAIL,		/* 22 */
-    ERR_NOT_IMPLEMENTED,	/* 23 */
-    ERR_CANNOT_FETCH,		/* 24 */
-    ERR_NO_RELAY,		/* 25 */
-    ERR_DISK_IO,		/* 26 */
-    ERR_ZERO_SIZE_OBJECT	/* 27 */
+    LOG_UDP_RELOADING,		/* 13 */
+    ERR_READ_TIMEOUT,		/* 14 */
+    ERR_LIFETIME_EXP,		/* 15 */
+    ERR_NO_CLIENTS_BIG_OBJ,	/* 16 */
+    ERR_READ_ERROR,		/* 17 */
+    ERR_CLIENT_ABORT,		/* 18 */
+    ERR_CONNECT_FAIL,		/* 19 */
+    ERR_INVALID_REQ,		/* 20 */
+    ERR_INVALID_URL,		/* 21 */
+    ERR_NO_FDS,			/* 22 */
+    ERR_DNS_FAIL,		/* 23 */
+    ERR_NOT_IMPLEMENTED,	/* 24 */
+    ERR_CANNOT_FETCH,		/* 25 */
+    ERR_NO_RELAY,		/* 26 */
+    ERR_DISK_IO,		/* 27 */
+    ERR_ZERO_SIZE_OBJECT	/* 28 */
 } log_type;
 
 #define ERR_MIN ERR_READ_TIMEOUT
@@ -158,54 +159,21 @@ typedef struct wwd {
     log_type logcode;
 } icpUdpData;
 
-
-#define ICP_IDENT_SZ 63
-typedef struct iwd {
-    icp_common_t header;	/* Allows access to previous header */
-    int fd;
-    char *url;
-    char *inbuf;
-    int inbufsize;
-    method_t method;		/* GET, POST, ... */
-    request_t *request;		/* Parsed URL ... */
-    char *request_hdr;		/* Mime header */
-    StoreEntry *entry;
-    long offset;
-    int log_type;
-    int http_code;
-    struct sockaddr_in peer;
-    struct sockaddr_in me;
-    struct in_addr log_addr;
-    char *buf;
-    struct timeval start;
-    int flags;
-    int size;			/* hack for CONNECT which doesnt use sentry */
-    char ident[ICP_IDENT_SZ + 1];
-    int ident_fd;
-    aclCheck_t *aclChecklist;
-    void (*aclHandler) _PARAMS((struct iwd *, int answer));
-} icpStateData;
-
+extern char *icpWrite _PARAMS((int, char *, int, int, void (*handler) (), void *));
 extern int icpUdpSend _PARAMS((int,
 	char *,
 	icp_common_t *,
 	struct sockaddr_in *,
+	int flags,
 	icp_opcode,
 	log_type));
+
 extern int icpHandleUdp _PARAMS((int sock, void *data));
 extern int asciiHandleConn _PARAMS((int sock, void *data));
-extern int icpSendERROR _PARAMS((int fd,
-	log_type errorCode,
-	char *text,
-	icpStateData *,
-	int httpCode));
 extern void AppendUdp _PARAMS((icpUdpData *));
-extern void icpParseRequestHeaders _PARAMS((icpStateData *));
-extern void icpDetectClientClose _PARAMS((int fd, icpStateData *));
-extern void icp_hit_or_miss _PARAMS((int fd, icpStateData *));
 
 extern int neighbors_do_private_keys;
 extern char *IcpOpcodeStr[];
 extern int icpUdpReply _PARAMS((int fd, icpUdpData * queue));
 
-#endif /* ICP_H */
+#endif

@@ -143,7 +143,7 @@ typedef enum {
     ICP_OP_UNUSED6,		/* 18 */
     ICP_OP_UNUSED7,		/* 19 */
     ICP_OP_UNUSED8,		/* 20 */
-    ICP_OP_UNUSED9,		/* 21 */
+    ICP_OP_RELOADING,		/* 21 access denied while reloading */
     ICP_OP_DENIED,		/* 22 access denied (cl<-sv) */
     ICP_OP_HIT_OBJ,		/* 23 hit with object data (cl<-sv) */
     ICP_OP_END			/* 24 marks end of opcodes */
@@ -287,10 +287,7 @@ typedef struct _protodispatch_data {
 
 extern int proto_cachable _PARAMS((char *url, int method));
 extern int protoDispatch _PARAMS((int, char *, StoreEntry *, request_t *));
-extern void protoUnregister _PARAMS((int fd,
-	StoreEntry *,
-	request_t *,
-	struct in_addr));
+extern int protoUndispatch _PARAMS((int, char *, StoreEntry *, request_t *));
 extern int getFromDefaultSource _PARAMS((int, StoreEntry *));
 extern int getFromCache _PARAMS((int, StoreEntry *, edge *, request_t *));
 extern void protoCancelTimeout _PARAMS((int fd, StoreEntry *));

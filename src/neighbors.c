@@ -112,6 +112,7 @@ static neighbors *friends = NULL;
 static struct neighbor_cf *Neighbor_cf = NULL;
 static icp_common_t echo_hdr;
 static u_short echo_port;
+static struct in_addr any_addr;
 
 FILE *cache_hierarchy_log = NULL;
 
@@ -119,7 +120,7 @@ char *hier_strings[] =
 {
     "NONE",
     "DIRECT",
-    "SIBLING_HIT",
+    "NEIGHBOR_HIT",
     "PARENT_HIT",
     "SINGLE_PARENT",
     "FIRST_UP_PARENT",
@@ -127,10 +128,13 @@ char *hier_strings[] =
     "FIRST_PARENT_MISS",
     "LOCAL_IP_DIRECT",
     "FIREWALL_IP_DIRECT",
+    "DEAD_PARENT",
+    "DEAD_NEIGHBOR",
+    "REVIVE_PARENT",
+    "REVIVE_NEIGHBOR",
     "NO_DIRECT_FAIL",
     "SOURCE_FASTEST",
-    "SIBLING_UDP_HIT_OBJ",
-    "PARENT_UDP_HIT_OBJ",
+    "UDP_HIT_OBJ",
     "INVALID CODE"
 };
 
@@ -169,7 +173,7 @@ void hierarchy_log_append(entry, code, timeout, cache_host)
     char *url = entry->url;
     MemObject *mem = entry->mem_obj;
     static time_t last_time = 0;
-    LOCAL_ARRAY(char, time_str, 128);
+    static char time_str[128];
     char *s = NULL;
 
     if (!cache_hierarchy_log)
@@ -178,11 +182,9 @@ void hierarchy_log_append(entry, code, timeout, cache_host)
     if (code > HIER_MAX)
 	code = HIER_MAX;
     if (mem)
-	mem->hierarchy_code = code;
-    if (mem && cache_host)
-	mem->hierarchy_host = xstrdup(cache_host);
+	mem->request->hierarchy_code = code;
 
-    if (Config.commonLogFormat) {
+    if (emulate_httpd_log) {
 	if (squid_curtime != last_time) {
 	    s = mkhttpdlogtime(&squid_curtime);
 	    strcpy(time_str, s);
@@ -231,7 +233,6 @@ static int edgeWouldBePinged(e, request)
     dom_list *d = NULL;
     int do_ping = 1;
     struct _acl_list *a = NULL;
-    aclCheck_t checklist;
 
     if (e->domains == NULL && e->acls == NULL)
 	return do_ping;
@@ -241,10 +242,14 @@ static int edgeWouldBePinged(e, request)
 	    return d->do_ping;
 	do_ping = !d->do_ping;
     }
-    checklist.src_addr = any_addr;	/* XXX bogus! */
-    checklist.request = request;
     for (a = e->acls; a; a = a->next) {
-	if (aclMatchAcl(a->acl, &checklist))
+	if (aclMatchAcl(a->acl,
+		any_addr,	/* bogus */
+		request->method,
+		request->protocol,
+		request->host,
+		request->port,
+		request->urlpath))
 	    return a->op;
 	do_ping = !a->op;
     }
@@ -332,7 +337,6 @@ void neighborRemove(target)
     }
     if (e) {
 	*E = e->next;
-	safe_free(e->host);
 	safe_free(e);
 	friends->n--;
     }
@@ -348,8 +352,8 @@ void neighborsDestroy()
     for (e = friends->edges_head; e; e = next) {
 	next = e->next;
 	safe_free(e->host);
+	/* XXX I think we need to free e->domains too -DW */
 	safe_free(e);
-	friends->n--;
     }
     safe_free(friends);
     friends = NULL;
@@ -367,7 +371,7 @@ static void neighborsOpenLog(fname)
 	cache_hierarchy_log = NULL;
     }
     if (strcmp(fname, "none") != 0) {
-	log_fd = file_open(fname, NULL, O_WRONLY | O_CREAT);
+	log_fd = file_open(fname, NULL, O_WRONLY | O_CREAT | O_APPEND);
 	if (log_fd < 0) {
 	    debug(15, 0, "neighborsOpenLog: %s: %s\n", fname, xstrerror());
 	} else if ((cache_hierarchy_log = fdopen(log_fd, "a")) == NULL) {
@@ -411,6 +415,7 @@ void neighbors_open(fd)
 	    safe_free(e);
 	    continue;
 	}
+	ipcacheLockEntry(e->host);
 	e->n_addresses = 0;
 	for (j = 0; *list && j < EDGE_MAX_ADDRESSES; j++) {
 	    ina = &e->addresses[j];
@@ -479,7 +484,6 @@ void neighbors_open(fd)
 int neighborsUdpPing(proto)
      protodispatch_data *proto;
 {
-    char *t = NULL;
     char *host = proto->request->host;
     char *url = proto->url;
     StoreEntry *entry = proto->entry;
@@ -488,6 +492,7 @@ int neighborsUdpPing(proto)
     edge *e = NULL;
     int i;
     MemObject *mem = entry->mem_obj;
+    int reqnum = 0;
 
     mem->e_pings_n_pings = 0;
     mem->e_pings_n_acks = 0;
@@ -495,7 +500,7 @@ int neighborsUdpPing(proto)
     mem->w_rtt = 0;
     mem->start_ping = current_time;
 
-    if (friends->edges_head == NULL)
+    if (friends->edges_head == (edge *) NULL)
 	return 0;
 
     for (i = 0, e = friends->first_ping; i++ < friends->n; e = e->next) {
@@ -505,7 +510,7 @@ int neighborsUdpPing(proto)
 
 	/* Don't resolve refreshes through neighbors because we don't resolve
 	 * misses through neighbors */
-	if (entry->flag & REFRESH_REQUEST && e->type == EDGE_SIBLING)
+	if (e->type == EDGE_SIBLING && entry->flag & REFRESH_REQUEST)
 	    continue;
 
 	/* skip any cache where we failed to connect() w/in the last 60s */
@@ -520,27 +525,30 @@ int neighborsUdpPing(proto)
 	debug(15, 4, "neighborsUdpPing: pinging cache %s for <URL:%s>\n",
 	    e->host, url);
 
-	/* e->header.reqnum++; */
 	if (BIT_TEST(entry->flag, KEY_PRIVATE))
-	    e->header.reqnum = atoi(entry->key);
+	    reqnum = atoi(entry->key);
 	else
-	    e->header.reqnum = getKeyCounter();
+	    reqnum = getKeyCounter();
 	debug(15, 3, "neighborsUdpPing: key = '%s'\n", entry->key);
-	debug(15, 3, "neighborsUdpPing: reqnum = %d\n", e->header.reqnum);
+	debug(15, 3, "neighborsUdpPing: reqnum = %d\n", reqnum);
 
 	if (e->icp_port == echo_port) {
-	    debug(15, 4, "neighborsUdpPing: Looks like a dumb cache, send DECHO ping\n");
+	    debug(15, 4, "neighborsUdpPing: Sending DECHO to dumb cache\n");
+	    echo_hdr.reqnum = reqnum;
 	    icpUdpSend(friends->fd,
 		url,
 		&echo_hdr,
 		&e->in_addr,
+		entry->flag,
 		ICP_OP_DECHO,
 		LOG_TAG_NONE);
 	} else {
+	    e->header.reqnum = reqnum;
 	    icpUdpSend(friends->fd,
 		url,
 		&e->header,
 		&e->in_addr,
+		entry->flag,
 		ICP_OP_QUERY,
 		LOG_TAG_NONE);
 	}
@@ -549,18 +557,16 @@ int neighborsUdpPing(proto)
 	e->stats.pings_sent++;
 
 	if (e->stats.ack_deficit < HIER_MAX_DEFICIT) {
-	    /* consider it's alive. count it */
+	    /* its alive, expect a reply from it */
 	    e->neighbor_up = 1;
 	    mem->e_pings_n_pings++;
 	} else {
-	    /* consider it's dead. send a ping but don't count it. */
+	    /* Neighbor is dead; ping it anyway, but don't expect a reply */
 	    e->neighbor_up = 0;
 	    if (e->stats.ack_deficit > (HIER_MAX_DEFICIT << 1))
 		/* do this to prevent wrap around but we still want it
 		 * to move a bit so we can debug it easier. */
 		e->stats.ack_deficit = HIER_MAX_DEFICIT + 1;
-	    debug(15, 6, "cache %s is considered dead but send PING anyway, hope it comes up soon.\n",
-		inet_ntoa(e->in_addr.sin_addr));
 	    /* log it once at the threshold */
 	    if ((e->stats.ack_deficit == HIER_MAX_DEFICIT)) {
 		debug(15, 0, "neighborsUdpPing: Detected DEAD %s: %s\n",
@@ -572,21 +578,26 @@ int neighborsUdpPing(proto)
     }
 
     /* only do source_ping if we have neighbors */
-    if (echo_hdr.opcode) {
-	if (proto->source_ping && (hep = ipcache_gethostbyname(host, IP_BLOCKING_LOOKUP))) {
-	    debug(15, 6, "neighborsUdpPing: Send to original host\n");
-	    debug(15, 6, "neighborsUdpPing: url=%s, host=%s, t=%d\n",
-		url, host, t);
+    if (friends->n) {
+	if (!proto->source_ping) {
+	    debug(15, 6, "neighborsUdpPing: Source Ping is disabled.\n");
+	} else if ((hep = ipcache_gethostbyname(host, IP_BLOCKING_LOOKUP))) {
+	    debug(15, 6, "neighborsUdpPing: Source Ping: to %s for '%s'\n",
+		host, url);
 	    to_addr.sin_family = AF_INET;
 	    xmemcpy(&to_addr.sin_addr, hep->h_addr, hep->h_length);
 	    to_addr.sin_port = htons(echo_port);
-	    echo_hdr.reqnum = squid_curtime;
-	    debug(15, 6, "neighborsUdpPing - url: %s to url-host %s \n",
-		url, inet_ntoa(to_addr.sin_addr));
-	    /* send to original site */
-	    icpUdpSend(friends->fd, url, &echo_hdr, &to_addr, ICP_OP_SECHO, LOG_TAG_NONE);
+	    echo_hdr.reqnum = reqnum;
+	    icpUdpSend(friends->fd,
+		url,
+		&echo_hdr,
+		&to_addr,
+		entry->flag,
+		ICP_OP_SECHO,
+		LOG_TAG_NONE);
 	} else {
-	    debug(15, 6, "neighborsUdpPing: Source Ping is disabled.\n");
+	    debug(15, 6, "neighborsUdpPing: Source Ping: unknown host: %s\n",
+		host);
 	}
     }
     return (mem->e_pings_n_pings);
@@ -617,7 +628,7 @@ void neighborsUdpAck(fd, url, header, from, entry, data, data_sz)
 
     debug(15, 6, "neighborsUdpAck: opcode %d '%s'\n",
 	(int) header->opcode, url);
-    if ((icp_opcode) header->opcode > ICP_OP_END)
+    if (header->opcode > ICP_OP_END)
 	return;
     if (mem == NULL) {
 	debug(15, 1, "Ignoring ICP reply for missing mem_obj: %s\n", url);
@@ -670,10 +681,7 @@ void neighborsUdpAck(fd, url, header, from, entry, data, data_sz)
 	    return;
 	}
     } else if (header->opcode == ICP_OP_HIT_OBJ) {
-	if (e == NULL) {
-	    debug(15, 0, "Ignoring ICP_OP_HIT_OBJ from non-neighbor %s\n",
-		inet_ntoa(from->sin_addr));
-	} else if (entry->object_len != 0) {
+	if (entry->object_len != 0) {
 	    debug(15, 1, "Too late UDP_HIT_OBJ '%s'?\n", entry->url);
 	} else {
 	    protoCancelTimeout(0, entry);
@@ -684,9 +692,9 @@ void neighborsUdpAck(fd, url, header, from, entry, data, data_sz)
 	    storeAppend(entry, data, data_sz);
 	    storeComplete(entry);
 	    hierarchy_log_append(entry,
-		e->type == EDGE_PARENT ? HIER_PARENT_UDP_HIT_OBJ : HIER_SIBLING_UDP_HIT_OBJ,
+		HIER_UDP_HIT_OBJ,
 		0,
-		e->host);
+		e ? e->host : inet_ntoa(from->sin_addr));
 	    if (httpState->reply_hdr)
 		put_free_8k_page(httpState->reply_hdr);
 	    safe_free(httpState);
@@ -697,7 +705,7 @@ void neighborsUdpAck(fd, url, header, from, entry, data, data_sz)
 	    debug(15, 1, "neighborsUdpAck: Ignoring HIT from non-neighbor\n");
 	} else {
 	    hierarchy_log_append(entry,
-		e->type == EDGE_SIBLING ? HIER_SIBLING_HIT : HIER_PARENT_HIT,
+		e->type == EDGE_SIBLING ? HIER_NEIGHBOR_HIT : HIER_PARENT_HIT,
 		0,
 		e->host);
 	    BIT_SET(entry->flag, ENTRY_DISPATCHED);
@@ -737,6 +745,9 @@ void neighborsUdpAck(fd, url, header, from, entry, data, data_sz)
 		neighborRemove(e);
 	    }
 	}
+    } else if (header->opcode == ICP_OP_RELOADING) {
+	if (e)
+	    debug(15, 3, "neighborsUdpAck: %s is RELOADING\n", e->host);
     } else {
 	debug(15, 0, "neighborsUdpAck: Unexpected ICP reply: %s\n",
 	    IcpOpcodeStr[header->opcode]);
@@ -866,12 +877,12 @@ void neighbors_init()
     if (friends == NULL)
 	friends = xcalloc(1, sizeof(neighbors));
 
-    if ((fname = Config.Log.hierarchy))
+    if ((fname = getHierarchyLogFile()))
 	neighborsOpenLog(fname);
 
     for (t = Neighbor_cf; t; t = next) {
 	next = t->next;
-	if (!strcmp(t->host, me) && t->http_port == Config.Port.http) {
+	if (!strcmp(t->host, me) && t->http_port == getHttpPortNum()) {
 	    debug(15, 0, "neighbors_init: skipping cache_host %s %s %d %d\n",
 		t->type, t->host, t->http_port, t->icp_port);
 	    continue;
@@ -915,23 +926,23 @@ void neighbors_rotate_log()
 {
     char *fname = NULL;
     int i;
-    LOCAL_ARRAY(char, from, MAXPATHLEN);
-    LOCAL_ARRAY(char, to, MAXPATHLEN);
+    static char from[MAXPATHLEN];
+    static char to[MAXPATHLEN];
 
-    if ((fname = Config.Log.hierarchy) == NULL)
+    if ((fname = getHierarchyLogFile()) == NULL)
 	return;
 
     debug(15, 1, "neighbors_rotate_log: Rotating.\n");
 
     /* Rotate numbers 0 through N up one */
-    for (i = Config.Log.rotateNumber; i > 1;) {
+    for (i = getLogfileRotateNumber(); i > 1;) {
 	i--;
 	sprintf(from, "%s.%d", fname, i - 1);
 	sprintf(to, "%s.%d", fname, i);
 	rename(from, to);
     }
     /* Rotate the current log to .0 */
-    if (Config.Log.rotateNumber > 0) {
+    if (getLogfileRotateNumber() > 0) {
 	sprintf(to, "%s.%d", fname, 0);
 	rename(fname, to);
     }
