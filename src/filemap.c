@@ -37,7 +37,7 @@ fileMap *file_map_create(n)
     debug(8, 1, "file_map_create: creating space for %d files\n", n);
     debug(8, 5, "--> %d words of %d bytes each\n",
 	fm->nwords, sizeof(unsigned long));
-    fm->file_map = (unsigned long *) xcalloc(fm->nwords, sizeof(unsigned long));
+    fm->file_map = xcalloc(fm->nwords, sizeof(unsigned long));
     return (fm);
 }
 
