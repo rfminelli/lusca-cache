@@ -116,7 +116,6 @@ static DEFER httpAcceptDefer;
 static log_type clientProcessRequest2(clientHttpRequest * http);
 static int clientReplyBodyTooLarge(int clen);
 static int clientRequestBodyTooLarge(int clen);
-static void clientProcessBody(ConnStateData * conn);
 
 static int
 checkAccelOnly(clientHttpRequest * http)
@@ -139,9 +138,11 @@ static void
 clientIdentDone(const char *ident, void *data)
 {
     ConnStateData *conn = data;
-    xstrncpy(conn->rfc931, ident ? ident : dash_str, USER_IDENT_SZ);
+    if (ident)
+	xstrncpy(conn->ident, ident, sizeof(conn->ident));
+    else
+	xstrncpy(conn->ident, "-", sizeof(conn->ident));
 }
-
 #endif
 
 static aclCheck_t *
@@ -151,16 +152,15 @@ clientAclChecklistCreate(const acl_access * acl, const clientHttpRequest * http)
     ConnStateData *conn = http->conn;
     ch = aclChecklistCreate(acl,
 	http->request,
-	conn->rfc931);
-
+	conn->ident);
+#if USE_IDENT
     /*
      * hack for ident ACL. It needs to get full addresses, and a
      * place to store the ident result on persistent connections...
      */
-    /* connection oriented auth also needs these two lines for it's operation. */
     ch->conn = conn;
     cbdataLock(ch->conn);
-
+#endif
     return ch;
 }
 
@@ -218,12 +218,10 @@ clientAccessCheckDone(int answer, void *data)
     int page_id = -1;
     http_status status;
     ErrorState *err = NULL;
-    char *proxy_auth_msg = NULL;
     debug(33, 2) ("The request %s %s is %s, because it matched '%s'\n",
 	RequestMethodStr[http->request->method], http->uri,
 	answer == ACCESS_ALLOWED ? "ALLOWED" : "DENIED",
 	AclMatchedName ? AclMatchedName : "NO ACL's");
-    proxy_auth_msg = authenticateAuthUserRequestMessage(http->conn->auth_user_request ? http->conn->auth_user_request : http->request->auth_user_request);
     http->acl_checklist = NULL;
     if (answer == ACCESS_ALLOWED) {
 	safe_free(http->uri);
@@ -235,8 +233,6 @@ clientAccessCheckDone(int answer, void *data)
 	debug(33, 5) ("Access Denied: %s\n", http->uri);
 	debug(33, 5) ("AclMatchedName = %s\n",
 	    AclMatchedName ? AclMatchedName : "<null>");
-	debug(33, 5) ("Proxy Auth Message = %s\n",
-	    proxy_auth_msg ? proxy_auth_msg : "<null>");
 	/*
 	 * NOTE: get page_id here, based on AclMatchedName because
 	 * if USE_DELAY_POOLS is enabled, then AclMatchedName gets
@@ -265,14 +261,6 @@ clientAccessCheckDone(int answer, void *data)
 	err = errorCon(page_id, status);
 	err->request = requestLink(http->request);
 	err->src_addr = http->conn->peer.sin_addr;
-	if (http->conn->auth_user_request)
-	    err->auth_user_request = http->conn->auth_user_request;
-	else if (http->request->auth_user_request)
-	    err->auth_user_request = http->request->auth_user_request;
-	/* lock for the error state */
-	if (err->auth_user_request)
-	    authenticateAuthUserRequestLock(err->auth_user_request);
-	err->callback_data = NULL;
 	errorAppendEntry(http->entry, err);
     }
 }
@@ -310,10 +298,13 @@ clientRedirectDone(void *data, char *result)
 	new_request->my_addr = old_request->my_addr;
 	new_request->my_port = old_request->my_port;
 	new_request->flags.redirected = 1;
-	new_request->auth_user_request = old_request->auth_user_request;
-	if (old_request->body_connection) {
-	    new_request->body_connection = old_request->body_connection;
-	    old_request->body_connection = NULL;
+	if (old_request->user_ident[0])
+	    xstrncpy(new_request->user_ident, old_request->user_ident,
+		USER_IDENT_SZ);
+	if (old_request->body) {
+	    new_request->body = xmalloc(old_request->body_sz);
+	    xmemcpy(new_request->body, old_request->body, old_request->body_sz);
+	    new_request->body_sz = old_request->body_sz;
 	}
 	new_request->content_length = old_request->content_length;
 	new_request->flags.proxy_keepalive = old_request->flags.proxy_keepalive;
@@ -708,8 +699,6 @@ httpRequestFree(void *data)
     MemObject *mem = NULL;
     debug(33, 3) ("httpRequestFree: %s\n", storeUrl(http->entry));
     if (!clientCheckTransferDone(http)) {
-	if (request && request->body_connection)
-	    clientAbortBody(request);	/* abort body transter */
 #if MYSTERIOUS_CODE
 	/*
 	 * DW: this seems odd here, is it really needed?  It causes
@@ -750,13 +739,10 @@ httpRequestFree(void *data)
 	    http->al.http.version = request->http_ver;
 	    http->al.headers.request = xstrdup(mb.buf);
 	    http->al.hier = request->hier;
-	    if (request->auth_user_request) {
-		http->al.cache.authuser = xstrdup(authenticateUserRequestUsername(request->auth_user_request));
-		authenticateAuthUserRequestUnlock(request->auth_user_request);
-		request->auth_user_request = NULL;
-	    }
-	    if (conn->rfc931[0])
-		http->al.cache.rfc931 = conn->rfc931;
+	    if (request->user_ident[0])
+		http->al.cache.ident = request->user_ident;
+	    else
+		http->al.cache.ident = conn->ident;
 	    packerClean(&p);
 	    memBufClean(&mb);
 	}
@@ -791,7 +777,6 @@ httpRequestFree(void *data)
     requestUnlink(http->request);
     assert(http != http->next);
     assert(http->conn->chr != NULL);
-    /* Unlink us from the clients request list */
     H = &http->conn->chr;
     while (*H) {
 	if (*H == http)
@@ -813,7 +798,6 @@ connStateFree(int fd, void *data)
     clientHttpRequest *http;
     debug(33, 3) ("connStateFree: FD %d\n", fd);
     assert(connState != NULL);
-    authenticateOnCloseConnection(connState);
     clientdbEstablished(connState->peer.sin_addr, -1);	/* decrement */
     while ((http = connState->chr) != NULL) {
 	assert(http->conn == connState);
@@ -995,18 +979,14 @@ clientCachable(clientHttpRequest * http)
     if (req->protocol == PROTO_HTTP)
 	return httpCachable(method);
     /* FTP is always cachable */
+    if (req->protocol == PROTO_GOPHER)
+	return gopherCachable(url);
     if (req->protocol == PROTO_WAIS)
 	return 0;
     if (method == METHOD_CONNECT)
 	return 0;
     if (method == METHOD_TRACE)
 	return 0;
-    if (method == METHOD_PUT)
-	return 0;
-    if (method == METHOD_POST)
-	return 0;		/* XXX POST may be cached sometimes.. ignored for now */
-    if (req->protocol == PROTO_GOPHER)
-	return gopherCachable(url);
     if (req->protocol == PROTO_CACHEOBJ)
 	return 0;
     return 1;
@@ -1285,9 +1265,6 @@ clientBuildReplyHeader(clientHttpRequest * http, HttpReply * rep)
 		httpHeaderPutInt(hdr, HDR_AGE,
 		    squid_curtime - http->entry->timestamp);
     }
-    /* Handle authentication headers */
-    if (request->auth_user_request)
-	authenticateFixHeader(rep, request->auth_user_request, request, http->flags.accel);
     /* Append X-Cache */
     httpHeaderPutStrf(hdr, HDR_X_CACHE, "%s from %s",
 	is_hit ? "HIT" : "MISS", getMyHostname());
@@ -1315,7 +1292,6 @@ clientBuildReplyHeader(clientHttpRequest * http, HttpReply * rep)
     httpHeaderPutStr(hdr, HDR_X_REQUEST_URI,
 	http->entry->mem_obj->url ? http->entry->mem_obj->url : http->uri);
 #endif
-    httpHdrMangleList(hdr, request);
 }
 
 static HttpReply *
@@ -1869,7 +1845,7 @@ clientKeepaliveNextRequest(clientHttpRequest * http)
     if ((http = conn->chr) == NULL) {
 	debug(33, 5) ("clientKeepaliveNextRequest: FD %d reading next req\n",
 	    conn->fd);
-	fd_note(conn->fd, "Waiting for next request");
+	fd_note(conn->fd, "Reading next request");
 	/*
 	 * Set the timeout BEFORE calling clientReadRequest().
 	 */
@@ -2151,6 +2127,13 @@ clientProcessRequest(clientHttpRequest * http)
 	}
 	/* yes, continue */
 	http->log_type = LOG_TCP_MISS;
+    } else if (r->content_length >= 0) {
+	/*
+	 * Need to initialize pump even if content-length: 0
+	 */
+	http->log_type = LOG_TCP_MISS;
+	/* XXX oof, POST can be cached! */
+	pumpInit(fd, r, http->uri);
     } else {
 	http->log_type = clientProcessRequest2(http);
     }
@@ -2243,8 +2226,8 @@ clientProcessMiss(clientHttpRequest * http)
 static clientHttpRequest *
 parseHttpRequestAbort(ConnStateData * conn, const char *uri)
 {
-    clientHttpRequest *http;
-    http = CBDATA_ALLOC(clientHttpRequest, NULL);
+    clientHttpRequest *http = memAllocate(MEM_CLIENTHTTPREQUEST);
+    cbdataAdd(http, memFree, MEM_CLIENTHTTPREQUEST);
     http->conn = conn;
     http->start = current_time;
     http->req_sz = conn->in.offset;
@@ -2274,6 +2257,7 @@ parseHttpRequest(ConnStateData * conn, method_t * method_p, int *status,
     char *token = NULL;
     char *t = NULL;
     char *end;
+    int free_request = 0;
     size_t header_sz;		/* size of headers, not including first line */
     size_t prefix_sz;		/* size of whole request (req-line + headers) */
     size_t url_sz;
@@ -2383,7 +2367,8 @@ parseHttpRequest(ConnStateData * conn, method_t * method_p, int *status,
     assert(prefix_sz <= conn->in.offset);
 
     /* Ok, all headers are received */
-    http = CBDATA_ALLOC(clientHttpRequest, NULL);
+    http = memAllocate(MEM_CLIENTHTTPREQUEST);
+    cbdataAdd(http, memFree, MEM_CLIENTHTTPREQUEST);
     http->http_ver = http_ver;
     http->conn = conn;
     http->start = current_time;
@@ -2509,6 +2494,8 @@ parseHttpRequest(ConnStateData * conn, method_t * method_p, int *status,
     else
 	http->log_uri = xstrndup(rfc1738_escape_unescaped(http->uri), MAX_URL);
     debug(33, 5) ("parseHttpRequest: Complete request received\n");
+    if (free_request)
+	safe_free(url);
     xfree(inbuf);
     *status = 1;
     return http;
@@ -2518,10 +2505,7 @@ static int
 clientReadDefer(int fdnotused, void *data)
 {
     ConnStateData *conn = data;
-    if (conn->body.size_left)
-	return conn->in.offset >= conn->in.size;
-    else
-	return conn->defer.until > squid_curtime;
+    return conn->defer.until > squid_curtime;
 }
 
 static void
@@ -2554,18 +2538,14 @@ clientReadRequest(int fd, void *data)
      * whole, not individual read() calls.  Plus, it breaks our
      * lame half-close detection
      */
-    if (size > 0) {
-	conn->in.offset += size;
-	conn->in.buf[conn->in.offset] = '\0';	/* Terminate the string */
-    } else if (size == 0 && len > 0) {
-	if (conn->chr == NULL && conn->in.offset == 0) {
+    commSetSelect(fd, COMM_SELECT_READ, clientReadRequest, conn, 0);
+    if (size == 0) {
+	if (conn->chr == NULL) {
 	    /* no current or pending requests */
-	    debug(33, 4) ("clientReadRequest: FD %d closed\n", fd);
 	    comm_close(fd);
 	    return;
 	} else if (!Config.onoff.half_closed_clients) {
 	    /* admin doesn't want to support half-closed client sockets */
-	    debug(33, 3) ("clientReadRequest: FD %d aborted (half_closed_clients disabled)\n", fd);
 	    comm_close(fd);
 	    return;
 	}
@@ -2575,11 +2555,7 @@ clientReadRequest(int fd, void *data)
 	conn->defer.until = squid_curtime + 1;
 	conn->defer.n++;
 	fd_note(fd, "half-closed");
-	/* There is one more close check at the end, to detect aborted
-	 * (partial) requests. At this point we can't tell if the request
-	 * is partial.
-	 */
-	/* Continue to process previously read data */
+	return;
     } else if (size < 0) {
 	if (!ignoreErrno(errno)) {
 	    debug(50, 2) ("clientReadRequest: FD %d: %s\n", fd, xstrerror());
@@ -2590,16 +2566,13 @@ clientReadRequest(int fd, void *data)
 	    return;
 	}
 	/* Continue to process previously read data */
+	size = 0;
     }
-    commSetSelect(fd, COMM_SELECT_READ, clientReadRequest, conn, 0);
-    /* Process request body if any */
-    if (conn->in.offset > 0 && conn->body.callback != NULL)
-	clientProcessBody(conn);
-    /* Process next request */
-    while (conn->in.offset > 0 && conn->body.size_left == 0) {
+    conn->in.offset += size;
+    /* Skip leading (and trailing) whitespace */
+    while (conn->in.offset > 0) {
 	int nrequests;
 	size_t req_line_sz;
-	/* Skip leading (and trailing) whitespace */
 	while (conn->in.offset > 0 && xisspace(conn->in.buf[0])) {
 	    xmemmove(conn->in.buf, conn->in.buf + 1, conn->in.offset - 1);
 	    conn->in.offset--;
@@ -2615,9 +2588,6 @@ clientReadRequest(int fd, void *data)
 	    conn->defer.until = squid_curtime + 100;	/* Reset when a request is complete */
 	    break;
 	}
-	conn->in.buf[conn->in.offset] = '\0';	/* Terminate the string */
-	if (nrequests == 0)
-	    fd_note(conn->fd, "Reading next request");
 	/* Process request */
 	http = parseHttpRequest(conn,
 	    &method,
@@ -2712,7 +2682,7 @@ clientReadRequest(int fd, void *data)
 		errorAppendEntry(http->entry, err);
 		break;
 	    }
-	    if (!clientCheckContentLength(request)) {
+	    if (0 == clientCheckContentLength(request)) {
 		err = errorCon(ERR_INVALID_REQ, HTTP_LENGTH_REQUIRED);
 		err->src_addr = conn->peer.sin_addr;
 		err->request = requestLink(request);
@@ -2722,13 +2692,38 @@ clientReadRequest(int fd, void *data)
 		break;
 	    }
 	    http->request = requestLink(request);
+	    /*
+	     * We need to set the keepalive flag before doing some
+	     * hacks for POST/PUT requests below.  Maybe we could
+	     * set keepalive flag even earlier.
+	     */
 	    clientSetKeepaliveFlag(http);
-	    /* Do we expect a request-body? */
-	    if (request->content_length > 0) {
-		conn->body.size_left = request->content_length;
-		request->body_connection = conn;
-		/* Is it too large? */
-		if (clientRequestBodyTooLarge(request->content_length)) {
+	    /*
+	     * break here if the request has a content-length
+	     * because there is a reqeust body following and we
+	     * don't want to parse it as though it was new request.
+	     */
+	    if (request->content_length >= 0) {
+		int copy_len = XMIN(conn->in.offset, request->content_length);
+		if (copy_len > 0) {
+		    assert(conn->in.offset >= copy_len);
+		    request->body_sz = copy_len;
+		    request->body = xmalloc(request->body_sz);
+		    xmemcpy(request->body, conn->in.buf, request->body_sz);
+		    conn->in.offset -= copy_len;
+		    if (conn->in.offset)
+			xmemmove(conn->in.buf, conn->in.buf + copy_len, conn->in.offset);
+		}
+		/*
+		 * if we didn't get the full body now, then more will
+		 * be arriving on the client socket.  Lets cancel
+		 * the read handler until this request gets forwarded.
+		 */
+		if (request->body_sz < request->content_length)
+		    commSetSelect(fd, COMM_SELECT_READ, NULL, NULL, 0);
+		if (request->content_length < 0)
+		    (void) 0;
+		else if (clientRequestBodyTooLarge(request->content_length)) {
 		    err = errorCon(ERR_TOO_BIG, HTTP_REQUEST_ENTITY_TOO_LARGE);
 		    err->request = requestLink(request);
 		    http->entry = clientCreateStoreEntry(http,
@@ -2738,7 +2733,7 @@ clientReadRequest(int fd, void *data)
 		}
 	    }
 	    clientAccessCheck(http);
-	    continue;		/* while offset > 0 && body.size_left == 0 */
+	    continue;		/* while offset > 0 */
 	} else if (parser_return_code == 0) {
 	    /*
 	     *    Partial request received; reschedule until parseHttpRequest()
@@ -2777,132 +2772,7 @@ clientReadRequest(int fd, void *data)
 	    }
 	    break;
 	}
-    }				/* while offset > 0 && conn->body.size_left == 0 */
-    /* Check if a half-closed connection was aborted in the middle */
-    if (F->flags.socket_eof) {
-	if (conn->in.offset != conn->body.size_left) {	/* != 0 when no request body */
-	    /* Partial request received. Abort client connection! */
-	    debug(33, 3) ("clientReadRequest: FD %d aborted\n", fd);
-	    comm_close(fd);
-	    return;
-	}
     }
-}
-
-/* file_read like function, for reading body content */
-void
-clientReadBody(request_t * request, char *buf, size_t size, CBCB * callback, void *cbdata)
-{
-    ConnStateData *conn = request->body_connection;
-    if (!conn) {
-	debug(33, 5) ("clientReadBody: no body to read, request=%p\n", request);
-	callback(buf, 0, cbdata);	/* Signal end of body */
-	return;
-    }
-    debug(33, 2) ("clientReadBody: start fd=%d body_size=%d in.offset=%d cb=%p req=%p\n", conn->fd, conn->body.size_left, conn->in.offset, callback, request);
-    conn->body.callback = callback;
-    conn->body.cbdata = cbdata;
-    conn->body.buf = buf;
-    conn->body.bufsize = size;
-    conn->body.request = requestLink(request);
-    if (conn->in.offset) {
-	/* Data available */
-	clientProcessBody(conn);
-    } else {
-	debug(33, 2) ("clientReadBody: fd %d wait for clientReadRequest\n", conn->fd);
-    }
-}
-
-/* Called by clientReadRequest to process body content */
-static void
-clientProcessBody(ConnStateData * conn)
-{
-    int size;
-    char *buf = conn->body.buf;
-    void *cbdata = conn->body.cbdata;
-    CBCB *callback = conn->body.callback;
-    request_t *request = conn->body.request;
-    /* Note: request is null while eating "aborted" transfers */
-    debug(33, 2) ("clientProcessBody: start fd=%d body_size=%d in.offset=%d cb=%p req=%p\n", conn->fd, conn->body.size_left, conn->in.offset, callback, request);
-    /* Some sanity checks... */
-    assert(conn->body.size_left > 0);
-    assert(conn->in.offset > 0);
-    assert(callback != NULL);
-    assert(buf != NULL);
-    /* How much do we have to process? */
-    size = conn->in.offset;
-    if (size > conn->body.size_left)	/* only process the body part */
-	size = conn->body.size_left;
-    if (size > conn->body.bufsize)	/* don't copy more than requested */
-	size = conn->body.bufsize;
-    xmemcpy(buf, conn->in.buf, size);
-    conn->body.size_left -= size;
-    /* Move any remaining data */
-    conn->in.offset -= size;
-    if (conn->in.offset > 0)
-	xmemmove(conn->in.buf, conn->in.buf + size, conn->in.offset);
-    /* Remove request link if this is the last part of the body, as
-     * clientReadRequest automatically continues to process next request */
-    if (conn->body.size_left <= 0 && request != NULL)
-	request->body_connection = NULL;
-    /* Remove clientReadBody arguments (the call is completed) */
-    conn->body.request = NULL;
-    conn->body.callback = NULL;
-    conn->body.buf = NULL;
-    conn->body.bufsize = 0;
-    /* Remember that we have touched the body, not restartable */
-    if (request != NULL)
-	request->flags.body_sent = 1;
-    /* Invoke callback function */
-    callback(buf, size, cbdata);
-    if (request != NULL)
-	requestUnlink(request);	/* Linked in clientReadBody */
-    debug(33, 2) ("clientProcessBody: end fd=%d size=%d body_size=%d in.offset=%d cb=%p req=%p\n", conn->fd, size, conn->body.size_left, conn->in.offset, callback, request);
-    return;
-}
-
-/* A dummy handler that throws away a request-body */
-static char bodyAbortBuf[SQUID_TCP_SO_RCVBUF];
-void
-clientReadBodyAbortHandler(char *buf, size_t size, void *data)
-{
-    ConnStateData *conn = (ConnStateData *) data;
-    debug(33, 2) ("clientReadBodyAbortHandler: fd=%d body_size=%d in.offset=%d\n", conn->fd, conn->body.size_left, conn->in.offset);
-    if (size != 0 && conn->body.size_left != 0) {
-	debug(33, 3) ("clientReadBodyAbortHandler: fd=%d shedule next read\n", conn->fd);
-	conn->body.callback = clientReadBodyAbortHandler;
-	conn->body.buf = bodyAbortBuf;
-	conn->body.bufsize = sizeof(bodyAbortBuf);
-	conn->body.cbdata = data;
-    }
-}
-
-/* Abort a body request */
-int
-clientAbortBody(request_t * request)
-{
-    ConnStateData *conn = request->body_connection;
-    char *buf;
-    CBCB *callback;
-    void *cbdata;
-    request->body_connection = NULL;
-    if (!conn || conn->body.size_left <= 0)
-	return 0;		/* No body to abort */
-    if (conn->body.callback != NULL) {
-	buf = conn->body.buf;
-	callback = conn->body.callback;
-	cbdata = conn->body.cbdata;
-	assert(request == conn->body.request);
-	conn->body.buf = NULL;
-	conn->body.callback = NULL;
-	conn->body.cbdata = NULL;
-	conn->body.request = NULL;
-	callback(buf, -1, cbdata);	/* Signal abort to clientReadBody caller */
-	requestUnlink(request);
-    }
-    clientReadBodyAbortHandler(NULL, -1, conn);		/* Install abort handler */
-    /* clientProcessBody() */
-    return 1;			/* Aborted */
 }
 
 /* general lifetime handler for HTTP requests */
@@ -3008,7 +2878,8 @@ httpAccept(int sock, void *data)
 	    break;
 	}
 	debug(33, 4) ("httpAccept: FD %d: accepted\n", fd);
-	connState = CBDATA_ALLOC(ConnStateData, NULL);
+	connState = memAllocate(MEM_CONNSTATEDATA);
+	cbdataAdd(connState, memFree, MEM_CONNSTATEDATA);
 	connState->peer = peer;
 	connState->log_addr = peer.sin_addr;
 	connState->log_addr.s_addr &= Config.Addrs.client_netmask.s_addr;

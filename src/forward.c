@@ -49,7 +49,6 @@ static void fwdStartFail(FwdState *);
 static void fwdLogReplyStatus(int tries, http_status status);
 static OBJH fwdStats;
 static STABH fwdAbort;
-static peer *fwdStateServerPeer(FwdState *);
 
 #define MAX_FWD_STATS_IDX 9
 static int FwdReplyCodes[MAX_FWD_STATS_IDX + 1][HTTP_INVALID_HEADER + 1];
@@ -58,16 +57,6 @@ static int FwdReplyCodes[MAX_FWD_STATS_IDX + 1][HTTP_INVALID_HEADER + 1];
 static void fwdLog(FwdState * fwdState);
 static Logfile *logfile = NULL;
 #endif
-
-static peer *
-fwdStateServerPeer(FwdState * fwdState)
-{
-    if (NULL == fwdState)
-	return NULL;
-    if (NULL == fwdState->servers)
-	return NULL;
-    return fwdState->servers->peer;
-}
 
 static void
 fwdServerFree(FwdServer * fs)
@@ -82,7 +71,6 @@ fwdStateFree(FwdState * fwdState)
 {
     StoreEntry *e = fwdState->entry;
     int sfd;
-    peer *p;
     debug(17, 3) ("fwdStateFree: %p\n", fwdState);
     assert(e->mem_obj);
 #if URL_CHECKSUM_DEBUG
@@ -104,7 +92,6 @@ fwdStateFree(FwdState * fwdState)
     }
     if (storePendingNClients(e) > 0)
 	assert(!EBIT_TEST(e->flags, ENTRY_FWD_HDR_WAIT));
-    p = fwdStateServerPeer(fwdState);
     fwdServersFree(&fwdState->servers);
     requestUnlink(fwdState->request);
     fwdState->request = NULL;
@@ -119,8 +106,6 @@ fwdStateFree(FwdState * fwdState)
 	fwdState->server_fd = -1;
 	debug(17, 3) ("fwdStateFree: closing FD %d\n", sfd);
 	comm_close(sfd);
-	if (p)
-	    p->stats.conn_open--;
     }
     cbdataFree(fwdState);
 }
@@ -138,8 +123,9 @@ fwdCheckRetry(FwdState * fwdState)
 	return 0;
     if (fwdState->flags.dont_retry)
 	return 0;
-    if (fwdState->request->flags.body_sent)
-	return 0;
+    if (fwdState->request->content_length >= 0)
+	if (0 == pumpRestart(fwdState->request))
+	    return 0;
     return 1;
 }
 
@@ -202,8 +188,6 @@ fwdConnectDone(int server_fd, int status, void *data)
 	err->dnsserver_msg = xstrdup(dns_error_message);
 	err->request = requestLink(request);
 	fwdFail(fwdState, err);
-	if (fs->peer)
-	    fs->peer->stats.conn_open--;
 	comm_close(server_fd);
     } else if (status != COMM_OK) {
 	assert(fs);
@@ -218,10 +202,8 @@ fwdConnectDone(int server_fd, int status, void *data)
 	}
 	err->request = requestLink(request);
 	fwdFail(fwdState, err);
-	if (fs->peer) {
+	if (fs->peer)
 	    peerConnectFailed(fs->peer);
-	    fs->peer->stats.conn_open--;
-	}
 	comm_close(server_fd);
     } else {
 	debug(17, 3) ("fwdConnectDone: FD %d: '%s'\n", server_fd, storeUrl(fwdState->entry));
@@ -246,7 +228,6 @@ fwdConnectTimeout(int fd, void *data)
     FwdState *fwdState = data;
     StoreEntry *entry = fwdState->entry;
     ErrorState *err;
-    peer *p = fwdStateServerPeer(fwdState);
     debug(17, 2) ("fwdConnectTimeout: FD %d: '%s'\n", fd, storeUrl(entry));
     assert(fd == fwdState->server_fd);
     if (entry->mem_obj->inmem_hi == 0) {
@@ -261,8 +242,6 @@ fwdConnectTimeout(int fd, void *data)
 	    if (fwdState->servers->peer)
 		peerConnectFailed(fwdState->servers->peer);
     }
-    if (p)
-	p->stats.conn_open--;
     comm_close(fd);
 }
 
@@ -323,14 +302,6 @@ fwdConnectStart(void *data)
     }
     fwdState->server_fd = fd;
     fwdState->n_tries++;
-    /*
-     * stats.conn_open is used to account for the number of
-     * connections that we have open to the peer, so we can limit
-     * based on the max-conn option.  We need to increment here,
-     * even if the connection may fail.
-     */
-    if (fs->peer)
-	fs->peer->stats.conn_open++;
     comm_add_close_handler(fd, fwdServerClosed, fwdState);
     commSetTimeout(fd,
 	ctimeout,
@@ -367,7 +338,7 @@ fwdStartFail(FwdState * fwdState)
 static void
 fwdDispatch(FwdState * fwdState)
 {
-    peer *p = NULL;
+    peer *p;
     request_t *request = fwdState->request;
     StoreEntry *entry = fwdState->entry;
     ErrorState *err;
@@ -391,7 +362,6 @@ fwdDispatch(FwdState * fwdState)
 	fwdState->request->peer_login = p->login;
 	httpStart(fwdState);
     } else {
-	fwdState->request->peer_login = NULL;
 	switch (request->protocol) {
 	case PROTO_HTTP:
 	    httpStart(fwdState);
@@ -430,11 +400,6 @@ fwdDispatch(FwdState * fwdState)
 	     * transient (network) error; its a bug.
 	     */
 	    fwdState->flags.dont_retry = 1;
-	    /*
-	     * this assertion exists because if we are connected to
-	     * a peer, then we need to decrement p->stats.conn_open.
-	     */
-	    assert(NULL == p);
 	    comm_close(fwdState->server_fd);
 	    break;
 	}
@@ -459,8 +424,9 @@ fwdReforward(FwdState * fwdState)
     }
     if (fwdState->n_tries > 9)
 	return 0;
-    if (fwdState->request->flags.body_sent)
-	return 0;
+    if (fwdState->request->content_length >= 0)
+	if (0 == pumpRestart(fwdState->request))
+	    return 0;
     assert(fs);
     fwdState->servers = fs->next;
     fwdServerFree(fs);
@@ -544,7 +510,8 @@ fwdStart(int fd, StoreEntry * e, request_t * r)
     default:
 	break;
     }
-    fwdState = CBDATA_ALLOC(FwdState, NULL);
+    fwdState = memAllocate(MEM_FWD_STATE);
+    cbdataAdd(fwdState, memFree, MEM_FWD_STATE);
     fwdState->entry = e;
     fwdState->client_fd = fd;
     fwdState->server_fd = -1;
@@ -621,7 +588,7 @@ void
 fwdUnregister(int fd, FwdState * fwdState)
 {
     debug(17, 3) ("fwdUnregister: %s\n", storeUrl(fwdState->entry));
-    assert(fd == fwdState->server_fd);
+    assert(fd = fwdState->server_fd);
     assert(fd > -1);
     comm_remove_close_handler(fd, fwdServerClosed, fwdState);
     fwdState->server_fd = -1;

@@ -46,7 +46,6 @@ extern void headersLog(int cs, int pq, method_t m, void *data);
 #endif
 char *log_quote(const char *header);
 
-/* acl.c */
 extern aclCheck_t *aclChecklistCreate(const struct _acl_access *,
     request_t *,
     const char *ident);
@@ -68,7 +67,6 @@ extern void aclParseRegexList(void *curlist);
 extern const char *aclTypeToStr(squid_acl);
 extern wordlist *aclDumpGeneric(const acl *);
 extern int aclPurgeMethodInUse(acl_access *);
-extern void aclCacheMatchFlush(dlink_list * cache);
 
 /*
  * cache_cf.c
@@ -87,32 +85,20 @@ extern void allocate_new_swapdir(cacheSwap *);
 extern void self_destruct(void);
 extern int GetInteger(void);
 
-/* extra functions from cache_cf.c useful for lib modules */
-extern void parse_int(int *var);
-extern void parse_eol(char *volatile *var);
-extern void parse_wordlist(wordlist ** list);
-extern void requirePathnameExists(const char *name, const char *path);
-extern void parse_time_t(time_t * var);
 
-/*
- * cbdata.c
- */
 extern void cbdataInit(void);
 #if CBDATA_DEBUG
-extern void *cbdataInternalAllocDbg(cbdata_type type, CBDUNL *, int, const char *);
+extern void cbdataAddDbg(const void *p, CBDUNL *, int, const char *, int);
 extern void cbdataLockDbg(const void *p, const char *, int);
 extern void cbdataUnlockDbg(const void *p, const char *, int);
 #else
-extern void *cbdataInternalAlloc(cbdata_type type, CBDUNL *);
+extern void cbdataAdd(const void *p, CBDUNL *, int);
 extern void cbdataLock(const void *p);
 extern void cbdataUnlock(const void *p);
 #endif
-/* Note: Allocations is done using the CBDATA_ALLOC macro */
-
 extern void cbdataFree(void *p);
 extern int cbdataValid(const void *p);
-extern void cbdataInitType(cbdata_type type, char *label, int size);
-extern cbdata_type cbdataAddType(cbdata_type type, char *label, int size);
+extern CBDUNL cbdataXfree;
 
 extern void clientdbInit(void);
 extern void clientdbUpdate(struct in_addr, log_type, protocol_t, size_t);
@@ -131,8 +117,6 @@ extern void clientHttpConnectionsOpen(void);
 extern void clientHttpConnectionsClose(void);
 extern StoreEntry *clientCreateStoreEntry(clientHttpRequest *, method_t, request_flags);
 extern int isTcpHit(log_type);
-extern void clientReadBody(request_t * req, char *buf, size_t size, CBCB * callback, void *data);
-extern int clientAbortBody(request_t * req);
 
 extern int commSetNonBlocking(int fd);
 extern int commUnsetNonBlocking(int fd);
@@ -275,7 +259,6 @@ extern int fqdncacheQueueDrain(void);
 extern void fqdncacheFreeMemory(void);
 extern void fqdncache_restart(void);
 extern EVH fqdncache_purgelru;
-extern void fqdncacheAddEntryFromHosts(char *addr, wordlist * hostnames);
 
 extern void ftpStart(FwdState *);
 extern char *ftpUrlWith2f(const request_t *);
@@ -449,7 +432,6 @@ extern HttpHeaderEntry *httpHeaderEntryClone(const HttpHeaderEntry * e);
 extern void httpHeaderEntryPackInto(const HttpHeaderEntry * e, Packer * p);
 /* store report about current header usage and other stats */
 extern void httpHeaderStoreReport(StoreEntry * e);
-extern void httpHdrMangleList(HttpHeader *, request_t *);
 
 /* Http Msg (currently in HttpReply.c @?@ ) */
 extern int httpMsgIsPersistent(http_version_t http_ver, const HttpHeader * hdr);
@@ -576,7 +558,6 @@ extern void ipcacheMarkGoodAddr(const char *name, struct in_addr);
 extern void ipcacheFreeMemory(void);
 extern ipcache_addrs *ipcacheCheckNumeric(const char *name);
 extern void ipcache_restart(void);
-extern int ipcacheAddEntryFromHosts(const char *name, const char *ipaddr);
 
 /* MemBuf */
 /* init with specific sizes */
@@ -717,44 +698,9 @@ extern void redirectStart(clientHttpRequest *, RH *, void *);
 extern void redirectInit(void);
 extern void redirectShutdown(void);
 
-/* auth_modules.c */
-extern void authSchemeSetup(void);
-
-/* authenticate.c */
-extern void authenticateAuthUserMerge(auth_user_t *, auth_user_t *);
-extern auth_user_t *authenticateAuthUserNew(const char *);
-extern int authenticateAuthSchemeId(const char *typestr);
-extern void authenticateStart(auth_user_request_t *, RH *, void *);
-extern void authenticateSchemeInit(void);
-extern void authenticateInit(authConfig *);
+extern void authenticateStart(acl_proxy_auth_user *, RH *, void *);
+extern void authenticateInit(void);
 extern void authenticateShutdown(void);
-extern void authenticateFixHeader(HttpReply *, auth_user_request_t *, request_t *, int);
-extern void authenticateAddTrailer(HttpReply *, auth_user_request_t *, request_t *, int);
-extern auth_user_request_t *authenticateGetAuthUser(const char *proxy_auth);
-extern void authenticateAuthenticateUser(auth_user_request_t *, request_t *, ConnStateData *, http_hdr_type);
-extern void authenticateAuthUserUnlock(auth_user_t * auth_user);
-extern void authenticateAuthUserLock(auth_user_t * auth_user);
-extern void authenticateAuthUserRequestUnlock(auth_user_request_t *);
-extern void authenticateAuthUserRequestLock(auth_user_request_t *);
-extern char *authenticateAuthUserRequestMessage(auth_user_request_t *);
-extern int authenticateAuthUserInuse(auth_user_t * auth_user);
-extern void authenticateAuthUserRequestSetIp(auth_user_request_t *, struct in_addr);
-extern int authenticateDirection(auth_user_request_t *);
-extern FREE authenticateFreeProxyAuthUser;
-extern void authenticateFreeProxyAuthUserACLResults(void *data);
-extern void authenticateProxyUserCacheCleanup(void *);
-extern void authenticateInitUserCache();
-extern int authenticateActiveSchemeCount();
-extern int authenticateSchemeCount();
-extern void authenticateUserNameCacheAdd(auth_user_t * auth_user);
-extern int authenticateCheckAuthUserIP(struct in_addr request_src_addr, auth_user_request_t * auth_user);
-extern int authenticateUserAuthenticated(auth_user_request_t *);
-extern void authenticateUserCacheRestart();
-extern char *authenticateUserUsername(auth_user_t *);
-extern char *authenticateUserRequestUsername(auth_user_request_t *);
-extern int authenticateValidateUser(auth_user_request_t *);
-extern void authenticateOnCloseConnection(ConnStateData * conn);
-extern void authSchemeAdd(char *type, AUTHSSETUP * setup);
 
 extern void refreshAddToList(const char *, int, time_t, int, time_t);
 extern int refreshIsCachable(const StoreEntry *);
@@ -823,7 +769,7 @@ extern void memCleanModule(void);
 extern void memConfigure(void);
 extern void *memAllocate(mem_type);
 extern void *memAllocBuf(size_t net_size, size_t * gross_size);
-extern void memFree(void *, int type);
+extern CBDUNL memFree;
 extern void memFreeBuf(size_t size, void *);
 extern void memFree2K(void *);
 extern void memFree4K(void *);
@@ -1074,6 +1020,11 @@ extern void releaseServerSockets(void);
 extern void PrintRusage(void);
 extern void dumpMallocStats(void);
 
+extern void pumpInit(int fd, request_t * r, char *uri);
+extern void pumpStart(int, FwdState *, CWCB * callback, void *);
+extern int pumpMethod(method_t method);
+extern int pumpRestart(request_t *);
+
 #if USE_UNLINKD
 extern void unlinkdInit(void);
 extern void unlinkdClose(void);
@@ -1125,9 +1076,6 @@ extern void asnFreeMemory(void);
 extern void dlinkAdd(void *data, dlink_node *, dlink_list *);
 extern void dlinkAddTail(void *data, dlink_node *, dlink_list *);
 extern void dlinkDelete(dlink_node * m, dlink_list * list);
-extern void dlinkNodeDelete(dlink_node * m);
-extern dlink_node *dlinkNodeNew();
-
 extern void kb_incr(kb_t *, size_t);
 extern double gb_to_double(const gb_t *);
 extern const char *gb_to_str(const gb_t *);
@@ -1138,7 +1086,6 @@ extern void linklistPush(link_list **, void *);
 extern void *linklistShift(link_list **);
 extern int xrename(const char *from, const char *to);
 extern int isPowTen(int);
-extern void parseEtcHosts(void);
 
 #if USE_HTCP
 extern void htcpInit(void);
@@ -1231,23 +1178,11 @@ extern void delayUnregisterDelayIdPtr(delay_id * loc);
 
 /* helper.c */
 extern void helperOpenServers(helper * hlp);
-extern void helperStatefulOpenServers(statefulhelper * hlp);
 extern void helperSubmit(helper * hlp, const char *buf, HLPCB * callback, void *data);
-extern void helperStatefulSubmit(statefulhelper * hlp, const char *buf, HLPSCB * callback, void *data, helper_stateful_server * lastserver);
 extern void helperStats(StoreEntry * sentry, helper * hlp);
-extern void helperStatefulStats(StoreEntry * sentry, statefulhelper * hlp);
 extern void helperShutdown(helper * hlp);
-extern void helperStatefulShutdown(statefulhelper * hlp);
 extern helper *helperCreate(const char *);
-extern statefulhelper *helperStatefulCreate(const char *);
 extern void helperFree(helper *);
-extern void helperStatefulFree(statefulhelper *);
-extern void helperStatefulReset(helper_stateful_server * srv);
-extern void helperStatefulReleaseServer(helper_stateful_server * srv);
-extern void *helperStatefulServerGetData(helper_stateful_server * srv);
-extern helper_stateful_server *helperStatefulDefer(statefulhelper *);
-
-
 
 #if USE_LEAKFINDER
 extern void leakInit(void);

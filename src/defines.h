@@ -53,6 +53,7 @@
 
 #define DefaultDnsChildrenMax		32	/* 32 processes */
 #define DefaultRedirectChildrenMax	32	/* 32 processes */
+#define DefaultAuthenticateChildrenMax	32	/* 32 processes */
 #define MAXHTTPPORTS			12
 
 #define COMM_OK		  (0)
@@ -132,9 +133,10 @@
 #define REDIRECT_DONE 2
 
 #define AUTHENTICATE_AV_FACTOR 1000
-/* AUTHENTICATION */
 
-#define NTLM_CHALLENGE_SZ 300
+#define AUTHENTICATE_NONE 0
+#define AUTHENTICATE_PENDING 1
+#define AUTHENTICATE_DONE 2
 
 #define  CONNECT_PORT        443
 
@@ -279,12 +281,6 @@
 #ifndef _PATH_DEVNULL
 #define _PATH_DEVNULL "/dev/null"
 #endif
-
-/* cbdata macros */
-#define CBDATA_ALLOC(type, unl) ((type *)cbdataInternalAlloc(CBDATA_##type, unl))
-#define CBDATA_TYPE(type)	static cbdata_type CBDATA_##type = 0
-#define CBDATA_GLOBAL_TYPE(type)	cbdata_type CBDATA_##type
-#define CBDATA_INIT_TYPE(type)	(CBDATA_##type ? 0 : (CBDATA_##type = cbdataAddType(CBDATA_##type, #type, sizeof(type))))
 
 #ifndef O_TEXT
 #define O_TEXT 0

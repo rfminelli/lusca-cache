@@ -3,8 +3,7 @@
  * $Id$
  *
  * DEBUG: section 45    Callback Data Registry
- * ORIGINAL AUTHOR: Duane Wessels
- * Modified by Moez Mahfoudh (08/12/2000)
+ * AUTHOR: Duane Wessels
  *
  * SQUID Web Proxy Cache          http://www.squid-cache.org/
  * ----------------------------------------------------------
@@ -45,15 +44,16 @@
  * 
  * In terms of time, the sequence goes something like this:
  * 
- * foo = cbdataAlloc(sizeof(foo),NULL);
+ * foo = xcalloc(sizeof(foo));
+ * cbdataAdd(foo);
  * ...
+ * cbdataLock(foo);
  * some_blocking_operation(..., callback_func, foo);
- *   cbdataLock(foo);
- *   ...
- *   some_blocking_operation_completes()
- *   if (cbdataValid(foo))
- *   callback_func(..., foo)
- *   cbdataUnlock(foo);
+ * ...
+ * some_blocking_operation_completes()
+ * if (cbdataValid(foo))
+ * callback_func(..., foo)
+ * cbdataUnlock(foo);
  * ...
  * cbdataFree(foo);
  * 
@@ -66,132 +66,107 @@
 
 #include "squid.h"
 
+static hash_table *htable = NULL;
+
 static int cbdataCount = 0;
 
 typedef struct _cbdata {
+    hash_link hash;		/* must be first */
     int valid;
     int locks;
     CBDUNL *unlock_func;
-    int type;			/* move to CBDATA_DEBUG with type argument to cbdataFree */
+    int id;
 #if CBDATA_DEBUG
     const char *file;
     int line;
 #endif
-    void *y;			/* cookie used while debugging */
-    union {
-	void *pointer;
-	double double_float;
-	int integer;
-    } data;
 } cbdata;
 
+static HASHCMP cbdata_cmp;
+static HASHHASH cbdata_hash;
+static void cbdataReallyFree(cbdata * c);
 static OBJH cbdataDump;
+static MemPool *cbdata_pool = NULL;
 
-static MemPool **cbdata_memory_pool = NULL;
-int cbdata_types = 0;
-
-#define OFFSET_OF(type, member) ((int)(char *)&((type *)0L)->member)
-
-void
-cbdataInitType(cbdata_type type, char *name, int size)
+static int
+cbdata_cmp(const void *p1, const void *p2)
 {
-    char *label;
-    if (type >= cbdata_types) {
-	cbdata_memory_pool = xrealloc(cbdata_memory_pool, (type + 1) * sizeof(*cbdata_memory_pool));
-	memset(&cbdata_memory_pool[cbdata_types], 0,
-	    (type + 1 - cbdata_types) * sizeof(*cbdata_memory_pool));
-	cbdata_types = type + 1;
-    }
-    if (cbdata_memory_pool[type])
-	return;
-    label = xmalloc(strlen(name) + 20);
-    snprintf(label, strlen(name) + 20, "cbdata %s (%d)", name, (int) type);
-    assert(OFFSET_OF(cbdata, data) == (sizeof(cbdata) - sizeof(((cbdata *) NULL)->data)));
-    cbdata_memory_pool[type] = memPoolCreate(label, size + OFFSET_OF(cbdata, data));
+    return (char *) p1 - (char *) p2;
 }
 
-cbdata_type
-cbdataAddType(cbdata_type type, char *name, int size)
+static unsigned int
+cbdata_hash(const void *p, unsigned int mod)
 {
-    if (type)
-	return type;
-    type = cbdata_types;
-    cbdataInitType(type, name, size);
-    return type;
+    return ((unsigned long) p >> 8) % mod;
 }
+
 
 void
 cbdataInit(void)
 {
     debug(45, 3) ("cbdataInit\n");
+    if (cbdata_pool == NULL) {
+	cbdata_pool = memPoolCreate("cbdata", sizeof(cbdata));
+    }
+    htable = hash_create(cbdata_cmp, 1 << 8, cbdata_hash);
     cachemgrRegister("cbdata",
 	"Callback Data Registry Contents",
 	cbdataDump, 0, 1);
-#define CREATE_CBDATA(type) cbdataInitType(CBDATA_##type, #type, sizeof(type))
-    CREATE_CBDATA(acl_access);
-    CREATE_CBDATA(aclCheck_t);
-    CREATE_CBDATA(clientHttpRequest);
-    CREATE_CBDATA(ConnStateData);
-    CREATE_CBDATA(ErrorState);
-    CREATE_CBDATA(FwdState);
-    CREATE_CBDATA(generic_cbdata);
-    CREATE_CBDATA(helper);
-    CREATE_CBDATA(helper_server);
-    CREATE_CBDATA(statefulhelper);
-    CREATE_CBDATA(helper_stateful_server);
-    CREATE_CBDATA(HttpStateData);
-    CREATE_CBDATA(peer);
-    CREATE_CBDATA(ps_state);
-    CREATE_CBDATA(RemovalPolicy);
-    CREATE_CBDATA(RemovalPolicyWalker);
-    CREATE_CBDATA(RemovalPurgeWalker);
-    CREATE_CBDATA(store_client);
-    CREATE_CBDATA(storeIOState);
 }
 
-void *
+void
 #if CBDATA_DEBUG
-cbdataInternalAllocDbg(cbdata_type type, CBDUNL * unlock_func, const char *file, int line)
+cbdataAddDbg(const void *p, CBDUNL * unlock_func, int id, const char *file, int line)
 #else
-cbdataInternalAlloc(cbdata_type type, CBDUNL * unlock_func)
+cbdataAdd(const void *p, CBDUNL * unlock_func, int id)
 #endif
 {
-    cbdata *p;
-    assert(type > 0 && type < cbdata_types);
-    p = memPoolAlloc(cbdata_memory_pool[type]);
-    p->type = type;
-    p->unlock_func = unlock_func;
-    p->valid = 1;
-    p->locks = 0;
+    cbdata *c;
+    assert(p);
+    debug(45, 3) ("cbdataAdd: %p\n", p);
+    assert(htable != NULL);
+    assert(hash_lookup(htable, p) == NULL);
+    c = memPoolAlloc(cbdata_pool);
+    c->hash.key = (void *) p;
+    c->valid = 1;
+    c->unlock_func = unlock_func;
+    c->id = id;
 #if CBDATA_DEBUG
-    p->file = file;
-    p->line = line;
+    c->file = file;
+    c->line = line;
 #endif
-    p->y = p;
+    hash_join(htable, &c->hash);
     cbdataCount++;
+}
 
-    return (void *) &p->data;
+static void
+cbdataReallyFree(cbdata * c)
+{
+    CBDUNL *unlock_func = c->unlock_func;
+    void *p = c->hash.key;
+    int id = c->id;
+    hash_remove_link(htable, (hash_link *) c);
+    cbdataCount--;
+    memPoolFree(cbdata_pool, c);
+    debug(45, 3) ("cbdataReallyFree: Freeing %p\n", p);
+    if (unlock_func)
+	unlock_func(p, id);
 }
 
 void
 cbdataFree(void *p)
 {
-    cbdata *c;
-    debug(45, 3) ("cbdataFree: %p\n", p);
+    cbdata *c = (cbdata *) hash_lookup(htable, p);
     assert(p);
-    c = (cbdata *) (((char *) p) - OFFSET_OF(cbdata, data));
-    assert(c->y == c);
+    debug(45, 3) ("cbdataFree: %p\n", p);
+    assert(c != NULL);
     c->valid = 0;
     if (c->locks) {
 	debug(45, 3) ("cbdataFree: %p has %d locks, not freeing\n",
 	    p, c->locks);
 	return;
     }
-    cbdataCount--;
-    debug(45, 3) ("cbdataFree: Freeing %p\n", p);
-    if (c->unlock_func)
-	c->unlock_func((void *) p);
-    memPoolFree(cbdata_memory_pool[c->type], c);
+    cbdataReallyFree(c);
 }
 
 void
@@ -204,8 +179,7 @@ cbdataLock(const void *p)
     cbdata *c;
     if (p == NULL)
 	return;
-    c = (cbdata *) (((char *) p) - OFFSET_OF(cbdata, data));
-    assert(c->y == c);
+    c = (cbdata *) hash_lookup(htable, p);
     debug(45, 3) ("cbdataLock: %p\n", p);
     assert(c != NULL);
     c->locks++;
@@ -225,8 +199,7 @@ cbdataUnlock(const void *p)
     cbdata *c;
     if (p == NULL)
 	return;
-    c = (cbdata *) (((char *) p) - OFFSET_OF(cbdata, data));
-    assert(c->y == c);
+    c = (cbdata *) hash_lookup(htable, p);
     debug(45, 3) ("cbdataUnlock: %p\n", p);
     assert(c != NULL);
     assert(c->locks > 0);
@@ -237,29 +210,50 @@ cbdataUnlock(const void *p)
 #endif
     if (c->valid || c->locks)
 	return;
-    cbdataCount--;
-    debug(45, 3) ("cbdataUnlock: Freeing %p\n", p);
-    if (c->unlock_func)
-	c->unlock_func((void *) p);
-    memPoolFree(cbdata_memory_pool[c->type], c);
+    cbdataReallyFree(c);
 }
 
 int
 cbdataValid(const void *p)
 {
     cbdata *c;
+    /* Maybe NULL should be considered valid? */
     if (p == NULL)
-	return 1;		/* A NULL pointer cannot become invalid */
+	return 0;
+    c = (cbdata *) hash_lookup(htable, p);
     debug(45, 3) ("cbdataValid: %p\n", p);
-    c = (cbdata *) (((char *) p) - OFFSET_OF(cbdata, data));
-    assert(c->y == c);
+    assert(c != NULL);
     assert(c->locks > 0);
     return c->valid;
 }
 
+void
+cbdataXfree(void *p, int unused)
+{
+    xfree(p);
+}
+
+
 static void
 cbdataDump(StoreEntry * sentry)
 {
+    hash_link *hptr;
+    cbdata *c;
     storeAppendPrintf(sentry, "%d cbdata entries\n", cbdataCount);
-    storeAppendPrintf(sentry, "see also memory pools section\n");
+    hash_first(htable);
+    while ((hptr = hash_next(htable))) {
+	c = (cbdata *) hptr;
+#if CBDATA_DEBUG
+	storeAppendPrintf(sentry, "%20p %10s %d locks %s:%d\n",
+	    c->hash.key,
+	    c->valid ? "VALID" : "NOT VALID",
+	    c->locks,
+	    c->file, c->line);
+#else
+	storeAppendPrintf(sentry, "%20p %10s %d locks\n",
+	    c->hash.key,
+	    c->valid ? "VALID" : "NOT VALID",
+	    c->locks);
+#endif
+    }
 }

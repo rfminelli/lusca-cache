@@ -69,9 +69,10 @@ static IPH commConnectDnsHandle;
 static void commConnectCallback(ConnectStateData * cs, int status);
 static int commResetFD(ConnectStateData * cs);
 static int commRetryConnect(ConnectStateData * cs);
-CBDATA_TYPE(ConnectStateData);
+static CBDUNL commConnectDataFree;
 
 static MemPool *comm_write_pool = NULL;
+static MemPool *conn_state_pool = NULL;
 static MemPool *conn_close_pool = NULL;
 
 static void
@@ -230,9 +231,9 @@ comm_listen(int sock)
 void
 commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *data)
 {
-    ConnectStateData *cs;
+    ConnectStateData *cs = memPoolAlloc(conn_state_pool);
     debug(5, 3) ("commConnectStart: FD %d, %s:%d\n", fd, host, (int) port);
-    cs = CBDATA_ALLOC(ConnectStateData, NULL);
+    cbdataAdd(cs, commConnectDataFree, 0);
     cs->fd = fd;
     cs->host = xstrdup(host);
     cs->port = port;
@@ -242,6 +243,12 @@ commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *
     comm_add_close_handler(fd, commConnectFree, cs);
     cs->locks++;
     ipcache_nbgethostbyname(host, commConnectDnsHandle, cs);
+}
+
+static void
+commConnectDataFree(void *data, int unused)
+{
+    memPoolFree(conn_state_pool, data);
 }
 
 static void
@@ -790,8 +797,8 @@ comm_init(void)
      * after accepting a client but before it opens a socket or a file.
      * Since Squid_MaxFD can be as high as several thousand, don't waste them */
     RESERVED_FD = XMIN(100, Squid_MaxFD / 4);
-    CBDATA_INIT_TYPE(ConnectStateData);
     comm_write_pool = memPoolCreate("CommWriteStateData", sizeof(CommWriteStateData));
+    conn_state_pool = memPoolCreate("ConnectStateData", sizeof(ConnectStateData));
     conn_close_pool = memPoolCreate("close_handler", sizeof(close_handler));
 }
 
@@ -856,7 +863,7 @@ commHandleWrite(int fd, void *data)
 
 
 /* Select for Writing on FD, until SIZE bytes are sent.  Call
- * *HANDLER when complete. */
+ * * HANDLER when complete. */
 void
 comm_write(int fd, char *buf, int size, CWCB * handler, void *handler_data, FREE * free_func)
 {

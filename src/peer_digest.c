@@ -97,8 +97,6 @@ peerDigestClean(PeerDigest * pd)
     stringClean(&pd->host);
 }
 
-CBDATA_TYPE(PeerDigest);
-
 /* allocate new peer digest, call Init, and lock everything */
 PeerDigest *
 peerDigestCreate(peer * p)
@@ -106,8 +104,8 @@ peerDigestCreate(peer * p)
     PeerDigest *pd;
     assert(p);
 
-    CBDATA_INIT_TYPE(PeerDigest);
-    pd = CBDATA_ALLOC(PeerDigest, NULL);
+    pd = memAllocate(MEM_PEER_DIGEST);
+    cbdataAdd(pd, memFree, MEM_PEER_DIGEST);
     peerDigestInit(pd, p);
     cbdataLock(pd->peer);	/* we will use the peer */
 
@@ -295,7 +293,8 @@ peerDigestRequest(PeerDigest * pd)
     if (p->login)
 	xstrncpy(req->login, p->login, MAX_LOGIN_SZ);
     /* create fetch state structure */
-    fetch = CBDATA_ALLOC(DigestFetchState, NULL);
+    fetch = memAllocate(MEM_DIGEST_FETCH_STATE);
+    cbdataAdd(fetch, memFree, MEM_DIGEST_FETCH_STATE);
     fetch->request = requestLink(req);
     fetch->pd = pd;
     fetch->offset = 0;

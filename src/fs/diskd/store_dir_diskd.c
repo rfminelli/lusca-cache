@@ -165,7 +165,7 @@ storeDiskdDirMapBitReset(SwapDir * SD, int fn)
      * file_map_bit_reset doesn't do bounds checking.  It assumes
      * filn is a valid file number, but it might not be because
      * the map is dynamic in size.  Also clearing an already clear
-     * bit puts the map counter of-of-whack.
+     * bit puts the map counter out-of-whack.
      */
     if (file_map_bit_test(diskdinfo->map, filn))
 	file_map_bit_reset(diskdinfo->map, filn);
@@ -1006,18 +1006,14 @@ storeDiskdDirAddDiskRestore(SwapDir * SD, const cache_key * key,
     return e;
 }
 
-CBDATA_TYPE(RebuildState);
-
 static void
 storeDiskdDirRebuild(SwapDir * sd)
 {
-    RebuildState *rb;
+    RebuildState *rb = xcalloc(1, sizeof(*rb));
     int clean = 0;
     int zero = 0;
     FILE *fp;
     EVH *func = NULL;
-    CBDATA_INIT_TYPE(RebuildState);
-    rb = CBDATA_ALLOC(RebuildState, NULL);
     rb->sd = sd;
     rb->speed = opt_foreground_rebuild ? 1 << 30 : 50;
     /*
@@ -1041,6 +1037,7 @@ storeDiskdDirRebuild(SwapDir * sd)
     debug(20, 1) ("Rebuilding storage in %s (%s)\n",
 	sd->path, clean ? "CLEAN" : "DIRTY");
     store_dirs_rebuilding++;
+    cbdataAdd(rb, cbdataXfree, 0);
     eventAdd("storeRebuild", func, rb, 0.0, 1);
 }
 
@@ -1144,14 +1141,8 @@ storeDiskdDirWriteCleanStart(SwapDir * sd)
     struct stat sb;
     sd->log.clean.write = NULL;
     sd->log.clean.state = NULL;
-    state->new = xstrdup(storeDiskdDirSwapLogFile(sd, ".clean"));
-    state->fd = file_open(state->new, O_WRONLY | O_CREAT | O_TRUNC);
-    if (state->fd < 0) {
-	xfree(state->new);
-	xfree(state);
-	return -1;
-    }
     state->cur = xstrdup(storeDiskdDirSwapLogFile(sd, NULL));
+    state->new = xstrdup(storeDiskdDirSwapLogFile(sd, ".clean"));
     state->cln = xstrdup(storeDiskdDirSwapLogFile(sd, ".last-clean"));
     state->outbuf = xcalloc(CLEAN_BUF_SZ, 1);
     state->outbuf_offset = 0;
@@ -1834,6 +1825,7 @@ static int
 storeDiskdCleanupDoubleCheck(SwapDir * sd, StoreEntry * e)
 {
     struct stat sb;
+
     if (stat(storeDiskdDirFullPath(sd, e->swap_filen, NULL), &sb) < 0) {
 	debug(20, 0) ("storeDiskdCleanupDoubleCheck: MISSING SWAP FILE\n");
 	debug(20, 0) ("storeDiskdCleanupDoubleCheck: FILENO %08X\n", e->swap_filen);

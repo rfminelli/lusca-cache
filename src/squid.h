@@ -231,24 +231,10 @@
 #endif /* HAVE_POLL_H */
 #endif /* HAVE_POLL */
 
-#if defined(HAVE_STDARG_H)
+#if STDC_HEADERS
 #include <stdarg.h>
-#define HAVE_STDARGS		/* let's hope that works everywhere (mj) */
-#define VA_LOCAL_DECL va_list ap;
-#define VA_START(f) va_start(ap, f)
-#define VA_SHIFT(v,t) ;		/* no-op for ANSI */
-#define VA_END va_end(ap)
 #else
-#if defined(HAVE_VARARGS_H)
 #include <varargs.h>
-#undef HAVE_STDARGS
-#define VA_LOCAL_DECL va_list ap;
-#define VA_START(f) va_start(ap)	/* f is ignored! */
-#define VA_SHIFT(v,t) v = va_arg(ap,t)
-#define VA_END va_end(ap)
-#else
-#error XX **NO VARARGS ** XX
-#endif
 #endif
 
 /* Make sure syslog goes after stdarg/varargs */
@@ -332,7 +318,7 @@ struct rusage {
 #endif
 
 #if CBDATA_DEBUG
-#define cbdataAlloc(a,b)	cbdataAllocDbg(a,b,__FILE__,__LINE__)
+#define cbdataAdd(a,b,c)	cbdataAddDbg(a,b,c,__FILE__,__LINE__)
 #define cbdataLock(a)		cbdataLockDbg(a,__FILE__,__LINE__)
 #define cbdataUnlock(a)		cbdataUnlockDbg(a,__FILE__,__LINE__)
 #endif

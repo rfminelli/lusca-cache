@@ -346,12 +346,11 @@ mainReconfigure(void)
     authenticateShutdown();
     storeDirCloseSwapLogs();
     errorClean();
+    mimeFreeMemory();
     parseConfigFile(ConfigFile);
     _db_init(Config.Log.log, Config.debugOptions);
     ipcache_restart();		/* clear stuck entries */
-    authenticateUserCacheRestart();	/* clear stuck ACL entries */
     fqdncache_restart();	/* sigh, fqdncache too */
-    parseEtcHosts();
     errorInitialize();		/* reload error pages */
 #if USE_DNSSERVERS
     dnsInit();
@@ -359,7 +358,7 @@ mainReconfigure(void)
     idnsInit();
 #endif
     redirectInit();
-    authenticateInit(&Config.authConfig);
+    authenticateInit();
 #if USE_WCCP
     wccpInit();
 #endif
@@ -400,7 +399,7 @@ mainRotate(void)
     dnsInit();
 #endif
     redirectInit();
-    authenticateInit(&Config.authConfig);
+    authenticateInit();
 }
 
 static void
@@ -483,14 +482,13 @@ mainInitialize(void)
 	disk_init();		/* disk_init must go before ipcache_init() */
     ipcache_init();
     fqdncache_init();
-    parseEtcHosts();
 #if USE_DNSSERVERS
     dnsInit();
 #else
     idnsInit();
 #endif
     redirectInit();
-    authenticateInit(&Config.authConfig);
+    authenticateInit();
     useragentOpenLog();
     refererOpenLog();
     httpHeaderInitModule();	/* must go before any header processing (e.g. the one in errorInitialize) */
@@ -626,14 +624,13 @@ main(int argc, char **argv)
 	if (!ConfigFile)
 	    ConfigFile = xstrdup(DefaultConfigFile);
 	assert(!configured_once);
+	memInit();		/* memInit is required for config parsing */
+	cbdataInit();
 #if USE_LEAKFINDER
 	leakInit();
 #endif
-	memInit();
-	cbdataInit();
 	eventInit();		/* eventInit() is required for config parsing */
 	storeFsInit();		/* required for config parsing */
-	authenticateSchemeInit();	/* required for config parsign */
 	parse_err = parseConfigFile(ConfigFile);
 
 	if (opt_parse_cfg_only)
@@ -713,6 +710,7 @@ main(int argc, char **argv)
 	    idnsShutdown();
 #endif
 	    redirectShutdown();
+	    authenticateShutdown();
 	    eventAdd("SquidShutdown", SquidShutdown, NULL, (double) (wait + 1), 1);
 	}
 	eventRun();
@@ -938,7 +936,6 @@ SquidShutdown(void *unused)
 #endif
     releaseServerSockets();
     commCloseAllSockets();
-    authenticateShutdown();
 #if USE_UNLINKD
     unlinkdClose();
 #endif

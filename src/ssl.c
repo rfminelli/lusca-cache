@@ -429,7 +429,6 @@ sslConnectDone(int fdnotused, int status, void *data)
     }
 }
 
-CBDATA_TYPE(SslStateData);
 void
 sslStart(int fd, const char *url, request_t * request, size_t * size_ptr, int *status_ptr)
 {
@@ -483,8 +482,8 @@ sslStart(int fd, const char *url, request_t * request, size_t * size_ptr, int *s
 	errorSend(fd, err);
 	return;
     }
-    CBDATA_INIT_TYPE(SslStateData);
-    sslState = CBDATA_ALLOC(SslStateData, NULL);
+    sslState = xcalloc(1, sizeof(SslStateData));
+    cbdataAdd(sslState, cbdataXfree, 0);
 #if DELAY_POOLS
     sslState->delay_id = delayClient(request);
     delayRegisterDelayIdPtr(&sslState->delay_id);
@@ -587,7 +586,6 @@ sslPeerSelectComplete(FwdServer * fs, void *data)
 	sslState->request->peer_login = fs->peer->login;
 	sslState->request->flags.proxying = 1;
     } else {
-	sslState->request->peer_login = NULL;
 	sslState->request->flags.proxying = 0;
     }
 #if DELAY_POOLS

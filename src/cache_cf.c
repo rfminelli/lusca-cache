@@ -55,6 +55,8 @@ static const char *const B_MBYTES_STR = "MB";
 static const char *const B_GBYTES_STR = "GB";
 
 static const char *const list_sep = ", \t\n\r";
+static int http_header_first;
+static int http_header_allowed = 0;
 
 static void update_maxobjsize(void);
 static void configDoConfigure(void);
@@ -63,24 +65,18 @@ static int parseTimeUnits(const char *unit);
 static void parseTimeLine(time_t * tptr, const char *units);
 static void parse_ushort(u_short * var);
 static void parse_string(char **);
-void parse_wordlist(wordlist **);
+static void parse_wordlist(wordlist **);
 static void default_all(void);
 static void defaults_if_none(void);
 static int parse_line(char *);
 static void parseBytesLine(size_t * bptr, const char *units);
 static size_t parseBytesUnits(const char *unit);
 static void free_all(void);
-void requirePathnameExists(const char *name, const char *path);
+static void requirePathnameExists(const char *name, const char *path);
 static OBJH dump_config;
-static void dump_http_header_access(StoreEntry * entry, const char *name, header_mangler header[]);
-static void parse_http_header_access(header_mangler header[]);
-static void free_http_header_access(header_mangler header[]);
-static void dump_http_header_replace(StoreEntry * entry, const char *name, header_mangler header[]);
-static void parse_http_header_replace(header_mangler * header);
-static void free_http_header_replace(header_mangler * header);
-static void parse_denyinfo(acl_deny_info_list ** var);
-static void dump_denyinfo(StoreEntry * entry, const char *name, acl_deny_info_list * var);
-static void free_denyinfo(acl_deny_info_list ** var);
+static void dump_http_header(StoreEntry * entry, const char *name, HttpHeaderMask header);
+static void parse_http_header(HttpHeaderMask * header);
+static void free_http_header(HttpHeaderMask * header);
 static void parse_sockaddr_in_list(sockaddr_in_list **);
 static void dump_sockaddr_in_list(StoreEntry *, const char *, const sockaddr_in_list *);
 static void free_sockaddr_in_list(sockaddr_in_list **);
@@ -230,6 +226,7 @@ parseConfigFile(const char *file_name)
 	cfg_filename = token + 1;
     memset(config_input_line, '\0', BUFSIZ);
     config_lineno = 0;
+    http_header_first = 0;
     while (fgets(config_input_line, BUFSIZ, fp)) {
 	config_lineno++;
 	if ((token = strchr(config_input_line, '\n')))
@@ -303,6 +300,17 @@ configDoConfigure(void)
 	    Config.redirectChildren = DefaultRedirectChildrenMax;
 	}
     }
+    if (Config.Program.authenticate) {
+	if (Config.authenticateChildren < 1) {
+	    Config.authenticateChildren = 0;
+	    wordlistDestroy(&Config.Program.authenticate);
+	} else if (Config.authenticateChildren > DefaultAuthenticateChildrenMax) {
+	    debug(3, 0) ("WARNING: authenticate_children was set to a bad value: %d\n",
+		Config.authenticateChildren);
+	    debug(3, 0) ("Setting it to the maximum (%d).\n", DefaultAuthenticateChildrenMax);
+	    Config.authenticateChildren = DefaultAuthenticateChildrenMax;
+	}
+    }
     if (Config.Accel.host) {
 	snprintf(buf, BUFSIZ, "http://%s:%d", Config.Accel.host, Config.Accel.port);
 	Config2.Accel.prefix = xstrdup(buf);
@@ -358,6 +366,8 @@ configDoConfigure(void)
 #endif
     if (Config.Program.redirect)
 	requirePathnameExists("redirect_program", Config.Program.redirect->key);
+    if (Config.Program.authenticate)
+	requirePathnameExists("authenticate_program", Config.Program.authenticate->key);
     requirePathnameExists("Icon Directory", Config.icons.directory);
     requirePathnameExists("Error Directory", Config.errorDirectory);
 #if HTTP_VIOLATIONS
@@ -380,7 +390,8 @@ configDoConfigure(void)
     if (Config.Wais.relayHost) {
 	if (Config.Wais.peer)
 	    cbdataFree(Config.Wais.peer);
-	Config.Wais.peer = CBDATA_ALLOC(peer, peerDestroy);
+	Config.Wais.peer = memAllocate(MEM_PEER);
+	cbdataAdd(Config.Wais.peer, peerDestroy, MEM_PEER);
 	Config.Wais.peer->host = xstrdup(Config.Wais.relayHost);
 	Config.Wais.peer->http_port = Config.Wais.relayPort;
     }
@@ -767,124 +778,62 @@ parse_delay_pool_access(delayConfig * cfg)
 #endif
 
 static void
-dump_http_header_access(StoreEntry * entry, const char *name, header_mangler header[])
+dump_http_header(StoreEntry * entry, const char *name, HttpHeaderMask header)
 {
     int i;
-    storeAppendPrintf(entry, "%s:", name);
-    for (i = 0; i < HDR_ENUM_END; i++) {
-	if (header[i].access_list != NULL) {
-	    storeAppendPrintf(entry, "\t");
-	    dump_acl_access(entry, httpHeaderNameById(i),
-		header[i].access_list);
-	}
+    for (i = 0; i < HDR_OTHER; i++) {
+	if (http_header_allowed && !CBIT_TEST(header, i))
+	    storeAppendPrintf(entry, "%s allow %s\n", name, httpHeaderNameById(i));
+	else if (!http_header_allowed && CBIT_TEST(header, i))
+	    storeAppendPrintf(entry, "%s deny %s\n", name, httpHeaderNameById(i));
     }
 }
 
 static void
-parse_http_header_access(header_mangler header[])
+parse_http_header(HttpHeaderMask * header)
 {
-    int id, i;
+    int allowed, id;
     char *t = NULL;
     if ((t = strtok(NULL, w_space)) == NULL) {
 	debug(3, 0) ("%s line %d: %s\n",
 	    cfg_filename, config_lineno, config_input_line);
-	debug(3, 0) ("parse_http_header_access: missing header name.\n");
+	debug(3, 0) ("parse_http_header: missing 'allow' or 'deny'.\n");
 	return;
     }
-    /* Now lookup index of header. */
-    id = httpHeaderIdByNameDef(t, strlen(t));
-    if (strcmp(t, "All") == 0)
-	id = HDR_ENUM_END;
-    else if (strcmp(t, "Other") == 0)
-	id = HDR_OTHER;
-    else if (id == -1) {
+    if (!strcmp(t, "allow"))
+	allowed = 1;
+    else if (!strcmp(t, "deny"))
+	allowed = 0;
+    else {
 	debug(3, 0) ("%s line %d: %s\n",
 	    cfg_filename, config_lineno, config_input_line);
-	debug(3, 0) ("parse_http_header_access: unknown header name %s.\n", t);
+	debug(3, 0) ("parse_http_header: expecting 'allow' or 'deny', got '%s'.\n", t);
 	return;
     }
-    if (id != HDR_ENUM_END) {
-	parse_acl_access(&header[id].access_list);
-    } else {
-	char *next_string = t + strlen(t);
-	*next_string = ' ';
-	for (i = 0; i < HDR_ENUM_END; i++) {
-	    char *new_string = xstrdup(next_string);
-	    strtok(new_string, " ");
-	    parse_acl_access(&header[i].access_list);
-	    safe_free(new_string);
+    if (!http_header_first) {
+	http_header_first = 1;
+	if (allowed) {
+	    http_header_allowed = 1;
+	    httpHeaderMaskInit(header, 0xFF);
+	} else {
+	    http_header_allowed = 0;
+	    httpHeaderMaskInit(header, 0);
 	}
     }
-}
-
-static void
-free_http_header_access(header_mangler header[])
-{
-    int i;
-    for (i = 0; i < HDR_ENUM_END; i++) {
-	free_acl_access(&header[i].access_list);
+    while ((t = strtok(NULL, w_space))) {
+	if ((id = httpHeaderIdByNameDef(t, strlen(t))) == -1)
+	    debug(3, 0) ("parse_http_header: Ignoring unknown header '%s'\n", t);
+	else if (allowed)
+	    CBIT_CLR(*header, id);
+	else
+	    CBIT_SET(*header, id);
     }
 }
 
 static void
-dump_http_header_replace(StoreEntry * entry, const char *name, header_mangler
-    header[])
+free_http_header(HttpHeaderMask * header)
 {
-    int i;
-    storeAppendPrintf(entry, "%s:", name);
-    for (i = 0; i < HDR_ENUM_END; i++) {
-	if (NULL == header[i].replacement)
-	    continue;
-	storeAppendPrintf(entry, "\t%s: %s", httpHeaderNameById(i),
-	    header[i].replacement);
-    }
-}
-
-static void
-parse_http_header_replace(header_mangler header[])
-{
-    int id, i;
-    char *t = NULL;
-    if ((t = strtok(NULL, w_space)) == NULL) {
-	debug(3, 0) ("%s line %d: %s\n",
-	    cfg_filename, config_lineno, config_input_line);
-	debug(3, 0) ("parse_http_header_replace: missing header name.\n");
-	return;
-    }
-    /* Now lookup index of header. */
-    id = httpHeaderIdByNameDef(t, strlen(t));
-    if (strcmp(t, "All") == 0)
-	id = HDR_ENUM_END;
-    else if (strcmp(t, "Other") == 0)
-	id = HDR_OTHER;
-    else if (id == -1) {
-	debug(3, 0) ("%s line %d: %s\n",
-	    cfg_filename, config_lineno, config_input_line);
-	debug(3, 0) ("parse_http_header_replace: unknown header name %s.\n",
-	    t);
-	return;
-    }
-    if (id != HDR_ENUM_END) {
-	if (header[id].replacement != NULL)
-	    safe_free(header[id].replacement);
-	header[id].replacement = xstrdup(t + strlen(t) + 1);
-    } else {
-	for (i = 0; i < HDR_ENUM_END; i++) {
-	    if (header[i].replacement != NULL)
-		safe_free(header[i].replacement);
-	    header[i].replacement = xstrdup(t + strlen(t) + 1);
-	}
-    }
-}
-
-static void
-free_http_header_replace(header_mangler header[])
-{
-    int i;
-    for (i = 0; i < HDR_ENUM_END; i++) {
-	if (header[i].replacement != NULL)
-	    safe_free(header[i].replacement);
-    }
+    httpHeaderMaskInit(header, 0);
 }
 
 static void
@@ -908,86 +857,6 @@ static int
 check_null_string(char *s)
 {
     return s == NULL;
-}
-
-void
-allocate_new_authScheme(authConfig * cfg)
-{
-    if (cfg->schemes == NULL) {
-	cfg->n_allocated = 4;
-	cfg->schemes = xcalloc(cfg->n_allocated, sizeof(authScheme));
-    }
-    if (cfg->n_allocated == cfg->n_configured) {
-	authScheme *tmp;
-	cfg->n_allocated <<= 1;
-	tmp = xcalloc(cfg->n_allocated, sizeof(authScheme));
-	xmemcpy(tmp, cfg->schemes, cfg->n_configured * sizeof(authScheme));
-	xfree(cfg->schemes);
-	cfg->schemes = tmp;
-    }
-}
-
-static void
-parse_authparam(authConfig * config)
-{
-    char *type_str;
-    char *param_str;
-    authScheme *scheme = NULL;
-    int type, i;
-
-    if ((type_str = strtok(NULL, w_space)) == NULL)
-	self_destruct();
-
-    if ((param_str = strtok(NULL, w_space)) == NULL)
-	self_destruct();
-
-    if ((type = authenticateAuthSchemeId(type_str)) == -1) {
-	debug(3, 0) ("Parsing Config File: Unknown authentication scheme '%s'.\n", type_str);
-	return;
-    }
-    for (i = 0; i < config->n_configured; i++) {
-	if (config->schemes[i].Id == type) {
-	    scheme = config->schemes + i;
-	}
-    }
-
-    if (scheme == NULL) {
-	allocate_new_authScheme(config);
-	scheme = config->schemes + config->n_configured;
-	config->n_configured++;
-	scheme->Id = type;
-	scheme->typestr = authscheme_list[type].typestr;
-    }
-    authscheme_list[type].parse(scheme, config->n_configured, param_str);
-}
-
-static void
-free_authparam(authConfig * cfg)
-{
-    authScheme *scheme;
-    int i;
-    /* DON'T FREE THESE FOR RECONFIGURE */
-    if (reconfiguring)
-	return;
-    for (i = 0; i < cfg->n_configured; i++) {
-	scheme = cfg->schemes + i;
-	authscheme_list[scheme->Id].freeconfig(scheme);
-    }
-    safe_free(cfg->schemes);
-    cfg->schemes = NULL;
-    cfg->n_allocated = 0;
-    cfg->n_configured = 0;
-}
-
-static void
-dump_authparam(StoreEntry * entry, const char *name, authConfig cfg)
-{
-    authScheme *scheme;
-    int i;
-    for (i = 0; i < cfg.n_configured; i++) {
-	scheme = cfg.schemes + i;
-	authscheme_list[scheme->Id].dump(entry, name, scheme);
-    }
 }
 
 void
@@ -1169,7 +1038,7 @@ parse_peer(peer ** head)
     char *token = NULL;
     peer *p;
     int i;
-    p = CBDATA_ALLOC(peer, peerDestroy);
+    p = memAllocate(MEM_PEER);
     p->http_port = CACHE_HTTP_PORT;
     p->icp.port = CACHE_ICP_PORT;
     p->weight = 1;
@@ -1234,8 +1103,6 @@ parse_peer(peer ** head)
 #endif
 	} else if (!strcasecmp(token, "allow-miss")) {
 	    p->options.allow_miss = 1;
-	} else if (!strcasecmp(token, "max-conn=")) {
-	    p->max_conn = atoi(token + 9);
 	} else {
 	    debug(3, 0) ("parse_peer: token='%s'\n", token);
 	    self_destruct();
@@ -1247,16 +1114,18 @@ parse_peer(peer ** head)
     p->tcp_up = PEER_TCP_MAGIC_COUNT;
     p->test_fd = -1;
 #if USE_CARP
-#define ROTATE_LEFT(x, n) (((x) << (n)) | ((x) >> (32-(n))))
+#define ROTATE_LEFT(x, n) (((x) << (n)) | ((x) >> ((sizeof(u_long)*8)-(n))))
     if (p->carp.load_factor) {
 	/* calculate this peers hash for use in CARP */
 	p->carp.hash = 0;
 	for (token = p->host; *token != 0; token++)
-	    p->carp.hash += ROTATE_LEFT(p->carp.hash, 19) + (unsigned int) *token;
+	    p->carp.hash += ROTATE_LEFT(p->carp.hash, 19) + *token;
 	p->carp.hash += p->carp.hash * 0x62531965;
-	p->carp.hash = ROTATE_LEFT(p->carp.hash, 21);
+	p->carp.hash += ROTATE_LEFT(p->carp.hash, 21);
     }
 #endif
+    /* This must preceed peerDigestCreate */
+    cbdataAdd(p, peerDestroy, MEM_PEER);
 #if USE_CACHE_DIGESTS
     if (!p->options.no_digest) {
 	p->digest = peerDigestCreate(p);
@@ -1492,7 +1361,7 @@ dump_int(StoreEntry * entry, const char *name, int var)
     storeAppendPrintf(entry, "%s %d\n", name, var);
 }
 
-void
+static void
 parse_int(int *var)
 {
     int i;
@@ -1689,7 +1558,7 @@ free_string(char **var)
     safe_free(*var);
 }
 
-void
+static void
 parse_eol(char *volatile *var)
 {
     char *token = strtok(NULL, null_string);
@@ -1705,7 +1574,7 @@ dump_time_t(StoreEntry * entry, const char *name, time_t var)
     storeAppendPrintf(entry, "%s %d seconds\n", name, (int) var);
 }
 
-void
+static void
 parse_time_t(time_t * var)
 {
     parseTimeLine(var, T_SECOND_STR);
@@ -1798,7 +1667,7 @@ dump_wordlist(StoreEntry * entry, const char *name, wordlist * list)
     }
 }
 
-void
+static void
 parse_wordlist(wordlist ** list)
 {
     char *token;
@@ -1988,7 +1857,7 @@ configFreeMemory(void)
     free_all();
 }
 
-void
+static void
 requirePathnameExists(const char *name, const char *path)
 {
     struct stat sb;

@@ -151,14 +151,12 @@ asnAclInitialize(acl * acls)
 
 /* initialize the radix tree structure */
 
-CBDATA_TYPE(ASState);
 void
 asnInit(void)
 {
     extern int max_keylen;
     static int inited = 0;
     max_keylen = 40;
-    CBDATA_INIT_TYPE(ASState);
     if (0 == inited++)
 	rn_init();
     rn_inithead((void **) &AS_tree_head, 8);
@@ -189,8 +187,8 @@ asnCacheStart(int as)
     LOCAL_ARRAY(char, asres, 4096);
     StoreEntry *e;
     request_t *req;
-    ASState *asState;
-    asState = CBDATA_ALLOC(ASState, NULL);
+    ASState *asState = xcalloc(1, sizeof(ASState));
+    cbdataAdd(asState, cbdataXfree, 0);
     debug(53, 3) ("asnCacheStart: AS %d\n", as);
     snprintf(asres, 4096, "whois://%s/!gAS%d", Config.as_whois_server, as);
     asState->as_number = as;
