@@ -4,6 +4,7 @@
  * DEBUG: Section 18          stat
  */
 
+
 #include "squid.h"
 
 #ifdef _SQUID_HPUX_
