@@ -122,6 +122,33 @@ struct icp_common_s {
 
 #define ICP_COMMON_SZ (sizeof(icp_common_t))
 #define ICP_HDR_SZ (sizeof(icp_common_t)+sizeof(u_num32))
+typedef enum {
+    ICP_OP_INVALID,		/* 00 to insure 0 doesn't get accidently interpreted. */
+    ICP_OP_QUERY,		/* 01 query opcode (cl->sv) */
+    ICP_OP_HIT,			/* 02 hit (cl<-sv) */
+    ICP_OP_MISS,		/* 03 miss (cl<-sv) */
+    ICP_OP_ERR,			/* 04 error (cl<-sv) */
+    ICP_OP_SEND,		/* 05 send object non-auth (cl->sv) */
+    ICP_OP_SENDA,		/* 06 send object authoritative (cl->sv) */
+    ICP_OP_DATABEG,		/* 07 first data, but not last (sv<-cl) */
+    ICP_OP_DATA,		/* 08 data middle of stream (sv<-cl) */
+    ICP_OP_DATAEND,		/* 09 last data (sv<-cl) */
+    ICP_OP_SECHO,		/* 10 echo from source (sv<-os) */
+    ICP_OP_DECHO,		/* 11 echo from dumb cache (sv<-dc) */
+    ICP_OP_UNUSED0,		/* 12 */
+    ICP_OP_UNUSED1,		/* 13 */
+    ICP_OP_UNUSED2,		/* 14 */
+    ICP_OP_UNUSED3,		/* 15 */
+    ICP_OP_UNUSED4,		/* 16 */
+    ICP_OP_UNUSED5,		/* 17 */
+    ICP_OP_UNUSED6,		/* 18 */
+    ICP_OP_UNUSED7,		/* 19 */
+    ICP_OP_UNUSED8,		/* 20 */
+    ICP_OP_MISS_NOFETCH,	/* 21 access denied while reloading */
+    ICP_OP_DENIED,		/* 22 access denied (cl<-sv) */
+    ICP_OP_HIT_OBJ,		/* 23 hit with object data (cl<-sv) */
+    ICP_OP_END			/* 24 marks end of opcodes */
+} icp_opcode;
 
 #define ICP_OP_HIGHEST (ICP_OP_END - 1)		/* highest valid opcode */
 
@@ -165,6 +192,17 @@ typedef struct icp_error_s icp_error_t;
 #define ICP_ERROR_SZ (sizeof(icp_error_t))
 
 #define ICP_ERROR_MSGLEN	256	/* max size for string, incl '\0' */
+
+/* Error Codes - These can come back in the response packet */
+typedef enum {
+    ICP_ERROR_INVALID,		/* invalid (not used) */
+    ICP_ERROR_BADVERS,		/* version error */
+    ICP_ERROR_BADURL,		/* bad URL */
+    ICP_ERROR_BADFLAGS,		/* bad flags */
+    ICP_ERROR_TIMEDOUT,		/* couldn't get data */
+    ICP_ERROR_ACCESS,		/* authorization problem */
+    ICP_ERROR_INTERNAL		/* cache server internal err */
+} icp_error_code;
 
 /* Header for SEND packet */
 struct icp_send_s {
@@ -227,12 +265,43 @@ typedef struct icp_message_s icp_message_t;
 #define ICP_VERSION_3		3
 #define ICP_VERSION_CURRENT	ICP_VERSION_2
 
-extern void protoDispatch _PARAMS((int, StoreEntry *, request_t *));
+#if 0
+extern int icp_proto_errno;	/* operation errors */
+extern int icp_hit _PARAMS((int sock, u_num32 reqnum, u_num32 * auth, u_num32 size));
+extern int icp_miss _PARAMS((int sock, u_num32 reqnum, u_num32 * auth));
+extern int icp_error _PARAMS((int sock, u_num32 reqnum, u_num32 * auth, unsigned short errcode, char *errstr));
+extern int icp_databegin _PARAMS((int sock, u_num32 reqnum, u_num32 * auth, u_num32 ttl, u_num32 timestamp, char *data));
+extern int icp_data _PARAMS((int sock, u_num32 reqnum, u_num32 * auth, char *data));
+extern int icp_dataend _PARAMS((int sock, u_num32 reqnum, u_num32 * auth, char *data));
+#endif
 
-extern int protoUnregister _PARAMS((StoreEntry *, request_t *, struct in_addr));
-extern void protoStart _PARAMS((int, StoreEntry *, peer *, request_t *));
+typedef struct _protodispatch_data {
+    int fd;
+    char *url;
+    StoreEntry *entry;
+    request_t *request;
+    int inside_firewall;
+    int direct_fetch;
+    int source_ping;
+    int hierarchical;
+    int n_peers;
+    struct _peer *single_parent;
+    struct _peer *default_parent;
+#if DELAY_HACK
+    int delay_fetch;
+#endif
+    int ip_lookup_pending;
+} protodispatch_data;
+
+extern int protoDispatch _PARAMS((int, char *, StoreEntry *, request_t *));
+extern int protoUnregister _PARAMS((int fd,
+	StoreEntry *,
+	request_t *,
+	struct in_addr));
+extern int getFromDefaultSource _PARAMS((int, StoreEntry *));
+extern int protoStart _PARAMS((int, StoreEntry *, peer *, request_t *));
 extern void protoCancelTimeout _PARAMS((int fd, StoreEntry *));
-extern int protoAbortFetch _PARAMS((StoreEntry * entry));
+extern int matchInsideFirewall _PARAMS((const char *));
 
 #define DIRECT_NO    0
 #define DIRECT_MAYBE 1

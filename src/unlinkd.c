@@ -35,6 +35,10 @@ static char hello_string[] = "hi there\n";
 /* This is the external unlinkd process */
 
 #include "config.h"
+
+#if HAVE_LIBC_H
+#include <libc.h>
+#endif
 #if HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -92,11 +96,11 @@ unlinkdCreate(void)
     char buf[HELLO_BUFSIZ];
     struct timeval slp;
     if (pipe(squid_to_unlinkd) < 0) {
-	debug(50, 0) ("unlinkdCreate: pipe: %s\n", xstrerror());
+	debug(50, 0, "unlinkdCreate: pipe: %s\n", xstrerror());
 	return -1;
     }
     if (pipe(unlinkd_to_squid) < 0) {
-	debug(50, 0) ("unlinkdCreate: pipe: %s\n", xstrerror());
+	debug(50, 0, "unlinkdCreate: pipe: %s\n", xstrerror());
 	return -1;
     }
     rfd1 = squid_to_unlinkd[0];
@@ -104,7 +108,7 @@ unlinkdCreate(void)
     rfd2 = unlinkd_to_squid[0];
     wfd2 = unlinkd_to_squid[1];
     if ((pid = fork()) < 0) {
-	debug(50, 0) ("unlinkdCreate: fork: %s\n", xstrerror());
+	debug(50, 0, "unlinkdCreate: fork: %s\n", xstrerror());
 	close(rfd1);
 	close(wfd1);
 	close(rfd2);
@@ -116,23 +120,22 @@ unlinkdCreate(void)
 	close(wfd2);
 	memset(buf, '\0', HELLO_BUFSIZ);
 	n = read(rfd2, buf, HELLO_BUFSIZ - 1);
-	fd_bytes(rfd2, n, FD_READ);
 	close(rfd2);
 	if (n <= 0) {
-	    debug(50, 0) ("unlinkdCreate: handshake failed\n");
+	    debug(50, 0, "unlinkdCreate: handshake failed\n");
 	    close(wfd1);
 	    return -1;
 	} else if (strcmp(buf, hello_string)) {
-	    debug(50, 0) ("unlinkdCreate: handshake failed\n");
-	    debug(50, 0) ("--> got '%s'\n", rfc1738_escape(buf));
+	    debug(50, 0, "unlinkdCreate: handshake failed\n");
+	    debug(50, 0, "--> got '%s'\n", rfc1738_escape(buf));
 	    close(wfd1);
 	    return -1;
 	}
-	commSetTimeout(wfd1, -1, NULL, NULL);
+	comm_set_fd_lifetime(wfd1, -1);
 	slp.tv_sec = 0;
 	slp.tv_usec = 250000;
 	select(0, NULL, NULL, NULL, &slp);
-	fd_open(wfd1, FD_PIPE, "squid -> unlinkd");
+	file_open_fd(wfd1, "unlinkd socket", FD_PIPE);
 	commSetNonBlocking(wfd1);
 	return wfd1;
     }
@@ -146,7 +149,7 @@ unlinkdCreate(void)
     close(wfd2);		/* close parent's FD */
     commSetCloseOnExec(fileno(debug_log));
     execlp(Config.Program.unlinkd, "(unlinkd)", NULL);
-    debug(50, 0) ("unlinkdCreate: %s: %s\n",
+    debug(50, 0, "unlinkdCreate: %s: %s\n",
 	Config.Program.unlinkd, xstrerror());
     _exit(1);
     return 0;
@@ -193,7 +196,8 @@ unlinkdInit(void)
     unlinkd_fd = unlinkdCreate();
     if (unlinkd_fd < 0)
 	fatal("unlinkdInit: failed to start unlinkd\n");
-    debug(43, 0) ("Unlinkd pipe opened on FD %d\n", unlinkd_fd);
+    fd_note(unlinkd_fd, Config.Program.unlinkd);
+    debug(43, 0, "Unlinkd pipe opened on FD %d\n", unlinkd_fd);
 }
 
 #endif /* ndef UNLINK_DAEMON */

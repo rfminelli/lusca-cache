@@ -117,11 +117,16 @@ stmem_stats mem_obj_pool;
 #define USE_MEMALIGN 0
 #endif
 
+static int memFreeDataUpto _PARAMS((mem_ptr, int));
+static int memAppend _PARAMS((mem_ptr, const char *, int));
+static int memCopy _PARAMS((const mem_ptr, int, char *, int));
 static void *get_free_thing _PARAMS((stmem_stats *));
 static void put_free_thing _PARAMS((stmem_stats *, void *));
 static void stmemFreeThingMemory _PARAMS((stmem_stats *));
+static void memFree _PARAMS((mem_ptr));
+static void memFreeData _PARAMS((mem_ptr));
 
-void
+static void
 memFree(mem_ptr mem)
 {
     mem_node lastp, p = mem->head;
@@ -145,17 +150,18 @@ memFree(mem_ptr mem)
     safe_free(mem);
 }
 
-#ifdef UNUSED_CODE
-void
+static void
 memFreeData(mem_ptr mem)
 {
     mem_node lastp, p = mem->head;
+
     while (p != mem->tail) {
 	lastp = p;
 	p = p->next;
 	put_free_4k_page(lastp->data);
 	safe_free(lastp);
     }
+
     if (p != NULL) {
 	put_free_4k_page(p->data);
 	safe_free(p);
@@ -164,9 +170,8 @@ memFreeData(mem_ptr mem)
     mem->head = mem->tail = NULL;	/* detach in case ref'd */
     mem->origin_offset = 0;
 }
-#endif
 
-int
+static int
 memFreeDataUpto(mem_ptr mem, int target_offset)
 {
     int current_offset = mem->origin_offset;
@@ -194,8 +199,8 @@ memFreeDataUpto(mem_ptr mem, int target_offset)
 	return current_offset;
     }
     if (current_offset != target_offset) {
-	debug(19, 1) ("memFreeDataUpto: This shouldn't happen. Some odd condition.\n");
-	debug(19, 1) ("   Current offset: %d  Target offset: %d  p: %p\n",
+	debug(19, 1, "memFreeDataUpto: This shouldn't happen. Some odd condition.\n");
+	debug(19, 1, "   Current offset: %d  Target offset: %d  p: %p\n",
 	    current_offset, target_offset, p);
     }
     return current_offset;
@@ -203,14 +208,14 @@ memFreeDataUpto(mem_ptr mem, int target_offset)
 
 
 /* Append incoming data. */
-void
+static int
 memAppend(mem_ptr mem, const char *data, int len)
 {
     mem_node p;
     int avail_len;
     int len_to_copy;
 
-    debug(19, 6) ("memAppend: len %d\n", len);
+    debug(19, 6, "memAppend: len %d\n", len);
 
     /* Does the last block still contain empty space? 
      * If so, fill out the block before dropping into the
@@ -244,36 +249,50 @@ memAppend(mem_ptr mem, const char *data, int len)
 	len -= len_to_copy;
 	data += len_to_copy;
     }
+    return len;
 }
 
-ssize_t
-memCopy(const mem_ptr mem, off_t offset, char *buf, size_t size)
+static int
+memCopy(const mem_ptr mem, int offset, char *buf, int size)
 {
     mem_node p = mem->head;
-    off_t t_off = mem->origin_offset;
-    size_t bytes_to_go = size;
+    int t_off = mem->origin_offset;
+    int bytes_to_go = size;
     char *ptr_to_buf = NULL;
     int bytes_from_this_packet = 0;
     int bytes_into_this_packet = 0;
-    debug(19, 6) ("memCopy: offset %d: size %d\n", offset, size);
+
+    debug(19, 6, "memCopy: offset %d: size %d\n", offset, size);
+
     if (p == NULL)
-	return -1;
-    /*      fatal_dump("memCopy: NULL mem_node"); *//* Can happen on async */
-    assert(size > 0);
+	fatal_dump("memCopy: NULL mem_node");
+
+    if (size <= 0)
+	return size;
+
     /* Seek our way into store */
     while ((t_off + p->len) < offset) {
 	t_off += p->len;
-	assert(p->next);
-	p = p->next;
+	if (p->next)
+	    p = p->next;
+	else {
+	    debug(19, 1, "memCopy: Offset: %d is off limit of current object of %d\n", t_off, offset);
+	    return 0;
+	}
     }
+
     /* Start copying begining with this block until
      * we're satiated */
+
     bytes_into_this_packet = offset - t_off;
-    bytes_from_this_packet = min(bytes_to_go, p->len - bytes_into_this_packet);
+    bytes_from_this_packet = min(bytes_to_go,
+	p->len - bytes_into_this_packet);
+
     xmemcpy(buf, p->data + bytes_into_this_packet, bytes_from_this_packet);
     bytes_to_go -= bytes_from_this_packet;
     ptr_to_buf = buf + bytes_from_this_packet;
     p = p->next;
+
     while (p && bytes_to_go > 0) {
 	if (bytes_to_go > p->len) {
 	    xmemcpy(ptr_to_buf, p->data, p->len);
@@ -285,7 +304,8 @@ memCopy(const mem_ptr mem, off_t offset, char *buf, size_t size)
 	}
 	p = p->next;
     }
-    return size - bytes_to_go;
+
+    return size;
 }
 
 
@@ -295,6 +315,11 @@ memInit(void)
 {
     mem_ptr new = xcalloc(1, sizeof(Mem_Hdr));
     new->tail = new->head = NULL;
+    new->mem_free = memFree;
+    new->mem_free_data = memFreeData;
+    new->mem_free_data_upto = memFreeDataUpto;
+    new->mem_append = memAppend;
+    new->mem_copy = memCopy;
     return new;
 }
 
@@ -404,7 +429,7 @@ stmemInit(void)
     mem_obj_pool.max_pages = Squid_MaxFD >> 3;
 
 #if PURIFY
-    debug(19, 0) ("Disabling stacks under purify\n");
+    debug(19, 0, "Disabling stacks under purify\n");
     sm_stats.max_pages = 0;
     disk_stats.max_pages = 0;
     request_pool.max_pages = 0;

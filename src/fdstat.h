@@ -106,8 +106,23 @@
 #ifndef FDSTAT_H
 #define FDSTAT_H
 
+typedef enum {
+    FD_NONE,
+    FD_LOG,
+    FD_FILE,
+    FD_SOCKET,
+    FD_PIPE,
+    FD_UNKNOWN
+} File_Desc_Type;
+
 extern void fdstat_init _PARAMS((void));
-extern void fdstat_open _PARAMS((int fd, unsigned int type));
+extern int fdstat_isopen _PARAMS((int fd));
+extern void fdstat_close _PARAMS((int fd));
+extern void fdstat_open _PARAMS((int fd, File_Desc_Type type));
 extern int fdstat_are_n_free_fd _PARAMS((int));
+extern File_Desc_Type fdstatGetType _PARAMS((int));
+extern void fdstatFreeMemory _PARAMS((void));
+
+extern const char *fdstatTypeStr[];
 
 #endif
