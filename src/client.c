@@ -1,5 +1,4 @@
 
-
 /*
  * $Id$
  *
@@ -138,7 +137,6 @@ main(int argc, char *argv[])
 {
     int conn, c, len, bytesWritten;
     int port, to_stdout, reload;
-    int keep_alive = 0;
     int opt_noaccept = 0;
     char url[BUFSIZ], msg[BUFSIZ], buf[BUFSIZ], hostname[BUFSIZ];
     const char *method = "GET";
@@ -158,7 +156,7 @@ main(int argc, char *argv[])
 	strcpy(url, argv[argc - 1]);
 	if (url[0] == '-')
 	    usage(argv[0]);
-	while ((c = getopt(argc, argv, "ah:i:km:p:rst:?")) != -1)
+	while ((c = getopt(argc, argv, "ah:i:m:p:rst:?")) != -1)
 	    switch (c) {
 	    case 'a':
 		opt_noaccept = 1;
@@ -169,9 +167,6 @@ main(int argc, char *argv[])
 		break;
 	    case 's':		/* silent */
 		to_stdout = 0;
-		break;
-	    case 'k':		/* backward compat */
-		keep_alive = 1;
 		break;
 	    case 'r':		/* reload */
 		reload = 1;
@@ -229,10 +224,6 @@ main(int argc, char *argv[])
     }
     if (max_forwards > -1) {
 	sprintf(buf, "Max-Forwards: %d\r\n", max_forwards);
-	strcat(msg, buf);
-    }
-    if (keep_alive) {
-	sprintf(buf, "Proxy-Connection: Keep-Alive\r\n");
 	strcat(msg, buf);
     }
     sprintf(buf, "\r\n");
