@@ -160,10 +160,13 @@ memBufGrow(MemBuf *mb, mb_size_t min_cap)
     assert(new_cap > mb->capacity);      /* progress */
 
     /* finally [re]allocate memory */
-    if (mb->buf)
-	mb->buf = realloc(mb->buf, new_cap);
-    else
+    if (!mb->buf) {
 	mb->buf = xmalloc(new_cap);
+	mb->freefunc = &xfree;
+    } else {
+	assert(mb->freefunc);
+	mb->buf = realloc(mb->buf, new_cap);
+    }
     memset(mb->buf+mb->size, 0, new_cap-mb->size); /* just in case */
     mb->capacity = new_cap;
 }

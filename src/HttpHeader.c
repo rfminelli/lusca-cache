@@ -66,7 +66,7 @@ struct _HttpHeaderExtField {
 
 /* possible types for fields */
 typedef enum {
-    ftInvalid = 0,
+    ftInvalid = HDR_ENUM_END, /* to catch nasty errors with hdr_id<->fld_type clashes */
     ftInt,
     ftPChar,
     ftDate_1123,
@@ -140,7 +140,8 @@ static field_attrs_t Headers[] = {
     { "Proxy-Authenticate",HDR_PROXY_AUTHENTICATE,ftPChar },
     { "Public",            HDR_PUBLIC,          ftPChar },
     { "Retry-After",       HDR_RETRY_AFTER,     ftPChar }, /* for now */
-    { "Set-Cookie",        HDR_SET_COOKIE,      ftPChar }, 
+    /* fix this: make count-but-treat as OTHER mask @?@ @?@ */
+    { "Set-Cookie:",        HDR_SET_COOKIE,      ftPChar },
     { "Upgrade",           HDR_UPGRADE,         ftPChar }, /* for now */
     { "Warning",           HDR_WARNING,         ftPChar }, /* for now */
     { "WWW-Authenticate",  HDR_WWW_AUTHENTICATE,ftPChar },
@@ -149,7 +150,7 @@ static field_attrs_t Headers[] = {
 };
 
 /* this table is used for parsing server cache control header */
-static const field_attrs_t SccAttrs[] = {
+static field_attrs_t SccAttrs[] = {
     { "public",            SCC_PUBLIC },
     { "private",           SCC_PRIVATE },
     { "no-cache",          SCC_NO_CACHE },
@@ -157,7 +158,7 @@ static const field_attrs_t SccAttrs[] = {
     { "no-transform",      SCC_NO_TRANSFORM },
     { "must-revalidate",   SCC_MUST_REVALIDATE },
     { "proxy-revalidate",  SCC_PROXY_REVALIDATE },
-    { "max-age",           SCC_MAX_AGE },
+    { "max-age",           SCC_MAX_AGE }
 };
 
 /*
@@ -222,9 +223,9 @@ static struct {
 
 #endif /* if 0 */
 
-/* recycle bin for short strings */
-static const size_t shortStrSize = 24;
-static const size_t shortStrPoolCount = 1024*1024L/24;
+/* recycle bin for short strings (32KB only) */
+static const size_t shortStrSize = 32; /* max size of a recyclable string */
+static const size_t shortStrPoolCount = (32*1024)/32; /* sync this with shortStrSize */
 static MemPool *shortStrings = NULL;
 
 /* long strings accounting */
@@ -246,7 +247,7 @@ static HttpHeaderEntry *httpHeaderGetEntry(const HttpHeader *hdr, HttpHeaderPos 
 static void httpHeaderDelAt(HttpHeader *hdr, HttpHeaderPos pos);
 static void httpHeaderAddParsedEntry(HttpHeader *hdr, HttpHeaderEntry *e);
 static void httpHeaderAddNewEntry(HttpHeader *hdr, const HttpHeaderEntry *e);
-static void httpHeaderSyncMasks(HttpHeader *hdr, const HttpHeaderEntry *e);
+static void httpHeaderSyncMasks(HttpHeader *hdr, const HttpHeaderEntry *e, int add);
 static void httpHeaderSyncStats(HttpHeader *hdr, const HttpHeaderEntry *e);
 static int httpHeaderIdByName(const char *name, int name_len, const field_attrs_t *attrs, int end, int mask);
 static void httpHeaderGrow(HttpHeader *hdr);
@@ -256,6 +257,7 @@ static void httpHeaderEntryClean(HttpHeaderEntry *e);
 static int httpHeaderEntryParseInit(HttpHeaderEntry *e, const char *field_start, const char *field_end, int mask);
 static int httpHeaderEntryParseExtFieldInit(HttpHeaderEntry *e, int id, const HttpHeaderExtField *f);
 static int httpHeaderEntryParseByTypeInit(HttpHeaderEntry *e, int id, const HttpHeaderExtField *f);
+static HttpHeaderEntry httpHeaderEntryClone(const HttpHeaderEntry *e);
 static void httpHeaderEntryPackInto(const HttpHeaderEntry *e, Packer *p);
 static void httpHeaderEntryPackByType(const HttpHeaderEntry *e, Packer *p);
 static void httpHeaderEntryJoinWith(HttpHeaderEntry *e, const HttpHeaderEntry *newe);
@@ -307,6 +309,7 @@ static char *allocShortBuf(size_t size);
 static void freeShortString(char *str);
 
 static int strListGetItem(const char *str, char del, const char **item, int *ilen, const char **pos);
+static const char *getStringPrefix(const char *str);
 
 
 /* delete this when everybody remembers that ':' is not a part of a name */
@@ -316,12 +319,14 @@ static int strListGetItem(const char *str, char del, const char **item, int *ile
 #define countof(arr) (sizeof(arr)/sizeof(*arr))
 
 /*
- * Initialization routines
+ * Module initialization routines
  */
 
 void
 httpHeaderInitModule()
 {
+    /* paranoid check if smbd put a big object into field_store */
+    assert(sizeof(field_store) == 4);
     /* have to force removal of const here */
     httpHeaderInitAttrTable((field_attrs_t *)Headers, countof(Headers));
     httpHeaderInitAttrTable((field_attrs_t *)SccAttrs, countof(SccAttrs));
@@ -342,11 +347,11 @@ httpHeaderInitAttrTable(field_attrs_t *table, int count)
 
     /* reorder so that .id becomes an index */
     for (i = 0; i < count;) {
-	int id = table[i].id;
+	const int id = table[i].id;
 	assert(id >= 0 && id < count); /* sanity check */
 	assert(id >= i);    /* entries prior to i have been indexed already */
 	if (id != i) { /* out of order */
-	    field_attrs_t fa = table[id];
+	    const field_attrs_t fa = table[id];
 	    assert(fa.id != id);  /* avoid endless loops */
 	    table[id] = table[i]; /* swap */
 	    table[i] = fa;
@@ -358,6 +363,7 @@ httpHeaderInitAttrTable(field_attrs_t *table, int count)
     for (i = 0; i < count; ++i) {
 	assert(table[i].name);
 	table[i].name_len = strlen(table[i].name);
+	tmp_debug(here) ("hdr table entry[%d]: %s (%d)\n", i, table[i].name, table[i].name_len);
 	assert(table[i].name_len);
     }
 }
@@ -400,14 +406,15 @@ httpHeaderInit(HttpHeader *hdr)
 {
     assert(hdr);
     memset(hdr, 0, sizeof(*hdr));
+    tmp_debug(here) ("init hdr: %p\n", hdr);
 }
 
 void
 httpHeaderClean(HttpHeader *hdr)
 {
     HttpHeaderPos pos = HttpHeaderInitPos;
-    HttpHeaderEntry *e;
 
+    tmp_debug(here) ("cleaning hdr: %p\n", hdr);
     assert(hdr);
 
     if (hdr->capacity > INIT_FIELDS_PER_HEADER)
@@ -415,8 +422,8 @@ httpHeaderClean(HttpHeader *hdr)
     else
 	shortHeadersCount++;
 
-    while ((e = httpHeaderGetEntry(hdr, &pos)))
-	httpHeaderEntryClean(e);
+    while (httpHeaderGetEntry(hdr, &pos))
+	httpHeaderDelAt(hdr, pos);
     xfree(hdr->entries);
     hdr->emask = 0;
     hdr->entries = NULL;
@@ -438,8 +445,12 @@ httpHeaderClone(HttpHeader *hdr)
     HttpHeaderEntry *e;
     HttpHeaderPos pos = HttpHeaderInitPos;
 
-    while ((e = httpHeaderGetEntry(hdr, &pos)))
-	httpHeaderAddNewEntry(clone, e);
+    tmp_debug(here) ("cloning hdr: %p -> %p\n", hdr, clone);
+
+    while ((e = httpHeaderGetEntry(hdr, &pos))) {
+	HttpHeaderEntry e_clone = httpHeaderEntryClone(e);
+	httpHeaderAddNewEntry(clone, &e_clone);
+    }
 
     return clone;
 }
@@ -470,18 +481,32 @@ httpHeaderParse(HttpHeader *hdr, const char *header_start, const char *header_en
 
     assert(hdr);
     assert(header_start && header_end);
+    tmp_debug(here) ("parsing hdr: %p\n", hdr);
     /* select appropriate field mask */
     mask = (/* fix this @?@ @?@ */ 1 ) ? ReplyHeadersMask : RequestHeadersMask;
     /* commonn format headers are "<name>:[ws]<value>" lines delimited by <CRLF> */
     while (field_start < header_end) {
 	const char *field_end = field_start + strcspn(field_start, "\r\n");
+	/*tmp_debug(here) ("found end of field: %d\n", (int)*field_end);*/
 	if (!*field_end) 
 	    return httpHeaderReset(hdr); /* missing <CRLF> */
-	if (!httpHeaderEntryParseInit(&e, field_start, field_end, mask));
-	    return httpHeaderReset(hdr);
-	httpHeaderAddParsedEntry(hdr, &e);
+	/*
+	 * If we fail to parse a field, we ignore that field. We also could
+	 * claim that the whole header is invalid. The latter is safer, but less
+	 * robust. Note that we should be able to parse any commonn format field
+	 */
+	if (!httpHeaderEntryParseInit(&e, field_start, field_end, mask))
+	    debug(55, 1) ("warning: ignoring unparseable http header field near '%s'\n",
+		getStringPrefix(field_start));
+	else
+	    httpHeaderAddParsedEntry(hdr, &e);
+	/*
+	 * Note that we init() e, bit never clean() it which is equivalent to *
+	 * creating a fresh entry on each loop iteration; thus, it is safe to *
+	 * add e without dup()-ing it.
+	 */
 	field_start = field_end;
-	/* skip /r/n */
+	/* skip CRLF */
 	if (*field_start == '\r') field_start++;
 	if (*field_start == '\n') field_start++;
     }
@@ -498,6 +523,7 @@ httpHeaderPackInto(const HttpHeader *hdr, Packer *p)
     HttpHeaderPos pos = HttpHeaderInitPos;
     const HttpHeaderEntry *e;
     assert(hdr && p);
+    tmp_debug(here) ("packing hdr: %p\n", hdr);
     /* add terminating character (required when no fields are present) */
     packerAppend(p, "", 1);
     /* pack all entries one by one */
@@ -512,14 +538,16 @@ httpHeaderGetEntry(const HttpHeader *hdr, HttpHeaderPos *pos)
 {
     assert(hdr && pos);
     assert(*pos >= HttpHeaderInitPos && *pos < hdr->capacity);
-    for ((*pos)++; *pos < hdr->capacity; (*pos)++) {
+    tmp_debug(here) ("searching next e in hdr %p from %d\n", hdr, *pos);
+    for ((*pos)++; *pos < hdr->ucount; (*pos)++) {
 	HttpHeaderEntry *e = hdr->entries + *pos;
     	if (httpHeaderEntryIsValid(e)) {
-	    debug(55, 9) ("httpHeaderGetEntry: returning: %s at %d\n", 
-		httpHeaderEntryName(e), *pos);
+	    tmp_debug(here)("%p returning: %s at %d\n", 
+		hdr, httpHeaderEntryName(e), *pos);
     	    return e;
 	}
     }
+    tmp_debug(here) ("failed to find entry in hdr %p\n", hdr);
     return NULL;
 }
 
@@ -533,13 +561,22 @@ httpHeaderFindEntry(const HttpHeader *hdr, http_hdr_type id, HttpHeaderPos *pos)
 {
     HttpHeaderPos p;
     HttpHeaderEntry *e;
+    int is_absent;
     assert(hdr);
+    assert_eid(id);
+
+    tmp_debug(here) ("finding entry %d in hdr %p\n", id, hdr);
+    /* check mask first @?@ @?@ remove double checking and asserts when done */
+    is_absent = (id != HDR_OTHER && !EBIT_TEST(hdr->emask, id));
     if (!pos) pos = &p;
     *pos = HttpHeaderInitPos;
     while ((e = httpHeaderGetEntry(hdr, pos))) {
-    	if (e->id == id)
+    	if (e->id == id) {
+	    assert(!is_absent);
     	    return e;
+	}
     }
+    assert(!EBIT_TEST(hdr->emask, id));
     return NULL;
 }
 
@@ -554,6 +591,7 @@ httpHeaderDelFields(HttpHeader *hdr, const char *name)
     HttpHeaderPos pos = HttpHeaderInitPos;
     HttpHeaderEntry *e;
 
+    tmp_debug(here) ("deleting '%s' fields in hdr %p\n", name, hdr);
     while ((e = httpHeaderGetEntry(hdr, &pos))) {
     	if (!strcmp(httpHeaderEntryName(e), name)) {
 	    httpHeaderDelAt(hdr, pos);
@@ -574,14 +612,20 @@ httpHeaderDelAt(HttpHeader *hdr, HttpHeaderPos pos)
     assert(hdr);
     assert(pos >= 0 && pos < hdr->ucount);
     e = hdr->entries + pos;
-    httpHeaderEntryClean(e);
+    tmp_debug(here) ("%p deling entry at %d: id: %d (%p:%p)\n", 
+	hdr, pos, e->id, hdr->entries, e);
     /* sync masks */
-    httpHeaderSyncMasks(hdr, e);
+    httpHeaderSyncMasks(hdr, e, 0);
+    httpHeaderEntryClean(e);
     if (pos == hdr->ucount)
 	hdr->ucount--;
 }
 
-/* adds parsed entry (joins entries if neeeded) */
+/*
+ * adds parsed entry (joins entries if neeeded); assumes e.value is dup()-ed and
+ * clean()s it if needed. Thus, "e" should be treated as uninitialized after
+ * this function returns.
+ */
 static void
 httpHeaderAddParsedEntry(HttpHeader *hdr, HttpHeaderEntry *e)
 {
@@ -589,22 +633,29 @@ httpHeaderAddParsedEntry(HttpHeader *hdr, HttpHeaderEntry *e)
     assert(hdr);
     assert_eid(e->id);
 
+    tmp_debug(here) ("%p adding parsed entry %d\n", hdr, e->id);
+
+    /* there is no good reason to add invalid entries */
+    if (!httpHeaderEntryIsValid(e))
+	return;
+
     olde = (e->id == HDR_OTHER) ? NULL : httpHeaderFindEntry(hdr, e->id, NULL);
     if (olde) {
 	if (EBIT_TEST(ListHeadersMask, e->id))
 	    httpHeaderEntryJoinWith(olde, e);
 	else
-	    debug(55, 0) ("ignoring duplicate header: %s\n", httpHeaderEntryName(e));
+	    debug(55, 1) ("ignoring duplicate header: %s\n", httpHeaderEntryName(e));
 	httpHeaderEntryClean(e);
     } else {
 	/* actual add */
 	httpHeaderAddNewEntry(hdr, e);
     }
+    tmp_debug(here) ("%p done adding parsed entry %d\n", hdr, e->id);
 }
 
 /*
- * adds a new entry (low level append, does not check if entry is new)
- * note: we copy e value, thus, e can point to a tmp variable
+ * adds a new entry (low level append, does not check if entry is new) note: we
+ * copy e value, thus, e can point to a tmp variable (but e->field is not dupped!)
  */
 static void
 httpHeaderAddNewEntry(HttpHeader *hdr, const HttpHeaderEntry *e)
@@ -612,9 +663,12 @@ httpHeaderAddNewEntry(HttpHeader *hdr, const HttpHeaderEntry *e)
     assert(hdr && e);
     if (hdr->ucount >= hdr->capacity)
 	httpHeaderGrow(hdr);
+    tmp_debug(here) ("%p adding entry: %d at %d, (%p:%p)\n", 
+	hdr, e->id, hdr->ucount, 
+	hdr->entries, hdr->entries + hdr->ucount);
     hdr->entries[hdr->ucount++] = *e;
     /* sync masks */
-    httpHeaderSyncMasks(hdr, e);
+    httpHeaderSyncMasks(hdr, e, 1);
     /* sync accounting */
     httpHeaderSyncStats(hdr, e);
 }
@@ -657,6 +711,7 @@ int httpHeaderHas(const HttpHeader *hdr, http_hdr_type id)
 {
     assert(hdr);
     assert_eid(id);
+    tmp_debug(here) ("%p lookup for %d\n", hdr, id);
     return EBIT_TEST(hdr->emask, id);
 
 #ifdef SLOW_BUT_SAFE
@@ -667,7 +722,8 @@ int httpHeaderHas(const HttpHeader *hdr, http_hdr_type id)
 /* delete a field if any */
 void httpHeaderDel(HttpHeader *hdr, http_hdr_type id)
 {
-    HttpHeaderPos pos;
+    HttpHeaderPos pos = HttpHeaderInitPos;
+    tmp_debug(here) ("%p del-by-id %d\n", hdr, id);
     if (httpHeaderFindEntry(hdr, id, &pos)) {
 	httpHeaderDelAt(hdr, pos);
     }
@@ -675,18 +731,26 @@ void httpHeaderDel(HttpHeader *hdr, http_hdr_type id)
 
 /*
  * set a field
+ * setting an invaid value is equivalent to deleting a field
  * (if field is not present, it is added; otherwise, old content is destroyed).
  */
-void httpHeaderSet(HttpHeader *hdr, http_hdr_type id, const field_store value)
+void
+httpHeaderSet(HttpHeader *hdr, http_hdr_type id, const field_store value)
 {
     HttpHeaderPos pos;
     HttpHeaderEntry e;
+    assert(hdr);
+    assert_eid(id);
     
+    tmp_debug(here) ("%p sets with id: %d\n", hdr, id);
     if (httpHeaderFindEntry(hdr, id, &pos)) /* delete old entry */
 	httpHeaderDelAt(hdr, pos);
 
-    httpHeaderEntryInit(&e, id, httpHeaderFieldDup(id, value));
-    httpHeaderAddNewEntry(hdr, &e);
+    httpHeaderEntryInit(&e, id, httpHeaderFieldDup(Headers[id].type, value));
+    if (httpHeaderEntryIsValid(&e))
+	httpHeaderAddNewEntry(hdr, &e);
+    else
+	httpHeaderEntryClean(&e);
 }
 
 void
@@ -706,6 +770,7 @@ httpHeaderAddExt(HttpHeader *hdr, const char *name, const char* value)
     HttpHeaderExtField *ext = httpHeaderExtFieldCreate(name, value);
     HttpHeaderEntry e;
 
+    tmp_debug(here) ("%p ads exte '%s:%s'\n", hdr, name, value);
     httpHeaderEntryInit(&e, HDR_OTHER, ext);
     httpHeaderAddNewEntry(hdr, &e);
 }
@@ -718,10 +783,11 @@ httpHeaderGet(const HttpHeader *hdr, http_hdr_type id)
     assert_eid(id);
     assert(id != HDR_OTHER); /* there is no single value for HDR_OTHER */
 
+    tmp_debug(here) ("%p get for id %d\n", hdr, id);
     if ((e = httpHeaderFindEntry(hdr, id, NULL)))
 	return e->field;
     else
-	return httpHeaderFieldBadValue(id);
+	return httpHeaderFieldBadValue(Headers[id].type);
 }
 
 const char *
@@ -748,21 +814,19 @@ httpHeaderGetScc(const HttpHeader *hdr)
 
 /* updates header masks */
 static void
-httpHeaderSyncMasks(HttpHeader *hdr, const HttpHeaderEntry *e)
+httpHeaderSyncMasks(HttpHeader *hdr, const HttpHeaderEntry *e, int add)
 {
     int isSet;
-    int isValid;
     assert(hdr && e);
     assert_eid(e->id);
 
     /* we cannot mask HDR_OTHER because it may not be unique */
     if (e->id == HDR_OTHER)
 	return;
-
     isSet = EBIT_TEST(hdr->emask, e->id) != 0;
-    isValid = httpHeaderEntryIsValid(e) != 0;
-    assert(isSet ^ isValid);
-    isValid ? EBIT_SET(hdr->emask, e->id) : EBIT_CLR(hdr->emask, e->id);
+    add = add != 0;
+    assert(isSet ^ add);
+    add ? EBIT_SET(hdr->emask, e->id) : EBIT_CLR(hdr->emask, e->id);
 }
 
 /* updates header stats */
@@ -822,16 +886,19 @@ httpHeaderIdByName(const char *name, int name_len, const field_attrs_t *attrs, i
 static void
 httpHeaderGrow(HttpHeader *hdr)
 {
-    int new_cap = (hdr->capacity) ? 2*hdr->capacity : INIT_FIELDS_PER_HEADER;
-    int new_size = new_cap*sizeof(HttpHeaderEntry);
-
+    int new_cap;
+    int new_size;
     assert(hdr);
+    new_cap = (hdr->capacity) ? 2*hdr->capacity : INIT_FIELDS_PER_HEADER;
+    new_size = new_cap*sizeof(HttpHeaderEntry);
 
-    hdr->entries = (hdr->entries) ? 
+    tmp_debug(here) ("%p grow (%p) %d->%d\n", hdr, hdr->entries, hdr->capacity, new_cap);
+    hdr->entries = hdr->entries ?
 	xrealloc(hdr->entries, new_size) :
 	xmalloc(new_size);
     memset(hdr->entries+hdr->capacity, 0, (new_cap-hdr->capacity)*sizeof(HttpHeaderEntry));
     hdr->capacity = new_cap;
+    tmp_debug(here) ("%p grew (%p)\n", hdr, hdr->entries);
 }
 
 /*
@@ -872,7 +939,7 @@ httpHeaderEntryClean(HttpHeaderEntry *e) {
 	default:
 	    assert(0); /* somebody added a new type? */
     }
-    /* we do not have to do that */
+    /* we have to do that so entry will be _invlaid_ */
     e->id = -1;
     e->field.v_pchar = NULL;
 }
@@ -889,8 +956,9 @@ httpHeaderEntryParseInit(HttpHeaderEntry *e, const char *field_start, const char
     f = httpHeaderExtFieldParseCreate(field_start, field_end);
     if (!f) /* parsing failure */
 	return 0;
-
     id = httpHeaderIdByName(f->name, -1, Headers, countof(Headers), mask);
+    if (id < 0)
+	id = HDR_OTHER;
     if (id == HDR_OTHER) {
 	/* hm.. it is an extension field indeed */
 	httpHeaderEntryInit(e, id, f);
@@ -959,8 +1027,8 @@ httpHeaderEntryParseByTypeInit(HttpHeaderEntry *e, int id, const HttpHeaderExtFi
     switch(type) {
 	case ftInt:
 	    field.v_int = atoi(f->value);
-	    if (errno && !ignoreErrno(errno)) {
-		debug(55, 0) ("cannot parse an int header field: id: %d, field: '%s: %s'\n",
+	    if (!field.v_int && !isdigit(*f->value)) {
+		debug(55, 1) ("cannot parse an int header field: id: %d, field: '%s: %s'\n",
 		    id, f->name, f->value);
 		return 0;
 	    }
@@ -995,6 +1063,18 @@ httpHeaderEntryParseByTypeInit(HttpHeaderEntry *e, int id, const HttpHeaderExtFi
     /* success, do actual init */
     httpHeaderEntryInit(e, id, field);
     return 1;
+}
+
+
+static HttpHeaderEntry
+httpHeaderEntryClone(const HttpHeaderEntry *e)
+{
+    HttpHeaderEntry clone;
+    assert(e);
+    assert_eid(e->id);
+    httpHeaderEntryInit(&clone, e->id,
+	httpHeaderFieldDup(Headers[e->id].type, e->field));
+    return clone;
 }
 
 static void
@@ -1077,6 +1157,8 @@ static int
 httpHeaderEntryIsValid(const HttpHeaderEntry *e)
 {
     assert(e);
+    if (e->id == -1)
+	return 0;
     assert_eid(e->id);
     /* type-based analysis */
     switch(Headers[e->id].type) {
@@ -1293,21 +1375,24 @@ httpHeaderExtFieldParseCreate(const char *field_start, const char *field_end)
     if (!name_end || name_end <= field_start || name_end > field_end) 
 	return NULL;
 
+    tmp_debug(here) ("got field len: %d\n", field_end-field_start);
+
     value_start = name_end + 1; /* skip ':' */
     /* skip white space */
     while (value_start < field_end && isspace(*value_start)) 
 	value_start++;
 
     /* cut off "; parameter" from Content-Type @?@ why? */
-    if (!strncasecmp(field_start, "Content-Type:", 14)) {
+    if (!strncasecmp(field_start, "Content-Type:", 13)) {
 	const int l = strcspn(value_start, ";\t ");
-	if (l > 0)
+	if (l > 0 && value_start + l < field_end)
 	    field_end = value_start + l;
     }
 
     f = xcalloc(1, sizeof(HttpHeaderExtField));
     f->name = dupShortBuf(field_start, name_end-field_start);
     f->value = dupShortBuf(value_start, field_end-value_start);
+    tmp_debug(here) ("%p got field: '%s: %s'\n", f, f->name, f->value);
     return f;
 }
 
@@ -1460,9 +1545,11 @@ dupShortBuf(const char *str, size_t len)
     assert(str);
     assert(len >= 0);
     buf = allocShortBuf(len + 1);
+    assert(buf);
     if (len)
 	xmemcpy(buf, str, len); /* may not have terminating 0 */
     buf[len] = '\0'; /* terminate */
+    tmp_debug(here) ("dupped short buf[%d]: '%s'\n", len, buf);
     return buf;
 }
 
@@ -1480,6 +1567,8 @@ static char *
 allocShortBuf(size_t sz)
 {
     char *buf = NULL;
+    assert(shortStrings);
+    /* tmp_debug(here) ("allocating short buffer of size %d (max: %d)\n", sz, shortStrings->obj_size); @?@ */
     if (sz > shortStrings->obj_size) {
 	buf = xmalloc(sz);
 	longStrAllocCount++;
@@ -1496,9 +1585,12 @@ allocShortBuf(size_t sz)
 static void
 freeShortString(char *str)
 {
+    assert(shortStrings);
     if (str) {
 	const size_t sz = strlen(str)+1;
+        /* tmp_debug(here) ("freeing short str of size %d (max: %d)'%s'\n", sz, shortStrings->obj_size, str); @?@ */
 	if (sz > shortStrings->obj_size) {
+	    tmp_debug(here) ("LONG short string[%d>%d]: %s\n", sz, shortStrings->obj_size, str);
 	    xfree(str);
 	    longStrFreeCount++;
 	    longStrFreeSize += sz;
@@ -1545,4 +1637,13 @@ strListGetItem(const char *str, char del, const char **item, int *ilen, const ch
     if (ilen)
 	*ilen = len;
     return len > 0;
+}
+
+/* handy to printf prefixes of potentially very long buffers */
+static const char *
+getStringPrefix(const char *str) {
+#define SHORT_PREFIX_SIZE 256
+    LOCAL_ARRAY(char, buf, SHORT_PREFIX_SIZE);
+    xstrncpy(buf, str, SHORT_PREFIX_SIZE);
+    return buf;
 }

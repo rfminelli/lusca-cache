@@ -299,7 +299,8 @@ typedef enum {
     HTTP_BAD_GATEWAY = 502,
     HTTP_SERVICE_UNAVAILABLE = 503,
     HTTP_GATEWAY_TIMEOUT = 504,
-    HTTP_HTTP_VERSION_NOT_SUPPORTED = 505
+    HTTP_HTTP_VERSION_NOT_SUPPORTED = 505,
+    HTTP_INVALID_HEADER = 600 /* Squid header parsing error */
 } http_status;
 
 /* These are for StoreEntry->flag, which is defined as a SHORT */
