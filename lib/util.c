@@ -129,9 +129,10 @@
 #include <errno.h>
 #endif
 
+#include "ansiproto.h"
 #include "util.h"
 
-void (*failure_notify) (const char *) = NULL;
+void (*failure_notify) _PARAMS((const char *)) = NULL;
 static char msg[128];
 
 extern int sys_nerr;
@@ -442,21 +443,6 @@ xstrerror(void)
     sprintf(xstrerror_buf, "(%d) %s", errno, strerror(errno));
     return xstrerror_buf;
 }
-
-#if NOT_NEEDED
-/*
- * xbstrerror with argument for late notification */
-
-const char *
-xbstrerror(int err)
-{
-    static char xbstrerror_buf[BUFSIZ];
-    if (err < 0 || err >= sys_nerr)
-	return ("Unknown");
-    sprintf(xbstrerror_buf, "(%d) %s", err, strerror(err));
-    return xbstrerror_buf;
-}
-#endif
 
 void
 Tolower(char *q)

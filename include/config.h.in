@@ -140,18 +140,6 @@
 #define xmemcpy(d,s,n) memmove((d),(s),(n))
 #endif
 
-#if defined(O_NONBLOCK) && !defined(_SQUID_SUNOS_) && !defined(_SQUID_SOLARIS_)
-#define SQUID_NONBLOCK O_NONBLOCK
-#else
-#define SQUID_NONBLOCK O_NDELAY
-#endif
-
-/* DW's experience is that poll(2) doesn't work well on HP-UX */
-#if defined(_SQUID_HPUX_)
-#undef HAVE_POLL
-#define HAVE_POLL 0
-#endif
-
 #if HAVE_RANDOM
 #define squid_random random
 #define squid_srandom srandom
@@ -162,5 +150,6 @@
 #define squid_random rand
 #define squid_srandom srand
 #endif
+
 
 #endif /* _CONFIG_H_ */
