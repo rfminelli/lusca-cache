@@ -125,3 +125,13 @@ logUserAgent(const char *client, const char *agent)
 	fflush(cache_useragent_log);
 #endif
 }
+
+void
+useragentLogClose(void)
+{
+#if USE_USERAGENT_LOG
+    if (NULL == cache_useragent_log)
+	return;
+    fclose(cache_useragent_log);
+    cache_useragent_log = NULL;
+#endif

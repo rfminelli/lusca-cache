@@ -872,6 +872,7 @@ SquidShutdown(void *unused)
 #endif
     storeLogClose();
     accessLogClose();
+    useragentLogClose();
 #if USE_ASYNC_IO
     aioSync();			/* flush log close */
 #endif
