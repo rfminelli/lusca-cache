@@ -49,6 +49,15 @@
  * `BSTRING', as far as I know, and neither of them use this code.  */
 #if HAVE_STRING_H || STDC_HEADERS
 #include <string.h>
+#ifndef bcmp
+#define bcmp(s1, s2, n)	memcmp ((s1), (s2), (n))
+#endif
+#ifndef bcopy
+#define bcopy(s, d, n)	memcpy ((d), (s), (n))
+#endif
+#ifndef bzero
+#define bzero(s, n)	memset ((s), 0, (n))
+#endif
 #else
 #include <strings.h>
 #endif
@@ -89,7 +98,7 @@ init_syntax_once()
     if (done)
 	return;
 
-    memset(re_syntax_table, 0, sizeof re_syntax_table);
+    bzero(re_syntax_table, sizeof re_syntax_table);
 
     for (c = 'a'; c <= 'z'; c++)
 	re_syntax_table[c] = Sword;
@@ -199,7 +208,7 @@ char *alloca();
 /* Assumes a `char *destination' variable.  */
 #define REGEX_REALLOCATE(source, osize, nsize)				\
   (destination = (char *) alloca (nsize),				\
-   xmemcpy (destination, source, osize),				\
+   bcopy (source, destination, osize),					\
    destination)
 
 #endif /* not REGEX_MALLOC */
@@ -1324,7 +1333,7 @@ regex_compile(pattern, size, syntax, bufp)
 		BUF_PUSH((1 << BYTEWIDTH) / BYTEWIDTH);
 
 		/* Clear the whole map.  */
-		memset(b, 0, (1 << BYTEWIDTH) / BYTEWIDTH);
+		bzero(b, (1 << BYTEWIDTH) / BYTEWIDTH);
 
 		/* charset_not matches newline according to a syntax bit.  */
 		if ((re_opcode_t) b[-2] == charset_not
@@ -1564,12 +1573,11 @@ regex_compile(pattern, size, syntax, bufp)
 		if (syntax & RE_NO_BK_PARENS)
 		    goto normal_backslash;
 
-		if (COMPILE_STACK_EMPTY) {
+		if (COMPILE_STACK_EMPTY)
 		    if (syntax & RE_UNMATCHED_RIGHT_PAREN_ORD)
 			goto normal_backslash;
 		    else
 			return REG_ERPAREN;
-		}
 
 	      handle_close:
 		if (fixup_alt_jump) {	/* Push a dummy failure point at the end of the
@@ -1583,12 +1591,11 @@ regex_compile(pattern, size, syntax, bufp)
 		    STORE_JUMP(jump_past_alt, fixup_alt_jump, b - 1);
 		}
 		/* See similar code for backslashed left paren above.  */
-		if (COMPILE_STACK_EMPTY) {
+		if (COMPILE_STACK_EMPTY)
 		    if (syntax & RE_UNMATCHED_RIGHT_PAREN_ORD)
 			goto normal_char;
 		    else
 			return REG_ERPAREN;
-		}
 
 		/* Since we just checked for an empty stack above, this
 		 * ``can't happen''.  */
@@ -2485,7 +2492,7 @@ re_compile_fastmap(bufp)
     assert(fastmap != NULL && p != NULL);
 
     INIT_FAIL_STACK();
-    memset(fastmap, 0, 1 << BYTEWIDTH);		/* Assume nothing's valid.  */
+    bzero(fastmap, 1 << BYTEWIDTH);	/* Assume nothing's valid.  */
     bufp->fastmap_accurate = 1;	/* It will be when we're done.  */
     bufp->can_be_null = 0;
 
@@ -3687,7 +3694,7 @@ re_match_2(bufp, string1, size1, string2, size2, pos, regs, stop)
 		     * past them.  */
 		    if (translate
 			? bcmp_translate(d, d2, mcnt, translate)
-			: memcmp(d, d2, mcnt))
+			: bcmp(d, d2, mcnt))
 			goto fail;
 		    d += mcnt, d2 += mcnt;
 		}

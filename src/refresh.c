@@ -42,18 +42,73 @@
  *      MAX     3 days
  */
 #define REFRESH_DEFAULT_MIN	(time_t)0
-#define REFRESH_DEFAULT_PCT	0.20
+#define REFRESH_DEFAULT_PCT	(time_t)20
 #define REFRESH_DEFAULT_MAX	(time_t)259200
 
-static const refresh_t *
-refreshLimits(const char *url)
+typedef struct _refresh_t {
+    char *pattern;
+    regex_t compiled_pattern;
+    time_t min;
+    int pct;
+    time_t max;
+    struct _refresh_t *next;
+} refresh_t;
+
+static refresh_t *Refresh_tbl = NULL;
+static refresh_t *Refresh_tail = NULL;
+
+static void
+refreshFreeList(refresh_t * t)
 {
-    const refresh_t *R;
-    for (R = Config.Refresh; R; R = R->next) {
-	if (!regexec(&(R->compiled_pattern), url, 0, 0, 0))
-	    return R;
+    refresh_t *tnext;
+
+    for (; t; t = tnext) {
+	tnext = t->next;
+	safe_free(t->pattern);
+	regfree(&t->compiled_pattern);
+	safe_free(t);
     }
-    return NULL;
+}
+
+void
+refreshFreeMemory(void)
+{
+    refreshFreeList(Refresh_tbl);
+    Refresh_tail = Refresh_tbl = NULL;
+}
+
+void
+refreshAddToList(const char *pattern, int opts, time_t min, int pct, time_t max)
+{
+    refresh_t *t;
+    regex_t comp;
+    int errcode;
+    int flags = REG_EXTENDED | REG_NOSUB;
+    if (opts & REFRESH_ICASE)
+	flags |= REG_ICASE;
+    if ((errcode = regcomp(&comp, pattern, flags)) != 0) {
+	char errbuf[256];
+	regerror(errcode, &comp, errbuf, sizeof errbuf);
+	debug(22, 0, "%s line %d: %s\n",
+	    cfg_filename, config_lineno, config_input_line);
+	debug(22, 0, "refreshAddToList: Invalid regular expression '%s': %s\n",
+	    pattern, errbuf);
+	return;
+    }
+    pct = pct < 0 ? 0 : pct;
+    max = max < 0 ? 0 : max;
+    t = xcalloc(1, sizeof(refresh_t));
+    t->pattern = (char *) xstrdup(pattern);
+    t->compiled_pattern = comp;
+    t->min = min;
+    t->pct = pct;
+    t->max = max;
+    t->next = NULL;
+    if (!Refresh_tbl)
+	Refresh_tbl = t;
+    if (Refresh_tail)
+	Refresh_tail->next = t;
+    Refresh_tail = t;
 }
 
 /*
@@ -63,128 +118,76 @@ refreshLimits(const char *url)
 int
 refreshCheck(const StoreEntry * entry, const request_t * request, time_t delta)
 {
-    const refresh_t *R;
+    refresh_t *R;
     time_t min = REFRESH_DEFAULT_MIN;
-    double pct = REFRESH_DEFAULT_PCT;
+    int pct = REFRESH_DEFAULT_PCT;
     time_t max = REFRESH_DEFAULT_MAX;
     const char *pattern = ".";
     time_t age;
-    double factor;
+    int factor;
     time_t check_time = squid_curtime + delta;
-    debug(22, 3) ("refreshCheck: '%s'\n", storeUrl(entry));
-    if (EBIT_TEST(entry->flag, ENTRY_REVALIDATE)) {
-	debug(22, 3) ("refreshCheck: YES: Required Authorization\n");
-	return 1;
-    }
-    if ((R = refreshLimits(storeUrl(entry)))) {
+    debug(22, 3, "refreshCheck: '%s'\n", entry->url);
+    for (R = Refresh_tbl; R; R = R->next) {
+	if (regexec(&(R->compiled_pattern), entry->url, 0, 0, 0) != 0)
+	    continue;
 	min = R->min;
 	pct = R->pct;
 	max = R->max;
 	pattern = R->pattern;
+	break;
     }
-    debug(22, 3) ("refreshCheck: Matched '%s %d %d%% %d'\n",
-	pattern, (int) min, (int) (100.0 * pct), (int) max);
+    debug(22, 3, "refreshCheck: Matched '%s %d %d%% %d'\n",
+	pattern, (int) min, pct, (int) max);
     age = check_time - entry->timestamp;
-    debug(22, 3) ("refreshCheck: age = %d\n", (int) age);
+    debug(22, 3, "refreshCheck: age = %d\n", (int) age);
     if (request->max_age > -1) {
 	if (age > request->max_age) {
-	    debug(22, 3) ("refreshCheck: YES: age > client-max-age\n");
+	    debug(22, 3, "refreshCheck: YES: age > client-max-age\n");
 	    return 1;
 	}
     }
     if (age <= min) {
-	debug(22, 3) ("refreshCheck: NO: age < min\n");
+	debug(22, 3, "refreshCheck: NO: age < min\n");
 	return 0;
     }
     if (-1 < entry->expires) {
 	if (entry->expires <= check_time) {
-	    debug(22, 3) ("refreshCheck: YES: expires <= curtime\n");
+	    debug(22, 3, "refreshCheck: YES: expires <= curtime\n");
 	    return 1;
 	} else {
-	    debug(22, 3) ("refreshCheck: NO: expires > curtime\n");
+	    debug(22, 3, "refreshCheck: NO: expires > curtime\n");
 	    return 0;
 	}
     }
     if (age > max) {
-	debug(22, 3) ("refreshCheck: YES: age > max\n");
+	debug(22, 3, "refreshCheck: YES: age > max\n");
 	return 1;
     }
     if (entry->timestamp <= entry->lastmod) {
 	if (request->protocol != PROTO_HTTP) {
-	    debug(22, 3) ("refreshCheck: NO: non-HTTP request\n");
+	    debug(22, 3, "refreshCheck: NO: non-HTTP request\n");
 	    return 0;
 	}
-	debug(22, 3) ("refreshCheck: YES: lastvalid <= lastmod (%d <= %d)\n",
-	    (int) entry->timestamp, (int) entry->lastmod);
+	debug(22, 3, "refreshCheck: YES: lastvalid <= lastmod\n");
 	return 1;
     }
-    factor = (double) age / (double) (entry->timestamp - entry->lastmod);
-    debug(22, 3) ("refreshCheck: factor = %f\n", factor);
+    factor = 100 * age / (entry->timestamp - entry->lastmod);
+    debug(22, 3, "refreshCheck: factor = %d\n", factor);
     if (factor < pct) {
-	debug(22, 3) ("refreshCheck: NO: factor < pct\n");
+	debug(22, 3, "refreshCheck: NO: factor < pct\n");
 	return 0;
     }
     return 1;
 }
 
-/* returns an approximate time when refreshCheck() may return true */
-time_t
-refreshWhen(const StoreEntry * entry)
-{
-    const refresh_t *R;
-    time_t refresh_time = squid_curtime;
-    time_t min = REFRESH_DEFAULT_MIN;
-    time_t max = REFRESH_DEFAULT_MAX;
-    double pct = REFRESH_DEFAULT_PCT;
-    const char *pattern = ".";
-
-    assert(entry);
-    debug(22, 3) ("refreshWhen: key '%s'\n", storeKeyText(entry->key));
-    debug(22, 3) ("refreshWhen: url '%s'\n", storeUrl(entry));
-    if (EBIT_TEST(entry->flag, ENTRY_REVALIDATE)) {
-	debug(22, 3) ("refreshWhen: NOW: Required Authorization\n");
-	return refresh_time;
-    }
-    debug(22, 3) ("refreshWhen: entry: exp: %d, tstamp: %d, lmt: %d\n",
-	entry->expires, entry->timestamp, entry->lastmod);
-    if ((R = refreshLimits(storeUrl(entry)))) {
-	min = R->min;
-	max = R->max;
-	pct = R->pct;
-	pattern = R->pattern;
-    }
-    debug(22, 3) ("refreshWhen: Matched '%s %d %d%% %d'\n",
-	pattern, (int) min, (int) (100.0 * pct), (int) max);
-    /* convert to absolute numbers */
-    min += entry->timestamp;
-    max += entry->timestamp;
-    if (-1 < entry->expires) {
-	debug(22, 3) ("refreshWhen: expires set\n");
-	refresh_time = entry->expires;
-    } else if (entry->timestamp <= entry->lastmod) {
-	debug(22, 3) ("refreshWhen: lastvalid <= lastmod\n");
-	refresh_time = squid_curtime;
-    } else {
-	refresh_time = (entry->timestamp - entry->lastmod) * pct + entry->timestamp;
-	debug(22, 3) ("refreshWhen: using refresh pct\n");
-    }
-    /* take min/max into account, max takes priority over min */
-    if (refresh_time < min)
-	refresh_time = min;
-    if (refresh_time > max)
-	refresh_time = max;
-    debug(22, 3) ("refreshWhen: answer: %d (in %d secs)\n",
-	refresh_time, (int) (refresh_time - squid_curtime));
-    return refresh_time;
-}
-
 time_t
 getMaxAge(const char *url)
 {
-    const refresh_t *R;
-    debug(22, 3) ("getMaxAge: '%s'\n", url);
-    if ((R = refreshLimits(url)))
-	return R->max;
-    else
-	return REFRESH_DEFAULT_MAX;
+    refresh_t *R;
+    debug(22, 3, "getMaxAge: '%s'\n", url);
+    for (R = Refresh_tbl; R; R = R->next) {
+	if (regexec(&(R->compiled_pattern), url, 0, 0, 0) == 0)
+	    return R->max;
+    }
+    return REFRESH_DEFAULT_MAX;
 }

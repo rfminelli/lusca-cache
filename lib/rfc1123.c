@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -130,14 +129,14 @@
 #include <sys/time.h>
 #endif
 
+#include "ansiproto.h"
 #include "util.h"
-#include "snprintf.h"
 
 #define RFC850_STRFTIME "%A, %d-%b-%y %H:%M:%S GMT"
 #define RFC1123_STRFTIME "%a, %d %b %Y %H:%M:%S GMT"
 
-static int make_month(const char *s);
-static int make_num(const char *s);
+static int make_month _PARAMS((const char *s));
+static int make_num _PARAMS((const char *s));
 
 static char *month_names[12] =
 {
@@ -185,20 +184,15 @@ parse_rfc1123(const char *str)
     memset(&tm, '\0', sizeof(struct tm));
     if ((s = strchr(str, ','))) {	/* Thursday, 10-Jun-93 01:29:59 GMT */
 	s++;			/* or: Thu, 10 Jan 1993 01:29:59 GMT */
-	while (*s == ' ')
+	while (*s && *s == ' ')
 	    s++;
-	if (isdigit(*s) && !isdigit(*(s+1))) /* backoff if only one digit */
-	    s--;
 	if (strchr(s, '-')) {	/* First format */
 	    if ((int) strlen(s) < 18)
 		return -1;
 	    tm.tm_mday = make_num(s);
 	    tm.tm_mon = make_month(s + 3);
 	    tm.tm_year = make_num(s + 7);
-	    /*
-	     * Y2K: Arjan de Vet <Arjan.deVet@adv.IAEhv.nl>
-	     * if tm.tm_year < 70, assume it's after the year 2000.
-	     */
+	    /* Y2K: if tm.tm_year < 70, assume it's after the year 2000 */
 	    if (tm.tm_year < 70)
 		tm.tm_year += 100;
 	    tm.tm_hour = make_num(s + 10);
@@ -251,20 +245,16 @@ parse_rfc1123(const char *str)
     t = mktime(&tm);
     {
 	time_t dst = 0;
-#if !defined _TIMEZONE && !defined _timezone
+#ifndef _TIMEZONE
 	extern time_t timezone;
-#endif
+#endif /* _TIMEZONE */
 	/*
 	 * The following assumes a fixed DST offset of 1 hour,
 	 * which is probably wrong.
 	 */
 	if (tm.tm_isdst > 0)
 	    dst = -3600;
-#ifdef _timezone
-	t -= (_timezone + dst);
-#else
 	t -= (timezone + dst);
-#endif
     }
 #endif
     return t;
@@ -312,7 +302,7 @@ mkhttpdlogtime(const time_t * t)
 	day_offset = 1;
 
     len = strftime(buf, 127 - 5, "%d/%b/%Y:%H:%M:%S ", lt);
-    snprintf(buf + len, 128 - len, "%+03d%02d",
+    sprintf(buf + len, "%+03d%02d",
 	(min_offset / 60) % 24,
 	min_offset % 60);
 #else /* USE_GMT */

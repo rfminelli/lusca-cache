@@ -5,11 +5,31 @@
 #
 #  Uncomment and customize the following to suit your needs:
 #
+HOST_OPT	= # -DCACHEMGR_HOSTNAME="getfullhostname()"
+AUTH_OPT	= # -DUSE_PROXY_AUTH=1
+LOG_HDRS_OPT	= # -DLOG_FULL_HEADERS=1
+ICMP_OPT	= # -DUSE_ICMP=1
+DELAY_HACK      = # -DDELAY_HACK=1
+USERAGENT_OPT	= # -DUSE_USERAGENT_LOG=1
+KILL_PARENT_OPT	= # -DKILL_PARENT_OPT
+USE_POLL_OPT    = # -DUSE_POLL
+# do NOT define both USE_SPLAY_TREE and USE_BIN_TREE at the same time!
+USE_SPLAY_TREE  = # -DUSE_SPLAY_TREE
+USE_BIN_TREE    = # -DUSE_BIN_TREE
+RELOAD_INTO_IMS	= # -DRELOAD_INTO_IMS
+UNDERSCORES_OPT = # -DALLOW_HOSTNAME_UNDERSCORES
+RETRY_PATCH	= -DRETRY_PATCH
+NO_CACHE_ACL	= # -DNO_CACHE_ACL=1
+
+DEFINES         = $(HOST_OPT) $(AUTH_OPT) $(LOG_HDRS_OPT) \
+                  $(ICMP_OPT) $(DELAY_HACK) $(USERAGENT_OPT) \
+                  $(KILL_PARENT_OPT) $(USE_POLL_OPT) \
+                  $(USE_SPLAY_TREE) $(USE_BIN_TREE) \
+		  $(RELOAD_INTO_IMS) $(UNDERSCORES_OPT) \
+		  $(RETRY_PATCH) $(NO_CACHE_ACL)
 
 prefix		= @prefix@
 exec_prefix	= @exec_prefix@
-exec_suffix	= @exec_suffix@
-cgi_suffix	= @cgi_suffix@
 top_srcdir	= @top_srcdir@
 bindir		= @bindir@
 libexecdir      = @libexecdir@
@@ -18,28 +38,16 @@ localstatedir   = @localstatedir@
 srcdir		= @srcdir@
 VPATH		= @srcdir@
 
-# Gotta love the DOS legacy
-#
-SQUID_EXE	= squid$(exec_suffix)
-CLIENT_EXE	= client$(exec_suffix)
-DNSSERVER_EXE	= dnsserver$(exec_suffix)
-UNLINKD_EXE	= unlinkd$(exec_suffix)
-PINGER_EXE	= pinger$(exec_suffix)
-CACHEMGR_EXE	= cachemgr$(cgi_suffix)
-
 DEFAULT_CONFIG_FILE     = $(sysconfdir)/squid.conf
-DEFAULT_MIME_TABLE	= $(sysconfdir)/mime.conf
-DEFAULT_DNSSERVER       = $(libexecdir)/$(DNSSERVER_EXE)
+DEFAULT_FTPGET          = $(libexecdir)/ftpget
+DEFAULT_DNSSERVER       = $(libexecdir)/dnsserver
 DEFAULT_CACHE_LOG       = $(localstatedir)/logs/cache.log
 DEFAULT_ACCESS_LOG      = $(localstatedir)/logs/access.log
 DEFAULT_STORE_LOG       = $(localstatedir)/logs/store.log
 DEFAULT_PID_FILE        = $(localstatedir)/logs/squid.pid
 DEFAULT_SWAP_DIR        = $(localstatedir)/cache
-DEFAULT_PINGER		= $(libexecdir)/$(PINGER_EXE)
-DEFAULT_UNLINKD		= $(libexecdir)/$(UNLINKD_EXE)
-DEFAULT_ICON_DIR	= $(sysconfdir)/icons
-DEFAULT_ERROR_DIR	= $(sysconfdir)/errors
-DEFAULT_MIB_PATH	= $(sysconfdir)/mib.txt
+DEFAULT_PINGER		= $(libexecdir)/pinger
+DEFAULT_UNLINKD		= $(libexecdir)/unlinkd
 
 CC		= @CC@
 MAKEDEPEND	= @MAKEDEPEND@
@@ -52,9 +60,6 @@ LN_S		= @LN_S@
 PERL            = @PERL@
 CRYPTLIB	= @CRYPTLIB@
 REGEXLIB	= @REGEXLIB@
-PTHREADLIB	= @PTHREADLIB@
-SNMPLIB		= @SNMPLIB@
-MALLOCLIB	= @LIB_MALLOC@
 AC_CFLAGS	= @CFLAGS@
 LDFLAGS		= @LDFLAGS@
 XTRA_LIBS	= @XTRA_LIBS@
@@ -64,27 +69,21 @@ RM		= @RM@
 SHELL		= /bin/sh
 
 
-INCLUDE		= -I. -I../include -I$(top_srcdir)/include
+INCLUDE		= -I. -I../include -I$(srcdir)/../include
 CFLAGS 		= $(AC_CFLAGS) $(INCLUDE) $(DEFINES)
-SQUID_LIBS	= -L../lib $(CRYPTLIB) $(REGEXLIB) @SQUID_PTHREAD_LIB@ \
-		  $(SNMPLIB) $(MALLOCLIB) -lmiscutil $(XTRA_LIBS)
+SQUID_LIBS	= -L../lib $(CRYPTLIB) $(REGEXLIB) -lmiscutil $(XTRA_LIBS)
 CLIENT_LIBS	= -L../lib -lmiscutil $(XTRA_LIBS)
 DNSSERVER_LIBS	= -L../lib -lmiscutil $(XTRA_LIBS)
+FTPGET_LIBS	= -L../lib -lmiscutil $(XTRA_LIBS)
 PINGER_LIBS	= -L../lib -lmiscutil $(XTRA_LIBS)
-STD_APP_LIBS    = -L../lib -lmiscutil $(XTRA_LIBS)
 
-PROGS           = $(SQUID_EXE) $(CLIENT_EXE)
-UTILS           = $(DNSSERVER_EXE) $(UNLINKD_EXE)
-SUID_UTILS	= $(PINGER_EXE)
-CGIPROGS	= $(CACHEMGR_EXE)
+PROGS           = squid client
+UTILS           = dnsserver ftpget unlinkd
+SUID_UTILS	= pinger
+CGIPROGS	= cachemgr.cgi
 OBJS	 	= \
-		access_log.o \
 		acl.o \
-		asn.o \
-		@ASYNC_OBJS@ \
 		cache_cf.o \
-		CacheDigest.o \
-		cbdata.o \
 		client_db.o \
 		client_side.o \
 		comm.o \
@@ -92,149 +91,87 @@ OBJS	 	= \
 		disk.o \
 		dns.o \
 		errorpage.o \
-		ETag.o \
 		event.o \
-		fd.o \
+		fdstat.o \
 		filemap.o \
-		forward.o \
 		fqdncache.o \
 		ftp.o \
-		globals.o \
 		gopher.o \
 		hash.o \
-		@HTCP_OBJS@ \
 		http.o \
 		http-anon.o \
-		HttpStatusLine.o \
-		HttpHdrCc.o \
-		HttpHdrRange.o \
-		HttpHdrContRange.o \
-		HttpHeader.o \
-		HttpHeaderTools.o \
-		HttpBody.o \
-		HttpMsg.o \
-		HttpReply.o \
-		HttpRequest.o \
 		icmp.o \
-		icp_v2.o \
-		icp_v3.o \
+		icp.o \
 		ident.o \
-		internal.o \
-		ipc.o \
 		ipcache.o \
 		main.o \
-		mem.o \
-		MemPool.o \
-		MemBuf.o \
 		mime.o \
-		multicast.o \
 		neighbors.o \
 		net_db.o \
-		cache_manager.o \
-		Packer.o \
-		pconn.o \
-		peer_digest.o \
-		peer_select.o \
-		pump.o \
+		objcache.o \
+		pass.o \
+		proto.o \
 		redirect.o \
 		refresh.o \
 		send-announce.o \
-		@SNMP_OBJS@ \
 		ssl.o \
+		stack.o \
 		stat.o \
-		StatHist.o \
-		String.o \
 		stmem.o \
 		store.o \
 		store_clean.o \
-		store_client.o \
-		store_digest.o \
-		store_dir.o \
-		store_key_md5.o \
-		store_log.o \
-		store_rebuild.o \
-		store_swapin.o \
-		store_swapmeta.o \
-		store_swapout.o \
-		string_arrays.o \
+		storetoString.o \
 		tools.o \
 		unlinkd.o \
 		url.o \
-		urn.o \
 		useragent.o \
 		wais.o \
-		whois.o \
 		$(XTRA_OBJS)
 
-SNMP_OBJS	= \
-		snmp_core.o \
-                snmp_oidlist.o \
-                snmp_agent.o  \
-		snmp_config.o \
-		snmp_auth.o
-
-HTCP_OBJS	= htcp.o
-
-ASYNC_OBJS	= \
-		aiops.o \
-		async_io.o
-
 DEFAULTS        = \
-	-DDEFAULT_CONFIG_FILE=\"$(DEFAULT_CONFIG_FILE)\"
+	-DDEFAULT_CONFIG_FILE=\"$(DEFAULT_CONFIG_FILE)\" \
+	-DDEFAULT_FTPGET=\"$(DEFAULT_FTPGET)\" \
+	-DDEFAULT_DNSSERVER=\"$(DEFAULT_DNSSERVER)\" \
+	-DDEFAULT_CACHE_LOG=\"$(DEFAULT_CACHE_LOG)\" \
+	-DDEFAULT_ACCESS_LOG=\"$(DEFAULT_ACCESS_LOG)\" \
+	-DDEFAULT_STORE_LOG=\"$(DEFAULT_STORE_LOG)\" \
+	-DDEFAULT_PID_FILE=\"$(DEFAULT_PID_FILE)\" \
+	-DDEFAULT_SWAP_DIR=\"$(DEFAULT_SWAP_DIR)\" \
+	-DDEFAULT_PINGER=\"$(DEFAULT_PINGER)\" \
+	-DDEFAULT_UNLINKD=\"$(DEFAULT_UNLINKD)\"
 
 all:    squid.conf $(PROGS) $(UTILS) $(SUID_UTILS) $(CGIPROGS)
 
-$(OBJS): $(top_srcdir)/include/version.h
+$(OBJS): ../include/version.h
 
-$(SNMP_OBJS): ../snmplib/libsnmp.a $(top_srcdir)/include/cache_snmp.h
-
-$(SQUID_EXE): $(OBJS)
+squid:	$(OBJS)
 	$(CC) -o $@ $(LDFLAGS) $(OBJS) $(SQUID_LIBS)
 
-globals.o: globals.c Makefile
-	$(CC) -c $< $(CFLAGS) -I$(srcdir) $(DEFAULTS)
+cache_cf.o: cache_cf.c Makefile
+	$(CC) -c $< $(CFLAGS) $(DEFAULTS)
 
-globals.c: globals.h mk-globals-c.pl
-	$(PERL) $(srcdir)/mk-globals-c.pl < $(srcdir)/globals.h > $@
+client:	client.o
+	$(CC) -o $@ $(LDFLAGS) $@.o $(CLIENT_LIBS)
 
-string_arrays.c: enums.h mk-string-arrays.pl
-	$(PERL) $(srcdir)/mk-string-arrays.pl < $(srcdir)/enums.h > $@
+dnsserver: dnsserver.o
+	$(CC) -o $@ $(LDFLAGS) $@.o $(DNSSERVER_LIBS)
 
-$(CLIENT_EXE): client.o
-	$(CC) -o $@ $(LDFLAGS) client.o $(CLIENT_LIBS)
-
-$(DNSSERVER_EXE): dnsserver.o
-	$(CC) -o $@ $(LDFLAGS) dnsserver.o $(DNSSERVER_LIBS)
-
-$(CACHEMGR_EXE): cachemgr.o
+cachemgr.cgi:	cachemgr.o
 	$(CC) -o $@ $(LDFLAGS) cachemgr.o $(CLIENT_LIBS)
 
-$(PINGER_EXE): pinger.o
-	$(CC) -o $@ $(LDFLAGS) pinger.o debug.o globals.o $(PINGER_LIBS)
+ftpget: ftpget.o
+	$(CC) -o $@ $(LDFLAGS) ftpget.o debug.o $(FTPGET_LIBS)
 
-$(UNLINKD_EXE): unlinkd-daemon.o
-	$(CC) $(LDFLAGS) unlinkd-daemon.o -o $@
+pinger: pinger.o
+	$(CC) -o $@ $(LDFLAGS) pinger.o debug.o $(PINGER_LIBS)
 
-unlinkd-daemon.o: unlinkd.c
-	$(CC) -c $(CFLAGS) -DUNLINK_DAEMON $(srcdir)/unlinkd.c -o $@
+unlinkd: unlinkd.c
+	$(CC) $(CFLAGS) -DUNLINK_DAEMON $(srcdir)/unlinkd.c -o $@ $(LDFLAGS)
 
-cache_diff: cache_diff.o debug.o globals.o hash.o store_key_md5.o
-	$(CC) -o $@ $(LDFLAGS) $@.o debug.o globals.o hash.o store_key_md5.o $(STD_APP_LIBS)
-
-test_cache_digest: test_cache_digest.o CacheDigest.o debug.o globals.o hash.o store_key_md5.o
-	$(CC) -o $@ $(LDFLAGS) $@.o CacheDigest.o debug.o globals.o hash.o store_key_md5.o $(STD_APP_LIBS)
-
-cache_cf.o: cf_parser.c
-
-squid.conf cf_parser.c: cf.data cf_gen
-	./cf_gen cf.data
-
-cf_gen: cf_gen.o
-	$(CC) -o $@ cf_gen.o
-
-cf.data: cf.data.pre Makefile
+squid.conf: squid.conf.pre Makefile
 	sed "\
-	s%@DEFAULT_MIME_TABLE@%$(DEFAULT_MIME_TABLE)%g;\
+	s%@DEFAULT_CONFIG_FILE@%$(DEFAULT_CONFIG_FILE)%g;\
+	s%@DEFAULT_FTPGET@%$(DEFAULT_FTPGET)%g;\
 	s%@DEFAULT_DNSSERVER@%$(DEFAULT_DNSSERVER)%g;\
 	s%@DEFAULT_UNLINKD@%$(DEFAULT_UNLINKD)%g;\
 	s%@DEFAULT_PINGER@%$(DEFAULT_PINGER)%g;\
@@ -242,10 +179,7 @@ cf.data: cf.data.pre Makefile
 	s%@DEFAULT_ACCESS_LOG@%$(DEFAULT_ACCESS_LOG)%g;\
 	s%@DEFAULT_STORE_LOG@%$(DEFAULT_STORE_LOG)%g;\
 	s%@DEFAULT_PID_FILE@%$(DEFAULT_PID_FILE)%g;\
-	s%@DEFAULT_SWAP_DIR@%$(DEFAULT_SWAP_DIR)%g;\
-	s%@DEFAULT_ICON_DIR@%$(DEFAULT_ICON_DIR)%g;\
-        s%@DEFAULT_MIB_PATH@%$(DEFAULT_MIB_PATH)%g;\
-	s%@DEFAULT_ERROR_DIR@%$(DEFAULT_ERROR_DIR)%g" < $(srcdir)/cf.data.pre >$@
+	s%@DEFAULT_SWAP_DIR@%$(DEFAULT_SWAP_DIR)%g" < squid.conf.pre >$@
 
 install-mkdirs:
 	-@if test ! -d $(prefix); then \
@@ -316,21 +250,12 @@ install: all install-mkdirs
 			$(RM) -f $(libexecdir)/-$$f; \
 		fi; \
 	done
-	$(INSTALL_FILE) $(srcdir)/mib.txt $(DEFAULT_MIB_PATH)
 	$(INSTALL_FILE) squid.conf $(sysconfdir)/squid.conf.default
 	@if test -f $(sysconfdir)/squid.conf ; then \
 		echo "$@ will not overwrite existing $(sysconfdir)/squid.conf" ; \
 	else \
 		echo "$(INSTALL_FILE) squid.conf $(sysconfdir)"; \
 		$(INSTALL_FILE) squid.conf $(sysconfdir); \
-	fi
-
-	$(INSTALL_FILE) $(srcdir)/mime.conf $(sysconfdir)/mime.conf.default
-	@if test -f $(sysconfdir)/mime.conf ; then \
-		echo "$@ will not overwrite existing $(sysconfdir)/mime.conf" ; \
-	else \
-		echo "$(INSTALL_FILE) $(srcdir)/mime.conf $(sysconfdir)"; \
-		$(INSTALL_FILE) $(srcdir)/mime.conf $(sysconfdir); \
 	fi
 
 install-pinger:
@@ -348,9 +273,8 @@ install-pinger:
 
 clean: 
 	-rm -rf *.o *pure_* core $(PROGS) $(UTILS) $(CGIPROGS) $(SUID_UTILS)
-	-rm -f cf_gen cf_parser.c cf.data globals.c string_arrays.c
 
-distclean:	clean
+realclean:	clean
 	-rm -f Makefile squid.conf squid.conf.pre
 
 tags:
