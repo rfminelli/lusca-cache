@@ -289,7 +289,6 @@ int connectStart(fd, url, request, mime_hdr, entry)
 	squid_error_entry(entry, ERR_NO_FDS, xstrerror());
 	return COMM_ERROR;
     }
-
     data = (ConnectData *) xcalloc(1, sizeof(ConnectData));
     data->entry = entry;
     data->request = request;
