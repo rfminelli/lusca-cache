@@ -513,7 +513,7 @@ void ftpSendRequest(fd, data)
     strcat(buf, data->user);
     strcat(buf, space);
     strcat(buf, data->password);
-    strcat(buf, space);
+    strcat(buf, "\n");
     debug(9, 5, "ftpSendRequest: FD %d: buf '%s'\n", fd, buf);
     data->icp_rwd_ptr = icpWrite(fd,
 	buf,
