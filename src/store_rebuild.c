@@ -273,7 +273,8 @@ storeRebuildFromSwapLog(rebuild_dir * d)
 		 * the cleanup procedure.
 		 */
 		storeExpireNow(e);
-		storeReleaseRequest(e);
+		storeSetPrivateKey(e);
+		EBIT_SET(e->flags, RELEASE_REQUEST);
 		if (e->swap_file_number > -1) {
 		    storeDirMapBitReset(e->swap_file_number);
 		    e->swap_file_number = -1;
@@ -354,7 +355,8 @@ storeRebuildFromSwapLog(rebuild_dir * d)
 	    /* key already exists, this swapfile not being used */
 	    /* junk old, load new */
 	    storeExpireNow(e);
-	    storeReleaseRequest(e);
+	    storeSetPrivateKey(e);
+	    EBIT_SET(e->flags, RELEASE_REQUEST);
 	    if (e->swap_file_number > -1) {
 		storeDirMapBitReset(e->swap_file_number);
 		e->swap_file_number = -1;

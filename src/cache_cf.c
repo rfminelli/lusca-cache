@@ -57,6 +57,7 @@ static const char *const B_GBYTES_STR = "GB";
 static const char *const list_sep = ", \t\n\r";
 
 static void self_destruct(void);
+static void wordlistAdd(wordlist **, const char *);
 
 static void configDoConfigure(void);
 static void parse_refreshpattern(refresh_t **);
@@ -96,7 +97,7 @@ wordlistDestroy(wordlist ** list)
     *list = NULL;
 }
 
-void
+static void
 wordlistAdd(wordlist ** list, const char *key)
 {
     wordlist *p = NULL;

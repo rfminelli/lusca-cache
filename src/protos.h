@@ -89,7 +89,6 @@ extern void aioCheckCallbacks(void);
 extern int parseConfigFile(const char *file_name);
 extern void intlistDestroy(intlist **);
 extern int intlistFind(intlist * list, int i);
-extern void wordlistAdd(wordlist **, const char *);
 extern void wordlistDestroy(wordlist **);
 extern void configFreeMemory(void);
 extern void wordlistCat(const wordlist *, MemBuf * mb);
@@ -154,7 +153,6 @@ extern void commSetDefer(int fd, DEFER * func, void *);
 extern int ignoreErrno(int);
 extern void commCloseAllSockets(void);
 
-
 /*
  * comm_select.c
  */
@@ -164,8 +162,6 @@ extern int comm_poll(int);
 #else
 extern int comm_select(int);
 #endif
-extern void commUpdateReadBits(int, PF *);
-extern void commUpdateWriteBits(int, PF *);
 
 extern void packerToStoreInit(Packer * p, StoreEntry * e);
 extern void packerToMemInit(Packer * p, MemBuf * mb);
@@ -203,9 +199,12 @@ extern int file_read(int, char *, int, off_t, DRCB *, void *);
 extern void disk_init(void);
 extern int diskWriteIsComplete(int);
 
-extern void dnsShutdown(void);
-extern void dnsInit(void);
-extern void dnsSubmit(const char *lookup, HLPCB * callback, void *data);
+extern void dnsShutdownServers(void *);
+extern void dnsShutdownServer(dnsserver_t * dns);
+extern void dnsOpenServers(void);
+extern dnsserver_t *dnsGetFirstAvailable(void);
+extern void dnsStats(StoreEntry *);
+extern void dnsFreeMemory(void);
 
 extern void eventAdd(const char *name, EVH * func, void *arg, double when, int);
 extern void eventAddIsh(const char *name, EVH * func, void *arg, double delta_ish, int);
@@ -633,12 +632,16 @@ extern void fwdUnregister(int fd, FwdState *);
 extern void urnStart(request_t *, StoreEntry *);
 
 extern void redirectStart(clientHttpRequest *, RH *, void *);
-extern void redirectInit(void);
-extern void redirectShutdown(void);
+extern void redirectOpenServers(void);
+extern void redirectShutdownServers(void *);
+extern void redirectStats(StoreEntry *);
 
 extern void authenticateStart(acl_proxy_auth_user *, RH *, void *);
-extern void authenticateInit(void);
-extern void authenticateShutdown(void);
+extern void authenticateOpenServers(void);
+extern void authenticateShutdownServers(void *);
+extern void authenticateStats(StoreEntry *);
+extern int authenticateUnregister(const char *url, void *);
+extern void authenticateFreeMemory(void);
 
 extern void refreshAddToList(const char *, int, time_t, int, time_t);
 extern int refreshCheck(const StoreEntry *, request_t *, time_t delta);
@@ -1066,18 +1069,13 @@ extern peer *carpSelectParent(request_t *);
 #if DELAY_POOLS
 extern int delayClient(clientHttpRequest *);
 extern void delayPoolsInit(void);
-extern EVH delayPoolsUpdate;
+extern void delayPoolsUpdate(int);
 extern int delayMostBytesWanted(const MemObject * mem, int max);
 extern int delayMostBytesAllowed(const MemObject * mem);
 extern void delayBytesIn(delay_id, int qty);
 extern void delaySetStoreClient(StoreEntry * e, void *data, delay_id delay_id);
 extern int delayBytesWanted(delay_id d, int min, int max);
 #endif
-
-extern void helperOpenServers(helper * hlp);
-extern void helperSubmit(helper * hlp, const char *buf, HLPCB * callback, void *data);
-extern void helperStats(StoreEntry * sentry, helper * hlp);
-extern void helperShutdown(helper * hlp);
 
 /*
  * prototypes for system functions missing from system includes

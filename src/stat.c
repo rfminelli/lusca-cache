@@ -76,8 +76,6 @@ static OBJH statAvg5min;
 static OBJH statAvg60min;
 static OBJH statUtilization;
 static OBJH statCountersHistograms;
-static double statRequestHitRatio(int minutes);
-static double statByteHitRatio(int minutes);
 
 #ifdef XMALLOC_STATISTICS
 static void info_get_mallstat(int, int, StoreEntry *);
@@ -466,12 +464,6 @@ info_get(StoreEntry * sentry)
 
     storeAppendPrintf(sentry, "Cache information for %s:\n",
 	appname);
-    storeAppendPrintf(sentry, "\tRequest Hit Ratios:\t5min: %3.1f%%, 60min: %3.1f%%\n",
-	statRequestHitRatio(5),
-	statRequestHitRatio(60));
-    storeAppendPrintf(sentry, "\tByte Hit Ratios:\t5min: %3.1f%%, 60min: %3.1f%%\n",
-	statByteHitRatio(5),
-	statByteHitRatio(60));
     storeAppendPrintf(sentry, "\tStorage Swap size:\t%d KB\n",
 	store_swap_size);
     storeAppendPrintf(sentry, "\tStorage Mem size:\t%d KB\n",
@@ -1266,31 +1258,6 @@ statCPUUsage(int minutes)
     assert(minutes < N_COUNT_HIST);
     return dpercent(CountHist[0].cputime - CountHist[minutes].cputime,
 	tvSubDsec(CountHist[minutes].timestamp, CountHist[0].timestamp));
-}
-
-static double
-statRequestHitRatio(int minutes)
-{
-    assert(minutes < N_COUNT_HIST);
-    return dpercent(CountHist[0].client_http.hits -
-	CountHist[minutes].client_http.hits,
-	CountHist[0].client_http.requests -
-	CountHist[minutes].client_http.requests);
-}
-
-static double
-statByteHitRatio(int minutes)
-{
-    size_t s;
-    size_t c;
-    assert(minutes < N_COUNT_HIST);
-    c = CountHist[0].client_http.kbytes_out.kb - CountHist[minutes].client_http.kbytes_out.kb;
-    s = CountHist[0].server.all.kbytes_in.kb - CountHist[minutes].server.all.kbytes_in.kb;
-    /* size_t might be unsigned */
-    if (c > s)
-    	return dpercent(c - s, c);
-    else
-    	return (-1.0 * dpercent(s - c, c));
 }
 
 #if STAT_GRAPHS

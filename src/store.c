@@ -227,6 +227,7 @@ storeReleaseRequest(StoreEntry * e)
 {
     if (EBIT_TEST(e->flags, RELEASE_REQUEST))
 	return;
+    assert(storeEntryLocked(e));
     debug(20, 3) ("storeReleaseRequest: '%s'\n", storeKeyText(e->key));
     EBIT_SET(e->flags, RELEASE_REQUEST);
     /*
@@ -786,7 +787,10 @@ storeRelease(StoreEntry * e)
 	debug(20, 2) ("storeRelease: Delaying release until store is rebuilt: '%s'\n",
 	    storeUrl(e));
 	storeExpireNow(e);
-	storeReleaseRequest(e);
+	storeSetPrivateKey(e);
+	EBIT_SET(e->flags, RELEASE_REQUEST);
+	/* we must clear ENTRY_CACHABLE if not using storeReleaseRequest() */
+	EBIT_CLR(e->flags, ENTRY_CACHABLE);
 	return;
     }
 #if USE_ASYNC_IO
