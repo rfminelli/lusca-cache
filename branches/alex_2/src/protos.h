@@ -628,9 +628,10 @@ extern void useragentRotateLog(void);
 extern void logUserAgent(const char *, const char *);
 extern peer_t parseNeighborType(const char *s);
 
-extern const char *errorBuildBuf(ErrorState * err, int *len);
+extern HttpResponse *errorBuildResponse(ErrorState * err);
 extern void errorSend(int fd, ErrorState *);
 extern void errorAppendEntry(StoreEntry *, ErrorState *);
+void errorStateFree(ErrorState * err);
 extern void errorInitialize(void);
 extern void errorFree(void);
 extern ErrorState *errorCon(err_type, http_status);

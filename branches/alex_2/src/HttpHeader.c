@@ -136,6 +136,8 @@ httpHeaderInit(HttpHeader *hdr)
     assert(hdr);
     memset(hdr, 0, sizeof(*hdr));
 
+    hdr->packed_size = 1; /* we always need one byte for terminating character */
+
     /* check if pool is ready (no static init in C??) @?@ */
     if (!shortStrings)
 	shortStrings = memPoolCreate(shortStrPoolCount, shortStrPoolCount/10, shortStrSize, "shortStr");
@@ -181,8 +183,6 @@ httpHeaderParse(HttpHeader *hdr, const char *header_start, const char *header_en
 
     assert(hdr);
     assert(header_start && header_end);
-    if (!hdr->packed_size)
-	hdr->packed_size = 1; /* we always need one byte for terminating character */
     /* commonn format headers are "<name>:[ws]<value>" lines delimited by <CRLF> */
     while (field_start < header_end) {
 	const char *field_end = field_start + strcspn(field_start, "\r\n");
@@ -200,12 +200,12 @@ httpHeaderParse(HttpHeader *hdr, const char *header_start, const char *header_en
 }
 
 /*
- * puts all the headers into the buffer
- * does not do overflow checking so check with hdr->size first!
- * asserts that exactly hdr->size bytes are put (including terminating 0)
+ * packs all the fields into the buffer
+ * does not do overflow checking so check with hdr->packed_size first!
+ * asserts that exactly hdr->packed_size bytes are put (including terminating 0)
  */
-void
-httpHeaderPack(const HttpHeader *hdr, char *buf)
+int
+httpHeaderPackInto(const HttpHeader *hdr, char *buf)
 {
     size_t space_left;
     HttpHeaderPos pos = HttpHeaderInitPos;
@@ -213,7 +213,7 @@ httpHeaderPack(const HttpHeader *hdr, char *buf)
     const char *value;
     assert(hdr && buf);
     space_left = hdr->packed_size;
-    /* put all fields one by one */
+    /* pack all fields one by one */
     while (httpHeaderGetField(hdr, &name, &value, &pos)) {
         size_t add_len = strlen(name) + 2 + strlen(value) + 2;
 	assert(space_left > add_len);
@@ -224,6 +224,20 @@ httpHeaderPack(const HttpHeader *hdr, char *buf)
     *buf = '\0';  /* required when no fields are present */
     space_left--;
     assert(!space_left); /* no space left :) */
+    return hdr->packed_size;
+}
+
+/* swaps out headers */
+void
+httpHeaderSwap(HttpHeader *hdr, StoreEntry *e) {
+    HttpHeaderPos pos = HttpHeaderInitPos;
+    const char *name;
+    const char *value;
+    assert(hdr && e);
+    /* swap out all fields one by one */
+    while (httpHeaderGetField(hdr, &name, &value, &pos)) {
+	storeAppendPrintf(e, "%s: %s\r\n", name, value);
+    }
 }
 
 const char *
@@ -362,7 +376,7 @@ httpHeaderAddListField(HttpHeader *hdr, HttpHeaderField *fld)
 
 /* adds a string field */
 const char *
-httpHeaderAddStrField(HttpHeader *hdr, const char *name, const char *value)
+httpHeaderAddStr(HttpHeader *hdr, const char *name, const char *value)
 {
     assert(hdr);
     assert(name);
@@ -373,11 +387,11 @@ httpHeaderAddStrField(HttpHeader *hdr, const char *name, const char *value)
 }
 
 long
-httpHeaderAddIntField(HttpHeader *hdr, const char *name, long value) {
+httpHeaderAddInt(HttpHeader *hdr, const char *name, long value) {
     static char buf[32]; /* 2^64 = 18446744073709551616 */
 
     snprintf(buf, sizeof(buf), "%ld", value);
-    httpHeaderAddStrField(hdr, name, buf);
+    httpHeaderAddStr(hdr, name, buf);
     return value;
 }
 
@@ -385,7 +399,7 @@ httpHeaderAddIntField(HttpHeader *hdr, const char *name, long value) {
 time_t
 httpHeaderAddDate(HttpHeader *hdr, const char *name, time_t value)
 {
-    httpHeaderAddStrField(hdr, name, mkrfc1123(value));
+    httpHeaderAddStr(hdr, name, mkrfc1123(value));
     return value;
 }
 
