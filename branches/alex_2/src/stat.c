@@ -114,14 +114,24 @@ static const char *describeTimestamps(const StoreEntry *);
 static void statAvgTick(void *notused);
 static void statAvgDump(StoreEntry *, int minutes);
 static void statCountersDump(StoreEntry * sentry);
+static void statCounterInit(StatCounters *);
+static void statLogHistInit(StatLogHist *, double, double);
+static int statLogHistBin(StatLogHist *, double);
+static double statLogHistVal(StatLogHist *, double);
+static double statLogHistDeltaMedian(StatLogHist * A, StatLogHist * B);
+static void statLogHistDump(StoreEntry * sentry, StatLogHist * H);
+static OBJH stat_io_get;
+static OBJH stat_objects_get;
+static OBJH stat_vmobjects_get;
+static OBJH info_get;
+static OBJH statFiledescriptors;
+static OBJH statCounters;
+static OBJH statAvg5min;
+static OBJH statAvg60min;
 
 #ifdef XMALLOC_STATISTICS
 static void info_get_mallstat(int, int, StoreEntry *);
 #endif
-
-#define PCONN_HIST_SZ 256
-int client_pconn_hist[PCONN_HIST_SZ];
-int server_pconn_hist[PCONN_HIST_SZ];
 
 /*
  * An hour's worth, plus the 'current' counter
@@ -129,12 +139,6 @@ int server_pconn_hist[PCONN_HIST_SZ];
 #define N_COUNT_HIST 61
 static StatCounters CountHist[N_COUNT_HIST];
 static int NCountHist = 0;
-
-void
-stat_utilization_get(StoreEntry * e)
-{
-    /* MAKE SOMETHING UP */
-}
 
 void
 stat_io_get(StoreEntry * sentry)
@@ -270,7 +274,7 @@ statObjects(StoreEntry * sentry, int vm_or_not)
 	if (vm_or_not && mem == NULL)
 	    continue;
 	if ((++N & 0xFF) == 0) {
-	    debug(18, 3) ("stat_objects_get:  Processed %d objects...\n", N);
+	    debug(18, 3) ("statObjects:  Processed %d objects...\n", N);
 	}
 	storeBuffer(sentry);
 	storeAppendPrintf(sentry, "KEY %s\n", storeKeyText(entry->key));
@@ -323,70 +327,6 @@ void
 stat_vmobjects_get(StoreEntry * e)
 {
     statObjects(e, 1);
-}
-
-void
-server_list(StoreEntry * sentry)
-{
-    dump_peers(sentry, Config.peers);
-}
-
-void
-dump_peers(StoreEntry * sentry, peer * peers)
-{
-    peer *e = NULL;
-    struct _domain_ping *d = NULL;
-    icp_opcode op;
-    if (peers == NULL)
-	storeAppendPrintf(sentry, "There are no neighbors installed.\n");
-    for (e = peers; e; e = e->next) {
-	assert(e->host != NULL);
-	storeAppendPrintf(sentry, "\n%-11.11s: %s/%d/%d\n",
-	    neighborTypeStr(e),
-	    e->host,
-	    e->http_port,
-	    e->icp_port);
-	storeAppendPrintf(sentry, "Status     : %s\n",
-	    neighborUp(e) ? "Up" : "Down");
-	storeAppendPrintf(sentry, "AVG RTT    : %d msec\n", e->stats.rtt);
-	storeAppendPrintf(sentry, "LAST QUERY : %8d seconds ago\n",
-	    (int) (squid_curtime - e->stats.last_query));
-	storeAppendPrintf(sentry, "LAST REPLY : %8d seconds ago\n",
-	    (int) (squid_curtime - e->stats.last_reply));
-	storeAppendPrintf(sentry, "PINGS SENT : %8d\n", e->stats.pings_sent);
-	storeAppendPrintf(sentry, "PINGS ACKED: %8d %3d%%\n",
-	    e->stats.pings_acked,
-	    percent(e->stats.pings_acked, e->stats.pings_sent));
-	storeAppendPrintf(sentry, "FETCHES    : %8d %3d%%\n",
-	    e->stats.fetches,
-	    percent(e->stats.fetches, e->stats.pings_acked));
-	storeAppendPrintf(sentry, "IGNORED    : %8d %3d%%\n",
-	    e->stats.ignored_replies,
-	    percent(e->stats.ignored_replies, e->stats.pings_acked));
-	storeAppendPrintf(sentry, "Histogram of PINGS ACKED:\n");
-	for (op = ICP_INVALID; op < ICP_END; op++) {
-	    if (e->stats.counts[op] == 0)
-		continue;
-	    storeAppendPrintf(sentry, "    %12.12s : %8d %3d%%\n",
-		icp_opcode_str[op],
-		e->stats.counts[op],
-		percent(e->stats.counts[op], e->stats.pings_acked));
-	}
-	if (e->last_fail_time) {
-	    storeAppendPrintf(sentry, "Last failed connect() at: %s\n",
-		mkhttpdlogtime(&(e->last_fail_time)));
-	}
-	if (e->pinglist != NULL)
-	    storeAppendPrintf(sentry, "DOMAIN LIST: ");
-	for (d = e->pinglist; d; d = d->next) {
-	    if (d->do_ping)
-		storeAppendPrintf(sentry, "%s ", d->domain);
-	    else
-		storeAppendPrintf(sentry, "!%s ", d->domain);
-	}
-	storeAppendPrintf(sentry, "Keep-Alive Ratio: %d%%\n",
-	    percent(e->stats.n_keepalives_recv, e->stats.n_keepalives_sent));
-    }
 }
 
 #ifdef XMALLOC_STATISTICS
@@ -646,6 +586,8 @@ statCountersDump(StoreEntry * sentry)
 	(int) f->client_http.kbytes_in.kb);
     storeAppendPrintf(sentry, "client_http.kbytes_out = %d\n",
 	(int) f->client_http.kbytes_out.kb);
+    storeAppendPrintf(sentry, "client_http.svc_time histogram:\n");
+    statLogHistDump(sentry, &f->client_http.svc_time);
     storeAppendPrintf(sentry, "icp.pkts_sent = %d\n",
 	f->icp.pkts_sent);
     storeAppendPrintf(sentry, "icp.pkts_recv = %d\n",
@@ -654,6 +596,10 @@ statCountersDump(StoreEntry * sentry)
 	(int) f->icp.kbytes_sent.kb);
     storeAppendPrintf(sentry, "icp.kbytes_recv = %d\n",
 	(int) f->icp.kbytes_recv.kb);
+    storeAppendPrintf(sentry, "icp.svc_time histogram:\n");
+    statLogHistDump(sentry, &f->icp.svc_time);
+    storeAppendPrintf(sentry, "dns.svc_time histogram:\n");
+    statLogHistDump(sentry, &f->dns.svc_time);
     storeAppendPrintf(sentry, "unlink.requests = %d\n",
 	f->unlink.requests);
     storeAppendPrintf(sentry, "page_faults = %d\n",
@@ -674,6 +620,7 @@ statAvgDump(StoreEntry * sentry, int minutes)
     StatCounters *l;
     double dt;
     double ct;
+    double x;
     assert(N_COUNT_HIST > 1);
     assert(minutes > 0);
     f = &CountHist[0];
@@ -692,6 +639,9 @@ statAvgDump(StoreEntry * sentry, int minutes)
 	XAVG(client_http.kbytes_in.kb));
     storeAppendPrintf(sentry, "client_http.kbytes_out = %f/sec\n",
 	XAVG(client_http.kbytes_out.kb));
+    x = statLogHistDeltaMedian(&l->client_http.svc_time, &f->client_http.svc_time);
+    storeAppendPrintf(sentry, "client_http.median_svc_time = %f seconds\n",
+	x / 1000.0);
     storeAppendPrintf(sentry, "icp.pkts_sent = %f/sec\n",
 	XAVG(icp.pkts_sent));
     storeAppendPrintf(sentry, "icp.pkts_recv = %f/sec\n",
@@ -700,6 +650,12 @@ statAvgDump(StoreEntry * sentry, int minutes)
 	XAVG(icp.kbytes_sent.kb));
     storeAppendPrintf(sentry, "icp.kbytes_recv = %f/sec\n",
 	XAVG(icp.kbytes_recv.kb));
+    x = statLogHistDeltaMedian(&l->icp.svc_time, &f->icp.svc_time);
+    storeAppendPrintf(sentry, "icp.median_svc_time = %f seconds\n",
+	x / 1000000.0);
+    x = statLogHistDeltaMedian(&l->dns.svc_time, &f->dns.svc_time);
+    storeAppendPrintf(sentry, "dns.median_svc_time = %f seconds\n",
+	x / 1000.0);
     storeAppendPrintf(sentry, "unlink.requests = %f/sec\n",
 	XAVG(unlink.requests));
     storeAppendPrintf(sentry, "page_faults = %f/sec\n",
@@ -711,63 +667,58 @@ statAvgDump(StoreEntry * sentry, int minutes)
     storeAppendPrintf(sentry, "cpu_usage = %f%%\n", dpercent(ct, dt));
 }
 
+static void
+statCounterInit(StatCounters * C)
+{
+    C->timestamp = current_time;
+    /*
+     * HTTP svc_time hist is kept in milli-seconds; max of 3 hours.
+     */
+    statLogHistInit(&C->client_http.svc_time, 0.0, 3600000.0 * 3.0);
+    /*
+     * ICP svc_time hist is kept in micro-seconds; max of 1 minute.
+     */
+    statLogHistInit(&C->icp.svc_time, 0.0, 1000000.0 * 60.0);
+    /*
+     * DNS svc_time hist is kept in milli-seconds; max of 10 minutes.
+     */
+    statLogHistInit(&C->dns.svc_time, 0.0, 60000.0 * 10.0);
+}
+
 void
 statInit(void)
 {
     int i;
     debug(18, 5) ("statInit: Initializing...\n");
-    for (i = 0; i < PCONN_HIST_SZ; i++) {
-	client_pconn_hist[i] = 0;
-	server_pconn_hist[i] = 0;
-    }
     memset(CountHist, '\0', N_COUNT_HIST * sizeof(StatCounters));
     for (i = 0; i < N_COUNT_HIST; i++)
-	CountHist[i].timestamp = current_time;
-    Counter.timestamp = current_time;
+	statCounterInit(&CountHist[i]);
+    statCounterInit(&Counter);
     eventAdd("statAvgTick", statAvgTick, NULL, 60);
-}
-
-void
-pconnHistCount(int what, int i)
-{
-    if (i >= PCONN_HIST_SZ)
-	i = PCONN_HIST_SZ - 1;
-    /* what == 0 for client, 1 for server */
-    if (what == 0)
-	client_pconn_hist[i]++;
-    else if (what == 1)
-	server_pconn_hist[i]++;
-    else
-	assert(0);
-}
-
-void
-pconnHistDump(StoreEntry * e)
-{
-    int i;
-    storeAppendPrintf(e,
-	"Client-side persistent connection counts:\n"
-	"\n"
-	"\treq/\n"
-	"\tconn      count\n"
-	"\t----  ---------\n");
-    for (i = 0; i < PCONN_HIST_SZ; i++) {
-	if (client_pconn_hist[i] == 0)
-	    continue;
-	storeAppendPrintf(e, "\t%4d  %9d\n", i, client_pconn_hist[i]);
-    }
-    storeAppendPrintf(e,
-	"\n"
-	"Server-side persistent connection counts:\n"
-	"\n"
-	"\treq/\n"
-	"\tconn      count\n"
-	"\t----  ---------\n");
-    for (i = 0; i < PCONN_HIST_SZ; i++) {
-	if (server_pconn_hist[i] == 0)
-	    continue;
-	storeAppendPrintf(e, "\t%4d  %9d\n", i, server_pconn_hist[i]);
-    }
+    cachemgrRegister("info",
+	"General Runtime Information",
+	info_get, 0);
+    cachemgrRegister("filedescriptors",
+	"Process Filedescriptor Allocation",
+	statFiledescriptors, 0);
+    cachemgrRegister("objects",
+	"All Cache Objects",
+	stat_objects_get, 0);
+    cachemgrRegister("vm_objects",
+	"In-Memory and In-Transit Objects",
+	stat_vmobjects_get, 0);
+    cachemgrRegister("io",
+	"Server-side network read() size histograms",
+	stat_io_get, 0);
+    cachemgrRegister("counters",
+	"Traffic and Resource Counters",
+	statCounters, 0);
+    cachemgrRegister("5min",
+	"5 Minute Average of Counters",
+	statAvg5min, 0);
+    cachemgrRegister("60min",
+	"60 Minute Average of Counters",
+	statAvg60min, 0);
 }
 
 static void
@@ -803,4 +754,104 @@ void
 statAvg60min(StoreEntry * e)
 {
     statAvgDump(e, 60);
+}
+
+static void
+statLogHistInit(StatLogHist * H, double min, double max)
+{
+    H->min = min;
+    H->max = max;
+    H->scale = (STAT_LOG_HIST_BINS - 1) / log(1.0 + max - min);
+}
+
+void
+statLogHistCount(StatLogHist * H, double val)
+{
+    int bin = statLogHistBin(H, val);
+    assert(H->scale != 0.0);	/* make sure it got initialized */
+    assert(0 <= bin && bin < STAT_LOG_HIST_BINS);
+    H->bins[bin]++;
+}
+
+static double
+statLogHistDeltaMedian(StatLogHist * A, StatLogHist * B)
+{
+    StatLogHist D;
+    int i;
+    int s1 = 0;
+    int h = 0;
+    int a = 0;
+    int b = 0;
+    int I = 0;
+    int J = STAT_LOG_HIST_BINS;
+    int K;
+    double f;
+    memset(&D, '\0', sizeof(StatLogHist));
+    for (i = 0; i < STAT_LOG_HIST_BINS; i++) {
+	assert(B->bins[i] >= A->bins[i]);
+	D.bins[i] = B->bins[i] - A->bins[i];
+    }
+    for (i = 0; i < STAT_LOG_HIST_BINS; i++)
+	s1 += D.bins[i];
+    h = s1 >> 1;
+    for (i = 0; i < STAT_LOG_HIST_BINS; i++) {
+	J = i;
+	b += D.bins[J];
+	if (a <= h && h <= b)
+	    break;
+	I = i;
+	a += D.bins[I];
+    }
+    if (s1 == 0)
+	return 0.0;
+    if (a > h) {
+	debug(0, 0) ("statLogHistDeltaMedian: a=%d, h=%d\n", a, h);
+	return 0.0;
+    }
+    if (a >= b) {
+	debug(0, 0) ("statLogHistDeltaMedian: a=%d, b=%d\n", a, b);
+	return 0.0;
+    }
+    if (I >= J) {
+	debug(0, 0) ("statLogHistDeltaMedian: I=%d, J=%d\n", I, J);
+	return 0.0;
+    }
+    f = (h - a) / (b - a);
+    K = f * (double) (J - I) + I;
+    return statLogHistVal(A, K);
+}
+
+static int
+statLogHistBin(StatLogHist * H, double v)
+{
+    int bin;
+    double x = 1.0 + v - H->min;
+    if (x < 0.0)
+	return 0;
+    bin = (int) (H->scale * log(x) + 0.5);
+    if (bin < 0)
+	bin = 0;
+    if (bin > STAT_LOG_HIST_BINS - 1)
+	bin = STAT_LOG_HIST_BINS - 1;
+    return bin;
+}
+
+static double
+statLogHistVal(StatLogHist * H, double bin)
+{
+    return exp(bin / H->scale) + H->min - 1.0;
+}
+
+static void
+statLogHistDump(StoreEntry * sentry, StatLogHist * H)
+{
+    int i;
+    for (i = 0; i < STAT_LOG_HIST_BINS; i++) {
+	if (H->bins[i] == 0)
+	    continue;
+	storeAppendPrintf(sentry, "\t%3d/%f\t%d\n",
+	    i,
+	    statLogHistVal(H, 0.5 + i),
+	    H->bins[i]);
+    }
 }

@@ -448,16 +448,9 @@ modifiedSince(StoreEntry * entry, request_t * request)
     if (entry->lastmod < 0)
 	return 1;
     /* Find size of the object */
-#if 0
-    if (mem->reply->content_length >= 0)
-	object_length = mem->reply->content_length;
-    else
-	object_length = contentLen(entry);
-#else
     object_length = httpReplyContentLen(mem->reply);
     if (object_length < 0)
 	object_length = contentLen(entry);
-#endif
     if (entry->lastmod > request->ims) {
 	debug(33, 3) ("--> YES: entry newer than client\n");
 	return 1;
@@ -574,6 +567,8 @@ clientUpdateCounters(clientHttpRequest * http)
     }
     if (http->request->err_type != ERR_NONE)
 	Counter.client_http.errors++;
+    statLogHistCount(&Counter.client_http.svc_time,
+	tvSubMsec(http->start, current_time));
 }
 
 static void
@@ -890,7 +885,9 @@ clientBuildReplyHeader(clientHttpRequest * http,
     }
     hdr_len = end - hdr_in;
     /* Append X-Cache: */
-    snprintf(ybuf, 4096, "X-Cache: %s", isTcpHit(http->log_type) ? "HIT" : "MISS");
+    snprintf(ybuf, 4096, "X-Cache: %s from %s",
+	isTcpHit(http->log_type) ? "HIT" : "MISS",
+	getMyHostname());
     clientAppendReplyHeader(hdr_out, ybuf, &len, out_sz);
     /* Append Proxy-Connection: */
     if (EBIT_TEST(http->request->flags, REQ_PROXY_KEEPALIVE)) {
@@ -1124,7 +1121,7 @@ clientGetHeadersForIMS(void *data, char *buf, ssize_t size)
 {
     clientHttpRequest *http = data;
     StoreEntry *entry = http->entry;
-    MemObject *mem = entry->mem_obj;
+    MemObject *mem;
 #if 0
     char *reply = NULL;
 #endif
@@ -1134,11 +1131,20 @@ clientGetHeadersForIMS(void *data, char *buf, ssize_t size)
     memFree(MEM_4K_BUF, buf);
     buf = NULL;
     if (size < 0 || entry->store_status == STORE_ABORTED) {
-	debug(33, 1) ("clientGetHeadersForIMS: storeClientCopy failed for '%s'\n",
-	    storeKeyText(entry->key));
-	clientProcessMiss(http);
+	/*
+	 * There are different reasons why we might have size < 0.  One
+	 * being that we failed to open a swapfile.  Another being that
+	 * the request was cancelled from the client-side.  If the client
+	 * cancelled the request, then http->entry will be NULL.
+	 */
+	if (entry != NULL) {
+	    debug(33, 1) ("clientGetHeadersForIMS: storeClientCopy failed for '%s'\n",
+		storeKeyText(entry->key));
+	    clientProcessMiss(http);
+	}
 	return;
     }
+    mem = entry->mem_obj;
     if (mem->reply->sline.status == 0) {
 	if (entry->mem_status == IN_MEMORY) {
 	    clientProcessMiss(http);

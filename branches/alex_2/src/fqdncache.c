@@ -131,7 +131,6 @@ static struct {
     int pending_hits;
     int negative_hits;
     int errors;
-    int avg_svc_time;
     int ghba_calls;		/* # calls to blocking gethostbyaddr() */
 } FqdncacheStats;
 
@@ -469,10 +468,8 @@ fqdncache_dnsHandleRead(int fd, void *data)
 	fatal_dump("fqdncache_dnsHandleRead: bad status");
     if (strstr(dnsData->ip_inbuf, "$end\n")) {
 	/* end of record found */
-	FqdncacheStats.avg_svc_time =
-	    intAverage(FqdncacheStats.avg_svc_time,
-	    tvSubMsec(dnsData->dispatch_time, current_time),
-	    n, FQDNCACHE_AV_FACTOR);
+	statLogHistCount(&Counter.dns.svc_time,
+	    tvSubMsec(dnsData->dispatch_time, current_time));
 	if ((x = fqdncache_parsebuffer(dnsData->ip_inbuf, dnsData)) == NULL) {
 	    debug(35, 0) ("fqdncache_dnsHandleRead: fqdncache_parsebuffer failed?!\n");
 	} else {
@@ -639,6 +636,9 @@ fqdncache_init(void)
 	    (float) FQDN_HIGH_WATER) / (float) 100);
     fqdncache_low = (long) (((float) MAX_FQDN *
 	    (float) FQDN_LOW_WATER) / (float) 100);
+    cachemgrRegister("fqdncache",
+	"FQDN Cache Stats and Contents",
+	fqdnStats, 0);
 }
 
 /* clean up the pending entries in dnsserver */
@@ -729,8 +729,6 @@ fqdnStats(StoreEntry * sentry)
 	FqdncacheStats.misses);
     storeAppendPrintf(sentry, "Blocking calls to gethostbyaddr(): %d\n",
 	FqdncacheStats.ghba_calls);
-    storeAppendPrintf(sentry, "dnsserver avg service time: %d msec\n",
-	FqdncacheStats.avg_svc_time);
     storeAppendPrintf(sentry, "FQDN Cache Contents:\n\n");
 
     next = (fqdncache_entry *) hash_first(fqdn_table);
@@ -747,6 +745,7 @@ fqdnStats(StoreEntry * sentry)
 	    (int) f->name_count);
 	for (k = 0; k < (int) f->name_count; k++)
 	    storeAppendPrintf(sentry, " %s", f->names[k]);
+	storeAppendPrintf(sentry, "\n");
     }
 }
 

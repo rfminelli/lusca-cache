@@ -524,8 +524,6 @@ httpHeaderPackInto(const HttpHeader *hdr, Packer *p)
     const HttpHeaderEntry *e;
     assert(hdr && p);
     tmp_debug(here) ("packing hdr: %p\n", hdr);
-    /* add terminating character (required when no fields are present) */
-    packerAppend(p, "", 1);
     /* pack all entries one by one */
     while ((e = httpHeaderGetEntry(hdr, &pos))) {
 	httpHeaderEntryPackInto(e, p);
@@ -875,7 +873,8 @@ httpHeaderIdByName(const char *name, int name_len, const field_attrs_t *attrs, i
 	if (mask < 0 || EBIT_TEST(mask, i)) {
 	    if (name_len >= 0 && name_len != attrs[i].name_len)
 		continue;
-	    if (!strncasecmp(name, attrs[i].name, attrs[i].name_len+1))
+	    if (!strncasecmp(name, attrs[i].name, 
+		name_len < 0 ? attrs[i].name_len+1 : name_len))
 		return i;
 	}
     }
@@ -1278,28 +1277,47 @@ static void
 httpSccParseInit(HttpScc *scc, const char *str)
 {
     const char *item;
+    const char *p; /* '=' parameter */
     const char *pos = NULL;
+    int type;
     int ilen;
     assert(scc && str);
 
     /* iterate through comma separated list */
     while(strListGetItem(str, ',', &item, &ilen, &pos)) {
-	if (ilen > 7 && !strncasecmp(item, "max-age", 7) &&
-	    (item[7] == '=' || isspace(item[7]))) {
-	    item += xcountws(item+7);
-	    item++; /* skip = */
-	    scc->max_age = (time_t) atoi(item);
-	} else {
-	    /* update mask */
-	    const int type = httpHeaderIdByName(item, ilen,
-		SccAttrs, SCC_ENUM_END, -1);
-	    if (type >= 0)
-		EBIT_SET(scc->mask, type);
-	    else
-		debug(55, 0) ("unknown scc type: near '%s' in '%s'\n",
-		    item, str);
+	/* strip '=' statements @?@ */
+	if ((p = strchr(item, '=')) && (p-item < ilen))
+	    ilen = p++ - item;
+	/* find type */
+	type = httpHeaderIdByName(item, ilen,
+	    SccAttrs, SCC_ENUM_END, -1);
+	if (type < 0) {
+	    debug(55, 0) ("cc: unknown cache-directive: near '%s' in '%s'\n", item, str);
+	    continue;
+	}
+	if (EBIT_TEST(scc->mask, type)) {
+	    debug(55, 0) ("cc: ignoring duplicate cache-directive: near '%s' in '%s'\n", item, str);
+	    continue;
+	}
+	/* update mask */
+        EBIT_SET(scc->mask, type);
+	/* post-processing special cases */
+	switch (type) {
+	    case SCC_MAX_AGE:
+		if (p)
+		    scc->max_age = (time_t) atoi(p);
+		if (scc->max_age < 0) {
+		    debug(55, 0) ("scc: invalid max-age specs near '%s'\n", item);
+		    scc->max_age = -1;
+		    EBIT_CLR(scc->mask, type);
+		}
+		break;
+	    default:
+		/* note that we ignore most of '=' specs @?@ */
+		break;
 	}
     }
+    return;
 }
 
 static void

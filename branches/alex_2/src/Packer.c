@@ -44,7 +44,7 @@
 /* local constants and vars */
 
 /*
- * We do have one potential problem here. Both append_f and printf_f types
+ * We do have one potential problem here. Both append_f and vprintf_f types
  * cannot match real functions precisely (at least because of the difference in
  * the type of the first parameter). Thus, we have to use type cast. If somebody
  * changes the prototypes of real functions, Packer will not notice that because
@@ -55,16 +55,13 @@
  * warning (e.g., "warning: assignment from incompatible pointer type").
  */
 
-
+/* append()'s */
 static void (*const store_append)(StoreEntry *, const char *, int) = &storeAppend;
 static void (*const memBuf_append)(MemBuf *, const char *, mb_size_t) = &memBufAppend;
-#ifdef __STDC__
-static void (*const store_printf)(StoreEntry *, const char *, ...) = &storeAppendPrintf;
-static void (*const memBuf_printf)(MemBuf *, const char *, ...) = &memBufPrintf;
-#else
-static void (*const store_printf)() = &storeAppendPrintf;
-static void (*const memBuf_printf)() = &memBufPrintf;
-#endif
+
+/* vprintf()'s */
+static void (*const store_vprintf)(StoreEntry *, const char *, va_list ap) = &storeAppendVPrintf;
+static void (*const memBuf_vprintf)(MemBuf *, const char *, va_list ap) = &memBufVPrintf;
 
 
 void
@@ -72,7 +69,7 @@ packerToStoreInit(Packer *p, StoreEntry *e)
 {
     assert(p && e);
     p->append = (append_f)store_append;
-    p->printf = (printf_f)storeAppendPrintf;
+    p->vprintf = (vprintf_f)storeAppendVPrintf;
     p->real_handler = e;
 }
 
@@ -81,7 +78,7 @@ packerToMemInit(Packer *p, MemBuf *mb)
 {
     assert(p && mb);
     p->append = (append_f)memBuf_append;
-    p->printf = (printf_f)memBuf_printf;
+    p->vprintf = (vprintf_f)memBuf_vprintf;
     p->real_handler = mb;
 }
 
@@ -91,7 +88,7 @@ packerClean(Packer *p)
    assert(p);
    /* it is not really necessary to do this, but, just in case... */
    p->append = NULL;
-   p->printf = NULL;
+   p->vprintf = NULL;
    p->real_handler = NULL;
 }
 
@@ -123,7 +120,8 @@ packerPrintf(va_alist)
     fmt = va_arg(args, char *);
 #endif
     assert(p);
-    assert(p->real_handler && p->printf);
-    p->printf(p->real_handler, fmt, args);
+    assert(p->real_handler && p->vprintf);
+    tmp_debug(here) ("printf: fmt: '%s'\n", fmt);
+    p->vprintf(p->real_handler, fmt, args);
     va_end(args);
 }

@@ -249,6 +249,7 @@ struct _SquidConfig {
     wordlist *hierarchy_stoplist;
     wordlist *mcast_group_list;
     wordlist *dns_testname_list;
+    wordlist *dns_nameservers;
     relist *cache_stop_relist;
     peer *peers;
     int npeers;
@@ -900,7 +901,7 @@ struct _request_t {
 
 struct _cachemgr_passwd {
     char *passwd;
-    long actions;
+    wordlist *actions;
     struct _cachemgr_passwd *next;
 };
 
@@ -944,6 +945,13 @@ struct _ErrorState {
     char *request_hdrs;
 };
 
+struct _StatLogHist {
+    int bins[STAT_LOG_HIST_BINS];
+    double min;
+    double max;
+    double scale;
+};
+
 struct _StatCounters {
     struct {
 	int requests;
@@ -952,7 +960,14 @@ struct _StatCounters {
 	kb_t kbytes_in;
 	kb_t kbytes_out;
 	kb_t hit_kbytes_out;
+	StatLogHist svc_time;
     } client_http;
+    struct {
+	int requests;
+	int errors;
+	kb_t kbytes_in;
+	kb_t kbytes_out;
+    } server;
     struct {
 	int pkts_sent;
 	int pkts_recv;
@@ -960,10 +975,14 @@ struct _StatCounters {
 	int hits_recv;
 	kb_t kbytes_sent;
 	kb_t kbytes_recv;
+	StatLogHist svc_time;
     } icp;
     struct {
 	int requests;
     } unlink;
+    struct {
+	StatLogHist svc_time;
+    } dns;
     int page_faults;
     int select_loops;
     double cputime;

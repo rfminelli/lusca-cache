@@ -127,7 +127,7 @@ extern int file_open(const char *path, int mode, FOCB *, void *callback_data, vo
 extern void file_close(int fd);
 extern void file_write(int, off_t, void *, int len, DWCB *, void *, FREE *);
 extern int file_read(int, char *, int, off_t, DRCB *, void *);
-extern int disk_init(void);
+extern void disk_init(void);
 extern int diskWriteIsComplete(int);
 
 extern void dnsShutdownServers(void);
@@ -149,6 +149,7 @@ extern void fd_bytes(int fd, int len, unsigned int type);
 extern void fdFreeMemory(void);
 extern void fdDumpOpen(void);
 extern int fdNFree(void);
+extern void fdAdjustReserved(void);
 
 extern fileMap *file_map_create(int);
 extern int file_map_allocate(fileMap *, int);
@@ -198,13 +199,11 @@ extern HASHHASH hash4;
 
 extern int httpCachable(method_t);
 extern void httpStart(request_t *, StoreEntry *, peer *);
-#if 0
-extern void httpParseReplyHeaders(const char *, struct _http_reply *);
-#else
 extern void httpParseReplyHeaders(const char *, http_reply *);
-#endif
 extern void httpProcessReplyHeader(HttpStateData *, const char *, int);
+#if 0
 extern void httpReplyHeaderStats(StoreEntry *);
+#endif
 extern size_t httpBuildRequestHeader(request_t * request,
     request_t * orig_request,
     StoreEntry * entry,
@@ -215,12 +214,15 @@ extern size_t httpBuildRequestHeader(request_t * request,
     int flags);
 extern int httpAnonAllowed(const char *line);
 extern int httpAnonDenied(const char *line);
+#if 0
 extern char *httpReplyHeader(double ver,
     http_status status,
     char *ctype,
     int clen,
     time_t lmt,
     time_t expires);
+#endif
+extern void httpInit(void);
 
 
 extern void icmpOpen(void);
@@ -320,6 +322,7 @@ extern int neighborUp(const peer * e);
 extern void peerDestroy(peer * e);
 extern char *neighborTypeStr(const peer * e);
 extern void peerCheckConnectStart(peer *);
+extern void dump_peers(StoreEntry *, peer *);
 
 extern void netdbInit(void);
 
@@ -333,10 +336,9 @@ extern int netdbHostHops(const char *host);
 extern int netdbHostRtt(const char *host);
 extern void netdbUpdatePeer(request_t *, peer * e, int rtt, int hops);
 
-extern void objcachePasswdAdd(cachemgr_passwd **, char *, wordlist *);
-extern void objcachePasswdDestroy(cachemgr_passwd ** a);
-extern void objcacheStart(int fd, StoreEntry *);
-extern void objcacheInit(void);
+extern void cachemgrStart(int fd, StoreEntry *);
+extern void cachemgrRegister(const char *, const char *, OBJH *, int);
+extern void cachemgrInit(void);
 
 extern void peerSelect(request_t *, StoreEntry *, PSC *, PSC *, void *data);
 extern peer *peerGetSomeParent(request_t *, hier_code *);
@@ -376,6 +378,8 @@ extern void identStart(int, ConnStateData *, IDCB * callback);
 extern void statInit(void);
 extern void pconnHistCount(int, int);
 extern int statMemoryAccounted(void);
+extern void statLogHistCount(StatLogHist * H, double val);
+
 
 extern void memInit(void);
 extern void memFreeMemory(void);
@@ -385,7 +389,6 @@ extern void memFree4K(void *);
 extern void memFree8K(void *);
 extern void memFreeDISK(void *);
 extern int memInUse(mem_type);
-extern OBJH memStats;
 
 extern int stmemFreeDataUpto(mem_hdr *, int);
 extern void stmemAppend(mem_hdr *, const char *, int);
@@ -450,6 +453,7 @@ extern void storeAppendPrintf(StoreEntry *, const char *,...);
 #else
 extern void storeAppendPrintf();
 #endif
+extern void storeAppendVPrintf(StoreEntry *, const char *, va_list ap);
 extern int storeCheckCachable(StoreEntry * e);
 extern void storeUnlinkFileno(int fileno);
 extern void storeSetPrivateKey(StoreEntry *);
@@ -511,7 +515,7 @@ extern int storeVerifyCacheDirs(void);
 extern int storeDirWriteCleanLogs(int reopen);
 extern int storeDirValidFileno(int fn);
 extern int storeFilenoBelongsHere(int, int, int, int);
-
+extern OBJH storeDirStats;
 
 /*
  * store_swapmeta.c
@@ -623,23 +627,6 @@ void errorStateFree(ErrorState * err);
 extern void errorInitialize(void);
 extern void errorFree(void);
 extern ErrorState *errorCon(err_type, http_status);
-
-extern OBJH stat_io_get;
-extern OBJH stat_objects_get;
-extern OBJH stat_vmobjects_get;
-extern OBJH stat_utilization_get;
-extern OBJH statFiledescriptors;
-extern OBJH log_enable;
-extern OBJH info_get;
-extern OBJH server_list;
-extern OBJH neighborDumpNonPeers;
-extern OBJH dump_config;
-extern OBJH storeDirStats;
-extern OBJH pconnHistDump;
-extern void dump_peers(StoreEntry *, peer *);
-extern OBJH statCounters;
-extern OBJH statAvg5min;
-extern OBJH statAvg60min;
 
 extern void pconnPush(int, const char *host, u_short port);
 extern int pconnPop(const char *host, u_short port);

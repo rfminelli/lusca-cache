@@ -67,17 +67,17 @@ typedef struct _Packer Packer;
 typedef void (*append_f)(void *, const char *buf, int size);
 
 #ifdef __STDC__
-typedef void (*printf_f)(void *, const char *fmt, ...);
+typedef void (*vprintf_f)(void *, const char *fmt, ...);
 #else
-typedef void (*printf_f)();
+typedef void (*vprintf_f)();
 #endif
 
 
 struct _Packer {
     /* protected, use interface functions instead */
     append_f append;
-    printf_f printf;
-    void *real_handler; /* first parameter to real append and printf */
+    vprintf_f vprintf;
+    void *real_handler; /* first parameter to real append and vprintf */
 };
 
 

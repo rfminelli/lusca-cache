@@ -59,6 +59,9 @@ void
 httpStatusLinePackInto(const HttpStatusLine *sline, Packer *p)
 {
     assert(sline && p);
+    tmp_debug(here) ("packing sline %p using %p:\n", sline, p);
+    tmp_debug(here) (HttpStatusLineFormat, sline->version, sline->status,
+	sline->reason ? sline->reason : httpStatusString(sline->status));
     packerPrintf(p, HttpStatusLineFormat,
 	sline->version, sline->status, 
 	sline->reason ? sline->reason : httpStatusString(sline->status));

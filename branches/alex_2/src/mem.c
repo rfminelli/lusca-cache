@@ -49,6 +49,13 @@ typedef struct {
 
 static memData MemData[MEM_MAX];
 
+static void * stackPop(Stack * s);
+static int stackFull(Stack * s);
+static int stackEmpty(Stack * s);
+static void stackPush(Stack * s, void *p);
+static void memDataInit(mem_type , const char *, size_t , int );
+static OBJH memStats;
+
 static int
 stackEmpty(Stack * s)
 {
@@ -228,6 +235,9 @@ memInit(void)
 	 */
 	assert(m->size);
     }
+    cachemgrRegister("mem",
+	"Memory Utilization",
+	memStats, 0);
 }
 
 void
@@ -246,7 +256,7 @@ memFreeMemory(void)
     }
 }
 
-void
+static void
 memStats(StoreEntry * sentry)
 {
     mem_type t;
