@@ -1,4 +1,5 @@
 #include "squid.h"
+#include "HttpRequest.h" /* @?@ -> structs.h */
 
 static void icpLogIcp(icpUdpData *);
 static void icpHandleIcpV2(int, struct sockaddr_in, char *, int);

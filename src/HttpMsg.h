@@ -30,18 +30,15 @@
 #ifndef _HTTP_MSG_H_
 #define _HTTP_MSG_H_
 
-/* generic http message (common portion of http Request and Reply)
+#include "IOBuffer.h" /* @?@ -> structs.h */
+#include "HttpConn.h" /* @?@ -> structs.h */
+#include "HttpHeader.h" /* @?@ -> structs.h */
+
+/* generic http message (common portion of http Request and Reply) */
 struct _HttpMsg {
-    /* public, writable (using corresponding interfaces) */
-    HttpHeader *header;
-    HttpConn *conn;    /* the connection this came from */
-
-    /* protected, do not use these, use interface functions instead */
-    IOBuffer *buf;     /* comm | buf | store */
-    StoreEntry *body;  /* body (if any) is always passed via store */
+    /* common fields with http reply (hack) */
+#include "HttpMsgHack.h"
 };
-
-typedef struct _HttpMsg HttpMsg;
 
 /* create/destroy */
 extern HttpMsg *httpMsgCreate();
@@ -49,6 +46,9 @@ extern void httpMsgDestroy(HttpMsg *msg);
 
 /* parses a message initializing headers and such */
 extern int httpMsgParse(HttpMsg *msg, const char *buf);
+
+/* total size of the message (first_line + header + body) */
+extern size_t httpMsgGetTotalSize(HttpMsg *msg);
 
 /* puts report on current header usage and other stats into a static string */
 extern const char *httpMsgReport();

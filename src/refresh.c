@@ -34,6 +34,8 @@
 #endif
 
 #include "squid.h"
+#include "HttpRequest.h"  /* @?@ -> structs.h */
+
 
 /*
  * Defaults:
@@ -58,6 +60,7 @@ refreshCheck(const StoreEntry * entry, const request_t * request, time_t delta)
     time_t max = REFRESH_DEFAULT_MAX;
     const char *pattern = ".";
     time_t age;
+    time_t max_age;
     int factor;
     time_t check_time = squid_curtime + delta;
     debug(22, 3) ("refreshCheck: '%s'\n", storeUrl(entry));
@@ -77,9 +80,10 @@ refreshCheck(const StoreEntry * entry, const request_t * request, time_t delta)
     debug(22, 3) ("refreshCheck: Matched '%s %d %d%% %d'\n",
 	pattern, (int) min, pct, (int) max);
     age = check_time - entry->timestamp;
-    debug(22, 3) ("refreshCheck: age = %d\n", (int) age);
-    if (request->max_age > -1) {
-	if (age > request->max_age) {
+    max_age = httpHeaderGetMaxAge(&request->header);
+    debug(22, 3) ("refreshCheck: age = %d, max_age: \n", (int)age, (int)max_age);
+    if (max_age > -1) {
+	if (age > max_age) {
 	    debug(22, 3) ("refreshCheck: YES: age > client-max-age\n");
 	    return 1;
 	}

@@ -30,6 +30,9 @@
  */
 
 #include "squid.h"
+#include "HttpConn.h"     /* @?@ -> structs.h */
+#include "HttpRequest.h"  /* @?@ -> structs.h */
+#include "HttpReply.h"    /* @?@ -> structs.h */
 
 #define stackSize(S) ((S)->top - (S)->base)
 
@@ -157,12 +160,17 @@ memInit(void)
     memDataInit(MEM_CACHEINFO, "cacheinfo", sizeof(cacheinfo), 0);
     memDataInit(MEM_CACHEMGR_PASSWD, "cachemgr_passwd",
 	sizeof(cachemgr_passwd), 0);
+#if OLD_CODE
     memDataInit(MEM_CLIENTHTTPREQUEST, "clientHttpRequest",
 	sizeof(clientHttpRequest), 0);
+    memDataInit(MEM_HTTP_REPLY, "http_reply", sizeof(http_reply), 0);
+#else
+    memDataInit(MEM_HTTPREQUEST, "HttpRequest", sizeof(HttpRequest), 0);
+    memDataInit(MEM_HTTPREPLY, "HttpReply", sizeof(HttpReply), 0);
+#endif /* OLD_CODE */
     memDataInit(MEM_CLOSE_HANDLER, "close_handler", sizeof(close_handler), 0);
     memDataInit(MEM_COMMWRITESTATEDATA, "CommWriteStateData",
 	sizeof(CommWriteStateData), 0);
-    memDataInit(MEM_CONNSTATEDATA, "ConnStateData", sizeof(ConnStateData), 0);
     memDataInit(MEM_DISK_BUF, "Disk I/O Buffer", DISK_PAGE_SIZE, 200);
     memDataInit(MEM_DLINK_LIST, "dlink_list", sizeof(dlink_list), 10);
     memDataInit(MEM_DLINK_NODE, "dlink_node", sizeof(dlink_node), 10);
@@ -180,8 +188,12 @@ memInit(void)
     memDataInit(MEM_HASH_TABLE, "hash_table", sizeof(hash_table), 0);
     memDataInit(MEM_HIERARCHYLOGENTRY, "HierarchyLogEntry",
 	sizeof(HierarchyLogEntry), 0);
+#if OLD_CODE
+    memDataInit(MEM_CONNSTATEDATA, "ConnStateData", sizeof(ConnStateData), 0);
     memDataInit(MEM_HTTPSTATEDATA, "HttpStateData", sizeof(HttpStateData), 0);
-    memDataInit(MEM_HTTP_REPLY, "http_reply", sizeof(http_reply), 0);
+else
+    memDataInit(MEM_HTTPCONN, "HttpConn", sizeof(HttpConn), 0);
+#endif
     memDataInit(MEM_ICPUDPDATA, "icpUdpData", sizeof(icpUdpData), 0);
     memDataInit(MEM_ICP_COMMON_T, "icp_common_t", sizeof(icp_common_t), 0);
     memDataInit(MEM_ICP_PING_DATA, "icp_ping_data", sizeof(icp_ping_data), 0);

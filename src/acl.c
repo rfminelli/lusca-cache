@@ -30,6 +30,7 @@
  */
 
 #include "squid.h"
+#include "HttpRequest.h" /* @?@ -> structs.h */
 
 #if defined(USE_BIN_TREE)
 #include "tree.h"
@@ -1086,12 +1087,14 @@ static int
 aclMatchProxyAuth(struct _acl_proxy_auth *p, aclCheck_t * checklist)
 {
     LOCAL_ARRAY(char, sent_user, ICP_IDENT_SZ);
-    char *s;
+    const char *s;
     char *cleartext;
     char *sent_auth;
     char *passwd = NULL;
     hash_link *hashr = NULL;
-    s = mime_get_header(checklist->request->headers, "Proxy-authorization:");
+    HttpRequest RRR;
+    httpHeaderGetStr(&RRR.header, "", NULL);
+    s = httpHeaderGetStr(&checklist->request->header, "Proxy-authorization", NULL);
     if (s == NULL)
 	return 0;
     if (strlen(s) < SKIP_BASIC_SZ)
@@ -1492,7 +1495,7 @@ aclChecklistCreate(const struct _acl_access *A,
      * pointer, so lock it.
      */
     cbdataLock(A);
-    checklist->request = requestLink(request);
+    checklist->request = requestUse(request);
     checklist->src_addr = src_addr;
     for (i = 0; i < ACL_ENUM_MAX; i++)
 	checklist->state[i] = ACL_LOOKUP_NONE;

@@ -105,6 +105,7 @@
  */
 
 #include "squid.h"
+#include "HttpRequest.h"  /* @?@ -> structs.h */
 
 typedef struct {
     int fd;
@@ -112,7 +113,7 @@ typedef struct {
     method_t method;
     char *relayhost;
     int relayport;
-    char *request_hdr;
+    HttpHeader *request_hdr;
     char request[MAX_URL];
 } WaisStateData;
 
@@ -256,11 +257,13 @@ waisSendRequest(int fd, void *data)
 {
     WaisStateData *waisState = data;
     int len = strlen(waisState->request) + 4;
+    int l = 0;
     char *buf = NULL;
     const char *Method = RequestMethodStr[waisState->method];
     debug(24, 5) ("waisSendRequest: FD %d\n", fd);
     if (Method)
 	len += strlen(Method);
+#ifdef OLD_CODE
     if (waisState->request_hdr)
 	len += strlen(waisState->request_hdr);
     buf = xcalloc(1, len + 1);
@@ -269,6 +272,22 @@ waisSendRequest(int fd, void *data)
 	    waisState->request_hdr);
     else
 	snprintf(buf, len + 1, "%s %s\r\n", Method, waisState->request);
+#else
+    /* @?@ if efficciency is desired, remember and use length for all trhee components */
+    if (waisState->request_hdr) {
+        l = len;
+	len += waisState->request_hdr->packed_size;
+    }
+    buf = xcalloc(1, len + 1);
+    strcat(buf, Method);
+    strcat(buf, " ");
+    strcat(buf, waisState->request);
+    if (waisState->request_hdr) {
+        strcat(buf, " ");
+	httpHeaderPack(waisState->request_hdr, buf + l + 1);
+    }
+    strcat(buf, "\r\n");
+#endif
     debug(24, 6) ("waisSendRequest: buf: %s\n", buf);
     comm_write(fd, buf, len, waisSendComplete, waisState, xfree);
     if (EBIT_TEST(waisState->entry->flag, ENTRY_CACHABLE))
@@ -310,7 +329,7 @@ waisStart(request_t * request, StoreEntry * entry)
     waisState->method = method;
     waisState->relayhost = Config.Wais.relayHost;
     waisState->relayport = Config.Wais.relayPort;
-    waisState->request_hdr = request->headers;
+    waisState->request_hdr = &request->header;
     waisState->fd = fd;
     waisState->entry = entry;
     xstrncpy(waisState->request, url, MAX_URL);
@@ -354,7 +373,7 @@ waisConnectDone(int fd, int status, void *data)
 static void
 waisAbort(void *data)
 {
-    HttpStateData *waisState = data;
+    WaisStateData *waisState = data;
     debug(24, 1) ("waisAbort: %s\n", storeUrl(waisState->entry));
     comm_close(waisState->fd);
 }

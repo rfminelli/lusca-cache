@@ -1,4 +1,5 @@
 #include "squid.h"
+#include "HttpRequest.h" /* @?@ -> structs.h */
 
 /* Currently Harvest cached-2.x uses ICP_VERSION_3 */
 void

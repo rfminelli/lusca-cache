@@ -104,6 +104,7 @@
  */
 
 #include "squid.h"
+#include "HttpRequest.h" /* @?@ -> structs.h */
 
 /* count mcast group peers every 15 minutes */
 #define MCAST_COUNT_RATE 900
@@ -398,7 +399,7 @@ neighborsUdpPing(request_t * request,
     void *callback_data,
     int *exprep)
 {
-    char *host = request->host;
+    const char *host = request->host;
     const char *url = storeUrl(entry);
     MemObject *mem = entry->mem_obj;
     const ipcache_addrs *ia = NULL;
@@ -598,13 +599,13 @@ neighborDumpNonPeers(StoreEntry * sentry)
  * from being used
  */
 static int
-ignoreMulticastReply(peer * p, MemObject * mem)
+ignoreMulticastReply(peer * p, request_t * request)
 {
     if (p == NULL)
 	return 0;
     if (!EBIT_TEST(p->options, NEIGHBOR_MCAST_RESPONDER))
 	return 0;
-    if (peerHTTPOkay(p, mem->request))
+    if (peerHTTPOkay(p, request))
 	return 0;
     return 1;
 }
@@ -620,6 +621,7 @@ neighborsUdpAck(const char *url, icp_common_t * header, const struct sockaddr_in
 {
     peer *p = NULL;
     MemObject *mem = entry->mem_obj;
+    HttpRequest *request = NULL;
     peer_t ntype = PEER_NONE;
     char *opcode_d;
     icp_opcode opcode = (icp_opcode) header->opcode;
@@ -653,9 +655,11 @@ neighborsUdpAck(const char *url, icp_common_t * header, const struct sockaddr_in
     }
     debug(15, 3) ("neighborsUdpAck: %s for '%s' from %s \n",
 	opcode_d, url, p ? p->host : "source");
+    request = mem->pending_request;
+    assert(request);
     if (p)
-	ntype = neighborType(p, mem->request);
-    if (ignoreMulticastReply(p, mem)) {
+	ntype = neighborType(p, request);
+    if (ignoreMulticastReply(p, request)) {
 	neighborCountIgnored(p, opcode);
     } else if (opcode == ICP_SECHO) {
 	/* Received source-ping reply */
@@ -902,14 +906,14 @@ peerCountMcastPeersStart(void *data)
     p->mcast.flags &= ~PEER_COUNT_EVENT_PENDING;
     snprintf(url, MAX_URL, "http://%s/", inet_ntoa(p->in_addr.sin_addr));
     fake = storeCreateEntry(url, url, 0, METHOD_GET);
-    psstate->request = requestLink(urlParse(METHOD_GET, url));
+    psstate->request = requestUse(urlParse(METHOD_GET, url));
     psstate->entry = fake;
     psstate->callback = NULL;
     psstate->fail_callback = NULL;
     psstate->callback_data = p;
     psstate->icp.start = current_time;
     mem = fake->mem_obj;
-    mem->request = requestLink(psstate->request);
+    mem->pending_request = requestUse(psstate->request);
     mem->start_ping = current_time;
     mem->icp_reply_callback = peerCountHandleIcpReply;
     mem->ircb_data = psstate;
@@ -947,8 +951,8 @@ peerCountMcastPeersDone(void *data)
 	p->mcast.avg_n_members);
     p->mcast.n_replies_expected = (int) p->mcast.avg_n_members;
     fake->store_status = STORE_ABORTED;
-    requestUnlink(fake->mem_obj->request);
-    fake->mem_obj->request = NULL;
+    requestUnlink(fake->mem_obj->pending_request);
+    fake->mem_obj->pending_request = NULL;
     storeReleaseRequest(fake);
     storeUnlockObject(fake);
     requestUnlink(psstate->request);

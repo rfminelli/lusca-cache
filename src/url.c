@@ -30,6 +30,7 @@
  */
 
 #include "squid.h"
+#include "HttpRequest.h" /* @?@ -> structs.h */
 
 const char *RequestMethodStr[] =
 {
@@ -272,6 +273,7 @@ urlParse(method_t method, char *url)
 	    *t = '\0';
     }
 #endif
+#ifdef OLD_CODE
     request = memAllocate(MEM_REQUEST_T, 1);
     request->method = method;
     request->protocol = protocol;
@@ -281,6 +283,10 @@ urlParse(method_t method, char *url)
     xstrncpy(request->urlpath, urlpath, MAX_URL);
     request->max_age = -1;
     request->max_forwards = -1;
+#else
+    request = httpRequestCreate();
+    httpRequestSetUri(request, method, protocol, host, port, login, urlpath);
+#endif
     return request;
 }
 
@@ -289,12 +295,18 @@ urnParse(method_t method, char *urn)
 {
     request_t *request = NULL;
     debug(50, 5) ("urnParse: %s\n", urn);
+#ifdef OLD_CODE
     request = memAllocate(MEM_REQUEST_T, 1);
     request->method = method;
     request->protocol = PROTO_URN;
     xstrncpy(request->urlpath, &urn[4], MAX_URL);
     request->max_age = -1;
     request->max_forwards = -1;
+#else
+    request = httpRequestCreate();
+    httpRequestSetUri(request, method, PROTO_URN, 
+	NULL/*host*/, -1/*port*/, NULL/*login*/, urn+4);
+#endif
     return request;
 }
 
@@ -378,25 +390,45 @@ urlClean(char *dirty)
     return clean;
 }
 
-
-request_t *
-requestLink(request_t * request)
+/*
+ * The following two functions are "mutable". That is, they discard "const"
+ * modifier. This is OK becuase link_count should be a property of a _pointer_
+ * to request, not request itself. By modifying link_count, we just indicate
+ * that we are using the object, not that we are modofying it. Finally when
+ * link_count is zero, it is OK to modify the object (destroy it) because nobody
+ * needs it anyway.
+ */
+const request_t *
+requestLink(const request_t *request)
 {
-    request->link_count++;
+    assert(request);
+    ((request_t*)request)->link_count++;
     return request;
 }
 
 void
-requestUnlink(request_t * request)
+requestUnlink(const request_t *request)
 {
     if (request == NULL)
 	return;
-    request->link_count--;
+    assert(request->link_count >= 0);
+    ((request_t*)request)->link_count--;
     if (request->link_count)
 	return;
+#if OLD_CODE
     safe_free(request->headers);
     safe_free(request->body);
     memFree(MEM_REQUEST_T, request);
+#else
+    httpRequestDestroy((HttpRequest*)request);
+#endif
+}
+
+request_t *
+requestUse(request_t *request) {
+    assert(request);
+    request->link_count++;
+    return request;
 }
 
 int

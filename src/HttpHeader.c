@@ -59,9 +59,17 @@ static size_t longStrHighWaterSize = 0;
 
 /* local routines */
 static void httpHeaderGrow(HttpHeader *hdr);
+static void httpHeaderAddField(HttpHeader *hdr, HttpHeaderField *fld);
+static void httpHeaderAddSingleField(HttpHeader *hdr, HttpHeaderField *fld);
+static void httpHeaderAddListField(HttpHeader *hdr, HttpHeaderField *fld);
 static HttpHeaderField *httpHeaderFieldCreate(const char *name, const char *value);
+static HttpHeaderField *httpHeaderFieldParseCreate(const char *field_start, const char *field_end);
 static void httpHeaderFieldDestroy(HttpHeaderField *f);
+static size_t httpHeaderFieldBufSize(const HttpHeaderField *fld);
+static int httpHeaderFieldIsList(const HttpHeaderField *fld);
+
 static char *dupShortString(const char *str);
+static char *dupShortBuf(const char *str, size_t len);
 static void freeShortString(char *str);
 
 /* delete this when everybody remembers that ':' is not a part of a name */
@@ -70,20 +78,29 @@ static void freeShortString(char *str);
 HttpHeader *
 httpHeaderCreate()
 {
-    HttpHeader *hdr = xcalloc(1, sizeof(HttpHeader));
-    hdr->packed_size = 1; /* we always need one byte for terminating character */
-    /* all other members are set to 0 in calloc */
-
-    /* check if pool is ready (no static init in C??) */
-    if (!shortStrings)
-	shortStrings = memPoolCreate(shortStrPoolCount, shortStrPoolCount/10, shortStrSize, "shortStr");
-
+    HttpHeader *hdr = xmalloc(sizeof(HttpHeader));
+    httpHeaderInit(hdr);
     return hdr;
 }
 
+
+/* "create" for non-alloc objects; also used by real Create to avoid code duplication */
+void
+httpHeaderInit(HttpHeader *hdr)
+{
+    assert(hdr);
+    memset(hdr, 0, sizeof(*hdr));
+    hdr->packed_size = 1; /* we always need one byte for terminating character */
+
+    /* check if pool is ready (no static init in C??) @?@ */
+    if (!shortStrings)
+	shortStrings = memPoolCreate(shortStrPoolCount, shortStrPoolCount/10, shortStrSize, "shortStr");
+}
+
+void
 httpHeaderDestroy(HttpHeader *hdr)
 {
-    HttpHeaderPos pos = httpHeaderInitPos;
+    HttpHeaderPos pos = HttpHeaderInitPos;
     HttpHeaderField *f;
 
     assert(hdr);
@@ -100,40 +117,40 @@ httpHeaderDestroy(HttpHeader *hdr)
     /* maybe we should recycle headers too ? */
 }
 
-void 
+/* just handy in parsing: resets and returns false */
+static int
+httpHeaderReset(HttpHeader *hdr) {
+    httpHeaderInit(hdr);
+    return 0;
+}
+ 
 int
 httpHeaderParse(HttpHeader *hdr, const char *header_start, const char *header_end)
 {
-    const char *field_start = buf;
+    const char *field_start = header_start;
+    HttpHeaderField *f;
 
     assert(hdr);
-    assert(buf);
-
+    assert(header_start && header_end);
     /*
      * first check if there are any chances to parse what we have; @?@ if we are
      * at EOF and no <CRLF> at the end, we might want to parse anyway, however,
      * this is risky because some important headers could be cut off!
      */
-    /* Move this check to HttpMsg!!!! @?@ */
-    if (!mime_headers_end(buf, size))
-	return 0;
-
     /* commonn format headers are "<name>:[ws]<value>" lines delimited by <CRLF> */
     while (field_start < header_end) {
-	const char *field_end = buf + strcspn(buf, "\r\n");
-	if (!*field_end) return httpHeaderReset(); /* missing <CRLF> */
-	HttpHeaderField f = httpHeaderFieldParseCreate(buf, field_end);
-	if (!f) {
-	    httpHeaderReset(hdr); /* will remove all fields, etc */
-	    return 0;
-	}
-	httpHeaderAddField(f);
+	const char *field_end = field_start + strcspn(field_start, "\r\n");
+	if (!*field_end) 
+	    return httpHeaderReset(hdr); /* missing <CRLF> */
+	if (!(f = httpHeaderFieldParseCreate(field_start, field_end)));
+	    return httpHeaderReset(hdr);
+	httpHeaderAddField(hdr, f);
 	field_start = field_end;
 	/* skip /r/n */
-	if (*field_start = '\r') field_start++;
-	if (*field_start = '\n') field_start++;
+	if (*field_start == '\r') field_start++;
+	if (*field_start == '\n') field_start++;
     }
-    return 1; /* even if no fields where found, they are optional! */
+    return 1; /* even if no fields where found, they could be optional! */
 }
 
 /*
@@ -142,14 +159,14 @@ httpHeaderParse(HttpHeader *hdr, const char *header_start, const char *header_en
  * asserts that exactly hdr->size bytes are put (including terminating 0)
  */
 void
-httpHeaderPack(HttpHeader *hdr, char *buf)
+httpHeaderPack(const HttpHeader *hdr, char *buf)
 {
     size_t space_left;
     HttpHeaderPos pos = HttpHeaderInitPos;
     const char *name;
     const char *value;
     assert(hdr && buf);
-    space_left = hdr->size;
+    space_left = hdr->packed_size;
     /* put all fields one by one */
     while (httpHeaderGetField(hdr, &name, &value, &pos)) {
         size_t add_len = strlen(name) + 2 + strlen(value) + 2;
@@ -164,14 +181,14 @@ httpHeaderPack(HttpHeader *hdr, char *buf)
 }
 
 const char *
-httpHeaderGetStr(HttpHeader *hdr, const char *name, HttpHeaderPos *pos)
+httpHeaderGetStr(const HttpHeader *hdr, const char *name, HttpHeaderPos *pos)
 {
     const char *n;
     const char *v;
 
     assert(hdr);
     assert(name);
-    converion_period_name_check(name);
+    conversion_period_name_check(name);
 
     while(httpHeaderGetField(hdr, &n, &v, pos))
     	if (strcasecmp(name, n) == 0)
@@ -180,7 +197,7 @@ httpHeaderGetStr(HttpHeader *hdr, const char *name, HttpHeaderPos *pos)
 }
 
 long 
-httpHeaderGetInt(HttpHeader *hdr, const char *name, HttpHeaderPos *pos)
+httpHeaderGetInt(const HttpHeader *hdr, const char *name, HttpHeaderPos *pos)
 {
     const char *str = httpHeaderGetStr(hdr, name, pos);
     return str ? atol(str) : -1;
@@ -188,10 +205,10 @@ httpHeaderGetInt(HttpHeader *hdr, const char *name, HttpHeaderPos *pos)
 
 
 HttpHeaderField *
-httpHeaderGetField(HttpHeader *hdr, const char **name, const char **value, HttpHeaderPos *pos)
+httpHeaderGetField(const HttpHeader *hdr, const char **name, const char **value, HttpHeaderPos *pos)
 {
     /* we do not want to care about '!pos' in the loop: */
-    HttpHeaderPos p = httpHeaderInitPos;
+    HttpHeaderPos p = HttpHeaderInitPos;
     if (!pos) pos = &p;
     
     assert(hdr);
@@ -215,7 +232,7 @@ int
 httpHeaderDelFields(HttpHeader *hdr, const char *name)
 {
     int count = 0;
-    HttpHeaderPos pos = httpHeaderInitPos;
+    HttpHeaderPos pos = HttpHeaderInitPos;
 
     while (httpHeaderGetStr(hdr, name, &pos)) {
     	httpHeaderDelField(hdr, pos);
@@ -287,13 +304,13 @@ httpHeaderAddListField(HttpHeader *hdr, HttpHeaderField *fld)
      * its value.
      */
     /* we got a fld.value that is a list of values separated by ',' */
-    v = strtok(fld.value, ",");
+    v = strtok(fld->value, ",");
     httpHeaderAddSingleField(hdr, fld); /* first strtok() did its job! */
-    while ((v = strtok(NULL, ",")) {
+    while ((v = strtok(NULL, ","))) {
 	/* ltrim and skip empty fields */
 	while (isspace(*v) || *v == ',') v++;
 	if (*v)
-	    httpHeaderAddSingleField(hdr, httpHeaderFieldCreate(fld.name, v));
+	    httpHeaderAddSingleField(hdr, httpHeaderFieldCreate(fld->name, v));
     }
 }
 
@@ -350,7 +367,7 @@ httpHeaderFieldParseCreate(const char *field_start, const char *field_end)
 {
     HttpHeaderField *f = NULL;
     /* note: name_start == field_start */
-    const char *name_end = strchr(buf, ':');
+    const char *name_end = strchr(field_start, ':');
     const char *value_start;
     /* note: value_end == field_end */
 

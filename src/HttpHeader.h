@@ -45,9 +45,6 @@ struct _HttpHeader {
 	struct _HttpHeaderField **fields;
 };
 
-typedef struct _HttpHeaderField HttpHeaderField;
-typedef struct _HttpHeader HttpHeader;
-
 /*
  * use HttpHeaderPos as opaque type, do not interpret, 
  * it is not what you think it is
@@ -55,24 +52,25 @@ typedef struct _HttpHeader HttpHeader;
 typedef size_t HttpHeaderPos; 
 
 /* use this and only this to initialize HttpHeaderPos */
-#define httpHeaderInitPos (-1)
+#define HttpHeaderInitPos (-1)
 
 /* create/init/destroy */
 extern HttpHeader *httpHeaderCreate();
+extern void httpHeaderInit(HttpHeader *hdr);
 extern void httpHeaderDestroy(HttpHeader *hdr);
 
 /* parse/pack */
 /* parse a 0-terminating buffer and fill internal structires; _end points at the first character after the header; returns true if successfull */
 extern int httpHeaderParse(HttpHeader *hdr, const char *header_start, const char *header_end);
 /* pack header into the buffer, does not check for overflow, check hdr.packed_size first! */
-extern void httpHeaderPack(HttpHeader *hdr, char *buf);
+extern void httpHeaderPack(const HttpHeader *hdr, char *buf);
 
 /* iterate through fields with name (or find first field with name) */
-extern const char *httpHeaderGetStr(HttpHeader *hdr, const char *name, HttpHeaderPos *pos);
-extern long httpHeaderGetInt(HttpHeader *hdr, const char *name, HttpHeaderPos *pos);
+extern const char *httpHeaderGetStr(const HttpHeader *hdr, const char *name, HttpHeaderPos *pos);
+extern long httpHeaderGetInt(const HttpHeader *hdr, const char *name, HttpHeaderPos *pos);
 
 /* iterate through all fields */
-extern HttpHeaderField *httpHeaderGetField(HttpHeader *hdr, const char **name, const char **value, HttpHeaderPos *pos);
+extern HttpHeaderField *httpHeaderGetField(const HttpHeader *hdr, const char **name, const char **value, HttpHeaderPos *pos);
 
 /* delete field(s) by name or pos */
 extern int httpHeaderDelFields(HttpHeader *hdr, const char *name);
@@ -81,6 +79,10 @@ extern void httpHeaderDelField(HttpHeader *hdr, HttpHeaderPos pos);
 /* add a field (appends) */
 extern const char *httpHeaderAddStrField(HttpHeader *hdr, const char *name, const char *value);
 extern long httpHeaderAddIntField(HttpHeader *hdr, const char *name, long value);
+
+/* often used field names (may use caching to speedup retreival!) */
+extern size_t httpHeaderGetContentLength(const HttpHeader *hdr);
+extern time_t httpHeaderGetMaxAge(const HttpHeader *hdr);
 
 /* put report about current header usage and other stats into a static string */
 extern const char *httpHeaderReport();

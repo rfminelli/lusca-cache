@@ -71,13 +71,14 @@ static void
 engineProcessConnectReq(Request *req)
 {
     int fd = req->conn->fd;
-    sslStart(fd, req->uri, r, &http->out.size ???);
+    assert(0); /* check last parameter to sslStart! (was http->out_size) @?@ */
+    sslStart(fd, req->uri, r, NULL);
 }
 
 static void
 engineProcessPurgeReq(Request *req)
 {
-    
+    assert(0); /* implement this ! @?@ */
 }
 
 static void
@@ -89,7 +90,7 @@ engineProcessTraceReq(Request *req)
 	return;
     }
     /* we are the last hop, reply back with our info */
-    /* @?@ we send headers only, and trace req are not cachable, so why bother with StoreEntry? */
+    /* note that we need to send the original request back in our body */
     engineProcessReply(httpReplyCreateTrace(req));
 }
 
@@ -113,7 +114,7 @@ engineProcessStdRequest(Request *req)
 	   engineProcessHit(req);
 	   break;
         case LOG_TCP_IMS_MISS:
-           .. wait for dw to answer this one ..
+           assert(0); /* .. wait for dw to answer this one .. */
            break;
 	case LOG_TCP_REFRESH_MISS:
 	   engineProcessStale(req);
@@ -188,9 +189,21 @@ engineGetRequestType(Request *req, StoreEntry *pe) {
 static void
 engineProcessMiss(Request *req) 
 {
-	/* req is a client request; we may want change it before sending */
-	Request *ourReq = enginePrepareReq(req);
+    /* req is a client request; we may want change it before sending */
+    Request *ourReq = engineMakeForwardReq(req);
     serverSendRequest(ourReq);
+}
+
+/* modify client request to forward it further */
+static void
+engineMakeForwardReq(Request *req) 
+{
+    /* req is a client request; we may want change it before sending */
+    Request *clone = httpRequestClone(req);
+    /* remove headers we do not want */
+    /* remove Connection: and "paranoid" stuff */
+    /* double check what has to be removed here @?@ */
+    /* httpHeaderCleanConnect(bad name)(&clone->header); */
 }
 
 /* entry point for _all_ replies that must be processed */
@@ -199,4 +212,5 @@ engineProcessReply(Reply *rep)
 {
     assert(rep);
     assert(rep->request);
+    assert(0); /* not implemented yet */
 }
