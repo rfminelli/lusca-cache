@@ -476,6 +476,8 @@ neighborsUdpPing(protodispatch_data * proto)
 	debug(15, 0, "Check 'icp_port' in your config file\n");
 	fatal_dump(NULL);
     }
+    if (entry->store_status != STORE_PENDING)
+	fatal_dump("neighborsUdpPing: bad store_status");
     if (entry->swap_status != NO_SWAP)
 	fatal_dump("neighborsUdpPing: bad swap_status");
 

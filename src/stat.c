@@ -311,9 +311,8 @@ static const char *
 describeStatuses(const StoreEntry * entry)
 {
     LOCAL_ARRAY(char, buf, 256);
-    sprintf(buf, "%-13s %-13s %-12s %-12s",
+    sprintf(buf, "%-13s %-12s %-12s",
 	storeStatusStr[entry->store_status],
-	memStatusStr[entry->mem_status],
 	swapStatusStr[entry->swap_status],
 	pingStatusStr[entry->ping_status]);
     return buf;
@@ -328,8 +327,6 @@ describeFlags(const StoreEntry * entry)
     buf[0] = '\0';
     if (BIT_TEST(flags, IP_LOOKUP_PENDING))
 	strcat(buf, "IP,");
-    if (BIT_TEST(flags, DELETE_BEHIND))
-	strcat(buf, "DB,");
     if (BIT_TEST(flags, CLIENT_ABORT_REQUEST))
 	strcat(buf, "CA,");
     if (BIT_TEST(flags, DELAY_SENDING))
@@ -382,8 +379,11 @@ stat_objects_get(const cacheinfo * obj, StoreEntry * sentry, int vm_or_not)
     StoreEntry *entry = NULL;
     MemObject *mem;
     int N = 0;
+    FILE *fp;
+    size_t l = 0;
 
-    storeAppendPrintf(sentry, open_bracket);
+    fp = fdopen(sentry->mem_obj->swapout_fd, "w");
+    l += fprintf(fp, open_bracket);
 
     for (entry = storeGetFirst(); entry != NULL; entry = storeGetNext()) {
 	mem = entry->mem_obj;
@@ -393,17 +393,19 @@ stat_objects_get(const cacheinfo * obj, StoreEntry * sentry, int vm_or_not)
 	    getCurrentTime();
 	    debug(18, 3, "stat_objects_get:  Processed %d objects...\n", N);
 	}
-	storeAppendPrintf(sentry, "{%s %dL %-25s %s %3d %2d %8d %s}\n",
+	l += fprintf(fp, "{%s %dL %-25s %s %3d %2d %8d %s}\n",
 	    describeStatuses(entry),
 	    (int) entry->lock_count,
 	    describeFlags(entry),
 	    describeTimestamps(entry),
 	    (int) entry->refcount,
 	    storePendingNClients(entry),
-	    mem ? mem->e_current_len : entry->object_len,
+	    entry->object_len,
 	    entry->url);
     }
-    storeAppendPrintf(sentry, close_bracket);
+    l += fprintf(fp, close_bracket);
+    fflush(fp);
+    sentry->object_len = l;
 }
 
 
@@ -668,7 +670,8 @@ statFiledescriptors(StoreEntry * sentry)
 	    break;
 	case FD_FILE:
 	    storeAppendPrintf(sentry, "%31s %s}\n",
-		null_string,
+		file_table[i].file_mode == FILE_WRITE ?
+		"Writing" : "Reading",
 		(s = diskFileName(i)) ? s : "-");
 	    break;
 	case FD_PIPE:
@@ -758,8 +761,6 @@ info_get(const cacheinfo * obj, StoreEntry * sentry)
 	appname);
     storeAppendPrintf(sentry, "{\tStorage Swap size:\t%d MB}\n",
 	storeGetSwapSize() >> 10);
-    storeAppendPrintf(sentry, "{\tStorage Mem size:\t%d KB}\n",
-	store_mem_size >> 10);
     storeAppendPrintf(sentry, "{\tStorage LRU Expiration Age:\t%6.2f days}\n",
 	(double) storeExpiredReferenceAge() / 86400.0);
 
@@ -835,8 +836,6 @@ info_get(const cacheinfo * obj, StoreEntry * sentry)
 	meta_data.store_entries);
     storeAppendPrintf(sentry, "{\t%6d StoreEntries with MemObjects}\n",
 	meta_data.mem_obj_count);
-    storeAppendPrintf(sentry, "{\t%6d StoreEntries with MemObject Data}\n",
-	meta_data.mem_data_count);
     storeAppendPrintf(sentry, "{\t%6d Hot Object Cache Items}\n",
 	meta_data.hot_vm);
 

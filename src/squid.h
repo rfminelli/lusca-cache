@@ -257,6 +257,7 @@ typedef unsigned long u_num32;
 
 typedef void (*SIH) (int, void *);	/* swap in */
 typedef int (*QS) (const void *, const void *);
+typedef void (*PIF) (int, void *);	/* store callback */
 
 #include "cache_cf.h"
 #include "comm.h"
@@ -342,7 +343,7 @@ extern char ThisCache[];	/* main.c */
 
 extern int objcacheStart _PARAMS((int, const char *, StoreEntry *));
 extern void send_announce _PARAMS((void *unused));
-extern int sslStart _PARAMS((int fd, const char *, request_t *, char *, int *sz));
+extern int sslStart _PARAMS((int fd, const char *, request_t *, char *, size_t * sz));
 extern const char *storeToString _PARAMS((const StoreEntry *));
 extern int waisStart _PARAMS((int, const char *, method_t, char *, StoreEntry *));
 extern void storeDirClean _PARAMS((void *unused));
@@ -351,7 +352,7 @@ extern int passStart _PARAMS((int fd,
 	request_t * request,
 	char *buf,
 	int buflen,
-	int *size_ptr));
+	size_t * size_ptr));
 extern void identStart _PARAMS((int, icpStateData *,
 	void       (*callback) _PARAMS((void *))));
 

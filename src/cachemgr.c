@@ -522,7 +522,6 @@ parse_object(char *string)
 {
     char *tbuf = NULL;
     char *store_status = NULL;
-    char *mem_status = NULL;
     char *swap_status = NULL;
     char *ping_status = NULL;
     char *lock_count = NULL;
@@ -539,8 +538,6 @@ parse_object(char *string)
     tbuf = xstrdup(string);
 
     if ((store_status = strtok(tbuf, w_space)) == NULL)
-	goto parse_obj_done;
-    if ((mem_status = strtok(NULL, w_space)) == NULL)
 	goto parse_obj_done;
     if ((swap_status = strtok(NULL, w_space)) == NULL)
 	goto parse_obj_done;
@@ -584,9 +581,8 @@ parse_object(char *string)
 	atoi(size),
 	atoi(refcount),
 	atoi(clients));
-    printf("%s, %s, %s, %s,<BR>",
+    printf("%s, %s, %s,<BR>",
 	store_status,
-	mem_status,
 	swap_status,
 	ping_status);
     printf("%d Locks, Flags: %s\n",

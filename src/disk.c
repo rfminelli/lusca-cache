@@ -151,7 +151,6 @@ file_open(const char *path, int (*handler) _PARAMS((void)), int mode)
 {
     FD_ENTRY *conn;
     int fd;
-
     if (mode & O_WRONLY)
 	mode |= O_APPEND;
 #if defined(O_NONBLOCK) && !defined(_SQUID_SUNOS_) && !defined(_SQUID_SOLARIS_)
@@ -159,7 +158,6 @@ file_open(const char *path, int (*handler) _PARAMS((void)), int mode)
 #else
     mode |= O_NDELAY;
 #endif
-
     /* Open file */
     if ((fd = open(path, mode, 0644)) < 0) {
 	debug(50, 0, "file_open: error opening file %s: %s\n",
@@ -169,7 +167,6 @@ file_open(const char *path, int (*handler) _PARAMS((void)), int mode)
     /* update fdstat */
     fdstat_open(fd, FD_FILE);
     commSetCloseOnExec(fd);
-
     /* init table */
     xstrncpy(file_table[fd].filename, path, SQUID_MAXPATHLEN);
     file_table[fd].at_eof = NO;
@@ -178,7 +175,7 @@ file_open(const char *path, int (*handler) _PARAMS((void)), int mode)
     file_table[fd].write_pending = NO_WRT_PENDING;
     file_table[fd].write_daemon = NOT_PRESENT;
     file_table[fd].write_q = NULL;
-
+    file_table[fd].file_mode = mode & O_WRONLY ? FILE_WRITE : FILE_READ;
     conn = &fd_table[fd];
     memset(conn, '\0', sizeof(FD_ENTRY));
     return fd;
@@ -190,6 +187,7 @@ int
 file_close(int fd)
 {
     FD_ENTRY *conn = NULL;
+    debug(6, 3, "file_close: FD %d\n", fd);
     if (fd < 0) {
 	debug_trap("file_close: bad file number");
 	return DISK_ERROR;
@@ -197,7 +195,6 @@ file_close(int fd)
     /* we might have to flush all the write back queue before we can
      * close it */
     /* save it for later */
-
     if (file_table[fd].open_stat == FILE_NOT_OPEN) {
 	debug(6, 3, "file_close: FD %d is not OPEN\n", fd);
     } else if (file_table[fd].write_daemon == PRESENT) {
@@ -208,7 +205,6 @@ file_close(int fd)
 	file_table[fd].open_stat = FILE_NOT_OPEN;
 	file_table[fd].write_daemon = NOT_PRESENT;
 	file_table[fd].filename[0] = '\0';
-
 	if (fdstatGetType(fd) == FD_SOCKET) {
 	    debug(6, 0, "FD %d: Someone called file_close() on a socket\n", fd);
 	    fatal_dump(NULL);
@@ -221,7 +217,6 @@ file_close(int fd)
 	close(fd);
 	return DISK_OK;
     }
-
     /* refused to close file if there is a daemon running */
     /* have pending flag set */
     file_table[fd].close_request = REQUEST;
@@ -289,7 +284,7 @@ diskHandleWrite(int fd, FileEntry * entry)
 	entry->write_daemon = PRESENT;
     }
     if (entry->wrt_handle)
-	entry->wrt_handle(fd, DISK_OK, entry->wrt_handle_data);
+	entry->wrt_handle(fd, DISK_OK, rlen, entry->wrt_handle_data);
     if (file_table[fd].close_request == REQUEST)
 	file_close(fd);
     return DISK_OK;
@@ -349,12 +344,14 @@ diskHandleRead(int fd, dread_ctrl * ctrl_dat)
 {
     int len;
 
+    debug(6, 3, "diskHandleRead: FD %d\n", fd);
     /* go to requested position. */
     lseek(fd, ctrl_dat->offset, SEEK_SET);
     file_table[fd].at_eof = NO;
     len = read(fd,
 	ctrl_dat->buf + ctrl_dat->cur_len,
 	ctrl_dat->req_len - ctrl_dat->cur_len);
+    debug(6, 3, "diskHandleRead: FD %d, %d bytes, errno=%d\n", fd, len, errno);
 
     if (len < 0)
 	switch (errno) {

@@ -112,9 +112,8 @@
 #define DISK_FILE_NOT_FOUND      (-5)
 #define DISK_NO_SPACE_LEFT       (-6)
 
-typedef int (*FILE_READ_HD) (int fd, char *buf, int size, int errflag,
-    void *data);
-typedef void (*FILE_WRITE_HD) (int, int, StoreEntry *);
+typedef int (*FILE_READ_HD) (int fd, char *buf, int size, int errflag, void *data);
+typedef void (*FILE_WRITE_HD) (int, int, int, StoreEntry *);
 typedef int (*FILE_WALK_HD) (int fd, int errflag, void *data);
 typedef int (*FILE_WALK_LHD) (int fd, char *buf, int size, void *line_data);
 
@@ -154,6 +153,9 @@ typedef struct _FileEntry {
     enum {
 	NO_WRT_PENDING, WRT_PENDING
     } write_pending;
+    enum {
+	FILE_READ, FILE_WRITE
+    } file_mode;
     void (*wrt_handle) ();
     void *wrt_handle_data;
     dwrite_q *write_q;

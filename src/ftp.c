@@ -280,14 +280,8 @@ ftpReadReply(int fd, FtpStateData * data)
     StoreEntry *entry = NULL;
 
     entry = data->entry;
-    if (entry->flag & DELETE_BEHIND && !storeClientWaiting(entry)) {
-	/* we can terminate connection right now */
-	squid_error_entry(entry, ERR_NO_CLIENTS_BIG_OBJ, NULL);
-	comm_close(fd);
-	return 0;
-    }
     /* check if we want to defer reading */
-    clen = entry->mem_obj->e_current_len;
+    clen = entry->object_len;
     off = storeGetLowestReaderOffset(entry);
     if ((clen - off) > FTP_DELETE_GAP) {
 	if (entry->flag & CLIENT_ABORT_REQUEST) {
@@ -338,7 +332,7 @@ ftpReadReply(int fd, FtpStateData * data)
 	    squid_error_entry(entry, ERR_READ_ERROR, xstrerror());
 	    comm_close(fd);
 	}
-    } else if (len == 0 && entry->mem_obj->e_current_len == 0) {
+    } else if (len == 0 && entry->mem_obj->swap_length == 0) {
 	squid_error_entry(entry,
 	    ERR_ZERO_SIZE_OBJECT,
 	    errno ? xstrerror() : NULL);
@@ -353,15 +347,11 @@ ftpReadReply(int fd, FtpStateData * data)
 	    storeNegativeCache(entry);
 	    BIT_RESET(entry->flag, ENTRY_CACHABLE);
 	    storeReleaseRequest(entry);
-	} else if (!(entry->flag & DELETE_BEHIND)) {
-	    storeTimestampsSet(entry);
 	}
 	/* update fdstat and fdtable */
 	storeComplete(entry);
 	comm_close(fd);
     } else if (entry->flag & CLIENT_ABORT_REQUEST) {
-	/* append the last bit of info we get */
-	storeAppend(entry, buf, len);
 	squid_error_entry(entry, ERR_CLIENT_ABORT, NULL);
 	comm_close(fd);
     } else {
@@ -560,7 +550,7 @@ ftpStart(int unusedfd, const char *url, request_t * request, StoreEntry * entry)
 	return COMM_ERROR;
     }
     ftpData = xcalloc(1, sizeof(FtpStateData));
-    storeLockObject(ftpData->entry = entry, NULL, NULL);
+    storeLockObject(ftpData->entry = entry);
     ftpData->request = requestLink(request);
 
     /* Parse login info. */
