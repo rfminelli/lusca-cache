@@ -36,8 +36,6 @@
 
 #if USE_ASYNC_IO
 #define MAX_POLL_TIME 10
-#elif USE_DISKD
-#define MAX_POLL_TIME 10
 #else
 #define MAX_POLL_TIME 1000
 #endif
@@ -306,9 +304,6 @@ comm_poll(int msec)
 #endif
 #if USE_ASYNC_IO
 	aioCheckCallbacks();
-#endif
-#if USE_DISKD
-	storeDiskdReadQueue();
 #endif
 	if (commCheckICPIncoming)
 	    comm_poll_icp_incoming();
@@ -596,9 +591,6 @@ comm_select(int msec)
 #endif
 #if USE_ASYNC_IO
 	aioCheckCallbacks();
-#endif
-#if USE_DISKD
-	storeDiskdReadQueue();
 #endif
 	if (commCheckICPIncoming)
 	    comm_select_icp_incoming();

@@ -813,10 +813,6 @@ parse_cachedir(cacheSwap * swap)
     } else if (0 == strcasecmp(type_str, "asyncufs")) {
 	storeAufsDirParse(swap);
 #endif
-#if USE_DISKD
-    } else if (0 == strcasecmp(type_str, "diskd")) {
-	storeDiskdDirParse(swap);
-#endif
     } else {
 	fatalf("Unknown cache_dir type '%s'\n", type_str);
     }
