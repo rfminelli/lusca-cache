@@ -211,9 +211,8 @@ static void mainInitialize()
     debug(1, 0, "Starting Squid Cache (version %s)...\n", version_string);
 
     if (first_time) {
-	disk_init();	/* disk_init must go before ipcache_init() */
+	disk_init();		/* disk_init must go before ipcache_init() */
     }
-
     ipcache_init();
     neighbors_init();
     ftpInitialize();

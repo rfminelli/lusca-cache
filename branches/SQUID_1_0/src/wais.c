@@ -243,7 +243,6 @@ int waisStart(unusedfd, url, method, mime_hdr, entry)
 	squid_error_entry(entry, ERR_NO_RELAY, NULL);
 	return COMM_ERROR;
     }
-
     /* Create socket. */
     sock = comm_open(COMM_NONBLOCKING, 0, 0, url);
     if (sock == COMM_ERROR) {
@@ -251,7 +250,6 @@ int waisStart(unusedfd, url, method, mime_hdr, entry)
 	squid_error_entry(entry, ERR_NO_FDS, xstrerror());
 	return COMM_ERROR;
     }
-
     data = (WAISData *) xcalloc(1, sizeof(WAISData));
     data->entry = entry;
     data->method = method;
