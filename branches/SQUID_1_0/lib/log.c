@@ -29,7 +29,7 @@
 #endif
 #if defined(__STRICT_ANSI__) && HAVE_STDARG_H
 #include <stdarg.h>
-#elsif HAVE_VARARGS_H
+#elif HAVE_VARARGS_H
 #include <varargs.h>
 #endif
 
