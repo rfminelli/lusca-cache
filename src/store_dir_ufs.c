@@ -93,6 +93,7 @@ static void storeUfsDirRebuild(SwapDir * sd);
 static void storeUfsDirCloseTmpSwapLog(SwapDir * sd);
 static FILE *storeUfsDirOpenTmpSwapLog(SwapDir *, int *, int *);
 static STLOGOPEN storeUfsDirOpenSwapLog;
+static STINIT storeUfsDirInit;
 static STLOGCLEANOPEN storeUfsDirWriteCleanOpen;
 static void storeUfsDirWriteCleanClose(SwapDir * sd);
 static STLOGCLEANWRITE storeUfsDirWriteCleanEntry;
@@ -244,7 +245,7 @@ storeUfsDirCloseSwapLog(SwapDir * sd)
 	safe_free(ufs_dir_index);
 }
 
-void
+static void
 storeUfsDirInit(SwapDir * sd)
 {
     static int started_clean_event = 0;
@@ -736,8 +737,7 @@ storeUfsDirCloseTmpSwapLog(SwapDir * sd)
 	fatal("storeUfsDirCloseTmpSwapLog: unlink failed");
     }
 #endif
-    if (rename(new_path, swaplog_path) < 0) {
-	debug(50, 0) ("%s,%s: %s\n", new_path, swaplog_path, xstrerror());
+    if (xrename(new_path, swaplog_path) < 0) {
 	fatal("storeUfsDirCloseTmpSwapLog: rename failed");
     }
     fd = file_open(swaplog_path, O_WRONLY | O_CREAT);
@@ -915,11 +915,7 @@ storeUfsDirWriteCleanClose(SwapDir * sd)
 	    debug(50, 0) ("storeDirWriteCleanLogs: unlinkd failed: %s, %s\n",
 		xstrerror(), cur);
 #endif
-	if (rename(state->new, state->cur) < 0) {
-	    debug(50, 0) ("storeDirWriteCleanLogs: rename failed: "
-		"%s, %s -> %s\n",
-		xstrerror(), state->new, state->cur);
-	}
+	xrename(state->new, state->cur);
     }
     /* touch a timestamp file if we're not still validating */
     if (store_dirs_rebuilding)
@@ -1089,7 +1085,8 @@ storeUfsDirCleanEvent(void *unused)
 	n = storeUfsDirClean(swap_index);
 	swap_index++;
     }
-    eventAdd("storeDirClean", storeUfsDirCleanEvent, NULL, 15.0, 1);
+    eventAdd("storeDirClean", storeUfsDirCleanEvent, NULL,
+	15.0 * exp(-0.25 * n), 1);
 }
 
 static int
@@ -1099,10 +1096,6 @@ storeUfsDirIs(SwapDir * sd)
 	return 1;
     if (sd->type == SWAPDIR_ASYNCUFS)
 	return 1;
-#if USE_DISKD
-    if (sd->type == SWAPDIR_DISKD)
-	return 1;
-#endif
     return 0;
 }
 
@@ -1311,78 +1304,6 @@ storeAufsDirParse(cacheSwap * swap)
     sd->obj.read = storeAufsRead;
     sd->obj.write = storeAufsWrite;
     sd->obj.unlink = storeAufsUnlink;
-    sd->log.open = storeUfsDirOpenSwapLog;
-    sd->log.close = storeUfsDirCloseSwapLog;
-    sd->log.write = storeUfsDirSwapLog;
-    sd->log.clean.open = storeUfsDirWriteCleanOpen;
-    swap->n_configured++;
-}
-#endif
-
-#if USE_DISKD
-void
-storeDiskdDirParse(cacheSwap * swap)
-{
-    char *token;
-    char *path;
-    int i;
-    int size;
-    int l1;
-    int l2;
-    unsigned int read_only = 0;
-    SwapDir *sd = NULL;
-    if ((path = strtok(NULL, w_space)) == NULL)
-	self_destruct();
-    i = GetInteger();
-    size = i << 10;		/* Mbytes to kbytes */
-    if (size <= 0)
-	fatal("storeUfsDirParse: invalid size value");
-    i = GetInteger();
-    l1 = i;
-    if (l1 <= 0)
-	fatal("storeUfsDirParse: invalid level 1 directories value");
-    i = GetInteger();
-    l2 = i;
-    if (l2 <= 0)
-	fatal("storeUfsDirParse: invalid level 2 directories value");
-    if ((token = strtok(NULL, w_space)))
-	if (!strcasecmp(token, "read-only"))
-	    read_only = 1;
-    for (i = 0; i < swap->n_configured; i++) {
-	sd = swap->swapDirs + i;
-	if (!strcmp(path, sd->path)) {
-	    /* just reconfigure it */
-	    if (size == sd->max_size)
-		debug(3, 1) ("Cache dir '%s' size remains unchanged at %d KB\n",
-		    path, size);
-	    else
-		debug(3, 1) ("Cache dir '%s' size changed to %d KB\n",
-		    path, size);
-	    sd->max_size = size;
-	    if (sd->flags.read_only != read_only)
-		debug(3, 1) ("Cache dir '%s' now %s\n",
-		    path, read_only ? "Read-Only" : "Read-Write");
-	    sd->flags.read_only = read_only;
-	    return;
-	}
-    }
-    allocate_new_swapdir(swap);
-    sd = swap->swapDirs + swap->n_configured;
-    sd->type = SWAPDIR_DISKD;
-    sd->index = swap->n_configured;
-    sd->path = xstrdup(path);
-    sd->max_size = size;
-    sd->u.ufs.l1 = l1;
-    sd->u.ufs.l2 = l2;
-    sd->u.ufs.swaplog_fd = -1;
-    sd->flags.read_only = read_only;
-    sd->init = storeDiskdInit;
-    sd->newfs = storeUfsDirNewfs;
-    sd->obj.open = storeDiskdOpen;
-    sd->obj.close = storeDiskdClose;
-    sd->obj.read = storeDiskdRead;
-    sd->obj.write = storeDiskdWrite;
-    sd->obj.unlink = storeDiskdUnlink;
     sd->log.open = storeUfsDirOpenSwapLog;
     sd->log.close = storeUfsDirCloseSwapLog;
     sd->log.write = storeUfsDirSwapLog;

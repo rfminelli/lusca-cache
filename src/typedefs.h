@@ -31,9 +31,6 @@
  *
  */
 
-#ifndef _TYPEDEFS_H_
-#define _TYPEDEFS_H_
-
 typedef unsigned int store_status_t;
 typedef unsigned int mem_status_t;
 typedef unsigned int ping_status_t;
@@ -267,5 +264,3 @@ typedef unsigned int delay_id;
 #if USE_HTCP
 typedef struct _htcpReplyData htcpReplyData;
 #endif
-
-#endif /* _TYPEDEFS_H_ */

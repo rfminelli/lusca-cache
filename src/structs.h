@@ -321,6 +321,7 @@ struct _SquidConfig {
     char *mimeTablePathname;
     char *visibleHostname;
     char *uniqueHostname;
+    wordlist *hostnameAliases;
     char *errHtmlText;
     struct {
 	char *host;
@@ -1314,22 +1315,6 @@ struct _SwapDir {
 	    int l2;
 	    int swaplog_fd;
 	} ufs;
-#if USE_DISKD
-	struct {
-	    int l1;
-	    int l2;
-	    int swaplog_fd;
-	    int smsgid;
-	    int rmsgid;
-	    int wfd;
-	    int away;
-	    struct {
-		char *buf;
-		link_list *stack;
-		int id;
-	    } shm;
-	} diskd;
-#endif
     } u;
 };
 
@@ -1392,17 +1377,8 @@ struct _storeIOState {
 	    } flags;
 	    const char *read_buf;
 	    link_list *pending_writes;
+	    link_list *pending_reads;
 	} aufs;
-#if USE_DISKD
-	struct {
-	    int id;
-	    struct {
-		unsigned int reading:1;
-		unsigned int writing:1;
-	    } flags;
-	    char *read_buf;
-	} diskd;
-#endif
     } type;
 };
 
@@ -1428,6 +1404,7 @@ struct _request_t {
     HttpHeader header;
     char *body;
     size_t body_sz;
+    int content_length;
     HierarchyLogEntry hier;
     err_type err_type;
     char *peer_login;		/* Configured peer login:password */
