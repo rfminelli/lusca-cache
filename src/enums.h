@@ -134,8 +134,11 @@ typedef enum {
     ACL_MAXCONN,
     ACL_REQ_MIME_TYPE,
     ACL_REP_MIME_TYPE,
+    ACL_REP_HEADER,
+    ACL_REQ_HEADER,
     ACL_MAX_USER_IP,
     ACL_EXTERNAL,
+    ACL_URLLOGIN,
     ACL_ENUM_MAX
 } squid_acl;
 
@@ -187,6 +190,7 @@ typedef enum {
     HDR_CACHE_CONTROL,
     HDR_CONNECTION,
     HDR_CONTENT_BASE,
+    HDR_CONTENT_DISPOSITION,
     HDR_CONTENT_ENCODING,
     HDR_CONTENT_LANGUAGE,
     HDR_CONTENT_LENGTH,
@@ -364,7 +368,7 @@ typedef enum {
     STORE_DISK_CLIENT
 } store_client_t;
 
-typedef enum {
+enum {
     METHOD_NONE,		/* 000 */
     METHOD_GET,			/* 001 */
     METHOD_POST,		/* 010 */
@@ -412,7 +416,8 @@ typedef enum {
     METHOD_EXT18,
     METHOD_EXT19,
     METHOD_ENUM_END
-} method_t;
+};
+typedef unsigned int method_t;
 
 typedef enum {
     PROTO_NONE,
@@ -506,23 +511,6 @@ enum {
 #endif
 };
 
-/*
- * These are for client Streams. Each node in the stream can be queried for
- * its status
- */
-typedef enum {
-    STREAM_NONE,		/* No particular status */
-    STREAM_COMPLETE,		/* All data has been flushed, no more reads allowed */
-    STREAM_UNPLANNED_COMPLETE,	/* an unpredicted end has occured, no more
-				 * reads occured, but no need to tell 
-				 * downstream that an error occured
-				 */
-    STREAM_FAILED		/* An error has occured in this node or an above one,
-				 * and the node is not generating an error body / it's 
-				 * midstream
-				 */
-} clientStream_status_t;
-
 typedef enum {
     ACCESS_DENIED,
     ACCESS_ALLOWED,
@@ -543,14 +531,6 @@ typedef enum {
     AUTH_DIGEST,
     AUTH_BROKEN			/* known type, but broken data */
 } auth_type_t;
-
-/* stateful helper callback response codes */
-typedef enum {
-    S_HELPER_UNKNOWN,
-    S_HELPER_RESERVE,
-    S_HELPER_RELEASE,
-    S_HELPER_DEFER
-} stateful_helper_callback_t;
 
 /* stateful helper reservation info */
 typedef enum {
@@ -591,6 +571,7 @@ typedef enum {
     MEM_CACHE_DIGEST,
 #endif
     MEM_CLIENT_INFO,
+    MEM_CLIENT_SOCK_BUF,
     MEM_LINK_LIST,
     MEM_DLINK_NODE,
     MEM_DONTFREE,
@@ -623,6 +604,7 @@ typedef enum {
     MEM_EVENT,
     MEM_TLV,
     MEM_SWAP_LOG_DATA,
+    MEM_CLIENT_REQ_BUF,
     MEM_MAX
 } mem_type;
 
@@ -719,6 +701,7 @@ typedef enum {
     CBDATA_RemovalPolicy,
     CBDATA_RemovalPolicyWalker,
     CBDATA_RemovalPurgeWalker,
+    CBDATA_store_client,
     CBDATA_FIRST_CUSTOM_TYPE = 1000
 } cbdata_type;
 
@@ -731,31 +714,6 @@ enum {
     VARY_OTHER,
     VARY_CANCEL
 };
-
-/*
- * Store digest state enum
- */
-typedef enum {
-    DIGEST_READ_NONE,
-    DIGEST_READ_REPLY,
-    DIGEST_READ_HEADERS,
-    DIGEST_READ_CBLOCK,
-    DIGEST_READ_MASK,
-    DIGEST_READ_DONE
-} digest_read_state_t;
-
-typedef enum {
-    COMM_OK = 0,
-    COMM_ERROR = -1,
-    COMM_NOMESSAGE = -3,
-    COMM_TIMEOUT = -4,
-    COMM_SHUTDOWN = -5,
-    COMM_INPROGRESS = -6,
-    COMM_ERR_CONNECT = -7,
-    COMM_ERR_DNS = -8,
-    COMM_ERR_CLOSING = -9
-} comm_err_t;
-
 
 /* CygWin & Windows NT Port */
 #if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
