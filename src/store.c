@@ -166,7 +166,6 @@ destroy_MemObject(StoreEntry * e)
     ctx_exit(ctx);		/* must exit before we free mem->url */
     safe_free(mem->url);
     safe_free(mem->log_url);	/* XXX account log_url */
-    safe_free(mem->vary_headers);
     memFree(mem, MEM_MEMOBJECT);
 }
 
@@ -326,22 +325,6 @@ storeGetPublic(const char *uri, const method_t method)
     return storeGet(storeKeyPublic(uri, method));
 }
 
-StoreEntry *
-storeGetPublicByRequestMethod(request_t * req, const method_t method)
-{
-    return storeGet(storeKeyPublicByRequestMethod(req, method));
-}
-
-StoreEntry *
-storeGetPublicByRequest(request_t * req)
-{
-    StoreEntry *e = storeGetPublicByRequestMethod(req, req->method);
-    if (e == NULL && req->method == METHOD_HEAD)
-	/* We can generate a HEAD reply from a cached GET object */
-	e = storeGetPublicByRequestMethod(req, METHOD_GET);
-    return e;
-}
-
 static int
 getKeyCounter(void)
 {
@@ -399,63 +382,12 @@ storeSetPublicKey(StoreEntry * e)
 	    e->hash.key, mem->url);
 #endif
     assert(!EBIT_TEST(e->flags, RELEASE_REQUEST));
-    if (mem->request) {
-	StoreEntry *pe;
-	request_t *request = mem->request;
-	if (!mem->vary_headers) {
-	    /* First handle the case where the object no longer varies */
-	    safe_free(request->vary_headers);
-	} else {
-	    if (request->vary_headers && strcmp(request->vary_headers, mem->vary_headers) != 0) {
-		/* Oops.. the variance has changed. Kill the base object
-		 * to record the new variance key
-		 */
-		safe_free(request->vary_headers);	/* free old "bad" variance key */
-		pe = storeGetPublic(mem->url, mem->method);
-		if (pe)
-		    storeRelease(pe);
-	    }
-	    /* Make sure the request knows the variance status */
-	    if (!request->vary_headers)
-		request->vary_headers = xstrdup(httpMakeVaryMark(request, mem->reply));
-	}
-	if (mem->vary_headers && !storeGetPublic(mem->url, mem->method)) {
-	    /* Create "vary" base object */
-	    http_version_t version;
-	    String vary;
-	    pe = storeCreateEntry(mem->url, mem->log_url, request->flags, request->method);
-	    httpBuildVersion(&version, 1, 0);
-	    httpReplySetHeaders(pe->mem_obj->reply, version, HTTP_OK, "Internal marker object", "x-squid-internal/vary", -1, -1, squid_curtime + 100000);
-	    vary = httpHeaderGetList(&mem->reply->header, HDR_VARY);
-	    if (strBuf(vary)) {
-		httpHeaderPutStr(&pe->mem_obj->reply->header, HDR_VARY, strBuf(vary));
-		stringClean(&vary);
-	    }
-#if X_ACCELERATOR_VARY
-	    vary = httpHeaderGetList(&mem->reply->header, HDR_X_ACCELERATOR_VARY);
-	    if (strBuf(vary)) {
-		httpHeaderPutStr(&pe->mem_obj->reply->header, HDR_X_ACCELERATOR_VARY, strBuf(vary));
-		stringClean(&vary);
-	    }
-#endif
-	    storeSetPublicKey(pe);
-	    httpReplySwapOut(pe->mem_obj->reply, pe);
-	    storeBufferFlush(pe);
-	    storeTimestampsSet(pe);
-	    storeComplete(pe);
-	    storeUnlockObject(pe);
-	}
-	newkey = storeKeyPublicByRequest(mem->request);
-    } else
-	newkey = storeKeyPublic(mem->url, mem->method);
+    newkey = storeKeyPublic(mem->url, mem->method);
     if ((e2 = (StoreEntry *) hash_lookup(store_table, newkey))) {
 	debug(20, 3) ("storeSetPublicKey: Making old '%s' private.\n", mem->url);
 	storeSetPrivateKey(e2);
 	storeRelease(e2);
-	if (mem->request)
-	    newkey = storeKeyPublicByRequest(mem->request);
-	else
-	    newkey = storeKeyPublic(mem->url, mem->method);
+	newkey = storeKeyPublic(mem->url, mem->method);
     }
     if (e->hash.key)
 	storeHashDelete(e);
@@ -1367,7 +1299,7 @@ createRemovalPolicy(RemovalPolicySettings * settings)
     debug(20, 1) ("ERROR: Be sure to have set cache_replacement_policy\n");
     debug(20, 1) ("ERROR:   and memory_replacement_policy in squid.conf!\n");
     fatalf("ERROR: Unknown policy %s\n", settings->type);
-    return NULL;		/* NOTREACHED */
+    return NULL;
 }
 
 #if 0

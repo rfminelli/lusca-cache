@@ -37,6 +37,8 @@
 #include "squid.h"
 #include "cache_snmp.h"
 
+extern StatCounters *snmpStatGet(int);
+
 /************************************************************************
 
  SQUID MIB Implementation
@@ -255,7 +257,7 @@ snmp_prfSysFn(variable_list * Var, snint * ErrP)
 	break;
     case PERF_SYS_MEMUSAGE:
 	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    (snint) statMemoryAccounted() >> 10,
+	    (snint) memTotalAllocated() >> 10,
 	    ASN_INTEGER);
 	break;
     case PERF_SYS_CPUTIME:

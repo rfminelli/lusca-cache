@@ -133,7 +133,8 @@ storeClientListAdd(StoreEntry * e, void *data)
 #endif
     e->refcount++;
     mem->nclients++;
-    sc = cbdataAlloc(store_client);
+    sc = memAllocate(MEM_STORE_CLIENT);
+    cbdataAdd(sc, memFree, MEM_STORE_CLIENT);	/* sc is callback_data for file_read */
     cbdataLock(data);		/* locked while we point to it */
     sc->callback_data = data;
     sc->seen_offset = 0;
@@ -432,15 +433,6 @@ storeClientReadHeader(void *data, const char *buf, ssize_t len)
 	    }
 	    break;
 	case STORE_META_STD:
-	    break;
-	case STORE_META_VARY_HEADERS:
-	    if (mem->vary_headers) {
-		if (strcmp(mem->vary_headers, t->value) != 0)
-		    swap_object_ok = 0;
-	    } else {
-		/* Assume the object is OK.. remember the vary request headers */
-		mem->vary_headers = xstrdup(t->value);
-	    }
 	    break;
 	default:
 	    debug(20, 1) ("WARNING: got unused STORE_META type %d\n", t->type);

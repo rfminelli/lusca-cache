@@ -112,7 +112,6 @@ log_trace_done()
 #define DBG_GRAIN_SM  (4)
 #define DBG_OFFSET    (DBG_SPLIT/DBG_GRAIN_SM - DBG_SPLIT/DBG_GRAIN )
 #define DBG_MAXINDEX  (DBG_MAXSIZE/DBG_GRAIN + DBG_OFFSET)
-// #define DBG_INDEX(sz) (sz<DBG_MAXSIZE?(sz+DBG_GRAIN-1)/DBG_GRAIN:DBG_MAXINDEX)
 static int malloc_sizes[DBG_MAXINDEX + 1];
 static int malloc_histo[DBG_MAXINDEX + 1];
 static int dbg_stat_init = 0;
@@ -124,9 +123,9 @@ DBG_INDEX(int sz)
 	return DBG_MAXINDEX;
 
     if (sz <= DBG_SPLIT)
-	return (sz + DBG_GRAIN_SM - 1) / DBG_GRAIN_SM;
+	return (sz+DBG_GRAIN_SM-1)/DBG_GRAIN_SM;
 
-    return (sz + DBG_GRAIN - 1) / DBG_GRAIN + DBG_OFFSET;
+    return (sz+DBG_GRAIN-1)/DBG_GRAIN + DBG_OFFSET;
 }
 
 static void
@@ -475,7 +474,7 @@ xfree(void *s)
 
 #if XMALLOC_DEBUG
     if (s != NULL)
-	check_free(s);
+        check_free(s);
 #endif
     if (s != NULL)
 	free(s);
@@ -487,9 +486,8 @@ xfree(void *s)
 
 /* xxfree() - like xfree(), but we already know s != NULL */
 void
-xxfree(const void *s_const)
+xxfree(void *s)
 {
-    void *s = (void *)s_const;
 #if XMALLOC_TRACE
     xmalloc_show_trace(s, -1);
 #endif
@@ -575,7 +573,7 @@ xcalloc(int n, size_t sz)
     check_malloc(p, sz * n);
 #endif
 #if XMALLOC_STATISTICS
-    malloc_stat(sz * n);
+    malloc_stat(sz);
 #endif
 #if XMALLOC_TRACE
     xmalloc_show_trace(p, 1);
@@ -633,7 +631,7 @@ xstrerror(void)
     if (errno < 0 || errno >= sys_nerr)
 	snprintf(xstrerror_buf, BUFSIZ, "(%d) Unknown", errno);
     else
-	snprintf(xstrerror_buf, BUFSIZ, "(%d) %s", errno, strerror(errno));
+        snprintf(xstrerror_buf, BUFSIZ, "(%d) %s", errno, strerror(errno));
     return xstrerror_buf;
 }
 
@@ -750,10 +748,10 @@ xitoa(int num)
 }
 
 /* A default failure notifier when the main program hasn't installed any */
-void
-default_failure_notify(const char *msg)
+void default_failure_notify(const char *msg)
 {
     write(2, msg, strlen(msg));
     write(2, "\n", 1);
     abort();
 }
+

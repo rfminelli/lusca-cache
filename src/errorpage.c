@@ -52,6 +52,8 @@ typedef struct {
 
 /* local constant and vars */
 
+static const char *const proxy_auth_challenge_fmt = "Basic realm=\"%s\"";
+
 /*
  * note: hard coded error messages are not appended with %S automagically
  * to give you more control on the format
@@ -177,7 +179,7 @@ errorTryLoadText(const char *page_name, const char *dir)
 	return NULL;
     }
     text = xcalloc(sb.st_size + 2 + 1, 1);	/* 2 == space for %S */
-    if (FD_READ_METHOD(fd, text, sb.st_size) != sb.st_size) {
+    if (read(fd, text, sb.st_size) != sb.st_size) {
 	debug(4, 0) ("errorTryLoadText: failed to fully read: '%s': %s\n",
 	    path, xstrerror());
 	xfree(text);
@@ -234,8 +236,7 @@ errorPageName(int pageId)
 ErrorState *
 errorCon(err_type type, http_status status)
 {
-    ErrorState *err;
-    err = cbdataAlloc(ErrorState);
+    ErrorState *err = memAllocate(MEM_ERRORSTATE);
     err->page_id = type;	/* has to be reset manually if needed */
     err->type = type;
     err->http_status = status;
@@ -278,13 +279,25 @@ errorAppendEntry(StoreEntry * entry, ErrorState * err)
     storeBuffer(entry);
     rep = errorBuildReply(err);
     /* Add authentication header */
-    /* TODO: alter errorstate to be accel on|off aware. The 0 on the next line
-     * depends on authenticate behaviour: all schemes to date send no extra data
-     * on 407/401 responses, and do not check the accel state on 401/407 responses 
-     */
-    authenticateFixHeader(rep, err->auth_user_request, err->request, 0, 1);
+    switch (err->http_status) {
+    case HTTP_PROXY_AUTHENTICATION_REQUIRED:
+	/* Proxy authorisation needed */
+	httpHeaderPutStrf(&rep->header, HDR_PROXY_AUTHENTICATE,
+	    proxy_auth_challenge_fmt, Config.proxyAuthRealm);
+	break;
+    case HTTP_UNAUTHORIZED:
+	/* WWW Authorisation needed */
+	httpHeaderPutStrf(&rep->header, HDR_WWW_AUTHENTICATE,
+	    proxy_auth_challenge_fmt, Config.proxyAuthRealm);
+	break;
+    default:
+	/* Keep GCC happy */
+	break;
+    }
     httpReplySwapOut(rep, entry);
-    httpReplyAbsorb(mem->reply, rep);
+    httpReplyDestroy(rep);
+    mem->reply->sline.status = err->http_status;
+    mem->reply->content_length = -1;
     EBIT_CLR(entry->flags, ENTRY_FWD_HDR_WAIT);
     storeBufferFlush(entry);
     storeComplete(entry);
@@ -327,6 +340,7 @@ errorSend(int fd, ErrorState * err)
 	err->request->err_type = err->type;
     /* moved in front of errorBuildBuf @?@ */
     err->flags.flag_cbdata = 1;
+    cbdataAdd(err, memFree, MEM_ERRORSTATE);
     rep = errorBuildReply(err);
     comm_write_mbuf(fd, httpReplyPack(rep), errorSendComplete, err);
     httpReplyDestroy(rep);
@@ -347,13 +361,10 @@ errorSendComplete(int fd, char *bufnotused, size_t size, int errflag, void *data
     ErrorState *err = data;
     debug(4, 3) ("errorSendComplete: FD %d, size=%d\n", fd, size);
     if (errflag != COMM_ERR_CLOSING) {
-	if (err->callback) {
-	    debug(4, 3) ("errorSendComplete: callback\n");
+	if (err->callback)
 	    err->callback(fd, err->callback_data, size);
-	} else {
+	else
 	    comm_close(fd);
-	    debug(4, 3) ("errorSendComplete: comm_close\n");
-	}
     }
     errorStateFree(err);
 }
@@ -370,9 +381,10 @@ errorStateFree(ErrorState * err)
     wordlistDestroy(&err->ftp.server_msg);
     safe_free(err->ftp.request);
     safe_free(err->ftp.reply);
-    if (err->auth_user_request)
-	authenticateAuthUserRequestUnlock(err->auth_user_request);
-    cbdataFree(err);
+    if (err->flags.flag_cbdata)
+	cbdataFree(err);
+    else
+	memFree(err, MEM_ERRORSTATE);
 }
 
 #define CVT_BUF_SZ 512
@@ -392,7 +404,6 @@ errorStateFree(ErrorState * err)
  * I - server IP address                        x
  * L - HREF link for more info/contact          x
  * M - Request Method                           x
- * m - Error message returned by external Auth. x 
  * p - URL port #                               x
  * P - Protocol                                 x
  * R - Full HTTP Request                        x
@@ -471,9 +482,6 @@ errorConvert(char token, ErrorState * err)
 	    memBufPrintf(&mb, "%s", Config.errHtmlText);
 	} else
 	    p = "[not available]";
-	break;
-    case 'm':
-	p = authenticateAuthUserRequestMessage(err->auth_user_request) ? authenticateAuthUserRequestMessage(err->auth_user_request) : "[not available]";
 	break;
     case 'M':
 	p = r ? RequestMethodStr[r->method] : "[unkown method]";

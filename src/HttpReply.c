@@ -82,7 +82,6 @@ httpReplyInit(HttpReply * rep)
 {
     assert(rep);
     rep->hdr_sz = 0;
-    rep->maxBodySize = 0;
     rep->pstate = psReadyToParseStartLine;
     httpBodyInit(&rep->body);
     httpHeaderInit(&rep->header, hoReply);
@@ -317,13 +316,6 @@ httpReplyHdrExpirationTime(const HttpReply * rep)
 		return squid_curtime;
 	}
     }
-    if (Config.onoff.vary_ignore_expire &&
-	httpHeaderHas(&rep->header, HDR_VARY)) {
-	const time_t d = httpHeaderGetTime(&rep->header, HDR_DATE);
-	const time_t e = httpHeaderGetTime(&rep->header, HDR_EXPIRES);
-	if (d == e)
-	    return -1;
-    }
     if (httpHeaderHas(&rep->header, HDR_EXPIRES)) {
 	const time_t e = httpHeaderGetTime(&rep->header, HDR_EXPIRES);
 	/*
@@ -463,29 +455,4 @@ httpReplyBodySize(method_t method, HttpReply * reply)
     else if (reply->sline.status < HTTP_OK)
 	return 0;
     return reply->content_length;
-}
-
-/*
- * Calculates the maximum size allowed for an HTTP response
- */
-void
-httpReplyBodyBuildSize(request_t * request, HttpReply * reply, dlink_list * bodylist)
-{
-    body_size *bs;
-    aclCheck_t *checklist;
-    bs = (body_size *) bodylist->head;
-    while (bs) {
-	checklist = aclChecklistCreate(bs->access_list, request, NULL);
-	checklist->reply = reply;
-	if (1 != aclCheckFast(bs->access_list, checklist)) {
-	    /* deny - skip this entry */
-	    bs = (body_size *) bs->node.next;
-	} else {
-	    /* Allow - use this entry */
-	    reply->maxBodySize = bs->maxsize;
-	    bs = NULL;
-	    debug(58, 3) ("httpReplyBodyBuildSize: Setting maxBodySize to %d\n", reply->maxBodySize);
-	}
-	aclChecklistFree(checklist);
-    }
 }

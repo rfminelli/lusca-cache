@@ -112,15 +112,6 @@ storeDirValidSwapDirSize(int swapdir, ssize_t objsize)
      */
     if (Config.cacheSwap.swapDirs[swapdir].max_objsize == -1)
 	return 1;
-
-    /*
-     * If the object size is -1, then if the storedir isn't -1 we
-     * can't store it
-     */
-    if ((objsize == -1) &&
-	(Config.cacheSwap.swapDirs[swapdir].max_objsize != -1))
-	return 0;
-
     /*
      * Else, make sure that the max object size is larger than objsize
      */
@@ -200,8 +191,6 @@ storeDirSelectSwapDirLeastLoad(const StoreEntry * e)
 	if (load < 0 || load > 1000) {
 	    continue;
 	}
-	if (!storeDirValidSwapDirSize(i, objsize))
-	    continue;
 	if (SD->flags.read_only)
 	    continue;
 	if (SD->cur_size > SD->max_size)
@@ -213,7 +202,7 @@ storeDirSelectSwapDirLeastLoad(const StoreEntry * e)
 	if (load == least_load) {
 	    /* closest max_objsize fit */
 	    if (least_objsize != -1)
-		if (SD->max_objsize > least_objsize || SD->max_objsize == -1)
+		if (SD->max_size > least_objsize || SD->max_size == -1)
 		    continue;
 	    /* most free */
 	    if (cur_free < most_free)
@@ -224,8 +213,10 @@ storeDirSelectSwapDirLeastLoad(const StoreEntry * e)
 	most_free = cur_free;
 	dirn = i;
     }
+
     if (dirn >= 0)
 	Config.cacheSwap.swapDirs[dirn].flags.selected = 1;
+
     return dirn;
 }
 
@@ -297,7 +288,6 @@ storeDirStats(StoreEntry * sentry)
     storeAppendPrintf(sentry, "Current Capacity       : %d%% used, %d%% free\n",
 	percent((int) store_swap_size, (int) Config.Swap.maxSize),
 	percent((int) (Config.Swap.maxSize - store_swap_size), (int) Config.Swap.maxSize));
-    /* FIXME Here we should output memory statistics */
 
     /* Now go through each swapdir, calling its statfs routine */
     for (i = 0; i < Config.cacheSwap.n_configured; i++) {
@@ -308,11 +298,6 @@ storeDirStats(StoreEntry * sentry)
 	storeAppendPrintf(sentry, "FS Block Size %d Bytes\n",
 	    SD->fs.blksize);
 	SD->statfs(SD, sentry);
-	if (SD->repl) {
-	    storeAppendPrintf(sentry, "Removal policy: %s\n", SD->repl->_type);
-	    if (SD->repl->Stats)
-		SD->repl->Stats(SD->repl, sentry);
-	}
     }
 }
 

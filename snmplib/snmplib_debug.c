@@ -15,8 +15,6 @@
 #include "snprintf.h"
 #endif
 
-#include "snmp_debug.h"
-
 #if STDC_HEADERS
 void (*snmplib_debug_hook) (int, char *,...) = NULL;
 #else

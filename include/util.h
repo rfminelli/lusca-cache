@@ -80,7 +80,7 @@ extern void *xmalloc(size_t);
 extern void *xrealloc(void *, size_t);
 extern void Tolower(char *);
 extern void xfree(void *);
-extern void xxfree(const void *);
+extern void xxfree(void *);
 
 /* rfc1738.c */
 extern char *rfc1738_escape(const char *);
@@ -115,7 +115,6 @@ extern int safe_inet_addr(const char *, SIA *);
 extern time_t parse_iso3307_time(const char *buf);
 extern char *base64_decode(const char *coded);
 extern const char *base64_encode(const char *decoded);
-extern const char *base64_encode_bin(const char *data, int len);
 
 extern double xpercent(double part, double whole);
 extern int xpercentInt(double part, double whole);
@@ -126,10 +125,5 @@ extern const char *xitoa(int num);
 #if !HAVE_DRAND48
 double drand48(void);
 #endif
-
-/*
- * Returns the amount of known allocated memory
- */
-int statMemoryAccounted(void);
 
 #endif /* ndef _UTIL_H_ */

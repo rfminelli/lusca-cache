@@ -103,7 +103,7 @@ waisReadReply(int fd, void *data)
     read_sz = delayBytesWanted(delay_id, 1, read_sz);
 #endif
     statCounter.syscalls.sock.reads++;
-    len = FD_READ_METHOD(fd, buf, read_sz);
+    len = read(fd, buf, read_sz);
     if (len > 0) {
 	fd_bytes(fd, len, FD_READ);
 #if DELAY_POOLS
@@ -216,7 +216,6 @@ waisSendRequest(int fd, void *data)
     EBIT_CLR(waisState->entry->flags, ENTRY_FWD_HDR_WAIT);
 }
 
-CBDATA_TYPE(WaisStateData);
 void
 waisStart(FwdState * fwd)
 {
@@ -229,8 +228,8 @@ waisStart(FwdState * fwd)
     debug(24, 3) ("waisStart: \"%s %s\"\n", RequestMethodStr[method], url);
     statCounter.server.all.requests++;
     statCounter.server.other.requests++;
-    CBDATA_INIT_TYPE(WaisStateData);
-    waisState = cbdataAlloc(WaisStateData);
+    waisState = xcalloc(1, sizeof(WaisStateData));
+    cbdataAdd(waisState, cbdataXfree, 0);
     waisState->method = method;
     waisState->request_hdr = &request->header;
     waisState->fd = fd;

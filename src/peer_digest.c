@@ -97,8 +97,6 @@ peerDigestClean(PeerDigest * pd)
     stringClean(&pd->host);
 }
 
-CBDATA_TYPE(PeerDigest);
-
 /* allocate new peer digest, call Init, and lock everything */
 PeerDigest *
 peerDigestCreate(peer * p)
@@ -106,8 +104,8 @@ peerDigestCreate(peer * p)
     PeerDigest *pd;
     assert(p);
 
-    CBDATA_INIT_TYPE(PeerDigest);
-    pd = cbdataAlloc(PeerDigest);
+    pd = memAllocate(MEM_PEER_DIGEST);
+    cbdataAdd(pd, memFree, MEM_PEER_DIGEST);
     peerDigestInit(pd, p);
     cbdataLock(pd->peer);	/* we will use the peer */
 
@@ -115,7 +113,7 @@ peerDigestCreate(peer * p)
 }
 
 /* call Clean and free/unlock everything */
-static void
+void
 peerDigestDestroy(PeerDigest * pd)
 {
     peer *p;
@@ -262,8 +260,6 @@ peerDigestCheck(void *data)
 	peerDigestSetCheck(pd, req_time - squid_curtime);
 }
 
-CBDATA_TYPE(DigestFetchState);
-
 /* ask store for a digest */
 static void
 peerDigestRequest(PeerDigest * pd)
@@ -285,10 +281,10 @@ peerDigestRequest(PeerDigest * pd)
 	url = internalRemoteUri(p->host, p->http_port,
 	    "/squid-internal-periodic/", StoreDigestFileName);
 
+    key = storeKeyPublic(url, METHOD_GET);
+    debug(72, 2) ("peerDigestRequest: %s key: %s\n", url, storeKeyText(key));
     req = urlParse(METHOD_GET, url);
     assert(req);
-    key = storeKeyPublicByRequest(req);
-    debug(72, 2) ("peerDigestRequest: %s key: %s\n", url, storeKeyText(key));
 
     /* add custom headers */
     assert(!req->header.len);
@@ -297,8 +293,8 @@ peerDigestRequest(PeerDigest * pd)
     if (p->login)
 	xstrncpy(req->login, p->login, MAX_LOGIN_SZ);
     /* create fetch state structure */
-    CBDATA_INIT_TYPE(DigestFetchState);
-    fetch = cbdataAlloc(DigestFetchState);
+    fetch = memAllocate(MEM_DIGEST_FETCH_STATE);
+    cbdataAdd(fetch, memFree, MEM_DIGEST_FETCH_STATE);
     fetch->request = requestLink(req);
     fetch->pd = pd;
     fetch->offset = 0;

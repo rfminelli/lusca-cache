@@ -35,9 +35,6 @@
 
 #include "squid.h"
 
-#if defined(_SQUID_CYGWIN_)
-#include <sys/ioctl.h>
-#endif
 #ifdef HAVE_NETINET_TCP_H
 #include <netinet/tcp.h>
 #endif
@@ -72,9 +69,10 @@ static IPH commConnectDnsHandle;
 static void commConnectCallback(ConnectStateData * cs, int status);
 static int commResetFD(ConnectStateData * cs);
 static int commRetryConnect(ConnectStateData * cs);
-CBDATA_TYPE(ConnectStateData);
+static CBDUNL commConnectDataFree;
 
 static MemPool *comm_write_pool = NULL;
+static MemPool *conn_state_pool = NULL;
 static MemPool *conn_close_pool = NULL;
 
 static void
@@ -233,9 +231,9 @@ comm_listen(int sock)
 void
 commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *data)
 {
-    ConnectStateData *cs;
+    ConnectStateData *cs = memPoolAlloc(conn_state_pool);
     debug(5, 3) ("commConnectStart: FD %d, %s:%d\n", fd, host, (int) port);
-    cs = cbdataAlloc(ConnectStateData);
+    cbdataAdd(cs, commConnectDataFree, 0);
     cs->fd = fd;
     cs->host = xstrdup(host);
     cs->port = port;
@@ -245,6 +243,12 @@ commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *
     comm_add_close_handler(fd, commConnectFree, cs);
     cs->locks++;
     ipcache_nbgethostbyname(host, commConnectDnsHandle, cs);
+}
+
+static void
+commConnectDataFree(void *data, int unused)
+{
+    memPoolFree(conn_state_pool, data);
 }
 
 static void
@@ -540,7 +544,7 @@ commLingerClose(int fd, void *unused)
 {
     LOCAL_ARRAY(char, buf, 1024);
     int n;
-    n = FD_READ_METHOD(fd, buf, 1024);
+    n = read(fd, buf, 1024);
     if (n < 0)
 	debug(5, 3) ("commLingerClose: FD %d read: %s\n", fd, xstrerror());
     comm_close(fd);
@@ -573,12 +577,10 @@ void
 comm_close(int fd)
 {
     fde *F = NULL;
-
     debug(5, 5) ("comm_close: FD %d\n", fd);
     assert(fd >= 0);
     assert(fd < Squid_MaxFD);
     F = &fd_table[fd];
-
     if (F->flags.closing)
 	return;
     if (shutting_down && (!F->flags.open || F->type == FD_FILE))
@@ -795,8 +797,8 @@ comm_init(void)
      * after accepting a client but before it opens a socket or a file.
      * Since Squid_MaxFD can be as high as several thousand, don't waste them */
     RESERVED_FD = XMIN(100, Squid_MaxFD / 4);
-    CBDATA_INIT_TYPE(ConnectStateData);
     comm_write_pool = memPoolCreate("CommWriteStateData", sizeof(CommWriteStateData));
+    conn_state_pool = memPoolCreate("ConnectStateData", sizeof(ConnectStateData));
     conn_close_pool = memPoolCreate("close_handler", sizeof(close_handler));
 }
 
@@ -812,7 +814,7 @@ commHandleWrite(int fd, void *data)
 	fd, (int) state->offset, state->size);
 
     nleft = state->size - state->offset;
-    len = FD_WRITE_METHOD(fd, state->buf + state->offset, nleft);
+    len = write(fd, state->buf + state->offset, nleft);
     debug(5, 5) ("commHandleWrite: write() returns %d\n", len);
     fd_bytes(fd, len, FD_WRITE);
     statCounter.syscalls.sock.writes++;
@@ -861,7 +863,7 @@ commHandleWrite(int fd, void *data)
 
 
 /* Select for Writing on FD, until SIZE bytes are sent.  Call
- * *HANDLER when complete. */
+ * * HANDLER when complete. */
 void
 comm_write(int fd, char *buf, int size, CWCB * handler, void *handler_data, FREE * free_func)
 {

@@ -2,7 +2,7 @@
 /*
  * $Id$
  *
- * DEBUG: none          Generate squid.conf.default and cf_parser.h
+ * DEBUG: none          Generate squid.conf and cf_parser.c
  * AUTHOR: Max Okumoto
  *
  * SQUID Web Proxy Cache          http://www.squid-cache.org/
@@ -36,15 +36,15 @@
 /*****************************************************************************
  * Abstract:	This program parses the input file and generates code and
  *		files used to configure the variables in squid.
- *		(ie it creates the squid.conf.default file from the cf.data file)
+ *		(ie it creates the squid.conf file from the cf.data file)
  *
  *		The output files are as follows:
- *		cf_parser.h - this file contains, default_all() which
+ *		cf_parser.c - this file contains, default_all() which
  *			  initializes variables with the default
  *			  values, parse_line() that parses line from
- *			  squid.conf.default, dump_config that dumps the
+ *			  squid.conf, dump_config that dumps the
  *			  current the values of the variables.
- *		squid.conf.default - default configuration file given to the server
+ *		squid.conf - default configuration file given to the server
  *			 administrator.
  *****************************************************************************/
 
@@ -76,8 +76,8 @@
 #include "util.h"
 
 #define MAX_LINE	1024	/* longest configuration line */
-#define _PATH_PARSER		"cf_parser.h"
-#define _PATH_SQUID_CONF	"squid.conf.default"
+#define _PATH_PARSER		"cf_parser.c"
+#define _PATH_SQUID_CONF	"squid.conf"
 
 enum State {
     sSTART,
@@ -102,7 +102,6 @@ typedef struct Entry {
     char *ifdef;
     Line *doc;
     Line *nocomment;
-    int array_flag;
     struct Entry *next;
 } Entry;
 
@@ -222,11 +221,6 @@ main(int argc, char *argv[])
 		    printf("Error on line %d\n", linenum);
 		    exit(1);
 		}
-		/* hack to support arrays, rather than pointers */
-		if (0 == strcmp(ptr + strlen(ptr) - 2, "[]")) {
-		    curr->array_flag = 1;
-		    *(ptr + strlen(ptr) - 2) = '\0';
-		}
 		curr->type = xstrdup(ptr);
 	    } else if (!strncmp(buff, "IFDEF:", 6)) {
 		if ((ptr = strtok(buff + 6, WS)) == NULL) {
@@ -325,7 +319,7 @@ main(int argc, char *argv[])
      * Generate parse_line()
      * Generate dump_config()
      * Generate free_all()
-     * Generate example squid.conf.default file
+     * Generate example squid.conf file
      *-------------------------------------------------------------------*/
 
     /* Open output x.c file */
@@ -491,9 +485,8 @@ gen_parse(Entry * head, FILE * fp)
 		);
 	} else {
 	    fprintf(fp,
-		"\t\tparse_%s(&%s%s);\n",
-		entry->type, entry->loc,
-		entry->array_flag ? "[0]" : ""
+		"\t\tparse_%s(&%s);\n",
+		entry->type, entry->loc
 		);
 	}
 	if (entry->ifdef)
@@ -552,9 +545,7 @@ gen_free(Entry * head, FILE * fp)
 	    continue;
 	if (entry->ifdef)
 	    fprintf(fp, "#if %s\n", entry->ifdef);
-	fprintf(fp, "\tfree_%s(&%s%s);\n",
-	    entry->type, entry->loc,
-	    entry->array_flag ? "[0]" : "");
+	fprintf(fp, "\tfree_%s(&%s);\n", entry->type, entry->loc);
 	if (entry->ifdef)
 	    fprintf(fp, "#endif\n");
     }

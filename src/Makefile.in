@@ -18,7 +18,7 @@ localstatedir   = @localstatedir@
 srcdir		= @srcdir@
 VPATH		= @srcdir@
 
-SUBDIRS		= fs repl auth
+SUBDIRS		= fs repl
 
 # Gotta love the DOS legacy
 #
@@ -49,8 +49,6 @@ DEFAULT_ICON_DIR	= $(sysconfdir)/icons
 DEFAULT_ERROR_DIR	= $(sysconfdir)/errors
 DEFAULT_MIB_PATH	= $(sysconfdir)/mib.txt
 
-AUTH_OBJS	= @AUTH_OBJS@
-AUTH_MODULES	= @AUTH_MODULES@
 CC		= @CC@
 MAKEDEPEND	= @MAKEDEPEND@
 INSTALL		= @INSTALL@
@@ -63,10 +61,8 @@ PERL            = @PERL@
 CRYPTLIB	= @CRYPTLIB@
 REGEXLIB	= @REGEXLIB@
 PTHREADLIB	= @PTHREADLIB@
-AIOLIB		= @AIOLIB@
 SNMPLIB		= @SNMPLIB@
 MALLOCLIB	= @LIB_MALLOC@
-SSLLIB		= @SSLLIB@
 AC_CFLAGS	= @CFLAGS@
 LDFLAGS		= @LDFLAGS@
 XTRA_LIBS	= @XTRA_LIBS@
@@ -81,8 +77,8 @@ SHELL		= /bin/sh
 
 INCLUDE		= -I. -I../include -I$(top_srcdir)/include
 CFLAGS 		= $(AC_CFLAGS) $(INCLUDE) $(DEFINES)
-SQUID_LIBS	= -L../lib $(CRYPTLIB) $(REGEXLIB) @SQUID_AIO_LIB@ @SQUID_PTHREAD_LIB@ \
-		  $(SNMPLIB) $(MALLOCLIB) $(SSLLIB) -lmiscutil $(XTRA_LIBS)
+SQUID_LIBS	= -L../lib $(CRYPTLIB) $(REGEXLIB) @SQUID_PTHREAD_LIB@ \
+		  $(SNMPLIB) $(MALLOCLIB) -lmiscutil $(XTRA_LIBS)
 CLIENT_LIBS	= -L../lib -lmiscutil $(XTRA_LIBS)
 DNSSERVER_LIBS	= -L../lib -lmiscutil $(XTRA_LIBS)
 PINGER_LIBS	= -L../lib -lmiscutil $(XTRA_LIBS)
@@ -96,7 +92,6 @@ OBJS	 	= \
 		access_log.o \
 		acl.o \
 		asn.o \
-		auth_modules.o \
 		authenticate.o \
 		cache_cf.o \
 		CacheDigest.o \
@@ -155,6 +150,7 @@ OBJS	 	= \
 		pconn.o \
 		peer_digest.o \
 		peer_select.o \
+		pump.o \
 		redirect.o \
 		referer.o \
 		refresh.o \
@@ -162,7 +158,6 @@ OBJS	 	= \
 		send-announce.o \
 		@SNMP_OBJS@ \
 		ssl.o \
-		@SSL_OBJS@ \
 		stat.o \
 		StatHist.o \
 		String.o \
@@ -188,7 +183,6 @@ OBJS	 	= \
 		wais.o \
 		wccp.o \
 		whois.o \
-		@WIN32_OBJS@ \
 		$(XTRA_OBJS)
 
 SNMP_OBJS	= \
@@ -202,12 +196,10 @@ DELAY_OBJS	= delay_pools.o
 LEAKFINDER_OBJS	= \
 		leakfinder.o
 
-SSL_OBJS 	= ssl_support.o
-
 DEFAULTS        = \
 	-DDEFAULT_CONFIG_FILE=\"$(DEFAULT_CONFIG_FILE)\"
 
-all:    squid.conf.default
+all:    squid.conf
 	@for dir in $(SUBDIRS); do \
 		echo "Making $@ in $$dir..."; \
 		(cd $$dir ; $(MAKE) $(MFLAGS) prefix="$(prefix)" $@) || exit 1; \
@@ -218,8 +210,8 @@ $(OBJS): $(top_srcdir)/include/version.h ../include/autoconf.h
 
 $(SNMP_OBJS): ../snmplib/libsnmp.a $(top_srcdir)/include/cache_snmp.h
 
-$(SQUID_EXE): $(OBJS) $(STORE_OBJS) $(REPL_OBJS) $(AUTH_OBJS)
-	$(CC) -o $@ $(LDFLAGS) $(OBJS) $(STORE_OBJS) $(REPL_OBJS) $(AUTH_OBJS) $(SQUID_LIBS)
+$(SQUID_EXE): $(OBJS) $(STORE_OBJS) $(REPL_OBJS)
+	$(CC) -o $@ $(LDFLAGS) $(OBJS) $(STORE_OBJS) $(REPL_OBJS) $(SQUID_LIBS)
 
 globals.o: globals.c Makefile
 	$(CC) -c globals.c $(CFLAGS) -I$(srcdir) $(DEFAULTS)
@@ -254,12 +246,12 @@ cache_diff: cache_diff.o debug.o globals.o store_key_md5.o
 test_cache_digest: test_cache_digest.o CacheDigest.o debug.o globals.o store_key_md5.o
 	$(CC) -o $@ $(LDFLAGS) $@.o CacheDigest.o debug.o globals.o store_key_md5.o $(STD_APP_LIBS)
 
-cache_cf.o: cf_parser.h
+cache_cf.o: cf_parser.c
 
-squid.conf.default: cf_parser.h
-	@sh -c "test -f squid.conf.default || ./cf_gen cf.data"
+squid.conf: cf_parser.c
+	@sh -c "test -f squid.conf || ./cf_gen cf.data"
 
-cf_parser.h: cf.data cf_gen
+cf_parser.c: cf.data cf_gen
 	./cf_gen cf.data
 
 cf_gen: cf_gen.o
@@ -308,15 +300,6 @@ $(REPL_OBJS):
 
 repl_modules repl/stamp:
 	@sh -c "cd repl && $(MAKE) all"
-
-auth_modules.c: auth_modules.sh Makefile
-	sh $(srcdir)/auth_modules.sh $(AUTH_MODULES) >auth_modules.c
-
-auth_modules.o: auth_modules.c
-	$(CC) -c auth_modules.c $(CFLAGS) -I$(srcdir)
-
-$(AUTH_OBJS):
-	@sh -c "cd `dirname $@` && $(MAKE) $(MFLAGS) `basename $@`"
 
 install-mkdirs:
 	-@if test ! -d $(prefix); then \
@@ -394,20 +377,20 @@ install: all install-mkdirs
 		fi; \
 	done
 	$(INSTALL_FILE) $(srcdir)/mib.txt $(DEFAULT_MIB_PATH)
-	$(INSTALL_FILE) squid.conf.default $(sysconfdir)
+	$(INSTALL_FILE) squid.conf $(sysconfdir)/squid.conf.default
 	@if test -f $(sysconfdir)/squid.conf ; then \
 		echo "$@ will not overwrite existing $(sysconfdir)/squid.conf" ; \
 	else \
-		echo "$(INSTALL_FILE) squid.conf.default $(sysconfdir)/squid.conf"; \
-		$(INSTALL_FILE) squid.conf.default $(sysconfdir)/squid.conf; \
+		echo "$(INSTALL_FILE) squid.conf $(sysconfdir)"; \
+		$(INSTALL_FILE) squid.conf $(sysconfdir); \
 	fi
 
-	$(INSTALL_FILE) $(srcdir)/mime.conf.default $(sysconfdir)
+	$(INSTALL_FILE) $(srcdir)/mime.conf $(sysconfdir)/mime.conf.default
 	@if test -f $(sysconfdir)/mime.conf ; then \
 		echo "$@ will not overwrite existing $(sysconfdir)/mime.conf" ; \
 	else \
-		echo "$(INSTALL_FILE) $(srcdir)/mime.conf.default $(sysconfdir)/mime.conf"; \
-		$(INSTALL_FILE) $(srcdir)/mime.conf.default $(sysconfdir)/mime.conf; \
+		echo "$(INSTALL_FILE) $(srcdir)/mime.conf $(sysconfdir)"; \
+		$(INSTALL_FILE) $(srcdir)/mime.conf $(sysconfdir); \
 	fi
 
 install-pinger:
@@ -425,8 +408,8 @@ install-pinger:
 
 clean: 
 	-rm -rf *.o *pure_* core $(PROGS) $(UTILS) $(CGIPROGS) $(SUID_UTILS)
-	-rm -f cf_gen cf_gen_defines.h cf_parser.h cf.data globals.c string_arrays.c
-	-rm -f store_modules.c repl_modules.c auth_modules.c squid.conf.default
+	-rm -f cf_gen cf_gen_defines.h cf_parser.c cf.data globals.c string_arrays.c
+	-rm -f store_modules.c repl_modules.c squid.conf
 	@for dir in $(SUBDIRS); do \
 		echo "Making $@ in $$dir..."; \
 		(cd $$dir ; $(MAKE) $(MFLAGS) prefix="$(prefix)" $@) || exit 1; \
@@ -444,5 +427,5 @@ distclean:	clean
 tags:
 	ctags *.[ch] ../include/*.h ../lib/*.[ch]
 
-depend: cf_parser.h
+depend: cf_parser.c
 	$(MAKEDEPEND) $(INCLUDE) -fMakefile $(srcdir)/*.c
