@@ -114,8 +114,7 @@
 #define DISK_FILE_NOT_FOUND      (-5)
 #define DISK_NO_SPACE_LEFT       (-6)
 
-typedef int (*FILE_READ_HD) (int fd, char *buf, int size, int errflag,
-    void *data, int offset);
+typedef int (*FILE_READ_HD) (int fd, char *buf, int size, int errflag, void *data);
 
 typedef int (*FILE_WALK_HD) (int fd, int errflag, void *data);
 
@@ -138,8 +137,7 @@ typedef struct _dread_ctrl {
     char *buf;
     int cur_len;
     int end_of_file;
-    int (*handler) (int fd, char *buf, int size, int errflag, void *data,
-	int offset);
+    FILE_READ_HD handler;
     void *client_data;
 } dread_ctrl;
 
@@ -158,12 +156,11 @@ typedef struct _FileEntry {
 	NOT_PRESENT, PRESENT
     } write_daemon;
     enum {
-	UNLOCK, LOCK
-    } write_lock;
-    int access_code;		/* use to verify write lock */
-    enum {
 	NO_WRT_PENDING, WRT_PENDING
     } write_pending;
+    enum {
+	FILE_READ, FILE_WRITE
+    } file_mode;
     void (*wrt_handle) ();
     void *wrt_handle_data;
     dwrite_q *write_q;
@@ -177,28 +174,20 @@ extern int file_close _PARAMS((int fd));
 extern int file_write _PARAMS((int fd,
 	char *buf,
 	int len,
-	int access_code,
-	void       (*handle) _PARAMS((int, int, StoreEntry *)),
+	void       (*handle) _PARAMS((int, int, int, StoreEntry *)),
 	void *handle_data,
 	void       (*free) _PARAMS((void *))));
-extern int file_write_unlock _PARAMS((int fd, int access_code));
 extern int file_read _PARAMS((int fd,
 	char *buf,
 	int req_len,
 	int offset,
-	int       (*handler) _PARAMS((int fd,
-		char *buf,
-		int size,
-		int errflag,
-		void *data,
-		int offset)),
+	FILE_READ_HD handler,
 	void *client_data));
 extern int file_walk _PARAMS((int fd,
 	int       (*handler) _PARAMS((int fd, int errflag, void *data)),
 	void *client_data,
 	int       (*line_handler) _PARAMS((int fd, char *buf, int size, void *line_data)),
 	void *line_data));
-extern int file_write_lock _PARAMS((int fd));
 extern int disk_init _PARAMS((void));
 extern int diskWriteIsComplete _PARAMS((int));
 extern void diskFreeMemory _PARAMS((void));

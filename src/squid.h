@@ -264,6 +264,7 @@ typedef unsigned long u_num32;
 
 typedef void (*SIH) (int, void *);	/* swap in */
 typedef int (*QS) (const void *, const void *);
+typedef void (*PIF) (int, void *);	/* store callback */
 
 #include "cache_cf.h"
 #include "comm.h"
