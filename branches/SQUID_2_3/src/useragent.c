@@ -135,3 +135,4 @@ useragentLogClose(void)
     fclose(cache_useragent_log);
     cache_useragent_log = NULL;
 #endif
+}
