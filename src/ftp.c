@@ -6,15 +6,20 @@
 
 #include "squid.h"
 
-#define FTP_DELETE_GAP  (64*1024)
-#define READBUFSIZ	4096
+#define FTP_DELETE_GAP  (1<<18)
 #define MAGIC_MARKER    "\004\004\004"	/* No doubt this should be more configurable */
 #define MAGIC_MARKER_SZ 3
 
 static char ftpASCII[] = "A";
 static char ftpBinary[] = "I";
+static int ftpget_server_read = -1;
+static int ftpget_server_write = -1;
+#if HAVE_WORKING_UNIX_SOCKETS
+static char ftpget_socket_path[128];
+#else
 static char localhost[] = "127.0.0.1";
-static int ftpget_server_pipe = -1;
+static u_short ftpget_port = 0;
+#endif
 
 typedef struct _Ftpdata {
     StoreEntry *entry;
@@ -26,9 +31,6 @@ typedef struct _Ftpdata {
     char *icp_page_ptr;		/* Used to send proxy-http request: 
 				 * put_free_8k_page(me) if the lifetime
 				 * expires */
-    char *icp_rwd_ptr;		/* When a lifetime expires during the
-				 * middle of an icpwrite, don't lose the
-				 * icpReadWriteData */
     int got_marker;		/* denotes end of successful request */
     int reply_hdr_state;
 } FtpData;
@@ -43,7 +45,7 @@ static void ftp_login_parser _PARAMS((char *login, FtpData * data));
 /* Global functions not declared in ftp.h */
 void ftpLifetimeExpire _PARAMS((int fd, FtpData * data));
 int ftpReadReply _PARAMS((int fd, FtpData * data));
-void ftpSendComplete _PARAMS((int fd, char *buf, int size, int errflag, FtpData * data));
+void ftpSendComplete _PARAMS((int fd, char *buf, int size, int errflag, void *ftpData));
 void ftpSendRequest _PARAMS((int fd, FtpData * data));
 void ftpConnInProgress _PARAMS((int fd, FtpData * data));
 void ftpServerClose _PARAMS((void));
@@ -54,6 +56,7 @@ static int ftpStateFree(fd, ftpState)
 {
     if (ftpState == NULL)
 	return 1;
+    storeUnlockObject(ftpState->entry);
     if (ftpState->reply_hdr) {
 	put_free_8k_page(ftpState->reply_hdr);
 	ftpState->reply_hdr = NULL;
@@ -62,8 +65,8 @@ static int ftpStateFree(fd, ftpState)
 	put_free_8k_page(ftpState->icp_page_ptr);
 	ftpState->icp_page_ptr = NULL;
     }
-    if (ftpState->icp_rwd_ptr)
-	safe_free(ftpState->icp_rwd_ptr);
+    if (--ftpState->request->link_count == 0)
+	put_free_request_t(ftpState->request);
     xfree(ftpState);
     return 0;
 }
@@ -228,6 +231,7 @@ static void ftpProcessReplyHeader(data, buf, size)
 	    if (BIT_TEST(entry->flag, CACHABLE))
 		storeSetPublicKey(entry);
 	    break;
+	case 302:		/* Moved Temporarily */
 	case 304:		/* Not Modified */
 	case 401:		/* Unauthorized */
 	case 407:		/* Proxy Authentication Required */
@@ -254,43 +258,52 @@ int ftpReadReply(fd, data)
      int fd;
      FtpData *data;
 {
-    static char buf[READBUFSIZ];
+    static char buf[SQUID_TCP_SO_RCVBUF];
     int len;
     int clen;
     int off;
+    int bin;
     StoreEntry *entry = NULL;
 
     entry = data->entry;
-    if (entry->flag & DELETE_BEHIND) {
-	if (storeClientWaiting(entry)) {
-	    /* check if we want to defer reading */
-	    clen = entry->mem_obj->e_current_len;
-	    off = entry->mem_obj->e_lowest_offset;
-	    if ((clen - off) > FTP_DELETE_GAP) {
-		debug(9, 3, "ftpReadReply: Read deferred for Object: %s\n",
-		    entry->url);
-		debug(9, 3, "--> Current Gap: %d bytes\n", clen - off);
-		/* reschedule, so it will automatically be reactivated when
-		 * Gap is big enough. */
-		comm_set_select_handler(fd,
-		    COMM_SELECT_READ,
-		    (PF) ftpReadReply,
-		    (void *) data);
-		/* dont try reading again for a while */
-		comm_set_stall(fd, getStallDelay());
-		return 0;
-	    }
-	} else {
-	    /* we can terminate connection right now */
-	    squid_error_entry(entry, ERR_NO_CLIENTS_BIG_OBJ, NULL);
+    if (entry->flag & DELETE_BEHIND && !storeClientWaiting(entry)) {
+	/* we can terminate connection right now */
+	squid_error_entry(entry, ERR_NO_CLIENTS_BIG_OBJ, NULL);
+	comm_close(fd);
+	return 0;
+    }
+    /* check if we want to defer reading */
+    clen = entry->mem_obj->e_current_len;
+    off = storeGetLowestReaderOffset(entry);
+    if ((clen - off) > FTP_DELETE_GAP) {
+	if (entry->flag & CLIENT_ABORT_REQUEST) {
+	    squid_error_entry(entry, ERR_CLIENT_ABORT, NULL);
 	    comm_close(fd);
-	    return 0;
 	}
+	IOStats.Ftp.reads_deferred++;
+	debug(11, 3, "ftpReadReply: Read deferred for Object: %s\n",
+	    entry->url);
+	debug(11, 3, "                Current Gap: %d bytes\n", clen - off);
+	/* reschedule, so it will be automatically reactivated
+	 * when Gap is big enough. */
+	comm_set_select_handler(fd,
+	    COMM_SELECT_READ,
+	    (PF) ftpReadReply,
+	    (void *) data);
+	/* NOTE there is no read timeout handler to disable */
+	/* dont try reading again for a while */
+	comm_set_stall(fd, getStallDelay());
+	return 0;
     }
     errno = 0;
-    len = read(fd, buf, READBUFSIZ);
+    IOStats.Ftp.reads++;
+    len = read(fd, buf, SQUID_TCP_SO_RCVBUF);
     debug(9, 5, "ftpReadReply: FD %d, Read %d bytes\n", fd, len);
-
+    if (len > 0) {
+	for (clen = len - 1, bin = 0; clen; bin++)
+	    clen >>= 1;
+	IOStats.Ftp.read_hist[bin]++;
+    }
     if (len < 0) {
 	debug(9, 1, "ftpReadReply: read error: %s\n", xstrerror());
 	if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -317,7 +330,7 @@ int ftpReadReply(fd, data)
 	    /* If we didn't see the magic marker, assume the transfer
 	     * failed and arrange so the object gets ejected and
 	     * never gets to disk. */
-	    debug(9, 1, "ftpReadReply: Didn't see magic marker, purging <URL:%s>.\n", entry->url);
+	    debug(9, 1, "ftpReadReply: Purging '%s'\n", entry->url);
 	    entry->expires = squid_curtime + getNegativeTTL();
 	    BIT_RESET(entry->flag, CACHABLE);
 	    storeReleaseRequest(entry);
@@ -371,11 +384,12 @@ void ftpSendComplete(fd, buf, size, errflag, data)
      char *buf;
      int size;
      int errflag;
-     FtpData *data;
+     void *data;
 {
+    FtpData *ftpState = (FtpData *) data;
     StoreEntry *entry = NULL;
 
-    entry = data->entry;
+    entry = ftpState->entry;
     debug(9, 5, "ftpSendComplete: FD %d: size %d: errflag %d.\n",
 	fd, size, errflag);
 
@@ -383,22 +397,21 @@ void ftpSendComplete(fd, buf, size, errflag, data)
 	put_free_8k_page(buf);	/* Allocated by ftpSendRequest. */
 	buf = NULL;
     }
-    data->icp_page_ptr = NULL;	/* So lifetime expire doesn't re-free */
-    data->icp_rwd_ptr = NULL;	/* Don't double free in lifetimeexpire */
+    ftpState->icp_page_ptr = NULL;	/* So lifetime expire doesn't re-free */
 
     if (errflag) {
 	squid_error_entry(entry, ERR_CONNECT_FAIL, xstrerror());
 	comm_close(fd);
 	return;
     } else {
-	comm_set_select_handler(data->ftp_fd,
+	comm_set_select_handler(ftpState->ftp_fd,
 	    COMM_SELECT_READ,
 	    (PF) ftpReadReply,
-	    (void *) data);
-	comm_set_select_handler_plus_timeout(data->ftp_fd,
+	    (void *) ftpState);
+	comm_set_select_handler_plus_timeout(ftpState->ftp_fd,
 	    COMM_SELECT_TIMEOUT,
 	    (PF) ftpLifetimeExpire,
-	    (void *) data, getReadTimeout());
+	    (void *) ftpState, getReadTimeout());
     }
 }
 
@@ -441,18 +454,7 @@ void ftpSendRequest(fd, data)
 	    mode = ftpBinary;
     }
 
-#ifdef NO_NEED_TO_DO_THIS
-    /* Remove leading slash from FTP url-path so that we can
-     *  handle ftp://user:pw@host/path objects where path and /path
-     *  are quite different.         -DW */
-    if (!strcmp(path, "/"))
-	*path = '.';
-    if (*path == '/')
-	path++;
-#endif
-
     /* Start building the buffer ... */
-
     strcat(buf, getFtpProgram());
     strcat(buf, space);
 
@@ -490,7 +492,7 @@ void ftpSendRequest(fd, data)
     strcat(buf, *data->password ? data->password : "\"\"");
     strcat(buf, "\n");
     debug(9, 5, "ftpSendRequest: FD %d: buf '%s'\n", fd, buf);
-    data->icp_rwd_ptr = icpWrite(fd,
+    comm_write(fd,
 	buf,
 	strlen(buf),
 	30,
@@ -506,7 +508,11 @@ void ftpConnInProgress(fd, data)
 
     debug(9, 5, "ftpConnInProgress: FD %d\n", fd);
 
-    if (comm_connect(fd, localhost, CACHE_FTP_PORT) != COMM_OK) {
+#if HAVE_WORKING_UNIX_SOCKETS
+    if (comm_connect_unix(fd, ftpget_socket_path) != COMM_OK) {
+#else
+    if (comm_connect(fd, localhost, ftpget_port) != COMM_OK) {
+#endif
 	switch (errno) {
 	case EINPROGRESS:
 	case EALREADY:
@@ -541,9 +547,10 @@ int ftpStart(unusedfd, url, request, entry)
 
     debug(9, 3, "FtpStart: FD %d <URL:%s>\n", unusedfd, url);
 
-    data = (FtpData *) xcalloc(1, sizeof(FtpData));
-    data->entry = entry;
+    data = xcalloc(1, sizeof(FtpData));
+    storeLockObject(data->entry = entry, NULL, NULL);
     data->request = request;
+    request->link_count++;
 
     /* Parse login info. */
     ftp_login_parser(request->login, data);
@@ -552,7 +559,11 @@ int ftpStart(unusedfd, url, request, entry)
 	unusedfd, data->request->host, data->request->urlpath,
 	data->user, data->password);
 
-    data->ftp_fd = comm_open(COMM_NONBLOCKING, 0, 0, url);
+#if HAVE_WORKING_UNIX_SOCKETS
+    data->ftp_fd = comm_open_unix(url);
+#else
+    data->ftp_fd = comm_open(COMM_NONBLOCKING, 0, url);
+#endif
     if (data->ftp_fd == COMM_ERROR) {
 	squid_error_entry(entry, ERR_CONNECT_FAIL, xstrerror());
 	safe_free(data);
@@ -567,7 +578,11 @@ int ftpStart(unusedfd, url, request, entry)
 	(void *) data);
 
     /* Now connect ... */
-    if ((status = comm_connect(data->ftp_fd, localhost, CACHE_FTP_PORT))) {
+#if HAVE_WORKING_UNIX_SOCKETS
+    if ((status = comm_connect_unix(data->ftp_fd, ftpget_socket_path))) {
+#else
+    if ((status = comm_connect(data->ftp_fd, localhost, ftpget_port))) {
+#endif
 	if (status != EINPROGRESS) {
 	    squid_error_entry(entry, ERR_CONNECT_FAIL, xstrerror());
 	    comm_close(data->ftp_fd);
@@ -606,6 +621,11 @@ static void ftpServerClosed(fd, nodata)
 {
     static time_t last_restart = 0;
     comm_close(fd);
+#if HAVE_WORKING_UNIX_SOCKETS
+    strncpy(ftpget_socket_path, tempnam(NULL, "ftpget"), 127);
+#else
+    ftpget_port++;
+#endif
     if (squid_curtime - last_restart < 2) {
 	debug(9, 0, "ftpget server failing too rapidly\n");
 	debug(9, 0, "WARNING: FTP access is disabled!\n");
@@ -618,16 +638,19 @@ static void ftpServerClosed(fd, nodata)
 
 void ftpServerClose()
 {
-    if (ftpget_server_pipe < 0)
+    if (ftpget_server_read < 0)
 	return;
 
-    comm_set_select_handler(ftpget_server_pipe,
-	COMM_SELECT_EXCEPT,
+    comm_set_select_handler(ftpget_server_read,
+	COMM_SELECT_READ,
 	(PF) NULL,
 	(void *) NULL);
-    fdstat_close(ftpget_server_pipe);
-    close(ftpget_server_pipe);
-    ftpget_server_pipe = -1;
+    fdstat_close(ftpget_server_read);
+    close(ftpget_server_read);
+    fdstat_close(ftpget_server_write);
+    close(ftpget_server_write);
+    ftpget_server_read = -1;
+    ftpget_server_write = -1;
 }
 
 
@@ -635,11 +658,27 @@ int ftpInitialize()
 {
     int pid;
     int fd;
-    int p[2];
+    int squid_to_ftpget[2];
+    int ftpget_to_squid[2];
+#if HAVE_WORKING_UNIX_SOCKETS
+    char *pbuf = NULL;
+#else
     char pbuf[128];
+#endif
     char *ftpget = getFtpProgram();
 
-    if (pipe(p) < 0) {
+#if HAVE_WORKING_UNIX_SOCKETS
+    memset(ftpget_socket_path, '\0', 128);
+    strncpy(ftpget_socket_path, tempnam(NULL, "ftpget"), 127);
+#else
+    ftpget_port = CACHE_FTP_PORT + getHttpPortNum();
+#endif
+
+    if (pipe(squid_to_ftpget) < 0) {
+	debug(9, 0, "ftpInitialize: pipe: %s\n", xstrerror());
+	return -1;
+    }
+    if (pipe(ftpget_to_squid) < 0) {
 	debug(9, 0, "ftpInitialize: pipe: %s\n", xstrerror());
 	return -1;
     }
@@ -648,30 +687,42 @@ int ftpInitialize()
 	return -1;
     }
     if (pid != 0) {		/* parent */
-	close(p[0]);
-	fdstat_open(p[1], Pipe);
-	fd_note(p[1], "ftpget -S");
-	fcntl(p[1], F_SETFD, 1);	/* set close-on-exec */
+	close(squid_to_ftpget[0]);
+	close(ftpget_to_squid[1]);
+	fdstat_open(squid_to_ftpget[1], Pipe);
+	fdstat_open(ftpget_to_squid[0], Pipe);
+	fd_note(squid_to_ftpget[1], "ftpget -S");
+	fd_note(ftpget_to_squid[0], "ftpget -S");
+	fcntl(squid_to_ftpget[1], F_SETFD, 1);	/* set close-on-exec */
+	fcntl(ftpget_to_squid[0], F_SETFD, 1);	/* set close-on-exec */
 	/* if ftpget -S goes away, this handler should get called */
-	comm_set_select_handler(p[1],
-	    COMM_SELECT_EXCEPT,
+	comm_set_select_handler(ftpget_to_squid[0],
+	    COMM_SELECT_READ,
 	    (PF) ftpServerClosed,
 	    (void *) NULL);
-	ftpget_server_pipe = p[1];
+	ftpget_server_write = squid_to_ftpget[1];
+	ftpget_server_read = ftpget_to_squid[0];
 	return 0;
     }
     /* child */
     /* give up all extra priviligies */
     no_suid();
     /* set up stdin,stdout */
-    dup2(p[0], 0);
+    dup2(squid_to_ftpget[0], 0);
+    dup2(ftpget_to_squid[1], 1);
     dup2(fileno(debug_log), 2);
-    close(p[0]);
-    close(p[1]);
+    close(squid_to_ftpget[0]);
+    close(squid_to_ftpget[1]);
+    close(ftpget_to_squid[0]);
+    close(ftpget_to_squid[1]);
     /* inherit stdin,stdout,stderr */
     for (fd = 3; fd < fdstat_biggest_fd(); fd++)
 	(void) close(fd);
-    sprintf(pbuf, "%d", CACHE_FTP_PORT);
+#if HAVE_WORKING_UNIX_SOCKETS
+    pbuf = ftpget_socket_path;
+#else
+    sprintf(pbuf, "%d", ftpget_port);
+#endif
     execlp(ftpget, ftpget, "-S", pbuf, NULL);
     debug(9, 0, "ftpInitialize: %s: %s\n", ftpget, xstrerror());
     _exit(1);

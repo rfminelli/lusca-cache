@@ -15,87 +15,138 @@ int RESERVED_FD = 64;
 #define min(x,y) ((x)<(y)? (x) : (y))
 #define max(a,b) ((a)>(b)? (a) : (b))
 
+struct _RWStateData {
+    char *buf;
+    long size;
+    long offset;
+    int timeout;		/* XXX Not used at present. */
+    time_t time;		/* XXX Not used at present. */
+    rw_complete_handler *handler;
+    void *handler_data;
+    int handle_immed;
+};
 
 /* GLOBAL */
 FD_ENTRY *fd_table = NULL;	/* also used in disk.c */
 
 /* STATIC */
-static int *fd_lifetime = NULL;
 static void checkTimeouts _PARAMS((void));
 static void checkLifetimes _PARAMS((void));
 static void Reserve_More_FDs _PARAMS((void));
 static int commSetReuseAddr _PARAMS((int));
 static int examine_select _PARAMS((fd_set *, fd_set *, fd_set *));
 static int commSetNoLinger _PARAMS((int));
-static struct timeval zero_tv;
 static void comm_select_incoming _PARAMS((void));
 
+static int *fd_lifetime = NULL;
+static struct timeval zero_tv;
+static struct in_addr wildcard_addr;
+
 /* Return the local port associated with fd. */
-int comm_port(fd)
+u_short comm_local_port(fd)
      int fd;
 {
     struct sockaddr_in addr;
     int addr_len = 0;
 
-    if (fd_table[fd].port)
-	return fd_table[fd].port;
-
     /* If the fd is closed already, just return */
     if (!fd_table[fd].openned) {
-	debug(5, 0, "comm_port: FD %d has been closed.\n", fd);
-	return (COMM_ERROR);
+	debug(5, 0, "comm_local_port: FD %d has been closed.\n", fd);
+	return 0;
     }
+    if (fd_table[fd].local_port)
+	return fd_table[fd].local_port;
     addr_len = sizeof(addr);
     if (getsockname(fd, (struct sockaddr *) &addr, &addr_len)) {
-	debug(5, 1, "comm_port: Failed to retrieve TCP/UDP port number for socket: FD %d: %s\n", fd, xstrerror());
-	return (COMM_ERROR);
+	debug(5, 1, "comm_local_port: Failed to retrieve TCP/UDP port number for socket: FD %d: %s\n", fd, xstrerror());
+	return 0;
     }
-    debug(5, 6, "comm_port: FD %d: sockaddr %u.\n", fd, addr.sin_addr.s_addr);
-    fd_table[fd].port = ntohs(addr.sin_port);
-
-    return fd_table[fd].port;
+    debug(5, 6, "comm_local_port: FD %d: sockaddr %u.\n", fd, addr.sin_addr.s_addr);
+    fd_table[fd].local_port = ntohs(addr.sin_port);
+    return fd_table[fd].local_port;
 }
 
-static int do_bind(s, host, port)
+int commBind(s, in_addr, port)
      int s;
-     char *host;
-     int port;
+     struct in_addr in_addr;
+     u_short port;
 {
     struct sockaddr_in S;
-    struct in_addr *addr = NULL;
 
-    addr = getAddress(host);
-    if (addr == (struct in_addr *) NULL) {
-	debug(5, 0, "do_bind: Unknown host: %s\n", host);
-	return COMM_ERROR;
-    }
     memset(&S, '\0', sizeof(S));
     S.sin_family = AF_INET;
     S.sin_port = htons(port);
-    S.sin_addr = *addr;
-
+    S.sin_addr = in_addr;
     if (bind(s, (struct sockaddr *) &S, sizeof(S)) == 0)
 	return COMM_OK;
-
-    debug(5, 0, "do_bind: Cannot bind socket FD %d to %s:%d: %s\n",
+    debug(5, 0, "commBind: Cannot bind socket FD %d to %s:%d: %s\n",
 	s,
-	S.sin_addr.s_addr == htonl(INADDR_ANY) ? "*" : inet_ntoa(S.sin_addr),
+	S.sin_addr.s_addr == INADDR_ANY ? "*" : inet_ntoa(S.sin_addr),
 	port, xstrerror());
     return COMM_ERROR;
 }
 
 /* Create a socket. Default is blocking, stream (TCP) socket.  IO_TYPE
  * is OR of flags specified in comm.h. */
-int comm_open(io_type, port, handler, note)
-     unsigned int io_type;
-     int port;
-     int (*handler) ();		/* Interrupt handler. */
+int comm_open_unix(note)
      char *note;
 {
     int new_socket;
     FD_ENTRY *conn = NULL;
+
+    if ((new_socket = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
+	/* Increase the number of reserved fd's if calls to socket()
+	 * are failing because the open file table is full.  This
+	 * limits the number of simultaneous clients */
+	switch (errno) {
+	case ENFILE:
+	case EMFILE:
+	    debug(5, 1, "comm_open: socket failure: %s\n", xstrerror());
+	    Reserve_More_FDs();
+	    break;
+	default:
+	    debug(5, 0, "comm_open: socket failure: %s\n", xstrerror());
+	}
+	return (COMM_ERROR);
+    }
+    /* update fdstat */
+    fdstat_open(new_socket, Socket);
+    conn = &fd_table[new_socket];
+    memset(conn, '\0', sizeof(FD_ENTRY));
+    fd_note(new_socket, note);
+    conn->openned = 1;
+
+    if (fcntl(new_socket, F_SETFD, 1) < 0) {
+	debug(5, 0, "comm_open: FD %d: failed to set close-on-exec flag: %s\n",
+	    new_socket, xstrerror());
+    }
+#if defined(O_NONBLOCK) && !defined(_SQUID_SUNOS_) && !defined(_SQUID_SOLARIS_)
+    if (fcntl(new_socket, F_SETFL, O_NONBLOCK)) {
+	debug(5, 0, "comm_open: FD %d: Failure to set O_NONBLOCK: %s\n",
+	    new_socket, xstrerror());
+	return (COMM_ERROR);
+    }
+#else
+    if (fcntl(new_socket, F_SETFL, O_NDELAY)) {
+	debug(5, 0, "comm_open: FD %d: Failure to set O_NDELAY: %s\n",
+	    new_socket, xstrerror());
+	return (COMM_ERROR);
+    }
+#endif /* O_NONBLOCK */
+    return new_socket;
+}
+
+/* Create a socket. Default is blocking, stream (TCP) socket.  IO_TYPE
+ * is OR of flags specified in comm.h. */
+int comm_open(io_type, port, note)
+     unsigned int io_type;
+     u_short port;
+     char *note;
+{
+    int new_socket;
+    FD_ENTRY *conn = NULL;
+    struct in_addr addr;
     int sock_type = io_type & COMM_DGRAM ? SOCK_DGRAM : SOCK_STREAM;
-    wordlist *p = NULL;
 
     /* Create socket for accepting new connections. */
     if ((new_socket = socket(AF_INET, sock_type, 0)) < 0) {
@@ -130,19 +181,16 @@ int comm_open(io_type, port, handler, note)
 	    debug(5, 0, "comm_open: failed to turn off SO_LINGER: %s\n",
 		xstrerror());
 	}
-	if (do_reuse) {
+	if (do_reuse)
 	    commSetReuseAddr(new_socket);
-	}
     }
-    if (port) {
-	for (p = getBindAddrList(); p; p = p->next) {
-	    if (do_bind(new_socket, p->key, port) == COMM_OK)
-		break;
-	    if (p->next == (wordlist *) NULL)
-		return COMM_ERROR;
-	}
-    }
-    conn->port = port;
+    addr.s_addr = SQUID_INADDR_NONE;
+    if (sock_type == SOCK_STREAM)
+	addr = port ? getTcpIncomingAddr() : getTcpOutgoingAddr();
+    if (addr.s_addr != SQUID_INADDR_NONE)
+	if (commBind(new_socket, addr, port) != COMM_OK)
+	    return COMM_ERROR;
+    conn->local_port = port;
 
     if (io_type & COMM_NONBLOCKING) {
 	/*
@@ -168,7 +216,7 @@ int comm_open(io_type, port, handler, note)
 }
 
    /*
-    * NOTE: set the listen queue to getMaxFD()/4 and rely on the kernel to      
+    * NOTE: set the listen queue to FD_SETSIZE/4 and rely on the kernel to      
     * impose an upper limit.  Solaris' listen(3n) page says it has   
     * no limit on this parameter, but sys/socket.h sets SOMAXCONN 
     * to 5.  HP-UX currently has a limit of 20.  SunOS is 5 and
@@ -178,21 +226,71 @@ int comm_listen(sock)
      int sock;
 {
     int x;
-    if ((x = listen(sock, getMaxFD() >> 2)) < 0) {
+    if ((x = listen(sock, FD_SETSIZE >> 2)) < 0) {
 	debug(5, 0, "comm_listen: listen(%d, %d): %s\n",
-	    getMaxFD() >> 2,
+	    FD_SETSIZE >> 2,
 	    sock, xstrerror());
 	return x;
     }
     return sock;
 }
 
+#ifndef UNIX_PATH_MAX
+#define UNIX_PATH_MAX 100
+#endif
+
+int comm_connect_unix(sock, path)
+     int sock;
+     char *path;
+{
+    static struct sockaddr_un to_addr;
+    int len;
+    int x;
+    int status = COMM_OK;
+    FD_ENTRY *conn = &fd_table[sock];
+
+    memset(&to_addr, '\0', sizeof(to_addr));
+    to_addr.sun_family = AF_UNIX;
+    strncpy(to_addr.sun_path, path, UNIX_PATH_MAX);
+
+    if (connect(sock, (struct sockaddr *) &to_addr, SUN_LEN(&to_addr)) < 0) {
+	switch (errno) {
+	case EALREADY:
+	    return COMM_ERROR;
+	    /* NOTREACHED */
+	case EINPROGRESS:
+	    status = EINPROGRESS;
+	    break;
+	case EISCONN:
+	    status = COMM_OK;
+	    break;
+	case EINVAL:
+	    len = sizeof(x);
+	    if (getsockopt(sock, SOL_SOCKET, SO_ERROR, (char *) &x, &len) >= 0)
+		errno = x;
+	default:
+	    debug(5, 1, "comm_connect_unix: %s: socket failure: %s.\n",
+		path,
+		xstrerror());
+	    return COMM_ERROR;
+	}
+    }
+    /* set the lifetime for this client */
+    if (status == COMM_OK) {
+	(void) comm_set_fd_lifetime(sock, getClientLifetime());
+    } else if (status == EINPROGRESS) {
+	(void) comm_set_fd_lifetime(sock, getConnectTimeout());
+    }
+    /* Add new socket to list of open sockets. */
+    conn->sender = 1;
+    return status;
+}
 
 /* Connect SOCK to specified DEST_PORT at DEST_HOST. */
 int comm_connect(sock, dest_host, dest_port)
      int sock;			/* Type of communication to use. */
      char *dest_host;		/* Server's host name. */
-     int dest_port;		/* Server's port. */
+     u_short dest_port;		/* Server's port. */
 {
     struct hostent *hp = NULL;
     static struct sockaddr_in to_addr;
@@ -213,8 +311,15 @@ int comm_set_fd_lifetime(fd, lifetime)
      int fd;
      int lifetime;
 {
-    if (fd < 0 || fd > getMaxFD())
+    if (fd < 0 || fd > FD_SETSIZE)
 	return 0;
+    if (shutdown_pending || reread_pending) {
+	/* don't increase the lifetime if something pending */
+	if (lifetime < 0)
+	    return fd_lifetime[fd];
+	if (fd_lifetime[fd] - squid_curtime < lifetime)
+	    return fd_lifetime[fd];
+    }
     if (lifetime < 0)
 	return fd_lifetime[fd] = -1;
     return fd_lifetime[fd] = (int) squid_curtime + lifetime;
@@ -270,7 +375,7 @@ int comm_connect_addr(sock, address)
 	    if (getsockopt(sock, SOL_SOCKET, SO_ERROR, (char *) &x, &len) >= 0)
 		errno = x;
 	default:
-	    debug(5, 1, "comm_connect_addr: %s:%d: socket failure: %s.\n",
+	    debug(5, 1, "connect: %s:%d: %s.\n",
 		inet_ntoa(address->sin_addr),
 		ntohs(address->sin_port),
 		xstrerror());
@@ -280,9 +385,9 @@ int comm_connect_addr(sock, address)
     if (status == COMM_OK) {
 	lft = comm_set_fd_lifetime(sock, getClientLifetime());
 	strcpy(conn->ipaddr, inet_ntoa(address->sin_addr));
-	conn->port = ntohs(address->sin_port);
+	conn->remote_port = ntohs(address->sin_port);
 	debug(5, 10, "comm_connect_addr: FD %d (lifetime %d): connected to %s:%d.\n",
-	    sock, lft, conn->ipaddr, conn->port);
+	    sock, lft, conn->ipaddr, conn->remote_port);
     } else if (status == EINPROGRESS) {
 	lft = comm_set_fd_lifetime(sock, getConnectTimeout());
 	debug(5, 10, "comm_connect_addr: FD %d connection pending, lifetime %d\n",
@@ -344,9 +449,9 @@ int comm_accept(fd, peer, me)
     conn->sender = 0;		/* This is an accept, therefore receiver. */
     conn->comm_type = listener->comm_type;
     strcpy(conn->ipaddr, inet_ntoa(P.sin_addr));
-
+    conn->remote_port = htons(P.sin_port);
+    conn->local_port = htons(M.sin_port);
     commSetNonBlocking(sock);
-
     return sock;
 }
 
@@ -363,6 +468,9 @@ int comm_close(fd)
 	fatal_dump(NULL);
     }
     conn = &fd_table[fd];
+
+    safe_free(conn->rstate);
+    safe_free(conn->wstate);
 
     comm_set_fd_lifetime(fd, -1);	/* invalidate the lifetime */
     debug(5, 5, "comm_close: FD %d\n", fd);
@@ -381,6 +489,9 @@ int comm_cleanup_fd_entry(fd)
 {
     FD_ENTRY *conn = &fd_table[fd];
 
+    safe_free(conn->rstate);
+    safe_free(conn->wstate);
+
     memset(conn, 0, sizeof(FD_ENTRY));
     return 0;
 }
@@ -390,7 +501,7 @@ int comm_cleanup_fd_entry(fd)
 int comm_udp_send(fd, host, port, buf, len)
      int fd;
      char *host;
-     int port;
+     u_short port;
      char *buf;
      int len;
 {
@@ -432,6 +543,7 @@ int comm_udp_sendto(fd, to_addr, addr_len, buf, len)
 	debug(5, 1, "comm_udp_sendto: --> sin_family = %d\n", to_addr->sin_family);
 	debug(5, 1, "comm_udp_sendto: --> sin_port   = %d\n", htons(to_addr->sin_port));
 	debug(5, 1, "comm_udp_sendto: --> sin_addr   = %s\n", inet_ntoa(to_addr->sin_addr));
+	debug(5, 1, "comm_udp_sendto: --> length     = %d\n", len);
 	return COMM_ERROR;
     }
     return bytes_sent;
@@ -477,10 +589,10 @@ static void comm_select_incoming()
     FD_ZERO(&read_mask);
     FD_ZERO(&write_mask);
 
-    if (theAsciiConnection >= 0 && fdstat_are_n_free_fd(RESERVED_FD))
-	fds[N++] = theAsciiConnection;
-    if (theUdpConnection >= 0)
-	fds[N++] = theUdpConnection;
+    if (theHttpConnection >= 0 && fdstat_are_n_free_fd(RESERVED_FD))
+	fds[N++] = theHttpConnection;
+    if (theInIcpConnection >= 0)
+	fds[N++] = theInIcpConnection;
     fds[N++] = 0;
 
     for (i = 0; i < N; i++) {
@@ -567,10 +679,12 @@ int comm_select(sec, failtime)
 	    }
 	}
 	if (!fdstat_are_n_free_fd(RESERVED_FD)) {
-	    FD_CLR(theAsciiConnection, &readfds);
+	    FD_CLR(theHttpConnection, &readfds);
 	}
-	if (shutdown_pending || reread_pending)
+	if (shutdown_pending || reread_pending) {
 	    debug(5, 2, "comm_select: Still waiting on %d FDs\n", nfds);
+	    setSocketShutdownLifetimes();
+	}
 	if (nfds == 0)
 	    return COMM_SHUTDOWN;
 	while (1) {
@@ -582,16 +696,17 @@ int comm_select(sec, failtime)
 	    /* break on interrupt so outer loop will reset FD_SET's */
 	    if (errno == EINTR)
 		break;
-	    debug(5, 0, "comm_select: select failure: %s (errno %d).\n",
-		xstrerror(), errno);
+	    debug(5, 0, "comm_select: select failure: %s\n",
+		xstrerror());
 	    examine_select(&readfds, &writefds, &exceptfds);
 	    return COMM_ERROR;
+	    /* NOTREACHED */
 	}
 	if (num < 0)
 	    continue;
 
 	debug(5, num ? 5 : 8, "comm_select: %d sockets ready at %d\n",
-	    num, squid_curtime);
+	    num, (int) squid_curtime);
 
 	/* Check lifetime and timeout handlers ONCE each second.
 	 * Replaces brain-dead check every time through the loop! */
@@ -622,7 +737,7 @@ int comm_select(sec, failtime)
 	     */
 	    comm_select_incoming();
 
-	    if ((fd == theUdpConnection) || (fd == theAsciiConnection))
+	    if ((fd == theInIcpConnection) || (fd == theHttpConnection))
 		continue;
 
 	    if (FD_ISSET(fd, &readfds)) {
@@ -663,55 +778,12 @@ int comm_select(sec, failtime)
     return COMM_TIMEOUT;
 }
 
-
-/* Select on fd to see if any io pending. */
-int comm_pending(fd, sec, usec)
-     int fd;
-     long sec, usec;
-{
-    fd_set readfds;
-    int num;
-    struct timeval timeout;
-
-    /* Find a fd ready for reading. */
-    FD_ZERO(&readfds);
-    FD_SET(fd, &readfds);
-
-    while (1) {
-	timeout.tv_sec = (time_t) sec;
-	timeout.tv_usec = (time_t) usec;
-	num = select(FD_SETSIZE, &readfds, NULL, NULL, &timeout);
-	if (num >= 0)
-	    break;
-	switch (errno) {
-#if EAGAIN != EWOULDBLOCK
-	case EAGAIN:
-#endif
-	case EWOULDBLOCK:
-	    return COMM_NOMESSAGE;
-	case EINTR:
-	    break;		/* if select interrupted, try again */
-	default:
-	    debug(5, 1, "comm_pending: select failure: %s\n", xstrerror());
-	    return COMM_ERROR;
-	}
-    }
-
-    debug(5, 5, "comm_pending: %d sockets ready for reading\n", num);
-
-    if (num && FD_ISSET(fd, &readfds)) {
-	return COMM_OK;
-    }
-    return COMM_TIMEOUT;
-}
-
 void comm_set_select_handler(fd, type, handler, client_data)
      int fd;
      unsigned int type;
      int (*handler) ();
      void *client_data;
 {
-
     comm_set_select_handler_plus_timeout(fd, type, handler, client_data, 0);
 }
 
@@ -872,19 +944,20 @@ struct in_addr *getAddress(name)
  */
 int comm_init()
 {
-    int i, max_fd = getMaxFD();
+    int i;
 
-    fd_table = (FD_ENTRY *) xcalloc(max_fd, sizeof(FD_ENTRY));
+    fd_table = xcalloc(FD_SETSIZE, sizeof(FD_ENTRY));
     /* Keep a few file descriptors free so that we don't run out of FD's
      * after accepting a client but before it opens a socket or a file.
-     * Since getMaxFD can be as high as several thousand, don't waste them */
-    RESERVED_FD = min(100, getMaxFD() / 4);
+     * Since FD_SETSIZE can be as high as several thousand, don't waste them */
+    RESERVED_FD = min(100, FD_SETSIZE / 4);
     /* hardwired lifetimes */
-    fd_lifetime = (int *) xmalloc(sizeof(int) * max_fd);
-    for (i = 0; i < max_fd; i++)
+    fd_lifetime = xmalloc(sizeof(int) * FD_SETSIZE);
+    for (i = 0; i < FD_SETSIZE; i++)
 	comm_set_fd_lifetime(i, -1);	/* denotes invalid */
     zero_tv.tv_sec = 0;
     zero_tv.tv_usec = 0;
+    wildcard_addr.s_addr = INADDR_ANY;
     return 0;
 }
 
@@ -907,12 +980,11 @@ static int examine_select(readfds, writefds, exceptfds)
     fd_set write_x;
     fd_set except_x;
     int num;
-    int maxfd = getMaxFD();
     struct timeval tv;
     FD_ENTRY *f = NULL;
 
     debug(5, 0, "examine_select: Examining open file descriptors...\n");
-    for (fd = 0; fd < maxfd; fd++) {
+    for (fd = 0; fd < FD_SETSIZE; fd++) {
 	FD_ZERO(&read_x);
 	FD_ZERO(&write_x);
 	FD_ZERO(&except_x);
@@ -972,10 +1044,9 @@ static void checkTimeouts()
     int fd;
     int (*tmp) () = NULL;
     FD_ENTRY *f = NULL;
-    int maxfd = fdstat_biggest_fd() + 1;
 
     /* scan for timeout */
-    for (fd = 0; fd < maxfd; ++fd) {
+    for (fd = 0; fd < FD_SETSIZE; ++fd) {
 	f = &fd_table[fd];
 	if ((f->timeout_handler) &&
 	    (f->timeout_time <= squid_curtime)) {
@@ -991,14 +1062,13 @@ static void checkTimeouts()
 static void checkLifetimes()
 {
     int fd;
-    int max_fd = getMaxFD();
     time_t lft;
     int (*tmp_local) () = NULL;
     int use_lifetime_handler = 0;
     int use_read = 0;
 
     /* scan for hardwired lifetime expires, do the timeouts first though */
-    for (fd = 0; fd < max_fd; fd++) {
+    for (fd = 0; fd < FD_SETSIZE; fd++) {
 	lft = comm_get_fd_lifetime(fd);
 	if ((lft != -1) && (lft < squid_curtime)) {
 	    if (fd_table[fd].lifetime_handler != NULL) {
@@ -1072,12 +1142,12 @@ static void checkLifetimes()
  */
 static void Reserve_More_FDs()
 {
-    if (RESERVED_FD < getMaxFD() - 64) {
+    if (RESERVED_FD < FD_SETSIZE - 64) {
 	RESERVED_FD = RESERVED_FD + 1;
-    } else if (RESERVED_FD == getMaxFD() - 64) {
+    } else if (RESERVED_FD == FD_SETSIZE - 64) {
 	RESERVED_FD = RESERVED_FD + 1;
 	debug(5, 0, "Don't you have a tiny open-file table size of %d\n",
-	    getMaxFD() - RESERVED_FD);
+	    FD_SETSIZE - RESERVED_FD);
     }
 }
 
@@ -1094,4 +1164,211 @@ int fd_of_first_client(e)
 	}
     }
     return (-1);
+}
+
+/* Read from FD. */
+static int commHandleRead(fd, state)
+     int fd;
+     RWStateData *state;
+{
+    int len;
+
+    len = read(fd, state->buf + state->offset, state->size - state->offset);
+    debug(5, 5, "commHandleRead: FD %d: read %d bytes\n", fd, len);
+
+    if (len <= 0) {
+	switch (errno) {
+#if EAGAIN != EWOULDBLOCK
+	case EAGAIN:
+#endif
+	case EWOULDBLOCK:
+	    /* reschedule self */
+	    comm_set_select_handler(fd,
+		COMM_SELECT_READ,
+		(PF) commHandleRead,
+		state);
+	    return COMM_OK;
+	default:
+	    /* Len == 0 means connection closed; otherwise would not have been
+	     * called by comm_select(). */
+	    debug(5, len == 0 ? 2 : 1, "commHandleRead: FD %d: read failure: %s\n",
+		fd, len == 0 ? "connection closed" : xstrerror());
+	    fd_table[fd].rstate = NULL;		/* The handler may issue a new read */
+	    /* Notify caller that we failed */
+	    state->handler(fd,
+		state->buf,
+		state->offset,
+		COMM_ERROR,
+		state->handler_data);
+	    safe_free(state);
+	    return COMM_ERROR;
+	}
+    }
+    state->offset += len;
+
+    /* Call handler if we have read enough */
+    if (state->offset >= state->size || state->handle_immed) {
+	fd_table[fd].rstate = NULL;	/* The handler may issue a new read */
+	state->handler(fd,
+	    state->buf,
+	    state->offset,
+	    COMM_OK,
+	    state->handler_data);
+	safe_free(state);
+    } else {
+	/* Reschedule until we are done */
+	comm_set_select_handler(fd,
+	    COMM_SELECT_READ,
+	    (PF) commHandleRead,
+	    state);
+    }
+    return COMM_OK;
+}
+
+/* Select for reading on FD, until SIZE bytes are received.  Call
+ * HANDLER when complete. */
+void comm_read(fd, buf, size, timeout, immed, handler, handler_data)
+     int fd;
+     char *buf;
+     int size;
+     int timeout;
+     int immed;			/* Call handler immediately when data available */
+     rw_complete_handler *handler;
+     void *handler_data;
+{
+    RWStateData *state = NULL;
+
+    debug(5, 5, "comm_read: FD %d: sz %d: tout %d: hndl %p: data %p.\n",
+	fd, size, timeout, handler, handler_data);
+
+    if (fd_table[fd].rstate) {
+	debug(5, 1, "comm_read: WARNING! A comm_read is already active.\n");
+	safe_free(fd_table[fd].rstate);
+    }
+    state = xcalloc(1, sizeof(RWStateData));
+    fd_table[fd].rstate = state;
+    state->buf = buf;
+    state->size = size;
+    state->offset = 0;
+    state->handler = handler;
+    state->timeout = timeout;
+    state->handle_immed = immed;
+    state->time = squid_curtime;
+    state->handler_data = handler_data;
+    comm_set_select_handler(fd,
+	COMM_SELECT_READ,
+	(PF) commHandleRead,
+	state);
+}
+
+/* Write to FD. */
+static void commHandleWrite(fd, state)
+     int fd;
+     RWStateData *state;
+{
+    int len = 0;
+    int nleft;
+
+    debug(5, 5, "commHandleWrite: FD %d: off %d: sz %d.\n",
+	fd, state->offset, state->size);
+
+    nleft = state->size - state->offset;
+    len = write(fd, state->buf + state->offset, nleft);
+
+    if (len == 0) {
+	/* XXX Is it ever possible that write() returns 0? */
+	/* We're done */
+	if (nleft != 0)
+	    debug(5, 2, "commHandleWrite: FD %d: write failure: connection closed with %d bytes remaining.\n", fd, nleft);
+	fd_table[fd].wstate = NULL;	/* The handler may call comm_write again */
+	/* Notify caller */
+	state->handler(fd,
+	    state->buf,
+	    state->offset,
+	    nleft == 0 ? COMM_OK : COMM_ERROR,
+	    state->handler_data);
+	safe_free(state);
+	return;
+    }
+    if (len < 0) {
+	/* An error */
+	if (errno == EWOULDBLOCK || errno == EAGAIN) {
+	    /* XXX: Re-install the handler rather than giving up. I hope
+	     * this doesn't freeze this socket due to some random OS bug
+	     * returning EWOULDBLOCK indefinitely.  Ought to maintain a
+	     * retry count in state? */
+	    debug(5, 10, "commHandleWrite: FD %d: write failure: %s.\n",
+		fd, xstrerror());
+	    comm_set_select_handler(fd,
+		COMM_SELECT_WRITE,
+		(PF) commHandleWrite,
+		state);
+	    return;
+	}
+	debug(5, 2, "commHandleWrite: FD %d: write failure: %s.\n",
+	    fd, xstrerror());
+	fd_table[fd].wstate = NULL;	/* The handler may call comm_write again */
+	/* Notify caller that we failed */
+	state->handler(fd,
+	    state->buf,
+	    state->offset,
+	    COMM_ERROR,
+	    state->handler_data);
+	safe_free(state);
+	return;
+    }
+    /* A successful write, continue */
+    state->offset += len;
+    if (state->offset < state->size) {
+	/* Reinstall the write handler and write some more */
+	comm_set_select_handler(fd,
+	    COMM_SELECT_WRITE,
+	    (PF) commHandleWrite,
+	    state);
+	return;
+    }
+    fd_table[fd].wstate = NULL;	/* The handler may call comm_write again */
+    /* Notify caller that the write is complete */
+    state->handler(fd,
+	state->buf,
+	state->offset,
+	COMM_OK,
+	state->handler_data);
+    safe_free(state);
+}
+
+
+
+/* Select for Writing on FD, until SIZE bytes are sent.  Call
+ * HANDLER when complete. */
+void comm_write(fd, buf, size, timeout, handler, handler_data)
+     int fd;
+     char *buf;
+     int size;
+     int timeout;
+     rw_complete_handler *handler;
+     void *handler_data;
+{
+    RWStateData *state = NULL;
+
+    debug(5, 5, "comm_write: FD %d: sz %d: tout %d: hndl %p: data %p.\n",
+	fd, size, timeout, handler, handler_data);
+
+    if (fd_table[fd].wstate) {
+	debug(5, 1, "comm_write: WARNING! A comm_write is already active.\n");
+	safe_free(fd_table[fd].wstate);
+    }
+    state = xcalloc(1, sizeof(RWStateData));
+    fd_table[fd].wstate = state;
+    state->buf = buf;
+    state->size = size;
+    state->offset = 0;
+    state->handler = handler;
+    state->timeout = timeout;
+    state->time = squid_curtime;
+    state->handler_data = handler_data;
+    comm_set_select_handler(fd,
+	COMM_SELECT_WRITE,
+	(PF) commHandleWrite,
+	state);
 }

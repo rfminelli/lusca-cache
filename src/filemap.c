@@ -31,13 +31,12 @@ fileMap *file_map_create(n)
      int n;			/* Number of files */
 {
     fm = xcalloc(1, sizeof(fileMap));
-
     fm->max_n_files = n;
     fm->nwords = n >> LONG_BIT_SHIFT;
     debug(8, 1, "file_map_create: creating space for %d files\n", n);
     debug(8, 5, "--> %d words of %d bytes each\n",
 	fm->nwords, sizeof(unsigned long));
-    fm->file_map = (unsigned long *) xcalloc(fm->nwords, sizeof(unsigned long));
+    fm->file_map = xcalloc(fm->nwords, sizeof(unsigned long));
     return (fm);
 }
 

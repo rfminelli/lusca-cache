@@ -1,10 +1,3 @@
-
-Changes to squid-1.1.alpha2:
-
-	- Added Support for RFC931/ident
-
-==============================================================================
-
 Changes to squid-1.0.beta1 (Apr 19, 1996) from Harvest cached-1.4.pl3:
 
 	- Added a "server mode" to ftpget.  Now the (much smaller)
@@ -147,3 +140,90 @@ Changes to squid-1.0.beta6:
 	- Fixed handling of FTP URLs with spaces (and other unsafe characters)
 	- Changed ftpget to only generate BASE HREF if the FTP URL does
 	  not end with '/'.
+
+
+changes to squid-1.0.beta7:
+
+	- Fixed comm_udp_sendto continuous loop bug
+	- Fixed URLs-with-colon-but-no-port-number bug
+	- Fixed sending ICP queries for HEAD requests
+	- Changed 'server_list' output.  Added RTT, Fetches, Hits, Misses,
+	  and percents.
+	- Fixed setuid bug causing some logs to be owned by root.
+	- Fixed virtual host mode (-V option)
+	- Added read(2) instrumentation for HTTP and FTP.
+	- Changed neighbor initialization to continue if DNS lookup fails.
+	- Lint cleanup
+
+Changes to squid-1.0.beta8 (May 22, 1996):
+
+	- More friendly CFLAGS and LDFLAGS for configure
+	- ACL_ALLWEEK bugfix
+	- Added missing increment of UDP connection counter.
+	- Changed ftpget select to check for EWOULDBLOCK/EAGAIN
+	  (workaround for broken Solaris select(2)).
+	- Fixed MALLINFO calls for Linux
+	- Fixed strerror() problems on SunOS 4.1.x
+	- Fixed DefaultAnnounceRate; set to zero by defult.
+	- Changed all port variables to u_short.
+	- Created AF_UNIX versions of comm_open(), comm_connect().
+	- Changed ftpget server to use UNIX domain socket.
+	- Removed RESET_SIGNAL_HANDLER check--always reset the signal
+	  handler.
+	- Added instrumentation of basic IPCache stats.
+	- Fixed calculation of neighbor average RTT.
+	- Added 'outbound_addr_list' to config
+	- Change getFirstParent() to getFirstUpParent().
+	- Changed ftpget to use an additional pipe() for crash detection
+	- Added ICP_OP_DENIED message type
+	- Added patches for Nextstep port from Luke Howard
+	  <lukeh@vurt.schnet.edu.au>
+	- Added a lifetime to HTTP server connections being deferred.
+	- Added IP address ranges in 'src' ACLs
+	- Added FQDN's in 'src' ACLs
+	- Fixed request structure free-memory-read/coredump bug.
+	- Changed icp.c to select on client socket to detect aborts.
+	- Better compliance with HTTP/1.1 *DRAFT* regarding which reply
+	  codes can be cached.
+	- Added 'hierarchy_stoplist' configuration option.
+	- Changed mallopt option M_MXFAST to 512 bytes.
+	- Added -Y option to only return UDP_HIT or UDP_DENIED during
+	  store reload.
+	- Added UDP_HIT_OBJ type.  Just like a UDP_HIT, but object data
+	  is returned in the UDP packet if it will fit; saves a TCP
+	  connection.  Not compiled in by default, add -DUDP_HIT_WITH_OBJ
+	  to src/Makefile DEFINES.
+
+
+Changes to squid-1.0.beta9 (May 23, 1996):
+
+	- Fixed storeToString() coredump bug on 'swap_buf'
+	- Added back the CIDR notation functionality to decoding IP
+	  address ACLs.
+	- Fixed ftpget listing parsing coredump bug.
+	- Fixed neighborsUdpAck() coredump for late-arriving ICP replies.
+
+Changes to squid-1.0.beta10 (May 31, 1996):
+
+	- Fixed bug when request arrives in fragmented IP packets.
+	- Fixed ACL bug which denied cache manager access while in
+ 	  httpd_accel mode.
+	- Changed ftpget to "fail nicely" for sites which do not allow
+	  PORT requests (if compiled with PASVONLY).
+	- Fixed Unix domain socket off-by-one bug in ftpget.
+	- Fixed lingering sockets after shutdown by SIGTERM.
+	- Added dnsserver use histogram to ipcache stats.
+	- Changed domain ACL's to match only the end of the hostname, not
+	  just anywhere in the string.
+	- Fixed setuid bugs when pid_filename was not defined
+	- Fixed zero-sized object getting stuck in VM.
+	- Configure checks for working UNIX domain stream sockets
+	- Rotate cache.log before the others
+	- SIGUSR2 now toggles between full and normal debugging
+	- Close and restart ftpget server during logfile rotation
+	- Added memory pools for request_t and MemObject data structures.
+	- Added new address binding options for more control
+
+Changes to squid-1.0.beta11 (June 1, 1996):
+
+	- Fixed serious memory leak of MemObject->reply structures.

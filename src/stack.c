@@ -19,7 +19,7 @@ void init_stack(stack, size)
      int size;
 {
     stack->stack_size = size;
-    stack->base = (generic_ptr *) xcalloc(size, sizeof(generic_ptr *));
+    stack->base = xcalloc(size, sizeof(generic_ptr *));
     stack->top = &stack->base[0];
 }
 
