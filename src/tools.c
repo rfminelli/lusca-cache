@@ -150,7 +150,7 @@ dumpMallocStats(void)
     t = mp.fsmblks + mp.fordblks;
     fprintf(debug_log, "\tTotal free:            %6d KB %d%%\n",
 	t >> 10, percent(t, mp.arena));
-#if HAVE_STRUCT_MALLINFO_MXFAST
+#if HAVE_EXT_MALLINFO
     fprintf(debug_log, "\tmax size of small blocks:\t%d\n",
 	mp.mxfast);
     fprintf(debug_log, "\tnumber of small blocks in a holding block:\t%d\n",
@@ -163,7 +163,7 @@ dumpMallocStats(void)
 	mp.allocated);
     fprintf(debug_log, "\tbytes used in maintaining the free tree:\t%d\n",
 	mp.treeoverhead);
-#endif /* HAVE_STRUCT_MALLINFO_MXFAST */
+#endif /* HAVE_EXT_MALLINFO */
 #endif /* HAVE_MALLINFO */
 }
 
@@ -205,6 +205,8 @@ rusage_maxrss(struct rusage *r)
 #elif defined(_SQUID_SGI_)
     return r->ru_maxrss;
 #elif defined(_SQUID_OSF_)
+    return r->ru_maxrss;
+#elif defined(_SQUID_AIX_)
     return r->ru_maxrss;
 #elif defined(BSD4_4)
     return r->ru_maxrss;
@@ -443,32 +445,24 @@ getMyHostname(void)
     LOCAL_ARRAY(char, host, SQUIDHOSTNAMELEN + 1);
     static int present = 0;
     const struct hostent *h = NULL;
-    struct in_addr sa;
     if (Config.visibleHostname != NULL)
 	return Config.visibleHostname;
     if (present)
 	return host;
     host[0] = '\0';
-    memcpy(&sa, &any_addr, sizeof(sa));
-    if (Config.Sockaddr.http && sa.s_addr == any_addr.s_addr)
-	memcpy(&sa, &Config.Sockaddr.http->s.sin_addr, sizeof(sa));
-#if USE_SSL
-    if (Config.Sockaddr.https && sa.s_addr == any_addr.s_addr)
-	memcpy(&sa, &Config.Sockaddr.https->s.sin_addr, sizeof(sa));
-#endif
-    /*
-     * If the first http_port address has a specific address, try a
-     * reverse DNS lookup on it.
-     */
-    if (sa.s_addr != any_addr.s_addr) {
-	h = gethostbyaddr((char *) &sa,
-	    sizeof(sa), AF_INET);
+    if (Config.Sockaddr.http->s.sin_addr.s_addr != any_addr.s_addr) {
+	/*
+	 * If the first http_port address has a specific address, try a
+	 * reverse DNS lookup on it.
+	 */
+	h = gethostbyaddr((char *) &Config.Sockaddr.http->s.sin_addr,
+	    sizeof(Config.Sockaddr.http->s.sin_addr), AF_INET);
 	if (h != NULL) {
 	    /* DNS lookup successful */
 	    /* use the official name from DNS lookup */
 	    xstrncpy(host, h->h_name, SQUIDHOSTNAMELEN);
 	    debug(50, 4) ("getMyHostname: resolved %s to '%s'\n",
-		inet_ntoa(sa),
+		inet_ntoa(Config.Sockaddr.http->s.sin_addr),
 		host);
 	    present = 1;
 	    if (strchr(host, '.'))
@@ -476,7 +470,7 @@ getMyHostname(void)
 
 	}
 	debug(50, 1) ("WARNING: failed to resolve %s to a fully qualified hostname\n",
-	    inet_ntoa(sa));
+	    inet_ntoa(Config.Sockaddr.http->s.sin_addr));
     }
     /*
      * Get the host name and store it in host to return
@@ -807,21 +801,6 @@ dlinkAdd(void *data, dlink_node * m, dlink_list * list)
 }
 
 void
-dlinkAddAfter(void *data, dlink_node * m, dlink_node * n, dlink_list * list)
-{
-    m->data = data;
-    m->prev = n;
-    m->next = n->next;
-    if (n->next)
-	n->next->prev = m;
-    else {
-	assert(list->tail == n);
-	list->tail = m;
-    }
-    n->next = m;
-}
-
-void
 dlinkAddTail(void *data, dlink_node * m, dlink_list * list)
 {
     m->data = data;
@@ -854,6 +833,43 @@ kb_incr(kb_t * k, size_t v)
     k->bytes += v;
     k->kb += (k->bytes >> 10);
     k->bytes &= 0x3FF;
+}
+
+void
+gb_flush(gb_t * g)
+{
+    g->gb += (g->bytes >> 30);
+    g->bytes &= (1 << 30) - 1;
+}
+
+double
+gb_to_double(const gb_t * g)
+{
+    return ((double) g->gb) * ((double) (1 << 30)) + ((double) g->bytes);
+}
+
+const char *
+gb_to_str(const gb_t * g)
+{
+    /*
+     * it is often convenient to call gb_to_str several times for _one_ printf
+     */
+#define max_cc_calls 5
+    typedef char GbBuf[32];
+    static GbBuf bufs[max_cc_calls];
+    static int call_id = 0;
+    double value = gb_to_double(g);
+    char *buf = bufs[call_id++];
+    if (call_id >= max_cc_calls)
+	call_id = 0;
+    /* select format */
+    if (value < 1e9)
+	snprintf(buf, sizeof(GbBuf), "%.2f MB", value / 1e6);
+    else if (value < 1e12)
+	snprintf(buf, sizeof(GbBuf), "%.2f GB", value / 1e9);
+    else
+	snprintf(buf, sizeof(GbBuf), "%.2f TB", value / 1e12);
+    return buf;
 }
 
 void
@@ -910,9 +926,6 @@ int
 xrename(const char *from, const char *to)
 {
     debug(21, 2) ("xrename: renaming %s to %s\n", from, to);
-#ifdef _SQUID_MSWIN_
-    remove(to);
-#endif
     if (0 == rename(from, to))
 	return 0;
     debug(21, errno == ENOENT ? 2 : 1) ("xrename: Cannot rename %s to %s: %s\n",
@@ -974,6 +987,7 @@ parseEtcHosts(void)
 	char *addr;
 	if (buf[0] == '#')	/* MS-windows likes to add comments */
 	    continue;
+	strtok(buf, "#");	/* chop everything following a comment marker */
 	lt = buf;
 	addr = buf;
 	debug(1, 5) ("etc_hosts: line is '%s'\n", buf);
@@ -1009,19 +1023,7 @@ parseEtcHosts(void)
       skip:
 	wordlistDestroy(&hosts);
     }
-}
-
-int
-getMyPort(void)
-{
-    if (Config.Sockaddr.http)
-	return ntohs(Config.Sockaddr.http->s.sin_port);
-#if USE_SSL
-    if (Config.Sockaddr.https)
-	return ntohs(Config.Sockaddr.https->s.sin_port);
-#endif
-    fatal("No port defined");
-    return 0;			/* NOT REACHED */
+    fclose(fp);
 }
 
 /*

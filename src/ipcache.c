@@ -60,6 +60,9 @@ static struct {
     int hits;
     int misses;
     int negative_hits;
+    int errors;
+    int ghbn_calls;		/* # calls to blocking gethostbyname() */
+    int release_locked;
 } IpcacheStats;
 
 static dlink_list lru_list;
@@ -102,6 +105,7 @@ ipcache_testname(void)
     if ((w = Config.dns_testname_list) == NULL)
 	return 1;
     for (; w; w = w->next) {
+	IpcacheStats.ghbn_calls++;
 	if (gethostbyname(w->key) != NULL)
 	    return 1;
     }
@@ -210,18 +214,19 @@ ipcacheAddEntry(ipcache_entry * i)
 static void
 ipcacheCallback(ipcache_entry * i)
 {
-    IPH *callback = i->handler;
-    void *cbdata;
+    IPH *handler = i->handler;
+    void *handlerData = i->handlerData;
     i->lastref = squid_curtime;
-    if (!i->handler)
-	return;
     ipcacheLockEntry(i);
-    callback = i->handler;
+    if (NULL == handler)
+	return;
     i->handler = NULL;
-    if (cbdataReferenceValidDone(i->handlerData, &cbdata)) {
+    i->handlerData = NULL;
+    if (cbdataValid(handlerData)) {
 	dns_error_message = i->error_message;
-	callback(i->flags.negcached ? NULL : &i->addrs, cbdata);
+	handler(i->flags.negcached ? NULL : &i->addrs, handlerData);
     }
+    cbdataUnlock(handlerData);
     ipcacheUnlockEntry(i);
 }
 
@@ -321,7 +326,7 @@ ipcacheParse(rfc1035_rr * answers, int nr)
     for (j = 0, k = 0; k < nr; k++) {
 	if (answers[k].type != RFC1035_TYPE_A)
 	    continue;
-	if (answers[k]._class != RFC1035_CLASS_IN)
+	if (answers[k].class != RFC1035_CLASS_IN)
 	    continue;
 	na++;
     }
@@ -337,7 +342,7 @@ ipcacheParse(rfc1035_rr * answers, int nr)
     for (j = 0, k = 0; k < nr; k++) {
 	if (answers[k].type != RFC1035_TYPE_A)
 	    continue;
-	if (answers[k]._class != RFC1035_CLASS_IN)
+	if (answers[k].class != RFC1035_CLASS_IN)
 	    continue;
 	if (j == 0)
 	    i.expires = squid_curtime + answers[k].ttl;
@@ -415,7 +420,8 @@ ipcache_nbgethostbyname(const char *name, IPH * handler, void *handlerData)
 	else
 	    IpcacheStats.hits++;
 	i->handler = handler;
-	i->handlerData = cbdataReference(handlerData);
+	i->handlerData = handlerData;
+	cbdataLock(handlerData);
 	ipcacheCallback(i);
 	return;
     }
@@ -423,7 +429,8 @@ ipcache_nbgethostbyname(const char *name, IPH * handler, void *handlerData)
     IpcacheStats.misses++;
     i = ipcacheCreateEntry(name);
     i->handler = handler;
-    i->handlerData = cbdataReference(handlerData);
+    i->handlerData = handlerData;
+    cbdataLock(handlerData);
     i->request_time = current_time;
     c = cbdataAlloc(generic_cbdata);
     c->data = i;
@@ -532,6 +539,10 @@ stat_ipcache_get(StoreEntry * sentry)
 	IpcacheStats.negative_hits);
     storeAppendPrintf(sentry, "IPcache Misses: %d\n",
 	IpcacheStats.misses);
+    storeAppendPrintf(sentry, "Blocking calls to gethostbyname(): %d\n",
+	IpcacheStats.ghbn_calls);
+    storeAppendPrintf(sentry, "Attempts to release locked entries: %d\n",
+	IpcacheStats.release_locked);
     storeAppendPrintf(sentry, "\n\n");
     storeAppendPrintf(sentry, "IP Cache Contents:\n\n");
     storeAppendPrintf(sentry, " %-29.29s %3s %6s %6s %1s\n",
@@ -780,7 +791,7 @@ snmp_netIpFn(variable_list * Var, snint * ErrP)
 	break;
     case IP_PENDHIT:
 	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    0,			/* deprecated */
+	    0,
 	    SMI_GAUGE32);
 	break;
     case IP_NEGHIT:
@@ -795,12 +806,12 @@ snmp_netIpFn(variable_list * Var, snint * ErrP)
 	break;
     case IP_GHBN:
 	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    0,			/* deprecated */
+	    IpcacheStats.ghbn_calls,
 	    SMI_COUNTER32);
 	break;
     case IP_LOC:
 	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    0,			/* deprecated */
+	    IpcacheStats.release_locked,
 	    SMI_COUNTER32);
 	break;
     default:

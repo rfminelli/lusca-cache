@@ -34,7 +34,6 @@
  */
 
 #include "squid.h"
-#include "StoreClient.h"
 
 static off_t storeSwapOutObjectBytesOnDisk(const MemObject *);
 static void storeSwapOutStart(StoreEntry * e);
@@ -50,7 +49,6 @@ storeSwapOutStart(StoreEntry * e)
     int swap_hdr_sz = 0;
     tlv *tlv_list;
     char *buf;
-    storeIOState *sio;
     assert(mem);
     /* Build the swap metadata, so the filesystem will know how much
      * metadata there is to store
@@ -65,8 +63,7 @@ storeSwapOutStart(StoreEntry * e)
     /* Create the swap file */
     c = cbdataAlloc(generic_cbdata);
     c->data = e;
-    sio = storeCreate(e, storeSwapOutFileNotify, storeSwapOutFileClosed, c);
-    mem->swapout.sio = cbdataReference(sio);
+    mem->swapout.sio = storeCreate(e, storeSwapOutFileNotify, storeSwapOutFileClosed, c);
     if (NULL == mem->swapout.sio) {
 	e->swap_status = SWAPOUT_NONE;
 	cbdataFree(c);
@@ -80,6 +77,7 @@ storeSwapOutStart(StoreEntry * e)
     e->swap_filen = mem->swapout.sio->swap_filen;
     e->swap_dirn = mem->swapout.sio->swap_dirn;
     /* write out the swap metadata */
+    cbdataLock(mem->swapout.sio);
     storeWrite(mem->swapout.sio, buf, mem->swap_hdr_sz, 0, xfree);
 }
 
@@ -329,7 +327,8 @@ storeSwapOutFileClosed(void *data, int errflag, storeIOState * sio)
 	statCounter.swap.outs++;
     }
     debug(20, 3) ("storeSwapOutFileClosed: %s:%d\n", __FILE__, __LINE__);
-    cbdataReferenceDone(mem->swapout.sio);
+    mem->swapout.sio = NULL;
+    cbdataUnlock(sio);
     storeUnlockObject(e);
 }
 
