@@ -10,6 +10,7 @@ int theAsciiConnection = -1;
 int theUdpConnection = -1;
 int do_reuse = 1;
 int opt_unlink_on_reload = 0;
+int opt_reload_hit_only = 0;	/* only UDP_HIT during store relaod */
 int catch_signals = 1;
 int do_dns_test = 1;
 int vhost_mode = 0;
@@ -19,11 +20,14 @@ int reread_pending = 0;		/* set by SIGHUP handler */
 char *version_string = SQUID_VERSION;
 char *appname = "squid";
 
-extern void (*failure_notify) ();	/* for error reporting from xmalloc */
+/* for error reporting from xmalloc and friends */
+extern void (*failure_notify) _PARAMS((char *));
 
-static int asciiPortNumOverride = 0;
-static int udpPortNumOverride = 0;
+static int asciiPortNumOverride = 1;
+static int udpPortNumOverride = 1;	/* Want to detect "-u 0" */
+#if MALLOC_DBG
 static int malloc_debug_level = 0;
+#endif
 
 static void usage()
 {
@@ -37,10 +41,12 @@ Usage: %s [-Rsehvz] [-f config-file] [-[apu] port]\n\
        -D        Disable initial DNS tests.\n\
        -R        Do not set REUSEADDR on port.\n\
        -U        Unlink expired objects on reload.\n\
+       -V        Virtual host httpd-accelerator.\n\
+       -Y        Only return UDP_HIT or UDP_DENIED during store reload.\n\
        -f file   Use given config-file instead of\n\
                  %s\n\
        -a port	 Specify ASCII port number (default: %d).\n\
-       -u port	 Specify UDP port number (default: %d).\n",
+       -u port	 Specify UDP port number (default: %d), disable with 0.\n",
 	appname, DefaultConfigFile, CACHE_HTTP_PORT, CACHE_ICP_PORT);
     exit(1);
 }
@@ -52,7 +58,7 @@ static void mainParseOptions(argc, argv)
     extern char *optarg;
     int c;
 
-    while ((c = getopt(argc, argv, "vCDRVUbsif:a:p:u:m:zh?")) != -1) {
+    while ((c = getopt(argc, argv, "vCDRVUbsiYf:a:p:u:m:zh?")) != -1) {
 	switch (c) {
 	case 'v':
 	    printf("Squid Cache: Version %s\n", version_string);
@@ -88,12 +94,21 @@ static void mainParseOptions(argc, argv)
 	    break;
 	case 'u':
 	    udpPortNumOverride = atoi(optarg);
+	    if (udpPortNumOverride < 0)
+		udpPortNumOverride = 0;
 	    break;
 	case 'm':
+#if MALLOC_DBG
 	    malloc_debug_level = atoi(optarg);
 	    break;
+#else
+	    fatal("Need to add -DMALLOC_DBG when compiling to use -m option");
+#endif
 	case 'z':
 	    zap_disk_store = 1;
+	    break;
+	case 'Y':
+	    opt_reload_hit_only = 1;
 	    break;
 	case '?':
 	case 'h':
@@ -107,12 +122,11 @@ static void mainParseOptions(argc, argv)
 void serverConnectionsOpen()
 {
     /* Get our real priviliges */
-    get_suid();
+    enter_suid();
 
     /* Open server ports */
     theAsciiConnection = comm_open(COMM_NONBLOCKING,
 	getAsciiPortNum(),
-	0,
 	"Ascii Port");
     if (theAsciiConnection < 0) {
 	fatal("Cannot open ascii Port");
@@ -127,10 +141,9 @@ void serverConnectionsOpen()
 	theAsciiConnection);
 
     if (!httpd_accel_mode || getAccelWithProxy()) {
-	if (getUdpPortNum() > -1) {
+	if (getUdpPortNum() > 0) {
 	    theUdpConnection = comm_open(COMM_NONBLOCKING | COMM_DGRAM,
 		getUdpPortNum(),
-		0,
 		"Ping Port");
 	    if (theUdpConnection < 0)
 		fatal("Cannot open UDP Port");
@@ -144,7 +157,7 @@ void serverConnectionsOpen()
 	}
     }
     /* And restore our priviliges to normal */
-    check_suid();
+    leave_suid();
 }
 
 void serverConnectionsClose()
@@ -194,6 +207,7 @@ static void mainInitialize()
 {
     static int first_time = 1;
 
+
     if (catch_signals) {
 	signal(SIGSEGV, death);
 	signal(SIGBUS, death);
@@ -205,32 +219,31 @@ static void mainInitialize()
 	ConfigFile = xstrdup(DefaultConfigFile);
     parseConfigFile(ConfigFile);
 
-    if (asciiPortNumOverride > 0)
-	setAsciiPortNum(asciiPortNumOverride);
-    if (udpPortNumOverride > 0)
-	setUdpPortNum(udpPortNumOverride);
+    leave_suid();		/* Run as non privilegied user */
+
+    if (asciiPortNumOverride != 1)
+	setAsciiPortNum((u_short) asciiPortNumOverride);
+    if (udpPortNumOverride != 1)
+	setUdpPortNum((u_short) udpPortNumOverride);
 
     _db_init(getCacheLogFile());
     fdstat_open(fileno(debug_log), LOG);
     fd_note(fileno(debug_log), getCacheLogFile());
 
     debug(1, 0, "Starting Squid Cache (version %s)...\n", version_string);
-    debug(1, 1, "With %d file descriptors available\n", getMaxFD());
+    debug(1, 1, "With %d file descriptors available\n", FD_SETSIZE);
 
     if (first_time) {
 	disk_init();		/* disk_init must go before ipcache_init() */
-	writePidFile();		/* write PID file before setuid() */
+	writePidFile();		/* write PID file */
     }
     ipcache_init();
     neighbors_init();
     (void) ftpInitialize();
 
-#if defined(MALLOC_DBG)
+#if MALLOC_DBG
     malloc_debug(0, malloc_debug_level);
 #endif
-
-    /* do suid checking */
-    check_suid();
 
     if (first_time) {
 	first_time = 0;
@@ -283,19 +296,25 @@ int main(argc, argv)
 
     setMaxFD();
 
-    for (n = getMaxFD(); n > 2; n--)
+    for (n = FD_SETSIZE; n > 2; n--)
 	close(n);
 
 #if HAVE_MALLOPT
+#ifdef M_GRAIN
     /* set malloc option */
     /* use small block algorithm for faster allocation */
     /* grain of small block */
     mallopt(M_GRAIN, 16);
+#endif
+#ifdef M_MXFAST
     /* biggest size that is considered a small block */
-    mallopt(M_MXFAST, 4096);
-    /* number of holding small block */
+    mallopt(M_MXFAST, 512);
+#endif
+#ifdef M_NBLKS
+    /* number of block in each chunk */
     mallopt(M_NLBLKS, 100);
 #endif
+#endif /* HAVE_MALLOPT */
 
     /*init comm module */
     comm_init();

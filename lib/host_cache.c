@@ -1,4 +1,7 @@
+
 /* $Id$ */
+
+#include "config.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -7,7 +10,9 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#if HAVE_NETDB_H
 #include <netdb.h>
+#endif
 #include <ctype.h>
 
 #include "util.h"
@@ -16,14 +21,15 @@
 #define HASHTABLE_M		  9
 
 static Host HostTable[HASHTABLE_N];
+static int hash_index _PARAMS((char *buf));
 
 static int hash_index(buf)
      char *buf;
 {
     static int n = HASHTABLE_N;
     static int m = HASHTABLE_M;
-    register int val = 0;
-    register char *s;
+    int val = 0;
+    char *s = NULL;
 
     for (s = buf; *s; s++)
 	val += (int) (*s * m);
@@ -32,7 +38,7 @@ static int hash_index(buf)
 }
 
 Host *get_host _PARAMS((char *hostname));
-void host_cache_init _PARAMS((void));
+static void host_cache_init _PARAMS((void));
 static Host *new_host _PARAMS((char *hostname));
 static void Tolower _PARAMS((char *));
 void dump_host_cache _PARAMS((int, int));
@@ -40,10 +46,8 @@ static int cache_inited = 0;
 
 /* ========== PUBLIC FUNCTIONS ============================================= */
 
-void host_cache_init()
+static void host_cache_init()
 {
-    char *getfullhostname();
-
     memset(HostTable, '\0', HASHTABLE_N * sizeof(Host));
     cache_inited = 1;
 
@@ -63,7 +67,7 @@ Host *get_host(hostname)
     time_t now = time(0);
 
     if (hostname == (char *) 0)
-	return 0;
+	return NULL;
 
     Debug(86, 1, ("host_cache: get_host (%s)\n", hostname));
 
@@ -82,7 +86,7 @@ Host *get_host(hostname)
     if (!h)
 	h = new_host(hostname);
     if (!h)
-	return 0;
+	return NULL;
 
     h->n++;
     h->last_t = now;
@@ -127,11 +131,11 @@ static Host *new_host(hostname)
 	}
     } else {
 	H = gethostbyname(hn);
-	if (H == (struct hostent *) NULL)
+	if (H == NULL)
 	    Debug(86, 1, ("new_host: gethostbyname(%s) failed.\n", hn));
     }
 
-    if (H == (struct hostent *) NULL) {
+    if (H == NULL) {
 	Debug(86, 1, ("new_host: %s: unknown host\n", hn));
 	xfree(hn);
 	return 0;
@@ -152,6 +156,7 @@ static Host *new_host(hostname)
     return h;
 }
 
+#ifdef UNUSED_CODE
 void dump_host_cache(d_sec, d_lvl)
      int d_sec;
      int d_lvl;
@@ -168,6 +173,7 @@ void dump_host_cache(d_sec, d_lvl)
 	}
     }
 }
+#endif /* UNUSED_CODE */
 
 
 /* ========== MISC UTIL FUNCS ============================================== */

@@ -1,3 +1,4 @@
+
 $Id$
 
 Release Notes for version 1.0 of the Squid cache.
@@ -18,6 +19,7 @@ TABLE OF CONTENTS:
 	Assigning weights to cache neighbors
 	Converting 'cache/log' from cached-1.4.pl3
 	Notes on stoplists vs. ttl_pattern
+        SIGUSR1 now rotates log files
 
 
 Private Objects
@@ -64,32 +66,13 @@ Proper parsing of HTTP reply codes
 
 Squid parses HTTP replies to extract the reply code.  The codes are used
 to determine which objects should be cached, which should be ejected,
-and which should be negative-cached.  Currently, the following are
-hard-coded:
+and which should be negative-cached. 
 
-    These could be cached for a long time:
-	200 OK
-	203 Non-Authoritative Information
-	300 Multiple Choices
-	301 Moved Permanently
-	410 Gone
-
-    These are ejected immediately:
-	304 Not Modified
-	401 Unauthorized
-	407 Proxy Authentication Required
-
-    All others are negative-cached (for whatever is configured, default
-    five minutes).  They include:
-	302 Moved Temporarily
-	400 Bad Request
-	403 Forbidden
-	404 Not Found
-	500 Internal Server Error
+See HTTP-codes.txt for a list of HTTP response codes, and how they are
+cached.
 
 The HTTP codes are now logged to "access.log" in the native format 
 (ie with 'emulate_httpd_log off').
-
 
 Support for If-Modified-Since GET
 ==============================================================================
@@ -332,3 +315,10 @@ Instead, the object will be fetched directly (unless on the other side
 of a firewall).  We recommend that you use the stoplist for cgi-bin
 scripts and use the ttl_pattern rules to prevent caching of normal
 objects.
+
+SIGUSR1 now rotates log files
+==============================================================================
+In order to be more consistent with other daemon programs, SIGHUP is used
+to reconfigure the running process.  This means that we needed to change
+the signal used to rotate the log files.  We now use SIGUSR1 to rotate the logs.
+

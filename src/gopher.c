@@ -72,6 +72,8 @@ static int gopherStateFree(fd, gopherState)
 {
     if (gopherState == NULL)
 	return 1;
+    if (gopherState->entry)
+	storeUnlockObject(gopherState->entry);
     put_free_4k_page(gopherState->buf);
     xfree(gopherState);
     return 0;
@@ -853,7 +855,7 @@ int gopherStart(unusedfd, url, entry)
     int sock, status;
     GopherData *data = CreateGopherData();
 
-    data->entry = entry;
+    storeLockObject(data->entry = entry, NULL, NULL);
 
     debug(10, 3, "gopherStart: url: %s\n", url);
 
@@ -865,7 +867,7 @@ int gopherStart(unusedfd, url, entry)
 	return COMM_ERROR;
     }
     /* Create socket. */
-    sock = comm_open(COMM_NONBLOCKING, 0, 0, url);
+    sock = comm_open(COMM_NONBLOCKING, 0, url);
     if (sock == COMM_ERROR) {
 	debug(10, 4, "gopherStart: Failed because we're out of sockets.\n");
 	squid_error_entry(entry, ERR_NO_FDS, xstrerror());
@@ -932,7 +934,7 @@ int gopherStart(unusedfd, url, entry)
 
 GopherData *CreateGopherData()
 {
-    GopherData *gd = (GopherData *) xcalloc(1, sizeof(GopherData));
+    GopherData *gd = xcalloc(1, sizeof(GopherData));
     gd->buf = get_free_4k_page();
     return (gd);
 }

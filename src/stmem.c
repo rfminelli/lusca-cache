@@ -125,7 +125,7 @@ int memAppend(mem, data, len)
     }
     while (len > 0) {
 	len_to_copy = min(len, SM_PAGE_SIZE);
-	p = (mem_node) xcalloc(1, sizeof(Mem_Node));
+	p = xcalloc(1, sizeof(Mem_Node));
 	p->next = NULL;
 	p->len = len_to_copy;
 	p->data = get_free_4k_page();
@@ -211,6 +211,9 @@ int memCopy(mem, offset, buf, size)
 
     debug(19, 6, "memCopy: offset %d: size %d\n", offset, size);
 
+    if (p == NULL)
+	fatal_dump("memCopy: NULL mem_node");
+
     if (size <= 0)
 	return size;
 
@@ -256,7 +259,7 @@ int memCopy(mem, offset, buf, size)
 /* Do whatever is necessary to begin storage of new object */
 mem_ptr memInit()
 {
-    mem_ptr new = (mem_ptr) xcalloc(1, sizeof(Mem_Hdr));
+    mem_ptr new = xcalloc(1, sizeof(Mem_Hdr));
 
     new->tail = new->head = NULL;
 
@@ -281,11 +284,11 @@ char *get_free_4k_page()
 	page = pop(&sm_stats.free_page_stack);
     } else {
 #if USE_MEMALIGN
-	page = (char *) memalign(SM_PAGE_SIZE, SM_PAGE_SIZE);
+	page = memalign(SM_PAGE_SIZE, SM_PAGE_SIZE);
 	if (!page)
 	    fatal_dump(NULL);
 #else
-	page = (char *) xmalloc(SM_PAGE_SIZE);
+	page = xmalloc(SM_PAGE_SIZE);
 #endif
 	sm_stats.total_pages_allocated++;
     }
@@ -307,7 +310,7 @@ void put_free_4k_page(page)
     if (full_stack(&sm_stats.free_page_stack)) {
 	sm_stats.total_pages_allocated--;
 	if (!stack_overflow_warning_toggle) {
-	    debug(19, 0, "Stack of free stmem pages overflowed.  Resize it?");
+	    debug(19, 0, "Stack of free stmem pages overflowed.  Resize it?\n");
 	    stack_overflow_warning_toggle++;
 	}
     }
@@ -325,11 +328,11 @@ char *get_free_8k_page()
 	page = pop(&disk_stats.free_page_stack);
     } else {
 #if USE_MEMALIGN
-	page = (char *) memalign(DISK_PAGE_SIZE, DISK_PAGE_SIZE);
+	page = memalign(DISK_PAGE_SIZE, DISK_PAGE_SIZE);
 	if (!page)
 	    fatal_dump(NULL);
 #else
-	page = (char *) xmalloc(DISK_PAGE_SIZE);
+	page = xmalloc(DISK_PAGE_SIZE);
 #endif
 	disk_stats.total_pages_allocated++;
     }
@@ -352,7 +355,7 @@ void put_free_8k_page(page)
     if (full_stack(&disk_stats.free_page_stack)) {
 	disk_stats.total_pages_allocated--;
 	if (!stack_overflow_warning_toggle) {
-	    debug(19, 0, "Stack of free disk pages overflowed.  Resize it?");
+	    debug(19, 0, "Stack of free disk pages overflowed.  Resize it?\n");
 	    stack_overflow_warning_toggle++;
 	}
     }
@@ -377,15 +380,20 @@ void stmemInit()
 /* use -DPURIFY=1 on the compile line to enable Purify checks */
 
 #if !PURIFY
+#ifdef LITTLESTACK
+    init_stack(&sm_stats.free_page_stack, (getCacheMemMax() / SM_PAGE_SIZE) >> 2);
+    init_stack(&disk_stats.free_page_stack, 1000);
+#else /* LITTLESTACK */
     /* 4096 * 10000 pages = 40MB + CacheMemMax in pages */
     init_stack(&sm_stats.free_page_stack, 10000 + (getCacheMemMax() / SM_PAGE_SIZE));
     /* 8096 * 1000 pages = 8MB */
     init_stack(&disk_stats.free_page_stack, 1000);
-#else
+#endif /* LITTLESTACK */
+#else /* !PURIFY */
     /* Declare a zero size page stack so that purify checks for 
      * FMRs/UMRs etc.
      */
     init_stack(&sm_stats.free_page_stack, 0);
     init_stack(&disk_stats.free_page_stack, 0);
-#endif
+#endif /* !PURIFY */
 }

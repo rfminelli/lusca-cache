@@ -1,10 +1,11 @@
+
 /* $Id$ */
 
 #ifndef ICP_H
 #define ICP_H
 
 typedef enum {
-    LOG_TAG_MIN,		/* 0 */
+    LOG_TAG_NONE,		/* 0 */
     LOG_TCP_HIT,		/* 1 */
     LOG_TCP_MISS,		/* 2 */
     LOG_TCP_EXPIRED,		/* 3 */
@@ -13,6 +14,9 @@ typedef enum {
     LOG_TCP_SWAPIN_FAIL,	/* 6 */
     LOG_TCP_DENIED,		/* 7 */
     LOG_UDP_HIT,		/* 8 */
+#ifdef UDP_HIT_WITH_OBJ
+    LOG_UDP_HIT_OBJ,		/* 8 */
+#endif
     LOG_UDP_MISS,		/* 9 */
     LOG_UDP_DENIED,		/* 10 */
     LOG_UDP_INVALID,		/* 11 */
@@ -50,10 +54,12 @@ typedef struct wwd {
     char *msg;
     long len;
     struct wwd *next;
+    struct timeval start;
+    log_type logcode;
 } icpUdpData;
 
 extern char *icpWrite _PARAMS((int, char *, int, int, void (*handler) (), void *));
-extern int icpUdpSend _PARAMS((int, char *, icp_common_t *, struct sockaddr_in *, icp_opcode));
+extern int icpUdpSend _PARAMS((int, char *, icp_common_t *, struct sockaddr_in *, icp_opcode, log_type));
 
 extern int icpHandleUdp _PARAMS((int sock, void *data));
 extern int asciiHandleConn _PARAMS((int sock, void *data));
@@ -64,28 +70,3 @@ extern char *IcpOpcodeStr[];
 extern int icpUdpReply _PARAMS((int fd, icpUdpData * queue));
 
 #endif
-
-#define ICP_IDENT_SZ 63
-
-typedef struct {
-    icp_common_t header;	/* Allows access to previous header */
-    char *url;
-    char *inbuf;
-    int inbufsize;
-    int method;			/* GET, POST, ... */
-    request_t *request;		/* Parsed URL ... */
-    char *request_hdr;		/* Mime header */
-    StoreEntry *entry;
-    long offset;
-    int log_type;
-    int http_code;
-    struct sockaddr_in peer;
-    struct sockaddr_in me;
-    char *ptr_to_4k_page;
-    char *buf;
-    struct timeval start;
-    int flags;
-    char ident[ICP_IDENT_SZ + 1];
-    int ident_fd;
-    int size;
-} icpStateData;

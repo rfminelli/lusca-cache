@@ -1,13 +1,19 @@
 /* $Id$ */
 
+#include "config.h"
+
 #include <stdlib.h>
 #include <string.h>
 #define MAIN
 #include "util.h"
 
+static void debug_enable _PARAMS((int, int));
+static void debug_disable _PARAMS((int));
+
 int Harvest_debug_levels[MAX_DEBUG_LEVELS];
 int Harvest_do_debug = 0;
 
+#ifdef UNUSED_CODE
 /*
  *  debug_reset() - Reset debugging routines.
  */
@@ -19,11 +25,12 @@ void debug_reset()
 	Harvest_debug_levels[i] = -1;
     Harvest_do_debug = 0;
 }
+#endif /* UNUSED_CODE */
 
 /*
  *  debug_enable() - Enables debugging output for section s, level l.
  */
-void debug_enable(s, l)
+static void debug_enable(s, l)
      int s, l;
 {
 #ifdef USE_NO_DEBUGGING
@@ -48,6 +55,7 @@ void debug_disable(s)
     Harvest_debug_levels[s] = -1;
 }
 
+#ifdef UNUSED_CODE
 /*
  *  debug_ok() - Returns non-zero if the caller is debugging the
  *  given section and level.  If level is -2, then all debugging is used.
@@ -77,6 +85,7 @@ int debug_ok(s, lev)
     return 0;
 #endif
 }
+#endif /* UNUSED_CODE */
 
 /*
  *  debug_flag() - Processes a -D flag and runs debug_enable()
@@ -132,6 +141,6 @@ void debug_init()
     u = strtok(t, " \t\n");
     do {
 	debug_flag(u);
-    } while ((u = strtok((char *) 0, " \t\n")) != (char *) NULL);
+    } while ((u = strtok((char *) 0, " \t\n")) != NULL);
     xfree(t);
 }

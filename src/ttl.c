@@ -50,15 +50,13 @@ void ttlAddToList(pattern, abs_ttl, pct_age, age_max)
     pct_age = pct_age < 0 ? 0 : pct_age > 100 ? 100 : pct_age;
     age_max = age_max < 0 ? 0 : age_max;
 
-    t = (ttl_t *) xmalloc(sizeof(ttl_t));
-    memset((char *) t, '\0', sizeof(ttl_t));
-
+    t = xcalloc(1, sizeof(ttl_t));
     t->pattern = (char *) xstrdup(pattern);
     t->compiled_pattern = comp;
     t->abs_ttl = abs_ttl;
     t->pct_age = pct_age;
     t->age_max = age_max;
-    t->next = (ttl_t *) NULL;
+    t->next = NULL;
 
     if (!TTL_tbl)
 	TTL_tbl = t;
@@ -145,7 +143,7 @@ time_t ttlSet(entry)
     else if (!strncmp(entry->url, "gopher:", 7))
 	default_ttl = getGopherTTL();
 
-    match = (ttl_t *) NULL;
+    match = NULL;
     for (t = TTL_tbl; t; t = t->next) {
 	if (regexec(&(t->compiled_pattern), entry->url, 0, 0, 0) == 0) {
 	    match = t;
@@ -156,32 +154,29 @@ time_t ttlSet(entry)
 	}
     }
 
-    /*       Return a TTL that is a percent of the object's age     */
-    /*       if a last-mod was given for the object.                */
+    /* Return a TTL that is a percent of the object's age if a last-mod
+     * was given for the object. */
 
     if (match && match->pct_age && last_modified > 0) {
 	d = (double) (now - last_modified) * match->pct_age / 100;
 	ttl = (time_t) d;
-	if (ttl > match->age_max)	/* place upper limit on           */
-	    ttl = match->age_max;	/* ttls set from %-of-age       */
+	if (ttl > match->age_max)	/* place upper limit on */
+	    ttl = match->age_max;	/* ttls set from %-of-age */
 	flags |= TTL_PCTAGE;
-    } else
-	/*      Return an absolute TTL value from a match (unless       */
-	/*      'abs_ttl' is negative).                                 */
-    if (match && match->abs_ttl >= 0) {
+    } else if (match && match->abs_ttl >= 0) {
+	/* Return an absolute TTL value from a match (unless 
+	 * 'abs_ttl' is negative). */
 	ttl = match->abs_ttl;
 	flags |= TTL_ABSOLUTE;
-    } else
-	/*      No match, use 50% of age if we have last-modified.      */
-	/*      But limit this to the default TTL.                      */
-    if (last_modified > 0) {
+    } else if (!match && last_modified > 0) {
+	/* No match, use 50% of age if we have last-modified.
+	 * But limit this to the default TTL. */
 	ttl = ((now - last_modified) / 2);
 	flags |= TTL_PCTAGE;
 	if (ttl > default_ttl)
 	    ttl = default_ttl;
-    } else
-	/*      No last-modified, use the defaults                      */
-    {
+    } else {
+	/* No last-modified, use the defaults */
 	ttl = default_ttl;
 	flags |= TTL_DEFAULT;
     }
