@@ -175,15 +175,19 @@ extern int commSetTimeout(int fd, int, PF *, void *);
 extern void commSetDefer(int fd, DEFER * func, void *);
 extern int ignoreErrno(int);
 extern void commCloseAllSockets(void);
-extern void checkTimeouts(void);
-extern int commDeferRead(int fd);
 
 
 /*
  * comm_select.c
  */
 extern void comm_select_init(void);
+#if HAVE_POLL
+extern int comm_poll(int);
+#else
 extern int comm_select(int);
+#endif
+extern void commUpdateReadBits(int, PF *);
+extern void commUpdateWriteBits(int, PF *);
 extern void comm_quick_poll_required(void);
 
 extern void packerToStoreInit(Packer * p, StoreEntry * e);
@@ -839,15 +843,15 @@ extern void memInitModule(void);
 extern void memCleanModule(void);
 extern void memConfigure(void);
 extern void *memAllocate(mem_type);
-extern void *memAllocString(size_t net_size, size_t * gross_size);
 extern void *memAllocBuf(size_t net_size, size_t * gross_size);
-extern void *memReallocBuf(void *buf, size_t net_size, size_t * gross_size);
 extern void memFree(void *, int type);
+extern void memFreeBuf(size_t size, void *);
+extern void memFree2K(void *);
 extern void memFree4K(void *);
 extern void memFree8K(void *);
-extern void memFreeString(size_t size, void *);
-extern void memFreeBuf(size_t size, void *);
-extern FREE *memFreeBufFunc(size_t size);
+extern void memFree16K(void *);
+extern void memFree32K(void *);
+extern void memFree64K(void *);
 extern int memInUse(mem_type);
 extern size_t memTotalAllocated(void);
 extern void memDataInit(mem_type, const char *, size_t, int);
@@ -1047,8 +1051,7 @@ extern int storeSwapOutAble(const StoreEntry * e);
 extern store_client *storeClientListSearch(const MemObject * mem, void *data);
 #endif
 extern store_client *storeClientListAdd(StoreEntry * e, void *data);
-extern void storeClientCopyOld(store_client *, StoreEntry *, off_t, off_t, size_t, char *, STCB *, void *);
-extern void storeClientCopy(store_client *, StoreEntry * , off_t, size_t, char *, STCB *, void *);
+extern void storeClientCopy(store_client *, StoreEntry *, off_t, off_t, size_t, char *, STCB *, void *);
 extern int storeClientCopyPending(store_client *, StoreEntry * e, void *data);
 extern int storeUnregister(store_client * sc, StoreEntry * e, void *data);
 extern off_t storeLowestMemReaderOffset(const StoreEntry * entry);

@@ -814,7 +814,7 @@ struct _MemBuf {
     /* private, stay away; use interface function instead */
     mb_size_t max_capacity;	/* when grows: assert(new_capacity <= max_capacity) */
     mb_size_t capacity;		/* allocated space */
-    unsigned stolen:1;		/* the buffer has been stolen for use by someone else */
+    FREE *freefunc;		/* what to use to free the buffer, NULL after memBufFreeFunc() is called */
 };
 
 /* see Packer.c for description */
@@ -1045,8 +1045,6 @@ struct _clientHttpRequest {
     request_t *request;		/* Parsed URL ... */
     store_client *sc;		/* The store_client we're using */
     store_client *old_sc;	/* ... for entry to be validated */
-    int old_reqofs;		/* ... for the buffer */
-    int old_reqsize;		/* ... again, for the buffer */
     char *uri;
     char *log_uri;
     struct {
@@ -1078,11 +1076,6 @@ struct _clientHttpRequest {
 	char *location;
     } redirect;
     dlink_node active;
-    char norm_reqbuf[HTTP_REQBUF_SZ]; /* For 'normal requests' */
-    char ims_reqbuf[HTTP_REQBUF_SZ];  /* For 'ims' requests */
-    char *reqbuf;
-    int reqofs;
-    int reqsize;
 };
 
 struct _ConnStateData {
@@ -1172,9 +1165,6 @@ struct _DigestFetchState {
 	int msg;
 	int bytes;
     } sent, recv;
-    char buf[SM_PAGE_SIZE];
-    int bufofs;
-    digest_read_state_t state;
 };
 
 /* statistics for cache digests and other hit "predictors" */
@@ -1423,7 +1413,7 @@ struct _mem_hdr {
 struct _store_client {
     int type;
     off_t copy_offset;
-    off_t cmp_offset;
+    off_t seen_offset;
     size_t copy_size;
     char *copy_buf;
     STCB *callback;

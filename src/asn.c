@@ -37,7 +37,6 @@
 #include "radix.h"
 
 #define WHOIS_PORT 43
-#define	AS_REQBUF_SZ	4096
 
 /* BEGIN of definitions for radix tree entries */
 
@@ -68,9 +67,8 @@ struct _ASState {
     store_client *sc;
     request_t *request;
     int as_number;
+    off_t seen;
     off_t offset;
-    int reqofs;
-    char reqbuf[AS_REQBUF_SZ];
 };
 
 typedef struct _ASState ASState;
@@ -207,55 +205,49 @@ asnCacheStart(int as)
 	asState->sc = storeClientListAdd(e, asState);
     }
     asState->entry = e;
+    asState->seen = 0;
     asState->offset = 0;
-    asState->reqofs = 0;
     storeClientCopy(asState->sc,
 	e,
+	asState->seen,
 	asState->offset,
-	AS_REQBUF_SZ,
-	asState->reqbuf,
+	4096,
+	memAllocate(MEM_4K_BUF),
 	asHandleReply,
 	asState);
 }
 
 static void
-asHandleReply(void *data, char *unused_buf, ssize_t retsize)
+asHandleReply(void *data, char *buf, ssize_t size)
 {
     ASState *asState = data;
     StoreEntry *e = asState->entry;
     char *s;
     char *t;
-    char *buf = asState->reqbuf;
-    int leftoversz = -1;
-
-    debug(53, 3) ("asHandleReply: Called with size=%d\n", (int)retsize);
-    debug(53, 3) ("asHandleReply: buffer='%s'\n", buf);
-
-    /* First figure out whether we should abort the request */
+    debug(53, 3) ("asHandleReply: Called with size=%ld\n", (long int) size);
     if (EBIT_TEST(e->flags, ENTRY_ABORTED)) {
+	memFree(buf, MEM_4K_BUF);
 	asStateFree(asState);
 	return;
     }
-    if (retsize == 0 && e->mem_obj->inmem_hi > 0) {
+    if (size == 0 && e->mem_obj->inmem_hi > 0) {
+	memFree(buf, MEM_4K_BUF);
 	asStateFree(asState);
 	return;
-    } else if (retsize < 0) {
-	debug(53, 1) ("asHandleReply: Called with size=%d\n", retsize);
+    } else if (size < 0) {
+	debug(53, 1) ("asHandleReply: Called with size=%ld\n", (long int) size);
+	memFree(buf, MEM_4K_BUF);
 	asStateFree(asState);
 	return;
     } else if (HTTP_OK != e->mem_obj->reply->sline.status) {
 	debug(53, 1) ("WARNING: AS %d whois request failed\n",
 	    asState->as_number);
+	memFree(buf, MEM_4K_BUF);
 	asStateFree(asState);
 	return;
     }
-
-    /*
-     * Next, attempt to parse our request
-     * Remembering that the actual buffer size is retsize + reqofs!
-     */
     s = buf;
-    while (s - buf < (retsize + asState->reqofs) && *s != '\0') {
+    while (s - buf < size && *s != '\0') {
 	while (*s && xisspace(*s))
 	    s++;
 	for (t = s; *t; t++) {
@@ -271,47 +263,33 @@ asHandleReply(void *data, char *unused_buf, ssize_t retsize)
 	asnAddNet(s, asState->as_number);
 	s = t + 1;
     }
-
-    /*
-     * Next, grab the end of the 'valid data' in the buffer, and figure
-     * out how much data is left in our buffer, which we need to keep
-     * around for the next request
-     */
-    leftoversz = (asState->reqofs + retsize) - (s - buf);
-    assert(leftoversz >= 0);
-
-    /*
-     * Next, copy the left over data, from s to s + leftoversz to the
-     * beginning of the buffer
-     */
-    xmemmove(buf, s, leftoversz);
-
-    /*
-     * Next, update our offset and reqofs, and kick off a copy if required
-     */
-    asState->offset += retsize;
-    asState->reqofs = leftoversz;
-    debug(53, 3) ("asState->offset = %ld\n",(long int) asState->offset);
+    asState->seen = asState->offset + size;
+    asState->offset += (s - buf);
+    debug(53, 3) ("asState->seen = %ld, asState->offset = %ld\n",
+	(long int) asState->seen, (long int) asState->offset);
     if (e->store_status == STORE_PENDING) {
 	debug(53, 3) ("asHandleReply: store_status == STORE_PENDING: %s\n", storeUrl(e));
 	storeClientCopy(asState->sc,
 	    e,
+	    asState->seen,
 	    asState->offset,
-	    AS_REQBUF_SZ - asState->reqofs,
-	    asState->reqbuf + asState->reqofs,
+	    4096,
+	    buf,
 	    asHandleReply,
 	    asState);
-    } else if (asState->offset < e->mem_obj->inmem_hi) {
-	debug(53, 3) ("asHandleReply: asState->offset < e->mem_obj->inmem_hi %s\n", storeUrl(e));
+    } else if (asState->seen < e->mem_obj->inmem_hi) {
+	debug(53, 3) ("asHandleReply: asState->seen < e->mem_obj->inmem_hi %s\n", storeUrl(e));
 	storeClientCopy(asState->sc,
 	    e,
+	    asState->seen,
 	    asState->offset,
-	    AS_REQBUF_SZ - asState->reqofs,
-	    asState->reqbuf + asState->reqofs,
+	    4096,
+	    buf,
 	    asHandleReply,
 	    asState);
     } else {
 	debug(53, 3) ("asHandleReply: Done: %s\n", storeUrl(e));
+	memFree(buf, MEM_4K_BUF);
 	asStateFree(asState);
     }
 }

@@ -288,6 +288,8 @@ statStoreEntry(StoreEntry * s, StoreEntry * e)
 	    storeAppendPrintf(s, "\tClient #%d, %p\n", i, sc->callback_data);
 	    storeAppendPrintf(s, "\t\tcopy_offset: %d\n",
 		(int) sc->copy_offset);
+	    storeAppendPrintf(s, "\t\tseen_offset: %d\n",
+		(int) sc->seen_offset);
 	    storeAppendPrintf(s, "\t\tcopy_size: %d\n",
 		(int) sc->copy_size);
 	    storeAppendPrintf(s, "\t\tflags:");
@@ -799,10 +801,9 @@ statAvgDump(StoreEntry * sentry, int minutes, int hours)
     storeAppendPrintf(sentry, "aborted_requests = %f/sec\n",
 	XAVG(aborted_requests));
 
-#if USE_POLL
+#if HAVE_POLL
     storeAppendPrintf(sentry, "syscalls.polls = %f/sec\n", XAVG(syscalls.polls));
-#endif
-#if USE_SELECT
+#else
     storeAppendPrintf(sentry, "syscalls.selects = %f/sec\n", XAVG(syscalls.selects));
 #endif
     storeAppendPrintf(sentry, "syscalls.disk.opens = %f/sec\n", XAVG(syscalls.disk.opens));

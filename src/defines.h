@@ -146,7 +146,6 @@
 #define LOG_DISABLE 0
 
 #define SM_PAGE_SIZE 4096
-#define MAX_CLIENT_BUF_SZ 4096
 
 #define EBIT_SET(flag, bit) 	((void)((flag) |= ((1L<<(bit)))))
 #define EBIT_CLR(flag, bit) 	((void)((flag) &= ~((1L<<(bit)))))
@@ -235,7 +234,7 @@
 #define countof(arr) (sizeof(arr)/sizeof(*arr))
 
 /* to initialize static variables (see also MemBufNull) */
-#define MemBufNULL { NULL, 0, 0, 0, 0 }
+#define MemBufNULL { NULL, 0, 0, 0, NULL }
 
 /*
  * Max number of ICP messages to receive per call to icpHandleUdp
@@ -270,6 +269,8 @@
  */
 #define PEER_TCP_MAGIC_COUNT 10
 
+#define CLIENT_SOCK_SZ 4096
+
 #define URI_WHITESPACE_STRIP 0
 #define URI_WHITESPACE_ALLOW 1
 #define URI_WHITESPACE_ENCODE 2
@@ -295,5 +296,4 @@
 #define O_BINARY 0
 #endif
 
-#define	HTTP_REQBUF_SZ	4096
 #endif /* SQUID_DEFINES_H */
