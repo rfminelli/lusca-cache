@@ -29,7 +29,8 @@ typedef struct _squid_read_data_t {
 
 /* GLOBALS */
 Meta_data meta_data;
-unsigned long nconn = 0;
+unsigned long ntcpconn = 0;
+unsigned long nudpconn = 0;
 
 char *stat_describe();
 char *mem_describe();
@@ -424,14 +425,17 @@ void info_get(obj, sentry)
     sprintf(line, "{Connection information for %s:}\n", appname);
     storeAppend(sentry, line, strlen(line));
 
-    sprintf(line, "{\tNumber of connections:\t%lu}\n", nconn);
+    sprintf(line, "{\tNumber of TCP connections:\t%lu}\n", ntcpconn);
+    storeAppend(sentry, line, strlen(line));
+
+    sprintf(line, "{\tNumber of UDP connections:\t%lu}\n", nudpconn);
     storeAppend(sentry, line, strlen(line));
 
     {
 	float f;
 	f = squid_curtime - squid_starttime;
 	sprintf(line, "{\tConnections per hour:\t%.1f}\n", f == 0.0 ? 0.0 :
-	    (nconn / (f / 3600)));
+	    ((ntcpconn+nudpconn) / (f / 3600)));
 	storeAppend(sentry, line, strlen(line));
     }
 
