@@ -45,7 +45,6 @@ extern int config_lineno;
 extern int emulate_httpd_log;
 extern int httpd_accel_mode;
 extern int unbuffered_logs;
-extern int zap_disk_store;
 extern intlist *connect_port_list;
 extern wordlist *bind_addr_list;
 extern wordlist *ftp_stoplist;
