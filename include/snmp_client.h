@@ -2,8 +2,8 @@
  * $Id$
  */
 
-#ifndef SQUID_SNMP_CLIENT_H
-#define SQUID_SNMP_CLIENT_H
+#ifndef _SNMP_CLIENT_H_
+#define _SNMP_CLIENT_H_
 
 /*
  * snmp_client.h
@@ -30,7 +30,7 @@ ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
 SOFTWARE.
 ******************************************************************/
 struct synch_state {
-    int waiting;
+    int	waiting;
     int status;
 /* status codes */
 #define STAT_SUCCESS	0
@@ -44,21 +44,22 @@ struct synch_state {
 extern "C" {
 #endif
 
-    extern struct synch_state snmp_synch_state;
+extern struct synch_state snmp_synch_state;
 
 /* Synchronize Input with Agent */
-    int snmp_synch_input(int, struct snmp_session *, int,
-	struct snmp_pdu *, void *);
+int  snmp_synch_input(int, struct snmp_session *, int,
+		     struct snmp_pdu *, void *);
 
 /* Synchronize Response with Agent */
-    int snmp_synch_response(struct snmp_session *, struct snmp_pdu *,
-	struct snmp_pdu **);
+int  snmp_synch_response(struct snmp_session *, struct snmp_pdu *, 
+			struct snmp_pdu **);
 
 /* Synchronize Setup */
-    void snmp_synch_setup(struct snmp_session *);
+void snmp_synch_setup(struct snmp_session *);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif				/* SQUID_SNMP_CLIENT_H */
+#endif /* _SNMP_CLIENT_H_ */
+

@@ -31,9 +31,6 @@
  *
  */
 
-#ifndef SQUID_DEFINES_H
-#define SQUID_DEFINES_H
-
 #ifndef TRUE
 #define TRUE 1
 #endif
@@ -54,6 +51,9 @@
 #define ACL_ALLWEEK	0x7F
 #define ACL_WEEKDAYS	0x3E
 
+#define DefaultDnsChildrenMax		32	/* 32 processes */
+#define DefaultRedirectChildrenMax	32	/* 32 processes */
+#define DefaultAuthenticateChildrenMax	32	/* 32 processes */
 #define MAXHTTPPORTS			12
 
 #define COMM_OK		  (0)
@@ -133,9 +133,10 @@
 #define REDIRECT_DONE 2
 
 #define AUTHENTICATE_AV_FACTOR 1000
-/* AUTHENTICATION */
 
-#define NTLM_CHALLENGE_SZ 300
+#define AUTHENTICATE_NONE 0
+#define AUTHENTICATE_PENDING 1
+#define AUTHENTICATE_DONE 2
 
 #define  CONNECT_PORT        443
 
@@ -146,7 +147,6 @@
 #define LOG_DISABLE 0
 
 #define SM_PAGE_SIZE 4096
-#define MAX_CLIENT_BUF_SZ 4096
 
 #define EBIT_SET(flag, bit) 	((void)((flag) |= ((1L<<(bit)))))
 #define EBIT_CLR(flag, bit) 	((void)((flag) &= ~((1L<<(bit)))))
@@ -235,7 +235,7 @@
 #define countof(arr) (sizeof(arr)/sizeof(*arr))
 
 /* to initialize static variables (see also MemBufNull) */
-#define MemBufNULL { NULL, 0, 0, 0, 0 }
+#define MemBufNULL { NULL, 0, 0, 0, NULL }
 
 /*
  * Max number of ICP messages to receive per call to icpHandleUdp
@@ -270,6 +270,8 @@
  */
 #define PEER_TCP_MAGIC_COUNT 10
 
+#define CLIENT_SOCK_SZ 4096
+
 #define URI_WHITESPACE_STRIP 0
 #define URI_WHITESPACE_ALLOW 1
 #define URI_WHITESPACE_ENCODE 2
@@ -280,20 +282,9 @@
 #define _PATH_DEVNULL "/dev/null"
 #endif
 
-/* cbdata macros */
-#define cbdataAlloc(type) ((type *)cbdataInternalAlloc(CBDATA_##type))
-#define cbdataFree(var) (var = (var != NULL ? cbdataInternalFree(var): NULL))
-#define CBDATA_TYPE(type)	static cbdata_type CBDATA_##type = 0
-#define CBDATA_GLOBAL_TYPE(type)	cbdata_type CBDATA_##type
-#define CBDATA_INIT_TYPE(type)	(CBDATA_##type ? 0 : (CBDATA_##type = cbdataAddType(CBDATA_##type, #type, sizeof(type), NULL)))
-#define CBDATA_INIT_TYPE_FREECB(type, free_func)	(CBDATA_##type ? 0 : (CBDATA_##type = cbdataAddType(CBDATA_##type, #type, sizeof(type), free_func)))
-
 #ifndef O_TEXT
 #define O_TEXT 0
 #endif
 #ifndef O_BINARY
 #define O_BINARY 0
 #endif
-
-#define	HTTP_REQBUF_SZ	4096
-#endif /* SQUID_DEFINES_H */

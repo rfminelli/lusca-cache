@@ -4,7 +4,6 @@
  */
 
 #include "config.h"
-#include "util.h"
 
 #if HAVE_STDIO_H
 #include <stdio.h>

@@ -183,7 +183,7 @@ rfc1035LabelPack(char *buf, size_t sz, const char *label)
  * Note message compression is not supported here.
  * Returns number of octets packed.
  */
-static off_t
+off_t
 rfc1035NamePack(char *buf, size_t sz, const char *name)
 {
     off_t off = 0;
@@ -575,7 +575,7 @@ unsigned short
 rfc1035BuildAQuery(const char *hostname, char *buf, size_t * szp)
 {
     static rfc1035_header h;
-    size_t offset = 0;
+    off_t offset = 0;
     size_t sz = *szp;
     memset(&h, '\0', sizeof(h));
     /* the first char of hostname must be alphanmeric */
@@ -613,7 +613,7 @@ unsigned short
 rfc1035BuildPTRQuery(const struct in_addr addr, char *buf, size_t * szp)
 {
     static rfc1035_header h;
-    size_t offset = 0;
+    off_t offset = 0;
     size_t sz = *szp;
     static char rev[32];
     unsigned int i;
@@ -636,7 +636,7 @@ rfc1035BuildPTRQuery(const struct in_addr addr, char *buf, size_t * szp)
 	RFC1035_TYPE_PTR,
 	RFC1035_CLASS_IN);
     assert(offset <= sz);
-    *szp = offset;
+    *szp = (size_t) offset;
     return h.id;
 }
 

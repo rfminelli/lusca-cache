@@ -66,7 +66,7 @@ static u_short echo_port;
 static int NLateReplies = 0;
 static peer *first_ping = NULL;
 
-const char *
+char *
 neighborTypeStr(const peer * p)
 {
     if (p->type == PEER_NONE)
@@ -151,14 +151,9 @@ peerAllowedToUse(const peer * p, request_t * request)
     checklist.my_addr = request->my_addr;
     checklist.my_port = request->my_port;
     checklist.request = request;
-#if 0 && USE_IDENT
-    /*
-     * this is currently broken because 'request->user_ident' has been
-     * moved to conn->rfc931 and we don't have access to the parent
-     * ConnStateData here.
-     */
+#if USE_IDENT
     if (request->user_ident[0])
-	xstrncpy(checklist.rfc931, request->user_ident, USER_IDENT_SZ);
+	xstrncpy(checklist.ident, request->user_ident, USER_IDENT_SZ);
 #endif
     return aclCheckFast(p->access, &checklist);
 }
@@ -198,9 +193,6 @@ peerHTTPOkay(const peer * p, request_t * request)
 	return 0;
     if (!neighborUp(p))
 	return 0;
-    if (p->max_conn)
-	if (p->stats.conn_open >= p->max_conn)
-	    return 0;
     return 1;
 }
 
@@ -567,10 +559,10 @@ neighborsUdpPing(request_t * request,
 
 /* lookup the digest of a given peer */
 lookup_t
-peerDigestLookup(peer * p, request_t * request)
+peerDigestLookup(peer * p, request_t * request, StoreEntry * entry)
 {
 #if USE_CACHE_DIGESTS
-    const cache_key *key = request ? storeKeyPublicByRequest(request) : NULL;
+    const cache_key *key = request ? storeKeyPublic(storeUrl(entry), request->method) : NULL;
     assert(p);
     assert(request);
     debug(15, 5) ("peerDigestLookup: peer %s\n", p->host);
@@ -606,7 +598,7 @@ peerDigestLookup(peer * p, request_t * request)
 
 /* select best peer based on cache digests */
 peer *
-neighborsDigestSelect(request_t * request)
+neighborsDigestSelect(request_t * request, StoreEntry * entry)
 {
     peer *best_p = NULL;
 #if USE_CACHE_DIGESTS
@@ -619,14 +611,14 @@ neighborsDigestSelect(request_t * request)
     int i;
     if (!request->flags.hierarchical)
 	return NULL;
-    key = storeKeyPublicByRequest(request);
+    key = storeKeyPublic(storeUrl(entry), request->method);
     for (i = 0, p = first_ping; i++ < Config.npeers; p = p->next) {
 	lookup_t lookup;
 	if (!p)
 	    p = Config.peers;
 	if (i == 1)
 	    first_ping = p;
-	lookup = peerDigestLookup(p, request);
+	lookup = peerDigestLookup(p, request, entry);
 	if (lookup == LOOKUP_NONE)
 	    continue;
 	choice_count++;
@@ -759,9 +751,9 @@ neighborIgnoreNonPeer(const struct sockaddr_in *from, icp_opcode opcode)
 
 /* ignoreMulticastReply
  * 
- * * We want to ignore replies from multicast peers if the
- * * cache_host_domain rules would normally prevent the peer
- * * from being used
+ * We want to ignore replies from multicast peers if the
+ * cache_host_domain rules would normally prevent the peer
+ * from being used
  */
 static int
 ignoreMulticastReply(peer * p, MemObject * mem)
@@ -941,7 +933,7 @@ neighborUp(const peer * p)
 }
 
 void
-peerDestroy(void *data)
+peerDestroy(void *data, int unused)
 {
     peer *p = data;
     struct _domain_ping *l = NULL;
@@ -961,6 +953,7 @@ peerDestroy(void *data)
 	cbdataUnlock(pd);
     }
 #endif
+    xfree(p);
 }
 
 void
@@ -1072,7 +1065,7 @@ peerProbeConnect(peer * p)
 	return;			/* probe already running */
     if (squid_curtime - p->stats.last_connect_probe < Config.Timeout.connect)
 	return;			/* don't probe to often */
-    fd = comm_open(SOCK_STREAM, 0, getOutgoingAddr(NULL),
+    fd = comm_open(SOCK_STREAM, 0, Config.Addrs.tcp_outgoing,
 	0, COMM_NONBLOCKING, p->host);
     if (fd < 0)
 	return;
@@ -1122,7 +1115,7 @@ static void
 peerCountMcastPeersStart(void *data)
 {
     peer *p = data;
-    ps_state *psstate;
+    ps_state *psstate = xcalloc(1, sizeof(ps_state));
     StoreEntry *fake;
     MemObject *mem;
     icp_common_t *query;
@@ -1132,12 +1125,12 @@ peerCountMcastPeersStart(void *data)
     p->mcast.flags.count_event_pending = 0;
     snprintf(url, MAX_URL, "http://%s/", inet_ntoa(p->in_addr.sin_addr));
     fake = storeCreateEntry(url, url, null_request_flags, METHOD_GET);
-    psstate = cbdataAlloc(ps_state);
     psstate->request = requestLink(urlParse(METHOD_GET, url));
     psstate->entry = fake;
     psstate->callback = NULL;
     psstate->callback_data = p;
     psstate->ping.start = current_time;
+    cbdataAdd(psstate, cbdataXfree, 0);
     mem = fake->mem_obj;
     mem->request = requestLink(psstate->request);
     mem->start_ping = current_time;
@@ -1272,7 +1265,6 @@ dump_peers(StoreEntry * sentry, peer * peers)
 	storeAppendPrintf(sentry, "Status     : %s\n",
 	    neighborUp(e) ? "Up" : "Down");
 	storeAppendPrintf(sentry, "AVG RTT    : %d msec\n", e->stats.rtt);
-	storeAppendPrintf(sentry, "OPEN CONNS : %d\n", e->stats.conn_open);
 	storeAppendPrintf(sentry, "LAST QUERY : %8d seconds ago\n",
 	    (int) (squid_curtime - e->stats.last_query));
 	storeAppendPrintf(sentry, "LAST REPLY : %8d seconds ago\n",

@@ -132,7 +132,7 @@ struct _LruWalkData {
     LruNode *current;
 };
 
-static const StoreEntry *
+const StoreEntry *
 lru_walkNext(RemovalPolicyWalker * walker)
 {
     LruWalkData *lru_walk = walker->_data;
@@ -162,13 +162,14 @@ lru_walkInit(RemovalPolicy * policy)
     RemovalPolicyWalker *walker;
     LruWalkData *lru_walk;
     lru->nwalkers += 1;
-    walker = cbdataAlloc(RemovalPolicyWalker);
+    walker = xcalloc(1, sizeof(*walker));
     lru_walk = xcalloc(1, sizeof(*lru_walk));
     walker->_policy = policy;
     walker->_data = lru_walk;
     walker->Next = lru_walkNext;
     walker->Done = lru_walkDone;
     lru_walk->current = (LruNode *) lru->list.head;
+    cbdataAdd(walker, cbdataXfree, 0);
     return walker;
 }
 
@@ -231,7 +232,7 @@ lru_purgeInit(RemovalPolicy * policy, int max_scan)
     RemovalPurgeWalker *walker;
     LruPurgeData *lru_walk;
     lru->nwalkers += 1;
-    walker = cbdataAlloc(RemovalPurgeWalker);
+    walker = xcalloc(1, sizeof(*walker));
     lru_walk = xcalloc(1, sizeof(*lru_walk));
     walker->_policy = policy;
     walker->_data = lru_walk;
@@ -239,24 +240,8 @@ lru_purgeInit(RemovalPolicy * policy, int max_scan)
     walker->Next = lru_purgeNext;
     walker->Done = lru_purgeDone;
     lru_walk->start = lru_walk->current = (LruNode *) lru->list.head;
+    cbdataAdd(walker, cbdataXfree, 0);
     return walker;
-}
-
-static void
-lru_stats(RemovalPolicy * policy, StoreEntry * sentry)
-{
-    LruPolicyData *lru = policy->_data;
-    LruNode *lru_node = (LruNode *) lru->list.head;
-
-  again:
-    if (lru_node) {
-	StoreEntry *entry = (StoreEntry *) lru_node->node.data;
-	if (storeEntryLocked(entry)) {
-	    lru_node = (LruNode *) lru_node->node.next;
-	    goto again;
-	}
-	storeAppendPrintf(sentry, "LRU reference age: %.2f days\n", (double) (squid_curtime - entry->lastref) / (double) (24 * 60 * 60));
-    }
 }
 
 static void
@@ -284,8 +269,10 @@ createRemovalPolicy_lru(wordlist * args)
     if (!lru_node_pool)
 	lru_node_pool = memPoolCreate("LRU policy node", sizeof(LruNode));
     /* Allocate the needed structures */
+    policy = xcalloc(1, sizeof(*policy));
     lru_data = xcalloc(1, sizeof(*lru_data));
-    policy = cbdataAlloc(RemovalPolicy);
+    /* cbdata register the policy */
+    cbdataAdd(policy, cbdataXfree, 0);
     /* Initialize the URL data */
     lru_data->policy = policy;
     /* Populate the policy structure */
@@ -298,7 +285,6 @@ createRemovalPolicy_lru(wordlist * args)
     policy->Dereferenced = lru_referenced;
     policy->WalkInit = lru_walkInit;
     policy->PurgeInit = lru_purgeInit;
-    policy->Stats = lru_stats;
     /* Increase policy usage count */
     nr_lru_policies += 0;
     return policy;

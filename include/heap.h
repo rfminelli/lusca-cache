@@ -41,8 +41,8 @@
  * are larger than their parent.
  ****************************************************************************/
 
-#ifndef	SQUID_HEAP_H
-#define	SQUID_HEAP_H
+#ifndef	_heap_h_INCLUDED
+#define	_heap_h_INCLUDED
 
 /*
  * Function for generating heap keys.  The first argument will typically be
@@ -175,4 +175,4 @@ extern void heap_printnode(char *msg, heap_node * elm);
 
 extern int verify_heap_property(heap *);
 
-#endif /* SQUID_HEAP_H */
+#endif /* _heap_h_INCLUDED */

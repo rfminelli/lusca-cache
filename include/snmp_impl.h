@@ -2,8 +2,8 @@
  * $Id$
  */
 
-#ifndef SQUID_SNMP_IMPL_H
-#define SQUID_SNMP_IMPL_H
+#ifndef _SNMP_IMPL_H_
+#define _SNMP_IMPL_H_
 
 /*
  * Definitions for SNMP (RFC 1067) implementation.
@@ -69,6 +69,13 @@ SOFTWARE.
 #define RWRITE	0xAABA		/* add write access for community private */
 #define NOACCESS 0x0000		/* no access for anybody */
 
+#ifndef INTEGER
+#define INTEGER	    ASN_INTEGER
+#define STRING	    ASN_OCTET_STR
+#define OBJID	    ASN_OBJECT_ID
+#define NULLOBJ	    ASN_NULL
+#endif
+
 struct trapVar {
     oid *varName;
     int varNameLen;
@@ -81,4 +88,4 @@ struct trapVar {
 /* from snmp.c */
 extern u_char sid[];		/* size SID_MAX_LEN */
 
-#endif /* SQUID_SNMP_IMPL_H */
+#endif /* _SNMP_IMPL_H_ */
