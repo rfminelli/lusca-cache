@@ -1,8 +1,6 @@
 
 #include "config.h"
 
-#if USE_SPLAY_TREE
-
 #if HAVE_STDIO_H
 #include <stdio.h>
 #endif
@@ -13,13 +11,14 @@
 #include <unistd.h>
 #endif
 
+#include "ansiproto.h"
 #include "splay.h"
 #include "util.h"
 
 int splayLastResult = 0;
 
 splayNode *
-splay_insert(void *data, splayNode * top, SPCMP * compare)
+splay_insert(void *data, splayNode * top, SPCMP compare)
 {
     splayNode *new = xcalloc(sizeof(splayNode), 1);
     new->data = data;
@@ -40,13 +39,13 @@ splay_insert(void *data, splayNode * top, SPCMP * compare)
 	return new;
     } else {
 	/* duplicate entry */
-	xfree(new);
+	free(new);
 	return top;
     }
 }
 
 splayNode *
-splay_splay(const void *data, splayNode * top, SPCMP * compare)
+splay_splay(const void *data, splayNode * top, SPCMP compare)
 {
     splayNode N;
     splayNode *l;
@@ -99,7 +98,7 @@ splay_splay(const void *data, splayNode * top, SPCMP * compare)
 }
 
 void
-splay_destroy(splayNode * top, void (*free_func) (void *))
+splay_destroy(splayNode * top, void (*free_func) _PARAMS((void *)))
 {
     if (top->left)
 	splay_destroy(top->left, free_func);
@@ -155,6 +154,4 @@ main(int argc, char *argv[])
     splay_print(top, printint);
     return 0;
 }
-#endif /* DRIVER */
-
-#endif /* USE_SPLAY_TREE */
+#endif
