@@ -106,51 +106,63 @@
 
 #include "squid.h"
 
+#define  WAIS_DELETE_GAP  (64*1024)
+
 typedef struct {
     int fd;
     StoreEntry *entry;
     method_t method;
     char *relayhost;
     int relayport;
-    char *request_hdr;
+    char *mime_hdr;
     char request[MAX_URL];
+    int ip_lookup_pending;
 } WaisStateData;
 
-static PF waisStateFree;
-static PF waisTimeout;
-static PF waisReadReply;
-static CWCB waisSendComplete;
-static PF waisSendRequest;
-static CNCB waisConnectDone;
-static STABH waisAbort;
+static int waisStateFree _PARAMS((int, WaisStateData *));
+static void waisReadReplyTimeout _PARAMS((int, WaisStateData *));
+static void waisLifetimeExpire _PARAMS((int, WaisStateData *));
+static void waisReadReply _PARAMS((int, WaisStateData *));
+static void waisSendComplete _PARAMS((int, char *, int, int, void *));
+static void waisSendRequest _PARAMS((int, WaisStateData *));
+static void waisConnect _PARAMS((int, const ipcache_addrs *, void *));
+static void waisConnectDone _PARAMS((int fd, int status, void *data));
 
-static void
-waisStateFree(int fd, void *data)
+static int
+waisStateFree(int fd, WaisStateData * waisState)
 {
-    WaisStateData *waisState = data;
     if (waisState == NULL)
-	return;
-    storeUnregisterAbort(waisState->entry);
+	return 1;
     storeUnlockObject(waisState->entry);
-    cbdataFree(waisState);
+    if (waisState->ip_lookup_pending)
+	ipcache_unregister(waisState->relayhost, waisState->fd);
+    xfree(waisState);
+    return 0;
+}
+
+/* This will be called when timeout on read. */
+static void
+waisReadReplyTimeout(int fd, WaisStateData * waisState)
+{
+    StoreEntry *entry = NULL;
+
+    entry = waisState->entry;
+    debug(24, 4, "waisReadReplyTimeout: Timeout on %d\n url: %s\n", fd, entry->url);
+    squid_error_entry(entry, ERR_READ_TIMEOUT, NULL);
+    commSetSelect(fd, COMM_SELECT_READ, NULL, NULL, 0);
+    comm_close(fd);
 }
 
 /* This will be called when socket lifetime is expired. */
 static void
-waisTimeout(int fd, void *data)
+waisLifetimeExpire(int fd, WaisStateData * waisState)
 {
-    WaisStateData *waisState = data;
-    ErrorState *err;
-    StoreEntry *entry = waisState->entry;
-    debug(24, 4) ("waisTimeout: FD %d: '%s'\n", fd, entry->url);
-    /* was assert */
-    err = xcalloc(1, sizeof(ErrorState));
-    err->type = ERR_READ_TIMEOUT;
-    err->http_status = HTTP_GATEWAY_TIMEOUT;
-    err->request = urlParse(METHOD_CONNECT, waisState->request);
-    errorAppendEntry(entry, err);
+    StoreEntry *entry = NULL;
 
-    storeAbort(entry, 0);
+    entry = waisState->entry;
+    debug(24, 4, "waisLifeTimeExpire: FD %d: '%s'\n", fd, entry->url);
+    squid_error_entry(entry, ERR_LIFETIME_EXP, NULL);
+    commSetSelect(fd, COMM_SELECT_READ | COMM_SELECT_WRITE, NULL, NULL, 0);
     comm_close(fd);
 }
 
@@ -159,43 +171,42 @@ waisTimeout(int fd, void *data)
 /* This will be called when data is ready to be read from fd.  Read until
  * error or connection closed. */
 static void
-waisReadReply(int fd, void *data)
+waisReadReply(int fd, WaisStateData * waisState)
 {
-    WaisStateData *waisState = data;
     LOCAL_ARRAY(char, buf, 4096);
-    StoreEntry *entry = waisState->entry;
     int len;
+    StoreEntry *entry = waisState->entry;
     int clen;
     int off;
     int bin;
-    if (protoAbortFetch(entry)) {
-	ErrorState *err;
-	err = xcalloc(1, sizeof(ErrorState));
-	err->type = ERR_CLIENT_ABORT;
-	err->http_status = HTTP_INTERNAL_SERVER_ERROR;
-	err->request = urlParse(METHOD_CONNECT, waisState->request);
-	errorAppendEntry(entry, err);
-	storeAbort(entry, 0);
-	comm_close(fd);
-	return;
-    }
+
     /* check if we want to defer reading */
-    clen = entry->mem_obj->inmem_hi;
-    off = storeLowestMemReaderOffset(entry);
-    if ((clen - off) > READ_AHEAD_GAP) {
+    clen = entry->object_len;
+    off = storeGetLowestReaderOffset(entry);
+    if ((clen - off) > WAIS_DELETE_GAP) {
+	if (entry->flag & CLIENT_ABORT_REQUEST) {
+	    squid_error_entry(entry, ERR_CLIENT_ABORT, NULL);
+	    comm_close(fd);
+	    return;
+	}
 	IOStats.Wais.reads_deferred++;
-	debug(24, 3) ("waisReadReply: Read deferred for Object: %s\n",
+	debug(24, 3, "waisReadReply: Read deferred for Object: %s\n",
 	    entry->url);
-	debug(24, 3) ("                Current Gap: %d bytes\n", clen - off);
+	debug(24, 3, "                Current Gap: %d bytes\n", clen - off);
 	/* reschedule, so it will automatically reactivated
 	 * when Gap is big enough. */
 	commSetSelect(fd,
 	    COMM_SELECT_READ,
-	    waisReadReply,
-	    waisState, 0);
+	    (PF) waisReadReply,
+	    (void *) waisState, 0);
 	/* don't install read handler while we're above the gap */
+	commSetSelect(fd,
+	    COMM_SELECT_TIMEOUT,
+	    NULL,
+	    NULL,
+	    0);
 	if (!BIT_TEST(entry->flag, READ_DEFERRED)) {
-	    commSetTimeout(fd, Config.Timeout.defer, NULL, NULL);
+	    comm_set_fd_lifetime(fd, 3600);	/* limit during deferring */
 	    BIT_SET(entry->flag, READ_DEFERRED);
 	}
 	/* dont try reading again for a while */
@@ -205,59 +216,53 @@ waisReadReply(int fd, void *data)
 	BIT_RESET(entry->flag, READ_DEFERRED);
     }
     len = read(fd, buf, 4096);
-    fd_bytes(fd, len, FD_READ);
-    debug(24, 5) ("waisReadReply: FD %d read len:%d\n", fd, len);
+    debug(24, 5, "waisReadReply: FD %d read len:%d\n", fd, len);
     if (len > 0) {
-	commSetTimeout(fd, Config.Timeout.read, NULL, NULL);
 	IOStats.Wais.reads++;
 	for (clen = len - 1, bin = 0; clen; bin++)
 	    clen >>= 1;
 	IOStats.Wais.read_hist[bin]++;
     }
     if (len < 0) {
-	debug(50, 1) ("waisReadReply: FD %d: read failure: %s.\n", xstrerror());
-	if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+	debug(50, 1, "waisReadReply: FD %d: read failure: %s.\n", xstrerror());
+	if (errno == EAGAIN || errno == EWOULDBLOCK) {
 	    /* reinstall handlers */
 	    /* XXX This may loop forever */
 	    commSetSelect(fd, COMM_SELECT_READ,
-		waisReadReply, waisState, 0);
+		(PF) waisReadReply, (void *) waisState, 0);
+	    commSetSelect(fd, COMM_SELECT_TIMEOUT,
+		(PF) waisReadReplyTimeout, (void *) waisState, Config.readTimeout);
 	} else {
-	    ErrorState *err;
 	    BIT_RESET(entry->flag, ENTRY_CACHABLE);
 	    storeReleaseRequest(entry);
-	    /* was assert */
-
-	    err = xcalloc(1, sizeof(ErrorState));
-	    err->type = ERR_READ_ERROR;
-	    err->http_status = HTTP_INTERNAL_SERVER_ERROR;
-	    err->request = urlParse(METHOD_CONNECT, waisState->request);
-	    errorAppendEntry(entry, err);
-
-	    storeAbort(entry, 0);
+	    squid_error_entry(entry, ERR_READ_ERROR, xstrerror());
 	    comm_close(fd);
 	}
-    } else if (len == 0 && entry->mem_obj->inmem_hi == 0) {
-	/* was assert */
-	ErrorState *err;
-	err = xcalloc(1, sizeof(ErrorState));
-	err->type = ERR_ZERO_SIZE_OBJECT;
-	err->errno = errno;
-	err->http_status = HTTP_SERVICE_UNAVAILABLE;
-	err->request = urlParse(METHOD_CONNECT, waisState->request);
-	errorAppendEntry(entry, err);
-	storeAbort(entry, 0);
+    } else if (len == 0 && entry->mem_obj->swap_length == 0) {
+	squid_error_entry(entry,
+	    ERR_ZERO_SIZE_OBJECT,
+	    errno ? xstrerror() : NULL);
 	comm_close(fd);
     } else if (len == 0) {
 	/* Connection closed; retrieval done. */
 	entry->expires = squid_curtime;
 	storeComplete(entry);
 	comm_close(fd);
+    } else if (!storeClientWaiting(entry)) {
+	/* we can terminate connection right now */
+	squid_error_entry(entry, ERR_NO_CLIENTS_BIG_OBJ, NULL);
+	comm_close(fd);
     } else {
 	storeAppend(entry, buf, len);
 	commSetSelect(fd,
 	    COMM_SELECT_READ,
-	    waisReadReply,
-	    waisState, 0);
+	    (PF) waisReadReply,
+	    (void *) waisState, 0);
+	commSetSelect(fd,
+	    COMM_SELECT_TIMEOUT,
+	    (PF) waisReadReplyTimeout,
+	    (void *) waisState,
+	    Config.readTimeout);
     }
 }
 
@@ -266,60 +271,55 @@ waisReadReply(int fd, void *data)
 static void
 waisSendComplete(int fd, char *buf, int size, int errflag, void *data)
 {
+    StoreEntry *entry = NULL;
     WaisStateData *waisState = data;
-    StoreEntry *entry = waisState->entry;
-    debug(24, 5) ("waisSendComplete: FD %d size: %d errflag: %d\n",
+    entry = waisState->entry;
+    debug(24, 5, "waisSendComplete: FD %d size: %d errflag: %d\n",
 	fd, size, errflag);
     if (errflag) {
-	/* was assert */
-	ErrorState *err;
-	err = xcalloc(1, sizeof(ErrorState));
-	err->type = ERR_CONNECT_FAIL;
-	err->errno = errno;
-	err->host = xstrdup(waisState->relayhost);
-	err->port = waisState->relayport;
-	err->http_status = HTTP_SERVICE_UNAVAILABLE;
-	err->request = urlParse(METHOD_CONNECT, waisState->request);
-	errorAppendEntry(entry, err);
-
-	storeAbort(entry, 0);
+	squid_error_entry(entry, ERR_CONNECT_FAIL, xstrerror());
 	comm_close(fd);
     } else {
 	/* Schedule read reply. */
 	commSetSelect(fd,
 	    COMM_SELECT_READ,
-	    waisReadReply,
-	    waisState, 0);
+	    (PF) waisReadReply,
+	    (void *) waisState, 0);
+	commSetSelect(fd,
+	    COMM_SELECT_TIMEOUT,
+	    (PF) waisReadReplyTimeout,
+	    (void *) waisState,
+	    Config.readTimeout);
     }
 }
 
 /* This will be called when connect completes. Write request. */
 static void
-waisSendRequest(int fd, void *data)
+waisSendRequest(int fd, WaisStateData * waisState)
 {
-    WaisStateData *waisState = data;
     int len = strlen(waisState->request) + 4;
     char *buf = NULL;
     const char *Method = RequestMethodStr[waisState->method];
 
-    debug(24, 5) ("waisSendRequest: FD %d\n", fd);
+    debug(24, 5, "waisSendRequest: FD %d\n", fd);
 
     if (Method)
 	len += strlen(Method);
-    if (waisState->request_hdr)
-	len += strlen(waisState->request_hdr);
+    if (waisState->mime_hdr)
+	len += strlen(waisState->mime_hdr);
 
     buf = xcalloc(1, len + 1);
 
-    if (waisState->request_hdr)
-	snprintf(buf, len + 1, "%s %s %s\r\n", Method, waisState->request,
-	    waisState->request_hdr);
+    if (waisState->mime_hdr)
+	sprintf(buf, "%s %s %s\r\n", Method, waisState->request,
+	    waisState->mime_hdr);
     else
-	snprintf(buf, len + 1, "%s %s\r\n", Method, waisState->request);
-    debug(24, 6) ("waisSendRequest: buf: %s\n", buf);
+	sprintf(buf, "%s %s\r\n", Method, waisState->request);
+    debug(24, 6, "waisSendRequest: buf: %s\n", buf);
     comm_write(fd,
 	buf,
 	len,
+	30,
 	waisSendComplete,
 	(void *) waisState,
 	xfree);
@@ -327,26 +327,18 @@ waisSendRequest(int fd, void *data)
 	storeSetPublicKey(waisState->entry);	/* Make it public */
 }
 
-void
-waisStart(request_t * request, StoreEntry * entry)
+int
+waisStart(int unusedfd, const char *url, method_t method, char *mime_hdr, StoreEntry * entry)
 {
     WaisStateData *waisState = NULL;
     int fd;
-    char *url = entry->url;
-    method_t method = request->method;
-    debug(24, 3) ("waisStart: \"%s %s\"\n", RequestMethodStr[method], url);
-    if (!Config.Wais.relayHost) {
-	ErrorState *err;
-	debug(24, 0) ("waisStart: Failed because no relay host defined!\n");
-	/* was assert */
-	err = xcalloc(1, sizeof(ErrorState));
-	err->type = ERR_NO_RELAY;
-	err->http_status = HTTP_INTERNAL_SERVER_ERROR;
-	err->request = urlParse(METHOD_CONNECT, waisState->request);
-	errorAppendEntry(entry, err);
 
-	storeAbort(entry, 0);
-	return;
+    debug(24, 3, "waisStart: \"%s %s\"\n", RequestMethodStr[method], url);
+    debug(24, 4, "            header: %s\n", mime_hdr);
+    if (!Config.Wais.relayHost) {
+	debug(24, 0, "waisStart: Failed because no relay host defined!\n");
+	squid_error_entry(entry, ERR_NO_RELAY, NULL);
+	return COMM_ERROR;
     }
     fd = comm_open(SOCK_STREAM,
 	0,
@@ -355,31 +347,42 @@ waisStart(request_t * request, StoreEntry * entry)
 	COMM_NONBLOCKING,
 	url);
     if (fd == COMM_ERROR) {
-	ErrorState *err;
-	debug(24, 4) ("waisStart: Failed because we're out of sockets.\n");
-	/* was assert */
-	err = xcalloc(1, sizeof(ErrorState));
-	err->type = ERR_SOCKET_FAILURE;
-	err->http_status = HTTP_INTERNAL_SERVER_ERROR;
-	err->request = urlParse(METHOD_CONNECT, waisState->request);
-	errorAppendEntry(entry, err);
-	storeAbort(entry, 0);
-	return;
+	debug(24, 4, "waisStart: Failed because we're out of sockets.\n");
+	squid_error_entry(entry, ERR_NO_FDS, xstrerror());
+	return COMM_ERROR;
     }
     waisState = xcalloc(1, sizeof(WaisStateData));
-    cbdataAdd(waisState);
+    storeLockObject(waisState->entry = entry);
     waisState->method = method;
     waisState->relayhost = Config.Wais.relayHost;
     waisState->relayport = Config.Wais.relayPort;
-    waisState->request_hdr = request->headers;
+    waisState->mime_hdr = mime_hdr;
     waisState->fd = fd;
-    waisState->entry = entry;
     xstrncpy(waisState->request, url, MAX_URL);
-    comm_add_close_handler(waisState->fd, waisStateFree, waisState);
-    storeRegisterAbort(entry, waisAbort, waisState);
-    commSetTimeout(fd, Config.Timeout.read, waisTimeout, waisState);
-    storeLockObject(entry);
-    commConnectStart(waisState->fd,
+    comm_add_close_handler(waisState->fd,
+	(PF) waisStateFree,
+	(void *) waisState);
+    waisState->ip_lookup_pending = 1;
+    ipcache_nbgethostbyname(waisState->relayhost,
+	waisState->fd,
+	waisConnect,
+	waisState);
+    return COMM_OK;
+}
+
+
+static void
+waisConnect(int fd, const ipcache_addrs * ia, void *data)
+{
+    WaisStateData *waisState = data;
+    waisState->ip_lookup_pending = 0;
+    if (!ipcache_gethostbyname(waisState->relayhost, 0)) {
+	debug(24, 4, "waisstart: Unknown host: %s\n", waisState->relayhost);
+	squid_error_entry(waisState->entry, ERR_DNS_FAIL, dns_error_message);
+	comm_close(waisState->fd);
+	return;
+    }
+    commConnectStart(fd,
 	waisState->relayhost,
 	waisState->relayport,
 	waisConnectDone,
@@ -390,40 +393,20 @@ static void
 waisConnectDone(int fd, int status, void *data)
 {
     WaisStateData *waisState = data;
-    char *request = waisState->request;
-    ErrorState *err;
-
-    if (status == COMM_ERR_DNS) {
-	/* was assert */
-	err = xcalloc(1, sizeof(ErrorState));
-	err->type = ERR_DNS_FAIL;
-	err->http_status = HTTP_SERVICE_UNAVAILABLE;
-	err->dnsserver_msg = xstrdup(dns_error_message);
-	err->request = urlParse(METHOD_CONNECT, request);
-	errorAppendEntry(waisState->entry, err);
-	storeAbort(waisState->entry, 0);
+    if (status == COMM_ERROR) {
+	squid_error_entry(waisState->entry, ERR_CONNECT_FAIL, xstrerror());
 	comm_close(fd);
-    } else if (status != COMM_OK) {
-	/* was assert */
-	err = xcalloc(1, sizeof(ErrorState));
-	err->type = ERR_CONNECT_FAIL;
-	err->http_status = HTTP_SERVICE_UNAVAILABLE;
-	err->errno = errno;
-	err->host = xstrdup(waisState->relayhost);
-	err->port = waisState->relayport;
-	err->request = urlParse(METHOD_CONNECT, request);
-	errorAppendEntry(waisState->entry, err);
-	storeAbort(waisState->entry, 0);
-	comm_close(fd);
-    } else {
-	commSetSelect(fd, COMM_SELECT_WRITE, waisSendRequest, waisState, 0);
+	return;
     }
-}
-
-static void
-waisAbort(void *data)
-{
-    HttpStateData *waisState = data;
-    debug(24, 1) ("waisAbort: %s\n", waisState->entry->url);
-    comm_close(waisState->fd);
+    /* Install connection complete handler. */
+    if (opt_no_ipcache)
+	ipcacheInvalidate(waisState->relayhost);
+    commSetSelect(fd,
+	COMM_SELECT_LIFETIME,
+	(PF) waisLifetimeExpire,
+	(void *) waisState, 0);
+    commSetSelect(fd,
+	COMM_SELECT_WRITE,
+	(PF) waisSendRequest,
+	(void *) waisState, 0);
 }

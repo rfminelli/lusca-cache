@@ -105,12 +105,18 @@
 
 #include "squid.h"
 
+FILE *debug_log = NULL;
 static char *debug_log_file = NULL;
+static const char *const w_space = " \t\n\r";
+
+#define MAX_DEBUG_SECTIONS 100
+static int debugLevels[MAX_DEBUG_SECTIONS];
+
 static char *accessLogTime _PARAMS((time_t));
 
 #ifdef __STDC__
 void
-_db_print(const char *format,...)
+_db_print(int section, int level, const char *format,...)
 {
     va_list args;
 #else
@@ -119,6 +125,8 @@ _db_print(va_alist)
      va_dcl
 {
     va_list args;
+    int section;
+    int level;
     const char *format = NULL;
 #endif
     LOCAL_ARRAY(char, f, BUFSIZ);
@@ -127,32 +135,38 @@ _db_print(va_alist)
 #endif
 
 #ifdef __STDC__
+    if (level > debugLevels[section])
+	return;
     va_start(args, format);
 #else
     va_start(args);
+    section = va_arg(args, int);
+    level = va_arg(args, int);
+    if (level > debugLevels[section]) {
+	va_end(args);
+	return;
+    }
     format = va_arg(args, const char *);
 #endif
 
     if (debug_log == NULL)
 	return;
-    snprintf(f, BUFSIZ, "%s| %s",
+    sprintf(f, "%s| %s",
 	accessLogTime(squid_curtime),
 	format);
 #if HAVE_SYSLOG
     /* level 0 go to syslog */
-    if (_db_level == 0 && opt_syslog_enable) {
+    if (level == 0 && opt_syslog_enable) {
 	tmpbuf[0] = '\0';
-	vsnprintf(tmpbuf, BUFSIZ, format, args);
+	vsprintf(tmpbuf, format, args);
 	tmpbuf[1023] = '\0';
 	syslog(LOG_ERR, "%s", tmpbuf);
     }
 #endif /* HAVE_SYSLOG */
     /* write to log file */
     vfprintf(debug_log, f, args);
-    if (!Config.onoff.buffered_logs)
+    if (unbuffered_logs)
 	fflush(debug_log);
-    if (opt_debug_stderr && debug_log != stderr)
-	vfprintf(stderr, f, args);
     va_end(args);
 }
 
@@ -248,13 +262,13 @@ _db_rotate_log(void)
     /* Rotate numbers 0 through N up one */
     for (i = Config.Log.rotateNumber; i > 1;) {
 	i--;
-	snprintf(from, MAXPATHLEN, "%s.%d", debug_log_file, i - 1);
-	snprintf(to, MAXPATHLEN, "%s.%d", debug_log_file, i);
+	sprintf(from, "%s.%d", debug_log_file, i - 1);
+	sprintf(to, "%s.%d", debug_log_file, i);
 	rename(from, to);
     }
     /* Rotate the current log to .0 */
     if (Config.Log.rotateNumber > 0) {
-	snprintf(to, MAXPATHLEN, "%s.%d", debug_log_file, 0);
+	sprintf(to, "%s.%d", debug_log_file, 0);
 	rename(debug_log_file, to);
     }
     /* Close and reopen the log.  It may have been renamed "manually"

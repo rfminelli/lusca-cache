@@ -163,13 +163,13 @@
 #if HAVE_GETOPT_H
 #include <getopt.h>
 #endif
+
+#if defined(USE_POLL) && HAVE_POLL
 #if HAVE_POLL_H
 #include <poll.h>
-#endif
-#if HAVE_ASSERT_H
-#include <assert.h>
+#endif /* HAVE_POLL_H */
 #else
-#define assert(X) ((void)0)
+#undef USE_POLL
 #endif
 
 #ifdef __STDC__
@@ -212,7 +212,6 @@
 #define BUFSIZ  4096		/* make reasonable guess */
 #endif
 
-
 #ifndef SA_RESTART
 #define SA_RESTART 0
 #endif
@@ -226,6 +225,16 @@
 #undef SA_RESETHAND
 #define SA_RESETHAND SA_ONESHOT
 #endif
+
+typedef struct sentry StoreEntry;
+typedef struct mem_hdr *mem_ptr;
+typedef struct _peer peer;
+typedef struct icp_common_s icp_common_t;
+typedef struct _cacheinfo cacheinfo;
+typedef struct _aclCheck_t aclCheck_t;
+typedef struct _request request_t;
+typedef struct _MemObject MemObject;
+typedef struct _cachemgr_passwd cachemgr_passwd;
 
 /* 32 bit integer compatability hack */
 #if SIZEOF_INT == 4
@@ -257,22 +266,112 @@ typedef unsigned long u_num32;
 #include <regex.h>
 #endif
 
-#include "defines.h"
-#include "enums.h"
-#include "typedefs.h"
-#include "structs.h"
-#include "protos.h"
-#include "globals.h"
+typedef void (*SIH) (int, void *);	/* swap in */
+typedef int (*QS) (const void *, const void *);
+typedef void (*PIF) (int, void *);	/* store callback */
 
+#include "cache_cf.h"
+#include "comm.h"
+#include "debug.h"
+#include "fdstat.h"
+#include "disk.h"
+#include "filemap.h"
+#include "hash.h"
+#include "proto.h"		/* must go before neighbors.h */
+#include "neighbors.h"		/* must go before url.h */
+#include "url.h"
+#include "icp.h"
+#include "errorpage.h"		/* must go after icp.h */
+#include "dns.h"
+#include "ipcache.h"
+#include "fqdncache.h"
+#include "mime.h"
+#include "stack.h"
+#include "stat.h"
+#include "stmem.h"
+#include "store.h"
+#include "tools.h"
+#include "http.h"
+#include "ftp.h"
+#include "gopher.h"
 #include "util.h"
+#include "event.h"
+#include "acl.h"
+#include "async_io.h"
+#include "redirect.h"
+#include "client_side.h"
+#include "useragent.h"
+#include "icmp.h"
+#include "net_db.h"
+#include "client_db.h"
+#include "objcache.h"
+#include "refresh.h"
+#include "unlinkd.h"
 
 #if !HAVE_TEMPNAM
 #include "tempnam.h"
 #endif
 
-#if !HAVE_SNPRINTF
-#include "snprintf.h"
-#endif
+extern void serverConnectionsClose _PARAMS((void));
+extern void shut_down _PARAMS((int));
+
+
+extern time_t squid_starttime;	/* main.c */
+extern int do_reuse;		/* main.c */
+extern int theHttpConnection;	/* main.c */
+extern int theInIcpConnection;	/* main.c */
+extern int theOutIcpConnection;	/* main.c */
+extern int vizSock;
+extern volatile int shutdown_pending;	/* main.c */
+extern volatile int reread_pending;	/* main.c */
+extern int opt_unlink_on_reload;	/* main.c */
+extern int opt_reload_hit_only;	/* main.c */
+extern int opt_dns_tests;	/* main.c */
+extern int opt_foreground_rebuild;	/* main.c */
+extern int opt_zap_disk_store;	/* main.c */
+extern int opt_syslog_enable;	/* main.c */
+extern int opt_catch_signals;	/* main.c */
+extern int opt_no_ipcache;	/* main.c */
+extern int vhost_mode;		/* main.c */
+extern int Squid_MaxFD;		/* main.c */
+extern int Biggest_FD;		/* main.c */
+extern int Number_FD;		/* main.c */
+extern int select_loops;	/* main.c */
+extern const char *const version_string;	/* main.c */
+extern const char *const appname;	/* main.c */
+extern struct in_addr local_addr;	/* main.c */
+extern struct in_addr theOutICPAddr;	/* main.c */
+extern const char *const localhost;
+extern struct in_addr no_addr;	/* comm.c */
+extern int opt_udp_hit_obj;	/* main.c */
+extern int opt_mem_pools;	/* main.c */
+extern int opt_forwarded_for;	/* main.c */
+extern int opt_accel_uses_host;	/* main.c */
+extern char ThisCache[];	/* main.c */
+
+/* Prototypes and definitions which don't really deserve a separate
+ * include file */
+
+#define  CONNECT_PORT        443
+
+extern void start_announce _PARAMS((void *unused));
+extern int sslStart _PARAMS((int fd, const char *, request_t *, char *, size_t * sz));
+extern const char *storeToString _PARAMS((const StoreEntry *));
+extern int waisStart _PARAMS((int, const char *, method_t, char *, StoreEntry *));
+extern void storeDirClean _PARAMS((void *unused));
+extern int passStart _PARAMS((int fd,
+	const char *url,
+	request_t * request,
+	char *buf,
+	int buflen,
+	size_t * size_ptr));
+extern void identStart _PARAMS((int, icpStateData *,
+	void       (*callback) _PARAMS((void *))));
+extern int httpAnonAllowed _PARAMS((const char *line));
+extern int httpAnonDenied _PARAMS((const char *line));
+
+extern const char *const dash_str;
+extern const char *const null_string;
 
 #define OR(A,B) (A ? A : B)
 

@@ -38,6 +38,21 @@
 #include "splay.h"
 #endif
 
+/* Global */
+const char *AclMatchedName = NULL;
+
+/* These should never be referenced directly in this file! */
+struct _acl_deny_info_list *DenyInfoList = NULL;
+struct _acl_access *HTTPAccessList = NULL;
+struct _acl_access *ICPAccessList = NULL;
+struct _acl_access *MISSAccessList = NULL;
+#if DELAY_HACK
+struct _acl_access *DelayAccessList = NULL;
+#endif
+
+static struct _acl *AclList = NULL;
+static struct _acl **AclListTail = &AclList;
+static const char *const w_space = " \t\n\r";	/* Jasper sez so */
 static int aclFromFile = 0;
 static FILE *aclFile;
 
@@ -51,12 +66,6 @@ static int aclMatchIp _PARAMS((void *dataptr, struct in_addr c));
 static int aclMatchDomainList _PARAMS((void *dataptr, const char *));
 static squid_acl aclType _PARAMS((const char *s));
 static int decode_addr _PARAMS((const char *, struct in_addr *, struct in_addr *));
-static void aclCheck _PARAMS((aclCheck_t * checklist));
-static void aclCheckCallback _PARAMS((aclCheck_t * checklist, int answer));
-static IPH aclLookupDstIPDone;
-static FQDNH aclLookupSrcFQDNDone;
-static FQDNH aclLookupDstFQDNDone;
-static int aclReadProxyAuth _PARAMS((struct _acl_proxy_auth * p));
 
 #if defined(USE_SPLAY_TREE)
 static int aclIpNetworkCompare _PARAMS((const void *, splayNode *));
@@ -107,12 +116,12 @@ strtokFile(void)
 		t++;
 	    *t = '\0';
 	    if ((aclFile = fopen(fn, "r")) == NULL) {
-		debug(28, 0) ("strtokFile: %s not found\n", fn);
+		debug(28, 0, "strtokFile: %s not found\n", fn);
 		return (NULL);
 	    }
 	    aclFromFile = 1;
 	} else {
-	    return t;
+	    return (t);
 	}
     }
     /* aclFromFile */
@@ -126,7 +135,7 @@ strtokFile(void)
 	/* skip leading and trailing white space */
 	t += strspn(buf, w_space);
 	t[strcspn(t, w_space)] = '\0';
-	return t;
+	return (t);
     }
 }
 
@@ -161,8 +170,6 @@ aclType(const char *s)
 	return ACL_METHOD;
     if (!strcmp(s, "browser"))
 	return ACL_BROWSER;
-    if (!strcmp(s, "proxy_auth"))
-	return ACL_PROXY_AUTH;
     return ACL_NONE;
 }
 
@@ -170,7 +177,7 @@ struct _acl *
 aclFindByName(const char *name)
 {
     struct _acl *a;
-    for (a = Config.aclList; a; a = a->next)
+    for (a = AclList; a; a = a->next)
 	if (!strcasecmp(a->name, name))
 	    return a;
     return NULL;
@@ -217,7 +224,7 @@ aclParseMethodList(void *curlist)
 	q = xcalloc(1, sizeof(intlist));
 	q->i = (int) urlParseMethod(t);
 	if (q->i == METHOD_PURGE)
-	    Config.onoff.enable_purge = 1;
+	    Config.Options.enable_purge = 1;
 	*(Tail) = q;
 	Tail = &q->next;
     }
@@ -236,7 +243,7 @@ decode_addr(const char *asc, struct in_addr *addr, struct in_addr *mask)
     switch (sscanf(asc, "%d.%d.%d.%d", &a1, &a2, &a3, &a4)) {
     case 4:			/* a dotted quad */
 	if (!safe_inet_addr(asc, addr)) {
-	    debug(28, 0) ("decode_addr: unsafe IP address: '%s'\n", asc);
+	    debug(28, 0, "decode_addr: unsafe IP address: '%s'\n", asc);
 	    fatal("decode_addr: unsafe IP address");
 	}
 	break;
@@ -252,7 +259,7 @@ decode_addr(const char *asc, struct in_addr *addr, struct in_addr *mask)
 	    *addr = inaddrFromHostent(hp);
 	} else {
 	    /* XXX: Here we could use getnetbyname */
-	    debug(28, 0) ("decode_addr: Invalid IP address or hostname '%s'\n", asc);
+	    debug(28, 0, "decode_addr: Invalid IP address or hostname '%s'\n", asc);
 	    return 0;		/* This is not valid address */
 	}
 	break;
@@ -283,7 +290,7 @@ aclParseIpData(const char *t)
     LOCAL_ARRAY(char, addr2, 256);
     LOCAL_ARRAY(char, mask, 256);
     struct _acl_ip_data *q = xcalloc(1, sizeof(struct _acl_ip_data));
-    debug(28, 5) ("aclParseIpData: %s\n", t);
+    debug(28, 5, "aclParseIpData: %s\n", t);
     if (!strcasecmp(t, "all")) {
 	q->addr1.s_addr = 0;
 	q->addr2.s_addr = 0;
@@ -305,31 +312,31 @@ aclParseIpData(const char *t)
 	addr2[0] = '\0';
 	mask[0] = '\0';
     } else {
-	debug(28, 0) ("aclParseIpData: Bad host/IP: '%s'\n", t);
+	debug(28, 0, "aclParseIpData: Bad host/IP: '%s'\n", t);
 	safe_free(q);
 	return NULL;
     }
     /* Decode addr1 */
     if (!decode_addr(addr1, &q->addr1, &q->mask)) {
-	debug(28, 0) ("%s line %d: %s\n",
+	debug(28, 0, "%s line %d: %s\n",
 	    cfg_filename, config_lineno, config_input_line);
-	debug(28, 0) ("aclParseIpData: Ignoring invalid IP acl entry: unknown first address '%s'\n", addr1);
+	debug(28, 0, "aclParseIpData: Ignoring invalid IP acl entry: unknown first address '%s'\n", addr1);
 	safe_free(q);
 	return NULL;
     }
     /* Decode addr2 */
     if (*addr2 && !decode_addr(addr2, &q->addr2, &q->mask)) {
-	debug(28, 0) ("%s line %d: %s\n",
+	debug(28, 0, "%s line %d: %s\n",
 	    cfg_filename, config_lineno, config_input_line);
-	debug(28, 0) ("aclParseIpData: Ignoring invalid IP acl entry: unknown second address '%s'\n", addr2);
+	debug(28, 0, "aclParseIpData: Ignoring invalid IP acl entry: unknown second address '%s'\n", addr2);
 	safe_free(q);
 	return NULL;
     }
     /* Decode mask */
     if (*mask && !decode_addr(mask, &q->mask, NULL)) {
-	debug(28, 0) ("%s line %d: %s\n",
+	debug(28, 0, "%s line %d: %s\n",
 	    cfg_filename, config_lineno, config_input_line);
-	debug(28, 0) ("aclParseIpData: Ignoring invalid IP acl entry: unknown netmask '%s'\n", mask);
+	debug(28, 0, "aclParseIpData: Ignoring invalid IP acl entry: unknown netmask '%s'\n", mask);
 	safe_free(q);
 	return NULL;
     }
@@ -431,9 +438,9 @@ aclParseTimeSpec(void *curlist)
 		    q->weekbits |= ACL_WEEKDAYS;
 		    break;
 		default:
-		    debug(28, 0) ("%s line %d: %s\n",
+		    debug(28, 0, "%s line %d: %s\n",
 			cfg_filename, config_lineno, config_input_line);
-		    debug(28, 0) ("aclParseTimeSpec: Bad Day '%c'\n",
+		    debug(28, 0, "aclParseTimeSpec: Bad Day '%c'\n",
 			*t);
 		    break;
 		}
@@ -441,18 +448,18 @@ aclParseTimeSpec(void *curlist)
 	} else {
 	    /* assume its time-of-day spec */
 	    if (sscanf(t, "%d:%d-%d:%d", &h1, &m1, &h2, &m2) < 4) {
-		debug(28, 0) ("%s line %d: %s\n",
+		debug(28, 0, "%s line %d: %s\n",
 		    cfg_filename, config_lineno, config_input_line);
-		debug(28, 0) ("aclParseTimeSpec: IGNORING Bad time range\n");
+		debug(28, 0, "aclParseTimeSpec: IGNORING Bad time range\n");
 		xfree(q);
 		return;
 	    }
 	    q->start = h1 * 60 + m1;
 	    q->stop = h2 * 60 + m2;
 	    if (q->start > q->stop) {
-		debug(28, 0) ("%s line %d: %s\n",
+		debug(28, 0, "%s line %d: %s\n",
 		    cfg_filename, config_lineno, config_input_line);
-		debug(28, 0) ("aclParseTimeSpec: IGNORING Reversed time range\n");
+		debug(28, 0, "aclParseTimeSpec: IGNORING Reversed time range\n");
 		xfree(q);
 		return;
 	    }
@@ -467,7 +474,7 @@ aclParseTimeSpec(void *curlist)
 }
 
 void
-aclParseRegexList(void *curlist)
+aclParseRegexList(void *curlist, int icase)
 {
     relist **Tail;
     relist *q = NULL;
@@ -476,21 +483,15 @@ aclParseRegexList(void *curlist)
     int errcode;
     int flags = REG_EXTENDED | REG_NOSUB;
     for (Tail = curlist; *Tail; Tail = &((*Tail)->next));
+    if (icase)
+	flags |= REG_ICASE;
     while ((t = strtokFile())) {
-	if (strcmp(t, "-i") == 0) {
-	    flags |= REG_ICASE;
-	    continue;
-	}
-	if (strcmp(t, "+i") == 0) {
-	    flags &= ~REG_ICASE;
-	    continue;
-	}
 	if ((errcode = regcomp(&comp, t, flags)) != 0) {
 	    char errbuf[256];
 	    regerror(errcode, &comp, errbuf, sizeof errbuf);
-	    debug(28, 0) ("%s line %d: %s\n",
+	    debug(28, 0, "%s line %d: %s\n",
 		cfg_filename, config_lineno, config_input_line);
-	    debug(28, 0) ("aclParseRegexList: Invalid regular expression '%s': %s\n",
+	    debug(28, 0, "aclParseRegexList: Invalid regular expression '%s': %s\n",
 		t, errbuf);
 	    continue;
 	}
@@ -570,44 +571,8 @@ aclParseDomainList(void *curlist)
 
 #endif /* USE_SPLAY_TREE */
 
-/* check for change password file each 300 seconds */
-#define CHECK_PROXY_FILE_TIME 300
-static void
-aclParseProxyAuth(void *data)
-{
-    struct _acl_proxy_auth *p;
-    struct _acl_proxy_auth **q = data;
-    char *t;
-    t = strtok(NULL, w_space);
-    if (t) {
-	p = xcalloc(1, sizeof(struct _acl_proxy_auth));
-	p->filename = xstrdup(t);
-	p->last_time = 0;
-	p->change_time = 0;
-	t = strtok(NULL, w_space);
-	if (t == NULL) {
-	    p->check_interval = CHECK_PROXY_FILE_TIME;
-	} else {
-	    p->check_interval = atoi(t);
-	}
-	if (p->check_interval < 1)
-	    p->check_interval = 1;
-	p->hash = 0;		/* force creation of a new hash table */
-	if (aclReadProxyAuth(p)) {
-	    *q = p;
-	    return;
-	} else {
-	    debug(28, 0) ("cannot read proxy_auth %s, ignoring\n", p->filename);
-	}
-    } else {
-	debug(28, 0) ("no filename in acl proxy_auth, ignoring\n");
-    }
-    *q = NULL;
-    return;
-}
-
 void
-aclParseAclLine(acl ** head)
+aclParseAclLine(void)
 {
     /* we're already using strtok() to grok the line */
     char *t = NULL;
@@ -618,27 +583,27 @@ aclParseAclLine(acl ** head)
 
     /* snarf the ACL name */
     if ((t = strtok(NULL, w_space)) == NULL) {
-	debug(28, 0) ("%s line %d: %s\n",
+	debug(28, 0, "%s line %d: %s\n",
 	    cfg_filename, config_lineno, config_input_line);
-	debug(28, 0) ("aclParseAclLine: missing ACL name.\n");
+	debug(28, 0, "aclParseAclLine: missing ACL name.\n");
 	return;
     }
     xstrncpy(aclname, t, ACL_NAME_SZ);
     /* snarf the ACL type */
     if ((t = strtok(NULL, w_space)) == NULL) {
-	debug(28, 0) ("%s line %d: %s\n",
+	debug(28, 0, "%s line %d: %s\n",
 	    cfg_filename, config_lineno, config_input_line);
-	debug(28, 0) ("aclParseAclLine: missing ACL type.\n");
+	debug(28, 0, "aclParseAclLine: missing ACL type.\n");
 	return;
     }
     if ((acltype = aclType(t)) == ACL_NONE) {
-	debug(28, 0) ("%s line %d: %s\n",
+	debug(28, 0, "%s line %d: %s\n",
 	    cfg_filename, config_lineno, config_input_line);
-	debug(28, 0) ("aclParseAclLine: Invalid ACL type '%s'\n", t);
+	debug(28, 0, "aclParseAclLine: Invalid ACL type '%s'\n", t);
 	return;
     }
     if ((A = aclFindByName(aclname)) == NULL) {
-	debug(28, 3) ("aclParseAclLine: Creating ACL '%s'\n", aclname);
+	debug(28, 3, "aclParseAclLine: Creating ACL '%s'\n", aclname);
 	A = xcalloc(1, sizeof(struct _acl));
 	xstrncpy(A->name, aclname, ACL_NAME_SZ);
 	A->type = acltype;
@@ -646,10 +611,10 @@ aclParseAclLine(acl ** head)
 	new_acl = 1;
     } else {
 	if (acltype != A->type) {
-	    debug(28, 0) ("aclParseAclLine: ACL '%s' already exists with different type, skipping.\n", A->name);
+	    debug(28, 0, "aclParseAclLine: ACL '%s' already exists with different type, skipping.\n", A->name);
 	    return;
 	}
-	debug(28, 3) ("aclParseAclLine: Appending to '%s'\n", aclname);
+	debug(28, 3, "aclParseAclLine: Appending to '%s'\n", aclname);
 	new_acl = 0;
     }
     switch (A->type) {
@@ -666,13 +631,13 @@ aclParseAclLine(acl ** head)
 	break;
     case ACL_URL_REGEX:
     case ACL_URLPATH_REGEX:
-	aclParseRegexList(&A->data);
+	aclParseRegexList(&A->data, 0);
 	break;
     case ACL_URL_PORT:
 	aclParseIntlist(&A->data);
 	break;
     case ACL_USER:
-	Config.onoff.ident_lookup = 1;
+	Config.identLookup = 1;
 	aclParseWordList(&A->data);
 	break;
     case ACL_PROTO:
@@ -682,10 +647,7 @@ aclParseAclLine(acl ** head)
 	aclParseMethodList(&A->data);
 	break;
     case ACL_BROWSER:
-	aclParseRegexList(&A->data);
-	break;
-    case ACL_PROXY_AUTH:
-	aclParseProxyAuth(&A->data);
+	aclParseRegexList(&A->data, 0);
 	break;
     case ACL_NONE:
     default:
@@ -695,15 +657,13 @@ aclParseAclLine(acl ** head)
     if (!new_acl)
 	return;
     if (A->data == NULL) {
-	debug(28, 0) ("aclParseAclLine: IGNORING invalid ACL: %s\n",
+	debug(28, 0, "aclParseAclLine: IGNORING invalid ACL: %s\n",
 	    A->cfgline);
 	xfree(A);
 	return;
     }
-    /* append */
-    while (*head)
-	head = &(*head)->next;
-    *head = A;
+    *AclListTail = A;
+    AclListTail = &A->next;
 }
 
 /* maex@space.net (06.09.96)
@@ -754,9 +714,9 @@ aclParseDenyInfoLine(struct _acl_deny_info_list **head)
 
     /* first expect an url */
     if ((t = strtok(NULL, w_space)) == NULL) {
-	debug(28, 0) ("%s line %d: %s\n",
+	debug(28, 0, "%s line %d: %s\n",
 	    cfg_filename, config_lineno, config_input_line);
-	debug(28, 0) ("aclParseDenyInfoLine: missing 'url' parameter.\n");
+	debug(28, 0, "aclParseDenyInfoLine: missing 'url' parameter.\n");
 	return;
     }
     A = xcalloc(1, sizeof(struct _acl_deny_info_list));
@@ -771,9 +731,9 @@ aclParseDenyInfoLine(struct _acl_deny_info_list **head)
 	Tail = &L->next;
     }
     if (A->acl_list == NULL) {
-	debug(28, 0) ("%s line %d: %s\n",
+	debug(28, 0, "%s line %d: %s\n",
 	    cfg_filename, config_lineno, config_input_line);
-	debug(28, 0) ("aclParseDenyInfoLine: deny_info line contains no ACL's, skipping\n");
+	debug(28, 0, "aclParseDenyInfoLine: deny_info line contains no ACL's, skipping\n");
 	xfree(A);
 	return;
     }
@@ -794,9 +754,9 @@ aclParseAccessLine(struct _acl_access **head)
 
     /* first expect either 'allow' or 'deny' */
     if ((t = strtok(NULL, w_space)) == NULL) {
-	debug(28, 0) ("%s line %d: %s\n",
+	debug(28, 0, "%s line %d: %s\n",
 	    cfg_filename, config_lineno, config_input_line);
-	debug(28, 0) ("aclParseAccessLine: missing 'allow' or 'deny'.\n");
+	debug(28, 0, "aclParseAccessLine: missing 'allow' or 'deny'.\n");
 	return;
     }
     A = xcalloc(1, sizeof(struct _acl_access));
@@ -805,9 +765,9 @@ aclParseAccessLine(struct _acl_access **head)
     else if (!strcmp(t, "deny"))
 	A->allow = 0;
     else {
-	debug(28, 0) ("%s line %d: %s\n",
+	debug(28, 0, "%s line %d: %s\n",
 	    cfg_filename, config_lineno, config_input_line);
-	debug(28, 0) ("aclParseAccessLine: expecting 'allow' or 'deny', got '%s'.\n", t);
+	debug(28, 0, "aclParseAccessLine: expecting 'allow' or 'deny', got '%s'.\n", t);
 	xfree(A);
 	return;
     }
@@ -823,12 +783,12 @@ aclParseAccessLine(struct _acl_access **head)
 	    L->op = 0;
 	    t++;
 	}
-	debug(28, 3) ("aclParseAccessLine: looking for ACL name '%s'\n", t);
+	debug(28, 3, "aclParseAccessLine: looking for ACL name '%s'\n", t);
 	a = aclFindByName(t);
 	if (a == NULL) {
-	    debug(28, 0) ("%s line %d: %s\n",
+	    debug(28, 0, "%s line %d: %s\n",
 		cfg_filename, config_lineno, config_input_line);
-	    debug(28, 0) ("aclParseAccessLine: ACL name '%s' not found.\n", t);
+	    debug(28, 0, "aclParseAccessLine: ACL name '%s' not found.\n", t);
 	    xfree(L);
 	    continue;
 	}
@@ -837,9 +797,9 @@ aclParseAccessLine(struct _acl_access **head)
 	Tail = &L->next;
     }
     if (A->acl_list == NULL) {
-	debug(28, 0) ("%s line %d: %s\n",
+	debug(28, 0, "%s line %d: %s\n",
 	    cfg_filename, config_lineno, config_input_line);
-	debug(28, 0) ("aclParseAccessLine: Access line contains no ACL's, skipping\n");
+	debug(28, 0, "aclParseAccessLine: Access line contains no ACL's, skipping\n");
 	xfree(A);
 	return;
     }
@@ -858,7 +818,7 @@ aclMatchIp(void *dataptr, struct in_addr c)
 {
     splayNode **Top = dataptr;
     *Top = splay_splay(&c, *Top, aclIpNetworkCompare);
-    debug(28, 3) ("aclMatchIp: '%s' %s\n",
+    debug(28, 3, "aclMatchIp: '%s' %s\n",
 	inet_ntoa(c), splayLastResult ? "NOT found" : "found");
     return !splayLastResult;
 }
@@ -869,10 +829,10 @@ aclMatchIp(void *dataptr, struct in_addr c)
 {
     tree **data = dataptr;
     if (tree_srch(data, bintreeIpNetworkCompare, &c)) {
-	debug(28, 3) ("aclMatchIp: '%s' found\n", inet_ntoa(c));
+	debug(28, 3, "aclMatchIp: '%s' found\n", inet_ntoa(c));
 	return 1;
     }
-    debug(28, 3) ("aclMatchIp: '%s' NOT found\n", inet_ntoa(c));
+    debug(28, 3, "aclMatchIp: '%s' NOT found\n", inet_ntoa(c));
     return 0;
 }
 
@@ -890,12 +850,12 @@ aclMatchIp(void *dataptr, struct in_addr c)
     prev = NULL;		/* previous element in the list */
     while (data) {
 	h.s_addr = c.s_addr & data->mask.s_addr;
-	debug(28, 3) ("aclMatchIp: h     = %s\n", inet_ntoa(h));
-	debug(28, 3) ("aclMatchIp: addr1 = %s\n", inet_ntoa(data->addr1));
-	debug(28, 3) ("aclMatchIp: addr2 = %s\n", inet_ntoa(data->addr2));
+	debug(28, 3, "aclMatchIp: h     = %s\n", inet_ntoa(h));
+	debug(28, 3, "aclMatchIp: addr1 = %s\n", inet_ntoa(data->addr1));
+	debug(28, 3, "aclMatchIp: addr2 = %s\n", inet_ntoa(data->addr2));
 	if (!data->addr2.s_addr) {
 	    if (h.s_addr == data->addr1.s_addr) {
-		debug(28, 3) ("aclMatchIp: returning 1\n");
+		debug(28, 3, "aclMatchIp: returning 1\n");
 		if (prev != NULL) {
 		    /* shift the element just found to the second position
 		     * in the list */
@@ -911,7 +871,7 @@ aclMatchIp(void *dataptr, struct in_addr c)
 	    la1 = ntohl(data->addr1.s_addr);
 	    la2 = ntohl(data->addr2.s_addr);
 	    if (lh >= la1 && lh <= la2) {
-		debug(28, 3) ("aclMatchIp: returning 1\n");
+		debug(28, 3, "aclMatchIp: returning 1\n");
 		if (prev != NULL) {
 		    /* shift the element just found to the second position
 		     * in the list */
@@ -925,7 +885,7 @@ aclMatchIp(void *dataptr, struct in_addr c)
 	prev = data;
 	data = data->next;
     }
-    debug(28, 3) ("aclMatchIp: returning 0\n");
+    debug(28, 3, "aclMatchIp: returning 0\n");
     return 0;
 }
 
@@ -942,9 +902,9 @@ aclMatchDomainList(void *dataptr, const char *host)
     splayNode **Top = dataptr;
     if (host == NULL)
 	return 0;
-    debug(28, 3) ("aclMatchDomainList: checking '%s'\n", host);
+    debug(28, 3, "aclMatchDomainList: checking '%s'\n", host);
     *Top = splay_splay(host, *Top, aclHostDomainCompare);
-    debug(28, 3) ("aclMatchDomainList: '%s' %s\n",
+    debug(28, 3, "aclMatchDomainList: '%s' %s\n",
 	host, splayLastResult ? "NOT found" : "found");
     return !splayLastResult;
 }
@@ -956,12 +916,12 @@ aclMatchDomainList(void *dataptr, const char *host)
     tree **data = dataptr;
     if (host == NULL)
 	return 0;
-    debug(28, 3) ("aclMatchDomainList: checking '%s'\n", host);
+    debug(28, 3, "aclMatchDomainList: checking '%s'\n", host);
     if (tree_srch(data, bintreeHostDomainCompare, (void *) host)) {
-	debug(28, 3) ("aclMatchDomainList: '%s' found\n", host);
+	debug(28, 3, "aclMatchDomainList: '%s' found\n", host);
 	return 1;
     }
-    debug(28, 3) ("aclMatchDomainList: '%s' NOT found\n", host);
+    debug(28, 3, "aclMatchDomainList: '%s' NOT found\n", host);
     return 0;
 }
 
@@ -974,9 +934,9 @@ aclMatchDomainList(void *dataptr, const char *host)
     wordlist *prev = NULL;
     if (host == NULL)
 	return 0;
-    debug(28, 3) ("aclMatchDomainList: checking '%s'\n", host);
+    debug(28, 3, "aclMatchDomainList: checking '%s'\n", host);
     for (data = *Head; data; data = data->next) {
-	debug(28, 3) ("aclMatchDomainList: looking for '%s'\n", data->key);
+	debug(28, 3, "aclMatchDomainList: looking for '%s'\n", data->key);
 	if (matchDomainName(data->key, host)) {
 	    if (prev) {
 		/* shift the element just found to the top of the list */
@@ -999,11 +959,11 @@ aclMatchRegex(relist * data, const char *word)
     relist *first, *prev;
     if (word == NULL)
 	return 0;
-    debug(28, 3) ("aclMatchRegex: checking '%s'\n", word);
+    debug(28, 3, "aclMatchRegex: checking '%s'\n", word);
     first = data;
     prev = NULL;
     while (data) {
-	debug(28, 3) ("aclMatchRegex: looking for '%s'\n", data->pattern);
+	debug(28, 3, "aclMatchRegex: looking for '%s'\n", data->pattern);
 	if (regexec(&data->regex, word, 0, 0, 0) == 0) {
 	    if (prev != NULL) {
 		/* shift the element just found to the second position
@@ -1025,9 +985,9 @@ aclMatchIdent(wordlist * data, const char *ident)
 {
     if (ident == NULL)
 	return 0;
-    debug(28, 3) ("aclMatchIdent: checking '%s'\n", ident);
+    debug(28, 3, "aclMatchIdent: checking '%s'\n", ident);
     while (data) {
-	debug(28, 3) ("aclMatchIdent: looking for '%s'\n", data->key);
+	debug(28, 3, "aclMatchIdent: looking for '%s'\n", data->key);
 	if (strcmp(data->key, "REQUIRED") == 0 && *ident != '\0')
 	    return 1;
 	if (strcmp(data->key, ident) == 0)
@@ -1035,63 +995,6 @@ aclMatchIdent(wordlist * data, const char *ident)
 	data = data->next;
     }
     return 0;
-}
-
-#define SKIP_BASIC_SZ 6
-static int
-aclMatchProxyAuth(struct _acl_proxy_auth *p, aclCheck_t * checklist)
-{
-    LOCAL_ARRAY(char, sent_user, ICP_IDENT_SZ);
-    char *s;
-    char *cleartext;
-    char *sent_auth;
-    char *passwd = NULL;
-    hash_link *hashr = NULL;
-    s = mime_get_header(checklist->request->headers, "Proxy-authorization:");
-    if (s == NULL)
-	return 0;
-    if (strlen(s) < SKIP_BASIC_SZ)
-	return 0;
-    s += SKIP_BASIC_SZ;
-    sent_auth = xstrdup(s);	/* username and password */
-    /* Trim trailing \n before decoding */
-    strtok(sent_auth, "\n");
-    cleartext = uudecode(sent_auth);
-    xfree(sent_auth);
-    debug(28, 3) ("aclMatchProxyAuth: cleartext = '%s'\n", cleartext);
-    xstrncpy(sent_user, cleartext, ICP_IDENT_SZ);
-    xfree(cleartext);
-    strtok(sent_user, ":");	/* Remove :password */
-    debug(28, 5) ("aclMatchProxyAuth: checking user %s\n", sent_user);
-    /* reread password file if necessary */
-    aclReadProxyAuth(p);
-    hashr = hash_lookup(p->hash, sent_user);
-    if (hashr == NULL) {
-	/* User doesn't exist; deny them */
-	debug(28, 4) ("aclMatchProxyAuth: user %s does not exist\n", sent_user);
-	return 0;
-    }
-    passwd = strtok(sent_user, null_string);
-    passwd++;
-    /* See if we've already validated them */
-    passwd[0] |= 0x80;
-    if (strcmp(hashr->item, passwd) == 0) {
-	debug(28, 5) ("aclMatchProxyAuth: user %s previously validated\n",
-	    sent_user);
-	return 1;
-    }
-    passwd[0] &= (~0x80);
-    if (strcmp(hashr->item, (char *) crypt(passwd, hashr->item))) {
-	/* Passwords differ, deny access */
-	debug(28, 4) ("aclMatchProxyAuth: authentication failed: user %s: "
-	    "passwords differ\n", sent_user);
-	return 0;
-    }
-    passwd[0] |= 0x80;
-    debug(28, 5) ("proxyAuthenticate: user %s validated OK\n", sent_user);
-    hash_delete(p->hash, sent_user);
-    hash_insert(p->hash, xstrdup(sent_user), (void *) xstrdup(passwd));
-    return 1;
 }
 
 static int
@@ -1130,7 +1033,7 @@ aclMatchTime(struct _acl_time_data *data, time_t when)
 	xmemcpy(&tm, localtime(&when), sizeof(struct tm));
     }
     t = (time_t) (tm.tm_hour * 60 + tm.tm_min);
-    debug(28, 3) ("aclMatchTime: checking %d in %d-%d, weekbits=%x\n",
+    debug(28, 3, "aclMatchTime: checking %d in %d-%d, weekbits=%x\n",
 	(int) t, (int) data->start, (int) data->stop, data->weekbits);
 
     if (t < data->start || t > data->stop)
@@ -1141,13 +1044,13 @@ aclMatchTime(struct _acl_time_data *data, time_t when)
 int
 aclMatchAcl(struct _acl *acl, aclCheck_t * checklist)
 {
-    request_t *r = checklist->request;
+    const request_t *r = checklist->request;
     const ipcache_addrs *ia = NULL;
     const char *fqdn = NULL;
     int k;
     if (!acl)
 	return 0;
-    debug(28, 3) ("aclMatchAcl: checking '%s'\n", acl->cfgline);
+    debug(28, 3, "aclMatchAcl: checking '%s'\n", acl->cfgline);
     switch (acl->type) {
     case ACL_SRC_IP:
 	return aclMatchIp(&acl->data, checklist->src_addr);
@@ -1156,14 +1059,15 @@ aclMatchAcl(struct _acl *acl, aclCheck_t * checklist)
 	ia = ipcache_gethostbyname(r->host, IP_LOOKUP_IF_MISS);
 	if (ia) {
 	    for (k = 0; k < (int) ia->count; k++) {
-		if (aclMatchIp(&acl->data, ia->in_addrs[k]))
+		checklist->dst_addr = ia->in_addrs[k];
+		if (aclMatchIp(&acl->data, checklist->dst_addr))
 		    return 1;
 	    }
 	    return 0;
 	} else if (checklist->state[ACL_DST_IP] == ACL_LOOKUP_NONE) {
-	    debug(28, 3) ("aclMatchAcl: Can't yet compare '%s' ACL for '%s'\n",
+	    debug(28, 3, "aclMatchAcl: Can't yet compare '%s' ACL for '%s'\n",
 		acl->name, r->host);
-	    checklist->state[ACL_DST_IP] = ACL_LOOKUP_NEEDED;
+	    checklist->state[ACL_DST_IP] = ACL_LOOKUP_NEED;
 	    return 0;
 	} else {
 	    return aclMatchIp(&acl->data, no_addr);
@@ -1176,9 +1080,9 @@ aclMatchAcl(struct _acl *acl, aclCheck_t * checklist)
 	if (fqdn)
 	    return aclMatchDomainList(&acl->data, fqdn);
 	if (checklist->state[ACL_DST_DOMAIN] == ACL_LOOKUP_NONE) {
-	    debug(28, 3) ("aclMatchAcl: Can't yet compare '%s' ACL for '%s'\n",
+	    debug(28, 3, "aclMatchAcl: Can't yet compare '%s' ACL for '%s'\n",
 		acl->name, inet_ntoa(ia->in_addrs[0]));
-	    checklist->state[ACL_DST_DOMAIN] = ACL_LOOKUP_NEEDED;
+	    checklist->state[ACL_DST_DOMAIN] = ACL_LOOKUP_NEED;
 	    return 0;
 	}
 	return aclMatchDomainList(&acl->data, "none");
@@ -1188,9 +1092,9 @@ aclMatchAcl(struct _acl *acl, aclCheck_t * checklist)
 	if (fqdn) {
 	    return aclMatchDomainList(&acl->data, fqdn);
 	} else if (checklist->state[ACL_SRC_DOMAIN] == ACL_LOOKUP_NONE) {
-	    debug(28, 3) ("aclMatchAcl: Can't yet compare '%s' ACL for '%s'\n",
+	    debug(28, 3, "aclMatchAcl: Can't yet compare '%s' ACL for '%s'\n",
 		acl->name, inet_ntoa(checklist->src_addr));
-	    checklist->state[ACL_SRC_DOMAIN] = ACL_LOOKUP_NEEDED;
+	    checklist->state[ACL_SRC_DOMAIN] = ACL_LOOKUP_NEED;
 	    return 0;
 	} else {
 	    return aclMatchDomainList(&acl->data, "none");
@@ -1209,6 +1113,8 @@ aclMatchAcl(struct _acl *acl, aclCheck_t * checklist)
 	return aclMatchInteger(acl->data, r->port);
 	/* NOTREACHED */
     case ACL_USER:
+	/* debug(28, 0, "aclMatchAcl: ACL_USER unimplemented\n"); */
+	/* return 0; */
 	return aclMatchIdent(acl->data, checklist->ident);
 	/* NOTREACHED */
     case ACL_PROTO:
@@ -1220,21 +1126,9 @@ aclMatchAcl(struct _acl *acl, aclCheck_t * checklist)
     case ACL_BROWSER:
 	return aclMatchRegex(acl->data, checklist->browser);
 	/* NOTREACHED */
-    case ACL_PROXY_AUTH:
-	if (!aclMatchProxyAuth(acl->data, checklist)) {
-	    /* no such user OR we need a proxy authentication header */
-	    checklist->state[ACL_PROXY_AUTH] = ACL_LOOKUP_NEEDED;
-	    return 0;
-	} else {
-	    /* register that we used the proxy authentication header */
-	    checklist->state[ACL_PROXY_AUTH] = ACL_LOOKUP_DONE;
-	    BIT_SET(r->flags, REQ_USED_PROXY_AUTH);
-	    return 1;
-	}
-	/* NOTREACHED */
     case ACL_NONE:
     default:
-	debug(28, 0) ("aclMatchAcl: '%s' has bad type %d\n",
+	debug(28, 0, "aclMatchAcl: '%s' has bad type %d\n",
 	    acl->name, acl->type);
 	return 0;
     }
@@ -1246,165 +1140,34 @@ aclMatchAclList(const struct _acl_list *list, aclCheck_t * checklist)
 {
     while (list) {
 	AclMatchedName = list->acl->name;
-	debug(28, 3) ("aclMatchAclList: checking %s%s\n",
+	debug(28, 3, "aclMatchAclList: checking %s%s\n",
 	    list->op ? null_string : "!", list->acl->name);
 	if (aclMatchAcl(list->acl, checklist) != list->op) {
-	    debug(28, 3) ("aclMatchAclList: returning 0\n");
+	    debug(28, 3, "aclMatchAclList: returning 0\n");
 	    return 0;
 	}
 	list = list->next;
     }
-    debug(28, 3) ("aclMatchAclList: returning 1\n");
+    debug(28, 3, "aclMatchAclList: returning 1\n");
     return 1;
 }
 
 int
-aclCheckFast(const struct _acl_access *A, aclCheck_t * checklist)
+aclCheck(const struct _acl_access *A, aclCheck_t * checklist)
 {
     int allow = 0;
+
     while (A) {
+	debug(28, 3, "aclCheck: checking '%s'\n", A->cfgline);
 	allow = A->allow;
-	if (aclMatchAclList(A->acl_list, checklist))
+	if (aclMatchAclList(A->acl_list, checklist)) {
+	    debug(28, 3, "aclCheck: match found, returning %d\n", allow);
 	    return allow;
+	}
 	A = A->next;
     }
     return !allow;
 }
-
-static void
-aclCheck(aclCheck_t * checklist)
-{
-    int allow = 0;
-    const struct _acl_access *A;
-    int match;
-    ipcache_addrs *ia;
-    while ((A = checklist->access_list)) {
-	debug(28, 3) ("aclCheck: checking '%s'\n", A->cfgline);
-	allow = A->allow;
-	match = aclMatchAclList(A->acl_list, checklist);
-	if (checklist->state[ACL_DST_IP] == ACL_LOOKUP_NEEDED) {
-	    checklist->state[ACL_DST_IP] = ACL_LOOKUP_PENDING;
-	    ipcache_nbgethostbyname(checklist->request->host,
-		aclLookupDstIPDone,
-		checklist);
-	    return;
-	} else if (checklist->state[ACL_SRC_DOMAIN] == ACL_LOOKUP_NEEDED) {
-	    checklist->state[ACL_SRC_DOMAIN] = ACL_LOOKUP_PENDING;
-	    fqdncache_nbgethostbyaddr(checklist->src_addr,
-		aclLookupSrcFQDNDone,
-		checklist);
-	    return;
-	} else if (checklist->state[ACL_DST_DOMAIN] == ACL_LOOKUP_NEEDED) {
-	    ia = ipcacheCheckNumeric(checklist->request->host);
-	    if (ia == NULL) {
-		checklist->state[ACL_DST_DOMAIN] = ACL_LOOKUP_DONE;
-		return;
-	    }
-	    checklist->dst_addr = ia->in_addrs[0];
-	    checklist->state[ACL_DST_DOMAIN] = ACL_LOOKUP_PENDING;
-	    fqdncache_nbgethostbyaddr(checklist->dst_addr,
-		aclLookupDstFQDNDone,
-		checklist);
-	    return;
-	}
-	if (match) {
-	    debug(28, 3) ("aclCheck: match found, returning %d\n", allow);
-	    aclCheckCallback(checklist, allow);
-	    return;
-	}
-	checklist->access_list = A->next;
-    }
-    debug(28, 3) ("aclCheck: NO match found, returning %d\n", !allow);
-    aclCheckCallback(checklist, !allow);
-}
-
-void
-aclChecklistFree(aclCheck_t * checklist)
-{
-    if (checklist->state[ACL_SRC_DOMAIN] == ACL_LOOKUP_PENDING)
-	fqdncacheUnregister(checklist->src_addr, checklist);
-    if (checklist->state[ACL_DST_DOMAIN] == ACL_LOOKUP_PENDING)
-	fqdncacheUnregister(checklist->dst_addr, checklist);
-    if (checklist->state[ACL_DST_IP] == ACL_LOOKUP_PENDING)
-	ipcacheUnregister(checklist->request->host, checklist);
-    requestUnlink(checklist->request);
-    checklist->request = NULL;
-    cbdataFree(checklist);
-}
-
-static void
-aclCheckCallback(aclCheck_t * checklist, int answer)
-{
-    debug(28, 3) ("aclCheckCallback: answer=%d\n", answer);
-    if (cbdataValid(checklist->callback_data))
-	checklist->callback(answer, checklist->callback_data);
-    cbdataUnlock(checklist->callback_data);
-    checklist->callback = NULL;
-    checklist->callback_data = NULL;
-    aclChecklistFree(checklist);
-}
-
-static void
-aclLookupDstIPDone(const ipcache_addrs * ia, void *data)
-{
-    aclCheck_t *checklist = data;
-    checklist->state[ACL_DST_IP] = ACL_LOOKUP_DONE;
-    aclCheck(checklist);
-}
-
-static void
-aclLookupSrcFQDNDone(const char *fqdn, void *data)
-{
-    aclCheck_t *checklist = data;
-    checklist->state[ACL_SRC_DOMAIN] = ACL_LOOKUP_DONE;
-    aclCheck(checklist);
-}
-
-static void
-aclLookupDstFQDNDone(const char *fqdn, void *data)
-{
-    aclCheck_t *checklist = data;
-    checklist->state[ACL_DST_DOMAIN] = ACL_LOOKUP_DONE;
-    aclCheck(checklist);
-}
-
-aclCheck_t *
-aclChecklistCreate(const struct _acl_access *A,
-    request_t * request,
-    struct in_addr src_addr,
-    char *user_agent,
-    char *ident)
-{
-    aclCheck_t *checklist = xcalloc(1, sizeof(aclCheck_t));;
-    cbdataAdd(checklist);
-    checklist->access_list = A;
-    checklist->request = requestLink(request);
-    checklist->src_addr = src_addr;
-    if (user_agent)
-	xstrncpy(checklist->browser, user_agent, BROWSERNAMELEN);
-    if (ident)
-	xstrncpy(checklist->ident, ident, ICP_IDENT_SZ);
-    return checklist;
-}
-
-void
-aclNBCheck(aclCheck_t * checklist, PF callback, void *callback_data)
-{
-    checklist->callback = callback;
-    checklist->callback_data = callback_data;
-    cbdataLock(callback_data);
-    aclCheck(checklist);
-}
-
-
-
-
-
-
-
-
-
-
 
 /*********************/
 /* Destroy functions */
@@ -1458,29 +1221,14 @@ aclDestroyRegexList(struct _relist *data)
     }
 }
 
-static void
-aclDestroyProxyAuth(struct _acl_proxy_auth *p)
-{
-    int i;
-    hash_link *hashr = NULL;
-    /* destroy hash list contents */
-    for (i = 0, hashr = hash_first(p->hash); hashr; hashr = hash_next(p->hash))
-	hash_delete(p->hash, hashr->key);
-    /* destroy and free the hash table itself */
-    hashFreeMemory(p->hash);
-    p->hash = NULL;
-    safe_free(p->filename);
-    safe_free(p);
-}
-
 void
-aclDestroyAcls(acl ** head)
+aclDestroyAcls(void)
 {
     struct _acl *a = NULL;
     struct _acl *next = NULL;
-    for (a = *head; a; a = next) {
+    for (a = AclList; a; a = next) {
 	next = a->next;
-	debug(28, 3) ("aclDestroyAcls: '%s'\n", a->cfgline);
+	debug(28, 3, "aclDestroyAcls: '%s'\n", a->cfgline);
 	switch (a->type) {
 	case ACL_SRC_IP:
 	case ACL_DST_IP:
@@ -1518,9 +1266,6 @@ aclDestroyAcls(acl ** head)
 	case ACL_METHOD:
 	    intlistDestroy((intlist **) & a->data);
 	    break;
-	case ACL_PROXY_AUTH:
-	    aclDestroyProxyAuth(a->data);
-	    break;
 	case ACL_NONE:
 	default:
 	    fatal_dump("aclDestroyAcls: Found ACL_NONE?");
@@ -1529,7 +1274,8 @@ aclDestroyAcls(acl ** head)
 	safe_free(a->cfgline);
 	safe_free(a);
     }
-    *head = NULL;
+    AclList = NULL;
+    AclListTail = &AclList;
 }
 
 static void
@@ -1548,7 +1294,7 @@ aclDestroyAccessList(struct _acl_access **list)
     struct _acl_access *l = NULL;
     struct _acl_access *next = NULL;
     for (l = *list; l; l = next) {
-	debug(28, 3) ("aclDestroyAccessList: '%s'\n", l->cfgline);
+	debug(28, 3, "aclDestroyAccessList: '%s'\n", l->cfgline);
 	next = l->next;
 	aclDestroyAclList(l->acl_list);
 	l->acl_list = NULL;
@@ -1623,70 +1369,6 @@ aclDomainCompare(const char *d1, const char *d2)
 }
 
 #endif /* USE_BIN_TREE || SPLAY_TREE */
-
-/* Original ProxyAuth code by Jon Thackray <jrmt@uk.gdscorp.com> */
-/* Generalized to ACL's by Arjan.deVet <Arjan.deVet@adv.IAEhv.nl> */
-static int
-aclReadProxyAuth(struct _acl_proxy_auth *p)
-{
-    struct stat buf;
-    static char *passwords = NULL;
-    char *user = NULL;
-    char *passwd = NULL;
-    int i;
-    hash_link *hashr = NULL;
-    FILE *f = NULL;
-    if ((squid_curtime - p->last_time) >= p->check_interval) {
-	if (stat(p->filename, &buf) == 0) {
-	    if (buf.st_mtime != p->change_time) {
-		debug(28, 1) ("aclReadProxyAuth: reloading changed proxy authentication file %s\n", p->filename);
-		p->change_time = buf.st_mtime;
-		if (p->hash != 0) {
-		    debug(28, 5) ("aclReadProxyAuth: invalidating old entries\n");
-		    for (i = 0, hashr = hash_first(p->hash); hashr; hashr = hash_next(p->hash)) {
-			debug(28, 6) ("aclReadProxyAuth: deleting %s\n", hashr->key);
-			hash_delete(p->hash, hashr->key);
-		    }
-		} else {
-		    /* First time around, 7921 should be big enough */
-		    p->hash = hash_create(urlcmp, 7921, hash_string);
-		    if (p->hash == NULL) {
-			debug(28, 0) ("aclReadProxyAuth: can't create "
-			    "hash table, turning auth off.\n");
-			return 0;
-		    }
-		}
-		passwords = xmalloc((size_t) buf.st_size + 2);
-		f = fopen(p->filename, "r");
-		fread(passwords, (size_t) buf.st_size, 1, f);
-		*(passwords + buf.st_size) = '\0';
-		strcat(passwords, "\n");
-		fclose(f);
-		user = strtok(passwords, ":");
-		passwd = strtok(NULL, "\n");
-		debug(28, 5) ("aclReadProxyAuth: adding new passwords to hash table\n");
-		while (user != NULL) {
-		    if (strlen(user) > 1 && passwd && strlen(passwd) > 1) {
-			debug(28, 6) ("aclReadProxyAuth: adding %s, %s to hash table\n", user, passwd);
-			hash_insert(p->hash, xstrdup(user), (void *) xstrdup(passwd));
-		    }
-		    user = strtok(NULL, ":");
-		    passwd = strtok(NULL, "\n");
-		}
-		xfree(passwords);
-	    } else {
-		debug(28, 5) ("aclReadProxyAuth: %s not changed (old=%d,new=%d)\n",
-		    p->filename, p->change_time, buf.st_mtime);
-	    }
-	} else {
-	    debug(28, 0) ("aclReadProxyAuth: can't access proxy_auth file %s, turning authentication off\n", p->filename);
-	    return 0;
-	}
-	p->last_time = squid_curtime;
-    }
-    return 1;
-}
-
 
 /* compare a host and a domain */
 
