@@ -229,10 +229,10 @@ struct sentry {
     swap_status_t swap_status:3;
     method_t method:4;
 
-    /* WARNING: Explicit assummption that fewer than 256
+    /* WARNING: Explicit assummption that fewer than 65536
      * WARNING:  clients all hop onto the same object.  The code
      * WARNING:  doesn't deal with this case.  */
-    unsigned char lock_count;
+    unsigned short lock_count;
 
 };
 
