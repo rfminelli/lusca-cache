@@ -233,22 +233,25 @@ void neighborsDestroy()
 static void neighborsOpenLog(fname)
      char *fname;
 {
-    int log_fd;
-
+    int log_fd = -1;
     /* Close and reopen the log.  It may have been renamed "manually"
      * before HUP'ing us. */
     if (cache_hierarchy_log) {
 	file_close(fileno(cache_hierarchy_log));
 	fclose(cache_hierarchy_log);
+	cache_hierarchy_log = NULL;
     }
-    log_fd = file_open(fname, NULL, O_WRONLY | O_CREAT | O_APPEND);
-    if (log_fd < 0) {
-	debug(15, 0, "rotate_logs: %s: %s\n", fname, xstrerror());
-	debug(15, 1, "Hierachical logging is disabled.\n");
-    } else if ((cache_hierarchy_log = fdopen(log_fd, "a")) == NULL) {
-	debug(15, 0, "rotate_logs: %s: %s\n", fname, xstrerror());
-	debug(15, 1, "Hierachical logging is disabled.\n");
+    if (strcmp(fname, "none") != 0) {
+	log_fd = file_open(fname, NULL, O_WRONLY | O_CREAT | O_APPEND);
+	if (log_fd < 0) {
+	    debug(15, 0, "neighborsOpenLog: %s: %s\n", fname, xstrerror());
+	} else if ((cache_hierarchy_log = fdopen(log_fd, "a")) == NULL) {
+	    file_close(log_fd);
+	    debug(15, 0, "neighborsOpenLog: %s: %s\n", fname, xstrerror());
+	}
     }
+    if (log_fd < 0 || cache_hierarchy_log == NULL)
+	debug(15, 1, "Hierachical logging is disabled.\n");
 }
 
 void neighbors_open(fd)

@@ -77,7 +77,7 @@ static void connectReadRemote(fd, data)
     debug(26, 5, "connectReadRemote FD %d read len:%d\n", fd, len);
 
     if (len < 0) {
-	debug(26, 1, "connectReadRemote: FD %d: read failure: %s.\n", xstrerror());
+	debug(26, 1, "connectReadRemote: FD %d: read failure: %s.\n", fd, xstrerror());
 	if (errno == EAGAIN || errno == EWOULDBLOCK) {
 	    /* reinstall handlers */
 	    /* XXX This may loop forever */
@@ -89,7 +89,7 @@ static void connectReadRemote(fd, data)
 		COMM_SELECT_TIMEOUT,
 		(PF) connectReadTimeout,
 		(void *) data,
-		getReadTimeout());
+		data->timeout);
 	} else {
 	    BIT_RESET(entry->flag, CACHABLE);
 	    storeReleaseRequest(entry);
@@ -238,7 +238,7 @@ void connectConnInProgress(fd, data)
     debug(26, 5, "connectConnInProgress: FD %d data=%p\n", fd, data);
 
     if (comm_connect(fd, req->host, req->port) != COMM_OK) {
-	debug(26, 5, "connectConnInProgress: FD %d errno=%d", fd, errno);
+	debug(26, 5, "connectConnInProgress: FD %d: %s", fd, xstrerror());
 	switch (errno) {
 #if EINPROGRESS != EALREADY
 	case EINPROGRESS:
@@ -289,7 +289,6 @@ int connectStart(fd, url, request, mime_hdr, entry)
 	squid_error_entry(entry, ERR_NO_FDS, xstrerror());
 	return COMM_ERROR;
     }
-
     data = (ConnectData *) xcalloc(1, sizeof(ConnectData));
     data->entry = entry;
     data->request = request;

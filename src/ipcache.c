@@ -159,13 +159,17 @@ int ipcache_create_dnsserver(command)
     }
     /* child */
 
+    /* give up extra priviliges */
+    no_suid();
+
+    /* setup filedescriptors */
     dup2(cfd, 3);
     for (fd = getMaxFD(); fd > 3; fd--) {
 	(void) close(fd);
     }
 
     execlp(command, "(dnsserver)", "-p", socketname, NULL);
-    perror(command);
+    debug(14, 0, "ipcache_create_dnsserver: %s: %s\n", command, xstrerror());
     _exit(1);
     return (0);			/* NOTREACHED */
 }
