@@ -77,8 +77,6 @@ extern int aio_unlink(const char *, aio_result_t *);
 extern int aio_opendir(const char *, aio_result_t *);
 extern aio_result_t *aio_poll_done(void);
 extern int aio_operations_pending(void);
-extern int aio_overloaded(void);
-extern int aio_sync(void);
 
 extern void aioCancel(int, void *);
 extern void aioOpen(const char *, int, mode_t, AIOCB *, void *, void *);
@@ -95,6 +93,7 @@ extern int parseConfigFile(const char *file_name);
 extern void intlistDestroy(intlist **);
 extern int intlistFind(intlist * list, int i);
 extern wordlist *wordlistAdd(wordlist **, const char *);
+extern wordlist *wordlistDup(const wordlist *);
 extern void wordlistDestroy(wordlist **);
 extern void configFreeMemory(void);
 extern void wordlistCat(const wordlist *, MemBuf * mb);
@@ -212,12 +211,6 @@ extern int diskWriteIsComplete(int);
 extern void dnsShutdown(void);
 extern void dnsInit(void);
 extern void dnsSubmit(const char *lookup, HLPCB * callback, void *data);
-
-/* dns_internal.c */
-extern void idnsInit(void);
-extern void idnsShutdown(void);
-extern void idnsALookup(const char *, IDNSCB *, void *);
-extern void idnsPTRLookup(const struct in_addr, IDNSCB *, void *);
 
 extern void eventAdd(const char *name, EVH * func, void *arg, double when, int);
 extern void eventAddIsh(const char *name, EVH * func, void *arg, double delta_ish, int);

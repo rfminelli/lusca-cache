@@ -996,7 +996,6 @@ aclDecodeProxyAuth(const char *proxy_auth, char **user, char **password, char *b
     char *sent_auth;
     char *cleartext;
 
-    debug(28, 6) ("aclDecodeProxyAuth: header = '%s'\n", proxy_auth);
     if (proxy_auth == NULL)
 	return 0;
     if (strlen(proxy_auth) < SKIP_BASIC_SZ)
@@ -1017,7 +1016,7 @@ aclDecodeProxyAuth(const char *proxy_auth, char **user, char **password, char *b
     if ((*password = strchr(*user, ':')) != NULL)
 	*(*password)++ = '\0';
     if (*password == NULL) {
-	debug(28, 1) ("aclDecodeProxyAuth: no password in proxy authorization header '%s'\n", proxy_auth);
+	debug(28, 1) ("aclDecodeProxyAuth: no password in proxy authorization header\n");
 	return 0;
     }
     return 1;
@@ -1795,8 +1794,6 @@ aclDestroyAcls(acl ** head)
 	    break;
 	case ACL_URL_REGEX:
 	case ACL_URLPATH_REGEX:
-	case ACL_SRC_DOM_REGEX:
-	case ACL_DST_DOM_REGEX:
 	case ACL_BROWSER:
 	    aclDestroyRegexList(a->data);
 	    break;
@@ -2118,6 +2115,8 @@ aclDumpGeneric(const acl * a)
 	break;
     case ACL_SRC_DOMAIN:
     case ACL_DST_DOMAIN:
+	return aclDumpDomainList(a->data);
+	break;
 #if SQUID_SNMP
     case ACL_SNMP_COMMUNITY:
 #endif
@@ -2125,7 +2124,7 @@ aclDumpGeneric(const acl * a)
     case ACL_IDENT:
 #endif
     case ACL_PROXY_AUTH:
-	return aclDumpDomainList(a->data);
+	return wordlistDup(a->data);
 	break;
     case ACL_TIME:
 	return aclDumpTimeSpecList(a->data);

@@ -379,7 +379,7 @@ aioSync(void)
     debug(32, 1) ("aioSync: flushing pending I/O operations\n");
     do {
 	aioCheckCallbacks();
-    } while (aio_sync());
+    } while (aio_operations_pending());
     debug(32, 1) ("aioSync: done\n");
 }
 

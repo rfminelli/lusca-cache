@@ -321,7 +321,6 @@ mainReconfigure(void)
     snmpConnectionClose();
 #endif
     dnsShutdown();
-    idnsShutdown();
     redirectShutdown();
     authenticateShutdown();
     storeDirCloseSwapLogs();
@@ -332,7 +331,6 @@ mainReconfigure(void)
     fqdncache_restart();	/* sigh, fqdncache too */
     errorInitialize();		/* reload error pages */
     dnsInit();
-    idnsInit();
     redirectInit();
     authenticateInit();
     serverConnectionsOpen();
@@ -437,7 +435,6 @@ mainInitialize(void)
     ipcache_init();
     fqdncache_init();
     dnsInit();
-    idnsInit();
     redirectInit();
     authenticateInit();
     useragentOpenLog();
@@ -619,7 +616,6 @@ main(int argc, char **argv)
 	    shutting_down = 1;
 	    serverConnectionsClose();
 	    dnsShutdown();
-	    idnsShutdown();
 	    redirectShutdown();
 	    authenticateShutdown();
 	    eventAdd("SquidShutdown", SquidShutdown, NULL, (double) (wait + 1), 1);

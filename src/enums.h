@@ -311,9 +311,9 @@ typedef enum {
     ICP_DATAEND,
     ICP_SECHO,
     ICP_DECHO,
-    ICP_NOTIFY,
-    ICP_INVALIDATE,
-    ICP_DELETE,
+    ICP_UNUSED12,
+    ICP_UNUSED13,
+    ICP_UNUSED14,
     ICP_UNUSED15,
     ICP_UNUSED16,
     ICP_UNUSED17,
@@ -556,7 +556,6 @@ typedef enum {
     MEM_SWAPDIR,
     MEM_USHORTLIST,
     MEM_WORDLIST,
-    MEM_IDNS_QUERY,
     MEM_MAX
 } mem_type;
 

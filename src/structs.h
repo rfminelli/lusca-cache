@@ -282,7 +282,7 @@ struct _SquidConfig {
     char *effectiveGroup;
     struct {
 	char *dnsserver;
-	wordlist *redirect;
+	char *redirect;
 	wordlist *authenticate;
 	char *pinger;
 	char *unlinkd;
@@ -424,10 +424,8 @@ struct _SquidConfig {
 #endif
     struct {
 	int icp_average;
-	int dns_average;
 	int http_average;
 	int icp_min_poll;
-	int dns_min_poll;
 	int http_min_poll;
     } comm_incoming;
     int max_open_disk_fds;
@@ -1464,7 +1462,6 @@ struct _StatCounters {
     double cputime;
     struct timeval timestamp;
     StatHist comm_icp_incoming;
-    StatHist comm_dns_incoming;
     StatHist comm_http_incoming;
     StatHist select_fds_hist;
     struct {
@@ -1675,16 +1672,4 @@ struct _helper_server {
  */
 struct _generic_cbdata {
     void *data;
-};
-
-struct _idns_query {
-    char buf[512];
-    size_t sz;
-    unsigned short id;
-    int nsends;
-    struct timeval start_t;
-    struct timeval sent_t;
-    dlink_node lru;
-    IDNSCB *callback;
-    void *callback_data;
 };
