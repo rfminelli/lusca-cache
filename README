@@ -1,5 +1,5 @@
 
-SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
+SQUID Internet Object Cache  http://www.squid-cache.org/
 --------------------------------------------------------
 
   Squid is the result of efforts by numerous individuals from the
@@ -27,7 +27,7 @@ http://harvest.cs.colorado.edu/.
 
 Please use our mailing lists for questions, feedback and bug fixes
 
-        squid-users@ircache.net	# general questions, pubilc forum
-        squid-bugs@ircache.net	# bugs and fixes
-        squid@ircache.net	# other feedback
+        squid-users@squid-cache.org	# general questions, pubilc forum
+        squid-bugs@squid-cache.org	# bugs and fixes
+        squid@squid-cache.org		# other feedback
 
