@@ -30,10 +30,14 @@ fi
 if test -z "$CACHE_ICP_PORT"; then
 	CACHE_ICP_PORT="3130"
 fi
+if test -z "$CACHE_FTP_PORT"; then
+	CACHE_FTP_PORT="3132"
+fi
 
 dnl Subsitutions
 AC_SUBST(CACHE_HTTP_PORT)
 AC_SUBST(CACHE_ICP_PORT)
+AC_SUBST(CACHE_FTP_PORT)
 
 AC_DEFINE_UNQUOTED(CONFIG_HOST_TYPE, "$host")
 
@@ -84,6 +88,14 @@ if test -z "$PRESET_CFLAGS"; then
     dnl Check if ANSI compile options are needed
     dnl
     case "$host" in
+	*-sgi-irix*)
+		echo "Adding ANSI compile flags for IRIX..."
+    		if test "$GCC" = "yes"; then
+			[CFLAGS="$CFLAGS -ansi"]
+		else
+			[CFLAGS="$CFLAGS -D__STRICT_ANSI__"]
+		fi
+		;;
 	*-hp-hpux*)
 		echo "Disabling 'ranlib' for HP-UX..."
 		RANLIB=":"
@@ -121,7 +133,6 @@ AC_HEADER_STDC
 
 AC_CHECK_HEADERS( \
 	alloca.h \
-	aio.h \
 	arpa/inet.h \
 	arpa/nameser.h \
 	bstring.h \
@@ -211,24 +222,6 @@ AC_SUBST(CRYPT_LIB)
 dnl Check for libshadow which is needed by the shadow password suite
 AC_CHECK_LIB(shadow, main)
 
-dnl Check for libs needed for aio_read()/aio_write()
-AIO_LIBS=""
-AC_CHECK_LIB(abi, main, [HAVE_LIBABI="yes"])
-AC_CHECK_LIB(posix4, main, [HAVE_LIBPOSIX4="yes"])
-case "$host" in
-	*-sgi-irix*)
-		if test "$HAVE_LIBABI" = "yes"; then
-			AIO_LIBS="-labi"
-		fi
-		;;
-	*-*-solaris*)
-		if test "$HAVE_LIBPOSIX4" = "yes"; then
-			AIO_LIBS="-lposix4"
-		fi
-		;;
-esac
-AC_SUBST(AIO_LIBS)
-
 dnl System-specific library modifications
 dnl
 case "$host" in
@@ -253,9 +246,12 @@ case "$host" in
         	LIBS=`echo $LIBS | sed -e s/-lsocket//`
         	echo "Removing -lnsl for IRIX..."
         	LIBS=`echo $LIBS | sed -e s/-lnsl//`
-		echo "Removing -lbsd for IRIX..."
-		LIBS=`echo $LIBS | sed -e s/-lbsd//`
 		;;
+esac
+
+dnl Some O/S's don't have tzp arg to gettimeofday()
+dnl
+case "$host" in
 	*m88k*)
 		CFLAGS="$CFLAGS -D_SQUID_MOTOROLA_"
 		AC_DEFINE(GETTIMEOFDAY_NO_TZP)
@@ -267,12 +263,10 @@ esac
 
 dnl Check for library functions
 AC_CHECK_FUNCS(\
-	aio_init \
 	bcopy \
 	getdtablesize \
 	getrusage \
 	lrand48 \
-	mallocblksize \
 	mallinfo \
 	mallopt \
 	memmove \
@@ -366,8 +360,8 @@ main ()
 }
 ],
 SQUID_UDP_SO_SNDBUF=`cat conftestval`,
-SQUID_UDP_SO_SNDBUF=8192,
-SQUID_UDP_SO_SNDBUF=8192)
+SQUID_UDP_SO_SNDBUF=16384,
+SQUID_UDP_SO_SNDBUF=16384)
 AC_MSG_RESULT($SQUID_UDP_SO_SNDBUF)
 AC_DEFINE_UNQUOTED(SQUID_UDP_SO_SNDBUF, $SQUID_UDP_SO_SNDBUF)
 
@@ -387,8 +381,8 @@ main ()
 }
 ],
 SQUID_UDP_SO_RCVBUF=`cat conftestval`,
-SQUID_UDP_SO_RCVBUF=8192,
-SQUID_UDP_SO_RCVBUF=8192)
+SQUID_UDP_SO_RCVBUF=16384,
+SQUID_UDP_SO_RCVBUF=16384)
 AC_MSG_RESULT($SQUID_UDP_SO_RCVBUF)
 AC_DEFINE_UNQUOTED(SQUID_UDP_SO_RCVBUF, $SQUID_UDP_SO_RCVBUF)
 
@@ -408,8 +402,8 @@ main ()
 }
 ],
 SQUID_TCP_SO_SNDBUF=`cat conftestval`,
-SQUID_TCP_SO_SNDBUF=8192,
-SQUID_TCP_SO_SNDBUF=8192)
+SQUID_TCP_SO_SNDBUF=16384,
+SQUID_TCP_SO_SNDBUF=16384)
 AC_MSG_RESULT($SQUID_TCP_SO_SNDBUF)
 AC_DEFINE_UNQUOTED(SQUID_TCP_SO_SNDBUF, $SQUID_TCP_SO_SNDBUF)
 
@@ -429,8 +423,8 @@ main ()
 }
 ],
 SQUID_TCP_SO_RCVBUF=`cat conftestval`,
-SQUID_TCP_SO_RCVBUF=8192,
-SQUID_TCP_SO_RCVBUF=8192)
+SQUID_TCP_SO_RCVBUF=16384,
+SQUID_TCP_SO_RCVBUF=16384)
 AC_MSG_RESULT($SQUID_TCP_SO_RCVBUF)
 AC_DEFINE_UNQUOTED(SQUID_TCP_SO_RCVBUF, $SQUID_TCP_SO_RCVBUF)
 
@@ -440,12 +434,6 @@ AC_TRY_COMPILE([#include <stdio.h>],
 AC_MSG_RESULT(yes),
 [AC_MSG_RESULT(no)
 AC_DEFINE(NEED_SYS_ERRLIST)])
-
-AC_MSG_CHECKING(for libresolv _dns_ttl_ hack)
-AC_TRY_LINK(extern int _dns_ttl_;,return _dns_ttl_;,
-[AC_MSG_RESULT(yes)
-AC_DEFINE(LIBRESOLV_DNS_TTL_HACK)],
-AC_MSG_RESULT(no))
 
 dnl Need the debugging version of malloc if available
 XTRA_OBJS=''

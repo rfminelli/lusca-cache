@@ -112,9 +112,9 @@ extern FILE *debug_log;
 
 void _db_init _PARAMS((char *logfile, char *options));
 #if defined(__STRICT_ANSI__)
-extern void _db_print _PARAMS((int, int, char *,...));
+void _db_print _PARAMS((int, int, char *,...));
 #else
-extern void _db_print();
+void _db_print();
 #endif
 
 

@@ -55,17 +55,11 @@
 /* If gettimeofday is known to take only one argument */
 #undef GETTIMEOFDAY_NO_TZP
 
-/* If libresolv.a has been hacked to export _dns_ttl_ */
-#undef LIBRESOLV_DNS_TTL_HACK
-
 /* The number of bytes in a int.  */
 #undef SIZEOF_INT
 
 /* The number of bytes in a long.  */
 #undef SIZEOF_LONG
-
-/* Define if you have the aio_init function.  */
-#undef HAVE_AIO_INIT
 
 /* Define if you have the bcopy function.  */
 #undef HAVE_BCOPY
@@ -81,9 +75,6 @@
 
 /* Define if you have the mallinfo function.  */
 #undef HAVE_MALLINFO
-
-/* Define if you have the mallocblksize function.  */
-#undef HAVE_MALLOCBLKSIZE
 
 /* Define if you have the mallopt function.  */
 #undef HAVE_MALLOPT
@@ -141,9 +132,6 @@
 
 /* Define if you have the timegm function.  */
 #undef HAVE_TIMEGM
-
-/* Define if you have the <aio.h> header file.  */
-#undef HAVE_AIO_H
 
 /* Define if you have the <alloca.h> header file.  */
 #undef HAVE_ALLOCA_H

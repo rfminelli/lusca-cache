@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -216,10 +215,6 @@
 
 extern int h_errno;
 
-#if LIBRESOLV_DNS_TTL_HACK
-extern int _dns_ttl_;		/* this is a really *dirty* hack - bne */
-#endif
-
 int do_debug = 0;
 
 /* error messages from gethostbyname() */
@@ -250,7 +245,7 @@ int do_debug = 0;
  * Squid creates UNIX domain sockets named dns.PID.NN, e.g. dns.19215.11
  * 
  * In ipcache_init():
- *       . dnssocket = ipcache_opensocket(Config.Program.dnsserver)
+ *       . dnssocket = ipcache_opensocket(getDnsProgram())
  *       . dns_child_table[i]->inpipe = dnssocket
  *       . dns_child_table[i]->outpipe = dnssocket
  * 
@@ -338,8 +333,6 @@ int main(argc, argv)
 	    close(fd);
     }
     while (1) {
-	int retry_count = 0;
-	int addrbuf;
 	memset(request, '\0', 256);
 
 	/* read from ipcache */
@@ -358,11 +351,8 @@ int main(argc, argv)
 	    fflush(stdout);
 	    continue;
 	}
-	result = NULL;
-	start = time(NULL);
 	/* check if it's already an IP address in text form. */
 	if (inet_addr(request) != INADDR_NONE) {
-#if NO_REVERSE_LOOKUP
 	    printf("$name %s\n", request);
 	    printf("$h_name %s\n", request);
 	    printf("$h_len %d\n", 4);
@@ -372,24 +362,13 @@ int main(argc, argv)
 	    printf("$end\n");
 	    fflush(stdout);
 	    continue;
-#endif
-	    addrbuf = inet_addr(request);
-	    for (;;) {
-		result = gethostbyaddr((char *) &addrbuf, 4, AF_INET);
-		if (result || h_errno != TRY_AGAIN)
-		    break;
-		if (++retry_count == 2)
-		    break;
+	}
+	start = time(NULL);
+	result = gethostbyname(request);
+	if (!result) {
+	    if (h_errno == TRY_AGAIN) {
 		sleep(2);
-	    }
-	} else {
-	    for (;;) {
-		result = gethostbyname(request);
-		if (result || h_errno != TRY_AGAIN)
-		    break;
-		if (++retry_count == 2)
-		    break;
-		sleep(2);
+		result = gethostbyname(request);	/* try a little harder */
 	    }
 	}
 	stop = time(NULL);
@@ -397,7 +376,7 @@ int main(argc, argv)
 	msg[0] = '\0';
 	if (!result) {
 	    if (h_errno == TRY_AGAIN) {
-		sprintf(msg, "Name Server for domain '%s' is unavailable.\n",
+		sprintf(msg, "Name Server for domain '%s' is unavailable.",
 		    request);
 	    } else {
 		sprintf(msg, "DNS Domain '%s' is invalid: %s.\n",
@@ -439,18 +418,13 @@ int main(argc, argv)
 		printf("%s\n", result->h_aliases[i]);
 	    }
 
-#if LIBRESOLV_DNS_TTL_HACK
-	    /* DNS TTL handling - bne@CareNet.hu
-	     * for first try it's a dirty hack, by hacking getanswer
-	     * to place th e ttl in a global variable */
-	    if (_dns_ttl_ > -1)
-		printf("$ttl %d\n", _dns_ttl_);
-#endif
-
 	    printf("$end\n");
 	    fflush(stdout);
 	    continue;
 	}
     }
-    /* NOTREACHED */
+
+    exit(0);
+    /*NOTREACHED */
+    return 0;
 }
