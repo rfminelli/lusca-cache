@@ -1,0 +1,69 @@
+#
+#  $Id$
+#
+prefix		= @prefix@
+srcdir		= @srcdir@
+VPATH		= @srcdir@
+
+
+CC		= @CC@
+MAKEDEPEND	= @MAKEDEPEND@
+INSTALL		= @INSTALL@
+INSTALL_BIN 	= @INSTALL_PROGRAM@
+INSTALL_FILE 	= @INSTALL_DATA@
+RANLIB		= @RANLIB@
+AC_CFLAGS	= @CFLAGS@
+LDFLAGS		= @LDFLAGS@
+XTRA_LIBS	= @XTRA_LIBS@
+RM		= @RM@
+LIBOBJS		= @LIBOBJS@
+AR_R		= @AR_R@
+
+INCLUDE		= -I../include -I$(srcdir)/../include
+UTILOBJS	= rfc1123.o \
+		  rfc1738.o \
+		  util.o \
+		  getfullhostname.o \
+		  base64.o \
+		  uudecode.o \
+		  tree.o \
+		  splay.o \
+		  safe_inet_addr.o \
+		  iso3307.o \
+		  snprintf.o \
+		  sha.o \
+		  md5.o \
+		  radix.o \
+		  String.o \
+		  $(LIBOBJS)
+REGEXOBJS	= GNUregex.o
+LIBS		= libmiscutil.a @LIBREGEX@
+
+CFLAGS		= $(AC_CFLAGS) $(INCLUDE)
+
+all: $(LIBS)
+
+$(UTILOBJS): ../include/version.h
+
+libmiscutil.a: $(UTILOBJS)
+	$(RM) -f $@
+	$(AR_R) $@ $(UTILOBJS)
+	$(RANLIB) $@
+
+libregex.a: $(REGEXOBJS)
+	$(RM) -f $@
+	$(AR_R) $@ $(REGEXOBJS)
+	$(RANLIB) $@
+
+clean:
+	-rm -f *.o $(LIBS) core
+
+distclean: clean
+	-rm -f libregex.a
+	-rm -f Makefile
+
+install: all
+
+depend:
+	$(MAKEDEPEND) -I../include -I. -fMakefile *.c
+
