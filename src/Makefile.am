@@ -229,7 +229,9 @@ unlinkd-daemon.o: unlinkd.c
 
 pinger_SOURCES = \
 	pinger.c \
-	debug.c \
+	debug.c
+
+nodist_pinger_SOURCES = \
 	globals.c
 
 BUILT_SOURCES = \
