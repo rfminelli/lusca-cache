@@ -95,10 +95,6 @@ if test -z "$PRESET_CFLAGS"; then
 		-Wl,-woff,85,-woff,84,-woff,134 \
 		-nostdinc -I/usr/include -D_BSD_SIGNALS"
 	    ;;
-	alpha-dec-osf4.*)
-	    # Mogul says DEC compilers take both -g and -O2
-	    CFLAGS="$CFLAGS -O2"
-	    ;;
 	*)
 	    ;;
 	esac
@@ -650,7 +646,6 @@ AC_CHECK_TYPE(size_t, unsigned int)
 AC_CHECK_TYPE(ssize_t, int)
 AC_CHECK_TYPE(off_t, int)
 AC_CHECK_TYPE(mode_t, u_short)
-AC_CHECK_TYPE(fd_mask, int)
 
 dnl Check for type in sys/socket.h
 AC_CACHE_CHECK(for socklen_t, ac_cv_type_socklen_t, [
@@ -803,7 +798,6 @@ dnl Check for library functions
 AC_CHECK_FUNCS(\
 	bcopy \
 	crypt \
-	drand48 \
 	fchmod \
 	getdtablesize \
 	getpagesize \
@@ -913,7 +907,6 @@ AC_SUBST(REGEXLIB)
 AC_SUBST(LIBREGEX)
 
 AC_REPLACE_FUNCS(\
-	drand48 \
 	tempnam \
 	strerror \
 )

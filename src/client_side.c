@@ -562,7 +562,6 @@ clientUpdateCounters(clientHttpRequest * http)
 	break;
     case LOG_TCP_HIT:
     case LOG_TCP_MEM_HIT:
-    case LOG_TCP_OFFLINE_HIT:
 	statHistCount(&Counter.client_http.hit_svc_time, svc_time);
 	break;
     case LOG_TCP_MISS:
@@ -896,8 +895,6 @@ isTcpHit(log_type code)
     if (code == LOG_TCP_NEGATIVE_HIT)
 	return 1;
     if (code == LOG_TCP_MEM_HIT)
-	return 1;
-    if (code == LOG_TCP_OFFLINE_HIT)
 	return 1;
     return 0;
 }
@@ -1258,8 +1255,6 @@ clientCacheHit(void *data, char *buf, ssize_t size)
 	 */
 	if (e->mem_status == IN_MEMORY)
 	    http->log_type = LOG_TCP_MEM_HIT;
-	else if (Config.onoff.offline)
-	    http->log_type = LOG_TCP_OFFLINE_HIT;
 	clientSendMoreData(data, buf, size);
     }
 }
@@ -1650,10 +1645,6 @@ clientProcessRequest2(clientHttpRequest * http)
 	/* this object isn't in the cache */
 	return LOG_TCP_MISS;
     }
-    if (Config.onoff.offline) {
-	http->entry = e;
-	return LOG_TCP_HIT;
-    }
     if (!storeEntryValidToSend(e)) {
 	http->entry = NULL;
 	return LOG_TCP_MISS;
@@ -1675,10 +1666,10 @@ clientProcessRequest2(clientHttpRequest * http)
 	http->entry = NULL;
 	ipcacheReleaseInvalid(r->host);
 	return LOG_TCP_CLIENT_REFRESH_MISS;
-    } else if (r->range && httpHdrRangeWillBeComplex(r->range)) {
-	/* Some clients break if we return "200 OK" for a Range request.
-	 * We would have to return "200 OK" for a _complex_ Range request
-	 * that is also a HIT. Thus, let's prevent HITs on complex Range requests */
+    }
+    if (r->range && httpHdrRangeWillBeComplex(r->range)) {
+	/* some clients break if we return "200 OK" for a Range request
+	 * and we _will_ return 200 if ranges happen to be too complex */
 	http->entry = NULL;
 	return LOG_TCP_MISS;
     }
