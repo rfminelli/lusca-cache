@@ -159,6 +159,10 @@ int ipcache_create_dnsserver(command)
     }
     /* child */
 
+    /* give up extra priviliges */
+    no_suid();
+
+    /* setup filedescriptors */
     dup2(cfd, 3);
     for (fd = getMaxFD(); fd > 3; fd--) {
 	(void) close(fd);
