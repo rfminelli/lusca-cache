@@ -40,11 +40,11 @@ while (<squidconf>) {
 	chop;
 	if (/^cache_dir\s+(.*)/) {
 		push (@cachedir, $1);
-	} elsif (/cache_swap_log\s+(.*)/) {
+	} elsif (/^cache_swap_log\s+(.*)/) {
 		$swaplog = $1;
-	} elsif (/swap_level1_dirs/) {
+	} elsif (/^swap_level1_dirs\s+(.*)/) {
 		$level1dirno = $1;
-	} elsif (/swap_level21_dirs/) {
+	} elsif (/^swap_level2_dirs\s+(.*)/) {
 		$level2dirno = $1;
 	}
 }
