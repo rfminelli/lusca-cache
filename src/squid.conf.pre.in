@@ -888,6 +888,12 @@ miss_access allow  all
 #
 #visible_hostname www-cache.foo.org
 
+#  TAG: unique_hostname
+#	If you want to have multiple machines with the same
+#	'visible_hostname' then you must give each machine a different
+#	'unique_hostname' so that forwarding loops can be detected.
+#unique_hostname www-cache1.foo.org
+
 
 # OPTIONS FOR THE CACHE REGISTRATION SERVICE
 #-----------------------------------------------------------------------------

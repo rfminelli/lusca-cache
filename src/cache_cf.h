@@ -216,6 +216,7 @@ struct SquidConfig {
     char *volatile debugOptions;
     char *pidFilename;
     char *visibleHostname;
+    char *uniqueHostname;
     char *ftpUser;
     char *errHtmlText;
     struct {
