@@ -34,7 +34,7 @@
 #define SQUID_ERROR_MSG_P1 "\
 <HTML><HEAD>\n\
 <TITLE>ERROR: The requested URL could not be retrieved</TITLE>\n\
-</HEAD><BODY>\n\
+</HEAD><BODY BGCOLOR=#FFFFFF>\n\
 <H1>ERROR</H1>\n\
 <H2>The requested URL could not be retrieved</H2>\n\
 <HR>\n\
@@ -230,7 +230,7 @@ squid_error_url(const char *url, int method, int type, const char *address, int 
 
 #define SQUID_REQUEST_ERROR_MSG "\
 <HTML><HEAD><TITLE>ERROR: Invalid HTTP Request</TITLE></HEAD>\n\
-<BODY><H1>ERROR</H1>\n\
+<BODY BGCOLOR=#FFFFFF><H1>ERROR</H1>\n\
 <H2>Invalid HTTP Request</H2>\n\
 <HR>\n\
 <PRE>\n\
@@ -275,7 +275,7 @@ access_denied_msg(int code, int method, const char *url, const char *client)
 	"Content-type: text/html\r\n"
 	"\r\n"
 	"<HTML><HEAD><TITLE>Cache Access Denied</TITLE></HEAD>\n"
-	"<BODY><H1>Error</H1>\n"
+	"<BODY BGCOLOR=#FFFFFF><H1>Error</H1>\n"
 	"<H2>Access Denied</H2>\n"
 	"<P>\n"
 	"Sorry, you are not currently allowed to request:\n"
@@ -323,7 +323,7 @@ access_denied_redirect(int code, int method, const char *url, const char *client
 	"Content-type: text/html\r\n"
 	"\r\n"
 	"<HTML><HEAD><TITLE>Cache Access Denied</TITLE></HEAD>\n"
-	"<BODY><H1>Error</H1>\n"
+	"<BODY BGCOLOR=#FFFFFF><H1>Error</H1>\n"
 	"<H2>Access Denied</H2>\n"
 	"<P>\n"
 	"Sorry, you are not currently allowed to request:\n"
@@ -361,7 +361,7 @@ char *
 authorization_needed_msg(const request_t * request, const char *realm)
 {
     sprintf(auth_msg, "<HTML><HEAD><TITLE>Authorization needed</TITLE>\n\
-</HEAD><BODY><H1>Authorization needed</H1>\n\
+</HEAD><BODY BGCOLOR=#FFFFFF><H1>Authorization needed</H1>\n\
 <P>Sorry, you have to authorize yourself to request:\n\
 <PRE>    ftp://%s@%s%s</PRE>\n\
 <P>from this cache.  Please check with the\n\
