@@ -148,10 +148,8 @@ void
 asnInit(void)
 {
     extern int max_keylen;
-    static int inited = 0;
     max_keylen = 40;
-    if (0 == inited++)
-        rn_init();
+    rn_init();
     rn_inithead((void **) &AS_tree_head, 8);
     asnAclInitialize(Config.aclList);
     cachemgrRegister("asndb", "AS Number Database", asnStats, 0, 1);
@@ -413,11 +411,12 @@ printRadixNode(struct radix_node *rn, void *w)
     struct in_addr addr;
     struct in_addr mask;
     assert(e);
+    assert(e->e_info);
     (void) get_m_int(addr.s_addr, e->e_addr);
     (void) get_m_int(mask.s_addr, e->e_mask);
     storeAppendPrintf(sentry, "%15s/%d\t",
 	inet_ntoa(addr), mask_len(ntohl(mask.s_addr)));
-    assert(as_info = e->e_info);
+    as_info = e->e_info;
     assert(as_info->as_number);
     for (q = as_info->as_number; q; q = q->next)
 	storeAppendPrintf(sentry, " %d", q->i);

@@ -132,14 +132,14 @@ extern const int CacheDigestHashFuncCount;	/* 4 */
 extern CacheDigest *store_digest;	/* NULL */
 extern const char *StoreDigestUrlPath;	/* "store_digest" */
 extern const char *StoreDigestMimeStr;	/* "application/cache-digest" */
+#if USE_CACHE_DIGESTS
 extern const Version CacheDigestVer;	/* { 4, 3 } */
+#endif
 extern const char *MultipartMsgBoundaryStr;	/* "Unique-Squid-Separator" */
 extern icpUdpData *IcpQueueHead;	/* NULL */
-#if DELAY_POOLS
-extern time_t delay_pools_last_update;	/* 0 */
-#endif
 #if HTTP_VIOLATIONS
 extern int refresh_nocache_hack;	/* 0 */
 #endif
 extern request_flags null_request_flags;
 extern int open_disk_fd;	/* 0 */
+extern hash_table *proxy_auth_cache; /* NULL */

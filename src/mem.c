@@ -278,6 +278,11 @@ memInit(void)
     memDataInit(MEM_WORDLIST, "wordlist", sizeof(wordlist), 0);
     memDataInit(MEM_CLIENT_INFO, "ClientInfo", sizeof(ClientInfo), 0);
     memDataInit(MEM_MD5_DIGEST, "MD5 digest", MD5_DIGEST_CHARS, 0);
+    memDataInit(MEM_HELPER, "helper", sizeof(helper), 0);
+    memDataInit(MEM_HELPER_REQUEST, "helper_request",
+	sizeof(helper_request), 0);
+    memDataInit(MEM_HELPER_SERVER, "helper_server",
+	sizeof(helper_server), 0);
     /* test that all entries are initialized */
     for (t = MEM_NONE, t++; t < MEM_MAX; t++) {
 	if (MEM_DONTFREE == t)

@@ -89,7 +89,7 @@ extern void aioCheckCallbacks(void);
 extern int parseConfigFile(const char *file_name);
 extern void intlistDestroy(intlist **);
 extern int intlistFind(intlist * list, int i);
-extern void wordlistAdd(wordlist **, const char *);
+extern wordlist *wordlistAdd(wordlist **, const char *);
 extern void wordlistDestroy(wordlist **);
 extern void configFreeMemory(void);
 extern void wordlistCat(const wordlist *, MemBuf * mb);
@@ -213,7 +213,6 @@ extern void eventRun(void);
 extern time_t eventNextTime(void);
 extern void eventDelete(EVH * func, void *arg);
 extern void eventInit(void);
-extern void eventFreeMemory(void);
 
 extern void fd_close(int fd);
 extern void fd_open(int fd, unsigned int type, const char *);
@@ -547,6 +546,7 @@ extern size_t headersEnd(const char *, size_t);
 extern const char *mime_get_auth(const char *hdr, const char *auth_scheme, const char **auth_field);
 
 extern void mimeInit(char *filename);
+extern void mimeFreeMemory(void);
 extern char *mimeGetContentEncoding(const char *fn);
 extern char *mimeGetContentType(const char *fn);
 extern char *mimeGetIcon(const char *fn);
@@ -984,6 +984,7 @@ extern void errorSend(int fd, ErrorState *);
 extern void errorAppendEntry(StoreEntry *, ErrorState *);
 extern void errorStateFree(ErrorState * err);
 extern void errorInitialize(void);
+extern void errorFreeMemory(void);
 extern int errorReservePageId(const char *page_name);
 extern void errorFree(void);
 extern ErrorState *errorCon(err_type type, http_status);
@@ -1064,6 +1065,7 @@ extern int internalCheck(const char *urlpath);
 extern int internalStaticCheck(const char *urlpath);
 extern char *internalLocalUri(const char *dir, const char *name);
 extern char *internalRemoteUri(const char *, u_short, const char *, const char *);
+extern const char *internalHostname(void);
 
 #if USE_CARP
 extern void carpInit(void);

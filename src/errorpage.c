@@ -120,6 +120,14 @@ errorInitialize(void)
     }
 }
 
+void
+errorFreeMemory(void)
+{
+    err_type i;
+    for (i = ERR_NONE, i++; i < error_page_count; i++)
+	safe_free(error_text[i]);
+}
+
 static const char *
 errorFindHardText(err_type type)
 {
@@ -169,7 +177,8 @@ errorTryLoadText(const char *page_name, const char *dir)
 	text = NULL;
     }
     file_close(fd);
-    strcat(text, "%S");		/* add signature */
+    if (strstr(text, "%s") == NULL)
+	strcat(text, "%S");	/* add signature */
     return text;
 }
 
