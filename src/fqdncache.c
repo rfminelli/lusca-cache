@@ -64,6 +64,8 @@ static struct {
     int hits;
     int misses;
     int negative_hits;
+    int errors;
+    int ghba_calls;		/* # calls to blocking gethostbyaddr() */
 } FqdncacheStats;
 
 static dlink_list lru_list;
@@ -202,18 +204,19 @@ fqdncacheAddEntry(fqdncache_entry * f)
 static void
 fqdncacheCallback(fqdncache_entry * f)
 {
-    FQDNH *callback;
-    void *cbdata;
+    FQDNH *handler = f->handler;
+    void *handlerData = f->handlerData;
     f->lastref = squid_curtime;
-    if (!f->handler)
+    if (NULL == handler)
 	return;
     fqdncacheLockEntry(f);
-    callback = f->handler;
     f->handler = NULL;
-    if (cbdataReferenceValidDone(f->handlerData, &cbdata)) {
+    f->handlerData = NULL;
+    if (cbdataValid(handlerData)) {
 	dns_error_message = f->error_message;
-	callback(f->flags.negcached ? NULL : f->names[0], cbdata);
+	handler(f->flags.negcached ? NULL : f->names[0], handlerData);
     }
+    cbdataUnlock(handlerData);
     fqdncacheUnlockEntry(f);
 }
 
@@ -294,7 +297,7 @@ fqdncacheParse(rfc1035_rr * answers, int nr)
     for (k = 0; k < nr; k++) {
 	if (answers[k].type != RFC1035_TYPE_PTR)
 	    continue;
-	if (answers[k]._class != RFC1035_CLASS_IN)
+	if (answers[k].class != RFC1035_CLASS_IN)
 	    continue;
 	na++;
 	f.flags.negcached = 0;
@@ -371,7 +374,8 @@ fqdncache_nbgethostbyaddr(struct in_addr addr, FQDNH * handler, void *handlerDat
 	else
 	    FqdncacheStats.hits++;
 	f->handler = handler;
-	f->handlerData = cbdataReference(handlerData);
+	f->handlerData = handlerData;
+	cbdataLock(handlerData);
 	fqdncacheCallback(f);
 	return;
     }
@@ -380,7 +384,8 @@ fqdncache_nbgethostbyaddr(struct in_addr addr, FQDNH * handler, void *handlerDat
     FqdncacheStats.misses++;
     f = fqdncacheCreateEntry(name);
     f->handler = handler;
-    f->handlerData = cbdataReference(handlerData);
+    f->handlerData = handlerData;
+    cbdataLock(handlerData);
     f->request_time = current_time;
     c = cbdataAlloc(generic_cbdata);
     c->data = f;
@@ -467,6 +472,8 @@ fqdnStats(StoreEntry * sentry)
 	FqdncacheStats.negative_hits);
     storeAppendPrintf(sentry, "FQDNcache Misses: %d\n",
 	FqdncacheStats.misses);
+    storeAppendPrintf(sentry, "Blocking calls to gethostbyaddr(): %d\n",
+	FqdncacheStats.ghba_calls);
     storeAppendPrintf(sentry, "FQDN Cache Contents:\n\n");
     storeAppendPrintf(sentry, "%-15.15s %3s %3s %3s %s\n",
 	"Address", "Flg", "TTL", "Cnt", "Hostnames");
@@ -615,8 +622,9 @@ snmp_netFqdnFn(variable_list * Var, snint * ErrP)
 	    SMI_COUNTER32);
 	break;
     case FQDN_PENDHIT:
+	/* this is now worthless */
 	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    0,			/* deprecated */
+	    0,
 	    SMI_GAUGE32);
 	break;
     case FQDN_NEGHIT:
@@ -631,7 +639,7 @@ snmp_netFqdnFn(variable_list * Var, snint * ErrP)
 	break;
     case FQDN_GHBN:
 	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    0,			/* deprecated */
+	    FqdncacheStats.ghba_calls,
 	    SMI_COUNTER32);
 	break;
     default:

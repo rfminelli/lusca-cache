@@ -229,7 +229,7 @@ static int HeaderEntryParsedCount = 0;
  * local routines
  */
 
-#define assert_eid(id) assert((id) >= 0 && (id) < HDR_ENUM_END)
+#define assert_eid(id) assert((id) < HDR_ENUM_END)
 
 static HttpHeaderEntry *httpHeaderEntryCreate(http_hdr_type id, const char *name, const char *value);
 static void httpHeaderEntryDestroy(HttpHeaderEntry * e);
@@ -330,7 +330,7 @@ httpHeaderClean(HttpHeader * hdr)
     HttpHeaderStats[hdr->owner].busyDestroyedCount += hdr->entries.count > 0;
     while ((e = httpHeaderGetEntry(hdr, &pos))) {
 	/* tmp hack to try to avoid coredumps */
-	if (e->id < 0 || e->id >= HDR_ENUM_END) {
+	if (e->id >= HDR_ENUM_END) {
 	    debug(55, 0) ("httpHeaderClean BUG: entry[%d] is invalid (%d). Ignored.\n",
 		(int) pos, e->id);
 	} else {
@@ -380,7 +380,7 @@ httpHeaderUpdate(HttpHeader * old, const HttpHeader * fresh, const HttpHeaderMas
 int
 httpHeaderReset(HttpHeader * hdr)
 {
-    http_hdr_owner_type ho;
+    http_hdr_owner_type ho = hdr->owner;
     assert(hdr);
     ho = hdr->owner;
     httpHeaderClean(hdr);
@@ -663,7 +663,9 @@ httpHeaderGetByName(const HttpHeader * hdr, const char *name)
 }
 
 /*
- * Returns a the value of the specified list member, if any.
+ * returns a pointer to a specified entry if any 
+ * note that we return one entry so it does not make much sense to ask for
+ * "list" headers
  */
 String
 httpHeaderGetByNameListMember(const HttpHeader * hdr, const char *name, const char *member, const char separator)
@@ -703,7 +705,7 @@ httpHeaderGetListMember(const HttpHeader * hdr, http_hdr_type id, const char *me
     int mlen = strlen(member);
 
     assert(hdr);
-    assert(id >= 0);
+    assert_eid(id);
 
     header = httpHeaderGetStrOrList(hdr, id);
 

@@ -5,7 +5,6 @@
 
 #include "squid.h"
 #include "store_asyncufs.h"
-#include "ufscommon.h"
 
 #if ASYNC_READ
 static AIOCB storeAufsReadDone;
@@ -33,7 +32,7 @@ storeAufsOpen(SwapDir * SD, StoreEntry * e, STFNCB * file_callback,
     STIOCB * callback, void *callback_data)
 {
     sfileno f = e->swap_filen;
-    char *path = commonUfsDirFullPath(SD, f, NULL);
+    char *path = storeAufsDirFullPath(SD, f, NULL);
     storeIOState *sio;
 #if !ASYNC_OPEN
     int fd;
@@ -63,8 +62,9 @@ storeAufsOpen(SwapDir * SD, StoreEntry * e, STFNCB * file_callback,
     sio->swap_dirn = SD->index;
     sio->mode = O_RDONLY | O_BINARY;
     sio->callback = callback;
-    sio->callback_data = cbdataReference(callback_data);
+    sio->callback_data = callback_data;
     sio->e = e;
+    cbdataLock(callback_data);
     Opening_FD++;
 #if ASYNC_OPEN
     aioOpen(path, O_RDONLY | O_BINARY, 0644, storeAufsOpenDone, sio);
@@ -88,8 +88,8 @@ storeAufsCreate(SwapDir * SD, StoreEntry * e, STFNCB * file_callback, STIOCB * c
 
     /* Allocate a number */
     dirn = SD->index;
-    filn = commonUfsDirMapBitAllocate(SD);
-    path = commonUfsDirFullPath(SD, filn, NULL);
+    filn = storeAufsDirMapBitAllocate(SD);
+    path = storeAufsDirFullPath(SD, filn, NULL);
 
     debug(79, 3) ("storeAufsCreate: fileno %08X\n", filn);
     /*
@@ -116,8 +116,9 @@ storeAufsCreate(SwapDir * SD, StoreEntry * e, STFNCB * file_callback, STIOCB * c
     sio->swap_dirn = dirn;
     sio->mode = O_WRONLY | O_BINARY;
     sio->callback = callback;
-    sio->callback_data = cbdataReference(callback_data);
+    sio->callback_data = callback_data;
     sio->e = (StoreEntry *) e;
+    cbdataLock(callback_data);
     Opening_FD++;
 #if ASYNC_CREATE
     aioOpen(path, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0644, storeAufsOpenDone, sio);
@@ -126,7 +127,7 @@ storeAufsCreate(SwapDir * SD, StoreEntry * e, STFNCB * file_callback, STIOCB * c
 #endif
 
     /* now insert into the replacement policy */
-    commonUfsDirReplAdd(SD, e);
+    storeAufsDirReplAdd(SD, e);
     return sio;
 
 }
@@ -166,13 +167,15 @@ storeAufsRead(SwapDir * SD, storeIOState * sio, char *buf, size_t size, off_t of
 	q->size = size;
 	q->offset = offset;
 	q->callback = callback;
-	q->callback_data = cbdataReference(callback_data);
+	q->callback_data = callback_data;
+	cbdataLock(q->callback_data);
 	linklistPush(&(aiostate->pending_reads), q);
 	return;
     }
     sio->read.callback = callback;
-    sio->read.callback_data = cbdataReference(callback_data);
+    sio->read.callback_data = callback_data;
     aiostate->read_buf = buf;
+    cbdataLock(callback_data);
     debug(79, 3) ("storeAufsRead: dirno %d, fileno %08X, FD %d\n",
 	sio->swap_dirn, sio->swap_filen, aiostate->fd);
     sio->offset = offset;
@@ -230,9 +233,9 @@ void
 storeAufsUnlink(SwapDir * SD, StoreEntry * e)
 {
     debug(79, 3) ("storeAufsUnlink: dirno %d, fileno %08X\n", SD->index, e->swap_filen);
-    commonUfsDirReplRemove(e);
-    commonUfsDirMapBitReset(SD, e->swap_filen);
-    commonUfsDirUnlinkFile(SD, e->swap_filen);
+    storeAufsDirReplRemove(e);
+    storeAufsDirMapBitReset(SD, e->swap_filen);
+    storeAufsDirUnlinkFile(SD, e->swap_filen);
 }
 
 /*  === STATIC =========================================================== */
@@ -256,13 +259,13 @@ storeAufsKickReadQueue(storeIOState * sio)
 {
     squidaiostate_t *aiostate = (squidaiostate_t *) sio->fsstate;
     struct _queued_read *q = linklistShift(&(aiostate->pending_reads));
-    void *cbdata;
     if (NULL == q)
 	return 0;
     debug(79, 3) ("storeAufsKickReadQueue: reading queued request of %ld bytes\n",
 	(long int) q->size);
-    if (cbdataReferenceValidDone(q->callback_data, &cbdata))
-	storeAufsRead(INDEXSD(sio->swap_dirn), sio, q->buf, q->size, q->offset, q->callback, cbdata);
+    if (cbdataValid(q->callback_data))
+	storeAufsRead(INDEXSD(sio->swap_dirn), sio, q->buf, q->size, q->offset, q->callback, q->callback_data);
+    cbdataUnlock(q->callback_data);
     memPoolFree(aufs_qread_pool, q);
     return 1;
 }
@@ -278,14 +281,14 @@ storeAufsOpenDone(int unused, void *my_data, const char *unused2, int fd, int er
     if (errflag || fd < 0) {
 	errno = errflag;
 	debug(79, 0) ("storeAufsOpenDone: %s\n", xstrerror());
-	debug(79, 1) ("\t%s\n", commonUfsDirFullPath(INDEXSD(sio->swap_dirn), sio->swap_filen, NULL));
+	debug(79, 1) ("\t%s\n", storeAufsDirFullPath(INDEXSD(sio->swap_dirn), sio->swap_filen, NULL));
 	storeAufsIOCallback(sio, DISK_ERROR);
 	return;
     }
     store_open_disk_fd++;
     aiostate->fd = fd;
     commSetCloseOnExec(fd);
-    fd_open(fd, FD_FILE, commonUfsDirFullPath(INDEXSD(sio->swap_dirn), sio->swap_filen, NULL));
+    fd_open(fd, FD_FILE, storeAufsDirFullPath(INDEXSD(sio->swap_dirn), sio->swap_filen, NULL));
     if (FILE_MODE(sio->mode) == O_WRONLY) {
 	if (storeAufsKickWriteQueue(sio))
 	    return;
@@ -309,7 +312,7 @@ storeAufsReadDone(int fd, const char *buf, int len, int errflag, void *my_data)
     storeIOState *sio = my_data;
     squidaiostate_t *aiostate = (squidaiostate_t *) sio->fsstate;
     STRCB *callback = sio->read.callback;
-    void *cbdata;
+    void *their_data = sio->read.callback_data;
     ssize_t rlen;
     int inreaddone = aiostate->flags.inreaddone;	/* Protect from callback loops */
     debug(79, 3) ("storeAufsReadDone: dirno %d, fileno %08X, FD %d, len %d\n",
@@ -335,14 +338,17 @@ storeAufsReadDone(int fd, const char *buf, int len, int errflag, void *my_data)
 	errflag = DISK_OK;	/* EOF is signalled by len == 0, not errors... */
 #endif
     assert(callback);
+    assert(their_data);
     sio->read.callback = NULL;
-    if (!aiostate->flags.close_request && cbdataReferenceValidDone(sio->read.callback_data, &cbdata)) {
+    sio->read.callback_data = NULL;
+    if (!aiostate->flags.close_request && cbdataValid(their_data)) {
 #if ASYNC_READ
 	if (rlen > 0)
 	    memcpy(aiostate->read_buf, buf, rlen);
 #endif
-	callback(cbdata, aiostate->read_buf, rlen);
+	callback(their_data, aiostate->read_buf, rlen);
     }
+    cbdataUnlock(their_data);
     aiostate->flags.inreaddone = 0;
     if (aiostate->flags.close_request && !inreaddone)
 	storeAufsIOCallback(sio, errflag);
@@ -400,17 +406,18 @@ static void
 storeAufsIOCallback(storeIOState * sio, int errflag)
 {
     STIOCB *callback = sio->callback;
+    void *their_data = sio->callback_data;
     squidaiostate_t *aiostate = (squidaiostate_t *) sio->fsstate;
     int fd = aiostate->fd;
     debug(79, 3) ("storeAufsIOCallback: errflag=%d\n", errflag);
+    sio->callback = NULL;
+    sio->callback_data = NULL;
     debug(79, 9) ("%s:%d\n", __FILE__, __LINE__);
-    if (callback) {
-	void *cbdata;
-	sio->callback = NULL;
-	if (cbdataReferenceValidDone(sio->callback_data, &cbdata))
-	    callback(cbdata, errflag, sio);
-    }
+    if (callback)
+	if (NULL == their_data || cbdataValid(their_data))
+	    callback(their_data, errflag, sio);
     debug(79, 9) ("%s:%d\n", __FILE__, __LINE__);
+    cbdataUnlock(their_data);
     aiostate->fd = -1;
     cbdataFree(sio);
     if (aiostate->flags.opening)
@@ -461,12 +468,12 @@ storeAufsIOFreeEntry(void *siop)
 	memPoolFree(aufs_qwrite_pool, qw);
     }
     while ((qr = linklistShift(&aiostate->pending_reads))) {
-	cbdataReferenceDone(qr->callback_data);
+	cbdataUnlock(qr->callback_data);
 	memPoolFree(aufs_qread_pool, qr);
     }
     if (sio->read.callback_data)
-	cbdataReferenceDone(sio->read.callback_data);
+	cbdataUnlock(sio->read.callback_data);
     if (sio->callback_data)
-	cbdataReferenceDone(sio->callback_data);
+	cbdataUnlock(sio->callback_data);
     memPoolFree(squidaio_state_pool, aiostate);
 }

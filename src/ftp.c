@@ -68,7 +68,7 @@ struct _ftp_flags {
     unsigned int authenticated:1;
     unsigned int http_header_sent:1;
     unsigned int tried_nlst:1;
-    unsigned int need_base_href:1;
+    unsigned int use_base:1;
     unsigned int root_dir:1;
     unsigned int no_dotdot:1;
     unsigned int html_header_sent:1;
@@ -112,6 +112,7 @@ typedef struct _Ftpdata {
 	char *buf;
 	size_t size;
 	off_t offset;
+	FREE *freefunc;
 	wordlist *message;
 	char *last_command;
 	char *last_reply;
@@ -122,6 +123,7 @@ typedef struct _Ftpdata {
 	char *buf;
 	size_t size;
 	off_t offset;
+	FREE *freefunc;
 	char *host;
 	u_short port;
     } data;
@@ -278,15 +280,21 @@ ftpStateFreed(void *data)
     storeUnlockObject(ftpState->entry);
     if (ftpState->reply_hdr) {
 	memFree(ftpState->reply_hdr, MEM_8K_BUF);
+	/* this seems unnecessary, but people report SEGV's
+	 * when freeing memory in this function */
 	ftpState->reply_hdr = NULL;
     }
     requestUnlink(ftpState->request);
     if (ftpState->ctrl.buf) {
-	memFreeBuf(ftpState->ctrl.size, ftpState->ctrl.buf);
+	ftpState->ctrl.freefunc(ftpState->ctrl.buf);
+	/* this seems unnecessary, but people report SEGV's
+	 * when freeing memory in this function */
 	ftpState->ctrl.buf = NULL;
     }
     if (ftpState->data.buf) {
-	memFreeBuf(ftpState->data.size, ftpState->data.buf);
+	ftpState->data.freefunc(ftpState->data.buf);
+	/* this seems unnecessary, but people report SEGV's
+	 * when freeing memory in this function */
 	ftpState->data.buf = NULL;
     }
     if (ftpState->pathcomps)
@@ -366,7 +374,7 @@ ftpListingStart(FtpStateData * ftpState)
 	html_quote(strBuf(ftpState->title_url)));
     storeAppendPrintf(e, "</TITLE>\n");
     storeAppendPrintf(e, "<STYLE type=\"text/css\"><!--BODY{background-color:#ffffff;font-family:verdana,sans-serif}--></STYLE>\n");
-    if (ftpState->flags.need_base_href)
+    if (ftpState->flags.use_base)
 	storeAppendPrintf(e, "<BASE HREF=\"%s\">\n",
 	    html_quote(strBuf(ftpState->base_href)));
     storeAppendPrintf(e, "</HEAD><BODY>\n");
@@ -995,20 +1003,20 @@ ftpCheckUrlpath(FtpStateData * ftpState)
 	}
     }
     l = strLen(request->urlpath);
-    ftpState->flags.need_base_href = 1;
+    ftpState->flags.use_base = 1;
     /* check for null path */
     if (!l) {
 	ftpState->flags.isdir = 1;
 	ftpState->flags.root_dir = 1;
     } else if (!strCmp(request->urlpath, "/%2f/")) {
 	/* UNIX root directory */
-	ftpState->flags.need_base_href = 0;
+	ftpState->flags.use_base = 0;
 	ftpState->flags.isdir = 1;
 	ftpState->flags.root_dir = 1;
     } else if ((l >= 1) && (*(strBuf(request->urlpath) + l - 1) == '/')) {
 	/* Directory URL, ending in / */
 	ftpState->flags.isdir = 1;
-	ftpState->flags.need_base_href = 0;
+	ftpState->flags.use_base = 0;
 	if (l == 1)
 	    ftpState->flags.root_dir = 1;
     }
@@ -1032,7 +1040,7 @@ ftpBuildTitleUrl(FtpStateData * ftpState)
     strCat(ftpState->title_url, strBuf(request->urlpath));
 
     stringReset(&ftpState->base_href, "ftp://");
-    if (strcmp(ftpState->user, "anonymous") != 0) {
+    if (strcmp(ftpState->user, "anonymous")) {
 	strCat(ftpState->base_href, rfc1738_escape_part(ftpState->user));
 	if (ftpState->password_url) {
 	    strCat(ftpState->base_href, ":");
@@ -1109,9 +1117,13 @@ ftpStart(FwdState * fwd)
 	ftpState->user, ftpState->password);
     ftpState->state = BEGIN;
     ftpState->ctrl.last_command = xstrdup("Connect to server");
-    ftpState->ctrl.buf = memAllocBuf(4096, &ftpState->ctrl.size);
+    ftpState->ctrl.buf = memAllocate(MEM_4K_BUF);
+    ftpState->ctrl.freefunc = memFree4K;
+    ftpState->ctrl.size = 4096;
     ftpState->ctrl.offset = 0;
-    ftpState->data.buf = memAllocBuf(SQUID_TCP_SO_RCVBUF, &ftpState->data.size);
+    ftpState->data.buf = xmalloc(SQUID_TCP_SO_RCVBUF);
+    ftpState->data.size = SQUID_TCP_SO_RCVBUF;
+    ftpState->data.freefunc = xfree;
     ftpScheduleReadControlReply(ftpState, 0);
 }
 
@@ -1134,7 +1146,7 @@ ftpWriteCommand(const char *buf, FtpStateData * ftpState)
 }
 
 static void
-ftpWriteCommandCallback(int fd, char *bufnotused, size_t size, comm_err_t errflag, void *data)
+ftpWriteCommandCallback(int fd, char *bufnotused, size_t size, int errflag, void *data)
 {
     FtpStateData *ftpState = data;
     debug(9, 7) ("ftpWriteCommandCallback: wrote %d bytes\n", (int) size);
@@ -1293,6 +1305,7 @@ ftpReadControlReply(int fd, void *data)
 static void
 ftpHandleControlReply(FtpStateData * ftpState)
 {
+    char *oldbuf;
     wordlist **W;
     int bytes_used = 0;
     wordlistDestroy(&ftpState->ctrl.message);
@@ -1301,7 +1314,12 @@ ftpHandleControlReply(FtpStateData * ftpState)
     if (ftpState->ctrl.message == NULL) {
 	/* didn't get complete reply yet */
 	if (ftpState->ctrl.offset == ftpState->ctrl.size) {
-	    ftpState->ctrl.buf = memReallocBuf(ftpState->ctrl.buf, ftpState->ctrl.size << 1, &ftpState->ctrl.size);
+	    oldbuf = ftpState->ctrl.buf;
+	    ftpState->ctrl.buf = xcalloc(ftpState->ctrl.size << 1, 1);
+	    xmemcpy(ftpState->ctrl.buf, oldbuf, ftpState->ctrl.size);
+	    ftpState->ctrl.size <<= 1;
+	    ftpState->ctrl.freefunc(oldbuf);
+	    ftpState->ctrl.freefunc = xfree;
 	}
 	ftpScheduleReadControlReply(ftpState, 0);
 	return;
@@ -1412,8 +1430,7 @@ ftpSendType(FtpStateData * ftpState)
     /*
      * Ref section 3.2.2 of RFC 1738
      */
-    mode = ftpState->typecode;
-    switch (mode) {
+    switch (mode = ftpState->typecode) {
     case 'D':
 	mode = 'A';
 	break;
@@ -1583,7 +1600,7 @@ ftpListDir(FtpStateData * ftpState)
 	debug(9, 3) ("Directory path did not end in /\n");
 	strCat(ftpState->title_url, "/");
 	ftpState->flags.isdir = 1;
-	ftpState->flags.need_base_href = 1;
+	ftpState->flags.use_base = 1;
     }
     ftpSendPasv(ftpState);
 }
@@ -1954,7 +1971,7 @@ ftpRestOrList(FtpStateData * ftpState)
     debug(9, 3) ("This is ftpRestOrList\n");
     if (ftpState->typecode == 'D') {
 	ftpState->flags.isdir = 1;
-	ftpState->flags.need_base_href = 1;
+	ftpState->flags.use_base = 1;
 	if (ftpState->flags.put) {
 	    ftpSendMkdir(ftpState);	/* PUT name;type=d */
 	} else {
@@ -2074,7 +2091,7 @@ static void
 ftpSendList(FtpStateData * ftpState)
 {
     if (ftpState->filepath) {
-	ftpState->flags.need_base_href = 1;
+	ftpState->flags.use_base = 1;
 	snprintf(cbuf, 1024, "LIST %s\r\n", ftpState->filepath);
     } else {
 	snprintf(cbuf, 1024, "LIST\r\n");
@@ -2088,7 +2105,7 @@ ftpSendNlst(FtpStateData * ftpState)
 {
     ftpState->flags.tried_nlst = 1;
     if (ftpState->filepath) {
-	ftpState->flags.need_base_href = 1;
+	ftpState->flags.use_base = 1;
 	snprintf(cbuf, 1024, "NLST %s\r\n", ftpState->filepath);
     } else {
 	snprintf(cbuf, 1024, "NLST\r\n");
@@ -2222,7 +2239,7 @@ ftpReadTransferDone(FtpStateData * ftpState)
 
 /* This will be called when there is data available to put */
 static void
-ftpRequestBody(char *buf, size_t size, void *data)
+ftpRequestBody(char *buf, ssize_t size, void *data)
 {
     FtpStateData *ftpState = (FtpStateData *) data;
     debug(9, 3) ("ftpRequestBody: buf=%p size=%d ftpState=%p\n", buf, (int) size, data);
@@ -2232,7 +2249,7 @@ ftpRequestBody(char *buf, size_t size, void *data)
 	comm_write(ftpState->data.fd, buf, size, ftpDataWriteCallback, data, NULL);
     } else if (size < 0) {
 	/* Error */
-	debug(9, 1) ("ftpRequestBody: request aborted");
+	debug(9, 1) ("ftpRequestBody: request aborted\n");
 	ftpFailed(ftpState, ERR_READ_ERROR);
     } else if (size == 0) {
 	/* End of transfer */
@@ -2475,7 +2492,7 @@ ftpSendReply(FtpStateData * ftpState)
     err_type err_code = ERR_NONE;
     debug(9, 5) ("ftpSendReply: %s, code %d\n",
 	storeUrl(ftpState->entry), code);
-    if (cbdataReferenceValid(ftpState))
+    if (cbdataValid(ftpState))
 	debug(9, 5) ("ftpSendReply: ftpState (%p) is valid!\n", ftpState);
     if (code == 226) {
 	err_code = (ftpState->mdtm > 0) ? ERR_FTP_PUT_MODIFIED : ERR_FTP_PUT_CREATED;
