@@ -418,7 +418,7 @@ typedef enum {
     MEM_CONNSTATEDATA,
     MEM_HTTPSTATEDATA,
 #else
-    MEME_HTTPCONN,
+    MEM_HTTPCONN,
 #endif
     MEM_ICPUDPDATA,
 #if OLD_CODE

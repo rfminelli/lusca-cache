@@ -50,8 +50,14 @@
     void (*noteSpaceReady)(HttpMsg *msg);
     /* parses the first line of an http message */
     int (*parseStart)(HttpMsg *msg, const char *start, const char *end);
+    /* called on connection close() */
+    void (*noteConnClosed)(HttpMsg *msg);
     /* called when [parsing] error is detected */
     void (*noteError)(HttpMsg *msg, HttpReply *error);
+    /* called to do force destroy of an object */
+    void (*noteException)(HttpMsg *msg, int status);
+    /* called to do force destroy of an object */
+    void (*destroy)(HttpMsg *msg);
 
     /* protected, do not use these, use interface functions instead */
     IOBuffer *buf;     /* comm | buf | store */

@@ -46,10 +46,12 @@ struct _IOBuffer {
     int terminator_hack; /* see IOBuffer.c for details */
 };
 
-/* create/init/destroy */
+/* create/init/destroy/clean */
 extern IOBuffer *ioBufferCreate(size_t capacity, int term_hack);
 extern void ioBufferInit(IOBuffer *iob, size_t capacity, int term_hack);
 extern void ioBufferDestroy(IOBuffer *iob);
+extern void ioBufferClean(IOBuffer *iob);
+
 
 /* grow (the buffer should not be used when grow() called) */
 extern void ioBufferGrow(IOBuffer *iob, void *writer, size_t new_capacity);
@@ -85,8 +87,8 @@ extern void ioBufferDoneReading(IOBuffer *iob, void *reader, size_t size);
 extern void ioBufferDoneWriting(IOBuffer *iob, void *writer, size_t size);
 
 /* if you are lasy: start()+read/write+done(); locking is left for you */
-extern size_t ioBufferRead(IOBuffer *iob, int fd, void *reader);
-extern size_t ioBufferWrite(IOBuffer *iob, int fd, void *writer);
+extern ssize_t ioBufferRead(IOBuffer *iob, int fd, void *reader);
+extern ssize_t ioBufferWrite(IOBuffer *iob, int fd, void *writer);
 
 /*
  * inline functions to test buffer state;
@@ -94,7 +96,8 @@ extern size_t ioBufferWrite(IOBuffer *iob, int fd, void *writer);
  * note: these can become real functions at any time if needed
  */
 
-/* test if there is data in the buffer */
+/* tests */
 #define ioBufferIsEmpty(iob) (!(iob) || !(iob)->rsize)
+#define ioBufferIsFull(iob) (!(iob) || (iob)->rsize == (iob)->capacity)
 
 #endif /* ndef _IO_BUFFER_H_ */

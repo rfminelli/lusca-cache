@@ -47,13 +47,16 @@ httpRequestCreate()
     req->httpRequestParseStart = &httpRequestParseStart;
     req->setRState = &httpRequestSetRState;
     req->noteError = &httpRequestNoteError;
+    msg->destroy = httpRequestDestroy;
     /* did we set everything? */
     httpMsgCheck(req);
 }
 
 void
-httpRequestDestroy(HttpRequest *req)
+httpRequestDestroy(HttpMsg *msg)
 {
+    HttpRequest *req = (HttpRequest*)msg;
+    assert(req);
     httpMsgClean(req);
     xfree(req->host);
     xfree(req->login);

@@ -31,6 +31,7 @@
 #define _HTTP_CONN_H_
 
 #include "IOBuffer.h" /* @?@ -> structs.h */
+#include "ObjIndex.h" /* @?@ -> structs.h */
 
 
 struct _HttpConn {
@@ -49,15 +50,18 @@ struct _HttpConn {
     int req_count;          /* number of requests created or admitted */
     int rep_count;          /* number of replies processed */
 
-#if 0
-    HttpConnIndex index;    /* keeps pending writers, searches by HttpMsg->id */
-    HttpConnDIndex deps;    /* keeps all HttpMsgs that depend on this connection */
-#endif
+    ObjIndex index;         /* keeps pending writers */
+    ObjIndex deps;          /* keeps all HttpMsgs that depend on this connection */
 
     u_char timeout_count;   /* number of timeouts caught */
 
     char *host;             /* peer host */ /* yes, these duplicate .addr below @?@ */
     u_char port;            /* peer port */
+
+    struct {
+	int n;
+	time_t until;
+    } defer;
 
     /* these are used by passive connections only @?@ */
     struct {
@@ -76,7 +80,7 @@ struct _HttpConn {
 extern HttpConn *httpConnAccept(int sock);
 
 /* manage dependent */
-void httpConnAddDep(HttpConn *conn, HttpMsg *dep);
+void httpConnAddDep(HttpConn *conn, HttpMsg *dep, int id);
 void httpConnDelDep(HttpConn *conn, HttpMsg *dep);
 void httpConnNoteReaderDone(HttpConn *conn, HttpMsg *msg);
 
