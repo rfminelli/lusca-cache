@@ -224,7 +224,7 @@ main(int argc, char *argv[])
 		xstrerror());
 	    exit(-1);
 	}
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
+#if defined(_SQUID_CYGWIN_)
 	setmode(put_fd, O_BINARY);
 #endif
 	fstat(put_fd, &sb);
@@ -262,7 +262,7 @@ main(int argc, char *argv[])
 	    exit(1);
 	}
 	snprintf(buf, BUFSIZ, "%s:%s", user, password);
-	snprintf(buf, BUFSIZ, "Proxy-Authorization: Basic %s\n", base64_encode(buf));
+	snprintf(buf, BUFSIZ, "Proxy-Authorization: Basic %s\r\n", base64_encode(buf));
 	strcat(msg, buf);
     }
     if (www_user) {
@@ -277,7 +277,7 @@ main(int argc, char *argv[])
 	    exit(1);
 	}
 	snprintf(buf, BUFSIZ, "%s:%s", user, password);
-	snprintf(buf, BUFSIZ, "Authorization: Basic %s\n", base64_encode(buf));
+	snprintf(buf, BUFSIZ, "Authorization: Basic %s\r\n", base64_encode(buf));
 	strcat(msg, buf);
     }
     if (keep_alive) {
