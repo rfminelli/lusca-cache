@@ -125,9 +125,6 @@
 #if HAVE_SYS_SELECT_H
 #include <sys/select.h>
 #endif
-#if USE_ASYNC_IO && HAVE_AIO_H
-#include <aio.h>
-#endif
 
 #if defined(__STRICT_ANSI__)
 #include <stdarg.h>
@@ -170,22 +167,18 @@
 #ifndef SA_NODEFER
 #define SA_NODEFER 0
 #endif
-
 #ifndef SA_RESETHAND
-#ifdef SA_ONESHOT
-#define SA_RESETHAND SA_ONESHOT
-#else
 #define SA_RESETHAND 0
-#define HAVE_SIGACTION 0
-#endif /* SA_ONESHOT */
-#endif /* SA_RESETHAND */
+#endif
+#if SA_RESETHAND == 0 && defined(SA_ONESHOT)
+#define SA_RESETHAND SA_ONESHOT
+#endif
 
 typedef struct sentry StoreEntry;
 typedef struct mem_hdr *mem_ptr;
 typedef struct _edge edge;
 typedef struct icp_common_s icp_common_t;
 typedef struct _cacheinfo cacheinfo;
-typedef struct _aclCheck_t aclCheck_t;
 typedef struct _request request_t;
 
 /* 32 bit integer compatability hack */
@@ -201,19 +194,11 @@ typedef unsigned long u_num32;
 #endif
 #define NUM32LEN sizeof(num32)	/* this should always be 4 */
 
-#if PURIFY
-#define LOCAL_ARRAY(type,name,size) \
-        static type *local_##name=NULL; \
-        type *name = local_##name ? local_##name : \
-                ( local_##name = (type *)xcalloc(size, sizeof(type)) )
-#else
-#define LOCAL_ARRAY(type,name,size) static type name[size]
-#endif
-
 #include "GNUregex.h"
 #include "ansihelp.h"
 
 typedef void (*SIH) _PARAMS((int, void *));	/* swap in */
+typedef int (*QS) _PARAMS((const void *, const void *));
 
 #include "cache_cf.h"
 #include "comm.h"
@@ -228,9 +213,7 @@ typedef void (*SIH) _PARAMS((int, void *));	/* swap in */
 #include "url.h"
 #include "icp.h"
 #include "errorpage.h"		/* must go after icp.h */
-#include "dns.h"
 #include "ipcache.h"
-#include "fqdncache.h"
 #include "mime.h"
 #include "stack.h"
 #include "stat.h"
@@ -240,12 +223,9 @@ typedef void (*SIH) _PARAMS((int, void *));	/* swap in */
 #include "http.h"
 #include "ftp.h"
 #include "gopher.h"
+#include "acl.h"
 #include "util.h"
 #include "background.h"
-#include "acl.h"
-#include "async_io.h"
-#include "redirect.h"
-#include "client_side.h"
 
 #if !HAVE_TEMPNAM
 #include "tempnam.h"
@@ -268,14 +248,13 @@ extern int opt_unlink_on_reload;	/* main.c */
 extern int opt_reload_hit_only;	/* main.c */
 extern int opt_dns_tests;	/* main.c */
 extern int opt_foreground_rebuild;	/* main.c */
-extern int opt_zap_disk_store;	/* main.c */
+extern int opt_syslog_enable;	/* main.c */
 extern int vhost_mode;		/* main.c */
 extern char version_string[];	/* main.c */
 extern char appname[];		/* main.c */
 extern struct in_addr local_addr;	/* main.c */
 extern char localhost[];
-extern struct in_addr any_addr;	/* comm.c */
-extern struct in_addr no_addr;	/* comm.c */
+
 
 /* Prototypes and definitions which don't really deserve a seaprate
  * include file */
@@ -286,7 +265,7 @@ extern int objcacheStart _PARAMS((int, char *, StoreEntry *));
 extern void send_announce _PARAMS((void));
 extern int sslStart _PARAMS((int fd, char *, request_t *, char *, int *sz));
 extern char *storeToString _PARAMS((StoreEntry *));
-extern void ttlSet _PARAMS((StoreEntry *));
+extern time_t ttlSet _PARAMS((StoreEntry *));
 extern void ttlAddToList _PARAMS((char *, time_t, int, time_t));
 extern int waisStart _PARAMS((int, char *, method_t, char *, StoreEntry *));
 extern void storeDirClean _PARAMS((void));

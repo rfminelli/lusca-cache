@@ -225,6 +225,5 @@ extern void Log();
 extern void errorlog();
 #endif /* __STRICT_ANSI__ */
 
-extern void Tolower _PARAMS((char *));
 
 #endif /* ndef _UTIL_H_ */

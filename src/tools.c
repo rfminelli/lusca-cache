@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -122,7 +121,7 @@ Thanks!\n"
 
 static char *dead_msg()
 {
-    LOCAL_ARRAY(char, msg, 1024);
+    static char msg[1024];
     sprintf(msg, DEAD_MSG, version_string, version_string);
     return msg;
 }
@@ -130,30 +129,20 @@ static char *dead_msg()
 void mail_warranty()
 {
     FILE *fp = NULL;
-    LOCAL_ARRAY(char, filename, 256);
-    LOCAL_ARRAY(char, command, 256);
-
-    sprintf(filename, "/tmp/mailin%d", (int) getpid());
-    fp = fopen(filename, "w");
-    if (fp != NULL) {
-	fprintf(fp, "From: %s\n", appname);
-	fprintf(fp, "To: %s\n", Config.adminEmail);
-	fprintf(fp, "Subject: %s\n", dead_msg());
-	fclose(fp);
-	sprintf(command, "mail %s < %s", Config.adminEmail, filename);
-	system(command);	/* XXX should avoid system(3) */
-	unlink(filename);
-    }
+    char *filename;
+    static char command[256];
+    if ((filename = tempnam(NULL, appname)) == NULL)
+	return;
+    if ((fp = fopen(filename, "w")) == NULL)
+	return;
+    fprintf(fp, "From: %s\n", appname);
+    fprintf(fp, "To: %s\n", getAdminEmail());
+    fprintf(fp, "Subject: %s\n", dead_msg());
+    fclose(fp);
+    sprintf(command, "mail %s < %s", getAdminEmail(), filename);
+    system(command);		/* XXX should avoid system(3) */
+    unlink(filename);
 }
-
-void print_warranty()
-{
-    if (Config.adminEmail)
-	mail_warranty();
-    else
-	puts(dead_msg());
-}
-
 
 static void dumpMallocStats(f)
      FILE *f;
@@ -233,17 +222,23 @@ void death(sig)
     if (sig == SIGSEGV)
 	fprintf(debug_log, "FATAL: Received Segment Violation...dying.\n");
     else if (sig == SIGBUS)
-	fprintf(debug_log, "FATAL: Received bus error...dying.\n");
+	fprintf(debug_log, "FATAL: Received Bus Error...dying.\n");
     else
 	fprintf(debug_log, "FATAL: Received signal %d...dying.\n", sig);
-#if !HAVE_SIGACTION
+#if SA_RESETHAND == 0
     signal(SIGSEGV, SIG_DFL);
     signal(SIGBUS, SIG_DFL);
     signal(sig, SIG_DFL);
 #endif
     storeWriteCleanLog();
     PrintRusage(NULL, debug_log);
-    print_warranty();
+    if (squid_curtime - SQUID_RELEASE_TIME < 864000) {
+	/* skip if more than 10 days old */
+	if (getAdminEmail())
+	    mail_warranty();
+	else
+	    puts(dead_msg());
+    }
     abort();
 }
 
@@ -254,10 +249,10 @@ void sigusr2_handle(sig)
     static int state = 0;
     debug(21, 1, "sigusr2_handle: SIGUSR2 received.\n");
     if (state == 0) {
-	_db_init(Config.Log.log, "ALL,10");
+	_db_init(getCacheLogFile(), "ALL,10");
 	state = 1;
     } else {
-	_db_init(Config.Log.log, Config.debugOptions);
+	_db_init(getCacheLogFile(), getDebugOptions());
 	state = 0;
     }
 #if !HAVE_SIGACTION
@@ -268,7 +263,7 @@ void sigusr2_handle(sig)
 void setSocketShutdownLifetimes()
 {
     FD_ENTRY *f = NULL;
-    int lft = Config.lifetimeShutdown;
+    int lft = getShutdownLifetime();
     int cur;
     int i;
     for (i = fdstat_biggest_fd(); i >= 0; i--) {
@@ -287,9 +282,9 @@ void setSocketShutdownLifetimes()
 void normal_shutdown()
 {
     debug(21, 1, "Shutting down...\n");
-    if (Config.pidFilename) {
+    if (getPidFilename()) {
 	enter_suid();
-	safeunlink(Config.pidFilename, 0);
+	safeunlink(getPidFilename(), 0);
 	leave_suid();
     }
     storeWriteCleanLog();
@@ -303,7 +298,7 @@ void fatal_common(message)
      char *message;
 {
 #if HAVE_SYSLOG
-    if (syslog_enable)
+    if (opt_syslog_enable)
 	syslog(LOG_ALERT, message);
 #endif
     fprintf(debug_log, "FATAL: %s\n", message);
@@ -359,12 +354,12 @@ void sig_child(sig)
 
 char *getMyHostname()
 {
-    LOCAL_ARRAY(char, host, SQUIDHOSTNAMELEN + 1);
+    static char host[SQUIDHOSTNAMELEN + 1];
     static int present = 0;
     struct hostent *h = NULL;
     char *t = NULL;
 
-    if ((t = Config.visibleHostname))
+    if ((t = getVisibleHostname()))
 	return t;
 
     /* Get the host name and store it in host to return */
@@ -410,11 +405,11 @@ void leave_suid()
     if (geteuid() != 0)
 	return;
     /* Started as a root, check suid option */
-    if (Config.effectiveUser == NULL)
+    if (getEffectiveUser() == NULL)
 	return;
-    if ((pwd = getpwnam(Config.effectiveUser)) == NULL)
+    if ((pwd = getpwnam(getEffectiveUser())) == NULL)
 	return;
-    if (Config.effectiveGroup && (grp = getgrnam(Config.effectiveGroup))) {
+    if (getEffectiveGroup() && (grp = getgrnam(getEffectiveGroup()))) {
 	setgid(grp->gr_gid);
     } else {
 	setgid(pwd->pw_gid);
@@ -463,7 +458,7 @@ void writePidFile()
     FILE *pid_fp = NULL;
     char *f = NULL;
 
-    if ((f = Config.pidFilename) == NULL)
+    if ((f = getPidFilename()) == NULL)
 	return;
     enter_suid();
     pid_fp = fopen(f, "w");
