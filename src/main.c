@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -106,55 +105,87 @@
 
 #include "squid.h"
 
-/* for error reporting from xmalloc and friends */
-extern void (*failure_notify) (const char *);
+time_t squid_starttime = 0;
+int theHttpConnection = -1;
+int theInIcpConnection = -1;
+int theOutIcpConnection = -1;
+int vizSock = -1;
+int do_reuse = 1;
+int opt_unlink_on_reload = 0;
+int opt_reload_hit_only = 0;	/* only UDP_HIT during store relaod */
+int opt_catch_signals = 1;
+int opt_dns_tests = 1;
+int opt_foreground_rebuild = 0;
+int opt_syslog_enable = 0;	/* disabled by default */
+int opt_no_ipcache = 0;		/* use ipcache by default */
+static int opt_send_signal = -1;	/* no signal to send */
+static int opt_create_swap_dirs = 0;
+int opt_udp_hit_obj = 0;	/* ask for HIT_OBJ's */
+int opt_mem_pools = 0;
+int opt_forwarded_for = 1;
+int opt_accel_uses_host = 0;
+int vhost_mode = 0;
+int Squid_MaxFD = SQUID_MAXFD;
+int Biggest_FD = -1;
+int Number_FD = 0;
+int select_loops = 0;		/* how many times thru select loop */
+volatile int unbuffered_logs = 1;	/* debug and hierarchy unbuffered by default */
+volatile int shutdown_pending = 0;	/* set by SIGTERM handler (shut_down()) */
+volatile int reread_pending = 0;	/* set by SIGHUP handler */
+const char *const version_string = SQUID_VERSION;
+const char *const appname = "squid";
+const char *const localhost = "127.0.0.1";
+struct in_addr local_addr;
+struct in_addr no_addr;
+struct in_addr theOutICPAddr;
+const char *const dash_str = "-";
+const char *const null_string = "";
+char ThisCache[SQUIDHOSTNAMELEN << 1];
 
-static int opt_send_signal = -1;
-static int opt_no_daemon = 0;
+/* for error reporting from xmalloc and friends */
+extern void (*failure_notify) _PARAMS((const char *));
+
 static volatile int rotate_pending = 0;		/* set by SIGUSR1 handler */
 static int httpPortNumOverride = 1;
 static int icpPortNumOverride = 1;	/* Want to detect "-u 0" */
+static struct in_addr any_addr;
 #if MALLOC_DBG
 static int malloc_debug_level = 0;
 #endif
 
-static SIGHDLR rotate_logs;
-static SIGHDLR reconfigure;
-#if ALARM_UPDATES_TIME
-static SIGHDLR time_tick;
-#endif
-static void mainInitialize(void);
-static void mainReconfigure(void);
-static void usage(void);
-static void mainParseOptions(int, char **);
-static void sendSignal(void);
-static void serverConnectionsOpen(void);
-static void watch_child(char **);
-static void setEffectiveUser(void);
+static void rotate_logs _PARAMS((int));
+static void reconfigure _PARAMS((int));
+static void mainInitialize _PARAMS((void));
+static void mainReinitialize _PARAMS((void));
+static void usage _PARAMS((void));
+static void mainParseOptions _PARAMS((int, char **));
+static void sendSignal _PARAMS((void));
+static void serverConnectionsOpen _PARAMS((void));
+static void setEffectiveUser _PARAMS((void));
 
 static void
 usage(void)
 {
     fprintf(stderr,
-	"Usage: %s [-dhsvzCDFNRVYX] [-f config-file] [-[au] port] [-k signal]\n"
-	"       -a port   Specify HTTP port number (default: %d).\n"
-	"       -d        Write debugging to stderr also.\n"
+	"Usage: %s [-hsvzCDFRUVY] [-f config-file] [-[au] port] [-k signal]\n"
+	"       -a port   Specify ASCII port number (default: %d).\n"
+	"       -b        Buffer log output (default is unbuffered).\n"
 	"       -f file   Use given config-file instead of\n"
 	"                 %s\n"
 	"       -h        Print help message.\n"
+	"       -i        Disable IP caching.\n"
 	"       -k reconfigure|rotate|shutdown|interrupt|kill|debug|check\n"
 	"                 Send signal to running copy and exit.\n"
 	"       -s        Enable logging to syslog.\n"
 	"       -u port   Specify ICP port number (default: %d), disable with 0.\n"
 	"       -v        Print version.\n"
-	"       -z        Create swap directories\n"
+	"       -z        Zap disk storage -- deletes all objects in disk cache.\n"
 	"       -C        Do not catch fatal signals.\n"
 	"       -D        Disable initial DNS tests.\n"
 	"       -F        Foreground fast store rebuild.\n"
-	"       -N        No daemon mode.\n"
 	"       -R        Do not set REUSEADDR on port.\n"
+	"       -U        Unlink expired objects on reload.\n"
 	"       -V        Virtual host httpd-accelerator.\n"
-	"       -X        Force full debugging.\n"
 	"       -Y        Only return UDP_HIT or UDP_MISS_NOFETCH during fast reload.\n",
 	appname, CACHE_HTTP_PORT, DefaultConfigFile, CACHE_ICP_PORT);
     exit(1);
@@ -166,7 +197,7 @@ mainParseOptions(int argc, char *argv[])
     extern char *optarg;
     int c;
 
-    while ((c = getopt(argc, argv, "CDFNRVYXa:df:hk:m:su:vz?")) != -1) {
+    while ((c = getopt(argc, argv, "CDFRUVYXa:bf:hik:m:su:vz?")) != -1) {
 	switch (c) {
 	case 'C':
 	    opt_catch_signals = 0;
@@ -177,11 +208,11 @@ mainParseOptions(int argc, char *argv[])
 	case 'F':
 	    opt_foreground_rebuild = 1;
 	    break;
-	case 'N':
-	    opt_no_daemon = 1;
-	    break;
 	case 'R':
 	    do_reuse = 0;
+	    break;
+	case 'U':
+	    opt_unlink_on_reload = 1;
 	    break;
 	case 'V':
 	    vhost_mode = 1;
@@ -196,8 +227,8 @@ mainParseOptions(int argc, char *argv[])
 	case 'a':
 	    httpPortNumOverride = atoi(optarg);
 	    break;
-	case 'd':
-	    opt_debug_stderr = 1;
+	case 'b':
+	    unbuffered_logs = 0;
 	    break;
 	case 'f':
 	    xfree(ConfigFile);
@@ -205,6 +236,9 @@ mainParseOptions(int argc, char *argv[])
 	    break;
 	case 'h':
 	    usage();
+	    break;
+	case 'i':
+	    opt_no_ipcache = 1;
 	    break;
 	case 'k':
 	    if ((int) strlen(optarg) < 1)
@@ -258,35 +292,23 @@ mainParseOptions(int argc, char *argv[])
     }
 }
 
-/* ARGSUSED */
 static void
 rotate_logs(int sig)
 {
-    debug(1, 1) ("rotate_logs: SIGUSR1 received.\n");
+    debug(1, 1, "rotate_logs: SIGUSR1 received.\n");
     rotate_pending = 1;
 #if !HAVE_SIGACTION
     signal(sig, rotate_logs);
 #endif
 }
 
-#if ALARM_UPDATES_TIME
-static void
-time_tick(int sig)
-{
-    getCurrentTime();
-    alarm(1);
-#if !HAVE_SIGACTION
-    signal(sig, time_tick);
-#endif
-}
-
-#endif
-
-/* ARGSUSED */
 static void
 reconfigure(int sig)
 {
-    reconfigure_pending = 1;
+    debug(1, 1, "reconfigure: SIGHUP received\n");
+    debug(1, 1, "Waiting %d seconds for active connections to finish\n",
+	Config.lifetimeShutdown);
+    reread_pending = 1;
 #if !HAVE_SIGACTION
     signal(sig, reconfigure);
 #endif
@@ -296,15 +318,15 @@ void
 shut_down(int sig)
 {
     shutdown_pending = sig == SIGINT ? -1 : 1;
-    debug(1, 1) ("Preparing for shutdown after %d requests\n",
-	Counter.client_http.requests);
-    debug(1, 1) ("Waiting %d seconds for active connections to finish\n",
-	shutdown_pending > 0 ? Config.shutdownLifetime : 0);
+    debug(1, 1, "Preparing for shutdown after %d connections\n",
+	ntcpconn + nudpconn);
+    debug(1, 1, "Waiting %d seconds for active connections to finish\n",
+	shutdown_pending > 0 ? Config.lifetimeShutdown : 0);
 #ifdef KILL_PARENT_OPT
     {
 	pid_t ppid = getppid();
 	if (ppid > 1) {
-	    debug(1, 1) ("Killing RunCache, pid %d\n", ppid);
+	    debug(1, 1, "Killing RunCache, pid %d\n", ppid);
 	    kill(ppid, sig);
 	}
     }
@@ -318,72 +340,194 @@ shut_down(int sig)
 static void
 serverConnectionsOpen(void)
 {
-    clientHttpConnectionsOpen();
-    icpConnectionsOpen();
-#ifdef SQUID_SNMP
-    snmpConnectionOpen();
+    struct in_addr addr;
+    struct sockaddr_in xaddr;
+    u_short port;
+    int len;
+    int x;
+    enter_suid();
+    theHttpConnection = comm_open(SOCK_STREAM,
+	0,
+	Config.Addrs.tcp_incoming,
+	Config.Port.http,
+	COMM_NONBLOCKING,
+	"HTTP Port");
+    leave_suid();
+    if (theHttpConnection < 0) {
+	fatal("Cannot open HTTP Port");
+    }
+    fd_note(theHttpConnection, "HTTP socket");
+    comm_listen(theHttpConnection);
+    commSetSelect(theHttpConnection,
+	COMM_SELECT_READ,
+	asciiHandleConn,
+	NULL, 0);
+    debug(1, 1, "Accepting HTTP connections on FD %d.\n",
+	theHttpConnection);
+
+    if (!httpd_accel_mode || Config.Accel.withProxy) {
+	if ((port = Config.Port.icp) > (u_short) 0) {
+	    enter_suid();
+	    theInIcpConnection = comm_open(SOCK_DGRAM,
+		0,
+		Config.Addrs.udp_incoming,
+		port,
+		COMM_NONBLOCKING,
+		"ICP Port");
+	    leave_suid();
+	    if (theInIcpConnection < 0)
+		fatal("Cannot open ICP Port");
+	    fd_note(theInIcpConnection, "ICP socket");
+	    commSetSelect(theInIcpConnection,
+		COMM_SELECT_READ,
+		icpHandleUdp,
+		NULL, 0);
+	    comm_join_mcast_groups(theInIcpConnection);
+	    debug(1, 1, "Accepting ICP connections on FD %d.\n",
+		theInIcpConnection);
+
+	    if ((addr = Config.Addrs.udp_outgoing).s_addr != no_addr.s_addr) {
+		enter_suid();
+		theOutIcpConnection = comm_open(SOCK_DGRAM,
+		    0,
+		    addr,
+		    port,
+		    COMM_NONBLOCKING,
+		    "ICP Port");
+		leave_suid();
+		if (theOutIcpConnection < 0)
+		    fatal("Cannot open Outgoing ICP Port");
+		commSetSelect(theOutIcpConnection,
+		    COMM_SELECT_READ,
+		    icpHandleUdp,
+		    NULL, 0);
+		debug(1, 1, "Accepting ICP connections on FD %d.\n",
+		    theOutIcpConnection);
+		fd_note(theOutIcpConnection, "Outgoing ICP socket");
+		fd_note(theInIcpConnection, "Incoming ICP socket");
+	    } else {
+		theOutIcpConnection = theInIcpConnection;
+	    }
+	    memset(&theOutICPAddr, '\0', sizeof(struct in_addr));
+	    len = sizeof(struct sockaddr_in);
+	    memset(&xaddr, '\0', len);
+	    x = getsockname(theOutIcpConnection,
+		(struct sockaddr *) &xaddr, &len);
+	    if (x < 0)
+		debug(50, 1, "theOutIcpConnection FD %d: getsockname: %s\n",
+		    theOutIcpConnection, xstrerror());
+	    else
+		theOutICPAddr = xaddr.sin_addr;
+	}
+    }
+    if (Config.vizHack.port) {
+	vizSock = comm_open(SOCK_DGRAM,
+	    0,
+	    any_addr,
+	    0,
+	    COMM_NONBLOCKING,
+	    "VizHack Port");
+	if (vizSock < 0)
+	    fatal("Could not open Viz Socket");
+#if defined(IP_ADD_MEMBERSHIP) && defined(IP_MULTICAST_TTL)
+	if (Config.vizHack.addr.s_addr > inet_addr("224.0.0.0")) {
+	    struct ip_mreq mr;
+	    char ttl = (char) Config.vizHack.mcast_ttl;
+	    memset(&mr, '\0', sizeof(struct ip_mreq));
+	    mr.imr_multiaddr.s_addr = Config.vizHack.addr.s_addr;
+	    mr.imr_interface.s_addr = INADDR_ANY;
+	    x = setsockopt(vizSock,
+		IPPROTO_IP,
+		IP_ADD_MEMBERSHIP,
+		(char *) &mr,
+		sizeof(struct ip_mreq));
+	    if (x < 0)
+		debug(50, 1, "IP_ADD_MEMBERSHIP: FD %d, addr %s: %s\n",
+		    vizSock, inet_ntoa(Config.vizHack.addr), xstrerror());
+	    x = setsockopt(vizSock,
+		IPPROTO_IP,
+		IP_MULTICAST_TTL,
+		&ttl,
+		sizeof(char));
+	    if (x < 0)
+		debug(50, 1, "IP_MULTICAST_TTL: FD %d, TTL %d: %s\n",
+		    vizSock, Config.vizHack.mcast_ttl, xstrerror());
+	    ttl = 0;
+	    x = sizeof(char);
+	    getsockopt(vizSock, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, &x);
+	    debug(1, 0, "vizSock on FD %d, ttl=%d\n", vizSock, (int) ttl);
+	}
+#else
+	debug(1, 0, "vizSock: Could not join multicast group\n");
 #endif
+	memset(&Config.vizHack.S, '\0', sizeof(struct sockaddr_in));
+	Config.vizHack.S.sin_family = AF_INET;
+	Config.vizHack.S.sin_addr = Config.vizHack.addr;
+	Config.vizHack.S.sin_port = htons(Config.vizHack.port);
+    }
     clientdbInit();
     icmpOpen();
     netdbInit();
-    asnInit();
-    peerSelectInit();
 }
 
 void
 serverConnectionsClose(void)
 {
-    /*
-     * NOTE, this function will be called repeatedly while shutdown
-     * is pending
-     */
-    clientHttpConnectionsClose();
-    icpConnectionsClose();
-    icmpClose();
-#ifdef SQUID_SNMP
-    snmpConnectionClose();
-#endif
+    /* NOTE, this function will be called repeatedly while shutdown
+     * is pending */
+    if (theHttpConnection >= 0) {
+	debug(1, 1, "FD %d Closing HTTP connection\n",
+	    theHttpConnection);
+	comm_close(theHttpConnection);
+	theHttpConnection = -1;
+    }
+    if (theInIcpConnection >= 0) {
+	/* NOTE, don't close outgoing ICP connection, we need to write to
+	 * it during shutdown */
+	debug(1, 1, "FD %d Closing ICP connection\n",
+	    theInIcpConnection);
+	if (theInIcpConnection != theOutIcpConnection)
+	    comm_close(theInIcpConnection);
+	else
+	    commSetSelect(theInIcpConnection,
+		COMM_SELECT_READ,
+		NULL,
+		NULL,
+		0);
+	theInIcpConnection = -1;
+    }
+    if (icmp_sock > -1)
+	icmpClose();
 }
 
 static void
-mainReconfigure(void)
+mainReinitialize(void)
 {
-    debug(1, 0) ("Restarting Squid Cache (version %s)...\n", version_string);
+    debug(1, 0, "Restarting Squid Cache (version %s)...\n", version_string);
     /* Already called serverConnectionsClose and ipcacheShutdownServers() */
-    serverConnectionsClose();
-    if (theOutIcpConnection > 0) {
-	comm_close(theOutIcpConnection);
-	theOutIcpConnection = -1;
-    }
-    dnsShutdownServers();
-    asnCleanup();
-    redirectShutdownServers();
-    storeDirCloseSwapLogs();
-    errorFree();
+    neighborsDestroy();
     parseConfigFile(ConfigFile);
     _db_init(Config.Log.log, Config.debugOptions);
-    asnAclInitialize(Config.aclList);	/* reload network->AS database */
     ipcache_restart();		/* clear stuck entries */
     fqdncache_restart();	/* sigh, fqdncache too */
-    errorInitialize();		/* reload error pages */
     dnsOpenServers();
     redirectOpenServers();
     serverConnectionsOpen();
-    if (theOutIcpConnection >= 0 && (!Config2.Accel.on || Config.onoff.accel_with_proxy))
+    ftpInitialize();
+    if (theOutIcpConnection >= 0 && (!httpd_accel_mode || Config.Accel.withProxy))
 	neighbors_open(theOutIcpConnection);
-    storeDirOpenSwapLogs();
-    debug(1, 0) ("Ready to serve requests.\n");
+    debug(1, 0, "Ready to serve requests.\n");
 }
 
-static void 
+static void
 setEffectiveUser(void)
 {
     leave_suid();		/* Run as non privilegied user */
     if (geteuid() == 0) {
-	debug(0, 0) ("Squid is not safe to run as root!  If you must\n");
-	debug(0, 0) ("start Squid as root, then you must configure\n");
-	debug(0, 0) ("it to run as a non-priveledged user with the\n");
-	debug(0, 0) ("'cache_effective_user' option in the config file.\n");
+	debug(0, 0, "Squid is not safe to run as root!  If you must\n");
+	debug(0, 0, "start Squid as root, then you must configure\n");
+	debug(0, 0, "it to run as a non-priveledged user with the\n");
+	debug(0, 0, "'cache_effective_user' option in the config file.\n");
 	fatal("Don't run Squid as root, set 'cache_effective_user'!");
     }
 }
@@ -391,6 +535,7 @@ setEffectiveUser(void)
 static void
 mainInitialize(void)
 {
+    static int first_time = 1;
     if (opt_catch_signals) {
 	squid_signal(SIGSEGV, death, SA_NODEFER | SA_RESETHAND);
 	squid_signal(SIGBUS, death, SA_NODEFER | SA_RESETHAND);
@@ -398,29 +543,25 @@ mainInitialize(void)
     squid_signal(SIGPIPE, SIG_IGN, SA_RESTART);
     squid_signal(SIGCHLD, sig_child, SA_NODEFER | SA_RESTART);
 
-    if (!configured_once)
-	cbdataInit();
     if (ConfigFile == NULL)
 	ConfigFile = xstrdup(DefaultConfigFile);
     parseConfigFile(ConfigFile);
-
     setEffectiveUser();
-    assert(Config.Port.http);
     if (httpPortNumOverride != 1)
-	Config.Port.http->i = (u_short) httpPortNumOverride;
+	Config.Port.http = (u_short) httpPortNumOverride;
     if (icpPortNumOverride != 1)
 	Config.Port.icp = (u_short) icpPortNumOverride;
 
     _db_init(Config.Log.log, Config.debugOptions);
-    fd_open(fileno(debug_log), FD_LOG, Config.Log.log);
+    fdstat_open(fileno(debug_log), FD_LOG);
+    fd_note(fileno(debug_log), Config.Log.log);
 
-    debug(1, 0) ("Starting Squid Cache version %s for %s...\n",
+    debug(1, 0, "Starting Squid Cache version %s for %s...\n",
 	version_string,
 	CONFIG_HOST_TYPE);
-    debug(1, 0) ("Process ID %d\n", (int) getpid());
-    debug(1, 1) ("With %d file descriptors available\n", Squid_MaxFD);
+    debug(1, 1, "With %d file descriptors available\n", Squid_MaxFD);
 
-    if (!configured_once) {
+    if (first_time) {
 	stmemInit();		/* stmem must go before at least redirect */
 	disk_init();		/* disk_init must go before ipcache_init() */
     }
@@ -429,67 +570,57 @@ mainInitialize(void)
     dnsOpenServers();
     redirectOpenServers();
     useragentOpenLog();
-    errorInitialize();
-    accessLogInit();
+    ftpInitialize();
 
 #if MALLOC_DBG
     malloc_debug(0, malloc_debug_level);
 #endif
 
-    if (!configured_once) {
+    if (first_time) {
 	unlinkdInit();
 	/* module initialization */
 	urlInitialize();
 	stat_init(&HTTPCacheInfo, Config.Log.access);
 	stat_init(&ICPCacheInfo, NULL);
-	objcacheInit();
 	storeInit();
-	asnAclInitialize(Config.aclList);
+#if FORW_VIA_LOG
+	icpInit(0);
+#endif
+
 	if (Config.effectiveUser) {
 	    /* we were probably started as root, so cd to a swap
 	     * directory in case we dump core */
-	    if (chdir(storeSwapDir(0)) < 0) {
-		debug(50, 0) ("%s: %s\n", storeSwapDir(0), xstrerror());
+	    if (chdir(swappath(0)) < 0) {
+		debug(50, 0, "%s: %s\n", swappath(0), xstrerror());
 		fatal_dump("Cannot cd to swap directory?");
 	    }
 	}
 	/* after this point we want to see the mallinfo() output */
 	do_mallinfo = 1;
-	mimeInit(Config.mimeTablePathname);
-	pconnInit();
     }
     serverConnectionsOpen();
-    if (theOutIcpConnection >= 0 && (!Config2.Accel.on || Config.onoff.accel_with_proxy))
+    if (theOutIcpConnection >= 0 && (!httpd_accel_mode || Config.Accel.withProxy))
 	neighbors_open(theOutIcpConnection);
 
-    if (!configured_once)
+    if (first_time)
 	writePidFile();		/* write PID file */
 
-#if !(defined(_SQUID_LINUX_) && USE_ASYNC_IO)
     squid_signal(SIGUSR1, rotate_logs, SA_RESTART);
     squid_signal(SIGUSR2, sigusr2_handle, SA_RESTART);
-#endif
     squid_signal(SIGHUP, reconfigure, SA_RESTART);
     squid_signal(SIGTERM, shut_down, SA_NODEFER | SA_RESETHAND | SA_RESTART);
     squid_signal(SIGINT, shut_down, SA_NODEFER | SA_RESETHAND | SA_RESTART);
-#if ALARM_UPDATES_TIME
-    squid_signal(SIGALRM, time_tick, SA_RESTART);
-    alarm(1);
-#endif
-    debug(1, 0) ("Ready to serve requests.\n");
+    debug(1, 0, "Ready to serve requests.\n");
 
-    if (!configured_once) {
+    if (first_time) {
+	eventAdd("storePurgeOld", storePurgeOld, NULL, Config.cleanRate);
 	eventAdd("storeMaintain", storeMaintainSwapSpace, NULL, 1);
 	eventAdd("storeDirClean", storeDirClean, NULL, 15);
-	if (Config.onoff.announce)
+	if (Config.Announce.on)
 	    eventAdd("start_announce", start_announce, NULL, 3600);
-	eventAdd("ipcache_purgelru", ipcache_purgelru, NULL, 10);
-	statAvgInit();
+	eventAdd("ipcache_purgelru", (EVH) ipcache_purgelru, NULL, 10);
     }
-    configured_once = 1;
-#ifdef SQUID_SNMP
-    snmpInit();
-#endif
+    first_time = 0;
 }
 
 int
@@ -526,9 +657,9 @@ main(int argc, char **argv)
     memset(&no_addr, '\0', sizeof(struct in_addr));
     safe_inet_addr("255.255.255.255", &no_addr);
     squid_srandom(time(NULL));
+    errorInitialize();
 
-    getCurrentTime();
-    squid_start = current_time;
+    squid_starttime = getCurrentTime();
     failure_notify = fatal_dump;
 
     mainParseOptions(argc, argv);
@@ -539,17 +670,14 @@ main(int argc, char **argv)
 	/* NOTREACHED */
     }
     if (opt_create_swap_dirs) {
-        if (ConfigFile == NULL)
-            ConfigFile = xstrdup(DefaultConfigFile);
-        cbdataInit();
-        parseConfigFile(ConfigFile);
-        setEffectiveUser();
-        debug(0, 0)("Creating Swap Directories\n");
-        storeCreateSwapDirectories();
-        return 0;
-    }   
-    if (!opt_no_daemon)
-	watch_child(argv);
+	if (ConfigFile == NULL)
+	    ConfigFile = xstrdup(DefaultConfigFile);
+	parseConfigFile(ConfigFile);
+	setEffectiveUser();
+	debug(0, 0, "Creating Swap Directories\n");
+	storeCreateSwapDirectories();
+	return 0;
+    }
     setMaxFD();
 
     if (opt_catch_signals)
@@ -561,41 +689,44 @@ main(int argc, char **argv)
 
     /* we have to init fdstat here. */
     fdstat_init();
-    fd_open(0, FD_LOG, "stdin");
-    fd_open(1, FD_LOG, "stdout");
-    fd_open(2, FD_LOG, "stderr");
+    fdstat_open(0, FD_LOG);
+    fdstat_open(1, FD_LOG);
+    fdstat_open(2, FD_LOG);
+    fd_note(0, "STDIN");
+    fd_note(1, "STDOUT");
+    fd_note(2, "STDERR");
+
+    hash_init(0);
 
     mainInitialize();
 
     /* main loop */
     for (;;) {
-	if (reconfigure_pending) {
-	    mainReconfigure();
-	    reconfigure_pending = 0;	/* reset */
-	} else if (rotate_pending) {
+	if (rotate_pending) {
+	    ftpServerClose();
 	    icmpClose();
 	    _db_rotate_log();	/* cache.log */
-	    storeWriteCleanLogs(1);
+	    storeWriteCleanLog();
 	    storeRotateLog();	/* store.log */
-	    accessLogRotate();	/* access.log */
+	    stat_rotate_log();	/* access.log */
 	    useragentRotateLog();	/* useragent.log */
+	    ftpInitialize();
 	    icmpOpen();
+#if FORW_VIA_LOG
+	    icpInit(1);
+#endif
 	    rotate_pending = 0;
 	}
 	eventRun();
 	if ((loop_delay = eventNextTime()) < 0)
 	    loop_delay = 0;
-#if HAVE_POLL
-	switch (comm_poll(loop_delay)) {
-#else
 	switch (comm_select(loop_delay)) {
-#endif
 	case COMM_OK:
 	    errcount = 0;	/* reset if successful */
 	    break;
 	case COMM_ERROR:
 	    errcount++;
-	    debug(1, 0) ("Select loop Error. Retry %d\n", errcount);
+	    debug(1, 0, "Select loop Error. Retry %d\n", errcount);
 	    if (errcount == 10)
 		fatal_dump("Select Loop failed!");
 	    break;
@@ -607,11 +738,9 @@ main(int argc, char **argv)
 	    }
 	    if (shutdown_pending) {
 		normal_shutdown();
-#if 0
-	    } else if (reconfigure_pending) {
-		mainReconfigure();
-		reconfigure_pending = 0;	/* reset */
-#endif
+	    } else if (reread_pending) {
+		mainReinitialize();
+		reread_pending = 0;	/* reset */
 	    } else {
 		fatal_dump("MAIN: SHUTDOWN from comm_select, but nothing pending.");
 	    }
@@ -634,7 +763,6 @@ sendSignal(void)
     debug_log = stderr;
     if (ConfigFile == NULL)
 	ConfigFile = xstrdup(DefaultConfigFile);
-    cbdataInit();
     parseConfigFile(ConfigFile);
     pid = readPidFile();
     if (pid > 1) {
@@ -652,53 +780,4 @@ sendSignal(void)
     }
     /* signal successfully sent */
     exit(0);
-}
-
-static void
-watch_child(char *argv[])
-{
-    char *prog;
-    int failcount = 0;
-    time_t start;
-    time_t stop;
-#ifdef _SQUID_NEXT_
-    union wait status;
-#else
-    int status;
-#endif
-    pid_t pid;
-    if (*(argv[0]) == '(')
-	return;
-    for (;;) {
-	if (fork() == 0) {
-	    /* child */
-	    prog = xstrdup(argv[0]);
-	    argv[0] = xstrdup("(squid)");
-	    execvp(prog, argv);
-	    fatal("execvp failed");
-	}
-	/* parent */
-	time(&start);
-	do {
-	    squid_signal(SIGINT, SIG_IGN, SA_RESTART);
-#ifdef _SQUID_NEXT_
-	    pid = wait3(&status, 0, NULL);
-#else
-	    pid = waitpid(-1, &status, 0);
-#endif
-	} while (pid > 0);
-	time(&stop);
-	if (stop - start < 10)
-	    failcount++;
-	else
-	    failcount = 0;
-	if (failcount == 5)
-	    exit(1);
-	if (WIFEXITED(status))
-	    if (WEXITSTATUS(status) == 0)
-		exit(0);
-	squid_signal(SIGINT, SIG_DFL, SA_RESTART);
-	sleep(3);
-    }
-    /* NOTREACHED */
 }

@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -130,14 +129,14 @@
 #include <sys/time.h>
 #endif
 
+#include "ansiproto.h"
 #include "util.h"
-#include "snprintf.h"
 
 #define RFC850_STRFTIME "%A, %d-%b-%y %H:%M:%S GMT"
 #define RFC1123_STRFTIME "%a, %d %b %Y %H:%M:%S GMT"
 
-static int make_month(const char *s);
-static int make_num(const char *s);
+static int make_month _PARAMS((const char *s));
+static int make_num _PARAMS((const char *s));
 
 static char *month_names[12] =
 {
@@ -193,10 +192,7 @@ parse_rfc1123(const char *str)
 	    tm.tm_mday = make_num(s);
 	    tm.tm_mon = make_month(s + 3);
 	    tm.tm_year = make_num(s + 7);
-	    /*
-	     * Y2K: Arjan de Vet <Arjan.deVet@adv.IAEhv.nl>
-	     * if tm.tm_year < 70, assume it's after the year 2000.
-	     */
+	    /* Y2K: if tm.tm_year < 70, assume it's after the year 2000 */
 	    if (tm.tm_year < 70)
 		tm.tm_year += 100;
 	    tm.tm_hour = make_num(s + 10);
@@ -313,7 +309,7 @@ mkhttpdlogtime(const time_t * t)
 	day_offset = 1;
 
     len = strftime(buf, 127 - 5, "%d/%b/%Y:%H:%M:%S ", lt);
-    snprintf(buf + len, 128-len, "%+03d%02d",
+    sprintf(buf + len, "%+03d%02d",
 	(min_offset / 60) % 24,
 	min_offset % 60);
 #else /* USE_GMT */

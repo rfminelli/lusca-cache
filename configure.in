@@ -50,17 +50,17 @@ dnl Check for GNU cc
 AC_PROG_CC
 
 dnl Warn if not using GNU cc
-dnl if test $ac_cv_prog_gcc = no; then
-dnl     echo '**************************************************************';
-dnl     echo '**************************************************************';
-dnl     echo '**';
-dnl     echo '**   WARNING:  Squid is only guaranteed to compile with GNU cc.';
-dnl     echo "**   Currently, you're using $CC";
-dnl     echo '**';
-dnl     echo '**************************************************************';
-dnl     echo '**************************************************************';
-dnl sleep 5
-dnl fi
+if test $ac_cv_prog_gcc = no; then
+        echo '**************************************************************';
+        echo '**************************************************************';
+        echo '**';
+        echo '**   WARNING:  Squid is only guaranteed to compile with GNU cc.';
+        echo "**   Currently, you're using $CC";
+        echo '**';
+        echo '**************************************************************';
+        echo '**************************************************************';
+	sleep 5
+fi
 
 dnl Gerben Wierda <Gerben_Wierda@RnA.nl>
 case "$host" in
@@ -95,248 +95,11 @@ if test -z "$PRESET_LDFLAGS"; then
     fi
 fi
 
-dnl Enable optional modules
-AC_ARG_ENABLE(dlmalloc,
-[  --enable-dlmalloc       Compile & use the malloc package by Doug Lea],
-[
- if test "$enableval" = "yes" ; then
-   LIBDLMALLOC="libdlmalloc.a"
-   LIB_MALLOC="-L../lib -ldlmalloc"
-   ac_cv_func_mallinfo="yes"
-   ac_cv_func_mallocblksize="no"
-   ac_cv_func_free="yes"
-   ac_cv_func_realloc="yes"
-   ac_cv_func_memalign="yes"
-   ac_cv_func_valloc="yes"
-   ac_cv_func_pvalloc="yes"
-   ac_cv_func_calloc="yes"
-   ac_cv_func_cfree="yes"
-   ac_cv_func_malloc_trim="yes"
-   ac_cv_func_malloc_usable_size="yes"
-   ac_cv_func_malloc_stats="yes"
-   ac_cv_func_mallinfo="yes"
-   ac_cv_func_mallopt="yes"
-   ac_cv_lib_gnumalloc="no"
-   ac_cv_lib_malloc="no"
-   ac_cv_enabled_dlmalloc="yes"
-   echo "dlmalloc build enabled"
- elif test "x$ac_cv_enabled_dlmalloc" = "xyes"; then
-   # Ok. dlmalloc was enabled before, but now disabled.
-   # we have to test these again
-   unset ac_cv_func_mallinfo
-   unset ac_cv_func_mallocblksize
-   unset ac_cv_func_free
-   unset ac_cv_func_realloc
-   unset ac_cv_func_memalign
-   unset ac_cv_func_valloc
-   unset ac_cv_func_pvalloc
-   unset ac_cv_func_calloc
-   unset ac_cv_func_cfree
-   unset ac_cv_func_malloc_trim
-   unset ac_cv_func_malloc_usable_size
-   unset ac_cv_func_malloc_stats
-   unset ac_cv_func_mallinfo
-   unset ac_cv_func_mallopt
-   unset ac_cv_lib_gnumalloc
-   unset ac_cv_lib_malloc
-   unset ac_cv_enabled_dlmalloc
- fi
- ],[
- if test "x$ac_cv_enabled_dlmalloc" = "xyes"; then
-   # Ok. dlmalloc was enabled before, but now disabled.
-   # we have to test these again
-   unset ac_cv_func_mallinfo
-   unset ac_cv_func_mallocblksize
-   unset ac_cv_func_free
-   unset ac_cv_func_realloc
-   unset ac_cv_func_memalign
-   unset ac_cv_func_valloc
-   unset ac_cv_func_pvalloc
-   unset ac_cv_func_calloc
-   unset ac_cv_func_cfree
-   unset ac_cv_func_malloc_trim
-   unset ac_cv_func_malloc_usable_size
-   unset ac_cv_func_malloc_stats
-   unset ac_cv_func_mallinfo
-   unset ac_cv_func_mallopt
-   unset ac_cv_lib_gnumalloc
-   unset ac_cv_lib_malloc
-   unset ac_cv_enabled_dlmalloc
- fi
- ])
-AC_SUBST(LIBDLMALLOC)
-AC_SUBST(LIB_MALLOC)
-
-AC_ARG_ENABLE(gnuregex,
-[  --enable-gnuregex       Compile GNUregex],
-[USE_GNUREGEX=$enableval])
-
-AC_ARG_ENABLE(new_storekey,
-[  --enable-new-storekey[=sha|md5]
-                          Use SHA/MD5 as store index, instead of URL],
-[ case "$enableval" in
-  yes|sha)
-  	echo "Store key set to SHA"
-  	AC_DEFINE(STORE_KEY_SHA)
-	STORE_KEY=sha
-      	;;
-  md5)
-  	echo "Store key set to MD5"
-  	AC_DEFINE(STORE_KEY_MD5)
-	STORE_KEY=md5
-	;;
-  no|url)
-	echo "Store key set to URL"
-	AC_DEFINE(STORE_KEY_URL)
-	STORE_KEY=url
-  esac
-],[
-  STORE_KEY=url
-  AC_DEFINE(STORE_KEY_URL)
-])
-AC_SUBST(STORE_KEY)
-
-AC_ARG_ENABLE(acltree,
-[  --enable-acltree[=bin|splay]
-                          Use tree function to store ACL lists],
-[ case "$enableval" in
-  splay)
-  	echo "ACL lists using BIN trees"
-  	AC_DEFINE(USE_SPLAY_TREE)
-      	;;
-  yes|bin)
-  	echo "ACL lists using SPLAY trees"
-  	AC_DEFINE(USE_BIN_TREE)
-	;;
-  esac
-])
-
-AC_ARG_ENABLE(xmalloc_debug,
-[  --enable-xmalloc-debug  Do some simple malloc debugging],
-[ if test "$enableval" = "yes" ; then
-    echo "Malloc debugging enabled"
-    AC_DEFINE(XMALLOC_DEBUG)
-  fi
-])
-
-AC_ARG_ENABLE(xmalloc_debug_count,
-[  --enable-xmalloc-debug-count
-                          Detailed trace of memory allocations],
-[ if test "$enableval" = "yes" ; then
-    echo "Malloc tracing enabled"
-    AC_DEFINE(XMALLOC_COUNT)
-  fi
-])
-
-AC_ARG_ENABLE(xmalloc_statistics,
-[  --enable-xmalloc-statistics
-                          Show malloc statistics in status page],
-[ if test "$enableval" = "yes" ; then
-    echo "Malloc statistics enabled"
-    AC_DEFINE(XMALLOC_STATISTICS)
-  fi
-])
-
-AC_ARG_ENABLE(async_io,
-[  --enable-async-io       Do ASYNC disk I/O using threads],
-[ if test "$enableval" = "yes" ; then
-    echo "Async I/O enabled"
-    AC_DEFINE(USE_ASYNC_IO)
-    ASYNC_OBJS='$(ASYNC_OBJS)'
-    SQUID_PTHREAD_LIB='$(PTHREADLIB)'
-    CFLAGS="$CFLAGS -D_REENTRANT"
-  fi
-])
-AC_SUBST(ASYNC_OBJS)
-AC_SUBST(SQUID_PTHREAD_LIB)
-
-AC_ARG_ENABLE(icmp,
-[  --enable-icmp           Enable ICMP pinging],
-[ if test "$enableval" = "yes" ; then
-    echo "ICMP enabled"
-    AC_DEFINE(USE_ICMP)
-  fi
-])
-
-AC_ARG_ENABLE(delay_hack,
-[  --enable-delay-hack     Enable delay hack to limit bandwith usage],
-[ if test "$enableval" = "yes" ; then
-    echo "Delay hack enabled"
-    AC_DEFINE(DELAY_HACK)
-  fi
-])
-
-AC_ARG_ENABLE(useragent_log,
-[  --enable-useragent-log  Enable logging of User-Agent header],
-[ if test "$enableval" = "yes" ; then
-    echo "User-Agent logging enabled"
-    AC_DEFINE(USE_USERAGENT_LOG)
-  fi
-])
-
-AC_ARG_ENABLE(kill_parent_hack,
-[  --enable-kill-parent-hack
-                          Kill parent on shutdown],
-[ if test "$enableval" = "yes" ; then
-    echo "Kill parent on shutdown"
-    AC_DEFINE(KILL_PARENT_OPT)
-  fi
-])
-
-AC_ARG_ENABLE(snmp,
-[  --enable-snmp           Enable SNMP monitoring],
-[ if test "$enableval" = "yes" ; then
-    echo "SNMP monitoring enabled"
-    AC_DEFINE(SQUID_SNMP)
-    SNMPLIB='-L../snmplib -lsnmp'
-    SNMP_OBJS='$(SNMP_OBJS)'
-    makesnmplib=snmplib
-  fi
-])
-AC_SUBST(SNMPLIB)
-AC_SUBST(SNMP_OBJS)
-AC_SUBST(makesnmplib)
-
-AC_ARG_ENABLE(time_hack,
-[  --enable-time-hack      Update internal timestamp only once per second],
-[ if test "$enableval" = "yes" ; then
-    echo "Update internal timestamp only once per second"
-    AC_DEFINE(ALARM_UPDATES_TIME)
-  fi
-])
-
-AC_ARG_ENABLE(cachemgr_hostname,
-[  --enable-cachemgr-hostname[=hostname]
-                          Make cachemgr.cgi default to this host],
-[  case $enableval in
-   yes)
-       AC_DEFINE(CACHEMGR_HOSTNAME,[getfullhostname()])
-       echo "Cachemgr default hostname == host where cachemgr runs"
-       ;;
-   no)
-       : # Nothing to do..
-       ;;
-   *)
-       AC_DEFINE_UNQUOTED(CACHEMGR_HOSTNAME,"${enableval}")
-       echo "Cachemgr default hostname set to ${enableval}"
-       ;;
-   esac
-])
-
-AC_ARG_ENABLE(arp_acl,
-[  --enable-arp-acl        Enable use of ARP ACL lists (ether address)],
-[  if test "$enableval" = "yes" ; then
-     echo "ARP ACL lists enabled (ether address)"
-     AC_DEFINE(USE_ARP_ACL)
-   fi
-])
-
 dnl Check for programs
 AC_PROG_CPP
 AC_PROG_INSTALL
 AC_PROG_RANLIB
 AC_PROG_LN_S
-AC_PATH_PROG(SH, sh, /bin/sh)
 AC_PATH_PROG(FALSE, false, /usr/bin/false)
 AC_PATH_PROG(TRUE, true, /usr/bin/true)
 AC_PATH_PROG(RM, rm, $FALSE)
@@ -367,11 +130,11 @@ dnl Check for headers
 AC_HEADER_DIRENT
 AC_HEADER_STDC
 
+
 AC_CHECK_HEADERS( \
 	alloca.h \
 	arpa/inet.h \
 	arpa/nameser.h \
-	assert.h \
 	bstring.h \
 	config.h \
 	crypt.h \
@@ -418,60 +181,34 @@ AC_CHECK_HEADERS( \
 )
 
 AC_C_CONST
-AC_C_BIGENDIAN
 
-AC_CACHE_CHECK(if ANSI prototypes work,ac_cv_have_ansi_prototypes, [
-  AC_TRY_COMPILE([int foo(char *); int foo (char *bar) {return 1;}],
-    [foo("bar")],
-    ac_cv_have_ansi_prototypes="yes",
-    ac_cv_have_ansi_prototypes="no")
-])
-if test $ac_cv_have_ansi_prototypes = "yes" ; then
-  AC_DEFINE(HAVE_ANSI_PROTOTYPES)
-fi
+AC_MSG_CHECKING(if ANSI prototypes work)
+AC_TRY_COMPILE([int foo(char *); int foo (char *bar) {return 1;}],
+[foo("bar")],
+[AC_DEFINE(HAVE_ANSI_PROTOTYPES)
+AC_MSG_RESULT(yes)],
+AC_MSG_RESULT(no))
 
-AC_CACHE_CHECK(for tm->tm_gmtoff,ac_cv_have_tm_gmoff, [
-  AC_TRY_COMPILE([#include <time.h>
+AC_MSG_CHECKING(for tm->tm_gmtoff)
+AC_TRY_COMPILE([#include <time.h>
 #include <sys/time.h>],
-    [struct tm foo;
-      foo.tm_gmtoff = 0;],
-    ac_cv_have_tm_gmoff="yes",
-    ac_cv_have_tm_gmoff="no")
-])
-if test $ac_cv_have_tm_gmoff = "yes" ; then
-  AC_DEFINE(HAVE_TM_GMTOFF)
-fi
+[struct tm foo;
+foo.tm_gmtoff = 0;],
+[AC_DEFINE(HAVE_TM_GMTOFF)
+AC_MSG_RESULT(yes)],
+AC_MSG_RESULT(no))
 
-AC_CACHE_CHECK(for extended mallinfo,ac_cv_have_ext_mallinfo, [
-  AC_TRY_COMPILE([#include <sys/types.h>
+AC_MSG_CHECKING(for extended mallinfo)
+AC_TRY_COMPILE([#include <sys/types.h>
 #include <malloc.h>],
-    [struct mallinfo foo;
-      foo.mxfast = 0;],
-    ac_cv_have_ext_mallinfo="yes",
-    ac_cv_have_ext_mallinfo="no")
-])
-if test $ac_cv_have_ext_mallinfo = "yes" ; then
-  AC_DEFINE(HAVE_EXT_MALLINFO)
-fi
+[struct mallinfo foo;
+foo.mxfast = 0;],
+[AC_DEFINE(HAVE_EXT_MALLINFO)
+AC_MSG_RESULT(yes)],
+AC_MSG_RESULT(no))
 
-AC_CACHE_CHECK(for struct rusage,ac_cv_have_struct_rusage, [
-  AC_TRY_COMPILE([
-#if HAVE_SYS_TIME_H
-#include <sys/time.h>
-#endif
-#if HAVE_SYS_RESOURCE_H
-#include <sys/resource.h>
-#endif],
-    [struct rusage R;],
-    ac_cv_have_struct_rusage="yes",
-    ac_cv_have_struct_rusage="no")
-])
-if test $ac_cv_have_struct_rusage = "yes" ; then
-  AC_DEFINE(HAVE_STRUCT_RUSAGE)
-fi
-
-AC_CACHE_CHECK(for ip->ip_hl, ac_cv_have_ip_hl, [
-  AC_TRY_COMPILE([#include <sys/types.h>
+AC_MSG_CHECKING(for ip->ip_hl)
+AC_TRY_COMPILE([#include <sys/types.h>
 #include <netinet/in.h>
 #include <netinet/in_systm.h>
 #include <netinet/ip.h>
@@ -481,14 +218,11 @@ AC_CACHE_CHECK(for ip->ip_hl, ac_cv_have_ip_hl, [
 #ifndef __linux__
 #define iphdr ip
 #endif],
-    [struct iphdr ip;
-      ip.ip_hl= 0;],
-    ac_cv_have_ip_hl="yes",
-    ac_cv_have_ip_hl="no")
-])
-if test $ac_cv_have_ip_hl = "yes" ; then
-  AC_DEFINE(HAVE_IP_HL)
-fi
+[struct iphdr ip;
+ip.ip_hl= 0;],
+[AC_DEFINE(HAVE_IP_HL)
+AC_MSG_RESULT(yes)],
+AC_MSG_RESULT(no))
 
 dnl Check for typedefs
 AC_CHECK_SIZEOF(int)
@@ -498,8 +232,7 @@ dnl Check for special functions
 AC_FUNC_ALLOCA
 
 AC_CHECK_TYPE(pid_t, int)
-AC_CHECK_TYPE(size_t, unsigned int)
-AC_CHECK_TYPE(ssize_t, int)
+AC_CHECK_TYPE(size_t, int)
 AC_CHECK_TYPE(off_t, int)
 AC_CHECK_TYPE(mode_t, u_short)
 
@@ -507,12 +240,7 @@ dnl Check for needed libraries
 AC_CHECK_LIB(nsl, main)
 AC_CHECK_LIB(socket, main)
 AC_CHECK_LIB(gnumalloc, main)
-if test "$ac_cv_lib_gnumalloc_main" = "yes"; then
-	echo "Disabling extended malloc functions when using gnumalloc"
-	ac_cv_func_mallinfo=no
-	ac_cv_func_mallocblksize=no
-	ac_cv_func_mallopt=no
-else
+if test "$ac_cv_lib_gnumalloc_main" = "no"; then
 	case "$host" in
 		*-sun-solaris*)
         		echo "skipping libmalloc check for $host"
@@ -527,26 +255,14 @@ else
 fi
 AC_CHECK_LIB(bsd, main)
 AC_CHECK_LIB(regex, main, [REGEXLIB="-lregex"])
-case "$host" in
-	i386-*-freebsd*)
-		echo "skipping libresolv checks for $host"
-		;;
-	*)
-		AC_CHECK_LIB(resolv, inet_aton, AC_CHECK_LIB(44bsd, inet_aton))
-		AC_CHECK_LIB(resolv, main)
-		;;
-esac
+AC_CHECK_LIB(resolv, inet_aton, AC_CHECK_LIB(44bsd, inet_aton))
+AC_CHECK_LIB(resolv, main)
 AC_CHECK_LIB(m, main)
 
 dnl Check for libcrypt
 dnl We use crypt(3) which may be in libc, or in libcrypt (eg FreeBSD)
 AC_CHECK_LIB(crypt, crypt, [CRYPTLIB="-lcrypt"])
 AC_SUBST(CRYPTLIB)
-
-dnl Check for pthreads
-dnl We use pthreads when doing ASYNC I/O
-AC_CHECK_LIB(pthread, main, [PTHREADLIB="-lpthread"])
-AC_SUBST(PTHREADLIB)
 
 dnl System-specific library modifications
 dnl
@@ -597,7 +313,6 @@ AC_CHECK_FUNCS(\
 	bcopy \
 	fchmod \
 	getdtablesize \
-	getpagesize \
 	getrusage \
 	getspnam \
 	lrand48 \
@@ -608,6 +323,7 @@ AC_CHECK_FUNCS(\
 	memmove \
 	mktime \
 	mstats \
+	poll \
 	random \
 	regcomp \
 	regexec \
@@ -615,54 +331,17 @@ AC_CHECK_FUNCS(\
 	res_init \
 	seteuid \
 	setpgrp \
+	setresuid \
 	setrlimit \
 	setsid \
 	sigaction \
-	snprintf \
 	srand48 \
 	srandom \
 	sysconf \
 	syslog \
 	tempnam \
 	timegm \
-	vsnprintf \
 )
-
-case "$host" in
-	[alpha-dec-osf3.*])
-		# John Kay (jkay@nlanr.net) 19970818
-		echo "skipping poll() check for $host..."
-		ac_cv_func_poll='no'
-		;;
-	[*-hp-hpux*.*])
-		# Duane Wessels
-		echo "skipping poll() check for $host..."
-		ac_cv_func_poll='no'
-		;;
-	*)
-		AC_CHECK_FUNC(poll)
-		;;
-esac
-
-dnl Yay!  Another Linux brokenness.  Its not good enough
-dnl to know that setresuid() exists, because RedHat 5.0 declares
-dnl setresuid() but doesn't implement it.
-dnl
-AC_CACHE_CHECK(if setresuid is implemented, ac_cv_func_setresuid,
-  AC_TRY_RUN([
-#include <stdlib.h>
-  int main() {
-    if(setresuid(-1,-1,-1)) {
-      perror("setresuid:");
-      exit(1);
-    }
-    exit(0);
-  }
-  ],ac_cv_func_setresuid="yes",ac_cv_func_setresuid="no")
-)
-if test "$ac_cv_func_setresuid" = "yes" ; then
-  AC_DEFINE(HAVE_SETRESUID)
-fi
 
 AC_MSG_CHECKING(if GNUregex needs to be compiled)
 if test "$ac_cv_func_regcomp" = "no" ; then
@@ -692,7 +371,6 @@ AC_REPLACE_FUNCS(\
 	strerror \
 )
 
-dnl Not cached since people are likely to tune this
 AC_MSG_CHECKING(Default FD_SETSIZE value)
 AC_TRY_RUN([
 #if HAVE_STDIO_H
@@ -721,7 +399,6 @@ DEFAULT_FD_SETSIZE=256)
 AC_MSG_RESULT($DEFAULT_FD_SETSIZE)
 AC_DEFINE_UNQUOTED(DEFAULT_FD_SETSIZE, $DEFAULT_FD_SETSIZE)
 
-dnl Not cached since people are likely to tune this
 AC_MSG_CHECKING(Maximum number of filedescriptors we can open)
 AC_TRY_RUN([
 #include <stdio.h>
@@ -778,7 +455,6 @@ SQUID_MAXFD=256)
 AC_MSG_RESULT($SQUID_MAXFD)
 AC_DEFINE_UNQUOTED(SQUID_MAXFD, $SQUID_MAXFD)
 
-dnl Not cached since people are likely to tune this
 AC_MSG_CHECKING(Default UDP send buffer size)
 AC_TRY_RUN([
 #include <stdlib.h>
@@ -802,7 +478,6 @@ SQUID_UDP_SO_SNDBUF=16384)
 AC_MSG_RESULT($SQUID_UDP_SO_SNDBUF)
 AC_DEFINE_UNQUOTED(SQUID_UDP_SO_SNDBUF, $SQUID_UDP_SO_SNDBUF)
 
-dnl Not cached since people are likely to tune this
 AC_MSG_CHECKING(Default UDP receive buffer size)
 AC_TRY_RUN([
 #include <stdlib.h>
@@ -826,7 +501,6 @@ SQUID_UDP_SO_RCVBUF=16384)
 AC_MSG_RESULT($SQUID_UDP_SO_RCVBUF)
 AC_DEFINE_UNQUOTED(SQUID_UDP_SO_RCVBUF, $SQUID_UDP_SO_RCVBUF)
 
-dnl Not cached since people are likely to tune this
 AC_MSG_CHECKING(Default TCP send buffer size)
 AC_TRY_RUN([
 #include <stdlib.h>
@@ -850,7 +524,6 @@ SQUID_TCP_SO_SNDBUF=16384)
 AC_MSG_RESULT($SQUID_TCP_SO_SNDBUF)
 AC_DEFINE_UNQUOTED(SQUID_TCP_SO_SNDBUF, $SQUID_TCP_SO_SNDBUF)
 
-dnl Not cached since people are likely to tune this
 AC_MSG_CHECKING(Default TCP receive buffer size)
 AC_TRY_RUN([
 #include <stdlib.h>
@@ -874,16 +547,13 @@ SQUID_TCP_SO_RCVBUF=16384)
 AC_MSG_RESULT($SQUID_TCP_SO_RCVBUF)
 AC_DEFINE_UNQUOTED(SQUID_TCP_SO_RCVBUF, $SQUID_TCP_SO_RCVBUF)
 
-AC_CACHE_CHECK(if sys_errlist is already defined, ac_cv_needs_sys_errlist,
-  AC_TRY_COMPILE([#include <stdio.h>],[char *s = sys_errlist[0];],
-    ac_cv_needs_sys_errlist="no",
-    ac_cv_needs_sys_errlist="yes")
-)
-if test "$ac_cv_needs_sys_errlist" = "yes" ; then
-  AC_DEFINE(NEED_SYS_ERRLIST)
-fi
+AC_MSG_CHECKING(if sys_errlist[] is already defined)
+AC_TRY_COMPILE([#include <stdio.h>],
+[char *s = sys_errlist[0];],
+AC_MSG_RESULT(yes),
+[AC_MSG_RESULT(no)
+AC_DEFINE(NEED_SYS_ERRLIST)])
 
-dnl Not cached since people are likely to change this
 AC_MSG_CHECKING(for libresolv _dns_ttl_ hack)
 AC_TRY_LINK(extern int _dns_ttl_;,return _dns_ttl_;,
 [AC_MSG_RESULT(yes)
@@ -900,7 +570,6 @@ if test "$ac_cv_lib_malloc_main" = "yes" ; then
 		XTRA_OBJS="$XTRA_OBJS /usr/lib/debug/mallocmap.o"
 	fi
 fi
-
 AC_SUBST(XTRA_OBJS)
 
 if test -z "$XTRA_LIBS"; then
@@ -920,9 +589,6 @@ AC_OUTPUT(\
 	./scripts/RunCache \
 	./scripts/RunAccel \
 	./src/Makefile \
-	./src/options.h \
+	./src/squid.conf.pre \
 	./contrib/Makefile \
-	./snmplib/Makefile \
-	./icons/Makefile \
-	./errors/Makefile \
 )

@@ -1,4 +1,3 @@
-
 #include "config.h"
 
 #if HAVE_STDIO_H
@@ -8,7 +7,9 @@
 #include <stdlib.h>
 #endif
 
-static void base64_init(void);
+#include "ansiproto.h"
+
+static void base64_init _PARAMS((void));
 
 static int base64_initialized = 0;
 int base64_value[256];

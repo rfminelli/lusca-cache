@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -130,10 +129,10 @@
 #include <errno.h>
 #endif
 
+#include "ansiproto.h"
 #include "util.h"
-#include "snprintf.h"
 
-void (*failure_notify) (const char *) = NULL;
+void (*failure_notify) _PARAMS((const char *)) = NULL;
 static char msg[128];
 
 extern int sys_nerr;
@@ -209,7 +208,7 @@ check_free(void *s)
 	break;
     }
     if (I == DBG_ARRY_SZ) {
-	snprintf(msg, 128, "xfree: ERROR: s=%p not found!", s);
+	sprintf(msg, "xfree: ERROR: s=%p not found!", s);
 	(*failure_notify) (msg);
     }
 }
@@ -225,7 +224,7 @@ check_malloc(void *p, size_t sz)
 	    continue;
 	Q = P + malloc_size[B][I];
 	if (P <= p && p < Q) {
-	    snprintf(msg, 128, "xmalloc: ERROR: p=%p falls in P=%p+%d",
+	    sprintf(msg, "xmalloc: ERROR: p=%p falls in P=%p+%d",
 		p, P, malloc_size[B][I]);
 	    (*failure_notify) (msg);
 	}
@@ -259,22 +258,16 @@ mallocblksize(void *p)
 static void
 xmalloc_count(void *p, int sign)
 {
-    int statMemoryAccounted();
-    static size_t last_total=0,last_accounted=0,last_mallinfo=0;
-    struct mallinfo mp=mallinfo();
-    size_t accounted=statMemoryAccounted();
-    size_t mi = mp.uordblks + mp.usmblks + mp.hblkhd;
     size_t sz;
     static size_t total = 0;
+    int memoryAccounted();
+    int mallinfoTotal();
     sz = mallocblksize(p) * sign;
     total += sz;
-    fprintf(stderr, "xmalloc_count=%7d/%9d  accounted=%7d/%9d  mallinfo=%7d%9d\n",
-	(int) total - last_total, (int) total,
-	(int) accounted - last_accounted, (int) accounted,
-	(int) mi - last_mallinfo, (int) mi);
-    last_total=total;
-    last_accounted=accounted;
-    last_mallinfo=mi;
+    fprintf(stderr, "xmalloc_count=%9d  accounted=%9d  mallinfo=%9d\n",
+	(int) total,
+	memoryAccounted(),
+	mallinfoTotal());
 }
 
 #endif /* XMALLOC_COUNT */
@@ -292,7 +285,7 @@ xmalloc(size_t sz)
 	sz = 1;
     if ((p = malloc(sz)) == NULL) {
 	if (failure_notify) {
-	    snprintf(msg, 128, "xmalloc: Unable to allocate %d bytes!\n",
+	    sprintf(msg, "xmalloc: Unable to allocate %d bytes!\n",
 		(int) sz);
 	    (*failure_notify) (msg);
 	} else {
@@ -358,7 +351,7 @@ xrealloc(void *s, size_t sz)
 	sz = 1;
     if ((p = realloc(s, sz)) == NULL) {
 	if (failure_notify) {
-	    snprintf(msg, 128, "xrealloc: Unable to reallocate %d bytes!\n",
+	    sprintf(msg, "xrealloc: Unable to reallocate %d bytes!\n",
 		(int) sz);
 	    (*failure_notify) (msg);
 	} else {
@@ -393,7 +386,7 @@ xcalloc(int n, size_t sz)
 	sz = 1;
     if ((p = calloc(n, sz)) == NULL) {
 	if (failure_notify) {
-	    snprintf(msg, 128, "xcalloc: Unable to allocate %d blocks of %d bytes!\n",
+	    sprintf(msg, "xcalloc: Unable to allocate %d blocks of %d bytes!\n",
 		(int) n, (int) sz);
 	    (*failure_notify) (msg);
 	} else {
@@ -447,24 +440,9 @@ xstrerror(void)
     static char xstrerror_buf[BUFSIZ];
     if (errno < 0 || errno >= sys_nerr)
 	return ("Unknown");
-    snprintf(xstrerror_buf, BUFSIZ, "(%d) %s", errno, strerror(errno));
+    sprintf(xstrerror_buf, "(%d) %s", errno, strerror(errno));
     return xstrerror_buf;
 }
-
-#if NOT_NEEDED
-/*
- * xbstrerror with argument for late notification */
-
-const char *
-xbstrerror(int err)
-{
-    static char xbstrerror_buf[BUFSIZ];
-    if (err < 0 || err >= sys_nerr)
-	return ("Unknown");
-    snprintf(xbstrerror_buf, BUFSIZ, "(%d) %s", err, strerror(err));
-    return xbstrerror_buf;
-}
-#endif
 
 void
 Tolower(char *q)
@@ -488,13 +466,6 @@ tvSubUsec(struct timeval t1, struct timeval t2)
 {
     return (t2.tv_sec - t1.tv_sec) * 1000000 +
 	(t2.tv_usec - t1.tv_usec);
-}
-
-double
-tvSubDsec(struct timeval t1, struct timeval t2)
-{
-    return (double) (t2.tv_sec - t1.tv_sec) +
-	(double) (t2.tv_usec - t1.tv_usec) / 1000000.0;
 }
 
 /*

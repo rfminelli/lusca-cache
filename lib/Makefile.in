@@ -1,4 +1,8 @@
 #
+#  Makefile for simple liburl
+#
+#  Darren Hardy, hardy@cs.colorado.edu, April 1994
+#
 #  $Id$
 #
 prefix		= @prefix@
@@ -29,17 +33,9 @@ UTILOBJS	= rfc1123.o \
 		  tree.o \
 		  splay.o \
 		  safe_inet_addr.o \
-		  iso3307.o \
-		  snprintf.o \
-		  sha.o \
-		  md5.o \
-		  radix.o \
-		  String.o \
-		  stub_memaccount.o \
 		  $(LIBOBJS)
 REGEXOBJS	= GNUregex.o
-DLMALLOCOBJS	= malloc-2.6.4.o
-LIBS		= libmiscutil.a @LIBREGEX@ @LIBDLMALLOC@
+LIBS		= libmiscutil.a @LIBREGEX@
 
 CFLAGS		= $(AC_CFLAGS) $(INCLUDE)
 
@@ -57,15 +53,10 @@ libregex.a: $(REGEXOBJS)
 	$(AR_R) $@ $(REGEXOBJS)
 	$(RANLIB) $@
 
-libdlmalloc.a: $(DLMALLOCOBJS)
-	$(RM) -f $@
-	$(AR_R) $@ $(DLMALLOCOBJS)
-	$(RANLIB) $@
-
 clean:
 	-rm -f *.o $(LIBS) core
 
-distclean: clean
+realclean: clean
 	-rm -f libregex.a
 	-rm -f Makefile
 

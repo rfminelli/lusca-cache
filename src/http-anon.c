@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -77,7 +76,6 @@ static struct http_anon_struct_header http_anon_allowed_header[] =
     {"GET ", 4},
     {"POST ", 5},
     {"HEAD ", 5},
-    {"TRACE ", 6},
     {"Allow:", 6},
     {"Authorization:", 14},
     {"Cache-control:", 14},
@@ -100,8 +98,6 @@ static struct http_anon_struct_header http_anon_allowed_header[] =
     {"Retry-After:", 12},
     {"Title:", 6},
     {"URI:", 4},
-    {"Connection:", 11},
-    {"Proxy-Connection:", 17},
     {NULL, 0}
 };
 
