@@ -225,6 +225,9 @@
 #	to not query neighbor caches for certain objects.  You may
 #	list this option multiple times.
 #
+#	NOTE: this option will partially replace 'http_stop' etc, in a
+#	future release.
+#
 #hierarchy_stoplist
 
 # OPTIONS WHICH AFFECT THE CACHE SIZE
@@ -270,15 +273,6 @@
 #cache_mem_low 75
 #cache_mem_high 90
 
-#  TAG: ipcache_size (number of entries)
-#  TAG: ipcache_low  (percent)
-#  TAG: ipcache_high (percent)
-#	The size, low-, and high-water marks for the IP cache.
-#
-#ipcache_size 1024
-#ipcache_low  90
-#ipcache_high 95
-
 
 # LOGFILE PATHNAMES AND CACHE DIRECTORIES
 #-----------------------------------------------------------------------------
@@ -301,6 +295,12 @@
 #	Cache logging file.  Set logging levels with "debug_options" below.
 #cache_log @DEFAULT_CACHE_LOG@
 
+#  TAG: cache_hierarchy_log 
+#	Hierachical caching access logfile.  It shows which parent,
+#	neighbor, or source host a request is satisfied from.
+#	To disable, enter "none".
+#cache_hierarchy_log @DEFAULT_HIERARCHY_LOG@
+
 #  TAG:	cache_store_log
 #	Logs the activities of the storage manager.  Shows which
 #	objects are ejected from the cache, and which objects are
@@ -311,13 +311,13 @@
 #	The Cache can emulate the log file format which many 'httpd'
 #	programs use.  To disable/enable this emulation, set 
 #	emulate_httpd_log to 'off' or 'on'.  The default 
-#	is to use the native log format.
+#	is to enable this emulation.
 #
-#emulate_httpd_log off
+#emulate_httpd_log on
 
 #  TAG: pid_filename
 #	A pathname to write the process-id to.  There is no default.
-#pid_filename
+#pid_filename /tmp/squid.pid
 
 #  TAG: debug_options
 #	Logging options are set as section,level where each source file
@@ -326,24 +326,7 @@
 #	log file, so be careful.  The magic word "ALL" sets debugging
 #	levels for all sections.  We recommend normally running with
 #	"ALL,1".
-debug_options ALL,1
-
-#  TAG: ident_lookup
-#	If you wish to make an RFC931/ident lookup of the client username
-#	for each connection, enable this.  It is off by default.
-#
-#ident_lookup off
-
-#  TAG: log_fqdn
-#	Turn this on if you wish to log fully qualified domain names
-#	in the access.log.
-#log_fqdn off
-
-#  TAG: client_netmask
-#	A netmask for client addresses in logfiles and cachemgr output.
-#	Change this to protect the privacy of your cache clients.
-#
-#client_netmask 255.255.255.255
+#debug_options ALL,1
 
 
 # OPTIONS FOR EXTERNAL SUPPORT PROGRAMS
@@ -369,9 +352,9 @@ debug_options ALL,1
 # resonable for your domain, like wwwuser@somewhere.net
 #
 # The reason why this is domainless by default is that the
-# request can be made on the behalf of a user in any domain,
+# request can be made on the behalf of a user in any domain.
 # depending on how the cache is used.
-# Some ftp server also validate that the email address is valid
+# Some ftp server also validate that the email adress is valid
 # (for example perl.com).
 #
 #ftp_user squid@
@@ -389,22 +372,21 @@ debug_options ALL,1
 #
 #dns_children 5
 
-#  TAG: redirect_program 
-#	Specify the location of the executable for the URL redirector.
-#	Currently, you must provide your own redirector program.
-#	See the Release-Notes for how to write one.
-#	By default, the redirector is not used.
-#
-#redirect_program /bin/false
-
-#  TAG: redirect_children
-#	The number of redirector processes to spawn.
-#
-#redirect_children 5
-
 
 # OPTIONS FOR TUNING THE CACHE
 #-----------------------------------------------------------------------------
+
+#  TAG: http_stop, gopher_stop, ftp_stop 
+#	Stoplist for URL's.  URL's which contain these strings will be
+#	never be saved in the cache.
+#
+#	NOTE: these options will be removed in a future release, their
+#	functionality will be more appropriately provided by 'ttl_pattern'
+#	and 'hierarchy_stoplist'.
+#
+http_stop     /cgi-bin/
+http_stop     ?
+gopher_stop   ?
 
 #  TAG: ftp, gopher, http
 #	Object size limits (in MB) and default TTLs (in minutes) 
@@ -436,15 +418,6 @@ debug_options ALL,1
 #	filesize plus a few extra kbytes.
 #
 request_size 100
-
-#  TAG: expire_age (minutes)
-#	An object must have expired this long ago before it will
-#	be forcibly removed from the cache.  Otherwise, the object
-#	will remain in the cache and we will issue an If-Modified-Since
-#	request for it when it is next requested.  The default is
-#	one week.
-#
-#expire_age 10080
 
 #  TAG: ttl_pattern		# case sensitive
 #  TAG: ttl_pattern/i		# case insensitive
@@ -507,23 +480,7 @@ request_size 100
 #	file descriptors by repeatedly aborting and re-requesting
 #	non-cachable objects.
 #	
-#	Usage: quick_abort    min-kbytes percent max-kbytes
-#
-#       When the user aborts a request, Squid will check the
-#	quick_abort values to the amount of data transfered until
-#	then.
-#
-#	If the transfer has less than 'min-kbytes' remaining, it
-#	will finish the retrieval.  Setting minlength to -1 will
-#	disable the quick_abort feature.
-#
-#	If the transfer has more than 'max-kbytes' remaining, it
-#	will abort the retrieval.
-#
-#	If more than 'percent' of the transfer has completed, it will
-#	finish the retrieval.
-#
-#quick_abort    -1 0 0
+#quick_abort    off
 
 #  TAG: negative_ttl (in minutes)         
 #	Time-to-Live (TTL) for failed requests.  Certain types of
@@ -611,17 +568,12 @@ request_size 100
 
 # Defining an Access List
 #
-# acl aclname acltype string1 ...
-#
-# acltype is one of src dst srcdomain dstdomain url_pattern urlpath_pattern
-#	            time port proto method
+# acl aclname src|domain|url_regex|urlpath_regex|time|port|proto|method string1 ...
 # 
-# acl aclname src      ip-address/netmask ... (clients IP address)
-# acl aclname src      addr1/mask1-addr2/mask2 ... (range of addresses)
-# acl aclname dst      ip-address/netmask ... (URL host's IP address)
-# acl aclname srcdomain   foo.com ... (taken from reverse DNS lookup)
-# acl aclname dstdomain   foo.com ... (taken from the URL)
-# acl aclname time     [day-abbrevs]  [h1:m1-h2:m2]
+# acl aclname src      ip-address/netmask ...
+# acl aclname src      addr1/mask1-addr2/mask2 ...	# range of addresses
+# acl aclname domain   foo.com ...
+# acl aclname time     day-abbrevs  h1:m1-h2:m2
 #	day-abbrevs:
 #		S - Sunday
 #		M - Monday
@@ -799,41 +751,27 @@ dns_testnames internic.net usc.edu cs.colorado.edu mit.edu yale.edu
 #
 #append_domain .yourdomain.com
 
-#  TAG: tcp_recv_bufsize
-#	Size of receive buffer to set for TCP sockets.  Probably just
-#	as easy to change your kernel's default.  Set to zero to use
-#	the default buffer size.
-#
-#tcp_recv_bufsize 0
-
-
-#  TAG: ssl_proxy
-#	Specify the name of a 'cache_host' listed above, or a hostname
-#	and port number where all SSL requests should be forwarded to.
-#
-#	Usage: ssl_proxy cache_host
-#	       ssl_proxy host:port
-#
-#ssl_proxy none
-
-#  TAG: proxy_auth
-#	Usage: proxy_auth passwd_file [ ignore-domain ]
-#
-#	'passwd_file' is an apache-style file of passwords for
-#	authenticated proxy access Looks like user:password, with the
-#	password being standard crypt() format.  Proxy authentication
-#	is disabled by default.
-#
-#	'ignore-domain' is a domain name for which authorization will
-#	*not* be required.
-#
-#proxy_auth /dev/null
-
 #  TAG: err_html_text
 #	HTML text to include in error messages.  Make this a "mailto"
 #	URL to your admin address, or maybe just a link to your 
 #	organizations Web page.
 #err_html_text
 
-#  TAG: deny_info
-#	deny_info URL acl1 acl2 ...
+#  TAG: udp_hit_obj on|off
+#	If set, Squid will request UDP_HIT_OBJ replies from its neighbors.
+#udp_hit_obj on
+
+#  TAG: memory_pools on|off
+#	If set, Squid will keep pools of allocated (but unused) memory
+#	available for future use.  If memory is a premium on your
+#	system, disable this.
+#memory_pools on
+
+#  TAG: forwarded_for on|off
+#	If set, Squid will include your system's IP address or name
+#	in the HTTP requests it forwards.  By default it looks like
+#	this:
+#		Forwarded: by http://foo.org:3128/ for 192.1.2.3
+#	If you disable this, it will appear as
+#		Forwarded: by http://foo.org:3128/
+#forwarded_for on

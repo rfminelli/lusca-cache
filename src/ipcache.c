@@ -107,9 +107,11 @@
 
 #define MAX_LINELEN (4096)
 
+#define MAX_IP		 1024	/* Maximum cached IP */
 #define IP_LOW_WATER       90
 #define IP_HIGH_WATER      95
 #define MAX_HOST_NAME	  256
+#define IP_INBUF_SZ	 4096
 
 struct _ip_pending {
     int fd;
@@ -118,52 +120,85 @@ struct _ip_pending {
     struct _ip_pending *next;
 };
 
-struct ipcacheQueueData {
-    struct ipcacheQueueData *next;
-    ipcache_entry *i;
-};
+#define DNS_FLAG_ALIVE		0x01
+#define DNS_FLAG_BUSY		0x02
+#define DNS_FLAG_CLOSING	0x04
+
+typedef struct _dnsserver {
+    int id;
+    int flags;
+    int inpipe;
+    int outpipe;
+    time_t lastcall;
+    time_t answer;
+    unsigned int offset;
+    unsigned int size;
+    char *ip_inbuf;
+    struct timeval dispatch_time;
+    ipcache_entry *ip_entry;
+} dnsserver_t;
 
 static struct {
     int requests;
-    int replies;
     int hits;
     int misses;
     int pending_hits;
     int negative_hits;
+    int dnsserver_requests;
+    int dnsserver_replies;
     int errors;
     int avg_svc_time;
     int ghbn_calls;		/* # calls to blocking gethostbyname() */
+    int dnsserver_hist[DefaultDnsChildrenMax];
 } IpcacheStats;
 
+typedef struct _line_entry {
+    char *line;
+    struct _line_entry *next;
+} line_entry;
+
+struct dnsQueueData {
+    struct dnsQueueData *next;
+    ipcache_entry *ip_entry;
+};
+
 static int ipcache_testname _PARAMS((void));
+static dnsserver_t *dnsGetFirstAvailable _PARAMS((void));
 static int ipcache_compareLastRef _PARAMS((ipcache_entry **, ipcache_entry **));
 static int ipcache_reverseLastRef _PARAMS((ipcache_entry **, ipcache_entry **));
+static int ipcache_create_dnsserver _PARAMS((char *command));
 static int ipcache_dnsHandleRead _PARAMS((int, dnsserver_t *));
-static ipcache_entry *ipcache_parsebuffer _PARAMS((char *buf, dnsserver_t *));
+static int ipcache_parsebuffer _PARAMS((char *buf, unsigned int offset, dnsserver_t *));
+static int ipcache_purgelru _PARAMS((void));
 static void ipcache_release _PARAMS((ipcache_entry *));
 static ipcache_entry *ipcache_GetFirst _PARAMS((void));
 static ipcache_entry *ipcache_GetNext _PARAMS((void));
 static ipcache_entry *ipcache_create _PARAMS((void));
+static void free_lines _PARAMS((line_entry *));
 static void ipcache_add_to_hash _PARAMS((ipcache_entry *));
 static void ipcache_call_pending _PARAMS((ipcache_entry *));
+static void ipcache_call_pending_badname _PARAMS((int fd, IPH handler, void *));
 static void ipcache_add _PARAMS((char *, ipcache_entry *, struct hostent *, int));
+static ipcache_entry *dnsDequeue _PARAMS(());
+static void dnsEnqueue _PARAMS((ipcache_entry *));
+static void dnsDispatch _PARAMS((dnsserver_t *, ipcache_entry *));
 static int ipcacheHasPending _PARAMS((ipcache_entry *));
 static ipcache_entry *ipcache_get _PARAMS((char *));
 static int dummy_handler _PARAMS((int, struct hostent * hp, void *));
 static int ipcacheExpiredEntry _PARAMS((ipcache_entry *));
 static void ipcacheAddPending _PARAMS((ipcache_entry *, int fd, IPH, void *));
-static void ipcacheEnqueue _PARAMS((ipcache_entry *));
-static void *ipcacheDequeue _PARAMS((void));
-static void ipcache_dnsDispatch _PARAMS((dnsserver_t *, ipcache_entry *));
 static struct hostent *ipcacheCheckNumeric _PARAMS((char *name));
 static void ipcacheStatPrint _PARAMS((ipcache_entry *, StoreEntry *));
-static void ipcacheUnlockEntry _PARAMS((ipcache_entry *));
-static void ipcacheLockEntry _PARAMS((ipcache_entry *));
 
+static dnsserver_t **dns_child_table = NULL;
 static struct hostent *static_result = NULL;
+static int NDnsServersAlloc = 0;
+static struct dnsQueueData *dnsQueueHead = NULL;
+static struct dnsQueueData **dnsQueueTailP = &dnsQueueHead;
 static HashID ip_table = 0;
-static struct ipcacheQueueData *ipcacheQueueHead = NULL;
-static struct ipcacheQueueData **ipcacheQueueTailP = &ipcacheQueueHead;
+char *dns_error_message = NULL;	/* possible error message */
+long ipcache_low = 180;
+long ipcache_high = 200;
 
 static char ipcache_status_char[] =
 {
@@ -173,38 +208,11 @@ static char ipcache_status_char[] =
     'D'
 };
 
-long ipcache_low = 180;
-long ipcache_high = 200;
-
-static void ipcacheEnqueue(i)
-     ipcache_entry *i;
-{
-    struct ipcacheQueueData *new = xcalloc(1, sizeof(struct ipcacheQueueData));
-    new->i = i;
-    *ipcacheQueueTailP = new;
-    ipcacheQueueTailP = &new->next;
-}
-
-static void *ipcacheDequeue()
-{
-    struct ipcacheQueueData *old = NULL;
-    ipcache_entry *i = NULL;
-    if (ipcacheQueueHead) {
-	i = ipcacheQueueHead->i;
-	old = ipcacheQueueHead;
-	ipcacheQueueHead = ipcacheQueueHead->next;
-	if (ipcacheQueueHead == NULL)
-	    ipcacheQueueTailP = &ipcacheQueueHead;
-	safe_free(old);
-    }
-    return i;
-}
-
 static int ipcache_testname()
 {
     wordlist *w = NULL;
     debug(14, 1, "Performing DNS Tests...\n");
-    if ((w = Config.dns_testname_list) == NULL)
+    if ((w = getDnsTestnameList()) == NULL)
 	return 1;
     for (; w; w = w->next) {
 	IpcacheStats.ghbn_calls++;
@@ -214,10 +222,83 @@ static int ipcache_testname()
     return 0;
 }
 
+/* TCP SOCKET VERSION */
+static int ipcache_create_dnsserver(command)
+     char *command;
+{
+    int pid;
+    u_short port;
+    struct sockaddr_in S;
+    int cfd;
+    int sfd;
+    int len;
+    int fd;
+    static char buf[128];
+
+    cfd = comm_open(COMM_NOCLOEXEC,
+	local_addr,
+	0,
+	"socket to dnsserver");
+    if (cfd == COMM_ERROR) {
+	debug(14, 0, "ipcache_create_dnsserver: Failed to create dnsserver\n");
+	return -1;
+    }
+    len = sizeof(S);
+    memset(&S, '\0', len);
+    if (getsockname(cfd, (struct sockaddr *) &S, &len) < 0) {
+	debug(14, 0, "ipcache_create_dnsserver: getsockname: %s\n", xstrerror());
+	comm_close(cfd);
+	return -1;
+    }
+    port = ntohs(S.sin_port);
+    debug(14, 4, "ipcache_create_dnsserver: bind to local host.\n");
+    listen(cfd, 1);
+    if ((pid = fork()) < 0) {
+	debug(14, 0, "ipcache_create_dnsserver: fork: %s\n", xstrerror());
+	comm_close(cfd);
+	return -1;
+    }
+    if (pid > 0) {		/* parent */
+	comm_close(cfd);	/* close shared socket with child */
+	/* open new socket for parent process */
+	sfd = comm_open(0, local_addr, 0, NULL);	/* blocking! */
+	if (sfd == COMM_ERROR)
+	    return -1;
+	if (comm_connect(sfd, localhost, port) == COMM_ERROR) {
+	    comm_close(sfd);
+	    return -1;
+	}
+	if (write(sfd, "$hello\n", 7) < 0) {
+	    debug(14, 0, "ipcache_create_dnsserver: $hello write test failed\n");
+	    comm_close(sfd);
+	    return -1;
+	}
+	memset(buf, '\0', 128);
+	if (read(sfd, buf, 128) < 0 || strcmp(buf, "$alive\n$end\n")) {
+	    debug(14, 0, "ipcache_create_dnsserver: $hello read test failed\n");
+	    comm_close(sfd);
+	    return -1;
+	}
+	comm_set_fd_lifetime(sfd, -1);
+	return sfd;
+    }
+    /* child */
+
+    no_suid();			/* give up extra priviliges */
+    dup2(cfd, 3);
+    for (fd = FD_SETSIZE; fd > 3; fd--)
+	close(fd);
+    execlp(command, "(dnsserver)", "-t", NULL);
+    debug(14, 0, "ipcache_create_dnsserver: %s: %s\n", command, xstrerror());
+    _exit(1);
+    return 0;
+}
+
 /* removes the given ipcache entry */
 static void ipcache_release(i)
      ipcache_entry *i;
 {
+    ipcache_entry *result = 0;
     hash_link *table_entry = NULL;
     int k;
 
@@ -225,8 +306,9 @@ static void ipcache_release(i)
 	debug(14, 0, "ipcache_release: Could not find key '%s'\n", i->name);
 	return;
     }
-    if (i != (ipcache_entry *) table_entry)
-	fatal_dump("ipcache_release: i != table_entry!");
+    result = (ipcache_entry *) table_entry;
+    if (i != result)
+	fatal_dump("ipcache_release: expected i == result!");
     if (i->status == IP_PENDING) {
 	debug(14, 1, "ipcache_release: Someone called on a PENDING entry\n");
 	return;
@@ -237,24 +319,25 @@ static void ipcache_release(i)
     }
     if (hash_remove_link(ip_table, table_entry)) {
 	debug(14, 0, "ipcache_release: hash_remove_link() failed for '%s'\n",
-	    i->name);
+	    result->name);
 	return;
     }
-    if (i->status == IP_CACHED) {
-	for (k = 0; k < (int) i->addr_count; k++)
-	    safe_free(*(i->entry.h_addr_list + k));
-	safe_free(i->entry.h_addr_list);
-	for (k = 0; k < (int) i->alias_count; k++)
-	    safe_free(i->entry.h_aliases[k]);
-	safe_free(i->entry.h_aliases);
-	safe_free(i->entry.h_name);
+    if (result->status == IP_CACHED) {
+	for (k = 0; k < (int) result->addr_count; k++)
+	    safe_free(result->entry.h_addr_list[k]);
+	safe_free(result->entry.h_addr_list);
+	for (k = 0; k < (int) result->alias_count; k++)
+	    safe_free(result->entry.h_aliases[k]);
+	if (result->entry.h_aliases)
+	    safe_free(result->entry.h_aliases);
+	safe_free(result->entry.h_name);
 	debug(14, 5, "ipcache_release: Released IP cached record for '%s'.\n",
-	    i->name);
+	    result->name);
     }
-    safe_free(i->name);
-    safe_free(i->error_message);
-    memset(i, '\0', sizeof(ipcache_entry));
-    safe_free(i);
+    safe_free(result->name);
+    safe_free(result->error_message);
+    memset(result, '\0', sizeof(ipcache_entry));
+    safe_free(result);
     --meta_data.ipcache_count;
     return;
 }
@@ -311,21 +394,22 @@ static int ipcache_reverseLastRef(e1, e2)
 static int ipcacheExpiredEntry(i)
      ipcache_entry *i;
 {
+    if (i->lock)
+	return 0;
     if (i->status == IP_PENDING)
 	return 0;
     if (i->status == IP_DISPATCHED)
 	return 0;
-    if (i->locks != 0)
-	return 0;
-    if (i->expires > squid_curtime)
+    if (i->ttl + i->lastref > squid_curtime)
 	return 0;
     return 1;
 }
 
 /* finds the LRU and deletes */
-int ipcache_purgelru()
+static int ipcache_purgelru()
 {
     ipcache_entry *i = NULL;
+    int local_ip_count = 0;
     int local_ip_notpending_count = 0;
     int removed = 0;
     int k;
@@ -340,21 +424,26 @@ int ipcache_purgelru()
 	    removed++;
 	    continue;
 	}
+	local_ip_count++;
+
 	if (LRU_list_count == meta_data.ipcache_count)
 	    break;
 	if (i->status == IP_PENDING)
 	    continue;
 	if (i->status == IP_DISPATCHED)
 	    continue;
+	if (i->lock)
+	    continue;
 	local_ip_notpending_count++;
 	LRU_list[LRU_list_count++] = i;
     }
 
     debug(14, 3, "ipcache_purgelru: ipcache_count: %5d\n", meta_data.ipcache_count);
-    debug(14, 3, "                LRU candidates : %5d\n", LRU_list_count);
+    debug(14, 3, "                  actual count : %5d\n", local_ip_count);
     debug(14, 3, "                   high W mark : %5d\n", ipcache_high);
     debug(14, 3, "                   low  W mark : %5d\n", ipcache_low);
     debug(14, 3, "                   not pending : %5d\n", local_ip_notpending_count);
+    debug(14, 3, "                LRU candidates : %5d\n", LRU_list_count);
 
     /* sort LRU candidate list */
     qsort((char *) LRU_list,
@@ -390,7 +479,6 @@ static ipcache_entry *ipcache_create()
     /* set default to 4, in case parser fail to get token $h_length from
      * dnsserver. */
     new->entry.h_length = 4;
-    new->expires = squid_curtime + Config.negativeDnsTtl;
     return new;
 
 }
@@ -424,10 +512,10 @@ static void ipcache_add(name, i, hp, cached)
     if (cached) {
 	/* count for IPs */
 	addr_count = 0;
-	while ((addr_count < 255) && *(hp->h_addr_list + addr_count))
+	while ((addr_count < 255) && hp->h_addr_list[addr_count])
 	    ++addr_count;
 
-	i->addr_count = (unsigned char) addr_count;
+	i->addr_count = addr_count;
 
 	/* count for Alias */
 	alias_count = 0;
@@ -435,13 +523,13 @@ static void ipcache_add(name, i, hp, cached)
 	    while ((alias_count < 255) && hp->h_aliases[alias_count])
 		++alias_count;
 
-	i->alias_count = (unsigned char) alias_count;
+	i->alias_count = alias_count;
 
 	/* copy ip addresses information */
 	i->entry.h_addr_list = xcalloc(addr_count + 1, sizeof(char *));
 	for (k = 0; k < addr_count; k++) {
-	    *(i->entry.h_addr_list + k) = xcalloc(1, hp->h_length);
-	    xmemcpy(*(i->entry.h_addr_list + k), *(hp->h_addr_list + k), hp->h_length);
+	    i->entry.h_addr_list[k] = xcalloc(1, hp->h_length);
+	    xmemcpy(i->entry.h_addr_list[k], hp->h_addr_list[k], hp->h_length);
 	}
 
 	if (alias_count) {
@@ -455,13 +543,16 @@ static void ipcache_add(name, i, hp, cached)
 	i->entry.h_length = hp->h_length;
 	i->entry.h_name = xstrdup(hp->h_name);
 	i->status = IP_CACHED;
-	i->expires = squid_curtime + Config.positiveDnsTtl;
+	i->ttl = DnsPositiveTtl;
     } else {
 	i->status = IP_NEGATIVE_CACHED;
-	i->expires = squid_curtime + Config.negativeDnsTtl;
+	i->ttl = getNegativeDNSTTL();
     }
     ipcache_add_to_hash(i);
 }
+
+
+
 
 /* walks down the pending list, calling handlers */
 static void ipcache_call_pending(i)
@@ -472,7 +563,6 @@ static void ipcache_call_pending(i)
 
     i->lastref = squid_curtime;
 
-    ipcacheLockEntry(i);
     while (i->pending_head != NULL) {
 	p = i->pending_head;
 	i->pending_head = p->next;
@@ -488,102 +578,256 @@ static void ipcache_call_pending(i)
     }
     i->pending_head = NULL;	/* nuke list */
     debug(14, 10, "ipcache_call_pending: Called %d handlers.\n", nhandler);
-    ipcacheUnlockEntry(i);
 }
 
-static ipcache_entry *ipcache_parsebuffer(inbuf, dnsData)
-     char *inbuf;
+static void ipcache_call_pending_badname(fd, handler, data)
+     int fd;
+     IPH handler;
+     void *data;
+{
+    debug(14, 0, "ipcache_call_pending_badname: Bad Name: Calling handler with NULL result.\n");
+    handler(fd, NULL, data);
+}
+
+/* free all lines in the list */
+static void free_lines(line)
+     line_entry *line;
+{
+    line_entry *tmp;
+
+    while (line) {
+	tmp = line;
+	line = line->next;
+	safe_free(tmp->line);
+	safe_free(tmp);
+    }
+}
+
+/* scan through buffer and do a conversion if possible 
+ * return number of char used */
+static int ipcache_parsebuffer(buf, offset, dnsData)
+     char *buf;
+     unsigned int offset;
      dnsserver_t *dnsData;
 {
-    char *buf = xstrdup(inbuf);
-    char *token;
-    static ipcache_entry i;
-    int k;
+    char *pos = NULL;
+    char *tpos = NULL;
+    char *endpos = NULL;
+    char *token = NULL;
+    char *tmp_ptr = NULL;
+    line_entry *line_head = NULL;
+    line_entry *line_tail = NULL;
+    line_entry *line_cur = NULL;
     int ipcount;
     int aliascount;
-    debug(14, 5, "ipcache_parsebuffer: parsing:\n%s", inbuf);
-    memset(&i, '\0', sizeof(ipcache_entry));
-    i.expires = squid_curtime + Config.positiveDnsTtl;
-    i.status = IP_DISPATCHED;
-    for (token = strtok(buf, w_space); token; token = strtok(NULL, w_space)) {
-	if (!strcmp(token, "$end")) {
+    ipcache_entry *i = NULL;
+
+
+    pos = buf;
+    while (pos < (buf + offset)) {
+
+	/* no complete record here */
+	if ((endpos = strstr(pos, "$end\n")) == NULL) {
+	    debug(14, 2, "ipcache_parsebuffer: DNS response incomplete.\n");
 	    break;
-	} else if (!strcmp(token, "$alive")) {
+	}
+	line_head = line_tail = NULL;
+
+	while (pos < endpos) {
+	    /* add the next line to the end of the list */
+	    line_cur = xcalloc(1, sizeof(line_entry));
+
+	    if ((tpos = memchr(pos, '\n', 4096)) == NULL) {
+		debug(14, 2, "ipcache_parsebuffer: DNS response incomplete.\n");
+		return -1;
+	    }
+	    *tpos = '\0';
+	    line_cur->line = xstrdup(pos);
+	    debug(14, 7, "ipcache_parsebuffer: %s\n", line_cur->line);
+	    *tpos = '\n';
+
+	    if (line_tail)
+		line_tail->next = line_cur;
+	    if (line_head == NULL)
+		line_head = line_cur;
+	    line_tail = line_cur;
+	    line_cur = NULL;
+
+	    /* update pointer */
+	    pos = tpos + 1;
+	}
+	pos = endpos + 5;	/* strlen("$end\n") */
+
+	/* 
+	 *  At this point, the line_head is a linked list with each
+	 *  link node containing another line of the DNS response.
+	 *  Start parsing...
+	 */
+	if (strstr(line_head->line, "$alive")) {
 	    dnsData->answer = squid_curtime;
-	} else if (!strcmp(token, "$fail")) {
-	    if ((token = strtok(NULL, w_space)) == NULL)
-		fatal_dump("Invalid $fail");
-	    i.expires = squid_curtime + Config.negativeDnsTtl;
-	    i.status = IP_NEGATIVE_CACHED;
-	} else if (!strcmp(token, "$message")) {
-	    if ((token = strtok(NULL, "\n")) == NULL)
-		fatal_dump("Invalid $message");
-	    i.error_message = xstrdup(token);
-	} else if (!strcmp(token, "$name")) {
-	    if ((token = strtok(NULL, w_space)) == NULL)
-		fatal_dump("Invalid $name");
-	    i.status = IP_CACHED;
-	} else if (!strcmp(token, "$h_name")) {
-	    if ((token = strtok(NULL, w_space)) == NULL)
-		fatal_dump("Invalid $h_name");
-	    i.entry.h_name = xstrdup(token);
-	} else if (!strcmp(token, "$h_len")) {
-	    if ((token = strtok(NULL, w_space)) == NULL)
-		fatal_dump("Invalid $h_len");
-	    i.entry.h_length = atoi(token);
-	} else if (!strcmp(token, "$ipcount")) {
-	    if ((token = strtok(NULL, w_space)) == NULL)
-		fatal_dump("Invalid $ipcount");
-	    ipcount = atoi(token);
-	    i.addr_count = (unsigned char) ipcount;
-	    if (ipcount == 0) {
-		i.entry.h_addr_list = NULL;
+	    free_lines(line_head);
+	    debug(14, 10, "ipcache_parsebuffer: $alive succeeded.\n");
+	} else if (strstr(line_head->line, "$fail")) {
+	    /*
+	     *  The $fail messages look like:
+	     *      $fail host\n$message msg\n$end\n
+	     */
+	    token = strtok(line_head->line, w_space);	/* skip first token */
+	    if ((token = strtok(NULL, w_space)) == NULL) {
+		debug(14, 1, "ipcache_parsebuffer: Invalid $fail?\n");
 	    } else {
-		i.entry.h_addr_list = xcalloc(ipcount + 1, sizeof(char *));
+		line_cur = line_head->next;
+		i = dnsData->ip_entry;
+		i->ttl = getNegativeDNSTTL();
+		i->status = IP_NEGATIVE_CACHED;
+		if (line_cur && !strncmp(line_cur->line, "$message", 8))
+		    i->error_message = xstrdup(line_cur->line + 8);
+		dns_error_message = i->error_message;
+		ipcache_call_pending(i);
 	    }
-	    for (k = 0; k < ipcount; k++) {
-		if ((token = strtok(NULL, w_space)) == NULL)
-		    fatal_dump("Invalid IP address");
-		*(i.entry.h_addr_list + k) = xcalloc(1, i.entry.h_length);
-		*((u_num32 *) (void *) *(i.entry.h_addr_list + k))
-		    = inet_addr(token);
-	    }
-	} else if (!strcmp(token, "$aliascount")) {
-	    if ((token = strtok(NULL, w_space)) == NULL)
-		fatal_dump("Invalid $aliascount");
-	    aliascount = atoi(token);
-	    i.alias_count = (unsigned char) aliascount;
-	    if (aliascount == 0) {
-		i.entry.h_aliases = NULL;
+	    free_lines(line_head);
+	} else if (strstr(line_head->line, "$name")) {
+	    tmp_ptr = line_head->line;
+	    /* skip the first token */
+	    token = strtok(tmp_ptr, w_space);
+	    if ((token = strtok(NULL, w_space)) == NULL) {
+		debug(14, 0, "ipcache_parsebuffer: Invalid OPCODE?\n");
 	    } else {
-		i.entry.h_aliases = xcalloc(aliascount, sizeof(char *));
+		i = dnsData->ip_entry;
+		if (i->status != IP_DISPATCHED) {
+		    debug(14, 0, "ipcache_parsebuffer: DNS record already resolved.\n");
+		} else {
+		    i->ttl = DnsPositiveTtl;
+		    i->status = IP_CACHED;
+
+		    line_cur = line_head->next;
+
+		    /* get $h_name */
+		    if (line_cur == NULL ||
+			!strstr(line_cur->line, "$h_name")) {
+			debug(14, 1, "ipcache_parsebuffer: DNS record in invalid format? No $h_name.\n");
+			/* abandon this record */
+			break;
+		    }
+		    tmp_ptr = line_cur->line;
+		    /* skip the first token */
+		    token = strtok(tmp_ptr, w_space);
+		    tmp_ptr = NULL;
+		    token = strtok(tmp_ptr, w_space);
+		    i->entry.h_name = xstrdup(token);
+
+		    line_cur = line_cur->next;
+
+		    /* get $h_length */
+		    if (line_cur == NULL ||
+			!strstr(line_cur->line, "$h_len")) {
+			debug(14, 1, "ipcache_parsebuffer: DNS record in invalid format? No $h_len.\n");
+			/* abandon this record */
+			break;
+		    }
+		    tmp_ptr = line_cur->line;
+		    /* skip the first token */
+		    token = strtok(tmp_ptr, w_space);
+		    tmp_ptr = NULL;
+		    token = strtok(tmp_ptr, w_space);
+		    i->entry.h_length = atoi(token);
+
+		    line_cur = line_cur->next;
+
+		    /* get $ipcount */
+		    if (line_cur == NULL ||
+			!strstr(line_cur->line, "$ipcount")) {
+			debug(14, 1, "ipcache_parsebuffer: DNS record in invalid format? No $ipcount.\n");
+			/* abandon this record */
+			break;
+		    }
+		    tmp_ptr = line_cur->line;
+		    /* skip the first token */
+		    token = strtok(tmp_ptr, w_space);
+		    tmp_ptr = NULL;
+		    token = strtok(tmp_ptr, w_space);
+		    i->addr_count = ipcount = atoi(token);
+
+		    if (ipcount == 0) {
+			i->entry.h_addr_list = NULL;
+		    } else {
+			i->entry.h_addr_list = xcalloc(ipcount + 1, sizeof(char *));
+		    }
+
+		    /* get ip addresses */
+		    {
+			int k = 0;
+			line_cur = line_cur->next;
+			while (k < ipcount) {
+			    if (line_cur == NULL) {
+				debug(14, 1, "ipcache_parsebuffer: DNS record in invalid format? No $ipcount data.\n");
+				break;
+			    }
+			    i->entry.h_addr_list[k] = xcalloc(1, i->entry.h_length);
+			    *((u_num32 *) (void *) i->entry.h_addr_list[k]) = inet_addr(line_cur->line);
+			    line_cur = line_cur->next;
+			    k++;
+			}
+		    }
+
+		    /* get $aliascount */
+		    if (line_cur == NULL ||
+			!strstr(line_cur->line, "$aliascount")) {
+			debug(14, 1, "ipcache_parsebuffer: DNS record in invalid format? No $aliascount.\n");
+			/* abandon this record */
+			break;
+		    }
+		    tmp_ptr = line_cur->line;
+		    /* skip the first token */
+		    token = strtok(tmp_ptr, w_space);
+		    tmp_ptr = NULL;
+		    token = strtok(tmp_ptr, w_space);
+		    i->alias_count = aliascount = atoi(token);
+
+		    if (aliascount == 0) {
+			i->entry.h_aliases = NULL;
+		    } else {
+			i->entry.h_aliases = xcalloc(aliascount, sizeof(char *));
+		    }
+
+		    /* get aliases */
+		    {
+			int k = 0;
+			line_cur = line_cur->next;
+			while (k < aliascount) {
+			    if (line_cur == NULL) {
+				debug(14, 1, "ipcache_parsebuffer: DNS record in invalid format? No $aliascount data.\n");
+				break;
+			    }
+			    i->entry.h_aliases[k] = xstrdup(line_cur->line);
+			    line_cur = line_cur->next;
+			    k++;
+			}
+		    }
+		    ipcache_call_pending(i);
+		    debug(14, 10, "ipcache_parsebuffer: $name succeeded.\n");
+		}
 	    }
-	    for (k = 0; k < aliascount; k++) {
-		if ((token = strtok(NULL, w_space)) == NULL)
-		    fatal_dump("Invalid alias");
-		*(i.entry.h_aliases + k) = xstrdup(token);
-	    }
-	} else if (!strcmp(token, "$ttl")) {
-	    if ((token = strtok(NULL, w_space)) == NULL)
-		fatal_dump("Invalid $ttl");
-	    i.expires = squid_curtime + atoi(token);
+	    free_lines(line_head);
 	} else {
-	    fatal_dump("Invalid dnsserver output");
+	    free_lines(line_head);
+	    debug(14, 1, "ipcache_parsebuffer: Invalid OPCODE for DNS table?\n");
+	    return -1;
 	}
     }
-    xfree(buf);
-    return &i;
+    return (int) (pos - buf);
 }
+
 
 static int ipcache_dnsHandleRead(fd, dnsData)
      int fd;
      dnsserver_t *dnsData;
 {
+    int char_scanned;
     int len;
     int svc_time;
     int n;
     ipcache_entry *i = NULL;
-    ipcache_entry *x = NULL;
 
     len = read(fd,
 	dnsData->ip_inbuf + dnsData->offset,
@@ -602,13 +846,10 @@ static int ipcache_dnsHandleRead(fd, dnsData)
 	comm_close(fd);
 	return 0;
     }
-    n = ++IpcacheStats.replies;
-    DnsStats.replies++;
+    n = ++IpcacheStats.dnsserver_replies;
     dnsData->offset += len;
     dnsData->ip_inbuf[dnsData->offset] = '\0';
-    i = dnsData->data;
-    if (i->status != IP_DISPATCHED)
-	fatal_dump("ipcache_dnsHandleRead: bad status");
+
     if (strstr(dnsData->ip_inbuf, "$end\n")) {
 	/* end of record found */
 	svc_time = tvSubMsec(dnsData->dispatch_time, current_time);
@@ -616,23 +857,20 @@ static int ipcache_dnsHandleRead(fd, dnsData)
 	    n = IPCACHE_AV_FACTOR;
 	IpcacheStats.avg_svc_time
 	    = (IpcacheStats.avg_svc_time * (n - 1) + svc_time) / n;
-	if ((x = ipcache_parsebuffer(dnsData->ip_inbuf, dnsData)) == NULL) {
-	    debug(14, 0, "ipcache_dnsHandleRead: ipcache_parsebuffer failed?!\n");
-	} else {
-	    dnsData->offset = 0;
-	    dnsData->ip_inbuf[0] = '\0';
-	    i = dnsData->data;
-	    i->addr_count = x->addr_count;
-	    i->alias_count = x->alias_count;
-	    i->entry = x->entry;
-	    i->error_message = x->error_message;
-	    i->status = x->status;
-	    i->expires = x->expires;
-	    ipcache_call_pending(i);
+	char_scanned = ipcache_parsebuffer(dnsData->ip_inbuf,
+	    dnsData->offset,
+	    dnsData);
+	if (char_scanned > 0) {
+	    /* update buffer */
+	    xmemcpy(dnsData->ip_inbuf,
+		dnsData->ip_inbuf + char_scanned,
+		dnsData->offset - char_scanned);
+	    dnsData->offset -= char_scanned;
+	    dnsData->ip_inbuf[dnsData->offset] = '\0';
 	}
     }
     if (dnsData->offset == 0) {
-	dnsData->data = NULL;
+	dnsData->ip_entry = NULL;
 	dnsData->flags &= ~DNS_FLAG_BUSY;
     }
     /* reschedule */
@@ -640,8 +878,8 @@ static int ipcache_dnsHandleRead(fd, dnsData)
 	COMM_SELECT_READ,
 	(PF) ipcache_dnsHandleRead,
 	dnsData);
-    while ((dnsData = dnsGetFirstAvailable()) && (i = ipcacheDequeue()))
-	ipcache_dnsDispatch(dnsData, i);
+    while ((dnsData = dnsGetFirstAvailable()) && (i = dnsDequeue()))
+	dnsDispatch(dnsData, i);
     return 0;
 }
 
@@ -679,7 +917,7 @@ void ipcache_nbgethostbyname(name, fd, handler, handlerData)
 
     if (name == NULL || name[0] == '\0') {
 	debug(14, 4, "ipcache_nbgethostbyname: Invalid name!\n");
-	handler(fd, NULL, handlerData);
+	ipcache_call_pending_badname(fd, handler, handlerData);
 	return;
     }
     if ((hp = ipcacheCheckNumeric(name))) {
@@ -723,50 +961,156 @@ void ipcache_nbgethostbyname(name, fd, handler, handlerData)
     /* for HIT, PENDING, DISPATCHED we've returned.  For MISS we continue */
 
     if ((dnsData = dnsGetFirstAvailable()))
-	ipcache_dnsDispatch(dnsData, i);
+	dnsDispatch(dnsData, i);
     else
-	ipcacheEnqueue(i);
+	dnsEnqueue(i);
 }
 
-static void ipcache_dnsDispatch(dns, i)
+static void dnsEnqueue(i)
+     ipcache_entry *i;
+{
+    struct dnsQueueData *new = xcalloc(1, sizeof(struct dnsQueueData));
+    new->ip_entry = i;
+    *dnsQueueTailP = new;
+    dnsQueueTailP = &new->next;
+}
+
+static ipcache_entry *dnsDequeue()
+{
+    struct dnsQueueData *old = NULL;
+    ipcache_entry *i = NULL;
+    if (dnsQueueHead) {
+	i = dnsQueueHead->ip_entry;
+	old = dnsQueueHead;
+	dnsQueueHead = dnsQueueHead->next;
+	if (dnsQueueHead == NULL)
+	    dnsQueueTailP = &dnsQueueHead;
+	safe_free(old);
+    }
+#ifdef SANITY_CHECK
+    if (i == NULL) {
+	for (i = ipcache_GetFirst(); i; i = ipcache_GetNext()) {
+	    if (i->status == IP_PENDING) {	/* This can't happen */
+		debug(14, 0, "IP Cache inconsistency: %s still pending\n",
+		    i->name);
+	    }
+	}
+	i = NULL;
+    }
+#endif
+    return i;
+}
+
+static dnsserver_t *dnsGetFirstAvailable()
+{
+    int k;
+    dnsserver_t *dns = NULL;
+    for (k = 0; k < NDnsServersAlloc; k++) {
+	dns = *(dns_child_table + k);
+	if (!(dns->flags & DNS_FLAG_BUSY))
+	    return dns;
+    }
+    return NULL;
+}
+
+static void dnsDispatch(dns, i)
      dnsserver_t *dns;
      ipcache_entry *i;
 {
     char *buf = NULL;
     if (!ipcacheHasPending(i)) {
-	debug(14, 0, "ipcache_dnsDispatch: skipping '%s' because no handler.\n",
+	debug(14, 0, "dnsDispatch: skipping '%s' because no handler.\n",
 	    i->name);
 	i->status = IP_NEGATIVE_CACHED;
 	ipcache_release(i);
 	return;
     }
+    i->status = IP_DISPATCHED;
     buf = xcalloc(1, 256);
     sprintf(buf, "%1.254s\n", i->name);
     dns->flags |= DNS_FLAG_BUSY;
-    dns->data = i;
-    i->status = IP_DISPATCHED;
+    dns->ip_entry = i;
     comm_write(dns->outpipe,
 	buf,
 	strlen(buf),
 	0,			/* timeout */
 	NULL,			/* Handler */
-	NULL,			/* Handler-data */
-	xfree);
-    comm_set_select_handler(dns->outpipe,
-	COMM_SELECT_READ,
-	(PF) ipcache_dnsHandleRead,
-	dns);
-    debug(14, 5, "ipcache_dnsDispatch: Request sent to DNS server #%d.\n",
+	NULL);			/* Handler-data */
+    debug(14, 5, "dnsDispatch: Request sent to DNS server #%d.\n",
 	dns->id);
     dns->dispatch_time = current_time;
-    DnsStats.requests++;
-    DnsStats.hist[dns->id - 1]++;
+    IpcacheStats.dnsserver_requests++;
+    IpcacheStats.dnsserver_hist[dns->id - 1]++;
 }
 
+
+void ipcacheOpenServers()
+{
+    int N = getDnsChildren();
+    char *prg = getDnsProgram();
+    int k;
+    int dnssocket;
+    static char fd_note_buf[FD_ASCII_NOTE_SZ];
+
+    /* free old structures if present */
+    if (dns_child_table) {
+	for (k = 0; k < NDnsServersAlloc; k++) {
+	    safe_free(dns_child_table[k]->ip_inbuf);
+	    safe_free(dns_child_table[k]);
+	}
+	safe_free(dns_child_table);
+    }
+    dns_child_table = xcalloc(N, sizeof(dnsserver_t *));
+    NDnsServersAlloc = N;
+    debug(14, 1, "ipcacheOpenServers: Starting %d 'dns_server' processes\n", N);
+    for (k = 0; k < N; k++) {
+	dns_child_table[k] = xcalloc(1, sizeof(dnsserver_t));
+	if ((dnssocket = ipcache_create_dnsserver(prg)) < 0) {
+	    debug(14, 1, "ipcacheOpenServers: WARNING: Cannot run 'dnsserver' process.\n");
+	    debug(14, 1, "              Fallling back to the blocking version.\n");
+	    dns_child_table[k]->flags &= ~DNS_FLAG_ALIVE;
+	} else {
+	    debug(14, 4, "ipcacheOpenServers: FD %d connected to %s #%d.\n",
+		dnssocket, prg, k + 1);
+	    dns_child_table[k]->flags |= DNS_FLAG_ALIVE;
+	    dns_child_table[k]->id = k + 1;
+	    dns_child_table[k]->inpipe = dnssocket;
+	    dns_child_table[k]->outpipe = dnssocket;
+	    dns_child_table[k]->lastcall = squid_curtime;
+	    dns_child_table[k]->size = IP_INBUF_SZ - 1;		/* spare one for \0 */
+	    dns_child_table[k]->offset = 0;
+	    dns_child_table[k]->ip_inbuf = xcalloc(IP_INBUF_SZ, 1);
+
+	    /* update fd_stat */
+
+	    sprintf(fd_note_buf, "%s #%d", prg, dns_child_table[k]->id);
+	    fd_note(dns_child_table[k]->inpipe, fd_note_buf);
+	    commSetNonBlocking(dns_child_table[k]->inpipe);
+
+	    /* clear unused handlers */
+	    comm_set_select_handler(dns_child_table[k]->inpipe,
+		COMM_SELECT_WRITE,
+		0,
+		0);
+	    comm_set_select_handler(dns_child_table[k]->outpipe,
+		COMM_SELECT_READ,
+		0,
+		0);
+
+	    /* set handler for incoming result */
+	    comm_set_select_handler(dns_child_table[k]->inpipe,
+		COMM_SELECT_READ,
+		(PF) ipcache_dnsHandleRead,
+		(void *) dns_child_table[k]);
+	    debug(14, 3, "ipcacheOpenServers: 'dns_server' %d started\n", k);
+	}
+    }
+}
 
 /* initialize the ipcache */
 void ipcache_init()
 {
+
     debug(14, 3, "Initializing IP Cache...\n");
 
     memset(&IpcacheStats, '\0', sizeof(IpcacheStats));
@@ -780,18 +1124,21 @@ void ipcache_init()
 	debug(14, 1, "Successful DNS name lookup tests...\n");
     }
 
-    ip_table = hash_create(urlcmp, 229, hash_string);	/* small hash table */
+    ip_table = hash_create(urlcmp, 229);	/* small hash table */
     /* init static area */
     static_result = xcalloc(1, sizeof(struct hostent));
     static_result->h_length = 4;
+    /* Need a terminating NULL address (h_addr_list[1]) */
     static_result->h_addr_list = xcalloc(2, sizeof(char *));
-    *(static_result->h_addr_list + 0) = xcalloc(1, 4);
+    static_result->h_addr_list[0] = xcalloc(1, 4);
     static_result->h_name = xcalloc(1, MAX_HOST_NAME + 1);
 
-    ipcache_high = (long) (((float) Config.ipcache.size *
-	    (float) Config.ipcache.high) / (float) 100);
-    ipcache_low = (long) (((float) Config.ipcache.size *
-	    (float) Config.ipcache.low) / (float) 100);
+    ipcacheOpenServers();
+
+    ipcache_high = (long) (((float) MAX_IP *
+	    (float) IP_HIGH_WATER) / (float) 100);
+    ipcache_low = (long) (((float) MAX_IP *
+	    (float) IP_LOW_WATER) / (float) 100);
 }
 
 /* clean up the pending entries in dnsserver */
@@ -861,7 +1208,7 @@ struct hostent *ipcache_gethostbyname(name, flags)
 	    ipcache_add(name, ipcache_create(), hp, 1);
 	    i = ipcache_get(name);
 	    i->lastref = squid_curtime;
-	    i->expires = squid_curtime + Config.positiveDnsTtl;
+	    i->ttl = DnsPositiveTtl;
 	    return &i->entry;
 	}
 	/* bad address, negative cached */
@@ -869,7 +1216,7 @@ struct hostent *ipcache_gethostbyname(name, flags)
 	    ipcache_add(name, ipcache_create(), hp, 0);
 	    i = ipcache_get(name);
 	    i->lastref = squid_curtime;
-	    i->expires = squid_curtime + Config.negativeDnsTtl;
+	    i->ttl = getNegativeDNSTTL();
 	    return NULL;
 	}
     }
@@ -882,12 +1229,18 @@ static void ipcacheStatPrint(i, sentry)
      ipcache_entry *i;
      StoreEntry *sentry;
 {
+    int ttl;
     int k;
-    storeAppendPrintf(sentry, " {%-32.32s  %c %6d %6d %d",
+    if (i->status == IP_PENDING || i->status == IP_DISPATCHED)
+	ttl = 0;
+    else
+	ttl = i->ttl + i->lastref - squid_curtime;
+    storeAppendPrintf(sentry, " {%-32.32s %c%c %6d %6d %d",
 	i->name,
 	ipcache_status_char[i->status],
+	i->lock ? 'L' : ' ',
 	(int) (squid_curtime - i->lastref),
-	(int) (i->expires - squid_curtime),
+	ttl,
 	i->addr_count);
     for (k = 0; k < (int) i->addr_count; k++) {
 	struct in_addr addr;
@@ -928,8 +1281,20 @@ void stat_ipcache_get(sentry)
 	IpcacheStats.misses);
     storeAppendPrintf(sentry, "{Blocking calls to gethostbyname(): %d}\n",
 	IpcacheStats.ghbn_calls);
+    storeAppendPrintf(sentry, "{dnsserver requests: %d}\n",
+	IpcacheStats.dnsserver_requests);
+    storeAppendPrintf(sentry, "{dnsserver replies: %d}\n",
+	IpcacheStats.dnsserver_replies);
     storeAppendPrintf(sentry, "{dnsserver avg service time: %d msec}\n",
 	IpcacheStats.avg_svc_time);
+    storeAppendPrintf(sentry, "{number of dnsservers: %d}\n",
+	getDnsChildren());
+    storeAppendPrintf(sentry, "{dnsservers use histogram:}\n");
+    for (k = 0; k < getDnsChildren(); k++) {
+	storeAppendPrintf(sentry, "{    dnsserver #%d: %d}\n",
+	    k + 1,
+	    IpcacheStats.dnsserver_hist[k]);
+    }
     storeAppendPrintf(sentry, "}\n\n");
     storeAppendPrintf(sentry, "{IP Cache Contents:\n\n");
     storeAppendPrintf(sentry, " {%-29.29s %5s %6s %6s %1s}\n",
@@ -954,12 +1319,49 @@ void stat_ipcache_get(sentry)
     storeAppendPrintf(sentry, close_bracket);
 }
 
+void ipcacheShutdownServers()
+{
+    dnsserver_t *dnsData = NULL;
+    int k;
+    static char *shutdown = "$shutdown\n";
+
+    debug(14, 3, "ipcacheShutdownServers:\n");
+
+    for (k = 0; k < getDnsChildren(); k++) {
+	dnsData = *(dns_child_table + k);
+	if (!(dnsData->flags & DNS_FLAG_ALIVE))
+	    continue;
+	if (dnsData->flags & DNS_FLAG_BUSY)
+	    continue;
+	if (dnsData->flags & DNS_FLAG_CLOSING)
+	    continue;
+	debug(14, 3, "ipcacheShutdownServers: sending '$shutdown' to dnsserver #%d\n", dnsData->id);
+	debug(14, 3, "ipcacheShutdownServers: --> FD %d\n", dnsData->outpipe);
+	comm_write(dnsData->outpipe,
+	    xstrdup(shutdown),
+	    strlen(shutdown),
+	    0,			/* timeout */
+	    NULL,		/* Handler */
+	    NULL);		/* Handler-data */
+	dnsData->flags |= DNS_FLAG_CLOSING;
+    }
+}
+
 static int dummy_handler(u1, u2, u3)
      int u1;
      struct hostent *u2;
      void *u3;
 {
     return 0;
+}
+
+void ipcacheLockEntry(name)
+     char *name;
+{
+    ipcache_entry *i;
+    if ((i = ipcache_get(name)) == NULL)
+	return;
+    i->lock++;
 }
 
 static int ipcacheHasPending(i)
@@ -974,29 +1376,6 @@ static int ipcacheHasPending(i)
     return 0;
 }
 
-void ipcacheReleaseInvalid(name)
-     char *name;
-{
-    ipcache_entry *i;
-    if ((i = ipcache_get(name)) == NULL)
-	return;
-    if (i->status != IP_NEGATIVE_CACHED)
-	return;
-    ipcache_release(i);
-}
-
-void ipcacheInvalidate(name)
-     char *name;
-{
-    ipcache_entry *i;
-    if ((i = ipcache_get(name)) == NULL)
-	return;
-    i->expires = squid_curtime;
-    /* NOTE, don't call ipcache_release here becuase we might be here due
-     * to a thread started from ipcache_call_pending() which will cause a
-     * FMR */
-}
-
 static struct hostent *ipcacheCheckNumeric(name)
      char *name;
 {
@@ -1007,29 +1386,4 @@ static struct hostent *ipcacheCheckNumeric(name)
     *((u_num32 *) (void *) static_result->h_addr_list[0]) = ip;
     strncpy(static_result->h_name, name, MAX_HOST_NAME);
     return static_result;
-}
-
-int ipcacheQueueDrain()
-{
-    ipcache_entry *i;
-    dnsserver_t *dnsData;
-    if (!ipcacheQueueHead)
-	return 0;
-    while ((dnsData = dnsGetFirstAvailable()) && (i = ipcacheDequeue()))
-	ipcache_dnsDispatch(dnsData, i);
-    return 1;
-}
-
-static void ipcacheLockEntry(i)
-     ipcache_entry *i;
-{
-    i->locks++;
-}
-
-static void ipcacheUnlockEntry(i)
-     ipcache_entry *i;
-{
-    i->locks--;
-    if (ipcacheExpiredEntry(i))
-	ipcache_release(i);
 }

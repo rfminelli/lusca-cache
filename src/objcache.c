@@ -180,7 +180,7 @@ int objcacheStart(fd, url, entry)
     char *buf = NULL;
     char *BADCacheURL = "Bad Object Cache URL %s ... negative cached.\n";
     char *BADPassword = "Incorrect password, sorry.\n";
-    LOCAL_ARRAY(char, password, 64);
+    static char password[64];
     struct sockaddr_in peer_socket_name;
     int sock_name_length = sizeof(peer_socket_name);
 
@@ -191,7 +191,7 @@ int objcacheStart(fd, url, entry)
     /* before we generate new object */
     data->entry->expires = squid_curtime + STAT_TTL;
 
-    debug(16, 3, "objectcacheStart: '%s'\n", url);
+    debug(16, 3, "objectcacheStart - url: %s\n", url);
 
     /* Parse url. */
     password[0] = '\0';
@@ -248,27 +248,9 @@ int objcacheStart(fd, url, entry)
 	BIT_RESET(data->entry->flag, DELAY_SENDING);
 	storeComplete(data->entry);
 
-    } else if (strcmp(data->request, "stats/ipcache") == 0) {
+    } else if (strcmp(data->request, "stats/general") == 0) {
 	BIT_SET(data->entry->flag, DELAY_SENDING);
-	CacheInfo->stat_get(CacheInfo, "ipcache", data->entry);
-	BIT_RESET(data->entry->flag, DELAY_SENDING);
-	storeComplete(data->entry);
-
-    } else if (strcmp(data->request, "stats/fqdncache") == 0) {
-	BIT_SET(data->entry->flag, DELAY_SENDING);
-	CacheInfo->stat_get(CacheInfo, "fqdncache", data->entry);
-	BIT_RESET(data->entry->flag, DELAY_SENDING);
-	storeComplete(data->entry);
-
-    } else if (strcmp(data->request, "stats/dns") == 0) {
-	BIT_SET(data->entry->flag, DELAY_SENDING);
-	CacheInfo->stat_get(CacheInfo, "dns", data->entry);
-	BIT_RESET(data->entry->flag, DELAY_SENDING);
-	storeComplete(data->entry);
-
-    } else if (strcmp(data->request, "stats/redirector") == 0) {
-	BIT_SET(data->entry->flag, DELAY_SENDING);
-	CacheInfo->stat_get(CacheInfo, "redirector", data->entry);
+	CacheInfo->stat_get(CacheInfo, "general", data->entry);
 	BIT_RESET(data->entry->flag, DELAY_SENDING);
 	storeComplete(data->entry);
 
@@ -281,12 +263,6 @@ int objcacheStart(fd, url, entry)
     } else if (strcmp(data->request, "stats/reply_headers") == 0) {
 	BIT_SET(data->entry->flag, DELAY_SENDING);
 	CacheInfo->stat_get(CacheInfo, "reply_headers", data->entry);
-	BIT_RESET(data->entry->flag, DELAY_SENDING);
-	storeComplete(data->entry);
-
-    } else if (strcmp(data->request, "stats/filedescriptors") == 0) {
-	BIT_SET(data->entry->flag, DELAY_SENDING);
-	CacheInfo->stat_get(CacheInfo, "filedescriptors", data->entry);
 	BIT_RESET(data->entry->flag, DELAY_SENDING);
 	storeComplete(data->entry);
 

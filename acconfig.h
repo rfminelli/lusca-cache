@@ -29,6 +29,3 @@
 
 /* If gettimeofday is known to take only one argument */
 #undef GETTIMEOFDAY_NO_TZP
-
-/* If libresolv.a has been hacked to export _dns_ttl_ */
-#undef LIBRESOLV_DNS_TTL_HACK

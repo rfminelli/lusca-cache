@@ -41,10 +41,6 @@
 #define XFER_TIMEOUT    120     /* 2 minutes */
 #endif
 
-#ifndef USE_ASYNC_IO
-#define USE_ASYNC_IO 0
-#endif
-
 /****************************************************************************
  *--------------------------------------------------------------------------*
  * DO *NOT* MAKE ANY CHANGES below here unless you know what you're doing...*
@@ -71,46 +67,28 @@
 #else						/* SUNOS */
 #define _SQUID_SUNOS_
 #endif
-
 #elif defined(__hpux)                           /* HP-UX - SysV-like? */
 #define _SQUID_HPUX_
 #define _SQUID_SYSV_
-#ifdef __STDC__
-#define __STRICT_ANSI__
-#endif
-
 #elif defined(__osf__)                          /* OSF/1 */
 #define _SQUID_OSF_
-
 #elif defined(__ultrix)				/* Ultrix */
 #define _SQUID_ULTRIX_
-
 #elif defined(_AIX)                          	/* AIX */
 #define _SQUID_AIX_
-
 #elif defined(__linux__)                        /* Linux */
 #define _SQUID_LINUX_
-
 #elif defined(__FreeBSD__)			/* FreeBSD */
 #define _SQUID_FREEBSD_
-
-#elif defined(__sgi__)	|| defined(sgi)		/* SGI */
+#elif defined(__sgi__)				/* SGI */
 #define _SQUID_SGI_
-#define __STRICT_ANSI__
-#if USE_ASYNC_IO
-#define _ABI_SOURCE
-#endif /* USE_ASYNC_IO */
-
+#define _SGI_SOURCE
 #elif defined(__NeXT__)
 #define _SQUID_NEXT_
-
 #elif defined(__bsdi__)
 #define _SQUID_BSDI_                          /* BSD/OS */
 #undef  SQUID_FD_SETSIZE
 #define SQUID_FD_SETSIZE 4096
-
-#elif defined(__NetBSD__)
-#define _SQUID_NETBSD_
 #endif
 
 #if !defined(CACHE_HTTP_PORT)
@@ -119,6 +97,10 @@
 
 #if !defined(CACHE_ICP_PORT)
 #define CACHE_ICP_PORT @CACHE_ICP_PORT@
+#endif
+
+#if !defined(CACHE_FTP_PORT)
+#define CACHE_FTP_PORT @CACHE_FTP_PORT@
 #endif
 
 #if !defined(CACHEMGR_HOSTNAME)
