@@ -37,7 +37,7 @@ struct _HttpHeaderField {
 
 struct _HttpHeader {
 	/* public, read only */
-	size_t sz;           /* the size of this header if packed into a buffer */
+	size_t packed_size;  /* packed header size (see httpHeaderPack()) */
 
 	/* protected, do not use these, use interface functions instead */
 	int count;        /* #headers */
@@ -54,13 +54,18 @@ typedef struct _HttpHeader HttpHeader;
  */
 typedef size_t HttpHeaderPos; 
 
-/* use this to initialize HttpHeaderPos */
+/* use this and only this to initialize HttpHeaderPos */
 #define httpHeaderInitPos (-1)
 
 /* create/init/destroy */
 extern HttpHeader *httpHeaderCreate();
-extern int httpHeaderParse(HttpHeader *hdr, const char *buf, size_t size);
 extern void httpHeaderDestroy(HttpHeader *hdr);
+
+/* parse/pack */
+/* parse a 0-terminating buffer and fill internal structires; _end points at the first character after the header; returns true if successfull */
+extern int httpHeaderParse(HttpHeader *hdr, const char *header_start, const char *header_end);
+/* pack header into the buffer, does not check for overflow, check hdr.packed_size first! */
+extern void httpHeaderPack(HttpHeader *hdr, char *buf);
 
 /* iterate through fields with name (or find first field with name) */
 extern const char *httpHeaderGetStr(HttpHeader *hdr, const char *name, HttpHeaderPos *pos);
@@ -77,7 +82,7 @@ extern void httpHeaderDelField(HttpHeader *hdr, HttpHeaderPos pos);
 extern const char *httpHeaderAddStrField(HttpHeader *hdr, const char *name, const char *value);
 extern long httpHeaderAddIntField(HttpHeader *hdr, const char *name, long value);
 
-/* puts report on current header usage and other stats into a static string */
+/* put report about current header usage and other stats into a static string */
 extern const char *httpHeaderReport();
 
 #endif /* ndef _HTTP_HEADER_H_ */
