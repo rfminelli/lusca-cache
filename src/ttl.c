@@ -124,8 +124,6 @@ typedef struct _ttl_t {
 
 static ttl_t *TTL_tbl = NULL;
 static ttl_t *TTL_tail = NULL;
-static ttl_t *TTL_tbl_force = NULL;
-static ttl_t *TTL_tail_force = NULL;
 
 #define TTL_EXPIRES	0x01
 #define TTL_SERVERDATE	0x02
@@ -134,44 +132,28 @@ static ttl_t *TTL_tail_force = NULL;
 #define TTL_PCTAGE	0x10
 #define TTL_ABSOLUTE	0x20
 #define TTL_DEFAULT	0x40
-#define TTL_FORCE	0x80
 
-static void
-ttlFreeListgeneric(ttl_t * t)
-{
-    ttl_t *tnext;
-
-    for (; t; t = tnext) {
-	tnext = t->next;
-	safe_free(t->pattern);
-	regfree(&t->compiled_pattern);
-	safe_free(t);
-    }
-}
-
-void
-ttlFreeList(void)
-{
-    ttlFreeListgeneric(TTL_tbl);
-    ttlFreeListgeneric(TTL_tbl_force);
-    TTL_tail = TTL_tbl = TTL_tail_force = TTL_tbl_force = 0;
-}
-
-void
-ttlAddToList(char *pattern, int icase, int force, time_t abs_ttl, int pct_age, time_t age_max)
+void ttlAddToList(pattern, icase, abs_ttl, pct_age, age_max)
+     char *pattern;
+     int icase;
+     time_t abs_ttl;
+     int pct_age;
+     time_t age_max;
 {
     ttl_t *t;
     regex_t comp;
     int flags = REG_EXTENDED;
     if (icase)
 	flags |= REG_ICASE;
+
     if (regcomp(&comp, pattern, flags) != REG_NOERROR) {
 	debug(22, 0, "ttlAddToList: Invalid regular expression: %s\n",
 	    pattern);
 	return;
     }
-    pct_age = pct_age < 0 ? 0 : pct_age;
+    pct_age = pct_age < 0 ? 0 : pct_age > 100 ? 100 : pct_age;
     age_max = age_max < 0 ? 0 : age_max;
+
     t = xcalloc(1, sizeof(ttl_t));
     t->pattern = (char *) xstrdup(pattern);
     t->compiled_pattern = comp;
@@ -179,23 +161,18 @@ ttlAddToList(char *pattern, int icase, int force, time_t abs_ttl, int pct_age, t
     t->pct_age = pct_age;
     t->age_max = age_max;
     t->next = NULL;
-    if (!force) {
-	if (!TTL_tbl)
-	    TTL_tbl = t;
-	if (TTL_tail)
-	    TTL_tail->next = t;
-	TTL_tail = t;
-    } else {
-	if (!TTL_tbl_force)
-	    TTL_tbl_force = t;
-	if (TTL_tail_force)
-	    TTL_tail_force->next = t;
-	TTL_tail_force = t;
-    }
+
+    if (!TTL_tbl)
+	TTL_tbl = t;
+    if (TTL_tail)
+	TTL_tail->next = t;
+    TTL_tail = t;
 }
 
-void
-ttlSet(StoreEntry * entry)
+
+
+time_t ttlSet(entry)
+     StoreEntry *entry;
 {
     time_t last_modified = -1;
     time_t expire = -1;
@@ -241,34 +218,47 @@ ttlSet(StoreEntry * entry)
 	expire = ((x = parse_rfc850(reply->expires)) > -1) ? x : served_date;
     }
     if (last_modified > -1)
-	debug(22, 5, "ttlSet: Last-Modified: %s\n", mkrfc850(last_modified));
+	debug(22, 5, "ttlSet: Last-Modified: %s\n", mkrfc850(&last_modified));
     if (expire > -1)
-	debug(22, 5, "ttlSet:       Expires: %s\n", mkrfc850(expire));
+	debug(22, 5, "ttlSet:       Expires: %s\n", mkrfc850(&expire));
     if (their_date > -1)
-	debug(22, 5, "ttlSet:   Server-Date: %s\n", mkrfc850(their_date));
+	debug(22, 5, "ttlSet:   Server-Date: %s\n", mkrfc850(&their_date));
 
     if (expire > -1) {
 	ttl = (expire - squid_curtime);
-	goto finalcheck;
+	if (ttl < 0)
+	    ttl = 0;
+	debug(22, 4, "ttlSet: [%c%c%c%c%c%c%c] %6.2lf days %s\n",
+	    flags & TTL_EXPIRES ? 'E' : '.',
+	    flags & TTL_SERVERDATE ? 'S' : '.',
+	    flags & TTL_LASTMOD ? 'L' : '.',
+	    flags & TTL_MATCHED ? 'M' : '.',
+	    flags & TTL_PCTAGE ? 'P' : '.',
+	    flags & TTL_ABSOLUTE ? 'A' : '.',
+	    flags & TTL_DEFAULT ? 'D' : '.',
+	    (double) ttl / 86400, entry->url);
+	return ttl;
     }
-    /*  Calculate default TTL for later use */
+    /*
+     * ** Calculate default TTL for later use
+     */
     if (request->protocol == PROTO_HTTP)
-	default_ttl = Config.Http.defaultTtl;
+	default_ttl = getHttpTTL();
     else if (request->protocol == PROTO_FTP)
-	default_ttl = Config.Ftp.defaultTtl;
+	default_ttl = getFtpTTL();
     else if (request->protocol == PROTO_GOPHER)
-	default_ttl = Config.Gopher.defaultTtl;
+	default_ttl = getGopherTTL();
 
     match = NULL;
     for (t = TTL_tbl; t; t = t->next) {
-	if (regexec(&(t->compiled_pattern), entry->url, 0, 0, 0) != 0)
-	    continue;
-	match = t;
-	debug(22, 5, "ttlSet: Matched '%s %d %d%%'\n",
-	    match->pattern,
-	    match->abs_ttl >= 0 ? match->abs_ttl : default_ttl,
-	    match->pct_age);
-	flags |= TTL_MATCHED;
+	if (regexec(&(t->compiled_pattern), entry->url, 0, 0, 0) == 0) {
+	    match = t;
+	    debug(22, 5, "ttlSet: Matched '%s %d %d%%'\n",
+		match->pattern,
+		match->abs_ttl >= 0 ? match->abs_ttl : default_ttl,
+		match->pct_age);
+	    flags |= TTL_MATCHED;
+	}
     }
 
     /* Return a TTL that is a percent of the object's age if a last-mod
@@ -298,25 +288,7 @@ ttlSet(StoreEntry * entry)
 	flags |= TTL_DEFAULT;
     }
 
-  finalcheck:
-    if (flags & (TTL_EXPIRES | TTL_PCTAGE)) {
-	match = NULL;
-	for (t = TTL_tbl_force; t; t = t->next) {
-	    if (t->age_max < ttl)
-		continue;
-	    if (regexec(&(t->compiled_pattern), entry->url, 0, 0, 0) != 0)
-		continue;
-	    match = t;
-	    debug(22, 5, "ttlSet: Matched '%s %d'\n",
-		match->pattern,
-		match->abs_ttl);
-	}
-	if (match) {
-	    ttl = match->abs_ttl;
-	    flags |= TTL_FORCE;
-	}
-    }
-    debug(22, 4, "ttlSet: [%c%c%c%c%c%c%c%c] %6.2lf days %s\n",
+    debug(22, 4, "ttlSet: [%c%c%c%c%c%c%c] %6.2lf days %s\n",
 	flags & TTL_EXPIRES ? 'E' : '.',
 	flags & TTL_SERVERDATE ? 'S' : '.',
 	flags & TTL_LASTMOD ? 'L' : '.',
@@ -324,9 +296,7 @@ ttlSet(StoreEntry * entry)
 	flags & TTL_PCTAGE ? 'P' : '.',
 	flags & TTL_ABSOLUTE ? 'A' : '.',
 	flags & TTL_DEFAULT ? 'D' : '.',
-	flags & TTL_FORCE ? 'F' : '.',
 	(double) ttl / 86400, entry->url);
 
-    entry->expires = squid_curtime + ttl;
-    entry->lastmod = last_modified > -1 ? last_modified : served_date;
+    return ttl;
 }

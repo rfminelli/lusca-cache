@@ -108,10 +108,9 @@
 
 #define GET_HDR_SZ 1024
 
-char *
-mime_get_header(char *mime, char *name)
+char *mime_get_header(char *mime, char *name)
 {
-    LOCAL_ARRAY(char, header, GET_HDR_SZ);
+    static char header[GET_HDR_SZ];
     char *p = NULL;
     char *q = NULL;
     char got = 0;
@@ -151,8 +150,7 @@ mime_get_header(char *mime, char *name)
 
 /* need to take the lowest, non-zero pointer to the end of the headers.
  * The headers end at the first empty line */
-char *
-mime_headers_end(char *mime)
+char *mime_headers_end(char *mime)
 {
     char *p1, *p2;
     char *end = NULL;
@@ -170,8 +168,7 @@ mime_headers_end(char *mime)
     return end;
 }
 
-int
-mime_headers_size(char *mime)
+int mime_headers_size(char *mime)
 {
     char *end;
 
@@ -183,14 +180,14 @@ mime_headers_size(char *mime)
 	return 0;
 }
 
-ext_table_entry *
-mime_ext_to_type(char *extension)
+ext_table_entry *mime_ext_to_type(extension)
+     char *extension;
 {
     int i;
     int low;
     int high;
     int comp;
-    LOCAL_ARRAY(char, ext, 16);
+    static char ext[16];
     char *cp = NULL;
 
     if (!extension || strlen(extension) >= (sizeof(ext) - 1))
@@ -223,15 +220,19 @@ mime_ext_to_type(char *extension)
  *  Returns the MIME header in the provided 'result' buffer, and
  *  returns non-zero on error, or 0 on success.
  */
-int
-mk_mime_hdr(char *result, char *type, int size, time_t ttl, time_t lmt)
+int mk_mime_hdr(result, ttl, size, lmt, type)
+     char *result;
+     char *type;
+     int size;
+     time_t ttl;
+     time_t lmt;
 {
     time_t expiretime;
     time_t t;
-    LOCAL_ARRAY(char, date, 100);
-    LOCAL_ARRAY(char, expires, 100);
-    LOCAL_ARRAY(char, last_modified, 100);
-    LOCAL_ARRAY(char, content_length, 100);
+    static char date[100];
+    static char expires[100];
+    static char last_modified[100];
+    static char content_length[100];
 
     if (result == NULL)
 	return 1;
@@ -239,11 +240,11 @@ mk_mime_hdr(char *result, char *type, int size, time_t ttl, time_t lmt)
     expiretime = ttl ? t + ttl : 0;
     date[0] = expires[0] = last_modified[0] = '\0';
     content_length[0] = result[0] = '\0';
-    sprintf(date, "Date: %s\r\n", mkrfc850(t));
+    sprintf(date, "Date: %s\r\n", mkrfc850(&t));
     if (ttl >= 0)
-	sprintf(expires, "Expires: %s\r\n", mkrfc850(expiretime));
+	sprintf(expires, "Expires: %s\r\n", mkrfc850(&expiretime));
     if (lmt)
-	sprintf(last_modified, "Last-Modified: %s\r\n", mkrfc850(lmt));
+	sprintf(last_modified, "Last-Modified: %s\r\n", mkrfc850(&lmt));
     if (size > 0)
 	sprintf(content_length, "Content-Length: %d\r\n", size);
     sprintf(result, "Server: %s/%s\r\n%s%s%sContent-Type: %s\r\n%s",

@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -28,7 +27,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *  
  */
-
+ 
 
 /*
  * Copyright (c) 1994, 1995.  All rights reserved.
@@ -136,7 +135,6 @@
 #include <netdb.h>
 #endif
 
-#include "ansiproto.h"
 #include "util.h"
 
 /*
@@ -144,8 +142,7 @@
  *  host, or NULL on error.  Pointer is only valid until the next call
  *  to the gethost*() functions.
  */
-char *
-getfullhostname(void)
+char *getfullhostname()
 {
     struct hostent *hp = NULL;
     static char buf[SQUIDHOSTNAMELEN + 1];

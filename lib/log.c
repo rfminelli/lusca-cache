@@ -27,7 +27,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *  
  */
-
+ 
 /*
  * Copyright (c) 1994, 1995.  All rights reserved.
  *  
@@ -132,13 +132,12 @@
 #if HAVE_SYS_FILE_H
 #include <sys/file.h>
 #endif
-#if __STDC__ && HAVE_STDARG_H
+#if defined(__STRICT_ANSI__) && HAVE_STDARG_H
 #include <stdarg.h>
 #elif HAVE_VARARGS_H
 #include <varargs.h>
 #endif
 
-#include "ansiproto.h"
 #include "util.h"
 
 #ifdef _SQUID_NEXT_
@@ -157,8 +156,28 @@ static int pid;
 static char *pname = NULL;
 static char lbuf[2048];
 
-void
-init_log3(char *pn, FILE * a, FILE * b)
+#ifdef UNUSED_CODE
+/*
+ *  init_log() - Initializes the logging routines.  Log() prints to 
+ *  FILE *a, and errorlog() prints to FILE *b;
+ */
+void init_log(a, b)
+     FILE *a, *b;
+{
+    fp_log = a;
+    fp_errs = b;
+    pid = getpid();
+    pname = NULL;
+    if (fp_log)
+	setbuf(fp_log, NULL);
+    if (fp_errs)
+	setbuf(fp_errs, NULL);
+}
+#endif
+
+void init_log3(pn, a, b)
+     char *pn;
+     FILE *a, *b;
 {
     fp_log = a;
     fp_errs = b;
@@ -175,9 +194,8 @@ init_log3(char *pn, FILE * a, FILE * b)
 /*
  *  Log() - used like printf(3).  Prints message to stdout.
  */
-#if __STDC__
-void
-Log(char *fmt,...)
+#if defined(__STRICT_ANSI__)
+void Log(char *fmt,...)
 {
     va_list ap;
 
@@ -186,8 +204,7 @@ Log(char *fmt,...)
 
     va_start(ap, fmt);
 #else
-void
-Log(va_alist)
+void Log(va_alist)
      va_dcl
 {
     va_list ap;
@@ -198,7 +215,7 @@ Log(va_alist)
 
     va_start(ap);
     fmt = va_arg(ap, char *);
-#endif /* __STDC__ */
+#endif /* __STRICT_ANSI__ */
     if (fp_log == NULL)
 	return;
 
@@ -211,9 +228,8 @@ Log(va_alist)
 /*
  *  errorlog() - used like printf(3).  Prints error message to stderr.
  */
-#if __STDC__
-void
-errorlog(char *fmt,...)
+#if defined(__STRICT_ANSI__)
+void errorlog(char *fmt,...)
 {
     va_list ap;
 
@@ -222,8 +238,7 @@ errorlog(char *fmt,...)
 
     va_start(ap, fmt);
 #else
-void
-errorlog(va_alist)
+void errorlog(va_alist)
      va_dcl
 {
     va_list ap;
@@ -234,7 +249,7 @@ errorlog(va_alist)
 
     va_start(ap);
     fmt = va_arg(ap, char *);
-#endif /* __STDC__ */
+#endif /* __STRICT_ANSI__ */
 
     if (fp_errs == NULL)
 	return;
@@ -248,9 +263,8 @@ errorlog(va_alist)
 /*
  *  fatal() - used like printf(3).  Prints error message to stderr and exits
  */
-#if __STDC__
-void
-fatal(char *fmt,...)
+#if defined(__STRICT_ANSI__)
+void fatal(char *fmt,...)
 {
     va_list ap;
 
@@ -259,8 +273,7 @@ fatal(char *fmt,...)
 
     va_start(ap, fmt);
 #else
-void
-fatal(va_alist)
+void fatal(va_alist)
      va_dcl
 {
     va_list ap;
@@ -271,7 +284,7 @@ fatal(va_alist)
 
     va_start(ap);
     fmt = va_arg(ap, char *);
-#endif /* __STDC__ */
+#endif /* __STRICT_ANSI__ */
 
     if (fp_errs == NULL)
 	exit(1);
@@ -286,8 +299,10 @@ fatal(va_alist)
 /*
  *  log_errno2() - Same as perror(); doesn't print when errno == 0
  */
-void
-log_errno2(char *file, int line, char *s)
+void log_errno2(file, line, s)
+     char *file;
+     int line;
+     char *s;
 {
     if (errno != 0)
 	errorlog("%s [%d]: %s: %s\n", file, line, s, xstrerror());
@@ -297,8 +312,7 @@ log_errno2(char *file, int line, char *s)
 /*
  *  standard_msg() - Prints the standard pid and timestamp
  */
-static char *
-standard_msg(void)
+static char *standard_msg()
 {
     time_t t;
     static char buf[BUFSIZ];

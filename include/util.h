@@ -107,12 +107,6 @@
 #include "config.h"
 #include <stdio.h>
 #include <time.h>
-#if HAVE_TIME_H
-#include <time.h>
-#endif
-#if HAVE_SYS_TIME_H
-#include <sys/time.h>
-#endif
 
 #if !defined(SQUIDHOSTNAMELEN)
 #include <sys/param.h>
@@ -127,27 +121,32 @@
 #endif
 #endif
 
+#ifndef _PARAMS
+#if defined(__STDC__) || defined(__cplusplus) || defined(__STRICT_ANSI__)
+#define _PARAMS(ARGS) ARGS
+#else /* Traditional C */
+#define _PARAMS(ARGS) ()
+#endif /* __STDC__ */
+#endif /* _PARAMS */
+
 #if !HAVE_STRDUP
 extern char *strdup _PARAMS((char *));
 #endif
-extern char *xstrdup _PARAMS((char *));
+extern char *xstrdup _PARAMS((char *));		/* Duplicate a string */
 
 /* from xmalloc.c */
-extern void *xmalloc _PARAMS((size_t));
-extern void *xrealloc _PARAMS((void *, size_t));
-extern void *xcalloc _PARAMS((int, size_t));
-extern void xfree _PARAMS((void *));
-extern void xxfree _PARAMS((void *));
-extern char *xstrdup _PARAMS((char *));
-extern char *xstrerror _PARAMS((void));
-extern char *getfullhostname _PARAMS((void));
-extern void xmemcpy _PARAMS((void *, void *, int));
-
-extern int tvSubMsec _PARAMS((struct timeval, struct timeval));
-
+void *xmalloc _PARAMS((size_t));	/* Wrapper for malloc(3) */
+void *xrealloc _PARAMS((void *, size_t));	/* Wrapper for realloc(3) */
+void *xcalloc _PARAMS((int, size_t));	/* Wrapper for calloc(3) */
+void xfree _PARAMS((void *));	/* Wrapper for free(3) */
+void xxfree _PARAMS((void *));	/* Wrapper for free(3) */
+char *xstrdup _PARAMS((char *));
+char *xstrerror _PARAMS((void));
+char *getfullhostname _PARAMS((void));
+void xmemcpy _PARAMS((void *, void*, int));
 
 #if XMALLOC_STATISTICS
-void malloc_statistics _PARAMS((void (*)_PARAMS((int, int, void *)), void *));
+void malloc_statistics _PARAMS((void (*)(int, int, void *), void *));
 #endif
 
 /* from debug.c */
@@ -184,22 +183,19 @@ extern int Harvest_debug_levels[];
 void debug_flag _PARAMS((char *));
 
 char *mkhttpdlogtime _PARAMS((time_t *));
-extern char *mkrfc850 _PARAMS((time_t));
+extern char *mkrfc850 _PARAMS((time_t *));
 extern time_t parse_rfc850 _PARAMS((char *str));
 extern void init_log3 _PARAMS((char *pn, FILE * a, FILE * b));
-extern void debug_init _PARAMS((void));
+extern void debug_init();
 extern void log_errno2 _PARAMS((char *, int, char *));
 
-#if __STDC__
+#if defined(__STRICT_ANSI__)
 extern void Log _PARAMS((char *,...));
 extern void errorlog _PARAMS((char *,...));
 #else
-extern void Log _PARAMS(());
-extern void errorlog _PARAMS(());
-#endif /* __STDC__ */
+extern void Log();
+extern void errorlog();
+#endif /* __STRICT_ANSI__ */
 
-extern void Tolower _PARAMS((char *));
-
-extern char *uudecode _PARAMS((char *));
 
 #endif /* ndef _UTIL_H_ */

@@ -117,7 +117,7 @@ struct icp_common_s {
     u_num32 shostid;		/* sender host id */
 };
 
-#define ICP_FLAG_HIT_OBJ 0x80000000ul
+#define ICP_FLAG_HIT_OBJ 0x80000000
 
 #define ICP_COMMON_SZ (sizeof(icp_common_t))
 #define ICP_HDR_SZ (sizeof(icp_common_t)+sizeof(u_num32))
@@ -290,12 +290,9 @@ typedef struct _protodispatch_data {
 
 extern int proto_cachable _PARAMS((char *url, int method));
 extern int protoDispatch _PARAMS((int, char *, StoreEntry *, request_t *));
-extern void protoUnregister _PARAMS((int fd,
-	StoreEntry *,
-	request_t *,
-	struct in_addr));
+extern int protoUndispatch _PARAMS((int, char *, StoreEntry *, request_t *));
 extern int getFromDefaultSource _PARAMS((int, StoreEntry *));
-extern int protoStart _PARAMS((int, StoreEntry *, edge *, request_t *));
+extern int getFromCache _PARAMS((int, StoreEntry *, edge *, request_t *));
 extern void protoCancelTimeout _PARAMS((int fd, StoreEntry *));
 
 #define DIRECT_NO    0
