@@ -281,11 +281,11 @@ char *get_free_4k_page()
 	page = pop(&sm_stats.free_page_stack);
     } else {
 #if USE_MEMALIGN
-	page = (char *) memalign(SM_PAGE_SIZE, SM_PAGE_SIZE);
+	page = memalign(SM_PAGE_SIZE, SM_PAGE_SIZE);
 	if (!page)
 	    fatal_dump(NULL);
 #else
-	page = (char *) xmalloc(SM_PAGE_SIZE);
+	page = xmalloc(SM_PAGE_SIZE);
 #endif
 	sm_stats.total_pages_allocated++;
     }
@@ -325,11 +325,11 @@ char *get_free_8k_page()
 	page = pop(&disk_stats.free_page_stack);
     } else {
 #if USE_MEMALIGN
-	page = (char *) memalign(DISK_PAGE_SIZE, DISK_PAGE_SIZE);
+	page = memalign(DISK_PAGE_SIZE, DISK_PAGE_SIZE);
 	if (!page)
 	    fatal_dump(NULL);
 #else
-	page = (char *) xmalloc(DISK_PAGE_SIZE);
+	page = xmalloc(DISK_PAGE_SIZE);
 #endif
 	disk_stats.total_pages_allocated++;
     }
