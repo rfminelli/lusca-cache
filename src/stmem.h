@@ -42,12 +42,18 @@ typedef struct _stmem_stats {
 
 extern stmem_stats sm_stats;
 extern stmem_stats disk_stats;
+extern stmem_stats request_pool;
+extern stmem_stats mem_obj_pool;
 
 extern char *get_free_4k_page _PARAMS(());
 extern char *get_free_8k_page _PARAMS(());
+extern void *get_free_request_t _PARAMS(());
+extern void *get_free_mem_obj _PARAMS(());
 extern mem_ptr memInit _PARAMS((void));
 extern void put_free_4k_page _PARAMS((char *));
 extern void put_free_8k_page _PARAMS((char *));
+extern void put_free_request_t _PARAMS((void *));
+extern void put_free_mem_obj _PARAMS((void *));
 extern void stmemInit _PARAMS((void));
 
 #endif
