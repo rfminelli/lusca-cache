@@ -176,7 +176,6 @@ static void gopherSendComplete(int fd,
     int size,
     int errflag,
     void *data);
-static void gopherStartComplete _PARAMS((void *, int));
 static void gopherSendRequest _PARAMS((int fd, GopherStateData *));
 static GopherStateData *CreateGopherStateData _PARAMS((void));
 static void gopherConnectDone _PARAMS((int fd, int status, void *data));
@@ -717,14 +716,8 @@ gopherReadReply(int fd, GopherStateData * data)
     int bin;
 
     entry = data->entry;
-    if (entry->flag & DELETE_BEHIND && !storeClientWaiting(entry)) {
-	/* we can terminate connection right now */
-	squid_error_entry(entry, ERR_NO_CLIENTS_BIG_OBJ, NULL);
-	comm_close(fd);
-	return;
-    }
     /* check if we want to defer reading */
-    clen = entry->mem_obj->e_current_len;
+    clen = entry->object_len;
     off = storeGetLowestReaderOffset(entry);
     if ((clen - off) > GOPHER_DELETE_GAP) {
 	if (entry->flag & CLIENT_ABORT_REQUEST) {
@@ -771,7 +764,7 @@ gopherReadReply(int fd, GopherStateData * data)
     }
     if (len < 0) {
 	debug(50, 1, "gopherReadReply: error reading: %s\n", xstrerror());
-	if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+	if (errno == EAGAIN || errno == EWOULDBLOCK) {
 	    /* reinstall handlers */
 	    /* XXX This may loop forever */
 	    commSetSelect(fd,
@@ -789,7 +782,7 @@ gopherReadReply(int fd, GopherStateData * data)
 	    squid_error_entry(entry, ERR_READ_ERROR, xstrerror());
 	    comm_close(fd);
 	}
-    } else if (len == 0 && entry->mem_obj->e_current_len == 0) {
+    } else if (len == 0 && entry->mem_obj->swap_length == 0) {
 	squid_error_entry(entry,
 	    ERR_ZERO_SIZE_OBJECT,
 	    errno ? xstrerror() : NULL);
@@ -799,18 +792,10 @@ gopherReadReply(int fd, GopherStateData * data)
 	/* flush the rest of data in temp buf if there is one. */
 	if (data->conversion != NORMAL)
 	    gopherEndHTML(data);
-	if (!(entry->flag & DELETE_BEHIND))
-	    storeTimestampsSet(entry);
 	BIT_RESET(entry->flag, DELAY_SENDING);
 	storeComplete(entry);
 	comm_close(fd);
     } else if (entry->flag & CLIENT_ABORT_REQUEST) {
-	/* append the last bit of info we got */
-	if (data->conversion != NORMAL) {
-	    gopherToHTML(data, buf, len);
-	} else {
-	    storeAppend(entry, buf, len);
-	}
 	squid_error_entry(entry, ERR_CLIENT_ABORT, NULL);
 	if (data->conversion != NORMAL)
 	    gopherEndHTML(data);
@@ -936,28 +921,22 @@ gopherSendRequest(int fd, GopherStateData * data)
 }
 
 int
-gopherStart(StoreEntry * entry)
+gopherStart(int unusedfd, const char *url, StoreEntry * entry)
 {
-    storeLockObject(entry, gopherStartComplete, entry);
-    return COMM_OK;
-}
-
-
-static void
-gopherStartComplete(void *datap, int status)
-{
-    StoreEntry *entry = datap;
-    char *url = entry->url;
-    GopherStateData *data = CreateGopherStateData();
+    /* Create state structure. */
     int sock;
-    data->entry = entry;
+    GopherStateData *data = CreateGopherStateData();
+
+    storeLockObject(data->entry = entry);
+
     debug(10, 3, "gopherStart: url: %s\n", url);
+
     /* Parse url. */
     if (gopher_url_parser(url, data->host, &data->port,
 	    &data->type_id, data->request)) {
 	squid_error_entry(entry, ERR_INVALID_URL, NULL);
 	gopherStateFree(-1, data);
-	return;
+	return COMM_ERROR;
     }
     /* Create socket. */
     sock = comm_open(SOCK_STREAM,
@@ -970,11 +949,12 @@ gopherStartComplete(void *datap, int status)
 	debug(10, 4, "gopherStart: Failed because we're out of sockets.\n");
 	squid_error_entry(entry, ERR_NO_FDS, xstrerror());
 	gopherStateFree(-1, data);
-	return;
+	return COMM_ERROR;
     }
     comm_add_close_handler(sock,
 	(PF) gopherStateFree,
 	(void *) data);
+
     /* check if IP is already in cache. It must be. 
      * It should be done before this route is called. 
      * Otherwise, we cannot check return code for connect. */
@@ -982,7 +962,7 @@ gopherStartComplete(void *datap, int status)
 	debug(10, 4, "gopherStart: Called without IP entry in ipcache. OR lookup failed.\n");
 	squid_error_entry(entry, ERR_DNS_FAIL, dns_error_message);
 	comm_close(sock);
-	return;
+	return COMM_ERROR;
     }
     if (((data->type_id == GOPHER_INDEX) || (data->type_id == GOPHER_CSO))
 	&& (strchr(data->request, '?') == NULL)
@@ -990,6 +970,7 @@ gopherStartComplete(void *datap, int status)
 	/* Index URL without query word */
 	/* We have to generate search page back to client. No need for connection */
 	gopherMimeCreate(data);
+
 	if (data->type_id == GOPHER_INDEX) {
 	    data->conversion = HTML_INDEX_PAGE;
 	} else {
@@ -1002,13 +983,14 @@ gopherStartComplete(void *datap, int status)
 	gopherToHTML(data, (char *) NULL, 0);
 	storeComplete(entry);
 	comm_close(sock);
-	return;
+	return COMM_OK;
     }
     commConnectStart(sock,
 	data->host,
 	data->port,
 	gopherConnectDone,
 	data);
+    return COMM_OK;
 }
 
 static void

@@ -227,19 +227,16 @@ objcache_CheckPassword(ObjectCacheData * obj)
 }
 
 int
-objcacheStart(int fd, StoreEntry * entry)
+objcacheStart(int fd, const char *url, StoreEntry * entry)
 {
     static const char *const BADCacheURL = "Bad Object Cache URL %s ... negative cached.\n";
     static const char *const BADPassword = "Incorrect password, sorry.\n";
     ObjectCacheData *data = NULL;
     int complete_flag = 1;
 
-    debug(16, 3, "objectcacheStart: '%s'\n", entry->url);
-    if ((data = objcache_url_parser(entry->url)) == NULL) {
-	storeAbort(entry, "Invalid objcache syntax.\n");
-	entry->expires = squid_curtime + STAT_TTL;
-	safe_free(data);
-	InvokeHandlers(entry);
+    debug(16, 3, "objectcacheStart: '%s'\n", url);
+    if ((data = objcache_url_parser(url)) == NULL) {
+	squid_error_entry(entry, ERR_INVALID_REQ, "Invalid objcache syntax.\n");
 	return COMM_ERROR;
     }
     data->reply_fd = fd;
@@ -251,9 +248,8 @@ objcacheStart(int fd, StoreEntry * entry)
     /* Check password */
     if (objcache_CheckPassword(data) != 0) {
 	debug(16, 1, "WARNING: Incorrect Cachemgr Password!\n");
-	storeAbort(entry, BADPassword);
-	entry->expires = squid_curtime + STAT_TTL;
-	InvokeHandlers(entry);
+	squid_error_entry(entry, ERR_INVALID_REQ, BADPassword);
+	safe_free(data);
 	return COMM_ERROR;
     }
     /* retrieve object requested */
@@ -331,8 +327,8 @@ objcacheStart(int fd, StoreEntry * entry)
 	complete_flag = 0;
 	break;
     default:
-	debug(16, 5, "Bad Object Cache URL %s ... negative cached.\n", entry->url);
-	storeAppendPrintf(entry, BADCacheURL, entry->url);
+	debug(16, 5, "Bad Object Cache URL %s ... negative cached.\n", url);
+	storeAppendPrintf(entry, BADCacheURL, url);
 	break;
     }
     BIT_RESET(entry->flag, DELAY_SENDING);

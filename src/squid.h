@@ -264,8 +264,9 @@ typedef unsigned long u_num32;
 #include <regex.h>
 #endif
 
-typedef void (*SIH) (void *, int);	/* swap in */
+typedef void (*SIH) (int, void *);	/* swap in */
 typedef int (*QS) (const void *, const void *);
+typedef void (*PIF) (int, void *);	/* store callback */
 
 #include "cache_cf.h"
 #include "comm.h"
@@ -275,7 +276,6 @@ typedef int (*QS) (const void *, const void *);
 #include "filemap.h"
 #include "hash.h"
 #include "proto.h"		/* must go before neighbors.h */
-#include "peer_select.h"	/* must go before neighbors.h */
 #include "neighbors.h"		/* must go before url.h */
 #include "url.h"
 #include "icp.h"
@@ -349,17 +349,18 @@ extern char ThisCache[];	/* main.c */
 
 #define  CONNECT_PORT        443
 
+extern int objcacheStart _PARAMS((int, const char *, StoreEntry *));
 extern void start_announce _PARAMS((void *unused));
-extern int sslStart _PARAMS((int fd, const char *, request_t *, char *, int *sz));
+extern int sslStart _PARAMS((int fd, const char *, request_t *, char *, size_t *sz));
 extern const char *storeToString _PARAMS((const StoreEntry *));
-extern int waisStart _PARAMS((method_t, char *, StoreEntry *));
+extern int waisStart _PARAMS((int, const char *, method_t, char *, StoreEntry *));
 extern void storeDirClean _PARAMS((void *unused));
 extern int passStart _PARAMS((int fd,
 	const char *url,
 	request_t * request,
 	char *buf,
 	int buflen,
-	int *size_ptr));
+	size_t * size_ptr));
 extern void identStart _PARAMS((int, icpStateData *,
 	void       (*callback) _PARAMS((void *))));
 extern int httpAnonAllowed _PARAMS((const char *line));

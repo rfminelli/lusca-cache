@@ -32,9 +32,54 @@
 #include "squid.h"
 
 static void clientRedirectDone _PARAMS((void *data, char *result));
-static void icpHandleIMSReply _PARAMS((int fd, StoreEntry * entry, void *data));
+static void icpHandleIMSReply _PARAMS((int fd, void *data));
+static void clientLookupDstIPDone _PARAMS((int fd, const ipcache_addrs *, void *data));
+static void clientLookupSrcFQDNDone _PARAMS((int fd, const char *fqdn, void *data));
+static void clientLookupDstFQDNDone _PARAMS((int fd, const char *fqdn, void *data));
 static int clientGetsOldEntry _PARAMS((StoreEntry * new, StoreEntry * old, request_t * request));
 static int checkAccelOnly _PARAMS((icpStateData * icpState));
+
+
+static void
+clientLookupDstIPDone(int fd, const ipcache_addrs * ia, void *data)
+{
+    icpStateData *icpState = data;
+    debug(33, 5, "clientLookupDstIPDone: FD %d, '%s'\n",
+	fd,
+	icpState->url);
+    icpState->aclChecklist->state[ACL_DST_IP] = ACL_LOOKUP_DONE;
+    if (ia) {
+	icpState->aclChecklist->dst_addr = ia->in_addrs[0];
+	debug(33, 5, "clientLookupDstIPDone: %s is %s\n",
+	    icpState->request->host,
+	    inet_ntoa(icpState->aclChecklist->dst_addr));
+    }
+    clientAccessCheck(icpState, icpState->aclHandler);
+}
+
+static void
+clientLookupSrcFQDNDone(int fd, const char *fqdn, void *data)
+{
+    icpStateData *icpState = data;
+    debug(33, 5, "clientLookupSrcFQDNDone: FD %d, '%s', FQDN %s\n",
+	fd,
+	icpState->url,
+	fqdn ? fqdn : "NULL");
+    icpState->aclChecklist->state[ACL_SRC_DOMAIN] = ACL_LOOKUP_DONE;
+    clientAccessCheck(icpState, icpState->aclHandler);
+}
+
+static void
+clientLookupDstFQDNDone(int fd, const char *fqdn, void *data)
+{
+    icpStateData *icpState = data;
+    debug(33, 5, "clientLookupDstFQDNDone: FD %d, '%s', FQDN %s\n",
+	fd,
+	icpState->url,
+	fqdn ? fqdn : "NULL");
+    icpState->aclChecklist->state[ACL_SRC_DOMAIN] = ACL_LOOKUP_DONE;
+    clientAccessCheck(icpState, icpState->aclHandler);
+}
 
 static void
 clientLookupIdentDone(void *data)
@@ -92,14 +137,34 @@ checkAccelOnly(icpStateData * icpState)
 }
 
 void
-clientAccessCheck(icpStateData * icpState, PF handler)
+clientAccessCheck(icpStateData * icpState, void (*handler) (icpStateData *, int))
 {
-    char *browser;
+    int answer = 1;
+    aclCheck_t *ch = NULL;
+    char *browser = NULL;
+    const ipcache_addrs *ia = NULL;
+
     if (Config.identLookup && icpState->ident.state == IDENT_NONE) {
 	icpState->aclHandler = handler;
 	identStart(-1, icpState, clientLookupIdentDone);
 	return;
     }
+    if (icpState->aclChecklist == NULL) {
+	icpState->aclChecklist = xcalloc(1, sizeof(aclCheck_t));
+	icpState->aclChecklist->src_addr = icpState->peer.sin_addr;
+	icpState->aclChecklist->request = requestLink(icpState->request);
+	browser = mime_get_header(icpState->request_hdr, "User-Agent");
+	if (browser != NULL) {
+	    xstrncpy(icpState->aclChecklist->browser, browser, BROWSERNAMELEN);
+	} else {
+	    icpState->aclChecklist->browser[0] = '\0';
+	}
+	xstrncpy(icpState->aclChecklist->ident,
+	    icpState->ident.ident,
+	    ICP_IDENT_SZ);
+    }
+    /* This so we can have SRC ACLs for cache_host_acl. */
+    icpState->request->client_addr = icpState->peer.sin_addr;
 #if USE_PROXY_AUTH
     if (clientProxyAuthCheck(icpState) == 0) {
 	char *wbuf = NULL;
@@ -116,24 +181,47 @@ clientAccessCheck(icpStateData * icpState, PF handler)
 	return;
     }
 #endif /* USE_PROXY_AUTH */
+
+    ch = icpState->aclChecklist;
+    icpState->aclHandler = handler;
     if (checkAccelOnly(icpState)) {
-        clientAccessCheckDone(0, icpState);
-	return;
+	answer = 0;
+    } else {
+	answer = aclCheck(HTTPAccessList, ch);
+	if (ch->state[ACL_DST_IP] == ACL_LOOKUP_NEED) {
+	    ch->state[ACL_DST_IP] = ACL_LOOKUP_PENDING;		/* first */
+	    ipcache_nbgethostbyname(icpState->request->host,
+		icpState->fd,
+		clientLookupDstIPDone,
+		icpState);
+	    return;
+	} else if (ch->state[ACL_SRC_DOMAIN] == ACL_LOOKUP_NEED) {
+	    ch->state[ACL_SRC_DOMAIN] = ACL_LOOKUP_PENDING;	/* first */
+	    fqdncache_nbgethostbyaddr(icpState->peer.sin_addr,
+		icpState->fd,
+		clientLookupSrcFQDNDone,
+		icpState);
+	    return;
+	} else if (ch->state[ACL_DST_DOMAIN] == ACL_LOOKUP_NEED) {
+	    ch->state[ACL_DST_DOMAIN] = ACL_LOOKUP_PENDING;	/* first */
+	    ia = ipcacheCheckNumeric(icpState->request->host);
+	    if (ia != NULL)
+		fqdncache_nbgethostbyaddr(ia->in_addrs[0],
+		    icpState->fd,
+		    clientLookupDstFQDNDone,
+		    icpState);
+	    return;
+	}
     }
-    browser = mime_get_header(icpState->request_hdr, "User-Agent"),
-    aclNBCheck(Config.accessList.HTTP,
-	icpState->request,
-	icpState->peer.sin_addr,
-	browser,
-	icpState->ident.ident,
-	handler,
-	icpState);
+    requestUnlink(icpState->aclChecklist->request);
+    safe_free(icpState->aclChecklist);
+    icpState->aclHandler = NULL;
+    handler(icpState, answer);
 }
 
 void
-clientAccessCheckDone(int answer, void *data)
+clientAccessCheckDone(icpStateData * icpState, int answer)
 {
-    icpStateData * icpState = data;
     int fd = icpState->fd;
     char *buf = NULL;
     char *redirectUrl = NULL;
@@ -143,7 +231,7 @@ clientAccessCheckDone(int answer, void *data)
 	redirectStart(fd, icpState, clientRedirectDone, icpState);
     } else {
 	debug(33, 5, "Access Denied: %s\n", icpState->url);
-	redirectUrl = aclGetDenyInfoUrl(&Config.denyInfoList, AclMatchedName);
+	redirectUrl = aclGetDenyInfoUrl(&DenyInfoList, AclMatchedName);
 	if (redirectUrl) {
 	    icpState->http_code = 302,
 		buf = access_denied_redirect(icpState->http_code,
@@ -356,10 +444,10 @@ icpProcessExpired(int fd, void *data)
 
     entry->refcount++;		/* EXPIRED CASE */
     icpState->entry = entry;
-    icpState->out_offset = 0;
+    icpState->out.offset = 0;
     /* Register with storage manager to receive updates when data comes in. */
-    storeRegister(entry, fd, icpHandleIMSReply, (void *) icpState);
-    protoDispatch(fd, icpState->entry, icpState->request);
+    storeRegister(entry, fd, icpHandleIMSReply, (void *) icpState, icpState->out.offset);
+    protoDispatch(fd, url, icpState->entry, icpState->request);
 }
 
 static int
@@ -390,15 +478,14 @@ clientGetsOldEntry(StoreEntry * new_entry, StoreEntry * old_entry, request_t * r
 
 
 static void
-icpHandleIMSReply(int fd, StoreEntry * entry, void *data)
+icpHandleIMSReply(int fd, void *data)
 {
     icpStateData *icpState = data;
+    StoreEntry *entry = icpState->entry;
     MemObject *mem = entry->mem_obj;
-    char *hbuf;
-    int len;
     int unlink_request = 0;
     StoreEntry *oldentry;
-    debug(33, 3, "icpHandleIMSReply: FD %d '%s'\n", fd, entry->url);
+    debug(33, 3, "icpHandleIMSReply: FD %d '%s'\n", fd, entry->key);
     /* unregister this handler */
     if (entry->store_status == STORE_ABORTED) {
 	debug(33, 3, "icpHandleIMSReply: ABORTED/%s '%s'\n",
@@ -416,42 +503,24 @@ icpHandleIMSReply(int fd, StoreEntry * entry, void *data)
 	storeRegister(entry,
 	    fd,
 	    icpHandleIMSReply,
-	    (void *) icpState);
+	    (void *) icpState,
+	    entry->object_len);
 	return;
     } else if (clientGetsOldEntry(entry, icpState->old_entry, icpState->request)) {
 	/* We initiated the IMS request, the client is not expecting
-	 * 304, so put the good one back.  First, make sure the old entry
-	 * headers have been loaded from disk. */
+	 * 304, so put the good one back. */
 	oldentry = icpState->old_entry;
-	if (oldentry->mem_obj->e_current_len == 0) {
-	    storeRegister(entry,
-		fd,
-		icpHandleIMSReply,
-		(void *) icpState);
-	    return;
-	}
 	icpState->log_type = LOG_TCP_REFRESH_HIT;
-	hbuf = get_free_8k_page();
-	if (storeClientCopy(oldentry, 0, 8191, hbuf, &len, fd) < 0) {
-	    debug(33, 1, "icpHandleIMSReply: Couldn't copy old entry\n");
-	} else {
-	    if (oldentry->mem_obj->request == NULL) {
-		oldentry->mem_obj->request = requestLink(mem->request);
-		unlink_request = 1;
-	    }
+	if (oldentry->mem_obj->request == NULL) {
+	    oldentry->mem_obj->request = requestLink(mem->request);
+	    unlink_request = 1;
 	}
+	memcpy(oldentry->mem_obj->reply, entry->mem_obj->reply, sizeof(struct _http_reply));
+	storeTimestampsSet(oldentry);
 	storeUnregister(entry, fd);
 	storeUnlockObject(entry);
 	entry = icpState->entry = oldentry;
-	if (mime_headers_end(hbuf)) {
-	    httpParseReplyHeaders(hbuf, entry->mem_obj->reply);
-	    storeTimestampsSet(entry);
-	} else {
-	    debug(33, 1, "icpHandleIMSReply: No end-of-headers, len=%d\n", len);
-	    debug(33, 1, "  --> '%s'\n", entry->url);
-	}
 	entry->timestamp = squid_curtime;
-	put_free_8k_page(hbuf);
 	if (unlink_request) {
 	    requestUnlink(entry->mem_obj->request);
 	    entry->mem_obj->request = NULL;
@@ -466,6 +535,8 @@ icpHandleIMSReply(int fd, StoreEntry * entry, void *data)
 	}
 	storeUnregister(icpState->old_entry, fd);
 	storeUnlockObject(icpState->old_entry);
+	file_close(icpState->swapin_fd);
+	icpState->swapin_fd = storeOpenSwapFileRead(entry);
     }
     icpState->old_entry = NULL;	/* done with old_entry */
     icpSendMoreData(fd, icpState);	/* give data to the client */
@@ -474,16 +545,16 @@ icpHandleIMSReply(int fd, StoreEntry * entry, void *data)
 int
 modifiedSince(StoreEntry * entry, request_t * request)
 {
-    int object_length;
+    int object_len;
     MemObject *mem = entry->mem_obj;
-    debug(33, 3, "modifiedSince: '%s'\n", entry->url);
+    debug(33, 3, "modifiedSince: '%s'\n", entry->key);
     if (entry->lastmod < 0)
 	return 1;
     /* Find size of the object */
     if (mem->reply->content_length)
-	object_length = mem->reply->content_length;
+	object_len = mem->reply->content_length;
     else
-	object_length = entry->object_len - mem->reply->hdr_sz;
+	object_len = entry->object_len - mem->reply->hdr_sz;
     if (entry->lastmod > request->ims) {
 	debug(33, 3, "--> YES: entry newer than client\n");
 	return 1;
@@ -493,7 +564,7 @@ modifiedSince(StoreEntry * entry, request_t * request)
     } else if (request->imslen < 0) {
 	debug(33, 3, "-->  NO: same LMT, no client length\n");
 	return 0;
-    } else if (request->imslen == object_length) {
+    } else if (request->imslen == object_len) {
 	debug(33, 3, "-->  NO: same LMT, same length\n");
 	return 0;
     } else {

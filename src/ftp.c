@@ -127,17 +127,11 @@ typedef struct _Ftpdata {
     int authenticated;		/* This ftp request is authenticated */
 } FtpStateData;
 
-typedef struct ftp_ctrl_t {
-    request_t *request;
-    StoreEntry *entry;
-} ftp_ctrl_t;
-
 /* Local functions */
 static const char *ftpTransferMode _PARAMS((const char *));
 static char *ftpGetBasicAuth _PARAMS((const char *));
 static int ftpReadReply _PARAMS((int, FtpStateData *));
 static int ftpStateFree _PARAMS((int, FtpStateData *));
-static void ftpStartComplete _PARAMS((void *, int));
 static void ftpConnectDone _PARAMS((int fd, int status, void *data));
 static void ftpLifetimeExpire _PARAMS((int, FtpStateData *));
 static void ftpProcessReplyHeader _PARAMS((FtpStateData *, const char *, int));
@@ -283,14 +277,8 @@ ftpReadReply(int fd, FtpStateData * data)
     StoreEntry *entry = NULL;
 
     entry = data->entry;
-    if (entry->flag & DELETE_BEHIND && !storeClientWaiting(entry)) {
-	/* we can terminate connection right now */
-	squid_error_entry(entry, ERR_NO_CLIENTS_BIG_OBJ, NULL);
-	comm_close(fd);
-	return 0;
-    }
     /* check if we want to defer reading */
-    clen = entry->mem_obj->e_current_len;
+    clen = entry->object_len;
     off = storeGetLowestReaderOffset(entry);
     if ((clen - off) > FTP_DELETE_GAP) {
 	if (entry->flag & CLIENT_ABORT_REQUEST) {
@@ -328,7 +316,7 @@ ftpReadReply(int fd, FtpStateData * data)
     }
     if (len < 0) {
 	debug(50, 1, "ftpReadReply: read error: %s\n", xstrerror());
-	if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+	if (errno == EAGAIN || errno == EWOULDBLOCK) {
 	    /* reinstall handlers */
 	    /* XXX This may loop forever */
 	    commSetSelect(fd, COMM_SELECT_READ,
@@ -341,7 +329,7 @@ ftpReadReply(int fd, FtpStateData * data)
 	    squid_error_entry(entry, ERR_READ_ERROR, xstrerror());
 	    comm_close(fd);
 	}
-    } else if (len == 0 && entry->mem_obj->e_current_len == 0) {
+    } else if (len == 0 && entry->mem_obj->swap_length == 0) {
 	squid_error_entry(entry,
 	    ERR_ZERO_SIZE_OBJECT,
 	    errno ? xstrerror() : NULL);
@@ -356,15 +344,11 @@ ftpReadReply(int fd, FtpStateData * data)
 	    storeNegativeCache(entry);
 	    BIT_RESET(entry->flag, ENTRY_CACHABLE);
 	    storeReleaseRequest(entry);
-	} else if (!(entry->flag & DELETE_BEHIND)) {
-	    storeTimestampsSet(entry);
 	}
 	/* update fdstat and fdtable */
 	storeComplete(entry);
 	comm_close(fd);
     } else if (entry->flag & CLIENT_ABORT_REQUEST) {
-	/* append the last bit of info we get */
-	storeAppend(entry, buf, len);
 	squid_error_entry(entry, ERR_CLIENT_ABORT, NULL);
 	comm_close(fd);
     } else {
@@ -547,37 +531,24 @@ ftpGetBasicAuth(const char *req_hdr)
 
 
 int
-ftpStart(request_t * request, StoreEntry * entry)
+ftpStart(int unusedfd, const char *url, request_t * request, StoreEntry * entry)
 {
-    ftp_ctrl_t *ctrlp;
-    debug(9, 3, "FtpStart: '%s'\n", entry->url);
+    LOCAL_ARRAY(char, realm, 8192);
+    FtpStateData *ftpData = NULL;
+    char *req_hdr = entry->mem_obj->mime_hdr;
+    char *response;
+    char *auth;
+
+    debug(9, 3, "FtpStart: FD %d '%s'\n", unusedfd, url);
+
     if (ftpget_server_write < 0) {
 	squid_error_entry(entry, ERR_FTP_DISABLED, NULL);
 	return COMM_ERROR;
     }
-    ctrlp = xmalloc(sizeof(ftp_ctrl_t));
-    ctrlp->request = request;
-    ctrlp->entry = entry;
-    storeLockObject(entry, ftpStartComplete, ctrlp);
-    return COMM_OK;
-}
-
-static void
-ftpStartComplete(void *data, int status)
-{
-    LOCAL_ARRAY(char, realm, 8192);
-    ftp_ctrl_t *ctrlp = data;
-    request_t * request = ctrlp->request;
-    StoreEntry *entry = ctrlp->entry;
-    char *url = entry->url;
-    FtpStateData *ftpData = xcalloc(1, sizeof(FtpStateData));
-    char *req_hdr;
-    char *response;
-    char *auth;
-    ftpData->entry = entry;
-    xfree(ctrlp);
-    req_hdr = entry->mem_obj->mime_hdr;
+    ftpData = xcalloc(1, sizeof(FtpStateData));
+    storeLockObject(ftpData->entry = entry);
     ftpData->request = requestLink(request);
+
     /* Parse login info. */
     if ((auth = ftpGetBasicAuth(req_hdr))) {
 	ftp_login_parser(auth, ftpData);
@@ -597,12 +568,14 @@ ftpStartComplete(void *data, int status)
 	    httpParseReplyHeaders(response, entry->mem_obj->reply);
 	    storeComplete(entry);
 	    ftpStateFree(-1, ftpData);
-	    return;
+	    return COMM_OK;
 	}
     }
-    debug(9, 5, "FtpStart: host=%s, path=%s, user=%s, passwd=%s\n",
-	ftpData->request->host, ftpData->request->urlpath,
+
+    debug(9, 5, "FtpStart: FD %d, host=%s, path=%s, user=%s, passwd=%s\n",
+	unusedfd, ftpData->request->host, ftpData->request->urlpath,
 	ftpData->user, ftpData->password);
+
     ftpData->ftp_fd = comm_open(SOCK_STREAM,
 	0,
 	local_addr,
@@ -612,19 +585,22 @@ ftpStartComplete(void *data, int status)
     if (ftpData->ftp_fd == COMM_ERROR) {
 	squid_error_entry(entry, ERR_CONNECT_FAIL, xstrerror());
 	ftpStateFree(-1, ftpData);
-	return;
+	return COMM_ERROR;
     }
     /* Pipe/socket created ok */
+
     /* register close handler */
     comm_add_close_handler(ftpData->ftp_fd,
 	(PF) ftpStateFree,
 	(void *) ftpData);
+
     /* Now connect ... */
     commConnectStart(ftpData->ftp_fd,
 	localhost,
 	ftpget_port,
 	ftpConnectDone,
 	ftpData);
+    return COMM_OK;
 }
 
 static void

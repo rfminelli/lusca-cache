@@ -119,7 +119,6 @@ typedef struct {
 } WaisStateData;
 
 static int waisStateFree _PARAMS((int, WaisStateData *));
-static void waisStartComplete _PARAMS((void *, int));
 static void waisReadReplyTimeout _PARAMS((int, WaisStateData *));
 static void waisLifetimeExpire _PARAMS((int, WaisStateData *));
 static void waisReadReply _PARAMS((int, WaisStateData *));
@@ -179,14 +178,8 @@ waisReadReply(int fd, WaisStateData * waisState)
     int bin;
 
     entry = waisState->entry;
-    if (entry->flag & DELETE_BEHIND && !storeClientWaiting(entry)) {
-	/* we can terminate connection right now */
-	squid_error_entry(entry, ERR_NO_CLIENTS_BIG_OBJ, NULL);
-	comm_close(fd);
-	return;
-    }
     /* check if we want to defer reading */
-    clen = entry->mem_obj->e_current_len;
+    clen = entry->object_len;
     off = storeGetLowestReaderOffset(entry);
     if ((clen - off) > WAIS_DELETE_GAP) {
 	if (entry->flag & CLIENT_ABORT_REQUEST) {
@@ -230,7 +223,7 @@ waisReadReply(int fd, WaisStateData * waisState)
     }
     if (len < 0) {
 	debug(50, 1, "waisReadReply: FD %d: read failure: %s.\n", xstrerror());
-	if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+	if (errno == EAGAIN || errno == EWOULDBLOCK) {
 	    /* reinstall handlers */
 	    /* XXX This may loop forever */
 	    commSetSelect(fd, COMM_SELECT_READ,
@@ -243,7 +236,7 @@ waisReadReply(int fd, WaisStateData * waisState)
 	    squid_error_entry(entry, ERR_READ_ERROR, xstrerror());
 	    comm_close(fd);
 	}
-    } else if (len == 0 && entry->mem_obj->e_current_len == 0) {
+    } else if (len == 0 && entry->mem_obj->swap_length == 0) {
 	squid_error_entry(entry,
 	    ERR_ZERO_SIZE_OBJECT,
 	    errno ? xstrerror() : NULL);
@@ -329,11 +322,11 @@ waisSendRequest(int fd, WaisStateData * waisState)
 }
 
 int
-waisStart(method_t method, char *mime_hdr, StoreEntry * entry)
+waisStart(int unusedfd, const char *url, method_t method, char *mime_hdr, StoreEntry * entry)
 {
     WaisStateData *waisState = NULL;
     int fd;
-    char *url = entry->url;
+
     debug(24, 3, "waisStart: \"%s %s\"\n", RequestMethodStr[method], url);
     debug(24, 4, "            header: %s\n", mime_hdr);
     if (!Config.Wais.relayHost) {
@@ -353,23 +346,13 @@ waisStart(method_t method, char *mime_hdr, StoreEntry * entry)
 	return COMM_ERROR;
     }
     waisState = xcalloc(1, sizeof(WaisStateData));
+    storeLockObject(waisState->entry = entry);
     waisState->method = method;
     waisState->relayhost = Config.Wais.relayHost;
     waisState->relayport = Config.Wais.relayPort;
     waisState->mime_hdr = mime_hdr;
     waisState->fd = fd;
-    waisState->entry = entry;
     xstrncpy(waisState->request, url, MAX_URL);
-    storeLockObject(entry, waisStartComplete, waisState);
-    return COMM_OK;
-}
-
-
-static void
-waisStartComplete(void *data, int status)
-{
-    WaisStateData *waisState = (WaisStateData *) data;
-
     comm_add_close_handler(waisState->fd,
 	(PF) waisStateFree,
 	(void *) waisState);
@@ -377,6 +360,7 @@ waisStartComplete(void *data, int status)
 	waisState->fd,
 	waisConnect,
 	waisState);
+    return COMM_OK;
 }
 
 
