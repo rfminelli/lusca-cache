@@ -91,7 +91,6 @@
 #		     ttl=n
 #		     no-query
 #		     default
-#		     round-robin
 #
 #		     use 'proxy-only' to specify that objects fetched
 #		     from this cache should not be saved locally.
@@ -114,10 +113,6 @@
 #		     be used as a "last-resort." You should probably
 #		     only use 'default' in situations where you cannot
 #		     use ICP with your parent cache(s).
-#
-#		     use 'round-robin' to define a set of parents which
-#		     should be used in a round-robin fashion in the
-#		     absence of any ICP queries.
 #
 #	NOTE: non-ICP neighbors must be specified as 'parent'.
 #
@@ -952,10 +947,6 @@ dns_testnames internic.net usc.edu cs.colorado.edu mit.edu yale.edu
 #
 #	'ignore-domain' is a domain name for which authorization will
 #	*not* be required.
-#
-#	NOTE, proxy_auth support is not compiled into Squid by default.
-#	To use this feature you must enable the USE_PROXY_AUTH option
-#	near the top of src/Makefile.
 #
 #proxy_auth /dev/null
 

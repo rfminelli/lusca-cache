@@ -35,7 +35,6 @@ const char *AclMatchedName = NULL;
 
 /* for reading ACL's from files */
 int aclFromFile = 0;
-int aclCompIpResult = 0;
 FILE *aclFile;
 
 /* These three should never be referenced directly in this file! */
@@ -53,13 +52,11 @@ static const char *const w_space = " \t\n\r";	/* Jasper sez so */
 
 static void aclDestroyAclList _PARAMS((struct _acl_list * list));
 static void aclDestroyIpList _PARAMS((struct _acl_ip_data * data));
-static struct _acl_ip_data *aclSplayInsertIp _PARAMS((struct _acl_ip_data *, struct _acl_ip_data *));
-static struct _acl_ip_data *aclSplayIp _PARAMS((struct in_addr, struct _acl_ip_data *));
 static void aclDestroyTimeList _PARAMS((struct _acl_time_data * data));
 static int aclMatchDomainList _PARAMS((wordlist *, const char *));
 static int aclMatchAclList _PARAMS((const struct _acl_list *, aclCheck_t *));
 static int aclMatchInteger _PARAMS((intlist * data, int i));
-static int aclMatchIp _PARAMS((void *dataptr, struct in_addr c));
+static int aclMatchIp _PARAMS((struct _acl_ip_data * data, struct in_addr c));
 static int aclMatchTime _PARAMS((struct _acl_time_data * data, time_t when));
 static int aclMatchIdent _PARAMS((wordlist * data, const char *ident));
 static squid_acl aclType _PARAMS((const char *s));
@@ -71,7 +68,6 @@ static void aclParseWordList _PARAMS((void *curlist));
 static void aclParseProtoList _PARAMS((void *curlist));
 static void aclParseMethodList _PARAMS((void *curlist));
 static void aclParseTimeSpec _PARAMS((void *curlist));
-static int aclSplayIpCompare _PARAMS((struct in_addr addr, struct _acl_ip_data *data));
 
 char *
 strtokFile(void)
@@ -197,8 +193,6 @@ aclParseMethodList(void *curlist)
     while ((t = strtokFile())) {
 	q = xcalloc(1, sizeof(intlist));
 	q->i = (int) urlParseMethod(t);
-	if (q->i == METHOD_PURGE)
-		Config.Options.enable_purge = 1;
 	*(Tail) = q;
 	Tail = &q->next;
     }
@@ -271,6 +265,9 @@ aclParseIpData(const char *t)
 	q->mask.s_addr = 0;
 	return q;
     }
+    memset(addr1, 0, 256);
+    memset(addr2, 0, 256);
+    memset(mask, 0, 256);
     if (sscanf(t, "%[0-9.]-%[0-9.]/%[0-9.]", addr1, addr2, mask) == 3) {
 	(void) 0;
     } else if (sscanf(t, "%[0-9.]-%[0-9.]", addr1, addr2) == 2) {
@@ -324,120 +321,15 @@ static void
 aclParseIpList(void *curlist)
 {
     char *t = NULL;
-    struct _acl_ip_data **ip_data = curlist;
+    struct _acl_ip_data **Tail;
     struct _acl_ip_data *q = NULL;
+    for (Tail = curlist; *Tail; Tail = &((*Tail)->next));
     while ((t = strtokFile())) {
 	if ((q = aclParseIpData(t)) == NULL)
 	    continue;
-	*ip_data = aclSplayInsertIp(q, *ip_data);
+	*(Tail) = q;
+	Tail = &q->next;
     }
-
-}
-
-static int
-aclSplayIpCompare(struct in_addr addr, struct _acl_ip_data *data)
-{
-    int rc = 0;
-    addr.s_addr &= data->mask.s_addr;		/* apply netmask */
-    if (data->addr2.s_addr == 0) {	/* single address check */
-	if (addr.s_addr > data->addr1.s_addr)
-	    rc = 1;
-	else if (addr.s_addr < data->addr1.s_addr)
-	    rc = -1;
-	else
-	    rc = 0;
-    } else {			/* range address check */
-	if (addr.s_addr > data->addr2.s_addr)
-	    rc = 1;
-	else if (addr.s_addr < data->addr1.s_addr)
-	    rc = -1;
-	else
-	    rc = 0;
-    }
-    return rc;
-}
-
-static struct _acl_ip_data *
-aclSplayInsertIp(struct _acl_ip_data *q, struct _acl_ip_data * t)
-{
-    struct _acl_ip_data *new;
-    new = xmalloc(sizeof(struct _acl_ip_data));
-    new->addr1 = q->addr1;
-    new->addr2 = q->addr2;
-    new->mask = q->mask;
-    if (t == NULL) {
-	new->left = new->right = NULL;
-	return new;
-    }
-    t = aclSplayIp(q->addr1, t);
-    if (aclCompIpResult < 0) {
-	new->left = t->left;
-	new->right = t;
-	t->left = NULL;
-	return new;
-    } else if (aclCompIpResult > 0) {
-	new->right = t->right;
-	new->left = t;
-	t->right = NULL;
-	return new;
-    } else {
-	debug_trap("aclSplayInsertIp: entry duplicated\n");
-	safe_free(new);
-	return t;
-    }
-}
-
-static struct _acl_ip_data *
-aclSplayIp(struct in_addr addr1, struct _acl_ip_data * t)
-{
-    struct _acl_ip_data N;
-    struct _acl_ip_data *l;
-    struct _acl_ip_data *r;
-    struct _acl_ip_data *y;
-    if (t == NULL)
-	return t;
-    N.left = N.right = NULL;
-    l = r = &N;
-
-    for (;;) {
-	aclCompIpResult = aclSplayIpCompare(addr1, t);
-	if (aclCompIpResult < 0) {
-	    if (t->left == NULL)
-		break;
-	    if (aclSplayIpCompare(addr1, t->left) < 0) {
-		y = t->left;	/* rotate right */
-		t->left = y->right;
-		y->right = t;
-		t = y;
-		if (t->left == NULL)
-		    break;
-	    }
-	    r->left = t;	/* link right */
-	    r = t;
-	    t = t->left;
-	} else if (aclCompIpResult > 0) {
-	    if (t->right == NULL)
-		break;
-	    if (aclSplayIpCompare(addr1, t->right) > 0) {
-		y = t->right;	/* rotate left */
-		t->right = y->left;
-		y->left = t;
-		t = y;
-		if (t->right == NULL)
-		    break;
-	    }
-	    l->right = t;	/* link left */
-	    l = t;
-	    t = t->right;
-	} else {
-	    break;
-	}
-    }
-    l->right = t->left;		/* assemble */
-    r->left = t->right;
-    t->left = N.right;
-    t->right = N.left;
-    return t;
 }
 
 static void
@@ -609,8 +501,7 @@ aclParseAclLine(void)
 	debug(28, 0, "aclParseAclLine: Invalid ACL type '%s'\n", t);
 	return;
     }
-    if ((A = aclFindByName(aclname)) == NULL) {
-       debug(28, 3, "aclParseAclLine: Creating ACL '%s'\n", aclname);
+    if ((A = aclFindByName(t)) == NULL) {
 	A = xcalloc(1, sizeof(struct _acl));
 	xstrncpy(A->name, aclname, ACL_NAME_SZ);
 	A->type = acltype;
@@ -622,12 +513,12 @@ aclParseAclLine(void)
 	    debug(28, 0, "aclParseAclLine: ACL '%s' already exists with different type, skipping.\n", A->name);
 	    return;
 	}
-	debug(28, 3, "aclParseAclLine: Appending to '%s'\n", aclname);
+	debug(28, 0, "aclParseAclLine: Appending to '%s'\n", aclname);
     }
     switch (A->type) {
     case ACL_SRC_IP:
     case ACL_DST_IP:
-	aclParseIpList(&A->data);
+	aclParseIpList(&(A->data));
 	break;
     case ACL_SRC_DOMAIN:
     case ACL_DST_DOMAIN:
@@ -803,11 +694,46 @@ aclParseAccessLine(struct _acl_access **head)
 }
 
 static int
-aclMatchIp(void *dataptr, struct in_addr c)
+aclMatchIp(struct _acl_ip_data *data, struct in_addr c)
 {
-    struct _acl_ip_data **data = dataptr;
-    *data = aclSplayIp(c, *data);
-    return !aclCompIpResult;
+    struct in_addr h;
+    unsigned long lh, la1, la2;
+    struct _acl_ip_data *first, *prev;
+
+    first = data;		/* remember first element, this will never be moved */
+    prev = NULL;		/* previous element in the list */
+    while (data) {
+	h.s_addr = c.s_addr & data->mask.s_addr;
+	debug(28, 3, "aclMatchIp: h     = %s\n", inet_ntoa(h));
+	debug(28, 3, "aclMatchIp: addr1 = %s\n", inet_ntoa(data->addr1));
+	debug(28, 3, "aclMatchIp: addr2 = %s\n", inet_ntoa(data->addr2));
+	if (!data->addr2.s_addr) {
+	    if (h.s_addr == data->addr1.s_addr) {
+		debug(28, 3, "aclMatchIp: returning 1\n");
+		if (prev != NULL) {
+		    /* shift the element just found to the second position
+		     * in the list */
+		    prev->next = data->next;
+		    data->next = first->next;
+		    first->next = data;
+		}
+		return 1;
+	    }
+	} else {
+	    /* This is a range check */
+	    lh = ntohl(h.s_addr);
+	    la1 = ntohl(data->addr1.s_addr);
+	    la2 = ntohl(data->addr2.s_addr);
+	    if (lh >= la1 && lh <= la2) {
+		debug(28, 3, "aclMatchIp: returning 1\n");
+		return 1;
+	    }
+	}
+	prev = data;
+	data = data->next;
+    }
+    debug(28, 3, "aclMatchIp: returning 0\n");
+    return 0;
 }
 
 static int
@@ -936,14 +862,14 @@ aclMatchAcl(struct _acl *acl, aclCheck_t * checklist)
     debug(28, 3, "aclMatchAcl: checking '%s'\n", acl->cfgline);
     switch (acl->type) {
     case ACL_SRC_IP:
-	return aclMatchIp(&acl->data, checklist->src_addr);
+	return aclMatchIp(acl->data, checklist->src_addr);
 	/* NOTREACHED */
     case ACL_DST_IP:
 	ia = ipcache_gethostbyname(r->host, IP_LOOKUP_IF_MISS);
 	if (ia) {
 	    for (k = 0; k < (int) ia->count; k++) {
 		checklist->dst_addr = ia->in_addrs[k];
-		if (aclMatchIp(&acl->data, checklist->dst_addr))
+		if (aclMatchIp(acl->data, checklist->dst_addr))
 		    return 1;
 	    }
 	    return 0;
@@ -953,7 +879,7 @@ aclMatchAcl(struct _acl *acl, aclCheck_t * checklist)
 	    checklist->state[ACL_DST_IP] = ACL_LOOKUP_NEED;
 	    return 0;
 	} else {
-	    return aclMatchIp(&acl->data, no_addr);
+	    return aclMatchIp(acl->data, no_addr);
 	}
 	/* NOTREACHED */
     case ACL_DST_DOMAIN:
@@ -1053,13 +979,13 @@ aclCheck(const struct _acl_access *A, aclCheck_t * checklist)
 }
 
 static void
-aclDestroyIpList(struct _acl_ip_data * data)
+aclDestroyIpList(struct _acl_ip_data *data)
 {
-    if (data == NULL)
-	return;
-    aclDestroyIpList(data->left);
-    aclDestroyIpList(data->right);
-    safe_free(data);
+    struct _acl_ip_data *next = NULL;
+    for (; data; data = next) {
+	next = data->next;
+	safe_free(data);
+    }
 }
 
 static void

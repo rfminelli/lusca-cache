@@ -410,7 +410,6 @@ httpParseReplyHeaders(const char *buf, struct _http_reply *reply)
 	    }
 	} else if (!strncasecmp(t, "Set-Cookie:", 11)) {
 	    EBIT_SET(reply->misc_headers, HDR_SET_COOKIE);
-	    ReplyHeaderStats.misc[HDR_SET_COOKIE]++;
 	}
     }
     put_free_4k_page(headers);
@@ -549,14 +548,8 @@ httpReadReply(int fd, void *data)
     StoreEntry *entry = NULL;
 
     entry = httpState->entry;
-    if (entry->flag & DELETE_BEHIND && !storeClientWaiting(entry)) {
-	/* we can terminate connection right now */
-	squid_error_entry(entry, ERR_NO_CLIENTS_BIG_OBJ, NULL);
-	comm_close(fd);
-	return;
-    }
     /* check if we want to defer reading */
-    clen = entry->mem_obj->e_current_len;
+    clen = entry->object_len;
     off = storeGetLowestReaderOffset(entry);
     if ((clen - off) > HTTP_DELETE_GAP) {
 	if (entry->flag & CLIENT_ABORT_REQUEST) {
@@ -616,7 +609,7 @@ httpReadReply(int fd, void *data)
 	    squid_error_entry(entry, ERR_READ_ERROR, xstrerror());
 	    comm_close(fd);
 	}
-    } else if (len == 0 && entry->mem_obj->e_current_len == 0) {
+    } else if (len == 0 && entry->mem_obj->swap_length == 0) {
 	httpState->eof = 1;
 	squid_error_entry(entry,
 	    ERR_ZERO_SIZE_OBJECT,
@@ -631,8 +624,6 @@ httpReadReply(int fd, void *data)
 	storeComplete(entry);	/* deallocates mem_obj->request */
 	comm_close(fd);
     } else if (entry->flag & CLIENT_ABORT_REQUEST) {
-	/* append the last bit of info we get */
-	storeAppend(entry, buf, len);
 	squid_error_entry(entry, ERR_CLIENT_ABORT, NULL);
 	comm_close(fd);
     } else {
@@ -693,11 +684,7 @@ httpAppendRequestHeader(char *hdr, const char *line, size_t * sz, size_t max)
     if (n >= max)
 	return;
 #ifdef USE_ANONYMIZER
-#ifdef USE_PARANOID_ANONYMIZER
-    if (httpAnonSearchHeaderField(http_anon_allowed_header, line) == NULL) {
-#else
-    if (httpAnonSearchHeaderField(http_anon_denied_header, line) == NULL) {
-#endif
+    if (!httpAnonSearchHeaderField(http_anon_allowed_header, line)) {
 	debug(11, 5, "httpAppendRequestHeader: removed for anonymity: <%s>\n",
 	    line);
 	return;
@@ -886,7 +873,7 @@ int
 proxyhttpStart(const char *url,
     request_t * orig_request,
     StoreEntry * entry,
-    peer * e)
+    edge * e)
 {
     int sock;
     HttpStateData *httpState = NULL;
@@ -898,7 +885,7 @@ proxyhttpStart(const char *url,
 	entry->mem_obj->mime_hdr);
 
     if (e->options & NEIGHBOR_PROXY_ONLY)
-	storeStartDeleteBehind(entry);
+	storeReleaseRequest(entry);
 
     /* Create socket. */
     sock = comm_open(SOCK_STREAM,
@@ -913,7 +900,7 @@ proxyhttpStart(const char *url,
 	return COMM_ERROR;
     }
     httpState = xcalloc(1, sizeof(HttpStateData));
-    storeLockObject(httpState->entry = entry, NULL, NULL);
+    storeLockObject(httpState->entry = entry);
     httpState->req_hdr = entry->mem_obj->mime_hdr;
     httpState->req_hdr_sz = entry->mem_obj->mime_hdr_sz;
     request = get_free_request_t();
@@ -963,7 +950,7 @@ httpConnectDone(int fd, int status, void *data)
     HttpStateData *httpState = data;
     request_t *request = httpState->request;
     StoreEntry *entry = httpState->entry;
-    peer *e = NULL;
+    edge *e = NULL;
     if (status != COMM_OK) {
 	if ((e = httpState->neighbor))
 	    e->last_fail_time = squid_curtime;
@@ -1011,7 +998,7 @@ httpStart(char *url,
 	return COMM_ERROR;
     }
     httpState = xcalloc(1, sizeof(HttpStateData));
-    storeLockObject(httpState->entry = entry, NULL, NULL);
+    storeLockObject(httpState->entry = entry);
     httpState->req_hdr = req_hdr;
     httpState->req_hdr_sz = req_hdr_sz;
     httpState->request = requestLink(request);

@@ -257,7 +257,7 @@ static void parseMinutesLine _PARAMS((int *));
 static void ip_acl_destroy _PARAMS((ip_acl **));
 static void parseCachemgrPasswd _PARAMS((void));
 static void parsePathname _PARAMS((char **));
-static void parseProxyLine _PARAMS((peer **));
+static void parseProxyLine _PARAMS((edge **));
 
 static void
 self_destruct(void)
@@ -497,8 +497,6 @@ parseCacheHostLine(void)
 	    mcast_ttl = atoi(token + 4);
 	} else if (!strncasecmp(token, "default", 7)) {
 	    options |= NEIGHBOR_DEFAULT_PARENT;
-	} else if (!strncasecmp(token, "round-robin", 11)) {
-	    options |= NEIGHBOR_ROUNDROBIN;
 	} else {
 	    debug(3, 0, "parseCacheHostLine: token='%s'\n", token);
 	    self_destruct();
@@ -964,19 +962,19 @@ parseVizHackLine(void)
 }
 
 static void
-parseProxyLine(peer ** E)
+parseProxyLine(edge ** E)
 {
     char *token;
     char *t;
-    peer *e;
+    edge *e;
     token = strtok(NULL, w_space);
     if (token == NULL)
 	self_destruct();
     if (*E) {
-	peerDestroy(*E);
+	edgeDestroy(*E);
 	*E = NULL;
     }
-    e = xcalloc(1, sizeof(peer));
+    e = xcalloc(1, sizeof(edge));
     if ((t = strchr(token, ':'))) {
 	*t++ = '\0';
 	e->http_port = atoi(t);
@@ -1463,8 +1461,8 @@ configFreeMemory(void)
     safe_free(Config.Announce.host);
     safe_free(Config.Announce.file);
     safe_free(Config.errHtmlText);
-    peerDestroy(Config.sslProxy);
-    peerDestroy(Config.passProxy);
+    edgeDestroy(Config.sslProxy);
+    edgeDestroy(Config.passProxy);
     wordlistDestroy(&Config.cache_dirs);
     wordlistDestroy(&Config.hierarchy_stoplist);
     wordlistDestroy(&Config.local_domain_list);

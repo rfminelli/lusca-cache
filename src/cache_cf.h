@@ -240,7 +240,7 @@ struct SquidConfig {
     relist *cache_stop_relist;
     ip_acl *local_ip_list;
     ip_acl *firewall_ip_list;
-    peer *sslProxy, *passProxy;
+    edge *sslProxy, *passProxy;
     struct {
 	int size;
 	int low;
@@ -268,7 +268,6 @@ struct SquidConfig {
     } Netdb;
     struct {
 	int log_udp;
-	int enable_purge;
     } Options;
 };
 

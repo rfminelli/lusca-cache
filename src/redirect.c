@@ -62,7 +62,6 @@ static struct {
     int avg_svc_time;
     int queue_size;
     int use_hist[DefaultRedirectChildrenMax];
-    int rewrites[DefaultRedirectChildrenMax];
 } RedirectStats;
 
 
@@ -188,8 +187,6 @@ redirectHandleRead(int fd, redirector_t * redirector)
 	    fatal_dump("All redirectors have exited!");
 	return 0;
     }
-    if (len != 1)
-	RedirectStats.rewrites[redirector->index]++;
     redirector->offset += len;
     redirector->inbuf[redirector->offset] = '\0';
     /* reschedule */
@@ -266,11 +263,8 @@ GetFirstAvailable(void)
     redirector_t *redirect = NULL;
     for (k = 0; k < NRedirectors; k++) {
 	redirect = *(redirect_child_table + k);
-	if (BIT_TEST(redirect->flags, REDIRECT_FLAG_BUSY))
-	    continue;
-	if (!BIT_TEST(redirect->flags, REDIRECT_FLAG_ALIVE))
-	    continue;
-	return redirect;
+	if (!(redirect->flags & REDIRECT_FLAG_BUSY))
+	    return redirect;
     }
     return NULL;
 }
@@ -498,10 +492,9 @@ redirectStats(StoreEntry * sentry)
 	NRedirectors);
     storeAppendPrintf(sentry, "{use histogram:}\n");
     for (k = 0; k < NRedirectors; k++) {
-	storeAppendPrintf(sentry, "{    redirector #%d: %d (%d rewrites)}\n",
+	storeAppendPrintf(sentry, "{    redirector #%d: %d}\n",
 	    k + 1,
-	    RedirectStats.use_hist[k],
-	    RedirectStats.rewrites[k]);
+	    RedirectStats.use_hist[k]);
     }
     storeAppendPrintf(sentry, close_bracket);
 }

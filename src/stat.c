@@ -311,9 +311,8 @@ static const char *
 describeStatuses(const StoreEntry * entry)
 {
     LOCAL_ARRAY(char, buf, 256);
-    sprintf(buf, "%-13s %-13s %-12s %-12s",
+    sprintf(buf, "%-13s %-12s %-12s",
 	storeStatusStr[entry->store_status],
-	memStatusStr[entry->mem_status],
 	swapStatusStr[entry->swap_status],
 	pingStatusStr[entry->ping_status]);
     return buf;
@@ -328,8 +327,6 @@ describeFlags(const StoreEntry * entry)
     buf[0] = '\0';
     if (BIT_TEST(flags, IP_LOOKUP_PENDING))
 	strcat(buf, "IP,");
-    if (BIT_TEST(flags, DELETE_BEHIND))
-	strcat(buf, "DB,");
     if (BIT_TEST(flags, CLIENT_ABORT_REQUEST))
 	strcat(buf, "CA,");
     if (BIT_TEST(flags, DELAY_SENDING))
@@ -382,8 +379,11 @@ stat_objects_get(const cacheinfo * obj, StoreEntry * sentry, int vm_or_not)
     StoreEntry *entry = NULL;
     MemObject *mem;
     int N = 0;
+    FILE *fp;
+    size_t l = 0;
 
-    storeAppendPrintf(sentry, open_bracket);
+    fp = fdopen(sentry->mem_obj->swapout_fd, "w");
+    l += fprintf(fp, open_bracket);
 
     for (entry = storeGetFirst(); entry != NULL; entry = storeGetNext()) {
 	mem = entry->mem_obj;
@@ -393,17 +393,19 @@ stat_objects_get(const cacheinfo * obj, StoreEntry * sentry, int vm_or_not)
 	    getCurrentTime();
 	    debug(18, 3, "stat_objects_get:  Processed %d objects...\n", N);
 	}
-	storeAppendPrintf(sentry, "{%s %dL %-25s %s %3d %2d %8d %s}\n",
+	l += fprintf(fp, "{%s %dL %-25s %s %3d %2d %8d %s}\n",
 	    describeStatuses(entry),
 	    (int) entry->lock_count,
 	    describeFlags(entry),
 	    describeTimestamps(entry),
 	    (int) entry->refcount,
 	    storePendingNClients(entry),
-	    mem ? mem->e_current_len : entry->object_len,
+	    entry->object_len,
 	    entry->url);
     }
-    storeAppendPrintf(sentry, close_bracket);
+    l += fprintf(fp, close_bracket);
+    fflush(fp);
+    sentry->object_len = l;
 }
 
 
@@ -551,19 +553,19 @@ dummyhandler(cacheinfo * obj, StoreEntry * sentry)
 static void
 server_list(const cacheinfo * obj, StoreEntry * sentry)
 {
-    peer *e = NULL;
+    edge *e = NULL;
     struct _domain_ping *d = NULL;
     icp_opcode op;
 
     storeAppendPrintf(sentry, open_bracket);
 
-    if (getFirstPeer() == NULL)
+    if (getFirstEdge() == NULL)
 	storeAppendPrintf(sentry, "{There are no neighbors installed.}\n");
-    for (e = getFirstPeer(); e; e = getNextPeer(e)) {
+    for (e = getFirstEdge(); e; e = getNextEdge(e)) {
 	if (e->host == NULL)
-	    fatal_dump("Found an peer without a hostname!");
+	    fatal_dump("Found an edge without a hostname!");
 	storeAppendPrintf(sentry, "\n{%-11.11s: %s/%d/%d}\n",
-	    e->type == PEER_PARENT ? "Parent" : "Sibling",
+	    e->type == EDGE_PARENT ? "Parent" : "Sibling",
 	    e->host,
 	    e->http_port,
 	    e->icp_port);
@@ -669,7 +671,8 @@ statFiledescriptors(StoreEntry * sentry)
 	    break;
 	case FD_FILE:
 	    storeAppendPrintf(sentry, "%31s %s}\n",
-		null_string,
+		file_table[i].file_mode == FILE_WRITE ?
+		"Writing" : "Reading",
 		(s = diskFileName(i)) ? s : "-");
 	    break;
 	case FD_PIPE:
@@ -759,8 +762,6 @@ info_get(const cacheinfo * obj, StoreEntry * sentry)
 	appname);
     storeAppendPrintf(sentry, "{\tStorage Swap size:\t%d MB}\n",
 	storeGetSwapSize() >> 10);
-    storeAppendPrintf(sentry, "{\tStorage Mem size:\t%d KB}\n",
-	store_mem_size >> 10);
     storeAppendPrintf(sentry, "{\tStorage LRU Expiration Age:\t%6.2f days}\n",
 	(double) storeExpiredReferenceAge() / 86400.0);
 
@@ -836,8 +837,6 @@ info_get(const cacheinfo * obj, StoreEntry * sentry)
 	meta_data.store_entries);
     storeAppendPrintf(sentry, "{\t%6d StoreEntries with MemObjects}\n",
 	meta_data.mem_obj_count);
-    storeAppendPrintf(sentry, "{\t%6d StoreEntries with MemObject Data}\n",
-	meta_data.mem_data_count);
     storeAppendPrintf(sentry, "{\t%6d Hot Object Cache Items}\n",
 	meta_data.hot_vm);
 
@@ -1141,7 +1140,6 @@ log_append(const cacheinfo * obj,
     x = file_write(obj->logfile_fd,
 	xstrdup(tmp),
 	strlen(tmp),
-	obj->logfile_access,
 	NULL,
 	NULL,
 	xfree);
@@ -1161,8 +1159,6 @@ log_enable(cacheinfo * obj, StoreEntry * sentry)
 	    debug(18, 0, "Cannot open logfile: %s\n", obj->logfilename);
 	    obj->logfile_status = LOG_DISABLE;
 	}
-	obj->logfile_access = file_write_lock(obj->logfile_fd);
-
     }
     /* at the moment, store one char to make a storage manager happy */
     storeAppendPrintf(sentry, " ");
@@ -1289,7 +1285,6 @@ stat_init(cacheinfo ** object, const char *logfilename)
 	    debug(50, 0, "%s: %s\n", obj->logfilename, xstrerror());
 	    fatal("Cannot open logfile.");
 	}
-	obj->logfile_access = file_write_lock(obj->logfile_fd);
     }
     obj->proto_id = urlParseProtocol;
     obj->proto_newobject = proto_newobject;
@@ -1348,11 +1343,9 @@ stat_rotate_log(void)
 
     if ((fname = HTTPCacheInfo->logfilename) == NULL)
 	return;
-#ifdef S_ISREG
     if (stat(fname, &sb) == 0)
 	if (S_ISREG(sb.st_mode) == 0)
 	    return;
-#endif
 
     debug(18, 1, "stat_rotate_log: Rotating\n");
 
@@ -1377,7 +1370,6 @@ stat_rotate_log(void)
 	HTTPCacheInfo->logfile_status = LOG_DISABLE;
 	fatal("Cannot open logfile.");
     }
-    HTTPCacheInfo->logfile_access = file_write_lock(HTTPCacheInfo->logfile_fd);
 }
 
 void

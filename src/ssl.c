@@ -1,4 +1,5 @@
 
+
 /*
  * $Id$
  *
@@ -44,7 +45,7 @@ typedef struct {
 	char *buf;
     } client, server;
     time_t timeout;
-    int *size_ptr;		/* pointer to size in an icpStateData for logging */
+    size_t *size_ptr;		/* pointer to size in an icpStateData for logging */
     ConnectStateData connectState;
     int proxying;
 } SslStateData;
@@ -395,7 +396,7 @@ sslConnectDone(int fd, int status, void *data)
 }
 
 int
-sslStart(int fd, const char *url, request_t * request, char *mime_hdr, int *size_ptr)
+sslStart(int fd, const char *url, request_t * request, char *mime_hdr, size_t * size_ptr)
 {
     /* Create state structure. */
     SslStateData *sslState = NULL;
@@ -487,23 +488,21 @@ sslSelectNeighbor(int fd, const ipcache_addrs * ia, void *data)
 {
     SslStateData *sslState = data;
     request_t *request = sslState->request;
-    peer *e = NULL;
-    peer *g = NULL;
+    edge *e = NULL;
+    edge *g = NULL;
     int fw_ip_match = IP_ALLOW;
     if (ia && Config.firewall_ip_list)
 	fw_ip_match = ip_access_check(ia->in_addrs[ia->cur], Config.firewall_ip_list);
-    if (matchInsideFirewall(request->host)) {
+    if ((e = Config.sslProxy)) {
+	hierarchyNote(request, HIER_SSL_PARENT, 0, e->host);
+    } else if (matchInsideFirewall(request->host)) {
 	hierarchyNote(request, HIER_DIRECT, 0, request->host);
     } else if (fw_ip_match == IP_DENY) {
 	hierarchyNote(request, HIER_DIRECT, 0, request->host);
-    } else if ((e = Config.sslProxy)) {
-	hierarchyNote(request, HIER_SSL_PARENT, 0, e->host);
     } else if ((e = getDefaultParent(request))) {
 	hierarchyNote(request, HIER_DEFAULT_PARENT, 0, e->host);
     } else if ((e = getSingleParent(request))) {
 	hierarchyNote(request, HIER_SINGLE_PARENT, 0, e->host);
-    } else if ((e = getRoundRobinParent(request))) {
-	hierarchyNote(request, HIER_ROUNDROBIN_PARENT, 0, e->host);
     } else if ((e = getFirstUpParent(request))) {
 	hierarchyNote(request, HIER_FIRSTUP_PARENT, 0, e->host);
     }
