@@ -82,7 +82,6 @@ httpReplyInit(HttpReply * rep)
 {
     assert(rep);
     rep->hdr_sz = 0;
-    rep->maxBodySize = 0;
     rep->pstate = psReadyToParseStartLine;
     httpBodyInit(&rep->body);
     httpHeaderInit(&rep->header, hoReply);
@@ -144,16 +143,17 @@ httpReplyParse(HttpReply * rep, const char *buf, ssize_t end)
      * becuase somebody may feed a non NULL-terminated buffer to
      * us.
      */
-    char *headers = memAllocate(MEM_4K_BUF);
+    MemBuf mb = MemBufNull;
     int success;
-    size_t s = XMIN(end + 1, 4096);
     /* reset current state, because we are not used in incremental fashion */
     httpReplyReset(rep);
     /* put a string terminator.  s is how many bytes to touch in
      * 'buf' including the terminating NULL. */
-    xstrncpy(headers, buf, s);
-    success = httpReplyParseStep(rep, headers, 0);
-    memFree(headers, MEM_4K_BUF);
+    memBufDefInit(&mb);
+    memBufAppend(&mb, buf, end);
+    memBufAppend(&mb, "\0", 1);
+    success = httpReplyParseStep(rep, mb.buf, 0);
+    memBufClean(&mb);
     return success == 1;
 }
 
@@ -450,9 +450,11 @@ httpReplyIsolateStart(const char **parse_start, const char **blk_start, const ch
  * Returns the body size of a HTTP response
  */
 int
-httpReplyBodySize(method_t method, HttpReply * reply)
+httpReplyBodySize(method_t method, const HttpReply * reply)
 {
-    if (METHOD_HEAD == method)
+    if (reply->sline.version.major < 1)
+	return -1;
+    else if (METHOD_HEAD == method)
 	return 0;
     else if (reply->sline.status == HTTP_OK)
 	(void) 0;		/* common case, continue */
@@ -463,29 +465,4 @@ httpReplyBodySize(method_t method, HttpReply * reply)
     else if (reply->sline.status < HTTP_OK)
 	return 0;
     return reply->content_length;
-}
-
-/*
- * Calculates the maximum size allowed for an HTTP response
- */
-void
-httpReplyBodyBuildSize(request_t * request, HttpReply * reply, dlink_list * bodylist)
-{
-    body_size *bs;
-    aclCheck_t *checklist;
-    bs = (body_size *) bodylist->head;
-    while (bs) {
-	checklist = aclChecklistCreate(bs->access_list, request, NULL);
-	checklist->reply = reply;
-	if (1 != aclCheckFast(bs->access_list, checklist)) {
-	    /* deny - skip this entry */
-	    bs = (body_size *) bs->node.next;
-	} else {
-	    /* Allow - use this entry */
-	    reply->maxBodySize = bs->maxsize;
-	    bs = NULL;
-	    debug(58, 3) ("httpReplyBodyBuildSize: Setting maxBodySize to %ld\n", (long int) reply->maxBodySize);
-	}
-	aclChecklistFree(checklist);
-    }
 }
