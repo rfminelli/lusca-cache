@@ -2402,7 +2402,7 @@ static int storeVerifySwapDirs(clean)
 	    debug(20, 1, "storeVerifySwapDirs: Created swap directory %s\n", path);
 	    directory_created = 1;
 	}
-	if (clean) {
+	if (clean && opt_unlink_on_reload) {
 	    debug(20, 1, "storeVerifySwapDirs: Zapping all objects on disk storage.\n");
 	    /* This could be dangerous, second copy of cache can destroy
 	     * the existing swap files of the previous cache. We may
