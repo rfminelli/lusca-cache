@@ -91,7 +91,7 @@ usage(void)
 	"       -z        Create swap directories\n"
 	"       -C        Do not catch fatal signals.\n"
 	"       -D        Disable initial DNS tests.\n"
-	"       -F        Don't serve any requests until store is rebuilt.\n"
+	"       -F        Foreground fast store rebuild.\n"
 	"       -N        No daemon mode.\n"
 	"       -R        Do not set REUSEADDR on port.\n"
 	"       -V        Virtual host httpd-accelerator.\n"
@@ -280,9 +280,6 @@ serverConnectionsOpen(void)
 #ifdef SQUID_SNMP
     snmpConnectionOpen();
 #endif
-#ifdef WCCP
-    wccpConnectionOpen();
-#endif
     clientdbInit();
     icmpOpen();
     netdbInit();
@@ -306,9 +303,6 @@ serverConnectionsClose(void)
 #ifdef SQUID_SNMP
     snmpConnectionShutdown();
 #endif
-#ifdef WCCP
-    wccpConnectionShutdown();
-#endif
     asnFreeMemory();
 }
 
@@ -326,23 +320,17 @@ mainReconfigure(void)
 #ifdef SQUID_SNMP
     snmpConnectionClose();
 #endif
-#ifdef WCCP
-    wccpConnectionClose();
-#endif
     dnsShutdown();
-    idnsShutdown();
     redirectShutdown();
     authenticateShutdown();
     storeDirCloseSwapLogs();
     errorClean();
-    mimeFreeMemory();
     parseConfigFile(ConfigFile);
     _db_init(Config.Log.log, Config.debugOptions);
     ipcache_restart();		/* clear stuck entries */
     fqdncache_restart();	/* sigh, fqdncache too */
     errorInitialize();		/* reload error pages */
     dnsInit();
-    idnsInit();
     redirectInit();
     authenticateInit();
     serverConnectionsOpen();
@@ -353,7 +341,6 @@ mainReconfigure(void)
 	    debug(1, 1) ("ICP port disabled in httpd_accelerator mode\n");
     }
     storeDirOpenSwapLogs();
-    mimeInit(Config.mimeTablePathname);
     writePidFile();		/* write PID file */
     debug(1, 1) ("Ready to serve requests.\n");
     reconfiguring = 0;
@@ -448,7 +435,6 @@ mainInitialize(void)
     ipcache_init();
     fqdncache_init();
     dnsInit();
-    idnsInit();
     redirectInit();
     authenticateInit();
     useragentOpenLog();
@@ -462,9 +448,7 @@ mainInitialize(void)
 #ifdef SQUID_SNMP
     snmpInit();
 #endif
-#ifdef WCCP
-    wccpInit();
-#endif
+
 #if MALLOC_DBG
     malloc_debug(0, malloc_debug_level);
 #endif
@@ -473,7 +457,6 @@ mainInitialize(void)
 	unlinkdInit();
 	urlInitialize();
 	cachemgrInit();
-	eventInit();		/* eventInit() before statInit() */
 	statInit();
 	storeInit();
 	mainSetCwd();
@@ -481,6 +464,7 @@ mainInitialize(void)
 	do_mallinfo = 1;
 	mimeInit(Config.mimeTablePathname);
 	pconnInit();
+	eventInit();
 	refreshInit();
 #if DELAY_POOLS
 	delayPoolsInit();
@@ -511,18 +495,15 @@ mainInitialize(void)
     squid_signal(SIGALRM, time_tick, SA_RESTART);
     alarm(1);
 #endif
-    memCheckInit();
     debug(1, 1) ("Ready to serve requests.\n");
+
     if (!configured_once) {
 	eventAdd("storeMaintain", storeMaintainSwapSpace, NULL, 1.0, 1);
+	eventAdd("storeDirClean", storeDirClean, NULL, 15.0, 1);
 	if (Config.onoff.announce)
 	    eventAdd("start_announce", start_announce, NULL, 3600.0, 1);
 	eventAdd("ipcache_purgelru", ipcache_purgelru, NULL, 10.0, 1);
 	eventAdd("fqdncache_purgelru", fqdncache_purgelru, NULL, 15.0, 1);
-#ifdef WCCP
-	if (Config.Wccp.router.s_addr != inet_addr("0.0.0.0"))
-	    eventAdd("wccpHereIam", wccpHereIam, NULL, 10.0, 1);
-#endif
     }
     configured_once = 1;
 }
@@ -635,7 +616,6 @@ main(int argc, char **argv)
 	    shutting_down = 1;
 	    serverConnectionsClose();
 	    dnsShutdown();
-	    idnsShutdown();
 	    redirectShutdown();
 	    authenticateShutdown();
 	    eventAdd("SquidShutdown", SquidShutdown, NULL, (double) (wait + 1), 1);
@@ -789,9 +769,6 @@ SquidShutdown(void *unused)
 #endif
 #ifdef SQUID_SNMP
     snmpConnectionClose();
-#endif
-#ifdef WCCP
-    wccpConnectionClose();
 #endif
     releaseServerSockets();
     commCloseAllSockets();

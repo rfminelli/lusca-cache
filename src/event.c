@@ -49,12 +49,11 @@ struct ev_entry {
 static struct ev_entry *tasks = NULL;
 static OBJH eventDump;
 static int run_id = 0;
-static const char *last_event_ran = NULL;
 
 void
 eventAdd(const char *name, EVH * func, void *arg, double when, int weight)
 {
-    struct ev_entry *event = memAllocate(MEM_EVENT);
+    struct ev_entry *event = xcalloc(1, sizeof(struct ev_entry));
     struct ev_entry **E;
     event->func = func;
     event->arg = arg;
@@ -102,7 +101,7 @@ eventDelete(EVH * func, void *arg)
 	*E = event->next;
 	if (NULL != event->arg)
 	    cbdataUnlock(event->arg);
-	memFree(event, MEM_EVENT);
+	xfree(event);
 	return;
     }
     debug_trap("eventDelete: event not found");
@@ -122,7 +121,6 @@ eventRun(void)
     run_id++;
     debug(41, 5) ("eventRun: RUN ID %d\n", run_id);
     while ((event = tasks)) {
-	int valid = 1;
 	if (event->when > current_dtime)
 	    break;
 	if (event->id == run_id)	/* was added during this run */
@@ -135,18 +133,17 @@ eventRun(void)
 	event->arg = NULL;
 	tasks = event->next;
 	if (NULL != arg) {
-	    valid = cbdataValid(arg);
+	    int valid = cbdataValid(arg);
 	    cbdataUnlock(arg);
+	    if (!valid) {
+		safe_free(event);
+		return;
+	    }
 	}
-	if (valid) {
-	    weight += event->weight;
-	    /* XXX assumes ->name is static memory! */
-	    last_event_ran = event->name;
-	    debug(41, 5) ("eventRun: Running '%s', id %d\n",
-		event->name, event->id);
-	    func(arg);
-	}
-	memFree(event, MEM_EVENT);
+	weight += event->weight;
+	debug(41, 5) ("eventRun: Running '%s', id %d\n", event->name, event->id);
+	func(arg);
+	safe_free(event);
     }
 }
 
@@ -161,7 +158,6 @@ eventNextTime(void)
 void
 eventInit(void)
 {
-    memDataInit(MEM_EVENT, "event", sizeof(struct ev_entry), 0);
     cachemgrRegister("events",
 	"Event Queue",
 	eventDump, 0, 1);
@@ -171,17 +167,12 @@ static void
 eventDump(StoreEntry * sentry)
 {
     struct ev_entry *e = tasks;
-    if (last_event_ran)
-	storeAppendPrintf(sentry, "Last event to run: %s\n\n", last_event_ran);
-    storeAppendPrintf(sentry, "%s\t%s\t%s\t%s\n",
+    storeAppendPrintf(sentry, "%s\t%s\n",
 	"Operation",
-	"Next Execution",
-	"Weight",
-	"Callback Valid?");
+	"Next Execution");
     while (e != NULL) {
-	storeAppendPrintf(sentry, "%s\t%f seconds\t%d\t%s\n",
-	    e->name, e->when - current_dtime, e->weight,
-	    e->arg ? cbdataValid(e->arg) ? "yes" : "no" : "N/A");
+	storeAppendPrintf(sentry, "%s\t%f seconds\n",
+	    e->name, e->when - current_dtime);
 	e = e->next;
     }
 }
@@ -193,7 +184,7 @@ eventFreeMemory(void)
     while ((event = tasks)) {
 	if (NULL != event->arg)
 	    cbdataUnlock(event->arg);
-	memFree(event, MEM_EVENT);
+	xfree(event);
     }
     tasks = NULL;
 }

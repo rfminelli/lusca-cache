@@ -52,13 +52,8 @@ static struct {
 
 static dlink_list lru_list;
 
-#if USE_DNSSERVERS
 static HLPCB fqdncacheHandleReply;
 static fqdncache_entry *fqdncacheParse(const char *buf);
-#else
-static IDNSCB fqdncacheHandleReply;
-static fqdncache_entry *fqdncacheParse(rfc1035_rr *, int);
-#endif
 static void fqdncache_release(fqdncache_entry *);
 static fqdncache_entry *fqdncache_create(const char *name);
 static void fqdncache_call_pending(fqdncache_entry *);
@@ -225,8 +220,8 @@ fqdncache_call_pending(fqdncache_entry * f)
     fqdncacheUnlockEntry(f);
 }
 
+
 static fqdncache_entry *
-#if USE_DNSSERVERS
 fqdncacheParse(const char *inbuf)
 {
     LOCAL_ARRAY(char, buf, DNS_INBUF_SZ);
@@ -276,54 +271,9 @@ fqdncacheParse(const char *inbuf)
     }
     return &f;
 }
-#else
-fqdncacheParse(rfc1035_rr * answers, int nr)
-{
-    static fqdncache_entry f;
-    int k;
-    int j;
-    int na = 0;
-    memset(&f, '\0', sizeof(f));
-    f.expires = squid_curtime;
-    f.status = FQDN_NEGATIVE_CACHED;
-    if (nr < 0) {
-	debug(35, 3) ("fqdncacheParse: Lookup failed (error %d)\n",
-	    rfc1035_errno);
-	assert(rfc1035_error_message);
-	f.error_message = xstrdup(rfc1035_error_message);
-	return &f;
-    }
-    if (nr == 0) {
-	debug(35, 3) ("fqdncacheParse: No DNS records\n");
-	f.error_message = xstrdup("No DNS records");
-	return &f;
-    }
-    debug(35, 3) ("fqdncacheParse: %d answers\n", nr);
-    assert(answers);
-    for (j = 0, k = 0; k < nr; k++) {
-	if (answers[k].type != RFC1035_TYPE_PTR)
-	    continue;
-	if (answers[k].class != RFC1035_CLASS_IN)
-	    continue;
-	na++;
-	f.status = FQDN_CACHED;
-	f.names[0] = xstrdup(answers[k].rdata);
-	f.name_count = 1;
-	f.expires = squid_curtime + answers[k].ttl;
-	return &f;
-    }
-    debug(35, 1) ("fqdncacheParse: No PTR record\n");
-    f.error_message = xstrdup("No PTR record");
-    return &f;
-}
-#endif
 
 static void
-#if USE_DNSSERVERS
 fqdncacheHandleReply(void *data, char *reply)
-#else
-fqdncacheHandleReply(void *data, rfc1035_rr * answers, int na)
-#endif
 {
     int n;
     generic_cbdata *c = data;
@@ -336,11 +286,7 @@ fqdncacheHandleReply(void *data, rfc1035_rr * answers, int na)
     n = ++FqdncacheStats.replies;
     statHistCount(&Counter.dns.svc_time,
 	tvSubMsec(f->request_time, current_time));
-#if USE_DNSSERVERS
     x = fqdncacheParse(reply);
-#else
-    x = fqdncacheParse(answers, na);
-#endif
     assert(x);
     f->name_count = x->name_count;
     for (n = 0; n < (int) f->name_count; n++)
@@ -423,11 +369,7 @@ fqdncache_nbgethostbyaddr(struct in_addr addr, FQDNH * handler, void *handlerDat
     cbdataAdd(c, cbdataXfree, 0);
     f->status = FQDN_DISPATCHED;
     fqdncacheLockEntry(f);	/* lock while FQDN_DISPATCHED */
-#if USE_DNSSERVERS
     dnsSubmit(f->name, fqdncacheHandleReply, c);
-#else
-    idnsPTRLookup(addr, fqdncacheHandleReply, c);
-#endif
 }
 
 /* initialize the fqdncache */
@@ -680,50 +622,46 @@ fqdncache_restart(void)
 variable_list *
 snmp_netFqdnFn(variable_list * Var, snint * ErrP)
 {
-    variable_list *Answer = NULL;
+    variable_list *Answer;
+
     debug(49, 5) ("snmp_netFqdnFn: Processing request:\n", Var->name[LEN_SQ_NET +
 	    1]);
     snmpDebugOid(5, Var->name, Var->name_length);
+
+    Answer = snmp_var_new(Var->name, Var->name_length);
     *ErrP = SNMP_ERR_NOERROR;
+    Answer->val_len = sizeof(snint);
+    Answer->val.integer = xmalloc(Answer->val_len);
+    Answer->type = SMI_COUNTER32;
+
     switch (Var->name[LEN_SQ_NET + 1]) {
     case FQDN_ENT:
-	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    memInUse(MEM_FQDNCACHE_ENTRY),
-	    SMI_GAUGE32);
+	*(Answer->val.integer) = memInUse(MEM_FQDNCACHE_ENTRY);
+	Answer->type = SMI_GAUGE32;
 	break;
     case FQDN_REQ:
-	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    FqdncacheStats.requests,
-	    SMI_COUNTER32);
+	*(Answer->val.integer) = FqdncacheStats.requests;
 	break;
     case FQDN_HITS:
-	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    FqdncacheStats.hits,
-	    SMI_COUNTER32);
+	*(Answer->val.integer) = FqdncacheStats.hits;
 	break;
     case FQDN_PENDHIT:
-	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    FqdncacheStats.pending_hits,
-	    SMI_GAUGE32);
+	*(Answer->val.integer) = FqdncacheStats.pending_hits;
+	Answer->type = SMI_GAUGE32;
 	break;
     case FQDN_NEGHIT:
-	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    FqdncacheStats.negative_hits,
-	    SMI_COUNTER32);
+	*(Answer->val.integer) = FqdncacheStats.negative_hits;
 	break;
     case FQDN_MISS:
-	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    FqdncacheStats.misses,
-	    SMI_COUNTER32);
+	*(Answer->val.integer) = FqdncacheStats.misses;
 	break;
     case FQDN_GHBN:
-	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    FqdncacheStats.ghba_calls,
-	    SMI_COUNTER32);
+	*(Answer->val.integer) = FqdncacheStats.ghba_calls;
 	break;
     default:
 	*ErrP = SNMP_ERR_NOSUCHNAME;
-	break;
+	snmp_var_free(Answer);
+	return (NULL);
     }
     return Answer;
 }

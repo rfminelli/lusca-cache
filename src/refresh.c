@@ -41,7 +41,7 @@
 #include "squid.h"
 
 typedef enum {
-    rcHTTP, rcICP, rcHTCP, rcCDigest, rcStore, rcCount
+    rcHTTP, rcICP, rcCDigest, rcStore, rcCount
 } refreshCountsEnum;
 
 static struct RefreshCounts {
@@ -299,12 +299,6 @@ refreshCheckICP(const StoreEntry * entry, request_t * request)
 }
 
 int
-refreshCheckHTCP(const StoreEntry * entry, request_t * request)
-{
-    return refreshCheck(entry, request, 10, &refreshCounts[rcHTCP]);
-}
-
-int
 refreshCheckDigest(const StoreEntry * entry, time_t delta)
 {
     return refreshCheck(entry,
@@ -334,6 +328,7 @@ refreshCountsStats(StoreEntry * sentry, struct RefreshCounts *rc)
     storeAppendPrintf(sentry, "Category\tCount\t%%Total\n");
 
 #define refreshCountsStatsEntry(name) { \
+    if (rc->name || !strcmp(#name, "total")) \
 	storeAppendPrintf(sentry, "%s\t%6d\t%6.2f\n", \
 	    #name, rc->name, xpercent(rc->name, tot)); \
     sum += rc->name; \
@@ -355,7 +350,6 @@ refreshCountsStats(StoreEntry * sentry, struct RefreshCounts *rc)
     tot = sum;			/* paranoid: "total" line shows 100% if we forgot nothing */
     refreshCountsStatsEntry(total);
     /* maybe counters */
-    storeAppendPrintf(sentry, "\n");
     refreshCountsStatsEntry(request_reload_ignore_maybe);
     refreshCountsStatsEntry(response_lmt_future_maybe);
 }
@@ -391,7 +385,6 @@ refreshInit()
     memset(refreshCounts, 0, sizeof(refreshCounts));
     refreshCounts[rcHTTP].proto = "HTTP";
     refreshCounts[rcICP].proto = "ICP";
-    refreshCounts[rcHTCP].proto = "HTCP";
     refreshCounts[rcStore].proto = "On Store";
     refreshCounts[rcCDigest].proto = "Cache Digests";
 

@@ -23,7 +23,6 @@ AR_R		= @AR_R@
 INCLUDE		= -I../include -I$(top_srcdir)/include
 UTILOBJS	= rfc1123.o \
 		  rfc1738.o \
-		  rfc1035.o \
 		  util.o \
 		  getfullhostname.o \
 		  base64.o \
@@ -38,12 +37,10 @@ UTILOBJS	= rfc1123.o \
 		  Array.o \
 		  Stack.o \
 		  hash.o \
-		  heap.o \
 		  $(LIBOBJS)
 REGEXOBJS	= GNUregex.o
 DLMALLOCOBJS	= dlmalloc.o
-GREOBJS		= libgre.o
-LIBS		= libmiscutil.a libgre.a @LIBREGEX@ @LIBDLMALLOC@
+LIBS		= libmiscutil.a @LIBREGEX@ @LIBDLMALLOC@
 
 CFLAGS		= $(AC_CFLAGS) $(INCLUDE)
 
@@ -66,17 +63,12 @@ libdlmalloc.a: $(DLMALLOCOBJS)
 	$(AR_R) $@ $(DLMALLOCOBJS)
 	$(RANLIB) $@
 
-libgre.a: $(GREOBJS)
-	$(RM) -f $@
-	$(AR_R) $@ $(GREOBJS)
-	$(RANLIB) $@
-
 clean:
 	-rm -f *.o $(LIBS) core
 
 distclean: clean
 	-rm -f libregex.a
-	-rm -f Makefile Makefile.bak
+	-rm -f Makefile
 
 install: all
 

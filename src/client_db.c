@@ -230,14 +230,18 @@ client_entry(struct in_addr *current)
 variable_list *
 snmp_meshCtblFn(variable_list * Var, snint * ErrP)
 {
-    variable_list *Answer = NULL;
+    variable_list *Answer;
     static char key[15];
     ClientInfo *c = NULL;
     int aggr = 0;
     log_type l;
+
+    Answer = snmp_var_new(Var->name, Var->name_length);
     *ErrP = SNMP_ERR_NOERROR;
+
     debug(49, 6) ("snmp_meshCtblFn: Current : \n");
     snmpDebugOid(6, Var->name, Var->name_length);
+
     snprintf(key, sizeof(key), "%d.%d.%d.%d", Var->name[LEN_SQ_NET + 3], Var->name[LEN_SQ_NET + 4],
 	Var->name[LEN_SQ_NET + 5], Var->name[LEN_SQ_NET + 6]);
     debug(49, 5) ("snmp_meshCtblFn: [%s] requested!\n", key);
@@ -250,19 +254,22 @@ snmp_meshCtblFn(variable_list * Var, snint * ErrP)
     }
     switch (Var->name[LEN_SQ_NET + 2]) {
     case MESH_CTBL_ADDR:
-	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    (snint) c->addr.s_addr,
-	    SMI_IPADDRESS);
+	Answer->type = SMI_IPADDRESS;
+	Answer->val_len = sizeof(snint);
+	Answer->val.integer = xmalloc(Answer->val_len);
+	*(Answer->val.integer) = (snint) c->addr.s_addr;
 	break;
     case MESH_CTBL_HTBYTES:
-	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    (snint) c->Http.kbytes_out.kb,
-	    SMI_COUNTER32);
+	Answer->val_len = sizeof(snint);
+	Answer->val.integer = xmalloc(Answer->val_len);
+	Answer->type = SMI_COUNTER32;
+	*(Answer->val.integer) = (snint) c->Http.kbytes_out.kb;
 	break;
     case MESH_CTBL_HTREQ:
-	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    (snint) c->Http.n_requests,
-	    SMI_COUNTER32);
+	Answer->val_len = sizeof(snint);
+	Answer->val.integer = xmalloc(Answer->val_len);
+	Answer->type = SMI_COUNTER32;
+	*(Answer->val.integer) = (snint) c->Http.n_requests;
 	break;
     case MESH_CTBL_HTHITS:
 	aggr = 0;
@@ -270,40 +277,47 @@ snmp_meshCtblFn(variable_list * Var, snint * ErrP)
 	    if (isTcpHit(l))
 		aggr += c->Http.result_hist[l];
 	}
-	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    (snint) aggr,
-	    SMI_COUNTER32);
+	Answer->val_len = sizeof(snint);
+	Answer->val.integer = xmalloc(Answer->val_len);
+	Answer->type = SMI_COUNTER32;
+	*(Answer->val.integer) = (snint) aggr;
 	break;
     case MESH_CTBL_HTHITBYTES:
-	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    (snint) c->Http.hit_kbytes_out.kb,
-	    SMI_COUNTER32);
+	Answer->val_len = sizeof(snint);
+	Answer->val.integer = xmalloc(Answer->val_len);
+	Answer->type = SMI_COUNTER32;
+	*(Answer->val.integer) = (snint) c->Http.hit_kbytes_out.kb;
 	break;
     case MESH_CTBL_ICPBYTES:
-	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    (snint) c->Icp.kbytes_out.kb,
-	    SMI_COUNTER32);
+	Answer->val_len = sizeof(snint);
+	Answer->val.integer = xmalloc(Answer->val_len);
+	Answer->type = SMI_COUNTER32;
+	*(Answer->val.integer) = (snint) c->Icp.kbytes_out.kb;
 	break;
     case MESH_CTBL_ICPREQ:
-	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    (snint) c->Icp.n_requests,
-	    SMI_COUNTER32);
+	Answer->val_len = sizeof(snint);
+	Answer->val.integer = xmalloc(Answer->val_len);
+	Answer->type = SMI_COUNTER32;
+	*(Answer->val.integer) = (snint) c->Icp.n_requests;
 	break;
     case MESH_CTBL_ICPHITS:
 	aggr = c->Icp.result_hist[LOG_UDP_HIT];
-	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    (snint) aggr,
-	    SMI_COUNTER32);
+	Answer->val_len = sizeof(snint);
+	Answer->val.integer = xmalloc(Answer->val_len);
+	Answer->type = SMI_COUNTER32;
+	*(Answer->val.integer) = (snint) aggr;
 	break;
     case MESH_CTBL_ICPHITBYTES:
-	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    (snint) c->Icp.hit_kbytes_out.kb,
-	    SMI_COUNTER32);
+	Answer->val_len = sizeof(snint);
+	Answer->val.integer = xmalloc(Answer->val_len);
+	Answer->type = SMI_COUNTER32;
+	*(Answer->val.integer) = (snint) c->Icp.hit_kbytes_out.kb;
 	break;
     default:
 	*ErrP = SNMP_ERR_NOSUCHNAME;
+	snmp_var_free(Answer);
 	debug(49, 5) ("snmp_meshCtblFn: illegal column.\n");
-	break;
+	return (NULL);
     }
     return Answer;
 }

@@ -44,17 +44,7 @@ const char *RequestMethodStr[] =
     "HEAD",
     "CONNECT",
     "TRACE",
-    "PURGE",
-#ifndef RFC_2518
-    "PROPFIND",
-    "PROPPATCH",
-    "MKCOL",
-    "COPY",
-    "MOVE",
-    "LOCK",
-    "UNLOCK",
-#endif
-    "ERROR"
+    "PURGE"
 };
 
 const char *ProtocolStr[] =
@@ -141,22 +131,6 @@ urlParseMethod(const char *s)
 	return METHOD_TRACE;
     } else if (strcasecmp(s, "PURGE") == 0) {
 	return METHOD_PURGE;
-#ifndef RFC_2518
-    } else if (strcasecmp(s, "PROPFIND") == 0) {
-	return METHOD_PROPFIND;
-    } else if (strcasecmp(s, "PROPPATCH") == 0) {
-	return METHOD_PROPPATCH;
-    } else if (strcasecmp(s, "MKCOL") == 0) {
-	return METHOD_MKCOL;
-    } else if (strcasecmp(s, "COPY") == 0) {
-	return METHOD_COPY;
-    } else if (strcasecmp(s, "MOVE") == 0) {
-	return METHOD_MOVE;
-    } else if (strcasecmp(s, "LOCK") == 0) {
-	return METHOD_LOCK;
-    } else if (strcasecmp(s, "UNLOCK") == 0) {
-	return METHOD_UNLOCK;
-#endif
     }
     return METHOD_NONE;
 }

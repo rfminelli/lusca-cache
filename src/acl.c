@@ -994,7 +994,6 @@ aclDecodeProxyAuth(const char *proxy_auth, char **user, char **password, char *b
     char *sent_auth;
     char *cleartext;
 
-    debug(28, 6) ("aclDecodeProxyAuth: header = '%s'\n", proxy_auth);
     if (proxy_auth == NULL)
 	return 0;
     if (strlen(proxy_auth) < SKIP_BASIC_SZ)
@@ -1015,7 +1014,7 @@ aclDecodeProxyAuth(const char *proxy_auth, char **user, char **password, char *b
     if ((*password = strchr(*user, ':')) != NULL)
 	*(*password)++ = '\0';
     if (*password == NULL) {
-	debug(28, 1) ("aclDecodeProxyAuth: no password in proxy authorization header '%s'\n", proxy_auth);
+	debug(28, 1) ("aclDecodeProxyAuth: no password in proxy authorization header\n");
 	return 0;
     }
     return 1;
@@ -2392,7 +2391,7 @@ aclDumpArpListWalkee(void *node, void *state)
     static char buf[24];
     while (*W != NULL)
 	W = &(*W)->next;
-    snprintf(buf, sizeof(buf), "%02x:%02x:%02x:%02x:%02x:%02x",
+    snprintf(buf, sizeof(buf), "%02x:%02x:02x:02x:02x:02x",
 	arp->eth[0], arp->eth[1], arp->eth[2], arp->eth[3],
 	arp->eth[4], arp->eth[5]);
     wordlistAdd(state, buf);

@@ -231,14 +231,6 @@ struct _SquidConfig {
 	int pct;
 	size_t max;
     } quickAbort;
-#if HEAP_REPLACEMENT
-    char *replPolicy;
-#else
-    /* 
-     * Note: the non-LRU policies do not use referenceAge, but we cannot
-     * remove it until we find out how to implement #else for cf_parser.c
-     */
-#endif
     time_t referenceAge;
     time_t negativeTtl;
     time_t negativeDnsTtl;
@@ -248,21 +240,17 @@ struct _SquidConfig {
 	time_t read;
 	time_t lifetime;
 	time_t connect;
-	time_t peer_connect;
 	time_t request;
 	time_t pconn;
 	time_t siteSelect;
 	time_t deadPeer;
 	int icp_query;		/* msec */
-	int icp_query_max;	/* msec */
 	int mcast_icp_query;	/* msec */
 #if USE_IDENT
 	time_t ident;
 #endif
     } Timeout;
-    size_t maxRequestHeaderSize;
-    size_t maxRequestBodySize;
-    size_t maxReplyBodySize;
+    size_t maxRequestSize;
     struct {
 	ushortlist *http;
 	u_short icp;
@@ -280,11 +268,6 @@ struct _SquidConfig {
 	u_short localPort;
     } Snmp;
 #endif
-#if WCCP
-    struct {
-	struct in_addr router;
-    } Wccp;
-#endif
     char *as_whois_server;
     struct {
 	char *log;
@@ -299,7 +282,7 @@ struct _SquidConfig {
     char *effectiveGroup;
     struct {
 	char *dnsserver;
-	wordlist *redirect;
+	char *redirect;
 	wordlist *authenticate;
 	char *pinger;
 	char *unlinkd;
@@ -334,10 +317,6 @@ struct _SquidConfig {
 #if SQUID_SNMP
 	struct in_addr snmp_incoming;
 	struct in_addr snmp_outgoing;
-#endif
-#if WCCP
-	struct in_addr wccp_incoming;
-	struct in_addr wccp_outgoing;
 #endif
 	struct in_addr client_netmask;
     } Addrs;
@@ -394,9 +373,9 @@ struct _SquidConfig {
 #endif
 	int offline;
 	int redir_rewrites_host;
+	int persistent_client_posts;
 	int prefer_direct;
 	int strip_query_terms;
-	int redirector_bypass;
     } onoff;
     acl *aclList;
     struct {
@@ -445,10 +424,8 @@ struct _SquidConfig {
 #endif
     struct {
 	int icp_average;
-	int dns_average;
 	int http_average;
 	int icp_min_poll;
-	int dns_min_poll;
 	int http_min_poll;
     } comm_incoming;
     int max_open_disk_fds;
@@ -541,6 +518,9 @@ struct _fde {
 	unsigned int nonblocking:1;
 	unsigned int ipc:1;
 	unsigned int called_connect:1;
+#ifdef OPTIMISTIC_IO
+	unsigned int calling_io_handler:1;
+#endif
     } flags;
     int bytes_read;
     int bytes_written;
@@ -1080,7 +1060,6 @@ struct _peer {
     } carp;
 #endif
     char *login;		/* Proxy authorization */
-    time_t connect_timeout;
 };
 
 struct _net_db_name {
@@ -1204,7 +1183,7 @@ struct _store_client {
     STCB *callback;
     void *callback_data;
     StoreEntry *entry;		/* ptr to the parent StoreEntry, argh! */
-    storeIOState *swapin_sio;
+    int swapin_fd;
     struct {
 	unsigned int disk_io_pending:1;
 	unsigned int store_copying:1;
@@ -1228,7 +1207,9 @@ struct _MemObject {
     int nclients;
     struct {
 	off_t queue_offset;	/* relative to in-mem data */
-	storeIOState *sio;
+	off_t done_offset;	/* relative to swap file with meta headers! */
+	int fd;
+	void *ctrl;
     } swapout;
     HttpReply *reply;
     request_t *request;
@@ -1241,14 +1222,7 @@ struct _MemObject {
 	void *data;
     } abort;
     char *log_url;
-#if HEAP_REPLACEMENT
-    /* 
-     * A MemObject knows where it is in the in-memory heap.
-     */
-    heap_node *node;
-#else
     dlink_node lru;
-#endif
     int id;
     ssize_t object_sz;
     size_t swap_hdr_sz;
@@ -1266,13 +1240,8 @@ struct _StoreEntry {
     size_t swap_file_sz;
     u_short refcount;
     u_short flags;
-    sfileno swap_file_number;
-#if HEAP_REPLACEMENT
-    heap_node *node;
-    dlink_node lock_list;
-#else
+    int swap_file_number;
     dlink_node lru;
-#endif
     u_short lock_count;		/* Assume < 65536! */
     mem_status_t mem_status:3;
     ping_status_t ping_status:3;
@@ -1281,59 +1250,18 @@ struct _StoreEntry {
 };
 
 struct _SwapDir {
-    swapdir_t type;
-    fileMap *map;
+    char *path;
+    int l1;
+    int l2;
     int cur_size;
     int max_size;
-    char *path;
-    int index;			/* This entry's index into the swapDirs array */
     int suggest;
+    fileMap *map;
+    int swaplog_fd;
     struct {
 	unsigned int selected:1;
 	unsigned int read_only:1;
     } flags;
-    STINIT *init;
-    STNEWFS *newfs;
-    struct {
-	STOBJOPEN *open;
-	STOBJCLOSE *close;
-	STOBJREAD *read;
-	STOBJWRITE *write;
-	STOBJUNLINK *unlink;
-    } obj;
-    struct {
-	STLOGOPEN *open;
-	STLOGCLOSE *close;
-	STLOGWRITE *write;
-	struct {
-	    STLOGCLEANOPEN *open;
-	    STLOGCLEANWRITE *write;
-	    void *state;
-	} clean;
-    } log;
-    union {
-	struct {
-	    int l1;
-	    int l2;
-	    int swaplog_fd;
-	} ufs;
-#if USE_DISKD
-	struct {
-	    int l1;
-	    int l2;
-	    int swaplog_fd;
-	    int smsgid;
-	    int rmsgid;
-	    int wfd;
-	    int away;
-	    struct {
-		char *buf;
-		link_list *stack;
-		int id;
-	    } shm;
-	} diskd;
-#endif
-    } u;
 };
 
 struct _request_flags {
@@ -1355,58 +1283,6 @@ struct _request_flags {
 #endif
     unsigned int accelerated:1;
     unsigned int internal:1;
-};
-
-struct _link_list {
-    void *ptr;
-    struct _link_list *next;
-};
-
-struct _storeIOState {
-    sfileno swap_file_number;
-    mode_t mode;
-    size_t st_size;		/* do stat(2) after read open */
-    off_t offset;		/* current offset pointer */
-    STIOCB *callback;
-    void *callback_data;
-    struct {
-	STRCB *callback;
-	void *callback_data;
-    } read;
-    struct {
-	unsigned int closing:1;	/* debugging aid */
-    } flags;
-    union {
-	struct {
-	    int fd;
-	    struct {
-		unsigned int close_request:1;
-		unsigned int reading:1;
-		unsigned int writing:1;
-	    } flags;
-	} ufs;
-	struct {
-	    int fd;
-	    struct {
-		unsigned int close_request:1;
-		unsigned int reading:1;
-		unsigned int writing:1;
-		unsigned int opening:1;
-	    } flags;
-	    const char *read_buf;
-	    link_list *pending_writes;
-	} aufs;
-#if USE_DISKD
-	struct {
-	    int id;
-	    struct {
-		unsigned int reading:1;
-		unsigned int writing:1;
-	    } flags;
-	    char *read_buf;
-	} diskd;
-#endif
-    } type;
 };
 
 struct _request_t {
@@ -1586,7 +1462,6 @@ struct _StatCounters {
     double cputime;
     struct timeval timestamp;
     StatHist comm_icp_incoming;
-    StatHist comm_dns_incoming;
     StatHist comm_http_incoming;
     StatHist select_fds_hist;
     struct {
@@ -1644,7 +1519,7 @@ struct _tlv {
 
 struct _storeSwapLogData {
     char op;
-    sfileno swap_file_number;
+    int swap_file_number;
     time_t timestamp;
     time_t lastref;
     time_t expires;
@@ -1797,17 +1672,4 @@ struct _helper_server {
  */
 struct _generic_cbdata {
     void *data;
-};
-
-struct _store_rebuild_data {
-    int objcount;		/* # objects successfully reloaded */
-    int expcount;		/* # objects expired */
-    int scancount;		/* # entries scanned or read from state file */
-    int clashcount;		/* # swapfile clashes avoided */
-    int dupcount;		/* # duplicates purged */
-    int cancelcount;		/* # SWAP_LOG_DEL objects purged */
-    int invalid;		/* # bad lines */
-    int badflags;		/* # bad e->flags */
-    int bad_log_op;
-    int zero_object_sz;
 };

@@ -31,14 +31,10 @@
  *
  */
 
-#ifndef _TYPEDEFS_H_
-#define _TYPEDEFS_H_
-
 typedef unsigned int store_status_t;
 typedef unsigned int mem_status_t;
 typedef unsigned int ping_status_t;
 typedef unsigned int swap_status_t;
-typedef int sfileno;
 
 typedef struct {
     size_t bytes;
@@ -165,8 +161,6 @@ typedef struct _helper helper;
 typedef struct _helper_server helper_server;
 typedef struct _helper_request helper_request;
 typedef struct _generic_cbdata generic_cbdata;
-typedef struct _storeIOState storeIOState;
-typedef struct _link_list link_list;
 
 #if SQUID_SNMP
 typedef variable_list *(oid_ParseFn) (variable_list *, snint *);
@@ -200,10 +194,7 @@ typedef void RH(void *data, char *);
 typedef void UH(void *data, wordlist *);
 typedef int DEFER(int fd, void *data);
 
-typedef void STIOCB(void *their_data, int errflag, storeIOState *);
-typedef void STRCB(void *their_data, const char *buf, ssize_t len);
-
-typedef void SIH(storeIOState *, void *);	/* swap in */
+typedef void SIH(int fd, void *);	/* swap in */
 typedef int QS(const void *, const void *);	/* qsort */
 typedef void STCB(void *, char *, ssize_t);	/* store callback */
 typedef void STABH(void *);
@@ -213,20 +204,6 @@ typedef void SIGHDLR(int sig);
 typedef void STVLDCB(void *, int, int);
 typedef void HLPCB(void *, char *buf);
 typedef void HLPCMDOPTS(int *argc, char **argv);
-typedef void IDNSCB(void *, rfc1035_rr *, int);
-
-typedef void STINIT(SwapDir *);
-typedef void STNEWFS(SwapDir *);
-typedef storeIOState *STOBJOPEN(sfileno, mode_t, STIOCB *, void *);
-typedef void STOBJCLOSE(storeIOState *);
-typedef void STOBJREAD(storeIOState *, char *, size_t, off_t, STRCB *, void *);
-typedef void STOBJWRITE(storeIOState *, char *, size_t, off_t, FREE *);
-typedef void STOBJUNLINK(sfileno);
-typedef void STLOGOPEN(SwapDir *);
-typedef void STLOGCLOSE(SwapDir *);
-typedef void STLOGWRITE(const SwapDir *, const StoreEntry *, int);
-typedef int STLOGCLEANOPEN(SwapDir *);
-typedef void STLOGCLEANWRITE(const StoreEntry *, SwapDir *);
 
 typedef double hbase_f(double);
 typedef void StatHistBinDumper(StoreEntry *, int idx, double val, double size, int count);
@@ -267,5 +244,3 @@ typedef unsigned int delay_id;
 #if USE_HTCP
 typedef struct _htcpReplyData htcpReplyData;
 #endif
-
-#endif /* _TYPEDEFS_H_ */

@@ -201,13 +201,7 @@ icpHandleIcpV2(int fd, struct sockaddr_in from, char *buf, int len)
     header.reqnum = ntohl(header.reqnum);
     header.flags = ntohl(header.flags);
     header.pad = ntohl(header.pad);
-    /*
-     * Length field should match the number of bytes read
-     */
-    if (len != header.length) {
-	debug(12, 3) ("icpHandleIcpV2: ICP message is too small\n");
-	return;
-    }
+
     switch (header.opcode) {
     case ICP_QUERY:
 	/* We have a valid packet */
@@ -262,7 +256,7 @@ icpHandleIcpV2(int fd, struct sockaddr_in from, char *buf, int len)
 		netdbPingSite(icp_request->host);
 	}
 	/* if store is rebuilding, return a UDP_HIT, but not a MISS */
-	if (store_dirs_rebuilding && opt_reload_hit_only) {
+	if (store_rebuilding && opt_reload_hit_only) {
 	    reply = icpCreateMessage(ICP_MISS_NOFETCH, flags, url, header.reqnum, src_rtt);
 	    icpUdpSend(fd, &from, reply, LOG_UDP_MISS_NOFETCH, 0);
 	} else if (hit_only_mode_until > squid_curtime) {

@@ -35,8 +35,8 @@ COMMENT_START
 	------------------
 
 	This is the default Squid configuration file. You may wish
-	to look at the Squid home page (http://squid.nlanr.net/)
-	for the FAQ and other documentation.
+	to look at http://cache.is.co.za/squid/ for documentation,
+	or the Squid home page (http://squid.nlanr.net/) for the FAQ.
 
 	The default Squid config file shows what the defaults for
 	various options happen to be.  If you don't need to change the
@@ -75,7 +75,7 @@ TYPE: ushort
 DEFAULT: 3130
 LOC: Config.Port.icp
 DOC_START
-	The port number where Squid sends and receives ICP queries to
+	The port number where Squid sends and receives ICP requests to
 	and from neighbor caches.  Default is 3130.  To disable use
 	"0".  May be overridden with -u on the command line.
 
@@ -88,7 +88,7 @@ TYPE: ushort
 DEFAULT: 4827
 LOC: Config.Port.htcp
 DOC_START
-	The port number where Squid sends and receives HTCP queries to
+	The port number where Squid sends and receives ICP requests to
 	and from neighbor caches.  Default is 4827.  To disable use
 	"0".
 
@@ -104,7 +104,7 @@ LOC: Config.mcast_group_list
 DEFAULT: none
 DOC_START
 	This tag specifies a list of multicast groups which your server
-	should join to receive multicasted ICP queries.
+	should join to receive multicasted ICP requests.
 
 	NOTE!  Be very careful what you put here!  Be sure you
 	understand the difference between an ICP _query_ and an ICP
@@ -224,7 +224,6 @@ DOC_START
 		     no-netdb-exchange
 		     no-delay
 		     login=user:password
-		     connect-timeout=nn
 
 		     use 'proxy-only' to specify that objects fetched
 		     from this cache should not be saved locally.
@@ -234,7 +233,7 @@ DOC_START
 		     is 1, larger weights are favored more.
 
 		     use 'ttl=n' to specify a IP multicast TTL to use
-		     when sending an ICP queries to this address.
+		     when sending an ICP request to this address.
 		     Only useful when sending to a multicast group.
 		     Because we don't accept ICP replies from random
 		     hosts, you must configure other group members as
@@ -272,11 +271,6 @@ DOC_START
 
 		     use 'login=user:password' if this is a personal/workgroup
 		     proxy and your parent requires proxy authentication.
-
-		     use 'connect-timeout=nn' to specify a peer
-		     specific connect timeout (also see the
-		     peer_connect_timeout directive)
-
 
 	NOTE: non-ICP neighbors must be specified as 'parent'.
 
@@ -353,20 +347,6 @@ DOC_START
 		icp_query_timeout 2000
 
 icp_query_timeout 0
-DOC_END
-
-NAME: maximum_icp_query_timeout
-COMMENT: (msec)
-DEFAULT: 2000
-TYPE: int
-LOC: Config.Timeout.icp_query_max
-DOC_START
-	When you use the dynamic ICP query timeout (by setting
-	'icp_query_timeout' to zero) you might want to place an
-	upper limit on the timeout value.
-
-	If 'icp_query_timeout' is set to zero, this value is ignored.
-icp_query_timeout 2000
 DOC_END
 
 NAME: mcast_icp_query_timeout
@@ -514,17 +494,12 @@ TYPE: int
 DEFAULT: 95
 LOC: Config.Swap.highWaterMark
 DOC_START
-
-	The low- and high-water marks for cache object replacement.
-	Replacement begins when the swap (disk) usage is above the
-	low-water mark and attempts to maintain utilization near the
-	low-water mark.  As swap utilization gets close to high-water
-	mark object eviction becomes more aggressive.  If utilization is
-	close to the low-water mark less replacement is done each time.
-	
-	Defaults are 90% and 95%. If you have a large cache, 5% could be
-	hundreds of MB. If this is the case you may wish to set these
-	numbers closer together.
+	The low- and high-water marks for cache LRU replacement.  LRU
+	replacement begins when the high-water mark is reached and ends
+	when enough objects have been removed and the low-water mark is
+	reached. Defaults are 90% and 95%. If you have a large cache, 5%
+	could be hundreds of MB. If this is the case you may wish to
+	set these numbers closer together.
 
 cache_swap_low  90
 cache_swap_high 95
@@ -542,10 +517,6 @@ DOC_START
 	increase this (one 32 MB object hit counts for 3200 10KB
 	hits).  If you wish to increase speed more than your want to
 	save bandwidth you should leave this low.
-
-	NOTE: if using the LFUDA replacement policy you should increase
-	this value to maximize the byte hit rate improvement of LFUDA!
-	See replacement_policy below for a discussion of this policy.
 
 maximum_object_size 4096 KB
 DOC_END
@@ -636,7 +607,7 @@ DEFAULT: @DEFAULT_ACCESS_LOG@
 LOC: Config.Log.access
 DOC_START
 	Logs the client request activity.  Contains an entry for
-	every HTTP and ICP queries received.
+	every HTTP and ICP request received.
 
 cache_access_log @DEFAULT_ACCESS_LOG@
 DOC_END
@@ -938,7 +909,7 @@ DOC_END
 
 
 NAME: redirect_program
-TYPE: wordlist
+TYPE: string
 LOC: Config.Program.redirect
 DEFAULT: none
 DOC_START
@@ -1050,50 +1021,17 @@ wais_relay_port 8000
 DOC_END
 
 
-NAME: request_header_max_size
-COMMENT: (KB)
-TYPE: b_size_t
-DEFAULT: 10 KB
-LOC: Config.maxRequestHeaderSize
-DOC_START
-	This specifies the maximum size for HTTP headers in a request.
-	Request headers are usually relatively small (about 512 bytes).
-	Placing a limit on the request header size will catch certain
-	bugs (for example with persistent connections) and possibly
-	buffer-overflow or denial-of-service attacks.
-request_header_max_size 10 KB
-DOC_END
-
-NAME: request_body_max_size
+NAME: request_size
 COMMENT: (KB)
 TYPE: b_size_t
 DEFAULT: 100 KB
-LOC: Config.maxRequestBodySize
+LOC: Config.maxRequestSize
 DOC_START
-	This specifies the maximum size for an HTTP request body.
-	In other words, the maximum size of a PUT/POST request.
-	A user who attempts to send a request with a body larger
-	than this limit receives an "Invalid Request" error message.
-	If you set this parameter to a zero, there will be no limit
-	imposed.
-request_body_max_size 100 KB
-DOC_END
+	Maximum allowed request size in kilobytes.  If people are using
+	POST to upload files, then set this to the largest acceptable
+	filesize plus a few extra kbytes.
 
-NAME: reply_body_max_size
-COMMENT: (KB)
-TYPE: b_size_t
-DEFAULT: 0
-LOC: Config.maxReplyBodySize
-DOC_START
-	This specifies the maximum size for an HTTP reply body.
-	This can be used to restrict users from downloading very
-	large files.  If the reply headers include a content-length
-	value, then we can recognize large reply bodies early and
-	avoid downloading any of it.  If not, we will download as
-	much data up to this limit and then ungraciously terminate
-	the transfer.  If you set this parameter to zero, there
-	will be no limit imposed.
-reply_body_max_size 0
+request_size 100 KB
 DOC_END
 
 
@@ -1148,55 +1086,9 @@ DOC_START
 	match, then the default will be used.
 
 Default:
-NOCOMMENT_START
 refresh_pattern		^ftp:		1440	20%	10080
 refresh_pattern		^gopher:	1440	0%	1440
 refresh_pattern 	.		0	20%	4320
-NOCOMMENT_END
-DOC_END
-
-
-NAME: replacement_policy
-TYPE: string
-LOC: Config.replPolicy
-DEFAULT: LFUDA
-IFDEF: HEAP_REPLACEMENT
-DOC_START
-	The cache replacement policy parameter determines which
-	objects are evicted (replaced) when disk space is needed.
-	Squid used to have only a single replacement policy, LRU.
-	But when built with -DHEAP_REPLACEMENT you can choose
-	between two new, enhanced policies:
-
-		   GDSF: Greedy-Dual Size Frequency
-		   LFUDA: Least Frequently Used with Dynamic Aging
-
-	Both of these policies are frequency based rather than recency
-	based, and perform better than LRU.
-
-	The GDSF policy optimizes object hit rate by keeping smaller
-	popular objects in cache so it has a better chance of getting a
-	hit.  It achieves a lower byte hit rate than LFUDA though since
-	it evicts larger (possibly popular) objects.
-
-	The LFUDA policy keeps popular objects in cache regardless of
-	their size and thus optimizes byte hit rate at the expense of
-	hit rate since one large, popular object will prevent many
-	smaller, slightly less popular objects from being cached.
-
-	Both policies utilize a dynamic aging mechanism that prevents
-	cache pollution that can otherwise occur with frequency-based
-	replacement policies.
-
-	NOTE: if using the LFUDA replacement policy you should increase
-	the value of maximum_object_size above its default of 4096 KB to
-	to maximize the potential byte hit rate improvement of LFUDA.  
-
-	For more information about these cache replacement policies see
-	http://www.hpl.hp.com/personal/John_Dilley/caching/wcw.html and
-	http://fog.hpl.external.hp.com/techreports/98/HPL-98-173.html.
-
-replacement_policy LFUDA
 DOC_END
 
 
@@ -1222,10 +1114,7 @@ DOC_START
 		4 months
 		2.2 hours
 
-	NOTE: this parameter is not used when using the enhanced
-	replacement policies, GDSH or LFUDA.
-
-reference_age 1 year
+reference_age 1 month
 DOC_END
 
 
@@ -1360,18 +1249,6 @@ DOC_START
 
 connect_timeout 120 seconds
 DOC_END
-
-NAME: peer_connect_timeout
-COMMENT: time-units
-TYPE: time_t
-LOC: Config.Timeout.peer_connect
-DEFAULT: 30 seconds
-DOC_START
-	This parameter specifies how long to wait for a pending TCP
-	connection to a peer cache.  The default is 30 seconds.   You
-	may also set different timeout values for individual neighbors
-	with the 'connect-timeout' option on a 'cache_peer' line.
-peer_connect_timeout 30 seconds
 
 NAME: siteselect_timeout
 COMMENT: time-units
@@ -1588,7 +1465,7 @@ DOC_START
 
 Examples:
 acl myexample dst_as 1241
-acl password proxy_auth REQUIRED
+acl password proxy_auth 300
 
 Defaults:
 NOCOMMENT_START
@@ -2413,7 +2290,7 @@ TYPE: http_header
 LOC: Config.anonymize_headers
 DEFAULT: none
 DOC_START
-	Usage: anonymize_headers allow|deny header_name ...
+        Usage: anonymize_headers allow|deny header_name ...
 
 	This option replaces the old 'http_anonymizer' option with
 	something that is much more configurable.  You may now
@@ -2578,7 +2455,7 @@ DOC_START
 	snmp_access allow|deny [!]aclname ...
 
 Example:
-snmp_access allow snmpppublic localhost
+snmp_access allow public localhost
 snmp_access deny all
 DOC_END
 
@@ -2619,47 +2496,6 @@ DOC_START
 	WHOIS server to query for AS numbers.  NOTE: AS numbers are
 	queried only when Squid starts up, not for every request.
 DOC_END
-
-NAME: wccp_router
-TYPE: address
-LOC: Config.Wccp.router
-DEFAULT: 0.0.0.0
-IFDEF: WCCP
-DOC_START
-	Specifies the router that will manage WCCP for this
-	cache.
-
-wccp_router 10.0.0.1
-DOC_END
-
-NAME: wccp_incoming_address
-TYPE: address
-LOC: Config.Addrs.wccp_outgoing
-DEFAULT: 0.0.0.0
-IFDEF: WCCP
-DOC_NONE
-NAME: wccp_outgoing_address
-TYPE: address
-LOC: Config.Addrs.wccp_outgoing
-DEFAULT: 255.255.255.255
-IFDEF: WCCP
-DOC_START
-        Just like 'udp_incoming_address' above, but for the WCCP port.
-
-        wccp_incoming_address   is used for the WCCP socket receiving
-                                messages from WCCP routers.
-        wccp_outgoing_address   is used for WCCP packets returned to WCCP
-                                routers.
-
-        The default behaviour is to not bind to any specific address.
-
-        NOTE, wccp_incoming_address and wccp_outgoing_address can not have
-        the same value since they both use port 2048.
-
-wccp_incoming_address 0.0.0.0
-wccp_outgoing_address 0.0.0.0
-DOC_END
-
 
 COMMENT_START
  DELAY POOL PARAMETERS (all require DELAY_POOLS compilation option)
@@ -2974,22 +2810,6 @@ DOC_START
 	directory.  If you set 'coredump_dir' to a directory
 	that exists, Squid will chdir() to that directory at startup
 	and coredump files will be left there.
-DOC_END
-
-NAME: redirector_bypass
-TYPE: onoff
-LOC: Config.onoff.redirector_bypass
-DEFAULT: off
-DOC_START
-	When this is 'on', a request will not go through the
-	redirector if all redirectors are busy.  If this is 'off'
-	and the redirector queue grows too large, Squid will exit
-	with a FATAL erorr and ask you to increase the number of
-	redirectors.  You should only enable this if the redirectors
-	are not critical to your caching system.  If you use
-	redirectors for access control, and you enable this option,
-	then users may have access to pages that they should not
-	be allowed to request.
 DOC_END
 
 EOF

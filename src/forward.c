@@ -112,7 +112,7 @@ fwdCheckRetry(FwdState * fwdState)
 	return 0;
     if (fwdState->flags.dont_retry)
 	return 0;
-    if (fwdState->request->body)
+    if (pumpMethod(fwdState->request->method))
 	if (0 == pumpRestart(fwdState->request))
 	    return 0;
     return 1;
@@ -217,19 +217,15 @@ fwdConnectStart(void *data)
     FwdServer *fs = fwdState->servers;
     const char *host;
     unsigned short port;
-    time_t ctimeout;
     assert(fs);
     assert(fwdState->server_fd == -1);
     debug(17, 3) ("fwdConnectStart: %s\n", url);
     if (fs->peer) {
 	host = fs->peer->host;
 	port = fs->peer->http_port;
-	ctimeout = fs->peer->connect_timeout > 0 ? fs->peer->connect_timeout
-	    : Config.Timeout.peer_connect;
     } else {
 	host = fwdState->request->host;
 	port = fwdState->request->port;
-	ctimeout = Config.Timeout.connect;
     }
     hierarchyNote(&fwdState->request->hier, fs->code, host);
     if ((fd = pconnPop(host, port)) >= 0) {
@@ -259,7 +255,7 @@ fwdConnectStart(void *data)
     fwdState->n_tries++;
     comm_add_close_handler(fd, fwdServerClosed, fwdState);
     commSetTimeout(fd,
-	ctimeout,
+	Config.Timeout.connect,
 	fwdConnectTimeout,
 	fwdState);
     commConnectStart(fd, host, port, fwdConnectDone, fwdState);
@@ -361,7 +357,7 @@ fwdReforward(FwdState * fwdState)
     }
     if (fwdState->n_tries > 9)
 	return 0;
-    if (fwdState->request->body)
+    if (pumpMethod(fwdState->request->method))
 	if (0 == pumpRestart(fwdState->request))
 	    return 0;
     assert(fs);
