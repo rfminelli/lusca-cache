@@ -339,7 +339,7 @@ noargs_html(char *host, int port, char *url, char *password)
 
     printf("\r\n\r\n");
     printf("<HTML><HEAD><TITLE>Cache Manager Interface</TITLE></HEAD>\n");
-    printf("<BODY><H1>Cache Manager Interface</H1>\n");
+    printf("<BODY BGCOLOR=#FFFFFF><H1>Cache Manager Interface</H1>\n");
     printf("<P>This is a WWW interface to the instrumentation interface\n");
     printf("for the Squid object cache.</P>\n");
     printf("<HR>\n");
@@ -763,7 +763,7 @@ main(int argc, char *argv[])
 
     printf("<HTML><HEAD><TITLE>Cache Manager: %s:%s:%d</TITLE></HEAD>\n",
 	operation, hostname, portnum);
-    printf("<BODY><FORM METHOD=\"POST\" ACTION=\"%s\">\n", script_name);
+    printf("<BODY BGCOLOR=#FFFFFF><FORM METHOD=\"POST\" ACTION=\"%s\">\n", script_name);
     printf("<INPUT TYPE=\"submit\" VALUE=\"Refresh\">\n");
     printf("<SELECT NAME=\"operation\">\n");
     printf("<OPTION VALUE=\"empty\">Empty Form\n");
