@@ -255,7 +255,6 @@ ipcache_release(ipcache_entry * i)
     }
     safe_free(i->name);
     safe_free(i->error_message);
-    memset(i, '\0', sizeof(ipcache_entry));
     safe_free(i);
     --meta_data.ipcache_count;
     return;
@@ -465,7 +464,6 @@ ipcache_call_pending(ipcache_entry * i)
 		i->status == IP_CACHED ? &i->addrs : NULL,
 		p->handlerData);
 	}
-	memset(p, '\0', sizeof(struct _ip_pending));
 	safe_free(p);
     }
     i->pending_head = NULL;	/* nuke list */
@@ -572,13 +570,6 @@ ipcache_dnsHandleRead(int fd, dnsserver_t * dnsData)
     debug(14, 5, "ipcache_dnsHandleRead: Result from DNS ID %d (%d bytes)\n",
 	dnsData->id, len);
     if (len <= 0) {
-	if (len < 0 && (errno == EWOULDBLOCK || errno == EAGAIN || errno == EINTR)) {
-	    commSetSelect(fd,
-		COMM_SELECT_READ,
-		(PF) ipcache_dnsHandleRead,
-		dnsData, 0);
-	    return 0;
-	}
 	debug(14, dnsData->flags & DNS_FLAG_CLOSING ? 5 : 1,
 	    "FD %d: Connection from DNSSERVER #%d is closed, disabling\n",
 	    fd, dnsData->id);
@@ -741,6 +732,7 @@ ipcache_dnsDispatch(dnsserver_t * dns, ipcache_entry * i)
     sprintf(buf, "%1.254s\n", i->name);
     dns->flags |= DNS_FLAG_BUSY;
     dns->data = i;
+    dns->lastcall = squid_curtime;
     i->status = IP_DISPATCHED;
     comm_write(dns->outpipe,
 	buf,
@@ -857,6 +849,14 @@ ipcache_gethostbyname(const char *name, int flags)
 	    /* good address, cached */
 	    if (i == NULL) {
 		i = ipcacheAddNew(name, hp, IP_CACHED);
+	    } else if (i->status == IP_PENDING || i->status == IP_DISPATCHED) {
+		/* only dnsHandleRead() can change from DISPATCHED to CACHED */
+		static_addrs.count = 1;
+		static_addrs.cur = 0;
+		xmemcpy(&static_addrs.in_addrs[0].s_addr,
+		    *(hp->h_addr_list),
+		    hp->h_length);
+		return &static_addrs;
 	    } else {
 		ipcacheAddHostent(i, hp);
 	    }

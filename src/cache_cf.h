@@ -130,6 +130,13 @@ typedef enum {
     IP_DENY
 } ip_access_type;
 
+typedef struct _ip_acl {
+    struct in_addr addr;
+    struct in_addr mask;
+    ip_access_type access;
+    struct _ip_acl *next;
+} ip_acl;
+
 struct SquidConfig {
     struct {
 	int maxSize;
@@ -171,8 +178,10 @@ struct SquidConfig {
 	int log_fqdn;
     } Log;
 #if USE_PROXY_AUTH
-    char *proxyAuthFile;
-    char *proxyAuthIgnoreDomain;
+    struct {
+	char *File;
+	relist *IgnoreDomains;
+    } proxyAuth;
 #endif				/* USE_PROXY_AUTH */
     char *adminEmail;
     char *effectiveUser;
@@ -227,9 +236,13 @@ struct SquidConfig {
     wordlist *cache_dirs;
     wordlist *cache_stoplist;
     wordlist *hierarchy_stoplist;
+    wordlist *local_domain_list;
     wordlist *mcast_group_list;
+    wordlist *inside_firewall_list;
     wordlist *dns_testname_list;
     relist *cache_stop_relist;
+    ip_acl *local_ip_list;
+    ip_acl *firewall_ip_list;
     peer *sslProxy, *passProxy;
     struct {
 	int size;
@@ -262,14 +275,6 @@ struct SquidConfig {
 	int res_defnames;
 	int anonymizer;
     } Options;
-    struct {
-	struct _acl_access *HTTP;
-	struct _acl_access *ICP;
-	struct _acl_access *MISS;
-	struct _acl_access *NeverDirect;
-	struct _acl_access *AlwaysDirect;
-    } accessList;
-    struct _acl_deny_info_list *denyInfoList;
 };
 
 extern struct SquidConfig Config;
@@ -286,6 +291,7 @@ extern int httpd_accel_mode;
 
 extern int parseConfigFile _PARAMS((const char *file_name));
 extern int setCacheSwapMax _PARAMS((int size));
+extern ip_access_type ip_access_check _PARAMS((struct in_addr, const ip_acl *));
 extern void intlistDestroy _PARAMS((intlist **));
 extern void wordlistDestroy _PARAMS((wordlist **));
 extern void configFreeMemory _PARAMS((void));

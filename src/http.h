@@ -136,14 +136,13 @@ typedef struct {
     int req_hdr_sz;
     int reply_hdr_state;
     peer *neighbor;		/* neighbor request made to */
-    ConnectStateData connectState;
     int eof;			/* reached end-of-object? */
     request_t *orig_request;
 } HttpStateData;
 
-extern int httpCachable _PARAMS((method_t));
-extern int proxyhttpStart _PARAMS((request_t *, StoreEntry *, peer *));
-extern int httpStart _PARAMS((request_t *, char *, int, StoreEntry *));
+extern int httpCachable _PARAMS((const char *, int));
+extern int proxyhttpStart _PARAMS((const char *, request_t *, StoreEntry *, peer *));
+extern int httpStart _PARAMS((char *, request_t *, char *, int, StoreEntry *));
 extern void httpParseReplyHeaders _PARAMS((const char *, struct _http_reply *));
 extern void httpProcessReplyHeader _PARAMS((HttpStateData *, const char *, int));
 extern void httpReplyHeaderStats _PARAMS((StoreEntry *));

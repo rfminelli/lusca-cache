@@ -112,7 +112,6 @@
 
 #define HTTP_DELETE_GAP   (1<<18)
 
-static const char *const w_space = " \t\n\r";
 static const char *const crlf = "\r\n";
 
 typedef enum {
@@ -158,22 +157,7 @@ typedef enum {
     HDR_MISC_END
 } http_hdr_misc_t;
 
-typedef struct proxy_ctrl_t {
-    int sock;
-    request_t *orig_request;
-    StoreEntry *entry;
-    peer *e;
-} proxy_ctrl_t;
-
-typedef struct http_ctrl_t {
-    int sock;
-    request_t *request;
-    char *req_hdr;
-    int req_hdr_sz;
-    StoreEntry *entry;
-} http_ctrl_t;
-
-char *HttpServerCCStr[] =
+static char *HttpServerCCStr[] =
 {
     "public",
     "private",
@@ -222,8 +206,6 @@ static void httpMakePrivate _PARAMS((StoreEntry *));
 static void httpCacheNegatively _PARAMS((StoreEntry *));
 static void httpReadReply _PARAMS((int fd, void *));
 static void httpSendComplete _PARAMS((int fd, char *, int, int, void *));
-static void proxyhttpStartComplete _PARAMS((void *, int));
-static void httpStartComplete _PARAMS((void *, int));
 static void httpSendRequest _PARAMS((int fd, void *));
 static void httpConnect _PARAMS((int fd, const ipcache_addrs *, void *));
 static void httpConnectDone _PARAMS((int fd, int status, void *data));
@@ -247,7 +229,7 @@ httpStateFree(int fd, void *data)
 }
 
 int
-httpCachable(method_t method)
+httpCachable(const char *url, int method)
 {
     /* GET and HEAD are cachable. Others are not. */
     if (method != METHOD_GET && method != METHOD_HEAD)
@@ -446,10 +428,8 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 
     debug(11, 3, "httpProcessReplyHeader: key '%s'\n", entry->key);
 
-    if (httpState->reply_hdr == NULL) {
+    if (httpState->reply_hdr == NULL)
 	httpState->reply_hdr = get_free_8k_page();
-	memset(httpState->reply_hdr, '\0', 8192);
-    }
     if (httpState->reply_hdr_state == 0) {
 	hdr_len = strlen(httpState->reply_hdr);
 	room = 8191 - hdr_len;
@@ -618,7 +598,9 @@ httpReadReply(int fd, void *data)
 	IOStats.Http.read_hist[bin]++;
     }
     if (len < 0) {
-	if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+	debug(50, 2, "httpReadReply: FD %d: read failure: %s.\n",
+	    fd, xstrerror());
+	if (errno == EAGAIN || errno == EWOULDBLOCK) {
 	    /* reinstall handlers */
 	    /* XXX This may loop forever */
 	    commSetSelect(fd, COMM_SELECT_READ,
@@ -631,8 +613,6 @@ httpReadReply(int fd, void *data)
 	    squid_error_entry(entry, ERR_READ_ERROR, xstrerror());
 	    comm_close(fd);
 	}
-	debug(50, 2, "httpReadReply: FD %d: read failure: %s.\n",
-	    fd, xstrerror());
     } else if (len == 0 && entry->mem_obj->e_current_len == 0) {
 	httpState->eof = 1;
 	squid_error_entry(entry,
@@ -657,14 +637,14 @@ httpReadReply(int fd, void *data)
 	    httpProcessReplyHeader(httpState, buf, len);
 	storeAppend(entry, buf, len);
 	commSetSelect(fd,
+	    COMM_SELECT_READ,
+	    httpReadReply,
+	    (void *) httpState, 0);
+	commSetSelect(fd,
 	    COMM_SELECT_TIMEOUT,
 	    httpReadReplyTimeout,
 	    (void *) httpState,
 	    Config.readTimeout);
-	commSetSelect(fd,
-	    COMM_SELECT_READ,
-	    httpReadReply,
-	    (void *) httpState, 0);
     }
 }
 
@@ -738,7 +718,6 @@ httpBuildRequestHeader(request_t * request,
     char *end = NULL;
     size_t len = 0;
     size_t hdr_len = 0;
-    size_t in_sz;
     size_t l;
     int hdr_flags = 0;
     int cc_flags = 0;
@@ -759,7 +738,6 @@ httpBuildRequestHeader(request_t * request,
 	EBIT_SET(hdr_flags, HDR_IMS);
     }
     end = mime_headers_end(hdr_in);
-    in_sz = strlen(hdr_in);
     for (t = hdr_in; t < end; t += strcspn(t, crlf), t += strspn(t, crlf)) {
 	hdr_len = t - hdr_in;
 	l = strcspn(t, crlf) + 1;
@@ -858,7 +836,6 @@ httpSendRequest(int fd, void *data)
     }
     if (buflen < DISK_PAGE_SIZE) {
 	buf = get_free_8k_page();
-	memset(buf, '\0', buflen);
 	buftype = BUF_TYPE_8K;
 	buflen = DISK_PAGE_SIZE;
     } else {
@@ -892,54 +869,37 @@ httpSendRequest(int fd, void *data)
 }
 
 int
-proxyhttpStart(request_t * orig_request,
+proxyhttpStart(const char *url,
+    request_t * orig_request,
     StoreEntry * entry,
     peer * e)
 {
-    proxy_ctrl_t *ctrlp;
     int sock;
+    HttpStateData *httpState = NULL;
+    request_t *request = NULL;
+
     debug(11, 3, "proxyhttpStart: \"%s %s\"\n",
-	RequestMethodStr[orig_request->method], entry->url);
+	RequestMethodStr[orig_request->method], url);
     debug(11, 10, "proxyhttpStart: HTTP request header:\n%s\n",
 	entry->mem_obj->mime_hdr);
+
     if (e->options & NEIGHBOR_PROXY_ONLY)
 	storeStartDeleteBehind(entry);
+
     /* Create socket. */
     sock = comm_open(SOCK_STREAM,
 	0,
 	Config.Addrs.tcp_outgoing,
 	0,
 	COMM_NONBLOCKING,
-	entry->url);
+	url);
     if (sock == COMM_ERROR) {
 	debug(11, 4, "proxyhttpStart: Failed because we're out of sockets.\n");
 	squid_error_entry(entry, ERR_NO_FDS, xstrerror());
 	return COMM_ERROR;
     }
-    ctrlp = xmalloc(sizeof(proxy_ctrl_t));
-    ctrlp->sock = sock;
-    ctrlp->orig_request = orig_request;
-    ctrlp->entry = entry;
-    ctrlp->e = e;
-    storeLockObject(entry, proxyhttpStartComplete, ctrlp);
-    return COMM_OK;
-}
-
-
-static void
-proxyhttpStartComplete(void *data, int status)
-{
-    proxy_ctrl_t *ctrlp = data;
-    int sock = ctrlp->sock;
-    request_t *orig_request = ctrlp->orig_request;
-    StoreEntry *entry = ctrlp->entry;
-    peer *e = ctrlp->e;
-    char *url = entry->url;
-    HttpStateData *httpState = NULL;
-    request_t *request = NULL;
-    xfree(ctrlp);
     httpState = xcalloc(1, sizeof(HttpStateData));
-    httpState->entry = entry;
+    storeLockObject(httpState->entry = entry, NULL, NULL);
     httpState->req_hdr = entry->mem_obj->mime_hdr;
     httpState->req_hdr_sz = entry->mem_obj->mime_hdr_sz;
     request = get_free_request_t();
@@ -959,7 +919,7 @@ proxyhttpStartComplete(void *data, int status)
 	sock,
 	httpConnect,
 	httpState);
-    return;
+    return COMM_OK;
 }
 
 static void
@@ -975,12 +935,11 @@ httpConnect(int fd, const ipcache_addrs * ia, void *data)
 	return;
     }
     /* Open connection. */
-    httpState->connectState.fd = fd;
-    httpState->connectState.host = request->host;
-    httpState->connectState.port = request->port;
-    httpState->connectState.handler = httpConnectDone;
-    httpState->connectState.data = httpState;
-    comm_nbconnect(fd, &httpState->connectState);
+    commConnectStart(fd,
+	request->host,
+	request->port,
+	httpConnectDone,
+	httpState);
 }
 
 static void
@@ -989,11 +948,10 @@ httpConnectDone(int fd, int status, void *data)
     HttpStateData *httpState = data;
     request_t *request = httpState->request;
     StoreEntry *entry = httpState->entry;
-    peer *e = NULL;
     if (status != COMM_OK) {
-	if ((e = httpState->neighbor))
-	    e->last_fail_time = squid_curtime;
 	squid_error_entry(entry, ERR_CONNECT_FAIL, xstrerror());
+	if (httpState->neighbor)
+	    peerCheckConnectStart(httpState->neighbor);
 	comm_close(fd);
     } else {
 	/* Install connection complete handler. */
@@ -1004,66 +962,38 @@ httpConnectDone(int fd, int status, void *data)
 	    httpLifetimeExpire, (void *) httpState, 0);
 	commSetSelect(fd, COMM_SELECT_WRITE,
 	    httpSendRequest, (void *) httpState, 0);
-	if (vizSock > -1)
-	    vizHackSendPkt(&httpState->connectState.S, 2);
     }
 }
 
 int
-httpStart(request_t * request,
+httpStart(char *url,
+    request_t * request,
     char *req_hdr,
     int req_hdr_sz,
     StoreEntry * entry)
 {
-    http_ctrl_t *ctrlp;
+    /* Create state structure. */
     int sock;
+    HttpStateData *httpState = NULL;
+
     debug(11, 3, "httpStart: \"%s %s\"\n",
-	RequestMethodStr[request->method], entry->url);
+	RequestMethodStr[request->method], url);
     debug(11, 10, "httpStart: req_hdr '%s'\n", req_hdr);
+
     /* Create socket. */
     sock = comm_open(SOCK_STREAM,
 	0,
 	Config.Addrs.tcp_outgoing,
 	0,
 	COMM_NONBLOCKING,
-	entry->url);
+	url);
     if (sock == COMM_ERROR) {
 	debug(11, 4, "httpStart: Failed because we're out of sockets.\n");
 	squid_error_entry(entry, ERR_NO_FDS, xstrerror());
 	return COMM_ERROR;
     }
-    ctrlp = xmalloc(sizeof(http_ctrl_t));
-    ctrlp->sock = sock;
-    ctrlp->request = request;
-    ctrlp->req_hdr = req_hdr;
-    ctrlp->req_hdr_sz = req_hdr_sz;
-    ctrlp->entry = entry;
-    storeLockObject(entry, httpStartComplete, ctrlp);
-    return COMM_OK;
-}
-
-
-static void
-httpStartComplete(void *data, int status)
-{
-    http_ctrl_t *ctrlp = (http_ctrl_t *) data;
-    HttpStateData *httpState = NULL;
-    int sock;
-    request_t *request;
-    char *req_hdr;
-    int req_hdr_sz;
-    StoreEntry *entry;
-
-    sock = ctrlp->sock;
-    request = ctrlp->request;
-    req_hdr = ctrlp->req_hdr;
-    req_hdr_sz = ctrlp->req_hdr_sz;
-    entry = ctrlp->entry;
-    xfree(ctrlp);
-
     httpState = xcalloc(1, sizeof(HttpStateData));
-    httpState->entry = entry;
-
+    storeLockObject(httpState->entry = entry, NULL, NULL);
     httpState->req_hdr = req_hdr;
     httpState->req_hdr_sz = req_hdr_sz;
     httpState->request = requestLink(request);
@@ -1074,6 +1004,7 @@ httpStartComplete(void *data, int status)
 	sock,
 	httpConnect,
 	httpState);
+    return COMM_OK;
 }
 
 void

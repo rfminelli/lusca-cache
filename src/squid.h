@@ -39,23 +39,30 @@
  * NetBSD is another.  So here we increase FD_SETSIZE to our
  * configure-discovered maximum *before* any system includes.
  */
+#define CHANGE_FD_SETSIZE 1
 
-/*
- * Linux (2.x only?) always defines FD_SETSIZE in <linux/time.h> so
- * we get in trouble if we try to increase it.  barf.
- */
+/* Cannot increase FD_SETSIZE on Linux */
+#if defined(_SQUID_LINUX_)
+#undef CHANGE_FD_SETSIZE
+#define CHANGE_FD_SETSIZE 0
+#endif
 
-#ifdef _SQUID_LINUX_
-	/* Cannot increase FD_SETSIZE on Linux */
-#elif _SQUID_FREEBSD_
-	/* Cannot increase FD_SETSIZE on FreeBSD */
-	/* Marian Durkovic <marian@svf.stuba.sk> */
-#else
-	/* Increase FD_SETSIZE if SQUID_MAXFD is bigger */
-#if SQUID_MAXFD > FD_SETSIZE
+/* Cannot increase FD_SETSIZE on FreeBSD before 2.2.0, causes select(2)
+ * to return EINVAL. */
+/* Marian Durkovic <marian@svf.stuba.sk> */
+/* Peter Wemm <peter@spinner.DIALix.COM> */
+#if defined(_SQUID_FREEBSD_)
+#include <osreldate.h>
+#if __FreeBSD_version < 220000
+#undef CHANGE_FD_SETSIZE
+#define CHANGE_FD_SETSIZE 0
+#endif
+#endif
+
+/* Increase FD_SETSIZE if SQUID_MAXFD is bigger */
+#if CHANGE_FD_SETSIZE && SQUID_MAXFD > DEFAULT_FD_SETSIZE
 #define FD_SETSIZE SQUID_MAXFD
 #endif
-#endif /* */
 
 #if HAVE_UNISTD_H
 #include <unistd.h>
@@ -174,10 +181,6 @@
 #include <syslog.h>
 #endif
 
-#if HAVE_SHADOW_H
-#include <shadow.h>
-#endif
-
 #if HAVE_MATH_H
 #include <math.h>
 #endif
@@ -261,7 +264,7 @@ typedef unsigned long u_num32;
 #include <regex.h>
 #endif
 
-typedef void (*SIH) (void *, int);	/* swap in */
+typedef void (*SIH) (int, void *);	/* swap in */
 typedef int (*QS) (const void *, const void *);
 
 #include "cache_cf.h"
@@ -272,7 +275,6 @@ typedef int (*QS) (const void *, const void *);
 #include "filemap.h"
 #include "hash.h"
 #include "proto.h"		/* must go before neighbors.h */
-#include "peer_select.h"	/* must go before neighbors.h */
 #include "neighbors.h"		/* must go before url.h */
 #include "url.h"
 #include "icp.h"
@@ -334,7 +336,6 @@ extern struct in_addr local_addr;	/* main.c */
 extern struct in_addr theOutICPAddr;	/* main.c */
 extern const char *const localhost;
 extern unsigned int inaddr_none;
-extern struct in_addr any_addr;	/* comm.c */
 extern struct in_addr no_addr;	/* comm.c */
 extern int opt_udp_hit_obj;	/* main.c */
 extern int opt_mem_pools;	/* main.c */
@@ -347,10 +348,11 @@ extern char ThisCache[];	/* main.c */
 
 #define  CONNECT_PORT        443
 
-extern void send_announce _PARAMS((void *unused));
+extern int objcacheStart _PARAMS((int, const char *, StoreEntry *));
+extern void start_announce _PARAMS((void *unused));
 extern int sslStart _PARAMS((int fd, const char *, request_t *, char *, int *sz));
 extern const char *storeToString _PARAMS((const StoreEntry *));
-extern int waisStart _PARAMS((method_t, char *, StoreEntry *));
+extern int waisStart _PARAMS((int, const char *, method_t, char *, StoreEntry *));
 extern void storeDirClean _PARAMS((void *unused));
 extern int passStart _PARAMS((int fd,
 	const char *url,

@@ -488,7 +488,7 @@ log_get_start(const cacheinfo * obj, StoreEntry * sentry)
 	storeComplete(sentry);
 	return;
     }
-    fd = file_open(obj->logfilename, NULL, O_RDONLY, NULL, NULL);
+    fd = file_open(obj->logfilename, NULL, O_RDONLY);
     if (fd < 0) {
 	debug(50, 0, "Cannot open logfile: %s: %s\n",
 	    obj->logfilename, xstrerror());
@@ -535,7 +535,7 @@ squid_get_start(const cacheinfo * obj, StoreEntry * sentry)
 
     data = xcalloc(1, sizeof(squid_read_data_t));
     data->sentry = sentry;
-    data->fd = file_open(ConfigFile, NULL, O_RDONLY, NULL, NULL);
+    data->fd = file_open(ConfigFile, NULL, O_RDONLY);
     storeAppendPrintf(sentry, open_bracket);
     file_walk(data->fd, (FILE_WALK_HD) squidReadEndHandler, (void *) data,
 	(FILE_WALK_LHD) squidReadHandler, (void *) data);
@@ -606,9 +606,9 @@ server_list(const cacheinfo * obj, StoreEntry * sentry)
     storeAppendPrintf(sentry, close_bracket);
 }
 
-#ifdef XMALLOC_STATISTICS
+#if XMALLOC_STATISTICS
 static void
-info_get_mallstat(int size, int number, StoreEntry * sentry)
+info_get_mallstat(int size, number, StoreEntry * sentry)
 {
     if (number > 0)
 	storeAppendPrintf(sentry, "{\t%d = %d}\n", size, number);
@@ -1078,10 +1078,7 @@ log_append(const cacheinfo * obj,
     const char *client = NULL;
     hier_code hier_code = HIER_NONE;
     const char *hier_host = dash_str;
-    int ns = 0;
-    int ne = 0;
-    int nr = 0;
-    int tt = 0;
+    int hier_timeout = 0;
 
     if (obj->logfile_status != LOG_ENABLE)
 	return;
@@ -1104,24 +1101,21 @@ log_append(const cacheinfo * obj,
     if (hierData) {
 	hier_code = hierData->code;
 	hier_host = hierData->host ? hierData->host : dash_str;
-	if (hierData->icp.start.tv_sec && hierData->icp.stop.tv_sec)
-	    tt = tvSubMsec(hierData->icp.start, hierData->icp.stop);
-	ns = hierData->icp.n_sent;
-	ne = hierData->icp.n_replies_expected;
-	nr = hierData->icp.n_recv;
+	hier_timeout = hierData->timeout;
     }
     if (Config.commonLogFormat)
-	sprintf(tmp, "%s %s - [%s] \"%s %s\" %s:%s %d\n",
+	sprintf(tmp, "%s %s - [%s] \"%s %s\" %s:%s%s %d\n",
 	    client,
 	    ident,
 	    mkhttpdlogtime(&squid_curtime),
 	    method,
 	    url,
 	    action,
+	    hier_timeout ? "TIMEOUT_" : null_string,
 	    hier_strings[hier_code],
 	    size);
     else
-	sprintf(tmp, "%9d.%03d %6d %s %s/%03d %d %s %s %s %s/%s %d/%d/%d/%d %s\n",
+	sprintf(tmp, "%9d.%03d %6d %s %s/%03d %d %s %s %s %s%s/%s %s\n",
 	    (int) current_time.tv_sec,
 	    (int) current_time.tv_usec / 1000,
 	    msec,
@@ -1132,9 +1126,9 @@ log_append(const cacheinfo * obj,
 	    method,
 	    url,
 	    ident,
+	    hier_timeout ? "TIMEOUT_" : null_string,
 	    hier_strings[hier_code],
 	    hier_host,
-	    ns,ne,nr,tt,
 	    content_type);
 #if LOG_FULL_HEADERS
     if (Config.logMimeHdrs) {
@@ -1167,7 +1161,7 @@ log_enable(cacheinfo * obj, StoreEntry * sentry)
 	obj->logfile_status = LOG_ENABLE;
 
 	/* open the logfile */
-	obj->logfile_fd = file_open(obj->logfilename, NULL, O_WRONLY | O_CREAT, NULL, NULL);
+	obj->logfile_fd = file_open(obj->logfilename, NULL, O_WRONLY | O_CREAT);
 	if (obj->logfile_fd == DISK_ERROR) {
 	    debug(18, 0, "Cannot open logfile: %s\n", obj->logfilename);
 	    obj->logfile_status = LOG_DISABLE;
@@ -1200,7 +1194,7 @@ log_clear(cacheinfo * obj, StoreEntry * sentry)
     unlink(obj->logfilename);
 
     /* reopen it anyway */
-    obj->logfile_fd = file_open(obj->logfilename, NULL, O_WRONLY | O_CREAT, NULL, NULL);
+    obj->logfile_fd = file_open(obj->logfilename, NULL, O_WRONLY | O_CREAT);
     if (obj->logfile_fd == DISK_ERROR) {
 	debug(18, 0, "Cannot open logfile: %s\n", obj->logfilename);
 	obj->logfile_status = LOG_DISABLE;
@@ -1291,9 +1285,9 @@ stat_init(cacheinfo ** object, const char *logfilename)
     obj->parameter_get = parameter_get;
     obj->server_list = server_list;
     if (logfilename) {
-	memset(obj->logfilename, '0', SQUID_MAXPATHLEN);
+	memset(obj->logfilename, '\0', SQUID_MAXPATHLEN);
 	xstrncpy(obj->logfilename, logfilename, SQUID_MAXPATHLEN);
-	obj->logfile_fd = file_open(obj->logfilename, NULL, O_WRONLY | O_CREAT, NULL, NULL);
+	obj->logfile_fd = file_open(obj->logfilename, NULL, O_WRONLY | O_CREAT);
 	if (obj->logfile_fd == DISK_ERROR) {
 	    debug(50, 0, "%s: %s\n", obj->logfilename, xstrerror());
 	    fatal("Cannot open logfile.");
@@ -1379,7 +1373,7 @@ stat_rotate_log(void)
     /* Close and reopen the log.  It may have been renamed "manually"
      * before HUP'ing us. */
     file_close(HTTPCacheInfo->logfile_fd);
-    HTTPCacheInfo->logfile_fd = file_open(fname, NULL, O_WRONLY | O_CREAT, NULL, NULL);
+    HTTPCacheInfo->logfile_fd = file_open(fname, NULL, O_WRONLY | O_CREAT);
     if (HTTPCacheInfo->logfile_fd == DISK_ERROR) {
 	debug(18, 0, "stat_rotate_log: Cannot open logfile: %s\n", fname);
 	HTTPCacheInfo->logfile_status = LOG_DISABLE;

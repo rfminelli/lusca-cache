@@ -33,8 +33,53 @@
 
 static void clientRedirectDone _PARAMS((void *data, char *result));
 static void icpHandleIMSReply _PARAMS((int fd, StoreEntry * entry, void *data));
+static void clientLookupDstIPDone _PARAMS((int fd, const ipcache_addrs *, void *data));
+static void clientLookupSrcFQDNDone _PARAMS((int fd, const char *fqdn, void *data));
+static void clientLookupDstFQDNDone _PARAMS((int fd, const char *fqdn, void *data));
 static int clientGetsOldEntry _PARAMS((StoreEntry * new, StoreEntry * old, request_t * request));
 static int checkAccelOnly _PARAMS((icpStateData * icpState));
+
+
+static void
+clientLookupDstIPDone(int fd, const ipcache_addrs * ia, void *data)
+{
+    icpStateData *icpState = data;
+    debug(33, 5, "clientLookupDstIPDone: FD %d, '%s'\n",
+	fd,
+	icpState->url);
+    icpState->aclChecklist->state[ACL_DST_IP] = ACL_LOOKUP_DONE;
+    if (ia) {
+	icpState->aclChecklist->dst_addr = ia->in_addrs[0];
+	debug(33, 5, "clientLookupDstIPDone: %s is %s\n",
+	    icpState->request->host,
+	    inet_ntoa(icpState->aclChecklist->dst_addr));
+    }
+    clientAccessCheck(icpState, icpState->aclHandler);
+}
+
+static void
+clientLookupSrcFQDNDone(int fd, const char *fqdn, void *data)
+{
+    icpStateData *icpState = data;
+    debug(33, 5, "clientLookupSrcFQDNDone: FD %d, '%s', FQDN %s\n",
+	fd,
+	icpState->url,
+	fqdn ? fqdn : "NULL");
+    icpState->aclChecklist->state[ACL_SRC_DOMAIN] = ACL_LOOKUP_DONE;
+    clientAccessCheck(icpState, icpState->aclHandler);
+}
+
+static void
+clientLookupDstFQDNDone(int fd, const char *fqdn, void *data)
+{
+    icpStateData *icpState = data;
+    debug(33, 5, "clientLookupDstFQDNDone: FD %d, '%s', FQDN %s\n",
+	fd,
+	icpState->url,
+	fqdn ? fqdn : "NULL");
+    icpState->aclChecklist->state[ACL_SRC_DOMAIN] = ACL_LOOKUP_DONE;
+    clientAccessCheck(icpState, icpState->aclHandler);
+}
 
 static void
 clientLookupIdentDone(void *data)
@@ -54,13 +99,17 @@ clientProxyAuthCheck(icpStateData * icpState)
     /* Check that the user is allowed to access via this proxy-cache
      * don't restrict if they're accessing a local domain or
      * an object of type cacheobj:// */
-    if (Config.proxyAuthFile == NULL)
+    if (Config.proxyAuth.File == NULL)
 	return 1;
     if (urlParseProtocol(icpState->url) == PROTO_CACHEOBJ)
 	return 1;
-    if (Config.proxyAuthIgnoreDomain != NULL)
-	if (matchDomainName(Config.proxyAuthIgnoreDomain, icpState->request->host))
+
+    if (Config.proxyAuth.IgnoreDomains) {
+	if (aclMatchRegex(Config.proxyAuth.IgnoreDomains, icpState->request->host)) {
+	    debug(33, 2, "clientProxyAuthCheck: host \"%s\" matched proxyAuthIgnoreDomains\n", icpState->request->host);
 	    return 1;
+	}
+    }
     proxy_user = proxyAuthenticate(icpState->request_hdr);
     xstrncpy(icpState->ident.ident, proxy_user, ICP_IDENT_SZ);
     debug(33, 6, "clientProxyAuthCheck: user = %s\n", icpState->ident.ident);
@@ -88,14 +137,34 @@ checkAccelOnly(icpStateData * icpState)
 }
 
 void
-clientAccessCheck(icpStateData * icpState, PF handler)
+clientAccessCheck(icpStateData * icpState, void (*handler) (icpStateData *, int))
 {
-    char *browser;
+    int answer = 1;
+    aclCheck_t *ch = NULL;
+    char *browser = NULL;
+    const ipcache_addrs *ia = NULL;
+
     if (Config.identLookup && icpState->ident.state == IDENT_NONE) {
 	icpState->aclHandler = handler;
 	identStart(-1, icpState, clientLookupIdentDone);
 	return;
     }
+    if (icpState->aclChecklist == NULL) {
+	icpState->aclChecklist = xcalloc(1, sizeof(aclCheck_t));
+	icpState->aclChecklist->src_addr = icpState->peer.sin_addr;
+	icpState->aclChecklist->request = requestLink(icpState->request);
+	browser = mime_get_header(icpState->request_hdr, "User-Agent");
+	if (browser != NULL) {
+	    xstrncpy(icpState->aclChecklist->browser, browser, BROWSERNAMELEN);
+	} else {
+	    icpState->aclChecklist->browser[0] = '\0';
+	}
+	xstrncpy(icpState->aclChecklist->ident,
+	    icpState->ident.ident,
+	    ICP_IDENT_SZ);
+    }
+    /* This so we can have SRC ACLs for cache_host_acl. */
+    icpState->request->client_addr = icpState->peer.sin_addr;
 #if USE_PROXY_AUTH
     if (clientProxyAuthCheck(icpState) == 0) {
 	char *wbuf = NULL;
@@ -112,24 +181,47 @@ clientAccessCheck(icpStateData * icpState, PF handler)
 	return;
     }
 #endif /* USE_PROXY_AUTH */
+
+    ch = icpState->aclChecklist;
+    icpState->aclHandler = handler;
     if (checkAccelOnly(icpState)) {
-        clientAccessCheckDone(0, icpState);
-	return;
+	answer = 0;
+    } else {
+	answer = aclCheck(HTTPAccessList, ch);
+	if (ch->state[ACL_DST_IP] == ACL_LOOKUP_NEED) {
+	    ch->state[ACL_DST_IP] = ACL_LOOKUP_PENDING;		/* first */
+	    ipcache_nbgethostbyname(icpState->request->host,
+		icpState->fd,
+		clientLookupDstIPDone,
+		icpState);
+	    return;
+	} else if (ch->state[ACL_SRC_DOMAIN] == ACL_LOOKUP_NEED) {
+	    ch->state[ACL_SRC_DOMAIN] = ACL_LOOKUP_PENDING;	/* first */
+	    fqdncache_nbgethostbyaddr(icpState->peer.sin_addr,
+		icpState->fd,
+		clientLookupSrcFQDNDone,
+		icpState);
+	    return;
+	} else if (ch->state[ACL_DST_DOMAIN] == ACL_LOOKUP_NEED) {
+	    ch->state[ACL_DST_DOMAIN] = ACL_LOOKUP_PENDING;	/* first */
+	    ia = ipcacheCheckNumeric(icpState->request->host);
+	    if (ia != NULL)
+		fqdncache_nbgethostbyaddr(ia->in_addrs[0],
+		    icpState->fd,
+		    clientLookupDstFQDNDone,
+		    icpState);
+	    return;
+	}
     }
-    browser = mime_get_header(icpState->request_hdr, "User-Agent"),
-    aclNBCheck(Config.accessList.HTTP,
-	icpState->request,
-	icpState->peer.sin_addr,
-	browser,
-	icpState->ident.ident,
-	handler,
-	icpState);
+    requestUnlink(icpState->aclChecklist->request);
+    safe_free(icpState->aclChecklist);
+    icpState->aclHandler = NULL;
+    handler(icpState, answer);
 }
 
 void
-clientAccessCheckDone(int answer, void *data)
+clientAccessCheckDone(icpStateData * icpState, int answer)
 {
-    icpStateData * icpState = data;
     int fd = icpState->fd;
     char *buf = NULL;
     char *redirectUrl = NULL;
@@ -139,7 +231,7 @@ clientAccessCheckDone(int answer, void *data)
 	redirectStart(fd, icpState, clientRedirectDone, icpState);
     } else {
 	debug(33, 5, "Access Denied: %s\n", icpState->url);
-	redirectUrl = aclGetDenyInfoUrl(&Config.denyInfoList, AclMatchedName);
+	redirectUrl = aclGetDenyInfoUrl(&DenyInfoList, AclMatchedName);
 	if (redirectUrl) {
 	    icpState->http_code = 302,
 		buf = access_denied_redirect(icpState->http_code,
@@ -240,11 +332,11 @@ proxyAuthenticate(const char *headers)
      */
 
     if ((squid_curtime - last_time) > CHECK_PROXY_FILE_TIME) {
-	debug(33, 5, "proxyAuthenticate: checking password file %s hasn't changed\n", Config.proxyAuthFile);
+	debug(33, 5, "proxyAuthenticate: checking password file %s hasn't changed\n", Config.proxyAuth.File);
 
-	if (stat(Config.proxyAuthFile, &buf) == 0) {
+	if (stat(Config.proxyAuth.File, &buf) == 0) {
 	    if (buf.st_mtime != change_time) {
-		debug(33, 0, "proxyAuthenticate: reloading changed proxy authentication password file %s \n", Config.proxyAuthFile);
+		debug(33, 0, "proxyAuthenticate: reloading changed proxy authentication password file %s \n", Config.proxyAuth.File);
 		change_time = buf.st_mtime;
 
 		if (validated != 0) {
@@ -257,14 +349,14 @@ proxyAuthenticate(const char *headers)
 		    /* First time around, 7921 should be big enough */
 		    if ((validated = hash_create(urlcmp, 7921, hash_string)) < 0) {
 			debug(33, 1, "ERK: can't create hash table. Turning auth off");
-			xfree(Config.proxyAuthFile);
-			Config.proxyAuthFile = NULL;
+			xfree(Config.proxyAuth.File);
+			Config.proxyAuth.File = NULL;
 			return (dash_str);
 		    }
 		}
 
 		passwords = xmalloc((size_t) buf.st_size + 2);
-		f = fopen(Config.proxyAuthFile, "r");
+		f = fopen(Config.proxyAuth.File, "r");
 		fread(passwords, (size_t) buf.st_size, 1, f);
 		*(passwords + buf.st_size) = '\0';
 		strcat(passwords, "\n");
@@ -286,9 +378,9 @@ proxyAuthenticate(const char *headers)
 		xfree(passwords);
 	    }
 	} else {
-	    debug(33, 1, "ERK: can't access proxy_auth file %s. Turning authentication off", Config.proxyAuthFile);
-	    xfree(Config.proxyAuthFile);
-	    Config.proxyAuthFile = NULL;
+	    debug(33, 1, "ERK: can't access proxy_auth file %s. Turning authentication off", Config.proxyAuth.File);
+	    xfree(Config.proxyAuth.File);
+	    Config.proxyAuth.File = NULL;
 	    return (dash_str);
 	}
     }
@@ -355,7 +447,7 @@ icpProcessExpired(int fd, void *data)
     icpState->out_offset = 0;
     /* Register with storage manager to receive updates when data comes in. */
     storeRegister(entry, fd, icpHandleIMSReply, (void *) icpState);
-    protoDispatch(fd, icpState->entry, icpState->request);
+    protoDispatch(fd, url, icpState->entry, icpState->request);
 }
 
 static int
@@ -428,13 +520,10 @@ icpHandleIMSReply(int fd, StoreEntry * entry, void *data)
 	}
 	icpState->log_type = LOG_TCP_REFRESH_HIT;
 	hbuf = get_free_8k_page();
-	if (storeClientCopy(oldentry, 0, 8191, hbuf, &len, fd) < 0) {
-	    debug(33, 1, "icpHandleIMSReply: Couldn't copy old entry\n");
-	} else {
-	    if (oldentry->mem_obj->request == NULL) {
-		oldentry->mem_obj->request = requestLink(mem->request);
-		unlink_request = 1;
-	    }
+	storeClientCopy(oldentry, 0, 8191, hbuf, &len, fd);
+	if (oldentry->mem_obj->request == NULL) {
+	    oldentry->mem_obj->request = requestLink(mem->request);
+	    unlink_request = 1;
 	}
 	storeUnregister(entry, fd);
 	storeUnlockObject(entry);

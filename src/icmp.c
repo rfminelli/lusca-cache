@@ -81,7 +81,7 @@ icmpRecv(int unused1, void *unused2)
 	COMM_SELECT_READ,
 	(PF) icmpRecv,
 	(void *) -1, 0);
-    memset((char *) &preply, '\0', sizeof(pingerReplyData));
+    memset(&preply, '\0', sizeof(pingerReplyData));
     n = recv(icmp_sock,
 	(char *) &preply,
 	sizeof(pingerReplyData),
@@ -148,7 +148,7 @@ icmpSend(int fd, icmpQueueData * queue)
 	    queue->len,
 	    0);
 	if (x < 0) {
-	    if (errno == EWOULDBLOCK || errno == EAGAIN || errno == EINTR)
+	    if (errno == EWOULDBLOCK || errno == EAGAIN)
 		break;		/* don't de-queue */
 	    debug(50, 0, "icmpSend: send: %s\n", xstrerror());
 	    if (errno == ECONNREFUSED) {
@@ -316,6 +316,8 @@ icmpClose(void)
 {
 #if USE_ICMP
     icmpQueueData *queue;
+    if (icmp_sock < 0)
+	return;
     debug(29, 0, "Closing ICMP socket on FD %d\n", icmp_sock);
     comm_close(icmp_sock);
     commSetSelect(icmp_sock, COMM_SELECT_READ, NULL, NULL, 0);

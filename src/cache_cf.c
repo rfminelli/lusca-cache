@@ -111,8 +111,8 @@ struct SquidConfig Config;
 #define DefaultMemHighWaterMark 90	/* 90% */
 #define DefaultMemLowWaterMark  75	/* 75% */
 #define DefaultSwapMaxSize	(100 << 10)	/* 100 MB (100*1024 kbytes) */
-#define DefaultSwapHighWaterMark 90	/* 90% */
-#define DefaultSwapLowWaterMark  75	/* 75% */
+#define DefaultSwapHighWaterMark 95	/* 95% */
+#define DefaultSwapLowWaterMark  90	/* 90% */
 #define DefaultNetdbHigh	1000	/* counts, not percents */
 #define DefaultNetdbLow		 900
 
@@ -129,12 +129,15 @@ struct SquidConfig Config;
 #define DefaultConnectTimeout	(2 * 60)	/* 2 min */
 #define DefaultCleanRate	-1	/* disabled */
 #define DefaultDnsChildren	5	/* 5 processes */
+#define DefaultOptionsResDefnames 0	/* default off */
+#define DefaultOptionsAnonymizer  0	/* default off */
 #define DefaultRedirectChildren	5	/* 5 processes */
 #define DefaultMaxRequestSize	(100 << 10)	/* 100Kb */
 
 #define DefaultHttpPortNum	CACHE_HTTP_PORT
 #define DefaultIcpPortNum	CACHE_ICP_PORT
 
+#define DefaultLogLogFqdn      0	/* default off */
 #define DefaultCacheLogFile	DEFAULT_CACHE_LOG
 #define DefaultAccessLogFile	DEFAULT_ACCESS_LOG
 #define DefaultUseragentLogFile	(char *)NULL	/* default NONE */
@@ -142,7 +145,6 @@ struct SquidConfig Config;
 #define DefaultSwapLogFile	(char *)NULL	/* default swappath(0) */
 #if USE_PROXY_AUTH
 #define DefaultProxyAuthFile    (char *)NULL	/* default NONE */
-#define DefaultProxyAuthIgnoreDomain (char *)NULL	/* default NONE */
 #endif /* USE_PROXY_AUTH */
 #define DefaultLogRotateNumber  10
 #define DefaultAdminEmail	"webmaster"
@@ -187,8 +189,8 @@ struct SquidConfig Config;
 #define DefaultUdpIncomingAddr	INADDR_ANY
 #define DefaultUdpOutgoingAddr	inaddr_none
 #define DefaultClientNetmask    0xFFFFFFFFul
-#define DefaultSslProxyPort	0
-#define DefaultSslProxyHost	(char *)NULL
+#define DefaultPassProxy	NULL
+#define DefaultSslProxy		NULL
 #define DefaultIpcacheSize	1024
 #define DefaultIpcacheLow	90
 #define DefaultIpcacheHigh	95
@@ -200,6 +202,7 @@ struct SquidConfig Config;
 #define DefaultLevelOneDirs	16
 #define DefaultLevelTwoDirs	256
 #define DefaultOptionsLogUdp	1	/* on */
+#define DefaultOptionsEnablePurge 0	/* default off */
 
 int httpd_accel_mode = 0;	/* for fast access */
 const char *DefaultSwapDir = DEFAULT_SWAP_DIR;
@@ -214,6 +217,8 @@ int config_lineno = 0;
 
 static char fatal_str[BUFSIZ];
 static char *safe_xstrdup _PARAMS((const char *p));
+static int ip_acl_match _PARAMS((struct in_addr, const ip_acl *));
+static void addToIPACL _PARAMS((ip_acl **, const char *, ip_access_type));
 static void parseOnOff _PARAMS((int *));
 static void parseIntegerValue _PARAMS((int *));
 static void parseString _PARAMS((char **));
@@ -239,7 +244,10 @@ static void parseHostDomainLine _PARAMS((void));
 static void parseHostDomainTypeLine _PARAMS((void));
 static void parseHttpPortLine _PARAMS((void));
 static void parseHttpdAccelLine _PARAMS((void));
+static void parseIPLine _PARAMS((ip_acl ** list));
 static void parseIcpPortLine _PARAMS((void));
+static void parseLocalDomainFile _PARAMS((const char *fname));
+static void parseLocalDomainLine _PARAMS((void));
 static void parseMcastGroupLine _PARAMS((void));
 static void parseMemLine _PARAMS((void));
 static void parseMgrLine _PARAMS((void));
@@ -249,6 +257,7 @@ static void parseRefreshPattern _PARAMS((int icase));
 static void parseVisibleHostnameLine _PARAMS((void));
 static void parseWAISRelayLine _PARAMS((void));
 static void parseMinutesLine _PARAMS((int *));
+static void ip_acl_destroy _PARAMS((ip_acl **));
 static void parseCachemgrPasswd _PARAMS((void));
 static void parsePathname _PARAMS((char **));
 static void parseProxyLine _PARAMS((peer **));
@@ -260,6 +269,140 @@ self_destruct(void)
     sprintf(fatal_str, "Bungled %s line %d: %s",
 	cfg_filename, config_lineno, config_input_line);
     fatal(fatal_str);
+}
+
+static int
+ip_acl_match(struct in_addr c, const ip_acl * a)
+{
+    static struct in_addr h;
+
+    h.s_addr = c.s_addr & a->mask.s_addr;
+    if (h.s_addr == a->addr.s_addr)
+	return 1;
+    else
+	return 0;
+}
+
+static void
+ip_acl_destroy(ip_acl ** a)
+{
+    ip_acl *b;
+    ip_acl *n;
+    for (b = *a; b; b = n) {
+	n = b->next;
+	safe_free(b);
+    }
+    *a = NULL;
+}
+
+ip_access_type
+ip_access_check(struct in_addr address, const ip_acl * list)
+{
+    static int init = 0;
+    static struct in_addr localhost;
+    const ip_acl *p = NULL;
+    struct in_addr naddr;	/* network byte-order IP addr */
+
+    if (!list)
+	return IP_ALLOW;
+
+    if (!init) {
+	memset(&localhost, '\0', sizeof(struct in_addr));
+	localhost.s_addr = inet_addr("127.0.0.1");
+	init = 1;
+    }
+    naddr.s_addr = address.s_addr;
+    if (naddr.s_addr == localhost.s_addr)
+	return IP_ALLOW;
+
+    debug(3, 5, "ip_access_check: using %s\n", inet_ntoa(naddr));
+
+    for (p = list; p; p = p->next) {
+	if (ip_acl_match(naddr, p))
+	    return p->access;
+    }
+    return IP_ALLOW;
+}
+
+
+static void
+addToIPACL(ip_acl ** list, const char *ip_str, ip_access_type access)
+{
+    ip_acl *p, *q;
+    int a1, a2, a3, a4;
+    int m1, m2, m3, m4;
+    struct in_addr lmask;
+    int inv = 0;
+    int c;
+
+    if (!ip_str) {
+	return;
+    }
+    if (!(*list)) {
+	/* empty list */
+	*list = xcalloc(1, sizeof(ip_acl));
+	(*list)->next = NULL;
+	q = *list;
+    } else {
+	/* find end of list */
+	p = *list;
+	while (p->next)
+	    p = p->next;
+	q = xcalloc(1, sizeof(ip_acl));
+	q->next = NULL;
+	p->next = q;
+    }
+
+    /* decode ip address */
+    if (*ip_str == '!') {
+	ip_str++;
+	inv = 1;
+    }
+    if (!strcasecmp(ip_str, "all")) {
+	a1 = a2 = a3 = a4 = 0;
+	lmask.s_addr = 0;
+    } else {
+	a1 = a2 = a3 = a4 = 0;
+	c = sscanf(ip_str, "%d.%d.%d.%d/%d.%d.%d.%d", &a1, &a2, &a3, &a4,
+	    &m1, &m2, &m3, &m4);
+
+	switch (c) {
+	case 4:
+	    if (a1 == 0 && a2 == 0 && a3 == 0 && a4 == 0)	/* world   */
+		lmask.s_addr = 0x00000000ul;
+	    else if (a2 == 0 && a3 == 0 && a4 == 0)	/* class A */
+		lmask.s_addr = htonl(0xff000000ul);
+	    else if (a3 == 0 && a4 == 0)	/* class B */
+		lmask.s_addr = htonl(0xffff0000ul);
+	    else if (a4 == 0)	/* class C */
+		lmask.s_addr = htonl(0xffffff00ul);
+	    else
+		lmask.s_addr = 0xfffffffful;
+	    break;
+
+	case 5:
+	    if (m1 < 0 || m1 > 32) {
+		debug(3, 0, "addToIPACL: Ignoring invalid IP acl line '%s'\n",
+		    ip_str);
+		return;
+	    }
+	    lmask.s_addr = m1 ? htonl(0xfffffffful << (32 - m1)) : 0;
+	    break;
+
+	case 8:
+	    lmask.s_addr = htonl(m1 * 0x1000000 + m2 * 0x10000 + m3 * 0x100 + m4);
+	    break;
+
+	default:
+	    debug(3, 0, "addToIPACL: Ignoring invalid IP acl line '%s'\n",
+		ip_str);
+	    return;
+	}
+    }
+
+    q->access = inv ? (access == IP_ALLOW ? IP_DENY : IP_ALLOW) : access;
+    q->addr.s_addr = htonl(a1 * 0x1000000 + a2 * 0x10000 + a3 * 0x100 + a4);
+    q->mask.s_addr = lmask.s_addr;
 }
 
 void
@@ -513,11 +656,11 @@ parseProxyAuthLine(void)
     token = strtok(NULL, w_space);
     if (token == NULL)
 	self_destruct();
-    safe_free(Config.proxyAuthFile);
-    safe_free(Config.proxyAuthIgnoreDomain);
-    Config.proxyAuthFile = xstrdup(token);
-    if ((token = strtok(NULL, w_space)))
-	Config.proxyAuthIgnoreDomain = xstrdup(token);
+    safe_free(Config.proxyAuth.File);
+    aclDestroyRegexList(Config.proxyAuth.IgnoreDomains);
+    Config.proxyAuth.IgnoreDomains = NULL;
+    Config.proxyAuth.File = xstrdup(token);
+    aclParseRegexList(&Config.proxyAuth.IgnoreDomains, 1);
 }
 #endif /* USE_PROXY_AUTH */
 
@@ -617,6 +760,15 @@ parseWAISRelayLine(void)
 }
 
 static void
+parseIPLine(ip_acl ** list)
+{
+    char *token;
+    while ((token = strtok(NULL, w_space))) {
+	addToIPACL(list, token, IP_DENY);
+    }
+}
+
+static void
 parseWordlist(wordlist ** list)
 {
     char *token;
@@ -651,6 +803,46 @@ parseAddressLine(struct in_addr *addr)
 	*addr = inaddrFromHostent(hp);
     else
 	self_destruct();
+}
+
+static void
+parseLocalDomainFile(const char *fname)
+{
+    LOCAL_ARRAY(char, tmp_line, BUFSIZ);
+    FILE *fp = NULL;
+    char *t = NULL;
+    if ((fp = fopen(fname, "r")) == NULL) {
+	debug(50, 1, "parseLocalDomainFile: %s: %s\n", fname, xstrerror());
+	return;
+    }
+    memset(tmp_line, '\0', BUFSIZ);
+    while (fgets(tmp_line, BUFSIZ, fp)) {
+	if (tmp_line[0] == '#')
+	    continue;
+	if (tmp_line[0] == '\0')
+	    continue;
+	if (tmp_line[0] == '\n')
+	    continue;
+	for (t = strtok(tmp_line, w_space); t; t = strtok(NULL, w_space)) {
+	    debug(3, 1, "parseLocalDomainFileLine: adding %s\n", t);
+	    wordlistAdd(&Config.local_domain_list, t);
+	}
+    }
+    fclose(fp);
+}
+
+static void
+parseLocalDomainLine(void)
+{
+    char *token = NULL;
+    struct stat sb;
+    while ((token = strtok(NULL, w_space))) {
+	if (stat(token, &sb) < 0) {
+	    wordlistAdd(&Config.local_domain_list, token);
+	} else {
+	    parseLocalDomainFile(token);
+	}
+    }
 }
 
 static void
@@ -862,12 +1054,13 @@ parseConfigFile(const char *file_name)
     configFreeMemory();
     configSetFactoryDefaults();
     aclDestroyAcls();
-    aclDestroyDenyInfoList(&Config.denyInfoList);
-    aclDestroyAccessList(&Config.accessList.HTTP);
-    aclDestroyAccessList(&Config.accessList.ICP);
-    aclDestroyAccessList(&Config.accessList.MISS);
-    aclDestroyAccessList(&Config.accessList.NeverDirect);
-    aclDestroyAccessList(&Config.accessList.AlwaysDirect);
+    aclDestroyDenyInfoList(&DenyInfoList);
+    aclDestroyAccessList(&HTTPAccessList);
+    aclDestroyAccessList(&MISSAccessList);
+    aclDestroyAccessList(&ICPAccessList);
+#if DELAY_HACK
+    aclDestroyAccessList(&DelayAccessList);
+#endif
     aclDestroyRegexList(Config.cache_stop_relist);
     Config.cache_stop_relist = NULL;
 
@@ -969,18 +1162,16 @@ parseConfigFile(const char *file_name)
 	    aclParseAclLine();
 
 	else if (!strcmp(token, "deny_info"))
-	    aclParseDenyInfoLine(&Config.denyInfoList);
+	    aclParseDenyInfoLine(&DenyInfoList);
 
 	else if (!strcmp(token, "http_access"))
-	    aclParseAccessLine(&Config.accessList.HTTP);
-	else if (!strcmp(token, "icp_access"))
-	    aclParseAccessLine(&Config.accessList.ICP);
+	    aclParseAccessLine(&HTTPAccessList);
+
 	else if (!strcmp(token, "miss_access"))
-	    aclParseAccessLine(&Config.accessList.MISS);
-	else if (!strcmp(token, "never_direct"))
-	    aclParseAccessLine(&Config.accessList.NeverDirect);
-	else if (!strcmp(token, "always_direct"))
-	    aclParseAccessLine(&Config.accessList.AlwaysDirect);
+	    aclParseAccessLine(&MISSAccessList);
+
+	else if (!strcmp(token, "icp_access"))
+	    aclParseAccessLine(&ICPAccessList);
 
 	else if (!strcmp(token, "hierarchy_stoplist"))
 	    parseWordlist(&Config.hierarchy_stoplist);
@@ -991,6 +1182,11 @@ parseConfigFile(const char *file_name)
 	    aclParseRegexList(&Config.cache_stop_relist, 0);
 	else if (!strcmp(token, "cache_stoplist_pattern/i"))
 	    aclParseRegexList(&Config.cache_stop_relist, 1);
+
+#if DELAY_HACK
+	else if (!strcmp(token, "delay_access"))
+	    aclParseAccessLine(&DelayAccessList);
+#endif
 
 	else if (!strcmp(token, "refresh_pattern"))
 	    parseRefreshPattern(0);
@@ -1051,6 +1247,8 @@ parseConfigFile(const char *file_name)
 #if USE_PROXY_AUTH
 	else if (!strcmp(token, "proxy_auth"))
 	    parseProxyAuthLine();
+	else if (!strcmp(token, "proxy_auth_ignore"))
+	    aclParseRegexList(&Config.proxyAuth.IgnoreDomains, 1);
 #endif /* USE_PROXY_AUTH */
 
 	else if (!strcmp(token, "source_ping"))
@@ -1062,8 +1260,8 @@ parseConfigFile(const char *file_name)
 #if LOG_FULL_HEADERS
 	else if (!strcmp(token, "log_mime_hdrs"))
 	    parseOnOff(&Config.logMimeHdrs);
-#endif /* LOG_FULL_HEADERS */
 
+#endif /* LOG_FULL_HEADERS */
 	else if (!strcmp(token, "ident_lookup"))
 	    parseOnOff(&Config.identLookup);
 
@@ -1072,6 +1270,15 @@ parseConfigFile(const char *file_name)
 
 	else if (!strcmp(token, "wais_relay"))
 	    parseWAISRelayLine();
+
+	else if (!strcmp(token, "local_ip"))
+	    parseIPLine(&Config.local_ip_list);
+
+	else if (!strcmp(token, "firewall_ip"))
+	    parseIPLine(&Config.firewall_ip_list);
+
+	else if (!strcmp(token, "local_domain"))
+	    parseLocalDomainLine();
 
 	else if (!strcmp(token, "mcast_groups"))
 	    parseMcastGroupLine();
@@ -1108,6 +1315,9 @@ parseConfigFile(const char *file_name)
 
 	else if (!strcmp(token, "icp_port") || !strcmp(token, "udp_port"))
 	    parseIcpPortLine();
+
+	else if (!strcmp(token, "inside_firewall"))
+	    parseWordlist(&Config.inside_firewall_list);
 
 	else if (!strcmp(token, "dns_testnames"))
 	    parseWordlist(&Config.dns_testname_list);
@@ -1274,8 +1484,9 @@ configFreeMemory(void)
     safe_free(Config.visibleHostname);
     safe_free(Config.ftpUser);
 #if USE_PROXY_AUTH
-    safe_free(Config.proxyAuthFile);
-    safe_free(Config.proxyAuthIgnoreDomain);
+    safe_free(Config.proxyAuth.File);
+    aclDestroyRegexList(Config.proxyAuth.IgnoreDomains);
+    Config.proxyAuth.IgnoreDomains = NULL;
 #endif /* USE_PROXY_AUTH */
     safe_free(Config.Announce.host);
     safe_free(Config.Announce.file);
@@ -1284,9 +1495,13 @@ configFreeMemory(void)
     peerDestroy(Config.passProxy);
     wordlistDestroy(&Config.cache_dirs);
     wordlistDestroy(&Config.hierarchy_stoplist);
+    wordlistDestroy(&Config.local_domain_list);
     wordlistDestroy(&Config.mcast_group_list);
+    wordlistDestroy(&Config.inside_firewall_list);
     wordlistDestroy(&Config.dns_testname_list);
     wordlistDestroy(&Config.cache_stoplist);
+    ip_acl_destroy(&Config.local_ip_list);
+    ip_acl_destroy(&Config.firewall_ip_list);
     objcachePasswdDestroy(&Config.passwd_list);
     refreshFreeMemory();
 }
@@ -1295,7 +1510,7 @@ configFreeMemory(void)
 static void
 configSetFactoryDefaults(void)
 {
-    memset((char *) &Config, '\0', sizeof(Config));
+    memset(&Config, '\0', sizeof(Config));
     Config.Mem.maxSize = DefaultMemMaxSize;
     Config.Mem.highWaterMark = DefaultMemHighWaterMark;
     Config.Mem.lowWaterMark = DefaultMemLowWaterMark;
@@ -1328,6 +1543,7 @@ configSetFactoryDefaults(void)
 #if LOG_FULL_HEADERS
     Config.logMimeHdrs = DefaultLogMimeHdrs;
 #endif /* LOG_FULL_HEADERS */
+    Config.identLookup = DefaultIdentLookup;
     Config.debugOptions = safe_xstrdup(DefaultDebugOptions);
     Config.neighborTimeout = DefaultNeighborTimeout;
     Config.stallDelay = DefaultStallDelay;
@@ -1337,9 +1553,9 @@ configSetFactoryDefaults(void)
     Config.effectiveGroup = safe_xstrdup(DefaultEffectiveGroup);
     Config.appendDomain = safe_xstrdup(DefaultAppendDomain);
     Config.errHtmlText = safe_xstrdup(DefaultErrHtmlText);
-
     Config.Port.http = DefaultHttpPortNum;
     Config.Port.icp = DefaultIcpPortNum;
+    Config.Log.log_fqdn = DefaultLogLogFqdn;
     Config.Log.log = safe_xstrdup(DefaultCacheLogFile);
     Config.Log.access = safe_xstrdup(DefaultAccessLogFile);
     Config.Log.store = safe_xstrdup(DefaultStoreLogFile);
@@ -1360,8 +1576,8 @@ configSetFactoryDefaults(void)
     Config.pidFilename = safe_xstrdup(DefaultPidFilename);
     Config.visibleHostname = safe_xstrdup(DefaultVisibleHostname);
 #if USE_PROXY_AUTH
-    Config.proxyAuthFile = safe_xstrdup(DefaultProxyAuthFile);
-    Config.proxyAuthIgnoreDomain = safe_xstrdup(DefaultProxyAuthIgnoreDomain);
+    Config.proxyAuth.File = safe_xstrdup(DefaultProxyAuthFile);
+/*    Config.proxyAuth.IgnoreDomains = safe_xstrdup(DefaultproxyAuthIgnoreDomains); */
 #endif /* USE_PROXY_AUTH */
     Config.ftpUser = safe_xstrdup(DefaultFtpUser);
     Config.Announce.host = safe_xstrdup(DefaultAnnounceHost);
@@ -1376,6 +1592,8 @@ configSetFactoryDefaults(void)
     Config.Addrs.udp_outgoing.s_addr = DefaultUdpOutgoingAddr;
     Config.Addrs.udp_incoming.s_addr = DefaultUdpIncomingAddr;
     Config.Addrs.client_netmask.s_addr = DefaultClientNetmask;
+    Config.passProxy = DefaultPassProxy;
+    Config.sslProxy = DefaultSslProxy;
     Config.ipcache.size = DefaultIpcacheSize;
     Config.ipcache.low = DefaultIpcacheLow;
     Config.ipcache.high = DefaultIpcacheHigh;
@@ -1386,6 +1604,9 @@ configSetFactoryDefaults(void)
     Config.levelOneDirs = DefaultLevelOneDirs;
     Config.levelTwoDirs = DefaultLevelTwoDirs;
     Config.Options.log_udp = DefaultOptionsLogUdp;
+    Config.Options.res_defnames = DefaultOptionsResDefnames;
+    Config.Options.anonymizer = DefaultOptionsAnonymizer;
+    Config.Options.enable_purge = DefaultOptionsEnablePurge;
 }
 
 static void

@@ -156,7 +156,6 @@ typedef struct gopher_ds {
     int cso_recno;
     int len;
     char *buf;			/* pts to a 4k page */
-    ConnectStateData connectState;
 } GopherStateData;
 
 static int gopherStateFree _PARAMS((int fd, GopherStateData *));
@@ -177,7 +176,6 @@ static void gopherSendComplete(int fd,
     int size,
     int errflag,
     void *data);
-static void gopherStartComplete _PARAMS((void *, int));
 static void gopherSendRequest _PARAMS((int fd, GopherStateData *));
 static GopherStateData *CreateGopherStateData _PARAMS((void));
 static void gopherConnectDone _PARAMS((int fd, int status, void *data));
@@ -772,7 +770,7 @@ gopherReadReply(int fd, GopherStateData * data)
     }
     if (len < 0) {
 	debug(50, 1, "gopherReadReply: error reading: %s\n", xstrerror());
-	if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+	if (errno == EAGAIN || errno == EWOULDBLOCK) {
 	    /* reinstall handlers */
 	    /* XXX This may loop forever */
 	    commSetSelect(fd,
@@ -937,29 +935,22 @@ gopherSendRequest(int fd, GopherStateData * data)
 }
 
 int
-gopherStart(StoreEntry * entry)
+gopherStart(int unusedfd, const char *url, StoreEntry * entry)
 {
-    storeLockObject(entry, gopherStartComplete, entry);
-    return COMM_OK;
-}
-
-
-static void
-gopherStartComplete(void *datap, int status)
-{
-    StoreEntry *entry = datap;
-    char *url = entry->url;
-    GopherStateData *data = CreateGopherStateData();
+    /* Create state structure. */
     int sock;
-    data->entry = entry;
+    GopherStateData *data = CreateGopherStateData();
+
+    storeLockObject(data->entry = entry, NULL, NULL);
+
     debug(10, 3, "gopherStart: url: %s\n", url);
+
     /* Parse url. */
     if (gopher_url_parser(url, data->host, &data->port,
 	    &data->type_id, data->request)) {
 	squid_error_entry(entry, ERR_INVALID_URL, NULL);
 	gopherStateFree(-1, data);
-	xfree(url);
-	return;
+	return COMM_ERROR;
     }
     /* Create socket. */
     sock = comm_open(SOCK_STREAM,
@@ -972,12 +963,12 @@ gopherStartComplete(void *datap, int status)
 	debug(10, 4, "gopherStart: Failed because we're out of sockets.\n");
 	squid_error_entry(entry, ERR_NO_FDS, xstrerror());
 	gopherStateFree(-1, data);
-	xfree(url);
-	return;
+	return COMM_ERROR;
     }
     comm_add_close_handler(sock,
 	(PF) gopherStateFree,
 	(void *) data);
+
     /* check if IP is already in cache. It must be. 
      * It should be done before this route is called. 
      * Otherwise, we cannot check return code for connect. */
@@ -985,8 +976,7 @@ gopherStartComplete(void *datap, int status)
 	debug(10, 4, "gopherStart: Called without IP entry in ipcache. OR lookup failed.\n");
 	squid_error_entry(entry, ERR_DNS_FAIL, dns_error_message);
 	comm_close(sock);
-	xfree(url);
-	return;
+	return COMM_ERROR;
     }
     if (((data->type_id == GOPHER_INDEX) || (data->type_id == GOPHER_CSO))
 	&& (strchr(data->request, '?') == NULL)
@@ -994,6 +984,7 @@ gopherStartComplete(void *datap, int status)
 	/* Index URL without query word */
 	/* We have to generate search page back to client. No need for connection */
 	gopherMimeCreate(data);
+
 	if (data->type_id == GOPHER_INDEX) {
 	    data->conversion = HTML_INDEX_PAGE;
 	} else {
@@ -1006,17 +997,14 @@ gopherStartComplete(void *datap, int status)
 	gopherToHTML(data, (char *) NULL, 0);
 	storeComplete(entry);
 	comm_close(sock);
-	xfree(url);
-	return;
+	return COMM_OK;
     }
-    data->connectState.fd = sock;
-    data->connectState.host = data->host;
-    data->connectState.port = data->port;
-    data->connectState.handler = gopherConnectDone;
-    data->connectState.data = data;
-    comm_nbconnect(sock, &data->connectState);
-    xfree(url);
-    return;
+    commConnectStart(sock,
+	data->host,
+	data->port,
+	gopherConnectDone,
+	data);
+    return COMM_OK;
 }
 
 static void
@@ -1039,8 +1027,6 @@ gopherConnectDone(int fd, int status, void *data)
 	COMM_SELECT_WRITE,
 	(PF) gopherSendRequest,
 	(void *) gopherState, 0);
-    if (vizSock > -1)
-	vizHackSendPkt(&gopherState->connectState.S, 2);
 }
 
 

@@ -526,13 +526,6 @@ fqdncache_dnsHandleRead(int fd, void *data)
     debug(35, 5, "fqdncache_dnsHandleRead: Result from DNS ID %d (%d bytes)\n",
 	dnsData->id, len);
     if (len <= 0) {
-	if (len < 0 && (errno == EINTR || errno == EWOULDBLOCK || errno == EAGAIN)) {
-	    commSetSelect(fd,
-		COMM_SELECT_READ,
-		fqdncache_dnsHandleRead,
-		dnsData, 0);
-	    return;
-	}
 	debug(35, dnsData->flags & DNS_FLAG_CLOSING ? 5 : 1,
 	    "FD %d: Connection from DNSSERVER #%d is closed, disabling\n",
 	    fd, dnsData->id);
@@ -747,6 +740,7 @@ fqdncache_gethostbyaddr(struct in_addr addr, int flags)
     fqdncache_entry *f = NULL;
     const struct hostent *hp = NULL;
     unsigned int ip;
+    static char *static_name = NULL;
 
     if (!name)
 	fatal_dump("fqdncache_gethostbyaddr: NULL name");
@@ -775,6 +769,11 @@ fqdncache_gethostbyaddr(struct in_addr addr, int flags)
 	ip = inet_addr(name);
 	hp = gethostbyaddr((char *) &ip, 4, AF_INET);
 	if (hp && hp->h_name && (hp->h_name[0] != '\0') && fqdn_table) {
+	    if (f->status == FQDN_PENDING || f->status == FQDN_DISPATCHED) {
+		xfree(static_name);
+		static_name = xstrdup(hp->h_name);
+		return static_name;
+	    }
 	    /* good address, cached */
 	    fqdncache_add(name, fqdncache_create(), hp, 1);
 	    f = fqdncache_get(name);
