@@ -592,7 +592,7 @@ httpBuildRequestHeader(request_t * request,
      *  the server and fetch only the requested content) 
      */
     we_do_ranges =
-	orig_request->range && orig_request->flags.cachable && !httpHdrRangeWillBeComplex(orig_request->range);
+	orig_request->range && orig_request->flags.cachable && !httpHdrRangeWillBeComplex(orig_request->range) && (Config.rangeOffsetLimit == -1 || httpHdrRangeFirstOffset(orig_request->range) <= Config.rangeOffsetLimit);
     debug(11, 8) ("httpBuildRequestHeader: range specs: %p, cachable: %d; we_do_ranges: %d\n",
 	orig_request->range, orig_request->flags.cachable, we_do_ranges);
 
@@ -610,7 +610,7 @@ httpBuildRequestHeader(request_t * request,
 	    break;
 	case HDR_HOST:
 	    /* Don't use client's Host: header for redirected requests */
-	    if (!request->flags.redirected)
+	    if (!request->flags.redirected || !Config.onoff.redir_rewrites_host)
 		httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 	    break;
 	case HDR_IF_MODIFIED_SINCE:

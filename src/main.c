@@ -714,7 +714,6 @@ SquidShutdown(void *unused)
 #if PURIFY || XMALLOC_TRACE
     configFreeMemory();
     storeFreeMemory();
-    dnsFreeMemory();
     /*stmemFreeMemory(); */
     netdbFreeMemory();
     ipcacheFreeMemory();
@@ -723,7 +722,8 @@ SquidShutdown(void *unused)
     clientdbFreeMemory();
     httpHeaderCleanModule();
     statFreeMemory();
-    eventFreeMemory();
+    mimeFreeMemory();
+    errorFreeMemory();
 #endif
     memClean();
 #if !XMALLOC_TRACE

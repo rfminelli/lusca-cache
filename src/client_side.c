@@ -80,6 +80,7 @@ static int checkAccelOnly(clientHttpRequest *);
 static int clientOnlyIfCached(clientHttpRequest * http);
 static STCB clientSendMoreData;
 static STCB clientCacheHit;
+static void clientSetKeepaliveFlag(clientHttpRequest *);
 static void clientInterpretRequestHeaders(clientHttpRequest *);
 static void clientProcessRequest(clientHttpRequest *);
 static void clientProcessExpired(void *data);
@@ -652,6 +653,7 @@ httpRequestFree(void *data)
 	    packerToMemInit(&p, &mb);
 	    httpHeaderPackInto(&request->header, &p);
 	    http->al.http.method = request->method;
+	    http->al.http.version = request->http_ver;
 	    http->al.headers.request = xstrdup(mb.buf);
 	    http->al.hier = request->hier;
 	    packerClean(&p);
@@ -762,15 +764,12 @@ clientInterpretRequestHeaders(clientHttpRequest * http)
 	request->flags.auth = 1;
     if (request->login[0] != '\0')
 	request->flags.auth = 1;
-    if (httpMsgIsPersistent(request->http_ver, req_hdr))
-	request->flags.proxy_keepalive = 1;
     if (httpHeaderHas(req_hdr, HDR_VIA)) {
 	String s = httpHeaderGetList(req_hdr, HDR_VIA);
 	/* ThisCache cannot be a member of Via header, "1.0 ThisCache" can */
 	if (strListIsSubstr(&s, ThisCache, ',')) {
-	    debug(33, 1) ("WARNING: Forwarding loop detected for '%s'\n",
-		http->uri);
-	    debug(33, 1) ("--> %s\n", strBuf(s));
+	    debugObj(33, 1, "WARNING: Forwarding loop detected for:\n",
+		request, (ObjPackMethod) & httpRequestPack);
 	    request->flags.loopdetect = 1;
 	}
 #if FORW_VIA_DB
@@ -810,6 +809,28 @@ clientInterpretRequestHeaders(clientHttpRequest * http)
 	request->flags.cachable ? "SET" : "NOT SET");
     debug(33, 5) ("clientInterpretRequestHeaders: REQ_HIERARCHICAL = %s\n",
 	request->flags.hierarchical ? "SET" : "NOT SET");
+}
+
+/*
+ * clientSetKeepaliveFlag() sets request->flags.proxy_keepalive.
+ * This is the client-side persistent connection flag.  We need
+ * to set this relatively early in the request processing
+ * to handle hacks for broken servers and clients.
+ */
+static void
+clientSetKeepaliveFlag(clientHttpRequest * http)
+{
+    request_t *request = http->request;
+    const HttpHeader *req_hdr = &request->header;
+    debug(33, 3) ("clientSetKeepaliveFlag: http_ver = %3.1f\n",
+	request->http_ver);
+    debug(33, 3) ("clientSetKeepaliveFlag: method = %s\n",
+	RequestMethodStr[request->method]);
+    if (httpMsgIsPersistent(request->http_ver, req_hdr))
+	request->flags.proxy_keepalive = 1;
+    if (request->method == METHOD_POST || request->method == METHOD_PUT)
+	if (!Config.onoff.persistent_client_posts)
+	    request->flags.proxy_keepalive = 0;
 }
 
 static int
@@ -1087,10 +1108,12 @@ clientBuildReplyHeader(clientHttpRequest * http, HttpReply * rep)
 	http->lookup_type ? http->lookup_type : "NONE",
 	getMyHostname(), Config.Port.http->i);
 #endif
-    /* Only replies with valid Content-Length can be sent with keep-alive */
-    if (request->method != METHOD_HEAD &&
-	http->entry->mem_obj->reply->content_length < 0)
-	request->flags.proxy_keepalive = 0;
+    /*
+     * Clear keepalive for NON-HEAD requests with invalid content length
+     */
+    if (request->method != METHOD_HEAD)
+	if (http->entry->mem_obj->reply->content_length < 0)
+	    request->flags.proxy_keepalive = 0;
     /* Signal keep-alive if needed */
     httpHeaderPutStr(hdr,
 	http->flags.accel ? HDR_CONNECTION : HDR_PROXY_CONNECTION,
@@ -1856,7 +1879,7 @@ parseHttpRequestAbort(ConnStateData * conn, const char *uri)
     http->start = current_time;
     http->req_sz = conn->in.offset;
     http->uri = xstrdup(uri);
-    http->log_uri = xstrdup(uri);
+    http->log_uri = xstrndup(uri, MAX_URL);
     http->range_iter.boundary = StringNull;
     return http;
 }
@@ -1884,6 +1907,7 @@ parseHttpRequest(ConnStateData * conn, method_t * method_p, int *status,
     size_t header_sz;		/* size of headers, not including first line */
     size_t prefix_sz;		/* size of whole request (req-line + headers) */
     size_t url_sz;
+    size_t req_sz;
     method_t method;
     clientHttpRequest *http = NULL;
 #if IPF_TRANSPARENT
@@ -1891,26 +1915,29 @@ parseHttpRequest(ConnStateData * conn, method_t * method_p, int *status,
     static int natfd = -1;
 #endif
 
-    /* Make sure a complete line has been received */
-    if ((t = strchr(conn->in.buf, '\n')) == NULL) {
-	debug(33, 5) ("Incomplete request line, waiting for more data\n");
+    if ((req_sz = headersEnd(conn->in.buf, conn->in.offset)) == 0) {
+	debug(33, 5) ("Incomplete request, waiting for end of headers\n");
 	*status = 0;
 	*prefix_p = NULL;
 	*method_p = METHOD_NONE;
 	return NULL;
     }
-    *req_line_sz_p = t - conn->in.buf;
-    /* Use xmalloc/xmemcpy instead of xstrdup because inbuf might
-     * contain NULL bytes; especially for POST data  */
-    inbuf = xmalloc(conn->in.offset + 1);
-    xmemcpy(inbuf, conn->in.buf, conn->in.offset);
-    *(inbuf + conn->in.offset) = '\0';
+    assert(req_sz <= conn->in.offset);
+    /* Use memcpy, not strdup! */
+    inbuf = xmalloc(req_sz + 1);
+    xmemcpy(inbuf, conn->in.buf, req_sz);
+    *(inbuf + req_sz) = '\0';
 
     /* pre-set these values to make aborting simpler */
     *prefix_p = inbuf;
     *method_p = METHOD_NONE;
     *status = -1;
 
+    /* Barf on NULL characters in the headers */
+    if (strlen(inbuf) != req_sz) {
+	debug(33, 1) ("parseHttpRequest: Requestheader contains NULL characters\n");
+	return parseHttpRequestAbort(conn, "error:invalid-request");
+    }
     /* Look for request method */
     if ((mstr = strtok(inbuf, "\t ")) == NULL) {
 	debug(33, 1) ("parseHttpRequest: Can't get request method\n");
@@ -1925,10 +1952,12 @@ parseHttpRequest(ConnStateData * conn, method_t * method_p, int *status,
     *method_p = method;
 
     /* look for URL+HTTP/x.x */
-    if ((url = strtok(NULL, "\r\n")) == NULL) {
+    if ((url = strtok(NULL, "\n")) == NULL) {
 	debug(33, 1) ("parseHttpRequest: Missing URL\n");
 	return parseHttpRequestAbort(conn, "error:missing-url");
     }
+    while (isspace(*url))
+	url++;
     t = url + strlen(url);
     assert(*t == '\0');
     token = NULL;
@@ -1953,22 +1982,15 @@ parseHttpRequest(ConnStateData * conn, method_t * method_p, int *status,
 	http_ver = (float) atof(token + 5);
     }
 
-    /* Check if headers are received */
-    req_hdr = t;
-    header_sz = headersEnd(req_hdr, conn->in.offset - (req_hdr - inbuf));
+    /*
+     * Process headers after request line
+     */
+    req_hdr = strtok(NULL, null_string);
+    header_sz = req_sz - (req_hdr - inbuf);
     if (0 == header_sz) {
 	debug(33, 3) ("parseHttpRequest: header_sz == 0\n");
 	*status = 0;
 	return NULL;
-    }
-    /*
-     * Skip whitespace at the end of the first line, up to the
-     * first newline.
-     */
-    while (isspace(*req_hdr)) {
-	header_sz--;
-	if (*(req_hdr++) == '\n')
-	    break;
     }
     assert(header_sz > 0);
     debug(33, 3) ("parseHttpRequest: req_hdr = {%s}\n", req_hdr);
@@ -1994,11 +2016,6 @@ parseHttpRequest(ConnStateData * conn, method_t * method_p, int *status,
     *(*prefix_p + prefix_sz) = '\0';
 
     debug(33, 5) ("parseHttpRequest: Request Header is\n%s\n", (*prefix_p) + *req_line_sz_p);
-    /* Assign http->uri */
-    if ((t = strchr(url, '\n')))	/* remove NL */
-	*t = '\0';
-    if ((t = strchr(url, '\r')))	/* remove CR */
-	*t = '\0';
     if ((t = strchr(url, '#')))	/* remove HTML anchors */
 	*t = '\0';
 
@@ -2082,9 +2099,9 @@ parseHttpRequest(ConnStateData * conn, method_t * method_p, int *status,
 	http->flags.accel = 0;
     }
     if (!stringHasWhitespace(http->uri))
-	http->log_uri = xstrdup(http->uri);
+	http->log_uri = xstrndup(http->uri, MAX_URL);
     else
-	http->log_uri = xstrdup(rfc1738_escape(http->uri));
+	http->log_uri = xstrndup(rfc1738_escape(http->uri), MAX_URL);
     debug(33, 5) ("parseHttpRequest: Complete request received\n");
     if (free_request)
 	safe_free(url);
@@ -2232,11 +2249,11 @@ clientReadRequest(int fd, void *data)
 	    }
 	    if (!http->flags.internal) {
 		if (internalCheck(strBuf(request->urlpath))) {
-		    if (0 == strcasecmp(request->host, getMyHostname())) {
+		    if (0 == strcasecmp(request->host, internalHostname())) {
 			if (request->port == Config.Port.http->i)
 			    http->flags.internal = 1;
 		    } else if (internalStaticCheck(strBuf(request->urlpath))) {
-			xstrncpy(request->host, getMyHostname(), SQUIDHOSTNAMELEN);
+			xstrncpy(request->host, internalHostname(), SQUIDHOSTNAMELEN);
 			request->port = Config.Port.http->i;
 			http->flags.internal = 1;
 		    }
@@ -2267,13 +2284,21 @@ clientReadRequest(int fd, void *data)
 	    }
 	    http->request = requestLink(request);
 	    /*
+	     * We need to set the keepalive flag before doing some
+	     * hacks for POST/PUT requests below.  Maybe we could
+	     * set keepalive flag even earlier.
+	     */
+	    clientSetKeepaliveFlag(http);
+	    /*
 	     * break here for NON-GET because most likely there is a
 	     * reqeust body following and we don't want to parse it
 	     * as though it was new request
 	     */
 	    if (request->method != METHOD_GET) {
 		int cont_len = httpHeaderGetInt(&request->header, HDR_CONTENT_LENGTH);
-		int copy_len = XMIN(cont_len, conn->in.offset);
+		int copy_len = conn->in.offset;
+		if (cont_len < copy_len && request->flags.proxy_keepalive)
+		    copy_len = cont_len;
 		if (copy_len > 0) {
 		    assert(conn->in.offset >= copy_len);
 		    request->body_sz = copy_len;

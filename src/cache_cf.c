@@ -91,31 +91,20 @@ wordlistDestroy(wordlist ** list)
     while ((w = *list) != NULL) {
 	*list = w->next;
 	safe_free(w->key);
-	safe_free(w);
+	memFree(MEM_WORDLIST, w);
     }
     *list = NULL;
 }
 
-void
+wordlist *
 wordlistAdd(wordlist ** list, const char *key)
 {
-    wordlist *p = NULL;
-    wordlist *q = NULL;
-
-    if (!(*list)) {
-	/* empty list */
-	*list = xcalloc(1, sizeof(wordlist));
-	(*list)->key = xstrdup(key);
-	(*list)->next = NULL;
-    } else {
-	p = *list;
-	while (p->next)
-	    p = p->next;
-	q = xcalloc(1, sizeof(wordlist));
-	q->key = xstrdup(key);
-	q->next = NULL;
-	p->next = q;
-    }
+    while (*list)
+	list = &(*list)->next;
+    *list = memAllocate(MEM_WORDLIST);
+    (*list)->key = xstrdup(key);
+    (*list)->next = NULL;
+    return *list;
 }
 
 void
@@ -134,7 +123,7 @@ intlistDestroy(intlist ** list)
     intlist *n = NULL;
     for (w = *list; w; w = n) {
 	n = w->next;
-	safe_free(w);
+	memFree(MEM_INTLIST, w);
     }
     *list = NULL;
 }
@@ -600,7 +589,7 @@ parse_cachedir(cacheSwap * swap)
     int size;
     int l1;
     int l2;
-    int readonly = 0;
+    int read_only = 0;
     SwapDir *tmp = NULL;
     if ((path = strtok(NULL, w_space)) == NULL)
 	self_destruct();
@@ -618,7 +607,7 @@ parse_cachedir(cacheSwap * swap)
 	fatal("parse_cachedir: invalid level 2 directories value");
     if ((token = strtok(NULL, w_space)))
 	if (!strcasecmp(token, "read-only"))
-	    readonly = 1;
+	    read_only = 1;
     for (i = 0; i < swap->n_configured; i++) {
 	tmp = swap->swapDirs + i;
 	if (!strcmp(path, tmp->path)) {
@@ -630,10 +619,10 @@ parse_cachedir(cacheSwap * swap)
 		debug(3, 1) ("Cache dir '%s' size changed to %d KB\n",
 		    path, size);
 	    tmp->max_size = size;
-	    if (tmp->read_only != readonly)
+	    if (tmp->read_only != read_only)
 		debug(3, 1) ("Cache dir '%s' now %s\n",
-		    readonly ? "Read-Only" : "Read-Write");
-	    tmp->read_only = readonly;
+		    read_only ? "Read-Only" : "Read-Write");
+	    tmp->read_only = read_only;
 	    return;
 	}
     }
@@ -653,7 +642,7 @@ parse_cachedir(cacheSwap * swap)
     tmp->max_size = size;
     tmp->l1 = l1;
     tmp->l2 = l2;
-    tmp->read_only = readonly;
+    tmp->read_only = read_only;
     tmp->swaplog_fd = -1;
     swap->n_configured++;
 }
