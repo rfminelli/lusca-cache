@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -122,7 +121,7 @@ Thanks!\n"
 
 static char *dead_msg()
 {
-    LOCAL_ARRAY(char, msg, 1024);
+    static char msg[1024];
     sprintf(msg, DEAD_MSG, version_string, version_string);
     return msg;
 }
@@ -137,10 +136,10 @@ void mail_warranty()
     if ((fp = fopen(filename, "w")) == NULL)
 	return;
     fprintf(fp, "From: %s\n", appname);
-    fprintf(fp, "To: %s\n", Config.adminEmail);
+    fprintf(fp, "To: %s\n", getAdminEmail());
     fprintf(fp, "Subject: %s\n", dead_msg());
     fclose(fp);
-    sprintf(command, "mail %s < %s", Config.adminEmail, filename);
+    sprintf(command, "mail %s < %s", getAdminEmail(), filename);
     system(command);		/* XXX should avoid system(3) */
     unlink(filename);
 }
@@ -235,7 +234,7 @@ void death(sig)
     PrintRusage(NULL, debug_log);
     if (squid_curtime - SQUID_RELEASE_TIME < 864000) {
 	/* skip if more than 10 days old */
-	if (Config.adminEmail)
+	if (getAdminEmail())
 	    mail_warranty();
 	else
 	    puts(dead_msg());
@@ -250,10 +249,10 @@ void sigusr2_handle(sig)
     static int state = 0;
     debug(21, 1, "sigusr2_handle: SIGUSR2 received.\n");
     if (state == 0) {
-	_db_init(Config.Log.log, "ALL,10");
+	_db_init(getCacheLogFile(), "ALL,10");
 	state = 1;
     } else {
-	_db_init(Config.Log.log, Config.debugOptions);
+	_db_init(getCacheLogFile(), getDebugOptions());
 	state = 0;
     }
 #if !HAVE_SIGACTION
@@ -264,7 +263,7 @@ void sigusr2_handle(sig)
 void setSocketShutdownLifetimes()
 {
     FD_ENTRY *f = NULL;
-    int lft = Config.lifetimeShutdown;
+    int lft = getShutdownLifetime();
     int cur;
     int i;
     for (i = fdstat_biggest_fd(); i >= 0; i--) {
@@ -283,18 +282,15 @@ void setSocketShutdownLifetimes()
 void normal_shutdown()
 {
     debug(21, 1, "Shutting down...\n");
-    if (Config.pidFilename) {
+    if (getPidFilename()) {
 	enter_suid();
-	safeunlink(Config.pidFilename, 0);
+	safeunlink(getPidFilename(), 0);
 	leave_suid();
     }
     storeWriteCleanLog();
     PrintRusage(NULL, debug_log);
     debug(21, 0, "Squid Cache (Version %s): Exiting normally.\n",
 	version_string);
-    storeCloseLog();
-    statCloseLog();
-    fclose(debug_log);
     exit(0);
 }
 
@@ -326,7 +322,7 @@ void fatal_dump(message)
 {
     if (message)
 	fatal_common(message);
-    if (opt_catch_signals)
+    if (catch_signals)
 	storeWriteCleanLog();
     abort();
 }
@@ -358,12 +354,12 @@ void sig_child(sig)
 
 char *getMyHostname()
 {
-    LOCAL_ARRAY(char, host, SQUIDHOSTNAMELEN + 1);
+    static char host[SQUIDHOSTNAMELEN + 1];
     static int present = 0;
     struct hostent *h = NULL;
     char *t = NULL;
 
-    if ((t = Config.visibleHostname))
+    if ((t = getVisibleHostname()))
 	return t;
 
     /* Get the host name and store it in host to return */
@@ -409,11 +405,11 @@ void leave_suid()
     if (geteuid() != 0)
 	return;
     /* Started as a root, check suid option */
-    if (Config.effectiveUser == NULL)
+    if (getEffectiveUser() == NULL)
 	return;
-    if ((pwd = getpwnam(Config.effectiveUser)) == NULL)
+    if ((pwd = getpwnam(getEffectiveUser())) == NULL)
 	return;
-    if (Config.effectiveGroup && (grp = getgrnam(Config.effectiveGroup))) {
+    if (getEffectiveGroup() && (grp = getgrnam(getEffectiveGroup()))) {
 	setgid(grp->gr_gid);
     } else {
 	setgid(pwd->pw_gid);
@@ -462,7 +458,7 @@ void writePidFile()
     FILE *pid_fp = NULL;
     char *f = NULL;
 
-    if ((f = Config.pidFilename) == NULL)
+    if ((f = getPidFilename()) == NULL)
 	return;
     enter_suid();
     pid_fp = fopen(f, "w");
@@ -485,7 +481,7 @@ void setMaxFD()
     struct rlimit rl;
 #if defined(RLIMIT_NOFILE)
     if (getrlimit(RLIMIT_NOFILE, &rl) < 0) {
-	debug(21, 0, "setrlimit: RLIMIT_NOFILE: %s", xstrerror());
+	debug(21, 0, "setrlimit: RLIMIT_NOFILE: %s\n", xstrerror());
     } else {
 	rl.rlim_cur = FD_SETSIZE;
 	if (rl.rlim_cur > rl.rlim_max)
@@ -497,7 +493,7 @@ void setMaxFD()
     }
 #elif defined(RLIMIT_OFILE)
     if (getrlimit(RLIMIT_OFILE, &rl) < 0) {
-	debug(21, 0, "setrlimit: RLIMIT_NOFILE: %s", xstrerror());
+	debug(21, 0, "setrlimit: RLIMIT_NOFILE: %s\n", xstrerror());
     } else {
 	rl.rlim_cur = FD_SETSIZE;
 	if (rl.rlim_cur > rl.rlim_max)
@@ -509,12 +505,12 @@ void setMaxFD()
     }
 #endif
 #else /* HAVE_SETRLIMIT */
-    debug(21, 1, "setMaxFD: Cannot increase: setrlimit() not supported on this system");
+    debug(21, 1, "setMaxFD: Cannot increase: setrlimit() not supported on this system\n");
 #endif /* HAVE_SETRLIMIT */
 
 #if HAVE_SETRLIMIT && defined(RLIMIT_DATA)
     if (getrlimit(RLIMIT_DATA, &rl) < 0) {
-	debug(21, 0, "getrlimit: RLIMIT_DATA: %s", xstrerror());
+	debug(21, 0, "getrlimit: RLIMIT_DATA: %s\n", xstrerror());
     } else {
 	rl.rlim_cur = rl.rlim_max;	/* set it to the max */
 	if (setrlimit(RLIMIT_DATA, &rl) < 0) {

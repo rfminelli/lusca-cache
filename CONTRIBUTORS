@@ -1,4 +1,5 @@
-Special thanks go to people who have volunteered their time, effort, and ideas to make this software available.
+Special thanks go to people who have volunteered their time, effort, 
+and ideas to make this software available.
 
 	Henrik Nordstrom <henrik.nordstrom@ida.his.se>
 	Daniel O'Callaghan <danny@miriworld.its.unimelb.EDU.AU>
@@ -25,13 +26,6 @@ Special thanks go to people who have volunteered their time, effort, and ideas t
 	Pete Bentley <pete@demon.net>
 	Alexander B. Demenshin <aldem@barnet.kharkov.ua>
 	Tony Lorimer <tlorimer@au.mdis.com>
-	Igor Vinokurov <igor@cs.ibank.ru>
-	Russell Street <r.street@auckland.ac.nz>
-	Cord Beermann <cord@cc.fh-lippe.de>
-	Stephen R. van den Berg <srb@cuci.nl>
-	Jon Thackray <jrmt@uk.gdscorp.com>
-	John Saunders <johns@rd.scitec.com.au>
-	Endre Balint Nagy <bne@CareNet.hu>
 
 
 Development of this caching software is funded by the National Science

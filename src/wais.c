@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -175,7 +174,7 @@ static void waisReadReply(fd, waisState)
      int fd;
      WaisStateData *waisState;
 {
-    LOCAL_ARRAY(char, buf, 4096);
+    static char buf[4096];
     int len;
     StoreEntry *entry = NULL;
 
@@ -203,7 +202,7 @@ static void waisReadReply(fd, waisState)
 		    (void *) NULL,
 		    (time_t) 0);
 		/* dont try reading again for a while */
-		comm_set_stall(fd, Config.stallDelay);
+		comm_set_stall(fd, getStallDelay());
 		return;
 	    }
 	} else {
@@ -224,7 +223,7 @@ static void waisReadReply(fd, waisState)
 	    comm_set_select_handler(fd, COMM_SELECT_READ,
 		(PF) waisReadReply, (void *) waisState);
 	    comm_set_select_handler_plus_timeout(fd, COMM_SELECT_TIMEOUT,
-		(PF) waisReadReplyTimeout, (void *) waisState, Config.readTimeout);
+		(PF) waisReadReplyTimeout, (void *) waisState, getReadTimeout());
 	} else {
 	    BIT_RESET(entry->flag, CACHABLE);
 	    storeReleaseRequest(entry);
@@ -241,7 +240,7 @@ static void waisReadReply(fd, waisState)
 	entry->expires = squid_curtime;
 	storeComplete(entry);
 	comm_close(fd);
-    } else if (((entry->mem_obj->e_current_len + len) > Config.Wais.maxObjSize) &&
+    } else if (((entry->mem_obj->e_current_len + len) > getWAISMax()) &&
 	!(entry->flag & DELETE_BEHIND)) {
 	/*  accept data, but start to delete behind it */
 	storeStartDeleteBehind(entry);
@@ -254,7 +253,7 @@ static void waisReadReply(fd, waisState)
 	    COMM_SELECT_TIMEOUT,
 	    (PF) waisReadReplyTimeout,
 	    (void *) waisState,
-	    Config.readTimeout);
+	    getReadTimeout());
     } else {
 	storeAppend(entry, buf, len);
 	comm_set_select_handler(fd,
@@ -265,7 +264,7 @@ static void waisReadReply(fd, waisState)
 	    COMM_SELECT_TIMEOUT,
 	    (PF) waisReadReplyTimeout,
 	    (void *) waisState,
-	    Config.readTimeout);
+	    getReadTimeout());
     }
 }
 
@@ -296,8 +295,9 @@ static void waisSendComplete(fd, buf, size, errflag, data)
 	    COMM_SELECT_TIMEOUT,
 	    (PF) waisReadReplyTimeout,
 	    (void *) waisState,
-	    Config.readTimeout);
+	    getReadTimeout());
     }
+    safe_free(buf);		/* Allocated by waisSendRequest. */
 }
 
 /* This will be called when connect completes. Write request. */
@@ -329,8 +329,7 @@ static void waisSendRequest(fd, waisState)
 	len,
 	30,
 	waisSendComplete,
-	(void *) waisState,
-	xfree);
+	(void *) waisState);
     if (BIT_TEST(waisState->entry->flag, CACHABLE))
 	storeSetPublicKey(waisState->entry);	/* Make it public */
 }
@@ -361,8 +360,6 @@ static void waisConnInProgress(fd, waisState)
 	}
     }
     /* Call the real write handler, now that we're fully connected */
-    if (opt_no_ipcache)
-	ipcacheInvalidate(waisState->relayhost);
     comm_set_select_handler(fd, COMM_SELECT_WRITE,
 	(PF) waisSendRequest, (void *) waisState);
 }
@@ -379,12 +376,12 @@ int waisStart(unusedfd, url, method, mime_hdr, entry)
 
     debug(24, 3, "waisStart: \"%s %s\"\n", RequestMethodStr[method], url);
     debug(24, 4, "            header: %s\n", mime_hdr);
-    if (!Config.Wais.relayHost) {
+    if (!getWaisRelayHost()) {
 	debug(24, 0, "waisStart: Failed because no relay host defined!\n");
 	squid_error_entry(entry, ERR_NO_RELAY, NULL);
 	return COMM_ERROR;
     }
-    fd = comm_open(COMM_NONBLOCKING, Config.Addrs.tcp_outgoing, 0, url);
+    fd = comm_open(COMM_NONBLOCKING, getTcpOutgoingAddr(), 0, url);
     if (fd == COMM_ERROR) {
 	debug(24, 4, "waisStart: Failed because we're out of sockets.\n");
 	squid_error_entry(entry, ERR_NO_FDS, xstrerror());
@@ -393,8 +390,8 @@ int waisStart(unusedfd, url, method, mime_hdr, entry)
     waisState = xcalloc(1, sizeof(WaisStateData));
     storeLockObject(waisState->entry = entry, NULL, NULL);
     waisState->method = method;
-    waisState->relayhost = Config.Wais.relayHost;
-    waisState->relayport = Config.Wais.relayPort;
+    waisState->relayhost = getWaisRelayHost();
+    waisState->relayport = getWaisRelayPort();
     waisState->mime_hdr = mime_hdr;
     waisState->fd = fd;
     strncpy(waisState->request, url, MAX_URL);
@@ -443,8 +440,6 @@ static int waisConnect(fd, hp, waisState)
 	}
     }
     /* Install connection complete handler. */
-    if (opt_no_ipcache)
-	ipcacheInvalidate(host);
     comm_set_select_handler(fd,
 	COMM_SELECT_LIFETIME,
 	(PF) waisLifetimeExpire,
