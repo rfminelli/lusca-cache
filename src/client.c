@@ -40,13 +40,13 @@
 #endif
 
 /* Local functions */
-static int client_comm_bind(int, const char *);
-static int client_comm_connect(int, const char *, u_short, struct timeval *);
+static int client_comm_bind(int, char *);
+static int client_comm_connect(int, char *, u_short, struct timeval *);
 static void usage(const char *progname);
 static int Now(struct timeval *);
 static SIGHDLR catch;
 static SIGHDLR pipe_handler;
-static void set_our_signal(void);
+static void set_our_signal();
 static ssize_t myread(int fd, void *buf, size_t len);
 static ssize_t mywrite(int fd, void *buf, size_t len);
 static int put_fd;
@@ -89,8 +89,9 @@ main(int argc, char *argv[])
     int ping, pcount;
     int keep_alive = 0;
     int opt_noaccept = 0;
+    int opt_put = 0;
     int opt_verbose = 0;
-    const char *hostname, *localhost;
+    char *hostname, *localhost;
     char url[BUFSIZ], msg[BUFSIZ], buf[BUFSIZ];
     char extra_hdrs[BUFSIZ];
     const char *method = "GET";
@@ -193,6 +194,8 @@ main(int argc, char *argv[])
 	xfree(t);
     }
     if (put_file) {
+	opt_put = 1;
+	/*method = xstrdup("PUT"); */
 	put_fd = open(put_file, O_RDONLY);
 	set_our_signal();
 	if (put_fd < 0) {
@@ -355,7 +358,7 @@ main(int argc, char *argv[])
 }
 
 static int
-client_comm_bind(int sock, const char *local_host)
+client_comm_bind(int sock, char *local_host)
 {
     static const struct hostent *hp = NULL;
     static struct sockaddr_in from_addr;
@@ -374,7 +377,7 @@ client_comm_bind(int sock, const char *local_host)
 }
 
 static int
-client_comm_connect(int sock, const char *dest_host, u_short dest_port, struct timeval *tvp)
+client_comm_connect(int sock, char *dest_host, u_short dest_port, struct timeval *tvp)
 {
     static const struct hostent *hp = NULL;
     static struct sockaddr_in to_addr;

@@ -15,8 +15,6 @@
 #include "snprintf.h"
 #endif
 
-#include "snmp_debug.h"
-
 #if STDC_HEADERS
 void (*snmplib_debug_hook) (int, char *,...) = NULL;
 #else
@@ -25,7 +23,7 @@ void (*snmplib_debug_hook) (va_alist) = NULL;
 
 extern void
 #if STDC_HEADERS
-snmplib_debug(int lvl, const char *fmt,...)
+snmplib_debug(int lvl, char *fmt,...)
 {
     char buf[BUFSIZ];
     va_list args;

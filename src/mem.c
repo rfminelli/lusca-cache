@@ -62,8 +62,6 @@ static struct {
 static MemMeter StrCountMeter;
 static MemMeter StrVolumeMeter;
 
-static MemMeter HugeBufCountMeter;
-static MemMeter HugeBufVolumeMeter;
 
 /* local routines */
 
@@ -94,15 +92,6 @@ memStringStats(StoreEntry * sentry)
 	"Other Strings",
 	xpercentInt(StrCountMeter.level - pooled_count, StrCountMeter.level),
 	xpercentInt(StrVolumeMeter.level - pooled_volume, StrVolumeMeter.level));
-    storeAppendPrintf(sentry, "\n");
-}
-
-static void
-memBufStats(StoreEntry *sentry)
-{
-    storeAppendPrintf(sentry, "Large buffers: %d (%d KB)\n",
-	HugeBufCountMeter.level,
-	HugeBufVolumeMeter.level / 1024);
 }
 
 static void
@@ -111,7 +100,6 @@ memStats(StoreEntry * sentry)
     storeBuffer(sentry);
     memReport(sentry);
     memStringStats(sentry);
-    memBufStats(sentry);
     storeBufferFlush(sentry);
 }
 
@@ -148,7 +136,7 @@ memFree(void *p, int type)
 
 /* allocate a variable size buffer using best-fit pool */
 void *
-memAllocString(size_t net_size, size_t * gross_size)
+memAllocBuf(size_t net_size, size_t * gross_size)
 {
     int i;
     MemPool *pool = NULL;
@@ -166,9 +154,9 @@ memAllocString(size_t net_size, size_t * gross_size)
     return pool ? memPoolAlloc(pool) : xcalloc(1, net_size);
 }
 
-/* free buffer allocated with memAllocString() */
+/* free buffer allocated with memAllocBuf() */
 void
-memFreeString(size_t size, void *buf)
+memFreeBuf(size_t size, void *buf)
 {
     int i;
     MemPool *pool = NULL;
@@ -184,86 +172,6 @@ memFreeString(size_t size, void *buf)
     memMeterDel(StrVolumeMeter, size);
     pool ? memPoolFree(pool, buf) : xfree(buf);
 }
-
-/* Find the best fit MEM_X_BUF type */
-static mem_type
-memFindBufSizeType(size_t net_size, size_t * gross_size)
-{
-    mem_type type;
-    size_t size;
-    if (net_size <= 2*1024) {
-	type = MEM_2K_BUF;
-	size = 2*1024;
-    } else if (net_size <= 4*1024) {
-	type = MEM_4K_BUF;
-	size = 4*1024;
-    } else if (net_size <= 8*1024) {
-	type = MEM_8K_BUF;
-	size = 8*1024;
-    } else if (net_size <= 16*1024) {
-	type = MEM_16K_BUF;
-	size = 16*1024;
-    } else if (net_size <= 32*1024) {
-	type = MEM_32K_BUF;
-	size = 32*1024;
-    } else if (net_size <= 64*1024) {
-	type = MEM_64K_BUF;
-	size = 64*1024;
-    } else {
-	type = MEM_NONE;
-	size = net_size;
-    }
-    if (gross_size)
-	*gross_size = size;
-    return type;
-}
-
-/* allocate a variable size buffer using best-fit pool */
-void *
-memAllocBuf(size_t net_size, size_t * gross_size)
-{
-    mem_type type = memFindBufSizeType(net_size, gross_size);
-    if (type != MEM_NONE)
-	return memAllocate(type);
-    else {
-	memMeterInc(HugeBufCountMeter);
-	memMeterAdd(HugeBufVolumeMeter, *gross_size);
-	return xcalloc(1, net_size);
-    }
-}
-
-/* resize a variable sized buffer using best-fit pool */
-void *
-memReallocBuf(void *oldbuf, size_t net_size, size_t * gross_size)
-{
-    /* XXX This can be optimized on very large buffers to use realloc() */
-    int new_gross_size;
-    void *newbuf = memAllocBuf(net_size, &new_gross_size);
-    if (oldbuf) {
-	int data_size = *gross_size;
-	if (data_size > net_size)
-	    data_size = net_size;
-	memcpy(newbuf, oldbuf, data_size);
-	memFreeBuf(*gross_size, oldbuf);
-    }
-    *gross_size = new_gross_size;
-    return newbuf;
-}
-
-/* free buffer allocated with memAllocBuf() */
-void
-memFreeBuf(size_t size, void *buf)
-{
-    mem_type type = memFindBufSizeType(size, NULL);
-    if (type != MEM_NONE)
-	memFree(buf, type);
-    else {
-	xfree(buf);
-	memMeterDec(HugeBufCountMeter);
-	memMeterDel(HugeBufVolumeMeter, size);
-    }
-}
-
 
 void
 memInit(void)
@@ -284,53 +192,107 @@ memInit(void)
     memDataInit(MEM_16K_BUF, "16K Buffer", 16384, 10);
     memDataInit(MEM_32K_BUF, "32K Buffer", 32768, 10);
     memDataInit(MEM_64K_BUF, "64K Buffer", 65536, 10);
+    memDataInit(MEM_CLIENT_SOCK_BUF, "Client Socket Buffer", CLIENT_SOCK_SZ, 0);
+    memDataInit(MEM_ACCESSLOGENTRY, "AccessLogEntry",
+	sizeof(AccessLogEntry), 10);
     memDataInit(MEM_ACL, "acl", sizeof(acl), 0);
+    memDataInit(MEM_ACLCHECK_T, "aclCheck_t", sizeof(aclCheck_t), 0);
+    memDataInit(MEM_ACL_ACCESS, "acl_access", sizeof(acl_access), 0);
     memDataInit(MEM_ACL_DENY_INFO_LIST, "acl_deny_info_list",
 	sizeof(acl_deny_info_list), 0);
     memDataInit(MEM_ACL_IP_DATA, "acl_ip_data", sizeof(acl_ip_data), 0);
     memDataInit(MEM_ACL_LIST, "acl_list", sizeof(acl_list), 0);
     memDataInit(MEM_ACL_NAME_LIST, "acl_name_list", sizeof(acl_name_list), 0);
     memDataInit(MEM_ACL_TIME_DATA, "acl_time_data", sizeof(acl_time_data), 0);
-    memDataInit(MEM_AUTH_USER_T, "auth_user_t",
-	sizeof(auth_user_t), 0);
-    memDataInit(MEM_AUTH_USER_HASH, "auth_user_hash_pointer",
-	sizeof(auth_user_hash_pointer), 0);
-    memDataInit(MEM_ACL_PROXY_AUTH_MATCH, "acl_proxy_auth_match_cache",
-	sizeof(acl_proxy_auth_match_cache), 0);
-    memDataInit(MEM_ACL_USER_DATA, "acl_user_data",
-	sizeof(acl_user_data), 0);
+    memDataInit(MEM_ACL_PROXY_AUTH_USER, "acl_proxy_auth_user",
+	sizeof(acl_proxy_auth_user), 0);
+    memDataInit(MEM_CACHEMGR_PASSWD, "cachemgr_passwd",
+	sizeof(cachemgr_passwd), 0);
 #if USE_CACHE_DIGESTS
     memDataInit(MEM_CACHE_DIGEST, "CacheDigest", sizeof(CacheDigest), 0);
 #endif
+    memDataInit(MEM_CLIENTHTTPREQUEST, "clientHttpRequest",
+	sizeof(clientHttpRequest), 0);
+    memDataInit(MEM_CLOSE_HANDLER, "close_handler", sizeof(close_handler), 0);
+    memDataInit(MEM_COMMWRITESTATEDATA, "CommWriteStateData",
+	sizeof(CommWriteStateData), 0);
+    memDataInit(MEM_CONNSTATEDATA, "ConnStateData", sizeof(ConnStateData), 0);
+#if USE_CACHE_DIGESTS
+    memDataInit(MEM_DIGEST_FETCH_STATE, "DigestFetchState", sizeof(DigestFetchState), 0);
+#endif
     memDataInit(MEM_LINK_LIST, "link_list", sizeof(link_list), 10);
+    memDataInit(MEM_DLINK_LIST, "dlink_list", sizeof(dlink_list), 10);
     memDataInit(MEM_DLINK_NODE, "dlink_node", sizeof(dlink_node), 10);
+    memDataInit(MEM_DNSSERVER_T, "dnsserver_t", sizeof(dnsserver_t), 0);
+    memDataInit(MEM_DNSSTATDATA, "dnsStatData", sizeof(dnsStatData), 0);
+    memDataInit(MEM_DOMAIN_PING, "domain_ping", sizeof(domain_ping), 0);
+    memDataInit(MEM_DOMAIN_TYPE, "domain_type", sizeof(domain_type), 0);
     memDataInit(MEM_DREAD_CTRL, "dread_ctrl", sizeof(dread_ctrl), 0);
     memDataInit(MEM_DWRITE_Q, "dwrite_q", sizeof(dwrite_q), 0);
+    memDataInit(MEM_ERRORSTATE, "ErrorState", sizeof(ErrorState), 0);
+    memDataInit(MEM_FILEMAP, "fileMap", sizeof(fileMap), 0);
+    memDataInit(MEM_FWD_STATE, "FwdState", sizeof(FwdState), 0);
     memDataInit(MEM_FWD_SERVER, "FwdServer", sizeof(FwdServer), 0);
+    memDataInit(MEM_HASH_LINK, "hash_link", sizeof(hash_link), 0);
+    memDataInit(MEM_HASH_TABLE, "hash_table", sizeof(hash_table), 0);
+    memDataInit(MEM_HIERARCHYLOGENTRY, "HierarchyLogEntry",
+	sizeof(HierarchyLogEntry), 0);
+    memDataInit(MEM_HTTP_STATE_DATA, "HttpStateData", sizeof(HttpStateData), 0);
     memDataInit(MEM_HTTP_REPLY, "HttpReply", sizeof(HttpReply), 0);
     memDataInit(MEM_HTTP_HDR_ENTRY, "HttpHeaderEntry", sizeof(HttpHeaderEntry), 0);
     memDataInit(MEM_HTTP_HDR_CC, "HttpHdrCc", sizeof(HttpHdrCc), 0);
     memDataInit(MEM_HTTP_HDR_RANGE_SPEC, "HttpHdrRangeSpec", sizeof(HttpHdrRangeSpec), 0);
     memDataInit(MEM_HTTP_HDR_RANGE, "HttpHdrRange", sizeof(HttpHdrRange), 0);
     memDataInit(MEM_HTTP_HDR_CONTENT_RANGE, "HttpHdrContRange", sizeof(HttpHdrContRange), 0);
+    memDataInit(MEM_ICPUDPDATA, "icpUdpData", sizeof(icpUdpData), 0);
+    memDataInit(MEM_ICP_COMMON_T, "icp_common_t", sizeof(icp_common_t), 0);
+    memDataInit(MEM_ICP_PING_DATA, "ping_data", sizeof(ping_data), 0);
     memDataInit(MEM_INTLIST, "intlist", sizeof(intlist), 0);
+    memDataInit(MEM_IOSTATS, "iostats", sizeof(iostats), 0);
     memDataInit(MEM_MEMOBJECT, "MemObject", sizeof(MemObject),
 	Squid_MaxFD >> 3);
     memDataInit(MEM_MEM_NODE, "mem_node", sizeof(mem_node), 0);
     memDataInit(MEM_NETDBENTRY, "netdbEntry", sizeof(netdbEntry), 0);
     memDataInit(MEM_NET_DB_NAME, "net_db_name", sizeof(net_db_name), 0);
+    memDataInit(MEM_NET_DB_PEER, "net_db_peer", sizeof(net_db_peer), 0);
+    memDataInit(MEM_PEER, "peer", sizeof(peer), 0);
+#if USE_CACHE_DIGESTS
+    memDataInit(MEM_PEER_DIGEST, "PeerDigest", sizeof(PeerDigest), 0);
+    memDataInit(MEM_DIGEST_FETCH_STATE, "DigestFetchState", sizeof(DigestFetchState), 0);
+#endif
+#if USE_ICMP
+    memDataInit(MEM_PINGERECHODATA, "pingerEchoData",
+	sizeof(pingerEchoData), 0);
+    memDataInit(MEM_PINGERREPLYDATA, "pingerReplyData",
+	sizeof(pingerReplyData), 0);
+#endif
+    memDataInit(MEM_PS_STATE, "ps_state", sizeof(ps_state), 0);
+    memDataInit(MEM_REFRESH_T, "refresh_t", sizeof(refresh_t), 0);
     memDataInit(MEM_RELIST, "relist", sizeof(relist), 0);
     memDataInit(MEM_REQUEST_T, "request_t", sizeof(request_t),
 	Squid_MaxFD >> 3);
+    memDataInit(MEM_SQUIDCONFIG, "SquidConfig", sizeof(SquidConfig), 0);
+    memDataInit(MEM_SQUIDCONFIG2, "SquidConfig2", sizeof(SquidConfig2), 0);
+    memDataInit(MEM_STATCOUNTERS, "StatCounters", sizeof(StatCounters), 0);
+    memDataInit(MEM_STMEM_BUF, "Store Mem Buffer", SM_PAGE_SIZE,
+	Config.memMaxSize / SM_PAGE_SIZE);
     memDataInit(MEM_STOREENTRY, "StoreEntry", sizeof(StoreEntry), 0);
+    memDataInit(MEM_STORE_CLIENT, "store_client", sizeof(store_client), 0);
+    memDataInit(MEM_SWAPDIR, "SwapDir", sizeof(SwapDir), 0);
+    memDataInit(MEM_USHORTLIST, "ushort_list", sizeof(ushortlist), 0);
     memDataInit(MEM_WORDLIST, "wordlist", sizeof(wordlist), 0);
     memDataInit(MEM_CLIENT_INFO, "ClientInfo", sizeof(ClientInfo), 0);
     memDataInit(MEM_MD5_DIGEST, "MD5 digest", MD5_DIGEST_CHARS, 0);
+    memDataInit(MEM_HELPER, "helper", sizeof(helper), 0);
     memDataInit(MEM_HELPER_REQUEST, "helper_request",
 	sizeof(helper_request), 0);
-    memDataInit(MEM_HELPER_STATEFUL_REQUEST, "helper_stateful_request",
-	sizeof(helper_stateful_request), 0);
+    memDataInit(MEM_HELPER_SERVER, "helper_server",
+	sizeof(helper_server), 0);
+    memDataInit(MEM_STORE_IO, "storeIOState", sizeof(storeIOState), 0);
     memDataInit(MEM_TLV, "storeSwapTLV", sizeof(tlv), 0);
+    memDataInit(MEM_GEN_CBDATA, "generic_cbdata", sizeof(generic_cbdata), 0);
+    memDataInit(MEM_PUMP_STATE_DATA, "PumpStateData", sizeof(PumpStateData), 0);
+    memDataInit(MEM_CLIENT_REQ_BUF, "clientRequestBuffer", CLIENT_REQ_BUF_SZ, 0);
     memDataInit(MEM_SWAP_LOG_DATA, "storeSwapLogData", sizeof(storeSwapLogData), 0);
 
     /* init string pools */
@@ -374,7 +336,7 @@ memInUse(mem_type type)
 
 /* ick */
 
-static void
+void
 memFree2K(void *p)
 {
     memFree(p, MEM_2K_BUF);
@@ -392,44 +354,20 @@ memFree8K(void *p)
     memFree(p, MEM_8K_BUF);
 }
 
-static void
+void
 memFree16K(void *p)
 {
     memFree(p, MEM_16K_BUF);
 }
 
-static void
+void
 memFree32K(void *p)
 {
     memFree(p, MEM_32K_BUF);
 }
 
-static void
+void
 memFree64K(void *p)
 {
     memFree(p, MEM_64K_BUF);
-}
-
-FREE *
-memFreeBufFunc(size_t size)
-{
-    switch(size)
-    {
-    case 2*1024:
-	return memFree2K;
-    case 4*1024:
-	return memFree4K;
-    case 8*1024:
-	return memFree8K;
-    case 16*1024:
-	return memFree16K;
-    case 32*1024:
-	return memFree32K;
-    case 64*1024:
-	return memFree64K;
-    default:
-	memMeterDec(HugeBufCountMeter);
-	memMeterDel(HugeBufVolumeMeter, size);
-	return xfree;
-    }
 }

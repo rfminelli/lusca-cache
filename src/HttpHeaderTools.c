@@ -35,9 +35,7 @@
 
 #include "squid.h"
 
-#if UNUSED_CODE
 static int httpHeaderStrCmp(const char *h1, const char *h2, int len);
-#endif
 static void httpHeaderPutStrvf(HttpHeader * hdr, http_hdr_type id, const char *fmt, va_list vargs);
 
 
@@ -314,7 +312,6 @@ httpHeaderParseSize(const char *start, ssize_t * value)
  * parses a given string then packs compiled headers and compares the result
  * with the original, reports discrepancies
  */
-#if UNUSED_CODE
 void
 httpHeaderTestParser(const char *hstr)
 {
@@ -365,11 +362,9 @@ httpHeaderTestParser(const char *hstr)
     packerClean(&p);
     memBufClean(&mb);
 }
-#endif
 
 
 /* like strncasecmp but ignores ws characters */
-#if UNUSED_CODE
 static int
 httpHeaderStrCmp(const char *h1, const char *h2, int len)
 {
@@ -395,50 +390,4 @@ httpHeaderStrCmp(const char *h1, const char *h2, int len)
     }
     /* NOTREACHED */
     return 0;
-}
-#endif
-
-/*
- * httpHdrMangle checks the anonymizer (header_access) configuration.
- * Returns 1 if the header is allowed.
- */
-static int
-httpHdrMangle(HttpHeaderEntry * e, request_t * request)
-{
-    int retval;
-
-    /* check with anonymizer tables */
-    header_mangler *hm;
-    aclCheck_t *checklist;
-    assert(e);
-    hm = &Config.header_access[e->id];
-    checklist = aclChecklistCreate(hm->access_list, request, NULL);
-    if (1 == aclCheckFast(hm->access_list, checklist)) {
-	/* aclCheckFast returns 1 for allow. */
-	retval = 1;
-    } else if (NULL == hm->replacement) {
-	/* It was denied, and we don't have any replacement */
-	retval = 0;
-    } else {
-	/* It was denied, but we have a replacement. Replace the
-	 * header on the fly, and return that the new header
-	 * is allowed.
-	 */
-	stringReset(&e->value, hm->replacement);
-	retval = 1;
-    }
-
-    aclChecklistFree(checklist);
-    return retval;
-}
-
-/* Mangles headers for a list of headers. */
-void
-httpHdrMangleList(HttpHeader * l, request_t * request)
-{
-    HttpHeaderEntry *e;
-    HttpHeaderPos p = HttpHeaderInitPos;
-    while ((e = httpHeaderGetEntry(l, &p)))
-	if (0 == httpHdrMangle(e, request))
-	    httpHeaderDelAt(l, p);
 }

@@ -49,20 +49,17 @@ static PF whoisReadReply;
 
 /* PUBLIC */
 
-CBDATA_TYPE(WhoisState);
-
 void
 whoisStart(FwdState * fwd)
 {
-    WhoisState *p;
+    WhoisState *p = xcalloc(1, sizeof(*p));
     int fd = fwd->server_fd;
     char *buf;
     size_t l;
-    CBDATA_INIT_TYPE(WhoisState);
-    p = cbdataAlloc(WhoisState);
     p->request = fwd->request;
     p->entry = fwd->entry;
     p->fwd = fwd;
+    cbdataAdd(p, cbdataXfree, 0);
     storeLockObject(p->entry);
     comm_add_close_handler(fd, whoisClose, p);
     l = strLen(p->request->urlpath) + 3;
@@ -92,7 +89,7 @@ whoisReadReply(int fd, void *data)
     MemObject *mem = entry->mem_obj;
     int len;
     statCounter.syscalls.sock.reads++;
-    len = FD_READ_METHOD(fd, buf, 4095);
+    len = read(fd, buf, 4095);
     buf[len] = '\0';
     debug(75, 3) ("whoisReadReply: FD %d read %d bytes\n", fd, len);
     debug(75, 5) ("{%s}\n", buf);

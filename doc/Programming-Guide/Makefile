@@ -1,6 +1,6 @@
 DOC	= prog-guide
 
-all: $(DOC).html $(DOC).ps $(DOC).txt
+all: $(DOC).html $(DOC).ps
 
 $(DOC).ps: $(DOC).dvi
 	dvips -o $(DOC).ps $(DOC).dvi
@@ -13,9 +13,8 @@ $(DOC).dvi: $(DOC).sgml
 #	latex $(DOC).tex
 #	latex $(DOC).tex
 #
-
-$(DOC).txt: $(DOC).sgml
-	sgml2txt $(DOC)
+#$(DOC).tex: $(DOC).sgml
+#	sgml2latex $(DOC)
 
 $(DOC).html: $(DOC).sgml
 	sgml2html $(DOC)

@@ -2,10 +2,13 @@
  * $Id$
  */
 
-#ifndef SQUID_SNMP_DEBUG_H
-#define SQUID_SNMP_DEBUG_H
+#ifndef SNMP_DEBUG_H
+#define SNMP_DEBUG_H
 
-extern void 
-snmplib_debug(int, const char *,...) PRINTF_FORMAT_ARG2;
+#if STDC_HEADERS
+extern void snmplib_debug(int, char *,...);
+#else
+extern void snmplib_debug(va_alist);
+#endif
 
-#endif /* SQUID_SNMP_DEBUG_H */
+#endif

@@ -88,7 +88,6 @@ StatCounters CountHist[N_COUNT_HIST];
 static int NCountHist = 0;
 static StatCounters CountHourHist[N_COUNT_HOUR_HIST];
 static int NCountHourHist = 0;
-CBDATA_TYPE(StatObjectsState);
 
 extern unsigned int mem_pool_alloc_calls;
 extern unsigned int mem_pool_free_calls;
@@ -288,6 +287,8 @@ statStoreEntry(StoreEntry * s, StoreEntry * e)
 	    storeAppendPrintf(s, "\tClient #%d, %p\n", i, sc->callback_data);
 	    storeAppendPrintf(s, "\t\tcopy_offset: %d\n",
 		(int) sc->copy_offset);
+	    storeAppendPrintf(s, "\t\tseen_offset: %d\n",
+		(int) sc->seen_offset);
 	    storeAppendPrintf(s, "\t\tcopy_size: %d\n",
 		(int) sc->copy_size);
 	    storeAppendPrintf(s, "\t\tflags:");
@@ -342,11 +343,11 @@ statObjects(void *data)
 static void
 statObjectsStart(StoreEntry * sentry, STOBJFLT * filter)
 {
-    StatObjectsState *state;
-    state = cbdataAlloc(StatObjectsState);
+    StatObjectsState *state = xcalloc(1, sizeof(*state));
     state->sentry = sentry;
     state->filter = filter;
     storeLockObject(sentry);
+    cbdataAdd(state, cbdataXfree, 0);
     eventAdd("statObjects", statObjects, state, 0.0, 1);
 }
 
@@ -590,7 +591,7 @@ info_get(StoreEntry * sentry)
 #endif /* HAVE_MALLINFO */
     storeAppendPrintf(sentry, "Memory accounted for:\n");
     storeAppendPrintf(sentry, "\tTotal accounted:       %6d KB\n",
-	statMemoryAccounted() >> 10);
+	memTotalAllocated() >> 10);
     storeAppendPrintf(sentry, "\tmemPoolAlloc calls: %d\n",
 	mem_pool_alloc_calls);
     storeAppendPrintf(sentry, "\tmemPoolFree calls: %d\n",
@@ -799,10 +800,9 @@ statAvgDump(StoreEntry * sentry, int minutes, int hours)
     storeAppendPrintf(sentry, "aborted_requests = %f/sec\n",
 	XAVG(aborted_requests));
 
-#if USE_POLL
+#if HAVE_POLL
     storeAppendPrintf(sentry, "syscalls.polls = %f/sec\n", XAVG(syscalls.polls));
-#endif
-#if USE_SELECT
+#else
     storeAppendPrintf(sentry, "syscalls.selects = %f/sec\n", XAVG(syscalls.selects));
 #endif
     storeAppendPrintf(sentry, "syscalls.disk.opens = %f/sec\n", XAVG(syscalls.disk.opens));
@@ -832,7 +832,6 @@ statInit(void)
 {
     int i;
     debug(18, 5) ("statInit: Initializing...\n");
-    CBDATA_INIT_TYPE(StatObjectsState);
     for (i = 0; i < N_COUNT_HIST; i++)
 	statCountersInit(&CountHist[i]);
     for (i = 0; i < N_COUNT_HOUR_HIST; i++)
@@ -985,7 +984,7 @@ statCountersInitSpecial(StatCounters * C)
     statHistEnumInit(&C->comm_icp_incoming, INCOMING_ICP_MAX);
     statHistEnumInit(&C->comm_dns_incoming, INCOMING_DNS_MAX);
     statHistEnumInit(&C->comm_http_incoming, INCOMING_HTTP_MAX);
-    statHistIntInit(&C->select_fds_hist, 256);	/* was SQUID_MAXFD, but it is way too much. It is OK to crop this statistics */
+    statHistIntInit(&C->select_fds_hist, SQUID_MAXFD);
 }
 
 /* add special cases here as they arrive */
@@ -1299,14 +1298,11 @@ statMedianSvc(int interval, int which)
 /*
  * SNMP wants ints, ick
  */
-#if UNUSED_CODE
 int
 get_median_svc(int interval, int which)
 {
     return (int) statMedianSvc(interval, which);
 }
-
-#endif
 
 StatCounters *
 snmpStatGet(int minutes)
@@ -1408,8 +1404,8 @@ statClientRequests(StoreEntry * s)
 	    storeAppendPrintf(s, "\tFD %d, read %d, wrote %d\n", fd,
 		fd_table[fd].bytes_read, fd_table[fd].bytes_written);
 	    storeAppendPrintf(s, "\tFD desc: %s\n", fd_table[fd].desc);
-	    storeAppendPrintf(s, "\tin: buf %p, offset %ld, size %ld\n",
-		conn->in.buf, (long int) conn->in.offset, (long int) conn->in.size);
+	    storeAppendPrintf(s, "\tin: buf %p, offset %d, size %d\n",
+		conn->in.buf, conn->in.offset, conn->in.size);
 	    storeAppendPrintf(s, "\tpeer: %s:%d\n",
 		inet_ntoa(conn->peer.sin_addr),
 		ntohs(conn->peer.sin_port));
@@ -1418,21 +1414,22 @@ statClientRequests(StoreEntry * s)
 		ntohs(conn->me.sin_port));
 	    storeAppendPrintf(s, "\tnrequests: %d\n",
 		conn->nrequests);
-	    storeAppendPrintf(s, "\tdefer: n %d, until %ld\n",
-		conn->defer.n, (long int) conn->defer.until);
+	    storeAppendPrintf(s, "\tpersistent: %d\n",
+		conn->persistent);
+	    storeAppendPrintf(s, "\tdefer: n %d, until %d\n",
+		conn->defer.n, conn->defer.until);
 	}
 	storeAppendPrintf(s, "uri %s\n", http->uri);
 	storeAppendPrintf(s, "log_type %s\n", log_tags[http->log_type]);
-	storeAppendPrintf(s, "out.offset %ld, out.size %lu\n",
-	    (long int) http->out.offset, (unsigned long int) http->out.size);
-	storeAppendPrintf(s, "req_sz %ld\n", (long int) http->req_sz);
+	storeAppendPrintf(s, "out.offset %d, out.size %d\n",
+	    http->out.offset, http->out.size);
+	storeAppendPrintf(s, "req_sz %d\n", http->req_sz);
 	e = http->entry;
 	storeAppendPrintf(s, "entry %p/%s\n", e, e ? storeKeyText(e->hash.key) : "N/A");
 	e = http->old_entry;
 	storeAppendPrintf(s, "old_entry %p/%s\n", e, e ? storeKeyText(e->hash.key) : "N/A");
-	storeAppendPrintf(s, "start %ld.%06d (%f seconds ago)\n",
-	    (long int) http->start.tv_sec,
-	    (int) http->start.tv_usec,
+	storeAppendPrintf(s, "start %d.%06d (%f seconds ago)\n", http->start.tv_sec,
+	    http->start.tv_usec,
 	    tvSubDsec(http->start, current_time));
 	storeAppendPrintf(s, "\n");
     }
@@ -1518,12 +1515,6 @@ statGraphDump(StoreEntry * e)
     GENGRAPH(page_faults, "page_faults", "System Page Faults/sec");
     GENGRAPH(select_loops, "select_loops", "System Select Loop calls/sec");
     GENGRAPH(cputime, "cputime", "CPU utilisation");
-}
-
-int
-statMemoryAccounted(void)
-{
-    memTotalAllocated();
 }
 
 #endif /* STAT_GRAPHS */

@@ -56,7 +56,7 @@ ipcCloseAllFD(int prfd, int pwfd, int crfd, int cwfd)
 }
 
 int
-ipcCreate(int type, const char *prog, const char *const args[], const char *name, int *rfd, int *wfd)
+ipcCreate(int type, const char *prog, char *const args[], const char *name, int *rfd, int *wfd)
 {
     pid_t pid;
     struct sockaddr_in CS;
@@ -74,7 +74,7 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 #endif
     int x;
 
-#if USE_POLL && defined(_SQUID_OSF_)
+#if HAVE_POLL && defined(_SQUID_OSF_)
     assert(type != IPC_FIFO);
 #endif
 
@@ -204,14 +204,7 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	    *wfd = pwfd;
 	fd_table[prfd].flags.ipc = 1;
 	fd_table[pwfd].flags.ipc = 1;
-	if (Config.sleep_after_fork) {
-	    /* XXX emulation of usleep() */
-	    struct timeval sl;
-	    sl.tv_sec = Config.sleep_after_fork / 1000000;
-	    sl.tv_usec = Config.sleep_after_fork % 1000000;
-	    select(0, NULL, NULL, NULL, &sl);
-	}
-	return pid;
+	return pwfd;
     }
     /* child */
     no_suid();			/* give up extra priviliges */
@@ -281,7 +274,7 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 #if HAVE_SETSID
     setsid();
 #endif
-    execvp(prog, (char *const *) args);
+    execvp(prog, args);
     debug_log = fdopen(2, "a+");
     debug(50, 0) ("ipcCreate: %s: %s\n", prog, xstrerror());
     _exit(1);

@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
-#ifndef SQUID_SNMP_ERROR_H
-#define SQUID_SNMP_ERROR_H
+#ifndef _SNMP_ERROR_H_
+#define _SNMP_ERROR_H_
 
 /**********************************************************************
  *
@@ -59,10 +59,10 @@
 extern "C" {
 #endif
 
-    const char *snmp_errstring(int);
+    char *snmp_errstring(int);
 
 #ifdef __cplusplus
 }
-#endif
 
-#endif				/* SQUID_SNMP_ERROR_H */
+#endif
+#endif				/* _SNMP_ERROR_H_ */

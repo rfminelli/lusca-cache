@@ -184,7 +184,7 @@ snmp_fix_pdu(struct snmp_pdu *pdu, int command)
 {
     struct variable_list *var, *newvar;
     struct snmp_pdu *newpdu;
-    int i;
+    int index;
     int copied = 0;
 
 #ifdef DEBUG_PDU
@@ -212,12 +212,12 @@ snmp_fix_pdu(struct snmp_pdu *pdu, int command)
     /* Loop through the variables, removing whatever isn't necessary */
 
     var = pdu->variables;
-    i = 1;
+    index = 1;
 
     /* skip first variable if necessary */
-    if (pdu->errindex == i) {
+    if (pdu->errindex == index) {
 	var = var->next_variable;
-	i++;
+	index++;
     }
     if (var != NULL) {
 
@@ -237,7 +237,7 @@ snmp_fix_pdu(struct snmp_pdu *pdu, int command)
 	while (var->next_variable) {
 
 	    /* Skip the item that was bad */
-	    if (++i == pdu->errindex) {
+	    if (++index == pdu->errindex) {
 		var = var->next_variable;
 		continue;
 	    }
@@ -255,7 +255,7 @@ snmp_fix_pdu(struct snmp_pdu *pdu, int command)
 	newvar->next_variable = NULL;
     }
     /* If we didn't copy anything, free the new pdu. */
-    if (i < pdu->errindex || copied == 0) {
+    if (index < pdu->errindex || copied == 0) {
 	snmp_free_pdu(newpdu);
 	snmp_set_api_error(SNMPERR_UNABLE_TO_FIX);
 	return (NULL);
@@ -270,7 +270,7 @@ snmp_fix_pdu(struct snmp_pdu *pdu, int command)
 
 /**********************************************************************/
 
-void
+void 
 snmp_pdu_free(struct snmp_pdu *pdu)
 {
     snmp_free_pdu(pdu);
@@ -279,7 +279,7 @@ snmp_pdu_free(struct snmp_pdu *pdu)
 /*
  * Frees the pdu and any xmalloc'd data associated with it.
  */
-void
+void 
 snmp_free_pdu(struct snmp_pdu *pdu)
 {
     struct variable_list *vp, *ovp;
@@ -359,7 +359,7 @@ snmp_pdu_encode(u_char * DestBuf, int *DestBufLen,
     switch (PDU->command) {
 
 /**********************************************************************/
-#ifdef TRP_REQ_MSG
+
     case TRP_REQ_MSG:
 
 	/* SNMPv1 Trap */
@@ -401,7 +401,6 @@ snmp_pdu_encode(u_char * DestBuf, int *DestBufLen,
 	if (bufp == NULL)
 	    return (NULL);
 	break;
-#endif
 
 /**********************************************************************/
 
@@ -488,11 +487,9 @@ snmp_pdu_decode(u_char * Packet,	/* data */
 {				/* pdu */
     u_char *bufp;
     u_char PDUType;
-    u_char ASNType;
-#ifdef UNUSED_CODE
     int four;
+    u_char ASNType;
     oid objid[MAX_NAME_LEN];
-#endif
 
     bufp = asn_parse_header(Packet, Length, &PDUType);
     if (bufp == NULL)
@@ -505,7 +502,6 @@ snmp_pdu_decode(u_char * Packet,	/* data */
     PDU->command = PDUType;
     switch (PDUType) {
 
-#ifdef TRP_REQ_MSG
     case TRP_REQ_MSG:
 
 	/* SNMPv1 Trap Message */
@@ -557,7 +553,6 @@ snmp_pdu_decode(u_char * Packet,	/* data */
 	if (bufp == NULL)
 	    ASN_PARSE_ERROR(NULL);
 	break;
-#endif
 
 /**********************************************************************/
 
@@ -585,8 +580,8 @@ snmp_pdu_decode(u_char * Packet,	/* data */
 	    &PDU->max_repetitions, sizeof(PDU->max_repetitions));
 	if (bufp == NULL)
 	    ASN_PARSE_ERROR(NULL);
-	break;
 
+	break;
 /**********************************************************************/
 
     default:
@@ -632,11 +627,50 @@ snmp_pdu_decode(u_char * Packet,	/* data */
     return (bufp);
 }
 
+
+char *
+snmp_pdu_type(struct snmp_pdu *PDU)
+{
+    switch (PDU->command) {
+    case SNMP_PDU_GET:
+	return ("GET");
+	break;
+    case SNMP_PDU_GETNEXT:
+	return ("GETNEXT");
+	break;
+    case SNMP_PDU_RESPONSE:
+	return ("RESPONSE");
+	break;
+    case SNMP_PDU_SET:
+	return ("SET");
+	break;
+    case SNMP_PDU_GETBULK:
+	return ("GETBULK");
+	break;
+    case SNMP_PDU_INFORM:
+	return ("INFORM");
+	break;
+    case SNMP_PDU_V2TRAP:
+	return ("V2TRAP");
+	break;
+    case SNMP_PDU_REPORT:
+	return ("REPORT");
+	break;
+
+    case TRP_REQ_MSG:
+	return ("V1TRAP");
+	break;
+    default:
+	return ("Unknown");
+	break;
+    }
+}
+
 /*
  * Add a null variable with the requested name to the end of the list of
  * variables for this pdu.
  */
-void
+void 
 snmp_add_null_var(struct snmp_pdu *pdu, oid * name, int name_length)
 {
     struct variable_list *vars;

@@ -55,18 +55,8 @@ static const char *const B_MBYTES_STR = "MB";
 static const char *const B_GBYTES_STR = "GB";
 
 static const char *const list_sep = ", \t\n\r";
-
-static void parse_cachedir_option_readonly(SwapDir * sd, const char *option, const char *value, int reconfiguring);
-static void dump_cachedir_option_readonly(StoreEntry * e, const char *option, SwapDir * sd);
-static void parse_cachedir_option_maxsize(SwapDir * sd, const char *option, const char *value, int reconfiguring);
-static void dump_cachedir_option_maxsize(StoreEntry * e, const char *option, SwapDir * sd);
-static struct cache_dir_option common_cachedir_options[] =
-{
-    {"read-only", parse_cachedir_option_readonly, dump_cachedir_option_readonly},
-    {"max-size", parse_cachedir_option_maxsize, dump_cachedir_option_maxsize},
-    {NULL, NULL}
-};
-
+static int http_header_first;
+static int http_header_allowed = 0;
 
 static void update_maxobjsize(void);
 static void configDoConfigure(void);
@@ -75,36 +65,22 @@ static int parseTimeUnits(const char *unit);
 static void parseTimeLine(time_t * tptr, const char *units);
 static void parse_ushort(u_short * var);
 static void parse_string(char **);
-void parse_wordlist(wordlist **);
+static void parse_wordlist(wordlist **);
 static void default_all(void);
 static void defaults_if_none(void);
 static int parse_line(char *);
 static void parseBytesLine(size_t * bptr, const char *units);
 static size_t parseBytesUnits(const char *unit);
 static void free_all(void);
-void requirePathnameExists(const char *name, const char *path);
+static void requirePathnameExists(const char *name, const char *path);
 static OBJH dump_config;
-static void dump_http_header_access(StoreEntry * entry, const char *name, header_mangler header[]);
-static void parse_http_header_access(header_mangler header[]);
-static void free_http_header_access(header_mangler header[]);
-static void dump_http_header_replace(StoreEntry * entry, const char *name, header_mangler header[]);
-static void parse_http_header_replace(header_mangler * header);
-static void free_http_header_replace(header_mangler * header);
-static void parse_denyinfo(acl_deny_info_list ** var);
-static void dump_denyinfo(StoreEntry * entry, const char *name, acl_deny_info_list * var);
-static void free_denyinfo(acl_deny_info_list ** var);
+static void dump_http_header(StoreEntry * entry, const char *name, HttpHeaderMask header);
+static void parse_http_header(HttpHeaderMask * header);
+static void free_http_header(HttpHeaderMask * header);
 static void parse_sockaddr_in_list(sockaddr_in_list **);
 static void dump_sockaddr_in_list(StoreEntry *, const char *, const sockaddr_in_list *);
 static void free_sockaddr_in_list(sockaddr_in_list **);
 static int check_null_sockaddr_in_list(const sockaddr_in_list *);
-#if USE_SSL
-static void parse_https_port_list(https_port_list **);
-static void dump_https_port_list(StoreEntry *, const char *, const https_port_list *);
-static void free_https_port_list(https_port_list **);
-#if 0
-static int check_null_https_port_list(const https_port_list *);
-#endif
-#endif /* USE_SSL */
 
 void
 self_destruct(void)
@@ -250,6 +226,7 @@ parseConfigFile(const char *file_name)
 	cfg_filename = token + 1;
     memset(config_input_line, '\0', BUFSIZ);
     config_lineno = 0;
+    http_header_first = 0;
     while (fgets(config_input_line, BUFSIZ, fp)) {
 	config_lineno++;
 	if ((token = strchr(config_input_line, '\n')))
@@ -294,7 +271,7 @@ configDoConfigure(void)
 	/* people might want a zero-sized cache on purpose */
 	(void) 0;
     else if (Config.Swap.maxSize < (Config.memMaxSize >> 10))
-	debug(3, 0) ("WARNING cache_mem is larger than total disk cache space!\n");
+	fatal("cache_swap is lower than cache_mem");
     if (Config.Announce.period > 0) {
 	Config.onoff.announce = 1;
     } else if (Config.Announce.period < 1) {
@@ -304,11 +281,34 @@ configDoConfigure(void)
 #if USE_DNSSERVERS
     if (Config.dnsChildren < 1)
 	fatal("No dnsservers allocated");
+    if (Config.dnsChildren > DefaultDnsChildrenMax) {
+	debug(3, 0) ("WARNING: dns_children was set to a bad value: %d\n",
+	    Config.dnsChildren);
+	debug(3, 0) ("Setting it to the maximum (%d).\n",
+	    DefaultDnsChildrenMax);
+	Config.dnsChildren = DefaultDnsChildrenMax;
+    }
 #endif
     if (Config.Program.redirect) {
 	if (Config.redirectChildren < 1) {
 	    Config.redirectChildren = 0;
 	    wordlistDestroy(&Config.Program.redirect);
+	} else if (Config.redirectChildren > DefaultRedirectChildrenMax) {
+	    debug(3, 0) ("WARNING: redirect_children was set to a bad value: %d\n",
+		Config.redirectChildren);
+	    debug(3, 0) ("Setting it to the maximum (%d).\n", DefaultRedirectChildrenMax);
+	    Config.redirectChildren = DefaultRedirectChildrenMax;
+	}
+    }
+    if (Config.Program.authenticate) {
+	if (Config.authenticateChildren < 1) {
+	    Config.authenticateChildren = 0;
+	    wordlistDestroy(&Config.Program.authenticate);
+	} else if (Config.authenticateChildren > DefaultAuthenticateChildrenMax) {
+	    debug(3, 0) ("WARNING: authenticate_children was set to a bad value: %d\n",
+		Config.authenticateChildren);
+	    debug(3, 0) ("Setting it to the maximum (%d).\n", DefaultAuthenticateChildrenMax);
+	    Config.authenticateChildren = DefaultAuthenticateChildrenMax;
 	}
     }
     if (Config.Accel.host) {
@@ -366,6 +366,8 @@ configDoConfigure(void)
 #endif
     if (Config.Program.redirect)
 	requirePathnameExists("redirect_program", Config.Program.redirect->key);
+    if (Config.Program.authenticate)
+	requirePathnameExists("authenticate_program", Config.Program.authenticate->key);
     requirePathnameExists("Icon Directory", Config.icons.directory);
     requirePathnameExists("Error Directory", Config.errorDirectory);
 #if HTTP_VIOLATIONS
@@ -388,50 +390,39 @@ configDoConfigure(void)
     if (Config.Wais.relayHost) {
 	if (Config.Wais.peer)
 	    cbdataFree(Config.Wais.peer);
-	Config.Wais.peer = cbdataAlloc(peer);
+	Config.Wais.peer = memAllocate(MEM_PEER);
+	cbdataAdd(Config.Wais.peer, peerDestroy, MEM_PEER);
 	Config.Wais.peer->host = xstrdup(Config.Wais.relayHost);
 	Config.Wais.peer->http_port = Config.Wais.relayPort;
     }
     if (aclPurgeMethodInUse(Config.accessList.http))
 	Config2.onoff.enable_purge = 1;
-    if (geteuid() == 0) {
-	if (NULL != Config.effectiveUser) {
-	    struct passwd *pwd = getpwnam(Config.effectiveUser);
-	    if (NULL == pwd)
-		/*
-		 * Andres Kroonmaa <andre@online.ee>:
-		 * Some getpwnam() implementations (Solaris?) require
-		 * an available FD < 256 for opening a FILE* to the
-		 * passwd file.
-		 * DW:
-		 * This should be safe at startup, but might still fail
-		 * during reconfigure.
-		 */
-		fatalf("getpwnam failed to find userid for effective user '%s'",
-		    Config.effectiveUser);
-	    Config2.effectiveUserID = pwd->pw_uid;
-	    Config2.effectiveGroupID = pwd->pw_gid;
-	}
-    } else {
-	Config2.effectiveUserID = geteuid();
-	Config2.effectiveGroupID = getegid();
+    if (NULL != Config.effectiveUser) {
+	struct passwd *pwd = getpwnam(Config.effectiveUser);
+	if (NULL == pwd)
+	    /*
+	     * Andres Kroonmaa <andre@online.ee>:
+	     * Some getpwnam() implementations (Solaris?) require
+	     * an available FD < 256 for opening a FILE* to the
+	     * passwd file.
+	     * DW:
+	     * This should be safe at startup, but might still fail
+	     * during reconfigure.
+	     */
+	    fatalf("getpwnam failed to find userid for effective user '%s'",
+		Config.effectiveUser,
+		xstrerror());
+	Config2.effectiveUserID = pwd->pw_uid;
     }
     if (NULL != Config.effectiveGroup) {
 	struct group *grp = getgrnam(Config.effectiveGroup);
 	if (NULL == grp)
 	    fatalf("getgrnam failed to find groupid for effective group '%s'",
-		Config.effectiveGroup);
+		Config.effectiveGroup,
+		xstrerror());
 	Config2.effectiveGroupID = grp->gr_gid;
     }
     urlExtMethodConfigure();
-    if (0 == Config.onoff.client_db) {
-	acl *a;
-	for (a = Config.aclList; a; a = a->next) {
-	    if (ACL_MAXCONN != a->type)
-		continue;
-	    debug(22, 0) ("WARNING: 'maxconn' ACL (%s) won't work with client_db disabled\n", a->name);
-	}
-    }
 }
 
 /* Parse a time specification from the config file.  Store the
@@ -561,26 +552,20 @@ free_acl(acl ** ae)
 }
 
 static void
-dump_acl_list(StoreEntry * entry, acl_list * head)
-{
-    acl_list *l;
-    for (l = head; l; l = l->next) {
-	storeAppendPrintf(entry, " %s%s",
-	    l->op ? null_string : "!",
-	    l->acl->name);
-    }
-}
-
-static void
 dump_acl_access(StoreEntry * entry, const char *name, acl_access * head)
 {
-    acl_access *l;
-    for (l = head; l; l = l->next) {
+    acl_list *l;
+    while (head != NULL) {
 	storeAppendPrintf(entry, "%s %s",
 	    name,
-	    l->allow ? "Allow" : "Deny");
-	dump_acl_list(entry, l->acl_list);
+	    head->allow ? "Allow" : "Deny");
+	for (l = head->acl_list; l != NULL; l = l->next) {
+	    storeAppendPrintf(entry, " %s%s",
+		l->op ? null_string : "!",
+		l->acl->name);
+	}
 	storeAppendPrintf(entry, "\n");
+	head = head->next;
     }
 }
 
@@ -624,110 +609,6 @@ free_address(struct in_addr *addr)
     memset(addr, '\0', sizeof(struct in_addr));
 }
 
-CBDATA_TYPE(acl_address);
-
-static void
-dump_acl_address(StoreEntry * entry, const char *name, acl_address * head)
-{
-    acl_address *l;
-    for (l = head; l; l = l->next) {
-	if (l->addr.s_addr != INADDR_ANY)
-	    storeAppendPrintf(entry, "%s %s", name, inet_ntoa(l->addr));
-	else
-	    storeAppendPrintf(entry, "%s autoselect", name);
-	dump_acl_list(entry, l->acl_list);
-	storeAppendPrintf(entry, "\n");
-    }
-}
-
-static void
-freed_acl_address(void *data)
-{
-    acl_address *l = data;
-    aclDestroyAclList(&l->acl_list);
-}
-
-static void
-parse_acl_address(acl_address ** head)
-{
-    acl_address *l;
-    acl_address **tail = head;	/* sane name below */
-    CBDATA_INIT_TYPE_FREECB(acl_address, freed_acl_address);
-    l = cbdataAlloc(acl_address);
-    parse_address(&l->addr);
-    aclParseAclList(&l->acl_list);
-    while (*tail)
-	tail = &(*tail)->next;
-    *tail = l;
-}
-
-static void
-free_acl_address(acl_address ** head)
-{
-    while (*head) {
-	acl_address *l = *head;
-	*head = l->next;
-	cbdataFree(l);
-    }
-}
-
-CBDATA_TYPE(acl_tos);
-
-static void
-dump_acl_tos(StoreEntry * entry, const char *name, acl_tos * head)
-{
-    acl_tos *l;
-    for (l = head; l; l = l->next) {
-	if (l->tos > 0)
-	    storeAppendPrintf(entry, "%s 0x%02X", name, l->tos);
-	else
-	    storeAppendPrintf(entry, "%s none", name);
-	dump_acl_list(entry, l->acl_list);
-	storeAppendPrintf(entry, "\n");
-    }
-}
-
-static void
-freed_acl_tos(void *data)
-{
-    acl_tos *l = data;
-    aclDestroyAclList(&l->acl_list);
-}
-
-static void
-parse_acl_tos(acl_tos ** head)
-{
-    acl_tos *l;
-    acl_tos **tail = head;	/* sane name below */
-    int tos;
-    char junk;
-    char *token = strtok(NULL, w_space);
-    if (!token)
-	self_destruct();
-    if (sscanf(token, "0x%x%c", &tos, &junk) != 1)
-	self_destruct();
-    if (tos < 0 || tos > 255)
-	self_destruct();
-    CBDATA_INIT_TYPE_FREECB(acl_tos, freed_acl_tos);
-    l = cbdataAlloc(acl_tos);
-    l->tos = tos;
-    aclParseAclList(&l->acl_list);
-    while (*tail)
-	tail = &(*tail)->next;
-    *tail = l;
-}
-
-static void
-free_acl_tos(acl_tos ** head)
-{
-    while (*head) {
-	acl_tos *l = *head;
-	*head = l->next;
-	l->next = NULL;
-	cbdataFree(l);
-    }
-}
-
 #if DELAY_POOLS
 
 /* do nothing - free_delay_pool_count is the magic free function.
@@ -754,7 +635,7 @@ free_delay_pool_count(delayConfig * cfg)
 	}
 	aclDestroyAccessList(&cfg->access[i]);
     }
-    delayFreeDelayData(cfg->pools);
+    delayFreeDelayData();
     xfree(cfg->class);
     xfree(cfg->rates);
     xfree(cfg->access);
@@ -899,133 +780,62 @@ parse_delay_pool_access(delayConfig * cfg)
 #endif
 
 static void
-dump_http_header_access(StoreEntry * entry, const char *name, header_mangler header[])
+dump_http_header(StoreEntry * entry, const char *name, HttpHeaderMask header)
 {
     int i;
-    for (i = 0; i < HDR_ENUM_END; i++) {
-	if (header[i].access_list != NULL) {
-	    storeAppendPrintf(entry, "%s ", name);
-	    dump_acl_access(entry, httpHeaderNameById(i),
-		header[i].access_list);
-	}
+    for (i = 0; i < HDR_OTHER; i++) {
+	if (http_header_allowed && !CBIT_TEST(header, i))
+	    storeAppendPrintf(entry, "%s allow %s\n", name, httpHeaderNameById(i));
+	else if (!http_header_allowed && CBIT_TEST(header, i))
+	    storeAppendPrintf(entry, "%s deny %s\n", name, httpHeaderNameById(i));
     }
 }
 
 static void
-parse_http_header_access(header_mangler header[])
+parse_http_header(HttpHeaderMask * header)
 {
-    int id, i;
+    int allowed, id;
     char *t = NULL;
     if ((t = strtok(NULL, w_space)) == NULL) {
 	debug(3, 0) ("%s line %d: %s\n",
 	    cfg_filename, config_lineno, config_input_line);
-	debug(3, 0) ("parse_http_header_access: missing header name.\n");
+	debug(3, 0) ("parse_http_header: missing 'allow' or 'deny'.\n");
 	return;
     }
-    /* Now lookup index of header. */
-    id = httpHeaderIdByNameDef(t, strlen(t));
-    if (strcmp(t, "All") == 0)
-	id = HDR_ENUM_END;
-    else if (strcmp(t, "Other") == 0)
-	id = HDR_OTHER;
-    else if (id == -1) {
+    if (!strcmp(t, "allow"))
+	allowed = 1;
+    else if (!strcmp(t, "deny"))
+	allowed = 0;
+    else {
 	debug(3, 0) ("%s line %d: %s\n",
 	    cfg_filename, config_lineno, config_input_line);
-	debug(3, 0) ("parse_http_header_access: unknown header name %s.\n", t);
+	debug(3, 0) ("parse_http_header: expecting 'allow' or 'deny', got '%s'.\n", t);
 	return;
     }
-    if (id != HDR_ENUM_END) {
-	parse_acl_access(&header[id].access_list);
-    } else {
-	char *next_string = t + strlen(t) - 1;
-	*next_string = 'A';
-	*(next_string + 1) = ' ';
-	for (i = 0; i < HDR_ENUM_END; i++) {
-	    char *new_string = xstrdup(next_string);
-	    strtok(new_string, w_space);
-	    parse_acl_access(&header[i].access_list);
-	    safe_free(new_string);
+    if (!http_header_first) {
+	http_header_first = 1;
+	if (allowed) {
+	    http_header_allowed = 1;
+	    httpHeaderMaskInit(header, 0xFF);
+	} else {
+	    http_header_allowed = 0;
+	    httpHeaderMaskInit(header, 0);
 	}
     }
-}
-
-static void
-free_http_header_access(header_mangler header[])
-{
-    int i;
-    for (i = 0; i < HDR_ENUM_END; i++) {
-	free_acl_access(&header[i].access_list);
+    while ((t = strtok(NULL, w_space))) {
+	if ((id = httpHeaderIdByNameDef(t, strlen(t))) == -1)
+	    debug(3, 0) ("parse_http_header: Ignoring unknown header '%s'\n", t);
+	else if (allowed)
+	    CBIT_CLR(*header, id);
+	else
+	    CBIT_SET(*header, id);
     }
 }
 
 static void
-dump_http_header_replace(StoreEntry * entry, const char *name, header_mangler
-    header[])
+free_http_header(HttpHeaderMask * header)
 {
-    int i;
-    for (i = 0; i < HDR_ENUM_END; i++) {
-	if (NULL == header[i].replacement)
-	    continue;
-	storeAppendPrintf(entry, "%s %s %s\n", name, httpHeaderNameById(i),
-	    header[i].replacement);
-    }
-}
-
-static void
-parse_http_header_replace(header_mangler header[])
-{
-    int id, i;
-    char *t = NULL;
-    if ((t = strtok(NULL, w_space)) == NULL) {
-	debug(3, 0) ("%s line %d: %s\n",
-	    cfg_filename, config_lineno, config_input_line);
-	debug(3, 0) ("parse_http_header_replace: missing header name.\n");
-	return;
-    }
-    /* Now lookup index of header. */
-    id = httpHeaderIdByNameDef(t, strlen(t));
-    if (strcmp(t, "All") == 0)
-	id = HDR_ENUM_END;
-    else if (strcmp(t, "Other") == 0)
-	id = HDR_OTHER;
-    else if (id == -1) {
-	debug(3, 0) ("%s line %d: %s\n",
-	    cfg_filename, config_lineno, config_input_line);
-	debug(3, 0) ("parse_http_header_replace: unknown header name %s.\n",
-	    t);
-	return;
-    }
-    if (id != HDR_ENUM_END) {
-	if (header[id].replacement != NULL)
-	    safe_free(header[id].replacement);
-	header[id].replacement = xstrdup(t + strlen(t) + 1);
-    } else {
-	for (i = 0; i < HDR_ENUM_END; i++) {
-	    if (header[i].replacement != NULL)
-		safe_free(header[i].replacement);
-	    header[i].replacement = xstrdup(t + strlen(t) + 1);
-	}
-    }
-}
-
-static void
-free_http_header_replace(header_mangler header[])
-{
-    int i;
-    for (i = 0; i < HDR_ENUM_END; i++) {
-	if (header[i].replacement != NULL)
-	    safe_free(header[i].replacement);
-    }
-}
-
-void
-dump_cachedir_options(StoreEntry * entry, struct cache_dir_option *options, SwapDir * sd)
-{
-    struct cache_dir_option *option;
-    if (!options)
-	return;
-    for (option = options; option->name; option++)
-	option->dump(entry, option->name, sd);
+    httpHeaderMaskInit(header, 0);
 }
 
 static void
@@ -1035,11 +845,10 @@ dump_cachedir(StoreEntry * entry, const char *name, cacheSwap swap)
     int i;
     for (i = 0; i < swap.n_configured; i++) {
 	s = swap.swapDirs + i;
-	storeAppendPrintf(entry, "%s %s %s", name, s->type, s->path);
 	if (s->dump)
-	    s->dump(entry, s);
-	dump_cachedir_options(entry, common_cachedir_options, s);
-	storeAppendPrintf(entry, "\n");
+	    s->dump(entry, name, s);
+	else
+	    debug(3, 1) ("WARNING: no config dump function for cache_dir %s\n", s->path);
     }
 }
 
@@ -1053,86 +862,6 @@ static int
 check_null_string(char *s)
 {
     return s == NULL;
-}
-
-static void
-allocate_new_authScheme(authConfig * cfg)
-{
-    if (cfg->schemes == NULL) {
-	cfg->n_allocated = 4;
-	cfg->schemes = xcalloc(cfg->n_allocated, sizeof(authScheme));
-    }
-    if (cfg->n_allocated == cfg->n_configured) {
-	authScheme *tmp;
-	cfg->n_allocated <<= 1;
-	tmp = xcalloc(cfg->n_allocated, sizeof(authScheme));
-	xmemcpy(tmp, cfg->schemes, cfg->n_configured * sizeof(authScheme));
-	xfree(cfg->schemes);
-	cfg->schemes = tmp;
-    }
-}
-
-static void
-parse_authparam(authConfig * config)
-{
-    char *type_str;
-    char *param_str;
-    authScheme *scheme = NULL;
-    int type, i;
-
-    if ((type_str = strtok(NULL, w_space)) == NULL)
-	self_destruct();
-
-    if ((param_str = strtok(NULL, w_space)) == NULL)
-	self_destruct();
-
-    if ((type = authenticateAuthSchemeId(type_str)) == -1) {
-	debug(3, 0) ("Parsing Config File: Unknown authentication scheme '%s'.\n", type_str);
-	return;
-    }
-    for (i = 0; i < config->n_configured; i++) {
-	if (config->schemes[i].Id == type) {
-	    scheme = config->schemes + i;
-	}
-    }
-
-    if (scheme == NULL) {
-	allocate_new_authScheme(config);
-	scheme = config->schemes + config->n_configured;
-	config->n_configured++;
-	scheme->Id = type;
-	scheme->typestr = authscheme_list[type].typestr;
-    }
-    authscheme_list[type].parse(scheme, config->n_configured, param_str);
-}
-
-static void
-free_authparam(authConfig * cfg)
-{
-    authScheme *scheme;
-    int i;
-    /* DON'T FREE THESE FOR RECONFIGURE */
-    if (reconfiguring)
-	return;
-    for (i = 0; i < cfg->n_configured; i++) {
-	scheme = cfg->schemes + i;
-	authscheme_list[scheme->Id].freeconfig(scheme);
-    }
-    safe_free(cfg->schemes);
-    cfg->schemes = NULL;
-    cfg->n_allocated = 0;
-    cfg->n_configured = 0;
-}
-
-static void
-dump_authparam(StoreEntry * entry, const char *name, authConfig cfg)
-{
-    authScheme *scheme;
-    int i;
-    for (i = 0; i < cfg.n_configured; i++) {
-	scheme = cfg.schemes + i;
-	authscheme_list[scheme->Id].dump(entry, name, scheme);
-    }
 }
 
 void
@@ -1243,13 +972,6 @@ parse_cachedir_option_readonly(SwapDir * sd, const char *option, const char *val
 }
 
 static void
-dump_cachedir_option_readonly(StoreEntry * e, const char *option, SwapDir * sd)
-{
-    if (sd->flags.read_only)
-	storeAppendPrintf(e, " %s", option);
-}
-
-static void
 parse_cachedir_option_maxsize(SwapDir * sd, const char *option, const char *value, int reconfiguring)
 {
     ssize_t size;
@@ -1260,17 +982,17 @@ parse_cachedir_option_maxsize(SwapDir * sd, const char *option, const char *valu
     size = atoi(value);
 
     if (reconfiguring && sd->max_objsize != size)
-	debug(3, 1) ("Cache dir '%s' max object size now %ld\n", sd->path, (long int) size);
+	debug(3, 1) ("Cache dir '%s' max object size now %d\n", size);
 
     sd->max_objsize = size;
 }
 
-static void
-dump_cachedir_option_maxsize(StoreEntry * e, const char *option, SwapDir * sd)
+static struct cache_dir_option common_cachedir_options[] =
 {
-    if (sd->max_objsize != -1)
-	storeAppendPrintf(e, " %s=%ld", option, (long int) sd->max_objsize);
-}
+    {"read-only", parse_cachedir_option_readonly},
+    {"max-size", parse_cachedir_option_maxsize},
+    {NULL, NULL}
+};
 
 void
 parse_cachedir_options(SwapDir * sd, struct cache_dir_option *options, int reconfiguring)
@@ -1334,7 +1056,7 @@ free_cachedir(cacheSwap * swap)
     swap->n_configured = 0;
 }
 
-static const char *
+const char *
 peer_type_str(const peer_t type)
 {
     switch (type) {
@@ -1357,6 +1079,7 @@ static void
 dump_peer(StoreEntry * entry, const char *name, peer * p)
 {
     domain_ping *d;
+    acl_access *a;
     domain_type *t;
     LOCAL_ARRAY(char, xname, 128);
     while (p != NULL) {
@@ -1373,7 +1096,7 @@ dump_peer(StoreEntry * entry, const char *name, peer * p)
 		d->do_ping ? null_string : "!",
 		d->domain);
 	}
-	if (p->access) {
+	if ((a = p->access)) {
 	    snprintf(xname, 128, "cache_peer_access %s", p->host);
 	    dump_acl_access(entry, xname, p->access);
 	}
@@ -1393,7 +1116,7 @@ parse_peer(peer ** head)
     char *token = NULL;
     peer *p;
     int i;
-    p = cbdataAlloc(peer);
+    p = memAllocate(MEM_PEER);
     p->http_port = CACHE_HTTP_PORT;
     p->icp.port = CACHE_ICP_PORT;
     p->weight = 1;
@@ -1450,7 +1173,6 @@ parse_peer(peer ** head)
 #endif
 	} else if (!strncasecmp(token, "login=", 6)) {
 	    p->login = xstrdup(token + 6);
-	    rfc1738_unescape(p->login);
 	} else if (!strncasecmp(token, "connect-timeout=", 16)) {
 	    p->connect_timeout = atoi(token + 16);
 #if USE_CACHE_DIGESTS
@@ -1459,8 +1181,6 @@ parse_peer(peer ** head)
 #endif
 	} else if (!strcasecmp(token, "allow-miss")) {
 	    p->options.allow_miss = 1;
-	} else if (!strncasecmp(token, "max-conn=", 9)) {
-	    p->max_conn = atoi(token + 9);
 	} else {
 	    debug(3, 0) ("parse_peer: token='%s'\n", token);
 	    self_destruct();
@@ -1472,16 +1192,18 @@ parse_peer(peer ** head)
     p->tcp_up = PEER_TCP_MAGIC_COUNT;
     p->test_fd = -1;
 #if USE_CARP
-#define ROTATE_LEFT(x, n) (((x) << (n)) | ((x) >> (32-(n))))
+#define ROTATE_LEFT(x, n) (((x) << (n)) | ((x) >> ((sizeof(u_long)*8)-(n))))
     if (p->carp.load_factor) {
 	/* calculate this peers hash for use in CARP */
 	p->carp.hash = 0;
 	for (token = p->host; *token != 0; token++)
-	    p->carp.hash += ROTATE_LEFT(p->carp.hash, 19) + (unsigned int) *token;
+	    p->carp.hash += ROTATE_LEFT(p->carp.hash, 19) + *token;
 	p->carp.hash += p->carp.hash * 0x62531965;
-	p->carp.hash = ROTATE_LEFT(p->carp.hash, 21);
+	p->carp.hash += ROTATE_LEFT(p->carp.hash, 21);
     }
 #endif
+    /* This must preceed peerDigestCreate */
+    cbdataAdd(p, peerDestroy, MEM_PEER);
 #if USE_CACHE_DIGESTS
     if (!p->options.no_digest) {
 	p->digest = peerDigestCreate(p);
@@ -1717,7 +1439,7 @@ dump_int(StoreEntry * entry, const char *name, int var)
     storeAppendPrintf(entry, "%s %d\n", name, var);
 }
 
-void
+static void
 parse_int(int *var)
 {
     int i;
@@ -1737,7 +1459,7 @@ dump_onoff(StoreEntry * entry, const char *name, int var)
     storeAppendPrintf(entry, "%s %s\n", name, var ? "on" : "off");
 }
 
-void
+static void
 parse_onoff(int *var)
 {
     char *token = strtok(NULL, w_space);
@@ -1914,18 +1636,14 @@ free_string(char **var)
     safe_free(*var);
 }
 
-void
+static void
 parse_eol(char *volatile *var)
 {
-    unsigned char *token = (unsigned char *) strtok(NULL, null_string);
+    char *token = strtok(NULL, null_string);
     safe_free(*var);
     if (token == NULL)
 	self_destruct();
-    while (*token && isspace(*token))
-	token++;
-    if (!*token)
-	self_destruct();
-    *var = xstrdup((char *) token);
+    *var = xstrdup(token);
 }
 
 static void
@@ -1934,7 +1652,7 @@ dump_time_t(StoreEntry * entry, const char *name, time_t var)
     storeAppendPrintf(entry, "%s %d seconds\n", name, (int) var);
 }
 
-void
+static void
 parse_time_t(time_t * var)
 {
     parseTimeLine(var, T_SECOND_STR);
@@ -1977,65 +1695,6 @@ parse_b_size_t(size_t * var)
 {
     parseBytesLine(var, B_BYTES_STR);
 }
-
-CBDATA_TYPE(body_size);
-
-static void
-parse_body_size_t(dlink_list * bodylist)
-{
-    body_size *bs;
-    CBDATA_INIT_TYPE(body_size);
-    bs = cbdataAlloc(body_size);
-    parse_size_t(&bs->maxsize);
-    aclParseAccessLine(&bs->access_list);
-
-    dlinkAddTail(bs, &bs->node, bodylist);
-}
-
-static void
-dump_body_size_t(StoreEntry * entry, const char *name, dlink_list bodylist)
-{
-    body_size *bs;
-    bs = (body_size *) bodylist.head;
-    while (bs) {
-	acl_list *l;
-	acl_access *head = bs->access_list;
-	while (head != NULL) {
-	    storeAppendPrintf(entry, "%s %ld %s", name, (long int) bs->maxsize,
-		head->allow ? "Allow" : "Deny");
-	    for (l = head->acl_list; l != NULL; l = l->next) {
-		storeAppendPrintf(entry, " %s%s",
-		    l->op ? null_string : "!",
-		    l->acl->name);
-	    }
-	    storeAppendPrintf(entry, "\n");
-	    head = head->next;
-	}
-	bs = (body_size *) bs->node.next;
-    }
-}
-
-static void
-free_body_size_t(dlink_list * bodylist)
-{
-    body_size *bs, *tempnode;
-    bs = (body_size *) bodylist->head;
-    while (bs) {
-	bs->maxsize = 0;
-	aclDestroyAccessList(&bs->access_list);
-	tempnode = (body_size *) bs->node.next;
-	dlinkDelete(&bs->node, bodylist);
-	cbdataFree(bs);
-	bs = tempnode;
-    }
-}
-
-static int
-check_null_body_size_t(dlink_list bodylist)
-{
-    return bodylist.head == NULL;
-}
-
 
 static void
 parse_kb_size_t(size_t * var)
@@ -2086,7 +1745,7 @@ dump_wordlist(StoreEntry * entry, const char *name, wordlist * list)
     }
 }
 
-void
+static void
 parse_wordlist(wordlist ** list)
 {
     char *token;
@@ -2134,7 +1793,7 @@ parse_uri_whitespace(int *var)
 static void
 dump_uri_whitespace(StoreEntry * entry, const char *name, int var)
 {
-    const char *s;
+    char *s;
     if (var == URI_WHITESPACE_ALLOW)
 	s = "allow";
     else if (var == URI_WHITESPACE_ENCODE)
@@ -2183,7 +1842,7 @@ dump_removalpolicy(StoreEntry * entry, const char *name, RemovalPolicySettings *
 }
 
 
-#include "cf_parser.h"
+#include "cf_parser.c"
 
 peer_t
 parseNeighborType(const char *s)
@@ -2270,111 +1929,6 @@ check_null_sockaddr_in_list(const sockaddr_in_list * s)
     return NULL == s;
 }
 
-#if USE_SSL
-static void
-parse_https_port_list(https_port_list ** head)
-{
-    char *token;
-    char *t;
-    char *host;
-    const struct hostent *hp;
-    unsigned short port;
-    https_port_list *s;
-    token = strtok(NULL, w_space);
-    if (!token)
-	self_destruct();
-    host = NULL;
-    port = 0;
-    if ((t = strchr(token, ':'))) {
-	/* host:port */
-	host = token;
-	*t = '\0';
-	port = (unsigned short) atoi(t + 1);
-	if (0 == port)
-	    self_destruct();
-    } else if ((port = atoi(token)) > 0) {
-	/* port */
-    } else {
-	self_destruct();
-    }
-    s = xcalloc(1, sizeof(*s));
-    s->s.sin_port = htons(port);
-    if (NULL == host)
-	s->s.sin_addr = any_addr;
-    else if (1 == safe_inet_addr(host, &s->s.sin_addr))
-	(void) 0;
-    else if ((hp = gethostbyname(host)))	/* dont use ipcache */
-	s->s.sin_addr = inaddrFromHostent(hp);
-    else
-	self_destruct();
-    /* parse options ... */
-    while ((token = strtok(NULL, w_space))) {
-	if (strncmp(token, "cert=", 5) == 0) {
-	    safe_free(s->cert);
-	    s->cert = xstrdup(token + 5);
-	} else if (strncmp(token, "key=", 4) == 0) {
-	    safe_free(s->key);
-	    s->key = xstrdup(token + 4);
-	} else if (strncmp(token, "version=", 8) == 0) {
-	    s->version = atoi(token + 8);
-	} else if (strncmp(token, "options=", 8) == 0) {
-	    safe_free(s->options);
-	    s->options = xstrdup(token + 8);
-	} else if (strncmp(token, "cipher=", 7) == 0) {
-	    safe_free(s->cipher);
-	    s->cipher = xstrdup(token + 7);
-	} else {
-	    self_destruct();
-	}
-    }
-    while (*head)
-	head = &(*head)->next;
-    *head = s;
-}
-
-static void
-dump_https_port_list(StoreEntry * e, const char *n, const https_port_list * s)
-{
-    while (s) {
-	storeAppendPrintf(e, "%s %s:%d cert=\"%s\" key=\"%s\"",
-	    n,
-	    inet_ntoa(s->s.sin_addr),
-	    ntohs(s->s.sin_port),
-	    s->cert,
-	    s->key);
-	if (s->version)
-	    storeAppendPrintf(e, " version=%d", s->version);
-	if (s->options)
-	    storeAppendPrintf(e, " options=%s", s->options);
-	if (s->cipher)
-	    storeAppendPrintf(e, " cipher=%s", s->cipher);
-	storeAppendPrintf(e, "\n");
-	s = s->next;
-    }
-}
-
-static void
-free_https_port_list(https_port_list ** head)
-{
-    https_port_list *s;
-    while ((s = *head) != NULL) {
-	*head = s->next;
-	safe_free(s->cert);
-	safe_free(s->key);
-	safe_free(s);
-    }
-}
-
-#if 0
-static int
-check_null_https_port_list(const https_port_list * s)
-{
-    return NULL == s;
-}
-#endif
-
-#endif /* USE_SSL */
-
 void
 configFreeMemory(void)
 {
@@ -2382,7 +1936,7 @@ configFreeMemory(void)
     free_all();
 }
 
-void
+static void
 requirePathnameExists(const char *name, const char *path)
 {
     struct stat sb;

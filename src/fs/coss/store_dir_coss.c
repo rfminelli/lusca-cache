@@ -34,9 +34,7 @@
  */
 
 #include "squid.h"
-#include <aio.h>
 
-#include "async_io.h"
 #include "store_coss.h"
 
 #define STORE_META_BUFSZ 4096
@@ -44,6 +42,7 @@
 int n_coss_dirs = 0;
 /* static int last_coss_pick_index = -1; */
 int coss_initialised = 0;
+MemPool *coss_membuf_pool = NULL;
 MemPool *coss_state_pool = NULL;
 MemPool *coss_index_pool = NULL;
 
@@ -88,10 +87,6 @@ static STFREE storeCossDirShutdown;
 static STFSPARSE storeCossDirParse;
 static STFSRECONFIGURE storeCossDirReconfigure;
 static STDUMP storeCossDirDump;
-static STCALLBACK storeCossDirCallback;
-
-/* The "only" externally visible function */
-STSETUP storeFsSetup_coss;
 
 static char *
 storeCossDirSwapLogFile(SwapDir * sd, const char *ext)
@@ -155,14 +150,9 @@ static void
 storeCossDirInit(SwapDir * sd)
 {
     CossInfo *cs = (CossInfo *) sd->fsdata;
-    a_file_setupqueue(&cs->aq);
     storeCossDirOpenSwapLog(sd);
     storeCossDirRebuild(sd);
     cs->fd = file_open(sd->path, O_RDWR | O_CREAT);
-    if (cs->fd < 0) {
-	debug(81, 1) ("%s: %s\n", sd->path, xstrerror());
-	fatal("storeCossDirInit: Failed to open a COSS directory.");
-    }
     n_coss_dirs++;
     (void) storeDirGetBlkSize(sd->path, &sd->fs.blksize);
 }
@@ -338,17 +328,15 @@ storeCossAddDiskRestore(SwapDir * SD, const cache_key * key,
     return e;
 }
 
-CBDATA_TYPE(RebuildState);
 static void
 storeCossDirRebuild(SwapDir * sd)
 {
-    RebuildState *rb;
+    RebuildState *rb = xcalloc(1, sizeof(*rb));
     int clean = 0;
     int zero = 0;
     FILE *fp;
     EVH *func = NULL;
-    CBDATA_INIT_TYPE(RebuildState);
-    rb = cbdataAlloc(RebuildState);
+    cbdataAdd(rb, cbdataXfree, 0);
     rb->sd = sd;
     rb->speed = opt_foreground_rebuild ? 1 << 30 : 50;
     func = storeCossRebuildFromSwapLog;
@@ -481,20 +469,18 @@ storeCossDirWriteCleanStart(SwapDir * sd)
     CossInfo *cs = (CossInfo *) sd->fsdata;
     struct _clean_state *state = xcalloc(1, sizeof(*state));
     struct stat sb;
-    state->new = xstrdup(storeCossDirSwapLogFile(sd, ".clean"));
-    state->fd = file_open(state->new, O_WRONLY | O_CREAT | O_TRUNC);
-    if (state->fd < 0) {
-	xfree(state->new);
-	xfree(state);
-	return -1;
-    }
     sd->log.clean.write = NULL;
     sd->log.clean.state = NULL;
     state->cur = xstrdup(storeCossDirSwapLogFile(sd, NULL));
+    state->new = xstrdup(storeCossDirSwapLogFile(sd, ".clean"));
     state->cln = xstrdup(storeCossDirSwapLogFile(sd, ".last-clean"));
     state->outbuf = xcalloc(CLEAN_BUF_SZ, 1);
     state->outbuf_offset = 0;
+    unlink(state->new);
     unlink(state->cln);
+    state->fd = file_open(state->new, O_WRONLY | O_CREAT | O_TRUNC);
+    if (state->fd < 0)
+	return -1;
     state->current = cs->index.tail;
     debug(20, 3) ("storeCOssDirWriteCleanLogs: opened %s, FD %d\n",
 	state->new, state->fd);
@@ -656,8 +642,8 @@ storeCossDirShutdown(SwapDir * SD)
 {
     CossInfo *cs = (CossInfo *) SD->fsdata;
 
-    storeCossSync(SD);		/* This'll call a_file_syncqueue() */
-    a_file_closequeue(&cs->aq);
+    storeCossSync(SD);
+
     file_close(cs->fd);
     cs->fd = -1;
 
@@ -679,34 +665,18 @@ storeCossDirShutdown(SwapDir * SD)
 int
 storeCossDirCheckObj(SwapDir * SD, const StoreEntry * e)
 {
-    CossInfo *cs = (CossInfo *) SD->fsdata;
-    int loadav;
-
     /* Check if the object is a special object, we can't cache these */
     if (EBIT_TEST(e->flags, ENTRY_SPECIAL))
 	return -1;
 
     /* Otherwise, we're ok */
-    /* Return load, cs->aq.aq_numpending out of MAX_ASYNCOP */
-    loadav = cs->aq.aq_numpending * 1000 / MAX_ASYNCOP;
-    return loadav;
-}
-
-
-/*
- * storeCossDirCallback - do the IO completions
- */
-static int
-storeCossDirCallback(SwapDir * SD)
-{
-    CossInfo *cs = (CossInfo *) SD->fsdata;
-
-    return a_file_callback(&cs->aq);
+    /* Return 900 (90%) load */
+    return 900;
 }
 
 /* ========== LOCAL FUNCTIONS ABOVE, GLOBAL FUNCTIONS BELOW ========== */
 
-static void
+void
 storeCossDirStats(SwapDir * SD, StoreEntry * sentry)
 {
     CossInfo *cs = (CossInfo *) SD->fsdata;
@@ -723,7 +693,6 @@ storeCossDirStats(SwapDir * SD, StoreEntry * sentry)
 	SD->map->n_files_in_map, SD->map->max_n_files,
 	percent(SD->map->n_files_in_map, SD->map->max_n_files));
 #endif
-    storeAppendPrintf(sentry, "Pending operations: %d out of %d\n", cs->aq.aq_numpending, MAX_ASYNCOP);
     storeAppendPrintf(sentry, "Flags:");
     if (SD->flags.selected)
 	storeAppendPrintf(sentry, " SELECTED");
@@ -766,7 +735,7 @@ storeCossDirParse(SwapDir * sd, int index, char *path)
     sd->checkobj = storeCossDirCheckObj;
     sd->refobj = NULL;		/* LRU is done in storeCossRead */
     sd->unrefobj = NULL;
-    sd->callback = storeCossDirCallback;
+    sd->callback = NULL;
     sd->sync = storeCossSync;
 
     sd->obj.create = storeCossCreate;
@@ -788,15 +757,12 @@ storeCossDirParse(SwapDir * sd, int index, char *path)
     cs->fd = -1;
     cs->swaplog_fd = -1;
     cs->numcollisions = 0;
-    cs->membufs.head = cs->membufs.tail = NULL;		/* set when the rebuild completes */
-    cs->current_membuf = NULL;
+    cs->membufs = NULL;		/* set when the rebuild completes */
+    cs->current_membuf = cs->membufs;
     cs->index.head = NULL;
     cs->index.tail = NULL;
 
     parse_cachedir_options(sd, NULL, 0);
-    /* Enforce maxobjsize being set to something */
-    if (sd->max_objsize == -1)
-	fatal("COSS requires max-size to be set to something other than -1!\n");
 }
 
 
@@ -818,17 +784,16 @@ storeCossDirReconfigure(SwapDir * sd, int index, char *path)
 	sd->max_size = size;
     }
     parse_cachedir_options(sd, NULL, 1);
-    /* Enforce maxobjsize being set to something */
-    if (sd->max_objsize == -1)
-	fatal("COSS requires max-size to be set to something other than -1!\n");
 }
 
 void
-storeCossDirDump(StoreEntry * entry, SwapDir * s)
+storeCossDirDump(StoreEntry * entry, const char *name, SwapDir * s)
 {
-    storeAppendPrintf(entry, " %d",
+    storeAppendPrintf(entry, "%s %s %s %d\n",
+	name,
+	s->type,
+	s->path,
 	s->max_size >> 20);
-    dump_cachedir_options(entry, NULL, s);
 }
 
 #if OLD_UNUSED_CODE
@@ -878,6 +843,7 @@ storeCossDirPick(void)
 static void
 storeCossDirDone(void)
 {
+    memPoolDestroy(coss_membuf_pool);
     memPoolDestroy(coss_state_pool);
     coss_initialised = 0;
 }
@@ -890,6 +856,7 @@ storeFsSetup_coss(storefs_entry_t * storefs)
     storefs->parsefunc = storeCossDirParse;
     storefs->reconfigurefunc = storeCossDirReconfigure;
     storefs->donefunc = storeCossDirDone;
+    coss_membuf_pool = memPoolCreate("COSS Membuf data", sizeof(CossMemBuf));
     coss_state_pool = memPoolCreate("COSS IO State data", sizeof(CossState));
     coss_index_pool = memPoolCreate("COSS index data", sizeof(CossIndexNode));
     coss_initialised = 1;

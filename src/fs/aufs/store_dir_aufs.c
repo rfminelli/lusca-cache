@@ -66,9 +66,9 @@ struct _RebuildState {
 
 static int n_asyncufs_dirs = 0;
 static int *asyncufs_dir_index = NULL;
-MemPool *squidaio_state_pool = NULL;
-MemPool *aufs_qread_pool = NULL;
-MemPool *aufs_qwrite_pool = NULL;
+MemPool *aio_state_pool = NULL;
+MemPool *aio_qread_pool = NULL;
+MemPool *aio_qwrite_pool = NULL;
 static int asyncufs_initialised = 0;
 
 static char *storeAufsDirSwapSubDir(SwapDir *, int subdirn);
@@ -79,9 +79,9 @@ static void storeAufsDirCreateSwapSubDirs(SwapDir *);
 static char *storeAufsDirSwapLogFile(SwapDir *, const char *);
 static EVH storeAufsDirRebuildFromDirectory;
 static EVH storeAufsDirRebuildFromSwapLog;
-static int storeAufsDirGetNextFile(RebuildState *, sfileno *, int *size);
+static int storeAufsDirGetNextFile(RebuildState *, int *sfileno, int *size);
 static StoreEntry *storeAufsDirAddDiskRestore(SwapDir * SD, const cache_key * key,
-    sfileno file_number,
+    int file_number,
     size_t swap_file_sz,
     time_t expires,
     time_t timestamp,
@@ -118,9 +118,6 @@ static void storeAufsDirStats(SwapDir *, StoreEntry *);
 static void storeAufsDirInitBitmap(SwapDir *);
 static int storeAufsDirValidFileno(SwapDir *, sfileno, int);
 
-/* The MAIN externally visible function */
-STSETUP storeFsSetup_aufs;
-
 /*
  * These functions were ripped straight out of the heart of store_dir.c.
  * They assume that the given filenum is on a asyncufs partiton, which may or
@@ -128,27 +125,30 @@ STSETUP storeFsSetup_aufs;
  * XXX this evilness should be tidied up at a later date!
  */
 
-static int
-storeAufsDirMapBitTest(SwapDir * SD, sfileno filn)
+int
+storeAufsDirMapBitTest(SwapDir * SD, int fn)
 {
-    squidaioinfo_t *aioinfo;
-    aioinfo = (squidaioinfo_t *) SD->fsdata;
+    sfileno filn = fn;
+    aioinfo_t *aioinfo;
+    aioinfo = (aioinfo_t *) SD->fsdata;
     return file_map_bit_test(aioinfo->map, filn);
 }
 
-static void
-storeAufsDirMapBitSet(SwapDir * SD, sfileno filn)
+void
+storeAufsDirMapBitSet(SwapDir * SD, int fn)
 {
-    squidaioinfo_t *aioinfo;
-    aioinfo = (squidaioinfo_t *) SD->fsdata;
+    sfileno filn = fn;
+    aioinfo_t *aioinfo;
+    aioinfo = (aioinfo_t *) SD->fsdata;
     file_map_bit_set(aioinfo->map, filn);
 }
 
 void
-storeAufsDirMapBitReset(SwapDir * SD, sfileno filn)
+storeAufsDirMapBitReset(SwapDir * SD, int fn)
 {
-    squidaioinfo_t *aioinfo;
-    aioinfo = (squidaioinfo_t *) SD->fsdata;
+    sfileno filn = fn;
+    aioinfo_t *aioinfo;
+    aioinfo = (aioinfo_t *) SD->fsdata;
     /*
      * We have to test the bit before calling file_map_bit_reset.
      * file_map_bit_reset doesn't do bounds checking.  It assumes
@@ -163,7 +163,7 @@ storeAufsDirMapBitReset(SwapDir * SD, sfileno filn)
 int
 storeAufsDirMapBitAllocate(SwapDir * SD)
 {
-    squidaioinfo_t *aioinfo = (squidaioinfo_t *) SD->fsdata;
+    aioinfo_t *aioinfo = (aioinfo_t *) SD->fsdata;
     int fn;
     fn = file_map_allocate(aioinfo->map, aioinfo->suggest);
     file_map_bit_set(aioinfo->map, fn);
@@ -180,7 +180,7 @@ storeAufsDirMapBitAllocate(SwapDir * SD)
 static void
 storeAufsDirInitBitmap(SwapDir * sd)
 {
-    squidaioinfo_t *aioinfo = (squidaioinfo_t *) sd->fsdata;
+    aioinfo_t *aioinfo = (aioinfo_t *) sd->fsdata;
 
     if (aioinfo->map == NULL) {
 	/* First time */
@@ -195,7 +195,7 @@ storeAufsDirInitBitmap(SwapDir * sd)
 static char *
 storeAufsDirSwapSubDir(SwapDir * sd, int subdirn)
 {
-    squidaioinfo_t *aioinfo = (squidaioinfo_t *) sd->fsdata;
+    aioinfo_t *aioinfo = (aioinfo_t *) sd->fsdata;
 
     LOCAL_ARRAY(char, fullfilename, SQUID_MAXPATHLEN);
     assert(0 <= subdirn && subdirn < aioinfo->l1);
@@ -248,7 +248,7 @@ storeAufsDirVerifyDirectory(const char *path)
 static int
 storeAufsDirVerifyCacheDirs(SwapDir * sd)
 {
-    squidaioinfo_t *aioinfo = (squidaioinfo_t *) sd->fsdata;
+    aioinfo_t *aioinfo = (aioinfo_t *) sd->fsdata;
     int j;
     const char *path = sd->path;
 
@@ -265,7 +265,7 @@ storeAufsDirVerifyCacheDirs(SwapDir * sd)
 static void
 storeAufsDirCreateSwapSubDirs(SwapDir * sd)
 {
-    squidaioinfo_t *aioinfo = (squidaioinfo_t *) sd->fsdata;
+    aioinfo_t *aioinfo = (aioinfo_t *) sd->fsdata;
     int i, k;
     int should_exist;
     LOCAL_ARRAY(char, name, MAXPATHLEN);
@@ -316,11 +316,11 @@ storeAufsDirSwapLogFile(SwapDir * sd, const char *ext)
 static void
 storeAufsDirOpenSwapLog(SwapDir * sd)
 {
-    squidaioinfo_t *aioinfo = (squidaioinfo_t *) sd->fsdata;
+    aioinfo_t *aioinfo = (aioinfo_t *) sd->fsdata;
     char *path;
     int fd;
     path = storeAufsDirSwapLogFile(sd, NULL);
-    fd = file_open(path, O_WRONLY | O_CREAT | O_BINARY);
+    fd = file_open(path, O_WRONLY | O_CREAT);
     if (fd < 0) {
 	debug(50, 1) ("%s: %s\n", path, xstrerror());
 	fatal("storeAufsDirOpenSwapLog: Failed to open swap log.");
@@ -336,7 +336,7 @@ storeAufsDirOpenSwapLog(SwapDir * sd)
 static void
 storeAufsDirCloseSwapLog(SwapDir * sd)
 {
-    squidaioinfo_t *aioinfo = (squidaioinfo_t *) sd->fsdata;
+    aioinfo_t *aioinfo = (aioinfo_t *) sd->fsdata;
     if (aioinfo->swaplog_fd < 0)	/* not open */
 	return;
     file_close(aioinfo->swaplog_fd);
@@ -378,7 +378,7 @@ storeAufsDirRebuildFromDirectory(void *data)
     StoreEntry *e = NULL;
     StoreEntry tmpe;
     cache_key key[MD5_DIGEST_CHARS];
-    sfileno filn = 0;
+    int sfileno = 0;
     int count;
     int size;
     struct stat sb;
@@ -390,7 +390,7 @@ storeAufsDirRebuildFromDirectory(void *data)
     debug(20, 3) ("storeAufsDirRebuildFromDirectory: DIR #%d\n", rb->sd->index);
     for (count = 0; count < rb->speed; count++) {
 	assert(fd == -1);
-	fd = storeAufsDirGetNextFile(rb, &filn, &size);
+	fd = storeAufsDirGetNextFile(rb, &sfileno, &size);
 	if (fd == -2) {
 	    debug(20, 1) ("Done scanning %s swaplog (%d entries)\n",
 		rb->sd->path, rb->n_read);
@@ -415,7 +415,7 @@ storeAufsDirRebuildFromDirectory(void *data)
 	if ((++rb->counts.scancount & 0xFFFF) == 0)
 	    debug(20, 3) ("  %s %7d files opened so far.\n",
 		rb->sd->path, rb->counts.scancount);
-	debug(20, 9) ("file_in: fd=%d %08X\n", fd, filn);
+	debug(20, 9) ("file_in: fd=%d %08X\n", fd, sfileno);
 	statCounter.syscalls.disk.reads++;
 	if (read(fd, hdr_buf, SM_PAGE_SIZE) < 0) {
 	    debug(20, 1) ("storeAufsDirRebuildFromDirectory: read(FD %d): %s\n",
@@ -437,7 +437,7 @@ storeAufsDirRebuildFromDirectory(void *data)
 	if (tlv_list == NULL) {
 	    debug(20, 1) ("storeAufsDirRebuildFromDirectory: failed to get meta data\n");
 	    /* XXX shouldn't this be a call to storeAufsUnlink ? */
-	    storeAufsDirUnlinkFile(SD, filn);
+	    storeAufsDirUnlinkFile(SD, sfileno);
 	    continue;
 	}
 	debug(20, 3) ("storeAufsDirRebuildFromDirectory: successful swap meta unpacking\n");
@@ -461,7 +461,7 @@ storeAufsDirRebuildFromDirectory(void *data)
 	tlv_list = NULL;
 	if (storeKeyNull(key)) {
 	    debug(20, 1) ("storeAufsDirRebuildFromDirectory: NULL key\n");
-	    storeAufsDirUnlinkFile(SD, filn);
+	    storeAufsDirUnlinkFile(SD, sfileno);
 	    continue;
 	}
 	tmpe.hash.key = key;
@@ -471,13 +471,13 @@ storeAufsDirRebuildFromDirectory(void *data)
 	} else if (tmpe.swap_file_sz == sb.st_size - swap_hdr_len) {
 	    tmpe.swap_file_sz = sb.st_size;
 	} else if (tmpe.swap_file_sz != sb.st_size) {
-	    debug(20, 1) ("storeAufsDirRebuildFromDirectory: SIZE MISMATCH %ld!=%ld\n",
-		(long int) tmpe.swap_file_sz, (long int) sb.st_size);
-	    storeAufsDirUnlinkFile(SD, filn);
+	    debug(20, 1) ("storeAufsDirRebuildFromDirectory: SIZE MISMATCH %d!=%d\n",
+		tmpe.swap_file_sz, (int) sb.st_size);
+	    storeAufsDirUnlinkFile(SD, sfileno);
 	    continue;
 	}
 	if (EBIT_TEST(tmpe.flags, KEY_PRIVATE)) {
-	    storeAufsDirUnlinkFile(SD, filn);
+	    storeAufsDirUnlinkFile(SD, sfileno);
 	    rb->counts.badflags++;
 	    continue;
 	}
@@ -496,7 +496,7 @@ storeAufsDirRebuildFromDirectory(void *data)
 	rb->counts.objcount++;
 	storeEntryDump(&tmpe, 5);
 	e = storeAufsDirAddDiskRestore(SD, key,
-	    filn,
+	    sfileno,
 	    tmpe.swap_file_sz,
 	    tmpe.expires,
 	    tmpe.timestamp,
@@ -687,10 +687,10 @@ storeAufsDirRebuildFromSwapLog(void *data)
 }
 
 static int
-storeAufsDirGetNextFile(RebuildState * rb, sfileno * filn_p, int *size)
+storeAufsDirGetNextFile(RebuildState * rb, int *sfileno, int *size)
 {
     SwapDir *SD = rb->sd;
-    squidaioinfo_t *aioinfo = (squidaioinfo_t *) SD->fsdata;
+    aioinfo_t *aioinfo = (aioinfo_t *) SD->fsdata;
     int fd = -1;
     int used = 0;
     int dirs_opened = 0;
@@ -715,6 +715,9 @@ storeAufsDirGetNextFile(RebuildState * rb, sfileno * filn_p, int *size)
 	    snprintf(rb->fullpath, SQUID_MAXPATHLEN, "%s/%02X/%02X",
 		rb->sd->path,
 		rb->curlvl1, rb->curlvl2);
+	    if (rb->flags.init && rb->td != NULL)
+		closedir(rb->td);
+	    rb->td = NULL;
 	    if (dirs_opened)
 		return -1;
 	    rb->td = opendir(rb->fullpath);
@@ -750,16 +753,13 @@ storeAufsDirGetNextFile(RebuildState * rb, sfileno * filn_p, int *size)
 	    snprintf(rb->fullfilename, SQUID_MAXPATHLEN, "%s/%s",
 		rb->fullpath, rb->entry->d_name);
 	    debug(20, 3) ("storeAufsDirGetNextFile: Opening %s\n", rb->fullfilename);
-	    fd = file_open(rb->fullfilename, O_RDONLY | O_BINARY);
+	    fd = file_open(rb->fullfilename, O_RDONLY);
 	    if (fd < 0)
 		debug(50, 1) ("storeAufsDirGetNextFile: %s: %s\n", rb->fullfilename, xstrerror());
 	    else
 		store_open_disk_fd++;
 	    continue;
 	}
-	if (rb->td != NULL)
-	    closedir(rb->td);
-	rb->td = NULL;
 	rb->in_dir = 0;
 	if (++rb->curlvl2 < aioinfo->l2)
 	    continue;
@@ -769,7 +769,7 @@ storeAufsDirGetNextFile(RebuildState * rb, sfileno * filn_p, int *size)
 	rb->curlvl1 = 0;
 	rb->done = 1;
     }
-    *filn_p = rb->fn;
+    *sfileno = rb->fn;
     return fd;
 }
 
@@ -777,7 +777,7 @@ storeAufsDirGetNextFile(RebuildState * rb, sfileno * filn_p, int *size)
  * use to rebuild store from disk. */
 static StoreEntry *
 storeAufsDirAddDiskRestore(SwapDir * SD, const cache_key * key,
-    sfileno file_number,
+    int file_number,
     size_t swap_file_sz,
     time_t expires,
     time_t timestamp,
@@ -816,18 +816,14 @@ storeAufsDirAddDiskRestore(SwapDir * SD, const cache_key * key,
     return e;
 }
 
-CBDATA_TYPE(RebuildState);
-
 static void
 storeAufsDirRebuild(SwapDir * sd)
 {
-    RebuildState *rb;
+    RebuildState *rb = xcalloc(1, sizeof(*rb));
     int clean = 0;
     int zero = 0;
     FILE *fp;
     EVH *func = NULL;
-    CBDATA_INIT_TYPE(RebuildState);
-    rb = cbdataAlloc(RebuildState);
     rb->sd = sd;
     rb->speed = opt_foreground_rebuild ? 1 << 30 : 50;
     /*
@@ -851,18 +847,19 @@ storeAufsDirRebuild(SwapDir * sd)
     debug(20, 1) ("Rebuilding storage in %s (%s)\n",
 	sd->path, clean ? "CLEAN" : "DIRTY");
     store_dirs_rebuilding++;
+    cbdataAdd(rb, cbdataXfree, 0);
     eventAdd("storeRebuild", func, rb, 0.0, 1);
 }
 
 static void
 storeAufsDirCloseTmpSwapLog(SwapDir * sd)
 {
-    squidaioinfo_t *aioinfo = (squidaioinfo_t *) sd->fsdata;
+    aioinfo_t *aioinfo = (aioinfo_t *) sd->fsdata;
     char *swaplog_path = xstrdup(storeAufsDirSwapLogFile(sd, NULL));
     char *new_path = xstrdup(storeAufsDirSwapLogFile(sd, ".new"));
     int fd;
     file_close(aioinfo->swaplog_fd);
-#if defined (_SQUID_OS2_) || defined (_SQUID_CYGWIN_)
+#ifdef _SQUID_OS2_
     if (unlink(swaplog_path) < 0) {
 	debug(50, 0) ("%s: %s\n", swaplog_path, xstrerror());
 	fatal("storeAufsDirCloseTmpSwapLog: unlink failed");
@@ -871,7 +868,7 @@ storeAufsDirCloseTmpSwapLog(SwapDir * sd)
     if (xrename(new_path, swaplog_path) < 0) {
 	fatal("storeAufsDirCloseTmpSwapLog: rename failed");
     }
-    fd = file_open(swaplog_path, O_WRONLY | O_CREAT | O_BINARY);
+    fd = file_open(swaplog_path, O_WRONLY | O_CREAT);
     if (fd < 0) {
 	debug(50, 1) ("%s: %s\n", swaplog_path, xstrerror());
 	fatal("storeAufsDirCloseTmpSwapLog: Failed to open swap log.");
@@ -885,7 +882,7 @@ storeAufsDirCloseTmpSwapLog(SwapDir * sd)
 static FILE *
 storeAufsDirOpenTmpSwapLog(SwapDir * sd, int *clean_flag, int *zero_flag)
 {
-    squidaioinfo_t *aioinfo = (squidaioinfo_t *) sd->fsdata;
+    aioinfo_t *aioinfo = (aioinfo_t *) sd->fsdata;
     char *swaplog_path = xstrdup(storeAufsDirSwapLogFile(sd, NULL));
     char *clean_path = xstrdup(storeAufsDirSwapLogFile(sd, ".last-clean"));
     char *new_path = xstrdup(storeAufsDirSwapLogFile(sd, ".new"));
@@ -917,9 +914,6 @@ storeAufsDirOpenTmpSwapLog(SwapDir * sd, int *clean_flag, int *zero_flag)
 	debug(50, 0) ("%s: %s\n", swaplog_path, xstrerror());
 	fatal("Failed to open swap log for reading");
     }
-#if defined(_SQUID_CYGWIN_)
-    setmode(fileno(fp), O_BINARY);
-#endif
     memset(&clean_sb, '\0', sizeof(struct stat));
     if (stat(clean_path, &clean_sb) < 0)
 	*clean_flag = 0;
@@ -957,19 +951,17 @@ storeAufsDirWriteCleanStart(SwapDir * sd)
     struct stat sb;
     sd->log.clean.write = NULL;
     sd->log.clean.state = NULL;
-    state->new = xstrdup(storeAufsDirSwapLogFile(sd, ".clean"));
-    state->fd = file_open(state->new, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY);
-    if (state->fd < 0) {
-	xfree(state->new);
-	xfree(state);
-	return -1;
-    }
     state->cur = xstrdup(storeAufsDirSwapLogFile(sd, NULL));
+    state->new = xstrdup(storeAufsDirSwapLogFile(sd, ".clean"));
     state->cln = xstrdup(storeAufsDirSwapLogFile(sd, ".last-clean"));
     state->outbuf = xcalloc(CLEAN_BUF_SZ, 1);
     state->outbuf_offset = 0;
     state->walker = sd->repl->WalkInit(sd->repl);
+    unlink(state->new);
     unlink(state->cln);
+    state->fd = file_open(state->new, O_WRONLY | O_CREAT | O_TRUNC);
+    if (state->fd < 0)
+	return -1;
     debug(20, 3) ("storeDirWriteCleanLogs: opened %s, FD %d\n",
 	state->new, state->fd);
 #if HAVE_FCHMOD
@@ -1036,7 +1028,6 @@ storeAufsDirWriteCleanEntry(SwapDir * sd, const StoreEntry * e)
 static void
 storeAufsDirWriteCleanDone(SwapDir * sd)
 {
-    int fd;
     struct _clean_state *state = sd->log.clean.state;
     if (NULL == state)
 	return;
@@ -1058,26 +1049,24 @@ storeAufsDirWriteCleanDone(SwapDir * sd)
      * so we have to close before renaming.
      */
     storeAufsDirCloseSwapLog(sd);
-    /* save the fd value for a later test */
-    fd = state->fd;
     /* rename */
     if (state->fd >= 0) {
-#if defined(_SQUID_OS2_) || defined (_SQUID_CYGWIN_)
+#ifdef _SQUID_OS2_
 	file_close(state->fd);
 	state->fd = -1;
-	if (unlink(state->cur) < 0)
+	if (unlink(cur) < 0)
 	    debug(50, 0) ("storeDirWriteCleanLogs: unlinkd failed: %s, %s\n",
-		xstrerror(), state->cur);
+		xstrerror(), cur);
 #endif
 	xrename(state->new, state->cur);
     }
     /* touch a timestamp file if we're not still validating */
     if (store_dirs_rebuilding)
 	(void) 0;
-    else if (fd < 0)
+    else if (state->fd < 0)
 	(void) 0;
     else
-	file_close(file_open(state->cln, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY));
+	file_close(file_open(state->cln, O_WRONLY | O_CREAT | O_TRUNC));
     /* close */
     safe_free(state->cur);
     safe_free(state->new);
@@ -1099,7 +1088,7 @@ storeSwapLogDataFree(void *s)
 static void
 storeAufsDirSwapLog(const SwapDir * sd, const StoreEntry * e, int op)
 {
-    squidaioinfo_t *aioinfo = (squidaioinfo_t *) sd->fsdata;
+    aioinfo_t *aioinfo = (aioinfo_t *) sd->fsdata;
     storeSwapLogData *s = memAllocate(MEM_SWAP_LOG_DATA);
     s->op = (char) op;
     s->swap_filen = e->swap_filen;
@@ -1154,11 +1143,11 @@ storeAufsDirClean(int swap_index)
     int N0, N1, N2;
     int D0, D1, D2;
     SwapDir *SD;
-    squidaioinfo_t *aioinfo;
+    aioinfo_t *aioinfo;
     N0 = n_asyncufs_dirs;
     D0 = asyncufs_dir_index[swap_index % N0];
     SD = &Config.cacheSwap.swapDirs[D0];
-    aioinfo = (squidaioinfo_t *) SD->fsdata;
+    aioinfo = (aioinfo_t *) SD->fsdata;
     N1 = aioinfo->l1;
     D1 = (swap_index / N0) % N1;
     N2 = aioinfo->l2;
@@ -1226,7 +1215,7 @@ storeAufsDirCleanEvent(void *unused)
     assert(n_asyncufs_dirs);
     if (NULL == asyncufs_dir_index) {
 	SwapDir *sd;
-	squidaioinfo_t *aioinfo;
+	aioinfo_t *aioinfo;
 	/*
 	 * Initialize the little array that translates AUFS cache_dir
 	 * number into the Config.cacheSwap.swapDirs array index.
@@ -1237,7 +1226,7 @@ storeAufsDirCleanEvent(void *unused)
 	    if (!storeAufsDirIs(sd))
 		continue;
 	    asyncufs_dir_index[n++] = i;
-	    aioinfo = (squidaioinfo_t *) sd->fsdata;
+	    aioinfo = (aioinfo_t *) sd->fsdata;
 	    j += (aioinfo->l1 * aioinfo->l2);
 	}
 	assert(n == n_asyncufs_dirs);
@@ -1274,9 +1263,9 @@ storeAufsFilenoBelongsHere(int fn, int F0, int F1, int F2)
     int D1, D2;
     int L1, L2;
     int filn = fn;
-    squidaioinfo_t *aioinfo;
+    aioinfo_t *aioinfo;
     assert(F0 < Config.cacheSwap.n_configured);
-    aioinfo = (squidaioinfo_t *) Config.cacheSwap.swapDirs[F0].fsdata;
+    aioinfo = (aioinfo_t *) Config.cacheSwap.swapDirs[F0].fsdata;
     L1 = aioinfo->l1;
     L2 = aioinfo->l2;
     D1 = ((filn / L2) / L2) % L1;
@@ -1291,7 +1280,7 @@ storeAufsFilenoBelongsHere(int fn, int F0, int F1, int F2)
 int
 storeAufsDirValidFileno(SwapDir * SD, sfileno filn, int flag)
 {
-    squidaioinfo_t *aioinfo = (squidaioinfo_t *) SD->fsdata;
+    aioinfo_t *aioinfo = (aioinfo_t *) SD->fsdata;
     if (filn < 0)
 	return 0;
     /*
@@ -1451,7 +1440,7 @@ storeAufsDirReplRemove(StoreEntry * e)
 void
 storeAufsDirStats(SwapDir * SD, StoreEntry * sentry)
 {
-    squidaioinfo_t *aioinfo = SD->fsdata;
+    aioinfo_t *aioinfo = SD->fsdata;
     int totl_kb = 0;
     int free_kb = 0;
     int totl_in = 0;
@@ -1488,8 +1477,8 @@ storeAufsDirStats(SwapDir * SD, StoreEntry * sentry)
 static struct cache_dir_option options[] =
 {
 #if NOT_YET_DONE
-    {"L1", storeAufsDirParseL1, storeAufsDirDumpL1},
-    {"L2", storeAufsDirParseL2, storeAufsDirDumpL2},
+    {"L1", storeAufsDirParseL1},
+    {"L2", storeAufsDirParseL2},
 #endif
     {NULL, NULL}
 };
@@ -1499,7 +1488,7 @@ static struct cache_dir_option options[] =
  *
  * This routine is called when the given swapdir needs reconfiguring 
  */
-static void
+void
 storeAufsDirReconfigure(SwapDir * sd, int index, char *path)
 {
     int i;
@@ -1535,14 +1524,16 @@ storeAufsDirReconfigure(SwapDir * sd, int index, char *path)
 }
 
 void
-storeAufsDirDump(StoreEntry * entry, SwapDir * s)
+storeAufsDirDump(StoreEntry * entry, const char *name, SwapDir * s)
 {
-    squidaioinfo_t *aioinfo = (squidaioinfo_t *) s->fsdata;
-    storeAppendPrintf(entry, " %d %d %d",
+    aioinfo_t *aioinfo = (aioinfo_t *) s->fsdata;
+    storeAppendPrintf(entry, "%s %s %s %d %d %d\n",
+	name,
+	"aufs",
+	s->path,
 	s->max_size >> 10,
 	aioinfo->l1,
 	aioinfo->l2);
-    dump_cachedir_options(entry, options, s);
 }
 
 /*
@@ -1551,7 +1542,7 @@ storeAufsDirDump(StoreEntry * entry, SwapDir * s)
 static void
 storeAufsDirFree(SwapDir * s)
 {
-    squidaioinfo_t *aioinfo = (squidaioinfo_t *) s->fsdata;
+    aioinfo_t *aioinfo = (aioinfo_t *) s->fsdata;
     if (aioinfo->swaplog_fd > -1) {
 	file_close(aioinfo->swaplog_fd);
 	aioinfo->swaplog_fd = -1;
@@ -1565,7 +1556,7 @@ char *
 storeAufsDirFullPath(SwapDir * SD, sfileno filn, char *fullpath)
 {
     LOCAL_ARRAY(char, fullfilename, SQUID_MAXPATHLEN);
-    squidaioinfo_t *aioinfo = (squidaioinfo_t *) SD->fsdata;
+    aioinfo_t *aioinfo = (aioinfo_t *) SD->fsdata;
     int L1 = aioinfo->l1;
     int L2 = aioinfo->l2;
     if (!fullpath)
@@ -1588,6 +1579,7 @@ static int
 storeAufsCleanupDoubleCheck(SwapDir * sd, StoreEntry * e)
 {
     struct stat sb;
+
     if (stat(storeAufsDirFullPath(sd, e->swap_filen, NULL), &sb) < 0) {
 	debug(20, 0) ("storeAufsCleanupDoubleCheck: MISSING SWAP FILE\n");
 	debug(20, 0) ("storeAufsCleanupDoubleCheck: FILENO %08X\n", e->swap_filen);
@@ -1601,8 +1593,8 @@ storeAufsCleanupDoubleCheck(SwapDir * sd, StoreEntry * e)
 	debug(20, 0) ("storeAufsCleanupDoubleCheck: FILENO %08X\n", e->swap_filen);
 	debug(20, 0) ("storeAufsCleanupDoubleCheck: PATH %s\n",
 	    storeAufsDirFullPath(sd, e->swap_filen, NULL));
-	debug(20, 0) ("storeAufsCleanupDoubleCheck: ENTRY SIZE: %ld, FILE SIZE: %ld\n",
-	    (long int) e->swap_file_sz, (long int) sb.st_size);
+	debug(20, 0) ("storeAufsCleanupDoubleCheck: ENTRY SIZE: %d, FILE SIZE: %d\n",
+	    e->swap_file_sz, (int) sb.st_size);
 	storeEntryDump(e, 0);
 	return -1;
     }
@@ -1610,17 +1602,18 @@ storeAufsCleanupDoubleCheck(SwapDir * sd, StoreEntry * e)
 }
 
 /*
- * storeAufsDirParse *
+ * storeAufsDirParse
+ *
  * Called when a *new* fs is being setup.
  */
-static void
+void
 storeAufsDirParse(SwapDir * sd, int index, char *path)
 {
     int i;
     int size;
     int l1;
     int l2;
-    squidaioinfo_t *aioinfo;
+    aioinfo_t *aioinfo;
 
     i = GetInteger();
     size = i << 10;		/* Mbytes to kbytes */
@@ -1635,9 +1628,9 @@ storeAufsDirParse(SwapDir * sd, int index, char *path)
     if (l2 <= 0)
 	fatal("storeAufsDirParse: invalid level 2 directories value");
 
-    aioinfo = xmalloc(sizeof(squidaioinfo_t));
+    aioinfo = xmalloc(sizeof(aioinfo_t));
     if (aioinfo == NULL)
-	fatal("storeAufsDirParse: couldn't xmalloc() squidaioinfo_t!\n");
+	fatal("storeAufsDirParse: couldn't xmalloc() aioinfo_t!\n");
 
     sd->index = index;
     sd->path = xstrdup(path);
@@ -1682,13 +1675,13 @@ storeAufsDirParse(SwapDir * sd, int index, char *path)
 /*
  * Initial setup / end destruction
  */
-static void
+void
 storeAufsDirDone(void)
 {
     aioDone();
-    memPoolDestroy(squidaio_state_pool);
-    memPoolDestroy(aufs_qread_pool);
-    memPoolDestroy(aufs_qwrite_pool);
+    memPoolDestroy(aio_state_pool);
+    memPoolDestroy(aio_qread_pool);
+    memPoolDestroy(aio_qwrite_pool);
     asyncufs_initialised = 0;
 }
 
@@ -1699,10 +1692,10 @@ storeFsSetup_aufs(storefs_entry_t * storefs)
     storefs->parsefunc = storeAufsDirParse;
     storefs->reconfigurefunc = storeAufsDirReconfigure;
     storefs->donefunc = storeAufsDirDone;
-    squidaio_state_pool = memPoolCreate("AUFS IO State data", sizeof(squidaiostate_t));
-    aufs_qread_pool = memPoolCreate("AUFS Queued read data",
+    aio_state_pool = memPoolCreate("AUFS IO State data", sizeof(aiostate_t));
+    aio_qread_pool = memPoolCreate("AUFS Queued read data",
 	sizeof(queued_read));
-    aufs_qwrite_pool = memPoolCreate("AUFS Queued write data",
+    aio_qwrite_pool = memPoolCreate("AUFS Queued write data",
 	sizeof(queued_write));
 
     asyncufs_initialised = 1;

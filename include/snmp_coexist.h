@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
-#ifndef SQUID_SNMP_COEXISTANCE_H
-#define SQUID_SNMP_COEXISTANCE_H
+#ifndef _SNMP_COEXISTANCE_H_
+#define _SNMP_COEXISTANCE_H_
 
 /**********************************************************************
  *
@@ -39,6 +39,6 @@ extern "C" {
 
 #ifdef __cplusplus
 }
-#endif
 
-#endif				/* SQUID_SNMP_COEXISTANCE_H */
+#endif
+#endif				/* _SNMP_COEXISTANCE_H_ */
