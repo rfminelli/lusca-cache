@@ -1933,7 +1933,7 @@ aclHostDomainCompare(const void *data, splayNode * n)
 {
     const char *h = data;
     char *d = n->data;
-    return matchDomainName(d, h);
+    return matchDomainName(h, d);
 }
 
 /* compare two network specs
