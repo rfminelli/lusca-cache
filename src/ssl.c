@@ -51,6 +51,7 @@ typedef struct {
 #if DELAY_POOLS
     delay_id delay_id;
 #endif
+    int connected;
 } SslStateData;
 
 static const char *const conn_established = "HTTP/1.0 200 Connection established\r\n\r\n";
@@ -91,7 +92,9 @@ sslClientClosed(int fd, void *data)
     debug(26, 3) ("sslClientClosed: FD %d\n", fd);
     assert(fd == sslState->client.fd);
     sslState->client.fd = -1;
-    if (sslState->server.fd == -1)
+    if (sslState->server.fd != -1)
+	comm_close(sslState->server.fd);
+    else
 	sslStateFree(sslState);
 }
 
@@ -152,7 +155,9 @@ sslSetSelect(SslStateData * sslState)
     } else if (sslState->client.len == 0) {
 	comm_close(sslState->server.fd);
     }
-    if (sslState->server.fd > -1) {
+    if (!sslState->connected) {
+	/* Not yet connected. wait.. */
+    } else if (sslState->server.fd > -1) {
 	if (sslState->client.len > 0) {
 	    commSetSelect(sslState->server.fd,
 		COMM_SELECT_WRITE,
@@ -211,18 +216,18 @@ sslReadServer(int fd, void *data)
 	kb_incr(&statCounter.server.other.kbytes_in, len);
 	sslState->server.len += len;
     }
-    cbdataInternalLock(sslState);	/* ??? should be locked by the caller... */
+    cbdataLock(sslState);
     if (len < 0) {
 	debug(50, ignoreErrno(errno) ? 3 : 1)
 	    ("sslReadServer: FD %d: read failure: %s\n", fd, xstrerror());
 	if (!ignoreErrno(errno))
 	    comm_close(fd);
     } else if (len == 0) {
-	comm_close(sslState->server.fd);
+	comm_close(fd);
     }
-    if (cbdataReferenceValid(sslState))
+    if (cbdataValid(sslState))
 	sslSetSelect(sslState);
-    cbdataInternalUnlock(sslState);	/* ??? */
+    cbdataUnlock(sslState);
 }
 
 /* Read from client side and queue it for writing to the server */
@@ -245,7 +250,7 @@ sslReadClient(int fd, void *data)
 	kb_incr(&statCounter.client_http.kbytes_in, len);
 	sslState->client.len += len;
     }
-    cbdataInternalLock(sslState);	/* ??? should be locked by the caller... */
+    cbdataLock(sslState);
     if (len < 0) {
 	int level = 1;
 #ifdef ECONNRESET
@@ -261,9 +266,9 @@ sslReadClient(int fd, void *data)
     } else if (len == 0) {
 	comm_close(fd);
     }
-    if (cbdataReferenceValid(sslState))
+    if (cbdataValid(sslState))
 	sslSetSelect(sslState);
-    cbdataInternalUnlock(sslState);	/* ??? */
+    cbdataUnlock(sslState);
 }
 
 /* Writes data from the client buffer to the server side */
@@ -293,16 +298,16 @@ sslWriteServer(int fd, void *data)
 		sslState->client.len);
 	}
     }
-    cbdataInternalLock(sslState);	/* ??? should be locked by the caller... */
+    cbdataLock(sslState);
     if (len < 0) {
 	debug(50, ignoreErrno(errno) ? 3 : 1)
 	    ("sslWriteServer: FD %d: write failure: %s.\n", fd, xstrerror());
 	if (!ignoreErrno(errno))
 	    comm_close(fd);
     }
-    if (cbdataReferenceValid(sslState))
+    if (cbdataValid(sslState))
 	sslSetSelect(sslState);
-    cbdataInternalUnlock(sslState);	/* ??? */
+    cbdataUnlock(sslState);
 }
 
 /* Writes data from the server buffer to the client side */
@@ -326,7 +331,10 @@ sslWriteClient(int fd, void *data)
 	sslState->server.len -= len;
 	/* increment total object size */
 	if (sslState->size_ptr)
-	    *sslState->size_ptr += len;
+#if SIZEOF_SIZE_T == 4
+	    if (*sslState->size_ptr < 0x7FFF0000)
+#endif
+		*sslState->size_ptr += len;
 	if (sslState->server.len > 0) {
 	    /* we didn't write the whole thing */
 	    xmemmove(sslState->server.buf,
@@ -334,16 +342,16 @@ sslWriteClient(int fd, void *data)
 		sslState->server.len);
 	}
     }
-    cbdataInternalLock(sslState);	/* ??? should be locked by the caller... */
+    cbdataLock(sslState);
     if (len < 0) {
 	debug(50, ignoreErrno(errno) ? 3 : 1)
 	    ("sslWriteClient: FD %d: write failure: %s.\n", fd, xstrerror());
 	if (!ignoreErrno(errno))
 	    comm_close(fd);
     }
-    if (cbdataReferenceValid(sslState))
+    if (cbdataValid(sslState))
 	sslSetSelect(sslState);
-    cbdataInternalUnlock(sslState);	/* ??? */
+    cbdataUnlock(sslState);
 }
 
 static void
@@ -351,13 +359,7 @@ sslTimeout(int fd, void *data)
 {
     SslStateData *sslState = data;
     debug(26, 3) ("sslTimeout: FD %d\n", fd);
-    /* Temporary lock to protect our own feets (comm_close -> sslClientClosed -> Free) */
-    cbdataInternalLock(sslState);
-    if (sslState->client.fd > -1)
-	comm_close(sslState->client.fd);
-    if (sslState->server.fd > -1)
-	comm_close(sslState->server.fd);
-    cbdataInternalUnlock(sslState);
+    comm_close(sslState->client.fd);
 }
 
 static void
@@ -376,22 +378,19 @@ sslErrorComplete(int fdnotused, void *data, size_t sizenotused)
 {
     SslStateData *sslState = data;
     assert(sslState != NULL);
-    if (sslState->client.fd > -1)
-	comm_close(sslState->client.fd);
-    if (sslState->server.fd > -1)
-	comm_close(sslState->server.fd);
+    comm_close(sslState->client.fd);
 }
 
 
 static void
-sslConnectDone(int fdnotused, comm_err_t status, void *data)
+sslConnectDone(int fdnotused, int status, void *data)
 {
     SslStateData *sslState = data;
     request_t *request = sslState->request;
     ErrorState *err = NULL;
-    if (sslState->servers->_peer)
+    if (sslState->servers->peer)
 	hierarchyNote(&sslState->request->hier, sslState->servers->code,
-	    sslState->servers->_peer->host);
+	    sslState->servers->peer->host);
     else if (Config.onoff.log_ip_on_direct)
 	hierarchyNote(&sslState->request->hier, sslState->servers->code,
 	    fd_table[sslState->server.fd].ipaddr);
@@ -418,7 +417,8 @@ sslConnectDone(int fdnotused, comm_err_t status, void *data)
 	err->callback_data = sslState;
 	errorSend(sslState->client.fd, err);
     } else {
-	if (sslState->servers->_peer)
+	sslState->connected = 1;
+	if (sslState->servers->peer)
 	    sslProxyConnected(sslState->server.fd, sslState);
 	else
 	    sslConnected(sslState->server.fd, sslState);
@@ -430,6 +430,33 @@ sslConnectDone(int fdnotused, comm_err_t status, void *data)
 	commSetDefer(sslState->server.fd, sslDeferServerRead, sslState);
 #endif
     }
+}
+
+static void
+sslConnectTimeout(int fd, void *data)
+{
+    SslStateData *sslState = data;
+    request_t *request = sslState->request;
+    ErrorState *err = NULL;
+    if (sslState->servers->peer)
+	hierarchyNote(&sslState->request->hier, sslState->servers->code,
+	    sslState->servers->peer->host);
+    else if (Config.onoff.log_ip_on_direct)
+	hierarchyNote(&sslState->request->hier, sslState->servers->code,
+	    fd_table[sslState->server.fd].ipaddr);
+    else
+	hierarchyNote(&sslState->request->hier, sslState->servers->code,
+	    sslState->host);
+    comm_close(fd);
+    err = errorCon(ERR_CONNECT_FAIL, HTTP_SERVICE_UNAVAILABLE);
+    *sslState->status_ptr = HTTP_SERVICE_UNAVAILABLE;
+    err->xerrno = ETIMEDOUT;
+    err->host = xstrdup(sslState->host);
+    err->port = sslState->port;
+    err->request = requestLink(request);
+    err->callback = sslErrorComplete;
+    err->callback_data = sslState;
+    errorSend(sslState->client.fd, err);
 }
 
 CBDATA_TYPE(SslStateData);
@@ -504,6 +531,16 @@ sslStart(clientHttpRequest * http, size_t * size_ptr, int *status_ptr)
     sslState->server.fd = sock;
     sslState->server.buf = xmalloc(SQUID_TCP_SO_RCVBUF);
     sslState->client.buf = xmalloc(SQUID_TCP_SO_RCVBUF);
+    /* Copy any pending data from the client connection */
+    sslState->client.len = http->conn->in.offset;
+    if (sslState->client.len > 0) {
+	if (sslState->client.len > SQUID_TCP_SO_RCVBUF) {
+	    safe_free(sslState->client.buf);
+	    sslState->client.buf = xmalloc(sslState->client.len);
+	}
+	memcpy(sslState->client.buf, http->conn->in.buf, sslState->client.len);
+	http->conn->in.offset = 0;
+    }
     comm_add_close_handler(sslState->server.fd,
 	sslServerClosed,
 	sslState);
@@ -514,19 +551,11 @@ sslStart(clientHttpRequest * http, size_t * size_ptr, int *status_ptr)
 	Config.Timeout.lifetime,
 	sslTimeout,
 	sslState);
-    commSetTimeout(sslState->server.fd,
-	Config.Timeout.connect,
-	sslTimeout,
-	sslState);
+    sslSetSelect(sslState);
     peerSelect(request,
 	NULL,
 	sslPeerSelectComplete,
 	sslState);
-    /*
-     * Disable the client read handler until peer selection is complete
-     * Take control away from client_side.c.
-     */
-    commSetSelect(sslState->client.fd, COMM_SELECT_READ, NULL, NULL, 0);
 }
 
 static void
@@ -556,10 +585,6 @@ sslProxyConnected(int fd, void *data)
     debug(26, 3) ("sslProxyConnected: Sending {%s}\n", sslState->client.buf);
     sslState->client.len = mb.size;
     memBufClean(&mb);
-    commSetTimeout(sslState->server.fd,
-	Config.Timeout.read,
-	sslTimeout,
-	sslState);
     sslSetSelect(sslState);
 }
 
@@ -580,18 +605,18 @@ sslPeerSelectComplete(FwdServer * fs, void *data)
 	return;
     }
     sslState->servers = fs;
-    sslState->host = fs->_peer ? fs->_peer->host : request->host;
-    if (fs->_peer == NULL) {
+    sslState->host = fs->peer ? fs->peer->host : request->host;
+    if (fs->peer == NULL) {
 	sslState->port = request->port;
-    } else if (fs->_peer->http_port != 0) {
-	sslState->port = fs->_peer->http_port;
-    } else if ((g = peerFindByName(fs->_peer->host))) {
+    } else if (fs->peer->http_port != 0) {
+	sslState->port = fs->peer->http_port;
+    } else if ((g = peerFindByName(fs->peer->host))) {
 	sslState->port = g->http_port;
     } else {
 	sslState->port = CACHE_HTTP_PORT;
     }
-    if (fs->_peer) {
-	sslState->request->peer_login = fs->_peer->login;
+    if (fs->peer) {
+	sslState->request->peer_login = fs->peer->login;
 	sslState->request->flags.proxying = 1;
     } else {
 	sslState->request->peer_login = NULL;
@@ -604,6 +629,10 @@ sslPeerSelectComplete(FwdServer * fs, void *data)
 	sslState->delay_id = 0;
     }
 #endif
+    commSetTimeout(sslState->server.fd,
+	Config.Timeout.connect,
+	sslConnectTimeout,
+	sslState);
     commConnectStart(sslState->server.fd,
 	sslState->host,
 	sslState->port,

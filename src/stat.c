@@ -33,8 +33,8 @@
  *
  */
 
+
 #include "squid.h"
-#include "StoreClient.h"
 
 #define DEBUG_OPENFD 1
 
@@ -58,7 +58,7 @@ static void statCountersInitSpecial(StatCounters *);
 static void statCountersClean(StatCounters *);
 static void statCountersCopy(StatCounters * dest, const StatCounters * orig);
 static double statMedianSvc(int, int);
-static void statStoreEntry(StoreEntry * s, StoreEntry * e);
+static void statStoreEntry(MemBuf * mb, StoreEntry * e);
 static double statCPUUsage(int minutes);
 static OBJH stat_io_get;
 static OBJH stat_objects_get;
@@ -254,36 +254,55 @@ describeTimestamps(const StoreEntry * entry)
 }
 
 static void
-statStoreEntry(StoreEntry * s, StoreEntry * e)
+statStoreEntry(MemBuf * mb, StoreEntry * e)
 {
     MemObject *mem = e->mem_obj;
     int i;
+    struct _store_client *sc;
     dlink_node *node;
-    storeAppendPrintf(s, "KEY %s\n", storeKeyText(e->hash.key));
+    memBufPrintf(mb, "KEY %s\n", storeKeyText(e->hash.key));
     if (mem)
-	storeAppendPrintf(s, "\t%s %s\n",
+	memBufPrintf(mb, "\t%s %s\n",
 	    RequestMethodStr[mem->method], mem->log_url);
-    storeAppendPrintf(s, "\t%s\n", describeStatuses(e));
-    storeAppendPrintf(s, "\t%s\n", storeEntryFlags(e));
-    storeAppendPrintf(s, "\t%s\n", describeTimestamps(e));
-    storeAppendPrintf(s, "\t%d locks, %d clients, %d refs\n",
+    memBufPrintf(mb, "\t%s\n", describeStatuses(e));
+    memBufPrintf(mb, "\t%s\n", storeEntryFlags(e));
+    memBufPrintf(mb, "\t%s\n", describeTimestamps(e));
+    memBufPrintf(mb, "\t%d locks, %d clients, %d refs\n",
 	(int) e->lock_count,
 	storePendingNClients(e),
 	(int) e->refcount);
-    storeAppendPrintf(s, "\tSwap Dir %d, File %#08X\n",
+    memBufPrintf(mb, "\tSwap Dir %d, File %#08X\n",
 	e->swap_dirn, e->swap_filen);
     if (mem != NULL) {
-	storeAppendPrintf(s, "\tinmem_lo: %d\n", (int) mem->inmem_lo);
-	storeAppendPrintf(s, "\tinmem_hi: %d\n", (int) mem->inmem_hi);
-	storeAppendPrintf(s, "\tswapout: %d bytes queued\n",
+	memBufPrintf(mb, "\tinmem_lo: %d\n", (int) mem->inmem_lo);
+	memBufPrintf(mb, "\tinmem_hi: %d\n", (int) mem->inmem_hi);
+	memBufPrintf(mb, "\tswapout: %d bytes queued\n",
 	    (int) mem->swapout.queue_offset);
 	if (mem->swapout.sio)
-	    storeAppendPrintf(s, "\tswapout: %d bytes written\n",
+	    memBufPrintf(mb, "\tswapout: %d bytes written\n",
 		(int) storeOffset(mem->swapout.sio));
-	for (i = 0, node = mem->clients.head; node; node = node->next, i++)
-	    storeClientDumpStats(node->data, s, i);
+	for (i = 0, node = mem->clients.head; node; node = node->next, i++) {
+	    sc = (store_client *) node->data;
+	    if (sc->callback_data == NULL)
+		continue;
+	    memBufPrintf(mb, "\tClient #%d, %p\n", i, sc->callback_data);
+	    memBufPrintf(mb, "\t\tcopy_offset: %d\n",
+		(int) sc->copy_offset);
+	    memBufPrintf(mb, "\t\tseen_offset: %d\n",
+		(int) sc->seen_offset);
+	    memBufPrintf(mb, "\t\tcopy_size: %d\n",
+		(int) sc->copy_size);
+	    memBufPrintf(mb, "\t\tflags:");
+	    if (sc->flags.disk_io_pending)
+		memBufPrintf(mb, " disk_io_pending");
+	    if (sc->flags.store_copying)
+		memBufPrintf(mb, " store_copying");
+	    if (sc->flags.copy_event_pending)
+		memBufPrintf(mb, " copy_event_pending");
+	    memBufPrintf(mb, "\n");
+	}
     }
-    storeAppendPrintf(s, "\n");
+    memBufPrintf(mb, "\n");
 }
 
 /* process objects list */
@@ -307,19 +326,23 @@ statObjects(void *data)
 	eventAdd("statObjects", statObjects, state, 0.1, 1);
 	return;
     }
-    storeBuffer(state->sentry);
     debug(49, 3) ("statObjects: Bucket #%d\n", state->bucket);
     link_next = hash_get_bucket(store_table, state->bucket);
-    while (NULL != (link_ptr = link_next)) {
-	link_next = link_ptr->next;
-	e = (StoreEntry *) link_ptr;
-	if (state->filter && 0 == state->filter(e))
-	    continue;
-	statStoreEntry(state->sentry, e);
+    if (link_next) {
+	MemBuf mb;
+	memBufDefInit(&mb);
+	while (NULL != (link_ptr = link_next)) {
+	    link_next = link_ptr->next;
+	    e = (StoreEntry *) link_ptr;
+	    if (state->filter && 0 == state->filter(e))
+		continue;
+	    statStoreEntry(&mb, e);
+	}
+	storeAppend(state->sentry, mb.buf, mb.size);
+	memBufClean(&mb);
     }
     state->bucket++;
     eventAdd("statObjects", statObjects, state, 0.0, 1);
-    storeBufferFlush(state->sentry);
 }
 
 static void
@@ -565,7 +588,7 @@ info_get(StoreEntry * sentry)
     t = mp.arena + mp.hblkhd;
     storeAppendPrintf(sentry, "\tTotal size:            %6d KB\n",
 	t >> 10);
-#if HAVE_STRUCT_MALLINFO_MXFAST
+#if HAVE_EXT_MALLINFO
     storeAppendPrintf(sentry, "\tmax size of small blocks:\t%d\n", mp.mxfast);
     storeAppendPrintf(sentry, "\tnumber of small blocks in a holding block:\t%d\n",
 	mp.nlblks);
@@ -576,30 +599,16 @@ info_get(StoreEntry * sentry)
 	mp.allocated);
     storeAppendPrintf(sentry, "\tbytes used in maintaining the free tree:\t%d\n",
 	mp.treeoverhead);
-#endif /* HAVE_STRUCT_MALLINFO_MXFAST */
+#endif /* HAVE_EXT_MALLINFO */
 #endif /* HAVE_MALLINFO */
     storeAppendPrintf(sentry, "Memory accounted for:\n");
-#if !(HAVE_MSTATS && HAVE_GNUMALLOC_H) && HAVE_MALLINFO && HAVE_STRUCT_MALLINFO
-    storeAppendPrintf(sentry, "\tTotal accounted:       %6d KB %3d%%\n",
-	statMemoryAccounted() >> 10, percent(statMemoryAccounted(), t));
-#else
     storeAppendPrintf(sentry, "\tTotal accounted:       %6d KB\n",
 	statMemoryAccounted() >> 10);
-#endif
-    {
-	MemPoolGlobalStats mp_stats;
-	memPoolGetGlobalStats(&mp_stats);
-#if !(HAVE_MSTATS && HAVE_GNUMALLOC_H) && HAVE_MALLINFO && HAVE_STRUCT_MALLINFO
-	storeAppendPrintf(sentry, "\tmemPool accounted:     %6d KB %3d%%\n",
-	    mp_stats.TheMeter->alloc.level >> 10, percent(mp_stats.TheMeter->alloc.level, t));
-	storeAppendPrintf(sentry, "\tmemPool unaccounted:   %6d KB %3d%%\n",
-	    (t - mp_stats.TheMeter->alloc.level) >> 10, percent((t - mp_stats.TheMeter->alloc.level), t));
-#endif
-	storeAppendPrintf(sentry, "\tmemPoolAlloc calls: %9.0f\n",
-	    mp_stats.TheMeter->gb_saved.count);
-	storeAppendPrintf(sentry, "\tmemPoolFree calls:  %9.0f\n",
-	    mp_stats.TheMeter->gb_freed.count);
-    }
+    storeAppendPrintf(sentry, "\tmemPoolAlloc calls: %u\n",
+	mem_pool_alloc_calls);
+    storeAppendPrintf(sentry, "\tmemPoolFree calls: %u\n",
+	mem_pool_free_calls);
+
     storeAppendPrintf(sentry, "File descriptor usage for %s:\n", appname);
     storeAppendPrintf(sentry, "\tMaximum number of file descriptors:   %4d\n",
 	Squid_MaxFD);
@@ -803,10 +812,9 @@ statAvgDump(StoreEntry * sentry, int minutes, int hours)
     storeAppendPrintf(sentry, "aborted_requests = %f/sec\n",
 	XAVG(aborted_requests));
 
-#if USE_POLL
+#if HAVE_POLL
     storeAppendPrintf(sentry, "syscalls.polls = %f/sec\n", XAVG(syscalls.polls));
-#endif
-#if USE_SELECT
+#else
     storeAppendPrintf(sentry, "syscalls.selects = %f/sec\n", XAVG(syscalls.selects));
 #endif
     storeAppendPrintf(sentry, "syscalls.disk.opens = %f/sec\n", XAVG(syscalls.disk.opens));
@@ -946,6 +954,8 @@ statAvgTick(void *notused)
 #elif HAVE_MALLINFO && HAVE_STRUCT_MALLINFO
 	struct mallinfo mp = mallinfo();
 	i = mp.arena;
+#elif HAVE_SBRK
+	i = (size_t) ((char *) sbrk(0) - (char *) sbrk_start);
 #endif
 	if (Config.warnings.high_memory < i)
 	    debug(18, 0) ("WARNING: Memory usage at %d MB\n", i >> 20);
@@ -1415,7 +1425,7 @@ statClientRequests(StoreEntry * s)
 		fd_table[fd].bytes_read, fd_table[fd].bytes_written);
 	    storeAppendPrintf(s, "\tFD desc: %s\n", fd_table[fd].desc);
 	    storeAppendPrintf(s, "\tin: buf %p, offset %ld, size %ld\n",
-		conn->in.buf, (long int) conn->in.notYetUsed, (long int) conn->in.allocatedSize);
+		conn->in.buf, (long int) conn->in.offset, (long int) conn->in.size);
 	    storeAppendPrintf(s, "\tpeer: %s:%d\n",
 		inet_ntoa(conn->peer.sin_addr),
 		ntohs(conn->peer.sin_port));
@@ -1428,7 +1438,7 @@ statClientRequests(StoreEntry * s)
 		conn->defer.n, (long int) conn->defer.until);
 	}
 	storeAppendPrintf(s, "uri %s\n", http->uri);
-	storeAppendPrintf(s, "logType %s\n", log_tags[http->logType]);
+	storeAppendPrintf(s, "log_type %s\n", log_tags[http->log_type]);
 	storeAppendPrintf(s, "out.offset %ld, out.size %lu\n",
 	    (long int) http->out.offset, (unsigned long int) http->out.size);
 	storeAppendPrintf(s, "req_sz %ld\n", (long int) http->req_sz);
@@ -1440,6 +1450,9 @@ statClientRequests(StoreEntry * s)
 	    (long int) http->start.tv_sec,
 	    (int) http->start.tv_usec,
 	    tvSubDsec(http->start, current_time));
+#if DELAY_POOLS
+	storeAppendPrintf(s, "delay_pool %d\n", delayClient(http) >> 16);
+#endif
 	storeAppendPrintf(s, "\n");
     }
 }
@@ -1531,5 +1544,5 @@ statGraphDump(StoreEntry * e)
 int
 statMemoryAccounted(void)
 {
-    return memPoolsTotalAllocated();
+    return memTotalAllocated();
 }
