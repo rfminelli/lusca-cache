@@ -127,63 +127,33 @@
 #endif
 #endif
 
-#if defined(_SQUID_FREEBSD_)
-#define _etext etext
-#endif
-
-extern const char *getfullhostname(void);
-extern const char *mkhttpdlogtime(const time_t *);
-extern const char *mkrfc1123(time_t);
-extern char *uudecode(const char *);
-extern char *xstrdup(const char *);
-extern const char *xstrerror(void);
-extern const char *xbstrerror(int);
-extern int tvSubMsec(struct timeval, struct timeval);
-extern int tvSubUsec(struct timeval, struct timeval);
-extern double tvSubDsec(struct timeval, struct timeval);
-extern char *xstrncpy(char *, const char *, size_t);
-extern size_t xcountws(const char *str);
-extern time_t parse_rfc1123(const char *str);
-extern void *xcalloc(int, size_t);
-extern void *xmalloc(size_t);
-extern void *xrealloc(void *, size_t);
-extern void Tolower(char *);
-extern void xfree(void *);
-extern void xxfree(void *);
+extern const char *getfullhostname _PARAMS((void));
+extern const char *mkhttpdlogtime _PARAMS((const time_t *));
+extern const char *mkrfc1123 _PARAMS((time_t));
+extern char *uudecode _PARAMS((const char *));
+extern char *xstrdup _PARAMS((const char *));
+extern const char *xstrerror _PARAMS((void));
+extern int tvSubMsec _PARAMS((struct timeval, struct timeval));
+extern int tvSubUsec _PARAMS((struct timeval, struct timeval));
+extern char *xstrncpy _PARAMS((char *, const char *, size_t));
+extern time_t parse_rfc1123 _PARAMS((const char *str));
+extern void *xcalloc _PARAMS((int, size_t));
+extern void *xmalloc _PARAMS((size_t));
+extern void *xrealloc _PARAMS((void *, size_t));
+extern void Tolower _PARAMS((char *));
+extern void xfree _PARAMS((void *));
+extern void xmemcpy _PARAMS((void *, void *, int));
+extern void xxfree _PARAMS((void *));
 
 /* rfc1738.c */
-extern char *rfc1738_escape(const char *);
-void rfc1738_unescape(char *);
+extern char *rfc1738_escape _PARAMS((const char *));
+void rfc1738_unescape _PARAMS((char *));
 
 #if XMALLOC_STATISTICS
-void malloc_statistics(void (*)(int, int, void *), void *);
-#endif
-
-#if XMALLOC_TRACE
-#define xmalloc(size) (xmalloc_func="xmalloc",xmalloc_line=__LINE__,xmalloc_file=__FILE__,xmalloc(size))
-#define xfree(ptr) (xmalloc_func="xfree",xmalloc_line=__LINE__,xmalloc_file=__FILE__,xfree(ptr))
-#define xxfree(ptr) (xmalloc_func="xxfree",xmalloc_line=__LINE__,xmalloc_file=__FILE__,xxfree(ptr))
-#define xrealloc(ptr,size) (xmalloc_func="xrealloc",xmalloc_line=__LINE__,xmalloc_file=__FILE__,xrealloc(ptr,size))
-#define xcalloc(n,size) (xmalloc_func="xcalloc",xmalloc_line=__LINE__,xmalloc_file=__FILE__,xcalloc(n,size))
-#define xstrdup(ptr) (xmalloc_func="xstrdup",xmalloc_line=__LINE__,xmalloc_file=__FILE__,xstrdup(ptr))
-extern int xmalloc_line;
-extern char *xmalloc_file;
-extern char *xmalloc_func;
-extern int xmalloc_trace;
-extern int xmalloc_total;
-extern void xmalloc_find_leaks(void);
+void malloc_statistics _PARAMS((void (*)_PARAMS((int, int, void *)), void *));
 #endif
 
 typedef struct in_addr SIA;
-extern int safe_inet_addr(const char *, SIA *);
-extern time_t parse_iso3307_time(const char *buf);
-extern char *base64_decode(const char *coded);
-extern const char *base64_encode(const char *decoded);
-
-extern double xpercent(double part, double whole);
-extern int xpercentInt(double part, double whole);
-extern double xdiv(double nom, double denom);
-
-extern const char *xitoa(int num);
+extern int safe_inet_addr _PARAMS((const char *, SIA *));
 
 #endif /* ndef _UTIL_H_ */

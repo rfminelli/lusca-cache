@@ -31,6 +31,8 @@
 
 #include "squid.h"
 
+FILE *cache_useragent_log = NULL;
+
 void
 useragentOpenLog(void)
 {
@@ -46,16 +48,16 @@ useragentOpenLog(void)
 	cache_useragent_log = NULL;
     }
     if (fname && strcmp(fname, "none") != 0) {
-	log_fd = file_open(fname, O_WRONLY | O_CREAT | O_APPEND, NULL, NULL, NULL);
+	log_fd = file_open(fname, NULL, O_WRONLY | O_CREAT | O_APPEND);
 	if (log_fd < 0) {
-	    debug(50, 0) ("useragentOpenLog: %s: %s\n", fname, xstrerror());
+	    debug(50, 0, "useragentOpenLog: %s: %s\n", fname, xstrerror());
 	} else if ((cache_useragent_log = fdopen(log_fd, "a")) == NULL) {
 	    file_close(log_fd);
-	    debug(50, 0) ("useragentOpenLog: %s: %s\n", fname, xstrerror());
+	    debug(50, 0, "useragentOpenLog: %s: %s\n", fname, xstrerror());
 	}
     }
     if (log_fd < 0 || cache_useragent_log == NULL)
-	debug(40, 1) ("User-Agent logging is disabled.\n");
+	debug(40, 1, "User-Agent logging is disabled.\n");
 #endif
 }
 
@@ -77,17 +79,17 @@ useragentRotateLog(void)
 	if (S_ISREG(sb.st_mode) == 0)
 	    return;
 #endif
-    debug(40, 1) ("useragentRotateLog: Rotating.\n");
+    debug(40, 1, "useragentRotateLog: Rotating.\n");
     /* Rotate numbers 0 through N up one */
     for (i = Config.Log.rotateNumber; i > 1;) {
 	i--;
-	snprintf(from, MAXPATHLEN, "%s.%d", fname, i - 1);
-	snprintf(to, MAXPATHLEN, "%s.%d", fname, i);
+	sprintf(from, "%s.%d", fname, i - 1);
+	sprintf(to, "%s.%d", fname, i);
 	rename(from, to);
     }
     /* Rotate the current log to .0 */
     if (Config.Log.rotateNumber > 0) {
-	snprintf(to, MAXPATHLEN, "%s.%d", fname, 0);
+	sprintf(to, "%s.%d", fname, 0);
 	rename(fname, to);
     }
     useragentOpenLog();
@@ -112,7 +114,7 @@ logUserAgent(const char *client, const char *agent)
 	client,
 	time_str,
 	agent);
-    if (!Config.onoff.buffered_logs)
+    if (unbuffered_logs)
 	fflush(cache_useragent_log);
 #endif
 }
