@@ -4,6 +4,7 @@ if [ $# -ne 1 -a $# -ne 2 ]; then
 	exit 1
 fi
 package=squid
+module=squid
 rev=`echo $1 | sed -e "s/^${package}-//"`
 name=${package}-${rev}
 tag=`echo ${name} | tr a-z.- A-Z__`
@@ -19,14 +20,14 @@ export CVSROOT
 rm -rf $name.tar.gz $tmpdir
 trap "rm -rf $tmpdir" 0
 
-cvs -Q export -d $tmpdir -r $tag $package
+cvs -Q export -d $tmpdir -r $tag $module
 if [ ! -f $tmpdir/configure ]; then
-	echo "ERROR! Tag $tag not found in $package"
+	echo "ERROR! Tag $tag not found in $module"
 fi
 
 cd $tmpdir
-eval `grep ^VERSION= configure | sed -e 's/-CVS$//'`
-eval `grep ^PACKAGE= configure`
+eval `grep "^ *VERSION=" configure | sed -e 's/-CVS//'`
+eval `grep "^ *PACKAGE=" configure`
 if [ ${name} != ${PACKAGE}-${VERSION} ]; then
 	echo "ERROR! The version numbers does not match!"
 	echo "${name} != ${PACKAGE}-${VERSION}"
@@ -58,5 +59,8 @@ cp -p $tmpdir/COPYRIGHT		$dst/COPYRIGHT.txt
 cp -p $tmpdir/CREDITS		$dst/CREDITS.txt
 cp -p $tmpdir/ChangeLog		$dst/ChangeLog.txt
 if [ -f $tmpdir/doc/release-notes/release-$RELEASE.html ]; then
-    cp -p $tmpdir/doc/release-notes/release-$RELEASE.html $dst/RELEASENOTES.html
+    cat $tmpdir/doc/release-notes/release-$RELEASE.html | sed -e '
+	s/"ChangeLog"/"ChangeLog.txt"/g;
+    ' > $dst/RELEASENOTES.html
+    touch -r $tmpdir/doc/release-notes/release-$RELEASE.html $dst/RELEASENOTES.html
 fi

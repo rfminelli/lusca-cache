@@ -46,12 +46,12 @@
 #endif
 
 /* rfc1035 - DNS */
-#define RFC1035_MAXHOSTNAMESZ 128
+#define RFC1035_MAXHOSTNAMESZ 250
 typedef struct _rfc1035_rr rfc1035_rr;
 struct _rfc1035_rr {
     char name[RFC1035_MAXHOSTNAMESZ];
     unsigned short type;
-    unsigned short _class;
+    unsigned short class;
     unsigned int ttl;
     unsigned short rdlength;
     char *rdata;

@@ -60,7 +60,6 @@ int
 file_open(const char *path, int mode)
 {
     int fd;
-    PROF_start(file_open);
     if (FILE_MODE(mode) == O_WRONLY)
 	mode |= O_APPEND;
     mode |= SQUID_NONBLOCK;
@@ -76,7 +75,6 @@ file_open(const char *path, int mode)
 	commSetCloseOnExec(fd);
 	fd_open(fd, FD_FILE, path);
     }
-    PROF_stop(file_open);
     return fd;
 }
 
@@ -87,7 +85,6 @@ file_close(int fd)
 {
     fde *F = &fd_table[fd];
     PF *read_callback;
-    PROF_start(file_close);
     assert(fd >= 0);
     assert(F->flags.open);
     if ((read_callback = F->read_handler)) {
@@ -95,7 +92,7 @@ file_close(int fd)
 	read_callback(-1, F->read_data);
     }
     if (F->flags.write_daemon) {
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_OS2_) || defined(_SQUID_CYGWIN_)
+#if defined(_SQUID_MSWIN_) || defined(_SQUID_OS2_) || defined (_SQUID_CYGWIN_)
 	/*
 	 * on some operating systems, you can not delete or rename
 	 * open files, so we won't allow delayed close.
@@ -105,7 +102,6 @@ file_close(int fd)
 #else
 	F->flags.close_request = 1;
 	debug(6, 2) ("file_close: FD %d, delaying close\n", fd);
-	PROF_stop(file_close);
 	return;
 #endif
     }
@@ -123,7 +119,6 @@ file_close(int fd)
 	("file_close: FD %d, really closing\n", fd);
     fd_close(fd);
     statCounter.syscalls.disk.closes++;
-    PROF_stop(file_close);
 }
 
 /*
@@ -184,10 +179,10 @@ diskHandleWrite(int fd, void *notused)
     struct _fde_disk *fdd = &F->disk;
     dwrite_q *q = fdd->write_q;
     int status = DISK_OK;
+    int do_callback;
     int do_close;
     if (NULL == q)
 	return;
-    PROF_start(diskHandleWrite);
     debug(6, 3) ("diskHandleWrite: FD %d\n", fd);
     F->flags.write_daemon = 0;
     assert(fdd->write_q != NULL);
@@ -264,28 +259,31 @@ diskHandleWrite(int fd, void *notused)
     } else {
 	/* another block is queued */
 	diskCombineWrites(fdd);
+	cbdataLock(fdd->wrt_handle_data);
 	commSetSelect(fd, COMM_SELECT_WRITE, diskHandleWrite, NULL, 0);
 	F->flags.write_daemon = 1;
     }
     do_close = F->flags.close_request;
     if (fdd->wrt_handle) {
-	DWCB *callback = fdd->wrt_handle;
-	void *cbdata;
-	fdd->wrt_handle = NULL;
-	if (cbdataReferenceValidDone(fdd->wrt_handle_data, &cbdata)) {
-	    callback(fd, status, len, cbdata);
+	if (fdd->wrt_handle_data == NULL)
+	    do_callback = 1;
+	else if (cbdataValid(fdd->wrt_handle_data))
+	    do_callback = 1;
+	else
+	    do_callback = 0;
+	if (fdd->wrt_handle_data != NULL)
+	    cbdataUnlock(fdd->wrt_handle_data);
+	if (do_callback) {
+	    fdd->wrt_handle(fd, status, len, fdd->wrt_handle_data);
 	    /*
 	     * NOTE, this callback can close the FD, so we must
 	     * not touch 'F', 'fdd', etc. after this.
 	     */
-	    PROF_stop(diskHandleWrite);
 	    return;
-	    /* XXX But what about close_request??? */
 	}
     }
     if (do_close)
 	file_close(fd);
-    PROF_stop(diskHandleWrite);
 }
 
 
@@ -303,7 +301,6 @@ file_write(int fd,
 {
     dwrite_q *wq = NULL;
     fde *F = &fd_table[fd];
-    PROF_start(file_write);
     assert(fd >= 0);
     assert(F->flags.open);
     /* if we got here. Caller is eligible to write. */
@@ -314,13 +311,8 @@ file_write(int fd,
     wq->buf_offset = 0;
     wq->next = NULL;
     wq->free_func = free_func;
-    if (!F->disk.wrt_handle_data) {
-	F->disk.wrt_handle = handle;
-	F->disk.wrt_handle_data = cbdataReference(handle_data);
-    } else {
-	/* Detect if there is multiple concurrent users of this fd.. we only support one callback */
-	assert(F->disk.wrt_handle_data == handle_data && F->disk.wrt_handle == handle);
-    }
+    F->disk.wrt_handle = handle;
+    F->disk.wrt_handle_data = handle_data;
     /* add to queue */
     if (F->disk.write_q == NULL) {
 	/* empty queue */
@@ -330,9 +322,9 @@ file_write(int fd,
 	F->disk.write_q_tail = wq;
     }
     if (!F->flags.write_daemon) {
+	cbdataLock(F->disk.wrt_handle_data);
 	diskHandleWrite(fd, NULL);
     }
-    PROF_stop(file_write);
 }
 
 /*
@@ -361,7 +353,6 @@ diskHandleRead(int fd, void *data)
 	memFree(ctrl_dat, MEM_DREAD_CTRL);
 	return;
     }
-    PROF_start(diskHandleRead);
     if (F->disk.offset != ctrl_dat->offset) {
 	debug(6, 3) ("diskHandleRead: FD %d seeking to offset %d\n",
 	    fd, (int) ctrl_dat->offset);
@@ -378,7 +369,6 @@ diskHandleRead(int fd, void *data)
     if (len < 0) {
 	if (ignoreErrno(errno)) {
 	    commSetSelect(fd, COMM_SELECT_READ, diskHandleRead, ctrl_dat, 0);
-	    PROF_stop(diskHandleRead);
 	    return;
 	}
 	debug(50, 1) ("diskHandleRead: FD %d: %s\n", fd, xstrerror());
@@ -387,11 +377,10 @@ diskHandleRead(int fd, void *data)
     } else if (len == 0) {
 	rc = DISK_EOF;
     }
-    if (cbdataReferenceValid(ctrl_dat->client_data))
+    if (cbdataValid(ctrl_dat->client_data))
 	ctrl_dat->handler(fd, ctrl_dat->buf, len, rc, ctrl_dat->client_data);
-    cbdataReferenceDone(ctrl_dat->client_data);
+    cbdataUnlock(ctrl_dat->client_data);
     memFree(ctrl_dat, MEM_DREAD_CTRL);
-    PROF_stop(diskHandleRead);
 }
 
 
@@ -403,7 +392,6 @@ void
 file_read(int fd, char *buf, int req_len, off_t offset, DRCB * handler, void *client_data)
 {
     dread_ctrl *ctrl_dat;
-    PROF_start(file_read);
     assert(fd >= 0);
     ctrl_dat = memAllocate(MEM_DREAD_CTRL);
     ctrl_dat->fd = fd;
@@ -412,7 +400,7 @@ file_read(int fd, char *buf, int req_len, off_t offset, DRCB * handler, void *cl
     ctrl_dat->buf = buf;
     ctrl_dat->end_of_file = 0;
     ctrl_dat->handler = handler;
-    ctrl_dat->client_data = cbdataReference(client_data);
+    ctrl_dat->client_data = client_data;
+    cbdataLock(client_data);
     diskHandleRead(fd, ctrl_dat);
-    PROF_stop(file_read);
 }
