@@ -30,7 +30,7 @@
 #include "squid.h"
 
 static STCB urnHandleReply;
-static wordlist *urnParseReply(const char *inbuf);
+static wordlist *urn_parsebuffer(const char *inbuf);
 static const char *const crlf = "\r\n";
 
 typedef struct {
@@ -85,7 +85,6 @@ urnStart(request_t *r, StoreEntry *e)
     request_t *urlres_r = NULL;
     const cache_key *k;
     char *t;
-    char *host;
     UrnState *urnState;
     StoreEntry *urlres_e;
     debug(50, 3) ("urnStart: '%s'\n", storeUrl(e));
@@ -98,28 +97,24 @@ urnStart(request_t *r, StoreEntry *e)
 	return;
     }
     *t = '\0';
-    host = xstrdup(r->urlpath);
-    *t = ':';
     urnState = xcalloc(1, sizeof(UrnState));
     urnState->entry = e;
     urnState->request = requestLink(r);
     cbdataAdd(urnState);
-    storeLockObject(urnState->entry);
-    snprintf(urlres, 4096, "http://%s/uri-res/N2L?urn:%s", host, r->urlpath);
-    safe_free(host);
+    snprintf(urlres, 4096, "http://%s/uri-res/N2L?%s", r->urlpath, t+1);
     k = storeKeyPublic(urlres, METHOD_GET);
     urlres_r = urlParse(METHOD_GET, urlres);
-    urlres_r->headers = xstrdup("Accept: text/plain\r\n\r\n");
+    urlres_r->headers = xstrdup("Accept: */*\r\n\r\n");
     urlres_r->headers_sz = strlen(urlres_r->headers);
     if ((urlres_e = storeGet(k)) == NULL) {
 	urlres_e = storeCreateEntry(urlres, urlres, 0, METHOD_GET);
 	storeClientListAdd(urlres_e, urnState);
 	protoDispatch(0, urlres_e, urlres_r);
     } else {
-        storeLockObject(urlres_e);
         storeClientListAdd(urlres_e, urnState);
     }
     urnState->urlres_e = urlres_e;
+    storeLockObject(urlres_e);
     storeClientCopy(urlres_e,
 	0,
 	0,
@@ -188,7 +183,7 @@ urnHandleReply(void *data, char *buf, ssize_t size)
     }
     while (isspace(*s))
 	s++;
-    urls = urnParseReply(s);
+    urls = urn_parsebuffer(s);
     if (urls == NULL) {	/* unkown URN error */
 	debug(50, 3) ("urnTranslateDone: unknown URN %s\n", storeUrl(e));
 	err = errorCon(ERR_URN_RESOLVE, HTTP_NOT_FOUND);
@@ -224,7 +219,6 @@ urnHandleReply(void *data, char *buf, ssize_t size)
 	0,
 	squid_curtime);
     storeAppend(e, hdr, strlen(hdr));
-    httpParseReplyHeaders(hdr, e->mem_obj->reply);
     if (min_w) {
 	l = snprintf(line, 4096, "Location: %s\r\n", min_w->key);
         storeAppend(e, line, l);
@@ -233,32 +227,26 @@ urnHandleReply(void *data, char *buf, ssize_t size)
     storeAppend(e, S->buf, stringLength(S));
     storeComplete(e);
     put_free_4k_page(buf);
-    wordlistDestroy(&urls);
     stringFree(S);
-    storeUnregister(urlres_e, urnState);
     storeUnlockObject(urlres_e);
-    storeUnlockObject(urnState->entry);
-    requestUnlink(urnState->request);
-    cbdataFree(urnState);
 }
 
 static wordlist *
-urnParseReply(const char *inbuf)
+urn_parsebuffer(const char *inbuf)
 {
     char *buf = xstrdup(inbuf);
     char *token;
     wordlist *u;
     wordlist *head = NULL;
     wordlist **last = &head;
-    debug(50, 3) ("urnParseReply\n");
+    debug(50, 3) ("urn_parsebuffer\n");
     for (token = strtok(buf, crlf); token; token = strtok(NULL, crlf)) {
-	debug(50, 3) ("urnParseReply: got '%s'\n", token);
+	debug(50, 3) ("urn_parsebuffer: got '%s'\n", token);
 	u = xmalloc(sizeof(wordlist));
 	u->key = xstrdup(token);
 	u->next = NULL;
 	*last = u;
 	last = &u->next;
     }
-    safe_free(buf);
     return head;
 }
