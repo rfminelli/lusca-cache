@@ -278,7 +278,7 @@ objcache_CheckPassword(ObjectCacheData * obj)
 void
 objcacheStart(int fd, StoreEntry * entry)
 {
-    HttpResponse resp;
+    HttpReply *rep;
     ObjectCacheData *data = NULL;
     int i;
     OBJH *handler = NULL;
@@ -329,11 +329,11 @@ objcacheStart(int fd, StoreEntry * entry)
     storeAppend(entry, hdr, strlen(hdr));
     storeAppend(entry, "\r\n", 2);
 #else
-    httpResponseInit(&resp);
-    httpResponseSetHeaders(&resp, 1.0, HTTP_OK, NULL, 
+    rep = httpReplyCreate();
+    httpReplySetHeaders(rep, 1.0, HTTP_OK, NULL, 
 	"text/plain", -1 /* Content-Length */, squid_curtime /* LMT */, squid_curtime);
-    httpResponseSwap(&resp, entry);
-    httpResponseClean(&resp);
+    httpReplySwapOut(rep, entry);
+    httpReplyDestroy(rep);
 #endif
     handler(entry);
     storeBufferFlush(entry);

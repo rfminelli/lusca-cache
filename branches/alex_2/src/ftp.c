@@ -142,7 +142,7 @@ static void ftpAppendSuccessHeader(FtpStateData * ftpState);
 #if 0
 static char *ftpAuthRequired(const request_t *, const char *);
 #else
-static HttpResponse *ftpAuthRequired(request_t *request, const char *realm);
+static void ftpAuthRequired(HttpReply *reply, request_t *request, const char *realm);
 #endif
 static STABH ftpAbort;
 static void ftpHackShortcut(FtpStateData * ftpState, FTPSM * nextState);
@@ -951,12 +951,11 @@ ftpStart(request_t * request, StoreEntry * entry)
 	httpParseReplyHeaders(response, entry->mem_obj->reply);
 #else
 	{
-	    /* create appropreate response */
-	    HttpResponse *response = ftpAuthRequired(request, realm);
-	    httpResponseSwap(response, entry);
-	    httpResponseSumm(response, entry->mem_obj->reply);
-	    /* do not need it anymore */
-	    httpResponseDestroy(response);
+	    HttpReply *reply = entry->mem_obj->reply;
+	    assert(reply);
+	    /* create appropreate reply */
+	    ftpAuthRequired(reply, request, realm);
+	    httpReplySwapOut(reply, entry);
 	}
 #endif
 	storeComplete(entry);
@@ -1857,24 +1856,18 @@ ftpAppendSuccessHeader(FtpStateData * ftpState)
 	reply->last_modified = ftpState->mdtm;
     }
     storeAppendPrintf(e, "\r\n");
-    storeBufferFlush(e);
-    reply->hdr_sz = e->mem_obj->inmem_hi;
 #else
-    {
-	HttpResponse resp;
-        httpResponseInit(&resp);
-	/* standard stuff */
-	httpResponseSetHeaders(&resp, 1.0, HTTP_OK, "Gatewaying",
-	    mime_type, ftpState->size, ftpState->mdtm, -2);
-	/* additional info */
-	if (mime_enc)
-	    httpHeaderAddStr(&resp.hdr, "Content-Encoding", mime_enc);
-        httpResponseSwap(&resp, e);
-	httpResponseSumm(&resp, reply);
-	httpResponseClean(&resp);
-    }
+    httpReplyReset(reply);
+    /* set standard stuff */
+    httpReplySetHeaders(reply, 1.0, HTTP_OK, "Gatewaying",
+	mime_type, ftpState->size, ftpState->mdtm, -2);
+    /* additional info */
+    if (mime_enc)
+	httpHeaderSetStr(&reply->hdr, HDR_CONTENT_ENCODING, mime_enc);
+    httpReplySwapOut(reply, e);
 #endif
     storeBufferFlush(e);
+    reply->hdr_sz = e->mem_obj->inmem_hi;
     storeTimestampsSet(e);
     storeSetPublicKey(e);
 }
@@ -1942,17 +1935,19 @@ ftpAuthRequired(const request_t * request, const char *realm)
 }
 #endif
 
-static HttpResponse *
-ftpAuthRequired(request_t *request, const char *realm)
+static void
+ftpAuthRequired(HttpReply *reply, request_t *request, const char *realm)
 {
     ErrorState *err = errorCon(ERR_ACCESS_DENIED, HTTP_UNAUTHORIZED);
-    HttpResponse *resp;
+    HttpReply *rep;
     err->request = requestLink(request);
-    resp = errorBuildResponse(err);
+    rep = errorBuildReply(err);
     /* add Authenticate header */
-    httpHeaderAddStr(&resp->hdr, "WWW-Authenticate", realm);
+    httpHeaderSetStr(&rep->hdr, HDR_WWW_AUTHENTICATE, realm);
     errorStateFree(err);
-    return resp;
+    /* substitute, should be OK because we clean it @?@ */
+    httpReplyClean(reply);
+    *reply = *rep; /* @?@ warning is generated due to hdr_sz being constant */
 }
 
 char *

@@ -429,18 +429,20 @@ struct _hash_table {
 };
 
 #if ! USE_ALEX_CODE
-#error must use USE_ALEX_CODE
+#error must USE_ALEX_CODE
 #endif
 
-#define Const const
-#include "HttpHeader.h"
-#include "HttpResponse.h"
+#include "MemBuf.h"
+#include "Packer.h"
+#include "HttpReply.h"
 
+# if 0 /* tmp moved to HttpReply.h */
+#define Const const
 struct _http_reply {
     double version;
     int code;
-    Const int content_length;
-    Const int hdr_sz;            /* includes _stored_ status-line, headers, and <CRLF> */
+    int content_length;
+    int hdr_sz;             /* includes _stored_ status-line, headers, and <CRLF> */
     /* Note: fields below may not match info stored on disk */
     Const int cache_control;
     Const int misc_headers;
@@ -452,6 +454,8 @@ struct _http_reply {
     Const char user_agent[HTTP_REPLY_FIELD_SZ << 2];
 #endif
 };
+#endif
+
 
 struct _HttpStateData {
     StoreEntry *entry;
@@ -816,7 +820,11 @@ struct _MemObject {
 	int fd;
 	void *ctrl;
     } swapout;
+#if 0
     struct _http_reply *reply;
+#else
+    HttpReply *reply;
+#endif
     request_t *request;
     struct timeval start_ping;
     IRCB *icp_reply_callback;

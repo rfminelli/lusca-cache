@@ -675,3 +675,17 @@ xstrncpy(char *dst, const char *src, size_t n)
     *dst = '\0';
     return dst;
 }
+
+/* returns the number of leading white spaces in str; handy in skipping ws */
+size_t
+xcountws(const char *str)
+{
+    size_t count = 0;
+    if (str) {
+	while (isspace(*str)) {
+	    str++;
+	    count++;
+	}
+    }
+    return count;
+}

@@ -92,7 +92,6 @@ OBJS	 	= \
 		HttpStatusLine.o \
 		HttpHeader.o \
 		HttpBody.o \
-		HttpResponse.o \
 		HttpReply.o \
 		icmp.o \
 		icp_v2.o \
@@ -102,11 +101,13 @@ OBJS	 	= \
 		ipcache.o \
 		main.o \
 		mem.o \
+		MemBuf.o \
 		mime.o \
 		multicast.o \
 		neighbors.o \
 		net_db.o \
 		objcache.o \
+		Packer.o \
 		pass.o \
 		pconn.o \
 		peer_select.o \
