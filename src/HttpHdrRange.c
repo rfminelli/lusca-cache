@@ -208,7 +208,7 @@ httpHdrRangeSpecMergeWith(HttpHdrRangeSpec * recep, const HttpHdrRangeSpec * don
  * Range
  */
 
-static HttpHdrRange *
+HttpHdrRange *
 httpHdrRangeCreate(void)
 {
     HttpHdrRange *r = memAllocate(MEM_HTTP_HDR_RANGE);

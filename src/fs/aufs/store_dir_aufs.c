@@ -118,9 +118,6 @@ static void storeAufsDirStats(SwapDir *, StoreEntry *);
 static void storeAufsDirInitBitmap(SwapDir *);
 static int storeAufsDirValidFileno(SwapDir *, sfileno, int);
 
-/* The MAIN externally visible function */
-STSETUP storeFsSetup_aufs;
-
 /*
  * These functions were ripped straight out of the heart of store_dir.c.
  * They assume that the given filenum is on a asyncufs partiton, which may or
@@ -128,7 +125,7 @@ STSETUP storeFsSetup_aufs;
  * XXX this evilness should be tidied up at a later date!
  */
 
-static int
+int
 storeAufsDirMapBitTest(SwapDir * SD, int fn)
 {
     sfileno filn = fn;
@@ -137,7 +134,7 @@ storeAufsDirMapBitTest(SwapDir * SD, int fn)
     return file_map_bit_test(aioinfo->map, filn);
 }
 
-static void
+void
 storeAufsDirMapBitSet(SwapDir * SD, int fn)
 {
     sfileno filn = fn;
@@ -818,18 +815,14 @@ storeAufsDirAddDiskRestore(SwapDir * SD, const cache_key * key,
     return e;
 }
 
-CBDATA_TYPE(RebuildState);
-
 static void
 storeAufsDirRebuild(SwapDir * sd)
 {
-    RebuildState *rb;
+    RebuildState *rb = xcalloc(1, sizeof(*rb));
     int clean = 0;
     int zero = 0;
     FILE *fp;
     EVH *func = NULL;
-    CBDATA_INIT_TYPE(RebuildState);
-    rb = CBDATA_ALLOC(RebuildState, NULL);
     rb->sd = sd;
     rb->speed = opt_foreground_rebuild ? 1 << 30 : 50;
     /*
@@ -853,6 +846,7 @@ storeAufsDirRebuild(SwapDir * sd)
     debug(20, 1) ("Rebuilding storage in %s (%s)\n",
 	sd->path, clean ? "CLEAN" : "DIRTY");
     store_dirs_rebuilding++;
+    cbdataAdd(rb, cbdataXfree, 0);
     eventAdd("storeRebuild", func, rb, 0.0, 1);
 }
 
@@ -956,20 +950,17 @@ storeAufsDirWriteCleanStart(SwapDir * sd)
     struct stat sb;
     sd->log.clean.write = NULL;
     sd->log.clean.state = NULL;
-    state->new = xstrdup(storeAufsDirSwapLogFile(sd, ".clean"));
-    state->fd = file_open(state->new, O_WRONLY | O_CREAT | O_TRUNC);
-    if (state->fd < 0) {
-	xfree(state->new);
-	xfree(state);
-	return -1;
-    }
     state->cur = xstrdup(storeAufsDirSwapLogFile(sd, NULL));
+    state->new = xstrdup(storeAufsDirSwapLogFile(sd, ".clean"));
     state->cln = xstrdup(storeAufsDirSwapLogFile(sd, ".last-clean"));
     state->outbuf = xcalloc(CLEAN_BUF_SZ, 1);
     state->outbuf_offset = 0;
     state->walker = sd->repl->WalkInit(sd->repl);
     unlink(state->new);
     unlink(state->cln);
+    state->fd = file_open(state->new, O_WRONLY | O_CREAT | O_TRUNC);
+    if (state->fd < 0)
+	return -1;
     debug(20, 3) ("storeDirWriteCleanLogs: opened %s, FD %d\n",
 	state->new, state->fd);
 #if HAVE_FCHMOD
@@ -1491,27 +1482,20 @@ storeAufsDirStats(SwapDir * SD, StoreEntry * sentry)
 #endif /* OLD_UNUSED_CODE */
 }
 
-static struct cache_dir_option options[] =
-{
-#if NOT_YET_DONE
-    {"L1", storeAufsDirParseL1},
-    {"L2", storeAufsDirParseL2},
-#endif
-    {NULL, NULL}
-};
-
 /*
  * storeAufsDirReconfigure
  *
  * This routine is called when the given swapdir needs reconfiguring 
  */
-static void
+void
 storeAufsDirReconfigure(SwapDir * sd, int index, char *path)
 {
+    char *token;
     int i;
     int size;
     int l1;
     int l2;
+    unsigned int read_only = 0;
 
     i = GetInteger();
     size = i << 10;		/* Mbytes to kbytes */
@@ -1525,6 +1509,9 @@ storeAufsDirReconfigure(SwapDir * sd, int index, char *path)
     l2 = i;
     if (l2 <= 0)
 	fatal("storeAufsDirReconfigure: invalid level 2 directories value");
+    if ((token = strtok(NULL, w_space)))
+	if (!strcasecmp(token, "read-only"))
+	    read_only = 1;
 
     /* just reconfigure it */
     if (size == sd->max_size)
@@ -1534,9 +1521,10 @@ storeAufsDirReconfigure(SwapDir * sd, int index, char *path)
 	debug(3, 1) ("Cache dir '%s' size changed to %d KB\n",
 	    path, size);
     sd->max_size = size;
-
-    parse_cachedir_options(sd, options, 0);
-
+    if (sd->flags.read_only != read_only)
+	debug(3, 1) ("Cache dir '%s' now %s\n",
+	    path, read_only ? "Read-Only" : "Read-Write");
+    sd->flags.read_only = read_only;
     return;
 }
 
@@ -1596,6 +1584,7 @@ static int
 storeAufsCleanupDoubleCheck(SwapDir * sd, StoreEntry * e)
 {
     struct stat sb;
+
     if (stat(storeAufsDirFullPath(sd, e->swap_filen, NULL), &sb) < 0) {
 	debug(20, 0) ("storeAufsCleanupDoubleCheck: MISSING SWAP FILE\n");
 	debug(20, 0) ("storeAufsCleanupDoubleCheck: FILENO %08X\n", e->swap_filen);
@@ -1618,16 +1607,19 @@ storeAufsCleanupDoubleCheck(SwapDir * sd, StoreEntry * e)
 }
 
 /*
- * storeAufsDirParse *
+ * storeAufsDirParse
+ *
  * Called when a *new* fs is being setup.
  */
-static void
+void
 storeAufsDirParse(SwapDir * sd, int index, char *path)
 {
+    char *token;
     int i;
     int size;
     int l1;
     int l2;
+    unsigned int read_only = 0;
     aioinfo_t *aioinfo;
 
     i = GetInteger();
@@ -1642,6 +1634,9 @@ storeAufsDirParse(SwapDir * sd, int index, char *path)
     l2 = i;
     if (l2 <= 0)
 	fatal("storeAufsDirParse: invalid level 2 directories value");
+    if ((token = strtok(NULL, w_space)))
+	if (!strcasecmp(token, "read-only"))
+	    read_only = 1;
 
     aioinfo = xmalloc(sizeof(aioinfo_t));
     if (aioinfo == NULL)
@@ -1656,6 +1651,7 @@ storeAufsDirParse(SwapDir * sd, int index, char *path)
     aioinfo->swaplog_fd = -1;
     aioinfo->map = NULL;	/* Debugging purposes */
     aioinfo->suggest = 0;
+    sd->flags.read_only = read_only;
     sd->init = storeAufsDirInit;
     sd->newfs = storeAufsDirNewfs;
     sd->dump = storeAufsDirDump;
@@ -1681,8 +1677,6 @@ storeAufsDirParse(SwapDir * sd, int index, char *path)
     sd->log.clean.nextentry = storeAufsDirCleanLogNextEntry;
     sd->log.clean.done = storeAufsDirWriteCleanDone;
 
-    parse_cachedir_options(sd, options, 0);
-
     /* Initialise replacement policy stuff */
     sd->repl = createRemovalPolicy(Config.replPolicy);
 }
@@ -1690,7 +1684,7 @@ storeAufsDirParse(SwapDir * sd, int index, char *path)
 /*
  * Initial setup / end destruction
  */
-static void
+void
 storeAufsDirDone(void)
 {
     aioDone();

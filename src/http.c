@@ -44,6 +44,7 @@ static const char *const crlf = "\r\n";
 
 static CWCB httpSendComplete;
 static CWCB httpSendRequestEntry;
+static CWCB httpSendRequestEntryDone;
 
 static PF httpReadReply;
 static void httpSendRequest(HttpStateData *);
@@ -649,8 +650,6 @@ httpBuildRequestHeader(request_t * request,
     const HttpHeader *hdr_in = &orig_request->header;
     int we_do_ranges;
     const HttpHeaderEntry *e;
-    String strVia;
-    String strFwd;
     HttpHeaderPos pos = HttpHeaderInitPos;
     httpHeaderInit(hdr_out, hoRequest);
     /* append our IMS header */
@@ -682,34 +681,20 @@ httpBuildRequestHeader(request_t * request,
     while ((e = httpHeaderGetEntry(hdr_in, &pos))) {
 	debug(11, 5) ("httpBuildRequestHeader: %s: %s\n",
 	    strBuf(e->name), strBuf(e->value));
-	if (!httpRequestHdrAllowed(e, &strConnection)) {
-	    debug(11, 2) ("'%s' header denied by anonymize_headers configuration\n",
-		strBuf(e->name));
+	if (!httpRequestHdrAllowed(e, &strConnection))
 	    continue;
-	}
 	switch (e->id) {
 	case HDR_PROXY_AUTHORIZATION:
-	    /* Only pass on proxy authentication to peers for which
-	     * authentication forwarding is explicitly enabled
-	     */
-	    if (request->flags.proxying && orig_request->peer_login &&
-		strcmp(orig_request->peer_login, "PASS") == 0) {
+	    /* If we're not doing proxy auth, then it must be passed on */
+	    if (!request->flags.used_proxy_auth)
 		httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
-	    }
 	    break;
 	case HDR_AUTHORIZATION:
-	    /* Pass on WWW authentication even if used locally. If this is
-	     * not wanted in an accelerator then the header can be removed
-	     * using the anonymization functions
-	     */
-	    httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
-	    /* XXX Some accelerators might want to strip the header
-	     * and regard the reply as cacheable, but authentication
-	     * is not normally enabled for accelerators without reading
-	     * the code, so there is not much use in adding logics here
-	     * without first defining the concept of having authentication
-	     * in the accelerator...
-	     */
+	    /* If we're not doing www auth, then it must be passed on */
+	    if (!request->flags.accelerated || !request->flags.used_proxy_auth)
+		httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
+	    else
+		request->flags.auth = 0;	/* We have used the authentication */
 	    break;
 	case HDR_HOST:
 	    /*
@@ -756,21 +741,28 @@ httpBuildRequestHeader(request_t * request,
 	}
     }
 
+    /* append fake user agent if configured and 
+     * the real one is not supplied by the client */
+    if (Config.fake_ua && !httpHeaderHas(hdr_out, HDR_USER_AGENT))
+	httpHeaderPutStr(hdr_out, HDR_USER_AGENT, Config.fake_ua);
+
     /* append Via */
-    strVia = httpHeaderGetList(hdr_in, HDR_VIA);
-    snprintf(bbuf, BBUF_SZ, "%d.%d %s",
-	orig_request->http_ver.major,
-	orig_request->http_ver.minor, ThisCache);
-    strListAdd(&strVia, bbuf, ',');
-    httpHeaderPutStr(hdr_out, HDR_VIA, strBuf(strVia));
-    stringClean(&strVia);
-
+    if (httpRequestHdrAllowedByName(HDR_VIA)) {
+	String strVia = httpHeaderGetList(hdr_in, HDR_VIA);
+	snprintf(bbuf, BBUF_SZ, "%d.%d %s",
+	    orig_request->http_ver.major,
+	    orig_request->http_ver.minor, ThisCache);
+	strListAdd(&strVia, bbuf, ',');
+	httpHeaderPutStr(hdr_out, HDR_VIA, strBuf(strVia));
+	stringClean(&strVia);
+    }
     /* append X-Forwarded-For */
-    strFwd = httpHeaderGetList(hdr_in, HDR_X_FORWARDED_FOR);
-    strListAdd(&strFwd, (cfd < 0 ? "unknown" : fd_table[cfd].ipaddr), ',');
-    httpHeaderPutStr(hdr_out, HDR_X_FORWARDED_FOR, strBuf(strFwd));
-    stringClean(&strFwd);
-
+    if (httpRequestHdrAllowedByName(HDR_X_FORWARDED_FOR)) {
+	String strFwd = httpHeaderGetList(hdr_in, HDR_X_FORWARDED_FOR);
+	strListAdd(&strFwd, (cfd < 0 ? "unknown" : fd_table[cfd].ipaddr), ',');
+	httpHeaderPutStr(hdr_out, HDR_X_FORWARDED_FOR, strBuf(strFwd));
+	stringClean(&strFwd);
+    }
     /* append Host if not there already */
     if (!httpHeaderHas(hdr_out, HDR_HOST)) {
 	/* use port# only if not default */
@@ -789,19 +781,8 @@ httpBuildRequestHeader(request_t * request,
 	}
     }
     /* append Proxy-Authorization if configured for peer, and proxying */
-    if (request->flags.proxying && orig_request->peer_login &&
-	!httpHeaderHas(hdr_out, HDR_PROXY_AUTHORIZATION) &&
-	strcmp(orig_request->peer_login, "PASS") != 0) {
-	if (*orig_request->peer_login == '*') {
-	    /* Special mode, to pass the username to the upstream cache */
-	    char loginbuf[256];
-	    char *username = "-";
-	    if (orig_request->auth_user_request)
-		username = authenticateUserRequestUsername(orig_request->auth_user_request);
-	    snprintf(loginbuf, sizeof(loginbuf), "%s%s", username, orig_request->peer_login + 1);
-	    httpHeaderPutStrf(hdr_out, HDR_PROXY_AUTHORIZATION, "Basic %s",
-		base64_encode(loginbuf));
-	} else {
+    if (!httpHeaderHas(hdr_out, HDR_PROXY_AUTHORIZATION)) {
+	if (request->flags.proxying && orig_request->peer_login) {
 	    httpHeaderPutStrf(hdr_out, HDR_PROXY_AUTHORIZATION, "Basic %s",
 		base64_encode(orig_request->peer_login));
 	}
@@ -830,8 +811,6 @@ httpBuildRequestHeader(request_t * request,
 	    httpHeaderPutStr(hdr_out, HDR_CONNECTION, "keep-alive");
 	}
     }
-    /* Now mangle the headers. */
-    httpHdrMangleList(hdr_out, request);
     stringClean(&strConnection);
 }
 
@@ -876,7 +855,7 @@ httpSendRequest(HttpStateData * httpState)
 
     debug(11, 5) ("httpSendRequest: FD %d: httpState %p.\n", httpState->fd, httpState);
 
-    if (httpState->orig_request->body_connection)
+    if (httpState->orig_request->content_length > 0)
 	sendHeaderDone = httpSendRequestEntry;
     else
 	sendHeaderDone = httpSendComplete;
@@ -890,8 +869,6 @@ httpSendRequest(HttpStateData * httpState)
     assert(-1 == cfd || FD_SOCKET == fd_table[cfd].type);
     if (p != NULL)
 	httpState->flags.proxying = 1;
-    else
-	httpState->flags.proxying = 0;
     /*
      * Is keep-alive okay for all request methods?
      */
@@ -922,13 +899,13 @@ void
 httpStart(FwdState * fwd)
 {
     int fd = fwd->server_fd;
-    HttpStateData *httpState;
+    HttpStateData *httpState = memAllocate(MEM_HTTP_STATE_DATA);
     request_t *proxy_req;
     request_t *orig_req = fwd->request;
     debug(11, 3) ("httpStart: \"%s %s\"\n",
 	RequestMethodStr[orig_req->method],
 	storeUrl(fwd->entry));
-    httpState = CBDATA_ALLOC(HttpStateData, NULL);
+    cbdataAdd(httpState, memFree, MEM_HTTP_STATE_DATA);
     storeLockObject(fwd->entry);
     httpState->fwd = fwd;
     httpState->entry = fwd->entry;
@@ -976,44 +953,6 @@ httpStart(FwdState * fwd)
 }
 
 static void
-httpSendRequestEntryDone(int fd, void *data)
-{
-    HttpStateData *httpState = data;
-    aclCheck_t ch;
-    debug(11, 5) ("httpSendRequestEntryDone: FD %d\n",
-	fd);
-    memset(&ch, '\0', sizeof(ch));
-    ch.request = httpState->request;
-    if (!Config.accessList.brokenPosts) {
-	debug(11, 5) ("httpSendRequestEntryDone: No brokenPosts list\n");
-	httpSendComplete(fd, NULL, 0, 0, data);
-    } else if (!aclCheckFast(Config.accessList.brokenPosts, &ch)) {
-	debug(11, 5) ("httpSendRequestEntryDone: didn't match brokenPosts\n");
-	httpSendComplete(fd, NULL, 0, 0, data);
-    } else {
-	debug(11, 2) ("httpSendRequestEntryDone: matched brokenPosts\n");
-	comm_write(fd, "\r\n", 2, httpSendComplete, data, NULL);
-    }
-}
-
-static void
-httpRequestBodyHandler(char *buf, size_t size, void *data)
-{
-    HttpStateData *httpState = (HttpStateData *) data;
-    if (size > 0) {
-	comm_write(httpState->fd, buf, size, httpSendRequestEntry, data, memFree8K);
-    } else if (size == 0) {
-	/* End of body */
-	memFree8K(buf);
-	httpSendRequestEntryDone(httpState->fd, data);
-    } else {
-	/* Failed to get whole body, probably aborted */
-	memFree8K(buf);
-	httpSendComplete(httpState->fd, NULL, 0, COMM_ERR_CLOSING, data);
-    }
-}
-
-static void
 httpSendRequestEntry(int fd, char *bufnotused, size_t size, int errflag, void *data)
 {
     HttpStateData *httpState = data;
@@ -1040,7 +979,45 @@ httpSendRequestEntry(int fd, char *bufnotused, size_t size, int errflag, void *d
 	comm_close(fd);
 	return;
     }
-    clientReadBody(httpState->orig_request, memAllocate(MEM_8K_BUF), 8192, httpRequestBodyHandler, httpState);
+    pumpStart(fd, httpState->fwd, httpSendRequestEntryDone, httpState);
+}
+
+static void
+httpSendRequestEntryDone(int fd, char *bufnotused, size_t size, int errflag, void *data)
+{
+    HttpStateData *httpState = data;
+    StoreEntry *entry = httpState->entry;
+    ErrorState *err;
+    aclCheck_t ch;
+    debug(11, 5) ("httpSendRequestEntryDone: FD %d: size %d: errflag %d.\n",
+	fd, size, errflag);
+    if (size > 0) {
+	fd_bytes(fd, size, FD_WRITE);
+	kb_incr(&statCounter.server.all.kbytes_out, size);
+	kb_incr(&statCounter.server.http.kbytes_out, size);
+    }
+    if (errflag == COMM_ERR_CLOSING)
+	return;
+    if (errflag) {
+	err = errorCon(ERR_WRITE_ERROR, HTTP_INTERNAL_SERVER_ERROR);
+	err->xerrno = errno;
+	err->request = requestLink(httpState->orig_request);
+	errorAppendEntry(entry, err);
+	comm_close(fd);
+	return;
+    }
+    memset(&ch, '\0', sizeof(ch));
+    ch.request = httpState->request;
+    if (!Config.accessList.brokenPosts) {
+	debug(11, 5) ("httpSendRequestEntryDone: No brokenPosts list\n");
+	httpSendComplete(fd, NULL, 0, 0, data);
+    } else if (!aclCheckFast(Config.accessList.brokenPosts, &ch)) {
+	debug(11, 5) ("httpSendRequestEntryDone: didn't match brokenPosts\n");
+	httpSendComplete(fd, NULL, 0, 0, data);
+    } else {
+	debug(11, 2) ("httpSendRequestEntryDone: matched brokenPosts\n");
+	comm_write(fd, "\r\n", 2, httpSendComplete, data, NULL);
+    }
 }
 
 void

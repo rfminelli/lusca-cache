@@ -128,8 +128,6 @@ static int storeDiskdDirValidFileno(SwapDir *, sfileno, int);
 static void storeDiskdStats(StoreEntry * sentry);
 static void storeDiskdDirSync(SwapDir *);
 
-/* The only externally visible interface */
-STSETUP storeFsSetup_diskd;
 
 /*
  * These functions were ripped straight out of the heart of store_dir.c.
@@ -138,7 +136,7 @@ STSETUP storeFsSetup_diskd;
  * XXX this evilness should be tidied up at a later date!
  */
 
-static int
+int
 storeDiskdDirMapBitTest(SwapDir * SD, int fn)
 {
     sfileno filn = fn;
@@ -147,7 +145,7 @@ storeDiskdDirMapBitTest(SwapDir * SD, int fn)
     return file_map_bit_test(diskdinfo->map, filn);
 }
 
-static void
+void
 storeDiskdDirMapBitSet(SwapDir * SD, int fn)
 {
     sfileno filn = fn;
@@ -167,7 +165,7 @@ storeDiskdDirMapBitReset(SwapDir * SD, int fn)
      * file_map_bit_reset doesn't do bounds checking.  It assumes
      * filn is a valid file number, but it might not be because
      * the map is dynamic in size.  Also clearing an already clear
-     * bit puts the map counter of-of-whack.
+     * bit puts the map counter out-of-whack.
      */
     if (file_map_bit_test(diskdinfo->map, filn))
 	file_map_bit_reset(diskdinfo->map, filn);
@@ -1010,18 +1008,14 @@ storeDiskdDirAddDiskRestore(SwapDir * SD, const cache_key * key,
     return e;
 }
 
-CBDATA_TYPE(RebuildState);
-
 static void
 storeDiskdDirRebuild(SwapDir * sd)
 {
-    RebuildState *rb;
+    RebuildState *rb = xcalloc(1, sizeof(*rb));
     int clean = 0;
     int zero = 0;
     FILE *fp;
     EVH *func = NULL;
-    CBDATA_INIT_TYPE(RebuildState);
-    rb = CBDATA_ALLOC(RebuildState, NULL);
     rb->sd = sd;
     rb->speed = opt_foreground_rebuild ? 1 << 30 : 50;
     /*
@@ -1045,6 +1039,7 @@ storeDiskdDirRebuild(SwapDir * sd)
     debug(20, 1) ("Rebuilding storage in %s (%s)\n",
 	sd->path, clean ? "CLEAN" : "DIRTY");
     store_dirs_rebuilding++;
+    cbdataAdd(rb, cbdataXfree, 0);
     eventAdd("storeRebuild", func, rb, 0.0, 1);
 }
 
@@ -1148,14 +1143,8 @@ storeDiskdDirWriteCleanStart(SwapDir * sd)
     struct stat sb;
     sd->log.clean.write = NULL;
     sd->log.clean.state = NULL;
-    state->new = xstrdup(storeDiskdDirSwapLogFile(sd, ".clean"));
-    state->fd = file_open(state->new, O_WRONLY | O_CREAT | O_TRUNC);
-    if (state->fd < 0) {
-	xfree(state->new);
-	xfree(state);
-	return -1;
-    }
     state->cur = xstrdup(storeDiskdDirSwapLogFile(sd, NULL));
+    state->new = xstrdup(storeDiskdDirSwapLogFile(sd, ".clean"));
     state->cln = xstrdup(storeDiskdDirSwapLogFile(sd, ".last-clean"));
     state->outbuf = xcalloc(CLEAN_BUF_SZ, 1);
     state->outbuf_offset = 0;
@@ -1707,50 +1696,21 @@ storeDiskdDirStats(SwapDir * SD, StoreEntry * sentry)
     storeAppendPrintf(sentry, "Pending operations: %d\n", diskdinfo->away);
 }
 
-static void 
-storeDiskdDirParseQ1(SwapDir * sd, const char *name, const char *value, int reconfiguring)
-{
-    diskdinfo_t *diskdinfo = sd->fsdata;
-    int old_magic1 = diskdinfo->magic1;
-    diskdinfo->magic1 = atoi(value);
-    if (reconfiguring && old_magic1 != diskdinfo->magic1)
-	debug(3, 1) ("cache_dir '%s' new Q1 value '%d'\n", diskdinfo->magic1);
-}
-
-static void 
-storeDiskdDirParseQ2(SwapDir * sd, const char *name, const char *value, int reconfiguring)
-{
-    diskdinfo_t *diskdinfo = sd->fsdata;
-    int old_magic2 = diskdinfo->magic2;
-    diskdinfo->magic2 = atoi(value);
-    if (reconfiguring && old_magic2 != diskdinfo->magic2)
-	debug(3, 1) ("cache_dir '%s' new Q2 value '%d'\n", diskdinfo->magic2);
-}
-
-struct cache_dir_option options[] =
-{
-#if NOT_YET
-    {"L1", storeDiskdDirParseL1},
-    {"L2", storeDiskdDirParseL2},
-#endif
-    {"Q1", storeDiskdDirParseQ1},
-    {"Q2", storeDiskdDirParseQ2},
-    {NULL, NULL}
-};
-
 /*
  * storeDiskdDirReconfigure
  *
  * This routine is called when the given swapdir needs reconfiguring 
  */
-static void
+void
 storeDiskdDirReconfigure(SwapDir * sd, int index, char *path)
 {
+    char *token;
     int i;
     int size;
     int l1;
     int l2;
     int magic1, magic2;
+    unsigned int read_only = 0;
     diskdinfo_t *diskdinfo;
 
     i = GetInteger();
@@ -1773,6 +1733,9 @@ storeDiskdDirReconfigure(SwapDir * sd, int index, char *path)
     magic2 = i;
     if (magic2 <= 0)
 	fatal("storeDiskdDirParse: invalid magic2 value");
+    if ((token = strtok(NULL, w_space)))
+	if (!strcasecmp(token, "read-only"))
+	    read_only = 1;
 
     /* just reconfigure it */
     if (size == sd->max_size)
@@ -1782,10 +1745,14 @@ storeDiskdDirReconfigure(SwapDir * sd, int index, char *path)
 	debug(3, 1) ("Cache dir '%s' size changed to %d KB\n",
 	    path, size);
     sd->max_size = size;
+    if (sd->flags.read_only != read_only)
+	debug(3, 1) ("Cache dir '%s' now %s\n",
+	    path, read_only ? "Read-Only" : "Read-Write");
     diskdinfo = sd->fsdata;
     diskdinfo->magic1 = magic1;
     diskdinfo->magic2 = magic2;
-    parse_cachedir_options(sd, options, 1);
+    sd->flags.read_only = read_only;
+    return;
 }
 
 void
@@ -1845,6 +1812,7 @@ static int
 storeDiskdCleanupDoubleCheck(SwapDir * sd, StoreEntry * e)
 {
     struct stat sb;
+
     if (stat(storeDiskdDirFullPath(sd, e->swap_filen, NULL), &sb) < 0) {
 	debug(20, 0) ("storeDiskdCleanupDoubleCheck: MISSING SWAP FILE\n");
 	debug(20, 0) ("storeDiskdCleanupDoubleCheck: FILENO %08X\n", e->swap_filen);
@@ -1871,13 +1839,16 @@ storeDiskdCleanupDoubleCheck(SwapDir * sd, StoreEntry * e)
  *
  * Called when a *new* fs is being setup.
  */
-static void
+void
 storeDiskdDirParse(SwapDir * sd, int index, char *path)
 {
+    char *token;
     int i;
     int size;
     int l1;
     int l2;
+    int magic1, magic2;
+    unsigned int read_only = 0;
     diskdinfo_t *diskdinfo;
 
     i = GetInteger();
@@ -1893,6 +1864,18 @@ storeDiskdDirParse(SwapDir * sd, int index, char *path)
     if (l2 <= 0)
 	fatal("storeDiskdDirParse: invalid level 2 directories value");
     i = GetInteger();
+    magic1 = i;
+    if (magic1 <= 0)
+	fatal("storeDiskdDirParse: invalid magic1 value");
+    i = GetInteger();
+    magic2 = i;
+    if (magic2 <= 0)
+	fatal("storeDiskdDirParse: invalid magic2 value");
+
+
+    if ((token = strtok(NULL, w_space)))
+	if (!strcasecmp(token, "read-only"))
+	    read_only = 1;
 
     sd->fsdata = diskdinfo = xcalloc(1, sizeof(*diskdinfo));
     sd->index = index;
@@ -1903,8 +1886,9 @@ storeDiskdDirParse(SwapDir * sd, int index, char *path)
     diskdinfo->swaplog_fd = -1;
     diskdinfo->map = NULL;	/* Debugging purposes */
     diskdinfo->suggest = 0;
-    diskdinfo->magic1 = 64;
-    diskdinfo->magic2 = 72;
+    diskdinfo->magic1 = magic1;
+    diskdinfo->magic2 = magic2;
+    sd->flags.read_only = read_only;
     sd->init = storeDiskdDirInit;
     sd->newfs = storeDiskdDirNewfs;
     sd->dump = storeDiskdDirDump;
@@ -1930,8 +1914,6 @@ storeDiskdDirParse(SwapDir * sd, int index, char *path)
     sd->log.clean.nextentry = storeDiskdDirCleanLogNextEntry;
     sd->log.clean.done = storeDiskdDirWriteCleanDone;
 
-    parse_cachedir_options(sd, options, 0);
-
     /* Initialise replacement policy stuff */
     sd->repl = createRemovalPolicy(Config.replPolicy);
 }
@@ -1939,7 +1921,7 @@ storeDiskdDirParse(SwapDir * sd, int index, char *path)
 /*
  * Initial setup / end destruction
  */
-static void
+void
 storeDiskdDirDone(void)
 {
     memPoolDestroy(diskd_state_pool);

@@ -46,8 +46,8 @@ static void storeCossWriteMemBuf(SwapDir * SD, CossMemBuf * t);
 static void storeCossWriteMemBufDone(int fd, int errflag, size_t len, void *my_data);
 static CossMemBuf *storeCossCreateMemBuf(SwapDir * SD, size_t start,
     sfileno curfn, int *collision);
-static CBDUNL storeCossIOFreeEntry;
-static CBDUNL storeCossMembufFree;
+static void storeCossIOFreeEntry(void *, int);
+static void storeCossMembufFree(void *, int);
 
 /* === PUBLIC =========================================================== */
 
@@ -128,7 +128,8 @@ storeCossCreate(SwapDir * SD, StoreEntry * e, STFNCB * file_callback, STIOCB * c
     CossState *cstate;
     storeIOState *sio;
 
-    sio = CBDATA_ALLOC(storeIOState, storeCossIOFreeEntry);
+    sio = memAllocate(MEM_STORE_IO);
+    cbdataAdd(sio, storeCossIOFreeEntry, MEM_STORE_IO);
     cstate = memPoolAlloc(coss_state_pool);
     sio->fsstate = cstate;
     sio->offset = 0;
@@ -172,7 +173,8 @@ storeCossOpen(SwapDir * SD, StoreEntry * e, STFNCB * file_callback,
 
     debug(81, 3) ("storeCossOpen: offset %d\n", f);
 
-    sio = CBDATA_ALLOC(storeIOState, storeCossIOFreeEntry);
+    sio = memAllocate(MEM_STORE_IO);
+    cbdataAdd(sio, storeCossIOFreeEntry, MEM_STORE_IO);
     cstate = memPoolAlloc(coss_state_pool);
 
     sio->fsstate = cstate;
@@ -430,6 +432,7 @@ storeCossWriteMemBuf(SwapDir * SD, CossMemBuf * t)
     CossInfo *cs = (CossInfo *) SD->fsdata;
     debug(81, 3) ("storeCossWriteMemBuf: offset %d, len %d\n",
 	t->diskstart, t->diskend - t->diskstart);
+    cbdataAdd(t, storeCossMembufFree, 0);
     t->flags.writing = 1;
     file_write(cs->fd, t->diskstart, &t->buffer,
 	t->diskend - t->diskstart, storeCossWriteMemBufDone, t, NULL);
@@ -466,7 +469,6 @@ storeCossWriteMemBufDone(int fd, int errflag, size_t len, void *my_data)
     cbdataFree(t);
 }
 
-CBDATA_TYPE(CossMemBuf);
 static CossMemBuf *
 storeCossCreateMemBuf(SwapDir * SD, size_t start,
     sfileno curfn, int *collision)
@@ -477,8 +479,7 @@ storeCossCreateMemBuf(SwapDir * SD, size_t start,
     int numreleased = 0;
     CossInfo *cs = (CossInfo *) SD->fsdata;
 
-    CBDATA_INIT_TYPE(CossMemBuf);
-    newmb = CBDATA_ALLOC(CossMemBuf, storeCossMembufFree);
+    newmb = memPoolAlloc(coss_membuf_pool);
     newmb->diskstart = start;
     debug(81, 3) ("storeCossCreateMemBuf: creating new membuf at %d\n", newmb->diskstart);
     newmb->diskend = newmb->diskstart + COSS_MEMBUF_SZ - 1;
@@ -529,7 +530,7 @@ storeCossStartMembuf(SwapDir * sd)
  * the fsstate variable ..
  */
 static void
-storeCossIOFreeEntry(void *sio)
+storeCossIOFreeEntry(void *sio, int foo)
 {
     memPoolFree(coss_state_pool, ((storeIOState *) sio)->fsstate);
     memFree(sio, MEM_STORE_IO);
@@ -541,7 +542,7 @@ storeCossIOFreeEntry(void *sio)
  * So we have this hack here ..
  */
 static void
-storeCossMembufFree(void *mb)
+storeCossMembufFree(void *mb, int foo)
 {
-    cbdataFree(mb);
+    memPoolFree(coss_membuf_pool, mb);
 }

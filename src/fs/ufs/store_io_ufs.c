@@ -40,7 +40,7 @@
 static DRCB storeUfsReadDone;
 static DWCB storeUfsWriteDone;
 static void storeUfsIOCallback(storeIOState * sio, int errflag);
-static CBDUNL storeUfsIOFreeEntry;
+static void storeUfsIOFreeEntry(void *, int);
 
 /* === PUBLIC =========================================================== */
 
@@ -60,7 +60,8 @@ storeUfsOpen(SwapDir * SD, StoreEntry * e, STFNCB * file_callback,
 	return NULL;
     }
     debug(79, 3) ("storeUfsOpen: opened FD %d\n", fd);
-    sio = CBDATA_ALLOC(storeIOState, storeUfsIOFreeEntry);
+    sio = memAllocate(MEM_STORE_IO);
+    cbdataAdd(sio, storeUfsIOFreeEntry, MEM_STORE_IO);
     sio->fsstate = memPoolAlloc(ufs_state_pool);
 
     sio->swap_filen = f;
@@ -107,7 +108,8 @@ storeUfsCreate(SwapDir * SD, StoreEntry * e, STFNCB * file_callback, STIOCB * ca
 	return NULL;
     }
     debug(79, 3) ("storeUfsCreate: opened FD %d\n", fd);
-    sio = CBDATA_ALLOC(storeIOState, storeUfsIOFreeEntry);
+    sio = memAllocate(MEM_STORE_IO);
+    cbdataAdd(sio, storeUfsIOFreeEntry, MEM_STORE_IO);
     sio->fsstate = memPoolAlloc(ufs_state_pool);
 
     sio->swap_filen = filn;
@@ -255,10 +257,12 @@ storeUfsIOCallback(storeIOState * sio, int errflag)
 
 
 /*
- * Clean up any references from the SIO before it get's released.
+ * We can't pass memFree() as a free function here, because we need to free
+ * the fsstate variable ..
  */
 static void
-storeUfsIOFreeEntry(void *sio)
+storeUfsIOFreeEntry(void *sio, int foo)
 {
     memPoolFree(ufs_state_pool, ((storeIOState *) sio)->fsstate);
+    memFree(sio, MEM_STORE_IO);
 }

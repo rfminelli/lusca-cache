@@ -38,7 +38,7 @@
 static char *debug_log_file = NULL;
 static int Ctx_Lock = 0;
 static const char *debugLogTime(time_t);
-static void ctx_print(void);
+static void ctx_print();
 
 #if STDC_HEADERS
 void

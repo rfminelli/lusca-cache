@@ -43,11 +43,11 @@ typedef struct {
 } Array;
 
 
-extern Array *arrayCreate(void);
+extern Array *arrayCreate();
 extern void arrayInit(Array * s);
 extern void arrayClean(Array * s);
-extern void arrayDestroy(Array * s);
-extern void arrayAppend(Array * s, void *obj);
+extern void arrayDestroy(Array *s);
+extern void arrayAppend(Array *s, void *obj);
 extern void arrayPreAppend(Array * s, int app_count);
 
 
