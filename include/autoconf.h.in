@@ -1,3 +1,7 @@
+/*
+ * $Id$
+ */
+
 /* include/autoconf.h.in.  Generated automatically from configure.in by autoheader.  */
 /* 
  * All configurable options are enabled by using --enable-....
@@ -236,11 +240,6 @@
  *  Linux system.
  */
 #undef IPF_TRANSPARENT
-
-/*
- * type of fd_set array
- */
-#undef fd_mask
 
 /* The number of bytes in a int.  */
 #undef SIZEOF_INT
