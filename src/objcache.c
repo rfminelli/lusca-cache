@@ -70,7 +70,6 @@ int objcacheStart(fd, url, entry)
      StoreEntry *entry;
 {
     char *buf = NULL;
-    char *badentry = NULL;
     char *BADCacheURL = "Bad Object Cache URL %s ... negative cached.\n";
     char *BADPassword = "Incorrect password, sorry.\n";
     char password[64];
@@ -78,7 +77,7 @@ int objcacheStart(fd, url, entry)
     int sock_name_length = sizeof(peer_socket_name);
 
     /* Create state structure. */
-    ObjectCacheData *data = (ObjectCacheData *) xcalloc(1, sizeof(ObjectCacheData));
+    ObjectCacheData *data = xcalloc(1, sizeof(ObjectCacheData));
     data->reply_fd = fd;
     data->entry = entry;
     /* before we generate new object */
@@ -101,10 +100,10 @@ int objcacheStart(fd, url, entry)
 	debug(16, 1, "getpeername failed??\n");
     }
     /* retrieve object requested */
-    if (strncmp(data->request, "shutdown", strlen("shutdown")) == 0) {
+    if (strcmp(data->request, "shutdown") == 0) {
 	if (objcache_CheckPassword(password, username) != 0) {
 	    buf = xstrdup(BADPassword);
-	    storeAppend(data->entry, buf, strlen(buf));
+	    storeAppendPrintf(data->entry, buf);
 	    storeAbort(data->entry, "SQUID:OBJCACHE Incorrect Password\n");
 	    /* override negative TTL */
 	    data->entry->expires = squid_curtime + STAT_TTL;
@@ -117,88 +116,91 @@ int objcacheStart(fd, url, entry)
 	    shut_down(0);
 	}
 
-    } else if (strncmp(data->request, "info", strlen("info")) == 0) {
+    } else if (strcmp(data->request, "info") == 0) {
 	BIT_SET(data->entry->flag, DELAY_SENDING);
 	CacheInfo->info_get(CacheInfo, data->entry);
 	BIT_RESET(data->entry->flag, DELAY_SENDING);
 	storeComplete(data->entry);
 
-    } else if (strncmp(data->request, "stats/objects", strlen("stats/objects")) == 0) {
+    } else if (strcmp(data->request, "stats/objects") == 0) {
 	BIT_SET(data->entry->flag, DELAY_SENDING);
 	CacheInfo->stat_get(CacheInfo, "objects", data->entry);
 	BIT_RESET(data->entry->flag, DELAY_SENDING);
 	storeComplete(data->entry);
 
-    } else if (strncmp(data->request, "stats/vm_objects", strlen("stats/vm_objects")) == 0) {
+    } else if (strcmp(data->request, "stats/vm_objects") == 0) {
 	BIT_SET(data->entry->flag, DELAY_SENDING);
 	CacheInfo->stat_get(CacheInfo, "vm_objects", data->entry);
 	BIT_RESET(data->entry->flag, DELAY_SENDING);
 	storeComplete(data->entry);
 
-    } else if (strncmp(data->request, "stats/utilization", strlen("stats/utilization")) == 0) {
+    } else if (strcmp(data->request, "stats/utilization") == 0) {
 	BIT_SET(data->entry->flag, DELAY_SENDING);
 	CacheInfo->stat_get(CacheInfo, "utilization", data->entry);
 	BIT_RESET(data->entry->flag, DELAY_SENDING);
 	storeComplete(data->entry);
 
-    } else if (strncmp(data->request, "stats/general", strlen("stats/general")) == 0) {
+    } else if (strcmp(data->request, "stats/general") == 0) {
 	BIT_SET(data->entry->flag, DELAY_SENDING);
 	CacheInfo->stat_get(CacheInfo, "general", data->entry);
 	BIT_RESET(data->entry->flag, DELAY_SENDING);
 	storeComplete(data->entry);
 
-    } else if (strncmp(data->request, "log/status", strlen("log/status")) == 0) {
+    } else if (strcmp(data->request, "stats/io") == 0) {
+	BIT_SET(data->entry->flag, DELAY_SENDING);
+	CacheInfo->stat_get(CacheInfo, "io", data->entry);
+	BIT_RESET(data->entry->flag, DELAY_SENDING);
+	storeComplete(data->entry);
+
+    } else if (strcmp(data->request, "log/status") == 0) {
 	BIT_SET(data->entry->flag, DELAY_SENDING);
 	CacheInfo->log_status_get(CacheInfo, data->entry);
 	BIT_RESET(data->entry->flag, DELAY_SENDING);
 	storeComplete(data->entry);
 
-    } else if (strncmp(data->request, "log/enable", strlen("log/enable")) == 0) {
+    } else if (strcmp(data->request, "log/enable") == 0) {
 	BIT_SET(data->entry->flag, DELAY_SENDING);
 	CacheInfo->log_enable(CacheInfo, data->entry);
 	BIT_RESET(data->entry->flag, DELAY_SENDING);
 	storeComplete(data->entry);
 
-    } else if (strncmp(data->request, "log/disable", strlen("log/disable")) == 0) {
+    } else if (strcmp(data->request, "log/disable") == 0) {
 	BIT_SET(data->entry->flag, DELAY_SENDING);
 	CacheInfo->log_disable(CacheInfo, data->entry);
 	BIT_RESET(data->entry->flag, DELAY_SENDING);
 	storeComplete(data->entry);
 
-    } else if (strncmp(data->request, "log/clear", strlen("log/clear")) == 0) {
+    } else if (strcmp(data->request, "log/clear") == 0) {
 	BIT_SET(data->entry->flag, DELAY_SENDING);
 	CacheInfo->log_clear(CacheInfo, data->entry);
 	BIT_RESET(data->entry->flag, DELAY_SENDING);
 	storeComplete(data->entry);
 
 #ifdef MENU_SHOW_LOG
-    } else if (strncmp(data->request, "log", strlen("log")) == 0) {
+    } else if (strcmp(data->request, "log") == 0) {
 	BIT_SET(data->entry->flag, DELAY_SENDING);
 	CacheInfo->log_get_start(CacheInfo, data->entry);
 	BIT_RESET(data->entry->flag, DELAY_SENDING);
 #endif
 
-    } else if (strncmp(data->request, "parameter", strlen("parameter")) == 0) {
+    } else if (strcmp(data->request, "parameter") == 0) {
 	BIT_SET(data->entry->flag, DELAY_SENDING);
 	CacheInfo->parameter_get(CacheInfo, data->entry);
 	BIT_RESET(data->entry->flag, DELAY_SENDING);
 	storeComplete(data->entry);
 
-    } else if (strncmp(data->request, "server_list", strlen("server_list")) == 0) {
+    } else if (strcmp(data->request, "server_list") == 0) {
 	BIT_SET(data->entry->flag, DELAY_SENDING);
 	CacheInfo->server_list(CacheInfo, data->entry);
 	BIT_RESET(data->entry->flag, DELAY_SENDING);
 	storeComplete(data->entry);
 
-    } else if (strncmp(data->request, "squid.conf", strlen("squid.conf")) == 0) {
+    } else if (strcmp(data->request, "squid.conf") == 0) {
 	CacheInfo->squid_get_start(CacheInfo, data->entry);
 
     } else {
 	debug(16, 5, "Bad Object Cache URL %s ... negative cached.\n", url);
-	badentry = (char *) xcalloc(1, strlen(BADCacheURL) + strlen(url));
-	sprintf(badentry, BADCacheURL, url);
-	storeAppend(entry, badentry, strlen(badentry));
-	safe_free(badentry);
+	storeAppendPrintf(entry, BADCacheURL, url);
 	storeComplete(entry);
     }
 

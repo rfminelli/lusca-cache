@@ -7,7 +7,10 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <netdb.h>
+#include <unistd.h>
+#include <signal.h>
 
 #define RECV_BUF_SIZE 8192
 
@@ -51,7 +54,6 @@ int main(argc, argv)
     int len;
     struct hostent *hp = NULL;
     char logfile[BUFSIZ];
-    char *t = NULL;
     char ip[4];
 
     for (len = 0; len < 32; len++) {
@@ -90,4 +92,5 @@ int main(argc, argv)
 	fputs(buf, stdout);
 	fflush(stdout);
     }
+    return 0;
 }

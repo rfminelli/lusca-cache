@@ -57,15 +57,15 @@ int main(argc, argv)
     char *t = NULL;
     char buf[256];
     int socket_from_cache, fd;
-    int a1, a2, a3, a4;
     int addr_count = 0;
     int alias_count = 0;
     int i;
     char *dnsServerPathname = NULL;
+    int dnsServerTCP = 0;
     int c;
     extern char *optarg;
 
-    while ((c = getopt(argc, argv, "vhdp:")) != -1)
+    while ((c = getopt(argc, argv, "vhdtp:")) != -1) {
 	switch (c) {
 	case 'v':
 	case 'h':
@@ -82,18 +82,23 @@ int main(argc, argv)
 	case 'p':
 	    dnsServerPathname = xstrdup(optarg);
 	    break;
+	case 't':
+	    dnsServerTCP = 1;
+	    break;
 	default:
 	    fprintf(stderr, "usage: dnsserver -h -d -p socket-filename\n");
 	    exit(1);
 	    break;
 	}
+    }
 
     socket_from_cache = 3;
 
     /* accept DNS look up from ipcache */
-    if (dnsServerPathname) {
-	fd = accept(socket_from_cache, (struct sockaddr *) 0, (int *) 0);
-	unlink(dnsServerPathname);
+    if (dnsServerPathname || dnsServerTCP) {
+	fd = accept(socket_from_cache, NULL, NULL);
+	if (dnsServerPathname)
+	    unlink(dnsServerPathname);
 	if (fd < 0) {
 	    fprintf(stderr, "dnsserver: accept: %s\n", xstrerror());
 	    exit(1);
@@ -109,7 +114,7 @@ int main(argc, argv)
 	memset(request, '\0', 256);
 
 	/* read from ipcache */
-	if (fgets(request, 255, stdin) == (char *) NULL)
+	if (fgets(request, 255, stdin) == NULL)
 	    exit(1);
 	if ((t = strrchr(request, '\n')) != NULL)
 	    *t = '\0';		/* strip NL */
@@ -125,7 +130,7 @@ int main(argc, argv)
 	    continue;
 	}
 	/* check if it's already an IP address in text form. */
-	if (sscanf(request, "%d.%d.%d.%d", &a1, &a2, &a3, &a4) == 4) {
+	if (inet_addr(request) != INADDR_NONE) {
 	    printf("$name %s\n", request);
 	    printf("$h_name %s\n", request);
 	    printf("$h_len %d\n", 4);

@@ -1,11 +1,10 @@
+
 /*
  *  $Id$ 
  *
  * DEBUG: Section 26                    ssl
  */
 #include "squid.h"
-
-#define SSL_BUFSIZ (1<<14)
 
 typedef struct {
     char *url;
@@ -48,6 +47,7 @@ static int sslStateFree(fd, sslState)
     safe_free(sslState->server.buf);
     safe_free(sslState->client.buf);
     xfree(sslState->url);
+    requestUnlink(sslState->request);
     memset(sslState, '\0', sizeof(SslStateData));
     safe_free(sslState);
     return 0;
@@ -70,7 +70,7 @@ static void sslReadServer(fd, sslState)
      SslStateData *sslState;
 {
     int len;
-    len = read(sslState->server.fd, sslState->server.buf, 4096);
+    len = read(sslState->server.fd, sslState->server.buf, SQUID_TCP_SO_RCVBUF);
     debug(26, 5, "sslReadServer FD %d, read %d bytes\n", fd, len);
     if (len < 0) {
 	debug(26, 1, "sslReadServer: FD %d: read failure: %s\n",
@@ -120,7 +120,7 @@ static void sslReadClient(fd, sslState)
      SslStateData *sslState;
 {
     int len;
-    len = read(sslState->client.fd, sslState->client.buf, 4096);
+    len = read(sslState->client.fd, sslState->client.buf, SQUID_TCP_SO_RCVBUF);
     debug(26, 5, "sslReadClient FD %d, read %d bytes\n",
 	sslState->client.fd, len);
     if (len < 0) {
@@ -238,8 +238,6 @@ static void sslReadTimeout(fd, sslState)
      int fd;
      SslStateData *sslState;
 {
-    if (fd != sslState->server.fd)
-	fatal_dump("sslReadTimeout: FD mismatch!\n");
     debug(26, 3, "sslReadTimeout: FD %d\n", fd);
     comm_close(sslState->client.fd);
     comm_close(sslState->server.fd);
@@ -257,7 +255,7 @@ static void sslConnected(fd, sslState)
 	COMM_SELECT_WRITE,
 	(PF) sslWriteClient,
 	(void *) sslState);
-    comm_set_fd_lifetime(fd, -1);	/* disable lifetime */
+    comm_set_fd_lifetime(fd, 86400);	/* extend lifetime */
     comm_set_select_handler_plus_timeout(sslState->server.fd,
 	COMM_SELECT_TIMEOUT,
 	(PF) sslReadTimeout,
@@ -320,7 +318,7 @@ int sslStart(fd, url, request, mime_hdr, size_ptr)
 	RequestMethodStr[request->method], url);
 
     /* Create socket. */
-    sock = comm_open(COMM_NONBLOCKING, 0, 0, url);
+    sock = comm_open(COMM_NONBLOCKING, getTcpOutgoingAddr(), 0, url);
     if (sock == COMM_ERROR) {
 	debug(26, 4, "sslStart: Failed because we're out of sockets.\n");
 	squid_error_url(url,
@@ -331,16 +329,16 @@ int sslStart(fd, url, request, mime_hdr, size_ptr)
 	    xstrerror());
 	return COMM_ERROR;
     }
-    sslState = (SslStateData *) xcalloc(1, sizeof(SslStateData));
+    sslState = xcalloc(1, sizeof(SslStateData));
     sslState->url = xstrdup(url);
-    sslState->request = request;
+    sslState->request = requestLink(request);
     sslState->mime_hdr = mime_hdr;
     sslState->timeout = getReadTimeout();
     sslState->size_ptr = size_ptr;
     sslState->client.fd = fd;
     sslState->server.fd = sock;
-    sslState->server.buf = xmalloc(SSL_BUFSIZ);
-    sslState->client.buf = xmalloc(SSL_BUFSIZ);
+    sslState->server.buf = xmalloc(SQUID_TCP_SO_RCVBUF);
+    sslState->client.buf = xmalloc(SQUID_TCP_SO_RCVBUF);
     comm_set_select_handler(sslState->server.fd,
 	COMM_SELECT_CLOSE,
 	(PF) sslStateFree,
@@ -349,7 +347,7 @@ int sslStart(fd, url, request, mime_hdr, size_ptr)
     /* check if IP is already in cache. It must be. 
      * It should be done before this route is called. 
      * Otherwise, we cannot check return code for ssl. */
-    if (!ipcache_gethostbyname(request->host)) {
+    if (!ipcache_gethostbyname(request->host, 0)) {
 	debug(26, 4, "sslstart: Called without IP entry in ipcache. OR lookup failed.\n");
 	squid_error_url(url,
 	    request->method,
