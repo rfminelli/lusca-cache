@@ -107,12 +107,6 @@
 #include "config.h"
 #include <stdio.h>
 #include <time.h>
-#if HAVE_TIME_H
-#include <time.h>
-#endif
-#if HAVE_SYS_TIME_H
-#include <sys/time.h>
-#endif
 
 #if !defined(SQUIDHOSTNAMELEN)
 #include <sys/param.h>
@@ -127,25 +121,81 @@
 #endif
 #endif
 
-extern char *getfullhostname _PARAMS((void));
-extern char *mkhttpdlogtime _PARAMS((time_t *));
-extern char *mkrfc1123 _PARAMS((time_t));
-extern char *uudecode _PARAMS((char *));
-extern char *xstrdup _PARAMS((char *));
-extern char *xstrdup _PARAMS((char *));
-extern char *xstrerror _PARAMS((void));
-extern int tvSubMsec _PARAMS((struct timeval, struct timeval));
-extern time_t parse_rfc1123 _PARAMS((char *str));
-extern void *xcalloc _PARAMS((int, size_t));
-extern void *xmalloc _PARAMS((size_t));
-extern void *xrealloc _PARAMS((void *, size_t));
-extern void Tolower _PARAMS((char *));
-extern void xfree _PARAMS((void *));
-extern void xmemcpy _PARAMS((void *, void *, int));
-extern void xxfree _PARAMS((void *));
+#ifndef _PARAMS
+#if defined(__STDC__) || defined(__cplusplus) || defined(__STRICT_ANSI__)
+#define _PARAMS(ARGS) ARGS
+#else /* Traditional C */
+#define _PARAMS(ARGS) ()
+#endif /* __STDC__ */
+#endif /* _PARAMS */
+
+#if !HAVE_STRDUP
+extern char *strdup _PARAMS((char *));
+#endif
+extern char *xstrdup _PARAMS((char *));		/* Duplicate a string */
+
+/* from xmalloc.c */
+void *xmalloc _PARAMS((size_t));	/* Wrapper for malloc(3) */
+void *xrealloc _PARAMS((void *, size_t));	/* Wrapper for realloc(3) */
+void *xcalloc _PARAMS((int, size_t));	/* Wrapper for calloc(3) */
+void xfree _PARAMS((void *));	/* Wrapper for free(3) */
+void xxfree _PARAMS((void *));	/* Wrapper for free(3) */
+char *xstrdup _PARAMS((char *));
+char *xstrerror _PARAMS((void));
+char *getfullhostname _PARAMS((void));
+void xmemcpy _PARAMS((void *, void*, int));
 
 #if XMALLOC_STATISTICS
-void malloc_statistics _PARAMS((void (*)_PARAMS((int, int, void *)), void *));
+void malloc_statistics _PARAMS((void (*)(int, int, void *), void *));
 #endif
+
+/* from debug.c */
+#ifndef MAX_DEBUG_LEVELS
+#define MAX_DEBUG_LEVELS 256
+#endif /* MAX_DEBUG_LEVELS */
+
+#ifndef MAIN
+extern int Harvest_do_debug;
+extern int Harvest_debug_levels[];
+#endif /* MAIN */
+
+#undef debug_ok_fast
+#if USE_NO_DEBUGGING
+#define debug_ok_fast(S,L) 0
+#else
+#define debug_ok_fast(S,L) \
+        ( \
+        (Harvest_do_debug) && \
+        ((Harvest_debug_levels[S] == -2) || \
+         ((Harvest_debug_levels[S] != -1) && \
+           ((L) <= Harvest_debug_levels[S]))) \
+        )
+#endif /* USE_NO_DEBUGGING */
+
+#undef Debug
+#if USE_NO_DEBUGGING
+#define Debug(section, level, X) /* empty */;
+#else
+#define Debug(section, level, X) \
+        {if (debug_ok_fast((section),(level))) {Log X;}}
+#endif
+
+void debug_flag _PARAMS((char *));
+
+char *mkhttpdlogtime _PARAMS((time_t *));
+extern char *mkrfc850 _PARAMS((time_t *));
+extern time_t parse_rfc850 _PARAMS((char *str));
+extern void init_log3 _PARAMS((char *pn, FILE * a, FILE * b));
+extern void debug_init();
+extern void log_errno2 _PARAMS((char *, int, char *));
+
+#if defined(__STRICT_ANSI__)
+extern void Log _PARAMS((char *,...));
+extern void errorlog _PARAMS((char *,...));
+#else
+extern void Log();
+extern void errorlog();
+#endif /* __STRICT_ANSI__ */
+
 
 #endif /* ndef _UTIL_H_ */

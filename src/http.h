@@ -129,15 +129,16 @@ typedef struct {
     StoreEntry *entry;
     request_t *request;
     char *req_hdr;
+    int req_hdr_sz;
+    int buf_type;		/* BUF_TYPE_8K or BUF_TYPE_MALLOC */
+    char *reqbuf;		/* Holds the HTTP request being sent to
+				 * the neighbor/origin server. */
     char *icp_rwd_ptr;		/* When a lifetime expires during the
 				 * middle of an icpwrite, don't lose the
 				 * icpReadWriteData */
     char *reply_hdr;
-    int req_hdr_sz;
     int reply_hdr_state;
     edge *neighbor;		/* neighbor request made to */
-    ConnectStateData connectState;
-    int eof;			/* reached end-of-object? */
 } HttpStateData;
 
 extern int httpCachable _PARAMS((char *, int));

@@ -115,11 +115,7 @@
 #include <unistd.h>
 #include <signal.h>
 
-#include "ansiproto.h"
-
 #define RECV_BUF_SIZE 8192
-
-extern void xmemcpy _PARAMS((void *from, void *to, int len));
 
 /*
  * This program must be run from inetd.  First add something like this
@@ -142,8 +138,7 @@ extern void xmemcpy _PARAMS((void *from, void *to, int len));
  * usage: recv-announce logfile
  */
 
-static void
-sig_handle(void)
+void sig_handle()
 {
     fflush(stdout);
     close(2);
@@ -153,8 +148,9 @@ sig_handle(void)
 }
 
 
-int
-main(int argc, char *argv[])
+int main(argc, argv)
+     int argc;
+     char *argv[];
 {
     char buf[RECV_BUF_SIZE];
     struct sockaddr_in R;

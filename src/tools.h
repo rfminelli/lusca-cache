@@ -114,16 +114,13 @@ extern void leave_suid _PARAMS((void));
 extern void enter_suid _PARAMS((void));
 extern void no_suid _PARAMS((void));
 extern void writePidFile _PARAMS((void));
-extern void setSocketShutdownLifetimes _PARAMS((int));
+extern void setSocketShutdownLifetimes _PARAMS((void));
 extern void setMaxFD _PARAMS((void));
 extern time_t getCurrentTime _PARAMS((void));
 extern void normal_shutdown _PARAMS((void));
+extern int tvSubMsec _PARAMS((struct timeval, struct timeval));
 extern int percent _PARAMS((int, int));
-extern void squid_signal _PARAMS((int sig, void (*func) _PARAMS((int)), int flags));
-extern pid_t readPidFile _PARAMS((void));
-extern void _debug_trap _PARAMS((char *message));
-extern struct in_addr inaddrFromHostent _PARAMS((struct hostent * hp));
-
+extern void squid_signal _PARAMS((int sig, void (*func) (), int flags));
 
 extern int do_mallinfo;
 extern time_t squid_curtime;

@@ -27,7 +27,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *  
  */
-
+ 
 /*
  * Copyright (c) 1994, 1995.  All rights reserved.
  *  
@@ -129,11 +129,7 @@
 #include <sys/time.h>
 #endif
 
-#include "ansiproto.h"
 #include "util.h"
-
-#define RFC850_STRFTIME "%A, %d-%b-%y %H:%M:%S GMT"
-#define RFC1123_STRFTIME "%a, %d %b %Y %H:%M:%S GMT"
 
 static int make_month _PARAMS((char *s));
 static int make_num _PARAMS((char *s));
@@ -145,8 +141,8 @@ static char *month_names[12] =
 };
 
 
-static int
-make_num(char *s)
+static int make_num(s)
+     char *s;
 {
     if (*s >= '0' && *s <= '9')
 	return 10 * (*s - '0') + *(s + 1) - '0';
@@ -154,8 +150,8 @@ make_num(char *s)
 	return *(s + 1) - '0';
 }
 
-static int
-make_month(char *s)
+static int make_month(s)
+     char *s;
 {
     int i;
 
@@ -170,8 +166,8 @@ make_month(char *s)
 }
 
 
-time_t
-parse_rfc1123(char *str)
+time_t parse_rfc850(str)
+     char *str;
 {
     char *s;
     struct tm tm;
@@ -240,8 +236,7 @@ parse_rfc1123(char *str)
     /* some systems do not have tm_gmtoff so we fake it */
     t = mktime(&tm);
     {
-	time_t dst = 0;
-	extern time_t timezone;
+	int dst = 0;
 	/*
 	 * The following assumes a fixed DST offset of 1 hour,
 	 * which is probably wrong.
@@ -254,20 +249,20 @@ parse_rfc1123(char *str)
     return t;
 }
 
-char *
-mkrfc1123(time_t t)
+char *mkrfc850(t)
+     time_t *t;
 {
     static char buf[128];
 
-    struct tm *gmt = gmtime(&t);
+    struct tm *gmt = gmtime(t);
 
     buf[0] = '\0';
-    strftime(buf, 127, RFC1123_STRFTIME, gmt);
+    (void) strftime(buf, 127, "%A, %d-%b-%y %H:%M:%S GMT", gmt);
     return buf;
 }
 
-char *
-mkhttpdlogtime(time_t * t)
+char *mkhttpdlogtime(t)
+     time_t *t;
 {
     static char buf[128];
 
@@ -296,29 +291,28 @@ mkhttpdlogtime(time_t * t)
 	day_offset = 1;
 
     len = strftime(buf, 127 - 5, "%d/%b/%Y:%H:%M:%S ", lt);
-    sprintf(buf + len, "%+03d%02d",
+    (void) sprintf(buf + len, "%+03d%02d",
 	(min_offset / 60) % 24,
 	min_offset % 60);
 #else /* USE_GMT */
     buf[0] = '\0';
-    strftime(buf, 127, "%d/%b/%Y:%H:%M:%S -000", gmt);
+    (void) strftime(buf, 127, "%d/%b/%Y:%H:%M:%S -000", gmt);
 #endif /* USE_GMT */
 
     return buf;
 }
 
 #if 0
-int
-main()
+int main()
 {
     char *x;
     time_t t, pt;
 
     t = time(NULL);
-    x = mkrfc1123(t);
+    x = mkrfc850(&t);
     printf("HTTP Time: %s\n", x);
 
-    pt = parse_rfc1123(x);
+    pt = parse_rfc850(x);
     printf("Parsed: %d vs. %d\n", pt, t);
 }
 

@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -106,6 +105,7 @@
 #ifndef _STORE_H_
 #define _STORE_H_
 
+#define MAX_FILE_NAME_LEN 	256
 #define MIN_PENDING 		1
 #define MIN_CLIENT 		1
 
@@ -118,8 +118,6 @@
  * KEY_CHANGE           If the key for this URL has been changed
  */
 
-#define READ_DEFERRED		(1<<15)
-#define ENTRY_NEGCACHED		(1<<14)
 #define HIERARCHICAL 		(1<<13)		/* can we query neighbors? */
 #define KEY_PRIVATE 		(1<<12)		/* is the key currently private? */
 #define ENTRY_DISPATCHED 	(1<<11)
@@ -149,7 +147,7 @@ typedef struct _ClientStatusEntry {
  */
 
 /* This structure can be freed while object is purged out from memory */
-struct _MemObject {
+typedef struct _MemObject {
     char *mime_hdr;		/* Mime header info */
     mem_ptr data;
 
@@ -169,7 +167,7 @@ struct _MemObject {
 
     int e_swap_access;
     char *e_abort_msg;
-    log_type abort_code;
+    int abort_code;
 
     int e_current_len;
     /* The lowest offset that store keep VM copy around
@@ -183,50 +181,39 @@ struct _MemObject {
     /* use another field to avoid changing the existing code */
     struct pentry **pending;
 
-    short swapin_fd;
-    short swapout_fd;
+    short swap_fd;
     int fd_of_first_client;
     struct _http_reply *reply;
     request_t *request;
     SIH swapin_complete_handler;
     void *swapin_complete_data;
     int mime_hdr_sz;
-};
+} MemObject;
 
-enum {
+typedef enum {
     NOT_IN_MEMORY,
     SWAPPING_IN,
     IN_MEMORY
-};
+} mem_status_t;
 
-enum {
+typedef enum {
     PING_WAITING,
     PING_TIMEOUT,
     PING_DONE,
     PING_NONE
-};
+} ping_status_t;
 
-enum {
+typedef enum {
     STORE_OK,
     STORE_PENDING,
     STORE_ABORTED
-};
+} store_status_t;
 
-enum {
+typedef enum {
     NO_SWAP,
     SWAPPING_OUT,
     SWAP_OK
-};
-
-typedef unsigned int store_status_t;
-typedef unsigned int mem_status_t;
-typedef unsigned int ping_status_t;
-typedef unsigned int swap_status_t;
-
-extern char *memStatusStr[];
-extern char *pingStatusStr[];
-extern char *storeStatusStr[];
-extern char *swapStatusStr[];
+} swap_status_t;
 
 /* A cut down structure for store manager */
 struct sentry {
@@ -239,11 +226,10 @@ struct sentry {
     MemObject *mem_obj;
 
     u_num32 flag;
+    u_num32 timestamp;
+    u_num32 lastref;
     u_num32 refcount;
-    time_t timestamp;
-    time_t lastref;
-    time_t expires;
-    time_t lastmod;
+    u_num32 expires;
 
     int object_len;
     int swap_file_number;
@@ -263,10 +249,10 @@ struct sentry {
 
 /* ----------------------------------------------------------------- */
 
-typedef int (*PIF) (int, StoreEntry *, void *);
+typedef int (*PIF) _PARAMS((int, StoreEntry *, void *));
 
 typedef struct pentry {
-    int fd;
+    short fd;
     PIF handler;
     void *data;
 } PendingEntry;
@@ -278,17 +264,22 @@ extern void storeSetPrivateKey _PARAMS((StoreEntry *));
 extern StoreEntry *storeGetFirst _PARAMS((void));
 extern StoreEntry *storeGetNext _PARAMS((void));
 extern StoreEntry *storeLRU _PARAMS((void));
-extern int storeWalkThrough _PARAMS((int (*proc) _PARAMS((void)), void *data));
+extern int storeWalkThrough _PARAMS((int (*proc) (), void *data));
 extern int storePurgeOld _PARAMS((void));
+extern void storeSanityCheck _PARAMS(());
 extern void storeComplete _PARAMS((StoreEntry *));
-extern void storeInit _PARAMS((void));
+extern int storeInit _PARAMS(());
 extern int storeReleaseEntry _PARAMS((StoreEntry *));
 extern int storeClientWaiting _PARAMS((StoreEntry *));
-extern void storeAbort _PARAMS((StoreEntry *, char *));
+extern int storeAbort _PARAMS((StoreEntry *, char *));
 extern void storeAppend _PARAMS((StoreEntry *, char *, int));
 extern int storeGetMemSize _PARAMS((void));
+extern int storeGetMemSpace _PARAMS((int, int));
 extern int storeGetSwapSize _PARAMS((void));
 extern int storeGetSwapSpace _PARAMS((int));
+extern int storeEntryValidToSend _PARAMS((StoreEntry *));
+extern int storeEntryValidLength _PARAMS((StoreEntry *));
+extern int storeEntryLocked _PARAMS((StoreEntry *));
 extern int storeLockObject _PARAMS((StoreEntry *, SIH, void *));
 extern int storeOriginalKey _PARAMS((StoreEntry *));
 extern int storeRelease _PARAMS((StoreEntry *));
@@ -297,30 +288,28 @@ extern int storeUnregister _PARAMS((StoreEntry *, int));
 extern char *storeGeneratePublicKey _PARAMS((char *, method_t));
 extern char *storeGeneratePrivateKey _PARAMS((char *, method_t, int));
 extern char *storeMatchMime _PARAMS((StoreEntry *, char *, char *, int));
+extern int storeAddSwapDisk _PARAMS((char *));
 extern char *swappath _PARAMS((int));
 extern void storeStartDeleteBehind _PARAMS((StoreEntry *));
 extern int storeClientCopy _PARAMS((StoreEntry *, int, int, char *, int *, int));
 extern int storePendingNClients _PARAMS((StoreEntry * e));
+extern char *storeSwapFullPath _PARAMS((int, char *));
 extern int storeWriteCleanLog _PARAMS((void));
-extern int storeRegister _PARAMS((StoreEntry *, int, PIF, void *));
+extern int storeRegister(StoreEntry *, int, PIF, void *);
 extern int urlcmp _PARAMS((char *, char *));
+extern int swapInError _PARAMS((int fd, StoreEntry *));
+extern int storeCopy _PARAMS((StoreEntry *, int, int, char *, int *));
 extern int storeMaintainSwapSpace _PARAMS((void));
 extern void storeExpireNow _PARAMS((StoreEntry *));
 extern void storeReleaseRequest _PARAMS((StoreEntry *));
 extern void storeRotateLog _PARAMS((void));
 extern unsigned int getKeyCounter _PARAMS((void));
 extern int storeGetLowestReaderOffset _PARAMS((StoreEntry *));
-extern void storeCloseLog _PARAMS((void));
-extern void storeConfigure _PARAMS((void));
-extern void storeNegativeCache _PARAMS((StoreEntry *));
-extern void storeFreeMemory _PARAMS((void));
-extern int expiresMoreThan _PARAMS((time_t, time_t));
-extern void storeClientListAdd _PARAMS((StoreEntry *, int, int));
 
-#ifdef __STDC__
+#if defined(__STRICT_ANSI__)
 extern void storeAppendPrintf _PARAMS((StoreEntry *, char *,...));
 #else
-extern void storeAppendPrintf _PARAMS(());
+extern void storeAppendPrintf();
 #endif
 
 extern int store_rebuilding;
@@ -328,9 +317,7 @@ extern int store_rebuilding;
 #define STORE_REBUILDING_SLOW 1
 #define STORE_REBUILDING_FAST 2
 
-#define SWAP_DIRECTORIES_L1	16
-#define SWAP_DIRECTORIES_L2	256
+#define SWAP_DIRECTORIES	100
 extern int ncache_dirs;
-extern unsigned long store_mem_size;
 
 #endif

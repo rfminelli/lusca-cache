@@ -119,7 +119,6 @@ extern char *mime_headers_end _PARAMS((char *mime));
 extern int mime_headers_size _PARAMS((char *mime));
 extern void mime_process _PARAMS((char *mime));
 extern ext_table_entry *mime_ext_to_type _PARAMS((char *extension));
-extern int mk_mime_hdr _PARAMS((char *result, char *type, int size, time_t ttl, time_t lmt));
-
+extern int mk_mime_hdr _PARAMS((char *, time_t, int, time_t, char *));
 
 #endif
