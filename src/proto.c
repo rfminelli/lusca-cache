@@ -242,7 +242,7 @@ protoDispatchDNSHandle(int unused1, const ipcache_addrs * ia, void *data)
 	} else if ((e = getFirstUpParent(protoData->request))) {
 	    hierarchyNote(req, HIER_FIRSTUP_PARENT, 0, e->host);
 	    protoStart(protoData->fd, entry, e, req);
-	} else if ((e == getAnyParent(protoData->request)) {
+	} else if ((e == getAnyParent(protoData->request))) {
 	    hierarchyNote(req, HIER_DEFAULT_PARENT, 0, e->host);
 	    protoStart(protoData->fd, entry, e, req);
 	} else {
