@@ -147,7 +147,8 @@ ipcacheExpiredEntry(ipcache_entry * i)
     if (i->locks != 0)
 	return 0;
     if (i->addrs.count == 0)
-	return 1;
+	if (i->status != IP_NEGATIVE_CACHED)
+	    return 1;
     if (i->expires > squid_curtime)
 	return 0;
     return 1;
