@@ -167,7 +167,7 @@ void ttlAddToList(pattern, abs_ttl, pct_age, age_max)
 
 
 
-void ttlSet(entry)
+time_t ttlSet(entry)
      StoreEntry *entry;
 {
     time_t last_modified = -1;
@@ -222,6 +222,8 @@ void ttlSet(entry)
 
     if (expire > -1) {
 	ttl = (expire - squid_curtime);
+	if (ttl < 0)
+	    ttl = 0;
 	debug(22, 4, "ttlSet: [%c%c%c%c%c%c%c] %6.2lf days %s\n",
 	    flags & TTL_EXPIRES ? 'E' : '.',
 	    flags & TTL_SERVERDATE ? 'S' : '.',
@@ -231,17 +233,17 @@ void ttlSet(entry)
 	    flags & TTL_ABSOLUTE ? 'A' : '.',
 	    flags & TTL_DEFAULT ? 'D' : '.',
 	    (double) ttl / 86400, entry->url);
-	entry->expires = expire;
-	entry->lastmod = last_modified > -1 ? last_modified : served_date;
-	return;
+	return ttl;
     }
-    /*  Calculate default TTL for later use */
+    /*
+     * ** Calculate default TTL for later use
+     */
     if (request->protocol == PROTO_HTTP)
-	default_ttl = Config.Http.defaultTtl;
+	default_ttl = getHttpTTL();
     else if (request->protocol == PROTO_FTP)
-	default_ttl = Config.Ftp.defaultTtl;
+	default_ttl = getFtpTTL();
     else if (request->protocol == PROTO_GOPHER)
-	default_ttl = Config.Gopher.defaultTtl;
+	default_ttl = getGopherTTL();
 
     match = NULL;
     for (t = TTL_tbl; t; t = t->next) {
@@ -291,6 +293,5 @@ void ttlSet(entry)
 	flags & TTL_DEFAULT ? 'D' : '.',
 	(double) ttl / 86400, entry->url);
 
-    entry->expires = squid_curtime + ttl;
-    entry->lastmod = last_modified > -1 ? last_modified : served_date;
+    return ttl;
 }

@@ -1,4 +1,3 @@
-
 /*
  * $Id$
  *
@@ -144,7 +143,7 @@ int do_debug = 0;
  * Squid creates UNIX domain sockets named dns.PID.NN, e.g. dns.19215.11
  * 
  * In ipcache_init():
- *       . dnssocket = ipcache_opensocket(Config.Program.dnsserver)
+ *       . dnssocket = ipcache_opensocket(getDnsProgram())
  *       . dns_child_table[i]->inpipe = dnssocket
  *       . dns_child_table[i]->outpipe = dnssocket
  * 
@@ -231,8 +230,6 @@ int main(argc, argv)
 	close(fd);
     }
     while (1) {
-	int retry_count = 0;
-	int addrbuf;
 	memset(request, '\0', 256);
 
 	/* read from ipcache */
@@ -251,11 +248,8 @@ int main(argc, argv)
 	    fflush(stdout);
 	    continue;
 	}
-	result = NULL;
-	start = time(NULL);
 	/* check if it's already an IP address in text form. */
 	if (inet_addr(request) != INADDR_NONE) {
-#if NO_REVERSE_LOOKUP
 	    printf("$name %s\n", request);
 	    printf("$h_name %s\n", request);
 	    printf("$h_len %d\n", 4);
@@ -265,24 +259,13 @@ int main(argc, argv)
 	    printf("$end\n");
 	    fflush(stdout);
 	    continue;
-#endif
-	    addrbuf = inet_addr(request);
-	    for (;;) {
-		result = gethostbyaddr((char *) &addrbuf, 4, AF_INET);
-		if (result || h_errno != TRY_AGAIN)
-		    break;
-		if (++retry_count == 2)
-		    break;
+	}
+	start = time(NULL);
+	result = gethostbyname(request);
+	if (!result) {
+	    if (h_errno == TRY_AGAIN) {
 		sleep(2);
-	    }
-	} else {
-	    for (;;) {
-		result = gethostbyname(request);
-		if (result || h_errno != TRY_AGAIN)
-		    break;
-		if (++retry_count == 2)
-		    break;
-		sleep(2);
+		result = gethostbyname(request);	/* try a little harder */
 	    }
 	}
 	stop = time(NULL);
@@ -337,6 +320,7 @@ int main(argc, argv)
 	    continue;
 	}
     }
+
     exit(0);
     /*NOTREACHED */
     return 0;
