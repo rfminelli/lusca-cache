@@ -37,6 +37,11 @@
 #include "HttpHeader.h"
 
 static const char *const crlf = "\r\n";
+static const char *KnownSplitableFields[] = {
+    "Connection", "Range"
+};
+/* if you must have KnownSplitableFields empty, set KnownSplitableFieldCount to 0 */
+static const int KnownSplitableFieldCount = sizeof(KnownSplitableFields)/sizeof(*KnownSplitableFields);
 
 /* headers accounting */
 #define INIT_FIELDS_PER_HEADER 32
@@ -65,7 +70,7 @@ static char *dupShortString(const char *str);
 static void freeShortString(char *str);
 
 /* delete this when everybody remembers that ':' is not a part of a name */
-#define converion_period_name_check(name) assert(!strchr((name), ':'))
+#define conversion_period_name_check(name) assert(!strchr((name), ':'))
 
 HttpHeader *
 httpHeaderCreate()
@@ -78,17 +83,6 @@ httpHeaderCreate()
 	shortStrings = memPoolCreate(shortStrPoolCount, shortStrPoolCount/10, shortStrSize, "shortStr");
 
     return hdr;
-}
-
-int 
-httpHeaderParse(HttpHeader *hdr, const char *buf, size_t size)
-{
-    assert(hdr);
-    assert(buf);
-
-    assert(0); /* not implemented yet */
-
-    return 0;
 }
 
 void 
@@ -109,6 +103,41 @@ httpHeaderDestroy(HttpHeader *hdr)
 
     xfree(hdr);
     /* maybe we should recycle headers too ? */
+}
+
+size_t
+httpHeaderParse(HttpHeader *hdr, const char *header_start, const char *header_end)
+{
+    const char *field_start = buf;
+
+    assert(hdr);
+    assert(buf);
+
+    /*
+     * first check if there are any chances to parse what we have; @?@ if we are
+     * at EOF and no <CRLF> at the end, we might want to parse anyway, however,
+     * this is risky because some important headers could be cut off!
+     */
+    /* Move this check to HttpMsg!!!! @?@ */
+    if (!mime_headers_end(buf, size))
+	return 0;
+
+    /* commonn format headers are "<name>:[ws]<value>" lines delimited by <CRLF> */
+    while (field_start < header_end) {
+	const char *field_end = buf + strcspn(buf, "\r\n");
+	if (!*field_end) return httpHeaderReset(); /* missing <CRLF> */
+	HttpHeaderField f = httpHeaderFieldParseCreate(buf, field_end);
+	if (!f) {
+	    httpHeaderReset(hdr); /* will remove all fields, etc */
+	    return 0;
+	}
+	httpHeaderAddField(f);
+	field_start = field_end;
+	/* skip /r/n */
+	if (*field_start = '\r') field_start++;
+	if (*field_start = '\n') field_start++;
+    }
+    return field_start - header_start;
 }
 
 const char *
@@ -186,19 +215,71 @@ httpHeaderDelField(HttpHeader *hdr, HttpHeaderPos pos)
     hdr->fields[pos] = NULL;
 }
 
-/* add a field (appends) */
+/* adds a field (appends); may split a well-known field into several ones */
+static void
+httpHeaderAddField(HttpHeader *hdr, HttpHeaderField *fld)
+{
+    assert(hdr);
+    assert(fld);
+
+    if (httpHeaderFieldIsList(fld))
+	httpHeaderAddListField(hdr, fld); /* splits and adds */
+    else
+	httpHeaderAddSingleField(hdr, fld); /* just adds */
+}
+
+/* adds a field that is guaranteed to be a single (not list) field
+ * Warning: This is internal function, never call this directly, 
+ *          only for httpHeaderAddField use.
+ */
+static void
+httpHeaderAddSingleField(HttpHeader *hdr, HttpHeaderField *fld)
+{
+    assert(hdr);
+    assert(fld);
+
+    if (hdr->count >= hdr->capacity)
+	httpHeaderGrow(hdr);
+    hdr->fields[hdr->count++] = fld;
+}
+
+/*
+ * Splits list field and appends all entries separately; 
+ * Warning: This is internal function, never call this directly, 
+ *          only for httpHeaderAddField use.
+ */
+static void
+httpHeaderAddListField(HttpHeader *hdr, HttpHeaderField *fld)
+{
+    const char *v;
+    assert(hdr);
+    assert(fld);
+
+    /*
+     * Note: assume that somebody already checked that we can split. The danger
+     * is in splitting something that is not a list field but contains ','s in
+     * its value.
+     */
+    /* we got a fld.value that is a list of values separated by ',' */
+    v = strtok(fld.value, ",");
+    httpHeaderAddSingleField(hdr, fld); /* first strtok() did its job! */
+    while ((v = strtok(NULL, ",")) {
+	/* ltrim and skip empty fields */
+	while (isspace(*v) || *v == ',') v++;
+	if (*v)
+	    httpHeaderAddSingleField(hdr, httpHeaderFieldCreate(fld.name, v));
+    }
+}
+
+/* adds a string field */
 const char *
 httpHeaderAddStrField(HttpHeader *hdr, const char *name, const char *value)
 {
-
     assert(hdr);
     assert(name);
     assert(value);
 
-    if (hdr->count >= hdr->capacity)
-	httpHeaderGrow(hdr);
-
-    hdr->fields[hdr->count++] = httpHeaderFieldCreate(name, value);
+    httpHeaderAddField(hdr, httpHeaderFieldCreate(name, value));
     return value;
 }
 
@@ -237,6 +318,30 @@ httpHeaderFieldCreate(const char *name, const char *value)
     return f;
 }
 
+/* parses field; returns fresh header field on success and NULL on failure */
+static HttpHeaderField *
+httpHeaderFieldParseCreate(const char *field_start, const char *field_end)
+{
+    HttpHeaderField *f = NULL;
+    /* note: name_start == field_start */
+    const char *name_end = strchr(buf, ':');
+    const char *value_start;
+    /* note: value_end == field_end */
+
+    if (!name_end || name_end <= field_start || name_end > field_end) 
+	return NULL;
+
+    value_start = name_end + 1; /* skip ':' */
+    /* skip white space */
+    while (value_start < field_end && isspace(*value_start)) 
+	value_start++;
+
+    f = xcalloc(1, sizeof(HttpHeaderField));
+    f->name = dupShortBuf(field_start, name_end-field_start);
+    f->value = dupShortBuf(value_start, field_end-value_start);
+    return f;
+}
+
 static void
 httpHeaderFieldDestroy(HttpHeaderField *f)
 {
@@ -245,6 +350,20 @@ httpHeaderFieldDestroy(HttpHeaderField *f)
     freeShortString(f->value);
 }
 
+/*
+ * returns true if fld.name is a "known" splitable field; 
+ * always call this function to check because the detection algortihm may change
+ */
+static int
+httpHeaderFieldIsList(const HttpHeaderField *fld) {
+    int i;
+    assert(fld);
+    /* "onten" should not match "Content"! */
+    for (i = 0; i < KnownSplitableFieldCount; ++i)
+	if (strcasecmp(KnownSplitableFields[i], fld->name))
+	    return 1;
+    return 0;
+}
 
 const char *
 httpHeaderReport()
@@ -267,8 +386,17 @@ httpHeaderReport()
 static char *
 dupShortString(const char *str)
 {
+    return dupShortBuf(str, strlen(str));
+}
+
+static char *
+dupShortBuf(const char *str, size_t len)
+{
     char *buf;
-    size_t sz = strlen(str)+1;
+    size_t sz;
+    assert(str);
+    assert(len >= 0);
+    sz = len + 1;
     if (sz > shortStrings->obj_size) {
 	buf = xmalloc(sz);
 	longStrAllocCount++;
@@ -279,7 +407,9 @@ dupShortString(const char *str)
 	    longStrHighWaterSize = longStrAllocSize - longStrFreeSize;
     } else
 	buf = memPoolGetObj(shortStrings);
-    xmemcpy(buf, str, sz); /* includes terminating 0 */
+    if (len) 
+	xmemcpy(buf, str, len); /* may not have terminating 0 */
+    buf[len] = '\0'; /* terminate */
     return buf;
 }
 

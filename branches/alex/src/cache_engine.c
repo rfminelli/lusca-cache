@@ -186,9 +186,11 @@ engineGetRequestType(Request *req, StoreEntry *pe) {
 
 /* attempts to find the requested object on the network */
 static void
-engineFetch(Request *req) 
+engineProcessMiss(Request *req) 
 {
-    serverSendRequest(req);
+	/* req is a client request; we may want change it before sending */
+	Request *ourReq = enginePrepareReq(req);
+    serverSendRequest(ourReq);
 }
 
 /* entry point for _all_ replies that must be processed */
