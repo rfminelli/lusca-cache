@@ -1068,6 +1068,7 @@ extern char *urlHostname(const char *url);
 extern void useragentOpenLog(void);
 extern void useragentRotateLog(void);
 extern void logUserAgent(const char *, const char *);
+extern void useragentLogClose(void);
 extern peer_t parseNeighborType(const char *s);
 
 extern void errorInitialize(void);

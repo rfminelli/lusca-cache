@@ -1006,7 +1006,7 @@ aclDecodeProxyAuth(const char *proxy_auth, char **user, char **password, char *b
 	return 0;
     debug(28, 6) ("aclDecodeProxyAuth: header = '%s'\n", proxy_auth);
     if (strncasecmp(proxy_auth, "Basic ", 6) != 0) {
-	debug(28, 1) ("aclDecodeProxyAuth: Unsupported proxy-auth sheme, '%s'\n", proxy_auth);
+	debug(28, 1) ("aclDecodeProxyAuth: Unsupported proxy-auth scheme, '%s'\n", proxy_auth);
 	return 0;
     }
     proxy_auth += 6;		/* "Basic " */
@@ -1755,7 +1755,7 @@ aclChecklistCreate(const acl_access * A,
 }
 
 void
-aclNBCheck(aclCheck_t * checklist, PF callback, void *callback_data)
+aclNBCheck(aclCheck_t * checklist, PF * callback, void *callback_data)
 {
     checklist->callback = callback;
     checklist->callback_data = callback_data;
