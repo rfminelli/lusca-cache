@@ -107,6 +107,10 @@ static void mainParseOptions(argc, argv)
 
 void serverConnectionsOpen()
 {
+    /* Get our real priviliges */
+    get_suid();
+
+    /* Open server ports */
     theAsciiConnection = comm_open(COMM_NONBLOCKING,
 	getAsciiPortNum(),
 	0,
@@ -140,6 +144,8 @@ void serverConnectionsOpen()
 		theUdpConnection);
 	}
     }
+    /* And restore our priviliges to normal */
+    check_suid();
 }
 
 void serverConnectionsClose()
@@ -211,9 +217,9 @@ static void mainInitialize()
     debug(1, 0, "Starting Squid Cache (version %s)...\n", version_string);
 
     if (first_time) {
-	disk_init();	/* disk_init must go before ipcache_init() */
+	disk_init();		/* disk_init must go before ipcache_init() */
+	writePidFile();		/* write PID file before setuid() */
     }
-
     ipcache_init();
     neighbors_init();
     ftpInitialize();
@@ -222,7 +228,7 @@ static void mainInitialize()
     malloc_debug(0, malloc_debug_level);
 #endif
 
-    /* do suid checking here */
+    /* do suid checking */
     check_suid();
 
     if (first_time) {
@@ -232,8 +238,15 @@ static void mainInitialize()
 	stat_init(&CacheInfo, getAccessLogFile());
 	storeInit();
 	stmemInit();
-	writePidFile();
 
+	if (getEffectiveUser()) {
+	    /* we were probably started as root, so cd to a swap
+	     * directory in case we dump core */
+	    if (chdir(swappath(0)) < 0) {
+		debug(1, 0, "%s: %s\n", swappath(0), xstrerror());
+		fatal_dump("Cannot cd to swap directory?");
+	    }
+	}
 	/* after this point we want to see the mallinfo() output */
 	do_mallinfo = 1;
     }
@@ -323,7 +336,7 @@ int main(argc, argv)
 	    break;
 	case COMM_ERROR:
 	    errcount++;
-	    debug(1, 0, "Select loop Error. Retry. %d\n", errcount);
+	    debug(1, 0, "Select loop Error. Retry %d\n", errcount);
 	    if (errcount == 10)
 		fatal_dump("Select Loop failed!");
 	    break;

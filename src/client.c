@@ -33,6 +33,7 @@ int main(argc, argv)
     int port, to_stdout, reload;
     char url[BUFSIZ], msg[BUFSIZ], buf[BUFSIZ], hostname[BUFSIZ];
     extern char *optarg;
+    time_t ims = 0;
 
     /* set the defaults */
     strcpy(hostname, "localhost");
@@ -46,7 +47,7 @@ int main(argc, argv)
 	strcpy(url, argv[argc - 1]);
 	if (url[0] == '-')
 	    usage(argv[0]);
-	while ((c = getopt(argc, argv, "fsrnp:c:h:?")) != -1)
+	while ((c = getopt(argc, argv, "fsrnp:c:h:i:?")) != -1)
 	    switch (c) {
 	    case 'h':		/* host:arg */
 	    case 'c':		/* backward compat */
@@ -64,6 +65,9 @@ int main(argc, argv)
 		sscanf(optarg, "%d", &port);
 		if (port < 1)
 		    port = CACHE_HTTP_PORT;	/* default */
+		break;
+	    case 'i':		/* IMS */
+		ims = (time_t) atoi(optarg);
 		break;
 	    case '?':		/* usage */
 	    default:
@@ -88,11 +92,19 @@ int main(argc, argv)
 	exit(1);
     }
     /* Build the HTTP request */
+    sprintf(msg, "GET %s HTTP/1.0\r\n", url);
     if (reload) {
-	sprintf(msg, "GET %s HTTP/1.0\r\nPragma: no-cache\r\nAccept: */*\r\n\r\n", url);
-    } else {
-	sprintf(msg, "GET %s HTTP/1.0\r\nAccept: */*\r\n\r\n", url);
+	sprintf(buf, "Pragma: no-cache\r\n");
+	strcat(msg, buf);
     }
+    sprintf(buf, "Accept: */*\r\n");
+    strcat(msg, buf);
+    if (ims) {
+	sprintf(buf, "If-Modified-Since: %s\r\n", mkrfc850(&ims));
+	strcat(msg, buf);
+    }
+    sprintf(buf, "\r\n");
+    strcat(msg, buf);
 
     /* Send the HTTP request */
     bytesWritten = write(conn, msg, strlen(msg));

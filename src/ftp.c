@@ -11,8 +11,9 @@
 #define MAGIC_MARKER    "\004\004\004"	/* No doubt this should be more configurable */
 #define MAGIC_MARKER_SZ 3
 
-static char *ftpASCII = "A";
-static char *ftpBinary = "I";
+static char ftpASCII[] = "A";
+static char ftpBinary[] = "I";
+static char localhost[] = "localhost";
 
 typedef struct _Ftpdata {
     StoreEntry *entry;
@@ -252,14 +253,14 @@ static void ftpProcessReplyHeader(data, buf, size)
 	case 410:		/* Gone */
 	    /* These can be cached for a long time, make the key public */
 	    entry->expires = squid_curtime + ttlSet(entry);
-	    if (!BIT_TEST(entry->flag, ENTRY_PRIVATE))
+	    if (BIT_TEST(entry->flag, CACHABLE))
 		storeSetPublicKey(entry);
 	    break;
+	case 304:		/* Not Modified */
 	case 401:		/* Unauthorized */
 	case 407:		/* Proxy Authentication Required */
 	    /* These should never be cached at all */
-	    if (BIT_TEST(entry->flag, ENTRY_PRIVATE))
-		storeSetPrivateKey(entry);
+	    storeSetPrivateKey(entry);
 	    storeExpireNow(entry);
 	    BIT_RESET(entry->flag, CACHABLE);
 	    storeReleaseRequest(entry);
@@ -267,7 +268,7 @@ static void ftpProcessReplyHeader(data, buf, size)
 	default:
 	    /* These can be negative cached, make key public */
 	    entry->expires = squid_curtime + getNegativeTTL();
-	    if (!BIT_TEST(entry->flag, ENTRY_PRIVATE))
+	    if (BIT_TEST(entry->flag, CACHABLE))
 		storeSetPublicKey(entry);
 	    break;
 	}
@@ -513,7 +514,7 @@ void ftpSendRequest(fd, data)
     strcat(buf, data->user);
     strcat(buf, space);
     strcat(buf, data->password);
-    strcat(buf, space);
+    strcat(buf, "\n");
     debug(9, 5, "ftpSendRequest: FD %d: buf '%s'\n", fd, buf);
     data->icp_rwd_ptr = icpWrite(fd,
 	buf,
@@ -521,8 +522,6 @@ void ftpSendRequest(fd, data)
 	30,
 	ftpSendComplete,
 	(void *) data);
-    if (!BIT_TEST(data->entry->flag, ENTRY_PRIVATE))
-	storeSetPublicKey(data->entry);		/* Make it public */
 }
 
 void ftpConnInProgress(fd, data)
@@ -533,7 +532,7 @@ void ftpConnInProgress(fd, data)
 
     debug(9, 5, "ftpConnInProgress: FD %d\n", fd);
 
-    if (comm_connect(fd, "localhost", CACHE_FTP_PORT) != COMM_OK)
+    if (comm_connect(fd, localhost, CACHE_FTP_PORT) != COMM_OK)
 	switch (errno) {
 	case EINPROGRESS:
 	case EALREADY:
@@ -596,7 +595,7 @@ int ftpStart(unusedfd, url, entry)
 	(void *) data);
 
     /* Now connect ... */
-    if ((status = comm_connect(data->ftp_fd, "localhost", CACHE_FTP_PORT))) {
+    if ((status = comm_connect(data->ftp_fd, localhost, CACHE_FTP_PORT))) {
 	if (status != EINPROGRESS) {
 	    squid_error_entry(entry, ERR_CONNECT_FAIL, xstrerror());
 	    comm_close(data->ftp_fd);
@@ -653,6 +652,9 @@ int ftpInitialize()
 	return 0;
     }
     /* child */
+    /* give up all extra priviligies */
+    no_suid();
+    /* set up stdin,stdout */
     dup2(p[0], 0);
     dup2(fileno(debug_log), 2);
     close(p[0]);

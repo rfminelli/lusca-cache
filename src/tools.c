@@ -19,7 +19,7 @@ The Squid Cache (version %s) died.\n\
 You've encountered a fatal error in the Squid Cache version %s.\n\
 If a core file was created (possibly in the swap directory),\n\
 please execute 'gdb squid core' or 'dbx squid core', then type 'where',\n\
-and report the trace back to squid@nlanr.net.\n\
+and report the trace back to squid-bugs@nlanr.net.\n\
 \n\
 Thanks!\n"
 
@@ -154,8 +154,11 @@ void rotate_logs(sig)
 void normal_shutdown()
 {
     debug(21, 1, "Shutting down...\n");
-    if (getPidFilename())
+    if (getPidFilename()) {
+	get_suid();
 	safeunlink(getPidFilename(), 0);
+	check_suid();
+    }
     storeWriteCleanLog();
     PrintRusage(NULL, debug_log);
     debug(21, 0, "Squid Cache (Version %s): Exiting normally.\n",
@@ -168,7 +171,8 @@ void shut_down(sig)
     int i;
     int lft = getShutdownLifetime();
     FD_ENTRY *f;
-    debug(21, 1, "Preparing for shutdown after %d connections\n", ntcpconn);
+    debug(21, 1, "Preparing for shutdown after %d connections\n",
+	ntcpconn + nudpconn);
     serverConnectionsClose();
     ipcacheShutdownServers();
     for (i = fdstat_biggest_fd(); i >= 0; i--) {
@@ -250,9 +254,9 @@ int getMaxFD()
     static int i = -1;
 
     if (i == -1) {
-#if defined(HAVE_SYSCONF) && defined(_SC_OPEN_MAX)
+#if HAVE_SYSCONF && defined(_SC_OPEN_MAX)
 	i = sysconf(_SC_OPEN_MAX);	/* prefered method */
-#elif defined(HAVE_GETDTABLESIZE)
+#elif HAVE_GETDTABLESIZE
 	i = getdtablesize();	/* the BSD way */
 #elif defined(OPEN_MAX)
 	i = OPEN_MAX;
@@ -340,17 +344,40 @@ void check_suid()
 	return;
     if ((pwd = getpwnam(getEffectiveUser())) == NULL)
 	return;
-    /* change current directory to swap space so we can get core */
-    if (chdir(swappath(0)) < 0) {
-	debug(21, 0, "%s: %s\n", swappath(0), xstrerror());
-	fatal_dump("Cannot cd to swap directory?");
-    }
     if (getEffectiveGroup() && (grp = getgrnam(getEffectiveGroup()))) {
 	setgid(grp->gr_gid);
     } else {
 	setgid(pwd->pw_gid);
     }
+#if HAVE_SETRESUID
+    setresuid(pwd->pw_uid, pwd->pw_uid, 0);
+#elif HAVE_SETEUID
+    seteuid(pwd->pw_uid);
+#else
     setuid(pwd->pw_uid);
+#endif
+}
+
+void get_suid()
+{
+#if HAVE_SETRESUID
+    setresuid(-1, 0, -1);
+#else
+    setuid(0);
+#endif
+}
+
+void no_suid()
+{
+    uid_t uid;
+    check_suid();
+    uid = geteuid();
+#if HAVE_SETRESUID
+    setresuid(uid, uid, uid);
+#else
+    setuid(0);
+    setuid(uid);
+#endif
 }
 
 void writePidFile()
@@ -372,7 +399,7 @@ void writePidFile()
 
 void setMaxFD()
 {
-#if defined(HAVE_SETRLIMIT)
+#if HAVE_SETRLIMIT
     /* try to use as many file descriptors as possible */
     /* System V uses RLIMIT_NOFILE and BSD uses RLIMIT_OFILE */
     struct rlimit rl;

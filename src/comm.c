@@ -903,52 +903,59 @@ static int examine_select(readfds, writefds, exceptfds)
     fd_set read_x;
     fd_set write_x;
     fd_set except_x;
-    int num;
     int maxfd = getMaxFD();
     struct timeval tv;
     FD_ENTRY *f = NULL;
 
     debug(5, 0, "examine_select: Examining open file descriptors...\n");
     for (fd = 0; fd < maxfd; fd++) {
+	if (!FD_ISSET(fd, readfds) && !FD_ISSET(fd, writefds) && !FD_ISSET(fd, exceptfds))
+	    continue;
 	FD_ZERO(&read_x);
 	FD_ZERO(&write_x);
 	FD_ZERO(&except_x);
 	tv.tv_sec = tv.tv_usec = 0;
-	if ((FD_ISSET(fd, readfds)) ||
-	    (FD_ISSET(fd, writefds)) ||
-	    (FD_ISSET(fd, exceptfds))) {
-	    FD_SET(fd, &read_x);
-	    num = select(FD_SETSIZE, &read_x, &read_x, &read_x, &tv);
-	    if (num < 0) {
-		f = &fd_table[fd];
-		debug(5, 0, "WARNING: FD %d has handlers, but it's invalid.\n", fd);
-		debug(5, 0, "lifetm:%p tmout:%p read:%p write:%p expt:%p\n",
-		    f->lifetime_handler,
-		    f->timeout_handler,
-		    f->read_handler,
-		    f->write_handler,
-		    f->except_handler);
-		if (f->close_handler) {
-		    debug(5, 0, "examine_select: Calling Close Handler\n");
-		    f->close_handler(fd, f->close_data);
-		} else if (f->lifetime_handler) {
-		    debug(5, 0, "examine_select: Calling Lifetime Handler\n");
-		    f->lifetime_handler(fd, f->lifetime_data);
-		} else if (f->timeout_handler) {
-		    debug(5, 0, "examine_select: Calling Timeout Handler\n");
-		    f->timeout_handler(fd, f->timeout_data);
-		}
-		f->close_handler = 0;
-		f->lifetime_handler = 0;
-		f->timeout_handler = 0;
-		f->read_handler = 0;
-		f->write_handler = 0;
-		f->except_handler = 0;
-		FD_CLR(fd, readfds);
-		FD_CLR(fd, writefds);
-		FD_CLR(fd, exceptfds);
-	    }
+	FD_SET(fd, &read_x);
+	if (select(FD_SETSIZE, &read_x, &read_x, &read_x, &tv) >= 0)
+	    continue;
+	debug(5, 0, "examine_select: FD %d: select: %s\n", fd,
+	    xstrerror());
+	if (errno != EBADF)
+	    continue;
+	f = &fd_table[fd];
+	debug(5, 0, "WARNING: FD %d has handlers, but it's invalid.\n",
+	    fd);
+	debug(5, 0, "lifetm:%p tmout:%p read:%p write:%p expt:%p\n",
+	    f->lifetime_handler,
+	    f->timeout_handler,
+	    f->read_handler,
+	    f->write_handler,
+	    f->except_handler);
+	if (f->close_handler) {
+	    debug(5, 0, "examine_select: Calling Close Handler\n");
+	    f->close_handler(fd, f->close_data);
+	} else if (f->lifetime_handler) {
+	    debug(5, 0, "examine_select: Calling Lifetime Handler\n");
+	    f->lifetime_handler(fd, f->lifetime_data);
+	} else if (f->timeout_handler) {
+	    debug(5, 0, "examine_select: Calling Timeout Handler\n");
+	    f->timeout_handler(fd, f->timeout_data);
+	} else if (f->read_handler) {
+	    debug(5, 0, "examine_select: Calling Read Handler\n");
+	    f->read_handler(fd, f->read_data);
+	} else if (f->write_handler) {
+	    debug(5, 0, "examine_select: Calling Write Handler\n");
+	    f->write_handler(fd, f->write_data);
 	}
+	f->close_handler = NULL;
+	f->lifetime_handler = NULL;
+	f->timeout_handler = NULL;
+	f->read_handler = NULL;
+	f->write_handler = NULL;
+	f->except_handler = NULL;
+	FD_CLR(fd, readfds);
+	FD_CLR(fd, writefds);
+	FD_CLR(fd, exceptfds);
     }
     debug(5, 0, "examine_select: Finished examining open file descriptors.\n");
     return 0;

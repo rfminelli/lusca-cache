@@ -19,7 +19,6 @@ static char *log_tags[] =
     "TCP_REFRESH",
     "TCP_IFMODSINCE",
     "TCP_SWAPFAIL",
-    "TCP_BLOCK",
     "TCP_DENIED",
     "UDP_HIT",
     "UDP_MISS",
@@ -38,7 +37,6 @@ static char *log_tags[] =
     "ERR_CANNOT_FETCH",
     "ERR_NO_RELAY",
     "ERR_DISK_IO",
-    "ERR_URL_BLOCKED",
     "ERR_ZERO_SIZE_OBJECT"
 };
 
@@ -83,7 +81,7 @@ typedef struct ireadd {
 /* Local functions */
 static void icpHandleStore _PARAMS((int, StoreEntry *, icpStateData *));
 static void icpHandleStoreComplete _PARAMS((int, char *, int, int, icpStateData *));
-static int icpProcessMISS _PARAMS((int, icpStateData *, char *key));
+static int icpProcessMISS _PARAMS((int, icpStateData *));
 static void CheckQuickAbort _PARAMS((icpStateData *));
 static void icpRead _PARAMS((int, int, char *, int, int, int, complete_handler, void *));
 
@@ -136,28 +134,29 @@ int icpStateFree(fdunused, icpState)
     return 0;			/* XXX gack, all comm handlers return ints */
 }
 
-int icpCachable(icpState)
+static void icpParseRequestHeaders(icpState)
      icpStateData *icpState;
 {
     char *request_hdr = icpState->request_hdr;
+    char *t = NULL;
+    if (mime_get_header(request_hdr, "If-Modified-Since"))
+	BIT_SET(icpState->flags, REQ_IMS);
+    if ((t = mime_get_header(request_hdr, "Pragma"))) {
+	if (!strcasecmp(t, "no-cache"))
+	    BIT_SET(icpState->flags, REQ_NOCACHE);
+    }
+    if (mime_get_header(request_hdr, "Authorization"))
+	BIT_SET(icpState->flags, REQ_AUTH);
+}
+
+int icpCachable(icpState)
+     icpStateData *icpState;
+{
     char *request = icpState->url;
     request_t *req = icpState->request;
     int method = req->method;
-    char *t = NULL;
-
-    if (mime_get_header(request_hdr, "If-Modified-Since")) {
-	BIT_SET(icpState->flags, REQ_IMS);
+    if (BIT_TEST(icpState->flags, REQ_AUTH))
 	return 0;
-    }
-    if ((t = mime_get_header(request_hdr, "Pragma"))) {
-	BIT_SET(icpState->flags, REQ_NOCACHE);
-	if (strcasecmp(t, "no-cache"))
-	    return 0;
-    }
-    if (mime_get_header(request_hdr, "Authorization")) {
-	BIT_SET(icpState->flags, REQ_AUTH);
-	return 0;
-    }
     if (req->protocol == PROTO_HTTP)
 	return httpCachable(request, method);
     if (req->protocol == PROTO_FTP)
@@ -166,13 +165,34 @@ int icpCachable(icpState)
 	return gopherCachable(request);
     if (req->protocol == PROTO_WAIS)
 	return 0;
-#ifdef NEED_PROTO_CONNECT
-    if (!strncasecmp(request, "connect://", 10))
-	return 0;
-#else
     if (method == METHOD_CONNECT)
 	return 0;
-#endif
+    if (req->protocol == PROTO_CACHEOBJ)
+	return 0;
+    return 1;
+}
+
+/* Return true if we can query our neighbors for this object */
+int icpHierarchical(icpState)
+     icpStateData *icpState;
+{
+    char *request = icpState->url;
+    request_t *req = icpState->request;
+    int method = req->method;
+    if (BIT_TEST(icpState->flags, REQ_IMS))
+	return 0;
+    if (BIT_TEST(icpState->flags, REQ_AUTH))
+	return 0;
+    if (req->protocol == PROTO_HTTP)
+	return httpCachable(request, method);
+    if (req->protocol == PROTO_FTP)
+	return ftpCachable(request);
+    if (req->protocol == PROTO_GOPHER)
+	return gopherCachable(request);
+    if (req->protocol == PROTO_WAIS)
+	return 0;
+    if (method == METHOD_CONNECT)
+	return 0;
     if (req->protocol == PROTO_CACHEOBJ)
 	return 0;
     return 1;
@@ -479,7 +499,7 @@ int icpSendMoreData(fd, state)
 	header->opcode = ICP_OP_DATABEG;
     } else if ((entry->mem_obj->e_current_len == entry->object_len) &&
 	    ((entry->object_len - state->offset) == len) &&
-	(entry->status != STORE_PENDING)) {
+	(entry->store_status != STORE_PENDING)) {
 	/* No more data; this is the last message. */
 	header->opcode = ICP_OP_DATAEND;
     } else {
@@ -513,7 +533,7 @@ static void icpHandleStore(fd, entry, state)
     debug(12, 5, "icpHandleStore: FD %d: off %d: <URL:%s>\n",
 	fd, state->offset, entry->url);
 
-    if (entry->status == STORE_ABORTED) {
+    if (entry->store_status == STORE_ABORTED) {
 	state->log_type = entry->mem_obj->abort_code;
 	debug(12, 3, "icpHandleStore: abort_code=%d\n", entry->mem_obj->abort_code);
 	state->ptr_to_4k_page = NULL;	/* Nothing to deallocate */
@@ -562,7 +582,7 @@ void icpHandleStoreComplete(fd, buf, size, errflag, state)
     } else
 	/* We're finished case */
 	if (state->offset == entry->object_len &&
-	entry->status != STORE_PENDING) {
+	entry->store_status != STORE_PENDING) {
 	CacheInfo->proto_touchobject(CacheInfo,
 	    CacheInfo->proto_id(entry->url),
 	    state->offset);
@@ -606,27 +626,49 @@ void icp_hit_or_miss(fd, usm)
 	RequestMethodStr[usm->method],
 	url);
 
+    if (icpCachable(usm))
+	BIT_SET(usm->flags, REQ_CACHABLE);
+    if (icpHierarchical(usm))
+	BIT_SET(usm->flags, REQ_HIERARCHICAL);
+
+    debug(12, 5, "icp_hit_or_miss: REQ_NOCACHE = %s\n",
+	BIT_TEST(usm->flags, REQ_NOCACHE) ? "SET" : "NOT SET");
+    debug(12, 5, "icp_hit_or_miss: REQ_CACHABLE = %s\n",
+	BIT_TEST(usm->flags, REQ_CACHABLE) ? "SET" : "NOT SET");
+    debug(12, 5, "icp_hit_or_miss: REQ_HIERARCHICAL = %s\n",
+	BIT_TEST(usm->flags, REQ_HIERARCHICAL) ? "SET" : "NOT SET");
+
     /* XXX we should not even look here for CONNECT etc */
+
+    /* XXX hmm, should we check for IFMODSINCE and USER_REFRESH before
+     * TCP_MISS?  It is possible to get IMS header for objects
+     * not in the cache */
 
     pubkey = storeGeneratePublicKey(usm->url, usm->method);
     if ((entry = storeGet(pubkey)) == NULL) {
 	/* This object isn't in the cache.  We do not hold a lock yet */
 	usm->log_type = LOG_TCP_MISS;
 	CacheInfo->proto_miss(CacheInfo, CacheInfo->proto_id(url));
-	icpProcessMISS(fd, usm, pubkey);
+	icpProcessMISS(fd, usm);
 	return;
     }
     /* The object is in the cache, but is it valid? */
-    if (!storeEntryValidToSend(entry))
+    if (!storeEntryValidToSend(entry)) {
+	storeRelease(entry);
 	usm->log_type = LOG_TCP_EXPIRED;
-    else if (BIT_TEST(usm->flags, REQ_NOCACHE))
+    } else if (BIT_TEST(usm->flags, REQ_NOCACHE)) {
+	storeRelease(entry);
 	usm->log_type = LOG_TCP_USER_REFRESH;
-    else if (BIT_TEST(usm->flags, REQ_IMS))
+    } else if (BIT_TEST(usm->flags, REQ_IMS)) {
+	/* no storeRelease() here because this request will always
+	 * start private (IMS clears HIERARCHICAL) */
 	usm->log_type = LOG_TCP_IFMODSINCE;
-    else if ((lock = storeLockObject(entry)) < 0)
+    } else if ((lock = storeLockObject(entry)) < 0) {
+	storeRelease(entry);
 	usm->log_type = LOG_TCP_SWAPIN_FAIL;
-    else
+    } else {
 	usm->log_type = LOG_TCP_HIT;
+    }
 
     debug(12, 4, "icp_hit_or_miss: %s for '%s'\n",
 	log_tags[usm->log_type],
@@ -651,7 +693,7 @@ void icp_hit_or_miss(fd, usm)
 	break;
     default:
 	CacheInfo->proto_miss(CacheInfo, CacheInfo->proto_id(url));
-	icpProcessMISS(fd, usm, pubkey);
+	icpProcessMISS(fd, usm);
 	break;
     }
 }
@@ -661,10 +703,9 @@ void icp_hit_or_miss(fd, usm)
  * The calling client should NOT hold a lock on object at this
  * time, as we're about to release any TCP_MISS version of the object.
  */
-static int icpProcessMISS(fd, usm, key)
+static int icpProcessMISS(fd, usm)
      int fd;
      icpStateData *usm;
-     char *key;
 {
     char *url = usm->url;
     char *request_hdr = usm->request_hdr;
@@ -674,6 +715,7 @@ static int icpProcessMISS(fd, usm, key)
 	RequestMethodStr[usm->method], url);
     debug(12, 10, "icpProcessMISS: request_hdr:\n%s\n", request_hdr);
 
+#ifdef OLD_CODE
     if ((entry = storeGet(key))) {
 	debug(12, 4, "icpProcessMISS: key '%s' already exists, moving.\n", key);
 	/* get rid of the old entry */
@@ -686,6 +728,7 @@ static int icpProcessMISS(fd, usm, key)
 	    storeRelease(entry);
 	}
     }
+#endif
     entry = storeCreateEntry(url,
 	request_hdr,
 	usm->flags,
@@ -753,50 +796,6 @@ int icpUdpReply(fd, queue)
     return result;
 }
 
-int icpUdpMiss(fd, url, reqheaderp, from)
-     int fd;
-     char *url;
-     icp_common_t *reqheaderp;
-     struct sockaddr_in *from;
-{
-    char *buf = NULL;
-    int buf_len = sizeof(icp_common_t) + strlen(url) + 1;
-    icp_common_t *headerp = NULL;
-    icpUdpData *data = (icpUdpData *) xmalloc(sizeof(icpUdpData));
-    struct sockaddr_in our_socket_name;
-    int sock_name_length = sizeof(our_socket_name);
-
-    if (getsockname(fd, (struct sockaddr *) &our_socket_name,
-	    &sock_name_length) == -1) {
-	debug(12, 1, "icpUdpMiss: FD %d: getsockname failure: %s\n",
-	    fd, xstrerror());
-    }
-    debug(12, 5, "icpUdpMiss: FD %d: %s: <URL:%s>\n", fd,
-	inet_ntoa(our_socket_name.sin_addr), url);
-
-    memset(data, '\0', sizeof(icpUdpData));
-    memcpy(&data->address, from, sizeof(struct sockaddr_in));
-
-    buf = xcalloc(buf_len, 1);
-    headerp = (icp_common_t *) buf;
-    headerp->opcode = ICP_OP_MISS;
-    headerp->version = ICP_VERSION_CURRENT;
-    headerp->length = htons(buf_len);
-    headerp->reqnum = htonl(reqheaderp->reqnum);
-/*  memcpy(headerp->auth, , ICP_AUTH_SIZE); */
-    headerp->shostid = htonl(our_socket_name.sin_addr.s_addr);
-
-    memcpy(buf + sizeof(icp_common_t), url, strlen(url) + 1);
-    data->msg = buf;
-    data->len = buf_len;
-    AppendUdp(data);
-    comm_set_select_handler(fd,
-	COMM_SELECT_WRITE,
-	(PF) icpUdpReply,
-	(void *) data);
-    return COMM_OK;
-}
-
 int icpUdpSend(fd, url, reqheaderp, to, opcode)
      int fd;
      char *url;
@@ -843,15 +842,15 @@ int icpUdpSend(fd, url, reqheaderp, to, opcode)
     data->msg = buf;
     data->len = buf_len;
 
-    AppendUdp(data);
     debug(12, 4, "icpUdpSend: Queueing for %s: \"%s %s\"\n",
 	inet_ntoa(to->sin_addr),
 	IcpOpcodeStr[opcode],
 	url);
+    AppendUdp(data);
     comm_set_select_handler(fd,
 	COMM_SELECT_WRITE,
 	(PF) icpUdpReply,
-	(void *) data);
+	(void *) UdpQueueHead);
     return COMM_OK;
 }
 
@@ -930,7 +929,7 @@ int icpHandleUdp(sock, not_used)
 	entry = storeGet(storeGeneratePublicKey(url, METHOD_GET));
 	debug(12, 5, "icpHandleUdp: OPCODE %s\n", IcpOpcodeStr[header.opcode]);
 	if (entry &&
-	    (entry->status == STORE_OK) &&
+	    (entry->store_status == STORE_OK) &&
 	    (entry->expires > (squid_curtime + getNegativeTTL()))) {
 	    /* Send "HIT" message. */
 	    CacheInfo->log_append(CacheInfo,	/* UDP_HIT */
@@ -957,7 +956,7 @@ int icpHandleUdp(sock, not_used)
 	    0);
 	CacheInfo->proto_miss(CacheInfo,
 	    CacheInfo->proto_id(url));
-	icpUdpMiss(sock, url, &header, &from);
+	icpUdpSend(sock, url, &header, &from, ICP_OP_MISS);
 	break;
 
     case ICP_OP_HIT:
@@ -976,7 +975,7 @@ int icpHandleUdp(sock, not_used)
 	    IcpOpcodeStr[header.opcode],
 	    inet_ntoa(from.sin_addr),
 	    url);
-	if (header.reqnum)
+	if (neighbors_do_private_keys && header.reqnum)
 	    key = storeGeneratePrivateKey(url, METHOD_GET, header.reqnum);
 	else
 	    key = storeGeneratePublicKey(url, METHOD_GET);
@@ -1143,19 +1142,6 @@ int parseHttpRequest(icpState)
 	}
     }
     /* Assign icpState->url */
-
-#ifdef NEED_PROTO_CONNECT
-    if (icpState->method == METHOD_CONNECT) {
-	/* Prepend the host name with connect:// on CONNECT */
-	t = xcalloc(strlen(request) + 12, 1);
-	strcpy(t, "connect://");
-	strcat(t, request);
-	if (free_request)
-	    safe_free(request);
-	request = t;
-	free_request = 1;
-    }
-#endif
     if ((t = strchr(request, '\n')))	/* remove NL */
 	*t = '\0';
     if ((t = strchr(request, '\r')))	/* remove CR */
@@ -1309,9 +1295,8 @@ void asciiProcessInput(fd, buf, size, flag, astm)
 	    astm->log_type = LOG_TCP_DENIED;
 	} else {
 	    /* The request is good, let's go... */
-	    if (icpCachable(astm))
-		BIT_SET(astm->flags, REQ_PUBLIC);
 	    urlCanonical(astm->request, astm->url);
+	    icpParseRequestHeaders(astm);
 	    sprintf(client_msg, "%16.16s %-4.4s %-40.40s",
 		fd_note(fd, 0),
 		RequestMethodStr[astm->method],
@@ -1485,11 +1470,11 @@ static void CheckQuickAbort(astm)
 {
     if (!getQuickAbort())
 	return;
-    if (BIT_TEST(astm->flags, REQ_PUBLIC))
+    if (astm->entry == NULL)
 	return;
     if (astm->entry->lock_count != 1)
 	return;
-    if (astm->entry->status == STORE_OK)
+    if (astm->entry->store_status == STORE_OK)
 	return;
     BIT_SET(astm->entry->flag, CLIENT_ABORT_REQUEST);
     storeReleaseRequest(astm->entry);
