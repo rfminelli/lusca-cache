@@ -33,8 +33,6 @@ UTILOBJS	= rfc1123.o \
 		  tree.o \
 		  splay.o \
 		  safe_inet_addr.o \
-		  iso3307.o \
-		  snprintf.o \
 		  $(LIBOBJS)
 REGEXOBJS	= GNUregex.o
 LIBS		= libmiscutil.a @LIBREGEX@
@@ -58,7 +56,7 @@ libregex.a: $(REGEXOBJS)
 clean:
 	-rm -f *.o $(LIBS) core
 
-distclean: clean
+realclean: clean
 	-rm -f libregex.a
 	-rm -f Makefile
 

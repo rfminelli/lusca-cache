@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * DEBUG: section 0     Announcement Server
+ * DEBUG: section 0     Announement Server
  * AUTHOR: Harvest Derived
  *
  * SQUID Internet Object Cache  http://squid.nlanr.net/Squid/
@@ -115,9 +115,11 @@
 #include <unistd.h>
 #include <signal.h>
 
+#include "ansiproto.h"
+
 #define RECV_BUF_SIZE 8192
 
-extern void xmemcpy(void *from, void *to, int len);
+extern void xmemcpy _PARAMS((void *from, void *to, int len));
 
 /*
  * This program must be run from inetd.  First add something like this

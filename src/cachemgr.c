@@ -197,8 +197,8 @@
 #include <sys/select.h>
 #endif
 
+#include "ansiproto.h"
 #include "util.h"
-#include "snprintf.h"
 
 #define MAX_ENTRIES 10000
 
@@ -234,7 +234,6 @@ typedef enum {
     STATS_NETDB,
     SHUTDOWN,
     REFRESH,
-    PCONN,
 #ifdef REMOVE_OBJECT
     REMOVE,
 #endif
@@ -248,21 +247,20 @@ static const char *const op_cmds[] =
     "server_list",
     "client_list",
     "log",
-    "config",
-    "ipcache",
-    "fqdncache",
-    "dns",
-    "redirector",
-    "objects",
-    "vm_objects",
-    "utilization",
-    "io",
-    "reply_headers",
-    "filedescriptors",
-    "netdb",
+    "parameter",
+    "stats/ipcache",
+    "stats/fqdncache",
+    "stats/dns",
+    "stats/redirector",
+    "stats/objects",
+    "stats/vm_objects",
+    "stats/utilization",
+    "stats/io",
+    "stats/reply_headers",
+    "stats/filedescriptors",
+    "stats/netdb",
     "shutdown",
     "refresh",
-    "pconn",
 #ifdef REMOVE_OBJECT
     "remove",
 #endif
@@ -290,7 +288,6 @@ static const char *const op_cmds_descr[] =
     "Network Probe Database",
     "Shutdown Cache",
     "Refresh Object (URL required)",
-    "Persistant Connection Statistics",
 #ifdef REMOVE_OBJECT
     "Remove Object (URL required)",
 #endif
@@ -305,14 +302,14 @@ static const char *progname = NULL;
 static time_t now;
 static struct in_addr no_addr;
 
-static char x2c(char *);
-static int client_comm_connect(int sock, char *dest_host, u_short dest_port);
-static void print_trailer(void);
-static void noargs_html(char *, int, char *, char *);
-static void unescape_url(char *);
-static void plustospace(char *);
-static void parse_object(char *);
-static char *describeTimeSince(time_t then);
+static char x2c _PARAMS((char *));
+static int client_comm_connect _PARAMS((int sock, char *dest_host, u_short dest_port));
+static void print_trailer _PARAMS((void));
+static void noargs_html _PARAMS((char *, int, char *, char *));
+static void unescape_url _PARAMS((char *));
+static void plustospace _PARAMS((char *));
+static void parse_object _PARAMS((char *));
+static char *describeTimeSince _PARAMS((time_t then));
 
 static void
 print_trailer(void)
@@ -385,7 +382,6 @@ noargs_html(char *host, int port, char *url, char *password)
     print_option(op, STATS_R);
     print_option(op, SHUTDOWN);
     print_option(op, REFRESH);
-    print_option(op, PCONN);
 #ifdef REMOVE_OBJECT
     print_option(op, REMOVE);
 #endif
@@ -506,20 +502,20 @@ describeTimeSince(time_t then)
     if (then < 0)
 	return "NEVER";
     if (delta < ONE_MINUTE)
-	snprintf(buf, 128, "%ds", (int) (delta / ONE_SECOND));
+	sprintf(buf, "%ds", (int) (delta / ONE_SECOND));
     else if (delta < ONE_HOUR)
-	snprintf(buf, 128, "%dm", (int) (delta / ONE_MINUTE));
+	sprintf(buf, "%dm", (int) (delta / ONE_MINUTE));
     else if (delta < ONE_DAY)
-	snprintf(buf, 128, "%dh", (int) (delta / ONE_HOUR));
+	sprintf(buf, "%dh", (int) (delta / ONE_HOUR));
     else if (delta < ONE_WEEK)
-	snprintf(buf, 128, "%dD", (int) (delta / ONE_DAY));
+	sprintf(buf, "%dD", (int) (delta / ONE_DAY));
     else if (delta < ONE_MONTH)
-	snprintf(buf, 128, "%dW", (int) (delta / ONE_WEEK));
+	sprintf(buf, "%dW", (int) (delta / ONE_WEEK));
     else if (delta < ONE_YEAR)
-	snprintf(buf, 128, "%dM", (int) (delta / ONE_MONTH));
+	sprintf(buf, "%dM", (int) (delta / ONE_MONTH));
     else
-	snprintf(buf, 128, "%dY", (int) (delta / ONE_YEAR));
-    snprintf(buf2, 128, fmt, buf);
+	sprintf(buf, "%dY", (int) (delta / ONE_YEAR));
+    sprintf(buf2, fmt, buf);
     return buf2;
 }
 
@@ -528,7 +524,6 @@ parse_object(char *string)
 {
     char *tbuf = NULL;
     char *store_status = NULL;
-    char *mem_status = NULL;
     char *swap_status = NULL;
     char *ping_status = NULL;
     char *lock_count = NULL;
@@ -545,8 +540,6 @@ parse_object(char *string)
     tbuf = xstrdup(string);
 
     if ((store_status = strtok(tbuf, w_space)) == NULL)
-	goto parse_obj_done;
-    if ((mem_status = strtok(NULL, w_space)) == NULL)
 	goto parse_obj_done;
     if ((swap_status = strtok(NULL, w_space)) == NULL)
 	goto parse_obj_done;
@@ -590,9 +583,8 @@ parse_object(char *string)
 	atoi(size),
 	atoi(refcount),
 	atoi(clients));
-    printf("%s, %s, %s, %s,<BR>",
+    printf("%s, %s, %s,<BR>",
 	store_status,
-	mem_status,
 	swap_status,
 	ping_status);
     printf("%d Locks, Flags: %s\n",
@@ -656,16 +648,15 @@ main(int argc, char *argv[])
 	/* convert hostname:portnum to host=hostname&port=portnum */
 	if (*s && !strchr(s, '=') && !strchr(s, '&')) {
 	    char *p;
-	    int len_buff = strlen(s) + sizeof "host=&port=";
-	    buffer = xmalloc(len_buff);
+	    buffer = xmalloc(strlen(s) + sizeof "host=&port=");
 	    if ((p = strchr(s, ':')))
 		if (p != s) {
 		    *p = '\0';
-		    snprintf(buffer, len_buff, "host=%s&port=%s", s, p + 1);
+		    sprintf(buffer, "host=%s&port=%s", s, p + 1);
 		} else {
-		    snprintf(buffer, len_buff, "port=%s", p + 1);
+		    sprintf(buffer, "port=%s", p + 1);
 	    } else
-		snprintf(buffer, len_buff, "host=%s", s);
+		sprintf(buffer, "host=%s", s);
 	} else {
 	    buffer = xstrdup(s);
 	}
@@ -748,13 +739,12 @@ main(int argc, char *argv[])
     case STATS_HDRS:
     case STATS_FDS:
     case STATS_NETDB:
-    case PCONN:
     case SHUTDOWN:
-	snprintf(msg, 1024, "GET cache_object://%s/%s@%s HTTP/1.0\r\n\r\n",
+	sprintf(msg, "GET cache_object://%s/%s@%s HTTP/1.0\r\n\r\n",
 	    hostname, op_cmds[op], password);
 	break;
     case REFRESH:
-	snprintf(msg, 1024, "GET %s HTTP/1.0\r\nPragma: no-cache\r\nAccept: */*\r\n\r\n", url);
+	sprintf(msg, "GET %s HTTP/1.0\r\nPragma: no-cache\r\nAccept: */*\r\n\r\n", url);
 	break;
 #ifdef REMOVE_OBJECT
     case REMOVE:
@@ -796,7 +786,6 @@ main(int argc, char *argv[])
     print_option(op, STATS_F);
     print_option(op, STATS_D);
     print_option(op, STATS_R);
-    print_option(op, PCONN);
     printf("</SELECT>\n");
     printf("<INPUT TYPE=\"hidden\" NAME=\"host\" VALUE=\"%s\">\n", hostname);
     printf("<INPUT TYPE=\"hidden\" NAME=\"port\" VALUE=\"%d\">\n", portnum);
@@ -847,7 +836,6 @@ main(int argc, char *argv[])
     case STATS_NETDB:
     case SHUTDOWN:
     case REFRESH:
-    case PCONN:
 	break;
     case PARAM:
 	if (hasTables) {
@@ -933,7 +921,6 @@ main(int argc, char *argv[])
 		case STATS_FDS:
 		case STATS_NETDB:
 		case SHUTDOWN:
-		case PCONN:
 		    p_state = 1;
 		    printf("%s", reserve);
 		    break;
@@ -1014,8 +1001,10 @@ client_comm_connect(int sock, char *dest_host, u_short dest_port)
 	xmemcpy(&to_addr.sin_addr.s_addr, hp->h_addr, hp->h_length);
     else if (safe_inet_addr(dest_host, &to_addr.sin_addr))
 	(void) 0;
-    else
-	return (-1);
+    else {
+	fprintf(stderr, "Unknown host: %s\n", dest_host);
+	exit(2);
+    }
 
     to_addr.sin_port = htons(dest_port);
     return connect(sock, (struct sockaddr *) &to_addr, sizeof(struct sockaddr_in));

@@ -50,17 +50,17 @@ dnl Check for GNU cc
 AC_PROG_CC
 
 dnl Warn if not using GNU cc
-dnl if test $ac_cv_prog_gcc = no; then
-dnl     echo '**************************************************************';
-dnl     echo '**************************************************************';
-dnl     echo '**';
-dnl     echo '**   WARNING:  Squid is only guaranteed to compile with GNU cc.';
-dnl     echo "**   Currently, you're using $CC";
-dnl     echo '**';
-dnl     echo '**************************************************************';
-dnl     echo '**************************************************************';
-dnl sleep 5
-dnl fi
+if test $ac_cv_prog_gcc = no; then
+        echo '**************************************************************';
+        echo '**************************************************************';
+        echo '**';
+        echo '**   WARNING:  Squid is only guaranteed to compile with GNU cc.';
+        echo "**   Currently, you're using $CC";
+        echo '**';
+        echo '**************************************************************';
+        echo '**************************************************************';
+	sleep 5
+fi
 
 dnl Gerben Wierda <Gerben_Wierda@RnA.nl>
 case "$host" in
@@ -100,7 +100,6 @@ AC_PROG_CPP
 AC_PROG_INSTALL
 AC_PROG_RANLIB
 AC_PROG_LN_S
-AC_PATH_PROG(SH, sh, /bin/sh)
 AC_PATH_PROG(FALSE, false, /usr/bin/false)
 AC_PATH_PROG(TRUE, true, /usr/bin/true)
 AC_PATH_PROG(RM, rm, $FALSE)
@@ -136,7 +135,6 @@ AC_CHECK_HEADERS( \
 	alloca.h \
 	arpa/inet.h \
 	arpa/nameser.h \
-	assert.h \
 	bstring.h \
 	config.h \
 	crypt.h \
@@ -183,7 +181,6 @@ AC_CHECK_HEADERS( \
 )
 
 AC_C_CONST
-AC_C_BIGENDIAN
 
 AC_MSG_CHECKING(if ANSI prototypes work)
 AC_TRY_COMPILE([int foo(char *); int foo (char *bar) {return 1;}],
@@ -235,8 +232,7 @@ dnl Check for special functions
 AC_FUNC_ALLOCA
 
 AC_CHECK_TYPE(pid_t, int)
-AC_CHECK_TYPE(size_t, unsigned int)
-AC_CHECK_TYPE(ssize_t, int)
+AC_CHECK_TYPE(size_t, int)
 AC_CHECK_TYPE(off_t, int)
 AC_CHECK_TYPE(mode_t, u_short)
 
@@ -339,23 +335,13 @@ AC_CHECK_FUNCS(\
 	setrlimit \
 	setsid \
 	sigaction \
-	snprintf \
 	srand48 \
 	srandom \
 	sysconf \
 	syslog \
 	tempnam \
 	timegm \
-	vsnprintf \
 )
-
-case "$host" in
-	[alpha-dec-osf3.*])
-		# John Kay (jkay@nlanr.net) 19970818
-		echo "Disabling poll() for $host..."
-		ac_cv_func_poll="no"
-		;;
-esac
 
 AC_MSG_CHECKING(if GNUregex needs to be compiled)
 if test "$ac_cv_func_regcomp" = "no" ; then
@@ -603,7 +589,6 @@ AC_OUTPUT(\
 	./scripts/RunCache \
 	./scripts/RunAccel \
 	./src/Makefile \
+	./src/squid.conf.pre \
 	./contrib/Makefile \
-	./icons/Makefile \
-	./errors/Makefile \
 )
