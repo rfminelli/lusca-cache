@@ -1,6 +1,4 @@
 
-
-
 /*
  * $Id$
  *
@@ -39,28 +37,33 @@ typedef struct {
     u_short port;
     request_t *request;
     request_t *proxy_request;
+    char *buf;			/* stuff already read from client */
+    int buflen;
     struct {
 	int fd;
 	int len;
 	int offset;
 	char *buf;
     } client, server;
-    size_t *size_ptr;		/* pointer to size for logging */
+    int *size_ptr;		/* pointer to size for logging */
     int proxying;
+    int ip_lookup_pending;
 } PassStateData;
 
-static PF passTimeout;
-static void passReadServer(int fd, void *);
-static void passReadClient(int fd, void *);
-static void passWriteServer(int fd, void *);
-static void passWriteClient(int fd, void *);
-static ERCB passErrorComplete;
-static void passClose(PassStateData * passState);
-static void passClientClosed(int fd, void *);
-static CNCB passConnectDone;
-static void passStateFree(int fd, void *data);
-static void passPeerSelectComplete(peer * p, void *data);
-static void passPeerSelectFail(peer * p, void *data);
+static void passLifetimeExpire _PARAMS((int fd, void *));
+static void passReadTimeout _PARAMS((int fd, void *));
+static void passReadServer _PARAMS((int fd, void *));
+static void passReadClient _PARAMS((int fd, void *));
+static void passWriteServer _PARAMS((int fd, void *));
+static void passWriteClient _PARAMS((int fd, void *));
+static void passConnected _PARAMS((int fd, void *));
+static void passConnect _PARAMS((int fd, const ipcache_addrs *, void *));
+static void passErrorComplete _PARAMS((int, char *, int, int, void *));
+static void passClose _PARAMS((PassStateData * passState));
+static void passClientClosed _PARAMS((int fd, void *));
+static void passConnectDone _PARAMS((int fd, int status, void *data));
+static void passStateFree _PARAMS((int fd, void *data));
+static void passSelectNeighbor _PARAMS((int, const ipcache_addrs *, void *));
 
 static void
 passClose(PassStateData * passState)
@@ -69,7 +72,7 @@ passClose(PassStateData * passState)
 	/* remove the "unexpected" client close handler */
 	comm_remove_close_handler(passState->client.fd,
 	    passClientClosed,
-	    passState);
+	    (void *) passState);
 	comm_close(passState->client.fd);
 	passState->client.fd = -1;
     }
@@ -84,10 +87,13 @@ static void
 passClientClosed(int fd, void *data)
 {
     PassStateData *passState = data;
-    debug(39, 3) ("passClientClosed: FD %d\n", fd);
+    debug(39, 3, "passClientClosed: FD %d\n", fd);
     /* we have been called from comm_close for the client side, so
      * just need to clean up the server side */
-    protoUnregister(NULL, passState->request);
+    protoUnregister(passState->server.fd,
+	NULL,
+	passState->request,
+	no_addr);
     comm_close(passState->server.fd);
 }
 
@@ -95,29 +101,28 @@ static void
 passStateFree(int fd, void *data)
 {
     PassStateData *passState = data;
-    debug(39, 3) ("passStateFree: FD %d, passState=%p\n", fd, passState);
+    debug(39, 3, "passStateFree: FD %d, passState=%p\n", fd, passState);
     if (passState == NULL)
 	return;
     if (fd != passState->server.fd)
 	fatal_dump("passStateFree: FD mismatch!\n");
-    if (passState->client.fd > -1)
-	commSetSelect(passState->client.fd, COMM_SELECT_READ, NULL, NULL, 0);
+    if (passState->ip_lookup_pending)
+	ipcache_unregister(passState->host, passState->server.fd);
     safe_free(passState->server.buf);
     safe_free(passState->client.buf);
     xfree(passState->url);
     requestUnlink(passState->request);
     requestUnlink(passState->proxy_request);
-    passState->request = NULL;
-    passState->proxy_request = NULL;
-    cbdataFree(passState);
+    safe_free(passState);
 }
 
 /* This will be called when the server lifetime is expired. */
 static void
-passTimeout(int fd, void *data)
+passLifetimeExpire(int fd, void *data)
 {
     PassStateData *passState = data;
-    debug(39, 3) ("passTimeout: FD %d\n", fd);
+    debug(39, 4, "passLifeTimeExpire: FD %d: URL '%s'>\n",
+	fd, passState->url);
     passClose(passState);
 }
 
@@ -128,22 +133,22 @@ passReadServer(int fd, void *data)
     PassStateData *passState = data;
     int len;
     len = read(passState->server.fd, passState->server.buf, SQUID_TCP_SO_RCVBUF);
-    fd_bytes(passState->server.fd, len, FD_READ);
-    debug(39, 5) ("passReadServer FD %d, read %d bytes\n", fd, len);
+    debug(39, 5, "passReadServer FD %d, read %d bytes\n", fd, len);
     if (len < 0) {
-	debug(50, 2) ("passReadServer: FD %d: read failure: %s\n",
+	debug(50, 2, "passReadServer: FD %d: read failure: %s\n",
 	    passState->server.fd, xstrerror());
-	if (ignoreErrno(errno)) {
+	if (errno == EAGAIN || errno == EWOULDBLOCK) {
 	    /* reinstall handlers */
 	    /* XXX This may loop forever */
 	    commSetSelect(passState->server.fd,
 		COMM_SELECT_READ,
 		passReadServer,
-		passState, 0);
-	    commSetTimeout(passState->server.fd,
-		Config.Timeout.read,
-		NULL,
-		NULL);
+		(void *) passState, 0);
+	    commSetSelect(passState->server.fd,
+		COMM_SELECT_TIMEOUT,
+		passReadTimeout,
+		(void *) passState,
+		Config.readTimeout);
 	} else {
 	    passClose(passState);
 	}
@@ -153,11 +158,10 @@ passReadServer(int fd, void *data)
     } else {
 	passState->server.offset = 0;
 	passState->server.len = len;
-	commSetTimeout(passState->server.fd, Config.Timeout.read, NULL, NULL);
 	commSetSelect(passState->client.fd,
 	    COMM_SELECT_WRITE,
 	    passWriteClient,
-	    passState, 0);
+	    (void *) passState, 0);
     }
 }
 
@@ -168,19 +172,18 @@ passReadClient(int fd, void *data)
     PassStateData *passState = data;
     int len;
     len = read(passState->client.fd, passState->client.buf, SQUID_TCP_SO_RCVBUF);
-    fd_bytes(passState->client.fd, len, FD_READ);
-    debug(39, 5) ("passReadClient FD %d, read %d bytes\n",
+    debug(39, 5, "passReadClient FD %d, read %d bytes\n",
 	passState->client.fd, len);
     if (len < 0) {
-	debug(50, 2) ("passReadClient: FD %d: read failure: %s\n",
+	debug(50, 2, "passReadClient: FD %d: read failure: %s\n",
 	    fd, xstrerror());
-	if (ignoreErrno(errno)) {
+	if (errno == EAGAIN || errno == EWOULDBLOCK) {
 	    /* reinstall handlers */
 	    /* XXX This may loop forever */
 	    commSetSelect(passState->client.fd,
 		COMM_SELECT_READ,
 		passReadClient,
-		passState, 0);
+		(void *) passState, 0);
 	} else {
 	    passClose(passState);
 	}
@@ -193,7 +196,7 @@ passReadClient(int fd, void *data)
 	commSetSelect(passState->server.fd,
 	    COMM_SELECT_WRITE,
 	    passWriteServer,
-	    passState, 0);
+	    (void *) passState, 0);
     }
 }
 
@@ -206,17 +209,9 @@ passWriteServer(int fd, void *data)
     len = write(passState->server.fd,
 	passState->client.buf + passState->client.offset,
 	passState->client.len - passState->client.offset);
-    fd_bytes(fd, len, FD_WRITE);
-    debug(39, 5) ("passWriteServer FD %d, wrote %d bytes\n", fd, len);
+    debug(39, 5, "passWriteServer FD %d, wrote %d bytes\n", fd, len);
     if (len < 0) {
-	if (ignoreErrno(errno)) {
-	    commSetSelect(passState->server.fd,
-		COMM_SELECT_WRITE,
-		passWriteServer,
-		passState, 0);
-	    return;
-	}
-	debug(50, 2) ("passWriteServer: FD %d: write failure: %s.\n",
+	debug(50, 2, "passWriteServer: FD %d: write failure: %s.\n",
 	    passState->server.fd, xstrerror());
 	passClose(passState);
 	return;
@@ -226,17 +221,18 @@ passWriteServer(int fd, void *data)
 	commSetSelect(passState->client.fd,
 	    COMM_SELECT_READ,
 	    passReadClient,
-	    passState, 0);
-	commSetTimeout(passState->server.fd,
-	    Config.Timeout.read,
-	    NULL,
-	    NULL);
+	    (void *) passState, 0);
+	commSetSelect(passState->server.fd,
+	    COMM_SELECT_TIMEOUT,
+	    passReadTimeout,
+	    (void *) passState,
+	    Config.readTimeout);
     } else {
 	/* still have more to write */
 	commSetSelect(passState->server.fd,
 	    COMM_SELECT_WRITE,
 	    passWriteServer,
-	    passState, 0);
+	    (void *) passState, 0);
     }
 }
 
@@ -246,24 +242,16 @@ passWriteClient(int fd, void *data)
 {
     PassStateData *passState = data;
     int len;
-    debug(39, 5) ("passWriteClient FD %d len=%d offset=%d\n",
+    debug(39, 5, "passWriteClient FD %d len=%d offset=%d\n",
 	fd,
 	passState->server.len,
 	passState->server.offset);
     len = write(passState->client.fd,
 	passState->server.buf + passState->server.offset,
 	passState->server.len - passState->server.offset);
-    fd_bytes(fd, len, FD_WRITE);
-    debug(39, 5) ("passWriteClient FD %d, wrote %d bytes\n", fd, len);
+    debug(39, 5, "passWriteClient FD %d, wrote %d bytes\n", fd, len);
     if (len < 0) {
-	if (ignoreErrno(errno)) {
-	    commSetSelect(passState->client.fd,
-		COMM_SELECT_WRITE,
-		passWriteClient,
-		passState, 0);
-	    return;
-	}
-	debug(50, 2) ("passWriteClient: FD %d: write failure: %s.\n",
+	debug(50, 2, "passWriteClient: FD %d: write failure: %s.\n",
 	    passState->client.fd, xstrerror());
 	passClose(passState);
 	return;
@@ -275,54 +263,36 @@ passWriteClient(int fd, void *data)
 	commSetSelect(passState->server.fd,
 	    COMM_SELECT_READ,
 	    passReadServer,
-	    passState, 0);
-	commSetTimeout(passState->server.fd,
-	    Config.Timeout.read,
-	    NULL,
-	    NULL);
+	    (void *) passState, 0);
+	commSetSelect(passState->server.fd,
+	    COMM_SELECT_TIMEOUT,
+	    passReadTimeout,
+	    (void *) passState,
+	    Config.readTimeout);
     } else {
 	/* still have more to write */
 	commSetSelect(passState->client.fd,
 	    COMM_SELECT_WRITE,
 	    passWriteClient,
-	    passState, 0);
+	    (void *) passState, 0);
     }
 }
 
 static void
-passErrorComplete(int fdnotused, void *passState, size_t sizenotused)
+passReadTimeout(int fd, void *data)
 {
-    assert(passState != NULL);
+    PassStateData *passState = data;
+    debug(39, 3, "passReadTimeout: FD %d\n", fd);
     passClose(passState);
 }
 
 static void
-passConnectDone(int fdnotused, int status, void *data)
+passConnected(int fd, void *data)
 {
     PassStateData *passState = data;
     request_t *request = passState->request;
     size_t hdr_len = 0;
-    ErrorState *err = NULL;
-    if (status == COMM_ERR_DNS) {
-	debug(39, 4) ("passConnectDone: Unknown host: %s\n", passState->host);
-	err = errorCon(ERR_DNS_FAIL, HTTP_NOT_FOUND);
-	err->request = requestLink(request);
-	err->dnsserver_msg = xstrdup(dns_error_message);
-	err->callback = passErrorComplete;
-	err->callback_data = passState;
-	errorSend(passState->client.fd, err);
-	return;
-    } else if (status != COMM_OK) {
-	err = errorCon(ERR_CONNECT_FAIL, HTTP_SERVICE_UNAVAILABLE);
-	err->xerrno = errno;
-	err->host = xstrdup(passState->host);
-	err->port = passState->port;
-	err->request = requestLink(request);
-	err->callback = passErrorComplete;
-	err->callback_data = passState;
-	errorSend(passState->client.fd, err);
-	return;
-    }
+    debug(39, 3, "passConnected: FD %d passState=%p\n", fd, passState);
     if (passState->proxying) {
 	request = get_free_request_t();
 	passState->proxy_request = requestLink(request);
@@ -332,37 +302,134 @@ passConnectDone(int fdnotused, int status, void *data)
     passState->client.len = httpBuildRequestHeader(request,
 	passState->request,	/* orig_request */
 	NULL,			/* entry */
+	passState->buf,
 	&hdr_len,
 	passState->client.buf,
 	SQUID_TCP_SO_RCVBUF >> 1,
-	opt_forwarded_for ? passState->client.fd : -1,
-	0);			/* flags */
-    debug(39, 3) ("passConnectDone: Appending %d bytes of content\n",
-	passState->request->body_sz);
+	opt_forwarded_for ? passState->client.fd : -1);
+    debug(39, 3, "passConnected: Appending %d bytes of content\n",
+	passState->buflen - hdr_len);
     xmemcpy(passState->client.buf + passState->client.len,
-	passState->request->body, passState->request->body_sz);
-    passState->client.len += passState->request->body_sz;
+	passState->buf + hdr_len,
+	passState->buflen - hdr_len);
+    passState->client.len += passState->buflen - hdr_len;
     passState->client.offset = 0;
-    commSetTimeout(passState->server.fd, Config.Timeout.read, NULL, NULL);
     commSetSelect(passState->server.fd,
 	COMM_SELECT_WRITE,
 	passWriteServer,
-	passState, 0);
+	(void *) passState, 0);
+    comm_set_fd_lifetime(fd, 86400);	/* extend lifetime */
     commSetSelect(passState->server.fd,
 	COMM_SELECT_READ,
 	passReadServer,
-	passState, 0);
+	(void *) passState, 0);
+    commSetSelect(passState->server.fd,
+	COMM_SELECT_TIMEOUT,
+	passReadTimeout,
+	(void *) passState,
+	Config.readTimeout);
 }
 
-void
-passStart(int fd, const char *url, request_t * request, size_t * size_ptr)
+static void
+passErrorComplete(int fd, char *buf, int size, int errflag, void *passState)
+{
+    safe_free(buf);
+    if (passState == NULL) {
+	debug_trap("passErrorComplete: NULL passState\n");
+	return;
+    }
+    passClose(passState);
+}
+
+static void
+passConnect(int fd, const ipcache_addrs * ia, void *data)
+{
+    PassStateData *passState = data;
+    request_t *request = passState->request;
+    char *buf = NULL;
+    passState->ip_lookup_pending = 0;
+    if (ia == NULL) {
+	debug(39, 4, "passConnect: Unknown host: %s\n", passState->host);
+	buf = squid_error_url(passState->url,
+	    request->method,
+	    ERR_DNS_FAIL,
+	    fd_table[fd].ipaddr,
+	    500,
+	    dns_error_message);
+	comm_write(passState->client.fd,
+	    xstrdup(buf),
+	    strlen(buf),
+	    30,
+	    passErrorComplete,
+	    (void *) passState,
+	    xfree);
+	return;
+    }
+    debug(39, 5, "passConnect: client=%d server=%d\n",
+	passState->client.fd,
+	passState->server.fd);
+    /* Install lifetime handler */
+    commSetSelect(passState->server.fd,
+	COMM_SELECT_LIFETIME,
+	passLifetimeExpire,
+	(void *) passState, 0);
+    /* NOTE this changes the lifetime handler for the client side.
+     * It used to be asciiConnLifetimeHandle, but it does funny things
+     * like looking for read handlers and assuming it was still reading
+     * the HTTP request.  sigh... */
+    commSetSelect(passState->client.fd,
+	COMM_SELECT_LIFETIME,
+	passLifetimeExpire,
+	(void *) passState, 0);
+    commConnectStart(fd,
+	passState->host,
+	passState->port,
+	passConnectDone,
+	passState);
+}
+
+static void
+passConnectDone(int fd, int status, void *data)
+{
+    PassStateData *passState = data;
+    char *buf = NULL;
+    if (status == COMM_ERROR) {
+	buf = squid_error_url(passState->url,
+	    passState->request->method,
+	    ERR_CONNECT_FAIL,
+	    fd_table[fd].ipaddr,
+	    500,
+	    xstrerror());
+	comm_write(passState->client.fd,
+	    xstrdup(buf),
+	    strlen(buf),
+	    30,
+	    passErrorComplete,
+	    (void *) passState,
+	    xfree);
+	return;
+    }
+    if (opt_no_ipcache)
+	ipcacheInvalidate(passState->host);
+    passConnected(passState->server.fd, passState);
+}
+
+int
+passStart(int fd,
+    const char *url,
+    request_t * request,
+    char *buf,
+    int buflen,
+    int *size_ptr)
 {
     /* Create state structure. */
     PassStateData *passState = NULL;
     int sock;
-    ErrorState *err = NULL;
-    debug(39, 3) ("passStart: '%s %s'\n",
+    char *msg = NULL;
+
+    debug(39, 3, "passStart: '%s %s'\n",
 	RequestMethodStr[request->method], url);
+
     /* Create socket. */
     sock = comm_open(SOCK_STREAM,
 	0,
@@ -371,17 +438,27 @@ passStart(int fd, const char *url, request_t * request, size_t * size_ptr)
 	COMM_NONBLOCKING,
 	url);
     if (sock == COMM_ERROR) {
-	debug(39, 4) ("passStart: Failed because we're out of sockets.\n");
-	err = errorCon(ERR_SOCKET_FAILURE, HTTP_INTERNAL_SERVER_ERROR);
-	err->xerrno = errno;
-	err->request = requestLink(request);
-	errorSend(fd, err);
-	return;
+	debug(39, 4, "passStart: Failed because we're out of sockets.\n");
+	msg = squid_error_url(url,
+	    request->method,
+	    ERR_NO_FDS,
+	    fd_table[fd].ipaddr,
+	    500,
+	    xstrerror());
+	comm_write(fd,
+	    xstrdup(msg),
+	    strlen(msg),
+	    30,
+	    NULL,
+	    NULL,
+	    xfree);
+	return COMM_ERROR;
     }
     passState = xcalloc(1, sizeof(PassStateData));
-    cbdataAdd(passState);
     passState->url = xstrdup(url);
     passState->request = requestLink(request);
+    passState->buf = buf;
+    passState->buflen = buflen;
     passState->host = request->host;
     passState->port = request->port;
     passState->size_ptr = size_ptr;
@@ -391,58 +468,76 @@ passStart(int fd, const char *url, request_t * request, size_t * size_ptr)
     passState->client.buf = xmalloc(SQUID_TCP_SO_RCVBUF);
     comm_add_close_handler(passState->server.fd,
 	passStateFree,
-	passState);
+	(void *) passState);
     comm_add_close_handler(passState->client.fd,
 	passClientClosed,
-	passState);
-    commSetTimeout(passState->server.fd,
-	Config.Timeout.read,
-	passTimeout,
-	passState);
+	(void *) passState);
     /* disable icpDetectClientClose */
     commSetSelect(passState->client.fd,
 	COMM_SELECT_READ,
 	NULL,
 	NULL, 0);
-    peerSelect(request,
-	NULL,
-	passPeerSelectComplete,
-	passPeerSelectFail,
-	passState);
+    if (Config.firewall_ip_list) {
+	/* must look up IP address */
+	passState->ip_lookup_pending = 1;
+	ipcache_nbgethostbyname(passState->host,
+	    passState->server.fd,
+	    passSelectNeighbor,
+	    passState);
+    } else {
+	/* can decide now */
+	passSelectNeighbor(passState->server.fd,
+	    NULL,
+	    (void *) passState);
+    }
+    return COMM_OK;
 }
 
 static void
-passPeerSelectComplete(peer * p, void *data)
+passSelectNeighbor(int u1, const ipcache_addrs * ia, void *data)
 {
     PassStateData *passState = data;
     request_t *request = passState->request;
+    peer *e = NULL;
     peer *g = NULL;
-    passState->proxying = p ? 1 : 0;
-    passState->host = p ? p->host : request->host;
-    if (p == NULL) {
+    int fw_ip_match = IP_ALLOW;
+    int inside_fw = matchInsideFirewall(request->host);
+    passState->ip_lookup_pending = 0;
+    if (ia && Config.firewall_ip_list)
+	fw_ip_match = ip_access_check(ia->in_addrs[ia->cur], Config.firewall_ip_list);
+    if (inside_fw == INSIDE_FIREWALL) {
+	hierarchyNote(request, HIER_DIRECT, 0, request->host);
+    } else if (fw_ip_match == IP_DENY) {
+	hierarchyNote(request, HIER_FIREWALL_IP_DIRECT, 0, request->host);
+    } else if ((e = Config.passProxy)) {
+	hierarchyNote(request, HIER_PASS_PARENT, 0, e->host);
+    } else if (inside_fw == NO_FIREWALL) {
+	hierarchyNote(request, HIER_DIRECT, 0, request->host);
+    } else if ((e = getDefaultParent(request))) {
+	hierarchyNote(request, HIER_DEFAULT_PARENT, 0, e->host);
+    } else if ((e = getSingleParent(request))) {
+	hierarchyNote(request, HIER_SINGLE_PARENT, 0, e->host);
+    } else if ((e = getRoundRobinParent(request))) {
+	hierarchyNote(request, HIER_ROUNDROBIN_PARENT, 0, e->host);
+    } else if ((e = getFirstUpParent(request))) {
+	hierarchyNote(request, HIER_FIRSTUP_PARENT, 0, e->host);
+    } else {
+	hierarchyNote(request, HIER_DIRECT, 0, request->host);
+    }
+    passState->proxying = e ? 1 : 0;
+    passState->host = e ? e->host : request->host;
+    if (e == NULL) {
 	passState->port = request->port;
-    } else if (p->http_port != 0) {
-	passState->port = p->http_port;
-    } else if ((g = peerFindByName(p->host))) {
+    } else if (e->http_port != 0) {
+	passState->port = e->http_port;
+    } else if ((g = neighborFindByName(e->host))) {
 	passState->port = g->http_port;
     } else {
 	passState->port = CACHE_HTTP_PORT;
     }
-    commConnectStart(passState->server.fd,
-	passState->host,
-	passState->port,
-	passConnectDone,
+    passState->ip_lookup_pending = 1;
+    ipcache_nbgethostbyname(passState->host,
+	passState->server.fd,
+	passConnect,
 	passState);
-}
-
-static void
-passPeerSelectFail(peer * pnotused, void *data)
-{
-    PassStateData *passState = data;
-    ErrorState *err;
-    err = errorCon(ERR_CANNOT_FORWARD, HTTP_SERVICE_UNAVAILABLE);
-    err->request = requestLink(passState->request);
-    err->callback = passErrorComplete;
-    err->callback_data = passState;
-    errorSend(passState->client.fd, err);
 }

@@ -210,8 +210,8 @@
 #include <resolv.h>
 #endif
 
+#include "ansiproto.h"
 #include "util.h"
-#include "snprintf.h"
 
 extern int h_errno;
 
@@ -287,7 +287,7 @@ main(int argc, char *argv[])
 	    exit(0);
 	    break;
 	case 'd':
-	    snprintf(buf, 256, "dnsserver.%d.log", (int) getpid());
+	    sprintf(buf, "dnsserver.%d.log", (int) getpid());
 	    logfile = fopen(buf, "a");
 	    do_debug++;
 	    if (!logfile)
@@ -324,8 +324,7 @@ main(int argc, char *argv[])
 	    exit(0);
 	}
 	if (strcmp(request, "$hello") == 0) {
-	    printf("$alive\n");
-	    printf("$end\n");
+	    printf("$alive\n$end\n");
 	    fflush(stdout);
 	    continue;
 	}
@@ -367,10 +366,10 @@ main(int argc, char *argv[])
 	msg[0] = '\0';
 	if (!result) {
 	    if (h_errno == TRY_AGAIN) {
-		snprintf(msg, 1024, "Name Server for domain '%s' is unavailable.\n",
+		sprintf(msg, "Name Server for domain '%s' is unavailable.\n",
 		    request);
 	    } else {
-		snprintf(msg, 1024, "DNS Domain '%s' is invalid: %s.\n",
+		sprintf(msg, "DNS Domain '%s' is invalid: %s.\n",
 		    request, my_h_msgs(h_errno));
 	    }
 	}

@@ -106,19 +106,30 @@
 
 #include "squid.h"
 
+stmem_stats sm_stats;
+stmem_stats disk_stats;
+stmem_stats request_pool;
+stmem_stats mem_obj_pool;
+
+#define min(x,y) ((x)<(y)? (x) : (y))
+
 #ifndef USE_MEMALIGN
 #define USE_MEMALIGN 0
 #endif
 
-static void *get_free_thing(stmem_stats *);
-static void put_free_thing(stmem_stats *, void *);
-static void stmemFreeThingMemory(stmem_stats *);
+static int memFreeDataUpto _PARAMS((mem_ptr, int));
+static int memAppend _PARAMS((mem_ptr, const char *, int));
+static int memCopy _PARAMS((const mem_ptr, int, char *, int));
+static void *get_free_thing _PARAMS((stmem_stats *));
+static void put_free_thing _PARAMS((stmem_stats *, void *));
+static void stmemFreeThingMemory _PARAMS((stmem_stats *));
+static void memFree _PARAMS((mem_ptr));
+static void memFreeData _PARAMS((mem_ptr));
 
-void
-memFree(mem_hdr * mem)
+static void
+memFree(mem_ptr mem)
 {
-    mem_node *lastp;
-    mem_node *p = mem->head;
+    mem_node lastp, p = mem->head;
 
     if (p) {
 	while (p && (p != mem->tail)) {
@@ -126,27 +137,46 @@ memFree(mem_hdr * mem)
 	    p = p->next;
 	    if (lastp) {
 		put_free_4k_page(lastp->data);
-		store_mem_size -= SM_PAGE_SIZE;
 		safe_free(lastp);
 	    }
 	}
 
 	if (p) {
 	    put_free_4k_page(p->data);
-	    store_mem_size -= SM_PAGE_SIZE;
 	    safe_free(p);
 	}
     }
-    memset(mem, '\0', sizeof(mem_hdr *));	/* nuke in case ref'ed again */
+    memset(mem, '\0', sizeof(mem_ptr));		/* nuke in case ref'ed again */
     safe_free(mem);
 }
 
-int
-memFreeDataUpto(mem_hdr * mem, int target_offset)
+static void
+memFreeData(mem_ptr mem)
+{
+    mem_node lastp, p = mem->head;
+
+    while (p != mem->tail) {
+	lastp = p;
+	p = p->next;
+	put_free_4k_page(lastp->data);
+	safe_free(lastp);
+    }
+
+    if (p != NULL) {
+	put_free_4k_page(p->data);
+	safe_free(p);
+	p = NULL;
+    }
+    mem->head = mem->tail = NULL;	/* detach in case ref'd */
+    mem->origin_offset = 0;
+}
+
+static int
+memFreeDataUpto(mem_ptr mem, int target_offset)
 {
     int current_offset = mem->origin_offset;
-    mem_node *lastp;
-    mem_node *p = mem->head;
+    mem_node lastp, p = mem->head;
+
     while (p && ((current_offset + p->len) <= target_offset)) {
 	if (p == mem->tail) {
 	    /* keep the last one to avoid change to other part of code */
@@ -158,34 +188,42 @@ memFreeDataUpto(mem_hdr * mem, int target_offset)
 	    p = p->next;
 	    current_offset += lastp->len;
 	    put_free_4k_page(lastp->data);
-	    store_mem_size -= SM_PAGE_SIZE;
 	    safe_free(lastp);
 	}
     }
+
     mem->head = p;
     mem->origin_offset = current_offset;
     if (current_offset < target_offset) {
 	/* there are still some data left. */
 	return current_offset;
     }
-    assert(current_offset == target_offset);
+    if (current_offset != target_offset) {
+	debug(19, 1, "memFreeDataUpto: This shouldn't happen. Some odd condition.\n");
+	debug(19, 1, "   Current offset: %d  Target offset: %d  p: %p\n",
+	    current_offset, target_offset, p);
+    }
     return current_offset;
 }
 
+
 /* Append incoming data. */
-void
-memAppend(mem_hdr * mem, const char *data, int len)
+static int
+memAppend(mem_ptr mem, const char *data, int len)
 {
-    mem_node *p;
+    mem_node p;
     int avail_len;
     int len_to_copy;
-    debug(19, 6) ("memAppend: len %d\n", len);
+
+    debug(19, 6, "memAppend: len %d\n", len);
+
     /* Does the last block still contain empty space? 
      * If so, fill out the block before dropping into the
      * allocation loop */
+
     if (mem->head && mem->tail && (mem->tail->len < SM_PAGE_SIZE)) {
 	avail_len = SM_PAGE_SIZE - (mem->tail->len);
-	len_to_copy = XMIN(avail_len, len);
+	len_to_copy = min(avail_len, len);
 	xmemcpy((mem->tail->data + mem->tail->len), data, len_to_copy);
 	/* Adjust the ptr and len according to what was deposited in the page */
 	data += len_to_copy;
@@ -193,13 +231,13 @@ memAppend(mem_hdr * mem, const char *data, int len)
 	mem->tail->len += len_to_copy;
     }
     while (len > 0) {
-	len_to_copy = XMIN(len, SM_PAGE_SIZE);
-	p = xcalloc(1, sizeof(mem_node));
+	len_to_copy = min(len, SM_PAGE_SIZE);
+	p = xcalloc(1, sizeof(Mem_Node));
 	p->next = NULL;
 	p->len = len_to_copy;
 	p->data = get_free_4k_page();
-	store_mem_size += SM_PAGE_SIZE;
 	xmemcpy(p->data, data, len_to_copy);
+
 	if (!mem->head) {
 	    /* The chain is empty */
 	    mem->head = mem->tail = p;
@@ -211,35 +249,50 @@ memAppend(mem_hdr * mem, const char *data, int len)
 	len -= len_to_copy;
 	data += len_to_copy;
     }
+    return len;
 }
 
-ssize_t
-memCopy(const mem_hdr * mem, off_t offset, char *buf, size_t size)
+static int
+memCopy(const mem_ptr mem, int offset, char *buf, int size)
 {
-    mem_node *p = mem->head;
-    off_t t_off = mem->origin_offset;
-    size_t bytes_to_go = size;
+    mem_node p = mem->head;
+    int t_off = mem->origin_offset;
+    int bytes_to_go = size;
     char *ptr_to_buf = NULL;
     int bytes_from_this_packet = 0;
     int bytes_into_this_packet = 0;
-    debug(19, 6) ("memCopy: offset %d: size %d\n", offset, size);
+
+    debug(19, 6, "memCopy: offset %d: size %d\n", offset, size);
+
     if (p == NULL)
-	return 0;
-    assert(size > 0);
+	fatal_dump("memCopy: NULL mem_node");
+
+    if (size <= 0)
+	return size;
+
     /* Seek our way into store */
     while ((t_off + p->len) < offset) {
 	t_off += p->len;
-	assert(p->next);
-	p = p->next;
+	if (p->next)
+	    p = p->next;
+	else {
+	    debug(19, 1, "memCopy: Offset: %d is off limit of current object of %d\n", t_off, offset);
+	    return 0;
+	}
     }
+
     /* Start copying begining with this block until
      * we're satiated */
+
     bytes_into_this_packet = offset - t_off;
-    bytes_from_this_packet = XMIN(bytes_to_go, p->len - bytes_into_this_packet);
+    bytes_from_this_packet = min(bytes_to_go,
+	p->len - bytes_into_this_packet);
+
     xmemcpy(buf, p->data + bytes_into_this_packet, bytes_from_this_packet);
     bytes_to_go -= bytes_from_this_packet;
     ptr_to_buf = buf + bytes_from_this_packet;
     p = p->next;
+
     while (p && bytes_to_go > 0) {
 	if (bytes_to_go > p->len) {
 	    xmemcpy(ptr_to_buf, p->data, p->len);
@@ -251,16 +304,22 @@ memCopy(const mem_hdr * mem, off_t offset, char *buf, size_t size)
 	}
 	p = p->next;
     }
-    return size - bytes_to_go;
+
+    return size;
 }
 
 
 /* Do whatever is necessary to begin storage of new object */
-mem_hdr *
+mem_ptr
 memInit(void)
 {
-    mem_hdr *new = xcalloc(1, sizeof(mem_hdr));
+    mem_ptr new = xcalloc(1, sizeof(Mem_Hdr));
     new->tail = new->head = NULL;
+    new->mem_free = memFree;
+    new->mem_free_data = memFreeData;
+    new->mem_free_data_upto = memFreeDataUpto;
+    new->mem_append = memAppend;
+    new->mem_copy = memCopy;
     return new;
 }
 
@@ -270,7 +329,8 @@ get_free_thing(stmem_stats * thing)
     void *p = NULL;
     if (!empty_stack(&thing->free_page_stack)) {
 	p = pop(&thing->free_page_stack);
-	assert(p != NULL);
+	if (p == NULL)
+	    fatal_dump("get_free_thing: NULL pointer?");
     } else {
 	p = xmalloc(thing->page_size);
 	thing->total_pages_allocated++;
@@ -307,7 +367,8 @@ get_free_8k_page(void)
 static void
 put_free_thing(stmem_stats * thing, void *p)
 {
-    assert(p != NULL);
+    if (p == NULL)
+	fatal_dump("Somebody is putting a NULL pointer!");
     thing->n_pages_in_use--;
     if (thing->total_pages_allocated > thing->max_pages) {
 	xfree(p);
@@ -368,7 +429,7 @@ stmemInit(void)
     mem_obj_pool.max_pages = Squid_MaxFD >> 3;
 
 #if PURIFY
-    debug(19, 0) ("Disabling stacks under purify\n");
+    debug(19, 0, "Disabling stacks under purify\n");
     sm_stats.max_pages = 0;
     disk_stats.max_pages = 0;
     request_pool.max_pages = 0;

@@ -36,32 +36,35 @@ typedef struct {
     char *host;			/* either request->host or proxy host */
     u_short port;
     request_t *request;
+    char *mime_hdr;
     struct {
 	int fd;
 	int len;
 	int offset;
 	char *buf;
     } client, server;
-    size_t *size_ptr;		/* pointer to size in an ConnStateData for logging */
+    int *size_ptr;		/* pointer to size in an icpStateData for logging */
     int proxying;
+    int ip_lookup_pending;
 } SslStateData;
 
 static const char *const conn_established = "HTTP/1.0 200 Connection established\r\n\r\n";
 
-static CNCB sslConnectDone;
-static ERCB sslErrorComplete;
-static PF sslClientClosed;
-static PF sslReadClient;
-static PF sslReadServer;
-static PF sslStateFree;
-static PF sslTimeout;
-static PF sslWriteClient;
-static PF sslWriteServer;
-static PSC sslPeerSelectComplete;
-static PSC sslPeerSelectFail;
-static void sslClose(SslStateData * sslState);
-static void sslConnected(int fd, void *);
-static void sslProxyConnected(int fd, void *);
+static void sslLifetimeExpire _PARAMS((int fd, void *));
+static void sslReadTimeout _PARAMS((int fd, void *));
+static void sslReadServer _PARAMS((int fd, void *));
+static void sslReadClient _PARAMS((int fd, void *));
+static void sslWriteServer _PARAMS((int fd, void *));
+static void sslWriteClient _PARAMS((int fd, void *));
+static void sslConnected _PARAMS((int fd, void *));
+static void sslProxyConnected _PARAMS((int fd, void *));
+static void sslConnect _PARAMS((int fd, const ipcache_addrs *, void *));
+static void sslErrorComplete _PARAMS((int, char *, int, int, void *));
+static void sslClose _PARAMS((SslStateData * sslState));
+static void sslClientClosed _PARAMS((int fd, void *));
+static void sslConnectDone _PARAMS((int fd, int status, void *data));
+static void sslStateFree _PARAMS((int fd, void *data));
+static void sslSelectNeighbor _PARAMS((int fd, const ipcache_addrs *, void *));
 
 static void
 sslClose(SslStateData * sslState)
@@ -70,7 +73,7 @@ sslClose(SslStateData * sslState)
 	/* remove the "unexpected" client close handler */
 	comm_remove_close_handler(sslState->client.fd,
 	    sslClientClosed,
-	    sslState);
+	    (void *) sslState);
 	comm_close(sslState->client.fd);
 	sslState->client.fd = -1;
     }
@@ -85,10 +88,13 @@ static void
 sslClientClosed(int fd, void *data)
 {
     SslStateData *sslState = data;
-    debug(26, 3) ("sslClientClosed: FD %d\n", fd);
+    debug(26, 3, "sslClientClosed: FD %d\n", fd);
     /* we have been called from comm_close for the client side, so
      * just need to clean up the server side */
-    protoUnregister(NULL, sslState->request);
+    protoUnregister(sslState->server.fd,
+	NULL,
+	sslState->request,
+	no_addr);
     comm_close(sslState->server.fd);
 }
 
@@ -96,16 +102,28 @@ static void
 sslStateFree(int fd, void *data)
 {
     SslStateData *sslState = data;
-    debug(26, 3) ("sslStateFree: FD %d, sslState=%p\n", fd, sslState);
+    debug(26, 3, "sslStateFree: FD %d, sslState=%p\n", fd, sslState);
     if (sslState == NULL)
 	return;
-    assert(fd == sslState->server.fd);
+    if (fd != sslState->server.fd)
+	fatal_dump("sslStateFree: FD mismatch!\n");
     safe_free(sslState->server.buf);
     safe_free(sslState->client.buf);
     xfree(sslState->url);
     requestUnlink(sslState->request);
-    sslState->request = NULL;
-    cbdataFree(sslState);
+    if (sslState->ip_lookup_pending)
+	ipcache_unregister(sslState->host, sslState->server.fd);
+    safe_free(sslState);
+}
+
+/* This will be called when the server lifetime is expired. */
+static void
+sslLifetimeExpire(int fd, void *data)
+{
+    SslStateData *sslState = data;
+    debug(26, 4, "sslLifeTimeExpire: FD %d: URL '%s'>\n",
+	fd, sslState->url);
+    sslClose(sslState);
 }
 
 /* Read from server side and queue it for writing to the client */
@@ -115,22 +133,22 @@ sslReadServer(int fd, void *data)
     SslStateData *sslState = data;
     int len;
     len = read(sslState->server.fd, sslState->server.buf, SQUID_TCP_SO_RCVBUF);
-    fd_bytes(sslState->server.fd, len, FD_READ);
-    debug(26, 5) ("sslReadServer FD %d, read %d bytes\n", fd, len);
+    debug(26, 5, "sslReadServer FD %d, read %d bytes\n", fd, len);
     if (len < 0) {
-	debug(50, 1) ("sslReadServer: FD %d: read failure: %s\n",
+	debug(50, 1, "sslReadServer: FD %d: read failure: %s\n",
 	    sslState->server.fd, xstrerror());
-	if (ignoreErrno(errno)) {
+	if (errno == EAGAIN || errno == EWOULDBLOCK) {
 	    /* reinstall handlers */
 	    /* XXX This may loop forever */
 	    commSetSelect(sslState->server.fd,
 		COMM_SELECT_READ,
 		sslReadServer,
-		sslState, 0);
-	    commSetTimeout(sslState->server.fd,
-		Config.Timeout.read,
-		NULL,
-		NULL);
+		(void *) sslState, 0);
+	    commSetSelect(sslState->server.fd,
+		COMM_SELECT_TIMEOUT,
+		sslReadTimeout,
+		(void *) sslState,
+		Config.readTimeout);
 	} else {
 	    sslClose(sslState);
 	}
@@ -140,12 +158,10 @@ sslReadServer(int fd, void *data)
     } else {
 	sslState->server.offset = 0;
 	sslState->server.len = len;
-	/* extend server read timeout */
-	commSetTimeout(sslState->server.fd, Config.Timeout.read, NULL, NULL);
 	commSetSelect(sslState->client.fd,
 	    COMM_SELECT_WRITE,
 	    sslWriteClient,
-	    sslState, 0);
+	    (void *) sslState, 0);
     }
 }
 
@@ -156,19 +172,18 @@ sslReadClient(int fd, void *data)
     SslStateData *sslState = data;
     int len;
     len = read(sslState->client.fd, sslState->client.buf, SQUID_TCP_SO_RCVBUF);
-    fd_bytes(sslState->client.fd, len, FD_READ);
-    debug(26, 5) ("sslReadClient FD %d, read %d bytes\n",
+    debug(26, 5, "sslReadClient FD %d, read %d bytes\n",
 	sslState->client.fd, len);
     if (len < 0) {
-	debug(50, 1) ("sslReadClient: FD %d: read failure: %s\n",
+	debug(50, 1, "sslReadClient: FD %d: read failure: %s\n",
 	    fd, xstrerror());
-	if (ignoreErrno(errno)) {
+	if (errno == EAGAIN || errno == EWOULDBLOCK) {
 	    /* reinstall handlers */
 	    /* XXX This may loop forever */
 	    commSetSelect(sslState->client.fd,
 		COMM_SELECT_READ,
 		sslReadClient,
-		sslState, 0);
+		(void *) sslState, 0);
 	} else {
 	    sslClose(sslState);
 	}
@@ -181,7 +196,7 @@ sslReadClient(int fd, void *data)
 	commSetSelect(sslState->server.fd,
 	    COMM_SELECT_WRITE,
 	    sslWriteServer,
-	    sslState, 0);
+	    (void *) sslState, 0);
     }
 }
 
@@ -194,17 +209,9 @@ sslWriteServer(int fd, void *data)
     len = write(sslState->server.fd,
 	sslState->client.buf + sslState->client.offset,
 	sslState->client.len - sslState->client.offset);
-    fd_bytes(fd, len, FD_WRITE);
-    debug(26, 5) ("sslWriteServer FD %d, wrote %d bytes\n", fd, len);
+    debug(26, 5, "sslWriteServer FD %d, wrote %d bytes\n", fd, len);
     if (len < 0) {
-	if (ignoreErrno(errno)) {
-	    commSetSelect(sslState->server.fd,
-		COMM_SELECT_WRITE,
-		sslWriteServer,
-		sslState, 0);
-	    return;
-	}
-	debug(50, 2) ("sslWriteServer: FD %d: write failure: %s.\n",
+	debug(50, 2, "sslWriteServer: FD %d: write failure: %s.\n",
 	    sslState->server.fd, xstrerror());
 	sslClose(sslState);
 	return;
@@ -214,17 +221,18 @@ sslWriteServer(int fd, void *data)
 	commSetSelect(sslState->client.fd,
 	    COMM_SELECT_READ,
 	    sslReadClient,
-	    sslState, 0);
-	commSetTimeout(sslState->server.fd,
-	    Config.Timeout.read,
-	    NULL,
-	    NULL);
+	    (void *) sslState, 0);
+	commSetSelect(sslState->server.fd,
+	    COMM_SELECT_TIMEOUT,
+	    sslReadTimeout,
+	    (void *) sslState,
+	    Config.readTimeout);
     } else {
 	/* still have more to write */
 	commSetSelect(sslState->server.fd,
 	    COMM_SELECT_WRITE,
 	    sslWriteServer,
-	    sslState, 0);
+	    (void *) sslState, 0);
     }
 }
 
@@ -234,24 +242,16 @@ sslWriteClient(int fd, void *data)
 {
     SslStateData *sslState = data;
     int len;
-    debug(26, 5) ("sslWriteClient FD %d len=%d offset=%d\n",
+    debug(26, 5, "sslWriteClient FD %d len=%d offset=%d\n",
 	fd,
 	sslState->server.len,
 	sslState->server.offset);
     len = write(sslState->client.fd,
 	sslState->server.buf + sslState->server.offset,
 	sslState->server.len - sslState->server.offset);
-    fd_bytes(fd, len, FD_WRITE);
-    debug(26, 5) ("sslWriteClient FD %d, wrote %d bytes\n", fd, len);
+    debug(26, 5, "sslWriteClient FD %d, wrote %d bytes\n", fd, len);
     if (len < 0) {
-	if (ignoreErrno(errno)) {
-	    commSetSelect(sslState->client.fd,
-		COMM_SELECT_WRITE,
-		sslWriteClient,
-		sslState, 0);
-	    return;
-	}
-	debug(50, 2) ("sslWriteClient: FD %d: write failure: %s.\n",
+	debug(50, 2, "sslWriteClient: FD %d: write failure: %s.\n",
 	    sslState->client.fd, xstrerror());
 	sslClose(sslState);
 	return;
@@ -263,25 +263,26 @@ sslWriteClient(int fd, void *data)
 	commSetSelect(sslState->server.fd,
 	    COMM_SELECT_READ,
 	    sslReadServer,
-	    sslState, 0);
-	commSetTimeout(sslState->server.fd,
-	    Config.Timeout.read,
-	    NULL,
-	    NULL);
+	    (void *) sslState, 0);
+	commSetSelect(sslState->server.fd,
+	    COMM_SELECT_TIMEOUT,
+	    sslReadTimeout,
+	    (void *) sslState,
+	    Config.readTimeout);
     } else {
 	/* still have more to write */
 	commSetSelect(sslState->client.fd,
 	    COMM_SELECT_WRITE,
 	    sslWriteClient,
-	    sslState, 0);
+	    (void *) sslState, 0);
     }
 }
 
 static void
-sslTimeout(int fd, void *data)
+sslReadTimeout(int fd, void *data)
 {
     SslStateData *sslState = data;
-    debug(26, 3) ("sslTimeout: FD %d\n", fd);
+    debug(26, 3, "sslReadTimeout: FD %d\n", fd);
     sslClose(sslState);
 }
 
@@ -289,69 +290,120 @@ static void
 sslConnected(int fd, void *data)
 {
     SslStateData *sslState = data;
-    debug(26, 3) ("sslConnected: FD %d sslState=%p\n", fd, sslState);
-    xstrncpy(sslState->server.buf, conn_established, SQUID_TCP_SO_RCVBUF);
+    debug(26, 3, "sslConnected: FD %d sslState=%p\n", fd, sslState);
+    strcpy(sslState->server.buf, conn_established);
     sslState->server.len = strlen(conn_established);
     sslState->server.offset = 0;
-    commSetTimeout(sslState->server.fd, Config.Timeout.read, NULL, NULL);
     commSetSelect(sslState->client.fd,
 	COMM_SELECT_WRITE,
 	sslWriteClient,
-	sslState, 0);
+	(void *) sslState, 0);
+    comm_set_fd_lifetime(fd, 86400);	/* extend lifetime */
     commSetSelect(sslState->client.fd,
 	COMM_SELECT_READ,
 	sslReadClient,
-	sslState, 0);
+	(void *) sslState, 0);
 }
 
 static void
-sslErrorComplete(int fdnotused, void *sslState, size_t sizenotused)
+sslErrorComplete(int fd, char *buf, int size, int errflag, void *sslState)
 {
-    assert(sslState != NULL);
+    safe_free(buf);
+    if (sslState == NULL) {
+	debug_trap("sslErrorComplete: NULL sslState\n");
+	return;
+    }
     sslClose(sslState);
 }
 
 
 static void
-sslConnectDone(int fdnotused, int status, void *data)
+sslConnect(int fd, const ipcache_addrs * ia, void *data)
 {
     SslStateData *sslState = data;
     request_t *request = sslState->request;
-    ErrorState *err = NULL;
-    if (status == COMM_ERR_DNS) {
-	debug(26, 4) ("sslConnect: Unknown host: %s\n", sslState->host);
-	err = errorCon(ERR_DNS_FAIL, HTTP_NOT_FOUND);
-	err->request = requestLink(request);
-	err->dnsserver_msg = xstrdup(dns_error_message);
-	err->callback = sslErrorComplete;
-	err->callback_data = sslState;
-	errorSend(sslState->client.fd, err);
-    } else if (status != COMM_OK) {
-	err = errorCon(ERR_CONNECT_FAIL, HTTP_SERVICE_UNAVAILABLE);
-	err->xerrno = errno;
-	err->host = xstrdup(sslState->host);
-	err->port = sslState->port;
-	err->request = requestLink(request);
-	err->callback = sslErrorComplete;
-	err->callback_data = sslState;
-	errorSend(sslState->client.fd, err);
-    } else {
-	if (sslState->proxying)
-	    sslProxyConnected(sslState->server.fd, sslState);
-	else
-	    sslConnected(sslState->server.fd, sslState);
+    char *buf = NULL;
+    sslState->ip_lookup_pending = 0;
+    if (ia == NULL) {
+	debug(26, 4, "sslConnect: Unknown host: %s\n", sslState->host);
+	buf = squid_error_url(sslState->url,
+	    request->method,
+	    ERR_DNS_FAIL,
+	    fd_table[fd].ipaddr,
+	    500,
+	    dns_error_message);
+	comm_write(sslState->client.fd,
+	    xstrdup(buf),
+	    strlen(buf),
+	    30,
+	    sslErrorComplete,
+	    (void *) sslState,
+	    xfree);
+	return;
     }
+    debug(26, 5, "sslConnect: client=%d server=%d\n",
+	sslState->client.fd,
+	sslState->server.fd);
+    /* Install lifetime handler */
+    commSetSelect(sslState->server.fd,
+	COMM_SELECT_LIFETIME,
+	sslLifetimeExpire,
+	(void *) sslState, 0);
+    /* NOTE this changes the lifetime handler for the client side.
+     * It used to be asciiConnLifetimeHandle, but it does funny things
+     * like looking for read handlers and assuming it was still reading
+     * the HTTP request.  sigh... */
+    commSetSelect(sslState->client.fd,
+	COMM_SELECT_LIFETIME,
+	sslLifetimeExpire,
+	(void *) sslState, 0);
+    commConnectStart(fd,
+	sslState->host,
+	sslState->port,
+	sslConnectDone,
+	sslState);
 }
 
-void
-sslStart(int fd, const char *url, request_t * request, size_t * size_ptr)
+static void
+sslConnectDone(int fd, int status, void *data)
+{
+    SslStateData *sslState = data;
+    char *buf = NULL;
+    if (status == COMM_ERROR) {
+	buf = squid_error_url(sslState->url,
+	    sslState->request->method,
+	    ERR_CONNECT_FAIL,
+	    fd_table[fd].ipaddr,
+	    500,
+	    xstrerror());
+	comm_write(sslState->client.fd,
+	    xstrdup(buf),
+	    strlen(buf),
+	    30,
+	    sslErrorComplete,
+	    (void *) sslState,
+	    xfree);
+	return;
+    }
+    if (opt_no_ipcache)
+	ipcacheInvalidate(sslState->host);
+    if (sslState->proxying)
+	sslProxyConnected(sslState->server.fd, sslState);
+    else
+	sslConnected(sslState->server.fd, sslState);
+}
+
+int
+sslStart(int fd, const char *url, request_t * request, char *mime_hdr, int *size_ptr)
 {
     /* Create state structure. */
     SslStateData *sslState = NULL;
     int sock;
-    ErrorState *err = NULL;
-    debug(26, 3) ("sslStart: '%s %s'\n",
+    char *buf = NULL;
+
+    debug(26, 3, "sslStart: '%s %s'\n",
 	RequestMethodStr[request->method], url);
+
     /* Create socket. */
     sock = comm_open(SOCK_STREAM,
 	0,
@@ -360,17 +412,26 @@ sslStart(int fd, const char *url, request_t * request, size_t * size_ptr)
 	COMM_NONBLOCKING,
 	url);
     if (sock == COMM_ERROR) {
-	debug(26, 4) ("sslStart: Failed because we're out of sockets.\n");
-	err = errorCon(ERR_SOCKET_FAILURE, HTTP_INTERNAL_SERVER_ERROR);
-	err->xerrno = errno;
-	err->request = requestLink(request);
-	errorSend(fd, err);
-	return;
+	debug(26, 4, "sslStart: Failed because we're out of sockets.\n");
+	buf = squid_error_url(url,
+	    request->method,
+	    ERR_NO_FDS,
+	    fd_table[fd].ipaddr,
+	    500,
+	    xstrerror());
+	comm_write(fd,
+	    xstrdup(buf),
+	    strlen(buf),
+	    30,
+	    NULL,
+	    NULL,
+	    xfree);
+	return COMM_ERROR;
     }
     sslState = xcalloc(1, sizeof(SslStateData));
-    cbdataAdd(sslState);
     sslState->url = xstrdup(url);
     sslState->request = requestLink(request);
+    sslState->mime_hdr = mime_hdr;
     sslState->size_ptr = size_ptr;
     sslState->client.fd = fd;
     sslState->server.fd = sock;
@@ -378,83 +439,102 @@ sslStart(int fd, const char *url, request_t * request, size_t * size_ptr)
     sslState->client.buf = xmalloc(SQUID_TCP_SO_RCVBUF);
     comm_add_close_handler(sslState->server.fd,
 	sslStateFree,
-	sslState);
+	(void *) sslState);
     comm_add_close_handler(sslState->client.fd,
 	sslClientClosed,
-	sslState);
-    commSetTimeout(sslState->client.fd,
-	Config.Timeout.lifetime,
-	sslTimeout,
-	sslState);
-    commSetTimeout(sslState->server.fd,
-	Config.Timeout.connect,
-	sslTimeout,
-	sslState);
-    peerSelect(request,
-	NULL,
-	sslPeerSelectComplete,
-	sslPeerSelectFail,
-	sslState);
+	(void *) sslState);
+
+    if (Config.sslProxy) {
+	sslState->host = request->host;
+	/* set sslState->host = request->host so that we can
+	 * cancel it later if needed */
+	sslState->ip_lookup_pending = 1;
+	ipcache_nbgethostbyname(sslState->host,
+	    sslState->server.fd,
+	    sslSelectNeighbor,
+	    sslState);
+    } else {
+	sslState->host = request->host;
+	sslState->port = request->port;
+	sslState->ip_lookup_pending = 1;
+	ipcache_nbgethostbyname(sslState->host,
+	    sslState->server.fd,
+	    sslConnect,
+	    sslState);
+    }
+    return COMM_OK;
 }
 
 static void
 sslProxyConnected(int fd, void *data)
 {
     SslStateData *sslState = data;
-    debug(26, 3) ("sslProxyConnected: FD %d sslState=%p\n", fd, sslState);
-    snprintf(sslState->client.buf, SQUID_TCP_SO_RCVBUF,
-	"CONNECT %s HTTP/1.0\r\n\r\n", sslState->url);
-    debug(26, 3) ("sslProxyConnected: Sending '%s'\n", sslState->client.buf);
+    debug(26, 3, "sslProxyConnected: FD %d sslState=%p\n", fd, sslState);
+    sprintf(sslState->client.buf, "CONNECT %s HTTP/1.0\r\n\r\n", sslState->url);
+    debug(26, 3, "sslProxyConnected: Sending 'CONNECT %s HTTP/1.0'\n", sslState->url);
     sslState->client.len = strlen(sslState->client.buf);
     sslState->client.offset = 0;
     commSetSelect(sslState->server.fd,
 	COMM_SELECT_WRITE,
 	sslWriteServer,
-	sslState, 0);
-    commSetTimeout(fd, Config.Timeout.read, NULL, NULL);
+	(void *) sslState, 0);
+    comm_set_fd_lifetime(fd, 86400);	/* extend lifetime */
     commSetSelect(sslState->server.fd,
 	COMM_SELECT_READ,
 	sslReadServer,
-	sslState, 0);
-    commSetTimeout(sslState->server.fd,
-	Config.Timeout.read,
-	NULL,
-	NULL);
+	(void *) sslState, 0);
+    commSetSelect(sslState->server.fd,
+	COMM_SELECT_TIMEOUT,
+	sslReadTimeout,
+	(void *) sslState,
+	Config.readTimeout);
 }
 
 static void
-sslPeerSelectComplete(peer * p, void *data)
+sslSelectNeighbor(int fd, const ipcache_addrs * ia, void *data)
 {
     SslStateData *sslState = data;
     request_t *request = sslState->request;
+    peer *e = NULL;
     peer *g = NULL;
-    sslState->proxying = p ? 1 : 0;
-    sslState->host = p ? p->host : request->host;
-    if (p == NULL) {
+    int fw_ip_match = IP_ALLOW;
+    int inside_fw = matchInsideFirewall(request->host);
+    sslState->ip_lookup_pending = 0;
+    if (ia && Config.firewall_ip_list)
+	fw_ip_match = ip_access_check(ia->in_addrs[ia->cur], Config.firewall_ip_list);
+    if (inside_fw == INSIDE_FIREWALL) {
+	hierarchyNote(request, HIER_DIRECT, 0, request->host);
+    } else if (fw_ip_match == IP_DENY) {
+	hierarchyNote(request, HIER_FIREWALL_IP_DIRECT, 0, request->host);
+    } else if ((e = Config.sslProxy)) {
+	hierarchyNote(request, HIER_SSL_PARENT, 0, e->host);
+    } else if (inside_fw == NO_FIREWALL) {
+	hierarchyNote(request, HIER_DIRECT, 0, request->host);
+    } else if ((e = getDefaultParent(request))) {
+	hierarchyNote(request, HIER_DEFAULT_PARENT, 0, e->host);
+    } else if ((e = getSingleParent(request))) {
+	hierarchyNote(request, HIER_SINGLE_PARENT, 0, e->host);
+    } else if ((e = getRoundRobinParent(request))) {
+	hierarchyNote(request, HIER_ROUNDROBIN_PARENT, 0, e->host);
+    } else if ((e = getFirstUpParent(request))) {
+	hierarchyNote(request, HIER_FIRSTUP_PARENT, 0, e->host);
+    } else {
+	hierarchyNote(request, HIER_DIRECT, 0, request->host);
+    }
+    sslState->proxying = e ? 1 : 0;
+    sslState->host = e ? e->host : request->host;
+    if (e == NULL) {
 	sslState->port = request->port;
-    } else if (p->http_port != 0) {
-	sslState->port = p->http_port;
-    } else if ((g = peerFindByName(p->host))) {
+    } else if (e->http_port != 0) {
+	sslState->port = e->http_port;
+    } else if ((g = neighborFindByName(e->host))) {
 	sslState->port = g->http_port;
     } else {
 	sslState->port = CACHE_HTTP_PORT;
     }
-    commConnectStart(sslState->server.fd,
-	sslState->host,
-	sslState->port,
-	sslConnectDone,
+    sslState->ip_lookup_pending = 1;
+    ipcache_nbgethostbyname(sslState->host,
+	sslState->server.fd,
+	sslConnect,
 	sslState);
-}
-
-static void
-sslPeerSelectFail(peer * peernotused, void *data)
-{
-    SslStateData *sslState = data;
-    ErrorState *err;
-    err = errorCon(ERR_CANNOT_FORWARD, HTTP_SERVICE_UNAVAILABLE);
-    err->request = requestLink(sslState->request);
-    err->callback = sslErrorComplete;
-    err->callback_data = sslState;
-    errorSend(sslState->client.fd, err);
-
 }

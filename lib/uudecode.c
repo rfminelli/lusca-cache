@@ -1,4 +1,5 @@
 #include "config.h"
+#include "ansiproto.h"
 #include "util.h"
 
 extern char **environ;
@@ -42,7 +43,10 @@ uudecode(const char *bufcoded)
     nbytesdecoded = ((nprbytes + 3) / 4) * 3;
 
     bufplain = xmalloc(nbytesdecoded + 1);
+    if (bufplain == NULL)
+	return (NULL);
     bufout = (unsigned char *) bufplain;
+
     bufin = (const unsigned char *) bufcoded;
 
     while (nprbytes > 0) {
