@@ -31,19 +31,47 @@
 #define _HTTP_HEADER_H_
 
 struct _HttpHeaderField {
-	char *name;   /* field-name from HTTP/1.1 (no column!) */
+	char *name;   /* field-name  from HTTP/1.1 (no column after name!) */
 	char *value;  /* field-value from HTTP/1.1 */
 };
 
-struct _HttpHeader {
-	/* public, read only */
-	size_t packed_size;  /* packed header size (see httpHeaderPack()) */
+/* recognized or "known" fields */
+typedef enum {
+    HDR_ACCEPT,
+    HDR_AGE,
+    HDR_CONTENT_LENGTH,
+    HDR_CONTENT_MD5,
+    HDR_CONTENT_TYPE,
+    HDR_DATE,
+    HDR_ETAG,
+    HDR_EXPIRES,
+    HDR_HOST,
+    HDR_IMS,
+    HDR_LAST_MODIFIED,
+    HDR_MAX_FORWARDS,
+    HDR_PUBLIC,
+    HDR_RETRY_AFTER,
+    HDR_SET_COOKIE,
+    HDR_UPGRADE,
+    HDR_WARNING,
+    HDR_PROXY_KEEPALIVE,
+    HDR_MISC_END
+} http_hdr_type;
 
-	/* protected, do not use these, use interface functions instead */
-	int count;        /* #headers */
-	int capacity;     /* max #headers before we have to grow */
-	struct _HttpHeaderField **fields;
+
+struct _HttpHeader {
+    /* public, read only */
+    size_t packed_size;  /* packed header size (see httpHeaderPack()) */
+
+    /* protected, do not use these, use interface functions instead */
+    int count;           /* #headers */
+    int capacity;        /* max #headers before we have to grow */
+    int field_mask;      /* bits set for present [known] fields */
+    struct _HttpHeaderField **fields;
 };
+
+typedef struct _HttpHeaderField HttpHeaderField;
+typedef struct _HttpHeader HttpHeader;
 
 /*
  * use HttpHeaderPos as opaque type, do not interpret, 
@@ -54,9 +82,10 @@ typedef size_t HttpHeaderPos;
 /* use this and only this to initialize HttpHeaderPos */
 #define HttpHeaderInitPos (-1)
 
-/* create/init/destroy */
+/* create/init/clean/destroy */
 extern HttpHeader *httpHeaderCreate();
 extern void httpHeaderInit(HttpHeader *hdr);
+extern void httpHeaderClean(HttpHeader *hdr);
 extern void httpHeaderDestroy(HttpHeader *hdr);
 
 /* parse/pack */
@@ -77,15 +106,41 @@ extern int httpHeaderDelFields(HttpHeader *hdr, const char *name);
 extern void httpHeaderDelField(HttpHeader *hdr, HttpHeaderPos pos);
 
 /* add a field (appends) */
-extern const char *httpHeaderAddStrField(HttpHeader *hdr, const char *name, const char *value);
-extern long httpHeaderAddIntField(HttpHeader *hdr, const char *name, long value);
+extern const char *httpHeaderAddStr(HttpHeader *hdr, const char *name, const char *value);
+extern long httpHeaderAddInt(HttpHeader *hdr, const char *name, long value);
+extern time_t httpHeaderAddDate(HttpHeader *hdr, const char *name, time_t value); /* mkrfc1123 */
 
-/* often used field names (may use caching to speedup retreival!) */
+/* fast test if a known field is present */
+extern int httpHeaderHas(const HttpHeader *hdr, http_hdr_type type);
+
+/* get common generic-header fields */
+extern size_t httpHeaderGetCacheControl(const HttpHeader *hdr);
+extern time_t httpHeaderGetDate(const HttpHeader *hdr);
+/*
+extern int httpHeaderGetVia(const HttpHeader *hdr);
+*/
+
+
+/* http reply-header fields */
 extern size_t httpHeaderGetContentLength(const HttpHeader *hdr);
-extern time_t httpHeaderGetMaxAge(const HttpHeader *hdr);
-extern int httpHeaderGetMaxForward(const HttpHeader *hdr);
+extern size_t httpHeaderGetExpires(const HttpHeader *hdr);
+extern size_t httpHeaderGetLastModified(const HttpHeader *hdr);
 
-/* put report about current header usage and other stats into a static string */
-extern const char *httpHeaderReport();
+
+/* http request-header fields */
+extern time_t httpHeaderGetMaxAge(const HttpHeader *hdr);  /* @?@ */
+extern int httpHeaderGetMaxForwards(const HttpHeader *hdr);
+extern int httpHeaderGetIMS(const HttpHeader *hdr);
+extern int httpHeaderGetUserAgent(const HttpHeader *hdr);
+
+/* http entitiy-header fields */
+extern int httpHeaderGetAge(const HttpHeader *hdr);
+
+/* put report about current header usage and other stats into a store entry */
+extern void httpHeaderStoreReport(StoreEntry *e);
+extern void httpHeaderStoreRepReport(StoreEntry *e);
+extern void httpHeaderStoreReqReport(StoreEntry *e);
+
+
 
 #endif /* ndef _HTTP_HEADER_H_ */

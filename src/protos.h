@@ -147,9 +147,7 @@ extern void fd_note(int fd, const char *);
 extern void fd_bytes(int fd, int len, unsigned int type);
 extern void fdFreeMemory(void);
 extern void fdDumpOpen(void);
-
-extern void fdstat_init(void);
-extern int fdstat_are_n_free_fd(int);
+extern int fdNFree(void);
 
 extern fileMap *file_map_create(int);
 extern int file_map_allocate(fileMap *, int);
@@ -630,6 +628,7 @@ extern void useragentRotateLog(void);
 extern void logUserAgent(const char *, const char *);
 extern peer_t parseNeighborType(const char *s);
 
+extern const char *errorBuildBuf(ErrorState * err, int *len);
 extern void errorSend(int fd, ErrorState *);
 extern void errorAppendEntry(StoreEntry *, ErrorState *);
 extern void errorInitialize(void);
