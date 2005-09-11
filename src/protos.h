@@ -397,7 +397,7 @@ extern int strListIsSubstr(const String * list, const char *s, char del);
 extern int strListGetItem(const String * str, char del, const char **item, int *ilen, const char **pos);
 extern const char *getStringPrefix(const char *str, const char *end);
 extern int httpHeaderParseInt(const char *start, int *val);
-extern squid_off_t httpHeaderParseSize(const char *start, squid_off_t * sz);
+extern int httpHeaderParseSize(const char *start, squid_off_t * sz);
 extern int httpHeaderReset(HttpHeader * hdr);
 #if STDC_HEADERS
 extern void
@@ -424,6 +424,7 @@ extern int httpHeaderHas(const HttpHeader * hdr, http_hdr_type type);
 extern void httpHeaderPutInt(HttpHeader * hdr, http_hdr_type type, int number);
 extern void httpHeaderPutSize(HttpHeader * hdr, http_hdr_type type, squid_off_t number);
 extern void httpHeaderPutTime(HttpHeader * hdr, http_hdr_type type, time_t htime);
+extern void httpHeaderInsertTime(HttpHeader * hdr, int pos, http_hdr_type type, time_t htime);
 extern void httpHeaderPutStr(HttpHeader * hdr, http_hdr_type type, const char *str);
 extern void httpHeaderPutAuth(HttpHeader * hdr, const char *auth_scheme, const char *realm);
 extern void httpHeaderPutCc(HttpHeader * hdr, const HttpHdrCc * cc);
@@ -453,6 +454,7 @@ extern void httpHeaderDelAt(HttpHeader * hdr, HttpHeaderPos pos);
 extern HttpHeaderEntry *httpHeaderGetEntry(const HttpHeader * hdr, HttpHeaderPos * pos);
 extern HttpHeaderEntry *httpHeaderFindEntry(const HttpHeader * hdr, http_hdr_type id);
 extern void httpHeaderAddEntry(HttpHeader * hdr, HttpHeaderEntry * e);
+extern void httpHeaderInsertEntry(HttpHeader * hdr, HttpHeaderEntry * e, int pos);
 extern HttpHeaderEntry *httpHeaderEntryClone(const HttpHeaderEntry * e);
 extern void httpHeaderEntryPackInto(const HttpHeaderEntry * e, Packer * p);
 /* store report about current header usage and other stats */
@@ -1244,7 +1246,7 @@ extern EVH delayPoolsUpdate;
 extern int delayBytesWanted(delay_id d, int min, int max);
 extern void delayBytesIn(delay_id, int qty);
 extern int delayMostBytesWanted(const MemObject * mem, int max);
-extern delay_id delayMostBytesAllowed(const MemObject * mem);
+extern delay_id delayMostBytesAllowed(const MemObject * mem, size_t * bytes);
 extern void delaySetStoreClient(store_client * sc, delay_id delay_id);
 extern void delayRegisterDelayIdPtr(delay_id * loc);
 extern void delayUnregisterDelayIdPtr(delay_id * loc);

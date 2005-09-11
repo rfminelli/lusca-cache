@@ -41,6 +41,20 @@
 #endif
 #include <netinet/tcp.h>
 #include <net/if.h>
+/* SG - 14 Aug 2005
+ * Workaround needed to allow the build of both ipfilter and ARP acl
+ * support on Solaris x86.
+ * 
+ * Some defines, like
+ * #define free +
+ * are used in squid.h to block misuse of standard malloc routines
+ * where the Squid versions should be used. This pollutes the C/C++
+ * token namespace crashing any structures or classes having members
+ * of the same names.
+ */
+#ifdef _SQUID_SOLARIS_
+#undef free
+#endif
 #if HAVE_IP_FIL_COMPAT_H
 #include <ip_fil_compat.h>
 #elif HAVE_NETINET_IP_FIL_COMPAT_H
@@ -357,6 +371,7 @@ clientRedirectDone(void *data, char *result)
 	new_request->client_addr = old_request->client_addr;
 	new_request->my_addr = old_request->my_addr;
 	new_request->my_port = old_request->my_port;
+	new_request->flags = old_request->flags;
 	new_request->flags.redirected = 1;
 	if (old_request->auth_user_request) {
 	    new_request->auth_user_request = old_request->auth_user_request;
@@ -369,7 +384,6 @@ clientRedirectDone(void *data, char *result)
 	    old_request->body_reader_data = NULL;
 	}
 	new_request->content_length = old_request->content_length;
-	new_request->flags.proxy_keepalive = old_request->flags.proxy_keepalive;
 	requestUnlink(old_request);
 	http->request = requestLink(new_request);
     }
@@ -1077,9 +1091,7 @@ clientSetKeepaliveFlag(clientHttpRequest * http)
 	request->http_ver.major, request->http_ver.minor);
     debug(33, 3) ("clientSetKeepaliveFlag: method = %s\n",
 	RequestMethodStr[request->method]);
-    if (!Config.onoff.client_pconns)
-	request->flags.proxy_keepalive = 0;
-    else {
+    {
 	http_version_t http_ver;
 	httpBuildVersion(&http_ver, 1, 0);	/* we are HTTP/1.0, no matter what the client requests... */
 	if (httpMsgIsPersistent(http_ver, req_hdr))
@@ -1404,7 +1416,10 @@ clientBuildReplyHeader(clientHttpRequest * http, HttpReply * rep)
 	    (void) 0;
 	else if (http->entry->timestamp < 0)
 	    (void) 0;
-	else if (http->entry->timestamp < squid_curtime)
+	if (EBIT_TEST(http->entry->flags, ENTRY_SPECIAL)) {
+	    httpHeaderDelById(hdr, HDR_DATE);
+	    httpHeaderInsertTime(hdr, 0, HDR_DATE, squid_curtime);
+	} else if (http->entry->timestamp < squid_curtime)
 	    httpHeaderPutInt(hdr, HDR_AGE,
 		squid_curtime - http->entry->timestamp);
     }
@@ -1441,10 +1456,12 @@ clientBuildReplyHeader(clientHttpRequest * http, HttpReply * rep)
 	debug(33, 3) ("clientBuildReplyHeader: can't keep-alive, unknown body size\n");
 	request->flags.proxy_keepalive = 0;
     }
-    if (fdUsageHigh()) {
+    if (fdUsageHigh() && !request->flags.must_keepalive) {
 	debug(33, 3) ("clientBuildReplyHeader: Not many unused FDs, can't keep-alive\n");
 	request->flags.proxy_keepalive = 0;
     }
+    if (!Config.onoff.client_pconns && !request->flags.must_keepalive)
+	request->flags.proxy_keepalive = 0;
     /* Signal keep-alive if needed */
     httpHeaderPutStr(hdr,
 	http->flags.accel ? HDR_CONNECTION : HDR_PROXY_CONNECTION,
@@ -2719,11 +2736,10 @@ parseHttpRequest(ConnStateData * conn, method_t * method_p, int *status,
 	*t = '\0';
 #endif
 
-    /* handle internal objects */
-    if (internalCheck(url)) {
+    /* handle direct internal objects */
+    if (!Config2.Accel.on && internalCheck(url)) {
 	/* prepend our name & port */
 	http->uri = xstrdup(internalLocalUri(NULL, url));
-	http->flags.internal = 1;
 	http->flags.accel = 1;
     }
     /* see if we running in Config2.Accel.on, if so got to convert it to URL */
@@ -2731,6 +2747,7 @@ parseHttpRequest(ConnStateData * conn, method_t * method_p, int *status,
 	int vport;
 	if (vhost_mode) {
 #if IPF_TRANSPARENT
+	    static time_t last_reported = 0;
 	    natLookup.nl_inport = http->conn->me.sin_port;
 	    natLookup.nl_outport = http->conn->peer.sin_port;
 	    natLookup.nl_inip = http->conn->me.sin_addr;
@@ -2749,12 +2766,10 @@ parseHttpRequest(ConnStateData * conn, method_t * method_p, int *status,
 		errno = save_errno;
 	    }
 	    if (natfd < 0) {
-		debug(50, 1) ("parseHttpRequest: NAT open failed: %s\n",
-		    xstrerror());
-		dlinkDelete(&http->active, &ClientActiveRequests);
-		xfree(http->uri);
-		cbdataFree(http);
-		xfree(inbuf);
+		if (squid_curtime - last_reported > 60) {
+		    debug(50, 1) ("parseHttpRequest: NAT open failed: %s\n", xstrerror());
+		    last_reported = squid_curtime;
+		}
 	    } else {
 		/*
 		 * IP-Filter changed the type for SIOCGNATL between
@@ -2771,48 +2786,59 @@ parseHttpRequest(ConnStateData * conn, method_t * method_p, int *status,
 		}
 		if (x < 0) {
 		    if (errno != ESRCH) {
-			debug(50, 1) ("parseHttpRequest: NAT lookup failed: ioctl(SIOCGNATL)\n");
+			if (squid_curtime - last_reported > 60) {
+			    debug(50, 1) ("parseHttpRequest: NAT lookup failed: ioctl(SIOCGNATL): %s\n", xstrerror());
+			    last_reported = squid_curtime;
+			}
 			close(natfd);
 			natfd = -1;
-			dlinkDelete(&http->active, &ClientActiveRequests);
-			xfree(http->uri);
-			cbdataFree(http);
-			xfree(inbuf);
 		    }
 		} else {
 		    conn->me.sin_port = natLookup.nl_realport;
-		    http->conn->me.sin_addr = natLookup.nl_realip;
+		    conn->me.sin_addr = natLookup.nl_realip;
 		}
 	    }
 #elif PF_TRANSPARENT
+	    static time_t last_reported = 0;
 	    if (pffd < 0)
 		pffd = open("/dev/pf", O_RDWR);
 	    if (pffd < 0) {
-		debug(50, 1) ("parseHttpRequest: PF open failed: %s\n",
-		    xstrerror());
-		return parseHttpRequestAbort(conn, "error:pf-open-failed");
-	    }
-	    memset(&nl, 0, sizeof(struct pfioc_natlook));
-	    nl.saddr.v4.s_addr = http->conn->peer.sin_addr.s_addr;
-	    nl.sport = http->conn->peer.sin_port;
-	    nl.daddr.v4.s_addr = http->conn->me.sin_addr.s_addr;
-	    nl.dport = http->conn->me.sin_port;
-	    nl.af = AF_INET;
-	    nl.proto = IPPROTO_TCP;
-	    nl.direction = PF_OUT;
-	    if (ioctl(pffd, DIOCNATLOOK, &nl)) {
-		if (errno != ENOENT) {
-		    debug(50, 1) ("parseHttpRequest: PF lookup failed: ioctl(DIOCNATLOOK)\n");
-		    close(pffd);
-		    pffd = -1;
+		if (squid_curtime - last_reported > 60) {
+		    debug(50, 1) ("parseHttpRequest: PF open failed: %s\n", xstrerror());
+		    last_reported = squid_curtime;
 		}
 	    } else {
-		conn->me.sin_port = nl.rdport;
-		http->conn->me.sin_addr = nl.rdaddr.v4;
+		memset(&nl, 0, sizeof(struct pfioc_natlook));
+		nl.saddr.v4.s_addr = http->conn->peer.sin_addr.s_addr;
+		nl.sport = http->conn->peer.sin_port;
+		nl.daddr.v4.s_addr = http->conn->me.sin_addr.s_addr;
+		nl.dport = http->conn->me.sin_port;
+		nl.af = AF_INET;
+		nl.proto = IPPROTO_TCP;
+		nl.direction = PF_OUT;
+		if (ioctl(pffd, DIOCNATLOOK, &nl)) {
+		    if (errno != ENOENT) {
+			if (squid_curtime - last_reported > 60) {
+			    debug(50, 1) ("parseHttpRequest: PF lookup failed: ioctl(DIOCNATLOOK): %s\n", xstrerror());
+			    last_reported = squid_curtime;
+			}
+			close(pffd);
+			pffd = -1;
+		    }
+		} else {
+		    conn->me.sin_port = nl.rdport;
+		    conn->me.sin_addr = nl.rdaddr.v4;
+		}
 	    }
 #elif LINUX_NETFILTER
+	    static time_t last_reported = 0;
 	    /* If the call fails the address structure will be unchanged */
-	    getsockopt(conn->fd, SOL_IP, SO_ORIGINAL_DST, &conn->me, &sock_sz);
+	    if (getsockopt(conn->fd, SOL_IP, SO_ORIGINAL_DST, &conn->me, &sock_sz) != 0) {
+		if (squid_curtime - last_reported > 60) {
+		    debug(50, 1) ("parseHttpRequest: NF getsockopt(SO_ORIGINAL_DST) failed: %s\n", xstrerror());
+		    last_reported = squid_curtime;
+		}
+	    }
 #endif
 	}
 	if (vport_mode)
@@ -3099,7 +3125,7 @@ clientReadRequest(int fd, void *data)
 		    if (internalHostnameIs(request->host) &&
 			request->port == ntohs(Config.Sockaddr.http->s.sin_port)) {
 			http->flags.internal = 1;
-		    } else if (internalStaticCheck(strBuf(request->urlpath))) {
+		    } else if (Config.onoff.global_internal_static && internalStaticCheck(strBuf(request->urlpath))) {
 			xstrncpy(request->host, internalHostname(), SQUIDHOSTNAMELEN);
 			request->port = ntohs(Config.Sockaddr.http->s.sin_port);
 			http->flags.internal = 1;
