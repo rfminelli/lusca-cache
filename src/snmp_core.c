@@ -355,7 +355,7 @@ snmpConnectionOpen(void)
     if ((port = Config.Port.snmp) > (u_short) 0) {
 	enter_suid();
 	theInSnmpConnection = comm_open(SOCK_DGRAM,
-	    IPPROTO_UDP,
+	    0,
 	    Config.Addrs.snmp_incoming,
 	    port,
 	    COMM_NONBLOCKING,
@@ -369,7 +369,7 @@ snmpConnectionOpen(void)
 	if (Config.Addrs.snmp_outgoing.s_addr != no_addr.s_addr) {
 	    enter_suid();
 	    theOutSnmpConnection = comm_open(SOCK_DGRAM,
-		IPPROTO_UDP,
+		0,
 		Config.Addrs.snmp_outgoing,
 		port,
 		COMM_NONBLOCKING,

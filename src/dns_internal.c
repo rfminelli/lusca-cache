@@ -658,7 +658,7 @@ idnsInit(void)
 	else
 	    addr = Config.Addrs.udp_incoming;
 	DnsSocket = comm_open(SOCK_DGRAM,
-	    IPPROTO_UDP,
+	    0,
 	    addr,
 	    0,
 	    COMM_NONBLOCKING,

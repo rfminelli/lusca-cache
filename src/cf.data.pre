@@ -1172,31 +1172,25 @@ DOC_END
 
 NAME: hosts_file
 TYPE: string
-DEFAULT: @DEFAULT_HOSTS@
+DEFAULT: /etc/hosts
 LOC: Config.etcHostsPath
 DOC_START
 	Location of the host-local IP name-address associations
-	database. Most Operating Systems have such a file on different
-	default locations:
-	- Un*X & Linux:    /etc/hosts
-	- Windows NT/2000: %SystemRoot%\system32\drivers\etc\hosts
-	                   (%SystemRoot% value install default is c:\winnt)
-	- Windows XP/2003: %SystemRoot%\system32\drivers\etc\hosts
-	                   (%SystemRoot% value install default is c:\windows)
-	- Windows 9x/Me:   %windir%\hosts
-	                   (%windir% value is usually c:\windows)
-	- Cygwin:          /etc/hosts
+	database.  Most Operating Systems have such a file: under
+	Un*X it's by default in /etc/hosts.  MS-Windows NT/2000 places
+	it in %SystemRoot%(by default
+	c:\winnt)\system32\drivers\etc\hosts, while Windows 9x/ME
+	places it in %windir%(usually c:\windows)\hosts
 
 	The file contains newline-separated definitions, in the
 	form ip_address_in_dotted_form name [name ...] names are
-	whitespace-separated. Lines beginning with an hash (#)
+	whitespace-separated.  lines beginning with an hash (#)
 	character are comments.
 
-	The file is checked at startup and upon configuration.
-	If set to 'none', it won't be checked.
-	If append_domain is used, that domain will be added to
-	domain-local (i.e. not containing any dot character) host
-	definitions.
+	The file is checked at startup and upon configuration.  If
+	set to 'none', it won't be checked.  If append_domain is
+	used, that domain will be added to domain-local (i.e. not
+	containing any dot character) host definitions.
 DOC_END
 
 NAME: diskd_program
@@ -3230,6 +3224,8 @@ DOC_START
 		header_access Allow allow all
 		header_access Authorization allow all
 		header_access WWW-Authenticate allow all
+		header_access Proxy-Authorization allow all
+		header_access Proxy-Authenticate allow all
 		header_access Cache-Control allow all
 		header_access Content-Encoding allow all
 		header_access Content-Length allow all
@@ -3962,6 +3958,16 @@ DOC_START
 	default, Squid uses persistent connections (when allowed)
 	with its clients and servers.  You can use these options to
 	disable persistent connections with clients and/or servers.
+DOC_END
+
+NAME: persistent_connection_after_error
+TYPE: onoff
+LOC: Config.onoff.error_pconns
+DEFAULT: off
+DOC_START
+	With this directive the use of persistent connections after
+	HTTP errors can be disabled. Useful if you have clients
+	who fail to handle errors on persistent connections proper.
 DOC_END
 
 NAME: detect_broken_pconn

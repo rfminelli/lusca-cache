@@ -48,8 +48,32 @@
  *			 administrator.
  *****************************************************************************/
 
-#include "squid.h"
+#include "config.h"
 #include "cf_gen_defines.h"
+
+#if HAVE_STDIO_H
+#include <stdio.h>
+#endif
+#if HAVE_STRING_H
+#include <string.h>
+#endif
+#if HAVE_STDLIB_H
+#include <stdlib.h>
+#endif
+#if HAVE_CTYPE_H
+#include <ctype.h>
+#endif
+#if HAVE_ASSERT_H
+#include <assert.h>
+#endif
+#if defined(_SQUID_CYGWIN_)
+#include <io.h>
+#endif
+#if HAVE_FCNTL_H
+#include <fcntl.h>
+#endif
+
+#include "util.h"
 
 #define MAX_LINE	1024	/* longest configuration line */
 #define _PATH_PARSER		"cf_parser.h"
@@ -157,10 +181,10 @@ main(int argc, char *argv[])
 		    printf("Error in input file\n");
 		    exit(1);
 		}
-		curr = xcalloc(1, sizeof(Entry));
+		curr = calloc(1, sizeof(Entry));
 		curr->name = xstrdup(name);
 		while ((aliasname = strtok(NULL, WS)) != NULL) {
-		    EntryAlias *alias = xcalloc(1, sizeof(EntryAlias));
+		    EntryAlias *alias = calloc(1, sizeof(EntryAlias));
 		    alias->next = curr->alias;
 		    alias->name = xstrdup(aliasname);
 		    curr->alias = alias;
@@ -169,7 +193,7 @@ main(int argc, char *argv[])
 	    } else if (!strcmp(buff, "EOF")) {
 		state = sEXIT;
 	    } else if (!strcmp(buff, "COMMENT_START")) {
-		curr = xcalloc(1, sizeof(Entry));
+		curr = calloc(1, sizeof(Entry));
 		curr->name = xstrdup("comment");
 		curr->loc = xstrdup("none");
 		state = sDOC;
@@ -255,7 +279,7 @@ main(int argc, char *argv[])
 	    } else if (!strcmp(buff, "NOCOMMENT_START")) {
 		state = sNOCOMMENT;
 	    } else {
-		Line *line = xcalloc(1, sizeof(Line));
+		Line *line = calloc(1, sizeof(Line));
 		line->data = xstrdup(buff);
 		line->next = curr->doc;
 		curr->doc = line;
@@ -277,7 +301,7 @@ main(int argc, char *argv[])
 		curr->nocomment = head;
 		state = sDOC;
 	    } else {
-		Line *line = xcalloc(1, sizeof(Line));
+		Line *line = calloc(1, sizeof(Line));
 		line->data = xstrdup(buff);
 		line->next = curr->nocomment;
 		curr->nocomment = line;
@@ -606,12 +630,12 @@ gen_conf(Entry * head, FILE * fp)
 	    fprintf(fp, "#%s\n", line->data);
 	}
 	if (entry->default_value && strcmp(entry->default_value, "none") != 0) {
-	    snprintf(buf, sizeof(buf), "%s %s", entry->name, entry->default_value);
+	    sprintf(buf, "%s %s", entry->name, entry->default_value);
 	    lineAdd(&def, buf);
 	}
 	if (entry->default_if_none) {
 	    for (line = entry->default_if_none; line; line = line->next) {
-		snprintf(buf, sizeof(buf), "%s %s", entry->name, line->data);
+		sprintf(buf, "%s %s", entry->name, line->data);
 		lineAdd(&def, buf);
 	    }
 	}
