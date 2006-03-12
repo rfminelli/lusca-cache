@@ -84,26 +84,26 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	*wfd = -1;
     if (type == IPC_TCP_SOCKET) {
 	crfd = cwfd = comm_open(SOCK_STREAM,
-	    IPPROTO_TCP,
+	    0,
 	    local_addr,
 	    0,
 	    COMM_NOCLOEXEC,
 	    name);
 	prfd = pwfd = comm_open(SOCK_STREAM,
-	    IPPROTO_TCP,	/* protocol */
+	    0,			/* protocol */
 	    local_addr,
 	    0,			/* port */
 	    0,			/* blocking */
 	    name);
     } else if (type == IPC_UDP_SOCKET) {
 	crfd = cwfd = comm_open(SOCK_DGRAM,
-	    IPPROTO_UDP,
+	    0,
 	    local_addr,
 	    0,
 	    COMM_NOCLOEXEC,
 	    name);
 	prfd = pwfd = comm_open(SOCK_DGRAM,
-	    IPPROTO_UDP,
+	    0,
 	    local_addr,
 	    0,
 	    0,
@@ -258,10 +258,11 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
      *  crfd, cwfd, or debug_log are in the rage 0-2.
      */
     do {
-	x = open(_PATH_DEVNULL, 0, 0444);
-	if (x > -1)
-	    commSetCloseOnExec(x);
-    } while (x < 3);
+	/* First make sure 0-2 is occupied by something. Gets cleaned up later */
+	x = dup(crfd);
+	assert(x > -1);
+    } while (x < 3 && x > -1);
+    close(x);
     t1 = dup(crfd);
     t2 = dup(cwfd);
     t3 = dup(fileno(debug_log));

@@ -857,7 +857,7 @@ htcpInit(void)
     }
     enter_suid();
     htcpInSocket = comm_open(SOCK_DGRAM,
-	IPPROTO_UDP,
+	0,
 	Config.Addrs.udp_incoming,
 	Config.Port.htcp,
 	COMM_NONBLOCKING,
@@ -871,7 +871,7 @@ htcpInit(void)
     if (Config.Addrs.udp_outgoing.s_addr != no_addr.s_addr) {
 	enter_suid();
 	htcpOutSocket = comm_open(SOCK_DGRAM,
-	    IPPROTO_UDP,
+	    0,
 	    Config.Addrs.udp_outgoing,
 	    Config.Port.htcp,
 	    COMM_NONBLOCKING,
