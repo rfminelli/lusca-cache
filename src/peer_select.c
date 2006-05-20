@@ -59,8 +59,6 @@ const char *hier_strings[] =
     "CARP",
 #endif
     "ANY_PARENT",
-    "USERHASH_PARENT",
-    "SOURCEHASH_PARENT",
     "INVALID CODE"
 };
 
@@ -92,6 +90,7 @@ static void peerGetSomeNeighborReplies(ps_state *);
 static void peerGetSomeDirect(ps_state *);
 static void peerGetSomeParent(ps_state *);
 static void peerGetAllParents(ps_state *);
+static void peerAddFwdServer(FwdServer **, peer *, hier_code);
 
 static void
 peerSelectStateFree(ps_state * psstate)
@@ -426,9 +425,9 @@ peerGetSomeDirect(ps_state * ps)
 	return;
     if (ps->request->protocol == PROTO_WAIS)
 	/* Its not really DIRECT, now is it? */
-	peerAddFwdServer(&ps->servers, Config.Wais.peer, HIER_DIRECT);
+	peerAddFwdServer(&ps->servers, Config.Wais.peer, DIRECT);
     else
-	peerAddFwdServer(&ps->servers, NULL, HIER_DIRECT);
+	peerAddFwdServer(&ps->servers, NULL, DIRECT);
 }
 
 static void
@@ -444,10 +443,6 @@ peerGetSomeParent(ps_state * ps)
 	return;
     if ((p = getDefaultParent(request))) {
 	code = DEFAULT_PARENT;
-    } else if ((p = peerUserHashSelectParent(request))) {
-	code = USERHASH_PARENT;
-    } else if ((p = peerSourceHashSelectParent(request))) {
-	code = SOURCEHASH_PARENT;
     } else if ((p = getRoundRobinParent(request))) {
 	code = ROUNDROBIN_PARENT;
     } else if ((p = getFirstUpParent(request))) {
@@ -649,7 +644,7 @@ peerHandlePingReply(peer * p, peer_t type, protocol_t proto, void *pingdata, voi
 	debug(44, 1) ("peerHandlePingReply: unknown protocol_t %d\n", (int) proto);
 }
 
-void
+static void
 peerAddFwdServer(FwdServer ** FS, peer * p, hier_code code)
 {
     FwdServer *fs = memAllocate(MEM_FWD_SERVER);

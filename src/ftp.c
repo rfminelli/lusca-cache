@@ -448,7 +448,7 @@ ftpListingFinish(FtpStateData * ftpState)
     storeAppendPrintf(e, "Generated %s by %s (%s)\n",
 	mkrfc1123(squid_curtime),
 	getMyHostname(),
-	visible_appname_string);
+	full_appname_string);
     storeAppendPrintf(e, "</ADDRESS></BODY></HTML>\n");
 }
 
@@ -1786,7 +1786,7 @@ ftpSendPasv(FtpStateData * ftpState)
     }
     /* Open data channel with the same local address as control channel */
     fd = comm_open(SOCK_STREAM,
-	IPPROTO_TCP,
+	0,
 	addr.sin_addr,
 	0,
 	COMM_NONBLOCKING,
@@ -1926,7 +1926,7 @@ ftpOpenListenSocket(FtpStateData * ftpState, int fallback)
 	port = ntohs(addr.sin_port);
     }
     fd = comm_open(SOCK_STREAM,
-	IPPROTO_TCP,
+	0,
 	addr.sin_addr,
 	port,
 	COMM_NONBLOCKING | (fallback ? COMM_REUSEADDR : 0),

@@ -132,18 +132,14 @@ sslStateFree(SslStateData * sslState)
 
 #if DELAY_POOLS
 static int
-sslDeferServerRead(int fd, void *data)
+sslDeferServerRead(int fdnotused, void *data)
 {
     SslStateData *s = data;
     int i = delayBytesWanted(s->delay_id, 0, INT_MAX);
     if (i == INT_MAX)
 	return 0;
-    if (i == 0) {
-#if HAVE_EPOLL
-	commDeferFD(fd);
-#endif
+    if (i == 0)
 	return 1;
-    }
     return -1;
 }
 #endif
@@ -432,6 +428,7 @@ sslConnectDone(int fd, int status, void *data)
 	err = errorCon(ERR_CONNECT_FAIL, HTTP_SERVICE_UNAVAILABLE);
 	*sslState->status_ptr = HTTP_SERVICE_UNAVAILABLE;
 	err->xerrno = errno;
+	err->port = sslState->port;
 	err->request = requestLink(request);
 	err->callback = sslErrorComplete;
 	err->callback_data = sslState;
@@ -471,6 +468,7 @@ sslConnectTimeout(int fd, void *data)
     err = errorCon(ERR_CONNECT_FAIL, HTTP_SERVICE_UNAVAILABLE);
     *sslState->status_ptr = HTTP_SERVICE_UNAVAILABLE;
     err->xerrno = ETIMEDOUT;
+    err->port = sslState->port;
     err->request = requestLink(request);
     err->callback = sslErrorComplete;
     err->callback_data = sslState;
@@ -520,7 +518,7 @@ sslStart(clientHttpRequest * http, squid_off_t * size_ptr, int *status_ptr)
     statCounter.server.other.requests++;
     /* Create socket. */
     sock = comm_openex(SOCK_STREAM,
-	IPPROTO_TCP,
+	0,
 	getOutgoingAddr(request),
 	0,
 	COMM_NONBLOCKING,

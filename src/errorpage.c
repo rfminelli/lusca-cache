@@ -214,7 +214,7 @@ errorDynamicPageInfoDestroy(ErrorDynamicPageInfo * info)
     xfree(info);
 }
 
-int
+static int
 errorPageId(const char *page_name)
 {
     int i;
@@ -248,7 +248,8 @@ errorPageName(int pageId)
     if (pageId >= ERR_NONE && pageId < ERR_MAX)		/* common case */
 	return err_type_str[pageId];
     if (pageId >= ERR_MAX && pageId - ERR_MAX < ErrorDynamicPages.count)
-	return ((ErrorDynamicPageInfo *) ErrorDynamicPages.items[pageId - ERR_MAX])->page_name;
+	return ((ErrorDynamicPageInfo *) ErrorDynamicPages.
+	    items[pageId - ERR_MAX])->page_name;
     return "ERR_UNKNOWN";	/* should not happen */
 }
 
@@ -425,7 +426,6 @@ errorStateFree(ErrorState * err)
  * L - HREF link for more info/contact          x
  * M - Request Method                           x
  * m - Error message returned by external Auth. x 
- * o - Error message returned by external ACL   x
  * p - URL port #                               x
  * P - Protocol                                 x
  * R - Full HTTP Request                        x
@@ -522,11 +522,6 @@ errorConvert(char token, ErrorState * err)
     case 'M':
 	p = r ? RequestMethodStr[r->method] : "[unkown method]";
 	break;
-    case 'o':
-	p = external_acl_message;
-	if (!p)
-	    p = "[not available]";
-	break;
     case 'p':
 	if (r) {
 	    memBufPrintf(&mb, "%d", (int) r->port);
@@ -554,7 +549,7 @@ errorConvert(char token, ErrorState * err)
 	}
 	break;
     case 's':
-	p = visible_appname_string;
+	p = full_appname_string;
 	break;
     case 'S':
 	/* signature may contain %-escapes, recursion */

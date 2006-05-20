@@ -75,10 +75,8 @@
 #define COMM_NOCLOEXEC		0x02
 #define COMM_REUSEADDR		0x04
 
-#define do_debug(SECTION, LEVEL) \
-	((_db_level = (LEVEL)) <= debugLevels[SECTION])
 #define debug(SECTION, LEVEL) \
-        !do_debug(SECTION, LEVEL) ? (void) 0 : _db_print
+        ((_db_level = (LEVEL)) > debugLevels[SECTION]) ? (void) 0 : _db_print
 
 #define safe_free(x)	if (x) { xxfree(x); x = NULL; }
 
@@ -194,16 +192,6 @@
 #define IPC_TCP_SOCKET 1
 #define IPC_UDP_SOCKET 2
 #define IPC_FIFO 3
-#define IPC_UNIX_STREAM 4
-#define IPC_UNIX_DGRAM 5
-
-#if HAVE_SOCKETPAIR && defined (AF_UNIX)
-#define IPC_STREAM IPC_UNIX_STREAM
-#define IPC_DGRAM IPC_UNIX_DGRAM
-#else
-#define IPC_STREAM IPC_TCP_SOCKET
-#define IPC_DGRAM IPC_UDP_SOCKET
-#endif
 
 #define STORE_META_KEY STORE_META_KEY_MD5
 

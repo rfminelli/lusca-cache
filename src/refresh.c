@@ -366,13 +366,6 @@ refreshCheckHTTP(const StoreEntry * entry, request_t * request)
 }
 
 int
-refreshCheckHTTPStale(const StoreEntry * entry, request_t * request)
-{
-    int reason = refreshCheck(entry, request, -Config.refresh_stale_window);
-    return (reason < 200) ? 0 : 1;
-}
-
-int
 refreshCheckICP(const StoreEntry * entry, request_t * request)
 {
     int reason = refreshCheck(entry, request, 30);

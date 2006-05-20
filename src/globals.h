@@ -57,8 +57,6 @@ extern const char *const localhost;	/* "127.0.0.1" */
 extern const char *const null_string;	/* "" */
 extern const char *const version_string;	/* VERSION */
 extern const char *const full_appname_string;	/* PACKAGE "/" VERSION */
-extern const char *const appname_string;	/* PACKAGE */
-extern char *visible_appname_string;
 extern const char *const w_space;	/* " \t\n\r" */
 extern const char *fdTypeStr[];
 extern const char *hier_strings[];
@@ -102,6 +100,8 @@ extern int theInSnmpConnection;	/* -1 */
 extern int theOutSnmpConnection;	/* -1 */
 extern char *snmp_agentinfo;
 #endif
+extern int vhost_mode;		/* 0 */
+extern int vport_mode;		/* 0 */
 extern int n_disk_objects;	/* 0 */
 extern iostats IOStats;
 extern struct _acl_deny_info_list *DenyInfoList;	/* NULL */
@@ -162,7 +162,6 @@ extern int incoming_sockets_accepted;
 extern unsigned int WIN32_OS_version;	/* 0 */
 extern char *WIN32_OS_string;	/* NULL */
 #endif
-extern const char *external_acl_message;	/* NULL */
 #if HAVE_SBRK
 extern void *sbrk_start;	/* 0 */
 #endif

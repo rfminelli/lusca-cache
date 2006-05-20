@@ -90,9 +90,7 @@ INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
 LIBDLMALLOC = @LIBDLMALLOC@
 LIBREGEX = @LIBREGEX@
 LIBSASL = @LIBSASL@
-LIB_EPOLL = @LIB_EPOLL@
 LIB_LBER = @LIB_LBER@
-LIB_LDAP = @LIB_LDAP@
 LIB_MALLOC = @LIB_MALLOC@
 LN = @LN@
 LN_S = @LN_S@
@@ -101,7 +99,6 @@ MKDIR = @MKDIR@
 MV = @MV@
 NTLM_AUTH_HELPERS = @NTLM_AUTH_HELPERS@
 OBJEXT = @OBJEXT@
-OPT_DEFAULT_HOSTS = @OPT_DEFAULT_HOSTS@
 PACKAGE = @PACKAGE@
 PERL = @PERL@
 PKGCONFIG = @PKGCONFIG@
@@ -187,8 +184,7 @@ libexec_PROGRAMS = \
 	cachemgr$(CGIEXT)
 
 
-cf_gen_SOURCES = cf_gen.c defines.h debug.c
-nodist_cf_gen_SOURCES = globals.c
+cf_gen_SOURCES = cf_gen.c defines.h
 nodist_cf_gen_HEADER = cf_gen_defines.h
 squidclient_SOURCES = client.c
 cachemgr__CGIEXT__SOURCES = cachemgr.c
@@ -232,7 +228,6 @@ squid_SOURCES = \
 	errorpage.c \
 	ETag.c \
 	event.c \
-	errormap.c \
 	external_acl.c \
 	fd.c \
 	filemap.c \
@@ -262,7 +257,6 @@ squid_SOURCES = \
 	ipc.c \
 	ipcache.c \
 	$(LEAKFINDERSOURCE) \
-	locrewrite.c \
 	logfile.c \
 	main.c \
 	mem.c \
@@ -275,10 +269,7 @@ squid_SOURCES = \
 	Packer.c \
 	pconn.c \
 	peer_digest.c \
-	peer_monitor.c \
 	peer_select.c \
-	peer_sourcehash.c \
-	peer_userhash.c \
 	protos.h \
 	redirect.c \
 	referer.c \
@@ -312,7 +303,6 @@ squid_SOURCES = \
 	useragent.c \
 	wais.c \
 	wccp.c \
-	wccp2.c \
 	whois.c \
 	$(WIN32SOURCE)
 
@@ -337,7 +327,6 @@ squid_LDADD = \
 	@SNMPLIB@ \
 	@LIB_MALLOC@ \
 	@SSLLIB@ \
-	@LIB_EPOLL@ \
 	-lmiscutil \
 	@XTRA_LIBS@
 
@@ -407,7 +396,6 @@ DEFAULT_DISKD = $(libexecdir)/`echo diskd | sed '$(transform);s/$$/$(EXEEXT)/'`
 DEFAULT_ICON_DIR = $(datadir)/icons
 DEFAULT_ERROR_DIR = $(datadir)/errors/@ERR_DEFAULT_LANGUAGE@
 DEFAULT_MIB_PATH = $(datadir)/mib.txt
-DEFAULT_HOSTS = @OPT_DEFAULT_HOSTS@
 
 DEFS = @DEFS@ -DDEFAULT_CONFIG_FILE=\"$(DEFAULT_CONFIG_FILE)\"
 
@@ -464,9 +452,8 @@ cachemgr__CGIEXT__OBJECTS = $(am_cachemgr__CGIEXT__OBJECTS)
 cachemgr__CGIEXT__LDADD = $(LDADD)
 cachemgr__CGIEXT__DEPENDENCIES =
 cachemgr__CGIEXT__LDFLAGS =
-am_cf_gen_OBJECTS = cf_gen.$(OBJEXT) debug.$(OBJEXT)
-nodist_cf_gen_OBJECTS = globals.$(OBJEXT)
-cf_gen_OBJECTS = $(am_cf_gen_OBJECTS) $(nodist_cf_gen_OBJECTS)
+am_cf_gen_OBJECTS = cf_gen.$(OBJEXT)
+cf_gen_OBJECTS = $(am_cf_gen_OBJECTS)
 cf_gen_LDADD = $(LDADD)
 cf_gen_DEPENDENCIES =
 cf_gen_LDFLAGS =
@@ -502,35 +489,33 @@ am_squid_OBJECTS = access_log.$(OBJEXT) acl.$(OBJEXT) asn.$(OBJEXT) \
 	client_db.$(OBJEXT) client_side.$(OBJEXT) comm.$(OBJEXT) \
 	comm_select.$(OBJEXT) debug.$(OBJEXT) $(am__objects_3) \
 	disk.$(OBJEXT) $(am__objects_4) errorpage.$(OBJEXT) \
-	ETag.$(OBJEXT) event.$(OBJEXT) errormap.$(OBJEXT) \
-	external_acl.$(OBJEXT) fd.$(OBJEXT) filemap.$(OBJEXT) \
-	forward.$(OBJEXT) fqdncache.$(OBJEXT) ftp.$(OBJEXT) \
-	gopher.$(OBJEXT) helper.$(OBJEXT) $(am__objects_5) \
-	http.$(OBJEXT) HttpStatusLine.$(OBJEXT) HttpHdrCc.$(OBJEXT) \
+	ETag.$(OBJEXT) event.$(OBJEXT) external_acl.$(OBJEXT) \
+	fd.$(OBJEXT) filemap.$(OBJEXT) forward.$(OBJEXT) \
+	fqdncache.$(OBJEXT) ftp.$(OBJEXT) gopher.$(OBJEXT) \
+	helper.$(OBJEXT) $(am__objects_5) http.$(OBJEXT) \
+	HttpStatusLine.$(OBJEXT) HttpHdrCc.$(OBJEXT) \
 	HttpHdrRange.$(OBJEXT) HttpHdrContRange.$(OBJEXT) \
 	HttpHeader.$(OBJEXT) HttpHeaderTools.$(OBJEXT) \
 	HttpBody.$(OBJEXT) HttpMsg.$(OBJEXT) HttpReply.$(OBJEXT) \
 	HttpRequest.$(OBJEXT) icmp.$(OBJEXT) icp_v2.$(OBJEXT) \
 	icp_v3.$(OBJEXT) ident.$(OBJEXT) internal.$(OBJEXT) \
 	ipc.$(OBJEXT) ipcache.$(OBJEXT) $(am__objects_6) \
-	locrewrite.$(OBJEXT) logfile.$(OBJEXT) main.$(OBJEXT) \
-	mem.$(OBJEXT) MemPool.$(OBJEXT) MemBuf.$(OBJEXT) mime.$(OBJEXT) \
+	logfile.$(OBJEXT) main.$(OBJEXT) mem.$(OBJEXT) \
+	MemPool.$(OBJEXT) MemBuf.$(OBJEXT) mime.$(OBJEXT) \
 	multicast.$(OBJEXT) neighbors.$(OBJEXT) net_db.$(OBJEXT) \
 	Packer.$(OBJEXT) pconn.$(OBJEXT) peer_digest.$(OBJEXT) \
-	peer_monitor.$(OBJEXT) peer_select.$(OBJEXT) \
-	peer_sourcehash.$(OBJEXT) peer_userhash.$(OBJEXT) \
-	redirect.$(OBJEXT) referer.$(OBJEXT) refresh.$(OBJEXT) \
-	send-announce.$(OBJEXT) $(am__objects_7) ssl.$(OBJEXT) \
-	$(am__objects_8) stat.$(OBJEXT) StatHist.$(OBJEXT) \
-	String.$(OBJEXT) stmem.$(OBJEXT) store.$(OBJEXT) \
-	store_io.$(OBJEXT) store_client.$(OBJEXT) \
+	peer_select.$(OBJEXT) redirect.$(OBJEXT) referer.$(OBJEXT) \
+	refresh.$(OBJEXT) send-announce.$(OBJEXT) $(am__objects_7) \
+	ssl.$(OBJEXT) $(am__objects_8) stat.$(OBJEXT) \
+	StatHist.$(OBJEXT) String.$(OBJEXT) stmem.$(OBJEXT) \
+	store.$(OBJEXT) store_io.$(OBJEXT) store_client.$(OBJEXT) \
 	store_digest.$(OBJEXT) store_dir.$(OBJEXT) \
 	store_key_md5.$(OBJEXT) store_log.$(OBJEXT) \
 	store_rebuild.$(OBJEXT) store_swapin.$(OBJEXT) \
 	store_swapmeta.$(OBJEXT) store_swapout.$(OBJEXT) \
 	tools.$(OBJEXT) $(am__objects_9) url.$(OBJEXT) urn.$(OBJEXT) \
 	useragent.$(OBJEXT) wais.$(OBJEXT) wccp.$(OBJEXT) \
-	wccp2.$(OBJEXT) whois.$(OBJEXT) $(am__objects_10)
+	whois.$(OBJEXT) $(am__objects_10)
 nodist_squid_OBJECTS = repl_modules.$(OBJEXT) auth_modules.$(OBJEXT) \
 	store_modules.$(OBJEXT) globals.$(OBJEXT) \
 	string_arrays.$(OBJEXT)
@@ -572,25 +557,22 @@ depcomp = $(SHELL) $(top_srcdir)/cfgaux/depcomp
 @AMDEP_TRUE@	$(DEPDIR)/debug.Po $(DEPDIR)/delay_pools.Po \
 @AMDEP_TRUE@	$(DEPDIR)/disk.Po $(DEPDIR)/dns.Po \
 @AMDEP_TRUE@	$(DEPDIR)/dns_internal.Po $(DEPDIR)/dnsserver.Po \
-@AMDEP_TRUE@	$(DEPDIR)/errormap.Po $(DEPDIR)/errorpage.Po \
-@AMDEP_TRUE@	$(DEPDIR)/event.Po $(DEPDIR)/external_acl.Po \
-@AMDEP_TRUE@	$(DEPDIR)/fd.Po $(DEPDIR)/filemap.Po \
-@AMDEP_TRUE@	$(DEPDIR)/forward.Po $(DEPDIR)/fqdncache.Po \
-@AMDEP_TRUE@	$(DEPDIR)/ftp.Po $(DEPDIR)/globals.Po \
-@AMDEP_TRUE@	$(DEPDIR)/gopher.Po $(DEPDIR)/helper.Po \
-@AMDEP_TRUE@	$(DEPDIR)/htcp.Po $(DEPDIR)/http.Po \
-@AMDEP_TRUE@	$(DEPDIR)/icmp.Po $(DEPDIR)/icp_v2.Po \
-@AMDEP_TRUE@	$(DEPDIR)/icp_v3.Po $(DEPDIR)/ident.Po \
-@AMDEP_TRUE@	$(DEPDIR)/internal.Po $(DEPDIR)/ipc.Po \
-@AMDEP_TRUE@	$(DEPDIR)/ipcache.Po $(DEPDIR)/leakfinder.Po \
-@AMDEP_TRUE@	$(DEPDIR)/locrewrite.Po $(DEPDIR)/logfile.Po \
+@AMDEP_TRUE@	$(DEPDIR)/errorpage.Po $(DEPDIR)/event.Po \
+@AMDEP_TRUE@	$(DEPDIR)/external_acl.Po $(DEPDIR)/fd.Po \
+@AMDEP_TRUE@	$(DEPDIR)/filemap.Po $(DEPDIR)/forward.Po \
+@AMDEP_TRUE@	$(DEPDIR)/fqdncache.Po $(DEPDIR)/ftp.Po \
+@AMDEP_TRUE@	$(DEPDIR)/globals.Po $(DEPDIR)/gopher.Po \
+@AMDEP_TRUE@	$(DEPDIR)/helper.Po $(DEPDIR)/htcp.Po \
+@AMDEP_TRUE@	$(DEPDIR)/http.Po $(DEPDIR)/icmp.Po \
+@AMDEP_TRUE@	$(DEPDIR)/icp_v2.Po $(DEPDIR)/icp_v3.Po \
+@AMDEP_TRUE@	$(DEPDIR)/ident.Po $(DEPDIR)/internal.Po \
+@AMDEP_TRUE@	$(DEPDIR)/ipc.Po $(DEPDIR)/ipcache.Po \
+@AMDEP_TRUE@	$(DEPDIR)/leakfinder.Po $(DEPDIR)/logfile.Po \
 @AMDEP_TRUE@	$(DEPDIR)/main.Po $(DEPDIR)/mem.Po \
 @AMDEP_TRUE@	$(DEPDIR)/mime.Po $(DEPDIR)/multicast.Po \
 @AMDEP_TRUE@	$(DEPDIR)/neighbors.Po $(DEPDIR)/net_db.Po \
 @AMDEP_TRUE@	$(DEPDIR)/pconn.Po $(DEPDIR)/peer_digest.Po \
-@AMDEP_TRUE@	$(DEPDIR)/peer_monitor.Po $(DEPDIR)/peer_select.Po \
-@AMDEP_TRUE@	$(DEPDIR)/peer_sourcehash.Po \
-@AMDEP_TRUE@	$(DEPDIR)/peer_userhash.Po $(DEPDIR)/pinger.Po \
+@AMDEP_TRUE@	$(DEPDIR)/peer_select.Po $(DEPDIR)/pinger.Po \
 @AMDEP_TRUE@	$(DEPDIR)/redirect.Po $(DEPDIR)/referer.Po \
 @AMDEP_TRUE@	$(DEPDIR)/refresh.Po $(DEPDIR)/repl_modules.Po \
 @AMDEP_TRUE@	$(DEPDIR)/send-announce.Po $(DEPDIR)/snmp_agent.Po \
@@ -609,8 +591,7 @@ depcomp = $(SHELL) $(top_srcdir)/cfgaux/depcomp
 @AMDEP_TRUE@	$(DEPDIR)/unlinkd.Po $(DEPDIR)/url.Po \
 @AMDEP_TRUE@	$(DEPDIR)/urn.Po $(DEPDIR)/useragent.Po \
 @AMDEP_TRUE@	$(DEPDIR)/wais.Po $(DEPDIR)/wccp.Po \
-@AMDEP_TRUE@	$(DEPDIR)/wccp2.Po $(DEPDIR)/whois.Po \
-@AMDEP_TRUE@	$(DEPDIR)/win32.Po
+@AMDEP_TRUE@	$(DEPDIR)/whois.Po $(DEPDIR)/win32.Po
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
 CCLD = $(CC)
@@ -629,7 +610,7 @@ RECURSIVE_TARGETS = info-recursive dvi-recursive install-info-recursive \
 	uninstall-recursive check-recursive installcheck-recursive
 DIST_COMMON = Makefile.am Makefile.in
 DIST_SUBDIRS = $(SUBDIRS)
-SOURCES = $(cachemgr__CGIEXT__SOURCES) $(cf_gen_SOURCES) $(nodist_cf_gen_SOURCES) dnsserver.c $(pinger_SOURCES) $(nodist_pinger_SOURCES) $(squid_SOURCES) $(EXTRA_squid_SOURCES) $(nodist_squid_SOURCES) $(squidclient_SOURCES) $(unlinkd_SOURCES)
+SOURCES = $(cachemgr__CGIEXT__SOURCES) $(cf_gen_SOURCES) dnsserver.c $(pinger_SOURCES) $(nodist_pinger_SOURCES) $(squid_SOURCES) $(EXTRA_squid_SOURCES) $(nodist_squid_SOURCES) $(squidclient_SOURCES) $(unlinkd_SOURCES)
 
 all: $(BUILT_SOURCES)
 	$(MAKE) $(AM_MAKEFLAGS) all-recursive
@@ -783,7 +764,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/dns.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/dns_internal.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/dnsserver.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/errormap.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/errorpage.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/event.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/external_acl.Po@am__quote@
@@ -805,7 +785,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/ipc.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/ipcache.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/leakfinder.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/locrewrite.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/logfile.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/main.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/mem.Po@am__quote@
@@ -815,10 +794,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/net_db.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/pconn.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/peer_digest.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/peer_monitor.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/peer_select.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/peer_sourcehash.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/peer_userhash.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/pinger.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/redirect.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/referer.Po@am__quote@
@@ -851,7 +827,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/useragent.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/wais.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/wccp.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/wccp2.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/whois.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/win32.Po@am__quote@
 
@@ -1188,8 +1163,7 @@ cf.data: cf.data.pre Makefile
 	s%@DEFAULT_ICON_DIR@%$(DEFAULT_ICON_DIR)%g;\
 	s%@DEFAULT_MIB_PATH@%$(DEFAULT_MIB_PATH)%g;\
 	s%@DEFAULT_ERROR_DIR@%$(DEFAULT_ERROR_DIR)%g;\
-	s%@DEFAULT_PREFIX@%$(DEFAULT_PREFIX)%g;\
-	s%@DEFAULT_HOSTS@%$(DEFAULT_HOSTS)%g;"\
+	s%@DEFAULT_PREFIX@%$(DEFAULT_PREFIX)%g;"\
 	< $(srcdir)/cf.data.pre >$@
 
 store_modules.c: store_modules.sh Makefile

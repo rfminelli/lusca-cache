@@ -40,7 +40,9 @@ static void aclParseDomainList(void *curlist);
 static void aclParseUserList(void **current);
 static void aclParseIpList(void *curlist);
 static void aclParseIntlist(void *curlist);
+#if SQUID_SNMP
 static void aclParseWordList(void *curlist);
+#endif
 static void aclParseProtoList(void *curlist);
 static void aclParseMethodList(void *curlist);
 static void aclParseTimeSpec(void *curlist);
@@ -56,7 +58,9 @@ static int aclMatchUser(void *proxyauth_acl, char *user);
 static int aclMatchIp(void *dataptr, struct in_addr c);
 static int aclMatchDomainList(void *dataptr, const char *);
 static int aclMatchIntegerRange(intrange * data, int i);
+#if SQUID_SNMP
 static int aclMatchWordList(wordlist *, const char *);
+#endif
 static void aclParseUserMaxIP(void *data);
 static void aclDestroyUserMaxIP(void *data);
 static wordlist *aclDumpUserMaxIP(void *data);
@@ -99,14 +103,6 @@ static wordlist *aclDumpArpList(void *);
 static SPLAYCMP aclArpCompare;
 static SPLAYWALKEE aclDumpArpListWalkee;
 #endif
-#if USE_SSL
-static void aclParseCertList(void *curlist);
-static int aclMatchUserCert(void *data, aclCheck_t *);
-static int aclMatchCACert(void *data, aclCheck_t *);
-static wordlist *aclDumpCertList(void *data);
-static void aclDestroyCertList(void *data);
-#endif
-
 static int aclCacheMatchAcl(dlink_list * cache, squid_acl acltype, void *data, char *MatchParam);
 
 static squid_acl
@@ -148,8 +144,6 @@ aclStrToType(const char *s)
     if (!strcmp(s, "ident_regex"))
 	return ACL_IDENT_REGEX;
 #endif
-    if (!strncmp(s, "type", 5))
-	return ACL_TYPE;
     if (!strncmp(s, "proto", 5))
 	return ACL_PROTO;
     if (!strcmp(s, "method"))
@@ -192,14 +186,6 @@ aclStrToType(const char *s)
 	return ACL_EXTERNAL;
     if (!strcmp(s, "urllogin"))
 	return ACL_URLLOGIN;
-#if USE_SSL
-    if (!strcmp(s, "user_cert"))
-	return ACL_USER_CERT;
-    if (!strcmp(s, "ca_cert"))
-	return ACL_CA_CERT;
-#endif
-    if (!strcmp(s, "urlgroup"))
-	return ACL_URLGROUP;
     return ACL_NONE;
 }
 
@@ -238,8 +224,6 @@ aclTypeToStr(squid_acl type)
     if (type == ACL_IDENT_REGEX)
 	return "ident_regex";
 #endif
-    if (type == ACL_TYPE)
-	return "type";
     if (type == ACL_PROTO)
 	return "proto";
     if (type == ACL_METHOD)
@@ -282,14 +266,6 @@ aclTypeToStr(squid_acl type)
 	return "external";
     if (type == ACL_URLLOGIN)
 	return "urllogin";
-#if USE_SSL
-    if (type == ACL_USER_CERT)
-	return "user_cert";
-    if (type == ACL_CA_CERT)
-	return "ca_cert";
-#endif
-    if (type == ACL_URLGROUP)
-	return "urlgroup";
     return "ERROR";
 }
 
@@ -367,36 +343,6 @@ aclParseMethodList(void *curlist)
 	q->i = (int) urlParseMethod(t);
 	*(Tail) = q;
 	Tail = &q->next;
-    }
-}
-
-static void
-aclParseType(void *current)
-{
-    acl_request_type **p = current;
-    acl_request_type *type;
-    char *t = NULL;
-    if (!*p)
-	*p = memAllocate(MEM_ACL_REQUEST_TYPE);
-    type = *p;
-    while ((t = strtokFile())) {
-	if (strcmp(t, "accelerated") == 0) {
-	    type->accelerated = 1;
-	    continue;
-	}
-	if (strcmp(t, "accel") == 0) {
-	    type->accelerated = 1;
-	    continue;
-	}
-	if (strcmp(t, "internal") == 0) {
-	    type->internal = 1;
-	    continue;
-	}
-	if (strcmp(t, "auth") == 0) {
-	    type->internal = 1;
-	    continue;
-	}
-	fatalf("unknown acl type argument '%s'\n", t);
     }
 }
 
@@ -760,6 +706,7 @@ aclDumpHeader(acl_hdr_data * hd)
     return W;
 }
 
+#if SQUID_SNMP
 static void
 aclParseWordList(void *curlist)
 {
@@ -767,6 +714,7 @@ aclParseWordList(void *curlist)
     while ((t = strtokFile()))
 	wordlistAdd(curlist, t);
 }
+#endif
 
 static void
 aclParseUserList(void **current)
@@ -828,91 +776,6 @@ aclParseDomainList(void *curlist)
 	*Top = splay_insert(xstrdup(t), *Top, aclDomainCompare);
     }
 }
-
-#if USE_SSL
-static void
-aclParseCertList(void *curlist)
-{
-    acl_cert_data **datap = curlist;
-    splayNode **Top;
-    char *t;
-    char *attribute = strtokFile();
-    if (!attribute)
-	self_destruct();
-    if (*datap) {
-	if (strcasecmp((*datap)->attribute, attribute) != 0)
-	    self_destruct();
-    } else {
-	*datap = memAllocate(MEM_ACL_CERT_DATA);
-	(*datap)->attribute = xstrdup(attribute);
-    }
-    Top = &(*datap)->values;
-    while ((t = strtokFile())) {
-	*Top = splay_insert(xstrdup(t), *Top, aclDomainCompare);
-    }
-}
-
-static int
-aclMatchUserCert(void *data, aclCheck_t * checklist)
-{
-    acl_cert_data *cert_data = data;
-    const char *value;
-    SSL *ssl = fd_table[checklist->conn->fd].ssl;
-
-    if (!ssl)
-	return 0;
-    value = sslGetUserAttribute(ssl, cert_data->attribute);
-    if (!value)
-	return 0;
-    cert_data->values = splay_splay(value, cert_data->values, (SPLAYCMP *) strcmp);
-    return !splayLastResult;
-}
-
-static int
-aclMatchCACert(void *data, aclCheck_t * checklist)
-{
-    acl_cert_data *cert_data = data;
-    const char *value;
-    SSL *ssl = fd_table[checklist->conn->fd].ssl;
-
-    if (!ssl)
-	return 0;
-    value = sslGetCAAttribute(ssl, cert_data->attribute);
-    if (!value)
-	return 0;
-    cert_data->values = splay_splay(value, cert_data->values, (SPLAYCMP *) strcmp);
-    return !splayLastResult;
-}
-
-static void
-aclDestroyCertList(void *curlist)
-{
-    acl_cert_data **datap = curlist;
-    if (!*datap)
-	return;
-    splay_destroy((*datap)->values, xfree);
-    memFree(*datap, MEM_ACL_CERT_DATA);
-    *datap = NULL;
-}
-
-static void
-aclDumpCertListWalkee(void *node_data, void *outlist)
-{
-    /* outlist is really a wordlist ** */
-    wordlistAdd(outlist, node_data);
-}
-
-static wordlist *
-aclDumpCertList(void *curlist)
-{
-    acl_cert_data *data = curlist;
-    wordlist *wl = NULL;
-    wordlistAdd(&wl, data->attribute);
-    if (data->values)
-	splay_walk(data->values, aclDumpCertListWalkee, &wl);
-    return wl;
-}
-#endif
 
 void
 aclParseAclLine(acl ** head)
@@ -1015,9 +878,6 @@ aclParseAclLine(acl ** head)
 	aclParseRegexList(&A->data);
 	break;
 #endif
-    case ACL_TYPE:
-	aclParseType(&A->data);
-	break;
     case ACL_PROTO:
 	aclParseProtoList(&A->data);
 	break;
@@ -1063,15 +923,6 @@ aclParseAclLine(acl ** head)
     case ACL_EXTERNAL:
 	aclParseExternal(&A->data);
 	break;
-    case ACL_URLGROUP:
-	aclParseWordList(&A->data);
-	break;
-#if USE_SSL
-    case ACL_USER_CERT:
-    case ACL_CA_CERT:
-	aclParseCertList(&A->data);
-	break;
-#endif
     case ACL_NONE:
     case ACL_ENUM_MAX:
 	fatal("Bad ACL type");
@@ -1642,6 +1493,7 @@ aclMatchTime(acl_time_data * data, time_t when)
     return 0;
 }
 
+#if SQUID_SNMP
 static int
 aclMatchWordList(wordlist * w, const char *word)
 {
@@ -1654,16 +1506,7 @@ aclMatchWordList(wordlist * w, const char *word)
     }
     return 0;
 }
-
-static int
-aclMatchType(acl_request_type * type, request_t * request)
-{
-    if (type->accelerated && request->flags.accelerated)
-	return 1;
-    if (type->internal && request->flags.internal)
-	return 1;
-    return 0;
-}
+#endif
 
 int
 aclAuthenticated(aclCheck_t * checklist)
@@ -1735,7 +1578,6 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
     case ACL_DST_IP:
     case ACL_MAX_USER_IP:
     case ACL_METHOD:
-    case ACL_TYPE:
     case ACL_PROTO:
     case ACL_PROXY_AUTH:
     case ACL_PROXY_AUTH_REGEX:
@@ -1893,8 +1735,6 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	}
 	/* NOTREACHED */
 #endif
-    case ACL_TYPE:
-	return aclMatchType(ae->data, r);
     case ACL_PROTO:
 	return aclMatchInteger(ae->data, r->protocol);
 	/* NOTREACHED */
@@ -1984,19 +1824,6 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
     case ACL_EXTERNAL:
 	return aclMatchExternal(ae->data, checklist);
 	/* NOTREACHED */
-    case ACL_URLGROUP:
-	if (!checklist->request->urlgroup)
-	    return 0;
-	return aclMatchWordList(ae->data, checklist->request->urlgroup);
-	/* NOTREACHED */
-#if USE_SSL
-    case ACL_USER_CERT:
-	return aclMatchUserCert(ae->data, checklist);
-	/* NOTREACHED */
-    case ACL_CA_CERT:
-	return aclMatchCACert(ae->data, checklist);
-	/* NOTREACHED */
-#endif
     case ACL_NONE:
     case ACL_ENUM_MAX:
 	break;
@@ -2411,11 +2238,6 @@ aclFreeUserData(void *data)
     memFree(d, MEM_ACL_USER_DATA);
 }
 
-static void
-aclDestroyType(acl_request_type * type)
-{
-    memFree(type, MEM_ACL_REQUEST_TYPE);
-}
 
 void
 aclDestroyAcls(acl ** head)
@@ -2469,9 +2291,6 @@ aclDestroyAcls(acl ** head)
 	case ACL_REQ_MIME_TYPE:
 	    aclDestroyRegexList(a->data);
 	    break;
-	case ACL_TYPE:
-	    aclDestroyType(a->data);
-	    break;
 	case ACL_REP_HEADER:
 	case ACL_REQ_HEADER:
 	    aclDestroyHeader(a->data);
@@ -2496,15 +2315,6 @@ aclDestroyAcls(acl ** head)
 	case ACL_EXTERNAL:
 	    aclDestroyExternal(&a->data);
 	    break;
-	case ACL_URLGROUP:
-	    wordlistDestroy((wordlist **) & a->data);
-	    break;
-#if USE_SSL
-	case ACL_USER_CERT:
-	case ACL_CA_CERT:
-	    aclDestroyCertList(&a->data);
-	    break;
-#endif
 	case ACL_NONE:
 	case ACL_ENUM_MAX:
 	    debug(28, 1) ("aclDestroyAcls: no case for ACL type %d\n", a->type);
@@ -2863,17 +2673,6 @@ aclDumpMethodList(intlist * data)
     return W;
 }
 
-static wordlist *
-aclDumpType(acl_request_type * type)
-{
-    wordlist *W = NULL;
-    if (type->accelerated)
-	wordlistAdd(&W, "accelerated");
-    if (type->internal)
-	wordlistAdd(&W, "internal");
-    return W;
-}
-
 wordlist *
 aclDumpGeneric(const acl * a)
 {
@@ -2923,8 +2722,6 @@ aclDumpGeneric(const acl * a)
     case ACL_URL_PORT:
     case ACL_MY_PORT:
 	return aclDumpIntRangeList(a->data);
-    case ACL_TYPE:
-	return aclDumpType(a->data);
     case ACL_PROTO:
 	return aclDumpProtoList(a->data);
     case ACL_METHOD:
@@ -2935,13 +2732,6 @@ aclDumpGeneric(const acl * a)
 #endif
     case ACL_EXTERNAL:
 	return aclDumpExternal(a->data);
-    case ACL_URLGROUP:
-	return wordlistDup(a->data);
-#if USE_SSL
-    case ACL_USER_CERT:
-    case ACL_CA_CERT:
-	return aclDumpCertList(a->data);
-#endif
     case ACL_NONE:
     case ACL_ENUM_MAX:
 	break;
@@ -2999,19 +2789,6 @@ aclPurgeMethodInUse(acl_access * a)
  *       Solaris code by R. Gancarz <radekg@solaris.elektrownia-lagisza.com.pl>
  */
 
-#if defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
-#ifdef _SQUID_CYGWIN_
-#include <windows.h>
-#endif
-
-struct arpreq {
-    struct sockaddr arp_pa;	/* protocol address */
-    struct sockaddr arp_ha;	/* hardware address */
-    int arp_flags;		/* flags */
-};
-
-#include <Iphlpapi.h>
-#else
 #ifdef _SQUID_SOLARIS_
 #include <sys/sockio.h>
 #else
@@ -3030,7 +2807,6 @@ struct arpreq {
 #endif
 #if HAVE_NETINET_IF_ETHER_H
 #include <netinet/if_ether.h>
-#endif
 #endif
 
 /*
@@ -3315,54 +3091,6 @@ aclMatchArp(void *dataptr, struct in_addr c)
     debug(28, 3) ("aclMatchArp: '%s' %s\n",
 	inet_ntoa(c), splayLastResult ? "NOT found" : "found");
     return (0 == splayLastResult);
-#elif defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
-
-    DWORD dwNetTable = 0;
-    DWORD ipNetTableLen = 0;
-    PMIB_IPNETTABLE NetTable = NULL;
-    DWORD i;
-    splayNode **Top = dataptr;
-    struct arpreq arpReq;
-
-    /* Get size of Windows ARP table */
-    if (GetIpNetTable(NetTable, &ipNetTableLen, FALSE) != ERROR_INSUFFICIENT_BUFFER) {
-	debug(28, 0) ("Can't estimate ARP table size!\n");
-	return 0;
-    }
-    /* Allocate space for ARP table and assign pointers */
-    if ((NetTable = (PMIB_IPNETTABLE) xmalloc(ipNetTableLen)) == NULL) {
-	debug(28, 0) ("Can't allocate temporary ARP table!\n");
-	return 0;
-    }
-    /* Get actual ARP table */
-    if ((dwNetTable = GetIpNetTable(NetTable, &ipNetTableLen, FALSE)) != NO_ERROR) {
-	debug(28, 0) ("Can't retrieve ARP table!\n");
-	xfree(NetTable);
-	return 0;
-    }
-    /* Find MAC address from net table */
-    for (i = 0; i < NetTable->dwNumEntries; i++) {
-	if ((c.s_addr == NetTable->table[i].dwAddr) && (NetTable->table[i].dwType > 2)) {
-	    arpReq.arp_ha.sa_family = AF_UNSPEC;
-	    memcpy(arpReq.arp_ha.sa_data, NetTable->table[i].bPhysAddr, NetTable[i].table->dwPhysAddrLen);
-	}
-    }
-    xfree(NetTable);
-    if (arpReq.arp_ha.sa_data[0] == 0 && arpReq.arp_ha.sa_data[1] == 0 &&
-	arpReq.arp_ha.sa_data[2] == 0 && arpReq.arp_ha.sa_data[3] == 0 &&
-	arpReq.arp_ha.sa_data[4] == 0 && arpReq.arp_ha.sa_data[5] == 0)
-	return 0;
-    debug(28, 4) ("Got address %02x:%02x:%02x:%02x:%02x:%02x\n",
-	arpReq.arp_ha.sa_data[0] & 0xff, arpReq.arp_ha.sa_data[1] & 0xff,
-	arpReq.arp_ha.sa_data[2] & 0xff, arpReq.arp_ha.sa_data[3] & 0xff,
-	arpReq.arp_ha.sa_data[4] & 0xff, arpReq.arp_ha.sa_data[5] & 0xff);
-
-    /* Do lookup */
-    *Top = splay_splay(&arpReq.arp_ha.sa_data, *Top, aclArpCompare);
-
-    debug(28, 3) ("aclMatchArp: '%s' %s\n",
-	inet_ntoa(c), splayLastResult ? "NOT found" : "found");
-    return (0 == splayLastResult);
 #else
     WRITE ME;
 #endif
@@ -3401,21 +3129,6 @@ aclArpCompare(const void *a, const void *b)
     if (d1[5] != d2[5])
 	return (d1[5] > d2[5]) ? 1 : -1;
 #elif defined(_SQUID_FREEBSD_)
-    const unsigned char *d1 = a;
-    const unsigned char *d2 = b;
-    if (d1[0] != d2[0])
-	return (d1[0] > d2[0]) ? 1 : -1;
-    if (d1[1] != d2[1])
-	return (d1[1] > d2[1]) ? 1 : -1;
-    if (d1[2] != d2[2])
-	return (d1[2] > d2[2]) ? 1 : -1;
-    if (d1[3] != d2[3])
-	return (d1[3] > d2[3]) ? 1 : -1;
-    if (d1[4] != d2[4])
-	return (d1[4] > d2[4]) ? 1 : -1;
-    if (d1[5] != d2[5])
-	return (d1[5] > d2[5]) ? 1 : -1;
-#elif defined(_SQUID_MSWIN_) || defined(_SQUID_CYGWIN_)
     const unsigned char *d1 = a;
     const unsigned char *d2 = b;
     if (d1[0] != d2[0])

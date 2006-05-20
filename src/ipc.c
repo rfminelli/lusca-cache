@@ -84,26 +84,26 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	*wfd = -1;
     if (type == IPC_TCP_SOCKET) {
 	crfd = cwfd = comm_open(SOCK_STREAM,
-	    IPPROTO_TCP,
+	    0,
 	    local_addr,
 	    0,
 	    COMM_NOCLOEXEC,
 	    name);
 	prfd = pwfd = comm_open(SOCK_STREAM,
-	    IPPROTO_TCP,	/* protocol */
+	    0,			/* protocol */
 	    local_addr,
 	    0,			/* port */
 	    0,			/* blocking */
 	    name);
     } else if (type == IPC_UDP_SOCKET) {
 	crfd = cwfd = comm_open(SOCK_DGRAM,
-	    IPPROTO_UDP,
+	    0,
 	    local_addr,
 	    0,
 	    COMM_NOCLOEXEC,
 	    name);
 	prfd = pwfd = comm_open(SOCK_DGRAM,
-	    IPPROTO_UDP,
+	    0,
 	    local_addr,
 	    0,
 	    0,
@@ -123,29 +123,6 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	fd_open(cwfd = p2c[1], FD_PIPE, "IPC FIFO Child Write");
 	fd_open(crfd = c2p[0], FD_PIPE, "IPC FIFO Child Read");
 	fd_open(pwfd = c2p[1], FD_PIPE, "IPC FIFO Parent Write");
-#if HAVE_SOCKETPAIR && defined(AF_UNIX)
-    } else if (type == IPC_UNIX_STREAM) {
-	int fds[2];
-	int buflen = 32768;
-	if (socketpair(AF_UNIX, SOCK_STREAM, 0, fds) < 0) {
-	    debug(50, 0) ("ipcCreate: socketpair: %s\n", xstrerror());
-	    return -1;
-	}
-	setsockopt(fds[0], SOL_SOCKET, SO_SNDBUF, (void *) &buflen, sizeof(buflen));
-	setsockopt(fds[0], SOL_SOCKET, SO_RCVBUF, (void *) &buflen, sizeof(buflen));
-	setsockopt(fds[1], SOL_SOCKET, SO_SNDBUF, (void *) &buflen, sizeof(buflen));
-	setsockopt(fds[1], SOL_SOCKET, SO_RCVBUF, (void *) &buflen, sizeof(buflen));
-	fd_open(prfd = pwfd = fds[0], FD_PIPE, "IPC UNIX STREAM Parent");
-	fd_open(crfd = cwfd = fds[1], FD_PIPE, "IPC UNIX STREAM Parent");
-    } else if (type == IPC_UNIX_DGRAM) {
-	int fds[2];
-	if (socketpair(AF_UNIX, SOCK_DGRAM, 0, fds) < 0) {
-	    debug(50, 0) ("ipcCreate: socketpair: %s\n", xstrerror());
-	    return -1;
-	}
-	fd_open(prfd = pwfd = fds[0], FD_PIPE, "IPC UNIX DGRAM Parent");
-	fd_open(crfd = cwfd = fds[1], FD_PIPE, "IPC UNIX DGRAM Parent");
-#endif
     } else {
 	assert(IPC_NONE);
     }

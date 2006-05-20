@@ -61,14 +61,12 @@ requestDestroy(request_t * req)
 	authenticateAuthUserRequestUnlock(req->auth_user_request);
     safe_free(req->canonical);
     safe_free(req->vary_headers);
-    safe_free(req->urlgroup);
     stringClean(&req->urlpath);
     httpHeaderClean(&req->header);
     if (req->cache_control)
 	httpHdrCcDestroy(req->cache_control);
     if (req->range)
 	httpHdrRangeDestroy(req->range);
-    stringClean(&req->extacl_log);
     memFree(req, MEM_REQUEST_T);
 }
 

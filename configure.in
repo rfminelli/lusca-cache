@@ -9,7 +9,7 @@ dnl
 dnl
 AC_INIT(src/main.c)
 AC_CONFIG_AUX_DIR(cfgaux)
-AM_INIT_AUTOMAKE(squid, 2.6.DEVEL-CVS)
+AM_INIT_AUTOMAKE(squid, 2.5.STABLE14-CVS)
 AM_CONFIG_HEADER(include/autoconf.h)
 AC_REVISION($Revision$)dnl
 AC_PREFIX_DEFAULT(/usr/local/squid)
@@ -250,35 +250,6 @@ dnl     AC_DEFINE(XMALLOC_DEBUG)
 dnl   fi
 dnl ])
 
-valgrind=
-AC_ARG_WITH(valgrind-debug,
-[  --with-valgrind-debug   Include debug instrumentation for use with valgrind],
-[ case $withval in
-  yes)
-	valgrind=1
-	;;
-  no)
-	valgrind=
-  	;;
-  *)
-  	CPPFLAGS="$CPPFLAGS -I${enableval}/include"
-	valgrind=1
-	;;
-  esac
-  if test $valgrind; then
-	AC_DEFINE(WITH_VALGRIND, 1, [Valgrind memory debugger support])
-	echo "Valgrind debug support enabled"
-  fi
-])
-
-valgrind=
-AC_ARG_ENABLE(mempool-debug,
-[  --enable-mempool-debug  Include MemPool debug verifications])
-if test "$enable_mempool_debug" = yes; then
-	AC_DEFINE(DEBUG_MEMPOOL, 1, [MemPool debug verifications])
-	echo "Mempool debug checks enabled"
-fi
-
 AC_ARG_ENABLE(xmalloc-statistics,
 [  --enable-xmalloc-statistics
                           Show malloc statistics in status page],
@@ -501,24 +472,14 @@ AC_ARG_ENABLE(referer-log,
 ])
 
 AC_ARG_ENABLE(wccp,  
-[  --disable-wccp          Disable Web Cache Coordination V1 Protocol],
+[  --disable-wccp          Disable Web Cache Coordination Protocol],
 [ if test "$enableval" = "no" ; then
-    echo "Web Cache Coordination V1 Protocol disabled"
+    echo "Web Cache Coordination Protocol disabled"
     AC_DEFINE(USE_WCCP, 0)
   else
     AC_DEFINE(USE_WCCP, 1)
   fi
 ])      
-
-AC_ARG_ENABLE(wccpv2,
-[  --enable-wccpv2          Enable Web Cache Coordination V2 Protocol],
-[ if test "$enableval" = "yes" ; then
-    echo "Web Cache Coordination V2 Protocol enabled"
-    AC_DEFINE(USE_WCCPv2, 1)
-  fi
-])
- 
-
 
 AC_ARG_ENABLE(kill-parent-hack,
 [  --enable-kill-parent-hack
@@ -584,12 +545,6 @@ AC_ARG_ENABLE(arp-acl,
 	*-solaris*)
 	    ;;
 	*-freebsd*)
-	    ;;
-	*-cygwin*)
-        LIBS="$LIBS -liphlpapi"
-	    ;;
-	*-mingw*)
-        LIBS="$LIBS -liphlpapi"
 	    ;;
 	*)
 	    echo "WARNING: ARP ACL support probably won't work on $host."
@@ -683,15 +638,6 @@ AC_ARG_ENABLE(cache-digests,
   fi
 ])
 
-AC_ARG_ENABLE(auth-on-acceleration,
-[  --enable-auth-on-acceleration
-                          Enable authentication in accelerators],
-[ if test "$enableval" = "yes" ; then
-    echo "AUTH_ON_ACCELERATION enabled"
-    AC_DEFINE(AUTH_ON_ACCELERATION)
-  fi
-])
-
 dnl Select Default Error language
 AC_ARG_ENABLE(default-err-language,
 [  --enable-default-err-language=lang
@@ -756,26 +702,6 @@ AC_ARG_ENABLE(poll,
   no)
     echo "Forcing poll() to be disabled"
     ac_cv_func_poll='no'
-    ;;
-  esac
-])
-
-dnl Enable epoll()
-AC_ARG_ENABLE(epoll,
-[  --enable-epoll          Enable epoll() instead of poll() or select().  
-                          epoll() is best where available, but must be 
-                          explicitly set at the moment.
-  --disable-epoll          Disable the use of epoll().],
-[ 
-  case "$enableval" in
-  yes)
-    echo "Forcing epoll() to be enabled"
-    ac_cv_func_epoll='yes'
-    ac_cv_func_poll='no'
-    ;;
-  no)
-    echo "Forcing epoll() to be disabled"
-    ac_cv_func_epoll='no'
     ;;
   esac
 ])
@@ -1005,26 +931,6 @@ AC_ARG_ENABLE(underscores,
     AC_DEFINE(ALLOW_HOSTNAME_UNDERSCORES, 1)
   fi
 ])
-
-dnl Select Default hosts file location
-AC_ARG_ENABLE(default-hostsfile,
-[  --enable-default-hostsfile=path
-                          Select default location for hosts file.
-                          See hosts_file directive in squid.conf for details],
-[
-    if test "$enableval" != "none" ; then
-    	if test -f $enableval; then
-	    OPT_DEFAULT_HOSTS=$enableval
-    	else
-	    echo "Warning Unable to find $enableval"
-	    sleep 5
-	fi
-    else
-	OPT_DEFAULT_HOSTS="none"    
-    fi
-    echo "Default hosts file set to: $enableval"
-],[OPT_DEFAULT_HOSTS="/etc/hosts"])
-AC_SUBST(OPT_DEFAULT_HOSTS)
 
 
 dnl Select auth schemes modules to build
@@ -1417,7 +1323,6 @@ AC_CHECK_HEADERS( \
 	openssl/err.h \
 	openssl/md5.h \
 	openssl/ssl.h \
-	openssl/engine.h \
 	poll.h \
 	pwd.h \
 	regex.h \
@@ -1768,21 +1673,6 @@ if test "$with_aio" = "yes"; then
     AC_CHECK_LIB(rt, aio_read,,AC_CHECK_LIB(aio, aio_read))
 fi
 
-LIB_EPOLL=''
-dnl Check for libepoll
-if test "$ac_cv_func_epoll" = "yes"; then
-    AC_CHECK_FUNCS(epoll_ctl,[AC_DEFINE_UNQUOTED(HAVE_EPOLL, 1)],
-	[AC_CHECK_LIB(epoll, epoll_ctl,[AC_DEFINE_UNQUOTED(HAVE_EPOLL, 1)] LIB_EPOLL="-lepoll",
-	    [echo "Error - no epoll found";
-	     echo "Try running 'sh ./scripts/get_epoll-lib.sh'";
-	     echo "then run configure again";
-	     exit -1],
-	    [-L ./lib]
-	)]
-    )
-fi
-AC_SUBST(LIB_EPOLL)
-
 dnl -lintl is needed on SCO version 3.2v4.2 for strftime()
 dnl Robert Side <rside@aiinc.bc.ca>
 dnl Mon, 18 Jan 1999 17:48:00 GMT
@@ -1792,20 +1682,8 @@ case "$host" in
 		;;
 esac
 
-dnl On MinGW OpenLDAP is not available, so LDAP helpers can be linked 
-dnl only with Windows LDAP libraries using -lwldap32
-case "$host_os" in
-mingw|mingw32)
-       LIB_LDAP="-lwldap32"
-       LIB_LBER=""
-       ;;
-*)
-       LIB_LDAP="-lldap"
-       dnl LDAP helpers need to know if -llber is needed or not
-       AC_CHECK_LIB(lber, main, [LIB_LBER="-llber"])
-       ;;
-esac
-AC_SUBST(LIB_LDAP)
+dnl LDAP helpers need to know if -llber is needed or not
+AC_CHECK_LIB(lber, main, [LIB_LBER="-llber"])
 AC_SUBST(LIB_LBER)
 
 dnl System-specific library modifications
@@ -1963,7 +1841,6 @@ AC_CHECK_FUNCS(\
 	setsid \
 	sigaction \
 	snprintf \
-	socketpair \
 	srand48 \
 	srandom \
 	statfs \
@@ -2600,7 +2477,6 @@ AC_OUTPUT([\
 	src/auth/basic/Makefile \
 	src/auth/digest/Makefile \
 	src/auth/ntlm/Makefile \
-	src/auth/negotiate/Makefile \
 	contrib/Makefile \
 	snmplib/Makefile \
 	icons/Makefile \
@@ -2627,7 +2503,6 @@ AC_OUTPUT([\
 	helpers/basic_auth/winbind/Makefile \
 	helpers/digest_auth/Makefile \
 	helpers/digest_auth/password/Makefile \
-	helpers/digest_auth/ldap/Makefile \
 	helpers/ntlm_auth/Makefile \
 	helpers/ntlm_auth/fakeauth/Makefile \
 	helpers/ntlm_auth/no_check/Makefile \

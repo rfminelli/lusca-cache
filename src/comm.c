@@ -374,11 +374,6 @@ commResetFD(ConnectStateData * cs)
     if (F->flags.nodelay)
 	commSetTcpNoDelay(cs->fd);
 #endif
-
-#if HAVE_EPOLL
-    // If we are using epoll(), we need to make sure that this fd will be polled
-    commSetSelect(cs->fd, 0, NULL, NULL, 0);
-#endif
     if (Config.tcpRcvBufsz > 0)
 	commSetTcpRcvbuf(cs->fd, Config.tcpRcvBufsz);
     return 1;
@@ -593,32 +588,6 @@ commLingerClose(int fd, void *unused)
     comm_close(fd);
 }
 
-#if USE_SSL
-static void
-commLingerSSLClose(int fd, void *unused)
-{
-    int ret;
-    LOCAL_ARRAY(char, buf, 1024);
-
-    ret = FD_READ_METHOD(fd, buf, 1024);
-    if (n < 0 && errno != EAGAIN) {
-	debug(5, 3) ("commLingerSSLClose: FD %d read: %s\n", fd, xstrerror());
-	comm_close(fd);
-	return;
-    }
-    ret = ssl_shutdown_method(fd);
-    if (ret == -1 && errno == EAGAIN) {
-	commSetSelect(fd, COMM_SELECT_WRITE, commLingerSSLClose, NULL, 0);
-	return;
-    }
-    if (shutdown(fd, 1) < 0) {
-	comm_close(fd);
-	return;
-    }
-    commSetSelect(fd, COMM_SELECT_READ, commLingerClose, NULL, 0);
-}
-#endif
-
 static void
 commLingerTimeout(int fd, void *unused)
 {
@@ -632,20 +601,16 @@ commLingerTimeout(int fd, void *unused)
 void
 comm_lingering_close(int fd)
 {
-    fd_note(fd, "lingering close");
-    commSetSelect(fd, COMM_SELECT_READ, NULL, NULL, 0);
-    commSetSelect(fd, COMM_SELECT_WRITE, NULL, NULL, 0);
-    commSetTimeout(fd, 10, commLingerTimeout, NULL);
 #if USE_SSL
-    if (fd_table[fd].ssl) {
-	commLingerSSLClose(fd, NULL);
-	return;
-    }
+    if (fd_table[fd].ssl)
+	ssl_shutdown_method(fd);
 #endif
     if (shutdown(fd, 1) < 0) {
 	comm_close(fd);
 	return;
     }
+    fd_note(fd, "lingering close");
+    commSetTimeout(fd, 10, commLingerTimeout, NULL);
     commSetSelect(fd, COMM_SELECT_READ, commLingerClose, NULL, 0);
 }
 #endif
@@ -657,68 +622,24 @@ comm_lingering_close(int fd)
 void
 comm_reset_close(int fd)
 {
-    fde *F = &fd_table[fd];
     struct linger L;
     L.l_onoff = 1;
     L.l_linger = 0;
     if (setsockopt(fd, SOL_SOCKET, SO_LINGER, (char *) &L, sizeof(L)) < 0)
 	debug(50, 0) ("commResetTCPClose: FD %d: %s\n", fd, xstrerror());
-    F->flags.close_request = 1;
     comm_close(fd);
 }
-
-static inline void
-comm_close_finish(int fd)
-{
-    fd_close(fd);		/* update fdstat */
-    close(fd);
-    statCounter.syscalls.sock.closes++;
-}
-
-#if USE_SSL
-static inline void
-comm_close_ssl_finish(int fd)
-{
-    fde *F = &fd_table[fd];
-    SSL_free(F->ssl);
-    F->ssl = NULL;
-    comm_close_finish(fd);
-}
-
-static void
-comm_close_ssl(int fd, void *unused)
-{
-    fde *F = &fd_table[fd];
-    int ret = ssl_shutdown_method(fd);
-    if (ret <= 0 && F->write_pending) {
-	commSetSelect(fd, COMM_SELECT_WRITE, comm_close_ssl, NULL, 0);
-	return;
-    }
-    comm_close_ssl_finish(fd);
-}
-
-static void
-comm_close_ssl_timeout(int fd, void *unused)
-{
-    debug(50, 1) ("comm_close_ssl: FD %d: timeout\n", fd);
-    comm_close_ssl_finish(fd);
-}
-
-#endif
 
 void
 comm_close(int fd)
 {
-    fde *F = &fd_table[fd];
+    fde *F = NULL;
 
     debug(5, 5) ("comm_close: FD %d\n", fd);
     assert(fd >= 0);
     assert(fd < Squid_MaxFD);
+    F = &fd_table[fd];
 
-    /* XXX This down to the cavium block below needs to be split and
-     * also called once on lingering close. In addition the ssl_shutdown
-     * may need to wait
-     */
     if (F->flags.closing)
 	return;
     if (shutting_down && (!F->flags.open || F->type == FD_FILE))
@@ -726,23 +647,23 @@ comm_close(int fd)
     assert(F->flags.open);
     assert(F->type != FD_FILE);
     F->flags.closing = 1;
+#if USE_SSL
+    if (F->ssl)
+	ssl_shutdown_method(fd);
+#endif
     CommWriteStateCallbackAndFree(fd, COMM_ERR_CLOSING);
     commCallCloseHandlers(fd);
     if (F->uses)		/* assume persistent connect count */
 	pconnHistCount(1, F->uses);
 #if USE_SSL
     if (F->ssl) {
-	if (!F->flags.close_request) {
-	    F->flags.close_request = 1;
-	    commSetTimeout(fd, 10, comm_close_ssl_timeout, NULL);
-	    comm_close_ssl(fd, NULL);
-	    return;
-	}
-	comm_close_ssl_finish(fd);
-	return;
+	SSL_free(F->ssl);
+	F->ssl = NULL;
     }
 #endif
-    comm_close_finish(fd);
+    fd_close(fd);		/* update fdstat */
+    close(fd);
+    statCounter.syscalls.sock.closes++;
 }
 
 /* Send a udp datagram to specified TO_ADDR. */
@@ -778,8 +699,6 @@ commSetDefer(int fd, DEFER * func, void *data)
     F->defer_data = data;
 }
 
-/* Epoll redefines this function in comm_select.c */
-#if !HAVE_EPOLL
 void
 commSetSelect(int fd, unsigned int type, PF * handler, void *client_data, time_t timeout)
 {
@@ -800,7 +719,6 @@ commSetSelect(int fd, unsigned int type, PF * handler, void *client_data, time_t
     if (timeout)
 	F->timeout = squid_curtime + timeout;
 }
-#endif
 
 void
 comm_add_close_handler(int fd, PF * handler, void *data)

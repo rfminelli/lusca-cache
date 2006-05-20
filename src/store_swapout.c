@@ -78,7 +78,7 @@ storeSwapOutStart(StoreEntry * e)
     e->swap_dirn = mem->swapout.sio->swap_dirn;
     /* write out the swap metadata */
     cbdataLock(mem->swapout.sio);
-    storeWrite(mem->swapout.sio, buf, mem->swap_hdr_sz, xfree);
+    storeWrite(mem->swapout.sio, buf, mem->swap_hdr_sz, 0, xfree);
 }
 
 static void
@@ -143,24 +143,9 @@ storeSwapOutMaintainMemObject(StoreEntry * e)
     }
     if (new_mem_lo < mem->inmem_lo)
 	new_mem_lo = mem->inmem_lo;
-    if (mem->inmem_lo != new_mem_lo) {
+    if (mem->inmem_lo != new_mem_lo)
 	mem->inmem_lo = stmemFreeDataUpto(&mem->data_hdr, new_mem_lo);
 
-	/* If ENTRY_DEFER_READ is set, then the client side will continue to
-	 * flush until it has less than READ_AHEAD_GAP bytes in memory */
-	if (EBIT_TEST(e->flags, ENTRY_DEFER_READ)) {
-
-	    if (mem->inmem_hi - mem->inmem_lo <= READ_AHEAD_GAP) {
-		EBIT_CLR(e->flags, ENTRY_DEFER_READ);
-#if HAVE_EPOLL
-		if (mem->serverfd != 0) {
-		    commResumeFD(mem->serverfd);
-		    mem->serverfd = 0;
-		}
-#endif
-	    }
-	}
-    }
     return swapout_able;
 }
 
@@ -285,7 +270,7 @@ storeSwapOut(StoreEntry * e)
 	debug(20, 3) ("storeSwapOut: swapping out %d bytes from %" PRINTF_OFF_T "\n",
 	    (int) swap_buf_len, mem->swapout.queue_offset);
 	mem->swapout.queue_offset += swap_buf_len;
-	storeWrite(mem->swapout.sio, stmemNodeGet(mem->swapout.memnode), swap_buf_len, stmemNodeFree);
+	storeWrite(mem->swapout.sio, stmemNodeGet(mem->swapout.memnode), swap_buf_len, -1, stmemNodeFree);
 	/* the storeWrite() call might generate an error */
 	if (e->swap_status != SWAPOUT_WRITING)
 	    break;

@@ -43,12 +43,6 @@
  *--------------------------------------------------------------------------*
  ****************************************************************************/
 
-/*
- * Linux GLIBC supports lots of things, but not all standards
- * enabled by default. Let it give us what it have.
- */
-#define _GNU_SOURCE 1
-
 #ifdef USE_POSIX_REGEX
 #ifndef USE_RE_SYNTAX
 #define USE_RE_SYNTAX	REG_EXTENDED	/* default Syntax */

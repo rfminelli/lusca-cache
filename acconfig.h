@@ -112,14 +112,9 @@
 #undef SQUID_SNMP
 
 /*
- * Define to enable WCCP V1
+ * Define to enable WCCP
  */
 #define USE_WCCP 1
-
-/*
- * Define to enable WCCP V2
- */
-#undef USE_WCCPv2
 
 /*
  * Squid frequently calls gettimeofday() for accurate timestamping.
@@ -406,16 +401,6 @@
  * Enable support for the X-Accelerator-Vary HTTP header
  */
 #undef X_ACCELERATOR_VARY
-
-/*
- * Enable authentication support in accelerators
- */
-#undef AUTH_ON_ACCELERATION
-
-/*
- * Supports epoll
- */
-#undef HAVE_EPOLL
 
 @BOTTOM@
 

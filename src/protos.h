@@ -34,14 +34,11 @@
 #ifndef SQUID_PROTOS_H
 #define SQUID_PROTOS_H
 
-extern void accessLogLog(AccessLogEntry *, aclCheck_t * checklist);
+extern void accessLogLog(AccessLogEntry *);
 extern void accessLogRotate(void);
 extern void accessLogClose(void);
 extern void accessLogInit(void);
 extern const char *accessLogTime(time_t);
-extern int accessLogParseLogFormat(logformat_token ** fmt, char *def);
-extern void accessLogDumpLogFormat(StoreEntry * entry, const char *name, logformat * definitions);
-extern void accessLogFreeLogFormat(logformat_token ** fmt);
 extern void hierarchyNote(HierarchyLogEntry *, hier_code, const char *);
 #if FORW_VIA_DB
 extern void fvdbCountVia(const char *key);
@@ -162,10 +159,6 @@ extern int comm_open(int, int, struct in_addr, u_short port, int, const char *no
 extern int comm_openex(int, int, struct in_addr, u_short, int, unsigned char TOS, const char *);
 extern u_short comm_local_port(int fd);
 
-#if HAVE_EPOLL
-extern void commDeferFD(int fd);
-extern void commResumeFD(int fd);
-#endif
 extern void commSetSelect(int, unsigned int, PF *, void *, time_t);
 extern void comm_add_close_handler(int fd, PF *, void *);
 extern void comm_remove_close_handler(int fd, PF *, void *);
@@ -188,9 +181,7 @@ extern void commCloseAllSockets(void);
  * comm_select.c
  */
 extern void comm_select_init(void);
-#if HAVE_EPOLL
-extern int comm_epoll(int);
-#elif HAVE_POLL
+#if HAVE_POLL
 extern int comm_poll(int);
 #else
 extern int comm_select(int);
@@ -572,13 +563,6 @@ extern void wccpConnectionShutdown(void);
 extern void wccpConnectionClose(void);
 #endif /* USE_WCCP */
 
-#if USE_WCCPv2
-extern void wccp2Init(void);
-extern void wccp2ConnectionOpen(void);
-extern void wccp2ConnectionShutdown(void);
-extern void wccp2ConnectionClose(void);
-#endif /* USE_WCCPv2 */
-
 extern void icpHandleIcpV3(int, struct sockaddr_in, char *, int);
 extern int icpCheckUdpHit(StoreEntry *, request_t * request);
 extern void icpConnectionsOpen(void);
@@ -667,7 +651,7 @@ extern int neighborsUdpPing(request_t *,
 extern void neighborAddAcl(const char *, const char *);
 extern void neighborsUdpAck(const cache_key *, icp_common_t *, const struct sockaddr_in *);
 extern void neighborAdd(const char *, const char *, int, int, int, int, int);
-extern void neighbors_init(void);
+extern void neighbors_open(int);
 extern peer *peerFindByName(const char *);
 extern peer *peerFindByNameAndPort(const char *, unsigned short);
 extern peer *getDefaultParent(request_t * request);
@@ -690,7 +674,6 @@ extern peer *whichPeer(const struct sockaddr_in *from);
 #if USE_HTCP
 extern void neighborsHtcpReply(const cache_key *, htcpReplyData *, const struct sockaddr_in *);
 #endif
-extern void peerAddFwdServer(FwdServer ** FS, peer * p, hier_code code);
 
 extern void netdbInit(void);
 extern void netdbHandlePingReply(const struct sockaddr_in *from, int hops, int rtt);
@@ -723,7 +706,6 @@ extern void peerDigestStatsReport(const PeerDigest * pd, StoreEntry * e);
 
 /* forward.c */
 extern void fwdStart(int, StoreEntry *, request_t *);
-extern void fwdStartPeer(peer *, StoreEntry *, request_t *);
 extern DEFER fwdCheckDeferRead;
 extern void fwdFail(FwdState *, ErrorState *);
 extern void fwdUnregister(int fd, FwdState *);
@@ -744,10 +726,6 @@ extern void urnStart(request_t *, StoreEntry *);
 extern void redirectStart(clientHttpRequest *, RH *, void *);
 extern void redirectInit(void);
 extern void redirectShutdown(void);
-
-extern void locationRewriteStart(HttpReply *, clientHttpRequest *, RH *, void *);
-extern void locationRewriteInit(void);
-extern void locationRewriteShutdown(void);
 
 /* auth_modules.c */
 extern void authSchemeSetup(void);
@@ -792,7 +770,6 @@ extern void authSchemeAdd(const char *type, AUTHSSETUP * setup);
 extern void refreshAddToList(const char *, int, time_t, int, time_t);
 extern int refreshIsCachable(const StoreEntry *);
 extern int refreshCheckHTTP(const StoreEntry *, request_t *);
-extern int refreshCheckHTTPStale(const StoreEntry *, request_t *);
 extern int refreshCheckICP(const StoreEntry *, request_t *);
 extern int refreshCheckHTCP(const StoreEntry *, request_t *);
 extern int refreshCheckDigest(const StoreEntry *, time_t delta);
@@ -965,7 +942,7 @@ extern storeIOState *storeCreate(StoreEntry *, STFNCB *, STIOCB *, void *);
 extern storeIOState *storeOpen(StoreEntry *, STFNCB *, STIOCB *, void *);
 extern void storeClose(storeIOState *);
 extern void storeRead(storeIOState *, char *, size_t, squid_off_t, STRCB *, void *);
-extern void storeWrite(storeIOState *, char *, size_t, FREE *);
+extern void storeWrite(storeIOState *, char *, size_t, squid_off_t, FREE *);
 extern void storeUnlink(StoreEntry *);
 extern squid_off_t storeOffset(storeIOState *);
 
@@ -1155,10 +1132,9 @@ extern void errorAppendEntry(StoreEntry *, ErrorState *);
 extern void errorStateFree(ErrorState * err);
 extern int errorReservePageId(const char *page_name);
 extern ErrorState *errorCon(err_type type, http_status);
-extern int errorPageId(const char *page_name);
 
-extern void pconnPush(int, const char *host, u_short port, const char *domain);
-extern int pconnPop(const char *host, u_short port, const char *domain);
+extern void pconnPush(int, const char *host, u_short port);
+extern int pconnPop(const char *host, u_short port);
 extern void pconnInit(void);
 
 extern int asnMatchIp(void *, struct in_addr);
@@ -1253,11 +1229,6 @@ extern int internalHostnameIs(const char *);
 extern void carpInit(void);
 extern peer *carpSelectParent(request_t *);
 #endif
-
-extern void peerUserHashInit(void);
-extern peer *peerUserHashSelectParent(request_t *);
-extern void peerSourceHashInit(void);
-extern peer *peerSourceHashSelectParent(request_t *);
 
 #if DELAY_POOLS
 extern void delayPoolsInit(void);
@@ -1369,25 +1340,5 @@ extern void externalAclInit(void);
 extern void externalAclShutdown(void);
 extern int externalAclRequiresAuth(void *acl_data);
 extern char *strtokFile(void);
-const char *externalAclMessage(external_acl_entry * entry);
-
-
-#if USE_WCCPv2
-extern void parse_wccp2_service(void *v);
-extern void free_wccp2_service(void *v);
-extern void dump_wccp2_service(StoreEntry * e, const char *label, void *v);
-
-extern void parse_wccp2_service_info(void *v);
-extern void free_wccp2_service_info(void *v);
-extern void dump_wccp2_service_info(StoreEntry * e, const char *label, void *v);
-#endif
-
-/* peer_monitor.c */
-extern void peerMonitorInit(void);
-extern void peerMonitorNow(peer *);
-
-/* errormap.c */
-extern void errorMapInit(void);
-extern int errorMapStart(const errormap * map, request_t * req, HttpReply * reply, const char *aclname, ERRMAPCB * callback, void *data);
 
 #endif /* SQUID_PROTOS_H */

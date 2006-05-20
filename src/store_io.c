@@ -7,12 +7,6 @@ static struct {
 	int create_fail;
 	int success;
     } create;
-    struct {
-	int calls;
-	int success;
-	int open_fail;
-	int loadav_fail;
-    } open;
 } store_io_stats;
 
 OBJH storeIOStats;
@@ -67,23 +61,8 @@ storeIOState *
 storeOpen(StoreEntry * e, STFNCB * file_callback, STIOCB * callback,
     void *callback_data)
 {
-    int load;
-    storeIOState *sio;
-
     SwapDir *SD = &Config.cacheSwap.swapDirs[e->swap_dirn];
-    store_io_stats.open.calls++;
-    load = SD->checkload(SD, ST_OP_OPEN);
-    if (load < 0 || load > 1000) {
-	store_io_stats.open.loadav_fail++;
-	return NULL;
-    }
-    sio = SD->obj.open(SD, e, file_callback, callback, callback_data);
-    if (sio == NULL) {
-	store_io_stats.open.open_fail++;
-    } else {
-	store_io_stats.open.success++;
-    }
-    return sio;
+    return SD->obj.open(SD, e, file_callback, callback, callback_data);
 }
 
 void
@@ -104,11 +83,9 @@ storeRead(storeIOState * sio, char *buf, size_t size, squid_off_t offset, STRCB 
 }
 
 void
-storeWrite(storeIOState * sio, char *buf, size_t size, FREE * free_func)
+storeWrite(storeIOState * sio, char *buf, size_t size, squid_off_t offset, FREE * free_func)
 {
     SwapDir *SD = &Config.cacheSwap.swapDirs[sio->swap_dirn];
-    squid_off_t offset = sio->write_offset;
-    sio->write_offset += size;
     SD->obj.write(SD, sio, buf, size, offset, free_func);
 }
 
@@ -137,8 +114,4 @@ storeIOStats(StoreEntry * sentry)
     storeAppendPrintf(sentry, "create.select_fail %d\n", store_io_stats.create.select_fail);
     storeAppendPrintf(sentry, "create.create_fail %d\n", store_io_stats.create.create_fail);
     storeAppendPrintf(sentry, "create.success %d\n", store_io_stats.create.success);
-    storeAppendPrintf(sentry, "open.calls %d\n", store_io_stats.open.calls);
-    storeAppendPrintf(sentry, "open.success %d\n", store_io_stats.open.success);
-    storeAppendPrintf(sentry, "open.loadav_fail %d\n", store_io_stats.open.loadav_fail);
-    storeAppendPrintf(sentry, "open.open_fail %d\n", store_io_stats.open.open_fail);
 }

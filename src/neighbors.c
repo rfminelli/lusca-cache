@@ -362,7 +362,7 @@ neighborRemove(peer * target)
 }
 
 void
-neighbors_init(void)
+neighbors_open(int fd)
 {
     struct sockaddr_in name;
     socklen_t len = sizeof(struct sockaddr_in);
@@ -370,27 +370,25 @@ neighbors_init(void)
     const char *me = getMyHostname();
     peer *this;
     peer *next;
-    int fd = theInIcpConnection;
-    if (fd >= 0) {
-	memset(&name, '\0', sizeof(struct sockaddr_in));
-	if (getsockname(fd, (struct sockaddr *) &name, &len) < 0)
-	    debug(15, 1) ("getsockname(%d,%p,%p) failed.\n", fd, &name, &len);
-	for (this = Config.peers; this; this = next) {
-	    http_port_list *s;
-	    next = this->next;
-	    if (0 != strcmp(this->host, me))
+    memset(&name, '\0', sizeof(struct sockaddr_in));
+    if (getsockname(fd, (struct sockaddr *) &name, &len) < 0)
+	debug(15, 1) ("getsockname(%d,%p,%p) failed.\n", fd, &name, &len);
+    for (this = Config.peers; this; this = next) {
+	sockaddr_in_list *s;
+	next = this->next;
+	if (0 != strcmp(this->host, me))
+	    continue;
+	for (s = Config.Sockaddr.http; s; s = s->next) {
+	    if (this->http_port != ntohs(s->s.sin_port))
 		continue;
-	    for (s = Config.Sockaddr.http; s; s = s->next) {
-		if (this->http_port != ntohs(s->s.sin_port))
-		    continue;
-		debug(15, 1) ("WARNING: Peer looks like this host\n");
-		debug(15, 1) ("         Ignoring %s %s/%d/%d\n",
-		    neighborTypeStr(this), this->host, this->http_port,
-		    this->icp.port);
-		neighborRemove(this);
-	    }
+	    debug(15, 1) ("WARNING: Peer looks like this host\n");
+	    debug(15, 1) ("         Ignoring %s %s/%d/%d\n",
+		neighborTypeStr(this), this->host, this->http_port,
+		this->icp.port);
+	    neighborRemove(this);
 	}
     }
+
     peerRefreshDNS((void *) 1);
     if (0 == echo_hdr.opcode) {
 	echo_hdr.opcode = ICP_SECHO;
@@ -407,11 +405,9 @@ neighbors_init(void)
     cachemgrRegister("server_list",
 	"Peer Cache Statistics",
 	neighborDumpPeers, 0, 1);
-    if (theInIcpConnection >= 0) {
-	cachemgrRegister("non_peers",
-	    "List of Unknown sites sending ICP messages",
-	    neighborDumpNonPeers, 0, 1);
-    }
+    cachemgrRegister("non_peers",
+	"List of Unknown sites sending ICP messages",
+	neighborDumpNonPeers, 0, 1);
 }
 
 int
@@ -509,8 +505,9 @@ neighborsUdpPing(request_t * request,
 	    /* Neighbor is dead; ping it anyway, but don't expect a reply */
 	    /* log it once at the threshold */
 	    if (p->stats.logged_state == PEER_ALIVE) {
-		debug(15, 1) ("Detected DEAD %s: %s\n",
-		    neighborTypeStr(p), p->name);
+		debug(15, 1) ("Detected DEAD %s: %s/%d/%d\n",
+		    neighborTypeStr(p),
+		    p->host, p->http_port, p->icp.port);
 		p->stats.logged_state = PEER_DEAD;
 	    }
 	}
@@ -684,8 +681,9 @@ static void
 neighborAlive(peer * p, const MemObject * mem, const icp_common_t * header)
 {
     if (p->stats.logged_state == PEER_DEAD && p->tcp_up) {
-	debug(15, 1) ("Detected REVIVED %s: %s\n",
-	    neighborTypeStr(p), p->name);
+	debug(15, 1) ("Detected REVIVED %s: %s/%d/%d\n",
+	    neighborTypeStr(p),
+	    p->host, p->http_port, p->icp.port);
 	p->stats.logged_state = PEER_ALIVE;
     }
     p->stats.last_reply = squid_curtime;
@@ -716,8 +714,9 @@ static void
 neighborAliveHtcp(peer * p, const MemObject * mem, const htcpReplyData * htcp)
 {
     if (p->stats.logged_state == PEER_DEAD && p->tcp_up) {
-	debug(15, 1) ("Detected REVIVED %s: %s\n",
-	    neighborTypeStr(p), p->name);
+	debug(15, 1) ("Detected REVIVED %s: %s/%d/%d\n",
+	    neighborTypeStr(p),
+	    p->host, p->http_port, p->icp.port);
 	p->stats.logged_state = PEER_ALIVE;
     }
     p->stats.last_reply = squid_curtime;
@@ -908,7 +907,7 @@ peerFindByName(const char *name)
 {
     peer *p = NULL;
     for (p = Config.peers; p; p = p->next) {
-	if (!strcasecmp(name, p->name))
+	if (!strcasecmp(name, p->host))
 	    break;
     }
     return p;
@@ -919,7 +918,7 @@ peerFindByNameAndPort(const char *name, unsigned short port)
 {
     peer *p = NULL;
     for (p = Config.peers; p; p = p->next) {
-	if (strcasecmp(name, p->name))
+	if (strcasecmp(name, p->host))
 	    continue;
 	if (port != p->http_port)
 	    continue;
@@ -935,10 +934,6 @@ neighborUp(const peer * p)
 	if (!peerProbeConnect((peer *) p))
 	    return 0;
     }
-    if (p->stats.logged_state != PEER_ALIVE)
-	return 0;
-    if (p->monitor.state != PEER_ALIVE)
-	return 0;
     if (p->options.no_query)
 	return 1;
     if (p->stats.probe_start != 0 &&
@@ -968,8 +963,6 @@ peerDestroy(void *data)
     }
     aclDestroyAccessList(&p->access);
     safe_free(p->host);
-    safe_free(p->name);
-    safe_free(p->domain);
 #if USE_CACHE_DIGESTS
     if (p->digest) {
 	PeerDigest *pd = p->digest;
@@ -1040,9 +1033,8 @@ peerRefreshDNS(void *data)
 	eventAddIsh("peerRefreshDNS", peerRefreshDNS, NULL, 180.0, 1);
 	return;
     }
-    for (p = Config.peers; p; p = p->next) {
+    for (p = Config.peers; p; p = p->next)
 	ipcache_nbgethostbyname(p->host, peerDNSConfigure, p);
-    }
     /* Reconfigure the peers every hour */
     eventAddIsh("peerRefreshDNS", peerRefreshDNS, NULL, 3600.0, 1);
 }
@@ -1057,8 +1049,9 @@ peerConnectFailedSilent(peer * p)
     }
     p->tcp_up--;
     if (!p->tcp_up) {
-	debug(15, 1) ("Detected DEAD %s: %s\n",
-	    neighborTypeStr(p), p->name);
+	debug(15, 1) ("Detected DEAD %s: %s/%d/%d\n",
+	    neighborTypeStr(p),
+	    p->host, p->http_port, p->icp.port);
 	p->stats.logged_state = PEER_DEAD;
     }
 }
@@ -1075,9 +1068,9 @@ peerConnectSucceded(peer * p)
 {
     if (!p->tcp_up) {
 	debug(15, 2) ("TCP connection to %s/%d succeded\n", p->host, p->http_port);
-	debug(15, 1) ("Detected REVIVED %s: %s\n",
-	    neighborTypeStr(p), p->name);
-	peerMonitorNow(p);
+	debug(15, 1) ("Detected REVIVED %s: %s/%d/%d\n",
+	    neighborTypeStr(p),
+	    p->host, p->http_port, p->icp.port);
 	p->stats.logged_state = PEER_ALIVE;
     }
     p->tcp_up = PEER_TCP_MAGIC_COUNT;
@@ -1106,7 +1099,7 @@ peerProbeConnect(peer * p)
 	return ret;		/* probe already running */
     if (squid_curtime - p->stats.last_connect_probe == 0)
 	return ret;		/* don't probe to often */
-    fd = comm_open(SOCK_STREAM, IPPROTO_TCP, getOutgoingAddr(NULL),
+    fd = comm_open(SOCK_STREAM, 0, getOutgoingAddr(NULL),
 	0, COMM_NONBLOCKING, p->host);
     if (fd < 0)
 	return ret;
@@ -1257,14 +1250,8 @@ dump_peer_options(StoreEntry * sentry, peer * p)
 	storeAppendPrintf(sentry, " round-robin");
     if (p->options.mcast_responder)
 	storeAppendPrintf(sentry, " multicast-responder");
-    if (p->weight != 1)
-	storeAppendPrintf(sentry, " weight=%d", p->weight);
     if (p->options.closest_only)
 	storeAppendPrintf(sentry, " closest-only");
-    if (p->options.userhash)
-	storeAppendPrintf(sentry, " userhash");
-    if (p->options.sourcehash)
-	storeAppendPrintf(sentry, " sourcehash");
 #if USE_HTCP
     if (p->options.htcp)
 	storeAppendPrintf(sentry, " htcp");
@@ -1279,29 +1266,6 @@ dump_peer_options(StoreEntry * sentry, peer * p)
 	storeAppendPrintf(sentry, " login=%s", p->login);
     if (p->mcast.ttl > 0)
 	storeAppendPrintf(sentry, " ttl=%d", p->mcast.ttl);
-    if (p->connect_timeout > 0)
-	storeAppendPrintf(sentry, " connect-timeout=%d", (int) p->connect_timeout);
-#if USE_CACHE_DIGESTS
-    if (p->digest_url)
-	storeAppendPrintf(sentry, " digest-url=%s", p->digest_url);
-#endif
-    if (p->options.allow_miss)
-	storeAppendPrintf(sentry, " allow-miss");
-    if (p->max_conn > 0)
-	storeAppendPrintf(sentry, " max-conn=%d", p->max_conn);
-    if (p->options.originserver)
-	storeAppendPrintf(sentry, " originserver");
-    /* name is used in the heading */
-    if (p->monitor.url)
-	storeAppendPrintf(sentry, " monitorurl=%s", p->monitor.url);
-    if (p->monitor.min > 0 || p->monitor.max > 0) {
-	if (p->monitor.max > 0)
-	    storeAppendPrintf(sentry, " monitorsize=%d:%d", p->monitor.min, p->monitor.max);
-	else
-	    storeAppendPrintf(sentry, " monitorsize=%d", p->monitor.min);
-    }
-    if (p->domain)
-	storeAppendPrintf(sentry, " forceddomain=%s", p->domain);
     storeAppendPrintf(sentry, "\n");
 }
 
@@ -1316,10 +1280,8 @@ dump_peers(StoreEntry * sentry, peer * peers)
 	storeAppendPrintf(sentry, "There are no neighbors installed.\n");
     for (e = peers; e; e = e->next) {
 	assert(e->host != NULL);
-	storeAppendPrintf(sentry, "\n%-11.11s: %s\n",
+	storeAppendPrintf(sentry, "\n%-11.11s: %s/%d/%d\n",
 	    neighborTypeStr(e),
-	    e->name);
-	storeAppendPrintf(sentry, "Host       : %s/%d/%d\n",
 	    e->host,
 	    e->http_port,
 	    e->icp.port);
@@ -1333,49 +1295,42 @@ dump_peers(StoreEntry * sentry, peer * peers)
 	    neighborUp(e) ? "Up" : "Down");
 	storeAppendPrintf(sentry, "AVG RTT    : %d msec\n", e->stats.rtt);
 	storeAppendPrintf(sentry, "OPEN CONNS : %d\n", e->stats.conn_open);
-	if (!e->options.no_query) {
-	    storeAppendPrintf(sentry, "LAST QUERY : %8d seconds ago\n",
-		(int) (squid_curtime - e->stats.last_query));
-	    if (e->stats.last_reply > 0)
-		storeAppendPrintf(sentry, "LAST REPLY : %8d seconds ago\n",
-		    (int) (squid_curtime - e->stats.last_reply));
-	    else
-		storeAppendPrintf(sentry, "LAST REPLY : none received\n");
-	    storeAppendPrintf(sentry, "PINGS SENT : %8d\n", e->stats.pings_sent);
-	    storeAppendPrintf(sentry, "PINGS ACKED: %8d %3d%%\n",
-		e->stats.pings_acked,
-		percent(e->stats.pings_acked, e->stats.pings_sent));
-	}
+	storeAppendPrintf(sentry, "LAST QUERY : %8d seconds ago\n",
+	    (int) (squid_curtime - e->stats.last_query));
+	storeAppendPrintf(sentry, "LAST REPLY : %8d seconds ago\n",
+	    (int) (squid_curtime - e->stats.last_reply));
+	storeAppendPrintf(sentry, "PINGS SENT : %8d\n", e->stats.pings_sent);
+	storeAppendPrintf(sentry, "PINGS ACKED: %8d %3d%%\n",
+	    e->stats.pings_acked,
+	    percent(e->stats.pings_acked, e->stats.pings_sent));
 	storeAppendPrintf(sentry, "FETCHES    : %8d %3d%%\n",
 	    e->stats.fetches,
 	    percent(e->stats.fetches, e->stats.pings_acked));
 	storeAppendPrintf(sentry, "IGNORED    : %8d %3d%%\n",
 	    e->stats.ignored_replies,
 	    percent(e->stats.ignored_replies, e->stats.pings_acked));
-	if (!e->options.no_query) {
-	    storeAppendPrintf(sentry, "Histogram of PINGS ACKED:\n");
+	storeAppendPrintf(sentry, "Histogram of PINGS ACKED:\n");
 #if USE_HTCP
-	    if (e->options.htcp) {
-		storeAppendPrintf(sentry, "\tMisses\t%8d %3d%%\n",
-		    e->htcp.counts[0],
-		    percent(e->htcp.counts[0], e->stats.pings_acked));
-		storeAppendPrintf(sentry, "\tHits\t%8d %3d%%\n",
-		    e->htcp.counts[1],
-		    percent(e->htcp.counts[1], e->stats.pings_acked));
-	    } else {
+	if (e->options.htcp) {
+	    storeAppendPrintf(sentry, "\tMisses\t%8d %3d%%\n",
+		e->htcp.counts[0],
+		percent(e->htcp.counts[0], e->stats.pings_acked));
+	    storeAppendPrintf(sentry, "\tHits\t%8d %3d%%\n",
+		e->htcp.counts[1],
+		percent(e->htcp.counts[1], e->stats.pings_acked));
+	} else {
 #endif
-		for (op = ICP_INVALID; op < ICP_END; op++) {
-		    if (e->icp.counts[op] == 0)
-			continue;
-		    storeAppendPrintf(sentry, "    %12.12s : %8d %3d%%\n",
-			icp_opcode_str[op],
-			e->icp.counts[op],
-			percent(e->icp.counts[op], e->stats.pings_acked));
-		}
-#if USE_HTCP
+	    for (op = ICP_INVALID; op < ICP_END; op++) {
+		if (e->icp.counts[op] == 0)
+		    continue;
+		storeAppendPrintf(sentry, "    %12.12s : %8d %3d%%\n",
+		    icp_opcode_str[op],
+		    e->icp.counts[op],
+		    percent(e->icp.counts[op], e->stats.pings_acked));
 	    }
-#endif
+#if USE_HTCP
 	}
+#endif
 	if (e->stats.last_connect_failure) {
 	    storeAppendPrintf(sentry, "Last failed connect() at: %s\n",
 		mkhttpdlogtime(&(e->stats.last_connect_failure)));

@@ -835,7 +835,7 @@ statAvgDump(StoreEntry * sentry, int minutes, int hours)
     storeAppendPrintf(sentry, "aborted_requests = %f/sec\n",
 	XAVG(aborted_requests));
 
-#if HAVE_POLL || HAVE_EPOLL
+#if HAVE_POLL
     storeAppendPrintf(sentry, "syscalls.polls = %f/sec\n", XAVG(syscalls.polls));
 #else
     storeAppendPrintf(sentry, "syscalls.selects = %f/sec\n", XAVG(syscalls.selects));
@@ -1477,16 +1477,6 @@ statClientRequests(StoreEntry * s)
 	    (long int) http->start.tv_sec,
 	    (int) http->start.tv_usec,
 	    tvSubDsec(http->start, current_time));
-	if (http->request->auth_user_request) {
-	    const char *p = NULL;
-
-	    p = authenticateUserRequestUsername(http->request->auth_user_request);
-
-	    if (!p)
-		p = "-";
-
-	    storeAppendPrintf(s, "username %s\n", p);
-	}
 #if DELAY_POOLS
 	storeAppendPrintf(s, "delay_pool %d\n", delayClient(http) >> 16);
 #endif

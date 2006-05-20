@@ -136,14 +136,7 @@ mainParseOptions(int argc, char *argv[])
 	    opt_store_doublecheck = 1;
 	    break;
 	case 'V':
-	    if (Config.Sockaddr.http)
-		Config.Sockaddr.http->vhost = 1;
-#if USE_SSL
-	    else if (Config.Sockaddr.https)
-		Config.Sockaddr.https->http.vhost = 1;
-#endif
-	    else
-		fatal("No http_port specified\n");
+	    vhost_mode = 1;
 	    break;
 	case 'X':
 	    /* force full debugging */
@@ -306,9 +299,6 @@ serverConnectionsOpen(void)
 #if USE_WCCP
     wccpConnectionOpen();
 #endif
-#if USE_WCCPv2
-    wccp2ConnectionOpen();
-#endif
     clientdbInit();
     icmpOpen();
     netdbInit();
@@ -317,9 +307,6 @@ serverConnectionsOpen(void)
 #if USE_CARP
     carpInit();
 #endif
-    peerSourceHashInit();
-    peerUserHashInit();
-    peerMonitorInit();
 }
 
 void
@@ -337,9 +324,6 @@ serverConnectionsClose(void)
 #endif
 #if USE_WCCP
     wccpConnectionShutdown();
-#endif
-#if USE_WCCPv2
-    wccp2ConnectionShutdown();
 #endif
     asnFreeMemory();
 }
@@ -361,16 +345,12 @@ mainReconfigure(void)
 #if USE_WCCP
     wccpConnectionClose();
 #endif
-#if USE_WCCPv2
-    wccp2ConnectionClose();
-#endif
 #if USE_DNSSERVERS
     dnsShutdown();
 #else
     idnsShutdown();
 #endif
     redirectShutdown();
-    locationRewriteShutdown();
     authenticateShutdown();
     externalAclShutdown();
     storeDirCloseSwapLogs();
@@ -398,24 +378,24 @@ mainReconfigure(void)
     idnsInit();
 #endif
     redirectInit();
-    locationRewriteInit();
     authenticateInit(&Config.authConfig);
     externalAclInit();
 #if USE_WCCP
     wccpInit();
 #endif
-#if USE_WCCPv2
-    wccp2Init();
-#endif
     serverConnectionsOpen();
-    neighbors_init();
+    if (theOutIcpConnection >= 0) {
+	if (!Config2.Accel.on || Config.onoff.accel_with_proxy)
+	    neighbors_open(theOutIcpConnection);
+	else
+	    debug(1, 1) ("ICP port disabled in httpd_accelerator mode\n");
+    }
     storeDirOpenSwapLogs();
     mimeInit(Config.mimeTablePathname);
     eventCleanup();
     writePidFile();		/* write PID file */
     debug(1, 1) ("Ready to serve requests.\n");
     reconfiguring = 0;
-    peerMonitorInit();
 }
 
 static void
@@ -426,7 +406,6 @@ mainRotate(void)
     dnsShutdown();
 #endif
     redirectShutdown();
-    locationRewriteShutdown();
     authenticateShutdown();
     externalAclShutdown();
     _db_rotate_log();		/* cache.log */
@@ -443,7 +422,6 @@ mainRotate(void)
     dnsInit();
 #endif
     redirectInit();
-    locationRewriteInit();
     authenticateInit(&Config.authConfig);
     externalAclInit();
 }
@@ -529,8 +507,6 @@ mainInitialize(void)
     idnsInit();
 #endif
     redirectInit();
-    locationRewriteInit();
-    errorMapInit();
     authenticateInit(&Config.authConfig);
     externalAclInit();
     useragentOpenLog();
@@ -571,11 +547,13 @@ mainInitialize(void)
 #if USE_WCCP
     wccpInit();
 #endif
-#if USE_WCCPv2
-    wccp2Init();
-#endif
     serverConnectionsOpen();
-    neighbors_init();
+    if (theOutIcpConnection >= 0) {
+	if (!Config2.Accel.on || Config.onoff.accel_with_proxy)
+	    neighbors_open(theOutIcpConnection);
+	else
+	    debug(1, 1) ("ICP port disabled in httpd_accelerator mode\n");
+    }
     if (Config.chroot_dir)
 	no_suid();
     if (!configured_once)
@@ -763,10 +741,8 @@ main(int argc, char **argv)
 	eventRun();
 	if ((loop_delay = eventNextTime()) < 0)
 	    loop_delay = 0;
-#if HAVE_EPOLL
-	switch (comm_epoll(loop_delay)) {
-#elif HAVE_POLL
-	    switch (comm_poll(loop_delay)) {
+#if HAVE_POLL
+	switch (comm_poll(loop_delay)) {
 #else
 	switch (comm_select(loop_delay)) {
 #endif
@@ -989,7 +965,6 @@ SquidShutdown(void *unused)
 #endif
     redirectShutdown();
     externalAclShutdown();
-    locationRewriteShutdown();
     icpConnectionClose();
 #if USE_HTCP
     htcpSocketClose();
@@ -999,9 +974,6 @@ SquidShutdown(void *unused)
 #endif
 #if USE_WCCP
     wccpConnectionClose();
-#endif
-#if USE_WCCPv2
-    wccp2ConnectionClose();
 #endif
     releaseServerSockets();
     commCloseAllSockets();
@@ -1023,7 +995,7 @@ SquidShutdown(void *unused)
 #endif
     storeDirSync();		/* Flush log close */
     storeFsDone();
-#if LEAK_CHECK_MODE
+#if PURIFY || XMALLOC_TRACE
     configFreeMemory();
     storeFreeMemory();
     /*stmemFreeMemory(); */

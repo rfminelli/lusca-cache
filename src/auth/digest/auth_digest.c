@@ -938,7 +938,7 @@ authDigestInit(authScheme * scheme)
 	    digestauthenticators = helperCreate("digestauthenticator");
 	digestauthenticators->cmdline = digestConfig->authenticate;
 	digestauthenticators->n_to_start = digestConfig->authenticateChildren;
-	digestauthenticators->ipc_type = IPC_STREAM;
+	digestauthenticators->ipc_type = IPC_TCP_SOCKET;
 	helperOpenServers(digestauthenticators);
 	if (!init) {
 	    cachemgrRegister("digestauthenticator",

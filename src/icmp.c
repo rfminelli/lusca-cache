@@ -188,7 +188,7 @@ icmpOpen(void)
     int wfd;
     args[0] = "(pinger)";
     args[1] = NULL;
-    x = ipcCreate(IPC_DGRAM,
+    x = ipcCreate(IPC_UDP_SOCKET,
 	Config.Program.pinger,
 	args,
 	"Pinger Socket",

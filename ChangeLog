@@ -1,27 +1,4 @@
-Changes to squid-2.6 (not yet released)
-
-	- New --enable-default-hostsfile configure option
-	- Added username info to active_requests cachemgr stats
-	- Modified squid MIB to incorporate squid.conf visible_hostname
-	- Added multi-line capability in squid.conf
-	- Added new httpd_suppress_version_string configuration directive
-	- WCCPv2 support
-	- Negotiate authentication scheme support
-	- NTLM authentication scheme rewritten
-	- Customizable access log formats
-	- Selective access logging
-	- Access logging via syslog
-	- Reverse proxy enhancements, with new cache_peer based forwarding
-	  model.
-	- LDAP based Digest helper (Note: not true LDAP integration, just using
-	  LDAP for storage of the Digest hashes)
-	- Improved helper communication protocol
-	- External ACL improvements. %PATH, log= (more to come before release)
-	- Improved SSL support with hardware offload, client certificate
-	  support (primitive), chained certificates and numerous bug fixes
-	- Linux epoll support
-
-Changes to squid-2.5.STABLE14 (not yet released)
+Changes to squid-2.5.STABLE14 (20 May 2006)
 	- [Minor] icons not displayed when visible_hostname is a
 	  short hostname (witout domain). (Bug #1532)
 	- [Medium] Memleak in HTCP client code (default disabled)
@@ -40,7 +17,7 @@ Changes to squid-2.5.STABLE13 (12 Mar 2006)
 	  (Bug #1472)
 	- [Minor] Squid crash when asyncio function counters url accessed
 	  from Cachemgr CGI (Bug #1464)
-	- [Cosmetic] Linux compile warning about prctl called with too few
+	- [Cosmetic] Linix compile warning about prctl called with too few
  	  arguments (Bug #1483)
 	- [Minor] Wrong timezone declaration for 64 bit Irix (Bug #1479)
 	- [Minor] Some 206 responses logged incorrectly (Bug #1511)

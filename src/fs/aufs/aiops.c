@@ -37,7 +37,7 @@
 #endif
 
 #include "squid.h"
-#include "async_io.h"
+#include "store_asyncufs.h"
 
 #include	<stdio.h>
 #include	<sys/types.h>
@@ -281,9 +281,6 @@ squidaio_init(void)
 #if HAVE_SCHED_H && HAVE_PTHREAD_ATTR_SETSCHEDPARAM
     pthread_attr_setschedparam(&globattr, &globsched);
 #endif
-
-    /* Give each thread a smaller 256KB stack, should be more than sufficient */
-    pthread_attr_setstacksize(&globattr, 256 * 1024);
 
     /* Initialize request queue */
     if (pthread_mutex_init(&(request_queue.mutex), NULL))
@@ -669,7 +666,8 @@ squidaio_read(int fd, char *bufp, int bufs, off_t offset, int whence, squidaio_r
 static void
 squidaio_do_read(squidaio_request_t * requestp)
 {
-    requestp->ret = pread(requestp->fd, requestp->bufferp, requestp->buflen, requestp->offset);
+    lseek(requestp->fd, requestp->offset, requestp->whence);
+    requestp->ret = read(requestp->fd, requestp->bufferp, requestp->buflen);
     requestp->err = errno;
 }
 
@@ -697,8 +695,7 @@ squidaio_write(int fd, char *bufp, int bufs, off_t offset, int whence, squidaio_
 static void
 squidaio_do_write(squidaio_request_t * requestp)
 {
-    assert(requestp->offset >= 0);
-    requestp->ret = pwrite(requestp->fd, requestp->bufferp, requestp->buflen, requestp->offset);
+    requestp->ret = write(requestp->fd, requestp->bufferp, requestp->buflen);
     requestp->err = errno;
 }
 

@@ -4,7 +4,6 @@
  */
 
 #include "squid.h"
-#include "async_io.h"
 #include "store_asyncufs.h"
 
 #if ASYNC_READ

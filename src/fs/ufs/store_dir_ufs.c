@@ -104,7 +104,6 @@ static STNEWFS storeUfsDirNewfs;
 static STDUMP storeUfsDirDump;
 static STMAINTAINFS storeUfsDirMaintain;
 static STCHECKOBJ storeUfsDirCheckObj;
-static STCHECKLOADAV storeUfsDirCheckLoadAv;
 static STREFOBJ storeUfsDirRefObj;
 static STUNREFOBJ storeUfsDirUnrefObj;
 static QS rev_int_sort;
@@ -1617,17 +1616,6 @@ storeUfsDirMaintain(SwapDir * SD)
 int
 storeUfsDirCheckObj(SwapDir * SD, const StoreEntry * e)
 {
-    return 1;
-}
-
-/*
- * storeUfsDirCheckLoadAv
- *
- * Return load average from 0 to 1000.
- */
-int
-storeUfsDirCheckLoadAv(SwapDir * SD, store_op_t op)
-{
     ufsinfo_t *ufsinfo = SD->fsdata;
     return 500 + ufsinfo->open_files / 2;
 }
@@ -1918,7 +1906,6 @@ storeUfsDirParse(SwapDir * sd, int index, char *path)
     sd->statfs = storeUfsDirStats;
     sd->maintainfs = storeUfsDirMaintain;
     sd->checkobj = storeUfsDirCheckObj;
-    sd->checkload = storeUfsDirCheckLoadAv;
     sd->refobj = storeUfsDirRefObj;
     sd->unrefobj = storeUfsDirUnrefObj;
     sd->callback = NULL;

@@ -65,7 +65,6 @@ extern void (*snmplib_debug_hook) (int, char *);
 static oid *static_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn);
 static oid *time_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn);
 static oid *peer_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn);
-static oid *peer_InstIndex(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn);
 static oid *client_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn);
 static void snmpDecodePacket(snmp_request_t * rq);
 static void snmpConstructReponse(snmp_request_t * rq);
@@ -122,7 +121,7 @@ snmpInit(void)
 					snmpAddNode(snmpCreateOid(LEN_SYS, SQ_SYS, SYS_UPTIME),
 					    LEN_SYS, snmp_sysFn, static_Inst, 0)),
 				    snmpAddNode(snmpCreateOid(LEN_SQ_CONF, SQ_CONF),
-					LEN_SQ_CONF, NULL, NULL, 6,
+					LEN_SQ_CONF, NULL, NULL, 5,
 					snmpAddNode(snmpCreateOid(LEN_SYS, SQ_CONF, CONF_ADMIN),
 					    LEN_SYS, snmp_confFn, static_Inst, 0),
 					snmpAddNode(snmpCreateOid(LEN_SYS, SQ_CONF, CONF_VERSION),
@@ -140,9 +139,7 @@ snmpInit(void)
 					    snmpAddNode(snmpCreateOid(LEN_CONF_ST, SQ_CONF, CONF_STORAGE, CONF_ST_SWHIWM),
 						LEN_CONF_ST, snmp_confFn, static_Inst, 0),
 					    snmpAddNode(snmpCreateOid(LEN_CONF_ST, SQ_CONF, CONF_STORAGE, CONF_ST_SWLOWM),
-						LEN_CONF_ST, snmp_confFn, static_Inst, 0)),
-					snmpAddNode(snmpCreateOid(LEN_SYS, SQ_CONF, CONF_UNIQNAME),
-					    LEN_SYS, snmp_confFn, static_Inst, 0)),
+						LEN_CONF_ST, snmp_confFn, static_Inst, 0))),
 				    snmpAddNode(snmpCreateOid(LEN_SQ_PRF, SQ_PRF),
 					LEN_SQ_PRF, NULL, NULL, 2,
 					snmpAddNode(snmpCreateOid(LEN_SQ_PRF + 1, SQ_PRF, PERF_SYS),
@@ -283,9 +280,9 @@ snmpInit(void)
 				    snmpAddNode(snmpCreateOid(LEN_SQ_MESH, SQ_MESH),
 					LEN_SQ_MESH, NULL, NULL, 2,
 					snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 1, SQ_MESH, 1),
-					    LEN_SQ_MESH + 1, NULL, NULL, 2,
+					    LEN_SQ_MESH + 1, NULL, NULL, 1,
 					    snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 2, SQ_MESH, 1, 1),
-						LEN_SQ_MESH + 2, NULL, NULL, 14,
+						LEN_SQ_MESH + 2, NULL, NULL, 13,
 						snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 3, SQ_MESH, 1, 1, 1),
 						    LEN_SQ_MESH + 3, snmp_meshPtblFn, peer_Inst, 0),
 						snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 3, SQ_MESH, 1, 1, 2),
@@ -311,41 +308,7 @@ snmpInit(void)
 						snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 3, SQ_MESH, 1, 1, 12),
 						    LEN_SQ_MESH + 3, snmp_meshPtblFn, peer_Inst, 0),
 						snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 3, SQ_MESH, 1, 1, 13),
-						    LEN_SQ_MESH + 3, snmp_meshPtblFn, peer_Inst, 0),
-						snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 3, SQ_MESH, 1, 1, 15),
-						    LEN_SQ_MESH + 3, snmp_meshPtblFn, peer_Inst, 0)),
-					    snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 2, SQ_MESH, 1, 2),
-						LEN_SQ_MESH + 2, NULL, NULL, 15,
-						snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 3, SQ_MESH, 1, 2, 1),
-						    LEN_SQ_MESH + 3, snmp_meshPtblFn, peer_InstIndex, 0),
-						snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 3, SQ_MESH, 1, 2, 2),
-						    LEN_SQ_MESH + 3, snmp_meshPtblFn, peer_InstIndex, 0),
-						snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 3, SQ_MESH, 1, 2, 3),
-						    LEN_SQ_MESH + 3, snmp_meshPtblFn, peer_InstIndex, 0),
-						snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 3, SQ_MESH, 1, 2, 4),
-						    LEN_SQ_MESH + 3, snmp_meshPtblFn, peer_InstIndex, 0),
-						snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 3, SQ_MESH, 1, 2, 5),
-						    LEN_SQ_MESH + 3, snmp_meshPtblFn, peer_InstIndex, 0),
-						snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 3, SQ_MESH, 1, 2, 6),
-						    LEN_SQ_MESH + 3, snmp_meshPtblFn, peer_InstIndex, 0),
-						snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 3, SQ_MESH, 1, 2, 7),
-						    LEN_SQ_MESH + 3, snmp_meshPtblFn, peer_InstIndex, 0),
-						snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 3, SQ_MESH, 1, 2, 8),
-						    LEN_SQ_MESH + 3, snmp_meshPtblFn, peer_InstIndex, 0),
-						snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 3, SQ_MESH, 1, 2, 9),
-						    LEN_SQ_MESH + 3, snmp_meshPtblFn, peer_InstIndex, 0),
-						snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 3, SQ_MESH, 1, 2, 10),
-						    LEN_SQ_MESH + 3, snmp_meshPtblFn, peer_InstIndex, 0),
-						snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 3, SQ_MESH, 1, 2, 11),
-						    LEN_SQ_MESH + 3, snmp_meshPtblFn, peer_InstIndex, 0),
-						snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 3, SQ_MESH, 1, 2, 12),
-						    LEN_SQ_MESH + 3, snmp_meshPtblFn, peer_InstIndex, 0),
-						snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 3, SQ_MESH, 1, 2, 13),
-						    LEN_SQ_MESH + 3, snmp_meshPtblFn, peer_InstIndex, 0),
-						snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 3, SQ_MESH, 1, 2, 14),
-						    LEN_SQ_MESH + 3, snmp_meshPtblFn, peer_InstIndex, 0),
-						snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 3, SQ_MESH, 1, 2, 15),
-						    LEN_SQ_MESH + 3, snmp_meshPtblFn, peer_InstIndex, 0))),
+						    LEN_SQ_MESH + 3, snmp_meshPtblFn, peer_Inst, 0))),
 					snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 1, SQ_MESH, 2),
 					    LEN_SQ_MESH + 1, NULL, NULL, 1,
 					    snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 2, SQ_MESH, 2, 1),
@@ -392,7 +355,7 @@ snmpConnectionOpen(void)
     if ((port = Config.Port.snmp) > (u_short) 0) {
 	enter_suid();
 	theInSnmpConnection = comm_open(SOCK_DGRAM,
-	    IPPROTO_UDP,
+	    0,
 	    Config.Addrs.snmp_incoming,
 	    port,
 	    COMM_NONBLOCKING,
@@ -406,7 +369,7 @@ snmpConnectionOpen(void)
 	if (Config.Addrs.snmp_outgoing.s_addr != no_addr.s_addr) {
 	    enter_suid();
 	    theOutSnmpConnection = comm_open(SOCK_DGRAM,
-		IPPROTO_UDP,
+		0,
 		Config.Addrs.snmp_outgoing,
 		port,
 		COMM_NONBLOCKING,
@@ -801,17 +764,19 @@ peer_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn)
 {
     oid *instance = NULL;
     u_char *cp = NULL;
-    peer *peerptr = Config.peers;
-    peer *peerptr2;
+    peer *peers = Config.peers;
     struct in_addr *laddr = NULL;
     char *host_addr = NULL, *current_addr = NULL, *last_addr = NULL;
 
-    if (peerptr == NULL) {
-	/* Do nothing */
+    if (peers == NULL) {
+	current = current->parent->parent->parent->leaves[1];
+	while ((current) && (!current->parsefunction))
+	    current = current->leaves[0];
+	instance = client_Inst(current->name, len, current, Fn);
     } else if (*len <= current->len) {
 	instance = xmalloc(sizeof(name) * (*len + 4));
 	xmemcpy(instance, name, (sizeof(name) * *len));
-	cp = (u_char *) & (peerptr->in_addr.sin_addr.s_addr);
+	cp = (u_char *) & (peers->in_addr.sin_addr.s_addr);
 	instance[*len] = *cp++;
 	instance[*len + 1] = *cp++;
 	instance[*len + 2] = *cp++;
@@ -820,74 +785,33 @@ peer_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn)
     } else {
 	laddr = oid2addr(&name[*len - 4]);
 	host_addr = inet_ntoa(*laddr);
-	last_addr = xstrdup(host_addr);
-      skip_duplicate:
-	current_addr = inet_ntoa(peerptr->in_addr.sin_addr);
-	while (peerptr && strcmp(last_addr, current_addr) != 0) {
-	    peerptr = peerptr->next;
-	    if (peerptr)
-		current_addr = inet_ntoa(peerptr->in_addr.sin_addr);
-	}
-
-	/* Find the next peer */
-	if (peerptr)
-	    peerptr = peerptr->next;
-
-	/* watch out for duplicate addresses */
-	for (peerptr2 = Config.peers; peerptr && peerptr2 != peerptr; peerptr2 = peerptr2->next) {
-	    if (peerptr2->in_addr.sin_addr.s_addr == peerptr->in_addr.sin_addr.s_addr) {
-		/* ouch.. there are more than one peer on this IP. Skip the second one */
-		peerptr = peerptr->next;
-		if (peerptr)
-		    goto skip_duplicate;
+	last_addr = xmalloc(strlen(host_addr));
+	strncpy(last_addr, host_addr, strlen(host_addr));
+	current_addr = inet_ntoa(peers->in_addr.sin_addr);
+	while ((peers) && (strncmp(last_addr, current_addr, strlen(current_addr)))) {
+	    if (peers->next) {
+		peers = peers->next;
+		current_addr = inet_ntoa(peers->in_addr.sin_addr);
+	    } else {
+		peers = NULL;
 	    }
 	}
-
 	xfree(last_addr);
-
-	if (peerptr) {
-	    instance = xmalloc(sizeof(name) * (*len));
-	    xmemcpy(instance, name, (sizeof(name) * *len));
-	    cp = (u_char *) & (peerptr->in_addr.sin_addr.s_addr);
-	    instance[*len - 4] = *cp++;
-	    instance[*len - 3] = *cp++;
-	    instance[*len - 2] = *cp++;
-	    instance[*len - 1] = *cp++;
-	}
-    }
-    *Fn = current->parsefunction;
-    return (instance);
-}
-
-static oid *
-peer_InstIndex(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn)
-{
-    oid *instance = NULL;
-
-    if (!Config.peers) {
-	/* Do nothing */
-    } else if (*len <= current->len) {
-	instance = xmalloc(sizeof(name) * (*len + 1));
-	xmemcpy(instance, name, (sizeof(name) * *len));
-	instance[*len] = 1;
-	*len += 1;
-    } else {
-	int identifier, loop = 1;	/* our index starts at 1 */
-	peer *p = Config.peers;
-	identifier = name[*len - 1];
-
-	/* We want the next one... */
-	identifier += 1;
-
-	/* Make sure it exists */
-	while ((identifier != loop) && (p != NULL)) {
-	    loop++;
-	    p = p->next;
-	}
-	if (p != NULL) {
-	    instance = xmalloc(sizeof(name) * (*len));
-	    xmemcpy(instance, name, (sizeof(name) * *len));
-	    instance[*len - 1] = loop;
+	if (peers) {
+	    if (peers->next) {
+		peers = peers->next;
+		instance = xmalloc(sizeof(name) * (*len));
+		xmemcpy(instance, name, (sizeof(name) * *len));
+		cp = (u_char *) & (peers->in_addr.sin_addr.s_addr);
+		instance[*len - 4] = *cp++;
+		instance[*len - 3] = *cp++;
+		instance[*len - 2] = *cp++;
+		instance[*len - 1] = *cp++;
+	    } else {
+		return (instance);
+	    }
+	} else {
+	    return (instance);
 	}
     }
     *Fn = current->parsefunction;

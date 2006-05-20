@@ -257,7 +257,7 @@ gopherHTMLFooter(StoreEntry * e)
     storeAppendPrintf(e, "Generated %s by %s (%s)\n",
 	mkrfc1123(squid_curtime),
 	getMyHostname(),
-	visible_appname_string);
+	full_appname_string);
     storeAppendPrintf(e, "</ADDRESS></BODY></HTML>\n");
 }
 
@@ -708,6 +708,7 @@ gopherSendComplete(int fd, char *buf, size_t size, int errflag, void *data)
 	ErrorState *err;
 	err = errorCon(ERR_WRITE_ERROR, HTTP_BAD_GATEWAY);
 	err->xerrno = errno;
+	err->port = gopherState->req->port;
 	err->url = xstrdup(storeUrl(entry));
 	fwdFail(gopherState->fwdState, err);
 	comm_close(fd);

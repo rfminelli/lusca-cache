@@ -86,8 +86,7 @@ libexec_PROGRAMS = \
 	$(UNLINKD) \
 	cachemgr$(CGIEXT)
 
-cf_gen_SOURCES = cf_gen.c defines.h debug.c
-nodist_cf_gen_SOURCES = globals.c
+cf_gen_SOURCES = cf_gen.c defines.h
 nodist_cf_gen_HEADER = cf_gen_defines.h
 cf_gen.$(OBJEXT): cf_gen_defines.h
 squidclient_SOURCES = client.c
@@ -131,7 +130,6 @@ squid_SOURCES = \
 	errorpage.c \
 	ETag.c \
 	event.c \
-	errormap.c \
 	external_acl.c \
 	fd.c \
 	filemap.c \
@@ -161,7 +159,6 @@ squid_SOURCES = \
 	ipc.c \
 	ipcache.c \
 	$(LEAKFINDERSOURCE) \
-	locrewrite.c \
 	logfile.c \
 	main.c \
 	mem.c \
@@ -174,10 +171,7 @@ squid_SOURCES = \
 	Packer.c \
 	pconn.c \
 	peer_digest.c \
-	peer_monitor.c \
 	peer_select.c \
-	peer_sourcehash.c \
-	peer_userhash.c \
 	protos.h \
 	redirect.c \
 	referer.c \
@@ -211,7 +205,6 @@ squid_SOURCES = \
 	useragent.c \
 	wais.c \
 	wccp.c \
-	wccp2.c \
 	whois.c \
 	$(WIN32SOURCE)
 
@@ -234,7 +227,6 @@ squid_LDADD = \
 	@SNMPLIB@ \
 	@LIB_MALLOC@ \
 	@SSLLIB@ \
-	@LIB_EPOLL@ \
 	-lmiscutil \
 	@XTRA_LIBS@
 
@@ -299,7 +291,6 @@ DEFAULT_DISKD		= $(libexecdir)/`echo diskd | sed '$(transform);s/$$/$(EXEEXT)/'`
 DEFAULT_ICON_DIR	= $(datadir)/icons
 DEFAULT_ERROR_DIR	= $(datadir)/errors/@ERR_DEFAULT_LANGUAGE@
 DEFAULT_MIB_PATH	= $(datadir)/mib.txt
-DEFAULT_HOSTS		= @OPT_DEFAULT_HOSTS@
 
 DEFS = @DEFS@ -DDEFAULT_CONFIG_FILE=\"$(DEFAULT_CONFIG_FILE)\"
 
@@ -351,8 +342,7 @@ cf.data: cf.data.pre Makefile
 	s%@DEFAULT_ICON_DIR@%$(DEFAULT_ICON_DIR)%g;\
 	s%@DEFAULT_MIB_PATH@%$(DEFAULT_MIB_PATH)%g;\
 	s%@DEFAULT_ERROR_DIR@%$(DEFAULT_ERROR_DIR)%g;\
-	s%@DEFAULT_PREFIX@%$(DEFAULT_PREFIX)%g;\
-	s%@DEFAULT_HOSTS@%$(DEFAULT_HOSTS)%g;"\
+	s%@DEFAULT_PREFIX@%$(DEFAULT_PREFIX)%g;"\
 	< $(srcdir)/cf.data.pre >$@
 
 store_modules.c: store_modules.sh Makefile

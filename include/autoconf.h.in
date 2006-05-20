@@ -149,14 +149,9 @@
 #undef SQUID_SNMP
 
 /*
- * Define to enable WCCP V1
+ * Define to enable WCCP
  */
 #define USE_WCCP 1
-
-/*
- * Define to enable WCCP V2
- */
-#undef USE_WCCPv2
 
 /*
  * Define this to include code which lets you specify access control
@@ -421,16 +416,6 @@
  */
 #undef X_ACCELERATOR_VARY
 
-/*
- * Enable authentication support in accelerators
- */
-#undef AUTH_ON_ACCELERATION
-
-/*
- * Supports epoll
- */
-#undef HAVE_EPOLL
-
 /* The number of bytes in a int.  */
 #undef SIZEOF_INT
 
@@ -463,9 +448,6 @@
 
 /* Define if you have the drand48 function.  */
 #undef HAVE_DRAND48
-
-/* Define if you have the epoll_ctl function.  */
-#undef HAVE_EPOLL_CTL
 
 /* Define if you have the fchmod function.  */
 #undef HAVE_FCHMOD
@@ -583,9 +565,6 @@
 
 /* Define if you have the snprintf function.  */
 #undef HAVE_SNPRINTF
-
-/* Define if you have the socketpair function.  */
-#undef HAVE_SOCKETPAIR
 
 /* Define if you have the srand48 function.  */
 #undef HAVE_SRAND48
@@ -745,9 +724,6 @@
 
 /* Define if you have the <nss_common.h> header file.  */
 #undef HAVE_NSS_COMMON_H
-
-/* Define if you have the <openssl/engine.h> header file.  */
-#undef HAVE_OPENSSL_ENGINE_H
 
 /* Define if you have the <openssl/err.h> header file.  */
 #undef HAVE_OPENSSL_ERR_H
@@ -925,12 +901,6 @@
 
 /* Version number of package */
 #undef VERSION
-
-/* Valgrind memory debugger support */
-#undef WITH_VALGRIND
-
-/* MemPool debug verifications */
-#undef DEBUG_MEMPOOL
 
 /* Support large cache files > 2GB */
 #undef LARGE_CACHE_FILES

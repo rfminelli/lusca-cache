@@ -94,14 +94,8 @@
 #endif
 
 #if PURIFY
-#define LEAK_CHECK_MODE 1
-#elif WITH_VALGRIND
-#define LEAK_CHECK_MODE 1
-#elif XMALLOC_TRACE
-#define LEAK_CHECK_MODE 1
-#endif
-
-#if defined(NODEBUG)
+#define assert(EX) ((void)0)
+#elif defined(NODEBUG)
 #define assert(EX) ((void)0)
 #elif STDC_HEADERS
 #define assert(EX)  ((EX)?((void)0):xassert( # EX , __FILE__, __LINE__))
@@ -258,10 +252,6 @@
 #endif /* HAVE_POLL_H */
 #endif /* HAVE_POLL */
 
-#if HAVE_EPOLL
-#include <sys/epoll.h>
-#endif
-
 #if defined(HAVE_STDARG_H)
 #include <stdarg.h>
 #define HAVE_STDARGS		/* let's hope that works everywhere (mj) */
@@ -349,7 +339,7 @@ struct rusage {
 #define SA_RESETHAND SA_ONESHOT
 #endif
 
-#if LEAK_CHECK_MODE
+#if PURIFY
 #define LOCAL_ARRAY(type,name,size) \
         static type *local_##name=NULL; \
         type *name = local_##name ? local_##name : \
@@ -487,14 +477,6 @@ struct rusage {
 #define FD_READ_METHOD(fd, buf, len) (*fd_table[fd].read_method)(fd, buf, len)
 #define FD_WRITE_METHOD(fd, buf, len) (*fd_table[fd].write_method)(fd, buf, len)
 
-#ifndef IPPROTO_UDP
-#define IPPROTO_UDP 0
-#endif
-
-#ifndef IPPROTO_TCP
-#define IPPROTO_TCP 0
-#endif
-
 /*
  * Trap attempts to build large file cache support without support for
  * large objects
@@ -502,21 +484,5 @@ struct rusage {
 #if LARGE_CACHE_FILES && SIZEOF_SQUID_OFF_T <= 4
 #error Your platform does not support large integers. Can not build with --enable-large-cache-files
 #endif
-
-/*
- * valgrind debug support
- */
-#if WITH_VALGRIND
-#include <valgrind/memcheck.h>
-#else
-#define VALGRIND_MAKE_NOACCESS(a,b) (0)
-#define VALGRIND_MAKE_WRITEABLE(a,b) (0)
-#define VALGRIND_MAKE_READABLE(a,b) (0)
-#define VALGRIND_CHECK_WRITEABLE(a,b) (0)
-#define VALGRIND_CHECK_READABLE(a,b) (0)
-#define VALGRIND_MALLOCLIKE_BLOCK(a,b,c,d)
-#define VALGRIND_FREELIKE_BLOCK(a,b)
-#define RUNNING_ON_VALGRIND 0
-#endif /* WITH_VALGRIND */
 
 #endif /* SQUID_H */

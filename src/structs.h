@@ -48,14 +48,6 @@ struct _dlink_list {
     dlink_node *tail;
 };
 
-#if USE_SSL
-struct _acl_cert_data {
-    splayNode *values;
-    char *attribute;
-};
-
-#endif
-
 struct _acl_user_data {
     splayNode *names;
     struct {
@@ -344,45 +336,20 @@ struct _relist {
     relist *next;
 };
 
-struct _acl_request_type {
-    unsigned int accelerated:1;
-    unsigned int internal:1;
-};
-
 struct _sockaddr_in_list {
     struct sockaddr_in s;
     sockaddr_in_list *next;
 };
 
-struct _http_port_list {
-    http_port_list *next;
-    struct sockaddr_in s;
-    char *protocol;		/* protocol name */
-    char *name;			/* visible name */
-    char *defaultsite;		/* default web site */
-    char *urlgroup;		/* default urlgroup */
-    unsigned int transparent:1;	/* transparent proxy */
-    unsigned int accel:1;	/* HTTP accelerator */
-    unsigned int vhost:1;	/* uses host header */
-    unsigned int vport:1;	/* virtual port support */
-};
-
 #if USE_SSL
 struct _https_port_list {
-    http_port_list http;	/* must be first */
+    https_port_list *next;
+    struct sockaddr_in s;
     char *cert;
     char *key;
     int version;
     char *cipher;
     char *options;
-    char *clientca;
-    char *cafile;
-    char *capath;
-    char *crlfile;
-    char *dhfile;
-    char *sslflags;
-    char *sslcontext;
-    SSL_CTX *sslContext;
 };
 
 #endif
@@ -476,7 +443,7 @@ struct _SquidConfig {
 #endif
     } Port;
     struct {
-	http_port_list *http;
+	sockaddr_in_list *http;
 #if USE_SSL
 	https_port_list *https;
 #endif
@@ -495,20 +462,10 @@ struct _SquidConfig {
 	int version;
     } Wccp;
 #endif
-#if USE_WCCPv2
-    struct {
-	sockaddr_in_list *router;
-	struct in_addr incoming;
-	struct in_addr outgoing;
-	int version;
-	int forwarding_method;
-	int return_method;
-	void *info;
-    } Wccp2;
-#endif
     char *as_whois_server;
     struct {
 	char *log;
+	char *access;
 	char *store;
 	char *swap;
 #if USE_USERAGENT_LOG
@@ -520,30 +477,18 @@ struct _SquidConfig {
 #if WIP_FWD_LOG
 	char *forward;
 #endif
-	logformat *logformats;
-	customlog *accesslogs;
 	int rotateNumber;
     } Log;
     char *adminEmail;
     char *EmailFrom;
     char *EmailProgram;
     char *effectiveUser;
-    char *visible_appname_string;
     char *effectiveGroup;
     struct {
 #if USE_DNSSERVERS
 	char *dnsserver;
 #endif
-	struct {
-	    wordlist *command;
-	    int children;
-	    int concurrency;
-	} url_rewrite;
-	struct {
-	    wordlist *command;
-	    int children;
-	    int concurrency;
-	} location_rewrite;
+	wordlist *redirect;
 #if USE_ICMP
 	char *pinger;
 #endif
@@ -551,16 +496,19 @@ struct _SquidConfig {
 	char *unlinkd;
 #endif
 	char *diskd;
-#if USE_SSL
-	char *ssl_password;
-#endif
     } Program;
 #if USE_DNSSERVERS
     int dnsChildren;
 #endif
+    int redirectChildren;
     time_t authenticateGCInterval;
     time_t authenticateTTL;
     time_t authenticateIpTTL;
+    struct {
+	int single_host;
+	char *host;
+	u_short port;
+    } Accel;
     char *appendDomain;
     int appendDomainLen;
     char *debugOptions;
@@ -619,7 +567,9 @@ struct _SquidConfig {
     } Netdb;
     struct {
 	int log_udp;
+#if USE_DNSSERVERS
 	int res_defnames;
+#endif
 	int anonymizer;
 	int client_db;
 	int query_icmp;
@@ -632,6 +582,7 @@ struct _SquidConfig {
 	int log_mime_hdrs;
 	int log_fqdn;
 	int announce;
+	int accel_with_proxy;
 	int mem_pools;
 	int test_reachability;
 	int half_closed_clients;
@@ -658,24 +609,20 @@ struct _SquidConfig {
 	int request_entities;
 	int detect_broken_server_pconns;
 	int balance_on_multiple_ip;
-	int collapsed_forwarding;
 	int relaxed_header_parser;
+	int accel_uses_host_header;
 	int accel_no_pmtu_disc;
 	int global_internal_static;
-	int httpd_suppress_version_string;
-	int via;
     } onoff;
     acl *aclList;
     struct {
 	acl_access *http;
-	acl_access *http2;
 	acl_access *icp;
 	acl_access *miss;
 	acl_access *NeverDirect;
 	acl_access *AlwaysDirect;
 	acl_access *ASlists;
 	acl_access *noCache;
-	acl_access *log;
 #if SQUID_SNMP
 	acl_access *snmp;
 #endif
@@ -683,8 +630,7 @@ struct _SquidConfig {
 #if USE_IDENT
 	acl_access *identLookup;
 #endif
-	acl_access *url_rewrite;
-	acl_access *location_rewrite;
+	acl_access *redirector;
 	acl_access *reply;
 	acl_address *outgoing_address;
 	acl_tos *outgoing_tos;
@@ -758,7 +704,6 @@ struct _SquidConfig {
 #if USE_SSL
     struct {
 	int unclean_shutdown;
-	char *ssl_engine;
     } SSL;
 #endif
     wordlist *ext_methods;
@@ -770,25 +715,13 @@ struct _SquidConfig {
     char *store_dir_select_algorithm;
     int sleep_after_fork;	/* microseconds */
     external_acl *externalAclHelperList;
-    errormap *errorMapList;
-#if USE_SSL
-    struct {
-	char *cert;
-	char *key;
-	int version;
-	char *options;
-	char *cipher;
-	char *cafile;
-	char *capath;
-	char *crlfile;
-	char *flags;
-	SSL_CTX *sslContext;
-    } ssl_client;
-#endif
-    time_t refresh_stale_window;
 };
 
 struct _SquidConfig2 {
+    struct {
+	char *prefix;
+	int on;
+    } Accel;
     struct {
 	int enable_purge;
     } onoff;
@@ -851,16 +784,11 @@ struct _fde {
 	unsigned int called_connect:1;
 	unsigned int nodelay:1;
 	unsigned int close_on_exec:1;
+	unsigned int read_pending:1;
     } flags;
-    comm_pending read_pending;
-    comm_pending write_pending;
     squid_off_t bytes_read;
     squid_off_t bytes_written;
     int uses;			/* ie # req's over persistent conn */
-#if HAVE_EPOLL
-    unsigned epoll_state;	/* keep track of the epoll state */
-    unsigned epoll_backoff;	/* keep track of whether the fd is backed off */
-#endif
     struct _fde_disk {
 	DWCB *wrt_handle;
 	void *wrt_handle_data;
@@ -884,6 +812,7 @@ struct _fde {
     WRITE_HANDLER *write_method;
 #if USE_SSL
     SSL *ssl;
+    int ssl_shutdown:1;
 #endif
 };
 
@@ -1052,8 +981,6 @@ struct _http_state_flags {
     unsigned int keepalive_broken:1;
     unsigned int abuse_detected:1;
     unsigned int request_sent:1;
-    unsigned int front_end_https:2;
-    unsigned int originpeer:1;
 };
 
 struct _HttpStateData {
@@ -1125,9 +1052,6 @@ struct _AccessLogEntry {
 	int msec;
 	const char *rfc931;
 	const char *authuser;
-#if USE_SSL
-	const char *ssluser;
-#endif
     } cache;
     struct {
 	char *request;
@@ -1137,14 +1061,11 @@ struct _AccessLogEntry {
 	const char *method_str;
     } private;
     HierarchyLogEntry hier;
-    HttpReply *reply;
-    request_t *request;
 };
 
 struct _clientHttpRequest {
     ConnStateData *conn;
     request_t *request;		/* Parsed URL ... */
-    request_t *orig_request;	/* Parsed URL ... */
     store_client *sc;		/* The store_client we're using */
     store_client *old_sc;	/* ... for entry to be validated */
     char *uri;
@@ -1194,10 +1115,6 @@ struct _ConnStateData {
 	char *buf;
 	size_t offset;
 	size_t size;
-#if HAVE_EPOLL
-	int clientfd;		/* Record the client's fd if we have too much 
-				 * data waiting to send to the server */
-#endif
     } in;
     struct {
 	squid_off_t size_left;	/* How much body left to process */
@@ -1222,8 +1139,6 @@ struct _ConnStateData {
 	int n;
 	time_t until;
     } defer;
-    http_port_list *port;
-    int transparent;
 };
 
 struct _ipcache_addrs {
@@ -1327,7 +1242,6 @@ struct _PeerDigest {
 #endif
 
 struct _peer {
-    char *name;
     char *host;
     peer_t type;
     struct sockaddr_in in_addr;
@@ -1379,9 +1293,6 @@ struct _peer {
 	unsigned int no_delay:1;
 #endif
 	unsigned int allow_miss:1;
-	unsigned int originserver:1;
-	unsigned int userhash:1;
-	unsigned int sourcehash:1;
     } options;
     int weight;
     struct {
@@ -1413,45 +1324,9 @@ struct _peer {
 	float load_factor;
     } carp;
 #endif
-    struct {
-	unsigned int hash;
-	double load_multiplier;
-	double load_factor;
-    } userhash;
-    struct {
-	unsigned int hash;
-	double load_multiplier;
-	double load_factor;
-    } sourcehash;
     char *login;		/* Proxy authorization */
     time_t connect_timeout;
     int max_conn;
-    struct {
-	char *url;
-	int min, max;
-	int interval;
-	int timeout;
-	int state;
-	time_t last;
-	PeerMonitor *data;
-    } monitor;
-    char *domain;		/* Forced domain */
-#if USE_SSL
-    int use_ssl;
-    char *sslcert;
-    char *sslkey;
-    int sslversion;
-    char *ssloptions;
-    char *sslcipher;
-    char *sslcafile;
-    char *sslcapath;
-    char *sslcrlfile;
-    char *sslflags;
-    char *ssldomain;
-    SSL_CTX *sslContext;
-    SSL_SESSION *sslSession;
-#endif
-    int front_end_https;
 };
 
 struct _net_db_name {
@@ -1630,10 +1505,6 @@ struct _MemObject {
     mem_hdr data_hdr;
     squid_off_t inmem_hi;
     squid_off_t inmem_lo;
-#if HAVE_EPOLL
-    int serverfd;		/* Record the server's fd if we have too much
-				 * data waiting to send to the client */
-#endif
     dlink_list clients;
     int nclients;
     struct {
@@ -1659,8 +1530,6 @@ struct _MemObject {
     unsigned int chksum;
 #endif
     const char *vary_headers;
-    StoreEntry *ims_entry;
-    time_t refresh_timestamp;
 };
 
 struct _StoreEntry {
@@ -1708,7 +1577,6 @@ struct _SwapDir {
     STSTATFS *statfs;		/* Dump fs statistics */
     STMAINTAINFS *maintainfs;	/* Replacement maintainence */
     STCHECKOBJ *checkobj;	/* Check if the fs will store an object */
-    STCHECKLOADAV *checkload;	/* Check if the fs is getting overloaded .. */
     /* These two are notifications */
     STREFOBJ *refobj;		/* Reference this object */
     STUNREFOBJ *unrefobj;	/* Unreference this object */
@@ -1750,7 +1618,7 @@ struct _request_flags {
     unsigned int hierarchical:1;
     unsigned int loopdetect:1;
     unsigned int proxy_keepalive:1;
-    unsigned int proxying:1;	/* this should be killed, also in httpstateflags */
+    unsigned int proxying:1;
     unsigned int refresh:1;
     unsigned int redirected:1;
     unsigned int need_validation:1;
@@ -1776,7 +1644,6 @@ struct _storeIOState {
     mode_t mode;
     squid_off_t st_size;	/* do stat(2) after read open */
     squid_off_t offset;		/* current on-disk offset pointer */
-    squid_off_t write_offset;	/* current storeWrite offset pointer */
     STFNCB *file_callback;	/* called on delayed sfileno assignments */
     STIOCB *callback;
     void *callback_data;
@@ -1818,12 +1685,8 @@ struct _request_t {
     char *peer_login;		/* Configured peer login:password */
     time_t lastmod;		/* Used on refreshes */
     const char *vary_headers;	/* Used when varying entities are detected. Changes how the store key is calculated */
-    char *urlgroup;		/* urlgroup, returned by redirectors */
-    char *peer_domain;		/* Configured peer forceddomain */
     BODY_HANDLER *body_reader;
     void *body_reader_data;
-#define HAVE_EXTACL_LOG 1
-    String extacl_log;		/* String to be used for access.log purposes */
 };
 
 struct _cachemgr_passwd {
@@ -1867,6 +1730,7 @@ struct _ErrorState {
     request_t *request;
     char *url;
     int xerrno;
+    u_short port;
     char *dnsserver_msg;
     time_t ttl;
     struct in_addr src_addr;
@@ -2000,7 +1864,7 @@ struct _StatCounters {
 	    int recvfroms;
 	    int sendtos;
 	} sock;
-#if HAVE_POLL || HAVE_EPOLL
+#if HAVE_POLL
 	int polls;
 #else
 	int selects;
@@ -2097,9 +1961,6 @@ struct _MemPoolMeter {
 struct _MemPool {
     const char *label;
     size_t obj_size;
-#if DEBUG_MEMPOOL
-    size_t real_obj_size;	/* with alignment */
-#endif
     Stack pstack;		/* stack for free pointers */
     MemPoolMeter meter;
 };
@@ -2179,14 +2040,12 @@ struct _helper_request {
     char *buf;
     HLPCB *callback;
     void *data;
-    struct timeval dispatch_time;
 };
 
 struct _helper_stateful_request {
     char *buf;
     HLPSCB *callback;
     void *data;
-    struct timeval dispatch_time;
 };
 
 
@@ -2199,7 +2058,6 @@ struct _helper {
     int n_running;
     int n_active;
     int ipc_type;
-    int concurrency;
     time_t last_queue_warn;
     struct {
 	int requests;
@@ -2220,7 +2078,6 @@ struct _helper_stateful {
     int n_running;
     int n_active;
     int ipc_type;
-    int concurrency;
     MemPool *datapool;
     HLPSAVAIL *IsAvailable;
     HLPSRESET *Reset;
@@ -2240,21 +2097,21 @@ struct _helper_server {
     int pid;
     int rfd;
     int wfd;
-    MemBuf wqueue;
-    char *rbuf;
-    size_t rbuf_sz;
-    int roffset;
+    char *buf;
+    size_t buf_sz;
+    int offset;
+    struct timeval dispatch_time;
+    struct timeval answer_time;
     dlink_node link;
     helper *parent;
-    helper_request **requests;
+    helper_request *request;
     struct _helper_flags {
-	unsigned int writing:1;
+	unsigned int busy:1;
 	unsigned int closing:1;
 	unsigned int shutdown:1;
     } flags;
     struct {
 	int uses;
-	unsigned int pending;
     } stats;
 };
 
@@ -2353,49 +2210,14 @@ struct _Logfile {
     size_t bufsz;
     ssize_t offset;
     struct {
-	unsigned int fatal;
-	unsigned int syslog;
+	unsigned int fatal:1;
     } flags;
-    int syslog_priority;
-};
-
-struct _logformat {
-    char *name;
-    logformat_token *format;
-    logformat *next;
-};
-
-struct _customlog {
-    char *filename;
-    acl_list *aclList;
-    logformat *logFormat;
-    Logfile *logfile;
-    customlog *next;
-    enum {
-	CLF_UNKNOWN,
-	CLF_AUTO,
-	CLF_CUSTOM,
-	CLF_SQUID,
-	CLF_COMMON,
-	CLF_NONE
-    } type;
 };
 
 struct cache_dir_option {
     const char *name;
     void (*parse) (SwapDir * sd, const char *option, const char *value, int reconfiguring);
     void (*dump) (StoreEntry * e, const char *option, SwapDir * sd);
-};
-
-struct error_map_entry {
-    struct error_map_entry *next;
-    char *value;
-    int status;
-};
-struct _errormap {
-    errormap *next;
-    char *url;
-    struct error_map_entry *map;
 };
 
 #endif /* SQUID_STRUCTS_H */

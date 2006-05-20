@@ -63,7 +63,7 @@ icpLogIcp(struct in_addr caddr, log_type logcode, int len, const char *url, int 
     al.cache.size = len;
     al.cache.code = logcode;
     al.cache.msec = delay;
-    accessLogLog(&al, NULL);
+    accessLogLog(&al);
 }
 
 void
@@ -407,11 +407,13 @@ icpConnectionsOpen(void)
     int x;
     socklen_t len;
     wordlist *s;
+    if (Config2.Accel.on && !Config.onoff.accel_with_proxy)
+	return;
     if ((port = Config.Port.icp) <= 0)
 	return;
     enter_suid();
     theInIcpConnection = comm_open(SOCK_DGRAM,
-	IPPROTO_UDP,
+	0,
 	Config.Addrs.udp_incoming,
 	port,
 	COMM_NONBLOCKING,
@@ -432,7 +434,7 @@ icpConnectionsOpen(void)
     if ((addr = Config.Addrs.udp_outgoing).s_addr != no_addr.s_addr) {
 	enter_suid();
 	theOutIcpConnection = comm_open(SOCK_DGRAM,
-	    IPPROTO_UDP,
+	    0,
 	    addr,
 	    port,
 	    COMM_NONBLOCKING,

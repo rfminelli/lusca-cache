@@ -110,7 +110,6 @@ static STNEWFS storeDiskdDirNewfs;
 static STDUMP storeDiskdDirDump;
 static STMAINTAINFS storeDiskdDirMaintain;
 static STCHECKOBJ storeDiskdDirCheckObj;
-static STCHECKLOADAV storeDiskdDirCheckLoadAv;
 static STREFOBJ storeDiskdDirRefObj;
 static STUNREFOBJ storeDiskdDirUnrefObj;
 static QS rev_int_sort;
@@ -411,7 +410,12 @@ storeDiskdDirInit(SwapDir * sd)
     args[2] = skey2;
     args[3] = skey3;
     args[4] = NULL;
-    x = ipcCreate(IPC_STREAM,
+#if HAVE_POLL && defined(_SQUID_OSF_)
+    /* pipes and poll() don't get along on DUNIX -DW */
+    x = ipcCreate(IPC_TCP_SOCKET,
+#else
+    x = ipcCreate(IPC_FIFO,
+#endif
 	Config.Program.diskd,
 	args,
 	"diskd",
@@ -1821,18 +1825,9 @@ storeDiskdDirCheckObj(SwapDir * SD, const StoreEntry * e)
     diskdinfo_t *diskdinfo = SD->fsdata;
     /* Check the queue length */
     if (diskdinfo->away >= diskdinfo->magic1)
-	return 0;
-    return 1;
-}
-
-int
-storeDiskdDirCheckLoadAv(SwapDir * SD, store_op_t op)
-{
-    diskdinfo_t *diskdinfo = SD->fsdata;
+	return -1;
     /* Calculate the storedir load relative to magic2 on a scale of 0 .. 1000 */
     /* the parse function guarantees magic2 is positivie */
-    if (diskdinfo->away >= diskdinfo->magic1)
-	return -1;
     return diskdinfo->away * 1000 / diskdinfo->magic2;
 }
 
@@ -2204,7 +2199,6 @@ storeDiskdDirParse(SwapDir * sd, int index, char *path)
     sd->statfs = storeDiskdDirStats;
     sd->maintainfs = storeDiskdDirMaintain;
     sd->checkobj = storeDiskdDirCheckObj;
-    sd->checkload = storeDiskdDirCheckLoadAv;
     sd->refobj = storeDiskdDirRefObj;
     sd->unrefobj = storeDiskdDirUnrefObj;
     sd->callback = storeDiskdDirCallback;
