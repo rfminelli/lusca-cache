@@ -1,0 +1,113 @@
+<!doctype linuxdoc system>
+<article>
+<title>Squid 2.6.PRE1 release notes</title>
+<author>Squid Developers</author>
+<date>$Id$</date>
+
+<abstract>
+This document contains the release notes for version 2.6 of Squid.
+Squid is a WWW Cache application developed by the National Laboratory
+for Applied Network Research and members of the Web Caching community.
+</abstract>
+
+<toc>
+
+<sect>Key changes from squid 2.5:
+<p>
+<itemize>
+<item>...
+</itemize>
+
+<sect>Changes to squid.conf
+<p><descrip>
+<tag>http_port</tag>Now takes a list of options in addition to the port address, specifying the purpose of this http_port. Default is plain Internet proxy as usual.
+<tag>httpd_accel_* for transparent proxy</tag>Now implemented by the "transparent" http_port option
+<tag>httpd_accel_host</tag>Replaced by defaultsite http_port option and cache_peer originserver option.
+<tag>httpd_accel_port</tag>No longer needed. Server port defined by the cache_peer port.
+<tag>httpd_accel_uses_host_header</tag>Replaced by vhost http_port option
+<tag>https_port</tag>Many new options. Reconstructs URLs as https:// by default.
+<tag>cache_peer</tag>Many new options to support origin servers and SSL encryption
+<tag>ssl_engine</tag>New directive for hardware assisted SSL encryption
+<tag>sslproxy_*</tag>New directives defining how to gateway http-&gt;https
+<tag>sslpassword_program</tag>New helper directive to query an external program for SSL key encryption password (if any)
+<tag>cache_vary</tag>New directive to disable caching of Vary:ing responses
+<tag>logformat</tag>New directive for defining custom log formats
+<tag>cache_access_log</tag>Renamed to access_log
+<tag>access_log</tag>Select what requests to log where any by what format. Support for multiple log files and multiple log formats.
+<tag>check_hostnames</tag>New option to disable the hostname validity/sanity checks usually performed by Squid, replacing the similar build time configure option in 2.5.
+<tag>allow_underscore</tag>New option to allow _ in hostnames, replacing the similar build time configure option in 2.5 and earlier.
+<tag>redirect_*</tag>Renamed to url_rewrite_* to better reflect the functionality of this helper
+<tag>url_rewrite_concurrency</tag>Activates a new and more efficient helper protocol. Requires changes in the helper.
+<tag>location_rewrite_*</tag>New helper hook for rewriting Location headers
+<tag>auth_param basic blankpassword</tag>New option to allow the use of blank passwords.
+<tag>auth_param ntlm max_challenge_reuse / max_challenge_lifetime</tag>No longer supported
+<tag>auth_param ntlm use_ntlm_negotiate</tag>Now defaults to "on"
+<tag>auth_param ntlm keep_alive</tag>New option to fine-tune the use of HTTP keep-alive in combination with NTLM
+<tag>auth_param negotiate</tag>New Negotiate authentication scheme, the "next generation" scheme in the family of Microsoft authentication.
+<tag>external_acl_type</tag>Many new format options %SRCPORT, %MYADDR, %MYPORT, %PATH, %USER_CERT, %ACL, %DATA and a few variants. Helper protocol defaults to the simpler "3.0" protocol, and there is support for a highly efficient protocol via the concurrency= option if supported by the helper.
+<tag>read_ahead_gap</tag>New directive to set the response buffer size.
+<tag>collapsed_forwarding</tag>New directive to enable an alternative optimized forwarding path when there is very many concurrent requests for the same URL.
+<tag>refresh_stale_hit</tag>New directive similar to collapsed_forwarding and activates an alternative optimized request processing when there is very many concurrent requests for the same recently expired URL.
+<tag>acl urlgroup</tag>New acl class
+<tag>acl user_cert</tag>New acl class matching the user SSL certificate (https_port)
+<tag>acl ca_cert</tag>New acl class matching the CA of the user SSL certificate (https_port)
+<tag>acl ext_user / ext_user_regex</tag>New acl matching usernames returned by external acl
+<tag>http_access2</tag>New http_access type directive but evaluated after url rewrites
+<tag>log_access</tag>New directive to limit what gets logged.
+<tag>httpd_suppress_version_string</tag>Enable hiding of the Squid version
+<tag>error_map</tag>New directive to allow dynamic rewrites of error pages
+<tag>via</tag>New directive to disable the use of the Via directive
+<tag>wccp2_*</tag>WCCP2 protocol support
+<tag>linux_tproxy, tproxy_port</tag>Linux TPROXY support for masquerading outgoing connections as the original client
+<tag>umask</tag>New directive enforcing a minimum umask
+</descrip>
+
+<sect>Known issues and limitations
+
+<P>There is a few known issues in this version of Squid which we hope to correct in a later release
+
+<descrip>
+<tag>Bug <url url="http://www.squid-cache.org/bugs/show_bug.cgi?id=1584" name="#1584"></tag>WCCPv2 unable to register with more than one router on Linux
+<tag>Bug <url url="http://www.squid-cache.org/bugs/show_bug.cgi?id=1590" name="#1590"></tag>"ETag Loop" warnings in cache.log
+<tag>Bug <url url="http://www.squid-cache.org/bugs/show_bug.cgi?id=761" name="#761"></tag>assertion failed: cbdata.c:249: "c-&gt;locks &gt; 0" when using diskd
+<tag>Bug <url url="http://www.squid-cache.org/bugs/show_bug.cgi?id=888" name="#888"></tag>ntlm_user_pool assertion error on shutdown
+<tag>Bug <url url="http://www.squid-cache.org/bugs/show_bug.cgi?id=1420" name="#1420"></tag>302 responses with an Expires header is always cached
+<tag>Bug <url url="http://www.squid-cache.org/bugs/show_bug.cgi?id=1500" name="#1500"></tag>diskd related memory corruption under heavy load
+</descrip>
+
+<P>Ipfilter 4.x compile problem on HP Tru64
+<itemize>
+    <item>Running configure --enable-ipf-transparent on an HP Tru64 5.1B system with ipfilter 4.x installed, the following error can occur:
+    <verb>
+      checking if IP-Filter header files are installed... no
+      WARNING: Cannot find necessary IP-Filter header files
+               Transparent Proxy support WILL NOT be enabled</verb>
+    To fix the problem first check if the ip_fil.h, ip_compat.h, ip_nat.h and ipl.h files are present in
+    /usr/include/netinet and copy them from ipfilter source tree if needed.
+    Don't forget to fix files permission and ownership after the copy.<newline>
+    If the error still persist, run configure making it skip the ip_compat.h test:<newline>
+    <verb>
+    env ac_cv_header_netinet_ip_compat_h=yes ./configure --enable-ipf-transparent</verb>
+    <item>On Sun Solaris 10, ipfilter 4.0.22 is provided with the OS, but related include files (ip_fil.h, ip_compat.h, ip_nat.h, ipl.h) are missing.<newline>
+      Before running configure --enable-ipf-transparent, they must be downloaded from the
+      <url url="http://cvs.opensolaris.org/source/xref/usr/src/common/ipf/" name="OpenSolaris Web Site">
+      in the /usr/include local directory. Don't forget to fix files permission and ownership after the download.
+</itemize>
+
+
+<P>In addition there is a set of limitations in this version of Squid which we hope to correct later
+
+<descrip>
+<tag>Bug <url url="http://www.squid-cache.org/bugs/show_bug.cgi?id=1059" name="#1059"></tag>mime.conf and referenced icons must be within chroot
+<tag>Bug <url url="http://www.squid-cache.org/bugs/show_bug.cgi?id=692" name="#692"></tag>tcp_outgoing_address using an ident ACL does not work
+<tag>Bug <url url="http://www.squid-cache.org/bugs/show_bug.cgi?id=581" name="#581"></tag>acl max_user_ip and multiple authentication schemes
+<tag>Bug <url url="http://www.squid-cache.org/bugs/show_bug.cgi?id=528" name="#528"></tag>miss_access fails on "slow" acl types such as dst.
+<tag>Bug <url url="http://www.squid-cache.org/bugs/show_bug.cgi?id=513" name="#513"></tag>squid -F is starting server sockets to early
+<tag>Bug <url url="http://www.squid-cache.org/bugs/show_bug.cgi?id=457" name="#457"></tag>does not handle swap.state corruption properly
+<tag>Bug <url url="http://www.squid-cache.org/bugs/show_bug.cgi?id=410" name="#410"></tag>unstable if runs out of disk space
+<tag>Bug <url url="http://www.squid-cache.org/bugs/show_bug.cgi?id=355" name="#355"></tag>diskd may appear slow on low loads
+<tag>Bug <url url="http://www.squid-cache.org/bugs/show_bug.cgi?id=219" name="#219"></tag>delay_pools stops working on -k reconfigure
+</descrip>
+
+</article>
+
