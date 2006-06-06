@@ -1,0 +1,295 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<HTML>
+<HEAD>
+ <META NAME="GENERATOR" CONTENT="LinuxDoc-Tools 0.9.21">
+ <TITLE>Squid 2.6.PRE2 release notes</TITLE>
+</HEAD>
+<BODY>
+<H1>Squid 2.6.PRE2 release notes</H1>
+
+<H2>Squid Developers</H2>$Id$
+<HR>
+<EM>This document contains the release notes for version 2.6 of Squid.
+Squid is a WWW Cache application developed by the Web Caching community.
+Squid was initially developed by the National Laboratory
+for Applied Network Research and members of the Web Caching community.</EM>
+<HR>
+<H2><A NAME="s1">1. Key changes from squid 2.5:</A></H2>
+
+<P>
+<UL>
+<LI>Major improvements to the way that Squid handles web proxy, accelerated 
+and transparent proxy requests to make it easier to configure transparent and 
+acceleration functionality.  The default behaviour is to function as a standard 
+HTTP proxy on each port that Squid is configured to listen on, but in addition 
+in this release the keywords "accelerated" and "transparent" can be specified 
+after each port to indicate to Squid the functionality that is to be enabled on 
+that port.  This means that the old config directives relating to httpd_accel_* 
+are now deprecated.</LI>
+<LI>WCCPv2 support multiple cache engines registering with multiple WCCP 
+routers and switches.  WCCPv2 is preferred over WCCPv1 for performance and 
+flexibility reasons if your router or switch is able to support it (all recent 
+versions of IOS do so).  Initially WCCPv2 under Linux is limited to registration 
+with only one router due to kernel limitations in more recent versions, although 
+this will be addressed in a future release of Squid.</LI>
+<LI>TPROXY totally transparent proxy support under Linux, which to allow Squid 
+to appear totally invisible to both client and server systems when transparently 
+caching requests.  This works by spoofing the source and destination address to 
+both the client and server.</LI>
+<LI>Support for Etag and Vary HTTP headers.  This further moves Squid towards 
+HTTP/1.1 compliance.  The Vary header field is used for improved caching and 
+delivery of customized content to end clients, and the Etag is used similar to 
+an MD5 checksum between client and server to determine if a web page has changed 
+since it was last retrieved.</LI>
+<LI>Collapsed forwarding, which gives Squid the ability to intelligently merge 
+client requests for objects into one request to the server.  Of particular 
+benefit in accelerator setups but also provides some benefits to non accelerator 
+setups.</LI>
+<LI>Support for epoll under Linux, which gives Squid the ability to handle 
+many many more concurrent requests with lower CPU overhead and lower 
+FileDescriptor usage.  This feature is of particular benefit to very busy caches 
+as the poll() and select() routines do not scale anywhere near as well as epoll 
+does under high loads.</LI>
+<LI>SSL assisted hardware encryption making use of OpenSSL functionality 
+within Squid.</LI>
+<LI>Logging enhancements to allow even greater customization of the way Squid 
+logs requests in the access-log or to syslog if required</LI>
+<LI>Authentication enhancements including Negotiate/Kerberos support, extra
+workarounds for NTLM clients and others using Microsoft Integrated Login.</LI>
+<LI>Additional external_acl parameters to support SSL and even more client 
+side parameters.</LI>
+<LI>ACL changes in conjunction with SSL changes which have been merged, to 
+allow matching based on SSL certificate parameters.</LI>
+<LI>Improvements to Cygwin support for users who wish to run Squid in a 
+Microsoft Windows/Cygwin environment as a system service.</LI>
+<LI>New authentication helpers:
+<UL>
+<LI>Digest LDAP helper</LI>
+<LI>Native Windows basic, NTLM and negotiate helpers</LI>
+<LI>External acl helpers for session monitoring and native Windows group
+membership check</LI>
+</UL>
+</LI>
+</UL>
+</P>
+
+<H2><A NAME="s2">2. Changes to squid.conf</A></H2>
+
+<P>
+<DL>
+<DT><B>http_port</B><DD><P>Now takes a list of options in addition to the port address, specifying the purpose of this http_port. Default is plain Internet proxy as usual.</P>
+<DT><B>httpd_accel_* for transparent proxy</B><DD><P>Now implemented by the "transparent" http_port option</P>
+<DT><B>httpd_accel_host</B><DD><P>Replaced by defaultsite http_port option and cache_peer originserver option.</P>
+<DT><B>httpd_accel_port</B><DD><P>No longer needed. Server port defined by the cache_peer port.</P>
+<DT><B>httpd_accel_uses_host_header</B><DD><P>Replaced by vhost http_port option</P>
+<DT><B>https_port</B><DD><P>Many new options. Reconstructs URLs as https:// by default.</P>
+<DT><B>cache_peer</B><DD><P>Many new options to support origin servers and SSL encryption</P>
+<DT><B>ssl_engine</B><DD><P>New directive for hardware assisted SSL encryption</P>
+<DT><B>sslproxy_*</B><DD><P>New directives defining how to gateway http-&gt;https</P>
+<DT><B>sslpassword_program</B><DD><P>New helper directive to query an external program for SSL key encryption password (if any)</P>
+<DT><B>cache_vary</B><DD><P>New directive to disable caching of Vary:ing responses</P>
+<DT><B>logformat</B><DD><P>New directive for defining custom log formats</P>
+<DT><B>cache_access_log</B><DD><P>Renamed to access_log</P>
+<DT><B>access_log</B><DD><P>Select what requests to log where any by what format. Support for multiple log files and multiple log formats.</P>
+<DT><B>check_hostnames</B><DD><P>New option to disable the hostname validity/sanity checks usually performed by Squid, replacing the similar build time configure option in 2.5.</P>
+<DT><B>allow_underscore</B><DD><P>New option to allow _ in hostnames, replacing the similar build time configure option in 2.5 and earlier.</P>
+<DT><B>redirect_*</B><DD><P>Renamed to url_rewrite_* to better reflect the functionality of this helper</P>
+<DT><B>url_rewrite_concurrency</B><DD><P>Activates a new and more efficient helper protocol. Requires changes in the helper.</P>
+<DT><B>location_rewrite_*</B><DD><P>New helper hook for rewriting Location headers</P>
+<DT><B>auth_param basic blankpassword</B><DD><P>New option to allow the use of blank passwords.</P>
+<DT><B>auth_param ntlm max_challenge_reuse / max_challenge_lifetime</B><DD><P>No longer supported</P>
+<DT><B>auth_param ntlm use_ntlm_negotiate</B><DD><P>Now defaults to "on"</P>
+<DT><B>auth_param ntlm keep_alive</B><DD><P>New option to fine-tune the use of HTTP keep-alive in combination with NTLM</P>
+<DT><B>auth_param negotiate</B><DD><P>New Negotiate authentication scheme, the "next generation" scheme in the family of Microsoft authentication.</P>
+<DT><B>external_acl_type</B><DD><P>Many new format options %SRCPORT, %MYADDR, %MYPORT, %PATH, %USER_CERT, %ACL, %DATA and a few variants. Helper protocol defaults to the simpler "3.0" protocol, and there is support for a highly efficient protocol via the concurrency= option if supported by the helper.</P>
+<DT><B>read_ahead_gap</B><DD><P>New directive to set the response buffer size.</P>
+<DT><B>collapsed_forwarding</B><DD><P>New directive to enable an alternative optimized forwarding path when there is very many concurrent requests for the same URL.</P>
+<DT><B>refresh_stale_hit</B><DD><P>New directive similar to collapsed_forwarding and activates an alternative optimized request processing when there is very many concurrent requests for the same recently expired URL.</P>
+<DT><B>acl urlgroup</B><DD><P>New acl class</P>
+<DT><B>acl user_cert</B><DD><P>New acl class matching the user SSL certificate (https_port)</P>
+<DT><B>acl ca_cert</B><DD><P>New acl class matching the CA of the user SSL certificate (https_port)</P>
+<DT><B>acl ext_user / ext_user_regex</B><DD><P>New acl matching usernames returned by external acl</P>
+<DT><B>http_access2</B><DD><P>New http_access type directive but evaluated after url rewrites</P>
+<DT><B>log_access</B><DD><P>New directive to limit what gets logged.</P>
+<DT><B>httpd_suppress_version_string</B><DD><P>Enable hiding of the Squid version</P>
+<DT><B>error_map</B><DD><P>New directive to allow dynamic rewrites of error pages</P>
+<DT><B>via</B><DD><P>New directive to disable the use of the Via directive</P>
+<DT><B>wccp2_*</B><DD><P>WCCP2 protocol support</P>
+<DT><B>linux_tproxy, tproxy_port</B><DD><P>Linux TPROXY support for masquerading outgoing connections as the original client</P>
+<DT><B>umask</B><DD><P>New directive enforcing a minimum umask</P>
+</DL>
+</P>
+
+<H2><A NAME="s3">3. Known issues and limitations</A></H2>
+
+<P>There is a few known issues in this version of Squid which we hope to correct in a later release</P>
+<P>
+<DL>
+<DT><B>Bug 
+<A HREF="http://www.squid-cache.org/bugs/show_bug.cgi?id=1584">#1584</A></B><DD><P>WCCPv2 unable to register with more than one router on Linux</P>
+<DT><B>Bug 
+<A HREF="http://www.squid-cache.org/bugs/show_bug.cgi?id=1590">#1590</A></B><DD><P>"ETag Loop" warnings in cache.log</P>
+<DT><B>Bug 
+<A HREF="http://www.squid-cache.org/bugs/show_bug.cgi?id=761">#761</A></B><DD><P>assertion failed: cbdata.c:249: "c-&gt;locks &gt; 0" when using diskd</P>
+<DT><B>Bug 
+<A HREF="http://www.squid-cache.org/bugs/show_bug.cgi?id=888">#888</A></B><DD><P>ntlm_user_pool assertion error on shutdown</P>
+<DT><B>Bug 
+<A HREF="http://www.squid-cache.org/bugs/show_bug.cgi?id=1420">#1420</A></B><DD><P>302 responses with an Expires header is always cached</P>
+<DT><B>Bug 
+<A HREF="http://www.squid-cache.org/bugs/show_bug.cgi?id=1500">#1500</A></B><DD><P>diskd related memory corruption under heavy load</P>
+</DL>
+</P>
+
+<P>Ipfilter 4.x compile problem on HP Tru64
+<UL>
+<LI>Running configure --enable-ipf-transparent on an HP Tru64 5.1B system with ipfilter 4.x installed, the following error can occur:
+<PRE>
+      checking if IP-Filter header files are installed... no
+      WARNING: Cannot find necessary IP-Filter header files
+               Transparent Proxy support WILL NOT be enabled
+</PRE>
+
+To fix the problem first check if the ip_fil.h, ip_compat.h, ip_nat.h and ipl.h files are present in
+/usr/include/netinet and copy them from ipfilter source tree if needed.
+Don't forget to fix files permission and ownership after the copy.<BR>
+If the error still persist, run configure making it skip the ip_compat.h test:<BR>
+<PRE>
+    env ac_cv_header_netinet_ip_compat_h=yes ./configure --enable-ipf-transparent
+</PRE>
+</LI>
+<LI>On Sun Solaris 10, ipfilter 4.0.22 is provided with the OS, but related include files (ip_fil.h, ip_compat.h, ip_nat.h, ipl.h) are missing.<BR>
+Before running configure --enable-ipf-transparent, they must be downloaded from the
+<A HREF="http://cvs.opensolaris.org/source/xref/usr/src/common/ipf/">OpenSolaris Web Site</A>
+in the /usr/include local directory. Don't forget to fix files permission and ownership after the download.</LI>
+</UL>
+</P>
+
+
+<P>In addition there is a set of limitations in this version of Squid which we hope to correct later</P>
+<P>
+<DL>
+<DT><B>Bug 
+<A HREF="http://www.squid-cache.org/bugs/show_bug.cgi?id=1059">#1059</A></B><DD><P>mime.conf and referenced icons must be within chroot</P>
+<DT><B>Bug 
+<A HREF="http://www.squid-cache.org/bugs/show_bug.cgi?id=692">#692</A></B><DD><P>tcp_outgoing_address using an ident ACL does not work</P>
+<DT><B>Bug 
+<A HREF="http://www.squid-cache.org/bugs/show_bug.cgi?id=581">#581</A></B><DD><P>acl max_user_ip and multiple authentication schemes</P>
+<DT><B>Bug 
+<A HREF="http://www.squid-cache.org/bugs/show_bug.cgi?id=528">#528</A></B><DD><P>miss_access fails on "slow" acl types such as dst.</P>
+<DT><B>Bug 
+<A HREF="http://www.squid-cache.org/bugs/show_bug.cgi?id=513">#513</A></B><DD><P>squid -F is starting server sockets to early</P>
+<DT><B>Bug 
+<A HREF="http://www.squid-cache.org/bugs/show_bug.cgi?id=457">#457</A></B><DD><P>does not handle swap.state corruption properly</P>
+<DT><B>Bug 
+<A HREF="http://www.squid-cache.org/bugs/show_bug.cgi?id=410">#410</A></B><DD><P>unstable if runs out of disk space</P>
+<DT><B>Bug 
+<A HREF="http://www.squid-cache.org/bugs/show_bug.cgi?id=355">#355</A></B><DD><P>diskd may appear slow on low loads</P>
+<DT><B>Bug 
+<A HREF="http://www.squid-cache.org/bugs/show_bug.cgi?id=219">#219</A></B><DD><P>delay_pools stops working on -k reconfigure</P>
+</DL>
+</P>
+
+<H2><A NAME="s4">4. Windows support:</A></H2>
+
+<P>This Squid version can run on Windows as a system service using the Cygwin environment.<BR>
+Windows NT4 and following are supported.<BR>
+On Windows 2000/XP/2003 the service is configured to use the Windows Service Recovery option
+restarting automatically after 60 seconds.
+<DL>
+
+<DT><B>Usage</B><DD><P>Some new command line options was added for Windows service support:<BR></P>
+<P>The service installation is made with -i command line switch, it's possible to use -f switch at
+the same time for specify a different config-file settings for the Squid Service that is stored
+on Windows Registry.</P>
+<P>A new -n switch specify the Windows Service Name, so multiple Squid instance are allowed.
+<EM>"Squid"</EM> is the default when the switch is not used.</P>
+<P>So, to install the service, the syntax is: </P>
+<P>
+<PRE>
+squid -i [-f file] [-n name]
+</PRE>
+</P>
+<P>Service uninstallation is made with -r command line switch plus the appropriate -n switch.</P>
+<P>The -k switch family must be used with the appropriate -f and -n switches, so the syntax is: </P>
+<P>
+<PRE>
+squid -k command [-f file] -n service-name
+</PRE>
+
+where <EM>service-name</EM> is the name specified with -n options at service install time.</P>
+<P>To use Squid original command line, the new -O switch must be used ONCE, the sintax is: </P>
+<P>
+<PRE>
+squid -O cmdline [-n service-name]
+</PRE>
+
+If multiple service command line options must be specified, use quote. The -n switch is
+needed only when a non default service name is in use.</P>
+<P>Don't use the "Start parameters" in the Windows 2000/XP/2003 Service applet: they are
+specific to Windows services functionality and Squid is not designed for understand they.</P>
+<P>Example: </P>
+<P>
+<PRE>
+squid -O "-D -a 8080" -n squidsvc
+</PRE>
+</P>
+</DL>
+</P>
+<P>
+<DL>
+<DT><B>Registry DNS lookup</B><DD><P>On Windows platforms, if no value is specified in the <EM>dns_nameservers</EM> option on
+squid.conf or in the /etc/resolv.conf file, the list of DNS name servers are
+taken from the Windows registry, both static and dynamic DHCP configurations
+are supported.</P>
+</DL>
+</P>
+<P>
+<DL>
+<DT><B>Compatibility Notes</B><DD><P>
+<UL>
+<LI>It's recommended to use '/' char in Squid paths instead of '\'</LI>
+<LI>Paths with spaces (like 'C:\Programs Files\Squid) are NOT supported by Squid</LI>
+<LI>When using ACL like 'acl aclname acltype "file"' the file must be in DOS text
+format (CR+LF) and the full Windows path must be specified, for example:
+
+<PRE>
+acl blocklist url_regex -i "c:/squid/etc/blocked1.txt"
+</PRE>
+
+</LI>
+<LI>The WIN32 equivalent of '/dev/null' is 'NUL'</LI>
+<LI>Squid doesn't know how to run external helpers based on scripts, like .bat, .cmd,
+.vbs, .pl, etc. So in squid.conf the interpreter path must be always specified, for example:
+
+<PRE>
+redirect_program c:/perl/bin/perl.exe c:/squid/libexec/redir.pl
+redirect_program c:/winnt/system32/cmd.exe /C c:/squid/libexec/redir.cmd
+</PRE>
+</LI>
+<LI>When Squid runs in command line mode, the launching user account must have administrative privilege on the system</LI>
+<LI>"Start parameters" in the Windows 2000/XP/2003 Service applet cannot be used</LI>
+</UL>
+</P>
+</DL>
+</P>
+<P>
+<DL>
+<DT><B>Known Limitations:</B><DD><P>
+<UL>
+<LI>Squid features not operational:<BR>
+<UL>
+<LI>DISKD: still needs to be ported<BR></LI>
+<LI>WCCP: cannot work because user space GRE support on Windows is missing<BR></LI>
+<LI>Transparent Proxy: missing Windows non commercial interception driver<BR></LI>
+</UL>
+</LI>
+<LI>Some code sections can make blocking calls.</LI>
+<LI>Some external helpers may not work.</LI>
+</UL>
+</P>
+</DL>
+</P>
+
+
+</BODY>
+</HTML>
