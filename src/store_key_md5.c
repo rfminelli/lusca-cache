@@ -98,7 +98,7 @@ storeKeyPrivate(const char *url, method_t method, int id)
     MD5_CTX M;
     assert(id > 0);
     debug(20, 3) ("storeKeyPrivate: %s %s\n",
-	RequestMethods[method].str, url);
+	RequestMethodStr[method], url);
     MD5Init(&M);
     MD5Update(&M, (unsigned char *) &id, sizeof(id));
     MD5Update(&M, (unsigned char *) &method, sizeof(method));

@@ -514,7 +514,7 @@ sslStart(clientHttpRequest * http, squid_off_t * size_ptr, int *status_ptr)
 	}
     }
     debug(26, 3) ("sslStart: '%s %s'\n",
-	RequestMethods[request->method].str, url);
+	RequestMethodStr[request->method], url);
     statCounter.server.all.requests++;
     statCounter.server.other.requests++;
     /* Create socket. */

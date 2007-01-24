@@ -383,7 +383,7 @@ aclParseMethodList(void *curlist)
     for (Tail = curlist; *Tail; Tail = &((*Tail)->next));
     while ((t = strtokFile())) {
 	q = memAllocate(MEM_INTLIST);
-	q->i = (int) urlParseMethod(t, strlen(t));
+	q->i = (int) urlParseMethod(t);
 	if (q->i == METHOD_NONE)
 	    self_destruct();
 	*(Tail) = q;
@@ -2903,7 +2903,7 @@ aclDumpMethodList(intlist * data)
 {
     wordlist *W = NULL;
     while (data != NULL) {
-	wordlistAdd(&W, RequestMethods[data->i].str);
+	wordlistAdd(&W, RequestMethodStr[data->i]);
 	data = data->next;
     }
     return W;

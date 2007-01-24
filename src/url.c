@@ -35,56 +35,56 @@
 
 #include "squid.h"
 
-rms_t RequestMethods[] =
+const char *RequestMethodStr[] =
 {
-    {"NONE", 4},
-    {"GET", 3},
-    {"POST", 4},
-    {"PUT", 3},
-    {"HEAD", 4},
-    {"CONNECT", 7},
-    {"TRACE", 5},
-    {"PURGE", 5},
-    {"OPTIONS", 7},
-    {"DELETE", 6},
-    {"PROPFIND", 8},
-    {"PROPPATCH", 9},
-    {"MKCOL", 5},
-    {"COPY", 4},
-    {"MOVE", 4},
-    {"LOCK", 4},
-    {"UNLOCK", 6},
-    {"BMOVE", 5},
-    {"BDELETE", 7},
-    {"BPROPFIND", 9},
-    {"BPROPPATCH", 10},
-    {"BCOPY", 5},
-    {"SEARCH", 6},
-    {"SUBSCRIBE", 9},
-    {"UNSUBSCRIBE", 11},
-    {"POLL", 4},
-    {"REPORT", 6},
-    {"%EXT00", 6},
-    {"%EXT01", 6},
-    {"%EXT02", 6},
-    {"%EXT03", 6},
-    {"%EXT04", 6},
-    {"%EXT05", 6},
-    {"%EXT06", 6},
-    {"%EXT07", 6},
-    {"%EXT08", 6},
-    {"%EXT09", 6},
-    {"%EXT10", 6},
-    {"%EXT11", 6},
-    {"%EXT12", 6},
-    {"%EXT13", 6},
-    {"%EXT14", 6},
-    {"%EXT15", 6},
-    {"%EXT16", 6},
-    {"%EXT17", 6},
-    {"%EXT18", 6},
-    {"%EXT19", 6},
-    {"ERROR", 5},
+    "NONE",
+    "GET",
+    "POST",
+    "PUT",
+    "HEAD",
+    "CONNECT",
+    "TRACE",
+    "PURGE",
+    "OPTIONS",
+    "DELETE",
+    "PROPFIND",
+    "PROPPATCH",
+    "MKCOL",
+    "COPY",
+    "MOVE",
+    "LOCK",
+    "UNLOCK",
+    "BMOVE",
+    "BDELETE",
+    "BPROPFIND",
+    "BPROPPATCH",
+    "BCOPY",
+    "SEARCH",
+    "SUBSCRIBE",
+    "UNSUBSCRIBE",
+    "POLL",
+    "REPORT",
+    "%EXT00",
+    "%EXT01",
+    "%EXT02",
+    "%EXT03",
+    "%EXT04",
+    "%EXT05",
+    "%EXT06",
+    "%EXT07",
+    "%EXT08",
+    "%EXT09",
+    "%EXT10",
+    "%EXT11",
+    "%EXT12",
+    "%EXT13",
+    "%EXT14",
+    "%EXT15",
+    "%EXT16",
+    "%EXT17",
+    "%EXT18",
+    "%EXT19",
+    "ERROR"
 };
 
 const char *ProtocolStr[] =
@@ -175,7 +175,7 @@ urlInitialize(void)
 }
 
 method_t
-urlParseMethod(const char *s, int len)
+urlParseMethod(const char *s)
 {
     method_t method = METHOD_NONE;
     /*
@@ -186,7 +186,7 @@ urlParseMethod(const char *s, int len)
     if (*s == '%')
 	return METHOD_NONE;
     for (method++; method < METHOD_ENUM_END; method++) {
-	if (len == RequestMethods[method].len && 0 == strncasecmp(s, RequestMethods[method].str, len))
+	if (0 == strcasecmp(s, RequestMethodStr[method]))
 	    return method;
     }
     return METHOD_NONE;
@@ -259,9 +259,6 @@ urlParse(method_t method, char *url)
     protocol_t protocol = PROTO_NONE;
     int l;
     proto[0] = host[0] = urlpath[0] = login[0] = '\0';
-    int i;
-    const char *src;
-    char *dst;
 
     if ((l = strlen(url)) + Config.appendDomainLen > (MAX_URL - 1)) {
 	/* terminate so it doesn't overflow other buffers */
@@ -276,51 +273,17 @@ urlParse(method_t method, char *url)
     } else if (!strncmp(url, "urn:", 4)) {
 	return urnParse(method, url);
     } else {
-	/* Parse the URL: */
-	src = url;
-	i = 0;
-	/* Find first : - everything before is protocol */
-	for (i = 0, dst = proto; i < l && *src != ':'; i++, src++, dst++) {
-	    *dst = *src;
-	}
-	if (i >= l)
+	if (sscanf(url, "%[^:]://%[^/]%[^\r\n]", proto, host, urlpath) < 2)
 	    return NULL;
-	*dst = '\0';
-
-	/* Then its :// */
-	/* (XXX yah, I'm not checking we've got enough data left before checking the array..) */
-	if (*src != ':' || *(src + 1) != '/' || *(src + 2) != '/')
-	    return NULL;
-	i += 3;
-	src += 3;
-
-	/* Then everything until first /; thats host (and port; which we'll look for here later) */
-	for (dst = host; i < l && *src != '/'; i++, src++, dst++) {
-	    *dst = *src;
-	}
-	if (i >= l)
-	    return NULL;
-	*dst = '\0';
-
-	/* Then everything from / (inclusive) until \r\n or \0 - thats urlpath */
-	for (dst = urlpath; i < l && *src != '\r' && *src != '\n' && *src != '\0'; i++, src++, dst++) {
-	    *dst = *src;
-	}
-	/* We -could- be at the end of the buffer here */
-	if (i > l)
-	    return NULL;
-	*dst = '\0';
-
 	protocol = urlParseProtocol(proto);
 	port = urlDefaultPort(protocol);
-	/* Is there any login informaiton? (we should eventually parse it above) */
+	/* Is there any login informaiton? */
 	if ((t = strrchr(host, '@'))) {
 	    strcpy((char *) login, (char *) host);
 	    t = strrchr(login, '@');
 	    *t = 0;
 	    strcpy((char *) host, t + 1);
 	}
-	/* Is there any host information? (we should eventually parse it above) */
 	if ((t = strrchr(host, ':'))) {
 	    *t++ = '\0';
 	    if (*t != '\0')
@@ -436,11 +399,6 @@ urlCanonical(request_t * request)
     return (request->canonical = xstrdup(urlbuf));
 }
 
-/*
- * Eventually the request_t strings should be String entries which
- * have in-built length. Eventually we should just take a buffer and
- * do our magic inside that to eliminate that copy.
- */
 char *
 urlCanonicalClean(const request_t * request)
 {
@@ -448,10 +406,6 @@ urlCanonicalClean(const request_t * request)
     LOCAL_ARRAY(char, portbuf, 32);
     LOCAL_ARRAY(char, loginbuf, MAX_LOGIN_SZ + 1);
     char *t;
-    int i;
-    const char *s;
-    char *ts = "://";
-
     if (request->protocol == PROTO_URN) {
 	snprintf(buf, MAX_URL, "urn:%s", strBuf(request->urlpath));
     } else {
@@ -470,40 +424,12 @@ urlCanonicalClean(const request_t * request)
 		    *t = '\0';
 		strcat(loginbuf, "@");
 	    }
-	    /*
-	     * This stuff would be better if/when each of these strings is a String with
-	     * a known length..
-	     */
-	    s = ProtocolStr[request->protocol];
-	    for (i = 0; i < MAX_URL && *s != '\0'; i++, s++) {
-		buf[i] = *s;
-	    }
-	    s = ts;
-	    for (; i < MAX_URL && *s != '\0'; i++, s++) {
-		buf[i] = *s;
-	    }
-	    s = loginbuf;
-	    for (; i < MAX_URL && *s != '\0'; i++, s++) {
-		buf[i] = *s;
-	    }
-	    s = request->host;
-	    for (; i < MAX_URL && *s != '\0'; i++, s++) {
-		buf[i] = *s;
-	    }
-	    s = portbuf;
-	    for (; i < MAX_URL && *s != '\0'; i++, s++) {
-		buf[i] = *s;
-	    }
-	    s = strBuf(request->urlpath);
-	    for (; i < MAX_URL && *s != '\0'; i++, s++) {
-		buf[i] = *s;
-	    }
-	    if (i >= (MAX_URL - 1)) {
-		buf[MAX_URL - 1] = '\0';
-	    } else {
-		buf[i] = '\0';
-	    }
-
+	    snprintf(buf, MAX_URL, "%s://%s%s%s%s",
+		ProtocolStr[request->protocol],
+		loginbuf,
+		request->host,
+		portbuf,
+		strBuf(request->urlpath));
 	    /*
 	     * strip arguments AFTER a question-mark
 	     */
@@ -685,17 +611,16 @@ urlExtMethodAdd(const char *mstr)
 {
     method_t method = 0;
     for (method++; method < METHOD_ENUM_END; method++) {
-	if (0 == strcmp(mstr, RequestMethods[method].str)) {
+	if (0 == strcmp(mstr, RequestMethodStr[method])) {
 	    debug(23, 2) ("Extension method '%s' already exists\n", mstr);
 	    return;
 	}
-	if (0 != strncmp("%EXT", RequestMethods[method].str, 4))
+	if (0 != strncmp("%EXT", RequestMethodStr[method], 4))
 	    continue;
 	/* Don't free statically allocated "%EXTnn" string */
-	if (0 == strncmp("%EXT_", RequestMethods[method].str, 5))
-	    safe_free(RequestMethods[method].str);
-	RequestMethods[method].str = xstrdup(mstr);
-	RequestMethods[method].len = strlen(mstr);
+	if (0 == strncmp("%EXT_", RequestMethodStr[method], 5))
+	    safe_free(RequestMethodStr[method]);
+	RequestMethodStr[method] = xstrdup(mstr);
 	debug(23, 1) ("Extension method '%s' added, enum=%d\n", mstr, (int) method);
 	return;
     }
@@ -703,7 +628,7 @@ urlExtMethodAdd(const char *mstr)
 }
 
 void
-parse_extension_method(rms_t * foo[])
+parse_extension_method(const char *(*_methods)[])
 {
     char *token;
     char *t = strtok(NULL, "");
@@ -713,27 +638,27 @@ parse_extension_method(rms_t * foo[])
 }
 
 void
-free_extension_method(rms_t * foo[])
+free_extension_method(const char *(*_methods)[])
 {
     method_t method;
+    char **methods = (char **) _methods;
     for (method = METHOD_EXT00; method < METHOD_ENUM_END; method++) {
-	if (RequestMethods[method].str[0] != '%') {
+	if (*methods[method] != '%') {
 	    char buf[32];
 	    snprintf(buf, sizeof(buf), "%%EXT_%02d", method - METHOD_EXT00);
-	    safe_free(RequestMethods[method].str);
-	    RequestMethods[method].str = xstrdup(buf);
-	    RequestMethods[method].len = strlen(buf);
+	    safe_free(methods[method]);
+	    methods[method] = xstrdup(buf);
 	}
     }
 }
 
 void
-dump_extension_method(StoreEntry * entry, const char *name, rms_t * methods[])
+dump_extension_method(StoreEntry * entry, const char *name, const char **methods)
 {
     method_t method;
     for (method = METHOD_EXT00; method < METHOD_ENUM_END; method++) {
-	if (RequestMethods[method].str[0] != '%') {
-	    storeAppendPrintf(entry, "%s %s\n", name, RequestMethods[method].str);
+	if (*methods[method] != '%') {
+	    storeAppendPrintf(entry, "%s %s\n", name, methods[method]);
 	}
     }
 }

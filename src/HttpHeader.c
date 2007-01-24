@@ -113,14 +113,12 @@ static const HttpHeaderFieldAttrs HeadersAttrs[] =
     {"Retry-After", HDR_RETRY_AFTER, ftStr},	/* for now (ftDate_1123 or ftInt!) */
     {"Server", HDR_SERVER, ftStr},
     {"Set-Cookie", HDR_SET_COOKIE, ftStr},
+    {"Title", HDR_TITLE, ftStr},
     {"Transfer-Encoding", HDR_TRANSFER_ENCODING, ftStr},
-    {"Te", HDR_TE, ftStr},
-    {"Trailer", HDR_TRAILER, ftStr},
     {"Upgrade", HDR_UPGRADE, ftStr},	/* for now */
     {"User-Agent", HDR_USER_AGENT, ftStr},
     {"Vary", HDR_VARY, ftStr},	/* for now */
     {"Via", HDR_VIA, ftStr},	/* for now */
-    {"Expect", HDR_EXPECT, ftStr},
     {"Warning", HDR_WARNING, ftStr},	/* for now */
     {"WWW-Authenticate", HDR_WWW_AUTHENTICATE, ftStr},
     {"Authentication-Info", HDR_AUTHENTICATION_INFO, ftStr},
@@ -159,8 +157,6 @@ static http_hdr_type ListHeadersArr[] =
     HDR_LINK, HDR_PRAGMA,
     HDR_PROXY_CONNECTION,
     HDR_PROXY_SUPPORT,
-    HDR_TE,
-    HDR_TRAILER,
     HDR_TRANSFER_ENCODING,
     HDR_UPGRADE,
     HDR_VARY,
@@ -169,7 +165,7 @@ static http_hdr_type ListHeadersArr[] =
     HDR_WWW_AUTHENTICATE,
     HDR_AUTHENTICATION_INFO,
     HDR_PROXY_AUTHENTICATION_INFO,
-    HDR_EXPECT,
+    /* HDR_EXPECT, HDR_TE, HDR_TRAILER */
 #if X_ACCELERATOR_VARY
     HDR_X_ACCELERATOR_VARY,
 #endif
@@ -181,8 +177,8 @@ static http_hdr_type GeneralHeadersArr[] =
 {
     HDR_CACHE_CONTROL, HDR_CONNECTION, HDR_DATE, HDR_PRAGMA,
     HDR_TRANSFER_ENCODING,
-    HDR_TRAILER,
     HDR_UPGRADE,
+    /* HDR_TRAILER, */
     HDR_VIA
 };
 
@@ -220,7 +216,7 @@ static http_hdr_type RequestHeadersArr[] =
     HDR_IF_MATCH, HDR_IF_MODIFIED_SINCE, HDR_IF_NONE_MATCH,
     HDR_IF_RANGE, HDR_MAX_FORWARDS, HDR_PROXY_CONNECTION,
     HDR_PROXY_AUTHORIZATION, HDR_RANGE, HDR_REFERER, HDR_REQUEST_RANGE,
-    HDR_USER_AGENT, HDR_X_FORWARDED_FOR, HDR_TE, HDR_EXPECT
+    HDR_USER_AGENT, HDR_X_FORWARDED_FOR
 };
 
 /* header accounting */
@@ -244,7 +240,6 @@ static int HeaderEntryParsedCount = 0;
 #define assert_eid(id) assert((id) < HDR_ENUM_END)
 
 static HttpHeaderEntry *httpHeaderEntryCreate(http_hdr_type id, const char *name, const char *value);
-static HttpHeaderEntry *httpHeaderEntryCreate2(http_hdr_type id, String name, String value);
 static void httpHeaderEntryDestroy(HttpHeaderEntry * e);
 static HttpHeaderEntry *httpHeaderEntryParseCreate(const char *field_start, const char *field_end);
 static void httpHeaderNoteParsedEntry(http_hdr_type id, String value, int error);
@@ -377,7 +372,7 @@ httpHeaderAppend(HttpHeader * dest, const HttpHeader * src)
     debug(55, 7) ("appending hdr: %p += %p\n", dest, src);
 
     while ((e = httpHeaderGetEntry(src, &pos))) {
-	httpHeaderAddClone(dest, e);
+	httpHeaderAddEntry(dest, httpHeaderEntryClone(e));
     }
 }
 
@@ -399,7 +394,7 @@ httpHeaderUpdate(HttpHeader * old, const HttpHeader * fresh, const HttpHeaderMas
 	    httpHeaderDelById(old, e->id);
 	else
 	    httpHeaderDelByName(old, strBuf(e->name));
-	httpHeaderAddClone(old, e);
+	httpHeaderAddEntry(old, httpHeaderEntryClone(e));
     }
 }
 
@@ -770,7 +765,7 @@ httpHeaderGetStrOrList(const HttpHeader * hdr, http_hdr_type id)
 	return httpHeaderGetList(hdr, id);
     if ((e = httpHeaderFindEntry(hdr, id))) {
 	String s;
-	stringLimitInit(&s, strBuf(e->value), strLen(e->value));
+	stringInit(&s, strBuf(e->value));
 	return s;
     }
     return StringNull;
@@ -1181,23 +1176,6 @@ httpHeaderEntryCreate(http_hdr_type id, const char *name, const char *value)
     return e;
 }
 
-static HttpHeaderEntry *
-httpHeaderEntryCreate2(http_hdr_type id, String name, String value)
-{
-    HttpHeaderEntry *e;
-    assert_eid(id);
-    e = memAllocate(MEM_HTTP_HDR_ENTRY);
-    e->id = id;
-    if (id != HDR_OTHER)
-	e->name = Headers[id].name;
-    else
-	stringLimitInit(&e->name, strBuf(name), strLen(name));
-    stringLimitInit(&e->value, strBuf(value), strLen(value));
-    Headers[id].stat.aliveCount++;
-    debug(55, 9) ("created entry %p: '%s: %s'\n", e, strBuf(e->name), strBuf(e->value));
-    return e;
-}
-
 static void
 httpHeaderEntryDestroy(HttpHeaderEntry * e)
 {
@@ -1283,13 +1261,7 @@ httpHeaderEntryParseCreate(const char *field_start, const char *field_end)
 HttpHeaderEntry *
 httpHeaderEntryClone(const HttpHeaderEntry * e)
 {
-    return httpHeaderEntryCreate2(e->id, e->name, e->value);
-}
-
-void
-httpHeaderAddClone(HttpHeader * hdr, const HttpHeaderEntry * e)
-{
-    httpHeaderAddEntry(hdr, httpHeaderEntryClone(e));
+    return httpHeaderEntryCreate(e->id, strBuf(e->name), strBuf(e->value));
 }
 
 void
