@@ -193,6 +193,37 @@ restarting automatically after 60 seconds.
 
 <tag>Usage</tag>
 
+The "squid -?" command gives the following output:
+
+<verb>Usage: squid [-hirvzCDFRYX] [-d level] [-s | -l facility] [-f config-file] [-u port] [-k signal] [-n name] [-O command-line]
+       -d level  Write debugging to stderr also.
+       -f file   Use given config-file instead of
+                 c:/squid/etc/squid.conf
+       -h        Print help message.
+       -i        Installs as a Windows Service (see -n option).
+       -k reconfigure|rotate|shutdown|interrupt|kill|debug|check|parse
+                 Parse configuration file, then send signal to
+                 running copy (except -k parse) and exit.
+       -n name   Specify Windows Service name to use for service operations
+                 default is: Squid.
+       -r        Removes a Windows Service (see -n option).
+       -s | -l facility
+                 Enable logging to syslog.
+       -u port   Specify ICP port number (default: 3130), disable with 0.
+       -v        Print version.
+       -z        Create swap directories
+       -C        Do not catch fatal signals.
+       -D        Disable initial DNS tests.
+       -F        Don't serve any requests until store is rebuilt.
+       -N        No daemon mode.
+       -O "options"
+                 Set Windows Service Command line options in Registry.
+       -R        Do not set REUSEADDR on port.
+       -S        Double-check swap during rebuild.
+       -X        Force full debugging.
+       -Y        Only return UDP_HIT or UDP_MISS_NOFETCH during fast reload.
+</verb>
+
 Some new command line options was added for the Windows service support:<newline>
 
 The service installation is made with -i command line switch, it's possible to use -f switch at
@@ -258,6 +289,20 @@ are supported.
 </descrip>
 
 <descrip>
+<tag>Key changes from SquidNT 2.5</tag>
+<itemize>
+<item>Changed the default Windows service name from "SquidNT" to "Squid"
+<item>Changed the names of the following Windows helpers:
+<itemize>
+<item>"win32_auth.exe" to "mswin_auth.exe"
+<item>"win32_ntlm_auth.exe" to "mswin_ntlm_auth.exe"
+<item>"win32_check_group.exe" to "mswin_check_lm_group.exe"
+</itemize>
+</itemize>
+</descrip>
+
+
+<descrip>
 <tag>Compatibility Notes</tag>
 <itemize>
 <item>It's recommended to use '/' char in Squid paths instead of '\'
@@ -316,7 +361,7 @@ When running configure, --disable-wccp and --disable-wccpv2 options should alway
 </itemize>
 <item>Unsupported configure options:<newline>
 <itemize>
-<item>--enable-coss-aio-ops: On Windows Posix AIO is not available<newline>
+<item>--enable-coss-aio-ops: On Cygwin Posix AIO is not available<newline>
 <item>--with-large-files: No suitable build environment is available on both Cygwin and MinGW, but --enable-large-cache-files works fine<newline>
 </itemize>
 <item>Recommended configure minimal options for Windows:<newline>
