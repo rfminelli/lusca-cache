@@ -74,6 +74,8 @@ icmpRecv(int unused1, void *unused2)
     static int fail_count = 0;
     pingerReplyData preply;
     static struct sockaddr_in F;
+    if (icmp_sock < 0)
+	return;
     commSetSelect(icmp_sock, COMM_SELECT_READ, icmpRecv, NULL, 0);
     memset(&preply, '\0', sizeof(pingerReplyData));
     statCounter.syscalls.sock.recvfroms++;
@@ -158,6 +160,8 @@ icmpSourcePing(struct in_addr to, const icp_common_t * header, const char *url)
     char *payload;
     int len;
     int ulen;
+    if (icmp_sock < 0)
+	return;
     debug(37, 3) ("icmpSourcePing: '%s'\n", url);
     if ((ulen = strlen(url)) > MAX_URL)
 	return;
@@ -176,6 +180,8 @@ void
 icmpDomainPing(struct in_addr to, const char *domain)
 {
 #if USE_ICMP
+    if (icmp_sock < 0)
+	return;
     debug(37, 3) ("icmpDomainPing: '%s'\n", domain);
     icmpSendEcho(to, S_ICMP_DOM, domain, 0);
 #endif
@@ -188,6 +194,10 @@ icmpOpen(void)
     const char *args[2];
     int rfd;
     int wfd;
+    if (strcmp(Config.Program.pinger, "none") == 0) {
+	debug(37, 1) ("Pinger disabled\n");
+	return;
+    }
     args[0] = "(pinger)";
     args[1] = NULL;
     pid = ipcCreate(IPC_DGRAM,
