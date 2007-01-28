@@ -655,7 +655,7 @@ fwdDispatch(FwdState * fwdState)
     int server_fd = fwdState->server_fd;
     debug(17, 3) ("fwdDispatch: FD %d: Fetching '%s %s'\n",
 	fwdState->client_fd,
-	RequestMethods[request->method].str,
+	RequestMethodStr[request->method],
 	storeUrl(entry));
     /*
      * Assert that server_fd is set.  This is to guarantee that fwdState
@@ -1121,7 +1121,7 @@ fwdLog(FwdState * fwdState)
 	(int) current_time.tv_sec,
 	(int) current_time.tv_usec / 1000,
 	fwdState->last_status,
-	RequestMethods[fwdState->request->method].str,
+	RequestMethodStr[fwdState->request->method],
 	fwdState->request->canonical);
 }
 

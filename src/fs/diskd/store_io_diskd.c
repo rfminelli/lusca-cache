@@ -443,9 +443,6 @@ storeDiskdHandle(diomsg * M)
 	}
 	return;
     }
-    /* set errno passed from diskd.  makes debugging more meaningful */
-    if (M->status < 0)
-	errno = -M->status;
     switch (M->mtype) {
     case _MQD_OPEN:
 	storeDiskdOpenDone(M);
@@ -472,7 +469,7 @@ static void
 storeDiskdIOCallback(storeIOState * sio, int errflag)
 {
     void *p = sio->callback_data;
-    debug(79, 3) ("storeDiskdIOCallback: errflag=%d\n", errflag);
+    debug(79, 3) ("storeUfsIOCallback: errflag=%d\n", errflag);
     if (cbdataValid(p))
 	sio->callback(p, errflag, sio);
     cbdataUnlock(p);
@@ -488,9 +485,6 @@ storeDiskdSend(int mtype, SwapDir * sd, int id, storeIOState * sio, int size, of
     static int last_seq_no = 0;
     static int seq_no = 0;
     diskdinfo_t *diskdinfo = sd->fsdata;
-    struct timeval delay =
-    {0, 1};
-
     M.mtype = mtype;
     M.callback_data = sio;
     M.size = size;
@@ -503,43 +497,6 @@ storeDiskdSend(int mtype, SwapDir * sd, int id, storeIOState * sio, int size, of
 	cbdataLock(M.callback_data);
     if (M.seq_no < last_seq_no)
 	debug(79, 1) ("WARNING: sequencing out of order\n");
-
-    /*
-     * We have to drain the queue here if necessary.  If we don't,
-     * then we can have a lot of messages in the queue (probably
-     * up to 2*magic1) and we can run out of shared memory buffers.
-     */
-    /*
-     * NOTE that it is important that we call storeDirCallback AFTER
-     * locking the callback data M.callback_data because we need
-     * to make sure the cbdata lock count doesn't go to zero (and
-     * get freed) before we have a chance to send the current message
-     * M!
-     */
-    /*
-     * Note that we call storeDirCallback (for all SDs), rather
-     * than storeDiskdDirCallback for just this SD, so that while
-     * we're "blocking" on this SD we can also handle callbacks
-     * from other SDs that might be ready.
-     */
-    while (diskdinfo->away > diskdinfo->magic2) {
-	select(0, NULL, NULL, NULL, &delay);
-	storeDirCallback();
-	if (delay.tv_usec < 1000000)
-	    delay.tv_usec <<= 1;
-    }
-
-#if 0
-    debug(79, 3) ("msgsnd %ld %d %d %p %d %" PRINTF_OFF_T " %d %d\n",
-	M.mtype,
-	M.id,
-	M.seq_no,
-	M.callback_data,
-	M.size,
-	M.offset,
-	M.status,
-	M.shm_offset);
-#endif
     x = msgsnd(diskdinfo->smsgid, &M, msg_snd_rcv_sz, IPC_NOWAIT);
     last_seq_no = M.seq_no;
     if (0 == x) {
@@ -550,6 +507,25 @@ storeDiskdSend(int mtype, SwapDir * sd, int id, storeIOState * sio, int size, of
 	if (M.callback_data)
 	    cbdataUnlock(M.callback_data);
 	assert(++send_errors < 100);
+    }
+    /*
+     * We have to drain the queue here if necessary.  If we don't,
+     * then we can have a lot of messages in the queue (probably
+     * up to 2*magic1) and we can run out of shared memory buffers.
+     */
+    /*
+     * Note that we call storeDirCallback (for all SDs), rather
+     * than storeDiskdDirCallback for just this SD, so that while
+     * we're "blocking" on this SD we can also handle callbacks
+     * from other SDs that might be ready.
+     */
+    while (diskdinfo->away > diskdinfo->magic2) {
+	struct timeval delay =
+	{0, 1};
+	select(0, NULL, NULL, NULL, &delay);
+	storeDirCallback();
+	if (delay.tv_usec < 1000000)
+	    delay.tv_usec <<= 1;
     }
     return x;
 }

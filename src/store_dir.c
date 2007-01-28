@@ -403,6 +403,7 @@ storeDirCloseSwapLogs(void)
  *  the run. Thanks goes to Eric Stern, since this solution
  *  came out of his COSS code.
  */
+#define CLEAN_BUF_SZ 16384
 int
 storeDirWriteCleanLogs(int reopen)
 {
@@ -471,6 +472,7 @@ storeDirWriteCleanLogs(int reopen)
 	dt, (double) n / (dt > 0.0 ? dt : 1.0));
     return n;
 }
+#undef CLEAN_BUF_SZ
 
 /*
  * sync all avaliable fs'es ..

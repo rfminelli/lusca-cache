@@ -526,7 +526,7 @@ errorConvert(char token, ErrorState * err)
 	p = authenticateAuthUserRequestMessage(err->auth_user_request) ? authenticateAuthUserRequestMessage(err->auth_user_request) : "[not available]";
 	break;
     case 'M':
-	p = r ? RequestMethods[r->method].str : "[unknown method]";
+	p = r ? RequestMethodStr[r->method] : "[unkown method]";
 	break;
     case 'o':
 	p = external_acl_message;
@@ -547,7 +547,7 @@ errorConvert(char token, ErrorState * err)
 	if (NULL != r) {
 	    Packer p;
 	    memBufPrintf(&mb, "%s %s HTTP/%d.%d\n",
-		RequestMethods[r->method].str,
+		RequestMethodStr[r->method],
 		strLen(r->urlpath) ? strBuf(r->urlpath) : "/",
 		r->http_ver.major, r->http_ver.minor);
 	    packerToMemInit(&p, &mb);

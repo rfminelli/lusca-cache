@@ -176,7 +176,7 @@ fd_open(int fd, unsigned int type, const char *desc)
 #endif
     fdUpdateBiggest(fd, 1);
     if (desc)
-	fd_note(fd, desc);
+	xstrncpy(F->desc, desc, FD_DESC_SZ);
     Number_FD++;
 }
 
@@ -184,15 +184,7 @@ void
 fd_note(int fd, const char *s)
 {
     fde *F = &fd_table[fd];
-    xstrncpy(F->descbuf, s, FD_DESC_SZ);
-    F->desc = F->descbuf;
-}
-
-void
-fd_note_static(int fd, const char *s)
-{
-    fde *F = &fd_table[fd];
-    F->desc = s;
+    xstrncpy(F->desc, s, FD_DESC_SZ);
 }
 
 void
