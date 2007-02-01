@@ -742,7 +742,7 @@
 
 /* Define this if you would like to use the aufs I/O method for disk I/O
    instead of the POSIX AIO method. */
-#define USE_AUFSOPS 0
+#define USE_AUFSOPS 1
 
 /* Use Cache Digests for locating objects in neighbor caches. This code is
    still semi-experimental. */
