@@ -25,7 +25,6 @@ copy %0\..\ntlm_win32_auth\%1\ntlm_win32_auth.exe %2\libexec\mswin_ntlm_auth.exe
 copy %0\..\negotiate_auth\%1\negotiate_auth.exe %2\libexec\mswin_negotiate_auth.exe
 copy %0\..\ldap_group\%1\ldap_group.exe %2\libexec\squid_ldap_group.exe
 copy %0\..\win32_check_group\%1\win32_check_group.exe %2\libexec\mswin_check_lm_group.exe
-copy %0\..\ip_user_check\%1\ip_user_check.exe %2\libexec\ip_user_check.exe
 copy %0\..\cachemgr\%1\cachemgr.exe %2\libexec\cachemgr.cgi
 
 copy %0\..\..\..\src\squid.conf.default %2\etc\squid.conf.default

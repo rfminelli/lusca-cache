@@ -21,9 +21,6 @@ Package=<4>
     Project_Dep_Name fake_auth
     End Project Dependency
     Begin Project Dependency
-    Project_Dep_Name ip_user_check
-    End Project Dependency
-    Begin Project Dependency
     Project_Dep_Name LDAP_auth
     End Project Dependency
     Begin Project Dependency
@@ -276,21 +273,6 @@ Package=<4>
 
 ###############################################################################
 
-Project: "ip_user_check"=".\ip_user_check\ip_user_check.dsp" - Package Owner=<4>
-
-Package=<5>
-{{{
-}}}
-
-Package=<4>
-{{{
-    Begin Project Dependency
-    Project_Dep_Name libmiscutil
-    End Project Dependency
-}}}
-
-###############################################################################
-
 Project: "libaufs"=".\libaufs\libaufs.dsp" - Package Owner=<4>
 
 Package=<5>
@@ -329,9 +311,6 @@ Package=<5>
 
 Package=<4>
 {{{
-    Begin Project Dependency
-    Project_Dep_Name modules
-    End Project Dependency
 }}}
 
 ###############################################################################
