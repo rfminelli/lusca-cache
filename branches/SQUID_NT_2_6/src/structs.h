@@ -1093,6 +1093,8 @@ struct _http_state_flags {
     unsigned int request_sent:1;
     unsigned int front_end_https:2;
     unsigned int originpeer:1;
+    unsigned int chunked:1;
+    unsigned int trailer:1;
 };
 
 struct _HttpStateData {
@@ -1108,6 +1110,8 @@ struct _HttpStateData {
     FwdState *fwd;
     char *body_buf;
     int body_buf_sz;
+    squid_off_t chunk_size;
+    String chunkhdr;
 };
 
 struct _icpUdpData {
@@ -1160,6 +1164,7 @@ struct _AccessLogEntry {
     struct {
 	struct in_addr caddr;
 	squid_off_t size;
+	size_t rq_size;
 	log_type code;
 	int msec;
 	const char *rfc931;
@@ -1832,6 +1837,7 @@ struct _request_flags {
     unsigned int tproxy:1;
 #endif
     unsigned int collapsed:1;	/* This request was collapsed. Don't trust the store entry to be valid */
+    unsigned int cache_validation:1;	/* This request is an internal cache validation */
 };
 
 struct _link_list {
