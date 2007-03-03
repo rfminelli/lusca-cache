@@ -244,7 +244,6 @@ static int HeaderEntryParsedCount = 0;
 #define assert_eid(id) assert((id) < HDR_ENUM_END)
 
 static HttpHeaderEntry *httpHeaderEntryCreate(http_hdr_type id, const char *name, const char *value);
-static HttpHeaderEntry *httpHeaderEntryCreate2(http_hdr_type id, String name, String value);
 static void httpHeaderEntryDestroy(HttpHeaderEntry * e);
 static HttpHeaderEntry *httpHeaderEntryParseCreate(const char *field_start, const char *field_end);
 static void httpHeaderNoteParsedEntry(http_hdr_type id, String value, int error);
@@ -377,7 +376,7 @@ httpHeaderAppend(HttpHeader * dest, const HttpHeader * src)
     debug(55, 7) ("appending hdr: %p += %p\n", dest, src);
 
     while ((e = httpHeaderGetEntry(src, &pos))) {
-	httpHeaderAddClone(dest, e);
+	httpHeaderAddEntry(dest, httpHeaderEntryClone(e));
     }
 }
 
@@ -399,7 +398,7 @@ httpHeaderUpdate(HttpHeader * old, const HttpHeader * fresh, const HttpHeaderMas
 	    httpHeaderDelById(old, e->id);
 	else
 	    httpHeaderDelByName(old, strBuf(e->name));
-	httpHeaderAddClone(old, e);
+	httpHeaderAddEntry(old, httpHeaderEntryClone(e));
     }
 }
 
@@ -770,7 +769,7 @@ httpHeaderGetStrOrList(const HttpHeader * hdr, http_hdr_type id)
 	return httpHeaderGetList(hdr, id);
     if ((e = httpHeaderFindEntry(hdr, id))) {
 	String s;
-	stringLimitInit(&s, strBuf(e->value), strLen(e->value));
+	stringInit(&s, strBuf(e->value));
 	return s;
     }
     return StringNull;
@@ -1181,23 +1180,6 @@ httpHeaderEntryCreate(http_hdr_type id, const char *name, const char *value)
     return e;
 }
 
-static HttpHeaderEntry *
-httpHeaderEntryCreate2(http_hdr_type id, String name, String value)
-{
-    HttpHeaderEntry *e;
-    assert_eid(id);
-    e = memAllocate(MEM_HTTP_HDR_ENTRY);
-    e->id = id;
-    if (id != HDR_OTHER)
-	e->name = Headers[id].name;
-    else
-	stringLimitInit(&e->name, strBuf(name), strLen(name));
-    stringLimitInit(&e->value, strBuf(value), strLen(value));
-    Headers[id].stat.aliveCount++;
-    debug(55, 9) ("created entry %p: '%s: %s'\n", e, strBuf(e->name), strBuf(e->value));
-    return e;
-}
-
 static void
 httpHeaderEntryDestroy(HttpHeaderEntry * e)
 {
@@ -1283,13 +1265,7 @@ httpHeaderEntryParseCreate(const char *field_start, const char *field_end)
 HttpHeaderEntry *
 httpHeaderEntryClone(const HttpHeaderEntry * e)
 {
-    return httpHeaderEntryCreate2(e->id, e->name, e->value);
-}
-
-void
-httpHeaderAddClone(HttpHeader * hdr, const HttpHeaderEntry * e)
-{
-    httpHeaderAddEntry(hdr, httpHeaderEntryClone(e));
+    return httpHeaderEntryCreate(e->id, strBuf(e->name), strBuf(e->value));
 }
 
 void

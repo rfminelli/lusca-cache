@@ -532,17 +532,6 @@ storeDiskdDirCallback(SwapDir * SD)
 		x);
 	    break;
 	}
-#if 0
-	debug(47, 3) ("msgrcv %ld %d %d %p %d %" PRINTF_OFF_T " %d %d\n",
-	    M.mtype,
-	    M.id,
-	    M.seq_no,
-	    M.callback_data,
-	    M.size,
-	    M.offset,
-	    M.status,
-	    M.shm_offset);
-#endif
 	diskd_stats.recv_count++;
 	diskdinfo->away--;
 	storeDiskdHandle(&M);
@@ -1229,7 +1218,7 @@ storeDiskdDirAddDiskRestore(SwapDir * SD, const cache_key * key,
     debug(20, 5) ("storeDiskdAddDiskRestore: %s, fileno=%08X\n", storeKeyText(key), file_number);
     /* if you call this you'd better be sure file_number is not 
      * already in use! */
-    e = new_StoreEntry(STORE_ENTRY_WITHOUT_MEMOBJ, NULL);
+    e = new_StoreEntry(STORE_ENTRY_WITHOUT_MEMOBJ, NULL, NULL);
     e->store_status = STORE_OK;
     storeSetMemStatus(e, NOT_IN_MEMORY);
     e->swap_status = SWAPOUT_DONE;

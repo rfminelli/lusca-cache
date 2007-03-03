@@ -175,6 +175,16 @@ stat_io_get(StoreEntry * sentry)
     }
 
     storeAppendPrintf(sentry, "\n");
+    storeAppendPrintf(sentry, "WAIS I/O\n");
+    storeAppendPrintf(sentry, "number of reads: %d\n", IOStats.Wais.reads);
+    storeAppendPrintf(sentry, "Read Histogram:\n");
+    for (i = 0; i < 16; i++) {
+	storeAppendPrintf(sentry, "%5d-%5d: %9d %2d%%\n",
+	    i ? (1 << (i - 1)) + 1 : 1,
+	    1 << i,
+	    IOStats.Wais.read_hist[i],
+	    percent(IOStats.Wais.read_hist[i], IOStats.Wais.reads));
+    }
 }
 
 static const char *
@@ -247,10 +257,9 @@ statStoreEntry(MemBuf * mb, StoreEntry * e)
     struct _store_client *sc;
     dlink_node *node;
     memBufPrintf(mb, "KEY %s\n", storeKeyText(e->hash.key));
-    /* XXX should this url be escaped? */
     if (mem)
 	memBufPrintf(mb, "\t%s %s\n",
-	    RequestMethods[mem->method].str, mem->url);
+	    RequestMethodStr[mem->method], mem->log_url);
     memBufPrintf(mb, "\t%s\n", describeStatuses(e));
     memBufPrintf(mb, "\t%s\n", storeEntryFlags(e));
     memBufPrintf(mb, "\t%s\n", describeTimestamps(e));
