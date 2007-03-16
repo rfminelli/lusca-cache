@@ -118,6 +118,7 @@ peerAllowedToUse(const peer * p, request_t * request)
 {
     const struct _domain_ping *d = NULL;
     int do_ping = 1;
+    aclCheck_t checklist;
     assert(request != NULL);
     if (neighborType(p, request) == PEER_SIBLING) {
 	if (request->flags.nocache)
@@ -143,7 +144,21 @@ peerAllowedToUse(const peer * p, request_t * request)
 	return do_ping;
     if (p->access == NULL)
 	return do_ping;
-    return aclCheckFastRequest(p->access, request);
+    memset(&checklist, '\0', sizeof(checklist));
+    checklist.src_addr = request->client_addr;
+    checklist.my_addr = request->my_addr;
+    checklist.my_port = request->my_port;
+    checklist.request = request;
+#if 0 && USE_IDENT
+    /*
+     * this is currently broken because 'request->user_ident' has been
+     * moved to conn->rfc931 and we don't have access to the parent
+     * ConnStateData here.
+     */
+    if (request->user_ident[0])
+	xstrncpy(checklist.rfc931, request->user_ident, USER_IDENT_SZ);
+#endif
+    return aclCheckFast(p->access, &checklist);
 }
 
 /* Return TRUE if it is okay to send an ICP request to this peer.   */
@@ -1150,7 +1165,7 @@ peerCountMcastPeersStart(void *data)
     assert(p->type == PEER_MULTICAST);
     p->mcast.flags.count_event_pending = 0;
     snprintf(url, MAX_URL, "http://%s/", inet_ntoa(p->in_addr.sin_addr));
-    fake = storeCreateEntry(url, null_request_flags, METHOD_GET);
+    fake = storeCreateEntry(url, url, null_request_flags, METHOD_GET);
     psstate = cbdataAlloc(ps_state);
     psstate->request = requestLink(urlParse(METHOD_GET, url));
     psstate->entry = fake;

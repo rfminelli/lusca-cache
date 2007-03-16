@@ -633,7 +633,6 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
     int fd = httpState->fd;
     int complete = httpState->eof;
     int keep_alive = !httpState->eof;
-    storeBuffer(entry);
     while (len > 0) {
 	if (httpState->chunk_size > 0) {
 	    size_t size = len;
@@ -708,15 +707,6 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 	    return;
 	}
     }
-    storeBufferFlush(entry);
-    if (EBIT_TEST(entry->flags, ENTRY_ABORTED)) {
-	/*
-	 * the above storeBufferFlush() call could ABORT this entry,
-	 * in that case, the server FD should already be closed.
-	 * there's nothing for us to do.
-	 */
-	return;
-    }
     if (!httpState->chunk_size && !httpState->flags.chunked)
 	complete = 1;
     if (!complete && len == 0) {
@@ -749,7 +739,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
     if (len > 0) {
 	debug(11, Config.onoff.relaxed_header_parser <= 0 || keep_alive ? 1 : 2)
 	    ("httpReadReply: Excess data from \"%s %s\"\n",
-	    RequestMethods[orig_request->method].str,
+	    RequestMethodStr[orig_request->method],
 	    storeUrl(entry));
 	comm_close(fd);
 	return;
@@ -770,7 +760,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
      */
     if (!httpState->flags.request_sent) {
 	debug(11, 1) ("httpReadReply: Request not yet fully sent \"%s %s\"\n",
-	    RequestMethods[orig_request->method].str,
+	    RequestMethodStr[orig_request->method],
 	    storeUrl(entry));
 	keep_alive = 0;
     }
@@ -922,11 +912,6 @@ httpReadReply(int fd, void *data)
 	return;
     } else {
 	if (httpState->reply_hdr_state < 2) {
-	    /* Temporarily buffer the entry. Main purpose is to ensure it gets flushed to the client side
-	     * when the headers is complete as ENTRY_HDR_WAIT may delay the callback. It's flushed by
-	     * httpAppendBody().
-	     */
-	    storeBuffer(entry);
 	    done = httpProcessReplyHeader(httpState, buf, len);
 	    if (httpState->reply_hdr_state == 2) {
 		http_status s = entry->mem_obj->reply->sline.status;
@@ -1095,7 +1080,7 @@ httpBuildRequestHeader(request_t * request,
 	     * authentication forwarding is explicitly enabled
 	     */
 	    if (flags.proxying && orig_request->peer_login && strcmp(orig_request->peer_login, "PASS") == 0) {
-		httpHeaderAddClone(hdr_out, e);
+		httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 		if (request->flags.connection_proxy_auth)
 		    request->flags.pinned = 1;
 	    }
@@ -1104,7 +1089,7 @@ httpBuildRequestHeader(request_t * request,
 	    /* Pass on WWW authentication.
 	     */
 	    if (!flags.originpeer) {
-		httpHeaderAddClone(hdr_out, e);
+		httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 		if (orig_request->flags.connection_auth)
 		    orig_request->flags.pinned = 1;
 	    } else {
@@ -1112,7 +1097,7 @@ httpBuildRequestHeader(request_t * request,
 		 * (see also below for proxy->server authentication)
 		 */
 		if (orig_request->peer_login && (strcmp(orig_request->peer_login, "PASS") == 0 || strcmp(orig_request->peer_login, "PROXYPASS") == 0)) {
-		    httpHeaderAddClone(hdr_out, e);
+		    httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 		    if (orig_request->flags.connection_auth)
 			orig_request->flags.pinned = 1;
 		}
@@ -1128,7 +1113,7 @@ httpBuildRequestHeader(request_t * request,
 	    if (orig_request->peer_domain)
 		httpHeaderPutStr(hdr_out, HDR_HOST, orig_request->peer_domain);
 	    else if (request->flags.redirected && !Config.onoff.redir_rewrites_host)
-		httpHeaderAddClone(hdr_out, e);
+		httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 	    else {
 		/* use port# only if not default */
 		if (orig_request->port == urlDefaultPort(orig_request->protocol)) {
@@ -1143,13 +1128,13 @@ httpBuildRequestHeader(request_t * request,
 	    /* append unless we added our own;
 	     * note: at most one client's ims header can pass through */
 	    if (!httpHeaderHas(hdr_out, HDR_IF_MODIFIED_SINCE))
-		httpHeaderAddClone(hdr_out, e);
+		httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 	    break;
 	case HDR_IF_NONE_MATCH:
 	    /* append unless we added our own;
 	     * note: at most one client's ims header can pass through */
 	    if (!httpHeaderHas(hdr_out, HDR_IF_NONE_MATCH))
-		httpHeaderAddClone(hdr_out, e);
+		httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 	    break;
 	case HDR_MAX_FORWARDS:
 	    if (orig_request->method == METHOD_TRACE) {
@@ -1161,18 +1146,18 @@ httpBuildRequestHeader(request_t * request,
 	    break;
 	case HDR_X_FORWARDED_FOR:
 	    if (!opt_forwarded_for)
-		httpHeaderAddClone(hdr_out, e);
+		httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 	    break;
 	case HDR_RANGE:
 	case HDR_IF_RANGE:
 	case HDR_REQUEST_RANGE:
 	    if (!we_do_ranges)
-		httpHeaderAddClone(hdr_out, e);
+		httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 	    break;
 	case HDR_VIA:
 	    /* If Via is disabled then forward any received header as-is */
 	    if (!Config.onoff.via)
-		httpHeaderAddClone(hdr_out, e);
+		httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 	    break;
 	case HDR_CONNECTION:
 	case HDR_KEEP_ALIVE:
@@ -1191,11 +1176,11 @@ httpBuildRequestHeader(request_t * request,
 	    break;
 	case HDR_FRONT_END_HTTPS:
 	    if (!flags.front_end_https)
-		httpHeaderAddClone(hdr_out, e);
+		httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 	    break;
 	default:
 	    /* pass on all other header fields */
-	    httpHeaderAddClone(hdr_out, e);
+	    httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 	}
     }
 
@@ -1358,7 +1343,7 @@ httpBuildRequestPrefix(request_t * request,
 {
     const int offset = mb->size;
     memBufPrintf(mb, "%s %s HTTP/1.0\r\n",
-	RequestMethods[request->method].str,
+	RequestMethodStr[request->method],
 	strLen(request->urlpath) ? strBuf(request->urlpath) : "/");
     /* build and pack headers */
     {
@@ -1446,7 +1431,7 @@ httpStart(FwdState * fwd)
     request_t *proxy_req;
     request_t *orig_req = fwd->request;
     debug(11, 3) ("httpStart: \"%s %s\"\n",
-	RequestMethods[orig_req->method].str,
+	RequestMethodStr[orig_req->method],
 	storeUrl(fwd->entry));
     httpState = cbdataAlloc(HttpStateData);
     storeLockObject(fwd->entry);
@@ -1504,12 +1489,15 @@ static void
 httpSendRequestEntryDone(int fd, void *data)
 {
     HttpStateData *httpState = data;
+    aclCheck_t ch;
     debug(11, 5) ("httpSendRequestEntryDone: FD %d\n",
 	fd);
+    memset(&ch, '\0', sizeof(ch));
+    ch.request = httpState->request;
     if (!Config.accessList.brokenPosts) {
 	debug(11, 5) ("httpSendRequestEntryDone: No brokenPosts list\n");
 	httpSendComplete(fd, NULL, 0, 0, data);
-    } else if (!aclCheckFastRequest(Config.accessList.brokenPosts, httpState->request)) {
+    } else if (!aclCheckFast(Config.accessList.brokenPosts, &ch)) {
 	debug(11, 5) ("httpSendRequestEntryDone: didn't match brokenPosts\n");
 	httpSendComplete(fd, NULL, 0, 0, data);
     } else {

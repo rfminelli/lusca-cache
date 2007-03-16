@@ -124,6 +124,7 @@ gopherMimeCreate(GopherStateData * gopherState)
 {
     StoreEntry *e = gopherState->entry;
     HttpReply *reply = e->mem_obj->reply;
+    http_version_t version;
     const char *mime_type = NULL;
     const char *mime_enc = NULL;
 
@@ -164,7 +165,8 @@ gopherMimeCreate(GopherStateData * gopherState)
     storeBuffer(e);
     httpReplyReset(reply);
     EBIT_CLR(gopherState->entry->flags, ENTRY_FWD_HDR_WAIT);
-    httpReplySetHeaders(reply, HTTP_OK, "Gatewaying", mime_type, -1, -1, -1);
+    httpBuildVersion(&version, 1, 0);
+    httpReplySetHeaders(reply, version, HTTP_OK, "Gatewaying", mime_type, -1, -1, -1);
     if (mime_enc)
 	httpHeaderPutStr(&reply->header, HDR_CONTENT_ENCODING, mime_enc);
     httpReplySwapOut(reply, e);
