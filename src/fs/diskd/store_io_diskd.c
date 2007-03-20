@@ -529,17 +529,6 @@ storeDiskdSend(int mtype, SwapDir * sd, int id, storeIOState * sio, int size, of
 	    delay.tv_usec <<= 1;
     }
 
-#if 0
-    debug(79, 3) ("msgsnd %ld %d %d %p %d %" PRINTF_OFF_T " %d %d\n",
-	M.mtype,
-	M.id,
-	M.seq_no,
-	M.callback_data,
-	M.size,
-	M.offset,
-	M.status,
-	M.shm_offset);
-#endif
     x = msgsnd(diskdinfo->smsgid, &M, msg_snd_rcv_sz, IPC_NOWAIT);
     last_seq_no = M.seq_no;
     if (0 == x) {

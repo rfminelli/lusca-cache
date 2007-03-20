@@ -79,7 +79,7 @@ extern OBJH storeIOStats;
 static int storeEntryValidLength(const StoreEntry *);
 static void storeGetMemSpace(int);
 static void storeHashDelete(StoreEntry *);
-static MemObject *new_MemObject(const char *);
+static MemObject *new_MemObject(const char *, const char *);
 static void destroy_MemObject(StoreEntry *);
 static FREE destroy_StoreEntry;
 static void storePurgeMem(StoreEntry *);
@@ -111,7 +111,7 @@ url_checksum(const char *url)
 #endif
 
 static MemObject *
-new_MemObject(const char *url)
+new_MemObject(const char *url, const char *log_url)
 {
     MemObject *mem = memAllocate(MEM_MEMOBJECT);
     mem->reply = httpReplyCreate();
@@ -119,30 +119,21 @@ new_MemObject(const char *url)
 #if URL_CHECKSUM_DEBUG
     mem->chksum = url_checksum(mem->url);
 #endif
+    mem->log_url = xstrdup(log_url);
     mem->object_sz = -1;
     mem->serverfd = -1;
+    /* XXX account log_url */
     debug(20, 3) ("new_MemObject: returning %p\n", mem);
     return mem;
 }
 
-int
-memHaveHeaders(const MemObject * mem)
-{
-    if (mem->reply == NULL)
-	return 0;
-    if (mem->reply->pstate != psParsed)
-	return 0;
-    return 1;
-}
-
-
 StoreEntry *
-new_StoreEntry(int mem_obj_flag, const char *url)
+new_StoreEntry(int mem_obj_flag, const char *url, const char *log_url)
 {
     StoreEntry *e = NULL;
     e = memAllocate(MEM_STOREENTRY);
     if (mem_obj_flag)
-	e->mem_obj = new_MemObject(url);
+	e->mem_obj = new_MemObject(url, log_url);
     debug(20, 3) ("new_StoreEntry: returning %p\n", e);
     e->expires = e->lastmod = e->lastref = e->timestamp = -1;
     e->swap_filen = -1;
@@ -180,6 +171,7 @@ destroy_MemObject(StoreEntry * e)
     mem->request = NULL;
     ctx_exit(ctx);		/* must exit before we free mem->url */
     safe_free(mem->url);
+    safe_free(mem->log_url);	/* XXX account log_url */
     safe_free(mem->vary_headers);
     safe_free(mem->vary_encoding);
     memFree(mem, MEM_MEMOBJECT);
@@ -272,10 +264,10 @@ storeEntryDereferenced(StoreEntry * e)
 }
 
 void
-storeLockObjectDebug(StoreEntry * e, const char *file, const int line)
+storeLockObject(StoreEntry * e)
 {
     e->lock_count++;
-    debug(20, 3) ("storeLockObject: (%s:%d): key '%s' count=%d\n", file, line,
+    debug(20, 3) ("storeLockObject: key '%s' count=%d\n",
 	storeKeyText(e->hash.key), (int) e->lock_count);
     e->lastref = squid_curtime;
     storeEntryReferenced(e);
@@ -300,10 +292,10 @@ storeReleaseRequest(StoreEntry * e)
 /* unlock object, return -1 if object get released after unlock
  * otherwise lock_count */
 int
-storeUnlockObjectDebug(StoreEntry * e, const char *file, const int line)
+storeUnlockObject(StoreEntry * e)
 {
     e->lock_count--;
-    debug(20, 3) ("storeUnlockObject: (%s:%d): key '%s' count=%d\n", file, line,
+    debug(20, 3) ("storeUnlockObject: key '%s' count=%d\n",
 	storeKeyText(e->hash.key), e->lock_count);
     if (e->lock_count)
 	return (int) e->lock_count;
@@ -694,9 +686,10 @@ storeAddVaryReadOld(void *data, char *buf, ssize_t size)
  * At leas one of key or etag must be specified, preferably both.
  */
 void
-storeAddVary(const char *url, const method_t method, const cache_key * key, const char *etag, const char *vary, const char *vary_headers, const char *accept_encoding)
+storeAddVary(const char *url, const char *log_url, const method_t method, const cache_key * key, const char *etag, const char *vary, const char *vary_headers, const char *accept_encoding)
 {
     AddVaryState *state;
+    http_version_t version;
     request_flags flags = null_request_flags;
     CBDATA_INIT_TYPE_FREECB(AddVaryState, free_AddVaryState);
     state = cbdataAlloc(AddVaryState);
@@ -714,8 +707,9 @@ storeAddVary(const char *url, const method_t method, const cache_key * key, cons
     if (state->oe)
 	storeLockObject(state->oe);
     flags.cachable = 1;
-    state->e = storeCreateEntry(url, flags, method);
-    httpReplySetHeaders(state->e->mem_obj->reply, HTTP_OK, "Internal marker object", "x-squid-internal/vary", -1, -1, squid_curtime + 100000);
+    state->e = storeCreateEntry(url, log_url, flags, method);
+    httpBuildVersion(&version, 1, 0);
+    httpReplySetHeaders(state->e->mem_obj->reply, version, HTTP_OK, "Internal marker object", "x-squid-internal/vary", -1, -1, squid_curtime + 100000);
     httpHeaderPutStr(&state->e->mem_obj->reply->header, HDR_VARY, vary);
     storeSetPublicKey(state->e);
     storeBuffer(state->e);
@@ -737,7 +731,7 @@ storeAddVary(const char *url, const method_t method, const cache_key * key, cons
 	 */
 	/* Swap in the dummy Vary object */
 	if (!state->oe->mem_obj) {
-	    storeCreateMemObject(state->oe, state->url);
+	    storeCreateMemObject(state->oe, state->url, log_url);
 	    state->oe->mem_obj->method = method;
 	}
 	state->sc = storeClientRegister(state->oe, state);
@@ -1038,7 +1032,7 @@ storeSetPublicKey(StoreEntry * e)
 		strListAdd(&vary, strBuf(varyhdr), ',');
 	    stringClean(&varyhdr);
 #endif
-	    storeAddVary(mem->url, mem->method, newkey, httpHeaderGetStr(&mem->reply->header, HDR_ETAG), strBuf(vary), mem->vary_headers, mem->vary_encoding);
+	    storeAddVary(mem->url, mem->log_url, mem->method, newkey, httpHeaderGetStr(&mem->reply->header, HDR_ETAG), strBuf(vary), mem->vary_headers, mem->vary_encoding);
 	    stringClean(&vary);
 	}
     } else {
@@ -1062,13 +1056,13 @@ storeSetPublicKey(StoreEntry * e)
 }
 
 StoreEntry *
-storeCreateEntry(const char *url, request_flags flags, method_t method)
+storeCreateEntry(const char *url, const char *log_url, request_flags flags, method_t method)
 {
     StoreEntry *e = NULL;
     MemObject *mem = NULL;
     debug(20, 3) ("storeCreateEntry: '%s'\n", url);
 
-    e = new_StoreEntry(STORE_ENTRY_WITH_MEMOBJ, url);
+    e = new_StoreEntry(STORE_ENTRY_WITH_MEMOBJ, url, log_url);
     e->lock_count = 1;		/* Note lock here w/o calling storeLock() */
     mem = e->mem_obj;
     mem->method = method;
@@ -1380,17 +1374,14 @@ storeGetMemSpace(int size)
     pages_needed = (size / SM_PAGE_SIZE) + 1;
     if (memInUse(MEM_MEM_NODE) + pages_needed < store_pages_max)
 	return;
-    debug(20, 3) ("storeGetMemSpace: Starting, need %d pages\n", pages_needed);
+    debug(20, 2) ("storeGetMemSpace: Starting, need %d pages\n", pages_needed);
     /* XXX what to set as max_scan here? */
     walker = mem_policy->PurgeInit(mem_policy, 100000);
     while ((e = walker->Next(walker))) {
-	debug(20, 3) ("storeGetMemSpace: purging %p\n", e);
 	storePurgeMem(e);
 	released++;
-	if (memInUse(MEM_MEM_NODE) + pages_needed < store_pages_max) {
-	    debug(20, 3) ("storeGetMemSpace: we finally have enough free memory!\n");
+	if (memInUse(MEM_MEM_NODE) + pages_needed < store_pages_max)
 	    break;
-	}
     }
     walker->Done(walker);
     debug(20, 3) ("storeGetMemSpace stats:\n");
@@ -1717,7 +1708,7 @@ storeRegisterAbort(StoreEntry * e, STABH * cb, void *data)
 }
 
 void
-storeUnregisterAbort(StoreEntry * e)
+storeClientUnregisterAbort(StoreEntry * e)
 {
     MemObject *mem = e->mem_obj;
     assert(mem);
@@ -1746,9 +1737,9 @@ storeMemObjectDump(MemObject * mem)
 	mem->reply);
     debug(20, 1) ("MemObject->request: %p\n",
 	mem->request);
-    debug(20, 1) ("MemObject->url: %p %s\n",
-	mem->url,
-	checkNullString(mem->url));
+    debug(20, 1) ("MemObject->log_url: %p %s\n",
+	mem->log_url,
+	checkNullString(mem->log_url));
 }
 
 void
@@ -1820,11 +1811,11 @@ storeUrl(const StoreEntry * e)
 }
 
 void
-storeCreateMemObject(StoreEntry * e, const char *url)
+storeCreateMemObject(StoreEntry * e, const char *url, const char *log_url)
 {
     if (e->mem_obj)
 	return;
-    e->mem_obj = new_MemObject(url);
+    e->mem_obj = new_MemObject(url, log_url);
 }
 
 /* this just sets DELAY_SENDING */

@@ -629,7 +629,7 @@ accessLogCustom(AccessLogEntry * al, customlog * log)
 	    break;
 
 	case LFT_REQUEST_URI:
-	    out = rfc1738_escape_unescaped(al->url);
+	    out = al->url;
 	    break;
 
 	case LFT_REQUEST_VERSION:
@@ -1031,7 +1031,7 @@ accessLogSquid(AccessLogEntry * al, Logfile * logfile)
 	    al->http.code,
 	    al->cache.size,
 	    al->private.method_str,
-	    rfc1738_escape_unescaped(al->url),
+	    al->url,
 	    user ? user : dash_str,
 	    al->hier.ping.timedout ? "TIMEOUT_" : "",
 	    hier_strings[al->hier.code],
@@ -1049,7 +1049,7 @@ accessLogSquid(AccessLogEntry * al, Logfile * logfile)
 	    al->http.code,
 	    al->cache.size,
 	    al->private.method_str,
-	    rfc1738_escape_unescaped(al->url),
+	    al->url,
 	    user ? user : dash_str,
 	    al->hier.ping.timedout ? "TIMEOUT_" : "",
 	    hier_strings[al->hier.code],
@@ -1080,7 +1080,7 @@ accessLogCommon(AccessLogEntry * al, Logfile * logfile)
 	user1 ? user1 : dash_str,
 	mkhttpdlogtime(&squid_curtime),
 	al->private.method_str,
-	rfc1738_escape_unescaped(al->url),
+	al->url,
 	al->http.version.major, al->http.version.minor,
 	al->http.code,
 	al->cache.size,
@@ -1112,7 +1112,7 @@ accessLogLog(AccessLogEntry * al, aclCheck_t * checklist)
     if (al->icp.opcode)
 	al->private.method_str = icp_opcode_str[al->icp.opcode];
     else
-	al->private.method_str = RequestMethods[al->http.method].str;
+	al->private.method_str = RequestMethodStr[al->http.method];
     if (al->hier.host[0] == '\0')
 	xstrncpy(al->hier.host, dash_str, SQUIDHOSTNAMELEN);
 

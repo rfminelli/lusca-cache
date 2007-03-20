@@ -1,13 +1,3 @@
-	- Optimization to only parse response headers once, reusing the
-	  already parsed headers when building the client reply.
-	- Simple perl library and script for processing access.log files
-	- General code tidyups of HTTP parser and related optimizations
-	- Kill the psuedo-support for wais. Was never really implemented.
-	- Clean up use of httpReplySetHeaders to be consistent across the
-	  code, and remove the unneeded http_version argument.
-	- Windows port fixes
-	- Strengthen the HTTP protocol parser further wrt integer errors
-
 Changes to squid-2.6.STABLE12 (Mar 20 2007)
 
 	- Assertion error on TRACE
