@@ -77,12 +77,6 @@
 /* Define to 1 if you have the <bstring.h> header file. */
 /* #undef HAVE_BSTRING_H */
 
-/* Define to 1 if you have the `bswap_16' function. */
-/* #undef HAVE_BSWAP_16 */
-
-/* Define to 1 if you have the `bswap_32' function. */
-/* #undef HAVE_BSWAP_32 */
-
 /* Define to 1 if you have the <byteswap.h> header file. */
 /* #undef HAVE_BYTESWAP_H */
 
@@ -734,6 +728,9 @@
 
 /* Define to 1 if you have the ANSI C header files. */
 #define STDC_HEADERS 1
+
+/* Supports large dgram sockets over AF_UNIX sockets */
+/* #undef SUPPORTS_LARGE_AF_UNIX_DGRAM */
 
 /* Define this to include code which lets you specify access control elements
    based on ethernet hardware addresses. This code uses functions found in 4.4
