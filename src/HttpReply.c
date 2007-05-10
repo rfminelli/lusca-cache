@@ -53,8 +53,9 @@ static void httpReplyClean(HttpReply * rep);
 static void httpReplyDoDestroy(HttpReply * rep);
 static void httpReplyHdrCacheInit(HttpReply * rep);
 static void httpReplyHdrCacheClean(HttpReply * rep);
-static int httpReplyParseStep(HttpReply * rep, const char *parse_start, int len);
+static int httpReplyParseStep(HttpReply * rep, const char *parse_start, int atEnd);
 static int httpReplyParseError(HttpReply * rep);
+static int httpReplyIsolateStart(const char **parse_start, const char **blk_start, const char **blk_end);
 static time_t httpReplyHdrExpirationTime(const HttpReply * rep);
 
 
@@ -136,9 +137,24 @@ httpReplyAbsorb(HttpReply * rep, HttpReply * new_rep)
 int
 httpReplyParse(HttpReply * rep, const char *buf, size_t end)
 {
-    /* The code called by httpReplyParseStep doesn't assume NUL-terminated stuff! */
+    /*
+     * this extra buffer/copy will be eliminated when headers become
+     * meta-data in store. Currently we have to xstrncpy the buffer
+     * becuase somebody may feed a non NULL-terminated buffer to
+     * us.
+     */
+    MemBuf mb = MemBufNull;
+    int success;
+    /* reset current state, because we are not used in incremental fashion */
     httpReplyReset(rep);
-    return (httpReplyParseStep(rep, buf, end) == 1);
+    /* put a string terminator.  s is how many bytes to touch in
+     * 'buf' including the terminating NULL. */
+    memBufDefInit(&mb);
+    memBufAppend(&mb, buf, end);
+    memBufAppend(&mb, "\0", 1);
+    success = httpReplyParseStep(rep, mb.buf, 0);
+    memBufClean(&mb);
+    return success == 1;
 }
 
 void
@@ -185,12 +201,12 @@ httpReplySwapOut(HttpReply * rep, StoreEntry * e)
 
 #if UNUSED_CODE
 MemBuf
-httpPackedReply(http_status status, const char *ctype,
+httpPackedReply(http_version_t ver, http_status status, const char *ctype,
     squid_off_t clen, time_t lmt, time_t expires)
 {
     HttpReply *rep = httpReplyCreate();
     MemBuf mb;
-    httpReplySetHeaders(rep, status, ctype, NULL, clen, lmt, expires);
+    httpReplySetHeaders(rep, ver, status, ctype, NULL, clen, lmt, expires);
     mb = httpReplyPack(rep);
     httpReplyDestroy(rep);
     return mb;
@@ -220,12 +236,10 @@ httpPacked304Reply(const HttpReply * rep)
 }
 
 void
-httpReplySetHeaders(HttpReply * reply, http_status status, const char *reason,
+httpReplySetHeaders(HttpReply * reply, http_version_t ver, http_status status, const char *reason,
     const char *ctype, squid_off_t clen, time_t lmt, time_t expires)
 {
     HttpHeader *hdr;
-    static const http_version_t ver =
-    {1, 0};
     assert(reply);
     httpStatusLineSet(&reply->sline, ver, status, reason);
     hdr = &reply->header;
@@ -351,41 +365,6 @@ httpReplyHdrCacheInit(HttpReply * rep)
     rep->expires = httpReplyHdrExpirationTime(rep);
 }
 
-HttpReply *
-httpReplyClone(HttpReply * src)
-{
-    HttpReply *dst = httpReplyCreate();
-
-    /* basic variables */
-    dst->hdr_sz = src->hdr_sz;
-    dst->content_length = src->content_length;
-    dst->date = src->date;
-    dst->last_modified = src->last_modified;
-    dst->expires = src->expires;
-
-    /* parser state */
-    dst->pstate = src->pstate;
-    /* status line */
-    dst->sline = src->sline;
-    /* header */
-    httpHeaderAppend(&dst->header, &src->header);
-    /* body, if applicable */
-    if (dst->body.mb.buf != NULL)
-	memBufAppend(&dst->body.mb, dst->body.mb.buf, dst->body.mb.size);
-
-    /*
-     * The next two are a bit .. special. I hate delving into the headers
-     * when we've already -done- that, but I'll worry about doing it
-     * faster later. Besides, there's too much other code to fix up.
-     */
-    /* cache control */
-    dst->cache_control = httpHeaderGetCc(&dst->header);
-    /* content range */
-    dst->content_range = httpHeaderGetContRange(&dst->header);
-
-    return dst;
-}
-
 /* sync this routine when you update HttpReply struct */
 static void
 httpReplyHdrCacheClean(HttpReply * rep)
@@ -405,51 +384,42 @@ httpReplyHdrCacheClean(HttpReply * rep)
  *      -1 -- parse error
  */
 static int
-httpReplyParseStep(HttpReply * rep, const char *buf, int len)
+httpReplyParseStep(HttpReply * rep, const char *buf, int atEnd)
 {
     const char *parse_start = buf;
     const char *blk_start, *blk_end;
-    int i;
-    const char *re;
+    const char **parse_end_ptr = &blk_end;
     assert(rep);
     assert(parse_start);
     assert(rep->pstate < psParsed);
 
-    /* For now we'll assume we need to parse the whole lot */
+    *parse_end_ptr = parse_start;
+    if (rep->pstate == psReadyToParseStartLine) {
+	if (!httpReplyIsolateStart(&parse_start, &blk_start, &blk_end))
+	    return 0;
+	if (!httpStatusLineParse(&rep->sline, blk_start, blk_end))
+	    return httpReplyParseError(rep);
 
-    /* Find end of start line */
-    re = memchr(buf, '\n', len);
-    if (!re)
-	return httpReplyParseError(rep);
+	*parse_end_ptr = parse_start;
+	rep->hdr_sz = *parse_end_ptr - buf;
+	rep->pstate++;
+    }
+    if (rep->pstate == psReadyToParseHeaders) {
+	if (!httpMsgIsolateHeaders(&parse_start, &blk_start, &blk_end)) {
+	    if (atEnd)
+		blk_start = parse_start, blk_end = blk_start + strlen(blk_start);
+	    else
+		return 0;
+	}
+	if (!httpHeaderParse(&rep->header, blk_start, blk_end))
+	    return httpReplyParseError(rep);
 
-    /* Skip \n */
-    re++;
-    i = re - buf;
-    if (i >= len)
-	return httpReplyParseError(rep);
+	httpReplyHdrCacheInit(rep);
 
-    /* Pass that to the existing Squid status line parsing routine */
-    if (!httpStatusLineParse(&rep->sline, buf, re - 1))
-	return httpReplyParseError(rep);
-    rep->pstate++;
-
-    /* All good? Attempt to isolate headers */
-    /* The block in question is between re and buf + len */
-    parse_start = re;
-    if (!httpMsgIsolateHeaders(&parse_start, len - i, &blk_start, &blk_end))
-	return httpReplyParseError(rep);
-
-    /* Isolated? parse headers */
-    if (!httpHeaderParse(&rep->header, blk_start, blk_end))
-	return httpReplyParseError(rep);
-
-    /* Update rep */
-    httpReplyHdrCacheInit(rep);
-    /* the previous code had hdr_sz including the status line + headers and final \r\n */
-    rep->hdr_sz = parse_start - buf;
-    rep->pstate++;
-
-    /* Done */
+	*parse_end_ptr = parse_start;
+	rep->hdr_sz = *parse_end_ptr - buf;
+	rep->pstate++;
+    }
     return 1;
 }
 
@@ -463,6 +433,25 @@ httpReplyParseError(HttpReply * rep)
     /* indicate an error */
     rep->sline.status = HTTP_INVALID_HEADER;
     return -1;
+}
+
+/* find first CRLF */
+static int
+httpReplyIsolateStart(const char **parse_start, const char **blk_start, const char **blk_end)
+{
+    int slen = strcspn(*parse_start, "\r\n");
+    if (!(*parse_start)[slen])	/* no CRLF found */
+	return 0;
+
+    *blk_start = *parse_start;
+    *blk_end = *blk_start + slen;
+    while (**blk_end == '\r')	/* CR */
+	(*blk_end)++;
+    if (**blk_end == '\n')	/* LF */
+	(*blk_end)++;
+
+    *parse_start = *blk_end;
+    return 1;
 }
 
 /*

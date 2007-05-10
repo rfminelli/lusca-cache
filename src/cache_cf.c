@@ -58,8 +58,6 @@ static const char *const list_sep = ", \t\n\r";
 
 static void parse_cachedir_option_readonly(SwapDir * sd, const char *option, const char *value, int reconfiguring);
 static void dump_cachedir_option_readonly(StoreEntry * e, const char *option, SwapDir * sd);
-static void parse_cachedir_option_minsize(SwapDir * sd, const char *option, const char *value, int reconfiguring);
-static void dump_cachedir_option_minsize(StoreEntry * e, const char *option, SwapDir * sd);
 static void parse_cachedir_option_maxsize(SwapDir * sd, const char *option, const char *value, int reconfiguring);
 static void dump_cachedir_option_maxsize(StoreEntry * e, const char *option, SwapDir * sd);
 static void parse_logformat(logformat ** logformat_definitions);
@@ -72,9 +70,7 @@ static void free_access_log(customlog ** definitions);
 
 static struct cache_dir_option common_cachedir_options[] =
 {
-    {"no-store", parse_cachedir_option_readonly, dump_cachedir_option_readonly},
-    {"read-only", parse_cachedir_option_readonly, NULL},
-    {"min-size", parse_cachedir_option_minsize, dump_cachedir_option_minsize},
+    {"read-only", parse_cachedir_option_readonly, dump_cachedir_option_readonly},
     {"max-size", parse_cachedir_option_maxsize, dump_cachedir_option_maxsize},
     {NULL, NULL}
 };
@@ -501,6 +497,13 @@ configDoConfigure(void)
     if (!Config.onoff.via)
 	debug(22, 1) ("WARNING: HTTP requires the use of Via\n");
 #endif
+    if (Config.Wais.relayHost) {
+	if (Config.Wais.peer)
+	    cbdataFree(Config.Wais.peer);
+	Config.Wais.peer = cbdataAlloc(peer);
+	Config.Wais.peer->host = xstrdup(Config.Wais.relayHost);
+	Config.Wais.peer->http_port = Config.Wais.relayPort;
+    }
     if (aclPurgeMethodInUse(Config.accessList.http))
 	Config2.onoff.enable_purge = 1;
     if (geteuid() == 0) {
@@ -1240,8 +1243,7 @@ dump_cachedir_options(StoreEntry * entry, struct cache_dir_option *options, Swap
     if (!options)
 	return;
     for (option = options; option->name; option++)
-	if (option->dump)
-	    option->dump(entry, option->name, sd);
+	option->dump(entry, option->name, sd);
 }
 
 static void
@@ -1420,7 +1422,6 @@ parse_cachedir(cacheSwap * swap)
     sd = swap->swapDirs + swap->n_configured;
     sd->type = storefs_list[fs].typestr;
     /* defaults in case fs implementation fails to set these */
-    sd->min_objsize = 0;
     sd->max_objsize = -1;
     sd->fs.blksize = 1024;
     /* parse the FS parameters and options */
@@ -1446,29 +1447,6 @@ dump_cachedir_option_readonly(StoreEntry * e, const char *option, SwapDir * sd)
 {
     if (sd->flags.read_only)
 	storeAppendPrintf(e, " %s", option);
-}
-
-static void
-parse_cachedir_option_minsize(SwapDir * sd, const char *option, const char *value, int reconfiguring)
-{
-    squid_off_t size;
-
-    if (!value)
-	self_destruct();
-
-    size = strto_off_t(value, NULL, 10);
-
-    if (reconfiguring && sd->min_objsize != size)
-	debug(3, 1) ("Cache dir '%s' min object size now %ld\n", sd->path, (long int) size);
-
-    sd->min_objsize = size;
-}
-
-static void
-dump_cachedir_option_minsize(StoreEntry * e, const char *option, SwapDir * sd)
-{
-    if (sd->min_objsize != 0)
-	storeAppendPrintf(e, " %s=%ld", option, (long int) sd->min_objsize);
 }
 
 static void
@@ -1532,7 +1510,7 @@ parse_cachedir_options(SwapDir * sd, struct cache_dir_option *options, int recon
     if (reconfiguring) {
 	if (old_read_only != sd->flags.read_only) {
 	    debug(3, 1) ("Cache dir '%s' now %s\n",
-		sd->path, sd->flags.read_only ? "No-Store" : "Read-Write");
+		sd->path, sd->flags.read_only ? "Read-Only" : "Read-Write");
 	}
     }
 }
@@ -2302,7 +2280,7 @@ parse_eol(char *volatile *var)
     safe_free(*var);
     if (token == NULL)
 	self_destruct();
-    while (*token && xisspace(*token))
+    while (*token && isspace(*token))
 	token++;
     if (!*token)
 	self_destruct();
@@ -2772,9 +2750,6 @@ parse_http_port_option(http_port_list * s, char *token)
 	s->tproxy = 1;
 	need_linux_tproxy = 1;
 #endif
-    } else if (strcmp(token, "act-as-origin") == 0) {
-	s->act_as_origin = 1;
-	s->accel = 1;
     } else {
 	self_destruct();
     }

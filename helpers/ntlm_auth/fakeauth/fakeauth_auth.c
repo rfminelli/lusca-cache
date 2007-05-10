@@ -91,7 +91,7 @@ hex_dump(void *data, int size)
 		    (unsigned int) (p - (unsigned char *) data));
 	    }
 	    c = *p;
-	    if (xisalnum(c) == 0) {
+	    if (isalnum(c) == 0) {
 		c = '.';
 	    }
 	    /* store hex str (for left side) */

@@ -118,10 +118,6 @@ DOC_START
 				outgoing connections using the client
 				IP address.
 
-		act-as-origin	Act is if this Squid is the origin server.
-				This currently means generate own Date: and
-				Expires: headers. Implies accel.
-
 	If you run Squid on a dual-homed machine with an internal
 	and an external interface we recommend you to specify the
 	internal address:port in http_port. This way Squid will only be
@@ -1201,12 +1197,7 @@ DOC_START
 
 	Common options:
 
-	no-store, no new objects should be stored to this cache_dir
-
-	min-size=n, refers to the min object size this storedir will accept.
-	It's used to restrict a storedir to only store large objects
-	(e.g. aufs) while other storedirs are optimized for smaller objects
-	(e.g. COSS). Defaults to 0.
+	read-only, this cache_dir is read only.
 
 	max-size=n, refers to the max object size this storedir supports.
 	It is used to initially choose the storedir to dump the object.
@@ -1257,7 +1248,6 @@ DOC_START
 		<A	Server IP address or peer name
 		la	Local IP address (http_port)
 		lp	Local port number (http_port)
-		oa	Our outgoing IP address (tcp_outgoing_address)
 		ts	Seconds since epoch
 		tu	subsecond time (milliseconds)
 		tl	Local time. Optional strftime format argument
@@ -2240,6 +2230,21 @@ COMMENT_START
  OPTIONS FOR TUNING THE CACHE
  -----------------------------------------------------------------------------
 COMMENT_END
+
+NAME: wais_relay_host
+TYPE: string
+DEFAULT: none
+LOC: Config.Wais.relayHost
+DOC_NONE
+
+NAME: wais_relay_port
+TYPE: ushort
+DEFAULT: 0
+LOC: Config.Wais.relayPort
+DOC_START
+	Relay WAIS request to host (1st arg) at port (2 arg).
+DOC_END
+
 
 NAME: request_header_max_size
 COMMENT: (KB)
@@ -4965,7 +4970,7 @@ DOC_END
 
 NAME: extension_methods
 TYPE: extension_method
-LOC: RequestMethods
+LOC: RequestMethodStr
 DEFAULT: none
 DOC_START
 	Squid only knows about standardized HTTP request methods.

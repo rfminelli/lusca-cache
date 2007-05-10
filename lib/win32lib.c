@@ -117,7 +117,7 @@ WIN32_strtoll(const char *nptr, char **endptr, int base)
     s = nptr;
     do {
 	c = *s++;
-    } while (xisspace(c));
+    } while (isspace(c));
     if (c == '-') {
 	neg = 1;
 	c = *s++;
