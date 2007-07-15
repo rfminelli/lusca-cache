@@ -141,7 +141,7 @@ peerSelect(request_t * request,
     if (entry)
 	debug(44, 3) ("peerSelect: %s\n", storeUrl(entry));
     else
-	debug(44, 3) ("peerSelect: %s\n", RequestMethods[request->method].str);
+	debug(44, 3) ("peerSelect: %s\n", RequestMethodStr[request->method]);
     psstate = cbdataAlloc(ps_state);
     psstate->request = requestLink(request);
     psstate->entry = entry;
@@ -241,7 +241,7 @@ peerSelectFoo(ps_state * ps)
     StoreEntry *entry = ps->entry;
     request_t *request = ps->request;
     debug(44, 3) ("peerSelectFoo: '%s %s'\n",
-	RequestMethods[request->method].str,
+	RequestMethodStr[request->method],
 	request->host);
     if (ps->direct == DIRECT_UNKNOWN) {
 	if (ps->always_direct == 0 && Config.accessList.AlwaysDirect) {
@@ -451,8 +451,10 @@ peerGetSomeDirect(ps_state * ps)
     if (ps->direct == DIRECT_NO)
 	return;
     if (ps->request->protocol == PROTO_WAIS)
-	return;			/* No server-side implemented, can't go direct */
-    peerAddFwdServer(&ps->servers, NULL, HIER_DIRECT);
+	/* Its not really DIRECT, now is it? */
+	peerAddFwdServer(&ps->servers, Config.Wais.peer, HIER_DIRECT);
+    else
+	peerAddFwdServer(&ps->servers, NULL, HIER_DIRECT);
 }
 
 static void
@@ -462,7 +464,7 @@ peerGetSomeParent(ps_state * ps)
     request_t *request = ps->request;
     hier_code code = HIER_NONE;
     debug(44, 3) ("peerGetSomeParent: %s %s\n",
-	RequestMethods[request->method].str,
+	RequestMethodStr[request->method],
 	request->host);
     if (ps->direct == DIRECT_YES)
 	return;

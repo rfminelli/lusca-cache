@@ -2,6 +2,7 @@
 #
 # $Id$
 #
+#
 # SQUID Web Proxy Cache          http://www.squid-cache.org/
 # ----------------------------------------------------------
 #
@@ -73,9 +74,6 @@ DOC_START
 	If you are running Squid in accelerator mode, you
 	probably want to listen on port 80 also, or instead.
 
-	The -I command line option will override the *first* port
-	specified here.
-
 	You may specify multiple socket addresses on multiple lines.
 
 	Options:
@@ -112,10 +110,6 @@ DOC_START
 		tproxy		Support Linux TPROXY for spoofing
 				outgoing connections using the client
 				IP address.
-
-		act-as-origin	Act is if this Squid is the origin server.
-				This currently means generate own Date: and
-				Expires: headers. Implies accel.
 
 	If you run Squid on a dual-homed machine with an internal
 	and an external interface we recommend you to specify the
@@ -1198,7 +1192,7 @@ DOC_START
 
 	Common options:
 
-	no-store, no new objects should be stored to this cache_dir
+	read-only, this cache_dir is read only.
 
 	min-size=n, refers to the min object size this storedir will accept.
 	It's used to restrict a storedir to only store large objects
@@ -1254,7 +1248,6 @@ DOC_START
 		<A	Server IP address or peer name
 		la	Local IP address (http_port)
 		lp	Local port number (http_port)
-		oa	Our outgoing IP address (tcp_outgoing_address)
 		ts	Seconds since epoch
 		tu	subsecond time (milliseconds)
 		tl	Local time. Optional strftime format argument
@@ -1277,7 +1270,6 @@ DOC_START
 		mt	MIME content type
 		rm	Request method (GET/POST etc)
 		ru	Request URL
-		rp	Request URL-Path excluding hostname
 		rv	Request protocol version
 		ea	Log string returned by external acl
 		<st	Reply size including HTTP headers
@@ -2159,7 +2151,6 @@ DOC_START
 	  %IDENT	Ident user name
 	  %SRC		Client IP
 	  %SRCPORT	Client source port
-	  %URI		Requested URI
 	  %DST		Requested host
 	  %PROTO	Requested protocol
 	  %PORT		Requested port
@@ -2225,6 +2216,21 @@ COMMENT_START
  OPTIONS FOR TUNING THE CACHE
  -----------------------------------------------------------------------------
 COMMENT_END
+
+NAME: wais_relay_host
+TYPE: string
+DEFAULT: none
+LOC: Config.Wais.relayHost
+DOC_NONE
+
+NAME: wais_relay_port
+TYPE: ushort
+DEFAULT: 0
+LOC: Config.Wais.relayPort
+DOC_START
+	Relay WAIS request to host (1st arg) at port (2 arg).
+DOC_END
+
 
 NAME: request_header_max_size
 COMMENT: (KB)
@@ -4930,7 +4936,7 @@ DOC_END
 
 NAME: extension_methods
 TYPE: extension_method
-LOC: RequestMethods
+LOC: RequestMethodStr
 DEFAULT: none
 DOC_START
 	Squid only knows about standardized HTTP request methods.
@@ -5094,34 +5100,4 @@ DOC_START
 	or response to be rejected.
 DOC_END
 
-NAME: max_filedescriptors
-TYPE: int
-DEFAULT: 0
-LOC: Config.max_filedescriptors
-DOC_START
-	The maximum number of filedescriptors supported.
-
-	The default "0" means Squid inherits the current ulimit setting.
-
-	Note: Changing this requires a restart of Squid. Also
-	not all comm loops supports values larger than --with-maxfd.
-DOC_END
-
-NAME: accept_filter
-IFDEF: SO_ACCEPTFILTER
-TYPE: string
-DEFAULT: none
-LOC: Config.accept_filter
-DOC_START
-	The name of an accept(2) filter to install on Squid's
-	listen socket(s).  This feature is perhaps specific to
-	FreeBSD and requires support in the kernel.
-
-	The 'httpready' filter delays delivering new connections
-	to Squid until a full HTTP request has been recieved.
-	See the accf_http(9) man page.
-
-EXAMPLE:
-accept_filter httpready
-DOC_END
 EOF

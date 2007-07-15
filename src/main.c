@@ -89,9 +89,9 @@ usage(void)
 {
     fprintf(stderr,
 #if defined(USE_WIN32_SERVICE) && defined(_SQUID_WIN32_)
-	"Usage: %s [-hirvzCDFIRYX] [-d level] [-s | -l facility] [-f config-file] [-u port] [-k signal] [-n name] [-O command-line]\n"
+	"Usage: %s [-hirvzCDFRYX] [-d level] [-s | -l facility] [-f config-file] [-u port] [-k signal] [-n name] [-O command-line]\n"
 #else
-	"Usage: %s [-hvzCDFINRYX] [-d level] [-s | -l facility] [-f config-file] [-u port] [-k signal]\n"
+	"Usage: %s [-hvzCDFNRYX] [-d level] [-s | -l facility] [-f config-file] [-u port] [-k signal]\n"
 #endif
 	"       -d level  Write debugging to stderr also.\n"
 	"       -f file   Use given config-file instead of\n"
@@ -116,7 +116,6 @@ usage(void)
 	"       -C        Do not catch fatal signals.\n"
 	"       -D        Disable initial DNS tests.\n"
 	"       -F        Don't serve any requests until store is rebuilt.\n"
-	"       -I        Override HTTP port with the bound socket passed in on stdin.\n"
 	"       -N        No daemon mode.\n"
 #if defined(USE_WIN32_SERVICE) && defined(_SQUID_WIN32_)
 	"       -O options\n"
@@ -137,9 +136,9 @@ mainParseOptions(int argc, char *argv[])
     int c;
 
 #if defined(USE_WIN32_SERVICE) && defined(_SQUID_WIN32_)
-    while ((c = getopt(argc, argv, "CDFIO:RSYXd:f:hik:m::n:rsl:u:vz?")) != -1) {
+    while ((c = getopt(argc, argv, "CDFO:RSYXd:f:hik:m::n:rsl:u:vz?")) != -1) {
 #else
-    while ((c = getopt(argc, argv, "CDFINRSYXd:f:hk:m::sl:u:vz?")) != -1) {
+    while ((c = getopt(argc, argv, "CDFNRSYXd:f:hk:m::sl:u:vz?")) != -1) {
 #endif
 	switch (c) {
 	case 'C':
@@ -150,9 +149,6 @@ mainParseOptions(int argc, char *argv[])
 	    break;
 	case 'F':
 	    opt_foreground_rebuild = 1;
-	    break;
-	case 'I':
-	    opt_stdin_overrides_http_port = 1;
 	    break;
 	case 'N':
 	    opt_no_daemon = 1;
@@ -556,7 +552,6 @@ mainInitialize(void)
 	debug(1, 0) ("Running on %s\n", WIN32_OS_string);
 #endif
     debug(1, 1) ("Process ID %d\n", (int) getpid());
-    setSystemLimits();
     debug(1, 1) ("With %d file descriptors available\n", Squid_MaxFD);
 #ifdef _SQUID_MSWIN_
     debug(1, 1) ("With %d CRT stdio descriptors available\n", _getmaxstdio());
@@ -799,8 +794,7 @@ main(int argc, char **argv)
 
     if (opt_no_daemon) {
 	/* we have to init fdstat here. */
-	if (!opt_stdin_overrides_http_port)
-	    fd_open(0, FD_LOG, "stdin");
+	fd_open(0, FD_LOG, "stdin");
 	fd_open(1, FD_LOG, "stdout");
 	fd_open(2, FD_LOG, "stderr");
     }
@@ -1003,8 +997,7 @@ watch_child(char *argv[])
     nullfd = open(_PATH_DEVNULL, O_RDWR | O_TEXT);
     if (nullfd < 0)
 	fatalf(_PATH_DEVNULL " %s\n", xstrerror());
-    if (!opt_stdin_overrides_http_port)
-	dup2(nullfd, 0);
+    dup2(nullfd, 0);
     if (opt_debug_stderr < 0) {
 	dup2(nullfd, 1);
 	dup2(nullfd, 2);
@@ -1148,8 +1141,7 @@ SquidShutdown(void *unused)
 #endif
 #if !XMALLOC_TRACE
     if (opt_no_daemon) {
-	if (!opt_stdin_overrides_http_port)
-	    fd_close(0);
+	fd_close(0);
 	fd_close(1);
 	fd_close(2);
     }

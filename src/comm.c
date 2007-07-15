@@ -179,6 +179,7 @@ comm_openex(int sock_type,
 {
     int new_socket;
     int tos = 0;
+    fde *F = NULL;
 
     /* Create socket for accepting new connections. */
     statCounter.syscalls.sock.sockets++;
@@ -210,31 +211,6 @@ comm_openex(int sock_type,
     }
     /* update fdstat */
     debug(5, 5) ("comm_open: FD %d is a new socket\n", new_socket);
-    return comm_fdopenex(new_socket, sock_type, addr, port, flags, tos, note);
-}
-
-int
-comm_fdopen(int socket_fd,
-    int sock_type,
-    struct in_addr addr,
-    u_short port,
-    int flags,
-    const char *note)
-{
-    return comm_fdopenex(socket_fd, sock_type, addr, port, flags, 0, note);
-}
-
-int
-comm_fdopenex(int new_socket,
-    int sock_type,
-    struct in_addr addr,
-    u_short port,
-    int flags,
-    unsigned char tos,
-    const char *note)
-{
-    fde *F = NULL;
-
     fd_open(new_socket, FD_SOCKET, note);
     F = &fd_table[new_socket];
     F->local_addr = addr;
@@ -288,23 +264,11 @@ comm_listen(int sock)
 	    sock, xstrerror());
 	return x;
     }
-#ifdef SO_ACCEPTFILTER
-    if (Config.accept_filter) {
-	struct accept_filter_arg afa;
-	bzero(&afa, sizeof(afa));
-	debug(5, 0) ("Installing accept filter '%s' on FD %d\n",
-	    Config.accept_filter, sock);
-	xstrncpy(afa.af_name, Config.accept_filter, sizeof(afa.af_name));
-	x = setsockopt(sock, SOL_SOCKET, SO_ACCEPTFILTER, &afa, sizeof(afa));
-	if (x < 0)
-	    debug(5, 0) ("SO_ACCEPTFILTER '%s': %s\n", Config.accept_filter, xstrerror());
-    }
-#endif
     return sock;
 }
 
 void
-commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *data, struct in_addr *addr)
+commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *data)
 {
     ConnectStateData *cs;
     debug(5, 3) ("commConnectStart: FD %d, %s:%d\n", fd, host, (int) port);
@@ -314,12 +278,6 @@ commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *
     cs->port = port;
     cs->callback = callback;
     cs->data = data;
-    if (addr != NULL) {
-	cs->in_addr = *addr;
-	cs->addrcount = 1;
-    } else {
-	cs->addrcount = 0;
-    }
     cbdataLock(cs->data);
     comm_add_close_handler(fd, commConnectFree, cs);
     ipcache_nbgethostbyname(host, commConnectDnsHandle, cs);
@@ -330,20 +288,13 @@ commConnectDnsHandle(const ipcache_addrs * ia, void *data)
 {
     ConnectStateData *cs = data;
     if (ia == NULL) {
-	/* If we've been given a default IP, use it */
-	if (cs->addrcount > 0) {
-	    fd_table[cs->fd].flags.dnsfailed = 1;
-	    cs->connstart = squid_curtime;
-	    commConnectHandle(cs->fd, cs);
-	} else {
-	    debug(5, 3) ("commConnectDnsHandle: Unknown host: %s\n", cs->host);
-	    if (!dns_error_message) {
-		dns_error_message = "Unknown DNS error";
-		debug(5, 1) ("commConnectDnsHandle: Bad dns_error_message\n");
-	    }
-	    assert(dns_error_message != NULL);
-	    commConnectCallback(cs, COMM_ERR_DNS);
+	debug(5, 3) ("commConnectDnsHandle: Unknown host: %s\n", cs->host);
+	if (!dns_error_message) {
+	    dns_error_message = "Unknown DNS error";
+	    debug(5, 1) ("commConnectDnsHandle: Bad dns_error_message\n");
 	}
+	assert(dns_error_message != NULL);
+	commConnectCallback(cs, COMM_ERR_DNS);
 	return;
     }
     assert(ia->cur < ia->count);
@@ -575,7 +526,7 @@ comm_connect_addr(int sock, const struct sockaddr_in *address)
 	status = COMM_INPROGRESS;
     else
 	return COMM_ERROR;
-    xstrncpy(F->ipaddr, xinet_ntoa(address->sin_addr), 16);
+    xstrncpy(F->ipaddr, inet_ntoa(address->sin_addr), 16);
     F->remote_port = ntohs(address->sin_port);
     if (status == COMM_OK) {
 	debug(5, 10) ("comm_connect_addr: FD %d connected to %s:%d\n",
@@ -621,7 +572,7 @@ comm_accept(int fd, struct sockaddr_in *pn, struct sockaddr_in *me)
     /* fdstat update */
     fd_open(sock, FD_SOCKET, "HTTP Request");
     F = &fd_table[sock];
-    xstrncpy(F->ipaddr, xinet_ntoa(P.sin_addr), 16);
+    xstrncpy(F->ipaddr, inet_ntoa(P.sin_addr), 16);
     F->remote_port = htons(P.sin_port);
     F->local_port = htons(M.sin_port);
     commSetNonBlocking(sock);
@@ -695,7 +646,7 @@ commLingerTimeout(int fd, void *unused)
 void
 comm_lingering_close(int fd)
 {
-    fd_note_static(fd, "lingering close");
+    fd_note(fd, "lingering close");
     commSetSelect(fd, COMM_SELECT_READ, NULL, NULL, 0);
     commSetSelect(fd, COMM_SELECT_WRITE, NULL, NULL, 0);
     commSetTimeout(fd, 10, commLingerTimeout, NULL);
