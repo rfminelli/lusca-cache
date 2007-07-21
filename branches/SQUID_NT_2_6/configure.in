@@ -5,7 +5,7 @@ dnl  $Id$
 dnl
 dnl
 dnl
-AC_INIT(Squid Web Proxy, 2.6.STABLE13-CVS, http://www.squid-cache.org/bugs/, squid)
+AC_INIT(Squid Web Proxy, 2.6.STABLE14-CVS, http://www.squid-cache.org/bugs/, squid)
 AC_PREREQ(2.52)
 AM_CONFIG_HEADER(include/autoconf.h)
 AC_CONFIG_AUX_DIR(cfgaux)
@@ -926,6 +926,22 @@ AC_ARG_ENABLE(kqueue,
     ;;
   esac
 ])
+
+dnl Enable devpoll
+AC_ARG_ENABLE(devpoll,
+[  --enable-devpoll       Use Solaris /dev/poll instead of poll],
+[
+  case "$enableval" in
+  yes)
+    echo "Forcing devpoll to be enabled"
+    SELECT_TYPE="devpoll"
+    ;;
+  no)
+    echo "Forcing devpoll to be disabled"
+    ;;
+  esac
+])
+
 
 dnl Disable HTTP violations
 HTTP_VIOLATIONS=1
@@ -2428,6 +2444,8 @@ AM_CONDITIONAL([USE_SELECT], [test $SELECT_TYPE = select])
 AM_CONDITIONAL([USE_SELECT_SIMPLE], [test $SELECT_TYPE = select_simple])
 AM_CONDITIONAL([USE_SELECT_WIN32], [test $SELECT_TYPE = select_win32])
 AM_CONDITIONAL([USE_KQUEUE], [test $SELECT_TYPE = kqueue])
+AM_CONDITIONAL([USE_DEVPOLL], [test $SELECT_TYPE = devpoll])
+
 
 dnl Hmm.. some OS:es (i.e. FreeBSD) can't handle large AF_UNIX dgram packets.
 dnl Verify that at least 16K is supported, if not fall back on using
@@ -3172,9 +3190,12 @@ AC_OUTPUT([\
 	helpers/basic_auth/mswin_sspi/Makefile \
 	helpers/basic_auth/multi-domain-NTLM/Makefile \
 	helpers/basic_auth/SASL/Makefile \
+	helpers/basic_auth/POP3/Makefile \
+	helpers/basic_auth/DB/Makefile \
 	helpers/digest_auth/Makefile \
 	helpers/digest_auth/password/Makefile \
 	helpers/digest_auth/ldap/Makefile \
+	helpers/digest_auth/eDirectory/Makefile \
 	helpers/ntlm_auth/Makefile \
 	helpers/ntlm_auth/fakeauth/Makefile \
 	helpers/ntlm_auth/mswin_sspi/Makefile \
@@ -3183,6 +3204,7 @@ AC_OUTPUT([\
 	helpers/ntlm_auth/SMB/smbval/Makefile \
 	helpers/negotiate_auth/Makefile \
 	helpers/negotiate_auth/mswin_sspi/Makefile \
+	helpers/negotiate_auth/squid_kerb_auth/Makefile \
 	helpers/external_acl/Makefile \
 	helpers/external_acl/ip_user/Makefile \
 	helpers/external_acl/ldap_group/Makefile \
