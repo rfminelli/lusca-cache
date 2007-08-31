@@ -37,8 +37,6 @@
 #include "config.h"
 #include "splay.h"
 
-#define PEER_MULTICAST_SIBLINGS 1
-
 struct _dlink_node {
     void *data;
     dlink_node *prev;
@@ -373,7 +371,6 @@ struct _http_port_list {
 #if LINUX_TPROXY
     unsigned int tproxy;
 #endif
-    unsigned int act_as_origin;	/* Fake Date: headers in accelerator mode */
 };
 
 #if USE_SSL
@@ -433,6 +430,11 @@ struct _SquidConfig {
 	int lowWaterMark;
     } Swap;
     squid_off_t memMaxSize;
+    struct {
+	char *relayHost;
+	u_short relayPort;
+	peer *peer;
+    } Wais;
     struct {
 	squid_off_t min;
 	int pct;
@@ -808,8 +810,6 @@ struct _SquidConfig {
 #endif
     time_t refresh_stale_window;
     int umask;
-    int max_filedescriptors;
-    char *accept_filter;
 };
 
 struct _SquidConfig2 {
@@ -872,8 +872,7 @@ struct _fde {
     struct in_addr local_addr;
     unsigned char tos;
     char ipaddr[16];		/* dotted decimal address of peer */
-    const char *desc;
-    char descbuf[FD_DESC_SZ];
+    char desc[FD_DESC_SZ];
     struct {
 	unsigned int open:1;
 	unsigned int close_request:1;
@@ -887,7 +886,6 @@ struct _fde {
 	unsigned int nodelay:1;
 	unsigned int close_on_exec:1;
 	unsigned int backoff:1;	/* keep track of whether the fd is backed off */
-	unsigned int dnsfailed:1;	/* did the dns lookup fail */
     } flags;
     comm_pending read_pending;
     comm_pending write_pending;
@@ -1051,14 +1049,13 @@ struct _HttpHeaderFieldInfo {
 
 struct _HttpHeaderEntry {
     http_hdr_type id;
-    int active;
     String name;
     String value;
 };
 
 struct _HttpHeader {
     /* protected, do not use these, use interface functions instead */
-    Array entries;		/* parsed entries in raw format */
+    Array entries;		/* parsed fields in raw format */
     HttpHeaderMask mask;	/* bit set <=> entry present */
     http_hdr_owner_type owner;	/* request or reply */
     int len;			/* length when packed, not counting terminating '\0' */
@@ -1166,7 +1163,6 @@ struct _AccessLogEntry {
     } icp;
     struct {
 	struct in_addr caddr;
-	struct in_addr out_ip;
 	squid_off_t size;
 	size_t rq_size;
 	log_type code;
@@ -1197,6 +1193,7 @@ struct _clientHttpRequest {
     store_client *sc;		/* The store_client we're using */
     store_client *old_sc;	/* ... for entry to be validated */
     char *uri;
+    char *log_uri;
     struct {
 	squid_off_t offset;
 	squid_off_t size;
@@ -1428,9 +1425,6 @@ struct _peer {
 	unsigned int default_parent:1;
 	unsigned int roundrobin:1;
 	unsigned int mcast_responder:1;
-#if PEER_MULTICAST_SIBLINGS
-	unsigned int mcast_siblings:1;
-#endif
 	unsigned int closest_only:1;
 #if USE_HTCP
 	unsigned int htcp:1;
@@ -1616,7 +1610,7 @@ struct _iostats {
 	int read_hist[16];
 	int writes;
 	int write_hist[16];
-    } Http, Ftp, Gopher;
+    } Http, Ftp, Gopher, Wais;
 };
 
 struct _mem_node {
@@ -1717,6 +1711,7 @@ struct _MemObject {
 	STABH *callback;
 	void *data;
     } abort;
+    char *log_url;
     RemovalPolicyNode repl;
     int id;
     squid_off_t object_sz;
@@ -1915,7 +1910,6 @@ struct _request_t {
     char *peer_domain;		/* Configured peer forceddomain */
     BODY_HANDLER *body_reader;
     void *body_reader_data;
-    struct in_addr out_ip;
     String extacl_log;		/* String to be used for access.log purposes */
     const char *extacl_user;	/* User name returned by extacl lookup */
     const char *extacl_passwd;	/* Password returned by extacl lookup */
@@ -2506,25 +2500,6 @@ struct _VaryData {
     char *key;
     char *etag;
     Array etags;
-};
-
-struct _HttpMsgBuf {
-    const char *buf;
-    size_t size;
-    /* offset of first/last byte of headers */
-    int h_start, h_end, h_len;
-    /* offset of first/last byte of request, including any padding */
-    int req_start, req_end, r_len;
-    int m_start, m_end, m_len;
-    int u_start, u_end, u_len;
-    int v_start, v_end, v_len;
-    int v_maj, v_min;
-};
-
-/* request method str stuff; should probably be a String type.. */
-struct rms {
-    char *str;
-    int len;
 };
 
 #endif /* SQUID_STRUCTS_H */
