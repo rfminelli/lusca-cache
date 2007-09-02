@@ -424,7 +424,7 @@ clientAccessCheckDone(int answer, void *data)
 	http->redirect_state = REDIRECT_PENDING;
 	clientRedirectStart(http);
     } else {
-	int require_auth = (answer == ACCESS_REQ_PROXY_AUTH || aclIsProxyAuth(AclMatchedName));
+	int require_auth = (answer == ACCESS_REQ_PROXY_AUTH || aclIsProxyAuth(AclMatchedName)) && !http->request->flags.transparent;
 	debug(33, 5) ("Access Denied: %s\n", http->uri);
 	debug(33, 5) ("AclMatchedName = %s\n",
 	    AclMatchedName ? AclMatchedName : "<null>");
@@ -1839,6 +1839,7 @@ clientBuildRangeHeader(clientHttpRequest * http, HttpReply * rep)
 	assert(actual_clen >= 0);
 	httpHeaderDelById(hdr, HDR_CONTENT_LENGTH);
 	httpHeaderPutSize(hdr, HDR_CONTENT_LENGTH, actual_clen);
+	rep->content_length = actual_clen;
 	debug(33, 3) ("clientBuildRangeHeader: actual content length: %" PRINTF_OFF_T "\n", actual_clen);
     }
 }
@@ -1990,7 +1991,7 @@ clientBuildReplyHeader(clientHttpRequest * http, HttpReply * rep)
 	request->flags.proxy_keepalive = 0;
     }
     /* Append Via */
-    {
+    if (Config.onoff.via) {
 	char bbuf[MAX_URL + 32];
 	String strVia = httpHeaderGetList(hdr, HDR_VIA);
 	snprintf(bbuf, MAX_URL + 32, "%d.%d %s",
@@ -2127,6 +2128,11 @@ clientCacheHit(void *data, char *buf, ssize_t size)
 		clientCacheHit,
 		http);
 	}
+	return;
+    }
+    if (strcmp(mem->url, urlCanonical(r)) != 0) {
+	debug(33, 1) ("clientCacheHit: URL mismatch '%s' != '%s'?\n", e->mem_obj->url, urlCanonical(r));
+	clientProcessMiss(http);
 	return;
     }
     /*
@@ -2845,6 +2851,7 @@ clientCheckErrorMapDone(StoreEntry * e, int body_offset, squid_off_t content_len
 	if (content_length >= 0) {
 	    httpHeaderPutSize(&state->http->reply->header, HDR_CONTENT_LENGTH, content_length);
 	}
+	http->reply->content_length = content_length;
     }
     clientCheckHeaderDone(state);
 }
@@ -3109,10 +3116,7 @@ clientWriteComplete(int fd, char *bufnotused, size_t size, int errflag, void *da
     } else if ((done = clientCheckTransferDone(http)) != 0 || size == 0) {
 	debug(33, 5) ("clientWriteComplete: FD %d transfer is DONE\n", fd);
 	/* We're finished case */
-	if (httpReplyBodySize(http->request->method, entry->mem_obj->reply) < 0) {
-	    debug(33, 5) ("clientWriteComplete: closing, content_length < 0\n");
-	    comm_close(fd);
-	} else if (!done) {
+	if (!done) {
 	    debug(33, 5) ("clientWriteComplete: closing, !done\n");
 	    comm_close(fd);
 	} else if (clientGotNotEnough(http)) {
@@ -3972,7 +3976,7 @@ clientReadRequest(int fd, void *data)
 	    if (conn->port->urlgroup)
 		request->urlgroup = xstrdup(conn->port->urlgroup);
 #if LINUX_TPROXY
-	    request->flags.tproxy = conn->port->tproxy;
+	    request->flags.tproxy = conn->port->tproxy && need_linux_tproxy;
 #endif
 	    request->flags.accelerated = http->flags.accel;
 	    request->flags.transparent = http->flags.transparent;
