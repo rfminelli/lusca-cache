@@ -244,7 +244,6 @@ static int HeaderEntryParsedCount = 0;
 #define assert_eid(id) assert((id) < HDR_ENUM_END)
 
 static HttpHeaderEntry *httpHeaderEntryCreate(http_hdr_type id, const char *name, const char *value);
-static HttpHeaderEntry *httpHeaderEntryCreate2(http_hdr_type id, String name, String value);
 static void httpHeaderEntryDestroy(HttpHeaderEntry * e);
 static HttpHeaderEntry *httpHeaderEntryParseCreate(const char *field_start, const char *field_end);
 static void httpHeaderNoteParsedEntry(http_hdr_type id, String value, int error);
@@ -377,7 +376,7 @@ httpHeaderAppend(HttpHeader * dest, const HttpHeader * src)
     debug(55, 7) ("appending hdr: %p += %p\n", dest, src);
 
     while ((e = httpHeaderGetEntry(src, &pos))) {
-	httpHeaderAddClone(dest, e);
+	httpHeaderAddEntry(dest, httpHeaderEntryClone(e));
     }
 }
 
@@ -399,7 +398,7 @@ httpHeaderUpdate(HttpHeader * old, const HttpHeader * fresh, const HttpHeaderMas
 	    httpHeaderDelById(old, e->id);
 	else
 	    httpHeaderDelByName(old, strBuf(e->name));
-	httpHeaderAddClone(old, e);
+	httpHeaderAddEntry(old, httpHeaderEntryClone(e));
     }
 }
 
@@ -419,7 +418,7 @@ int
 httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_end)
 {
     const char *field_ptr = header_start;
-    HttpHeaderEntry *e;
+    HttpHeaderEntry *e, *e2;
 
     assert(hdr);
     assert(header_start && header_end);
@@ -487,34 +486,28 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 	    else
 		return httpHeaderReset(hdr);
 	}
-	if (e->id == HDR_CONTENT_LENGTH) {
-	    squid_off_t l1;
-	    HttpHeaderEntry *e2;
-	    if (!httpHeaderParseSize(strBuf(e->value), &l1)) {
-		debug(55, 1) ("WARNING: Unparseable content-length '%s'\n", strBuf(e->value));
-		httpHeaderEntryDestroy(e);
-		return httpHeaderReset(hdr);
-	    }
-	    e2 = httpHeaderFindEntry(hdr, e->id);
-	    if (e2 && strCmp(e->value, strBuf(e2->value)) != 0) {
-		squid_off_t l2;
+	if (e->id == HDR_CONTENT_LENGTH && (e2 = httpHeaderFindEntry(hdr, e->id)) != NULL) {
+	    if (strCmp(e->value, strBuf(e2->value)) != 0) {
+		squid_off_t l1, l2;
 		debug(55, Config.onoff.relaxed_header_parser <= 0 ? 1 : 2) ("WARNING: found two conflicting content-length headers in {%s}\n", getStringPrefix(header_start, header_end));
 		if (!Config.onoff.relaxed_header_parser) {
 		    httpHeaderEntryDestroy(e);
 		    return httpHeaderReset(hdr);
 		}
-		if (!httpHeaderParseSize(strBuf(e2->value), &l2)) {
+		if (!httpHeaderParseSize(strBuf(e->value), &l1)) {
 		    debug(55, 1) ("WARNING: Unparseable content-length '%s'\n", strBuf(e->value));
 		    httpHeaderEntryDestroy(e);
-		    return httpHeaderReset(hdr);
-		}
-		if (l1 > l2) {
+		    continue;
+		} else if (!httpHeaderParseSize(strBuf(e2->value), &l2)) {
+		    debug(55, 1) ("WARNING: Unparseable content-length '%s'\n", strBuf(e2->value));
+		    httpHeaderDelById(hdr, e2->id);
+		} else if (l1 > l2) {
 		    httpHeaderDelById(hdr, e2->id);
 		} else {
 		    httpHeaderEntryDestroy(e);
 		    continue;
 		}
-	    } else if (e2) {
+	    } else {
 		debug(55, Config.onoff.relaxed_header_parser <= 0 ? 1 : 2)
 		    ("NOTICE: found double content-length header\n");
 		if (Config.onoff.relaxed_header_parser) {
@@ -776,7 +769,7 @@ httpHeaderGetStrOrList(const HttpHeader * hdr, http_hdr_type id)
 	return httpHeaderGetList(hdr, id);
     if ((e = httpHeaderFindEntry(hdr, id))) {
 	String s;
-	stringLimitInit(&s, strBuf(e->value), strLen(e->value));
+	stringInit(&s, strBuf(e->value));
 	return s;
     }
     return StringNull;
@@ -1187,23 +1180,6 @@ httpHeaderEntryCreate(http_hdr_type id, const char *name, const char *value)
     return e;
 }
 
-static HttpHeaderEntry *
-httpHeaderEntryCreate2(http_hdr_type id, String name, String value)
-{
-    HttpHeaderEntry *e;
-    assert_eid(id);
-    e = memAllocate(MEM_HTTP_HDR_ENTRY);
-    e->id = id;
-    if (id != HDR_OTHER)
-	e->name = Headers[id].name;
-    else
-	stringLimitInit(&e->name, strBuf(name), strLen(name));
-    stringLimitInit(&e->value, strBuf(value), strLen(value));
-    Headers[id].stat.aliveCount++;
-    debug(55, 9) ("created entry %p: '%s: %s'\n", e, strBuf(e->name), strBuf(e->value));
-    return e;
-}
-
 static void
 httpHeaderEntryDestroy(HttpHeaderEntry * e)
 {
@@ -1289,13 +1265,7 @@ httpHeaderEntryParseCreate(const char *field_start, const char *field_end)
 HttpHeaderEntry *
 httpHeaderEntryClone(const HttpHeaderEntry * e)
 {
-    return httpHeaderEntryCreate2(e->id, e->name, e->value);
-}
-
-void
-httpHeaderAddClone(HttpHeader * hdr, const HttpHeaderEntry * e)
-{
-    httpHeaderAddEntry(hdr, httpHeaderEntryClone(e));
+    return httpHeaderEntryCreate(e->id, strBuf(e->name), strBuf(e->value));
 }
 
 void

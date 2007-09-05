@@ -124,21 +124,19 @@ redirectStart(clientHttpRequest * http, RH * handler, void *data)
 #endif
     if (!r->client_ident)
 	r->client_ident = dash_str;
-    r->method_s = RequestMethods[http->request->method].str;
+    r->method_s = RequestMethodStr[http->request->method];
     r->handler = handler;
     r->data = data;
     cbdataLock(r->data);
     if ((fqdn = fqdncache_gethostbyaddr(r->client_addr, 0)) == NULL)
 	fqdn = dash_str;
-    snprintf(buf, 8191, "%s %s/%s %s %s %s",
+    snprintf(buf, 8192, "%s %s/%s %s %s %s\n",
 	r->orig_url,
 	inet_ntoa(r->client_addr),
 	fqdn,
 	r->client_ident[0] ? rfc1738_escape(r->client_ident) : dash_str,
 	r->method_s,
 	urlgroup ? urlgroup : "-");
-    debug(61, 6) ("redirectStart: sending '%s' to the helper\n", buf);
-    strcat(buf, "\n");
     helperSubmit(redirectors, buf, redirectHandleReply, r);
 }
 

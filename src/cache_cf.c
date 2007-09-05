@@ -72,8 +72,7 @@ static void free_access_log(customlog ** definitions);
 
 static struct cache_dir_option common_cachedir_options[] =
 {
-    {"no-store", parse_cachedir_option_readonly, dump_cachedir_option_readonly},
-    {"read-only", parse_cachedir_option_readonly, NULL},
+    {"read-only", parse_cachedir_option_readonly, dump_cachedir_option_readonly},
     {"min-size", parse_cachedir_option_minsize, dump_cachedir_option_minsize},
     {"max-size", parse_cachedir_option_maxsize, dump_cachedir_option_maxsize},
     {NULL, NULL}
@@ -501,6 +500,13 @@ configDoConfigure(void)
     if (!Config.onoff.via)
 	debug(22, 1) ("WARNING: HTTP requires the use of Via\n");
 #endif
+    if (Config.Wais.relayHost) {
+	if (Config.Wais.peer)
+	    cbdataFree(Config.Wais.peer);
+	Config.Wais.peer = cbdataAlloc(peer);
+	Config.Wais.peer->host = xstrdup(Config.Wais.relayHost);
+	Config.Wais.peer->http_port = Config.Wais.relayPort;
+    }
     if (aclPurgeMethodInUse(Config.accessList.http))
 	Config2.onoff.enable_purge = 1;
     if (geteuid() == 0) {
@@ -1240,8 +1246,7 @@ dump_cachedir_options(StoreEntry * entry, struct cache_dir_option *options, Swap
     if (!options)
 	return;
     for (option = options; option->name; option++)
-	if (option->dump)
-	    option->dump(entry, option->name, sd);
+	option->dump(entry, option->name, sd);
 }
 
 static void
@@ -1532,7 +1537,7 @@ parse_cachedir_options(SwapDir * sd, struct cache_dir_option *options, int recon
     if (reconfiguring) {
 	if (old_read_only != sd->flags.read_only) {
 	    debug(3, 1) ("Cache dir '%s' now %s\n",
-		sd->path, sd->flags.read_only ? "No-Store" : "Read-Write");
+		sd->path, sd->flags.read_only ? "Read-Only" : "Read-Write");
 	}
     }
 }
@@ -1647,10 +1652,6 @@ parse_peer(peer ** head)
 	    p->options.no_digest = 1;
 	} else if (!strcasecmp(token, "multicast-responder")) {
 	    p->options.mcast_responder = 1;
-#if PEER_MULTICAST_SIBLINGS
-	} else if (!strcasecmp(token, "multicast-siblings")) {
-	    p->options.mcast_siblings = 1;
-#endif
 	} else if (!strncasecmp(token, "weight=", 7)) {
 	    p->weight = xatoi(token + 7);
 	} else if (!strcasecmp(token, "closest-only")) {
@@ -1782,8 +1783,6 @@ parse_peer(peer ** head)
 	    p->connection_auth = 1;
 	} else if (strcmp(token, "connection-auth=auto") == 0) {
 	    p->connection_auth = -1;
-	} else if (strncmp(token, "idle=", 5) == 0) {
-	    p->idle = xatoi(token + 5);
 	} else {
 	    debug(3, 0) ("parse_peer: token='%s'\n", token);
 	    self_destruct();
@@ -2779,9 +2778,6 @@ parse_http_port_option(http_port_list * s, char *token)
 	s->tproxy = 1;
 	need_linux_tproxy = 1;
 #endif
-    } else if (strcmp(token, "act-as-origin") == 0) {
-	s->act_as_origin = 1;
-	s->accel = 1;
     } else {
 	self_destruct();
     }

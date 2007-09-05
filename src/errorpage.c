@@ -526,7 +526,7 @@ errorConvert(char token, ErrorState * err)
 	p = authenticateAuthUserRequestMessage(err->auth_user_request) ? authenticateAuthUserRequestMessage(err->auth_user_request) : "[not available]";
 	break;
     case 'M':
-	p = r ? RequestMethods[r->method].str : "[unknown method]";
+	p = r ? RequestMethodStr[r->method] : "[unkown method]";
 	break;
     case 'o':
 	p = external_acl_message;
@@ -547,7 +547,7 @@ errorConvert(char token, ErrorState * err)
 	if (NULL != r) {
 	    Packer p;
 	    memBufPrintf(&mb, "%s %s HTTP/%d.%d\n",
-		RequestMethods[r->method].str,
+		RequestMethodStr[r->method],
 		strLen(r->urlpath) ? strBuf(r->urlpath) : "/",
 		r->http_ver.major, r->http_ver.minor);
 	    packerToMemInit(&p, &mb);
@@ -625,10 +625,12 @@ errorBuildReply(ErrorState * err)
 {
     HttpReply *rep = httpReplyCreate();
     const char *name = errorPageName(err->page_id);
+    http_version_t version;
     /* no LMT for error pages; error pages expire immediately */
+    httpBuildVersion(&version, 1, 0);
     if (strchr(name, ':')) {
 	/* Redirection */
-	httpReplySetHeaders(rep, HTTP_MOVED_TEMPORARILY, NULL, "text/html", 0, -1, squid_curtime);
+	httpReplySetHeaders(rep, version, HTTP_MOVED_TEMPORARILY, NULL, "text/html", 0, 0, squid_curtime);
 	if (err->request) {
 	    char *quoted_url = rfc1738_escape_part(urlCanonical(err->request));
 	    httpHeaderPutStrf(&rep->header, HDR_LOCATION, name, quoted_url);
@@ -636,7 +638,7 @@ errorBuildReply(ErrorState * err)
 	httpHeaderPutStrf(&rep->header, HDR_X_SQUID_ERROR, "%d %s", err->http_status, "Access Denied");
     } else {
 	MemBuf content = errorBuildContent(err);
-	httpReplySetHeaders(rep, err->http_status, NULL, "text/html", content.size, -1, squid_curtime);
+	httpReplySetHeaders(rep, version, err->http_status, NULL, "text/html", content.size, 0, squid_curtime);
 	/*
 	 * include some information for downstream caches. Implicit
 	 * replaceable content. This isn't quite sufficient. xerrno is not

@@ -137,7 +137,7 @@ urnStart(request_t * r, StoreEntry * e)
     }
     httpHeaderPutStr(&urlres_r->header, HDR_ACCEPT, "text/plain");
     if ((urlres_e = storeGetPublic(urlres, METHOD_GET)) == NULL) {
-	urlres_e = storeCreateEntry(urlres, null_request_flags, METHOD_GET);
+	urlres_e = storeCreateEntry(urlres, urlres, null_request_flags, METHOD_GET);
 	urnState->sc = storeClientRegister(urlres_e, urnState);
 	fwdStart(-1, urlres_e, urlres_r);
     } else {
@@ -186,6 +186,7 @@ urnHandleReply(void *data, char *buf, ssize_t size)
     ErrorState *err;
     int i;
     int urlcnt = 0;
+    http_version_t version;
 
     debug(52, 3) ("urnHandleReply: Called with size=%d.\n", (int) size);
     if (EBIT_TEST(urlres_e->flags, ENTRY_ABORTED)) {
@@ -272,7 +273,9 @@ urnHandleReply(void *data, char *buf, ssize_t size)
 	full_appname_string, getMyHostname());
     rep = e->mem_obj->reply;
     httpReplyReset(rep);
-    httpReplySetHeaders(rep, HTTP_MOVED_TEMPORARILY, NULL, "text/html", mb.size, -1, squid_curtime);
+    httpBuildVersion(&version, 1, 0);
+    httpReplySetHeaders(rep, version, HTTP_MOVED_TEMPORARILY, NULL,
+	"text/html", mb.size, 0, squid_curtime);
     if (urnState->flags.force_menu) {
 	debug(52, 3) ("urnHandleReply: forcing menu\n");
     } else if (min_u) {
