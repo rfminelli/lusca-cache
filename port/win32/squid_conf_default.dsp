@@ -74,13 +74,15 @@ SOURCE=..\..\src\cf.data
 !IF  "$(CFG)" == "squid_conf_default - Win32 Release"
 
 # PROP Ignore_Default_Tool 1
+USERDEP__CF_DA="$(InputDir)\cf.data.depend"	
 # Begin Custom Build
+InputDir=\work\SNT-2.6\src
 OutDir=.\..\..\src
 ProjDir=.
 InputPath=..\..\src\cf.data
 
 BuildCmds= \
-	$(ProjDir)\cf_gen\Release\cf_gen $(InputPath)
+	$(ProjDir)\cf_gen\Release\cf_gen $(InputPath) $(InputDir)\cf.data.depend
 
 "$(OutDir)\squid.conf.default" : $(SOURCE) "$(INTDIR)" "$(OUTDIR)"
    $(BuildCmds)
@@ -92,13 +94,15 @@ BuildCmds= \
 !ELSEIF  "$(CFG)" == "squid_conf_default - Win32 Debug"
 
 # PROP Ignore_Default_Tool 1
+USERDEP__CF_DA="$(InputDir)\cf.data.depend"	
 # Begin Custom Build
+InputDir=\work\SNT-2.6\src
 OutDir=.\..\..\src
 ProjDir=.
 InputPath=..\..\src\cf.data
 
 BuildCmds= \
-	$(ProjDir)\cf_gen\debug\cf_gen $(InputPath)
+	$(ProjDir)\cf_gen\debug\cf_gen $(InputPath) $(InputDir)\cf.data.depend
 
 "$(OutDir)\squid.conf.default" : $(SOURCE) "$(INTDIR)" "$(OUTDIR)"
    $(BuildCmds)
