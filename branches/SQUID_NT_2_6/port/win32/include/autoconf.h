@@ -494,6 +494,9 @@
 /* Define to 1 if you have the <sys/bitypes.h> header file. */
 /* #undef HAVE_SYS_BITYPES_H */
 
+/* Define to 1 if you have the <sys/capability.h> header file. */
+/* #undef HAVE_SYS_CAPABILITY_H */
+
 /* Define to 1 if you have the <sys/dir.h> header file, and it defines `DIR'.
    */
 /* #undef HAVE_SYS_DIR_H */
@@ -534,6 +537,9 @@
 
 /* Define to 1 if you have the <sys/socket.h> header file. */
 /* #undef HAVE_SYS_SOCKET_H */
+
+/* Define to 1 if you have the <sys/statfs.h> header file. */
+/* #undef HAVE_SYS_STATFS_H */
 
 /* Define to 1 if you have the <sys/statvfs.h> header file. */
 /* #undef HAVE_SYS_STATVFS_H */
@@ -637,67 +643,67 @@
 /* Print stacktraces on fatal errors */
 /* #undef PRINT_STACK_TRACE */
 
-/* The size of a `char', as computed by sizeof. */
+/* The size of `char', as computed by sizeof. */
 #define SIZEOF_CHAR 1
 
-/* The size of a `int', as computed by sizeof. */
+/* The size of `int', as computed by sizeof. */
 #define SIZEOF_INT 4
 
-/* Size of SIZEOF_INT16_T */
+/* The size of `int16_t', as computed by sizeof. */
 #define SIZEOF_INT16_T 0
 
-/* Size of SIZEOF_INT32_T */
+/* The size of `int32_t', as computed by sizeof. */
 #define SIZEOF_INT32_T 0
 
-/* Size of SIZEOF_INT64_T */
+/* The size of `int64_t', as computed by sizeof. */
 #define SIZEOF_INT64_T 0
 
-/* Size of SIZEOF_INT8_T */
+/* The size of `int8_t', as computed by sizeof. */
 #define SIZEOF_INT8_T 0
 
-/* The size of a `long', as computed by sizeof. */
+/* The size of `long', as computed by sizeof. */
 #define SIZEOF_LONG 4
 
-/* The size of a `long long', as computed by sizeof. */
+/* The size of `long long', as computed by sizeof. */
 #define SIZEOF_LONG_LONG 0
 
-/* Size of SIZEOF_OFF_T */
+/* The size of `off_t', as computed by sizeof. */
 #define SIZEOF_OFF_T 4
 
-/* The size of a `short', as computed by sizeof. */
+/* The size of `short', as computed by sizeof. */
 #define SIZEOF_SHORT 2
 
-/* Size of SIZEOF_SIZE_T */
+/* The size of `size_t', as computed by sizeof. */
 #define SIZEOF_SIZE_T 4
 
-/* Size of SIZEOF_UINT16_T */
+/* The size of `uint16_t', as computed by sizeof. */
 #define SIZEOF_UINT16_T 0
 
-/* Size of SIZEOF_UINT32_T */
+/* The size of `uint32_t', as computed by sizeof. */
 #define SIZEOF_UINT32_T 0
 
-/* Size of SIZEOF_UINT64_T */
+/* The size of `uint64_t', as computed by sizeof. */
 #define SIZEOF_UINT64_T 0
 
-/* Size of SIZEOF_UINT8_T */
+/* The size of `uint8_t', as computed by sizeof. */
 #define SIZEOF_UINT8_T 0
 
-/* Size of SIZEOF_U_INT16_T */
+/* The size of `u_int16_t', as computed by sizeof. */
 #define SIZEOF_U_INT16_T 0
 
-/* Size of SIZEOF_U_INT32_T */
+/* The size of `u_int32_t', as computed by sizeof. */
 #define SIZEOF_U_INT32_T 0
 
-/* Size of SIZEOF_U_INT64_T */
+/* The size of `u_int64_t', as computed by sizeof. */
 #define SIZEOF_U_INT64_T 0
 
-/* Size of SIZEOF_U_INT8_T */
+/* The size of `u_int8_t', as computed by sizeof. */
 #define SIZEOF_U_INT8_T 0
 
-/* The size of a `void *', as computed by sizeof. */
+/* The size of `void *', as computed by sizeof. */
 #define SIZEOF_VOID_P 4
 
-/* Size of SIZEOF___INT64 */
+/* The size of `__int64', as computed by sizeof. */
 #define SIZEOF___INT64 8
 
 /* Maximum number of open filedescriptors */
@@ -707,20 +713,20 @@
 #define SQUID_SNMP 1
 
 /* TCP receive buffer size */
-#define SQUID_TCP_SO_RCVBUF 8192
+#define SQUID_TCP_SO_RCVBUF 16384
 
 /* TCP send buffer size */
-#define SQUID_TCP_SO_SNDBUF 8192
+#define SQUID_TCP_SO_SNDBUF 16384
 
 /* UDP receive buffer size */
-#define SQUID_UDP_SO_RCVBUF 8192
+#define SQUID_UDP_SO_RCVBUF 16384
 
 /* UDP send buffer size */
-#define SQUID_UDP_SO_SNDBUF 8192
+#define SQUID_UDP_SO_SNDBUF 16384
 
 /* If using the C implementation of alloca, define if you know the
    direction of stack growth for your system; otherwise it will be
-   automatically deduced at run-time.
+   automatically deduced at runtime.
 	STACK_DIRECTION > 0 => grows toward higher addresses
 	STACK_DIRECTION < 0 => grows toward lower addresses
 	STACK_DIRECTION = 0 => direction of growth unknown */
