@@ -1911,19 +1911,19 @@ clientBuildReplyHeader(clientHttpRequest * http, HttpReply * rep)
 	 * the objects age, so a Age: 0 header does not add any useful
 	 * information to the reply in any case.
 	 */
-	if (NULL == http->entry)
-	    (void) 0;
-	else if (http->entry->timestamp < 0)
-	    (void) 0;
-	if (EBIT_TEST(http->entry->flags, ENTRY_SPECIAL)) {
-	    httpHeaderDelById(hdr, HDR_DATE);
-	    httpHeaderInsertTime(hdr, 0, HDR_DATE, squid_curtime);
-	} else if (http->entry->timestamp < squid_curtime)
-	    httpHeaderPutInt(hdr, HDR_AGE,
-		squid_curtime - http->entry->timestamp);
-	if (!httpHeaderHas(hdr, HDR_CONTENT_LENGTH) && http->entry->mem_obj && http->entry->store_status == STORE_OK) {
-	    rep->content_length = contentLen(http->entry);
-	    httpHeaderPutSize(hdr, HDR_CONTENT_LENGTH, rep->content_length);
+	if (http->entry) {
+	    if (EBIT_TEST(http->entry->flags, ENTRY_SPECIAL)) {
+		httpHeaderDelById(hdr, HDR_DATE);
+		httpHeaderInsertTime(hdr, 0, HDR_DATE, squid_curtime);
+	    } else if (http->entry->timestamp < 0) {
+		(void) 0;
+	    } else if (http->entry->timestamp < squid_curtime)
+		httpHeaderPutInt(hdr, HDR_AGE,
+		    squid_curtime - http->entry->timestamp);
+	    if (!httpHeaderHas(hdr, HDR_CONTENT_LENGTH) && http->entry->mem_obj && http->entry->store_status == STORE_OK) {
+		rep->content_length = contentLen(http->entry);
+		httpHeaderPutSize(hdr, HDR_CONTENT_LENGTH, rep->content_length);
+	    }
 	}
     }
     /* Filter unproxyable authentication types */
@@ -4172,7 +4172,6 @@ clientProcessBody(ConnStateData * conn)
 	assert(conn->body.size_left > 0);
 	assert(conn->in.offset > 0);
 	assert(callback != NULL);
-	assert(buf != NULL || !conn->body.request);
 	/* How much do we have to process? */
 	size = conn->in.offset;
 	if (size > conn->body.size_left)	/* only process the body part */
@@ -4210,10 +4209,8 @@ clientProcessBody(ConnStateData * conn)
 	/* Invoke callback function */
 	if (valid)
 	    callback(buf, size, cbdata);
-	if (request != NULL) {
+	if (request != NULL)
 	    requestUnlink(request);	/* Linked in clientReadBody */
-	    conn->body.request = NULL;
-	}
 	debug(33, 2) ("clientProcessBody: end fd=%d size=%d body_size=%lu in.offset=%ld cb=%p req=%p\n", conn->fd, size, (unsigned long int) conn->body.size_left, (long int) conn->in.offset, callback, request);
     }
 }
