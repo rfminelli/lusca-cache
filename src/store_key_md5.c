@@ -98,7 +98,7 @@ storeKeyPrivate(const char *url, method_t method, int id)
     MD5_CTX M;
     assert(id > 0);
     debug(20, 3) ("storeKeyPrivate: %s %s\n",
-	RequestMethods[method].str, url);
+	RequestMethodStr[method], url);
     MD5Init(&M);
     MD5Update(&M, (unsigned char *) &id, sizeof(id));
     MD5Update(&M, (unsigned char *) &method, sizeof(method));
@@ -131,14 +131,7 @@ storeKeyPublicByRequestMethod(request_t * request, const method_t method)
 {
     static cache_key digest[MD5_DIGEST_CHARS];
     unsigned char m = (unsigned char) method;
-    const char *url;
-
-    if (request->store_url) {
-	url = request->store_url;
-    } else {
-	url = urlCanonical(request);
-    }
-
+    const char *url = urlCanonical(request);
     MD5_CTX M;
     MD5Init(&M);
     MD5Update(&M, &m, sizeof(m));

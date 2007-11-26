@@ -72,8 +72,7 @@ static void free_access_log(customlog ** definitions);
 
 static struct cache_dir_option common_cachedir_options[] =
 {
-    {"no-store", parse_cachedir_option_readonly, dump_cachedir_option_readonly},
-    {"read-only", parse_cachedir_option_readonly, NULL},
+    {"read-only", parse_cachedir_option_readonly, dump_cachedir_option_readonly},
     {"min-size", parse_cachedir_option_minsize, dump_cachedir_option_minsize},
     {"max-size", parse_cachedir_option_maxsize, dump_cachedir_option_maxsize},
     {NULL, NULL}
@@ -470,7 +469,6 @@ configDoConfigure(void)
 #if USE_UNLINKD
     requirePathnameExists("unlinkd_program", Config.Program.unlinkd);
 #endif
-    requirePathnameExists("logfile_daemon", Config.Program.logfile_daemon);
     if (Config.Program.url_rewrite.command)
 	requirePathnameExists("url_rewrite_program", Config.Program.url_rewrite.command->key);
     if (Config.Program.location_rewrite.command)
@@ -479,7 +477,6 @@ configDoConfigure(void)
     requirePathnameExists("Error Directory", Config.errorDirectory);
     authenticateConfigure(&Config.authConfig);
     externalAclConfigure();
-    refreshCheckConfigure();
 #if HTTP_VIOLATIONS
     {
 	const refresh_t *R;
@@ -495,12 +492,6 @@ configDoConfigure(void)
 	    debug(22, 1) ("WARNING: use of 'override-lastmod' in 'refresh_pattern' violates HTTP\n");
 	    break;
 	}
-	for (R = Config.Refresh; R; R = R->next) {
-	    if (R->stale_while_revalidate <= 0)
-		continue;
-	    debug(22, 1) ("WARNING: use of 'stale-while-revalidate' in 'refresh_pattern' violates HTTP\n");
-	    break;
-	}
     }
 #endif
 #if !HTTP_VIOLATIONS
@@ -509,6 +500,13 @@ configDoConfigure(void)
     if (!Config.onoff.via)
 	debug(22, 1) ("WARNING: HTTP requires the use of Via\n");
 #endif
+    if (Config.Wais.relayHost) {
+	if (Config.Wais.peer)
+	    cbdataFree(Config.Wais.peer);
+	Config.Wais.peer = cbdataAlloc(peer);
+	Config.Wais.peer->host = xstrdup(Config.Wais.relayHost);
+	Config.Wais.peer->http_port = Config.Wais.relayPort;
+    }
     if (aclPurgeMethodInUse(Config.accessList.http))
 	Config2.onoff.enable_purge = 1;
     if (geteuid() == 0) {
@@ -1248,8 +1246,7 @@ dump_cachedir_options(StoreEntry * entry, struct cache_dir_option *options, Swap
     if (!options)
 	return;
     for (option = options; option->name; option++)
-	if (option->dump)
-	    option->dump(entry, option->name, sd);
+	option->dump(entry, option->name, sd);
 }
 
 static void
@@ -1540,7 +1537,7 @@ parse_cachedir_options(SwapDir * sd, struct cache_dir_option *options, int recon
     if (reconfiguring) {
 	if (old_read_only != sd->flags.read_only) {
 	    debug(3, 1) ("Cache dir '%s' now %s\n",
-		sd->path, sd->flags.read_only ? "No-Store" : "Read-Write");
+		sd->path, sd->flags.read_only ? "Read-Only" : "Read-Write");
 	}
     }
 }
@@ -1617,34 +1614,6 @@ dump_peer(StoreEntry * entry, const char *name, peer * p)
     }
 }
 
-static u_short
-GetService(const char *proto)
-{
-    struct servent *port = NULL;
-    char *token = strtok(NULL, w_space);
-    if (token == NULL) {
-	self_destruct();
-	return -1;		/* NEVER REACHED */
-    }
-    port = getservbyname(token, proto);
-    if (port != NULL) {
-	return ntohs((u_short) port->s_port);
-    }
-    return xatos(token);
-}
-
-static u_short
-GetTcpService(void)
-{
-    return GetService("tcp");
-}
-
-static u_short
-GetUdpService(void)
-{
-    return GetService("udp");
-}
-
 static void
 parse_peer(peer ** head)
 {
@@ -1669,10 +1638,10 @@ parse_peer(peer ** head)
 	p->options.no_digest = 1;
 	p->options.no_netdb_exchange = 1;
     }
-    p->http_port = GetTcpService();
+    p->http_port = GetShort();
     if (!p->http_port)
 	self_destruct();
-    p->icp.port = GetUdpService();
+    p->icp.port = GetShort();
     p->connection_auth = -1;	/* auto */
     while ((token = strtok(NULL, w_space))) {
 	if (!strcasecmp(token, "proxy-only")) {
@@ -1683,10 +1652,6 @@ parse_peer(peer ** head)
 	    p->options.no_digest = 1;
 	} else if (!strcasecmp(token, "multicast-responder")) {
 	    p->options.mcast_responder = 1;
-#if PEER_MULTICAST_SIBLINGS
-	} else if (!strcasecmp(token, "multicast-siblings")) {
-	    p->options.mcast_siblings = 1;
-#endif
 	} else if (!strncasecmp(token, "weight=", 7)) {
 	    p->weight = xatoi(token + 7);
 	} else if (!strcasecmp(token, "closest-only")) {
@@ -1818,8 +1783,6 @@ parse_peer(peer ** head)
 	    p->connection_auth = 1;
 	} else if (strcmp(token, "connection-auth=auto") == 0) {
 	    p->connection_auth = -1;
-	} else if (strncmp(token, "idle=", 5) == 0) {
-	    p->idle = xatoi(token + 5);
 	} else {
 	    debug(3, 0) ("parse_peer: token='%s'\n", token);
 	    self_destruct();
@@ -2181,13 +2144,7 @@ dump_refreshpattern(StoreEntry * entry, const char *name, refresh_t * head)
 	    storeAppendPrintf(entry, " ignore-private");
 	if (head->flags.ignore_auth)
 	    storeAppendPrintf(entry, " ignore-auth");
-	if (head->stale_while_revalidate > 0)
-	    storeAppendPrintf(entry, " stale-while-revalidate=%d", head->stale_while_revalidate);
 #endif
-	if (head->max_stale >= 0)
-	    storeAppendPrintf(entry, " max-stale=%d", head->max_stale);
-	if (head->negative_ttl >= 0)
-	    storeAppendPrintf(entry, " negative-ttl=%d", head->negative_ttl);
 	storeAppendPrintf(entry, "\n");
 	head = head->next;
     }
@@ -2210,9 +2167,6 @@ parse_refreshpattern(refresh_t ** head)
     int ignore_private = 0;
     int ignore_auth = 0;
 #endif
-    int stale_while_revalidate = -1;
-    int max_stale = -1;
-    int negative_ttl = -1;
     int i;
     refresh_t *t;
     regex_t comp;
@@ -2257,18 +2211,10 @@ parse_refreshpattern(refresh_t ** head)
 	    ignore_reload = 1;
 	    refresh_nocache_hack = 1;
 	    /* tell client_side.c that this is used */
-	} else if (!strncmp(token, "stale-while-revalidate=", 23)) {
-	    stale_while_revalidate = atoi(token + 23);
 	} else
 #endif
-	if (!strncmp(token, "max-stale=", 10)) {
-	    max_stale = atoi(token + 10);
-	} else if (!strncmp(token, "negative-ttl=", 13)) {
-	    negative_ttl = atoi(token + 13);
-	} else {
 	    debug(22, 0) ("redreshAddToList: Unknown option '%s': %s\n",
 		pattern, token);
-	}
     }
     if ((errcode = regcomp(&comp, pattern, flags)) != 0) {
 	char errbuf[256];
@@ -2305,9 +2251,6 @@ parse_refreshpattern(refresh_t ** head)
     if (ignore_auth)
 	t->flags.ignore_auth = 1;
 #endif
-    t->stale_while_revalidate = stale_while_revalidate;
-    t->max_stale = max_stale;
-    t->negative_ttl = negative_ttl;
     t->next = NULL;
     while (*head)
 	head = &(*head)->next;
@@ -2701,10 +2644,37 @@ static void
 parse_sockaddr_in_list(sockaddr_in_list ** head)
 {
     char *token;
+    char *t;
+    char *host;
+    char *tmp;
+    const struct hostent *hp;
+    unsigned short port = 0;
     sockaddr_in_list *s;
     while ((token = strtok(NULL, w_space))) {
+	host = NULL;
+	port = 0;
+	if ((t = strchr(token, ':'))) {
+	    /* host:port */
+	    host = token;
+	    *t = '\0';
+	    port = xatos(t + 1);
+	    if (0 == port)
+		self_destruct();
+	} else if ((port = strtol(token, &tmp, 10)), !*tmp) {
+	    /* port */
+	} else {
+	    host = token;
+	    port = 0;
+	}
 	s = xcalloc(1, sizeof(*s));
-	if (!parse_sockaddr(token, &s->s))
+	s->s.sin_port = htons(port);
+	if (NULL == host)
+	    s->s.sin_addr = any_addr;
+	else if (1 == safe_inet_addr(host, &s->s.sin_addr))
+	    (void) 0;
+	else if ((hp = gethostbyname(host)))	/* dont use ipcache */
+	    s->s.sin_addr = inaddrFromHostent(hp);
+	else
 	    self_destruct();
 	while (*head)
 	    head = &(*head)->next;
@@ -2808,11 +2778,6 @@ parse_http_port_option(http_port_list * s, char *token)
 	s->tproxy = 1;
 	need_linux_tproxy = 1;
 #endif
-    } else if (strcmp(token, "act-as-origin") == 0) {
-	s->act_as_origin = 1;
-	s->accel = 1;
-    } else if (strcmp(token, "allow-direct") == 0) {
-	s->allow_direct = 1;
     } else {
 	self_destruct();
     }

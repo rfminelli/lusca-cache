@@ -131,8 +131,6 @@ httpCacheNegatively(StoreEntry * entry)
     storeNegativeCache(entry);
     if (EBIT_TEST(entry->flags, ENTRY_CACHABLE))
 	storeSetPublicKey(entry);
-    if (entry->expires <= squid_curtime)
-	storeRelease(entry);
 }
 
 static void
@@ -314,7 +312,7 @@ httpCachableReply(HttpStateData * httpState)
     case HTTP_FORBIDDEN:
     case HTTP_NOT_FOUND:
     case HTTP_METHOD_NOT_ALLOWED:
-    case HTTP_REQUEST_URI_TOO_LONG:
+    case HTTP_REQUEST_URI_TOO_LARGE:
     case HTTP_INTERNAL_SERVER_ERROR:
     case HTTP_NOT_IMPLEMENTED:
     case HTTP_BAD_GATEWAY:
@@ -532,8 +530,6 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	if (strBuf(httpState->orig_request->vary_encoding))
 	    entry->mem_obj->vary_encoding = xstrdup(strBuf(httpState->orig_request->vary_encoding));
     }
-    if (entry->mem_obj->old_entry)
-	EBIT_CLR(entry->mem_obj->old_entry->flags, REFRESH_FAILURE);
     switch (httpCachableReply(httpState)) {
     case 1:
 	httpMakePublic(entry);
@@ -542,7 +538,10 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	httpMakePrivate(entry);
 	break;
     case -1:
-	httpCacheNegatively(entry);
+	if (Config.negativeTtl > 0)
+	    httpCacheNegatively(entry);
+	else
+	    httpMakePrivate(entry);
 	break;
     default:
 	assert(0);
@@ -750,7 +749,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
     if (len > 0) {
 	debug(11, Config.onoff.relaxed_header_parser <= 0 || keep_alive ? 1 : 2)
 	    ("httpReadReply: Excess data from \"%s %s\"\n",
-	    RequestMethods[orig_request->method].str,
+	    RequestMethodStr[orig_request->method],
 	    storeUrl(entry));
 	comm_close(fd);
 	return;
@@ -771,7 +770,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
      */
     if (!httpState->flags.request_sent) {
 	debug(11, 1) ("httpReadReply: Request not yet fully sent \"%s %s\"\n",
-	    RequestMethods[orig_request->method].str,
+	    RequestMethodStr[orig_request->method],
 	    storeUrl(entry));
 	keep_alive = 0;
     }
@@ -807,7 +806,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 	    if (httpState->peer->options.originserver)
 		pconnPush(fd, httpState->peer->name, httpState->peer->http_port, httpState->orig_request->host, client_addr, client_port);
 	    else
-		pconnPush(fd, httpState->peer->name, httpState->peer->http_port, "*", client_addr, client_port);
+		pconnPush(fd, httpState->peer->name, httpState->peer->http_port, NULL, client_addr, client_port);
 	} else {
 	    pconnPush(fd, request->host, request->port, NULL, client_addr, client_port);
 	}
@@ -925,8 +924,9 @@ httpReadReply(int fd, void *data)
 	return;
     } else {
 	if (httpState->reply_hdr_state < 2) {
-	    /* Temporarily buffer the entry. Main purpose is to ensure it gets flushed to the client side
-	     * when the headers is complete as ENTRY_HDR_WAIT may delay the callback. It's flushed by
+	    /* Temporarily buffer the entry. Main purpose is to ensure it gets
+	     * flushed to the client side when the headers is complete as
+	     * ENTRY_HDR_WAIT may delay the callback. It's flushed by
 	     * httpAppendBody().
 	     */
 	    storeBuffer(entry);
@@ -1100,7 +1100,7 @@ httpBuildRequestHeader(request_t * request,
 	     * authentication forwarding is explicitly enabled
 	     */
 	    if (flags.proxying && orig_request->peer_login && strcmp(orig_request->peer_login, "PASS") == 0) {
-		httpHeaderAddClone(hdr_out, e);
+		httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 		if (request->flags.connection_proxy_auth)
 		    request->flags.pinned = 1;
 	    }
@@ -1109,7 +1109,7 @@ httpBuildRequestHeader(request_t * request,
 	    /* Pass on WWW authentication.
 	     */
 	    if (!flags.originpeer) {
-		httpHeaderAddClone(hdr_out, e);
+		httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 		if (orig_request->flags.connection_auth)
 		    orig_request->flags.pinned = 1;
 	    } else {
@@ -1117,7 +1117,7 @@ httpBuildRequestHeader(request_t * request,
 		 * (see also below for proxy->server authentication)
 		 */
 		if (orig_request->peer_login && (strcmp(orig_request->peer_login, "PASS") == 0 || strcmp(orig_request->peer_login, "PROXYPASS") == 0)) {
-		    httpHeaderAddClone(hdr_out, e);
+		    httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 		    if (orig_request->flags.connection_auth)
 			orig_request->flags.pinned = 1;
 		}
@@ -1133,7 +1133,7 @@ httpBuildRequestHeader(request_t * request,
 	    if (orig_request->peer_domain)
 		httpHeaderPutStr(hdr_out, HDR_HOST, orig_request->peer_domain);
 	    else if (request->flags.redirected && !Config.onoff.redir_rewrites_host)
-		httpHeaderAddClone(hdr_out, e);
+		httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 	    else {
 		/* use port# only if not default */
 		if (orig_request->port == urlDefaultPort(orig_request->protocol)) {
@@ -1148,14 +1148,13 @@ httpBuildRequestHeader(request_t * request,
 	    /* append unless we added our own;
 	     * note: at most one client's ims header can pass through */
 	    if (!httpHeaderHas(hdr_out, HDR_IF_MODIFIED_SINCE))
-		if (!Config.onoff.ignore_ims_on_miss || !orig_request->flags.cachable || orig_request->flags.auth)
-		    httpHeaderAddClone(hdr_out, e);
+		httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 	    break;
 	case HDR_IF_NONE_MATCH:
-	    /* append unless ignore_ims_on_miss is in effect */
+	    /* append unless we added our own;
+	     * note: at most one client's ims header can pass through */
 	    if (!httpHeaderHas(hdr_out, HDR_IF_NONE_MATCH))
-		if (!Config.onoff.ignore_ims_on_miss || !orig_request->flags.cachable || orig_request->flags.auth)
-		    httpHeaderAddClone(hdr_out, e);
+		httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 	    break;
 	case HDR_MAX_FORWARDS:
 	    if (orig_request->method == METHOD_TRACE) {
@@ -1167,18 +1166,18 @@ httpBuildRequestHeader(request_t * request,
 	    break;
 	case HDR_X_FORWARDED_FOR:
 	    if (!opt_forwarded_for)
-		httpHeaderAddClone(hdr_out, e);
+		httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 	    break;
 	case HDR_RANGE:
 	case HDR_IF_RANGE:
 	case HDR_REQUEST_RANGE:
 	    if (!we_do_ranges)
-		httpHeaderAddClone(hdr_out, e);
+		httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 	    break;
 	case HDR_VIA:
 	    /* If Via is disabled then forward any received header as-is */
 	    if (!Config.onoff.via)
-		httpHeaderAddClone(hdr_out, e);
+		httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 	    break;
 	case HDR_CONNECTION:
 	case HDR_KEEP_ALIVE:
@@ -1197,11 +1196,11 @@ httpBuildRequestHeader(request_t * request,
 	    break;
 	case HDR_FRONT_END_HTTPS:
 	    if (!flags.front_end_https)
-		httpHeaderAddClone(hdr_out, e);
+		httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 	    break;
 	default:
 	    /* pass on all other header fields */
-	    httpHeaderAddClone(hdr_out, e);
+	    httpHeaderAddEntry(hdr_out, httpHeaderEntryClone(e));
 	}
     }
 
@@ -1364,7 +1363,7 @@ httpBuildRequestPrefix(request_t * request,
 {
     const int offset = mb->size;
     memBufPrintf(mb, "%s %s HTTP/1.0\r\n",
-	RequestMethods[request->method].str,
+	RequestMethodStr[request->method],
 	strLen(request->urlpath) ? strBuf(request->urlpath) : "/");
     /* build and pack headers */
     {
@@ -1452,7 +1451,7 @@ httpStart(FwdState * fwd)
     request_t *proxy_req;
     request_t *orig_req = fwd->request;
     debug(11, 3) ("httpStart: \"%s %s\"\n",
-	RequestMethods[orig_req->method].str,
+	RequestMethodStr[orig_req->method],
 	storeUrl(fwd->entry));
     httpState = cbdataAlloc(HttpStateData);
     storeLockObject(fwd->entry);
@@ -1510,12 +1509,15 @@ static void
 httpSendRequestEntryDone(int fd, void *data)
 {
     HttpStateData *httpState = data;
+    aclCheck_t ch;
     debug(11, 5) ("httpSendRequestEntryDone: FD %d\n",
 	fd);
+    memset(&ch, '\0', sizeof(ch));
+    ch.request = httpState->request;
     if (!Config.accessList.brokenPosts) {
 	debug(11, 5) ("httpSendRequestEntryDone: No brokenPosts list\n");
 	httpSendComplete(fd, NULL, 0, 0, data);
-    } else if (!aclCheckFastRequest(Config.accessList.brokenPosts, httpState->request)) {
+    } else if (!aclCheckFast(Config.accessList.brokenPosts, &ch)) {
 	debug(11, 5) ("httpSendRequestEntryDone: didn't match brokenPosts\n");
 	httpSendComplete(fd, NULL, 0, 0, data);
     } else {

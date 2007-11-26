@@ -363,7 +363,7 @@ storeClientReadBody(void *data, const char *buf, ssize_t len)
     sc->flags.disk_io_pending = 0;
     assert(sc->callback != NULL);
     debug(20, 3) ("storeClientReadBody: len %d\n", (int) len);
-    if (sc->copy_offset == 0 && len > 0 && memHaveHeaders(mem) == 0)
+    if (sc->copy_offset == 0 && len > 0 && mem->reply->sline.status == 0)
 	httpReplyParse(mem->reply, sc->copy_buf, headersEnd(sc->copy_buf, len));
     storeClientCallback(sc, len);
 }
@@ -432,18 +432,6 @@ storeClientReadHeader(void *data, const char *buf, ssize_t len)
 		break;
 	    }
 	    break;
-	case STORE_META_STOREURL:
-	    if (NULL == mem->store_url)
-		mem->store_url = xstrdup(t->value);
-	    else if (0 == strcasecmp(mem->store_url, t->value))
-		(void) 0;	/* a match! */
-	    else {
-		debug(20, 1) ("storeClientReadHeader: store URL mismatch\n");
-		debug(20, 1) ("\t{%s} != {%s}\n", (char *) t->value, mem->store_url);
-		swap_object_ok = 0;
-		break;
-	    }
-	    break;
 	case STORE_META_OBJSIZE:
 	    break;
 	case STORE_META_STD:
@@ -483,7 +471,7 @@ storeClientReadHeader(void *data, const char *buf, ssize_t len)
 	debug(20, 3) ("storeClientReadHeader: copying %d bytes of body\n",
 	    (int) copy_sz);
 	xmemmove(sc->copy_buf, sc->copy_buf + swap_hdr_sz, copy_sz);
-	if (sc->copy_offset == 0 && len > 0 && memHaveHeaders(mem) == 0)
+	if (sc->copy_offset == 0 && len > 0 && mem->reply->sline.status == 0)
 	    httpReplyParse(mem->reply, sc->copy_buf,
 		headersEnd(sc->copy_buf, copy_sz));
 	storeClientCallback(sc, copy_sz);

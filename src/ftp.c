@@ -1849,7 +1849,7 @@ ftpReadPasv(FtpStateData * ftpState)
     safe_free(ftpState->ctrl.last_reply);
     ftpState->ctrl.last_command = xstrdup("Connect to server data port");
     debug(9, 5) ("ftpReadPasv: connecting to %s, port %d\n", ftpState->data.host, ftpState->data.port);
-    commConnectStart(fd, ipaddr, port, ftpPasvCallback, ftpState, NULL);
+    commConnectStart(fd, ipaddr, port, ftpPasvCallback, ftpState);
 }
 
 static void
@@ -2544,6 +2544,7 @@ ftpAppendSuccessHeader(FtpStateData * ftpState)
     const char *t = NULL;
     StoreEntry *e = ftpState->entry;
     http_reply *reply = e->mem_obj->reply;
+    http_version_t version;
 
     if (ftpState->flags.http_header_sent)
 	return;
@@ -2576,11 +2577,15 @@ ftpAppendSuccessHeader(FtpStateData * ftpState)
 	HttpHdrRangeSpec range_spec;
 	range_spec.offset = ftpState->restarted_offset;
 	range_spec.length = ftpState->size - ftpState->restarted_offset;
-	httpReplySetHeaders(reply, HTTP_PARTIAL_CONTENT, "Gatewaying", mime_type, ftpState->size - ftpState->restarted_offset, ftpState->mdtm, -1);
+	httpBuildVersion(&version, 1, 0);
+	httpReplySetHeaders(reply, version, HTTP_PARTIAL_CONTENT, "Gatewaying",
+	    mime_type, ftpState->size - ftpState->restarted_offset, ftpState->mdtm, -2);
 	httpHeaderAddContRange(&reply->header, range_spec, ftpState->size);
     } else {
 	/* Full reply */
-	httpReplySetHeaders(reply, HTTP_OK, "Gatewaying", mime_type, ftpState->size, ftpState->mdtm, -1);
+	httpBuildVersion(&version, 1, 0);
+	httpReplySetHeaders(reply, version, HTTP_OK, "Gatewaying",
+	    mime_type, ftpState->size, ftpState->mdtm, -2);
     }
     /* additional info */
     if (mime_enc)

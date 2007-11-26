@@ -44,8 +44,6 @@ UNLINKDSOURCE =
 UNLINKD = 
 endif
 
-LOGFILED = logfile-daemon
-
 if ENABLE_PINGER
 PINGER = pinger
 else
@@ -112,8 +110,7 @@ sbin_PROGRAMS = \
 libexec_PROGRAMS = \
 	$(PINGER) \
 	$(DNSSERVER) \
-	$(UNLINKD) \
-	$(LOGFILED)
+	$(UNLINKD)
 
 cf_gen_SOURCES = cf_gen.c defines.h debug.c
 nodist_cf_gen_SOURCES = globals.c
@@ -156,8 +153,6 @@ squid_SOURCES = \
 	cbdata.c \
 	client_db.c \
 	client_side.c \
-	client_side_rewrite.c \
-	client_side_storeurl_rewrite.c \
 	comm.c \
 	$(COMMLOOP_SOURCE) \
 	debug.c \
@@ -200,14 +195,6 @@ squid_SOURCES = \
 	$(LEAKFINDERSOURCE) \
 	locrewrite.c \
 	logfile.c \
-	logfile_mod_daemon.c \
-	logfile_mod_daemon.h \
-	logfile_mod_stdio.c \
-	logfile_mod_stdio.h \
-	logfile_mod_syslog.c \
-	logfile_mod_syslog.h \
-	logfile_mod_udp.c \
-	logfile_mod_udp.h \
 	main.c \
 	mem.c \
 	MemPool.c \
@@ -225,10 +212,8 @@ squid_SOURCES = \
 	peer_userhash.c \
 	protos.h \
 	redirect.c \
-	store_rewrite.c \
 	referer.c \
 	refresh.c \
-	refresh_check.c \
 	send-announce.c \
 	$(SNMPSOURCE) \
 	squid.h \
@@ -249,7 +234,6 @@ squid_SOURCES = \
 	store_swapin.c \
 	store_swapmeta.c \
 	store_swapout.c \
-	store_update.c \
 	structs.h \
 	tools.c \
 	typedefs.h \
@@ -257,6 +241,7 @@ squid_SOURCES = \
 	url.c \
 	urn.c \
 	useragent.c \
+	wais.c \
 	wccp.c \
 	wccp2.c \
 	whois.c \
@@ -349,7 +334,6 @@ DEFAULT_SWAP_DIR        = $(localstatedir)/cache
 DEFAULT_PINGER		= $(libexecdir)/`echo pinger | sed '$(transform);s/$$/$(EXEEXT)/'`
 DEFAULT_UNLINKD		= $(libexecdir)/`echo unlinkd | sed '$(transform);s/$$/$(EXEEXT)/'`
 DEFAULT_DISKD		= $(libexecdir)/`echo diskd-daemon | sed '$(transform);s/$$/$(EXEEXT)/'`
-DEFAULT_LOGFILED	= $(libexecdir)/`echo logfile-daemon | sed '$(transform);s/$$/$(EXEEXT)/'`
 DEFAULT_ICON_DIR	= $(datadir)/icons
 DEFAULT_ERROR_DIR	= $(datadir)/errors/@ERR_DEFAULT_LANGUAGE@
 DEFAULT_MIB_PATH	= $(datadir)/mib.txt
@@ -398,7 +382,6 @@ cf.data: cf.data.pre Makefile
 	s%@DEFAULT_UNLINKD@%$(DEFAULT_UNLINKD)%g;\
 	s%@DEFAULT_PINGER@%$(DEFAULT_PINGER)%g;\
 	s%@DEFAULT_DISKD@%$(DEFAULT_DISKD)%g;\
-	s%@DEFAULT_LOGFILED@%$(DEFAULT_LOGFILED)%g;\
 	s%@DEFAULT_CACHE_LOG@%$(DEFAULT_CACHE_LOG)%g;\
 	s%@DEFAULT_ACCESS_LOG@%$(DEFAULT_ACCESS_LOG)%g;\
 	s%@DEFAULT_STORE_LOG@%$(DEFAULT_STORE_LOG)%g;\
