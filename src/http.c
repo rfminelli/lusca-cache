@@ -432,7 +432,7 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	debug(11, 3) ("httpProcessReplyHeader: Non-HTTP-compliant header: '%s'\n", httpState->reply_hdr.buf);
 	httpState->reply_hdr_state += 2;
 	httpState->chunk_size = -1;	/* Terminated by EOF */
-	memBufClean(&httpState->reply_hdr);
+	httpState->reply_hdr.size = old_size;
 	httpBuildVersion(&reply->sline.version, 0, 9);
 	reply->sline.status = HTTP_INVALID_HEADER;
 	ctx_exit(ctx);
@@ -506,8 +506,8 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	stringClean(&tr);
 	if (httpState->flags.chunked && reply->content_length >= 0) {
 	    /* Can't have a content-length in chunked encoding */
-	    reply->sline.status = HTTP_INVALID_HEADER;
-	    return done;
+	    reply->content_length = -1;
+	    httpHeaderDelById(&reply->header, HDR_CONTENT_LENGTH);
 	}
     }
     if (!httpState->flags.chunked) {
@@ -956,6 +956,8 @@ httpReadReply(int fd, void *data)
 		    httpHeaderPutTime(&reply->header, HDR_DATE, squid_curtime);
 		    mb = httpReplyPack(reply);
 		    storeAppend(entry, mb.buf, mb.size);
+		    storeAppend(entry, httpState->reply_hdr.buf, httpState->reply_hdr.size);
+		    memBufClean(&httpState->reply_hdr);
 		    httpReplyReset(reply);
 		    httpReplyParse(reply, mb.buf, mb.size);
 		    memBufClean(&mb);
@@ -1254,10 +1256,10 @@ httpBuildRequestHeader(request_t * request,
 	    /* Special mode, to pass the username to the upstream cache */
 	    char loginbuf[256];
 	    const char *username = "-";
-	    if (orig_request->auth_user_request)
-		username = authenticateUserRequestUsername(orig_request->auth_user_request);
-	    else if (orig_request->extacl_user)
+	    if (orig_request->extacl_user)
 		username = orig_request->extacl_user;
+	    else if (orig_request->auth_user_request)
+		username = authenticateUserRequestUsername(orig_request->auth_user_request);
 	    snprintf(loginbuf, sizeof(loginbuf), "%s%s", username, orig_request->peer_login + 1);
 	    httpHeaderPutStrf(hdr_out, HDR_PROXY_AUTHORIZATION, "Basic %s",
 		base64_encode(loginbuf));
