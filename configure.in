@@ -5,7 +5,7 @@ dnl  $Id$
 dnl
 dnl
 dnl
-AC_INIT(Squid Web Proxy, 2.HEAD-CVS, http://www.squid-cache.org/bugs/, squid)
+AC_INIT(Squid Web Proxy, 2.7.DEVEL0-CVS, http://www.squid-cache.org/bugs/, squid)
 AC_PREREQ(2.52)
 AM_CONFIG_HEADER(include/autoconf.h)
 AC_CONFIG_AUX_DIR(cfgaux)
@@ -709,19 +709,6 @@ AC_ARG_ENABLE(ssl,
     esac
     USE_OPENSSL=1
   fi
-])
-
-USE_SQUID_MD5=0
-AC_ARG_WITH(system-md5,
-[  --without-system-md5    Disable the use of any system provided MD5
-			  Implementation forcing fallback on the internal
-			  implementation shipped with Squid],
-[
-  case "$enableval" in
-  no)
-	AC_DEFINE(USE_SQUID_MD5, 1, [Define this to force use of the internal MD5 implementation])
-	;;
-  esac
 ])
 
 dnl User may specify OpenSSL is needed from a non-standard location
@@ -2121,7 +2108,7 @@ dnl libcrypt (eg FreeBSD)
 AC_CHECK_LIB(crypt, crypt, [CRYPTLIB=" -lcrypt "])
 
 dnl Solaris10 provides MD5 natively through libmd5
-AC_CHECK_LIB(md5, MD5Init)
+AC_CHECK_LIB(md5, MD5Init, [CRYPTLIB+=" -lmd5 "])
 
 AC_SUBST(CRYPTLIB)
 

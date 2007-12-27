@@ -44,6 +44,8 @@ typedef struct {
     request_t *r;
     squid_off_t seen;
     squid_off_t used;
+    size_t buf_sz;
+    char *buf;
 } netdbExchangeState;
 
 static hash_table *addr_table = NULL;
@@ -66,7 +68,7 @@ static QS sortByRtt;
 static QS netdbLRU;
 static FREE netdbFreeNameEntry;
 static FREE netdbFreeNetdbEntry;
-static STNCB netdbExchangeHandleReply;
+static STCB netdbExchangeHandleReply;
 static void netdbExchangeDone(void *);
 #if USE_ICMP
 void netdbDump(StoreEntry * sentry);
@@ -368,13 +370,13 @@ sortPeerByRtt(const void *A, const void *B)
 static void
 netdbSaveState(void *foo)
 {
+    LOCAL_ARRAY(char, path, SQUID_MAXPATHLEN);
     Logfile *lf;
     netdbEntry *n;
     net_db_name *x;
     struct timeval start = current_time;
     int count = 0;
-    if (strcmp(Config.netdbFilename, "none") == 0)
-	return;
+    snprintf(path, SQUID_MAXPATHLEN, "%s/netdb_state", storeSwapDir(0));
     /*
      * This was nicer when we were using stdio, but thanks to
      * Solaris bugs, its a bad idea.  fopen can fail if more than
@@ -384,8 +386,8 @@ netdbSaveState(void *foo)
      * unlink() is here because there is currently no way to make
      * logfileOpen() use O_TRUNC.
      */
-    unlink(Config.netdbFilename);
-    lf = logfileOpen(Config.netdbFilename, 4096, 0);
+    unlink(path);
+    lf = logfileOpen(path, 4096, 0);
     if (NULL == lf) {
 	debug(50, 1) ("netdbSaveState: %s: %s\n", path, xstrerror());
 	return;
@@ -418,6 +420,7 @@ netdbSaveState(void *foo)
 static void
 netdbReloadState(void)
 {
+    LOCAL_ARRAY(char, path, SQUID_MAXPATHLEN);
     char *buf;
     char *t;
     char *s;
@@ -429,16 +432,13 @@ netdbReloadState(void)
     struct in_addr addr;
     int count = 0;
     struct timeval start = current_time;
-
-    if (strcmp(Config.netdbFilename, "none") == 0)
-	return;
-
+    snprintf(path, SQUID_MAXPATHLEN, "%s/netdb_state", storeSwapDir(0));
     /*
      * This was nicer when we were using stdio, but thanks to
      * Solaris bugs, its a bad idea.  fopen can fail if more than
      * 256 FDs are open.
      */
-    fd = file_open(Config.netdbFilename, O_RDONLY | O_BINARY);
+    fd = file_open(path, O_RDONLY | O_BINARY);
     if (fd < 0)
 	return;
     if (fstat(fd, &sb) < 0) {
@@ -530,22 +530,19 @@ netdbFreeNameEntry(void *data)
 }
 
 static void
-netdbExchangeHandleReply(void *data, mem_node_ref nr, ssize_t size)
+netdbExchangeHandleReply(void *data, char *buf, ssize_t size)
 {
-    const char *buf = nr.node->data + nr.offset;
     netdbExchangeState *ex = data;
     int rec_sz = 0;
     ssize_t o;
     struct in_addr addr;
     double rtt;
     double hops;
-    const char *p;
+    char *p;
     int j;
     HttpReply *rep;
     size_t hdr_sz;
     int nused = 0;
-    assert(size <= nr.node->len - nr.offset);
-
     rec_sz = 0;
     rec_sz += 1 + sizeof(addr.s_addr);
     rec_sz += 1 + sizeof(int);
@@ -555,7 +552,7 @@ netdbExchangeHandleReply(void *data, mem_node_ref nr, ssize_t size)
     if (!cbdataValid(ex->p)) {
 	debug(38, 3) ("netdbExchangeHandleReply: Peer became invalid\n");
 	netdbExchangeDone(ex);
-	goto finish;
+	return;
     }
     debug(38, 3) ("netdbExchangeHandleReply: for '%s:%d'\n", ex->p->host, ex->p->http_port);
     p = buf;
@@ -570,17 +567,17 @@ netdbExchangeHandleReply(void *data, mem_node_ref nr, ssize_t size)
 		rep->sline.status);
 	    if (HTTP_OK != rep->sline.status) {
 		netdbExchangeDone(ex);
-		goto finish;
+		return;
 	    }
 	    assert(size >= hdr_sz);
 	    ex->used += hdr_sz;
 	    size -= hdr_sz;
 	    p += hdr_sz;
 	} else {
-	    if (size >= SM_PAGE_SIZE) {
+	    if (size >= ex->buf_sz) {
 		debug(38, 3) ("netdbExchangeHandleReply: Too big HTTP header, aborting\n");
 		netdbExchangeDone(ex);
-		goto finish;
+		return;
 	    } else {
 		size = 0;
 	    }
@@ -615,7 +612,7 @@ netdbExchangeHandleReply(void *data, mem_node_ref nr, ssize_t size)
 	    default:
 		debug(38, 1) ("netdbExchangeHandleReply: corrupt data, aborting\n");
 		netdbExchangeDone(ex);
-		goto finish;
+		return;
 	    }
 	}
 	if (addr.s_addr != any_addr.s_addr && rtt > 0)
@@ -639,19 +636,16 @@ netdbExchangeHandleReply(void *data, mem_node_ref nr, ssize_t size)
 	netdbExchangeDone(ex);
     } else if (ex->e->store_status == STORE_PENDING) {
 	debug(38, 3) ("netdbExchangeHandleReply: STORE_PENDING\n");
-	storeClientRef(ex->sc, ex->e, ex->seen, ex->used, SM_PAGE_SIZE,
-	    netdbExchangeHandleReply, ex);
+	storeClientCopy(ex->sc, ex->e, ex->seen, ex->used, ex->buf_sz,
+	    ex->buf, netdbExchangeHandleReply, ex);
     } else if (ex->seen < ex->e->mem_obj->inmem_hi) {
 	debug(38, 3) ("netdbExchangeHandleReply: ex->e->mem_obj->inmem_hi\n");
-	storeClientRef(ex->sc, ex->e, ex->seen, ex->used, SM_PAGE_SIZE,
-	    netdbExchangeHandleReply, ex);
+	storeClientCopy(ex->sc, ex->e, ex->seen, ex->used, ex->buf_sz,
+	    ex->buf, netdbExchangeHandleReply, ex);
     } else {
 	debug(38, 3) ("netdbExchangeHandleReply: Done\n");
 	netdbExchangeDone(ex);
     }
-  finish:
-    buf = NULL;
-    stmemNodeUnref(&nr);
 }
 
 static void
@@ -659,6 +653,7 @@ netdbExchangeDone(void *data)
 {
     netdbExchangeState *ex = data;
     debug(38, 3) ("netdbExchangeDone: %s\n", storeUrl(ex->e));
+    memFree(ex->buf, MEM_4K_BUF);
     requestUnlink(ex->r);
     storeClientUnregister(ex->sc, ex->e, ex);
     storeUnlockObject(ex->e);
@@ -1002,10 +997,12 @@ netdbExchangeStart(void *data)
     assert(NULL != ex->r);
     httpBuildVersion(&ex->r->http_ver, 1, 0);
     ex->e = storeCreateEntry(uri, null_request_flags, METHOD_GET);
+    ex->buf_sz = 4096;
+    ex->buf = memAllocate(MEM_4K_BUF);
     assert(NULL != ex->e);
     ex->sc = storeClientRegister(ex->e, ex);
-    storeClientRef(ex->sc, ex->e, ex->seen, ex->used, SM_PAGE_SIZE,
-	netdbExchangeHandleReply, ex);
+    storeClientCopy(ex->sc, ex->e, ex->seen, ex->used, ex->buf_sz,
+	ex->buf, netdbExchangeHandleReply, ex);
     ex->r->flags.loopdetect = 1;	/* cheat! -- force direct */
     if (p->login)
 	xstrncpy(ex->r->login, p->login, MAX_LOGIN_SZ);

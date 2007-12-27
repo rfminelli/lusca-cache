@@ -101,11 +101,11 @@ unsigned int
 url_checksum(const char *url)
 {
     unsigned int ck;
-    SQUID_MD5_CTX M;
+    MD5_CTX M;
     static unsigned char digest[16];
-    SQUID_MD5Init(&M);
-    SQUID_MD5Update(&M, (unsigned char *) url, strlen(url));
-    SQUID_MD5Final(digest, &M);
+    MD5Init(&M);
+    MD5Update(&M, (unsigned char *) url, strlen(url));
+    MD5Final(digest, &M);
     xmemcpy(&ck, digest, sizeof(ck));
     return ck;
 }
@@ -561,31 +561,23 @@ strncmpnull(const char *a, const char *b, size_t n)
 }
 
 static void
-storeAddVaryReadOld(void *data, mem_node_ref nr, ssize_t size)
+storeAddVaryReadOld(void *data, char *buf, ssize_t size)
 {
     AddVaryState *state = data;
     size_t l = size + state->buf_offset;
     char *e;
     char *p = state->buf;
-    const char *buf = nr.node->data + nr.offset;
-
     debug(11, 3) ("storeAddVaryReadOld: %p seen_offset=%" PRINTF_OFF_T " buf_offset=%d size=%d\n", data, state->seen_offset, (int) state->buf_offset, (int) size);
     if (size <= 0) {
 	debug(11, 2) ("storeAddVaryReadOld: DONE\n");
 	/* Call back to the destructor free_AddVaryState */
 	cbdataFree(state);
-	goto finish;
+	return;
     }
-    assert(size <= nr.node->len);
-    /* size should never exceed what we asked for; just make sure first */
-    assert(size + state->buf_offset <= state->buf_size);
-    /* Copy in the data before we do anything else */
-    memcpy(state->buf + state->buf_offset, nr.node->data + nr.offset, size);
-
     if (EBIT_TEST(state->e->flags, ENTRY_ABORTED)) {
 	debug(11, 1) ("storeAddVaryReadOld: New index aborted at %d (%d)\n", (int) state->seen_offset, (int) size);
 	cbdataFree(state);
-	goto finish;
+	return;
     }
     storeBuffer(state->e);
     if (state->seen_offset != 0) {
@@ -600,7 +592,7 @@ storeAddVaryReadOld(void *data, mem_node_ref nr, ssize_t size)
 	  invalid_marker_obj:
 	    debug(11, 2) ("storeAddVaryReadOld: %p (%s) is not a Vary maker object, ignoring\n", data, storeUrl(state->oe));
 	    cbdataFree(state);
-	    goto finish;
+	    return;
 	}
 	hdr_sz = state->oe->mem_obj->reply->hdr_sz;
 	state->seen_offset = hdr_sz;
@@ -692,7 +684,7 @@ storeAddVaryReadOld(void *data, mem_node_ref nr, ssize_t size)
 	p = e;
 	if (l == 0)
 	    break;
-	assert(p <= (state->buf + size));
+	assert(p <= (buf + size));
     }
     state->buf_offset = l;
     if (l && p != state->buf)
@@ -706,20 +698,18 @@ storeAddVaryReadOld(void *data, mem_node_ref nr, ssize_t size)
 	    /* This does not look good. Bail out. This should match the size <= 0 case above */
 	    debug(11, 1) ("storeAddVaryReadOld: Buffer very large and still can't fit the data.. bailing out\n");
 	    cbdataFree(state);
-	    goto finish;
+	    return;
 	}
     }
     debug(11, 3) ("storeAddVaryReadOld: %p seen_offset=%" PRINTF_OFF_T " buf_offset=%d\n", data, state->seen_offset, (int) state->buf_offset);
     storeBufferFlush(state->e);
-    storeClientRef(state->sc, state->oe,
+    storeClientCopy(state->sc, state->oe,
 	state->seen_offset,
 	state->seen_offset,
 	state->buf_size - state->buf_offset,
+	state->buf + state->buf_offset,
 	storeAddVaryReadOld,
 	state);
-  finish:
-    stmemNodeUnref(&nr);
-    buf = NULL;
 }
 
 /*
@@ -786,8 +776,9 @@ storeAddVary(const char *url, const method_t method, const cache_key * key, cons
 	state->sc = storeClientRegister(state->oe, state);
 	state->buf = memAllocBuf(4096, &state->buf_size);
 	debug(11, 3) ("storeAddVary: %p\n", state);
-	storeClientRef(state->sc, state->oe, 0, 0,
+	storeClientCopy(state->sc, state->oe, 0, 0,
 	    state->buf_size,
+	    state->buf,
 	    storeAddVaryReadOld,
 	    state);
     } else {
@@ -872,24 +863,17 @@ storeLocateVaryCallback(LocateVaryState * state)
 }
 
 static void
-storeLocateVaryRead(void *data, mem_node_ref nr, ssize_t size)
+storeLocateVaryRead(void *data, char *buf, ssize_t size)
 {
     LocateVaryState *state = data;
     char *e;
     char *p = state->buf;
     size_t l = size + state->buf_offset;
-    const char *buf = nr.node->data;
     debug(11, 3) ("storeLocateVaryRead: %s %p seen_offset=%" PRINTF_OFF_T " buf_offset=%d size=%d\n", state->vary_data, data, state->seen_offset, (int) state->buf_offset, (int) size);
     if (size <= 0) {
 	storeLocateVaryCallback(state);
-	goto finish;
+	return;
     }
-    assert(size <= nr.node->len);
-    /* size should never exceed what we asked for; just make sure first */
-    assert(size + state->buf_offset <= state->buf_size);
-    /* Copy in the data before we do anything else */
-    memcpy(state->buf + state->buf_offset, nr.node->data + nr.offset, size);
-
     state->seen_offset = state->seen_offset + size;
     while ((e = memchr(p, '\n', l)) != NULL) {
 	int l2;
@@ -953,7 +937,7 @@ storeLocateVaryRead(void *data, mem_node_ref nr, ssize_t size)
 	if (l == 0)
 	    break;
 	assert(l > 0);
-	assert(p < (state->buf + size));
+	assert(p < (buf + size));
     }
     state->buf_offset = l;
     if (l)
@@ -967,19 +951,17 @@ storeLocateVaryRead(void *data, mem_node_ref nr, ssize_t size)
 	    /* This does not look good. Bail out. This should match the size <= 0 case above */
 	    debug(11, 1) ("storeLocateVaryRead: Buffer very large and still can't fit the data.. bailing out\n");
 	    storeLocateVaryCallback(state);
-	    goto finish;
+	    return;
 	}
     }
     debug(11, 3) ("storeLocateVaryRead: %p seen_offset=%" PRINTF_OFF_T " buf_offset=%d\n", data, state->seen_offset, (int) state->buf_offset);
-    storeClientRef(state->sc, state->e,
+    storeClientCopy(state->sc, state->e,
 	state->seen_offset,
 	state->seen_offset,
 	state->buf_size - state->buf_offset,
+	state->buf + state->buf_offset,
 	storeLocateVaryRead,
 	state);
-  finish:
-    stmemNodeUnref(&nr);
-    buf = 0;
 }
 
 void
@@ -1010,10 +992,11 @@ storeLocateVary(StoreEntry * e, int offset, const char *vary_data, String accept
 	storeLocateVaryCallback(state);
 	return;
     }
-    storeClientRef(state->sc, state->e,
+    storeClientCopy(state->sc, state->e,
 	state->seen_offset,
 	state->seen_offset,
 	state->buf_size,
+	state->buf,
 	storeLocateVaryRead,
 	state);
 }

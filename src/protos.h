@@ -912,13 +912,6 @@ extern void stmemFree(mem_hdr *);
 extern void stmemFreeData(mem_hdr *);
 extern void stmemNodeFree(void *);
 extern char *stmemNodeGet(mem_node *);
-extern int stmemRef(const mem_hdr * mem, squid_off_t offset, mem_node_ref * r);
-extern void stmemNodeUnref(mem_node_ref * r);
-extern mem_node_ref stmemNodeRef(mem_node_ref * r);
-extern void stmemNodeRefCreate(mem_node_ref * r);
-
-
-
 
 /* ----------------------------------------------------------------- */
 
@@ -1107,7 +1100,7 @@ extern squid_off_t storeSwapOutObjectBytesOnDisk(const MemObject * mem);
  * store_client.c
  */
 extern store_client *storeClientRegister(StoreEntry * e, void *data);
-extern void storeClientRef(store_client *, StoreEntry *, squid_off_t, squid_off_t, size_t, STNCB *, void *);
+extern void storeClientCopy(store_client *, StoreEntry *, squid_off_t, squid_off_t, size_t, char *, STCB *, void *);
 extern void storeClientCopyHeaders(store_client *, StoreEntry *, STHCB *, void *);
 extern int storeClientCopyPending(store_client *, StoreEntry * e, void *data);
 extern int storeClientUnregister(store_client * sc, StoreEntry * e, void *data);
@@ -1413,9 +1406,6 @@ extern int WIN32_pipe(int[2]);
 extern int WIN32_getrusage(int, struct rusage *);
 extern void WIN32_ExceptionHandlerInit(void);
 extern int SquidMain(int, char **);
-#ifdef _SQUID_MSWIN_
-extern DWORD WIN32_IpAddrChangeMonitorInit();
-#endif
 #endif
 
 /* external_acl.c */

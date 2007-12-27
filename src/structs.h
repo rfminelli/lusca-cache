@@ -580,7 +580,6 @@ struct _SquidConfig {
     int appendDomainLen;
     char *debugOptions;
     char *pidFilename;
-    char *netdbFilename;
     char *mimeTablePathname;
     char *etcHostsPath;
     char *visibleHostname;
@@ -1258,7 +1257,6 @@ struct _clientHttpRequest {
     } redirect;
     dlink_node active;
     squid_off_t maxBodySize;
-    mem_node_ref nr;
     STHCB *header_callback;	/* Temporarily here for storeClientCopyHeaders */
     StoreEntry *header_entry;	/* Temporarily here for storeClientCopyHeaders */
     int is_modified;
@@ -1663,8 +1661,8 @@ struct _store_client {
     squid_off_t copy_offset;
     squid_off_t seen_offset;
     size_t copy_size;
-    mem_node_ref node_ref;
-    STNCB *new_callback;
+    char *copy_buf;
+    STCB *callback;
     void *callback_data;
     StoreEntry *entry;		/* ptr to the parent StoreEntry, argh! */
     storeIOState *swapin_sio;
@@ -2194,7 +2192,7 @@ struct _storeSwapLogData {
     squid_file_sz swap_file_sz;
     u_short refcount;
     u_short flags;
-    unsigned char key[SQUID_MD5_DIGEST_LENGTH];
+    unsigned char key[MD5_DIGEST_CHARS];
 };
 
 struct _storeSwapLogHeader {
@@ -2214,7 +2212,7 @@ struct _storeSwapLogDataOld {
     size_t swap_file_sz;
     u_short refcount;
     u_short flags;
-    unsigned char key[SQUID_MD5_DIGEST_LENGTH];
+    unsigned char key[MD5_DIGEST_CHARS];
 };
 
 #endif

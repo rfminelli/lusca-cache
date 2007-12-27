@@ -81,6 +81,7 @@ typedef struct {
     store_client *sc;
     ERRMAPCB *callback;
     void *callback_data;
+    char *buf;
 } ErrorMapState;
 
 CBDATA_TYPE(ErrorMapState);
@@ -94,6 +95,7 @@ errorMapFetchComplete(ErrorMapState * state)
     state->e = NULL;
     requestUnlink(state->req);
     state->req = NULL;
+    memFree(state->buf, MEM_4K_BUF);
     cbdataUnlock(state->callback_data);
     state->callback_data = NULL;
     cbdataFree(state);
@@ -108,11 +110,10 @@ errorMapFetchAbort(ErrorMapState * state)
 }
 
 static void
-errorMapFetchHeaders(void *data, mem_node_ref nr, ssize_t size)
+errorMapFetchHeaders(void *data, char *buf, ssize_t size)
 {
     ErrorMapState *state = data;
     size_t hdr_size;
-    const char *buf = NULL;
 
     if (EBIT_TEST(state->e->flags, ENTRY_ABORTED))
 	goto abort;
@@ -120,8 +121,6 @@ errorMapFetchHeaders(void *data, mem_node_ref nr, ssize_t size)
 	goto abort;
     if (!cbdataValid(state->callback_data))
 	goto abort;
-
-    buf = nr.node->data + nr.offset;
 
     if ((hdr_size = headersEnd(buf, size))) {
 	http_status status;
@@ -141,13 +140,11 @@ errorMapFetchHeaders(void *data, mem_node_ref nr, ssize_t size)
 	goto abort;
     }
     /* Need more data */
-    storeClientRef(state->sc, state->e, size, 0, SM_PAGE_SIZE, errorMapFetchHeaders, state);
+    storeClientCopy(state->sc, state->e, size, 0, 4096, state->buf, errorMapFetchHeaders, state);
   done:
-    stmemNodeUnref(&nr);
     return;
   abort:
     errorMapFetchAbort(state);
-    stmemNodeUnref(&nr);
     return;
 }
 
@@ -207,8 +204,9 @@ errorMapStart(const errormap * map, request_t * client_req, HttpReply * reply, c
     httpHeaderPutInt(&req->header, HDR_X_ERROR_STATUS, (int) reply->sline.status);
     httpHeaderPutStr(&req->header, HDR_X_REQUEST_URI, urlCanonical(client_req));
 
+    state->buf = memAllocate(MEM_4K_BUF);
     fwdStart(-1, state->e, req);
-    storeClientRef(state->sc, state->e, 0, 0, SM_PAGE_SIZE, errorMapFetchHeaders, state);
+    storeClientCopy(state->sc, state->e, 0, 0, 4096, state->buf, errorMapFetchHeaders, state);
     return 1;
 }
 
