@@ -33,7 +33,6 @@ EXTRA_DIST = \
 	include/crypt.h \
 	include/getopt.h \
 	include/Readdir.h \
-	ip_user_check/ip_user_check.dsp \
 	LDAP_auth/LDAP_auth.dsp \
 	LDAP_group/LDAP_group.dsp \
 	libaufs/libaufs.dsp \
