@@ -494,6 +494,9 @@
 /* Define to 1 if you have the <sys/bitypes.h> header file. */
 /* #undef HAVE_SYS_BITYPES_H */
 
+/* Define to 1 if you have the <sys/capability.h> header file. */
+/* #undef HAVE_SYS_CAPABILITY_H */
+
 /* Define to 1 if you have the <sys/dir.h> header file, and it defines `DIR'.
    */
 /* #undef HAVE_SYS_DIR_H */
@@ -506,6 +509,9 @@
 
 /* Define to 1 if you have the <sys/ioctl.h> header file. */
 /* #undef HAVE_SYS_IOCTL_H */
+
+/* Define to 1 if you have the <sys/md5.h> header file. */
+/* #undef HAVE_SYS_MD5_H */
 
 /* Define to 1 if you have the <sys/mount.h> header file. */
 /* #undef HAVE_SYS_MOUNT_H */
@@ -534,6 +540,9 @@
 
 /* Define to 1 if you have the <sys/socket.h> header file. */
 /* #undef HAVE_SYS_SOCKET_H */
+
+/* Define to 1 if you have the <sys/statfs.h> header file. */
+/* #undef HAVE_SYS_STATFS_H */
 
 /* Define to 1 if you have the <sys/statvfs.h> header file. */
 /* #undef HAVE_SYS_STATVFS_H */
@@ -739,7 +748,7 @@
 
 /* Define this if you would like to use the aufs I/O method for disk I/O
    instead of the POSIX AIO method. */
-#define USE_AUFSOPS 0
+#define USE_AUFSOPS 1
 
 /* Use Cache Digests for locating objects in neighbor caches. This code is
    still semi-experimental. */
