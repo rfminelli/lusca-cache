@@ -265,7 +265,6 @@ EXTRA_DIST = \
 	include/crypt.h \
 	include/getopt.h \
 	include/Readdir.h \
-	ip_user_check/ip_user_check.dsp \
 	LDAP_auth/LDAP_auth.dsp \
 	LDAP_group/LDAP_group.dsp \
 	libaufs/libaufs.dsp \
@@ -344,7 +343,7 @@ CTAGS:
 
 
 distdir: $(DISTFILES)
-	$(mkdir_p) $(distdir)/LDAP_auth $(distdir)/LDAP_group $(distdir)/NCSA_auth $(distdir)/cachemgr $(distdir)/cf_gen $(distdir)/digest_edir_auth $(distdir)/digest_ldap_auth $(distdir)/digest_pw_auth $(distdir)/dnsserver $(distdir)/fake_auth $(distdir)/include $(distdir)/ip_user_check $(distdir)/libaufs $(distdir)/libbasic $(distdir)/libcoss $(distdir)/libdigest $(distdir)/libgnuregex $(distdir)/libheap $(distdir)/liblru $(distdir)/libmiscutil $(distdir)/libnegotiate $(distdir)/libntlm $(distdir)/libntlmauth $(distdir)/libnull $(distdir)/libsnmp $(distdir)/libsspwin32 $(distdir)/libufs $(distdir)/logfiled $(distdir)/negotiate_auth $(distdir)/nt_auth $(distdir)/ntlm_win32_auth $(distdir)/pinger $(distdir)/squid $(distdir)/squidclient $(distdir)/src $(distdir)/unlinkd $(distdir)/win32_check_group
+	$(mkdir_p) $(distdir)/LDAP_auth $(distdir)/LDAP_group $(distdir)/NCSA_auth $(distdir)/cachemgr $(distdir)/cf_gen $(distdir)/digest_edir_auth $(distdir)/digest_ldap_auth $(distdir)/digest_pw_auth $(distdir)/dnsserver $(distdir)/fake_auth $(distdir)/include $(distdir)/libaufs $(distdir)/libbasic $(distdir)/libcoss $(distdir)/libdigest $(distdir)/libgnuregex $(distdir)/libheap $(distdir)/liblru $(distdir)/libmiscutil $(distdir)/libnegotiate $(distdir)/libntlm $(distdir)/libntlmauth $(distdir)/libnull $(distdir)/libsnmp $(distdir)/libsspwin32 $(distdir)/libufs $(distdir)/logfiled $(distdir)/negotiate_auth $(distdir)/nt_auth $(distdir)/ntlm_win32_auth $(distdir)/pinger $(distdir)/squid $(distdir)/squidclient $(distdir)/src $(distdir)/unlinkd $(distdir)/win32_check_group
 	@srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`; \
 	topsrcdirstrip=`echo "$(top_srcdir)" | sed 's|.|.|g'`; \
 	list='$(DISTFILES)'; for file in $$list; do \
