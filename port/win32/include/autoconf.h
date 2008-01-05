@@ -207,6 +207,12 @@
 /* Define to 1 if you have the `malloc' library (-lmalloc). */
 /* #undef HAVE_LIBMALLOC */
 
+/* Define to 1 if you have the `md' library (-lmd). */
+/* #undef HAVE_LIBMD */
+
+/* Define to 1 if you have the `md5' library (-lmd5). */
+/* #undef HAVE_LIBMD5 */
+
 /* Define to 1 if you have the `nsl' library (-lnsl). */
 /* #undef HAVE_LIBNSL */
 
@@ -246,6 +252,12 @@
 
 /* Define to 1 if you have the <math.h> header file. */
 #define HAVE_MATH_H 1
+
+/* Define to 1 if you have the `MD5Init' function. */
+/* #undef HAVE_MD5INIT */
+
+/* Define to 1 if you have the <md5.h> header file. */
+/* #undef HAVE_MD5_H */
 
 /* Define to 1 if you have the `memcpy' function. */
 #define HAVE_MEMCPY 1
@@ -646,67 +658,67 @@
 /* Print stacktraces on fatal errors */
 /* #undef PRINT_STACK_TRACE */
 
-/* The size of a `char', as computed by sizeof. */
+/* The size of `char', as computed by sizeof. */
 #define SIZEOF_CHAR 1
 
-/* The size of a `int', as computed by sizeof. */
+/* The size of `int', as computed by sizeof. */
 #define SIZEOF_INT 4
 
-/* Size of SIZEOF_INT16_T */
+/* The size of `int16_t', as computed by sizeof. */
 #define SIZEOF_INT16_T 0
 
-/* Size of SIZEOF_INT32_T */
+/* The size of `int32_t', as computed by sizeof. */
 #define SIZEOF_INT32_T 0
 
-/* Size of SIZEOF_INT64_T */
+/* The size of `int64_t', as computed by sizeof. */
 #define SIZEOF_INT64_T 0
 
-/* Size of SIZEOF_INT8_T */
+/* The size of `int8_t', as computed by sizeof. */
 #define SIZEOF_INT8_T 0
 
-/* The size of a `long', as computed by sizeof. */
+/* The size of `long', as computed by sizeof. */
 #define SIZEOF_LONG 4
 
-/* The size of a `long long', as computed by sizeof. */
+/* The size of `long long', as computed by sizeof. */
 #define SIZEOF_LONG_LONG 0
 
-/* Size of SIZEOF_OFF_T */
+/* The size of `off_t', as computed by sizeof. */
 #define SIZEOF_OFF_T 4
 
-/* The size of a `short', as computed by sizeof. */
+/* The size of `short', as computed by sizeof. */
 #define SIZEOF_SHORT 2
 
-/* Size of SIZEOF_SIZE_T */
+/* The size of `size_t', as computed by sizeof. */
 #define SIZEOF_SIZE_T 4
 
-/* Size of SIZEOF_UINT16_T */
+/* The size of `uint16_t', as computed by sizeof. */
 #define SIZEOF_UINT16_T 0
 
-/* Size of SIZEOF_UINT32_T */
+/* The size of `uint32_t', as computed by sizeof. */
 #define SIZEOF_UINT32_T 0
 
-/* Size of SIZEOF_UINT64_T */
+/* The size of `uint64_t', as computed by sizeof. */
 #define SIZEOF_UINT64_T 0
 
-/* Size of SIZEOF_UINT8_T */
+/* The size of `uint8_t', as computed by sizeof. */
 #define SIZEOF_UINT8_T 0
 
-/* Size of SIZEOF_U_INT16_T */
+/* The size of `u_int16_t', as computed by sizeof. */
 #define SIZEOF_U_INT16_T 0
 
-/* Size of SIZEOF_U_INT32_T */
+/* The size of `u_int32_t', as computed by sizeof. */
 #define SIZEOF_U_INT32_T 0
 
-/* Size of SIZEOF_U_INT64_T */
+/* The size of `u_int64_t', as computed by sizeof. */
 #define SIZEOF_U_INT64_T 0
 
-/* Size of SIZEOF_U_INT8_T */
+/* The size of `u_int8_t', as computed by sizeof. */
 #define SIZEOF_U_INT8_T 0
 
-/* The size of a `void *', as computed by sizeof. */
+/* The size of `void *', as computed by sizeof. */
 #define SIZEOF_VOID_P 4
 
-/* Size of SIZEOF___INT64 */
+/* The size of `__int64', as computed by sizeof. */
 #define SIZEOF___INT64 8
 
 /* Maximum number of open filedescriptors */
@@ -729,7 +741,7 @@
 
 /* If using the C implementation of alloca, define if you know the
    direction of stack growth for your system; otherwise it will be
-   automatically deduced at run-time.
+   automatically deduced at runtime.
 	STACK_DIRECTION > 0 => grows toward higher addresses
 	STACK_DIRECTION < 0 => grows toward lower addresses
 	STACK_DIRECTION = 0 => direction of growth unknown */
@@ -790,6 +802,9 @@
    they are written to referer.log in the Squid log directory. */
 #define USE_REFERER_LOG 1
 
+/* Define this to force use of the internal MD5 implementation */
+/* #undef USE_SQUID_MD5 */
+
 /* Define this to include code for SSL encryption. */
 /* #undef USE_SSL */
 
@@ -832,7 +847,7 @@
 /* Define to empty if `const' does not conform to ANSI C. */
 /* #undef const */
 
-/* Have int datatype */
+/* Define to 'int' if not defined */
 #define fd_mask int
 
 /* Define to `__inline__' or `__inline' if that's what the C compiler
@@ -841,31 +856,31 @@
 #define inline __inline
 #endif
 
-/* Have int datatype */
+/* Define to 'int' if not defined */
 #define int16_t short
 
-/* Have long datatype */
+/* Define to 'long' if not defined */
 #define int32_t int
 
-/* Have __int64 datatype */
+/* Define to '__int64' if not defined */
 #define int64_t  __int64
 
-/* Have char datatype */
+/* Define to 'char' if not defined */
 #define int8_t char
 
-/* Have unsigned short datatype */
+/* Define to 'unsigned short' if not defined */
 /* #undef mode_t */
 
 /* message type for message queues */
 #define mtyp_t long
 
-/* Have int datatype */
+/* Define to 'int' if not defined */
 /* #undef off_t */
 
-/* Have int datatype */
+/* Define to 'int' if not defined */
 #define pid_t int
 
-/* Have unsigned int datatype */
+/* Define to 'unsigned int' if not defined */
 /* #undef size_t */
 
 /* This makes warnings go away. If you have socklen_t defined in your
@@ -873,31 +888,31 @@
    defined to int. */
 #define socklen_t int
 
-/* Have int datatype */
+/* Define to 'int' if not defined */
 /* #undef ssize_t */
 
-/* Have unsigned int datatype */
+/* Define to 'unsigned int' if not defined */
 #define u_int16_t unsigned short
 
-/* Have unsigned long datatype */
+/* Define to 'unsigned long' if not defined */
 #define u_int32_t unsigned int
 
-/* Have unsigned __int64 datatype */
+/* Define to 'unsigned __int64' if not defined */
 #define u_int64_t unsigned __int64
 
-/* Have unsigned char datatype */
+/* Define to 'unsigned char' if not defined */
 #define u_int8_t unsigned char
 
-/* Have unsigned int datatype */
+/* Define to 'unsigned int' if not defined */
 #define uint16_t unsigned short
 
-/* Have unsigned long datatype */
+/* Define to 'unsigned long' if not defined */
 #define uint32_t unsigned int 
 
-/* Have unsigned __int64 datatype */
+/* Define to 'unsigned __int64' if not defined */
 #define uint64_t unsigned __int64
 
-/* Have unsigned char datatype */
+/* Define to 'unsigned char' if not defined */
 #define uint8_t  unsigned char
 
 #if DELAY_POOLS
@@ -926,12 +941,12 @@
 #define STR_USE_ARP_ACL ""
 #endif
 
-#define SQUID_CONFIGURE_OPTIONS "--enable-win32-service --enable-storeio='ufs aufs null coss' " \
+#define SQUID_CONFIGURE_OPTIONS "--enable-win32-service --enable-storeio='ufs aufs null coss' --enable-default-hostsfile=none " \
     "--enable-removal-policies='heap lru' --enable-snmp --enable-htcp --disable-wccp --disable-wccpv2 --enable-useragent-log " \
     "--enable-referer-log --enable-cache-digests --enable-auth='basic ntlm digest negotiate' --enable-coss-aio-ops " \
-    "--enable-basic-auth-helpers='LDAP NCSA mswin_sspi' --enable-negotiate-auth-helpers=mswin_sspi" \
+    "--enable-basic-auth-helpers='LDAP NCSA mswin_sspi' --enable-negotiate-auth-helpers=mswin_sspi " \
     "--enable-ntlm-auth-helpers='mswin_sspi fakeauth' --enable-external-acl-helpers='mswin_lm_group ldap_group' " \
-    "--enable-large-cache-files --enable-digest-auth-helpers='password LDAP'" \
+    "--enable-large-cache-files --enable-digest-auth-helpers='password LDAP eDirectory' --enable-forw-via-db --enable-follow-x-forwarded-for " \
     STR_DELAY_POOLS \
     STR_USE_ICMP \
     STR_USE_DNSSERVERS \
