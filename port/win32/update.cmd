@@ -21,12 +21,12 @@ copy %0\..\nt_auth\%1\nt_auth.exe %2\libexec\mswin_auth.exe
 copy %0\..\ncsa_auth\%1\ncsa_auth.exe %2\libexec\ncsa_auth.exe
 copy %0\..\digest_ldap_auth\%1\digest_ldap_auth.exe %2\libexec\digest_ldap_auth.exe
 copy %0\..\digest_pw_auth\%1\digest_pw_auth.exe %2\libexec\digest_pw_auth.exe
+copy %0\..\digest_edir_auth\%1\digest_edir_auth.exe %2\libexec\digest_edir_auth.exe
 copy %0\..\fake_auth\%1\fake_auth.exe %2\libexec\fakeauth_auth.exe
 copy %0\..\ntlm_win32_auth\%1\ntlm_win32_auth.exe %2\libexec\mswin_ntlm_auth.exe
 copy %0\..\negotiate_auth\%1\negotiate_auth.exe %2\libexec\mswin_negotiate_auth.exe
 copy %0\..\ldap_group\%1\ldap_group.exe %2\libexec\squid_ldap_group.exe
 copy %0\..\win32_check_group\%1\win32_check_group.exe %2\libexec\mswin_check_lm_group.exe
-copy %0\..\ip_user_check\%1\ip_user_check.exe %2\libexec\ip_user_check.exe
 copy %0\..\cachemgr\%1\cachemgr.exe %2\libexec\cachemgr.cgi
 
 copy %0\..\..\..\src\squid.conf.default %2\etc\squid.conf.default
@@ -44,7 +44,6 @@ copy %0\..\readme.txt %2\docs\readme.txt
 copy %0\..\..\..\helpers\ntlm_auth\mswin_sspi\readme.txt %2\docs\mswin_ntlm_auth.txt
 copy %0\..\..\..\helpers\negotiate_auth\mswin_sspi\readme.txt %2\docs\mswin_negotiate_auth.txt
 copy %0\..\..\..\helpers\external_acl\mswin_lm_group\readme.txt %2\docs\mswin_check_lm_group.txt
-copy %0\..\..\..\helpers\external_acl\ip_user\README %2\docs\ip_user_check.txt
 copy %0\..\..\..\helpers\basic_auth\mswin_sspi\readme.txt %2\docs\mswin_auth.txt
 copy %0\..\..\..\doc\debug-sections.txt %2\docs\debug-sections.txt
 copy %0\..\..\..\doc\HTTP-codes.txt %2\docs\HTTP-codes.txt
