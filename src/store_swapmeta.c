@@ -73,7 +73,7 @@ storeSwapMetaBuild(StoreEntry * e)
     assert(e->swap_status == SWAPOUT_WRITING);
     url = storeUrl(e);
     debug(20, 3) ("storeSwapMetaBuild: %s\n", url);
-    T = storeSwapTLVAdd(STORE_META_KEY, e->hash.key, SQUID_MD5_DIGEST_LENGTH, T);
+    T = storeSwapTLVAdd(STORE_META_KEY, e->hash.key, MD5_DIGEST_CHARS, T);
 #if SIZEOF_SQUID_FILE_SZ == SIZEOF_SIZE_T
     T = storeSwapTLVAdd(STORE_META_STD, &e->timestamp, STORE_HDR_METASIZE, T);
 #else
@@ -86,9 +86,6 @@ storeSwapMetaBuild(StoreEntry * e)
     vary = e->mem_obj->vary_headers;
     if (vary)
 	T = storeSwapTLVAdd(STORE_META_VARY_HEADERS, vary, strlen(vary) + 1, T);
-    if (e->mem_obj->store_url)
-	T = storeSwapTLVAdd(STORE_META_STOREURL, e->mem_obj->store_url, strlen(e->mem_obj->store_url) + 1, T);
-    storeSwapTLVAdd(STORE_META_VARY_ID, &e->mem_obj->vary_id, sizeof(vary_id_t), T);
     return TLV;
 }
 

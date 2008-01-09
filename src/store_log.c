@@ -58,13 +58,17 @@ storeLog(int tag, const StoreEntry * e)
 	return;
 #endif
     if (mem != NULL) {
+	if (mem->log_url == NULL) {
+	    debug(20, 1) ("storeLog: NULL log_url for %s\n", mem->url);
+	    storeMemObjectDump(mem);
+	    mem->log_url = xstrdup(mem->url);
+	}
 	reply = mem->reply;
 	/*
 	 * XXX Ok, where should we print the dir number here?
 	 * Because if we print it before the swap file number, it'll break
 	 * the existing log format.
 	 */
-	logfileLineStart(storelog);
 	logfilePrintf(storelog, "%9ld.%03d %-7s %02d %08X %s %4d %9ld %9ld %9ld %s %" PRINTF_OFF_T "/%" PRINTF_OFF_T " %s %s\n",
 	    (long int) current_time.tv_sec,
 	    (int) current_time.tv_usec / 1000,
@@ -79,12 +83,10 @@ storeLog(int tag, const StoreEntry * e)
 	    strLen(reply->content_type) ? strBuf(reply->content_type) : "unknown",
 	    reply->content_length,
 	    mem->inmem_hi - mem->reply->hdr_sz,
-	    RequestMethods[mem->method].str,
-	    rfc1738_escape_unescaped(mem->url));
-	logfileLineEnd(storelog);
+	    RequestMethodStr[mem->method],
+	    mem->log_url);
     } else {
 	/* no mem object. Most RELEASE cases */
-	logfileLineStart(storelog);
 	logfilePrintf(storelog, "%9ld.%03d %-7s %02d %08X %s   ?         ?         ?         ? ?/? ?/? ? ?\n",
 	    (long int) current_time.tv_sec,
 	    (int) current_time.tv_usec / 1000,
@@ -92,7 +94,6 @@ storeLog(int tag, const StoreEntry * e)
 	    e->swap_dirn,
 	    e->swap_filen,
 	    storeKeyText(e->hash.key));
-	logfileLineEnd(storelog);
     }
 }
 

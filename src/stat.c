@@ -175,6 +175,16 @@ stat_io_get(StoreEntry * sentry)
     }
 
     storeAppendPrintf(sentry, "\n");
+    storeAppendPrintf(sentry, "WAIS I/O\n");
+    storeAppendPrintf(sentry, "number of reads: %d\n", IOStats.Wais.reads);
+    storeAppendPrintf(sentry, "Read Histogram:\n");
+    for (i = 0; i < 16; i++) {
+	storeAppendPrintf(sentry, "%5d-%5d: %9d %2d%%\n",
+	    i ? (1 << (i - 1)) + 1 : 1,
+	    1 << i,
+	    IOStats.Wais.read_hist[i],
+	    percent(IOStats.Wais.read_hist[i], IOStats.Wais.reads));
+    }
 }
 
 static const char *
@@ -204,8 +214,8 @@ storeEntryFlags(const StoreEntry * entry)
 	strcat(buf, "DELAY_SENDING,");
     if (EBIT_TEST(flags, RELEASE_REQUEST))
 	strcat(buf, "RELEASE_REQUEST,");
-    if (EBIT_TEST(flags, REFRESH_FAILURE))
-	strcat(buf, "REFRESH_FAILURE,");
+    if (EBIT_TEST(flags, REFRESH_REQUEST))
+	strcat(buf, "REFRESH_REQUEST,");
     if (EBIT_TEST(flags, ENTRY_CACHABLE))
 	strcat(buf, "CACHABLE,");
     if (EBIT_TEST(flags, ENTRY_DISPATCHED))
@@ -247,12 +257,9 @@ statStoreEntry(MemBuf * mb, StoreEntry * e)
     struct _store_client *sc;
     dlink_node *node;
     memBufPrintf(mb, "KEY %s\n", storeKeyText(e->hash.key));
-    /* XXX should this url be escaped? */
     if (mem)
 	memBufPrintf(mb, "\t%s %s\n",
-	    RequestMethods[mem->method].str, mem->url);
-    if (mem && mem->store_url)
-	memBufPrintf(mb, "\tStore lookup URL: %s\n", mem->store_url);
+	    RequestMethodStr[mem->method], mem->log_url);
     memBufPrintf(mb, "\t%s\n", describeStatuses(e));
     memBufPrintf(mb, "\t%s\n", storeEntryFlags(e));
     memBufPrintf(mb, "\t%s\n", describeTimestamps(e));
@@ -423,15 +430,7 @@ fdRemoteAddr(const fde * f)
     LOCAL_ARRAY(char, buf, 32);
     if (f->type != FD_SOCKET)
 	return null_string;
-    if (*f->ipaddr)
-	snprintf(buf, 32, "%s.%d", f->ipaddr, (int) f->remote_port);
-    else {
-	if (f->local_addr.s_addr != any_addr.s_addr) {
-	    snprintf(buf, 32, "%s.%d", inet_ntoa(f->local_addr), (int) f->local_port);
-	} else {
-	    snprintf(buf, 32, "*.%d", (int) f->local_port);
-	}
-    }
+    snprintf(buf, 32, "%s.%d", f->ipaddr, (int) f->remote_port);
     return buf;
 }
 
@@ -473,7 +472,7 @@ statFiledescriptors(StoreEntry * sentry)
 	    i,
 #endif
 	    fdTypeStr[f->type],
-	    f->timeout_handler ? (int) (f->timeout - squid_curtime) : 0,
+	    f->timeout_handler ? (int) (f->timeout - squid_curtime) / 60 : 0,
 	    f->bytes_read,
 	    f->read_handler ? '*' : ' ',
 	    f->bytes_written,

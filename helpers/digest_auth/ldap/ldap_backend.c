@@ -430,7 +430,7 @@ LDAPArguments(int argc, char **argv)
 		int len = strlen(ldapServer) + 1 + strlen(value) + 1;
 		char *newhost = malloc(len);
 		snprintf(newhost, len, "%s %s", ldapServer, value);
-		free((char *) ldapServer);
+		free((char *)ldapServer);
 		ldapServer = newhost;
 	    } else {
 		ldapServer = strdup(value);
@@ -556,7 +556,7 @@ LDAPArguments(int argc, char **argv)
 	    int len = strlen(ldapServer) + 1 + strlen(value) + 1;
 	    char *newhost = malloc(len);
 	    snprintf(newhost, len, "%s %s", ldapServer, value);
-	    free((char *) ldapServer);
+	    free((char *)ldapServer);
 	    ldapServer = newhost;
 	} else {
 	    ldapServer = strdup(value);
@@ -632,6 +632,7 @@ readSecret(const char *filename)
 	fprintf(stderr, PROGRAM_NAME " ERROR: can not allocate memory\n");
 	exit(1);
     }
+
     fclose(f);
 
     return 0;
