@@ -218,7 +218,7 @@ fwdServerClosed(int fd, void *data)
 	return;
     }
     if (!fwdState->err && shutting_down)
-	fwdState->err = errorCon(ERR_SHUTTING_DOWN, HTTP_GATEWAY_TIMEOUT, fwdState->request);
+	fwdState->err = errorCon(ERR_SHUTTING_DOWN, HTTP_SERVICE_UNAVAILABLE, fwdState->request);
     fwdStateFree(fwdState);
 }
 
@@ -246,7 +246,7 @@ fwdNegotiateSSL(int fd, void *data)
 	    return;
 	default:
 	    debug(81, 1) ("fwdNegotiateSSL: Error negotiating SSL connection on FD %d: %s (%d/%d/%d)\n", fd, ERR_error_string(ERR_get_error(), NULL), ssl_error, ret, errno);
-	    err = errorCon(ERR_CONNECT_FAIL, HTTP_BAD_GATEWAY, request);
+	    err = errorCon(ERR_CONNECT_FAIL, HTTP_SERVICE_UNAVAILABLE, request);
 #ifdef EPROTO
 	    err->xerrno = EPROTO;
 #else
@@ -339,21 +339,18 @@ fwdConnectDone(int server_fd, int status, void *data)
 	 * Only set the dont_retry flag if the DNS lookup fails on
 	 * a direct connection.  If DNS lookup fails when trying
 	 * a neighbor cache, we may want to retry another option.
-	 *
-	 * If this is a transparent connection, we will retry using the client's
-	 * DNS lookup
 	 */
-	if ((NULL == fs->peer) && !fwdState->request->flags.transparent)
+	if (NULL == fs->peer)
 	    fwdState->flags.dont_retry = 1;
 	debug(17, 4) ("fwdConnectDone: Unknown host: %s\n",
 	    request->host);
-	err = errorCon(ERR_DNS_FAIL, HTTP_GATEWAY_TIMEOUT, fwdState->request);
+	err = errorCon(ERR_DNS_FAIL, HTTP_SERVICE_UNAVAILABLE, fwdState->request);
 	err->dnsserver_msg = xstrdup(dns_error_message);
 	fwdFail(fwdState, err);
 	comm_close(server_fd);
     } else if (status != COMM_OK) {
 	assert(fs);
-	err = errorCon(ERR_CONNECT_FAIL, HTTP_GATEWAY_TIMEOUT, fwdState->request);
+	err = errorCon(ERR_CONNECT_FAIL, HTTP_SERVICE_UNAVAILABLE, fwdState->request);
 	err->xerrno = errno;
 	fwdFail(fwdState, err);
 	if (fs->peer)
@@ -397,82 +394,11 @@ fwdConnectTimeout(int fd, void *data)
     comm_close(fd);
 }
 
-typedef struct {
-    peer *peer;
-    char *domain;
-} idleconn;
-
-static void
-free_idleconn(void *data)
-{
-    idleconn *idle = data;
-    safe_free(idle->domain)
-}
-
-CBDATA_TYPE(idleconn);
-
-static void
-fwdConnectIdleDone(int fd, int status, void *data)
-{
-    idleconn *idle = data;
-    idle->peer->stats.idle_opening--;
-    if (fd >= 0)
-	pconnPush(fd, idle->peer->name, idle->peer->http_port, idle->domain, NULL, 0);
-    cbdataFree(idle);
-}
-
-static void
-fwdConnectIdleTimeout(int fd, void *data)
-{
-    idleconn *idle = data;
-    debug(17, 2) ("fwdConnectIdleTimeout: FD %d: '%s'\n", fd, idle->peer->name);
-    idle->peer->stats.idle_opening--;
-    comm_close(fd);
-    cbdataFree(idle);
-}
-
-static void
-openIdleConn(peer * peer, const char *domain, struct in_addr outgoing, unsigned short tos, int ctimeout)
-{
-    int fd = comm_openex(SOCK_STREAM,
-	IPPROTO_TCP,
-	outgoing,
-	0,
-	COMM_NONBLOCKING,
-	tos,
-	peer->name);
-    idleconn *idle;
-    if (fd < 0) {
-	debug(50, 4) ("openIdleConn: %s\n", xstrerror());
-	return;;
-    }
-    CBDATA_INIT_TYPE_FREECB(idleconn, free_idleconn);
-    idle = cbdataAlloc(idleconn);
-    idle->peer = peer;
-    cbdataLock(idle->peer);
-    idle->domain = xstrdup(domain);
-    /*
-     * stats.conn_open is used to account for the number of
-     * connections that we have open to the peer, so we can limit
-     * based on the max-conn option.  We need to increment here,
-     * even if the connection may fail.
-     */
-    peer->stats.conn_open++;
-    peer->stats.idle_opening++;
-    comm_add_close_handler(fd, fwdPeerClosed, peer);
-    commSetTimeout(fd,
-	ctimeout,
-	fwdConnectIdleTimeout,
-	idle);
-    commConnectStart(fd, peer->host, peer->http_port, fwdConnectIdleDone, idle, NULL);
-}
-
 static struct in_addr
 aclMapAddr(acl_address * head, aclCheck_t * ch)
 {
     acl_address *l;
     struct in_addr addr;
-    aclChecklistCacheInit(ch);
     for (l = head; l; l = l->next) {
 	if (aclMatchAclList(l->acl_list, ch))
 	    return l->addr;
@@ -485,7 +411,6 @@ static int
 aclMapTOS(acl_tos * head, aclCheck_t * ch)
 {
     acl_tos *l;
-    aclChecklistCacheInit(ch);
     for (l = head; l; l = l->next) {
 	if (aclMatchAclList(l->acl_list, ch))
 	    return l->tos;
@@ -499,6 +424,9 @@ getOutgoingAddr(request_t * request)
     aclCheck_t ch;
     memset(&ch, '\0', sizeof(aclCheck_t));
     if (request) {
+	ch.src_addr = request->client_addr;
+	ch.my_addr = request->my_addr;
+	ch.my_port = request->my_port;
 	ch.request = request;
     }
     return aclMapAddr(Config.accessList.outgoing_address, &ch);
@@ -510,6 +438,9 @@ getOutgoingTOS(request_t * request)
     aclCheck_t ch;
     memset(&ch, '\0', sizeof(aclCheck_t));
     if (request) {
+	ch.src_addr = request->client_addr;
+	ch.my_addr = request->my_addr;
+	ch.my_port = request->my_port;
 	ch.request = request;
     }
     return aclMapTOS(Config.accessList.outgoing_tos, &ch);
@@ -534,7 +465,6 @@ fwdConnectStart(void *data)
 #if LINUX_TPROXY
     struct in_tproxy itp;
 #endif
-    int idle = -1;
 
     assert(fs);
     assert(fwdState->server_fd == -1);
@@ -545,8 +475,6 @@ fwdConnectStart(void *data)
 	port = fs->peer->http_port;
 	if (fs->peer->options.originserver)
 	    domain = fwdState->request->host;
-	else
-	    domain = "*";
 	ctimeout = fs->peer->connect_timeout > 0 ? fs->peer->connect_timeout
 	    : Config.Timeout.peer_connect;
     } else {
@@ -586,15 +514,11 @@ fwdConnectStart(void *data)
     }
 #if LINUX_TPROXY
     if (fd == -1 && fwdState->request->flags.tproxy)
-	fd = pconnPop(name, port, domain, &fwdState->request->client_addr, 0, NULL);
+	fd = pconnPop(name, port, domain, &fwdState->request->client_addr, 0);
 #endif
-    if (fd == -1) {
-	fd = pconnPop(name, port, domain, NULL, 0, &idle);
-    }
+    if (fd == -1)
+	fd = pconnPop(name, port, domain, NULL, 0);
     if (fd != -1) {
-	/* Don't cache if the returned fd does not have valid DNS */
-	if (fd_table[fd].flags.dnsfailed)
-	    storeRelease(fwdState->entry);
 	if (fwdCheckRetriable(fwdState)) {
 	    debug(17, 3) ("fwdConnectStart: reusing pconn FD %d\n", fd);
 	    fwdState->server_fd = fd;
@@ -608,19 +532,6 @@ fwdConnectStart(void *data)
 		hierarchyNote(&fwdState->request->hier, fs->code, fd_table[fd].ipaddr);
 	    else
 		hierarchyNote(&fwdState->request->hier, fs->code, name);
-	    if (fs->peer && idle >= 0 && idle < fs->peer->idle) {
-		debug(17, 3) ("fwdConnectStart: Opening idle connetions for '%s'\n",
-		    fs->peer->name);
-		outgoing = getOutgoingAddr(fwdState->request);
-		tos = getOutgoingTOS(fwdState->request);
-		debug(17, 3) ("fwdConnectStart: got addr %s, tos %d\n",
-		    inet_ntoa(outgoing), tos);
-		idle += fs->peer->stats.idle_opening;
-		while (idle < fs->peer->idle) {
-		    openIdleConn(fs->peer, domain, outgoing, tos, ctimeout);
-		    idle++;
-		}
-	    }
 	    fwdDispatch(fwdState);
 	    return;
 	} else {
@@ -636,8 +547,6 @@ fwdConnectStart(void *data)
 #endif
     outgoing = getOutgoingAddr(fwdState->request);
     tos = getOutgoingTOS(fwdState->request);
-
-    fwdState->request->out_ip = outgoing;
 
     debug(17, 3) ("fwdConnectStart: got addr %s, tos %d\n",
 	inet_ntoa(outgoing), tos);
@@ -706,18 +615,7 @@ fwdConnectStart(void *data)
 #endif
 	hierarchyNote(&fwdState->request->hier, fs->code, fwdState->request->host);
     }
-
-    /*
-     * If we are retrying a transparent connection that is not being sent to a
-     * peer, then don't cache, and use the IP that the client's DNS lookup
-     * returned
-     */
-    if (fwdState->request->flags.transparent && fwdState->n_tries && (NULL == fs->peer)) {
-	storeRelease(fwdState->entry);
-	commConnectStart(fd, host, port, fwdConnectDone, fwdState, &fwdState->request->my_addr);
-    } else {
-	commConnectStart(fd, host, port, fwdConnectDone, fwdState, NULL);
-    }
+    commConnectStart(fd, host, port, fwdConnectDone, fwdState);
 }
 
 static void
@@ -738,7 +636,7 @@ fwdStartFail(FwdState * fwdState)
 {
     ErrorState *err;
     debug(17, 3) ("fwdStartFail: %s\n", storeUrl(fwdState->entry));
-    err = errorCon(ERR_CANNOT_FORWARD, HTTP_GATEWAY_TIMEOUT, fwdState->request);
+    err = errorCon(ERR_CANNOT_FORWARD, HTTP_SERVICE_UNAVAILABLE, fwdState->request);
     err->xerrno = errno;
     fwdFail(fwdState, err);
     fwdStateFree(fwdState);
@@ -755,7 +653,7 @@ fwdDispatch(FwdState * fwdState)
     FwdServer *fs = fwdState->servers;
     debug(17, 3) ("fwdDispatch: FD %d: Fetching '%s %s'\n",
 	fwdState->client_fd,
-	RequestMethods[request->method].str,
+	RequestMethodStr[request->method],
 	storeUrl(entry));
     /*
      * Assert that server_fd is set.  This is to guarantee that fwdState
@@ -771,7 +669,6 @@ fwdDispatch(FwdState * fwdState)
     fd_table[server_fd].uses++;
     if (fd_table[server_fd].uses == 1 && fs->peer)
 	peerConnectSucceded(fs->peer);
-    fwdState->request->out_ip = fd_table[server_fd].local_addr;
     netdbPingSite(request->host);
     entry->mem_obj->refresh_timestamp = squid_curtime;
     if (fwdState->servers && (p = fwdState->servers->peer)) {
@@ -797,6 +694,9 @@ fwdDispatch(FwdState * fwdState)
 	case PROTO_FTP:
 	    ftpStart(fwdState);
 	    break;
+	case PROTO_WAIS:
+	    waisStart(fwdState);
+	    break;
 	case PROTO_CACHEOBJ:
 	case PROTO_INTERNAL:
 	case PROTO_URN:
@@ -805,7 +705,6 @@ fwdDispatch(FwdState * fwdState)
 	case PROTO_WHOIS:
 	    whoisStart(fwdState);
 	    break;
-	case PROTO_WAIS:	/* not implemented */
 	default:
 	    debug(17, 1) ("fwdDispatch: Cannot retrieve '%s'\n",
 		storeUrl(entry));
@@ -907,6 +806,7 @@ void
 fwdStart(int fd, StoreEntry * e, request_t * r)
 {
     FwdState *fwdState;
+    aclCheck_t ch;
     int answer;
     ErrorState *err;
     /*
@@ -918,7 +818,12 @@ fwdStart(int fd, StoreEntry * e, request_t * r)
 	/*      
 	 * Check if this host is allowed to fetch MISSES from us (miss_access)
 	 */
-	answer = aclCheckFastRequest(Config.accessList.miss, r);
+	memset(&ch, '\0', sizeof(aclCheck_t));
+	ch.src_addr = r->client_addr;
+	ch.my_addr = r->my_addr;
+	ch.my_port = r->my_port;
+	ch.request = r;
+	answer = aclCheckFast(Config.accessList.miss, &ch);
 	if (answer == 0) {
 	    err_type page_id;
 	    page_id = aclGetDenyInfoPage(&Config.denyInfoList, AclMatchedName, 1);
@@ -937,7 +842,7 @@ fwdStart(int fd, StoreEntry * e, request_t * r)
 #endif
     if (shutting_down) {
 	/* more yuck */
-	err = errorCon(ERR_SHUTTING_DOWN, HTTP_GATEWAY_TIMEOUT, r);
+	err = errorCon(ERR_SHUTTING_DOWN, HTTP_SERVICE_UNAVAILABLE, r);
 	errorAppendEntry(e, err);
 	return;
     }
@@ -1238,7 +1143,7 @@ fwdLog(FwdState * fwdState)
 	(int) current_time.tv_sec,
 	(int) current_time.tv_usec / 1000,
 	fwdState->last_status,
-	RequestMethods[fwdState->request->method].str,
+	RequestMethodStr[fwdState->request->method],
 	fwdState->request->canonical);
 }
 

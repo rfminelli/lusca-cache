@@ -99,8 +99,10 @@ whoisReadReply(int fd, void *data)
     if (len > 0) {
 	if (0 == mem->inmem_hi) {
 	    http_reply *reply = mem->reply;
+	    http_version_t version;
 	    storeBuffer(entry);
-	    httpReplySetHeaders(reply, HTTP_OK, "Gatewaying", "text/plain", -1, -1, -1);
+	    httpBuildVersion(&version, 1, 0);
+	    httpReplySetHeaders(reply, version, HTTP_OK, "Gatewaying", "text/plain", -1, -1, -2);
 	    httpReplySwapOut(reply, entry);
 	}
 	fd_bytes(fd, len, FD_READ);
@@ -116,7 +118,7 @@ whoisReadReply(int fd, void *data)
 	    commSetSelect(fd, COMM_SELECT_READ, whoisReadReply, p, Config.Timeout.read);
 	} else {
 	    ErrorState *err;
-	    err = errorCon(ERR_READ_ERROR, HTTP_BAD_GATEWAY, p->fwd->request);
+	    err = errorCon(ERR_READ_ERROR, HTTP_INTERNAL_SERVER_ERROR, p->fwd->request);
 	    err->xerrno = errno;
 	    fwdFail(p->fwd, err);
 	    comm_close(fd);

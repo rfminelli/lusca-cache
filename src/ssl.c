@@ -52,11 +52,9 @@ typedef struct {
     delay_id delay_id;
 #endif
     int connected;
-    int http11;			/* Client-side HTTP/1.1 capable */
 } SslStateData;
 
-static const char *const conn_established_10 = "HTTP/1.0 200 Connection established\r\n\r\n";
-static const char *const conn_established_11 = "HTTP/1.1 200 Connection established\r\n\r\n";
+static const char *const conn_established = "HTTP/1.0 200 Connection established\r\n\r\n";
 
 static CNCB sslConnectDone;
 static ERCB sslErrorComplete;
@@ -394,13 +392,8 @@ sslConnected(int fd, void *data)
     SslStateData *sslState = data;
     debug(26, 3) ("sslConnected: FD %d sslState=%p\n", fd, sslState);
     *sslState->status_ptr = HTTP_OK;
-    if (sslState->http11) {
-	xstrncpy(sslState->server.buf, conn_established_11, SQUID_TCP_SO_RCVBUF);
-	sslState->server.len = strlen(conn_established_11);
-    } else {
-	xstrncpy(sslState->server.buf, conn_established_10, SQUID_TCP_SO_RCVBUF);
-	sslState->server.len = strlen(conn_established_10);
-    }
+    xstrncpy(sslState->server.buf, conn_established, SQUID_TCP_SO_RCVBUF);
+    sslState->server.len = strlen(conn_established);
     sslSetSelect(sslState);
 }
 
@@ -431,7 +424,7 @@ sslConnectDone(int fd, int status, void *data)
     if (status == COMM_ERR_DNS) {
 	debug(26, 4) ("sslConnect: Unknown host: %s\n", sslState->host);
 	comm_close(fd);
-	err = errorCon(ERR_DNS_FAIL, HTTP_GATEWAY_TIMEOUT, request);
+	err = errorCon(ERR_DNS_FAIL, HTTP_NOT_FOUND, request);
 	*sslState->status_ptr = HTTP_NOT_FOUND;
 	err->dnsserver_msg = xstrdup(dns_error_message);
 	err->callback = sslErrorComplete;
@@ -439,8 +432,8 @@ sslConnectDone(int fd, int status, void *data)
 	errorSend(sslState->client.fd, err);
     } else if (status != COMM_OK) {
 	comm_close(fd);
-	err = errorCon(ERR_CONNECT_FAIL, HTTP_GATEWAY_TIMEOUT, request);
-	*sslState->status_ptr = HTTP_GATEWAY_TIMEOUT;
+	err = errorCon(ERR_CONNECT_FAIL, HTTP_SERVICE_UNAVAILABLE, request);
+	*sslState->status_ptr = HTTP_SERVICE_UNAVAILABLE;
 	err->xerrno = errno;
 	err->callback = sslErrorComplete;
 	err->callback_data = sslState;
@@ -477,8 +470,8 @@ sslConnectTimeout(int fd, void *data)
 	hierarchyNote(&sslState->request->hier, sslState->servers->code,
 	    sslState->host);
     comm_close(fd);
-    err = errorCon(ERR_CONNECT_FAIL, HTTP_GATEWAY_TIMEOUT, request);
-    *sslState->status_ptr = HTTP_GATEWAY_TIMEOUT;
+    err = errorCon(ERR_CONNECT_FAIL, HTTP_SERVICE_UNAVAILABLE, request);
+    *sslState->status_ptr = HTTP_SERVICE_UNAVAILABLE;
     err->xerrno = ETIMEDOUT;
     err->callback = sslErrorComplete;
     err->callback_data = sslState;
@@ -493,12 +486,11 @@ sslStart(clientHttpRequest * http, squid_off_t * size_ptr, int *status_ptr)
     SslStateData *sslState = NULL;
     int sock;
     ErrorState *err = NULL;
+    aclCheck_t ch;
     int answer;
     int fd = http->conn->fd;
     request_t *request = http->request;
     char *url = http->uri;
-    struct in_addr outgoing;
-    unsigned long tos;
     /*
      * client_addr == no_addr indicates this is an "internal" request
      * from peer_digest.c, asn.c, netdb.c, etc and should always
@@ -508,7 +500,12 @@ sslStart(clientHttpRequest * http, squid_off_t * size_ptr, int *status_ptr)
 	/*
 	 * Check if this host is allowed to fetch MISSES from us (miss_access)
 	 */
-	answer = aclCheckFastRequest(Config.accessList.miss, http->request);
+	memset(&ch, '\0', sizeof(aclCheck_t));
+	ch.src_addr = request->client_addr;
+	ch.my_addr = request->my_addr;
+	ch.my_port = request->my_port;
+	ch.request = request;
+	answer = aclCheckFast(Config.accessList.miss, &ch);
 	if (answer == 0) {
 	    err = errorCon(ERR_FORWARDING_DENIED, HTTP_FORBIDDEN, request);
 	    *status_ptr = HTTP_FORBIDDEN;
@@ -517,18 +514,16 @@ sslStart(clientHttpRequest * http, squid_off_t * size_ptr, int *status_ptr)
 	}
     }
     debug(26, 3) ("sslStart: '%s %s'\n",
-	RequestMethods[request->method].str, url);
+	RequestMethodStr[request->method], url);
     statCounter.server.all.requests++;
     statCounter.server.other.requests++;
-    outgoing = getOutgoingAddr(request);
-    tos = getOutgoingTOS(request);
     /* Create socket. */
     sock = comm_openex(SOCK_STREAM,
 	IPPROTO_TCP,
-	outgoing,
+	getOutgoingAddr(request),
 	0,
 	COMM_NONBLOCKING,
-	tos,
+	getOutgoingTOS(request),
 	url);
     if (sock == COMM_ERROR) {
 	debug(26, 4) ("sslStart: Failed because we're out of sockets.\n");
@@ -546,7 +541,6 @@ sslStart(clientHttpRequest * http, squid_off_t * size_ptr, int *status_ptr)
 #endif
     sslState->url = xstrdup(url);
     sslState->request = requestLink(request);
-    sslState->http11 = http->conn->port->http11;
     sslState->size_ptr = size_ptr;
     sslState->status_ptr = status_ptr;
     sslState->client.fd = fd;
@@ -555,7 +549,6 @@ sslStart(clientHttpRequest * http, squid_off_t * size_ptr, int *status_ptr)
     sslState->client.buf = xmalloc(SQUID_TCP_SO_RCVBUF);
     /* Copy any pending data from the client connection */
     sslState->client.len = http->conn->in.offset;
-    sslState->request->out_ip = outgoing;
     if (sslState->client.len > 0) {
 	if (sslState->client.len > SQUID_TCP_SO_RCVBUF) {
 	    safe_free(sslState->client.buf);
@@ -593,7 +586,7 @@ sslProxyConnected(int fd, void *data)
     memset(&flags, '\0', sizeof(flags));
     flags.proxying = sslState->request->flags.proxying;
     memBufDefInit(&mb);
-    memBufPrintf(&mb, "CONNECT %s HTTP/1.%d\r\n", sslState->url, sslState->servers->peer ? sslState->servers->peer->options.http11 : 0);
+    memBufPrintf(&mb, "CONNECT %s HTTP/1.0\r\n", sslState->url);
     httpBuildRequestHeader(sslState->request,
 	sslState->request,
 	NULL,			/* StoreEntry */
@@ -619,8 +612,8 @@ sslPeerSelectComplete(FwdServer * fs, void *data)
     peer *g = NULL;
     if (fs == NULL) {
 	ErrorState *err;
-	err = errorCon(ERR_CANNOT_FORWARD, HTTP_GATEWAY_TIMEOUT, sslState->request);
-	*sslState->status_ptr = HTTP_GATEWAY_TIMEOUT;
+	err = errorCon(ERR_CANNOT_FORWARD, HTTP_SERVICE_UNAVAILABLE, sslState->request);
+	*sslState->status_ptr = HTTP_SERVICE_UNAVAILABLE;
 	err->callback = sslErrorComplete;
 	err->callback_data = sslState;
 	errorSend(sslState->client.fd, err);
@@ -659,6 +652,5 @@ sslPeerSelectComplete(FwdServer * fs, void *data)
 	sslState->host,
 	sslState->port,
 	sslConnectDone,
-	sslState,
-	NULL);
+	sslState);
 }

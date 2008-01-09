@@ -48,21 +48,6 @@ COMMENT_START
 COMMENT_END
 
 COMMENT_START
-  Configuration options can be included using the "include" directive.
-  Include takes one parameter, an unquoted pathname to a configuration
-  file including the full path.
-
-  For example,
-
-  include /path/to/included/file/squid.acl.config
-
-  Includes can be nested up to a hard-coded depth of 16 levels.
-  This arbitrary restriction is to prevent recursive include references
-  from causing Squid entering an infinite loop whilst trying to load
-  configuration files.
-COMMENT_END
-
-COMMENT_START
  OPTIONS FOR AUTHENTICATION
  -----------------------------------------------------------------------------
 COMMENT_END
@@ -405,7 +390,6 @@ DOC_START
 	  %IDENT	Ident user name
 	  %SRC		Client IP
 	  %SRCPORT	Client source port
-	  %URI		Requested URI
 	  %DST		Requested host
 	  %PROTO	Requested protocol
 	  %PORT		Requested port
@@ -641,18 +625,10 @@ acl javascript rep_mime_type -i ^application/x-javascript$
 
 NOCOMMENT_START
 #Recommended minimum configuration:
-acl all src all
+acl all src 0.0.0.0/0.0.0.0
 acl manager proto cache_object
-acl localhost src 127.0.0.1/32
+acl localhost src 127.0.0.1/255.255.255.255
 acl to_localhost dst 127.0.0.0/8
-#
-# Example rule allowing access from your local networks.
-# Adapt to list your (internal) IP networks from where browsing
-# should be allowed
-acl localnet src 10.0.0.0/8	# RFC1918 possible internal network
-acl localnet src 172.16.0.0/12	# RFC1918 possible internal network
-acl localnet src 192.168.0.0/16	# RFC1918 possible internal network
-#
 acl SSL_ports port 443
 acl Safe_ports port 80		# http
 acl Safe_ports port 21		# ftp
@@ -709,10 +685,11 @@ http_access deny CONNECT !SSL_ports
 #
 # INSERT YOUR OWN RULE(S) HERE TO ALLOW ACCESS FROM YOUR CLIENTS
 
-# Example rule allowing access from your local networks.
-# Adapt localnet in the ACL section to list your (internal) IP networks
-# from where browsing should be allowed
-http_access allow localnet
+# Example rule allowing access from your local networks. Adapt
+# to list your (internal) IP networks from where browsing should
+# be allowed
+#acl our_networks src 192.168.1.0/24 192.168.2.0/24
+#http_access allow our_networks
 
 # And finally deny all other access to this proxy
 http_access deny all
@@ -762,9 +739,8 @@ DOC_START
 	See http_access for details
 
 NOCOMMENT_START
-#Allow ICP queries from local networks only
-icp_access allow localnet
-icp_access deny all
+#Allow ICP queries from everyone
+icp_access allow all
 NOCOMMENT_END
 DOC_END
 
@@ -786,11 +762,8 @@ DOC_START
 	deny all traffic. This default may cause problems with peers
 	using the htcp or htcp-oldsquid options.
 
-NOCOMMENT_START
-#Allow HTCP queries from local networks only
-# htcp_access allow localnet
-# htcp_access deny all
-NOCOMMENT_END
+#Allow HTCP queries from everyone
+htcp_access allow all
 DOC_END
 
 NAME: htcp_clr_access
@@ -1008,9 +981,6 @@ DOC_START
 	If you are running Squid in accelerator mode, you
 	probably want to listen on port 80 also, or instead.
 
-	The -I command line option will override the *first* port
-	specified here.
-
 	You may specify multiple socket addresses on multiple lines.
 
 	Options:
@@ -1039,10 +1009,6 @@ DOC_START
 	   vport=NN	As above, but uses specified port number rather
 			than the http_port number. Implies accel.
 
-	   allow-direct	Allow direct forwarding in accelerator mode. Normally
-	   		accelerated requests is denied direct forwarding as it
-			never_direct was used.
-
 	   urlgroup=	Default urlgroup to mark requests with (see
 			also acl urlgroup and url_rewrite_program)
 
@@ -1052,15 +1018,6 @@ DOC_START
 	   no-connection-auth
 			Prevent forwarding of Microsoft connection oriented
 			authentication (NTLM, Negotiate and Kerberos)
-
-	   act-as-origin
-	   		Act is if this Squid is the origin server.
-			This currently means generate own Date: and
-			Expires: headers. Implies accel.
-
-	   http11	Enables HTTP/1.1 support to clients. The HTTP/1.1
-			support is still incomplete, but should work with
-			most clients.
 
 	If you run Squid on a dual-homed machine with an internal
 	and an external interface we recommend you to specify the
@@ -1232,11 +1189,11 @@ DOC_START
 	source address 10.1.0.2 and the rest will be forwarded with
 	source address 10.1.0.3.
 
-	acl normal_service_net src 10.0.0.0/24
-	acl good_service_net src 10.0.1.0/24 10.0.2.0/24
-	tcp_outgoing_address 10.1.0.1 normal_service_net
-	tcp_outgoing_address 10.1.0.2 good_service_net
-	tcp_outgoing_address 10.1.0.3
+	acl normal_service_net src 10.0.0.0/255.255.255.0
+	acl good_service_net src 10.0.1.0/255.255.255.0
+	tcp_outgoing_address 10.0.0.1 normal_service_net
+	tcp_outgoing_address 10.0.0.2 good_service_net
+	tcp_outgoing_address 10.0.0.3
 
 	Processing proceeds in the order specified, and stops at first fully
 	matching line.
@@ -1406,7 +1363,6 @@ DOC_START
 		     round-robin
 		     carp
 		     multicast-responder
-		     multicast-siblings
 		     closest-only
 		     no-digest
 		     no-netdb-exchange
@@ -1435,8 +1391,6 @@ DOC_START
 		     ssloptions=...
 		     front-end-https[=on|auto]
 		     connection-auth[=on|off|auto]
-		     idle=n
-		     http11
 
 		     use 'proxy-only' to specify objects fetched
 		     from this cache should not be saved locally.
@@ -1476,17 +1430,6 @@ DOC_START
 		     is a member of a multicast group.  ICP queries will
 		     not be sent directly to the peer, but ICP replies
 		     will be accepted from it.
-
-		     the 'multicast-siblings' option is meant to be used
-		     only for cache peers of type "multicast". It instructs
-		     Squid that ALL members of this multicast group have
-		     "sibling" relationship with it, not "parent".  This is
-		     an optimization that avoids useless multicast queries
-		     to a multicast group when the requested object would
-		     be fetched only from a "parent" cache, anyway.  It's
-		     useful, e.g., when configuring a pool of redundant
-		     Squid proxies, being members of the same
-		     multicast group.
 
 		     'closest-only' indicates that, for ICP_OP_MISS
 		     replies, we'll only forward CLOSEST_PARENT_MISSes
@@ -1658,12 +1601,6 @@ DOC_START
 		     and any such challenges received from there should be
 		     ignored. Default is auto to automatically determine the
 		     status of the peer.
-
-		     use idle=n to specify a minimum number of idle connections
-		     that should be kept open to this peer.
-
-		     use http11 to send requests using HTTP/1.1 to this peer.
-		     The HTTP/1.1 support is still incomplete.
 DOC_END
 
 NAME: cache_peer_domain cache_host_domain
@@ -2014,7 +1951,7 @@ DOC_START
 
 	Common options:
 
-	no-store, no new objects should be stored to this cache_dir
+	read-only, no new objects should be stored to this cache_dir
 
 	min-size=n, refers to the min object size this storedir will accept.
 	It's used to restrict a storedir to only store large objects
@@ -2106,20 +2043,6 @@ DOC_START
 	numbers closer together.
 DOC_END
 
-NAME: update_headers
-IFDEF: HTTP_VIOLATIONS
-COMMENT: on|off
-TYPE: onoff
-DEFAULT: on
-LOC: Config.onoff.update_headers
-DOC_START
-	By default Squid updates stored HTTP headers when receiving
-	a 304 response. Set this to off if you want to disable this
-	for disk I/O performance reasons. Disabling this VIOLATES the
-	HTTP standard, and could make you liable for problems which it
-	causes.
-DOC_END
-
 COMMENT_START
  LOGFILE OPTIONS
  -----------------------------------------------------------------------------
@@ -2164,7 +2087,6 @@ DOC_START
 		<A	Server IP address or peer name
 		la	Local IP address (http_port)
 		lp	Local port number (http_port)
-		oa	Our outgoing IP address (tcp_outgoing_address)
 		ts	Seconds since epoch
 		tu	subsecond time (milliseconds)
 		tl	Local time. Optional strftime format argument
@@ -2187,13 +2109,11 @@ DOC_START
 		mt	MIME content type
 		rm	Request method (GET/POST etc)
 		ru	Request URL
-		rp	Request URL-Path excluding hostname
 		rv	Request protocol version
 		ea	Log string returned by external acl
 		<st	Reply size including HTTP headers
 		>st	Request size including HTTP headers
 		st	Request+Reply size including HTTP headers
-		sn	Unique sequence number per log line entry
 		%	a literal % character
 
 logformat squid  %ts.%03tu %6tr %>a %Ss/%03Hs %<st %rm %ru %un %Sh/%<A %mt
@@ -2228,6 +2148,9 @@ DOC_START
 
 	And priority could be any of:
 	err, warning, notice, info, debug.
+
+	Note: 2.6.STABLE14 and earlier only supports a slightly different
+	and undocumented format with all uppercase LOG_FACILITY|LOG_PRIORITY
 NOCOMMENT_START
 access_log @DEFAULT_ACCESS_LOG@ squid
 NOCOMMENT_END
@@ -2242,15 +2165,6 @@ DOC_START
 	This options allows you to control which requests gets logged
 	to access.log (see access_log directive). Requests denied for
 	logging will also not be accounted for in performance counters.
-DOC_END
-
-NAME: logfile_daemon
-TYPE: string
-DEFAULT: @DEFAULT_LOGFILED@
-LOC: Config.Program.logfile_daemon
-DOC_START
-	Specify the path to the logfile-writing daemon. This daemon is
-	used to write the access and store logs, if configured.
 DOC_END
 
 NAME: cache_log
@@ -2478,15 +2392,6 @@ DOC_START
 	enabled in which case performance will suffer badly anyway..).
 DOC_END
 
-NAME: netdb_filename
-TYPE: string
-DEFAULT: @DEFAULT_NETDB_FILE@
-LOC: Config.netdbFilename
-DOC_START
-	A filename where Squid stores it's netdb state between restarts.
-	To disable, enter "none".
-DOC_END
-
 COMMENT_START
  OPTIONS FOR FTP GATEWAYING
  -----------------------------------------------------------------------------
@@ -2594,30 +2499,6 @@ COMMENT_START
  -----------------------------------------------------------------------------
 COMMENT_END
 
-NAME: storeurl_rewrite_program
-TYPE: programline
-LOC: Config.Program.store_rewrite.command
-DEFAULT: none
-DOC_START
-
-DOC_END
-
-NAME: storeurl_rewrite_children
-TYPE: int
-DEFAULT: 5
-LOC: Config.Program.store_rewrite.children
-DOC_START
-
-DOC_END
-
-NAME: storeurl_rewrite_concurrency
-TYPE: int
-DEFAULT: 0
-LOC: Config.Program.store_rewrite.concurrency
-DOC_START
-
-DOC_END
-
 NAME: url_rewrite_program redirect_program
 TYPE: programline
 LOC: Config.Program.url_rewrite.command
@@ -2628,13 +2509,7 @@ DOC_START
 
 	For each requested URL rewriter will receive on line with the format
 
-	URL <SP> client_ip "/" fqdn <SP> user <SP> method <SP> urlgroup
-	 [<SP> kvpairs] <NL>
-
-	In the future, the rewriter interface will be extended with
-	key=value pairs ("kvpairs" shown above).  Rewriter programs
-	should be prepared to receive and possibly ignore additional
-	whitespace-separated tokens on each input line.
+	URL <SP> client_ip "/" fqdn <SP> user <SP> method <SP> urlgroup <NL>
 
 	And the rewriter may return a rewritten URL. The other components of
 	the request line does not need to be returned (ignored if they are).
@@ -2698,14 +2573,6 @@ DOC_START
 	If defined, this access list specifies which requests are
 	sent to the redirector processes.  By default all requests
 	are sent.
-DOC_END
-
-NAME: storeurl_access
-TYPE: acl_access
-DEFAULT: none
-LOC: Config.accessList.storeurl_rewrite
-DOC_START
-
 DOC_END
 
 NAME: redirector_bypass
@@ -2801,16 +2668,6 @@ cache deny QUERY
 NOCOMMENT_END
 DOC_END
 
-NAME: max_stale
-COMMENT: time-units
-TYPE: time_t
-LOC: Config.maxStale
-DEFAULT: 1 week
-DOC_START
-	This option puts an upper limit on how stale content Squid
-	will serve from the cache if cache validation fails.
-DOC_END
-
 NAME: refresh_pattern
 TYPE: refreshpattern
 LOC: Config.Refresh
@@ -2841,10 +2698,6 @@ DOC_START
 		 ignore-no-cache
 		 ignore-private
 		 ignore-auth
-		 stale-while-revalidate=NN
-		 ignore-stale-while-revalidate
-		 max-stale=NN
-		 negative-ttl=NN
 
 		override-expire enforces min age even if the server
 		sent a Expires: header. Doing this VIOLATES the HTTP
@@ -2880,24 +2733,6 @@ DOC_START
 		in the response header. Doing this VIOLATES the HTTP standard.
 		Enabling this feature could make you liable for problems which
 		it causes.
-
-		stale-while-revalidate=NN makes Squid perform an asyncronous
-		cache validation if the object isn't more stale than NN.
-		Doing this VIOLATES the HTTP standard. Enabling this
-		feature could make you liable for problems which it
-		causes.
-
-		ignore-stale-while-revalidate makes Squid ignore any 'Cache-Control:
-		stale-while-revalidate=NN' headers received from a server. Can be
-		combined with stale-while-revalidate=NN to override the server provided
-		value.
-
-		max-stale=NN provided a maximum staleness factor. Squid won't
-		serve objects more stale than this even if it failed to
-		validate the object.
-
-		negative-ttl=NN overrides the global negative_ttl parameter
-		selectively for URLs matching this pattern (in seconds).
 
 	Basically a cached object is:
 
@@ -3247,7 +3082,7 @@ DOC_END
 
 NAME: extension_methods
 TYPE: extension_method
-LOC: RequestMethods
+LOC: RequestMethodStr
 DEFAULT: none
 DOC_START
 	Squid only knows about standardized HTTP request methods.
@@ -3371,92 +3206,6 @@ DOC_START
 
 	If set to "off" then such HTTP errors will cause the request
 	or response to be rejected.
-DOC_END
-
-NAME: server_http11
-COMMENT: on|off
-TYPE: onoff
-LOC: Config.onoff.server_http11
-DEFAULT: off
-DOC_START
-	This option enables the use ot HTTP/1.1 on outgoing "direct" requests.
-	See also the http11 cache_peer option.
-	Note: The HTTP/1.1 support is still incomplete.
-DOC_END
-
-NAME: ignore_expect_100
-COMMENT: on|off
-TYPE: onoff
-LOC: Config.onoff.ignore_expect_100
-DEFAULT: off
-DOC_START
-	This option makes Squid ignore any Expect: 100-continue header present
-	in the request.
-	Note: Enabling this is a HTTP protocol violation, but some client may
-	not handle it well..
-DOC_END
-
-NAME: external_refresh_check
-TYPE: refreshCheckHelper
-DEFAULT: none
-LOC: Config.Program.refresh_check
-DOC_START
-	This option defines an external helper for determining whether to
-	refresh a stale response. It will be called when Squid receives a
-	request for a cached response that is stale; the helper can either
-	confirm that the response is stale with a STALE response, or
-	extend the freshness of the response (thereby avoiding a refresh
-	check) with a FRESH response, along with a freshness=nnn keyword.
-
-	  external_refresh_check [options] FORMAT.. /path/to/helper [helper_args]
-
-	If present, helper_args will be passed to the helper on the command
-	line verbatim.
-
-	Options:
-
-	  children=n	Number of processes to spawn to service external
-			refresh checks (default 5).
-	  concurrency=n	Concurrency level per process. Only used with
-			helpers capable of processing more than one query
-			at a time.
-
-	When using the concurrency option, the protocol is changed by introducing
-	a query channel tag infront of the request/response. The query channel
-	tag is a number between 0 and concurrency−1.
-
-	FORMAT specifications:
-
-	  %CACHE_URI	The URI of the cached response
-	  %RES{Header}	HTTP response header value
-	  %AGE		The age of the cached response
-
-	The request sent to the helper consists of the data in the format
-	specification in the order specified.
-
-	The helper receives lines per the above format specification, and
-	returns lines starting with OK or ERR indicating the validity of
-	the request and optionally followed by additional keywords with
-	more details.  URL escaping is used to protect each value in both
-	requests and responses.
-
-	General result syntax:
-
-	  FRESH / STALE keyword=value ...
-
-	Defined keywords:
-
-	  freshness=nnn	The number of seconds to extend the freshness of
-			the response by.
-	  log=string	String to be logged in access.log. Available as
-			%ef in logformat specifications.
-	  res{Header}=value
-			Value to update response headers with. If already
-			present, the supplied value completely replaces
-			the cached value.
-
-	In the event of a helper−related error (e.g., overload), Squid
-	will always default to STALE.
 DOC_END
 
 COMMENT_START
@@ -4821,18 +4570,6 @@ DOC_START
 	acts on cacheable requests.
 DOC_END
 
-NAME: ignore_ims_on_miss
-IFDEF: HTTP_VIOLATIONS
-COMMENT: on|off
-TYPE: onoff
-DEFAULT: off
-LOC: Config.onoff.ignore_ims_on_miss
-DOC_START
-	This options makes Squid ignore If-Modified-Since on
-	cache misses. This is useful while the cache is
-	mostly empty to more quickly have the cache populated.
-DOC_END
-
 NAME: always_direct
 TYPE: acl_access
 LOC: Config.accessList.AlwaysDirect
@@ -4954,52 +4691,6 @@ DOC_START
 	Heavy voodoo here.  I can't even believe you are reading this.
 	Are you crazy?  Don't even think about adjusting these unless
 	you understand the algorithms in comm_select.c first!
-DOC_END
-
-NAME: max_filedescriptors max_filedesc
-TYPE: int
-DEFAULT: 0
-LOC: Config.max_filedescriptors
-DOC_START
-	The maximum number of filedescriptors supported.
-
-	The default "0" means Squid inherits the current ulimit setting.
-
-	Note: Changing this requires a restart of Squid. Also
-	not all comm loops supports values larger than --with-maxfd.
-DOC_END
-
-NAME: accept_filter
-TYPE: string
-DEFAULT: none
-LOC: Config.accept_filter
-DOC_START
-	FreeBSD:
-
-	The name of an accept(2) filter to install on Squid's
-	listen socket(s).  This feature is perhaps specific to
-	FreeBSD and requires support in the kernel.
-
-	The 'httpready' filter delays delivering new connections
-	to Squid until a full HTTP request has been received.
-	See the accf_http(9) man page for details.
-
-	The 'dataready' filter delays delivering new connections
-	to Squid until there is some data to process.
-	See the accf_dataready(9) man page for details.
-
-	Linux:
-	
-	The 'data' filter delays delivering of new connections
-	to Squid until there is some data to process by TCP_ACCEPT_DEFER.
-	You may optionally specify a number of seconds to wait by
-	'data=N' where N is the number of seconds. Defaults to 30
-	if not specified.  See the tcp(7) man page for details.
-EXAMPLE:
-# FreeBSD
-accept_filter httpready
-# Linux
-accept_filter data
 DOC_END
 
 NAME: tcp_recv_bufsize
@@ -5540,19 +5231,5 @@ DOC_START
 	On Windows value less then 1000 (1 milliseconds) are
 	rounded to 1000.
 DOC_END
-
-NAME: zero_buffers
-COMMENT: on|off
-TYPE: onoff
-LOC: Config.onoff.zero_buffers
-DEFAULT: on
-DOC_START
-	Squid by default will zero all buffers before using or reusing them.
- 	Setting this to 'off' will result in fixed-sized temporary buffers
-	not being zero'ed. This may give a performance boost on certain
-	platforms but it may result in undefined behaviour at the present
-	time.
-DOC_END
-
 
 EOF

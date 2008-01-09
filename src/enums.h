@@ -52,8 +52,6 @@ typedef enum {
     LOG_TCP_REDIRECT,
 #endif
     LOG_TCP_STALE_HIT,
-    LOG_TCP_ASYNC_HIT,
-    LOG_TCP_ASYNC_MISS,
     LOG_UDP_HIT,
     LOG_UDP_MISS,
     LOG_UDP_DENIED,
@@ -279,8 +277,6 @@ typedef enum {
     CC_S_MAXAGE,
     CC_MAX_STALE,
     CC_ONLY_IF_CACHED,
-    CC_STALE_WHILE_REVALIDATE,
-    CC_STALE_IF_ERROR,
     CC_OTHER,
     CC_ENUM_END
 } http_hdr_cc_type;
@@ -502,9 +498,8 @@ typedef enum {
     HTTP_LENGTH_REQUIRED = 411,
     HTTP_PRECONDITION_FAILED = 412,
     HTTP_REQUEST_ENTITY_TOO_LARGE = 413,
-    HTTP_REQUEST_URI_TOO_LONG = 414,
+    HTTP_REQUEST_URI_TOO_LARGE = 414,
     HTTP_UNSUPPORTED_MEDIA_TYPE = 415,
-    HTTP_EXPECTATION_FAILED = 417,
     HTTP_UNPROCESSABLE_ENTITY = 422,	/* RFC2518 section 10.3 */
     HTTP_LOCKED = 423,		/* RFC2518 section 10.4 */
     HTTP_FAILED_DEPENDENCY = 424,	/* RFC2518 section 10.5 */
@@ -530,7 +525,7 @@ enum {
     ENTRY_REVALIDATE,
     DELAY_SENDING,
     RELEASE_REQUEST,
-    REFRESH_FAILURE,
+    REFRESH_REQUEST,
     ENTRY_CACHABLE,
     ENTRY_DISPATCHED,
     KEY_PRIVATE,
@@ -605,7 +600,7 @@ typedef enum {
     MEM_CACHE_DIGEST,
 #endif
     MEM_CLIENT_INFO,
-    MEM_STORE_CLIENT_BUF,
+    MEM_CLIENT_SOCK_BUF,
     MEM_LINK_LIST,
     MEM_DLINK_NODE,
     MEM_DONTFREE,
@@ -659,8 +654,6 @@ enum {
     STORE_META_VARY_HEADERS,	/* Stores Vary request headers */
     STORE_META_STD_LFS,		/* standard metadata in lfs format */
     STORE_META_OBJSIZE,		/* object size, if its known */
-    STORE_META_STOREURL,	/* the store url, if different to the normal URL */
-    STORE_META_VARY_ID,		/* Unique ID linking variants */
     STORE_META_END
 };
 
@@ -754,8 +747,7 @@ enum {
     VARY_MATCH,
     VARY_OTHER,
     VARY_RESTART,
-    VARY_CANCEL,
-    VARY_EXPIRED
+    VARY_CANCEL
 };
 
 /* Windows Port */

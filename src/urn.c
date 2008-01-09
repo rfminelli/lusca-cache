@@ -55,7 +55,7 @@ typedef struct {
     } flags;
 } url_entry;
 
-static STNCB urnHandleReply;
+static STCB urnHandleReply;
 static url_entry *urnParseReply(const char *inbuf, method_t);
 static const char *const crlf = "\r\n";
 static QS url_entry_sort;
@@ -137,7 +137,7 @@ urnStart(request_t * r, StoreEntry * e)
     }
     httpHeaderPutStr(&urlres_r->header, HDR_ACCEPT, "text/plain");
     if ((urlres_e = storeGetPublic(urlres, METHOD_GET)) == NULL) {
-	urlres_e = storeCreateEntry(urlres, null_request_flags, METHOD_GET);
+	urlres_e = storeCreateEntry(urlres, urlres, null_request_flags, METHOD_GET);
 	urnState->sc = storeClientRegister(urlres_e, urnState);
 	fwdStart(-1, urlres_e, urlres_r);
     } else {
@@ -146,10 +146,11 @@ urnStart(request_t * r, StoreEntry * e)
     }
     urnState->urlres_e = urlres_e;
     urnState->urlres_r = requestLink(urlres_r);
-    storeClientRef(urnState->sc, urlres_e,
+    storeClientCopy(urnState->sc, urlres_e,
 	0,
 	0,
-	SM_PAGE_SIZE,
+	4096,
+	memAllocate(MEM_4K_BUF),
 	urnHandleReply,
 	urnState);
 }
@@ -170,13 +171,12 @@ url_entry_sort(const void *A, const void *B)
 }
 
 static void
-urnHandleReply(void *data, mem_node_ref nr, ssize_t size)
+urnHandleReply(void *data, char *buf, ssize_t size)
 {
     UrnState *urnState = data;
-    const char *buf = NULL;
     StoreEntry *e = urnState->entry;
     StoreEntry *urlres_e = urnState->urlres_e;
-    const char *s = NULL;
+    char *s = NULL;
     size_t k;
     HttpReply *rep;
     url_entry *urls;
@@ -186,26 +186,26 @@ urnHandleReply(void *data, mem_node_ref nr, ssize_t size)
     ErrorState *err;
     int i;
     int urlcnt = 0;
+    http_version_t version;
 
     debug(52, 3) ("urnHandleReply: Called with size=%d.\n", (int) size);
     if (EBIT_TEST(urlres_e->flags, ENTRY_ABORTED)) {
-	stmemNodeUnref(&nr);
+	memFree(buf, MEM_4K_BUF);
 	return;
     }
     if (size == 0) {
-	stmemNodeUnref(&nr);
+	memFree(buf, MEM_4K_BUF);
 	return;
     } else if (size < 0) {
-	stmemNodeUnref(&nr);
+	memFree(buf, MEM_4K_BUF);
 	return;
     }
-    buf = nr.node->data + nr.offset;
     if (urlres_e->store_status == STORE_PENDING && size < SM_PAGE_SIZE) {
-	stmemNodeUnref(&nr);
-	storeClientRef(urnState->sc, urlres_e,
+	storeClientCopy(urnState->sc, urlres_e,
 	    size,
 	    0,
 	    SM_PAGE_SIZE,
+	    buf,
 	    urnHandleReply,
 	    urnState);
 	return;
@@ -215,7 +215,6 @@ urnHandleReply(void *data, mem_node_ref nr, ssize_t size)
     if (0 == k) {
 	debug(52, 1) ("urnHandleReply: didn't find end-of-headers for %s\n",
 	    storeUrl(e));
-	stmemNodeUnref(&nr);
 	return;
     }
     s = buf + k;
@@ -228,7 +227,6 @@ urnHandleReply(void *data, mem_node_ref nr, ssize_t size)
 	err = errorCon(ERR_URN_RESOLVE, HTTP_NOT_FOUND, urnState->request);
 	err->url = xstrdup(storeUrl(e));
 	errorAppendEntry(e, err);
-	stmemNodeUnref(&nr);
 	return;
     }
     while (xisspace(*s))
@@ -242,7 +240,6 @@ urnHandleReply(void *data, mem_node_ref nr, ssize_t size)
 	err = errorCon(ERR_URN_RESOLVE, HTTP_NOT_FOUND, urnState->request);
 	err->url = xstrdup(storeUrl(e));
 	errorAppendEntry(e, err);
-	stmemNodeUnref(&nr);
 	return;
     }
     min_u = urnFindMinRtt(urls, urnState->request->method, NULL);
@@ -276,7 +273,9 @@ urnHandleReply(void *data, mem_node_ref nr, ssize_t size)
 	full_appname_string, getMyHostname());
     rep = e->mem_obj->reply;
     httpReplyReset(rep);
-    httpReplySetHeaders(rep, HTTP_MOVED_TEMPORARILY, NULL, "text/html", mb.size, -1, squid_curtime);
+    httpBuildVersion(&version, 1, 0);
+    httpReplySetHeaders(rep, version, HTTP_MOVED_TEMPORARILY, NULL,
+	"text/html", mb.size, 0, squid_curtime);
     if (urnState->flags.force_menu) {
 	debug(52, 3) ("urnHandleReply: forcing menu\n");
     } else if (min_u) {
@@ -285,7 +284,7 @@ urnHandleReply(void *data, mem_node_ref nr, ssize_t size)
     httpBodySet(&rep->body, &mb);
     httpReplySwapOut(rep, e);
     storeComplete(e);
-    stmemNodeUnref(&nr);
+    memFree(buf, MEM_4K_BUF);
     for (i = 0; i < urlcnt; i++) {
 	safe_free(urls[i].url);
 	safe_free(urls[i].host);

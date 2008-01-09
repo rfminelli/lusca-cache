@@ -37,8 +37,6 @@
 #include "config.h"
 #include "splay.h"
 
-#define PEER_MULTICAST_SIBLINGS 1
-
 struct _dlink_node {
     void *data;
     dlink_node *prev;
@@ -370,12 +368,9 @@ struct _http_port_list {
     unsigned int vhost;		/* uses host header */
     unsigned int vport;		/* virtual port support */
     unsigned int no_connection_auth;	/* Don't support connection oriented auth */
-    unsigned int http11;	/* HTTP/1.1 support */
 #if LINUX_TPROXY
     unsigned int tproxy;
 #endif
-    unsigned int act_as_origin;	/* Fake Date: headers in accelerator mode */
-    unsigned int allow_direct:1;	/* Allow direct forwarding in accelerator mode */
 };
 
 #if USE_SSL
@@ -436,6 +431,11 @@ struct _SquidConfig {
     } Swap;
     squid_off_t memMaxSize;
     struct {
+	char *relayHost;
+	u_short relayPort;
+	peer *peer;
+    } Wais;
+    struct {
 	squid_off_t min;
 	int pct;
 	squid_off_t max;
@@ -444,7 +444,6 @@ struct _SquidConfig {
     RemovalPolicySettings *replPolicy;
     RemovalPolicySettings *memPolicy;
     time_t negativeTtl;
-    time_t maxStale;
     time_t negativeDnsTtl;
     time_t positiveDnsTtl;
     time_t shutdownLifetime;
@@ -551,13 +550,7 @@ struct _SquidConfig {
 	    wordlist *command;
 	    int children;
 	    int concurrency;
-	} store_rewrite;
-	struct {
-	    wordlist *command;
-	    int children;
-	    int concurrency;
 	} location_rewrite;
-	refresh_check_helper *refresh_check;
 #if USE_ICMP
 	char *pinger;
 #endif
@@ -568,7 +561,6 @@ struct _SquidConfig {
 #if USE_SSL
 	char *ssl_password;
 #endif
-	char *logfile_daemon;
     } Program;
 #if USE_DNSSERVERS
     int dnsChildren;
@@ -580,7 +572,6 @@ struct _SquidConfig {
     int appendDomainLen;
     char *debugOptions;
     char *pidFilename;
-    char *netdbFilename;
     char *mimeTablePathname;
     char *etcHostsPath;
     char *visibleHostname;
@@ -634,7 +625,6 @@ struct _SquidConfig {
 	time_t period;
     } Netdb;
     struct {
-	int zero_buffers;
 	int log_udp;
 	int res_defnames;
 	int anonymizer;
@@ -661,9 +651,7 @@ struct _SquidConfig {
 	int nonhierarchical_direct;
 	int strip_query_terms;
 	int redirector_bypass;
-	int storeurl_bypass;
 	int ignore_unknown_nameservers;
-	int server_http11;
 	int client_pconns;
 	int server_pconns;
 	int error_pconns;
@@ -683,7 +671,6 @@ struct _SquidConfig {
 	int global_internal_static;
 	int httpd_suppress_version_string;
 	int via;
-	int ignore_ims_on_miss;
 	int check_hostnames;
 	int allow_underscore;
 	int cache_vary;
@@ -692,8 +679,6 @@ struct _SquidConfig {
 	int delay_pool_uses_indirect_client;
 	int log_uses_indirect_client;
 #endif
-	int update_headers;
-	int ignore_expect_100;
     } onoff;
     acl *aclList;
     struct {
@@ -714,7 +699,6 @@ struct _SquidConfig {
 	acl_access *identLookup;
 #endif
 	acl_access *url_rewrite;
-	acl_access *storeurl_rewrite;
 	acl_access *location_rewrite;
 	acl_access *reply;
 	acl_address *outgoing_address;
@@ -826,8 +810,6 @@ struct _SquidConfig {
 #endif
     time_t refresh_stale_window;
     int umask;
-    int max_filedescriptors;
-    char *accept_filter;
 };
 
 struct _SquidConfig2 {
@@ -871,8 +853,6 @@ struct _CommWriteStateData {
     CWCB *handler;
     void *handler_data;
     FREE *free_func;
-    char header[32];
-    size_t header_size;
 };
 
 
@@ -892,8 +872,7 @@ struct _fde {
     struct in_addr local_addr;
     unsigned char tos;
     char ipaddr[16];		/* dotted decimal address of peer */
-    const char *desc;
-    char descbuf[FD_DESC_SZ];
+    char desc[FD_DESC_SZ];
     struct {
 	unsigned int open:1;
 	unsigned int close_request:1;
@@ -907,7 +886,6 @@ struct _fde {
 	unsigned int nodelay:1;
 	unsigned int close_on_exec:1;
 	unsigned int backoff:1;	/* keep track of whether the fd is backed off */
-	unsigned int dnsfailed:1;	/* did the dns lookup fail */
     } flags;
     comm_pending read_pending;
     comm_pending write_pending;
@@ -1006,8 +984,6 @@ struct _HttpHdrCc {
     int max_age;
     int s_maxage;
     int max_stale;
-    int stale_while_revalidate;
-    int stale_if_error;
     String other;
 };
 
@@ -1073,14 +1049,13 @@ struct _HttpHeaderFieldInfo {
 
 struct _HttpHeaderEntry {
     http_hdr_type id;
-    int active;
     String name;
     String value;
 };
 
 struct _HttpHeader {
     /* protected, do not use these, use interface functions instead */
-    Array entries;		/* parsed entries in raw format */
+    Array entries;		/* parsed fields in raw format */
     HttpHeaderMask mask;	/* bit set <=> entry present */
     http_hdr_owner_type owner;	/* request or reply */
     int len;			/* length when packed, not counting terminating '\0' */
@@ -1120,7 +1095,6 @@ struct _http_state_flags {
     unsigned int originpeer:1;
     unsigned int chunked:1;
     unsigned int trailer:1;
-    unsigned int http11:1;
 };
 
 struct _HttpStateData {
@@ -1189,7 +1163,6 @@ struct _AccessLogEntry {
     } icp;
     struct {
 	struct in_addr caddr;
-	struct in_addr out_ip;
 	squid_off_t size;
 	size_t rq_size;
 	log_type code;
@@ -1210,7 +1183,6 @@ struct _AccessLogEntry {
     HierarchyLogEntry hier;
     HttpReply *reply;
     request_t *request;
-    char *ext_refresh;
 };
 
 struct _clientHttpRequest {
@@ -1221,6 +1193,7 @@ struct _clientHttpRequest {
     store_client *sc;		/* The store_client we're using */
     store_client *old_sc;	/* ... for entry to be validated */
     char *uri;
+    char *log_uri;
     struct {
 	squid_off_t offset;
 	squid_off_t size;
@@ -1258,10 +1231,12 @@ struct _clientHttpRequest {
     } redirect;
     dlink_node active;
     squid_off_t maxBodySize;
-    mem_node_ref nr;
-    STHCB *header_callback;	/* Temporarily here for storeClientCopyHeaders */
-    StoreEntry *header_entry;	/* Temporarily here for storeClientCopyHeaders */
-    int is_modified;
+    /*
+     * This can be changed into a pointer later on when the memory allocator
+     * has been taught the difference between buffers to zero and buffers not to
+     * zero.. [ahc]
+     */
+    char readbuf[CLIENT_SOCK_SZ];
 };
 
 struct _ConnStateData {
@@ -1426,7 +1401,6 @@ struct _peer {
 	time_t last_connect_probe;
 	int logged_state;	/* so we can print dead/revived msgs */
 	int conn_open;		/* current opened connections */
-	int idle_opening;	/* pending idle connection setups */
     } stats;
     struct {
 	int version;
@@ -1451,9 +1425,6 @@ struct _peer {
 	unsigned int default_parent:1;
 	unsigned int roundrobin:1;
 	unsigned int mcast_responder:1;
-#if PEER_MULTICAST_SIBLINGS
-	unsigned int mcast_siblings:1;
-#endif
 	unsigned int closest_only:1;
 #if USE_HTCP
 	unsigned int htcp:1;
@@ -1470,7 +1441,6 @@ struct _peer {
 #if USE_CARP
 	unsigned int carp:1;
 #endif
-	unsigned int http11:1;	/* HTTP/1.1 support */
     } options;
     int weight;
     struct {
@@ -1542,7 +1512,6 @@ struct _peer {
 #endif
     int front_end_https;
     int connection_auth;
-    int idle;
 };
 
 struct _net_db_name {
@@ -1641,7 +1610,7 @@ struct _iostats {
 	int read_hist[16];
 	int writes;
 	int write_hist[16];
-    } Http, Ftp, Gopher;
+    } Http, Ftp, Gopher, Wais;
 };
 
 struct _mem_node {
@@ -1663,8 +1632,8 @@ struct _store_client {
     squid_off_t copy_offset;
     squid_off_t seen_offset;
     size_t copy_size;
-    mem_node_ref node_ref;
-    STNCB *new_callback;
+    char *copy_buf;
+    STCB *callback;
     void *callback_data;
     StoreEntry *entry;		/* ptr to the parent StoreEntry, argh! */
     storeIOState *swapin_sio;
@@ -1717,16 +1686,10 @@ struct _RemovalPurgeWalker {
     void (*Done) (RemovalPurgeWalker * walker);
 };
 
-struct _vary_id_t {
-    time_t create_time;
-    unsigned int serial;
-};
-
 /* This structure can be freed while object is purged out from memory */
 struct _MemObject {
     method_t method;
     char *url;
-    const char *store_url;
     mem_hdr data_hdr;
     squid_off_t inmem_hi;
     squid_off_t inmem_lo;
@@ -1748,6 +1711,7 @@ struct _MemObject {
 	STABH *callback;
 	void *data;
     } abort;
+    char *log_url;
     RemovalPolicyNode repl;
     int id;
     squid_off_t object_sz;
@@ -1759,10 +1723,7 @@ struct _MemObject {
     const char *vary_headers;
     const char *vary_encoding;
     StoreEntry *ims_entry;
-    StoreEntry *old_entry;
     time_t refresh_timestamp;
-    time_t stale_while_revalidate;
-    vary_id_t vary_id;
 };
 
 struct _StoreEntry {
@@ -1879,8 +1840,6 @@ struct _request_flags {
 #endif
     unsigned int collapsed:1;	/* This request was collapsed. Don't trust the store entry to be valid */
     unsigned int cache_validation:1;	/* This request is an internal cache validation */
-    unsigned int no_direct:1;	/* Deny direct forwarding unless overriden by always_direct. Used in accelerator mode */
-    unsigned int chunked_response:1;	/* Send the response using chunked encoding */
 };
 
 struct _link_list {
@@ -1918,7 +1877,6 @@ struct _request_t {
     u_short port;
     String urlpath;
     char *canonical;
-    char *store_url;		/* rewritten URL for store lookup/storage; if NULL use canonical */
     int link_count;		/* free when zero */
     request_flags flags;
     HttpHdrCc *cache_control;
@@ -1945,7 +1903,6 @@ struct _request_t {
     char *vary_headers;		/* Used when varying entities are detected. Changes how the store key is calculated */
     String vary_encoding;	/* Used when varying entities are detected. Changes how the store key is calculated. */
     VaryData *vary;
-    vary_id_t vary_id;		/* Vary ID of the parent vary object */
     Array *etags;		/* possible known entity tags (Vary MISS) */
     char *etag;			/* current entity tag, cache validation */
     unsigned int done_etag:1;	/* We have done clientProcessETag on this, don't attempt it again */
@@ -1953,7 +1910,6 @@ struct _request_t {
     char *peer_domain;		/* Configured peer forceddomain */
     BODY_HANDLER *body_reader;
     void *body_reader_data;
-    struct in_addr out_ip;
     String extacl_log;		/* String to be used for access.log purposes */
     const char *extacl_user;	/* User name returned by extacl lookup */
     const char *extacl_passwd;	/* Password returned by extacl lookup */
@@ -1969,11 +1925,6 @@ struct _cachemgr_passwd {
     char *passwd;
     wordlist *actions;
     cachemgr_passwd *next;
-};
-
-struct _refresh_cc {
-    int max_stale;
-    int negative_ttl;
 };
 
 struct _refresh_t {
@@ -1994,11 +1945,7 @@ struct _refresh_t {
 	unsigned int ignore_private:1;
 	unsigned int ignore_auth:1;
 #endif
-	unsigned int ignore_stale_while_revalidate:1;
     } flags;
-    int max_stale;
-    int stale_while_revalidate;
-    int negative_ttl;
 };
 
 struct _ErrorState {
@@ -2194,7 +2141,7 @@ struct _storeSwapLogData {
     squid_file_sz swap_file_sz;
     u_short refcount;
     u_short flags;
-    unsigned char key[SQUID_MD5_DIGEST_LENGTH];
+    unsigned char key[MD5_DIGEST_CHARS];
 };
 
 struct _storeSwapLogHeader {
@@ -2214,7 +2161,7 @@ struct _storeSwapLogDataOld {
     size_t swap_file_sz;
     u_short refcount;
     u_short flags;
-    unsigned char key[SQUID_MD5_DIGEST_LENGTH];
+    unsigned char key[MD5_DIGEST_CHARS];
 };
 
 #endif
@@ -2243,9 +2190,6 @@ struct _MemPool {
 #if DEBUG_MEMPOOL
     size_t real_obj_size;	/* with alignment */
 #endif
-    struct {
-	int dozero:1;
-    } flags;
     Stack pstack;		/* stack for free pointers */
     MemPoolMeter meter;
 #if DEBUG_MEMPOOL
@@ -2501,29 +2445,17 @@ struct _diskd_queue {
     } shm;
 };
 
-struct _logfile_buffer {
-    char *buf;
-    int size;
-    int len;
-    int written_len;
-    dlink_node node;
-};
-
 struct _Logfile {
+    int fd;
     char path[MAXPATHLEN];
+    char *buf;
+    size_t bufsz;
+    ssize_t offset;
     struct {
 	unsigned int fatal;
+	unsigned int syslog;
     } flags;
-
-    void *data;
-    int sequence_number;
-
-    LOGLINESTART *f_linestart;
-    LOGWRITE *f_linewrite;
-    LOGLINEEND *f_lineend;
-    LOGFLUSH *f_flush;
-    LOGROTATE *f_rotate;
-    LOGCLOSE *f_close;
+    int syslog_priority;
 };
 
 struct _logformat {
@@ -2569,25 +2501,6 @@ struct _VaryData {
     char *key;
     char *etag;
     Array etags;
-};
-
-struct _HttpMsgBuf {
-    const char *buf;
-    size_t size;
-    /* offset of first/last byte of headers */
-    int h_start, h_end, h_len;
-    /* offset of first/last byte of request, including any padding */
-    int req_start, req_end, r_len;
-    int m_start, m_end, m_len;
-    int u_start, u_end, u_len;
-    int v_start, v_end, v_len;
-    int v_maj, v_min;
-};
-
-/* request method str stuff; should probably be a String type.. */
-struct rms {
-    char *str;
-    int len;
 };
 
 #endif /* SQUID_STRUCTS_H */
