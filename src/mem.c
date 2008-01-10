@@ -146,12 +146,6 @@ memDataInit(mem_type type, const char *name, size_t size, int max_pages_notused)
     MemPools[type] = memPoolCreate(name, size);
 }
 
-static void
-memDataNonZero(mem_type type)
-{
-    memPoolNonZero(MemPools[type]);
-}
-
 
 /* find appropriate pool and use it (pools always init buffer with 0s) */
 void *
@@ -300,19 +294,12 @@ memInit(void)
      * malloc() for those? @?@
      */
     memDataInit(MEM_2K_BUF, "2K Buffer", 2048, 10);
-    memDataNonZero(MEM_2K_BUF);
     memDataInit(MEM_4K_BUF, "4K Buffer", 4096, 10);
-    memDataNonZero(MEM_4K_BUF);
     memDataInit(MEM_8K_BUF, "8K Buffer", 8192, 10);
-    memDataNonZero(MEM_8K_BUF);
     memDataInit(MEM_16K_BUF, "16K Buffer", 16384, 10);
-    memDataNonZero(MEM_16K_BUF);
     memDataInit(MEM_32K_BUF, "32K Buffer", 32768, 10);
-    memDataNonZero(MEM_32K_BUF);
     memDataInit(MEM_64K_BUF, "64K Buffer", 65536, 10);
-    memDataNonZero(MEM_64K_BUF);
-    memDataInit(MEM_STORE_CLIENT_BUF, "Store Client Buffer", STORE_CLIENT_BUF_SZ, 0);
-    memDataNonZero(MEM_STORE_CLIENT_BUF);
+    memDataInit(MEM_CLIENT_SOCK_BUF, "Client Socket Buffer", CLIENT_SOCK_SZ, 0);
     memDataInit(MEM_ACL, "acl", sizeof(acl), 0);
     memDataInit(MEM_ACL_DENY_INFO_LIST, "acl_deny_info_list",
 	sizeof(acl_deny_info_list), 0);
@@ -350,7 +337,6 @@ memInit(void)
     memDataInit(MEM_MEMOBJECT, "MemObject", sizeof(MemObject),
 	Squid_MaxFD >> 3);
     memDataInit(MEM_MEM_NODE, "mem_node", sizeof(mem_node), 0);
-    memDataNonZero(MEM_MEM_NODE);
     memDataInit(MEM_NETDBENTRY, "netdbEntry", sizeof(netdbEntry), 0);
     memDataInit(MEM_NET_DB_NAME, "net_db_name", sizeof(net_db_name), 0);
     memDataInit(MEM_RELIST, "relist", sizeof(relist), 0);
@@ -359,7 +345,7 @@ memInit(void)
     memDataInit(MEM_STOREENTRY, "StoreEntry", sizeof(StoreEntry), 0);
     memDataInit(MEM_WORDLIST, "wordlist", sizeof(wordlist), 0);
     memDataInit(MEM_CLIENT_INFO, "ClientInfo", sizeof(ClientInfo), 0);
-    memDataInit(MEM_MD5_DIGEST, "MD5 digest", SQUID_MD5_DIGEST_LENGTH, 0);
+    memDataInit(MEM_MD5_DIGEST, "MD5 digest", MD5_DIGEST_CHARS, 0);
     memDataInit(MEM_HELPER_REQUEST, "helper_request",
 	sizeof(helper_request), 0);
     memDataInit(MEM_HELPER_STATEFUL_REQUEST, "helper_stateful_request",
@@ -370,7 +356,6 @@ memInit(void)
     /* init string pools */
     for (i = 0; i < mem_str_pool_count; i++) {
 	StrPools[i].pool = memPoolCreate(StrPoolsAttrs[i].name, StrPoolsAttrs[i].obj_size);
-	memPoolNonZero(StrPools[i].pool);
     }
     cachemgrRegister("mem",
 	"Memory Utilization",

@@ -92,7 +92,7 @@ typedef struct _rtentry rtentry;
 
 static int asnAddNet(char *, int);
 static void asnCacheStart(int as);
-static STNCB asHandleReply;
+static STCB asHandleReply;
 static int destroyRadixNode(struct squid_radix_node *rn, void *w);
 static int printRadixNode(struct squid_radix_node *rn, void *w);
 static void asnAclInitialize(acl * acls);
@@ -203,7 +203,7 @@ asnCacheStart(int as)
     assert(NULL != req);
     asState->request = requestLink(req);
     if ((e = storeGetPublic(asres, METHOD_GET)) == NULL) {
-	e = storeCreateEntry(asres, null_request_flags, METHOD_GET);
+	e = storeCreateEntry(asres, asres, null_request_flags, METHOD_GET);
 	asState->sc = storeClientRegister(e, asState);
 	fwdStart(-1, e, asState->request);
     } else {
@@ -213,50 +213,45 @@ asnCacheStart(int as)
     asState->entry = e;
     asState->seen = 0;
     asState->offset = 0;
-    storeClientRef(asState->sc,
+    storeClientCopy(asState->sc,
 	e,
 	asState->seen,
 	asState->offset,
-	SM_PAGE_SIZE,
+	4096,
+	memAllocate(MEM_4K_BUF),
 	asHandleReply,
 	asState);
 }
 
 static void
-asHandleReply(void *data, mem_node_ref nr, ssize_t size)
+asHandleReply(void *data, char *buf, ssize_t size)
 {
     ASState *asState = data;
     StoreEntry *e = asState->entry;
     char *s;
     char *t;
-    LOCAL_ARRAY(char, buf, SM_PAGE_SIZE);
-
     debug(53, 3) ("asHandleReply: Called with size=%ld\n", (long int) size);
     if (EBIT_TEST(e->flags, ENTRY_ABORTED)) {
-	stmemNodeUnref(&nr);
+	memFree(buf, MEM_4K_BUF);
 	asStateFree(asState);
 	return;
     }
     if (size == 0 && e->mem_obj->inmem_hi > 0) {
+	memFree(buf, MEM_4K_BUF);
 	asStateFree(asState);
-	stmemNodeUnref(&nr);
 	return;
     } else if (size < 0) {
 	debug(53, 1) ("asHandleReply: Called with size=%ld\n", (long int) size);
+	memFree(buf, MEM_4K_BUF);
 	asStateFree(asState);
-	stmemNodeUnref(&nr);
 	return;
     } else if (HTTP_OK != e->mem_obj->reply->sline.status) {
 	debug(53, 1) ("WARNING: AS %d whois request failed\n",
 	    asState->as_number);
-	stmemNodeUnref(&nr);
+	memFree(buf, MEM_4K_BUF);
 	asStateFree(asState);
 	return;
     }
-    assert((nr.offset + size) < SM_PAGE_SIZE);
-    memcpy(buf, nr.node->data + nr.offset, size);
-    stmemNodeUnref(&nr);
-
     s = buf;
     while (s - buf < size && *s != '\0') {
 	while (*s && xisspace(*s))
@@ -280,24 +275,27 @@ asHandleReply(void *data, mem_node_ref nr, ssize_t size)
 	(long int) asState->seen, (long int) asState->offset);
     if (e->store_status == STORE_PENDING) {
 	debug(53, 3) ("asHandleReply: store_status == STORE_PENDING: %s\n", storeUrl(e));
-	storeClientRef(asState->sc,
+	storeClientCopy(asState->sc,
 	    e,
 	    asState->seen,
 	    asState->offset,
-	    SM_PAGE_SIZE,
+	    4096,
+	    buf,
 	    asHandleReply,
 	    asState);
     } else if (asState->seen < e->mem_obj->inmem_hi) {
 	debug(53, 3) ("asHandleReply: asState->seen < e->mem_obj->inmem_hi %s\n", storeUrl(e));
-	storeClientRef(asState->sc,
+	storeClientCopy(asState->sc,
 	    e,
 	    asState->seen,
 	    asState->offset,
-	    SM_PAGE_SIZE,
+	    4096,
+	    buf,
 	    asHandleReply,
 	    asState);
     } else {
 	debug(53, 3) ("asHandleReply: Done: %s\n", storeUrl(e));
+	memFree(buf, MEM_4K_BUF);
 	asStateFree(asState);
     }
 }

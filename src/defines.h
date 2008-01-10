@@ -299,7 +299,7 @@
  */
 #define PEER_TCP_MAGIC_COUNT 10
 
-#define STORE_CLIENT_BUF_SZ 4096
+#define CLIENT_SOCK_SZ 4096
 
 #define URI_WHITESPACE_STRIP 0
 #define URI_WHITESPACE_ALLOW 1
@@ -363,7 +363,5 @@
 
 #define	DLINK_ISEMPTY(n)	( (n).head == NULL )
 #define	DLINK_HEAD(n)		( (n).head->data )
-
-#define	LOGFILE_SEQNO(n)	( (n)->sequence_number )
 
 #endif /* SQUID_DEFINES_H */

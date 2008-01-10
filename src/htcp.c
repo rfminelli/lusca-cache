@@ -178,7 +178,7 @@ static int htcpInSocket = -1;
 static int htcpOutSocket = -1;
 #define N_QUERIED_KEYS 8192
 static u_num32 queried_id[N_QUERIED_KEYS];
-static cache_key queried_keys[N_QUERIED_KEYS][SQUID_MD5_DIGEST_LENGTH];
+static cache_key queried_keys[N_QUERIED_KEYS][MD5_DIGEST_CHARS];
 static struct sockaddr_in queried_addr[N_QUERIED_KEYS];
 static MemPool *htcpSpecifierPool = NULL;
 static MemPool *htcpDetailPool = NULL;
@@ -553,7 +553,7 @@ htcpUnpackSpecifier(char *buf, int sz)
     /*
      * Parse the request
      */
-    method = urlParseMethod(s->method, strlen(s->method));
+    method = urlParseMethod(s->method);
     s->request = urlParse(method == METHOD_NONE ? METHOD_GET : method, s->uri);
     return s;
 }
@@ -1178,7 +1178,7 @@ htcpQuery(StoreEntry * e, request_t * req, peer * p)
     stuff.f1 = 1;
     stuff.response = 0;
     stuff.msg_id = ++msg_id_counter;
-    stuff.S.method = (char *) RequestMethods[req->method].str;
+    stuff.S.method = (char *) RequestMethodStr[req->method];
     stuff.S.uri = (char *) storeUrl(e);
     stuff.S.version = vbuf;
     httpBuildRequestHeader(req, req, e, &hdr, flags);
