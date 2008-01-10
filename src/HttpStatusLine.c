@@ -83,9 +83,6 @@ httpStatusLinePackInto(const HttpStatusLine * sline, Packer * p)
 int
 httpStatusLineParse(HttpStatusLine * sline, const char *start, const char *end)
 {
-    int maj, min, status;
-    const char *s;
-
     assert(sline);
     sline->status = HTTP_INVALID_HEADER;	/* Squid header parsing error */
     if (strncasecmp(start, "HTTP/", 5))
@@ -93,58 +90,12 @@ httpStatusLineParse(HttpStatusLine * sline, const char *start, const char *end)
     start += 5;
     if (!xisdigit(*start))
 	return 0;
-
-    /* Format: HTTP/x.x <space> <status code> <space> <reason-phrase> CRLF */
-    s = start;
-    maj = 0;
-    for (s = start; s < end && xisdigit(*s); s++) {
-	maj = maj * 10;
-	maj = maj + *s - '0';
+    if (sscanf(start, "%d.%d", &sline->version.major, &sline->version.minor) != 2) {
+	debug(57, 7) ("httpStatusLineParse: Invalid HTTP identifier.\n");
     }
-    if (s >= end) {
-	debug(57, 7) ("httpStatusLineParse: Invalid HTTP reply status major.\n");
+    if (!(start = strchr(start, ' ')))
 	return 0;
-    }
-    /* next should be '.' */
-    if (*s != '.') {
-	debug(57, 7) ("httpStatusLineParse: Invalid HTTP reply status line.\n");
-	return 0;
-    }
-    s++;
-    /* next should be minor number */
-    min = 0;
-    for (; s < end && xisdigit(*s); s++) {
-	min = min * 10;
-	min = min + *s - '0';
-    }
-    if (s >= end) {
-	debug(57, 7) ("httpStatusLineParse: Invalid HTTP reply status version minor.\n");
-	return 0;
-    }
-    /* then a space */
-    if (*s != ' ') {
-    }
-    s++;
-    /* next should be status start */
-    status = 0;
-    for (; s < end && xisdigit(*s); s++) {
-	status = status * 10;
-	status = status + *s - '0';
-    }
-    if (s >= end) {
-	debug(57, 7) ("httpStatusLineParse: Invalid HTTP reply status code.\n");
-	return 0;
-    }
-    /* then a space */
-
-    /* for now we ignore the reason-phrase */
-
-    /* then crlf */
-
-    sline->version.major = maj;
-    sline->version.minor = min;
-    sline->status = status;
-
+    sline->status = (http_status) atoi(++start);
     /* we ignore 'reason-phrase' */
     return 1;			/* success */
 }
@@ -255,8 +206,8 @@ httpStatusString(http_status status)
     case HTTP_REQUEST_ENTITY_TOO_LARGE:
 	p = "Request Entity Too Large";
 	break;
-    case HTTP_REQUEST_URI_TOO_LONG:
-	p = "Request-URI Too Long";
+    case HTTP_REQUEST_URI_TOO_LARGE:
+	p = "Request-URI Too Large";
 	break;
     case HTTP_UNSUPPORTED_MEDIA_TYPE:
 	p = "Unsupported Media Type";
@@ -278,9 +229,6 @@ httpStatusString(http_status status)
 	break;
     case HTTP_HTTP_VERSION_NOT_SUPPORTED:
 	p = "HTTP Version not supported";
-	break;
-    case HTTP_EXPECTATION_FAILED:
-	p = "Expectation failed";
 	break;
     default:
 	p = "Unknown";

@@ -532,17 +532,6 @@ storeDiskdDirCallback(SwapDir * SD)
 		x);
 	    break;
 	}
-#if 0
-	debug(47, 3) ("msgrcv %ld %d %d %p %d %" PRINTF_OFF_T " %d %d\n",
-	    M.mtype,
-	    M.id,
-	    M.seq_no,
-	    M.callback_data,
-	    M.size,
-	    M.offset,
-	    M.status,
-	    M.shm_offset);
-#endif
 	diskd_stats.recv_count++;
 	diskdinfo->away--;
 	storeDiskdHandle(&M);
@@ -581,7 +570,7 @@ storeDiskdDirRebuildFromDirectory(void *data)
     LOCAL_ARRAY(char, hdr_buf, SM_PAGE_SIZE);
     StoreEntry *e = NULL;
     StoreEntry tmpe;
-    cache_key key[SQUID_MD5_DIGEST_LENGTH];
+    cache_key key[MD5_DIGEST_CHARS];
     sfileno filn = 0;
     int count;
     int size;
@@ -640,13 +629,13 @@ storeDiskdDirRebuildFromDirectory(void *data)
 	    continue;
 	}
 	debug(20, 3) ("storeDiskdDirRebuildFromDirectory: successful swap meta unpacking\n");
-	memset(key, '\0', SQUID_MD5_DIGEST_LENGTH);
+	memset(key, '\0', MD5_DIGEST_CHARS);
 	memset(&tmpe, '\0', sizeof(StoreEntry));
 	for (t = tlv_list; t; t = t->next) {
 	    switch (t->type) {
 	    case STORE_META_KEY:
-		assert(t->length == SQUID_MD5_DIGEST_LENGTH);
-		xmemcpy(key, t->value, SQUID_MD5_DIGEST_LENGTH);
+		assert(t->length == MD5_DIGEST_CHARS);
+		xmemcpy(key, t->value, MD5_DIGEST_CHARS);
 		break;
 #if SIZEOF_SQUID_FILE_SZ == SIZEOF_SIZE_T
 	    case STORE_META_STD:
@@ -1229,7 +1218,7 @@ storeDiskdDirAddDiskRestore(SwapDir * SD, const cache_key * key,
     debug(20, 5) ("storeDiskdAddDiskRestore: %s, fileno=%08X\n", storeKeyText(key), file_number);
     /* if you call this you'd better be sure file_number is not 
      * already in use! */
-    e = new_StoreEntry(STORE_ENTRY_WITHOUT_MEMOBJ, NULL);
+    e = new_StoreEntry(STORE_ENTRY_WITHOUT_MEMOBJ, NULL, NULL);
     e->store_status = STORE_OK;
     storeSetMemStatus(e, NOT_IN_MEMORY);
     e->swap_status = SWAPOUT_DONE;
@@ -1471,7 +1460,7 @@ storeDiskdDirWriteCleanEntry(SwapDir * sd, const StoreEntry * e)
     s.swap_file_sz = e->swap_file_sz;
     s.refcount = e->refcount;
     s.flags = e->flags;
-    xmemcpy(&s.key, e->hash.key, SQUID_MD5_DIGEST_LENGTH);
+    xmemcpy(&s.key, e->hash.key, MD5_DIGEST_CHARS);
     xmemcpy(state->outbuf + state->outbuf_offset, &s, ss);
     state->outbuf_offset += ss;
     /* buffered write */
@@ -1557,7 +1546,7 @@ storeDiskdDirSwapLog(const SwapDir * sd, const StoreEntry * e, int op)
     s->swap_file_sz = e->swap_file_sz;
     s->refcount = e->refcount;
     s->flags = e->flags;
-    xmemcpy(s->key, e->hash.key, SQUID_MD5_DIGEST_LENGTH);
+    xmemcpy(s->key, e->hash.key, MD5_DIGEST_CHARS);
     file_write(diskdinfo->swaplog_fd,
 	-1,
 	s,

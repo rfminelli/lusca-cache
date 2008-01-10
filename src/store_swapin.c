@@ -69,27 +69,21 @@ storeSwapInStart(store_client * sc)
 static void
 storeSwapInFileClosed(void *data, int errflag, storeIOState * sio)
 {
-    STNCB *callback;
     store_client *sc = data;
+    STCB *callback;
     debug(20, 3) ("storeSwapInFileClosed: sio=%p, errflag=%d\n",
 	sio, errflag);
     cbdataUnlock(sio);
     sc->swapin_sio = NULL;
     if (errflag < 0)
 	storeRelease(sc->entry);
-    if ((callback = sc->new_callback)) {
-	/* XXX [ahc] why doesn't this call storeClientCallback() ? */
+    if ((callback = sc->callback)) {
 	void *cbdata = sc->callback_data;
-	mem_node_ref nr = sc->node_ref;
-	nr = sc->node_ref;	/* XXX this should be a reference; and we should dereference our copy! */
-	/* This code "transfers" its ownership (and reference) of the node_ref to the caller. Ugly, but works. */
-	sc->node_ref.node = NULL;
-	sc->node_ref.offset = -1;
 	assert(errflag <= 0);
-	sc->new_callback = NULL;
+	sc->callback = NULL;
 	sc->callback_data = NULL;
 	if (cbdataValid(cbdata))
-	    callback(cbdata, nr, errflag);
+	    callback(cbdata, sc->copy_buf, errflag);
 	cbdataUnlock(cbdata);
     }
     statCounter.swap.ins++;

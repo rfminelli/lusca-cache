@@ -61,16 +61,6 @@ typedef size_t squid_file_sz;
 #define SIZEOF_SQUID_FILE_SZ SIZEOF_SIZE_T
 #endif
 
-struct _mem_node_ref {
-    struct _mem_node *node;
-    /*
-     * the caller asked for a specific offset into the object;
-     * this particular offset is the offset into the above mem_node
-     * to get at said data.
-     */
-    int offset;
-};
-
 typedef struct {
     squid_off_t bytes;
     squid_off_t kb;
@@ -173,7 +163,6 @@ typedef struct _iostats iostats;
 typedef struct _MemBuf MemBuf;
 typedef struct _mem_node mem_node;
 typedef struct _mem_hdr mem_hdr;
-typedef struct _mem_node_ref mem_node_ref;
 typedef struct _store_client store_client;
 typedef struct _MemObject MemObject;
 typedef struct _StoreEntry StoreEntry;
@@ -188,7 +177,6 @@ typedef struct _request_t request_t;
 typedef struct _AccessLogEntry AccessLogEntry;
 typedef struct _cachemgr_passwd cachemgr_passwd;
 typedef struct _refresh_t refresh_t;
-typedef struct _refresh_cc refresh_cc;
 typedef struct _CommWriteStateData CommWriteStateData;
 typedef struct _ErrorState ErrorState;
 typedef struct _dlink_node dlink_node;
@@ -225,7 +213,6 @@ typedef struct _link_list link_list;
 typedef struct _storefs_entry storefs_entry_t;
 typedef struct _storerepl_entry storerepl_entry_t;
 typedef struct _diskd_queue diskd_queue;
-typedef struct _logfile_buffer logfile_buffer_t;
 typedef struct _Logfile Logfile;
 typedef struct _logformat_token logformat_token;
 typedef struct _logformat logformat;
@@ -237,7 +224,6 @@ typedef struct _RemovalPolicyNode RemovalPolicyNode;
 typedef struct _RemovalPolicySettings RemovalPolicySettings;
 typedef struct _errormap errormap;
 typedef struct _PeerMonitor PeerMonitor;
-typedef struct _vary_id_t vary_id_t;
 
 typedef struct _http_version_t http_version_t;
 
@@ -289,8 +275,7 @@ typedef void STRCB(void *their_data, const char *buf, ssize_t len);
 
 typedef void SIH(storeIOState *, void *);	/* swap in */
 typedef int QS(const void *, const void *);	/* qsort */
-typedef void STNCB(void *, struct _mem_node_ref r, ssize_t);	/* new store callback */
-typedef void STHCB(void *, HttpReply *);	/* store callback */
+typedef void STCB(void *, char *, ssize_t);	/* store callback */
 typedef void STABH(void *);
 typedef void ERCB(int fd, void *, size_t);
 typedef void OBJH(StoreEntry *);
@@ -420,17 +405,4 @@ typedef void ERRMAPCB(StoreEntry *, int body_offset, squid_off_t content_length,
 typedef struct _VaryData VaryData;
 typedef void STLVCB(VaryData * vary, void *cbdata);
 
-typedef struct _HttpMsgBuf HttpMsgBuf;
-
-typedef struct rms rms_t;
-
-typedef void LOGLINESTART(Logfile *);
-typedef void LOGWRITE(Logfile *, const char *, size_t len);
-typedef void LOGLINEEND(Logfile *);
-typedef void LOGFLUSH(Logfile *);
-typedef void LOGROTATE(Logfile *);
-typedef void LOGCLOSE(Logfile *);
-
-typedef void REFRESHCHECK(void *data, int fresh, const char *log);
-typedef struct _refresh_check_helper refresh_check_helper;
 #endif /* SQUID_TYPEDEFS_H */

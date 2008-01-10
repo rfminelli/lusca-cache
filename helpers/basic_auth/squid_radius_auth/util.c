@@ -72,7 +72,7 @@ char util_sccsid[] =
 #include	<signal.h>
 #endif
 
-#include	"squid_md5.h"
+#include	"md5.h"
 #include	"util.h"
 
 /*
@@ -164,3 +164,14 @@ u_int32_t get_ipaddr(char *host)
 	}
 	return(ntohl(*(u_int32_t *)hp->h_addr));
 }
+
+
+void md5_calc(unsigned char *output, unsigned char *input, unsigned int inlen)
+{
+	MD5_CTX	context;
+
+	MD5Init(&context);
+	MD5Update(&context, input, inlen);
+	MD5Final(output, &context);
+}
+
