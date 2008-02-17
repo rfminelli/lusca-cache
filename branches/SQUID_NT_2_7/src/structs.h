@@ -576,6 +576,7 @@ struct _SquidConfig {
     time_t authenticateGCInterval;
     time_t authenticateTTL;
     time_t authenticateIpTTL;
+    time_t authenticateIpShortcircuitTTL;
     char *appendDomain;
     int appendDomainLen;
     char *debugOptions;
@@ -727,6 +728,7 @@ struct _SquidConfig {
 	acl_access *followXFF;
 #endif
 	acl_access *vary_encoding;
+	acl_access *auth_ip_shortcircuit;
     } accessList;
     acl_deny_info_list *denyInfoList;
     struct _authConfig {
@@ -907,7 +909,6 @@ struct _fde {
 	unsigned int nodelay:1;
 	unsigned int close_on_exec:1;
 	unsigned int backoff:1;	/* keep track of whether the fd is backed off */
-	unsigned int dnsfailed:1;	/* did the dns lookup fail */
     } flags;
     comm_pending read_pending;
     comm_pending write_pending;
