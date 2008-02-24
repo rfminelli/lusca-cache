@@ -151,14 +151,13 @@ extern int clientGetPinnedConnection(ConnStateData * conn, const request_t * req
 extern int commSetNonBlocking(int fd);
 extern int commUnsetNonBlocking(int fd);
 extern void commSetCloseOnExec(int fd);
-extern void commSetTcpKeepalive(int fd, int idle, int interval, int timeout);
 extern int comm_accept(int fd, struct sockaddr_in *, struct sockaddr_in *);
 extern void comm_close(int fd);
 extern void comm_reset_close(int fd);
 #if LINGERING_CLOSE
 extern void comm_lingering_close(int fd);
 #endif
-extern void commConnectStart(int fd, const char *, u_short, CNCB *, void *, struct in_addr *addr);
+extern void commConnectStart(int fd, const char *, u_short, CNCB *, void *);
 extern int comm_connect_addr(int sock, const struct sockaddr_in *);
 extern void comm_init(void);
 extern int comm_listen(int sock);
@@ -913,13 +912,6 @@ extern void stmemFree(mem_hdr *);
 extern void stmemFreeData(mem_hdr *);
 extern void stmemNodeFree(void *);
 extern char *stmemNodeGet(mem_node *);
-extern int stmemRef(const mem_hdr * mem, squid_off_t offset, mem_node_ref * r);
-extern void stmemNodeUnref(mem_node_ref * r);
-extern mem_node_ref stmemNodeRef(mem_node_ref * r);
-extern void stmemNodeRefCreate(mem_node_ref * r);
-
-
-
 
 /* ----------------------------------------------------------------- */
 
@@ -1108,7 +1100,7 @@ extern squid_off_t storeSwapOutObjectBytesOnDisk(const MemObject * mem);
  * store_client.c
  */
 extern store_client *storeClientRegister(StoreEntry * e, void *data);
-extern void storeClientRef(store_client *, StoreEntry *, squid_off_t, squid_off_t, size_t, STNCB *, void *);
+extern void storeClientCopy(store_client *, StoreEntry *, squid_off_t, squid_off_t, size_t, char *, STCB *, void *);
 extern void storeClientCopyHeaders(store_client *, StoreEntry *, STHCB *, void *);
 extern int storeClientCopyPending(store_client *, StoreEntry * e, void *data);
 extern int storeClientUnregister(store_client * sc, StoreEntry * e, void *data);

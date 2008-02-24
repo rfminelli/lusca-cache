@@ -376,12 +376,6 @@ struct _http_port_list {
 #endif
     unsigned int act_as_origin;	/* Fake Date: headers in accelerator mode */
     unsigned int allow_direct:1;	/* Allow direct forwarding in accelerator mode */
-    struct {
-	unsigned int enabled;
-	unsigned int idle;
-	unsigned int interval;
-	unsigned int timeout;
-    } tcp_keepalive;
 };
 
 #if USE_SSL
@@ -915,7 +909,6 @@ struct _fde {
 	unsigned int nodelay:1;
 	unsigned int close_on_exec:1;
 	unsigned int backoff:1;	/* keep track of whether the fd is backed off */
-	unsigned int dnsfailed:1;	/* did the dns lookup fail */
     } flags;
     comm_pending read_pending;
     comm_pending write_pending;
@@ -1266,7 +1259,6 @@ struct _clientHttpRequest {
     } redirect;
     dlink_node active;
     squid_off_t maxBodySize;
-    mem_node_ref nr;
     STHCB *header_callback;	/* Temporarily here for storeClientCopyHeaders */
     StoreEntry *header_entry;	/* Temporarily here for storeClientCopyHeaders */
     int is_modified;
@@ -1671,8 +1663,8 @@ struct _store_client {
     squid_off_t copy_offset;
     squid_off_t seen_offset;
     size_t copy_size;
-    mem_node_ref node_ref;
-    STNCB *new_callback;
+    char *copy_buf;
+    STCB *callback;
     void *callback_data;
     StoreEntry *entry;		/* ptr to the parent StoreEntry, argh! */
     storeIOState *swapin_sio;
