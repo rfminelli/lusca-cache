@@ -47,7 +47,7 @@ copy %0\..\..\..\helpers\external_acl\mswin_lm_group\readme.txt %2\docs\mswin_ch
 copy %0\..\..\..\helpers\basic_auth\mswin_sspi\readme.txt %2\docs\mswin_auth.txt
 copy %0\..\..\..\doc\debug-sections.txt %2\docs\debug-sections.txt
 copy %0\..\..\..\doc\HTTP-codes.txt %2\docs\HTTP-codes.txt
-copy %0\..\..\..\doc\release-notes\release-2.6.html %2\docs\release-2.6.html
+copy %0\..\..\..\doc\release-notes\release-2.7.html %2\docs\release-2.7.html
 type %0\..\..\..\helpers\basic_auth\NCSA\ncsa_auth.8 | man2htm2 > %2\docs\ncsa_auth.html
 type %0\..\..\..\helpers\basic_auth\LDAP\squid_ldap_auth.8 | man2htm2 > %2\docs\squid_ldap_auth.html
 type %0\..\..\..\helpers\external_acl\LDAP_group\squid_ldap_group.8 | man2htm2 > %2\docs\squid_ldap_group.html
