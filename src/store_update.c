@@ -49,6 +49,7 @@ typedef struct {
     StoreEntry *newentry;
     store_client *sc;
     squid_off_t offset;
+    char buf[4096];
 } StoreUpdateState;
 
 CBDATA_TYPE(StoreUpdateState);
@@ -86,47 +87,40 @@ storeUpdateAbort(void *data)
 }
 
 static void
-storeUpdateCopy(void *data, mem_node_ref nr, ssize_t size)
+storeUpdateCopy(void *data, char *buf, ssize_t size)
 {
-    const char *buf = NULL;
     StoreUpdateState *state = data;
 
     if (EBIT_TEST(state->newentry->flags, ENTRY_ABORTED)) {
 	debug(20, 1) ("storeUpdateCopy: Aborted at %d (%d)\n", (int) state->offset, (int) size);
 	/* the abort callback deals with the needed cleanup */
-	goto finish;
+	return;
     }
     if (EBIT_TEST(state->newentry->flags, KEY_PRIVATE) && state->newentry->mem_obj->nclients == 0) {
 	debug(20, 2) ("storeUpdateCopy: Gone stale with no clients, skip copying of the rest\n");
 	storeUpdateDone(state);
-	goto finish;
+	return;
     }
     if (size < 0) {
 	debug(20, 1) ("storeUpdateCopy: Error at %d (%d)\n", (int) state->offset, (int) size);
 	storeUpdateDone(state);
-	goto finish;
+	return;
     }
     if (size > 0) {
-	buf = nr.node->data + nr.offset;
-	assert(size <= nr.node->len - nr.offset);
 	storeAppend(state->newentry, buf, size);
 	if (EBIT_TEST(state->newentry->flags, ENTRY_ABORTED)) {
 	    debug(20, 1) ("storeUpdateCopy: Aborted on write at %d (%d)\n", (int) state->offset, (int) size);
-	    goto finish;
+	    return;
 	}
 	state->offset += size;
-	storeClientRef(state->sc, state->oldentry, state->offset, state->offset, SM_PAGE_SIZE, storeUpdateCopy, state);
-	goto finish;
+	storeClientCopy(state->sc, state->oldentry, state->offset, state->offset, sizeof(state->buf), state->buf, storeUpdateCopy, state);
+	return;
     } else {
 	storeComplete(state->newentry);
 	storeUnlockObject(state->newentry);
 	state->newentry = NULL;
 	storeUpdateDone(state);
     }
-
-  finish:
-    buf = NULL;
-    stmemNodeUnref(&nr);
 }
 
 void
@@ -188,6 +182,6 @@ storeUpdate(StoreEntry * entry, request_t * request)
 	debug(20, 1) ("storeUpdate: Aborted on write\n");
 	return;
     }
-    storeClientRef(state->sc, state->oldentry, state->offset, state->offset, SM_PAGE_SIZE, storeUpdateCopy, state);
+    storeClientCopy(state->sc, state->oldentry, state->offset, state->offset, sizeof(state->buf), state->buf, storeUpdateCopy, state);
     return;
 }

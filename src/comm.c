@@ -313,7 +313,7 @@ comm_listen(int sock)
 }
 
 void
-commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *data, struct in_addr *addr)
+commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *data)
 {
     ConnectStateData *cs;
     debug(5, 3) ("commConnectStart: FD %d, %s:%d\n", fd, host, (int) port);
@@ -323,12 +323,6 @@ commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *
     cs->port = port;
     cs->callback = callback;
     cs->data = data;
-    if (addr != NULL) {
-	cs->in_addr = *addr;
-	cs->addrcount = 1;
-    } else {
-	cs->addrcount = 0;
-    }
     cbdataLock(cs->data);
     comm_add_close_handler(fd, commConnectFree, cs);
     ipcache_nbgethostbyname(host, commConnectDnsHandle, cs);
@@ -339,20 +333,13 @@ commConnectDnsHandle(const ipcache_addrs * ia, void *data)
 {
     ConnectStateData *cs = data;
     if (ia == NULL) {
-	/* If we've been given a default IP, use it */
-	if (cs->addrcount > 0) {
-	    fd_table[cs->fd].flags.dnsfailed = 1;
-	    cs->connstart = squid_curtime;
-	    commConnectHandle(cs->fd, cs);
-	} else {
-	    debug(5, 3) ("commConnectDnsHandle: Unknown host: %s\n", cs->host);
-	    if (!dns_error_message) {
-		dns_error_message = "Unknown DNS error";
-		debug(5, 1) ("commConnectDnsHandle: Bad dns_error_message\n");
-	    }
-	    assert(dns_error_message != NULL);
-	    commConnectCallback(cs, COMM_ERR_DNS);
+	debug(5, 3) ("commConnectDnsHandle: Unknown host: %s\n", cs->host);
+	if (!dns_error_message) {
+	    dns_error_message = "Unknown DNS error";
+	    debug(5, 1) ("commConnectDnsHandle: Bad dns_error_message\n");
 	}
+	assert(dns_error_message != NULL);
+	commConnectCallback(cs, COMM_ERR_DNS);
 	return;
     }
     assert(ia->cur < ia->count);
@@ -1090,32 +1077,6 @@ commSetTcpNoDelay(int fd)
 }
 #endif
 
-void
-commSetTcpKeepalive(int fd, int idle, int interval, int timeout)
-{
-    int on = 1;
-#ifdef TCP_KEEPCNT
-    if (timeout && interval) {
-	int count = (timeout + interval - 1) / interval;
-	if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &count, sizeof(on)) < 0)
-	    debug(5, 1) ("commSetKeepalive: FD %d: %s\n", fd, xstrerror());
-    }
-#endif
-#ifdef TCP_KEEPIDLE
-    if (idle) {
-	if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(on)) < 0)
-	    debug(5, 1) ("commSetKeepalive: FD %d: %s\n", fd, xstrerror());
-    }
-#endif
-#ifdef TCP_KEEPINTVL
-    if (interval) {
-	if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &interval, sizeof(on)) < 0)
-	    debug(5, 1) ("commSetKeepalive: FD %d: %s\n", fd, xstrerror());
-    }
-#endif
-    if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (char *) &on, sizeof(on)) < 0)
-	debug(5, 1) ("commSetKeepalive: FD %d: %s\n", fd, xstrerror());
-}
 
 void
 comm_init(void)
