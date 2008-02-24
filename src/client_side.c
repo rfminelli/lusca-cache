@@ -134,7 +134,7 @@ static void clientFollowXForwardedForNext(void *data);
 static void clientFollowXForwardedForDone(int answer, void *data);
 #endif /* FOLLOW_X_FORWARDED_FOR */
 static int clientOnlyIfCached(clientHttpRequest * http);
-static STNCB clientSendMoreData;
+static STCB clientSendMoreData;
 static STHCB clientSendHeaders;
 static STHCB clientCacheHit;
 static void clientSetKeepaliveFlag(clientHttpRequest *);
@@ -169,12 +169,12 @@ static inline int clientNatLookup(ConnStateData * conn);
 
 /* Temporary here while restructuring stuff */
 static void
-storeClientCopyHeadersCB(void *data, mem_node_ref nr, ssize_t size)
+storeClientCopyHeadersCB(void *data, char *buf, ssize_t size)
 {
     clientHttpRequest *http = data;
     assert(http->header_callback);
     assert(http->header_entry);
-    stmemNodeUnref(&nr);
+    memFree(buf, MEM_STORE_CLIENT_BUF);
     if (!http->header_entry)
 	return;
     if (size < 0 || !memHaveHeaders(http->header_entry->mem_obj)) {
@@ -189,7 +189,7 @@ storeClientCopyHeaders(store_client * sc, StoreEntry * e, STHCB * callback, void
     clientHttpRequest *http = callback_data;
     http->header_callback = callback;
     http->header_entry = e;
-    storeClientRef(http->sc, e, 0, 0, SM_PAGE_SIZE, storeClientCopyHeadersCB, http);
+    storeClientCopy(http->sc, e, 0, 0, STORE_CLIENT_BUF_SZ, memAllocate(MEM_STORE_CLIENT_BUF), storeClientCopyHeadersCB, http);
 }
 
 #if USE_IDENT
@@ -618,7 +618,6 @@ clientHandleETagMiss(clientHttpRequest * http)
 static void
 clientHandleETagReply(void *data, HttpReply * rep)
 {
-    //const char *buf = ref.node->data + ref.offset;
     clientHttpRequest *http = data;
     StoreEntry *entry = http->entry;
     const char *url = storeLookupUrl(entry);
@@ -2047,6 +2046,7 @@ typedef struct _clientAsyncRefreshRequest {
     store_client *sc;
     squid_off_t offset;
     size_t buf_in_use;
+    char readbuf[STORE_CLIENT_BUF_SZ];
     struct timeval start;
 } clientAsyncRefreshRequest;
 
@@ -2119,11 +2119,10 @@ clientAsyncDone(clientAsyncRefreshRequest * async)
 }
 
 static void
-clientHandleAsyncReply(void *data, mem_node_ref nr, ssize_t size)
+clientHandleAsyncReply(void *data, char *buf, ssize_t size)
 {
     clientAsyncRefreshRequest *async = data;
     StoreEntry *e = async->entry;
-    stmemNodeUnref(&nr);
     if (EBIT_TEST(e->flags, ENTRY_ABORTED)) {
 	clientAsyncDone(async);
 	return;
@@ -2137,10 +2136,10 @@ clientHandleAsyncReply(void *data, mem_node_ref nr, ssize_t size)
 	clientAsyncDone(async);
 	return;
     }
-    storeClientRef(async->sc, async->entry,
+    storeClientCopy(async->sc, async->entry,
 	async->offset,
 	async->offset,
-	SM_PAGE_SIZE,
+	STORE_CLIENT_BUF_SZ, async->readbuf,
 	clientHandleAsyncReply,
 	async);
 }
@@ -2186,10 +2185,10 @@ clientAsyncRefresh(clientHttpRequest * http)
     delaySetStoreClient(async->sc, delayClient(http));
 #endif
     fwdStart(-1, async->entry, async->request);
-    storeClientRef(async->sc, async->entry,
+    storeClientCopy(async->sc, async->entry,
 	async->offset,
 	async->offset,
-	SM_PAGE_SIZE,
+	STORE_CLIENT_BUF_SZ, async->readbuf,
 	clientHandleAsyncReply,
 	async);
 }
@@ -2748,7 +2747,6 @@ static void clientCheckHeaderDone(clientHttpRequest * http);
 static void
 clientSendHeaders(void *data, HttpReply * rep)
 {
-    //const char *buf = ref.node->data + ref.offset;
     clientHttpRequest *http = data;
     StoreEntry *entry = http->entry;
     ConnStateData *conn = http->conn;
@@ -3002,10 +3000,10 @@ clientCheckHeaderDone(clientHttpRequest * http)
     if (mb.size > 0) {
 	comm_write_mbuf(http->conn->fd, mb, clientWriteComplete, http);
     } else {
-	storeClientRef(http->sc, http->entry,
+	storeClientCopy(http->sc, http->entry,
 	    http->out.offset,
 	    http->out.offset,
-	    SM_PAGE_SIZE,
+	    STORE_CLIENT_BUF_SZ, memAllocate(MEM_STORE_CLIENT_BUF),
 	    clientSendMoreData,
 	    http);
     }
@@ -3017,17 +3015,15 @@ clientCheckHeaderDone(clientHttpRequest * http)
  * such, writes processed message to the client's socket
  */
 static void
-clientSendMoreData(void *data, mem_node_ref ref, ssize_t size)
+clientSendMoreData(void *data, char *buf, ssize_t size)
 {
-    const char *buf = NULL;
     clientHttpRequest *http = data;
     StoreEntry *entry = http->entry;
     ConnStateData *conn = http->conn;
     int fd = conn->fd;
     MemBuf mb;
     debug(33, 5) ("clientSendMoreData: %s, %d bytes\n", http->uri, (int) size);
-    assert(size + ref.offset <= SM_PAGE_SIZE);
-    assert(size <= SM_PAGE_SIZE);
+    assert(size <= STORE_CLIENT_BUF_SZ);
     assert(http->request != NULL);
     dlinkDelete(&http->active, &ClientActiveRequests);
     dlinkAdd(http, &http->active, &ClientActiveRequests);
@@ -3037,31 +3033,27 @@ clientSendMoreData(void *data, mem_node_ref ref, ssize_t size)
     if (DLINK_HEAD(conn->reqs) != http) {
 	/* there is another object in progress, defer this one */
 	debug(33, 1) ("clientSendMoreData: Deferring %s\n", storeUrl(entry));
-	stmemNodeUnref(&ref);
+	memFree(buf, MEM_STORE_CLIENT_BUF);
 	return;
     } else if (entry && EBIT_TEST(entry->flags, ENTRY_ABORTED)) {
 	/* call clientWriteComplete so the client socket gets closed */
 	clientWriteComplete(fd, NULL, 0, COMM_OK, http);
-	stmemNodeUnref(&ref);
+	memFree(buf, MEM_STORE_CLIENT_BUF);
 	return;
     } else if (size < 0) {
 	/* call clientWriteComplete so the client socket gets closed */
 	clientWriteComplete(fd, NULL, 0, COMM_OK, http);
-	stmemNodeUnref(&ref);
+	memFree(buf, MEM_STORE_CLIENT_BUF);
 	return;
     } else if (size == 0) {
 	/* call clientWriteComplete so the client socket gets closed */
 	clientWriteComplete(fd, NULL, 0, COMM_OK, http);
-	stmemNodeUnref(&ref);
+	memFree(buf, MEM_STORE_CLIENT_BUF);
 	return;
     }
-    assert(ref.node->data);
-    buf = ref.node->data + ref.offset;
     if (!http->request->range && !http->request->flags.chunked_response) {
 	/* Avoid copying to MemBuf for non-range requests */
 	http->out.offset += size;
-	/* XXX eww - these refcounting semantics should be better adrian! fix it! */
-	http->nr = ref;
 	comm_write(fd, buf, size, clientWriteBodyComplete, http, NULL);
 	/* NULL because clientWriteBodyComplete frees it */
 	return;
@@ -3105,7 +3097,7 @@ clientSendMoreData(void *data, mem_node_ref ref, ssize_t size)
     } else {
 	comm_write_mbuf(fd, mb, clientWriteComplete, http);
     }
-    stmemNodeUnref(&ref);
+    memFree(buf, MEM_STORE_CLIENT_BUF);
 }
 
 /*
@@ -3117,12 +3109,11 @@ clientSendMoreData(void *data, mem_node_ref ref, ssize_t size)
 static void
 clientWriteBodyComplete(int fd, char *buf, size_t size, int errflag, void *data)
 {
-    clientHttpRequest *http = data;
     /*
      * NOTE: clientWriteComplete doesn't currently use its "buf"
      * (second) argument, so we pass in NULL.
      */
-    stmemNodeUnref(&http->nr);
+    memFree(buf, MEM_STORE_CLIENT_BUF);
     clientWriteComplete(fd, NULL, size, errflag, data);
 }
 
@@ -3255,11 +3246,10 @@ clientWriteComplete(int fd, char *bufnotused, size_t size, int errflag, void *da
 	 * storage manager. */
 	if (EBIT_TEST(entry->flags, ENTRY_ABORTED))
 	    debug(33, 0) ("clientWriteComplete 2: ENTRY_ABORTED\n");
-	debug(33, 3) ("clientWriteComplete: copying from offset %d\n", (int) http->out.offset);
-	storeClientRef(http->sc, entry,
+	storeClientCopy(http->sc, entry,
 	    http->out.offset,
 	    http->out.offset,
-	    SM_PAGE_SIZE,
+	    STORE_CLIENT_BUF_SZ, memAllocate(MEM_STORE_CLIENT_BUF),
 	    clientSendMoreData,
 	    http);
     }
@@ -3747,7 +3737,7 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t * method_p, i
 	    }
 #endif
 	}
-	if (conn->port->transparent && clientNatLookup(conn) == 0)
+	if (!host && !conn->transparent && clientNatLookup(conn) == 0)
 	    conn->transparent = 1;
 	if (!host && conn->transparent) {
 	    port = ntohs(conn->me.sin_port);
@@ -4600,9 +4590,6 @@ httpAccept(int sock, void *data)
 #endif
 	commSetSelect(fd, COMM_SELECT_READ, clientReadRequest, connState, 0);
 	commSetDefer(fd, clientReadDefer, connState);
-	if (s->tcp_keepalive.enabled) {
-	    commSetTcpKeepalive(fd, s->tcp_keepalive.idle, s->tcp_keepalive.interval, s->tcp_keepalive.timeout);
-	}
 	clientdbEstablished(peer.sin_addr, 1);
 	incoming_sockets_accepted++;
     }
@@ -4761,9 +4748,6 @@ httpsAccept(int sock, void *data)
 	if (aclCheckFast(Config.accessList.identLookup, &identChecklist))
 	    identStart(&me, &peer, clientIdentDone, connState);
 #endif
-	if (s->http.tcp_keepalive.enabled) {
-	    commSetTcpKeepalive(fd, s->http.tcp_keepalive.idle, s->http.tcp_keepalive.interval, s->http.tcp_keepalive.timeout);
-	}
 	clientdbEstablished(peer.sin_addr, 1);
 	incoming_sockets_accepted++;
 	httpsAcceptSSL(connState, s->sslContext);

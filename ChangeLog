@@ -1,11 +1,3 @@
-	- TCP keepalive support
-	- Stricter MemPool debug mode detecting double free and filling freed
-	  objects with garbage
-	- Optimization using reference counted memory cache to avoid repeated
-	  copying of data.
-	- Use the client's DNS lookup if our DNS lookup fails on
-	  transparent requests.
-
 Changes to squid-2.7.STABLE1 (not yet released)
 
 	- General code tidyups of HTTP parser and related optimizations
