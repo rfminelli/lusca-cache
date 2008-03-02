@@ -5335,6 +5335,7 @@ DOC_START
 		offline_toggle *
 		pconn
 		peer_select
+		reconfigure *
 		redirector
 		refresh
 		server_list
