@@ -155,6 +155,8 @@ NEED_COSSDUMP_FALSE = @NEED_COSSDUMP_FALSE@
 NEED_COSSDUMP_TRUE = @NEED_COSSDUMP_TRUE@
 NEED_DISKD_FALSE = @NEED_DISKD_FALSE@
 NEED_DISKD_TRUE = @NEED_DISKD_TRUE@
+NEED_OWN_MD5_FALSE = @NEED_OWN_MD5_FALSE@
+NEED_OWN_MD5_TRUE = @NEED_OWN_MD5_TRUE@
 NEED_OWN_SNPRINTF_FALSE = @NEED_OWN_SNPRINTF_FALSE@
 NEED_OWN_SNPRINTF_TRUE = @NEED_OWN_SNPRINTF_TRUE@
 NEED_OWN_STRSEP_FALSE = @NEED_OWN_STRSEP_FALSE@
@@ -721,7 +723,7 @@ dist-hook:
 	@if [ -f $(top_srcdir)/RELEASENOTES.html ]; then \
 	  cp -p $(top_srcdir)/RELEASENOTES.html $(distdir)/RELEASENOTES.html; \
 	else \
-	  cp $(top_srcdir)/doc/release-notes/release.html $(distdir)/RELEASENOTES.html; \
+	  cp $(top_srcdir)/doc/release-notes/release-2.6.html $(distdir)/RELEASENOTES.html; \
 	fi
 
 install-pinger:

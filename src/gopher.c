@@ -124,6 +124,7 @@ gopherMimeCreate(GopherStateData * gopherState)
 {
     StoreEntry *e = gopherState->entry;
     HttpReply *reply = e->mem_obj->reply;
+    http_version_t version;
     const char *mime_type = NULL;
     const char *mime_enc = NULL;
 
@@ -164,7 +165,8 @@ gopherMimeCreate(GopherStateData * gopherState)
     storeBuffer(e);
     httpReplyReset(reply);
     EBIT_CLR(gopherState->entry->flags, ENTRY_FWD_HDR_WAIT);
-    httpReplySetHeaders(reply, HTTP_OK, "Gatewaying", mime_type, -1, -1, -1);
+    httpBuildVersion(&version, 1, 0);
+    httpReplySetHeaders(reply, version, HTTP_OK, "Gatewaying", mime_type, -1, -1, -1);
     if (mime_enc)
 	httpHeaderPutStr(&reply->header, HDR_CONTENT_ENCODING, mime_enc);
     httpReplySwapOut(reply, e);
@@ -646,13 +648,13 @@ gopherReadReply(int fd, void *data)
 	    commSetSelect(fd, COMM_SELECT_READ, gopherReadReply, data, 0);
 	} else {
 	    ErrorState *err;
-	    err = errorCon(ERR_READ_ERROR, HTTP_BAD_GATEWAY, gopherState->fwdState->request);
+	    err = errorCon(ERR_READ_ERROR, HTTP_INTERNAL_SERVER_ERROR, gopherState->fwdState->request);
 	    err->xerrno = errno;
 	    fwdFail(gopherState->fwdState, err);
 	    comm_close(fd);
 	}
     } else if (len == 0 && entry->mem_obj->inmem_hi == 0) {
-	fwdFail(gopherState->fwdState, errorCon(ERR_ZERO_SIZE_OBJECT, HTTP_BAD_GATEWAY, gopherState->fwdState->request));
+	fwdFail(gopherState->fwdState, errorCon(ERR_ZERO_SIZE_OBJECT, HTTP_SERVICE_UNAVAILABLE, gopherState->fwdState->request));
 	comm_close(fd);
     } else if (len == 0) {
 	/* Connection closed; retrieval done. */

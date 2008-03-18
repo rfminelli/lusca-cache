@@ -91,7 +91,7 @@
 #include	<string.h>
 #endif
 
-#include	"squid_md5.h"
+#include	"md5.h"
 #include	"radius.h"
 #include	"util.h"
 
@@ -146,10 +146,10 @@ time_since(const struct timeval *when)
 static void
 md5_calc(uint8_t out[16], void *in, size_t len)
 {
-    SQUID_MD5_CTX ctx;
-    SQUID_MD5Init(&ctx);
-    SQUID_MD5Update(&ctx, in, len);
-    SQUID_MD5Final(out, &ctx);
+    MD5_CTX ctx;
+    MD5Init(&ctx);
+    MD5Update(&ctx, in, len);
+    MD5Final(out, &ctx);
 }
 
 /*

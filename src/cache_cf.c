@@ -34,9 +34,6 @@
  */
 
 #include "squid.h"
-#if HAVE_GLOB_H
-#include <glob.h>
-#endif
 
 #if SQUID_SNMP
 #include "snmp.h"
@@ -75,8 +72,7 @@ static void free_access_log(customlog ** definitions);
 
 static struct cache_dir_option common_cachedir_options[] =
 {
-    {"no-store", parse_cachedir_option_readonly, dump_cachedir_option_readonly},
-    {"read-only", parse_cachedir_option_readonly, NULL},
+    {"read-only", parse_cachedir_option_readonly, dump_cachedir_option_readonly},
     {"min-size", parse_cachedir_option_minsize, dump_cachedir_option_minsize},
     {"max-size", parse_cachedir_option_maxsize, dump_cachedir_option_maxsize},
     {NULL, NULL}
@@ -131,14 +127,9 @@ static void free_https_port_list(https_port_list **);
 static int check_null_https_port_list(const https_port_list *);
 #endif
 #endif /* USE_SSL */
-static void parse_rewrite(rewrite ** rewrites);
-static void dump_rewrite(StoreEntry * entry, const char *n, rewrite * reds);
-static void free_rewrite(rewrite ** reds);
 static void parse_programline(wordlist **);
 static void free_programline(wordlist **);
 static void dump_programline(StoreEntry *, const char *, const wordlist *);
-
-static int parseOneConfigFile(const char *file_name, int depth);
 
 void
 self_destruct(void)
@@ -332,62 +323,24 @@ update_maxobjsize(void)
     store_maxobjsize = ms;
 }
 
-static int
-parseManyConfigFiles(char *files, int depth)
-{
-    int error_count = 0;
-    char *saveptr = NULL;
-#if HAVE_GLOB
-    char *path;
-    glob_t globbuf;
-    int i;
-    memset(&globbuf, 0, sizeof(globbuf));
-    for (path = strwordtok(files, &saveptr); path; path = strwordtok(NULL, &saveptr)) {
-	if (glob(path, globbuf.gl_pathc ? GLOB_APPEND : 0, NULL, &globbuf) != 0) {
-	    fatalf("Unable to find configuration file: %s: %s",
-		path, xstrerror());
-	}
-    }
-    for (i = 0; i < globbuf.gl_pathc; i++) {
-	error_count += parseOneConfigFile(globbuf.gl_pathv[i], depth);
-    }
-    globfree(&globbuf);
-#else
-    char *file = strwordtok(files, &saveptr);
-    while (file != NULL) {
-	error_count += parseOneConfigFile(file, depth);
-	file = strwordtok(NULL, &saveptr);
-    }
-#endif /* HAVE_GLOB */
-    return error_count;
-}
-
-static int
-parseOneConfigFile(const char *file_name, int depth)
+int
+parseConfigFile(const char *file_name)
 {
     FILE *fp = NULL;
-    const char *orig_cfg_filename = cfg_filename;
-    int orig_config_lineno = config_lineno;
     char *token = NULL;
     char *tmp_line = NULL;
     int tmp_line_len = 0;
     size_t config_input_line_len;
     int err_count = 0;
-
-    debug(3, 1) ("Including Configuration File: %s (depth %d)\n", file_name, depth);
-    if (depth > 16) {
-	debug(0, 0) ("WARNING: can't include %s: includes are nested too deeply (>16)!\n", file_name);
-	return 1;
-    }
+    configFreeMemory();
+    default_all();
     if ((fp = fopen(file_name, "r")) == NULL)
 	fatalf("Unable to open configuration file: %s: %s",
 	    file_name, xstrerror());
 #ifdef _SQUID_WIN32_
     setmode(fileno(fp), O_TEXT);
 #endif
-
     cfg_filename = file_name;
-
     if ((token = strrchr(cfg_filename, '/')))
 	cfg_filename = token + 1;
     memset(config_input_line, '\0', BUFSIZ);
@@ -414,46 +367,25 @@ parseOneConfigFile(const char *file_name, int depth)
 	    continue;
 	}
 	debug(3, 5) ("Processing: '%s'\n", tmp_line);
-
-	/* Handle includes here */
-	if (tmp_line_len >= 9 &&
-	    strncmp(tmp_line, "include", 7) == 0 &&
-	    xisspace(tmp_line[7])) {
-	    err_count += parseManyConfigFiles(tmp_line + 8, depth + 1);
-	} else if (!parse_line(tmp_line)) {
-	    debug(3, 0) ("parseConfigFile: %s:%d unrecognized: '%s'\n",
-		cfg_filename,
+	if (!parse_line(tmp_line)) {
+	    debug(3, 0) ("parseConfigFile: line %d unrecognized: '%s'\n",
 		config_lineno,
-		tmp_line);
+		config_input_line);
 	    err_count++;
 	}
 	safe_free(tmp_line);
 	tmp_line_len = 0;
     }
     fclose(fp);
-    cfg_filename = orig_cfg_filename;
-    config_lineno = orig_config_lineno;
-    return err_count;
-}
-
-int
-parseConfigFile(const char *file_name)
-{
-    int ret;
-
-    configFreeMemory();
-    default_all();
-    ret = parseOneConfigFile(file_name, 0);
     defaults_if_none();
     configDoConfigure();
-
     if (opt_send_signal == -1) {
 	cachemgrRegister("config",
 	    "Current Squid Configuration",
 	    dump_config,
 	    1, 1);
     }
-    return ret;
+    return err_count;
 }
 
 static void
@@ -537,7 +469,6 @@ configDoConfigure(void)
 #if USE_UNLINKD
     requirePathnameExists("unlinkd_program", Config.Program.unlinkd);
 #endif
-    requirePathnameExists("logfile_daemon", Config.Program.logfile_daemon);
     if (Config.Program.url_rewrite.command)
 	requirePathnameExists("url_rewrite_program", Config.Program.url_rewrite.command->key);
     if (Config.Program.location_rewrite.command)
@@ -546,7 +477,6 @@ configDoConfigure(void)
     requirePathnameExists("Error Directory", Config.errorDirectory);
     authenticateConfigure(&Config.authConfig);
     externalAclConfigure();
-    refreshCheckConfigure();
 #if HTTP_VIOLATIONS
     {
 	const refresh_t *R;
@@ -562,12 +492,6 @@ configDoConfigure(void)
 	    debug(22, 1) ("WARNING: use of 'override-lastmod' in 'refresh_pattern' violates HTTP\n");
 	    break;
 	}
-	for (R = Config.Refresh; R; R = R->next) {
-	    if (R->stale_while_revalidate <= 0)
-		continue;
-	    debug(22, 1) ("WARNING: use of 'stale-while-revalidate' in 'refresh_pattern' violates HTTP\n");
-	    break;
-	}
     }
 #endif
 #if !HTTP_VIOLATIONS
@@ -576,6 +500,13 @@ configDoConfigure(void)
     if (!Config.onoff.via)
 	debug(22, 1) ("WARNING: HTTP requires the use of Via\n");
 #endif
+    if (Config.Wais.relayHost) {
+	if (Config.Wais.peer)
+	    cbdataFree(Config.Wais.peer);
+	Config.Wais.peer = cbdataAlloc(peer);
+	Config.Wais.peer->host = xstrdup(Config.Wais.relayHost);
+	Config.Wais.peer->http_port = Config.Wais.relayPort;
+    }
     if (aclPurgeMethodInUse(Config.accessList.http))
 	Config2.onoff.enable_purge = 1;
     if (geteuid() == 0) {
@@ -1315,8 +1246,7 @@ dump_cachedir_options(StoreEntry * entry, struct cache_dir_option *options, Swap
     if (!options)
 	return;
     for (option = options; option->name; option++)
-	if (option->dump)
-	    option->dump(entry, option->name, sd);
+	option->dump(entry, option->name, sd);
 }
 
 static void
@@ -1607,7 +1537,7 @@ parse_cachedir_options(SwapDir * sd, struct cache_dir_option *options, int recon
     if (reconfiguring) {
 	if (old_read_only != sd->flags.read_only) {
 	    debug(3, 1) ("Cache dir '%s' now %s\n",
-		sd->path, sd->flags.read_only ? "No-Store" : "Read-Write");
+		sd->path, sd->flags.read_only ? "Read-Only" : "Read-Write");
 	}
     }
 }
@@ -1684,34 +1614,6 @@ dump_peer(StoreEntry * entry, const char *name, peer * p)
     }
 }
 
-static u_short
-GetService(const char *proto)
-{
-    struct servent *port = NULL;
-    char *token = strtok(NULL, w_space);
-    if (token == NULL) {
-	self_destruct();
-	return -1;		/* NEVER REACHED */
-    }
-    port = getservbyname(token, proto);
-    if (port != NULL) {
-	return ntohs((u_short) port->s_port);
-    }
-    return xatos(token);
-}
-
-static u_short
-GetTcpService(void)
-{
-    return GetService("tcp");
-}
-
-static u_short
-GetUdpService(void)
-{
-    return GetService("udp");
-}
-
 static void
 parse_peer(peer ** head)
 {
@@ -1736,10 +1638,10 @@ parse_peer(peer ** head)
 	p->options.no_digest = 1;
 	p->options.no_netdb_exchange = 1;
     }
-    p->http_port = GetTcpService();
+    p->http_port = GetShort();
     if (!p->http_port)
 	self_destruct();
-    p->icp.port = GetUdpService();
+    p->icp.port = GetShort();
     p->connection_auth = -1;	/* auto */
     while ((token = strtok(NULL, w_space))) {
 	if (!strcasecmp(token, "proxy-only")) {
@@ -1750,10 +1652,6 @@ parse_peer(peer ** head)
 	    p->options.no_digest = 1;
 	} else if (!strcasecmp(token, "multicast-responder")) {
 	    p->options.mcast_responder = 1;
-#if PEER_MULTICAST_SIBLINGS
-	} else if (!strcasecmp(token, "multicast-siblings")) {
-	    p->options.mcast_siblings = 1;
-#endif
 	} else if (!strncasecmp(token, "weight=", 7)) {
 	    p->weight = xatoi(token + 7);
 	} else if (!strcasecmp(token, "closest-only")) {
@@ -1885,10 +1783,6 @@ parse_peer(peer ** head)
 	    p->connection_auth = 1;
 	} else if (strcmp(token, "connection-auth=auto") == 0) {
 	    p->connection_auth = -1;
-	} else if (strncmp(token, "idle=", 5) == 0) {
-	    p->idle = xatoi(token + 5);
-	} else if (strcmp(token, "http11") == 0) {
-	    p->options.http11 = 1;
 	} else {
 	    debug(3, 0) ("parse_peer: token='%s'\n", token);
 	    self_destruct();
@@ -2250,15 +2144,7 @@ dump_refreshpattern(StoreEntry * entry, const char *name, refresh_t * head)
 	    storeAppendPrintf(entry, " ignore-private");
 	if (head->flags.ignore_auth)
 	    storeAppendPrintf(entry, " ignore-auth");
-	if (head->stale_while_revalidate > 0)
-	    storeAppendPrintf(entry, " stale-while-revalidate=%d", head->stale_while_revalidate);
 #endif
-	if (head->flags.ignore_stale_while_revalidate)
-	    storeAppendPrintf(entry, " ignore-stale-while-revalidate");
-	if (head->max_stale >= 0)
-	    storeAppendPrintf(entry, " max-stale=%d", head->max_stale);
-	if (head->negative_ttl >= 0)
-	    storeAppendPrintf(entry, " negative-ttl=%d", head->negative_ttl);
 	storeAppendPrintf(entry, "\n");
 	head = head->next;
     }
@@ -2281,10 +2167,6 @@ parse_refreshpattern(refresh_t ** head)
     int ignore_private = 0;
     int ignore_auth = 0;
 #endif
-    int stale_while_revalidate = -1;
-    int ignore_stale_while_revalidate = 0;
-    int max_stale = -1;
-    int negative_ttl = -1;
     int i;
     refresh_t *t;
     regex_t comp;
@@ -2329,20 +2211,10 @@ parse_refreshpattern(refresh_t ** head)
 	    ignore_reload = 1;
 	    refresh_nocache_hack = 1;
 	    /* tell client_side.c that this is used */
-	} else if (!strncmp(token, "stale-while-revalidate=", 23)) {
-	    stale_while_revalidate = atoi(token + 23);
 	} else
 #endif
-	if (!strncmp(token, "max-stale=", 10)) {
-	    max_stale = atoi(token + 10);
-	} else if (!strncmp(token, "negative-ttl=", 13)) {
-	    negative_ttl = atoi(token + 13);
-	} else if (!strcmp(token, "ignore-stale-while-revalidate")) {
-	    ignore_stale_while_revalidate = 1;
-	} else {
 	    debug(22, 0) ("redreshAddToList: Unknown option '%s': %s\n",
 		pattern, token);
-	}
     }
     if ((errcode = regcomp(&comp, pattern, flags)) != 0) {
 	char errbuf[256];
@@ -2379,10 +2251,6 @@ parse_refreshpattern(refresh_t ** head)
     if (ignore_auth)
 	t->flags.ignore_auth = 1;
 #endif
-    t->flags.ignore_stale_while_revalidate = ignore_stale_while_revalidate;
-    t->stale_while_revalidate = stale_while_revalidate;
-    t->max_stale = max_stale;
-    t->negative_ttl = negative_ttl;
     t->next = NULL;
     while (*head)
 	head = &(*head)->next;
@@ -2776,10 +2644,37 @@ static void
 parse_sockaddr_in_list(sockaddr_in_list ** head)
 {
     char *token;
+    char *t;
+    char *host;
+    char *tmp;
+    const struct hostent *hp;
+    unsigned short port = 0;
     sockaddr_in_list *s;
     while ((token = strtok(NULL, w_space))) {
+	host = NULL;
+	port = 0;
+	if ((t = strchr(token, ':'))) {
+	    /* host:port */
+	    host = token;
+	    *t = '\0';
+	    port = xatos(t + 1);
+	    if (0 == port)
+		self_destruct();
+	} else if ((port = strtol(token, &tmp, 10)), !*tmp) {
+	    /* port */
+	} else {
+	    host = token;
+	    port = 0;
+	}
 	s = xcalloc(1, sizeof(*s));
-	if (!parse_sockaddr(token, &s->s))
+	s->s.sin_port = htons(port);
+	if (NULL == host)
+	    s->s.sin_addr = any_addr;
+	else if (1 == safe_inet_addr(host, &s->s.sin_addr))
+	    (void) 0;
+	else if ((hp = gethostbyname(host)))	/* dont use ipcache */
+	    s->s.sin_addr = inaddrFromHostent(hp);
+	else
 	    self_destruct();
 	while (*head)
 	    head = &(*head)->next;
@@ -2825,7 +2720,6 @@ parse_http_port_specification(http_port_list * s, char *token)
     const struct hostent *hp;
     unsigned short port = 0;
     char *t;
-    s->name = xstrdup(token);
     if ((t = strchr(token, ':'))) {
 	/* host:port */
 	host = token;
@@ -2884,30 +2778,6 @@ parse_http_port_option(http_port_list * s, char *token)
 	s->tproxy = 1;
 	need_linux_tproxy = 1;
 #endif
-    } else if (strcmp(token, "act-as-origin") == 0) {
-	s->act_as_origin = 1;
-	s->accel = 1;
-    } else if (strcmp(token, "allow-direct") == 0) {
-	s->allow_direct = 1;
-    } else if (strcmp(token, "http11") == 0) {
-	s->http11 = 1;
-    } else if (strcmp(token, "tcpkeepalive") == 0) {
-	s->tcp_keepalive.enabled = 1;
-    } else if (strncmp(token, "tcpkeepalive=", 13) == 0) {
-	char *t = token + 13;
-	s->tcp_keepalive.enabled = 1;
-	s->tcp_keepalive.idle = atoi(t);
-	t = strchr(t, ',');
-	if (t) {
-	    t++;
-	    s->tcp_keepalive.interval = atoi(t);
-	    t = strchr(t, ',');
-	}
-	if (t) {
-	    t++;
-	    s->tcp_keepalive.timeout = atoi(t);
-	    t = strchr(t, ',');
-	}
     } else {
 	self_destruct();
     }
@@ -2993,15 +2863,6 @@ dump_generic_http_port(StoreEntry * e, const char *n, const http_port_list * s)
     if (s->tproxy)
 	storeAppendPrintf(e, " tproxy");
 #endif
-    if (s->http11)
-	storeAppendPrintf(e, " http11");
-    if (s->tcp_keepalive.enabled) {
-	if (s->tcp_keepalive.idle || s->tcp_keepalive.interval || s->tcp_keepalive.timeout) {
-	    storeAppendPrintf(e, " tcp_keepalive=%d,%d,%d", s->tcp_keepalive.idle, s->tcp_keepalive.interval, s->tcp_keepalive.timeout);
-	} else {
-	    storeAppendPrintf(e, " tcp_keepalive");
-	}
-    }
 }
 static void
 dump_http_port_list(StoreEntry * e, const char *n, const http_port_list * s)
@@ -3410,58 +3271,4 @@ static void
 dump_programline(StoreEntry * entry, const char *name, const wordlist * line)
 {
     dump_wordlist(entry, name, line);
-}
-
-static void
-parse_rewrite(rewrite ** rewrites)
-{
-    char *dsturl;
-    rewrite *red;
-
-    red = (rewrite *) xcalloc(1, sizeof(*red));
-
-    if ((dsturl = strtok(NULL, w_space)) == NULL)
-	self_destruct();
-
-    if (!strcmp(dsturl, "-")) {
-	red->tokens = NULL;
-	red->dsturl = NULL;
-    } else {
-	red->tokens = rewriteURLCompile(dsturl);
-	red->dsturl = xstrdup(dsturl);
-    }
-
-    aclParseAclList(&red->aclList);
-
-    //garana: TODO check red->aclList is not empty
-    //garana: TODO check Client.Program.rewrite == NULL
-    while (*rewrites)
-	rewrites = &(*rewrites)->next;
-    *rewrites = red;
-}
-
-static void
-dump_rewrite(StoreEntry * entry, const char *n, rewrite * reds)
-{
-    rewrite *red;
-
-    //TODO: garana: check this function.
-    for (red = reds; red != NULL; red = red->next) {
-	storeAppendPrintf(entry, "%s %s", n, red->dsturl);
-	dump_acl_list(entry, red->aclList);
-	storeAppendPrintf(entry, "\n");
-    }
-}
-
-static void
-free_rewrite(rewrite ** reds)
-{
-    while (*reds) {
-	rewrite *red = *reds;
-	*reds = red->next;
-
-	safe_free(red->dsturl);
-
-	xfree(red);
-    }
 }

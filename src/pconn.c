@@ -49,7 +49,6 @@ int server_pconn_hist[PCONN_HIST_SZ];
 
 static PF pconnRead;
 static PF pconnTimeout;
-static hash_link *pconnLookup(const char *peer, u_short port, const char *domain, struct in_addr *client_address, u_short client_port);
 static int pconnKey(char *buf, const char *host, u_short port, const char *domain, struct in_addr *client_address, u_short client_port);
 static hash_table *table = NULL;
 static struct _pconn *pconnNew(const char *key);
@@ -234,7 +233,7 @@ pconnPush(int fd, const char *host, u_short port, const char *domain, struct in_
 }
 
 int
-pconnPop(const char *host, u_short port, const char *domain, struct in_addr *client_address, u_short client_port, int *idle)
+pconnPop(const char *host, u_short port, const char *domain, struct in_addr *client_address, u_short client_port)
 {
     struct _pconn *p;
     hash_link *hptr;
@@ -245,8 +244,6 @@ pconnPop(const char *host, u_short port, const char *domain, struct in_addr *cli
 	p = (struct _pconn *) hptr;
 	assert(p->nfds > 0);
 	fd = p->fds[p->nfds - 1];
-	if (idle)
-	    *idle = p->nfds - 1;
 	pconnRemoveFD(p, fd);
 	commSetSelect(fd, COMM_SELECT_READ, NULL, NULL, 0);
 	commSetTimeout(fd, -1, NULL, NULL);
@@ -254,8 +251,8 @@ pconnPop(const char *host, u_short port, const char *domain, struct in_addr *cli
     return fd;
 }
 
-static hash_link *
-pconnLookup(const char *peer, u_short port, const char *domain, struct in_addr *client_address, u_short client_port)
+hash_link *
+pconnLookup(const char *peer, u_short port, const char *domain, struct in_addr * client_address, u_short client_port)
 {
     LOCAL_ARRAY(char, key, PCONN_KEYLEN);
     assert(table != NULL);

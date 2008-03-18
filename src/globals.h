@@ -48,7 +48,6 @@ extern char ThisCache2[SQUIDHOSTNAMELEN << 1];
 extern char config_input_line[BUFSIZ];
 extern const char *AclMatchedName;	/* NULL */
 extern const char *DefaultConfigFile;	/* DEFAULT_CONFIG_FILE */
-extern rms_t RequestMethods[];
 extern const char *RequestMethodStr[];
 extern const char *ProtocolStr[];
 extern const char *cfg_filename;	/* NULL */
@@ -88,7 +87,6 @@ extern int opt_dns_tests;	/* 1 */
 extern int opt_foreground_rebuild;	/* 0 */
 extern int opt_forwarded_for;	/* 1 */
 extern int opt_reload_hit_only;	/* 0 */
-extern int opt_stdin_overrides_http_port;	/* 0 */
 #if HAVE_SYSLOG
 extern int opt_syslog_enable;	/* 0 */
 #endif

@@ -256,7 +256,6 @@ typedef enum {
 
 /*LFT_SERVER_IP_ADDRESS, */
     LFT_SERVER_IP_OR_PEER_NAME,
-    LFT_OUTGOING_IP,
 /*LFT_SERVER_PORT, */
 
     LFT_LOCAL_IP,
@@ -298,7 +297,6 @@ typedef enum {
 
     LFT_REQUEST_METHOD,
     LFT_REQUEST_URI,
-    LFT_REQUEST_URLPATH,
 /*LFT_REQUEST_QUERY, * // * this is not needed. see strip_query_terms */
     LFT_REQUEST_VERSION,
 
@@ -317,10 +315,6 @@ typedef enum {
     LFT_IO_SIZE_TOTAL,
 
     LFT_EXT_LOG,
-
-    LFT_SEQUENCE_NUMBER,
-
-    LFT_EXT_FRESHNESS,
 
     LFT_PERCENT			/* special string cases for escaped chars */
 } logformat_bcode_t;
@@ -369,7 +363,6 @@ struct logformat_token_table_entry logformat_token_table[] =
 /*{ "<a", LFT_SERVER_IP_ADDRESS }, */
 /*{ "<p", LFT_SERVER_PORT }, */
     {"<A", LFT_SERVER_IP_OR_PEER_NAME},
-    {"oa", LFT_OUTGOING_IP},
 
     {"la", LFT_LOCAL_IP},
     {"lp", LFT_LOCAL_PORT},
@@ -407,7 +400,6 @@ struct logformat_token_table_entry logformat_token_table[] =
 
     {"rm", LFT_REQUEST_METHOD},
     {"ru", LFT_REQUEST_URI},	/* doesn't include the query-string */
-    {"rp", LFT_REQUEST_URLPATH},	/* doesn't include the host */
 /* { "rq", LFT_REQUEST_QUERY }, * /     / * the query-string, INCLUDING the leading ? */
     {">v", LFT_REQUEST_VERSION},
     {"rv", LFT_REQUEST_VERSION},
@@ -418,8 +410,6 @@ struct logformat_token_table_entry logformat_token_table[] =
 /*{ ">sb", LFT_REQUEST_SIZE_BODY }, */
 /*{ ">sB", LFT_REQUEST_SIZE_BODY_NO_TE }, */
 
-    {"sn", LFT_SEQUENCE_NUMBER},
-
     {"<st", LFT_REPLY_SIZE_TOTAL},
 /*{ "<sl", LFT_REPLY_SIZE_LINE }, * /   / * the reply line (protocol, code, text) */
 /*{ "<sh", LFT_REPLY_SIZE_HEADERS }, */
@@ -429,8 +419,6 @@ struct logformat_token_table_entry logformat_token_table[] =
     {"st", LFT_IO_SIZE_TOTAL},
 
     {"ea", LFT_EXT_LOG},
-
-    {"ef", LFT_EXT_FRESHNESS},
 
     {"%", LFT_PERCENT},
 
@@ -485,9 +473,6 @@ accessLogCustom(AccessLogEntry * al, customlog * log)
 
 	case LFT_SERVER_IP_OR_PEER_NAME:
 	    out = al->hier.host;
-	    break;
-	case LFT_OUTGOING_IP:
-	    out = xstrdup(inet_ntoa(al->cache.out_ip));
 	    break;
 
 	    /* case LFT_SERVER_PORT: */
@@ -644,14 +629,7 @@ accessLogCustom(AccessLogEntry * al, customlog * log)
 	    break;
 
 	case LFT_REQUEST_URI:
-	    out = rfc1738_escape_unescaped(al->url);
-	    break;
-
-	case LFT_REQUEST_URLPATH:
-	    if (al->request) {
-		out = strBuf(al->request->urlpath);
-		quote = 1;
-	    }
+	    out = al->url;
 	    break;
 
 	case LFT_REQUEST_VERSION:
@@ -686,17 +664,6 @@ accessLogCustom(AccessLogEntry * al, customlog * log)
 	case LFT_EXT_LOG:
 	    if (al->request)
 		out = strBuf(al->request->extacl_log);
-
-	    quote = 1;
-	    break;
-
-	case LFT_SEQUENCE_NUMBER:
-	    outint = LOGFILE_SEQNO(logfile);
-	    doint = 1;
-	    break;
-
-	case LFT_EXT_FRESHNESS:
-	    out = al->ext_refresh;
 
 	    quote = 1;
 	    break;
@@ -1064,7 +1031,7 @@ accessLogSquid(AccessLogEntry * al, Logfile * logfile)
 	    al->http.code,
 	    al->cache.size,
 	    al->private.method_str,
-	    rfc1738_escape_unescaped(al->url),
+	    al->url,
 	    user ? user : dash_str,
 	    al->hier.ping.timedout ? "TIMEOUT_" : "",
 	    hier_strings[al->hier.code],
@@ -1082,7 +1049,7 @@ accessLogSquid(AccessLogEntry * al, Logfile * logfile)
 	    al->http.code,
 	    al->cache.size,
 	    al->private.method_str,
-	    rfc1738_escape_unescaped(al->url),
+	    al->url,
 	    user ? user : dash_str,
 	    al->hier.ping.timedout ? "TIMEOUT_" : "",
 	    hier_strings[al->hier.code],
@@ -1113,7 +1080,7 @@ accessLogCommon(AccessLogEntry * al, Logfile * logfile)
 	user1 ? user1 : dash_str,
 	mkhttpdlogtime(&squid_curtime),
 	al->private.method_str,
-	rfc1738_escape_unescaped(al->url),
+	al->url,
 	al->http.version.major, al->http.version.minor,
 	al->http.code,
 	al->cache.size,
@@ -1145,39 +1112,36 @@ accessLogLog(AccessLogEntry * al, aclCheck_t * checklist)
     if (al->icp.opcode)
 	al->private.method_str = icp_opcode_str[al->icp.opcode];
     else
-	al->private.method_str = RequestMethods[al->http.method].str;
+	al->private.method_str = RequestMethodStr[al->http.method];
     if (al->hier.host[0] == '\0')
 	xstrncpy(al->hier.host, dash_str, SQUIDHOSTNAMELEN);
 
     for (log = Config.Log.accesslogs; log; log = log->next) {
 	if (checklist && log->aclList && aclMatchAclList(log->aclList, checklist) != 1)
 	    continue;
-	if (log->logfile) {
-	    logfileLineStart(log->logfile);
-	    switch (log->type) {
-	    case CLF_AUTO:
-		if (Config.onoff.common_log)
-		    accessLogCommon(al, log->logfile);
-		else
-		    accessLogSquid(al, log->logfile);
-		break;
-	    case CLF_SQUID:
-		accessLogSquid(al, log->logfile);
-		break;
-	    case CLF_COMMON:
+	switch (log->type) {
+	case CLF_AUTO:
+	    if (Config.onoff.common_log)
 		accessLogCommon(al, log->logfile);
-		break;
-	    case CLF_CUSTOM:
-		accessLogCustom(al, log);
-		break;
-	    case CLF_NONE:
-		goto last;
-	    default:
-		fatalf("Unknown log format %d\n", log->type);
-		break;
-	    }
-	    logfileLineEnd(log->logfile);
+	    else
+		accessLogSquid(al, log->logfile);
+	    break;
+	case CLF_SQUID:
+	    accessLogSquid(al, log->logfile);
+	    break;
+	case CLF_COMMON:
+	    accessLogCommon(al, log->logfile);
+	    break;
+	case CLF_CUSTOM:
+	    accessLogCustom(al, log);
+	    break;
+	case CLF_NONE:
+	    goto last;
+	default:
+	    fatalf("Unknown log format %d\n", log->type);
+	    break;
 	}
+	logfileFlush(log->logfile);
 	if (!checklist)
 	    break;
     }
@@ -1257,7 +1221,7 @@ accessLogInit(void)
     for (log = Config.Log.accesslogs; log; log = log->next) {
 	if (log->type == CLF_NONE)
 	    continue;
-	log->logfile = logfileOpen(log->filename, MAX_URL << 2, 1);
+	log->logfile = logfileOpen(log->filename, MAX_URL << 1, 1);
 	LogfileStatus = LOG_ENABLE;
     }
 #if HEADERS_LOG
@@ -1476,6 +1440,7 @@ headersLog(int cs, int pq, method_t m, void *data)
     logfileWrite(headerslog, &S, sizeof(S));
     logfileWrite(headerslog, hmask, sizeof(HttpHeaderMask));
     logfileWrite(headerslog, &ccmask, sizeof(int));
+    logfileFlush(headerslog);
 }
 
 #endif

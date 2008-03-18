@@ -179,6 +179,7 @@ comm_openex(int sock_type,
 {
     int new_socket;
     int tos = 0;
+    fde *F = NULL;
 
     /* Create socket for accepting new connections. */
     statCounter.syscalls.sock.sockets++;
@@ -210,31 +211,6 @@ comm_openex(int sock_type,
     }
     /* update fdstat */
     debug(5, 5) ("comm_open: FD %d is a new socket\n", new_socket);
-    return comm_fdopenex(new_socket, sock_type, addr, port, flags, tos, note);
-}
-
-int
-comm_fdopen(int socket_fd,
-    int sock_type,
-    struct in_addr addr,
-    u_short port,
-    int flags,
-    const char *note)
-{
-    return comm_fdopenex(socket_fd, sock_type, addr, port, flags, 0, note);
-}
-
-int
-comm_fdopenex(int new_socket,
-    int sock_type,
-    struct in_addr addr,
-    u_short port,
-    int flags,
-    unsigned char tos,
-    const char *note)
-{
-    fde *F = NULL;
-
     fd_open(new_socket, FD_SOCKET, note);
     F = &fd_table[new_socket];
     F->local_addr = addr;
@@ -288,32 +264,11 @@ comm_listen(int sock)
 	    sock, xstrerror());
 	return x;
     }
-    if (Config.accept_filter && strcmp(Config.accept_filter, "none") != 0) {
-#ifdef SO_ACCEPTFILTER
-	struct accept_filter_arg afa;
-	bzero(&afa, sizeof(afa));
-	debug(5, 0) ("Installing accept filter '%s' on FD %d\n",
-	    Config.accept_filter, sock);
-	xstrncpy(afa.af_name, Config.accept_filter, sizeof(afa.af_name));
-	x = setsockopt(sock, SOL_SOCKET, SO_ACCEPTFILTER, &afa, sizeof(afa));
-	if (x < 0)
-	    debug(5, 0) ("SO_ACCEPTFILTER '%s': %s\n", Config.accept_filter, xstrerror());
-#elif defined(TCP_DEFER_ACCEPT)
-	int seconds = 30;
-	if (strncmp(Config.accept_filter, "data=", 5) == 0)
-	    seconds = atoi(Config.accept_filter + 5);
-	x = setsockopt(sock, IPPROTO_TCP, TCP_DEFER_ACCEPT, &seconds, sizeof(seconds));
-	if (x < 0)
-	    debug(5, 0) ("TCP_DEFER_ACCEPT '%s': %s\n", Config.accept_filter, xstrerror());
-#else
-	debug(5, 0) ("accept_filter not supported on your OS\n");
-#endif
-    }
     return sock;
 }
 
 void
-commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *data, struct in_addr *addr)
+commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *data)
 {
     ConnectStateData *cs;
     debug(5, 3) ("commConnectStart: FD %d, %s:%d\n", fd, host, (int) port);
@@ -323,12 +278,6 @@ commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *
     cs->port = port;
     cs->callback = callback;
     cs->data = data;
-    if (addr != NULL) {
-	cs->in_addr = *addr;
-	cs->addrcount = 1;
-    } else {
-	cs->addrcount = 0;
-    }
     cbdataLock(cs->data);
     comm_add_close_handler(fd, commConnectFree, cs);
     ipcache_nbgethostbyname(host, commConnectDnsHandle, cs);
@@ -339,20 +288,13 @@ commConnectDnsHandle(const ipcache_addrs * ia, void *data)
 {
     ConnectStateData *cs = data;
     if (ia == NULL) {
-	/* If we've been given a default IP, use it */
-	if (cs->addrcount > 0) {
-	    fd_table[cs->fd].flags.dnsfailed = 1;
-	    cs->connstart = squid_curtime;
-	    commConnectHandle(cs->fd, cs);
-	} else {
-	    debug(5, 3) ("commConnectDnsHandle: Unknown host: %s\n", cs->host);
-	    if (!dns_error_message) {
-		dns_error_message = "Unknown DNS error";
-		debug(5, 1) ("commConnectDnsHandle: Bad dns_error_message\n");
-	    }
-	    assert(dns_error_message != NULL);
-	    commConnectCallback(cs, COMM_ERR_DNS);
+	debug(5, 3) ("commConnectDnsHandle: Unknown host: %s\n", cs->host);
+	if (!dns_error_message) {
+	    dns_error_message = "Unknown DNS error";
+	    debug(5, 1) ("commConnectDnsHandle: Bad dns_error_message\n");
 	}
+	assert(dns_error_message != NULL);
+	commConnectCallback(cs, COMM_ERR_DNS);
 	return;
     }
     assert(ia->cur < ia->count);
@@ -584,7 +526,7 @@ comm_connect_addr(int sock, const struct sockaddr_in *address)
 	status = COMM_INPROGRESS;
     else
 	return COMM_ERROR;
-    xstrncpy(F->ipaddr, xinet_ntoa(address->sin_addr), 16);
+    xstrncpy(F->ipaddr, inet_ntoa(address->sin_addr), 16);
     F->remote_port = ntohs(address->sin_port);
     if (status == COMM_OK) {
 	debug(5, 10) ("comm_connect_addr: FD %d connected to %s:%d\n",
@@ -630,7 +572,7 @@ comm_accept(int fd, struct sockaddr_in *pn, struct sockaddr_in *me)
     /* fdstat update */
     fd_open(sock, FD_SOCKET, "HTTP Request");
     F = &fd_table[sock];
-    xstrncpy(F->ipaddr, xinet_ntoa(P.sin_addr), 16);
+    xstrncpy(F->ipaddr, inet_ntoa(P.sin_addr), 16);
     F->remote_port = htons(P.sin_port);
     F->local_port = htons(M.sin_port);
     commSetNonBlocking(sock);
@@ -704,7 +646,7 @@ commLingerTimeout(int fd, void *unused)
 void
 comm_lingering_close(int fd)
 {
-    fd_note_static(fd, "lingering close");
+    fd_note(fd, "lingering close");
     commSetSelect(fd, COMM_SELECT_READ, NULL, NULL, 0);
     commSetSelect(fd, COMM_SELECT_WRITE, NULL, NULL, 0);
     commSetTimeout(fd, 10, commLingerTimeout, NULL);
@@ -1090,32 +1032,6 @@ commSetTcpNoDelay(int fd)
 }
 #endif
 
-void
-commSetTcpKeepalive(int fd, int idle, int interval, int timeout)
-{
-    int on = 1;
-#ifdef TCP_KEEPCNT
-    if (timeout && interval) {
-	int count = (timeout + interval - 1) / interval;
-	if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &count, sizeof(on)) < 0)
-	    debug(5, 1) ("commSetKeepalive: FD %d: %s\n", fd, xstrerror());
-    }
-#endif
-#ifdef TCP_KEEPIDLE
-    if (idle) {
-	if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(on)) < 0)
-	    debug(5, 1) ("commSetKeepalive: FD %d: %s\n", fd, xstrerror());
-    }
-#endif
-#ifdef TCP_KEEPINTVL
-    if (interval) {
-	if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &interval, sizeof(on)) < 0)
-	    debug(5, 1) ("commSetKeepalive: FD %d: %s\n", fd, xstrerror());
-    }
-#endif
-    if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (char *) &on, sizeof(on)) < 0)
-	debug(5, 1) ("commSetKeepalive: FD %d: %s\n", fd, xstrerror());
-}
 
 void
 comm_init(void)
@@ -1140,14 +1056,11 @@ commHandleWrite(int fd, void *data)
 
     assert(state->valid);
 
-    debug(5, 5) ("commHandleWrite: FD %d: off %ld, hd %ld, sz %ld.\n",
-	fd, (long int) state->offset, (long int) state->header_size, (long int) state->size);
+    debug(5, 5) ("commHandleWrite: FD %d: off %ld, sz %ld.\n",
+	fd, (long int) state->offset, (long int) state->size);
 
-    nleft = state->size + state->header_size - state->offset;
-    if (state->offset < state->header_size)
-	len = FD_WRITE_METHOD(fd, state->header + state->offset, state->header_size - state->offset);
-    else
-	len = FD_WRITE_METHOD(fd, state->buf + state->offset - state->header_size, nleft);
+    nleft = state->size - state->offset;
+    len = FD_WRITE_METHOD(fd, state->buf + state->offset, nleft);
     debug(5, 5) ("commHandleWrite: write() returns %d\n", len);
     fd_bytes(fd, len, FD_WRITE);
     statCounter.syscalls.sock.writes++;
@@ -1180,7 +1093,7 @@ commHandleWrite(int fd, void *data)
     } else {
 	/* A successful write, continue */
 	state->offset += len;
-	if (state->offset < state->size + state->header_size) {
+	if (state->offset < state->size) {
 	    /* Not done, reinstall the write handler and write some more */
 	    commSetSelect(fd,
 		COMM_SELECT_WRITE,
@@ -1209,39 +1122,12 @@ comm_write(int fd, const char *buf, int size, CWCB * handler, void *handler_data
     }
     state->buf = (char *) buf;
     state->size = size;
-    state->header_size = 0;
     state->offset = 0;
     state->handler = handler;
     state->handler_data = handler_data;
     state->free_func = free_func;
     state->valid = 1;
     cbdataLock(handler_data);
-    commSetSelect(fd, COMM_SELECT_WRITE, commHandleWrite, NULL, 0);
-}
-
-/* Select for Writing on FD, until SIZE bytes are sent.  Call
- * *HANDLER when complete. */
-void
-comm_write_header(int fd, const char *buf, int size, const char *header, size_t header_size, CWCB * handler, void *handler_data, FREE * free_func)
-{
-    CommWriteStateData *state = &fd_table[fd].rwstate;
-    debug(5, 5) ("comm_write: FD %d: sz %d: hndl %p: data %p.\n",
-	fd, size, handler, handler_data);
-    if (state->valid) {
-	debug(5, 1) ("comm_write: fd_table[%d].rwstate.valid == true!\n", fd);
-	fd_table[fd].rwstate.valid = 0;
-    }
-    state->buf = (char *) buf;
-    state->size = size;
-    state->offset = 0;
-    state->handler = handler;
-    state->handler_data = handler_data;
-    cbdataLock(handler_data);
-    state->free_func = free_func;
-    state->valid = 1;
-    assert(header_size < sizeof(state->header));
-    memcpy(state->header, header, header_size);
-    state->header_size = header_size;
     commSetSelect(fd, COMM_SELECT_WRITE, commHandleWrite, NULL, 0);
 }
 
@@ -1250,13 +1136,6 @@ void
 comm_write_mbuf(int fd, MemBuf mb, CWCB * handler, void *handler_data)
 {
     comm_write(fd, mb.buf, mb.size, handler, handler_data, memBufFreeFunc(&mb));
-}
-
-/* a wrapper around comm_write to allow for MemBuf to be comm_written in a snap */
-void
-comm_write_mbuf_header(int fd, MemBuf mb, const char *header, size_t header_size, CWCB * handler, void *handler_data)
-{
-    comm_write_header(fd, mb.buf, mb.size, header, header_size, handler, handler_data, memBufFreeFunc(&mb));
 }
 
 /*

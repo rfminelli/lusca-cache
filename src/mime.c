@@ -406,6 +406,7 @@ mimeLoadIconFile(const char *icon)
     char *buf;
     const char *type = mimeGetContentType(icon);
     HttpReply *reply;
+    http_version_t version;
     request_t *r;
     if (type == NULL)
 	fatal("Unknown icon format while reading mime.conf\n");
@@ -426,7 +427,10 @@ mimeLoadIconFile(const char *icon)
     }
     flags = null_request_flags;
     flags.cachable = 1;
-    e = storeCreateEntry(url, flags, METHOD_GET);
+    e = storeCreateEntry(url,
+	url,
+	flags,
+	METHOD_GET);
     assert(e != NULL);
     EBIT_SET(e->flags, ENTRY_SPECIAL);
     storeSetPublicKey(e);
@@ -436,7 +440,9 @@ mimeLoadIconFile(const char *icon)
 	fatal("mimeLoadIcon: cannot parse internal URL");
     e->mem_obj->request = requestLink(r);
     httpReplyReset(reply = e->mem_obj->reply);
-    httpReplySetHeaders(reply, HTTP_OK, NULL, type, sb.st_size, sb.st_mtime, -1);
+    httpBuildVersion(&version, 1, 0);
+    httpReplySetHeaders(reply, version, HTTP_OK, NULL,
+	type, sb.st_size, sb.st_mtime, -1);
     reply->cache_control = httpHdrCcCreate();
     httpHdrCcSetMaxAge(reply->cache_control, 86400);
     httpHeaderPutCc(&reply->header, reply->cache_control);

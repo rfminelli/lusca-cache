@@ -135,18 +135,15 @@ storeClientRegister(StoreEntry * e, void *owner)
 static void
 storeClientCallback(store_client * sc, ssize_t sz)
 {
-    STNCB *new_callback = sc->new_callback;
+    STCB *callback = sc->callback;
     void *cbdata = sc->callback_data;
-    mem_node_ref nr;
-
-    assert(sc->new_callback);
-    sc->new_callback = NULL;
+    char *buf = sc->copy_buf;
+    assert(sc->callback);
+    sc->callback = NULL;
     sc->callback_data = NULL;
-    nr = sc->node_ref;		/* XXX this should be a reference; and we should dereference our copy! */
-    /* This code "transfers" its ownership (and reference) of the node_ref to the caller. Ugly, but works. */
-    sc->node_ref.node = NULL;
-    sc->node_ref.offset = -1;
-    new_callback(cbdata, nr, sz);
+    sc->copy_buf = NULL;
+    if (cbdataValid(cbdata))
+	callback(cbdata, buf, sz);
     cbdataUnlock(cbdata);
 }
 
@@ -156,24 +153,24 @@ storeClientCopyEvent(void *data)
     store_client *sc = data;
     debug(20, 3) ("storeClientCopyEvent: Running\n");
     sc->flags.copy_event_pending = 0;
-    if (!sc->new_callback)
+    if (!sc->callback)
 	return;
     storeClientCopy2(sc->entry, sc);
 }
 
 /* copy bytes requested by the client */
-
 void
-storeClientRef(store_client * sc,
+storeClientCopy(store_client * sc,
     StoreEntry * e,
     squid_off_t seen_offset,
     squid_off_t copy_offset,
     size_t size,
-    STNCB * callback,
+    char *buf,
+    STCB * callback,
     void *data)
 {
     assert(!EBIT_TEST(e->flags, ENTRY_ABORTED));
-    debug(20, 3) ("storeClientRef: %s, seen %" PRINTF_OFF_T ", want %" PRINTF_OFF_T ", size %d, cb %p, cbdata %p\n",
+    debug(20, 3) ("storeClientCopy: %s, seen %" PRINTF_OFF_T ", want %" PRINTF_OFF_T ", size %d, cb %p, cbdata %p\n",
 	storeKeyText(e->hash.key),
 	seen_offset,
 	copy_offset,
@@ -184,12 +181,13 @@ storeClientRef(store_client * sc,
 #if STORE_CLIENT_LIST_DEBUG
     assert(sc == storeClientListSearch(e->mem_obj, data));
 #endif
-    assert(sc->new_callback == NULL);
+    assert(sc->callback == NULL);
     assert(sc->entry == e);
     sc->seen_offset = seen_offset;
-    sc->new_callback = callback;
+    sc->callback = callback;
     sc->callback_data = data;
     cbdataLock(sc->callback_data);
+    sc->copy_buf = buf;
     sc->copy_size = size;
     sc->copy_offset = copy_offset;
     /* If the read is being deferred, run swapout in case this client has the 
@@ -241,7 +239,7 @@ storeClientCopy2(StoreEntry * e, store_client * sc)
     cbdataLock(sc);		/* ick, prevent sc from getting freed */
     sc->flags.store_copying = 1;
     debug(20, 3) ("storeClientCopy2: %s\n", storeKeyText(e->hash.key));
-    assert(sc->new_callback);
+    assert(sc->callback != NULL);
     /*
      * We used to check for ENTRY_ABORTED here.  But there were some
      * problems.  For example, we might have a slow client (or two) and
@@ -258,7 +256,7 @@ static void
 storeClientCopy3(StoreEntry * e, store_client * sc)
 {
     MemObject *mem = e->mem_obj;
-    ssize_t sz = -1;
+    ssize_t sz;
 
     if (storeClientNoMoreToSend(e, sc)) {
 	/* There is no more to send! */
@@ -316,9 +314,8 @@ storeClientCopy3(StoreEntry * e, store_client * sc)
     if (sc->copy_offset >= mem->inmem_lo && sc->copy_offset < mem->inmem_hi) {
 	/* What the client wants is in memory */
 	debug(20, 3) ("storeClientCopy3: Copying from memory\n");
-	assert(sc->new_callback);
-	assert(sc->node_ref.node == NULL);	/* We should never, ever have a node here; or we'd leak! */
-	sz = stmemRef(&mem->data_hdr, sc->copy_offset, &sc->node_ref);
+	sz = stmemCopy(&mem->data_hdr,
+	    sc->copy_offset, sc->copy_buf, sc->copy_size);
 	if (EBIT_TEST(e->flags, RELEASE_REQUEST))
 	    storeSwapOutMaintainMemObject(e);
 	storeClientCallback(sc, sz);
@@ -328,8 +325,6 @@ storeClientCopy3(StoreEntry * e, store_client * sc)
     assert(STORE_DISK_CLIENT == sc->type);
     assert(!sc->flags.disk_io_pending);
     debug(20, 3) ("storeClientCopy3: reading from STORE\n");
-    /* Just in case there's a node here; free it */
-    stmemNodeUnref(&sc->node_ref);
     storeClientFileRead(sc);
 }
 
@@ -337,24 +332,22 @@ static void
 storeClientFileRead(store_client * sc)
 {
     MemObject *mem = sc->entry->mem_obj;
-    assert(sc->new_callback);
+    assert(sc->callback != NULL);
     assert(!sc->flags.disk_io_pending);
     sc->flags.disk_io_pending = 1;
-    assert(sc->node_ref.node == NULL);	/* We should never, ever have a node here; or we'd leak! */
-    stmemNodeRefCreate(&sc->node_ref);	/* Creates an entry with reference count == 1 */
     if (mem->swap_hdr_sz == 0) {
 	storeRead(sc->swapin_sio,
-	    sc->node_ref.node->data,
-	    XMIN(SM_PAGE_SIZE, sc->copy_size),
+	    sc->copy_buf,
+	    sc->copy_size,
 	    0,
 	    storeClientReadHeader,
 	    sc);
     } else {
 	if (sc->entry->swap_status == SWAPOUT_WRITING)
-	    assert(storeSwapOutObjectBytesOnDisk(mem) > sc->copy_offset);	/* XXX is this right? Shouldn't we incl. mem->swap_hdr_sz? */
+	    assert(storeSwapOutObjectBytesOnDisk(mem) > sc->copy_offset);
 	storeRead(sc->swapin_sio,
-	    sc->node_ref.node->data,
-	    XMIN(SM_PAGE_SIZE, sc->copy_size),
+	    sc->copy_buf,
+	    sc->copy_size,
 	    sc->copy_offset + mem->swap_hdr_sz,
 	    storeClientReadBody,
 	    sc);
@@ -362,27 +355,21 @@ storeClientFileRead(store_client * sc)
 }
 
 static void
-storeClientReadBody(void *data, const char *buf_unused, ssize_t len)
+storeClientReadBody(void *data, const char *buf, ssize_t len)
 {
-    char *cbuf = NULL;
     store_client *sc = data;
     MemObject *mem = sc->entry->mem_obj;
     assert(sc->flags.disk_io_pending);
-
     sc->flags.disk_io_pending = 0;
-    assert(sc->new_callback);
-    assert(sc->node_ref.node);
-    cbuf = sc->node_ref.node->data;
-    /* XXX update how much data in that mem page is active; argh this should be done in a storage layer */
-    sc->node_ref.node->len = len;
+    assert(sc->callback != NULL);
     debug(20, 3) ("storeClientReadBody: len %d\n", (int) len);
-    if (sc->copy_offset == 0 && len > 0 && memHaveHeaders(mem) == 0)
-	httpReplyParse(mem->reply, cbuf, headersEnd(cbuf, len));
+    if (sc->copy_offset == 0 && len > 0 && mem->reply->sline.status == 0)
+	httpReplyParse(mem->reply, sc->copy_buf, headersEnd(sc->copy_buf, len));
     storeClientCallback(sc, len);
 }
 
 static void
-storeClientReadHeader(void *data, const char *buf_unused, ssize_t len)
+storeClientReadHeader(void *data, const char *buf, ssize_t len)
 {
     static int md5_mismatches = 0;
     store_client *sc = data;
@@ -393,25 +380,17 @@ storeClientReadHeader(void *data, const char *buf_unused, ssize_t len)
     size_t copy_sz;
     tlv *tlv_list;
     tlv *t;
-    char *cbuf;
     int swap_object_ok = 1;
-    char *new_url = NULL;
-    char *new_store_url = NULL;
     assert(sc->flags.disk_io_pending);
     sc->flags.disk_io_pending = 0;
-    assert(sc->new_callback);
-    assert(sc->node_ref.node);
-    cbuf = sc->node_ref.node->data;
+    assert(sc->callback != NULL);
     debug(20, 3) ("storeClientReadHeader: len %d\n", (int) len);
-    /* XXX update how much data in that mem page is active; argh this should be done in a storage layer */
-    sc->node_ref.node->len = len;
     if (len < 0) {
 	debug(20, 3) ("storeClientReadHeader: %s\n", xstrerror());
 	storeClientCallback(sc, len);
 	return;
     }
-    assert(len <= SM_PAGE_SIZE);
-    tlv_list = storeSwapMetaUnpack(cbuf, &swap_hdr_sz);
+    tlv_list = storeSwapMetaUnpack(buf, &swap_hdr_sz);
     if (swap_hdr_sz > len) {
 	/* oops, bad disk file? */
 	debug(20, 1) ("WARNING: swapfile header too small\n");
@@ -429,9 +408,9 @@ storeClientReadHeader(void *data, const char *buf_unused, ssize_t len)
     for (t = tlv_list; t && swap_object_ok; t = t->next) {
 	switch (t->type) {
 	case STORE_META_KEY:
-	    assert(t->length == SQUID_MD5_DIGEST_LENGTH);
+	    assert(t->length == MD5_DIGEST_CHARS);
 	    if (!EBIT_TEST(e->flags, KEY_PRIVATE) &&
-		memcmp(t->value, e->hash.key, SQUID_MD5_DIGEST_LENGTH)) {
+		memcmp(t->value, e->hash.key, MD5_DIGEST_CHARS)) {
 		debug(20, 2) ("storeClientReadHeader: swapin MD5 mismatch\n");
 		debug(20, 2) ("\t%s\n", storeKeyText(t->value));
 		debug(20, 2) ("\t%s\n", storeKeyText(e->hash.key));
@@ -442,10 +421,16 @@ storeClientReadHeader(void *data, const char *buf_unused, ssize_t len)
 	    }
 	    break;
 	case STORE_META_URL:
-	    new_url = xstrdup(t->value);
-	    break;
-	case STORE_META_STOREURL:
-	    new_store_url = xstrdup(t->value);
+	    if (NULL == mem->url)
+		(void) 0;	/* can't check */
+	    else if (0 == strcasecmp(mem->url, t->value))
+		(void) 0;	/* a match! */
+	    else {
+		debug(20, 1) ("storeClientReadHeader: URL mismatch\n");
+		debug(20, 1) ("\t{%s} != {%s}\n", (char *) t->value, mem->url);
+		swap_object_ok = 0;
+		break;
+	    }
 	    break;
 	case STORE_META_OBJSIZE:
 	    break;
@@ -461,55 +446,12 @@ storeClientReadHeader(void *data, const char *buf_unused, ssize_t len)
 		mem->vary_headers = xstrdup(t->value);
 	    }
 	    break;
-	case STORE_META_VARY_ID:
-	    memcpy(&mem->vary_id, t->value, sizeof(vary_id_t));
-	    break;
 	default:
 	    debug(20, 2) ("WARNING: got unused STORE_META type %d\n", t->type);
 	    break;
 	}
     }
-
-    /* Check url / store_url */
-    do {
-	if (new_url == NULL) {
-	    debug(20, 1) ("storeClientReadHeader: no URL!\n");
-	    swap_object_ok = 0;
-	    break;
-	}
-	/*
-	 * If we have a store URL then it must match the requested object URL.
-	 * The theory is that objects with a store URL have been normalised
-	 * and thus a direct access which didn't go via the rewrite framework
-	 * are illegal!
-	 */
-	if (new_store_url) {
-	    if (NULL == mem->store_url)
-		mem->store_url = new_store_url;
-	    else if (0 == strcasecmp(mem->store_url, new_store_url))
-		(void) 0;	/* a match! */
-	    else {
-		debug(20, 1) ("storeClientReadHeader: store URL mismatch\n");
-		debug(20, 1) ("\t{%s} != {%s}\n", (char *) new_store_url, mem->store_url);
-		swap_object_ok = 0;
-		break;
-	    }
-	}
-	/* If we have no store URL then the request and the memory URL must match */
-	if ((!new_store_url) && mem->url && strcasecmp(mem->url, new_url) != 0) {
-	    debug(20, 1) ("storeClientReadHeader: URL mismatch\n");
-	    debug(20, 1) ("\t{%s} != {%s}\n", (char *) new_url, mem->url);
-	    swap_object_ok = 0;
-	    break;
-	}
-    } while (0);
-
     storeSwapTLVFree(tlv_list);
-    xfree(new_url);
-    /* don't free new_store_url if its owned by the mem object now */
-    if (mem->store_url != new_store_url)
-	xfree(new_store_url);
-
     if (!swap_object_ok) {
 	storeClientCallback(sc, -1);
 	return;
@@ -528,12 +470,10 @@ storeClientReadHeader(void *data, const char *buf_unused, ssize_t len)
 	copy_sz = XMIN(sc->copy_size, body_sz);
 	debug(20, 3) ("storeClientReadHeader: copying %d bytes of body\n",
 	    (int) copy_sz);
-	debug(20, 8) ("sc %p; node_ref->node %p; data %p; copy size %d; data size %d\n",
-	    sc, sc->node_ref.node, sc->node_ref.node->data, (int) copy_sz, (int) len);
-	xmemmove(cbuf, cbuf + swap_hdr_sz, copy_sz);
-	if (sc->copy_offset == 0 && len > 0 && memHaveHeaders(mem) == 0)
-	    httpReplyParse(mem->reply, cbuf,
-		headersEnd(cbuf, copy_sz));
+	xmemmove(sc->copy_buf, sc->copy_buf + swap_hdr_sz, copy_sz);
+	if (sc->copy_offset == 0 && len > 0 && mem->reply->sline.status == 0)
+	    httpReplyParse(mem->reply, sc->copy_buf,
+		headersEnd(sc->copy_buf, copy_sz));
 	storeClientCallback(sc, copy_sz);
 	return;
     }
@@ -541,8 +481,6 @@ storeClientReadHeader(void *data, const char *buf_unused, ssize_t len)
      * we don't have what the client wants, but at least we now
      * know the swap header size.
      */
-    /* Just in case there's a node here; free it */
-    stmemNodeUnref(&sc->node_ref);
     storeClientFileRead(sc);
 }
 
@@ -555,7 +493,7 @@ storeClientCopyPending(store_client * sc, StoreEntry * e, void *data)
     assert(sc->entry == e);
     if (sc == NULL)
 	return 0;
-    if (sc->new_callback == NULL)
+    if (sc->callback == NULL)
 	return 0;
     return 1;
 }
@@ -587,13 +525,12 @@ storeClientUnregister(store_client * sc, StoreEntry * e, void *owner)
 	sc->swapin_sio = NULL;
 	statCounter.swap.ins++;
     }
-    if (NULL != sc->new_callback) {
+    if (NULL != sc->callback) {
 	/* callback with ssize = -1 to indicate unexpected termination */
 	debug(20, 3) ("storeClientUnregister: store_client for %s has a callback\n",
 	    mem->url);
 	storeClientCallback(sc, -1);
     }
-    stmemNodeUnref(&sc->node_ref);
 #if DELAY_POOLS
     delayUnregisterDelayIdPtr(&sc->delay_id);
 #endif
@@ -647,7 +584,7 @@ InvokeHandlers(StoreEntry * e)
 	sc = node->data;
 	nx = node->next;
 	debug(20, 3) ("InvokeHandlers: checking client #%d\n", i++);
-	if (sc->new_callback == NULL)
+	if (sc->callback == NULL)
 	    continue;
 	if (sc->flags.disk_io_pending)
 	    continue;

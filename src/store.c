@@ -79,7 +79,7 @@ extern OBJH storeIOStats;
 static int storeEntryValidLength(const StoreEntry *);
 static void storeGetMemSpace(int);
 static void storeHashDelete(StoreEntry *);
-static MemObject *new_MemObject(const char *);
+static MemObject *new_MemObject(const char *, const char *);
 static void destroy_MemObject(StoreEntry *);
 static FREE destroy_StoreEntry;
 static void storePurgeMem(StoreEntry *);
@@ -87,7 +87,6 @@ static void storeEntryReferenced(StoreEntry *);
 static void storeEntryDereferenced(StoreEntry *);
 static int getKeyCounter(void);
 static int storeKeepInMemory(const StoreEntry *);
-static void initVaryId(vary_id_t *);
 static OBJH storeCheckCachableStats;
 static EVH storeLateRelease;
 
@@ -101,18 +100,18 @@ unsigned int
 url_checksum(const char *url)
 {
     unsigned int ck;
-    SQUID_MD5_CTX M;
+    MD5_CTX M;
     static unsigned char digest[16];
-    SQUID_MD5Init(&M);
-    SQUID_MD5Update(&M, (unsigned char *) url, strlen(url));
-    SQUID_MD5Final(digest, &M);
+    MD5Init(&M);
+    MD5Update(&M, (unsigned char *) url, strlen(url));
+    MD5Final(digest, &M);
     xmemcpy(&ck, digest, sizeof(ck));
     return ck;
 }
 #endif
 
 static MemObject *
-new_MemObject(const char *url)
+new_MemObject(const char *url, const char *log_url)
 {
     MemObject *mem = memAllocate(MEM_MEMOBJECT);
     mem->reply = httpReplyCreate();
@@ -120,47 +119,26 @@ new_MemObject(const char *url)
 #if URL_CHECKSUM_DEBUG
     mem->chksum = url_checksum(mem->url);
 #endif
+    mem->log_url = xstrdup(log_url);
     mem->object_sz = -1;
     mem->serverfd = -1;
+    /* XXX account log_url */
     debug(20, 3) ("new_MemObject: returning %p\n", mem);
     return mem;
 }
 
-int
-memHaveHeaders(const MemObject * mem)
-{
-    if (!mem)
-	return 0;
-    if (!mem->reply)
-	return 0;
-    if (mem->reply->pstate != psParsed)
-	return 0;
-    return 1;
-}
-
-
 StoreEntry *
-new_StoreEntry(int mem_obj_flag, const char *url)
+new_StoreEntry(int mem_obj_flag, const char *url, const char *log_url)
 {
     StoreEntry *e = NULL;
     e = memAllocate(MEM_STOREENTRY);
     if (mem_obj_flag)
-	e->mem_obj = new_MemObject(url);
+	e->mem_obj = new_MemObject(url, log_url);
     debug(20, 3) ("new_StoreEntry: returning %p\n", e);
     e->expires = e->lastmod = e->lastref = e->timestamp = -1;
     e->swap_filen = -1;
     e->swap_dirn = -1;
     return e;
-}
-
-void
-storeEntrySetStoreUrl(StoreEntry * e, const char *store_url)
-{
-    /* XXX eww, another strdup! */
-    if (!e->mem_obj)
-	return;
-    safe_free(e->mem_obj->store_url);
-    e->mem_obj->store_url = xstrdup(store_url);
 }
 
 static void
@@ -188,15 +166,12 @@ destroy_MemObject(StoreEntry * e)
 	storeUnlockObject(mem->ims_entry);
 	mem->ims_entry = NULL;
     }
-    if (mem->old_entry) {
-	storeUnlockObject(mem->old_entry);
-	mem->old_entry = NULL;
-    }
     httpReplyDestroy(mem->reply);
     requestUnlink(mem->request);
     mem->request = NULL;
     ctx_exit(ctx);		/* must exit before we free mem->url */
     safe_free(mem->url);
+    safe_free(mem->log_url);	/* XXX account log_url */
     safe_free(mem->vary_headers);
     safe_free(mem->vary_encoding);
     memFree(mem, MEM_MEMOBJECT);
@@ -289,10 +264,10 @@ storeEntryDereferenced(StoreEntry * e)
 }
 
 void
-storeLockObjectDebug(StoreEntry * e, const char *file, const int line)
+storeLockObject(StoreEntry * e)
 {
     e->lock_count++;
-    debug(20, 3) ("storeLockObject: (%s:%d): key '%s' count=%d\n", file, line,
+    debug(20, 3) ("storeLockObject: key '%s' count=%d\n",
 	storeKeyText(e->hash.key), (int) e->lock_count);
     e->lastref = squid_curtime;
     storeEntryReferenced(e);
@@ -317,10 +292,10 @@ storeReleaseRequest(StoreEntry * e)
 /* unlock object, return -1 if object get released after unlock
  * otherwise lock_count */
 int
-storeUnlockObjectDebug(StoreEntry * e, const char *file, const int line)
+storeUnlockObject(StoreEntry * e)
 {
     e->lock_count--;
-    debug(20, 3) ("storeUnlockObject: (%s:%d): key '%s' count=%d\n", file, line,
+    debug(20, 3) ("storeUnlockObject: key '%s' count=%d\n",
 	storeKeyText(e->hash.key), e->lock_count);
     if (e->lock_count)
 	return (int) e->lock_count;
@@ -348,9 +323,8 @@ storeUnlockObjectDebug(StoreEntry * e, const char *file, const int line)
 StoreEntry *
 storeGet(const cache_key * key)
 {
-    StoreEntry *e = (StoreEntry *) hash_lookup(store_table, key);
-    debug(20, 3) ("storeGet: %s -> %p\n", storeKeyText(key), e);
-    return e;
+    debug(20, 3) ("storeGet: looking up %s\n", storeKeyText(key));
+    return (StoreEntry *) hash_lookup(store_table, key);
 }
 
 StoreEntry *
@@ -454,11 +428,6 @@ free_AddVaryState(void *data)
 		storeAppendPrintf(state->e, "ETag: %s\n", state->etag);
 	    storeAppendPrintf(state->e, "VaryData: %s\n", state->vary_headers);
 	}
-	if (state->oe) {
-	    debug(11, 3) ("free_AddVaryState: copying vary ID %ld.%u to new entry\n",
-		state->oe->mem_obj->vary_id.create_time, state->oe->mem_obj->vary_id.serial);
-	    state->e->mem_obj->vary_id = state->oe->mem_obj->vary_id;
-	}
 	storeTimestampsSet(state->e);
 	storeComplete(state->e);
 	storeTimestampsSet(state->e);
@@ -561,31 +530,22 @@ strncmpnull(const char *a, const char *b, size_t n)
 }
 
 static void
-storeAddVaryReadOld(void *data, mem_node_ref nr, ssize_t size)
+storeAddVaryReadOld(void *data, char *buf, ssize_t size)
 {
     AddVaryState *state = data;
     size_t l = size + state->buf_offset;
     char *e;
     char *p = state->buf;
-    const char *buf = nr.node->data + nr.offset;
-
     debug(11, 3) ("storeAddVaryReadOld: %p seen_offset=%" PRINTF_OFF_T " buf_offset=%d size=%d\n", data, state->seen_offset, (int) state->buf_offset, (int) size);
     if (size <= 0) {
 	debug(11, 2) ("storeAddVaryReadOld: DONE\n");
-	/* Call back to the destructor free_AddVaryState */
 	cbdataFree(state);
-	goto finish;
+	return;
     }
-    assert(size <= nr.node->len);
-    /* size should never exceed what we asked for; just make sure first */
-    assert(size + state->buf_offset <= state->buf_size);
-    /* Copy in the data before we do anything else */
-    memcpy(state->buf + state->buf_offset, nr.node->data + nr.offset, size);
-
     if (EBIT_TEST(state->e->flags, ENTRY_ABORTED)) {
 	debug(11, 1) ("storeAddVaryReadOld: New index aborted at %d (%d)\n", (int) state->seen_offset, (int) size);
 	cbdataFree(state);
-	goto finish;
+	return;
     }
     storeBuffer(state->e);
     if (state->seen_offset != 0) {
@@ -600,7 +560,7 @@ storeAddVaryReadOld(void *data, mem_node_ref nr, ssize_t size)
 	  invalid_marker_obj:
 	    debug(11, 2) ("storeAddVaryReadOld: %p (%s) is not a Vary maker object, ignoring\n", data, storeUrl(state->oe));
 	    cbdataFree(state);
-	    goto finish;
+	    return;
 	}
 	hdr_sz = state->oe->mem_obj->reply->hdr_sz;
 	state->seen_offset = hdr_sz;
@@ -692,7 +652,7 @@ storeAddVaryReadOld(void *data, mem_node_ref nr, ssize_t size)
 	p = e;
 	if (l == 0)
 	    break;
-	assert(p <= (state->buf + size));
+	assert(p <= (buf + size));
     }
     state->buf_offset = l;
     if (l && p != state->buf)
@@ -706,33 +666,30 @@ storeAddVaryReadOld(void *data, mem_node_ref nr, ssize_t size)
 	    /* This does not look good. Bail out. This should match the size <= 0 case above */
 	    debug(11, 1) ("storeAddVaryReadOld: Buffer very large and still can't fit the data.. bailing out\n");
 	    cbdataFree(state);
-	    goto finish;
+	    return;
 	}
     }
     debug(11, 3) ("storeAddVaryReadOld: %p seen_offset=%" PRINTF_OFF_T " buf_offset=%d\n", data, state->seen_offset, (int) state->buf_offset);
     storeBufferFlush(state->e);
-    storeClientRef(state->sc, state->oe,
+    storeClientCopy(state->sc, state->oe,
 	state->seen_offset,
 	state->seen_offset,
 	state->buf_size - state->buf_offset,
+	state->buf + state->buf_offset,
 	storeAddVaryReadOld,
 	state);
-  finish:
-    stmemNodeUnref(&nr);
-    buf = NULL;
 }
 
 /*
  * Adds/updates a Vary record.
- * At least one of key or etag must be specified, preferably both.
- * Returns the vary ID if it can be determined immediately, zero otherwise
+ * For updates only one of key or etag needs to be specified
+ * At leas one of key or etag must be specified, preferably both.
  */
-vary_id_t
-storeAddVary(const char *url, const method_t method, const cache_key * key, const char *etag, const char *vary, const char *vary_headers, const char *accept_encoding)
+void
+storeAddVary(const char *url, const char *log_url, const method_t method, const cache_key * key, const char *etag, const char *vary, const char *vary_headers, const char *accept_encoding)
 {
-    vary_id_t vary_id =
-    {0, 0};
     AddVaryState *state;
+    http_version_t version;
     request_flags flags = null_request_flags;
     CBDATA_INIT_TYPE_FREECB(AddVaryState, free_AddVaryState);
     state = cbdataAlloc(AddVaryState);
@@ -750,14 +707,10 @@ storeAddVary(const char *url, const method_t method, const cache_key * key, cons
     if (state->oe)
 	storeLockObject(state->oe);
     flags.cachable = 1;
-    state->e = storeCreateEntry(url, flags, method);
-    httpReplySetHeaders(state->e->mem_obj->reply, HTTP_OK, "Internal marker object", "x-squid-internal/vary", -1, -1, squid_curtime + 100000);
+    state->e = storeCreateEntry(url, log_url, flags, method);
+    httpBuildVersion(&version, 1, 0);
+    httpReplySetHeaders(state->e->mem_obj->reply, version, HTTP_OK, "Internal marker object", "x-squid-internal/vary", -1, -1, squid_curtime + 100000);
     httpHeaderPutStr(&state->e->mem_obj->reply->header, HDR_VARY, vary);
-    if (!state->oe) {
-	/* New entry, create new unique ID */
-	initVaryId(&vary_id);
-	state->e->mem_obj->vary_id = vary_id;
-    }
     storeSetPublicKey(state->e);
     storeBuffer(state->e);
     httpReplySwapOut(state->e->mem_obj->reply, state->e);
@@ -776,24 +729,23 @@ storeAddVary(const char *url, const method_t method, const cache_key * key, cons
 	 * - VaryData is added last in the Key record it corresponds to (after
 	 *   modifications above)
 	 */
-	if (state->oe->mem_obj) {
-	    vary_id = state->oe->mem_obj->vary_id;
-	} else {
-	    /* Swap in the dummy Vary object. vary_id is unknown for now */
-	    storeCreateMemObject(state->oe, state->url);
+	/* Swap in the dummy Vary object */
+	if (!state->oe->mem_obj) {
+	    storeCreateMemObject(state->oe, state->url, log_url);
 	    state->oe->mem_obj->method = method;
 	}
 	state->sc = storeClientRegister(state->oe, state);
 	state->buf = memAllocBuf(4096, &state->buf_size);
 	debug(11, 3) ("storeAddVary: %p\n", state);
-	storeClientRef(state->sc, state->oe, 0, 0,
+	storeClientCopy(state->sc, state->oe, 0, 0,
 	    state->buf_size,
+	    state->buf,
 	    storeAddVaryReadOld,
 	    state);
+	return;
     } else {
 	cbdataFree(state);
     }
-    return vary_id;
 }
 
 static MemPool *VaryData_pool = NULL;
@@ -836,10 +788,9 @@ CBDATA_TYPE(LocateVaryState);
 static void
 storeLocateVaryCallback(LocateVaryState * state)
 {
-    int expired = FALSE;
     if (cbdataValid(state->callback_data)) {
 	VaryData *data = state->data;
-	if (!expired && (data->key || data->etags.count)) {
+	if (data->key || data->etags.count) {
 	    state->callback(data, state->callback_data);
 	    state->data = NULL;	/* now owned by the caller */
 	} else {
@@ -872,7 +823,7 @@ storeLocateVaryCallback(LocateVaryState * state)
 }
 
 static void
-storeLocateVaryRead(void *data, mem_node_ref nr, ssize_t size)
+storeLocateVaryRead(void *data, char *buf, ssize_t size)
 {
     LocateVaryState *state = data;
     char *e;
@@ -881,15 +832,8 @@ storeLocateVaryRead(void *data, mem_node_ref nr, ssize_t size)
     debug(11, 3) ("storeLocateVaryRead: %s %p seen_offset=%" PRINTF_OFF_T " buf_offset=%d size=%d\n", state->vary_data, data, state->seen_offset, (int) state->buf_offset, (int) size);
     if (size <= 0) {
 	storeLocateVaryCallback(state);
-	goto finish;
+	return;
     }
-    assert(size <= nr.node->len);
-    /* size should never exceed what we asked for; just make sure first */
-    assert(size + state->buf_offset <= state->buf_size);
-    /* Copy in the data before we do anything else */
-    if (size > 0)
-	memcpy(state->buf + state->buf_offset, nr.node->data + nr.offset, size);
-
     state->seen_offset = state->seen_offset + size;
     while ((e = memchr(p, '\n', l)) != NULL) {
 	int l2;
@@ -953,7 +897,7 @@ storeLocateVaryRead(void *data, mem_node_ref nr, ssize_t size)
 	if (l == 0)
 	    break;
 	assert(l > 0);
-	assert(p < (state->buf + size));
+	assert(p < (buf + size));
     }
     state->buf_offset = l;
     if (l)
@@ -967,18 +911,17 @@ storeLocateVaryRead(void *data, mem_node_ref nr, ssize_t size)
 	    /* This does not look good. Bail out. This should match the size <= 0 case above */
 	    debug(11, 1) ("storeLocateVaryRead: Buffer very large and still can't fit the data.. bailing out\n");
 	    storeLocateVaryCallback(state);
-	    goto finish;
+	    return;
 	}
     }
     debug(11, 3) ("storeLocateVaryRead: %p seen_offset=%" PRINTF_OFF_T " buf_offset=%d\n", data, state->seen_offset, (int) state->buf_offset);
-    storeClientRef(state->sc, state->e,
+    storeClientCopy(state->sc, state->e,
 	state->seen_offset,
 	state->seen_offset,
 	state->buf_size - state->buf_offset,
+	state->buf + state->buf_offset,
 	storeLocateVaryRead,
 	state);
-  finish:
-    stmemNodeUnref(&nr);
 }
 
 void
@@ -1009,10 +952,11 @@ storeLocateVary(StoreEntry * e, int offset, const char *vary_data, String accept
 	storeLocateVaryCallback(state);
 	return;
     }
-    storeClientRef(state->sc, state->e,
+    storeClientCopy(state->sc, state->e,
 	state->seen_offset,
 	state->seen_offset,
 	state->buf_size,
+	state->buf,
 	storeLocateVaryRead,
 	state);
 }
@@ -1023,7 +967,6 @@ storeSetPublicKey(StoreEntry * e)
     StoreEntry *e2 = NULL;
     const cache_key *newkey;
     MemObject *mem = e->mem_obj;
-    debug(20, 3) ("storeSetPublicKey: %s\n", storeKeyText(e->hash.key));
     if (e->hash.key && !EBIT_TEST(e->flags, KEY_PRIVATE)) {
 	if (EBIT_TEST(e->flags, KEY_EARLY_PUBLIC)) {
 	    EBIT_CLR(e->flags, KEY_EARLY_PUBLIC);
@@ -1061,7 +1004,7 @@ storeSetPublicKey(StoreEntry * e)
 		 * to record the new variance key
 		 */
 		safe_free(request->vary_headers);	/* free old "bad" variance key */
-		pe = storeGetPublic(storeLookupUrl(e), mem->method);
+		pe = storeGetPublic(mem->url, mem->method);
 		if (pe)
 		    storeRelease(pe);
 	    }
@@ -1077,7 +1020,6 @@ storeSetPublicKey(StoreEntry * e)
 	newkey = storeKeyPublicByRequest(mem->request);
 	if (mem->vary_headers && !EBIT_TEST(e->flags, KEY_EARLY_PUBLIC)) {
 	    String vary = StringNull;
-	    vary_id_t vary_id;
 	    String varyhdr;
 	    varyhdr = httpHeaderGetList(&mem->reply->header, HDR_VARY);
 	    if (strBuf(varyhdr))
@@ -1090,30 +1032,11 @@ storeSetPublicKey(StoreEntry * e)
 		strListAdd(&vary, strBuf(varyhdr), ',');
 	    stringClean(&varyhdr);
 #endif
-	    /* Create or update the vary object */
-	    vary_id = storeAddVary(mem->url, mem->method, newkey, httpHeaderGetStr(&mem->reply->header, HDR_ETAG), strBuf(vary), mem->vary_headers, mem->vary_encoding);
-	    if (vary_id.create_time) {
-		mem->vary_id = vary_id;
-	    } else {
-		/* Base vary object is not swapped in, so the vary_id is unknown.
-		 * Maybe we can cheat and use the vary_id from the request. If the 
-		 * base object existed earlier in the request, it would have been
-		 * swapped in and stored at that time.
-		 */
-		if (mem->request->vary_id.create_time) {
-		    mem->vary_id = mem->request->vary_id;
-		} else {
-		    /* Nope, no luck. Store with zero vary_id, which will immediately 
-		     * be treated as expired.
-		     * FIXME: make this work properly.
-		     */
-		    debug(20, 1) ("storeSetPublicKey: unable to determine vary_id for '%s'\n", mem->url);
-		}
-	    }
+	    storeAddVary(mem->url, mem->log_url, mem->method, newkey, httpHeaderGetStr(&mem->reply->header, HDR_ETAG), strBuf(vary), mem->vary_headers, mem->vary_encoding);
 	    stringClean(&vary);
 	}
     } else {
-	newkey = storeKeyPublic(storeLookupUrl(e), mem->method);
+	newkey = storeKeyPublic(mem->url, mem->method);
     }
     if ((e2 = (StoreEntry *) hash_lookup(store_table, newkey))) {
 	debug(20, 3) ("storeSetPublicKey: Making old '%s' private.\n", mem->url);
@@ -1122,7 +1045,7 @@ storeSetPublicKey(StoreEntry * e)
 	if (mem->request)
 	    newkey = storeKeyPublicByRequest(mem->request);
 	else
-	    newkey = storeKeyPublic(storeLookupUrl(e), mem->method);
+	    newkey = storeKeyPublic(mem->url, mem->method);
     }
     if (e->hash.key)
 	storeHashDelete(e);
@@ -1133,13 +1056,13 @@ storeSetPublicKey(StoreEntry * e)
 }
 
 StoreEntry *
-storeCreateEntry(const char *url, request_flags flags, method_t method)
+storeCreateEntry(const char *url, const char *log_url, request_flags flags, method_t method)
 {
     StoreEntry *e = NULL;
     MemObject *mem = NULL;
     debug(20, 3) ("storeCreateEntry: '%s'\n", url);
 
-    e = new_StoreEntry(STORE_ENTRY_WITH_MEMOBJ, url);
+    e = new_StoreEntry(STORE_ENTRY_WITH_MEMOBJ, url, log_url);
     e->lock_count = 1;		/* Note lock here w/o calling storeLock() */
     mem = e->mem_obj;
     mem->method = method;
@@ -1385,11 +1308,7 @@ storeComplete(StoreEntry * e)
     if (e->mem_obj->request)
 	e->mem_obj->request->hier.store_complete_stop = current_time;
 #endif
-    e->mem_obj->refresh_timestamp = 0;
-    if (e->mem_obj->old_entry) {
-	if (e->mem_obj->old_entry->mem_obj)
-	    e->mem_obj->old_entry->mem_obj->refresh_timestamp = 0;
-    }
+    e->mem_obj->refresh_timestamp = e->timestamp;
     /*
      * We used to call InvokeHandlers, then storeSwapOut.  However,
      * Madhukar Reddy <myreddy@persistence.com> reported that
@@ -1413,7 +1332,7 @@ storeAbort(StoreEntry * e)
     assert(mem != NULL);
     debug(20, 6) ("storeAbort: %s\n", storeKeyText(e->hash.key));
     storeLockObject(e);		/* lock while aborting */
-    storeExpireNow(e);
+    storeNegativeCache(e);
     storeReleaseRequest(e);
     EBIT_SET(e->flags, ENTRY_ABORTED);
     storeSetMemStatus(e, NOT_IN_MEMORY);
@@ -1455,17 +1374,14 @@ storeGetMemSpace(int size)
     pages_needed = (size / SM_PAGE_SIZE) + 1;
     if (memInUse(MEM_MEM_NODE) + pages_needed < store_pages_max)
 	return;
-    debug(20, 3) ("storeGetMemSpace: Starting, need %d pages\n", pages_needed);
+    debug(20, 2) ("storeGetMemSpace: Starting, need %d pages\n", pages_needed);
     /* XXX what to set as max_scan here? */
     walker = mem_policy->PurgeInit(mem_policy, 100000);
     while ((e = walker->Next(walker))) {
-	debug(20, 3) ("storeGetMemSpace: purging %p\n", e);
 	storePurgeMem(e);
 	released++;
-	if (memInUse(MEM_MEM_NODE) + pages_needed < store_pages_max) {
-	    debug(20, 3) ("storeGetMemSpace: we finally have enough free memory!\n");
+	if (memInUse(MEM_MEM_NODE) + pages_needed < store_pages_max)
 	    break;
-	}
     }
     walker->Done(walker);
     debug(20, 3) ("storeGetMemSpace stats:\n");
@@ -1702,37 +1618,7 @@ storeKeepInMemory(const StoreEntry * e)
 void
 storeNegativeCache(StoreEntry * e)
 {
-    StoreEntry *oe = e->mem_obj->old_entry;
-    time_t expires = e->expires;
-    refresh_cc cc = refreshCC(e, e->mem_obj->request);
-    if (expires == -1)
-	expires = squid_curtime + cc.negative_ttl;
-    if (oe && !EBIT_TEST(oe->flags, KEY_PRIVATE) && !EBIT_TEST(oe->flags, ENTRY_REVALIDATE)) {
-	HttpHdrCc *oldcc = oe->mem_obj->reply->cache_control;
-	if (oldcc && EBIT_TEST(oldcc->mask, CC_STALE_IF_ERROR) && oldcc->stale_if_error >= 0)
-	    cc.max_stale = oldcc->stale_if_error;
-	if (cc.max_stale >= 0) {
-	    time_t max_expires;
-	    storeTimestampsSet(oe);
-	    max_expires = oe->expires + cc.max_stale;
-	    /* Bail out if beyond the stale-if-error staleness limit */
-	    if (max_expires <= squid_curtime)
-		goto cache_error_response;
-	    /* Limit expiry time to stale-if-error/max_stale */
-	    if (expires > max_expires)
-		expires = max_expires;
-	}
-	/* Block the new error from getting cached */
-	EBIT_CLR(e->flags, ENTRY_CACHABLE);
-	/* And negatively cache the old one */
-	if (oe->expires < expires)
-	    oe->expires = expires;
-	EBIT_SET(oe->flags, REFRESH_FAILURE);
-	return;
-    }
-  cache_error_response:
-    if (e->expires < expires)
-	e->expires = expires;
+    e->expires = squid_curtime + Config.negativeTtl;
     EBIT_SET(e->flags, ENTRY_NEGCACHED);
 }
 
@@ -1851,11 +1737,9 @@ storeMemObjectDump(MemObject * mem)
 	mem->reply);
     debug(20, 1) ("MemObject->request: %p\n",
 	mem->request);
-    debug(20, 1) ("MemObject->url: %p %s\n",
-	mem->url,
-	checkNullString(mem->url));
-    debug(20, 1) ("MemObject->vary_id: %ld.%u\n",
-	mem->vary_id.create_time, mem->vary_id.serial);
+    debug(20, 1) ("MemObject->log_url: %p %s\n",
+	mem->log_url,
+	checkNullString(mem->log_url));
 }
 
 void
@@ -1926,25 +1810,12 @@ storeUrl(const StoreEntry * e)
 	return e->mem_obj->url;
 }
 
-const char *
-storeLookupUrl(const StoreEntry * e)
-{
-    if (e == NULL)
-	return "[null_entry]";
-    else if (e->mem_obj == NULL)
-	return "[null_mem_obj]";
-    else if (e->mem_obj->store_url)
-	return e->mem_obj->store_url;
-    else
-	return e->mem_obj->url;
-}
-
 void
-storeCreateMemObject(StoreEntry * e, const char *url)
+storeCreateMemObject(StoreEntry * e, const char *url, const char *log_url)
 {
     if (e->mem_obj)
 	return;
-    e->mem_obj = new_MemObject(url);
+    e->mem_obj = new_MemObject(url, log_url);
 }
 
 /* this just sets DELAY_SENDING */
@@ -2138,16 +2009,4 @@ storeResetDefer(StoreEntry * e)
     EBIT_CLR(e->flags, ENTRY_DEFER_READ);
     if (e->mem_obj)
 	e->mem_obj->serverfd = -1;
-}
-
-/* Initialise the vary_id with a new unique value */
-static void
-initVaryId(vary_id_t * vary_id)
-{
-    static unsigned int serial = 0;
-
-    debug(20, 3) ("initVaryId: Initialising vary_id to %ld.%u\n",
-	squid_curtime, serial);
-    vary_id->create_time = squid_curtime;
-    vary_id->serial = serial++;
 }
