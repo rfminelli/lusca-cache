@@ -1,0 +1,72 @@
+## Process this file with automake to produce Makefile.in
+#
+# $Id$
+#
+
+EXTRA_DIST = \
+	auth_modules.cmd \
+	Build.dsp \
+	cf_data.dsp \
+	default_config_file.cmd \
+	digest_edir_auth/digest_edir_auth.dsp \
+	digest_ldap_auth/digest_ldap_auth.dsp \
+	digest_pw_auth/digest_pw_auth.dsp \
+        doc.dsp \
+	icons.cmd \
+	icons.dsp \
+	install.dsp \
+	modules.dsp \
+	PerlPreprocessing.dsp \
+	repl_modules.cmd \
+	squid.dsw \
+	squid_conf_default.dsp \
+	squid_mswin.mak \
+	squid_version.cmd \
+	store_modules.cmd \
+	update.cmd \
+	cachemgr/cachemgr.dsp \
+	cf_gen/cf_gen.dsp \
+	dnsserver/dnsserver.dsp \
+	fake_auth/fake_auth.dsp \
+	include/autoconf.h \
+	include/cdefs.h \
+	include/crypt.h \
+	include/getopt.h \
+	include/Readdir.h \
+	ip_user_check/ip_user_check.dsp \
+	LDAP_auth/LDAP_auth.dsp \
+	LDAP_group/LDAP_group.dsp \
+	libaufs/libaufs.dsp \
+	libbasic/libbasic.dsp \
+	libcoss/libcoss.dsp \
+	libdigest/libdigest.dsp \
+	libgnuregex/libgnuregex.dsp \
+	libheap/libheap.dsp \
+	liblru/liblru.dsp \
+	libmiscutil/libmiscutil.dsp \
+	libnegotiate/libnegotiate.dsp \
+	libntlm/libntlm.dsp \
+	libntlmauth/libntlmauth.dsp \
+	libnull/libnull.dsp \
+	libsnmp/libsnmp.dsp \
+	libsspwin32/libsspwin32.dsp \
+	libufs/libufs.dsp \
+	logfiled/logfiled.dsp \
+	NCSA_auth/NCSA_auth.dsp \
+	negotiate_auth/negotiate_auth.dsp \
+	nt_auth/nt_auth.dsp \
+	ntlm_win32_auth/ntlm_win32_auth.dsp \
+	pinger/pinger.dsp \
+	squid/buildcount.dsm \
+	squid/buildver.h \
+	squid/resource.h \
+	squid/squid.dsp \
+	squid/squid.mak \
+	squid/squid.rc \
+	squid/squid.rc2 \
+	pinger/pinger.dsp \
+	squidclient/squidclient.dsp \
+	src/encrypt.c \
+	src/readdir.c \
+	unlinkd/unlinkd.dsp \
+	win32_check_group/win32_check_group.dsp
