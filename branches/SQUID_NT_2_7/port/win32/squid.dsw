@@ -1,0 +1,767 @@
+Microsoft Developer Studio Workspace File, Format Version 6.00
+# WARNING: DO NOT EDIT OR DELETE THIS WORKSPACE FILE!
+
+###############################################################################
+
+Project: "Build"=".\Build.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name cachemgr
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name dnsserver
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name fake_auth
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ip_user_check
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name LDAP_auth
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name LDAP_group
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name NCSA_auth
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name nt_auth
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ntlm_win32_auth
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name squid
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name squidclient
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name unlinkd
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name win32_check_group
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name icons
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name doc
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name negotiate_auth
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name digest_ldap_auth
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name digest_pw_auth
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name digest_edir_auth
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name logfiled
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "LDAP_auth"=".\LDAP_auth\LDAP_auth.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name libmiscutil
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "LDAP_group"=".\LDAP_group\LDAP_group.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name libmiscutil
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "NCSA_auth"=".\NCSA_auth\NCSA_auth.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name libmiscutil
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "PerlPreprocessing"=".\PerlPreprocessing.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "cachemgr"=".\cachemgr\cachemgr.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name libmiscutil
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "cf_data"=".\cf_data.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "cf_gen"=".\cf_gen\cf_gen.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name libmiscutil
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name cf_data
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name PerlPreprocessing
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "digest_edir_auth"=".\digest_edir_auth\digest_edir_auth.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name libmiscutil
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "digest_ldap_auth"=".\digest_ldap_auth\digest_ldap_auth.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name libmiscutil
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "digest_pw_auth"=".\digest_pw_auth\digest_pw_auth.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name libmiscutil
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "dnsserver"=".\dnsserver\dnsserver.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name libmiscutil
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "doc"=".\doc.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name modules
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "fake_auth"=".\fake_auth\fake_auth.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name libmiscutil
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "icons"=".\icons.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "install"=".\install.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Build
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "ip_user_check"=".\ip_user_check\ip_user_check.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name libmiscutil
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "libaufs"=".\libaufs\libaufs.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name modules
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "libbasic"=".\libbasic\libbasic.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name modules
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "libcoss"=".\libcoss\libcoss.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name modules
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "libdigest"=".\libdigest\libdigest.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name modules
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "libgnuregex"=".\libgnuregex\libgnuregex.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name modules
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "libheap"=".\libheap\libheap.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name modules
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "liblru"=".\liblru\liblru.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name modules
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "libmiscutil"=".\libmiscutil\libmiscutil.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name modules
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "libnegotiate"=".\libnegotiate\libnegotiate.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name modules
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "libntlm"=".\libntlm\libntlm.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name modules
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "libntlmauth"=".\libntlmauth\libntlmauth.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name modules
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "libnull"=".\libnull\libnull.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name modules
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "libsnmp"=".\libsnmp\libsnmp.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name modules
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "libsspwin32"=".\libsspwin32\libsspwin32.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "libufs"=".\libufs\libufs.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name modules
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "logfiled"=".\logfiled\logfiled.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "modules"=".\modules.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "negotiate_auth"=".\negotiate_auth\negotiate_auth.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name libmiscutil
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libsspwin32
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "nt_auth"=".\nt_auth\nt_auth.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name libmiscutil
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libsspwin32
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "ntlm_win32_auth"=".\ntlm_win32_auth\ntlm_win32_auth.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name libntlmauth
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libmiscutil
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libsspwin32
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "pinger"=".\pinger\pinger.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name libmiscutil
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name PerlPreprocessing
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "squid"=".\squid\squid.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name libgnuregex
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libmiscutil
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name PerlPreprocessing
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libntlmauth
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libsnmp
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name modules
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name squid_conf_default
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libbasic
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name liblru
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libntlm
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libufs
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libheap
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libdigest
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libnull
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libnegotiate
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libaufs
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libcoss
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "squid_conf_default"=".\squid_conf_default.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name cf_gen
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "squidclient"=".\squidclient\squidclient.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name libmiscutil
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "unlinkd"=".\unlinkd\unlinkd.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "win32_check_group"=".\win32_check_group\win32_check_group.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name libmiscutil
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Global:
+
+Package=<5>
+{{{
+}}}
+
+Package=<3>
+{{{
+}}}
+
+###############################################################################
+
