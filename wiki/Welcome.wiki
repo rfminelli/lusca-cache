@@ -1,0 +1,5 @@
+#summary Welcome Page.
+
+= Introduction =
+
+Welcome to Cacheboy. This is a trial of Google Code's services more than an active fork of Squid-2.
