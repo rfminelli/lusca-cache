@@ -14,9 +14,9 @@ This is what I'm currently developing on.
 
 Port versions:
 
-* autoconf-2.61_2
-* automake-1.9.6_2
+  * autoconf-2.61_2
+  * automake-1.9.6_2
 
 Dependencies (that I think are relevant):
 
-* m4-1.4.9,1
+  * m4-1.4.9,1
