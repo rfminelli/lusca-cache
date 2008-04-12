@@ -1,0 +1,22 @@
+#summary Known-working AutoTools for building.
+
+= Introduction =
+
+One thing that always annoys me about Squid development is the weird and wonderful combination of automake/autoconf/system which will generate a correct build environment.
+
+This document will attempt to capture known working automake/autoconf environments.
+
+= Details =
+
+== FreeBSD-7-STABLE ===
+
+This is what I'm currently developing on.
+
+Port versions:
+
+* autoconf-2.61_2
+* automake-1.9.6_2
+
+Dependencies (that I think are relevant):
+
+* m4-1.4.9,1
