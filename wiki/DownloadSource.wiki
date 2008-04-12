@@ -6,4 +6,6 @@ To grab it (read-only) via Subversion:
 
 *svn checkout http://cacheboy.googlecode.com/svn/branches/CACHEBOY_PRE
 
+You will need to run "bootstrap.sh" in the source tree to generate the build environment. Make sure you've read AutoTools to install a known working autoconf/automake environment.
+
 Be careful when browsing the source via the Source browser - it seems to hang the browser. I'm not sure if its due to the number of tags, branches or revisions.
