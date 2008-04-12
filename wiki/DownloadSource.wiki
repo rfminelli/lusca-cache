@@ -4,5 +4,4 @@ The current development playpen is a branch off trunk - CACHEBOY_PRE.
 
 To grab it (read-only) via Subversion:
 
-*svn checkout http://cacheboy.googlecode.com/svn/branches/CACHEBOY_PRE*
-
+*svn checkout http://cacheboy.googlecode.com/svn/branches/CACHEBOY_PRE
