@@ -76,12 +76,6 @@ typedef struct {
     squid_off_t kb;
 } kb_t;
 
-typedef struct {
-    size_t count;
-    size_t bytes;
-    size_t gb;
-} gb_t;
-
 /*
  * grep '^struct' structs.h \
  * | perl -ne '($a,$b)=split;$c=$b;$c=~s/^_//; print "typedef struct $b $c;\n";'

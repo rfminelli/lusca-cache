@@ -401,6 +401,7 @@ struct rusage {
 #include "../libcore/dlink.h"
 #include "../libcore/ctx.h"
 #include "../libcore/debug.h"
+#include "../libcore/gb.h"
 
 #include "defines.h"
 #include "enums.h"

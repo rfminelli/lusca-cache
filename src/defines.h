@@ -256,10 +256,6 @@
 #define DEFAULT_SQUID_ERROR_DIR "/usr/local/squid/etc/errors"
 #endif
 
-/* gb_type operations */
-#define gb_flush_limit (0x3FFFFFFF)
-#define gb_inc(gb, delta) { if ((gb)->bytes > gb_flush_limit || delta > gb_flush_limit) gb_flush(gb); (gb)->bytes += delta; (gb)->count++; }
-
 /* iteration for HttpHdrRange */
 #define HttpHdrRangeInitPos (-1)
 

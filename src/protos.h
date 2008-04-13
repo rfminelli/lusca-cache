@@ -1215,9 +1215,6 @@ extern void dlinkNodeDelete(dlink_node * m);
 extern dlink_node *dlinkNodeNew(void);
 
 extern void kb_incr(kb_t *, squid_off_t);
-extern double gb_to_double(const gb_t *);
-extern const char *gb_to_str(const gb_t *);
-extern void gb_flush(gb_t *);	/* internal, do not use this */
 extern int stringHasWhitespace(const char *);
 extern int stringHasCntl(const char *);
 extern void linklistPush(link_list **, void *);
