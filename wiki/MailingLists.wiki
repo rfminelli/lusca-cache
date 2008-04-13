@@ -1,0 +1,11 @@
+#summary Mailing lists.
+
+= Introduction =
+
+There's a few mailing lists:
+
+  * cacheboy-dev@googlegroups.com - development discussion
+  * cacheboy-users@googlegroups.com - user discussion
+  * cacheboy-commit@googlegroups.com - commit messages
+
+The automated commit messages don't seem to be appearing yet - I'll see if I can figure that one out.
