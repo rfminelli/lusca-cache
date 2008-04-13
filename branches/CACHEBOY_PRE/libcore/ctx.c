@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "../include/config.h"
+#include "varargs.h"
 #include "ctx.h"
 #include "debug.h"
 #include "assert.h"

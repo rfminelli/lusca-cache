@@ -411,7 +411,8 @@ mainReconfigure(void)
     parseConfigFile(ConfigFile);
     setUmask(Config.umask);
     setEffectiveUser();
-    _db_init(Config.Log.log, Config.debugOptions);
+    _db_init(Config.debugOptions);
+    _db_init_log(Config.Log.log);
     ipcache_restart();		/* clear stuck entries */
     authenticateUserCacheRestart();	/* clear stuck ACL entries */
     fqdncache_restart();	/* sigh, fqdncache too */
@@ -547,7 +548,8 @@ mainInitialize(void)
     if (icpPortNumOverride != 1)
 	Config.Port.icp = (u_short) icpPortNumOverride;
 
-    _db_init(Config.Log.log, Config.debugOptions);
+    _db_init(Config.debugOptions);
+    _db_init_log(Config.Log.log);
     fd_open(fileno(debug_log), FD_LOG, Config.Log.log);
 #if MEM_GEN_TRACE
     log_trace_init("/tmp/squid.alloc");
@@ -1019,7 +1021,7 @@ watch_child(char *argv[])
 	fatalf(_PATH_DEVNULL " %s\n", xstrerror());
     if (!opt_stdin_overrides_http_port)
 	dup2(nullfd, 0);
-    if (opt_debug_stderr < 0) {
+    if (_db_stderr_debug_opt() < 0) {
 	dup2(nullfd, 1);
 	dup2(nullfd, 2);
     }
