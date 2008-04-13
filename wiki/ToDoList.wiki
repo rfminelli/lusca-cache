@@ -1,0 +1,24 @@
+#summary Adrian's Code TODO List.
+
+= Introduction =
+
+A whole lot of cleanup work needs to be done to make the more difficult work less painful.
+
+This page is meant primarily as a kick for Adrian to remember what he needs to do.
+
+= Code Changes =
+
+  * Begin shuffling stuff out of src/ that isn't strictly required to be there and is trivial to reorganise (makes code reuse and unit testing easier to sort out)
+   * dlink list *done*
+   * debug/ctx *done*
+   * gb_t *done*
+   * kb_t
+   * mem
+   * mempool
+   * cbdata
+   * string
+   * membuf
+
+= Benchmarking =
+
+  * Benchmark with / without mempools - try to establish which areas of the codebase are (ab)using malloc far too often
