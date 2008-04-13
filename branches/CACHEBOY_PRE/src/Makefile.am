@@ -272,6 +272,7 @@ nodist_squid_SOURCES = \
 
 squid_LDADD = \
 	-L../lib \
+	-L../libcore \
 	@XTRA_OBJS@ \
 	@REPL_OBJS@ \
 	@STORE_OBJS@ \
@@ -283,6 +284,7 @@ squid_LDADD = \
 	@SSLLIB@ \
 	@LIB_EPOLL@ \
 	-lmiscutil \
+	-lcore \
 	@XTRA_LIBS@ \
 	$(MINGWEXLIB)
 
@@ -320,7 +322,7 @@ sysconf_DATA = \
 data_DATA = \
 	mib.txt
 
-LDADD = -L../lib -lmiscutil @XTRA_LIBS@
+LDADD = -L../lib -L../libcore -lmiscutil -lcore @XTRA_LIBS@
 
 EXTRA_DIST = \
 	cf_gen_defines \

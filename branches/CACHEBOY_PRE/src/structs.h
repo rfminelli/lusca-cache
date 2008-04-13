@@ -39,17 +39,6 @@
 
 #define PEER_MULTICAST_SIBLINGS 1
 
-struct _dlink_node {
-    void *data;
-    dlink_node *prev;
-    dlink_node *next;
-};
-
-struct _dlink_list {
-    dlink_node *head;
-    dlink_node *tail;
-};
-
 #if USE_SSL
 struct _acl_cert_data {
     splayNode *values;
