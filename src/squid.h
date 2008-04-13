@@ -415,6 +415,8 @@ struct rusage {
 #include "hash.h"
 #include "rfc1035.h"
 
+#include "../libcore/dlink.h"
+
 #include "defines.h"
 #include "enums.h"
 #include "typedefs.h"

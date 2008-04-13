@@ -192,8 +192,6 @@ typedef struct _refresh_t refresh_t;
 typedef struct _refresh_cc refresh_cc;
 typedef struct _CommWriteStateData CommWriteStateData;
 typedef struct _ErrorState ErrorState;
-typedef struct _dlink_node dlink_node;
-typedef struct _dlink_list dlink_list;
 typedef struct _StatCounters StatCounters;
 typedef struct _tlv tlv;
 typedef struct _storeSwapLogData storeSwapLogData;
