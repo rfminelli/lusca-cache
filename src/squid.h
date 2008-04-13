@@ -244,6 +244,7 @@
 #endif
 
 #include "../libcore/varargs.h"
+#include "../libcore/syslog.h"
 
 /* Make sure syslog goes after stdarg/varargs */
 #ifdef HAVE_SYSLOG_H
