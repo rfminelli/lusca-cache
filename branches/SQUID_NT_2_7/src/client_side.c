@@ -1938,7 +1938,7 @@ clientBuildReplyHeader(clientHttpRequest * http, HttpReply * rep)
     /* Signal keep-alive if needed */
     if (!request->flags.proxy_keepalive)
 	httpHeaderPutStr(hdr, HDR_CONNECTION, "close");
-    else if (request->http_ver.major == 1 && request->http_ver.minor == 0) {
+    else if ((request->http_ver.major == 1 && request->http_ver.minor == 0) || !http->conn->port->http11) {
 	httpHeaderPutStr(hdr, HDR_CONNECTION, "keep-alive");
 	if (!(http->flags.accel || http->flags.transparent))
 	    httpHeaderPutStr(hdr, HDR_PROXY_CONNECTION, "keep-alive");
@@ -2416,7 +2416,7 @@ clientCacheHit(void *data, HttpReply * rep)
 	debug(33, 2) ("clientProcessHit: offline HIT\n");
 	http->log_type = LOG_TCP_OFFLINE_HIT;
 	stale = 0;
-    } else if (stale == -2) {
+    } else if (stale == -2 && !clientOnlyIfCached(http)) {
 	debug(33, 2) ("clientProcessHit: stale-while-revalidate needs revalidation\n");
 	clientAsyncRefresh(http);
 	http->log_type = LOG_TCP_STALE_HIT;
