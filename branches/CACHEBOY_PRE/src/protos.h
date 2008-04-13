@@ -226,10 +226,6 @@ extern void packerPrintf();
 #endif
 
 
-/* see debug.c for info on context-based debugging */
-extern Ctx ctx_enter(const char *descr);
-extern void ctx_exit(Ctx ctx);
-
 extern void _db_set_syslog(const char *facility);
 extern void _db_init(const char *logfile, const char *options);
 extern void _db_rotate_log(void);
