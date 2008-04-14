@@ -403,6 +403,8 @@ struct rusage {
 #include "../libcore/debug.h"
 #include "../libcore/gb.h"
 
+#include "../libmem/MemPool.h"
+
 #include "defines.h"
 #include "enums.h"
 #include "typedefs.h"
