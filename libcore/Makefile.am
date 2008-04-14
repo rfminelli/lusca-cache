@@ -5,14 +5,16 @@ libcore_a_SOURCES = \
 	ctx.c \
 	debug.c \
 	syslog.c \
-	gb.c
+	gb.c \
+	tools.c
 
 libcore_a_LIBADD = \
 	dlink.o \
 	ctx.o \
 	debug.o \
 	syslog.o \
-	gb.h
+	gb.o \
+	tools.o
 
 noinst_LIBRARIES = \
 	libcore.a

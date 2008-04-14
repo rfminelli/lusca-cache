@@ -37,27 +37,12 @@
 #include "squid.h"
 #include "Stack.h"
 
-#define MB ((size_t)1024*1024)
-
 /* exported */
 
 /* module globals */
 
 /* huge constant to set mem_idle_limit to "unlimited" */
 static const size_t mem_unlimited_size = 2 * 1024 * MB - 1;
-
-static double
-toMB(size_t size)
-{
-    return ((double) size) / MB;
-}
-
-static size_t
-toKB(size_t size)
-{
-    return (size + 1024 - 1) / 1024;
-}
-
 
 /* MemPoolMeter */
 

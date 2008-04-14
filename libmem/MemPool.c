@@ -11,6 +11,7 @@
 #include "../libcore/valgrind.h"
 #include "../libcore/dlink.h"
 #include "../libcore/debug.h"
+#include "../libcore/tools.h"
 #include "../libcore/gb.h"
 #include "../include/Stack.h"
 #include "../include/util.h"
@@ -18,8 +19,6 @@
 #include "MemPool.h"
 
 extern time_t squid_curtime;
-
-#define MB ((size_t)1024*1024)
 
 /* exported */
 unsigned int mem_pool_alloc_calls = 0;
@@ -51,18 +50,6 @@ MemPoolStatInfo MemPoolStats = { 0, 0 };
 static void memShrink(size_t new_limit);
 static void memPoolDescribe(const MemPool * pool);
 static void memPoolShrink(MemPool * pool, size_t new_limit);
-
-double
-toMB(size_t size)
-{
-    return ((double) size) / MB;
-}
-
-size_t
-toKB(size_t size)
-{
-    return (size + 1024 - 1) / 1024;
-}
 
 /* Initialization */
 
