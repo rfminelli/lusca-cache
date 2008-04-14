@@ -401,6 +401,7 @@ struct rusage {
 #include "../libcore/dlink.h"
 #include "../libcore/ctx.h"
 #include "../libcore/debug.h"
+#include "../libcore/tools.h"
 #include "../libcore/gb.h"
 
 #include "../libmem/MemPool.h"
