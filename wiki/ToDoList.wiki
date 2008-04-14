@@ -15,6 +15,7 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
    * kb_t
    * mem
    * mempool *done*
+   * memstr *done*
    * cbdata
    * string
    * membuf
