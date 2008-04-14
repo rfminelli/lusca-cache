@@ -759,6 +759,7 @@ main(int argc, char **argv)
 	leakInit();
 #endif
 	memInit();
+	memStringInit();
 	cbdataInit();
 	eventInit();		/* eventInit() is required for config parsing */
 	storeFsInit();		/* required for config parsing */
