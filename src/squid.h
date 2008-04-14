@@ -405,6 +405,7 @@ struct rusage {
 #include "../libcore/gb.h"
 
 #include "../libmem/MemPool.h"
+#include "../libmem/MemStr.h"
 
 #include "defines.h"
 #include "enums.h"
