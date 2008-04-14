@@ -3193,6 +3193,7 @@ dnl done
 AC_OUTPUT([\
 	Makefile \
 	libcore/Makefile \
+	libmem/Makefile \
 	lib/Makefile \
 	scripts/Makefile \
 	scripts/RunCache \

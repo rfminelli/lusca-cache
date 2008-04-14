@@ -859,21 +859,13 @@ extern void statHistIntInit(StatHist * H, int n);
 extern StatHistBinDumper statHistEnumDumper;
 extern StatHistBinDumper statHistIntDumper;
 
-
 /* MemMeter */
-extern void memMeterSyncHWater(MemMeter * m);
-#define memMeterCheckHWater(m) { if ((m).hwater_level < (m).level) memMeterSyncHWater(&(m)); }
-#define memMeterInc(m) { (m).level++; memMeterCheckHWater(m); }
-#define memMeterDec(m) { (m).level--; }
-#define memMeterAdd(m, sz) { (m).level += (sz); memMeterCheckHWater(m); }
-#define memMeterDel(m, sz) { (m).level -= (sz); }
 
 /* mem */
 extern void memInit(void);
 extern void memClean(void);
 extern void memInitModule(void);
 extern void memCleanModule(void);
-extern void memConfigure(void);
 extern void *memAllocate(mem_type);
 extern void *memAllocString(size_t net_size, size_t * gross_size);
 extern void *memAllocBuf(size_t net_size, size_t * gross_size);
@@ -890,15 +882,6 @@ extern void memDataInit(mem_type, const char *, size_t, int);
 extern void memCheckInit(void);
 
 /* MemPool */
-extern MemPool *memPoolCreate(const char *label, size_t obj_size);
-extern void memPoolDestroy(MemPool * pool);
-extern void memPoolNonZero(MemPool * p);
-extern void *memPoolAlloc(MemPool * pool);
-extern void memPoolFree(MemPool * pool, void *obj);
-extern int memPoolWasUsed(const MemPool * pool);
-extern int memPoolInUseCount(const MemPool * pool);
-extern size_t memPoolInUseSize(const MemPool * pool);
-extern int memPoolUsedCount(const MemPool * pool);
 
 /* Mem */
 extern void memReport(StoreEntry * e);
