@@ -23,3 +23,8 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
 = Benchmarking =
 
   * Benchmark with / without mempools - try to establish which areas of the codebase are (ab)using malloc far too often
+
+= Additions for Cacheboy-1.0 =
+
+  * Solaris Event Ports - shouldn't be difficult; can almost merge /dev/poll + kqueue support to get network-only IO ports implemented (and ignore trying to use AIO for now!)
+  * TPROXY-4 support - already coded up, just need to test it before committing!
