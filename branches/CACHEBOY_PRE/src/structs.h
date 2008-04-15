@@ -210,13 +210,6 @@ struct _acl_arp_data {
 
 #endif
 
-struct _String {
-    /* never reference these directly! */
-    unsigned short int size;	/* buffer size; 64K limit */
-    unsigned short int len;	/* current length  */
-    char *buf;
-};
-
 struct _header_mangler {
     acl_access *access_list;
     char *replacement;

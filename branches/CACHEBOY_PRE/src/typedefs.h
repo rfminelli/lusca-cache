@@ -194,7 +194,6 @@ typedef struct _storeSwapLogHeader storeSwapLogHeader;
 typedef struct _authConfig authConfig;
 typedef struct _cacheSwap cacheSwap;
 typedef struct _StatHist StatHist;
-typedef struct _String String;
 typedef struct _ClientInfo ClientInfo;
 typedef struct _cd_guess_stats cd_guess_stats;
 typedef struct _CacheDigest CacheDigest;
