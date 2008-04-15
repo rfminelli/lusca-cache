@@ -17,7 +17,7 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
    * mempool *done*
    * memstr *done*
    * cbdata
-   * string
+   * string *done*
    * membuf
 
 = Benchmarking =
