@@ -12,7 +12,7 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
    * dlink list *done*
    * debug/ctx *done*
    * gb_t *done*
-   * kb_t
+   * kb_t - needs squid_off_t to me moved!
    * mem
    * mempool *done*
    * memstr *done*
