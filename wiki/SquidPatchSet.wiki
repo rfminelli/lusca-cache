@@ -12,7 +12,7 @@ At some point a tool should be written to do this!
 
 The initial import included all patchsets up to 12036.
 
-  * 12037
+  * 12037 - *committed*
   * 12038
   * 12039
   * 12040
