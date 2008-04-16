@@ -5,12 +5,12 @@ dnl  $Id: configure.in 12542 2008-04-13 13:27:23Z adrian.chadd $
 dnl
 dnl
 dnl
-AC_INIT(Cacheboy/Squid Web Proxy, $Revision$, http://code.google.com/p/cacheboy, Cacheboy)
+AC_INIT(Cacheboy/Squid Web Proxy, $GlobalRev$, http://code.google.com/p/cacheboy, Cacheboy)
 AC_PREREQ(2.52)
 AM_CONFIG_HEADER(include/autoconf.h)
 AC_CONFIG_AUX_DIR(cfgaux)
 AM_INIT_AUTOMAKE
-AC_REVISION($Revision$)dnl
+AC_REVISION($GlobalRev$)dnl
 AC_PREFIX_DEFAULT(/usr/local/squid)
 AM_MAINTAINER_MODE
 
