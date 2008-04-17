@@ -461,7 +461,7 @@ configDoConfigure(void)
 {
     memset(&Config2, '\0', sizeof(SquidConfig2));
     /* init memory as early as possible */
-    memConfigure();
+    memConfigure(Config.onoff.mem_pools, Config.MemPools.limit, Config.onoff.zero_buffers);
     /* Sanity checks */
     if (Config.cacheSwap.swapDirs == NULL)
 	fatal("No cache_dir's specified in config file");

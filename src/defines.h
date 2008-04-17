@@ -88,16 +88,10 @@
 /* Select types. */
 #define COMM_SELECT_READ   (0x1)
 #define COMM_SELECT_WRITE  (0x2)
-#define MAX_DEBUG_SECTIONS 100
 
 #define COMM_NONBLOCKING	0x01
 #define COMM_NOCLOEXEC		0x02
 #define COMM_REUSEADDR		0x04
-
-#define do_debug(SECTION, LEVEL) \
-	((_db_level = (LEVEL)) <= debugLevels[SECTION])
-#define debug(SECTION, LEVEL) \
-        !do_debug(SECTION, LEVEL) ? (void) 0 : _db_print
 
 #define safe_free(x)	if (x) { xxfree(x); x = NULL; }
 
@@ -261,10 +255,6 @@
 #ifndef DEFAULT_SQUID_ERROR_DIR
 #define DEFAULT_SQUID_ERROR_DIR "/usr/local/squid/etc/errors"
 #endif
-
-/* gb_type operations */
-#define gb_flush_limit (0x3FFFFFFF)
-#define gb_inc(gb, delta) { if ((gb)->bytes > gb_flush_limit || delta > gb_flush_limit) gb_flush(gb); (gb)->bytes += delta; (gb)->count++; }
 
 /* iteration for HttpHdrRange */
 #define HttpHdrRangeInitPos (-1)

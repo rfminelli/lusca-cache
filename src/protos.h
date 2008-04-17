@@ -226,12 +226,8 @@ extern void packerPrintf();
 #endif
 
 
-/* see debug.c for info on context-based debugging */
-extern Ctx ctx_enter(const char *descr);
-extern void ctx_exit(Ctx ctx);
-
+extern void _db_init_log(const char *logfile);
 extern void _db_set_syslog(const char *facility);
-extern void _db_init(const char *logfile, const char *options);
 extern void _db_rotate_log(void);
 
 #if STDC_HEADERS
@@ -863,29 +859,19 @@ extern void statHistIntInit(StatHist * H, int n);
 extern StatHistBinDumper statHistEnumDumper;
 extern StatHistBinDumper statHistIntDumper;
 
-
 /* MemMeter */
-extern void memMeterSyncHWater(MemMeter * m);
-#define memMeterCheckHWater(m) { if ((m).hwater_level < (m).level) memMeterSyncHWater(&(m)); }
-#define memMeterInc(m) { (m).level++; memMeterCheckHWater(m); }
-#define memMeterDec(m) { (m).level--; }
-#define memMeterAdd(m, sz) { (m).level += (sz); memMeterCheckHWater(m); }
-#define memMeterDel(m, sz) { (m).level -= (sz); }
 
 /* mem */
 extern void memInit(void);
 extern void memClean(void);
 extern void memInitModule(void);
 extern void memCleanModule(void);
-extern void memConfigure(void);
 extern void *memAllocate(mem_type);
-extern void *memAllocString(size_t net_size, size_t * gross_size);
 extern void *memAllocBuf(size_t net_size, size_t * gross_size);
 extern void *memReallocBuf(void *buf, size_t net_size, size_t * gross_size);
 extern void memFree(void *, int type);
 extern void memFree4K(void *);
 extern void memFree8K(void *);
-extern void memFreeString(size_t size, void *);
 extern void memFreeBuf(size_t size, void *);
 extern FREE *memFreeBufFunc(size_t size);
 extern int memInUse(mem_type);
@@ -894,15 +880,6 @@ extern void memDataInit(mem_type, const char *, size_t, int);
 extern void memCheckInit(void);
 
 /* MemPool */
-extern MemPool *memPoolCreate(const char *label, size_t obj_size);
-extern void memPoolDestroy(MemPool * pool);
-extern void memPoolNonZero(MemPool * p);
-extern void *memPoolAlloc(MemPool * pool);
-extern void memPoolFree(MemPool * pool, void *obj);
-extern int memPoolWasUsed(const MemPool * pool);
-extern int memPoolInUseCount(const MemPool * pool);
-extern size_t memPoolInUseSize(const MemPool * pool);
-extern int memPoolUsedCount(const MemPool * pool);
 
 /* Mem */
 extern void memReport(StoreEntry * e);
@@ -1219,9 +1196,6 @@ extern void dlinkNodeDelete(dlink_node * m);
 extern dlink_node *dlinkNodeNew(void);
 
 extern void kb_incr(kb_t *, squid_off_t);
-extern double gb_to_double(const gb_t *);
-extern const char *gb_to_str(const gb_t *);
-extern void gb_flush(gb_t *);	/* internal, do not use this */
 extern int stringHasWhitespace(const char *);
 extern int stringHasCntl(const char *);
 extern void linklistPush(link_list **, void *);
@@ -1247,26 +1221,6 @@ extern void htcpSocketClose(void);
 #endif
 
 /* String */
-#define strLen(s)     ((/* const */ int)(s).len)
-#define strBuf(s)     ((const char*)(s).buf)
-#define strChr(s,ch)  ((const char*)strchr(strBuf(s), (ch)))
-#define strRChr(s,ch) ((const char*)strrchr(strBuf(s), (ch)))
-#define strStr(s,str) ((const char*)strstr(strBuf(s), (str)))
-#define strCmp(s,str)     strcmp(strBuf(s), (str))
-#define strNCmp(s,str,n)     strncmp(strBuf(s), (str), (n))
-#define strCaseCmp(s,str) strcasecmp(strBuf(s), (str))
-#define strNCaseCmp(s,str,n) strncasecmp(strBuf(s), (str), (n))
-#define strSet(s,ptr,ch) (s).buf[ptr-(s).buf] = (ch)
-#define strCut(s,pos) (((s).len = pos) , ((s).buf[pos] = '\0'))
-#define strCutPtr(s,ptr) (((s).len = (ptr)-(s).buf) , ((s).buf[(s).len] = '\0'))
-#define strCat(s,str)  stringAppend(&(s), (str), strlen(str))
-extern void stringInit(String * s, const char *str);
-extern void stringLimitInit(String * s, const char *str, int len);
-extern String stringDup(const String * s);
-extern void stringClean(String * s);
-extern void stringReset(String * s, const char *str);
-extern void stringAppend(String * s, const char *buf, int len);
-/* extern void stringAppendf(String *s, const char *fmt, ...) PRINTF_FORMAT_ARG2; */
 
 /*
  * ipc.c

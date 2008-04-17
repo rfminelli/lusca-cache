@@ -39,17 +39,6 @@
 
 #define PEER_MULTICAST_SIBLINGS 1
 
-struct _dlink_node {
-    void *data;
-    dlink_node *prev;
-    dlink_node *next;
-};
-
-struct _dlink_list {
-    dlink_node *head;
-    dlink_node *tail;
-};
-
 #if USE_SSL
 struct _acl_cert_data {
     splayNode *values;
@@ -220,13 +209,6 @@ struct _acl_arp_data {
 };
 
 #endif
-
-struct _String {
-    /* never reference these directly! */
-    unsigned short int size;	/* buffer size; 64K limit */
-    unsigned short int len;	/* current length  */
-    char *buf;
-};
 
 struct _header_mangler {
     acl_access *access_list;
@@ -2233,39 +2215,6 @@ struct _storeSwapLogDataOld {
 
 #endif
 
-
-/* object to track per-action memory usage (e.g. #idle objects) */
-struct _MemMeter {
-    ssize_t level;		/* current level (count or volume) */
-    ssize_t hwater_level;	/* high water mark */
-    time_t hwater_stamp;	/* timestamp of last high water mark change */
-};
-
-/* object to track per-pool memory usage (alloc = inuse+idle) */
-struct _MemPoolMeter {
-    MemMeter alloc;
-    MemMeter inuse;
-    MemMeter idle;
-    gb_t saved;
-    gb_t total;
-};
-
-/* a pool is a [growing] space for objects of the same size */
-struct _MemPool {
-    const char *label;
-    size_t obj_size;
-#if DEBUG_MEMPOOL
-    size_t real_obj_size;	/* with alignment */
-#endif
-    struct {
-	int dozero:1;
-    } flags;
-    Stack pstack;		/* stack for free pointers */
-    MemPoolMeter meter;
-#if DEBUG_MEMPOOL
-    MemPoolMeter diff_meter;
-#endif
-};
 
 struct _ClientInfo {
     hash_link hash;		/* must be first */

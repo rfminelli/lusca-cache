@@ -40,27 +40,6 @@
 static MemPool *MemPools[MEM_MAX];
 
 /* string pools */
-#define mem_str_pool_count 3
-static const struct {
-    const char *name;
-    size_t obj_size;
-} StrPoolsAttrs[mem_str_pool_count] = {
-
-    {
-	"Short Strings", 36,
-    },				/* to fit rfc1123 and similar */
-    {
-	"Medium Strings", 128,
-    },				/* to fit most urls */
-    {
-	"Long Strings", 512
-    }				/* other */
-};
-static struct {
-    MemPool *pool;
-} StrPools[mem_str_pool_count];
-static MemMeter StrCountMeter;
-static MemMeter StrVolumeMeter;
 
 static MemMeter HugeBufCountMeter;
 static MemMeter HugeBufVolumeMeter;
@@ -79,7 +58,7 @@ memStringStats(StoreEntry * sentry)
 	"String Pool\t Impact\t\t\n"
 	" \t (%%strings)\t (%%volume)\n");
     /* table body */
-    for (i = 0; i < mem_str_pool_count; i++) {
+    for (i = 0; i < MEM_STR_POOL_COUNT; i++) {
 	const MemPool *pool = StrPools[i].pool;
 	const int plevel = pool->meter.inuse.level;
 	storeAppendPrintf(sentry, pfmt,
@@ -167,45 +146,6 @@ memFree(void *p, int type)
     memPoolFree(MemPools[type], p);
 }
 
-/* allocate a variable size buffer using best-fit pool */
-void *
-memAllocString(size_t net_size, size_t * gross_size)
-{
-    int i;
-    MemPool *pool = NULL;
-    assert(gross_size);
-    for (i = 0; i < mem_str_pool_count; i++) {
-	if (net_size <= StrPoolsAttrs[i].obj_size) {
-	    pool = StrPools[i].pool;
-	    break;
-	}
-    }
-    *gross_size = pool ? pool->obj_size : net_size;
-    assert(*gross_size >= net_size);
-    memMeterInc(StrCountMeter);
-    memMeterAdd(StrVolumeMeter, *gross_size);
-    return pool ? memPoolAlloc(pool) : xcalloc(1, net_size);
-}
-
-/* free buffer allocated with memAllocString() */
-void
-memFreeString(size_t size, void *buf)
-{
-    int i;
-    MemPool *pool = NULL;
-    assert(size && buf);
-    for (i = 0; i < mem_str_pool_count; i++) {
-	if (size <= StrPoolsAttrs[i].obj_size) {
-	    assert(size == StrPoolsAttrs[i].obj_size);
-	    pool = StrPools[i].pool;
-	    break;
-	}
-    }
-    memMeterDec(StrCountMeter);
-    memMeterDel(StrVolumeMeter, size);
-    pool ? memPoolFree(pool, buf) : xfree(buf);
-}
-
 /* Find the best fit MEM_X_BUF type */
 static mem_type
 memFindBufSizeType(size_t net_size, size_t * gross_size)
@@ -289,7 +229,6 @@ memFreeBuf(size_t size, void *buf)
 void
 memInit(void)
 {
-    int i;
     memInitModule();
     /* set all pointers to null */
     memset(MemPools, '\0', sizeof(MemPools));
@@ -367,11 +306,6 @@ memInit(void)
     memDataInit(MEM_TLV, "storeSwapTLV", sizeof(tlv), 0);
     memDataInit(MEM_SWAP_LOG_DATA, "storeSwapLogData", sizeof(storeSwapLogData), 0);
 
-    /* init string pools */
-    for (i = 0; i < mem_str_pool_count; i++) {
-	StrPools[i].pool = memPoolCreate(StrPoolsAttrs[i].name, StrPoolsAttrs[i].obj_size);
-	memPoolNonZero(StrPools[i].pool);
-    }
     cachemgrRegister("mem",
 	"Memory Utilization",
 	memStats, 0, 1);
