@@ -14,6 +14,7 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
    * gb_t *done*
    * kb_t - needs squid_off_t to me moved!
    * mem
+    * Move initialisation of types init'ed in mem.c out into component modules
    * mempool *done*
    * memstr *done*
    * cbdata
