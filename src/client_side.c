@@ -3134,7 +3134,7 @@ clientSendMoreData(void *data, mem_node_ref ref, ssize_t size)
 }
 
 /*
- * clientWriteBodyComplete is called for MEM_STORE_CLIENT_BUF's
+ * clientWriteBodyComplete is called for buffers
  * written directly to the client socket, versus copying to a MemBuf
  * and going through comm_write_mbuf.  Most non-range responses after
  * the headers probably go through here.
