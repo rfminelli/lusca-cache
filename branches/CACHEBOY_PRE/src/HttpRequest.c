@@ -35,6 +35,13 @@
 
 #include "squid.h"
 
+
+void
+requestInitMem(void)
+{
+    memDataInit(MEM_REQUEST_T, "request_t", sizeof(request_t), Squid_MaxFD >> 3);
+}
+
 request_t *
 requestCreate(method_t method, protocol_t protocol, const char *urlpath)
 {
