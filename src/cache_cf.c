@@ -141,6 +141,13 @@ static void dump_programline(StoreEntry *, const char *, const wordlist *);
 static int parseOneConfigFile(const char *file_name, int depth);
 
 void
+cacheCfInitMem(void)
+{
+    memDataInit(MEM_WORDLIST, "wordlist", sizeof(wordlist), 0);
+    memDataInit(MEM_INTLIST, "intlist", sizeof(intlist), 0);
+}
+
+void
 self_destruct(void)
 {
     shutting_down = 1;
