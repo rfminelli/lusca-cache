@@ -264,12 +264,11 @@ memInit(void)
     disk_init_mem();
     fwdInitMem();
     httpHeaderInitMem();
-    memDataInit(MEM_INTLIST, "intlist", sizeof(intlist), 0);
     stmemInitMem();
     netdbInitMem();
     requestInitMem();
     storeInitMem();
-    memDataInit(MEM_WORDLIST, "wordlist", sizeof(wordlist), 0);
+    cacheCfInitMem();
     clientdbInitMem();
     memDataInit(MEM_MD5_DIGEST, "MD5 digest", SQUID_MD5_DIGEST_LENGTH, 0);
     helperInitMem();
