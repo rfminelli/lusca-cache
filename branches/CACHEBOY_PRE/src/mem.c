@@ -271,9 +271,7 @@ memInit(void)
     cacheCfInitMem();
     clientdbInitMem();
     helperInitMem();
-    memDataInit(MEM_TLV, "storeSwapTLV", sizeof(tlv), 0);
-    memDataInit(MEM_SWAP_LOG_DATA, "storeSwapLogData", sizeof(storeSwapLogData), 0);
-
+    storeSwapTLVInitMem();
     cachemgrRegister("mem",
 	"Memory Utilization",
 	memStats, 0, 1);
