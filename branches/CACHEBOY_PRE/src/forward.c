@@ -1146,6 +1146,16 @@ fwdComplete(FwdState * fwdState)
 }
 
 void
+fwdInitMem(void)
+{
+    /*
+     * Although we (currently) create FwdServers's in peer_select.c, the bulk of
+     * the manipulation logic is here!
+     */
+    memDataInit(MEM_FWD_SERVER, "FwdServer", sizeof(FwdServer), 0);
+}
+
+void
 fwdInit(void)
 {
     cachemgrRegister("forward",

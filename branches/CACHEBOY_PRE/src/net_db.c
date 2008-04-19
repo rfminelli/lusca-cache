@@ -663,6 +663,13 @@ netdbExchangeDone(void *data)
 /* PUBLIC FUNCTIONS */
 
 void
+netdbInitMem(void)
+{
+    memDataInit(MEM_NETDBENTRY, "netdbEntry", sizeof(netdbEntry), 0);
+    memDataInit(MEM_NET_DB_NAME, "net_db_name", sizeof(net_db_name), 0);
+}
+
+void
 netdbInit(void)
 {
 #if USE_ICMP

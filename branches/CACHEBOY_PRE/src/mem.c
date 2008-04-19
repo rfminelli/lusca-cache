@@ -125,7 +125,7 @@ memDataInit(mem_type type, const char *name, size_t size, int max_pages_notused)
     MemPools[type] = memPoolCreate(name, size);
 }
 
-static void
+void
 memDataNonZero(mem_type type)
 {
     memPoolNonZero(MemPools[type]);
@@ -265,7 +265,7 @@ memInit(void)
     memDataInit(MEM_DLINK_NODE, "dlink_node", sizeof(dlink_node), 10);
     memDataInit(MEM_DREAD_CTRL, "dread_ctrl", sizeof(dread_ctrl), 0);
     memDataInit(MEM_DWRITE_Q, "dwrite_q", sizeof(dwrite_q), 0);
-    memDataInit(MEM_FWD_SERVER, "FwdServer", sizeof(FwdServer), 0);
+    fwdInitMem();
     memDataInit(MEM_HTTP_REPLY, "HttpReply", sizeof(HttpReply), 0);
     memDataInit(MEM_HTTP_HDR_ENTRY, "HttpHeaderEntry", sizeof(HttpHeaderEntry), 0);
     memDataInit(MEM_HTTP_HDR_CC, "HttpHdrCc", sizeof(HttpHdrCc), 0);
@@ -273,17 +273,12 @@ memInit(void)
     memDataInit(MEM_HTTP_HDR_RANGE, "HttpHdrRange", sizeof(HttpHdrRange), 0);
     memDataInit(MEM_HTTP_HDR_CONTENT_RANGE, "HttpHdrContRange", sizeof(HttpHdrContRange), 0);
     memDataInit(MEM_INTLIST, "intlist", sizeof(intlist), 0);
-    memDataInit(MEM_MEMOBJECT, "MemObject", sizeof(MemObject),
-	Squid_MaxFD >> 3);
-    memDataInit(MEM_MEM_NODE, "mem_node", sizeof(mem_node), 0);
-    memDataNonZero(MEM_MEM_NODE);
-    memDataInit(MEM_NETDBENTRY, "netdbEntry", sizeof(netdbEntry), 0);
-    memDataInit(MEM_NET_DB_NAME, "net_db_name", sizeof(net_db_name), 0);
+    stmemInitMem();
+    netdbInitMem();
     memDataInit(MEM_RELIST, "relist", sizeof(relist), 0);
     memDataInit(MEM_REQUEST_T, "request_t", sizeof(request_t),
 	Squid_MaxFD >> 3);
     storeInitMem();
-    memDataInit(MEM_STOREENTRY, "StoreEntry", sizeof(StoreEntry), 0);
     memDataInit(MEM_WORDLIST, "wordlist", sizeof(wordlist), 0);
     clientdbInitMem();
     memDataInit(MEM_MD5_DIGEST, "MD5 digest", SQUID_MD5_DIGEST_LENGTH, 0);

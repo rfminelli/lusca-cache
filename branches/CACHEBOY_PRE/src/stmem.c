@@ -256,3 +256,10 @@ stmemCopy(const mem_hdr * mem, squid_off_t offset, char *buf, size_t size)
     }
     return size - bytes_to_go;
 }
+
+void
+stmemInitMem(void)
+{
+    memDataInit(MEM_MEM_NODE, "mem_node", sizeof(mem_node), 0);
+    memDataNonZero(MEM_MEM_NODE);
+}

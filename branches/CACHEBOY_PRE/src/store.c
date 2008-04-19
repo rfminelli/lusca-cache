@@ -1657,6 +1657,7 @@ void
 storeInitMem(void)
 {
     memDataInit(MEM_STOREENTRY, "StoreEntry", sizeof(StoreEntry), 0);
+    memDataInit(MEM_MEMOBJECT, "MemObject", sizeof(MemObject), Squid_MaxFD >> 3);
 }
 
 void
