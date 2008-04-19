@@ -729,6 +729,7 @@ extern void peerSelect(request_t *, StoreEntry *, PSC *, void *data);
 extern void peerSelectInit(void);
 
 /* peer_digest.c */
+extern void peerDigestInitMem(void);
 extern PeerDigest *peerDigestCreate(peer * p);
 extern void peerDigestNeeded(PeerDigest * pd);
 extern void peerDigestNotePeerGone(PeerDigest * pd);

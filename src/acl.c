@@ -124,7 +124,7 @@ aclInitMem(void)
     memDataInit(MEM_ACL_REQUEST_TYPE, "acl_request_type", sizeof(acl_request_type), 0);
     memDataInit(MEM_ACL_PROXY_AUTH_MATCH, "acl_proxy_auth_match_cache", sizeof(acl_proxy_auth_match_cache), 0);
     memDataInit(MEM_ACL_USER_DATA, "acl_user_data", sizeof(acl_user_data), 0);
-
+    memDataInit(MEM_RELIST, "relist", sizeof(relist), 0);
 }
 
 static squid_acl
