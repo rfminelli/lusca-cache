@@ -47,6 +47,13 @@ diskWriteIsComplete(int fd)
 #endif
 
 void
+disk_init_mem(void)
+{
+    memDataInit(MEM_DREAD_CTRL, "dread_ctrl", sizeof(dread_ctrl), 0);
+    memDataInit(MEM_DWRITE_Q, "dwrite_q", sizeof(dwrite_q), 0);
+}
+
+void
 disk_init(void)
 {
     (void) 0;

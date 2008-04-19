@@ -261,8 +261,7 @@ memInit(void)
     peerDigestInitMem();
 #endif
     memDataInit(MEM_DLINK_NODE, "dlink_node", sizeof(dlink_node), 10);
-    memDataInit(MEM_DREAD_CTRL, "dread_ctrl", sizeof(dread_ctrl), 0);
-    memDataInit(MEM_DWRITE_Q, "dwrite_q", sizeof(dwrite_q), 0);
+    disk_init_mem();
     fwdInitMem();
     httpHeaderInitMem();
     memDataInit(MEM_INTLIST, "intlist", sizeof(intlist), 0);
@@ -274,10 +273,7 @@ memInit(void)
     memDataInit(MEM_WORDLIST, "wordlist", sizeof(wordlist), 0);
     clientdbInitMem();
     memDataInit(MEM_MD5_DIGEST, "MD5 digest", SQUID_MD5_DIGEST_LENGTH, 0);
-    memDataInit(MEM_HELPER_REQUEST, "helper_request",
-	sizeof(helper_request), 0);
-    memDataInit(MEM_HELPER_STATEFUL_REQUEST, "helper_stateful_request",
-	sizeof(helper_stateful_request), 0);
+    helperInitMem();
     memDataInit(MEM_TLV, "storeSwapTLV", sizeof(tlv), 0);
     memDataInit(MEM_SWAP_LOG_DATA, "storeSwapLogData", sizeof(storeSwapLogData), 0);
 
