@@ -224,6 +224,22 @@ memFreeBuf(size_t size, void *buf)
 	memMeterDel(HugeBufVolumeMeter, size);
     }
 }
+void
+memBuffersInit()
+{
+    memDataInit(MEM_2K_BUF, "2K Buffer", 2048, 10);
+    memDataNonZero(MEM_2K_BUF);
+    memDataInit(MEM_4K_BUF, "4K Buffer", 4096, 10);
+    memDataNonZero(MEM_4K_BUF);
+    memDataInit(MEM_8K_BUF, "8K Buffer", 8192, 10);
+    memDataNonZero(MEM_8K_BUF);
+    memDataInit(MEM_16K_BUF, "16K Buffer", 16384, 10);
+    memDataNonZero(MEM_16K_BUF);
+    memDataInit(MEM_32K_BUF, "32K Buffer", 32768, 10);
+    memDataNonZero(MEM_32K_BUF);
+    memDataInit(MEM_64K_BUF, "64K Buffer", 65536, 10);
+    memDataNonZero(MEM_64K_BUF);
+}
 
 
 void
@@ -238,37 +254,10 @@ memInit(void)
      * that are never used or used only once; perhaps we should simply use
      * malloc() for those? @?@
      */
-    memDataInit(MEM_2K_BUF, "2K Buffer", 2048, 10);
-    memDataNonZero(MEM_2K_BUF);
-    memDataInit(MEM_4K_BUF, "4K Buffer", 4096, 10);
-    memDataNonZero(MEM_4K_BUF);
-    memDataInit(MEM_8K_BUF, "8K Buffer", 8192, 10);
-    memDataNonZero(MEM_8K_BUF);
-    memDataInit(MEM_16K_BUF, "16K Buffer", 16384, 10);
-    memDataNonZero(MEM_16K_BUF);
-    memDataInit(MEM_32K_BUF, "32K Buffer", 32768, 10);
-    memDataNonZero(MEM_32K_BUF);
-    memDataInit(MEM_64K_BUF, "64K Buffer", 65536, 10);
-    memDataNonZero(MEM_64K_BUF);
-    memDataInit(MEM_ACL, "acl", sizeof(acl), 0);
-    memDataInit(MEM_ACL_DENY_INFO_LIST, "acl_deny_info_list",
-	sizeof(acl_deny_info_list), 0);
-    memDataInit(MEM_ACL_IP_DATA, "acl_ip_data", sizeof(acl_ip_data), 0);
-    memDataInit(MEM_ACL_LIST, "acl_list", sizeof(acl_list), 0);
-    memDataInit(MEM_ACL_NAME_LIST, "acl_name_list", sizeof(acl_name_list), 0);
-#if USE_SSL
-    memDataInit(MEM_ACL_CERT_DATA, "acl_cert_data", sizeof(acl_cert_data), 0);
-#endif
-    memDataInit(MEM_ACL_TIME_DATA, "acl_time_data", sizeof(acl_time_data), 0);
-    memDataInit(MEM_ACL_REQUEST_TYPE, "acl_request_type", sizeof(acl_request_type), 0);
-    memDataInit(MEM_AUTH_USER_T, "auth_user_t",
-	sizeof(auth_user_t), 0);
-    memDataInit(MEM_AUTH_USER_HASH, "auth_user_hash_pointer",
-	sizeof(auth_user_hash_pointer), 0);
-    memDataInit(MEM_ACL_PROXY_AUTH_MATCH, "acl_proxy_auth_match_cache",
-	sizeof(acl_proxy_auth_match_cache), 0);
-    memDataInit(MEM_ACL_USER_DATA, "acl_user_data",
-	sizeof(acl_user_data), 0);
+    aclInitMem();
+    memBuffersInit();
+    authenticateInitMem();
+
 #if USE_CACHE_DIGESTS
     memDataInit(MEM_CACHE_DIGEST, "CacheDigest", sizeof(CacheDigest), 0);
 #endif
@@ -293,9 +282,10 @@ memInit(void)
     memDataInit(MEM_RELIST, "relist", sizeof(relist), 0);
     memDataInit(MEM_REQUEST_T, "request_t", sizeof(request_t),
 	Squid_MaxFD >> 3);
+    storeInitMem();
     memDataInit(MEM_STOREENTRY, "StoreEntry", sizeof(StoreEntry), 0);
     memDataInit(MEM_WORDLIST, "wordlist", sizeof(wordlist), 0);
-    memDataInit(MEM_CLIENT_INFO, "ClientInfo", sizeof(ClientInfo), 0);
+    clientdbInitMem();
     memDataInit(MEM_MD5_DIGEST, "MD5 digest", SQUID_MD5_DIGEST_LENGTH, 0);
     memDataInit(MEM_HELPER_REQUEST, "helper_request",
 	sizeof(helper_request), 0);

@@ -53,6 +53,7 @@ extern void headersLog(int cs, int pq, method_t m, void *data);
 char *log_quote(const char *header);
 
 /* acl.c */
+extern void aclInitMem(void);
 extern aclCheck_t *aclChecklistCreate(const struct _acl_access *,
     request_t *,
     const char *ident);
@@ -132,6 +133,7 @@ extern void cbdataInitType(cbdata_type type, const char *label, int size, FREE *
 extern cbdata_type cbdataAddType(cbdata_type type, const char *label, int size, FREE * free_func);
 extern int cbdataLocked(const void *p);
 
+extern void clientdbInitMem(void);
 extern void clientdbInit(void);
 extern void clientdbUpdate(struct in_addr, log_type, protocol_t, squid_off_t);
 extern int clientdbCutoffDenied(struct in_addr);
@@ -772,6 +774,7 @@ extern int authenticateAuthSchemeId(const char *typestr);
 extern void authenticateStart(auth_user_request_t *, RH *, void *);
 extern void authenticateSchemeInit(void);
 extern void authenticateConfigure(authConfig *);
+extern void authenticateInitMem(void);
 extern void authenticateInit(authConfig *);
 extern void authenticateShutdown(void);
 extern void authenticateFixHeader(HttpReply *, auth_user_request_t *, request_t *, int, int);
@@ -913,6 +916,7 @@ extern StoreEntry *storeGetPublicByRequestMethod(request_t * request, const meth
 extern StoreEntry *storeCreateEntry(const char *, request_flags, method_t);
 extern void storeSetPublicKey(StoreEntry *);
 extern void storeComplete(StoreEntry *);
+extern void storeInitMem(void);
 extern void storeInit(void);
 extern void storeAbort(StoreEntry *);
 extern void storeAppend(StoreEntry *, const char *, int);

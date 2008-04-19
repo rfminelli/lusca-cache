@@ -1654,6 +1654,12 @@ storeInitHashValues(void)
 }
 
 void
+storeInitMem(void)
+{
+    memDataInit(MEM_STOREENTRY, "StoreEntry", sizeof(StoreEntry), 0);
+}
+
+void
 storeInit(void)
 {
     storeKeyInit();

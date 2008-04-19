@@ -65,6 +65,12 @@ clientdbAdd(struct in_addr addr)
 }
 
 void
+clientdbInitMem(void)
+{
+    memDataInit(MEM_CLIENT_INFO, "ClientInfo", sizeof(ClientInfo), 0);
+}
+
+void
 clientdbInit(void)
 {
     if (client_table)
