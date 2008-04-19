@@ -432,6 +432,7 @@ extern void httpHeaderPutStrf();
 
 /* Http Header */
 extern void httpHeaderInitModule(void);
+extern void httpHeaderInitMem(void);
 extern void httpHeaderCleanModule(void);
 /* init/clean */
 extern void httpHeaderInit(HttpHeader * hdr, http_hdr_owner_type owner);
