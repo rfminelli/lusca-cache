@@ -809,6 +809,13 @@ authenticateConfigure(authConfig * config)
 }
 
 void
+authenticateInitMem(void)
+{
+    memDataInit(MEM_AUTH_USER_T, "auth_user_t", sizeof(auth_user_t), 0);
+    memDataInit(MEM_AUTH_USER_HASH, "auth_user_hash_pointer", sizeof(auth_user_hash_pointer), 0);
+}
+
+void
 authenticateInit(authConfig * config)
 {
     int i;
