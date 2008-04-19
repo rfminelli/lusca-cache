@@ -987,31 +987,6 @@ stringHasWhitespace(const char *s)
     return strpbrk(s, w_space) != NULL;
 }
 
-void
-linklistPush(link_list ** L, void *p)
-{
-    link_list *l = memAllocate(MEM_LINK_LIST);
-    l->next = NULL;
-    l->ptr = p;
-    while (*L)
-	L = &(*L)->next;
-    *L = l;
-}
-
-void *
-linklistShift(link_list ** L)
-{
-    void *p;
-    link_list *l;
-    if (NULL == *L)
-	return NULL;
-    l = *L;
-    p = l->ptr;
-    *L = (*L)->next;
-    memFree(l, MEM_LINK_LIST);
-    return p;
-}
-
 /*
  * Same as rename(2) but complains if something goes wrong;
  * the caller is responsible for handing and explaining the 

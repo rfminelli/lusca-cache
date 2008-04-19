@@ -606,7 +606,6 @@ typedef enum {
     MEM_CACHE_DIGEST,
 #endif
     MEM_CLIENT_INFO,
-    MEM_LINK_LIST,
     MEM_DLINK_NODE,
     MEM_DONTFREE,
     MEM_DREAD_CTRL,
