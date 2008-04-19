@@ -251,6 +251,8 @@ extern void file_write(int, off_t, void *, size_t len, DWCB *, void *, FREE *);
 extern void file_write_mbuf(int fd, off_t, MemBuf mb, DWCB * handler, void *handler_data);
 extern void file_read(int, char *, size_t, off_t, DRCB *, void *);
 extern void disk_init(void);
+extern void disk_init_mem(void);
+
 
 /* dns.s */
 extern void dnsShutdown(void);
@@ -1297,6 +1299,7 @@ extern void delayUnregisterDelayIdPtr(delay_id * loc);
 #endif
 
 /* helper.c */
+extern void helperInitMem(void);
 extern void helperOpenServers(helper * hlp);
 extern void helperStatefulOpenServers(statefulhelper * hlp);
 extern void helperSubmit(helper * hlp, const char *buf, HLPCB * callback, void *data);

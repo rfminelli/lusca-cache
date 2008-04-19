@@ -55,6 +55,13 @@ static void helperStatefulRequestFree(helper_stateful_request * r);
 static void StatefulEnqueue(statefulhelper * hlp, helper_stateful_request * r);
 
 void
+helperInitMem(void)
+{
+    memDataInit(MEM_HELPER_REQUEST, "helper_request", sizeof(helper_request), 0);
+    memDataInit(MEM_HELPER_STATEFUL_REQUEST, "helper_stateful_request", sizeof(helper_stateful_request), 0);
+}
+
+void
 helperOpenServers(helper * hlp)
 {
     char *s;
