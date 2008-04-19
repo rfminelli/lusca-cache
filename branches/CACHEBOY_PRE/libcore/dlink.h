@@ -26,5 +26,6 @@ extern void dlinkAdd(void *data, dlink_node *, dlink_list *);
 extern void dlinkAddTail(void *data, dlink_node *, dlink_list *);
 extern void dlinkDelete(dlink_node * m, dlink_list * list);
 extern void dlinkNodeDelete(dlink_node * m);
+extern void * dlinkRemoveHead(dlink_list *list);
 
 #endif
