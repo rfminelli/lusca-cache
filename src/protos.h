@@ -527,6 +527,7 @@ extern squid_off_t httpDelayBodySize(method_t, const HttpReply *);
 extern HttpReply *httpReplyClone(HttpReply * src);
 
 /* Http Request */
+extern void requestInitMem(void);
 extern request_t *requestCreate(method_t, protocol_t, const char *urlpath);
 extern void requestDestroy(request_t *);
 extern request_t *requestLink(request_t *);

@@ -267,8 +267,7 @@ memInit(void)
     memDataInit(MEM_INTLIST, "intlist", sizeof(intlist), 0);
     stmemInitMem();
     netdbInitMem();
-    memDataInit(MEM_REQUEST_T, "request_t", sizeof(request_t),
-	Squid_MaxFD >> 3);
+    requestInitMem();
     storeInitMem();
     memDataInit(MEM_WORDLIST, "wordlist", sizeof(wordlist), 0);
     clientdbInitMem();
