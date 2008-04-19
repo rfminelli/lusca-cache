@@ -270,7 +270,6 @@ memInit(void)
     storeInitMem();
     cacheCfInitMem();
     clientdbInitMem();
-    memDataInit(MEM_MD5_DIGEST, "MD5 digest", SQUID_MD5_DIGEST_LENGTH, 0);
     helperInitMem();
     memDataInit(MEM_TLV, "storeSwapTLV", sizeof(tlv), 0);
     memDataInit(MEM_SWAP_LOG_DATA, "storeSwapLogData", sizeof(storeSwapLogData), 0);
