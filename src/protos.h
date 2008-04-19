@@ -704,6 +704,7 @@ extern void neighborsHtcpReply(const cache_key *, htcpReplyData *, const struct 
 extern void peerAddFwdServer(FwdServer ** FS, peer * p, hier_code code);
 extern int peerAllowedToUse(const peer *, request_t *);
 
+extern void netdbInitMem(void);
 extern void netdbInit(void);
 extern void netdbHandlePingReply(const struct sockaddr_in *from, int hops, int rtt);
 extern void netdbPingSite(const char *hostname);
@@ -739,6 +740,7 @@ extern DEFER fwdCheckDeferRead;
 extern void fwdFail(FwdState *, ErrorState *);
 extern void fwdUnregister(int fd, FwdState *);
 extern void fwdComplete(FwdState * fwdState);
+extern void fwdInitMem(void);
 extern void fwdInit(void);
 extern int fwdReforwardableStatus(http_status s);
 extern void fwdServersFree(FwdServer ** FS);
@@ -880,6 +882,7 @@ extern FREE *memFreeBufFunc(size_t size);
 extern int memInUse(mem_type);
 extern size_t memTotalAllocated(void);
 extern void memDataInit(mem_type, const char *, size_t, int);
+extern void memDataNonZero(mem_type);
 extern void memCheckInit(void);
 
 /* MemPool */
@@ -887,6 +890,7 @@ extern void memCheckInit(void);
 /* Mem */
 extern void memReport(StoreEntry * e);
 
+extern void stmemInitMem(void);
 extern squid_off_t stmemFreeDataUpto(mem_hdr *, squid_off_t);
 extern void stmemAppend(mem_hdr *, const char *, int);
 extern ssize_t stmemCopy(const mem_hdr *, squid_off_t, char *, size_t);
