@@ -48,3 +48,16 @@ dlinkDelete(dlink_node * m, dlink_list * list)
 	list->tail = m->prev;
     m->next = m->prev = NULL;
 }
+
+void *
+dlinkRemoveHead(dlink_list *list)
+{
+	dlink_node *n;
+
+	if (list->head == NULL)
+		return NULL;
+
+	n = list->head;
+	dlinkDelete(n, list);
+	return n->data;
+}
