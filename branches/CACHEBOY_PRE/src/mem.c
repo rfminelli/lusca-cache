@@ -257,9 +257,8 @@ memInit(void)
     aclInitMem();
     memBuffersInit();
     authenticateInitMem();
-
 #if USE_CACHE_DIGESTS
-    memDataInit(MEM_CACHE_DIGEST, "CacheDigest", sizeof(CacheDigest), 0);
+    peerDigestInitMem();
 #endif
     memDataInit(MEM_LINK_LIST, "link_list", sizeof(link_list), 10);
     memDataInit(MEM_DLINK_NODE, "dlink_node", sizeof(dlink_node), 10);
@@ -270,7 +269,6 @@ memInit(void)
     memDataInit(MEM_INTLIST, "intlist", sizeof(intlist), 0);
     stmemInitMem();
     netdbInitMem();
-    memDataInit(MEM_RELIST, "relist", sizeof(relist), 0);
     memDataInit(MEM_REQUEST_T, "request_t", sizeof(request_t),
 	Squid_MaxFD >> 3);
     storeInitMem();
