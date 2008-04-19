@@ -1199,10 +1199,6 @@ extern void asnInit(void);
 extern void asnFreeMemory(void);
 
 /* tools.c */
-extern void dlinkAdd(void *data, dlink_node *, dlink_list *);
-extern void dlinkAddTail(void *data, dlink_node *, dlink_list *);
-extern void dlinkDelete(dlink_node * m, dlink_list * list);
-extern void dlinkNodeDelete(dlink_node * m);
 extern dlink_node *dlinkNodeNew(void);
 
 extern void kb_incr(kb_t *, squid_off_t);
