@@ -260,7 +260,6 @@ memInit(void)
 #if USE_CACHE_DIGESTS
     peerDigestInitMem();
 #endif
-    memDataInit(MEM_DLINK_NODE, "dlink_node", sizeof(dlink_node), 10);
     disk_init_mem();
     fwdInitMem();
     httpHeaderInitMem();
