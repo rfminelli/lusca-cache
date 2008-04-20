@@ -2037,11 +2037,11 @@ free_denyinfo(acl_deny_info_list ** list)
     for (a = *list; a; a = a_next) {
 	for (l = a->acl_list; l; l = l_next) {
 	    l_next = l->next;
-	    memFree(l, MEM_ACL_NAME_LIST);
+	    memPoolFree(acl_name_list_pool, l);
 	    l = NULL;
 	}
 	a_next = a->next;
-	memFree(a, MEM_ACL_DENY_INFO_LIST);
+	memPoolFree(acl_deny_pool, a);
 	a = NULL;
     }
     *list = NULL;
