@@ -2296,6 +2296,7 @@ struct _helper_request {
     HLPCB *callback;
     void *data;
     struct timeval dispatch_time;
+    dlink_node n;
 };
 
 struct _helper_stateful_request {
@@ -2303,6 +2304,7 @@ struct _helper_stateful_request {
     HLPSCB *callback;
     void *data;
     struct timeval dispatch_time;
+    dlink_node n;
 };
 
 
