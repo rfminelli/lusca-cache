@@ -22,6 +22,10 @@ struct _dlink_list {
     dlink_node *tail;
 };
 
+#define DLINK_ISEMPTY(n)        ( (n).head == NULL )
+#define DLINK_HEAD(n)           ( (n).head->data )
+#define	DLINK_ISORPHAN(n)	( (n).next == NULL && (n).prev == NULL )
+
 extern void dlinkAdd(void *data, dlink_node *, dlink_list *);
 extern void dlinkAddTail(void *data, dlink_node *, dlink_list *);
 extern void dlinkDelete(dlink_node * m, dlink_list * list);
