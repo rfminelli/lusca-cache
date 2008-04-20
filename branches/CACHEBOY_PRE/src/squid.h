@@ -522,4 +522,8 @@ extern size_t getpagesize(void);
  */
 #include "../libcore/valgrind.h"
 
+/* For now - these need to move! [ahc] */
+extern MemPool *acl_name_list_pool;
+extern MemPool *acl_deny_pool;
+
 #endif /* SQUID_H */
