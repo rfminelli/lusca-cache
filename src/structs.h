@@ -365,17 +365,23 @@ struct _http_port_list {
     char *name;			/* visible name */
     char *defaultsite;		/* default web site */
     char *urlgroup;		/* default urlgroup */
-    unsigned int transparent;	/* transparent proxy */
-    unsigned int accel;		/* HTTP accelerator */
-    unsigned int vhost;		/* uses host header */
-    unsigned int vport;		/* virtual port support */
-    unsigned int no_connection_auth;	/* Don't support connection oriented auth */
+    int transparent;		/* transparent proxy */
+    int accel;			/* HTTP accelerator */
+    int vhost;			/* uses host header */
+    int vport;			/* virtual port support */
+    int no_connection_auth;	/* Don't support connection oriented auth */
     unsigned int http11;	/* HTTP/1.1 support */
 #if LINUX_TPROXY
     unsigned int tproxy;
 #endif
     unsigned int act_as_origin;	/* Fake Date: headers in accelerator mode */
     unsigned int allow_direct:1;	/* Allow direct forwarding in accelerator mode */
+    struct {
+	unsigned int enabled;
+	unsigned int idle;
+	unsigned int interval;
+	unsigned int timeout;
+    } tcp_keepalive;
 };
 
 #if USE_SSL
@@ -461,6 +467,7 @@ struct _SquidConfig {
 	time_t deadPeer;
 	int icp_query;		/* msec */
 	int icp_query_max;	/* msec */
+	int icp_query_min;	/* msec */
 	int mcast_icp_query;	/* msec */
 #if USE_IDENT
 	time_t ident;
@@ -803,6 +810,16 @@ struct _SquidConfig {
     int sleep_after_fork;	/* microseconds */
     time_t minimum_expiry_time;	/* seconds */
     external_acl *externalAclHelperList;
+    enum zph_mode {
+	ZPH_OFF = 0,
+	ZPH_TOS,
+	ZPH_PRIORITY,
+	ZPH_OPTION
+    } zph_mode;
+    int zph_local;
+    int zph_sibling;
+    int zph_parent;
+    int zph_option;
     errormap *errorMapList;
 #if USE_SSL
     struct {
@@ -1297,6 +1314,7 @@ struct _ConnStateData {
 	int auth;		/* pinned for www authentication */
 	peer *peer;		/* peer the connection goes via */
     } pinning;
+    int tos_priority;		/* Used by zph to avoid updating the tos/priority when not needed */
 };
 
 struct _ipcache_addrs {
@@ -1354,6 +1372,8 @@ struct _DigestFetchState {
 	int msg;
 	int bytes;
     } sent, recv;
+    char *buf;
+    size_t buf_used;
 };
 
 /* statistics for cache digests and other hit "predictors" */

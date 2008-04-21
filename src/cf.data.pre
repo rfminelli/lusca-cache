@@ -49,7 +49,8 @@ COMMENT_END
 
 COMMENT_START
   Configuration options can be included using the "include" directive.
-  Include takes a list of files to include. Quoting is supported.
+  Include takes a list of files to include. Quoting and wildcards is
+  supported.
 
   For example,
 
@@ -1041,13 +1042,15 @@ DOC_START
 	   tproxy	Support Linux TPROXY for spoofing outgoing
 			connections using the client IP address.
 
-	   accel	Accelerator mode. Also needs at least one
-			of vhost/vport/defaultsite.
+	   accel	Accelerator mode. See also the related vhost,
+			vport and defaultsite directives.
 
 	   defaultsite=domainname
 			What to use for the Host: header if it is not present
 			in a request. Determines what site (not origin server)
 			accelerators should consider the default.
+			Defaults to visible_hostname:port if not set
+			May be combined with vport=NN to override the port number.
 			Implies accel.
 
 	   vhost	Accelerator mode using Host header for virtual
@@ -1079,11 +1082,21 @@ DOC_START
 			Expires: headers. Implies accel.
 
 	   http11	Enables HTTP/1.1 support to clients. The HTTP/1.1
-			support is still incomplete, but should work with
-			most clients.
+			support is still incomplete with an internal HTTP/1.0
+			hop, but should work with most clients. The main
+			HTTP/1.1 features missing due to this is forwarding
+			of requests using chunked transfer encoding (results
+			in 411) and forwarding of 1xx responses (silently
+			dropped)
 
 	   name=	Specifies a internal name for the port. Defaults to
 			the port specification (port or addr:port)
+
+	   keepalive[=idle,interval,timeout]
+			Enable TCP keepalive probes of idle connections
+			idle is the initial time before TCP starts probing
+			the connection, interval how often to probe, and
+			timeout the time before giving up.
 
 	If you run Squid on a dual-homed machine with an internal
 	and an external interface we recommend you to specify the
@@ -1116,22 +1129,8 @@ DOC_START
 
 	Options:
 
-	   accel	Accelerator mode. Also needs at least one of
-	   	        defaultsite or vhost.
-
-	   defaultsite=	The name of the https site presented on
-			this port. Implies accel.
-
-	   vhost	Accelerator mode using Host header for virtual
-			domain support. Requires a wildcard certificate
-			or other certificate valid for more than one domain.
-			Implies accel.
-
-	   urlgroup=	Default urlgroup to mark requests with (see
-			also acl urlgroup and url_rewrite_program).
-
-	   protocol=	Protocol to reconstruct accelerated requests with.
-			Defaults to https.
+	In addition to the options specified for http_port the folling
+	SSL related options is supported:
 
 	   cert=	Path to SSL certificate (PEM format).
 
@@ -1194,14 +1193,6 @@ DOC_START
 				client certificate chain.
 
 	   sslcontext=	SSL session ID context identifier.
-
-	   vport	Accelerator with IP based virtual host support.
-
-	   vport=NN	As above, but uses specified port number rather
-			than the https_port number. Implies accel.
-
-	   name=	Specifies a internal name for the port. Defaults to
-			the port specification (port or addr:port)
 
 DOC_END
 
@@ -1271,6 +1262,57 @@ DOC_START
 	incompatible with the use of server side persistent connections. To
 	ensure correct results it is best to set server_persistent_connections
 	to off when using this directive in such configurations.
+DOC_END
+
+NAME: zph_mode
+TYPE: zph_mode
+DEFAULT: off
+LOC: Config.zph_mode
+DOC_START
+	This option enables packet level marking of HIT/MISS responses,
+	either using IP TOS or socket priority.
+	    off		Feature disabled
+	    tos		Set the IP TOS field
+	    priority	Set the socket priority (may get mapped to TOS by OS,
+			otherwise only usable in local rulesets)
+
+	See also tcp_outgoing_tos for details/requirements about TOS usage.
+DOC_END
+
+NAME: zph_local
+TYPE: int
+DEFAULT: 0
+LOC: Config.zph_local
+DOC_START
+	Allows you to select a TOS/Diffserv/Priority value to mark local hits.
+	Default: 0 (disabled).
+DOC_END
+
+NAME: zph_sibling
+TYPE: int
+DEFAULT: 0
+LOC: Config.zph_sibling
+DOC_START
+	Allows you to select a TOS/Diffserv/Priority value to mark sibling hits.
+	Default: 0 (disabled).
+DOC_END
+
+NAME: zph_parent
+TYPE: int
+DEFAULT: 0
+LOC: Config.zph_parent
+DOC_START
+	Allows you to select a TOS/Diffserv/Priority value to mark parent hits. 
+	Default: 0 (disabled).
+DOC_END
+
+NAME: zph_option
+TYPE: int
+DEFAULT: 136
+LOC: Config.zph_option
+DOC_START
+	The IP option to use when zph_mode is set to "option". Defaults to
+	136 which is officially registered as "SATNET Stream ID".
 DOC_END
 
 COMMENT_START
@@ -1689,7 +1731,9 @@ DOC_START
 		     that should be kept open to this peer.
 
 		     use http11 to send requests using HTTP/1.1 to this peer.
-		     The HTTP/1.1 support is still incomplete.
+		     Note: The HTTP/1.1 support is still incomplete, with an
+		     internal HTTP/1.0 hop. As result 1xx responses will not
+		     be forwarded.
 DOC_END
 
 NAME: cache_peer_domain cache_host_domain
@@ -3404,7 +3448,9 @@ DEFAULT: off
 DOC_START
 	This option enables the use ot HTTP/1.1 on outgoing "direct" requests.
 	See also the http11 cache_peer option.
-	Note: The HTTP/1.1 support is still incomplete.
+	Note: The HTTP/1.1 support is still incomplete, with an
+	internal HTTP/1.0 hop. As result 1xx responses will not
+	be forwarded.
 DOC_END
 
 NAME: ignore_expect_100
@@ -4565,6 +4611,22 @@ DOC_START
 	of a dynamic) timeout value. To set a fixed timeout see the
 	'icp_query_timeout' directive.
 DOC_END
+
+NAME: minimum_icp_query_timeout
+COMMENT: (msec)
+DEFAULT: 5
+TYPE: int
+LOC: Config.Timeout.icp_query_min
+DOC_START
+	Normally the ICP query timeout is determined dynamically.  But
+	sometimes it can lead to very small timeouts, even lower than
+	the normal latency variance on your link due to traffic.
+	Use this option to put an lower limit on the dynamic timeout
+	value.  Do NOT use this option to always use a fixed (instead
+	of a dynamic) timeout value. To set a fixed timeout see the
+	'icp_query_timeout' directive.
+DOC_END
+
 
 COMMENT_START
  MULTICAST ICP OPTIONS
