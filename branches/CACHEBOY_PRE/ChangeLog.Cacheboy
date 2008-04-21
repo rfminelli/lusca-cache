@@ -1,9 +1,12 @@
 ChangeLog:
 
+-- Tagged: CACHEBOY_0.PRE2
+-- (21-April-2008)
+
 * The helper code now doesn't use a temporary list structure to store
-  queued requests
+  queued requests (tested)
 * The aufs storage code now doesn't use a temporary list structure to store
-  temporary lists of pending reads and writes
+  temporary lists of pending reads and writes (tested)
 * Continued to shuffle around code into seperate libraries
 * Changed the way legacy memory pools are initialised - the same MemPools
   code is used but they're setup slightly differently. Instability could
