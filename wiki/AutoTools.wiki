@@ -1,8 +1,8 @@
-#summary Known-working AutoTools for building.
+﻿#summary Known-working AutoTools for building.
 
 = Introduction =
 
-One thing that always annoys me about Squid development is the weird and wonderful combination of automake/autoconf/system which will generate a correct build environment.
+One thing that always annoys me about Squid development is the weird and wonderful combination of automake/autoconf/system required to generate a correct build environment.
 
 This document will attempt to capture known working automake/autoconf environments.
 
