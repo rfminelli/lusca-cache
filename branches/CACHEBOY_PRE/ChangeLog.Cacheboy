@@ -11,6 +11,7 @@ ChangeLog:
 * Changed the way legacy memory pools are initialised - the same MemPools
   code is used but they're setup slightly differently. Instability could
   arise if objects are assigned to the wrong pool.
+* Removed some unused memory pool types.
 
 -- Tagged: CACHEBOY_0.PRE1
 
