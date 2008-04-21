@@ -2769,6 +2769,38 @@ clientSendHeaders(void *data, HttpReply * rep)
 	return;
     }
     assert(http->out.offset == 0);
+
+    if (Config.zph_mode != ZPH_OFF) {
+	int tos = 0;
+
+	if (!isTcpHit(http->log_type))
+	    tos = 0;
+	else if (Config.zph_local)
+	    tos = Config.zph_local;
+	else if (Config.zph_sibling && http->request->hier.code == SIBLING_HIT)		/* sibling hit */
+	    tos = Config.zph_sibling;
+	else if (Config.zph_parent && http->request->hier.code == PARENT_HIT)	/* parent hit */
+	    tos = Config.zph_parent;
+	if (conn->tos_priority != tos) {
+	    conn->tos_priority = tos;
+	    switch (Config.zph_mode) {
+	    case ZPH_OFF:
+		break;
+	    case ZPH_TOS:
+		commSetTos(fd, tos);
+		break;
+	    case ZPH_PRIORITY:
+		commSetSocketPriority(fd, tos);
+		break;
+	    case ZPH_OPTION:
+		{
+		    uint16_t value = tos;
+		    commSetIPOption(fd, Config.zph_option, &value, sizeof(value));
+		}
+		break;
+	    }
+	}
+    }
     rep = http->reply = clientCloneReply(http, rep);
     if (!rep) {
 	ErrorState *err = errorCon(ERR_INVALID_RESP, HTTP_BAD_GATEWAY, http->orig_request);
@@ -3773,41 +3805,31 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t * method_p, i
 	}
 	if (*url != '/') {
 	    /* Fully qualified URL. Nothing special to do */
-	} else if (vhost && (t = mime_get_header(req_hdr, "Host"))) {
-	    char *portstr = strchr(t, ':');
-	    int port = 0;
-	    size_t url_sz = strlen(url) + 32 + Config.appendDomainLen + strlen(t);
-	    if (portstr) {
-		*portstr++ = '\0';
-		port = atoi(portstr);
-	    }
-	    if (vport && !port)
+	} else if (conn->port->accel) {
+	    const char *host = NULL;
+	    int port;
+	    size_t url_sz;
+	    if (vport > 0)
 		port = vport;
-	    http->uri = xcalloc(url_sz, 1);
-	    if (vport)
-		snprintf(http->uri, url_sz, "%s://%s:%d%s",
-		    conn->port->protocol, t, port, url);
 	    else
+		port = htons(http->conn->me.sin_port);
+	    if (vhost && (t = mime_get_header(req_hdr, "Host")))
+		host = t;
+	    else if (conn->port->defaultsite)
+		host = conn->port->defaultsite;
+	    else if (vport == -1)
+		host = inet_ntoa(http->conn->me.sin_addr);
+	    else
+		host = getMyHostname();
+	    url_sz = strlen(url) + 32 + Config.appendDomainLen + strlen(host);
+	    http->uri = xcalloc(url_sz, 1);
+	    if (strchr(host, ':'))
 		snprintf(http->uri, url_sz, "%s://%s%s",
 		    conn->port->protocol, t, url);
+	    else
+		snprintf(http->uri, url_sz, "%s://%s:%d%s",
+		    conn->port->protocol, host, port, url);
 	    debug(33, 5) ("VHOST REWRITE: '%s'\n", http->uri);
-	} else if (conn->port->defaultsite) {
-	    size_t url_sz = strlen(url) + 32 + Config.appendDomainLen +
-	    strlen(conn->port->defaultsite);
-	    http->uri = xcalloc(url_sz, 1);
-	    snprintf(http->uri, url_sz, "%s://%s%s",
-		conn->port->protocol, conn->port->defaultsite, url);
-	    debug(33, 5) ("DEFAULTSITE REWRITE: '%s'\n", http->uri);
-	} else if (vport) {
-	    /* Put the local socket IP address as the hostname.
-	     */
-	    size_t url_sz = strlen(url) + 32 + Config.appendDomainLen;
-	    http->uri = xcalloc(url_sz, 1);
-	    snprintf(http->uri, url_sz, "%s://%s:%d%s",
-		http->conn->port->protocol,
-		inet_ntoa(http->conn->me.sin_addr),
-		vport, url);
-	    debug(33, 5) ("VPORT REWRITE: '%s'\n", http->uri);
 	} else if (internalCheck(url)) {
 	    goto internal;
 	} else {
@@ -4590,6 +4612,9 @@ httpAccept(int sock, void *data)
 #endif
 	commSetSelect(fd, COMM_SELECT_READ, clientReadRequest, connState, 0);
 	commSetDefer(fd, clientReadDefer, connState);
+	if (s->tcp_keepalive.enabled) {
+	    commSetTcpKeepalive(fd, s->tcp_keepalive.idle, s->tcp_keepalive.interval, s->tcp_keepalive.timeout);
+	}
 	clientdbEstablished(peer.sin_addr, 1);
 	incoming_sockets_accepted++;
     }
@@ -4748,6 +4773,9 @@ httpsAccept(int sock, void *data)
 	if (aclCheckFast(Config.accessList.identLookup, &identChecklist))
 	    identStart(&me, &peer, clientIdentDone, connState);
 #endif
+	if (s->http.tcp_keepalive.enabled) {
+	    commSetTcpKeepalive(fd, s->http.tcp_keepalive.idle, s->http.tcp_keepalive.interval, s->http.tcp_keepalive.timeout);
+	}
 	clientdbEstablished(peer.sin_addr, 1);
 	incoming_sockets_accepted++;
 	httpsAcceptSSL(connState, s->sslContext);

@@ -71,6 +71,9 @@ static void dump_logformat(StoreEntry * entry, const char *name, logformat * def
 static void dump_access_log(StoreEntry * entry, const char *name, customlog * definitions);
 static void free_logformat(logformat ** definitions);
 static void free_access_log(customlog ** definitions);
+static void parse_zph_mode(enum zph_mode *mode);
+static void dump_zph_mode(StoreEntry * entry, const char *name, enum zph_mode mode);
+static void free_zph_mode(enum zph_mode *mode);
 
 
 static struct cache_dir_option common_cachedir_options[] =
@@ -2888,6 +2891,23 @@ parse_http_port_option(http_port_list * s, char *token)
 	s->allow_direct = 1;
     } else if (strcmp(token, "http11") == 0) {
 	s->http11 = 1;
+    } else if (strcmp(token, "tcpkeepalive") == 0) {
+	s->tcp_keepalive.enabled = 1;
+    } else if (strncmp(token, "tcpkeepalive=", 13) == 0) {
+	char *t = token + 13;
+	s->tcp_keepalive.enabled = 1;
+	s->tcp_keepalive.idle = atoi(t);
+	t = strchr(t, ',');
+	if (t) {
+	    t++;
+	    s->tcp_keepalive.interval = atoi(t);
+	    t = strchr(t, ',');
+	}
+	if (t) {
+	    t++;
+	    s->tcp_keepalive.timeout = atoi(t);
+	    t = strchr(t, ',');
+	}
     } else {
 	self_destruct();
     }
@@ -2898,10 +2918,6 @@ verify_http_port_options(http_port_list * s)
 {
     if (s->accel && s->transparent) {
 	debug(28, 0) ("Can't be both a transparent proxy and web server accelerator on the same port\n");
-	self_destruct();
-    }
-    if (s->accel && !s->vhost && !s->defaultsite && !s->vport) {
-	debug(28, 0) ("Accelerator mode requires at least one of vhost/vport/defaultsite\n");
 	self_destruct();
     }
 }
@@ -2959,7 +2975,7 @@ dump_generic_http_port(StoreEntry * e, const char *n, const http_port_list * s)
 	storeAppendPrintf(e, " defaultsite=%s", s->defaultsite);
     if (s->vhost)
 	storeAppendPrintf(e, " vhost");
-    if (s->vport == ntohs(s->s.sin_port))
+    if (s->vport == -1)
 	storeAppendPrintf(e, " vport");
     else if (s->vport)
 	storeAppendPrintf(e, " vport=%d", s->vport);
@@ -2975,6 +2991,13 @@ dump_generic_http_port(StoreEntry * e, const char *n, const http_port_list * s)
 #endif
     if (s->http11)
 	storeAppendPrintf(e, " http11");
+    if (s->tcp_keepalive.enabled) {
+	if (s->tcp_keepalive.idle || s->tcp_keepalive.interval || s->tcp_keepalive.timeout) {
+	    storeAppendPrintf(e, " tcp_keepalive=%d,%d,%d", s->tcp_keepalive.idle, s->tcp_keepalive.interval, s->tcp_keepalive.timeout);
+	} else {
+	    storeAppendPrintf(e, " tcp_keepalive");
+	}
+    }
 }
 static void
 dump_http_port_list(StoreEntry * e, const char *n, const http_port_list * s)
@@ -3383,4 +3406,50 @@ static void
 dump_programline(StoreEntry * entry, const char *name, const wordlist * line)
 {
     dump_wordlist(entry, name, line);
+}
+
+static void
+parse_zph_mode(enum zph_mode *mode)
+{
+    char *token = strtok(NULL, w_space);
+    if (!token)
+	self_destruct();
+    if (strcmp(token, "off") == 0)
+	*mode = ZPH_OFF;
+    else if (strcmp(token, "tos") == 0)
+	*mode = ZPH_TOS;
+    else if (strcmp(token, "priority") == 0)
+	*mode = ZPH_PRIORITY;
+    else if (strcmp(token, "option") == 0)
+	*mode = ZPH_OPTION;
+    else {
+	debug(3, 0) ("WARNING: unsupported zph_mode argument '%s'\n", token);
+    }
+}
+
+static void
+dump_zph_mode(StoreEntry * entry, const char *name, enum zph_mode mode)
+{
+    const char *modestr = "unknown";
+    switch (mode) {
+    case ZPH_OFF:
+	modestr = "off";
+	break;
+    case ZPH_TOS:
+	modestr = "tos";
+	break;
+    case ZPH_PRIORITY:
+	modestr = "priority";
+	break;
+    case ZPH_OPTION:
+	modestr = "option";
+	break;
+    }
+    storeAppendPrintf(entry, "%s %s\n", name, modestr);
+}
+
+static void
+free_zph_mode(enum zph_mode *mode)
+{
+    *mode = ZPH_OFF;
 }
