@@ -6,7 +6,8 @@ libcore_a_SOURCES = \
 	debug.c \
 	syslog.c \
 	gb.c \
-	tools.c
+	tools.c \
+	fifo.c
 
 libcore_a_LIBADD = \
 	dlink.o \
@@ -14,7 +15,8 @@ libcore_a_LIBADD = \
 	debug.o \
 	syslog.o \
 	gb.o \
-	tools.o
+	tools.o \
+	fifo.o
 
 noinst_LIBRARIES = \
 	libcore.a

@@ -399,6 +399,7 @@ struct rusage {
 #include "rfc1035.h"
 
 #include "../libcore/dlink.h"
+#include "../libcore/fifo.h"
 #include "../libcore/ctx.h"
 #include "../libcore/debug.h"
 #include "../libcore/tools.h"
