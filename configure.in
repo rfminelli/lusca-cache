@@ -1,11 +1,11 @@
 dnl
 dnl  Configuration input file for Squid
 dnl
-dnl  $Id$
+dnl  $Id: configure.in 12542 2008-04-13 13:27:23Z adrian.chadd $
 dnl
 dnl
 dnl
-AC_INIT(Squid Web Proxy, 2.HEAD-CVS, http://www.squid-cache.org/bugs/, squid)
+AC_INIT(Cacheboy/Squid Web Proxy, 0.PRE2, http://code.google.com/p/cacheboy, Cacheboy)
 AC_PREREQ(2.52)
 AM_CONFIG_HEADER(include/autoconf.h)
 AC_CONFIG_AUX_DIR(cfgaux)
@@ -3192,6 +3192,8 @@ dnl done
 
 AC_OUTPUT([\
 	Makefile \
+	libcore/Makefile \
+	libmem/Makefile \
 	lib/Makefile \
 	scripts/Makefile \
 	scripts/RunCache \

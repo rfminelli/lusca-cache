@@ -76,6 +76,12 @@ static time_t pd_last_req_time = 0;	/* last call to Check */
 
 /* initialize peer digest */
 static void
+peerDigestInitMem()
+{
+    memDataInit(MEM_CACHE_DIGEST, "CacheDigest", sizeof(CacheDigest), 0);
+}
+
+static void
 peerDigestInit(PeerDigest * pd, peer * p)
 {
     assert(pd && p);

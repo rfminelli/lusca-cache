@@ -76,12 +76,6 @@ typedef struct {
     squid_off_t kb;
 } kb_t;
 
-typedef struct {
-    size_t count;
-    size_t bytes;
-    size_t gb;
-} gb_t;
-
 /*
  * grep '^struct' structs.h \
  * | perl -ne '($a,$b)=split;$c=$b;$c=~s/^_//; print "typedef struct $b $c;\n";'
@@ -192,8 +186,6 @@ typedef struct _refresh_t refresh_t;
 typedef struct _refresh_cc refresh_cc;
 typedef struct _CommWriteStateData CommWriteStateData;
 typedef struct _ErrorState ErrorState;
-typedef struct _dlink_node dlink_node;
-typedef struct _dlink_list dlink_list;
 typedef struct _StatCounters StatCounters;
 typedef struct _tlv tlv;
 typedef struct _storeSwapLogData storeSwapLogData;
@@ -202,10 +194,6 @@ typedef struct _storeSwapLogHeader storeSwapLogHeader;
 typedef struct _authConfig authConfig;
 typedef struct _cacheSwap cacheSwap;
 typedef struct _StatHist StatHist;
-typedef struct _String String;
-typedef struct _MemMeter MemMeter;
-typedef struct _MemPoolMeter MemPoolMeter;
-typedef struct _MemPool MemPool;
 typedef struct _ClientInfo ClientInfo;
 typedef struct _cd_guess_stats cd_guess_stats;
 typedef struct _CacheDigest CacheDigest;
@@ -384,9 +372,6 @@ typedef void (*vprintf_f) ();
 
 /* MD5 cache keys */
 typedef unsigned char cache_key;
-
-/* context-based debugging, the actual type is subject to change */
-typedef int Ctx;
 
 /* in case we want to change it later */
 typedef int mb_size_t;

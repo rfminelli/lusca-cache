@@ -243,25 +243,8 @@
 #include <sys/mount.h>
 #endif
 
-#if defined(HAVE_STDARG_H)
-#include <stdarg.h>
-#define HAVE_STDARGS		/* let's hope that works everywhere (mj) */
-#define VA_LOCAL_DECL va_list ap;
-#define VA_START(f) va_start(ap, f)
-#define VA_SHIFT(v,t) ;		/* no-op for ANSI */
-#define VA_END va_end(ap)
-#else
-#if defined(HAVE_VARARGS_H)
-#include <varargs.h>
-#undef HAVE_STDARGS
-#define VA_LOCAL_DECL va_list ap;
-#define VA_START(f) va_start(ap)	/* f is ignored! */
-#define VA_SHIFT(v,t) v = va_arg(ap,t)
-#define VA_END va_end(ap)
-#else
-#error XX **NO VARARGS ** XX
-#endif
-#endif
+#include "../libcore/varargs.h"
+#include "../libcore/syslog.h"
 
 /* Make sure syslog goes after stdarg/varargs */
 #ifdef HAVE_SYSLOG_H
@@ -415,6 +398,16 @@ struct rusage {
 #include "hash.h"
 #include "rfc1035.h"
 
+#include "../libcore/dlink.h"
+#include "../libcore/ctx.h"
+#include "../libcore/debug.h"
+#include "../libcore/tools.h"
+#include "../libcore/gb.h"
+
+#include "../libmem/MemPool.h"
+#include "../libmem/MemStr.h"
+#include "../libmem/String.h"
+
 #include "defines.h"
 #include "enums.h"
 #include "typedefs.h"
@@ -527,24 +520,10 @@ extern size_t getpagesize(void);
 /*
  * valgrind debug support
  */
-#if WITH_VALGRIND
-#include <valgrind/memcheck.h>
-#ifndef VALGRIND_MAKE_MEM_NOACCESS
-/* A little glue for older valgrind version prior to 3.2.0 */
-#define VALGRIND_MAKE_MEM_NOACCESS VALGRIND_MAKE_NOACCESS
-#define VALGRIND_MAME_MEM_UNDEFINED VALGRIND_MAME_WRITABLE
-#define VALGRIND_MAKE_MEM_DEFINED VALGRIND_MAKE_READABLE
-#define VALGRIND_CHECK_MEM_IS_ADDRESSABLE VALGRIND_CHECK_WRITABLE
-#endif
-#else
-#define VALGRIND_MAKE_MEM_NOACCESS(a,b) (0)
-#define VALGRIND_MAKE_MEM_UNDEFINED(a,b) (0)
-#define VALGRIND_MAKE_MEM_DEFINED(a,b) (0)
-#define VALGRIND_CHECK_MEM_IS_ADDRESSABLE(a,b) (0)
-#define VALGRIND_CHECK_MEM_IS_DEFINED(a,b) (0)
-#define VALGRIND_MALLOCLIKE_BLOCK(a,b,c,d)
-#define VALGRIND_FREELIKE_BLOCK(a,b)
-#define RUNNING_ON_VALGRIND 0
-#endif /* WITH_VALGRIND */
+#include "../libcore/valgrind.h"
+
+/* For now - these need to move! [ahc] */
+extern MemPool *acl_name_list_pool;
+extern MemPool *acl_deny_pool;
 
 #endif /* SQUID_H */

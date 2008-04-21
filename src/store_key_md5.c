@@ -201,5 +201,6 @@ storeKeyNull(const cache_key * key)
 void
 storeKeyInit(void)
 {
+    memDataInit(MEM_MD5_DIGEST, "MD5 digest", SQUID_MD5_DIGEST_LENGTH, 0);
     memset(null_key, '\0', SQUID_MD5_DIGEST_LENGTH);
 }
