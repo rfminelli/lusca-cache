@@ -1,0 +1,10 @@
+#summary What needs testing!
+
+= Introduction =
+
+This is a list of "stuff" that has changed and needs further testing to make sure there are no regressions.
+
+  * The new Solaris Event Ports framework - new!
+  * Helpers (both normal and parallel) - changed the pending request queues
+  * AUFS - changed the pending read/write queues
+  * HEAP replacement types - changed the queue used to shuffle objects around
