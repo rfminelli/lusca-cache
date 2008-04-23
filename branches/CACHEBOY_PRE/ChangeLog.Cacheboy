@@ -1,5 +1,11 @@
 ChangeLog:
 
+-- Tagged: CACHEBOY_0.PRE3
+-- (23-April-2008)
+
+* Add in a O(1) FIFO type (allocator overhead notwithstanding) - use it for
+  the heap allocation code.
+
 -- Tagged: CACHEBOY_0.PRE2
 -- (21-April-2008)
 
