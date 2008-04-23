@@ -14,7 +14,8 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
    * gb_t *done*
    * kb_t - needs squid_off_t to me moved!
    * mem
-    * Move initialisation of types init'ed in mem.c out into component modules
+    * Move initialisation of types init'ed in mem.c out into component modules *(Done)*
+    * Convert the legacy mem.c types into locally-scoped MemPool types, reducing the mem.c stuff to buffers only
    * mempool *done*
    * memstr *done*
    * cbdata
@@ -27,6 +28,10 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
 
 = Additions for Cacheboy-1.0 =
 
-  * Solaris Event Ports - shouldn't be difficult; can almost merge /dev/poll + kqueue support to get network-only IO ports implemented (and ignore trying to use AIO for now!)
+  * Nothing - get the codebase out there and stable!
+
+= Additions for Cacheboy-1.1 =
+
+  * Tidy up and commit the ZPH patch stuff? this is already included in Squid-2.HEAD.
   * TPROXY-4 support - already coded up, just need to test it before committing!
-  * Tidy up and commit the ZPH patch stuff?
+  * Solaris Event Ports - shouldn't be difficult; can almost merge /dev/poll + kqueue support to get network-only IO ports implemented (and ignore trying to use AIO for now!)

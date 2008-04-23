@@ -32,8 +32,8 @@ This branch will focus on fixing any existing bugs in the initial codebase whils
 Unless required, no large-scale changes will be made to the codebase until it has been verified in production.
 
   * Break out some code into seperate library modules, including documentation and some unit testing *(In Progress)*
-   * memory management
-   * debugging
+   * memory management *(Done)*
+   * debugging *(Done)*
    * buffers
    * strings
    * http request parsing
@@ -43,8 +43,11 @@ Unless required, no large-scale changes will be made to the codebase until it ha
     * Store -> Client buffer referencing *(Complete)*
   * Error page improvements - more professional-looking error pages and more descriptive/helpful messages.
 
-
 === Cacheboy 1.0 (was Squid-2.8) ===
+
+This will be the first stable release. Again, unless required, no large-scale changes will be made to the codebase until it has been verified in production.
+
+=== Cacheboy 1.1 (was Squid-2.8) ===
 
 This release concentrates on modularising existing code whilst improving performance. These changes should keep future developments in mind (HTTP/1.1, inline content processing, more efficient storage methods, threading.) The aim is to reduce user-space CPU usage (specifically, without ACL lookups - these can use a lot of CPU; these can be re-evaluated later.)
 
@@ -66,8 +69,7 @@ The planned changes will include:
  * Migrate internals to reference counted buffers rather than memcpy() / string copying '''(Complete)'''
  * Communications layer to seperate out SSL, TCP, (SCTP?), out of client/server side; and make Windows porting easier
 
-
-=== Cacheboy 2.0 (was Squid-2.9) ===
+=== Cacheboy 1.2 (was Squid-2.9) ===
 
 Bring together all the changes in Cacheboy 1.0/Squid-2.8 and expand on the code restructuring. Again, don't try to change everything at once - restructure the code to provide the ability to improve things in the next release.
 This release should bring in HTTP/1.1 support, enabled by improvements to the data flow in Cacheboy 1.0/Squid-2.8.
