@@ -141,6 +141,13 @@ static void dump_programline(StoreEntry *, const char *, const wordlist *);
 static int parseOneConfigFile(const char *file_name, int depth);
 
 void
+cacheCfInitMem(void)
+{
+    memDataInit(MEM_WORDLIST, "wordlist", sizeof(wordlist), 0);
+    memDataInit(MEM_INTLIST, "intlist", sizeof(intlist), 0);
+}
+
+void
 self_destruct(void)
 {
     shutting_down = 1;
@@ -461,7 +468,7 @@ configDoConfigure(void)
 {
     memset(&Config2, '\0', sizeof(SquidConfig2));
     /* init memory as early as possible */
-    memConfigure();
+    memConfigure(Config.onoff.mem_pools, Config.MemPools.limit, Config.onoff.zero_buffers);
     /* Sanity checks */
     if (Config.cacheSwap.swapDirs == NULL)
 	fatal("No cache_dir's specified in config file");
@@ -2030,11 +2037,11 @@ free_denyinfo(acl_deny_info_list ** list)
     for (a = *list; a; a = a_next) {
 	for (l = a->acl_list; l; l = l_next) {
 	    l_next = l->next;
-	    memFree(l, MEM_ACL_NAME_LIST);
+	    memPoolFree(acl_name_list_pool, l);
 	    l = NULL;
 	}
 	a_next = a->next;
-	memFree(a, MEM_ACL_DENY_INFO_LIST);
+	memPoolFree(acl_deny_pool, a);
 	a = NULL;
     }
     *list = NULL;

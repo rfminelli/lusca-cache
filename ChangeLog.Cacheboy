@@ -1,0 +1,27 @@
+ChangeLog:
+
+-- Tagged: CACHEBOY_0.PRE3
+-- (23-April-2008)
+
+* Add in a O(1) FIFO type (allocator overhead notwithstanding) - use it for
+  the heap allocation code.
+
+-- Tagged: CACHEBOY_0.PRE2
+-- (21-April-2008)
+
+* The helper code now doesn't use a temporary list structure to store
+  queued requests (tested)
+* The aufs storage code now doesn't use a temporary list structure to store
+  temporary lists of pending reads and writes (tested)
+* Continued to shuffle around code into seperate libraries
+* Changed the way legacy memory pools are initialised - the same MemPools
+  code is used but they're setup slightly differently. Instability could
+  arise if objects are assigned to the wrong pool.
+* Removed some unused memory pool types.
+
+-- Tagged: CACHEBOY_0.PRE1
+
+* Various code modules have been shuffled out of the main src/ directory
+  and into library subdirectories as part of code housekeeping.
+
+-- Imported Squid-2.HEAD.

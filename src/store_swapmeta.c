@@ -35,6 +35,14 @@
 
 #include "squid.h"
 
+void
+storeSwapTLVInitMem(void)
+{
+    memDataInit(MEM_TLV, "storeSwapTLV", sizeof(tlv), 0);
+    /* XXX This doesn't strictly belong here! */
+    memDataInit(MEM_SWAP_LOG_DATA, "storeSwapLogData", sizeof(storeSwapLogData), 0);
+}
+
 static tlv **
 storeSwapTLVAdd(int type, const void *ptr, size_t len, tlv ** tail)
 {
