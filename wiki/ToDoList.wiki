@@ -25,13 +25,15 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
 = Benchmarking =
 
   * Benchmark with / without mempools - try to establish which areas of the codebase are (ab)using malloc far too often
+  * Try to figure out the 'best' buffer sizes for doing socket and disk IO
 
 = Additions for Cacheboy-1.0 =
 
-  * Nothing - get the codebase out there and stable!
+  * Solaris Event Ports - shouldn't be difficult; can almost merge /dev/poll + kqueue support to get network-only IO ports implemented (and ignore trying to use AIO for now!) - *(Done)*
+  * Nothing else - get the codebase out there and stable!
+  * Error pages, perhaps?
 
 = Additions for Cacheboy-1.1 =
 
   * Tidy up and commit the ZPH patch stuff? this is already included in Squid-2.HEAD.
-  * TPROXY-4 support - already coded up, just need to test it before committing!
-  * Solaris Event Ports - shouldn't be difficult; can almost merge /dev/poll + kqueue support to get network-only IO ports implemented (and ignore trying to use AIO for now!)
+  * TPROXY-4 support - already coded up, just need to test it before committing! Or bring over what ends up in Squid-2.HEAD ?
