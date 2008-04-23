@@ -93,6 +93,9 @@ endif
 if USE_DEVPOLL
 COMMLOOP_SOURCE = comm_devpoll.c
 endif
+if USE_EVENTPORTS
+COMMLOOP_SOURCE = comm_eventports.c
+endif
 
 SUBDIRS		= fs repl auth
 
