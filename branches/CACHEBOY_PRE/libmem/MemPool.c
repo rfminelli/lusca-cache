@@ -10,6 +10,7 @@
 
 #include "../libcore/valgrind.h"
 #include "../libcore/dlink.h"
+#include "../libcore/varargs.h"
 #include "../libcore/debug.h"
 #include "../libcore/tools.h"
 #include "../libcore/gb.h"
