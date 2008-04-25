@@ -591,9 +591,6 @@ typedef enum {
     MEM_16K_BUF,
     MEM_32K_BUF,
     MEM_64K_BUF,
-#if USE_CACHE_DIGESTS
-    MEM_CACHE_DIGEST,
-#endif
     MEM_CLIENT_INFO,
     MEM_DONTFREE,
     MEM_DREAD_CTRL,

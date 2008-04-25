@@ -69,7 +69,7 @@ cacheDigestInit(CacheDigest * cd, int capacity, int bpe)
 CacheDigest *
 cacheDigestCreate(int capacity, int bpe)
 {
-    CacheDigest *cd = memAllocate(MEM_CACHE_DIGEST);
+    CacheDigest *cd = memAlloc(pool_cache_digest);
     assert(SQUID_MD5_DIGEST_LENGTH == 16);	/* our hash functions rely on 16 byte keys */
     cacheDigestInit(cd, capacity, bpe);
     return cd;
@@ -87,7 +87,7 @@ cacheDigestDestroy(CacheDigest * cd)
 {
     assert(cd);
     cacheDigestClean(cd);
-    memFree(cd, MEM_CACHE_DIGEST);
+    memPoolFree(pool_cache_digest, cd);
 }
 
 CacheDigest *

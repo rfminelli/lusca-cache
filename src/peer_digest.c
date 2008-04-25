@@ -60,6 +60,7 @@ static void peerDigestFetchSetStats(DigestFetchState * fetch);
 static int peerDigestSetCBlock(PeerDigest * pd, const char *buf);
 static int peerDigestUseful(const PeerDigest * pd);
 
+MemPool * pool_cache_digest = NULL;
 
 /* local constants */
 
@@ -76,9 +77,9 @@ static time_t pd_last_req_time = 0;	/* last call to Check */
 
 /* initialize peer digest */
 static void
-peerDigestInitMem()
+peerDigestInitMem(void)
 {
-    memDataInit(MEM_CACHE_DIGEST, "CacheDigest", sizeof(CacheDigest), 0);
+    pool_cache_digest = memPoolCreate("CacheDigest", sizeof(CacheDigest));
 }
 
 static void

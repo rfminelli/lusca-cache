@@ -527,5 +527,8 @@ extern size_t getpagesize(void);
 /* For now - these need to move! [ahc] */
 extern MemPool *acl_name_list_pool;
 extern MemPool *acl_deny_pool;
+#if USE_CACHE_DIGESTS
+extern MemPool *pool_cache_digest;
+#endif
 
 #endif /* SQUID_H */
