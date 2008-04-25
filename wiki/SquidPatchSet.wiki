@@ -20,9 +20,9 @@ The initial import included all patchsets up to 12036.
   * 12042 - *committed*
   * 12043 - *committed*
   * 12044 - *committed*
-  * 12045 - HEAD - minimum_icp_query_timeout directive
-  * 12046 - HEAD - ZPH patch
-  * 12047 - SQUID_2_7 - Bug #2296 - 100% CPU when fetching corrupt peer digest
+  * 12045 - HEAD - minimum_icp_query_timeout directive - *committed - rev 12616*
+  * 12046 - HEAD - ZPH patch - *committed - rev 12617*
+  * 12047 - SQUID_2_7 - Bug #2296 - 100% CPU when fething corrupt peer digest
   * 12048 - HEAD - Bug #2296 - 100% CPU when fetching corrupt peer digest
   * 12049 - SQUID_2_6 - Bug #2296 - 100% CPU when fetching corrupt peer digest
   * 12050 - SQUID_2_7 - Bug #2208 - Document major HTTP/1.1 shortcomings
