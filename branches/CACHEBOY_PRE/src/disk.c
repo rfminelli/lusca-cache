@@ -38,6 +38,9 @@
 static PF diskHandleRead;
 static PF diskHandleWrite;
 
+static MemPool * pool_dread_ctrl;
+static MemPool * pool_dwrite_q;
+
 #if defined(_SQUID_WIN32_) || defined(_SQUID_OS2_)
 static int
 diskWriteIsComplete(int fd)
@@ -49,8 +52,8 @@ diskWriteIsComplete(int fd)
 void
 disk_init_mem(void)
 {
-    memDataInit(MEM_DREAD_CTRL, "dread_ctrl", sizeof(dread_ctrl), 0);
-    memDataInit(MEM_DWRITE_Q, "dwrite_q", sizeof(dwrite_q), 0);
+    pool_dread_ctrl = memPoolCreate("dread_ctrl", sizeof(dread_ctrl));
+    pool_dwrite_q = memPoolCreate("dwrite_q", sizeof(dwrite_q));
 }
 
 void
@@ -152,7 +155,7 @@ diskCombineWrites(struct _fde_disk *fdd)
 	len = 0;
 	for (q = fdd->write_q; q != NULL; q = q->next)
 	    len += q->len - q->buf_offset;
-	wq = memAllocate(MEM_DWRITE_Q);
+	wq = memPoolAlloc(pool_dwrite_q);
 	wq->buf = xmalloc(len);
 	wq->len = 0;
 	wq->buf_offset = 0;
@@ -167,7 +170,7 @@ diskCombineWrites(struct _fde_disk *fdd)
 	    if (q->free_func)
 		(q->free_func) (q->buf);
 	    if (q) {
-		memFree(q, MEM_DWRITE_Q);
+		memPoolFree(pool_dwrite_q, q);
 		q = NULL;
 	    }
 	} while (fdd->write_q != NULL);
@@ -234,7 +237,7 @@ diskHandleWrite(int fd, void *notused)
 		if (q->free_func)
 		    (q->free_func) (q->buf);
 		if (q) {
-		    memFree(q, MEM_DWRITE_Q);
+		    memPoolFree(pool_dwrite_q, q);
 		    q = NULL;
 		}
 	    } while ((q = fdd->write_q));
@@ -254,7 +257,7 @@ diskHandleWrite(int fd, void *notused)
 	    if (q->free_func)
 		(q->free_func) (q->buf);
 	    if (q) {
-		memFree(q, MEM_DWRITE_Q);
+		memPoolFree(pool_dwrite_q, q);
 		q = NULL;
 	    }
 	}
@@ -310,7 +313,7 @@ file_write(int fd,
     assert(fd >= 0);
     assert(F->flags.open);
     /* if we got here. Caller is eligible to write. */
-    wq = memAllocate(MEM_DWRITE_Q);
+    wq = memPoolAlloc(pool_dwrite_q);
     wq->file_offset = file_offset;
     wq->buf = ptr_to_buf;
     wq->len = len;
@@ -356,7 +359,7 @@ diskHandleRead(int fd, void *data)
      * the state data.
      */
     if (fd < 0) {
-	memFree(ctrl_dat, MEM_DREAD_CTRL);
+	memPoolFree(pool_dread_ctrl, ctrl_dat);
 	return;
     }
     if (F->disk.offset != ctrl_dat->file_offset) {
@@ -386,7 +389,7 @@ diskHandleRead(int fd, void *data)
     if (cbdataValid(ctrl_dat->client_data))
 	ctrl_dat->handler(fd, ctrl_dat->buf, len, rc, ctrl_dat->client_data);
     cbdataUnlock(ctrl_dat->client_data);
-    memFree(ctrl_dat, MEM_DREAD_CTRL);
+    memPoolFree(pool_dread_ctrl, ctrl_dat);
 }
 
 
@@ -399,7 +402,7 @@ file_read(int fd, char *buf, size_t req_len, off_t file_offset, DRCB * handler, 
 {
     dread_ctrl *ctrl_dat;
     assert(fd >= 0);
-    ctrl_dat = memAllocate(MEM_DREAD_CTRL);
+    ctrl_dat = memPoolAlloc(pool_dread_ctrl);
     ctrl_dat->fd = fd;
     ctrl_dat->file_offset = file_offset;
     ctrl_dat->req_len = req_len;
