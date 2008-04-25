@@ -7,7 +7,8 @@ libcore_a_SOURCES = \
 	syslog.c \
 	gb.c \
 	tools.c \
-	fifo.c
+	fifo.c \
+	kb.c
 
 libcore_a_LIBADD = \
 	dlink.o \
@@ -16,7 +17,8 @@ libcore_a_LIBADD = \
 	syslog.o \
 	gb.o \
 	tools.o \
-	fifo.o
+	fifo.o \
+	kb.o
 
 noinst_LIBRARIES = \
 	libcore.a
