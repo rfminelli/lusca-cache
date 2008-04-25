@@ -46,6 +46,9 @@ static void authenticateDecodeAuth(const char *proxy_auth, auth_user_request_t *
 static auth_acl_t authenticateAuthenticate(auth_user_request_t ** auth_user_request, http_hdr_type headertype, request_t * request, ConnStateData * conn, struct in_addr src_addr);
 static void authenticateAuthUserRequestUnlinkIp(const struct in_addr ipaddr);
 
+static MemPool * pool_mem_auth_user;
+static MemPool * pool_mem_auth_user_hash;
+
 /*
  *
  * Private Data
@@ -184,7 +187,7 @@ auth_user_t *
 authenticateAuthUserNew(const char *scheme)
 {
     auth_user_t *temp_auth;
-    temp_auth = memAllocate(MEM_AUTH_USER_T);
+    temp_auth = memPoolAlloc(pool_mem_auth_user);
     assert(temp_auth != NULL);
     memset(temp_auth, '\0', sizeof(auth_user_t));
     temp_auth->auth_type = AUTH_UNKNOWN;
@@ -811,8 +814,8 @@ authenticateConfigure(authConfig * config)
 void
 authenticateInitMem(void)
 {
-    memDataInit(MEM_AUTH_USER_T, "auth_user_t", sizeof(auth_user_t), 0);
-    memDataInit(MEM_AUTH_USER_HASH, "auth_user_hash_pointer", sizeof(auth_user_hash_pointer), 0);
+    pool_mem_auth_user = memPoolCreate("auth_user_t", sizeof(auth_user_t));
+    pool_mem_auth_user_hash = memPoolCreate("auth_user_hash_pointer", sizeof(auth_user_hash_pointer));
 }
 
 void
@@ -1018,7 +1021,7 @@ authenticateFreeProxyAuthUser(void *data)
 	    (hash_link *) u->usernamehash);
 	/* don't free the key as we use the same user string as the auth_user 
 	 * structure */
-	memFree(u->usernamehash, MEM_AUTH_USER_HASH);
+	memPoolFree(pool_mem_auth_user_hash, u->usernamehash);
     }
     /* remove any outstanding requests */
     link = u->requests.head;
@@ -1039,7 +1042,7 @@ authenticateFreeProxyAuthUser(void *data)
 	authscheme_list[u->auth_module - 1].FreeUser(u);
     /* prevent accidental reuse */
     u->auth_type = AUTH_UNKNOWN;
-    memFree(u, MEM_AUTH_USER_T);
+    memPoolFree(pool_mem_auth_user, u);
 }
 
 void
@@ -1138,7 +1141,7 @@ void
 authenticateUserNameCacheAdd(auth_user_t * auth_user)
 {
     auth_user_hash_pointer *usernamehash;
-    usernamehash = memAllocate(MEM_AUTH_USER_HASH);
+    usernamehash = memPoolAlloc(pool_mem_auth_user_hash);
     usernamehash->key = authenticateUserUsername(auth_user);
     usernamehash->auth_user = auth_user;
     hash_join(proxy_auth_username_cache, (hash_link *) usernamehash);
