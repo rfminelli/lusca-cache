@@ -261,9 +261,9 @@ memInit(void)
     peerDigestInitMem();
 #endif
     disk_init_mem();
-    /* Those below require conversion */
     fwdInitMem();
     httpHeaderInitMem();
+    /* Those below require conversion */
     stmemInitMem();
     netdbInitMem();
     requestInitMem();
