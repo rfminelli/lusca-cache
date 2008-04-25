@@ -33,3 +33,15 @@ The initial import included all patchsets up to 12036.
   * 12055 - SQUID_2_7 - ZPH patch
   * 12056 - SQUID_2_6 - resolv.conf domain directive
   * 12057 - SQUID_2_6 - minimum_icp_query_timeout directive
+  * 12058 - SQUID_NT_2_6 - Merged changes from SQUID_2_6
+  * 12059 - SQUID_NT_2_7 - Merged changes from SQUID_2_7
+  * 12060 - HEAD - Windows port: Return the effective system pagesize in getpagesize()
+  * 12061 - HEAD - Change/release notes for 2.6/2.7
+  * 12062 - SQUID_2_6 - 2.6.20
+  * 12063 - SQUID_2_6 - Tag Z-SQUID_NT_2_6_merge-new_SQUID_2_6 - bootstrapped
+  * 12064 - SQUID_2_7 - Documentation update
+  * 12065 - SQUID_NT_2_6 - merged changes from SQUID_2_6
+  * 12066 - HEAD - Windows related DNS/host changes
+  * 12067 - SQUID_NT_2_6 - bootstrapped
+  * 12068 - SQUID_NT_2_6 - Revert unwanted changes
+  * 12069 - HEAD - net_db typo
