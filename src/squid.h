@@ -530,5 +530,6 @@ extern MemPool *acl_deny_pool;
 #if USE_CACHE_DIGESTS
 extern MemPool *pool_cache_digest;
 #endif
+extern MemPool *pool_fwd_server;
 
 #endif /* SQUID_H */
