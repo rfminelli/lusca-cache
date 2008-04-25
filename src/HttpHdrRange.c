@@ -75,7 +75,7 @@ static int RangeParsedCount = 0;
 static HttpHdrRangeSpec *
 httpHdrRangeSpecCreate(void)
 {
-    return memAllocate(MEM_HTTP_HDR_RANGE_SPEC);
+    return memPoolAlloc(pool_http_hdr_range_spec);
 }
 
 /* parses range-spec and returns new object on success */
@@ -119,7 +119,7 @@ httpHdrRangeSpecParseCreate(const char *field, int flen)
 static void
 httpHdrRangeSpecDestroy(HttpHdrRangeSpec * spec)
 {
-    memFree(spec, MEM_HTTP_HDR_RANGE_SPEC);
+    memPoolFree(pool_http_hdr_range_spec, spec);
 }
 
 
@@ -211,7 +211,7 @@ httpHdrRangeSpecMergeWith(HttpHdrRangeSpec * recep, const HttpHdrRangeSpec * don
 static HttpHdrRange *
 httpHdrRangeCreate(void)
 {
-    HttpHdrRange *r = memAllocate(MEM_HTTP_HDR_RANGE);
+    HttpHdrRange *r = memPoolAlloc(pool_http_hdr_range);
     stackInit(&r->specs);
     return r;
 }
@@ -265,7 +265,7 @@ httpHdrRangeDestroy(HttpHdrRange * range)
     while (range->specs.count)
 	httpHdrRangeSpecDestroy(stackPop(&range->specs));
     stackClean(&range->specs);
-    memFree(range, MEM_HTTP_HDR_RANGE);
+    memPoolFree(pool_http_hdr_range, range);
 }
 
 HttpHdrRange *
