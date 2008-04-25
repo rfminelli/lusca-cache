@@ -27,17 +27,17 @@ The initial import included all patchsets up to 12036.
   * 12049 - SQUID_2_6 - Bug #2296 - 100% CPU when fetching corrupt peer digest - *committed - rev 12621*
   * 12050 - SQUID_2_7 - Bug #2208 - Document major HTTP/1.1 shortcomings - *committed - rev 12622*
   * 12051 - SQUID_2_7 - Bug #2192 - Accelerator mode option cleanups - *committed - rev 12623*
-  * 12052 - SQUID_2_7 - resolv.conf domain directive
-  * 12053 - SQUID_2_7 - minimum_icp_query_timeout directive
-  * 12054 - SQUID_2_7 - TCP keepalive support
-  * 12055 - SQUID_2_7 - ZPH patch
-  * 12056 - SQUID_2_6 - resolv.conf domain directive
-  * 12057 - SQUID_2_6 - minimum_icp_query_timeout directive
-  * 12058 - SQUID_NT_2_6 - Merged changes from SQUID_2_6
-  * 12059 - SQUID_NT_2_7 - Merged changes from SQUID_2_7
-  * 12060 - HEAD - Windows port: Return the effective system pagesize in getpagesize()
+  * 12052 - SQUID_2_7 - resolv.conf domain directive - *committed - rev 12625*
+  * 12053 - SQUID_2_7 - minimum_icp_query_timeout directive - *committed - rev 12626*
+  * 12054 - SQUID_2_7 - TCP keepalive support - *committed - rev 12627*
+  * 12055 - SQUID_2_7 - ZPH patch - *committed - rev 12628*
+  * 12056 - SQUID_2_6 - resolv.conf domain directive - *committed - rev 12629*
+  * 12057 - SQUID_2_6 - minimum_icp_query_timeout directive - *committed - rev 12630*
+  * 12058 - SQUID_NT_2_6 - Merged changes from SQUID_2_6 - *committed - rev 12631*
+  * 12059 - SQUID_NT_2_7 - Merged changes from SQUID_2_7 - *committed - rev 12632*
+  * 12060 - HEAD - Windows port: Return the effective system pagesize in getpagesize() - *committed - rev 12633*
   * 12061 - HEAD - Change/release notes for 2.6/2.7
-  * 12062 - SQUID_2_6 - 2.6.20
+  * 12062 - SQUID_2_6 - Squid 2.6.STABLE20
   * 12063 - SQUID_2_6 - Tag Z-SQUID_NT_2_6_merge-new_SQUID_2_6 - bootstrapped
   * 12064 - SQUID_2_7 - Documentation update
   * 12065 - SQUID_NT_2_6 - merged changes from SQUID_2_6
