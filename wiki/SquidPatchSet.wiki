@@ -22,11 +22,11 @@ The initial import included all patchsets up to 12036.
   * 12044 - *committed*
   * 12045 - HEAD - minimum_icp_query_timeout directive - *committed - rev 12616*
   * 12046 - HEAD - ZPH patch - *committed - rev 12617*
-  * 12047 - SQUID_2_7 - Bug #2296 - 100% CPU when fething corrupt peer digest
-  * 12048 - HEAD - Bug #2296 - 100% CPU when fetching corrupt peer digest
-  * 12049 - SQUID_2_6 - Bug #2296 - 100% CPU when fetching corrupt peer digest
-  * 12050 - SQUID_2_7 - Bug #2208 - Document major HTTP/1.1 shortcomings
-  * 12051 - SQUID_2_7 - Bug #2192 - Accelerator mode option cleanups
+  * 12047 - SQUID_2_7 - Bug #2296 - 100% CPU when fething corrupt peer digest - *committed - rev 12619*
+  * 12048 - HEAD - Bug #2296 - 100% CPU when fetching corrupt peer digest - *committed - rev 12620*
+  * 12049 - SQUID_2_6 - Bug #2296 - 100% CPU when fetching corrupt peer digest - *committed - rev 12621*
+  * 12050 - SQUID_2_7 - Bug #2208 - Document major HTTP/1.1 shortcomings - *committed - rev 12622*
+  * 12051 - SQUID_2_7 - Bug #2192 - Accelerator mode option cleanups - *committed - rev 12623*
   * 12052 - SQUID_2_7 - resolv.conf domain directive
   * 12053 - SQUID_2_7 - minimum_icp_query_timeout directive
   * 12054 - SQUID_2_7 - TCP keepalive support
