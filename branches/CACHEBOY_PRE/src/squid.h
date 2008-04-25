@@ -403,6 +403,7 @@ struct rusage {
 #include "../libcore/ctx.h"
 #include "../libcore/debug.h"
 #include "../libcore/tools.h"
+#include "../libcore/kb.h"
 #include "../libcore/gb.h"
 
 #include "../libmem/MemPool.h"

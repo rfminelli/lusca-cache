@@ -1209,7 +1209,6 @@ extern void asnFreeMemory(void);
 /* tools.c */
 extern dlink_node *dlinkNodeNew(void);
 
-extern void kb_incr(kb_t *, squid_off_t);
 extern int stringHasWhitespace(const char *);
 extern int stringHasCntl(const char *);
 extern void linklistPush(link_list **, void *);
