@@ -36,12 +36,12 @@ The initial import included all patchsets up to 12036.
   * 12058 - SQUID_NT_2_6 - Merged changes from SQUID_2_6 - *committed - rev 12631*
   * 12059 - SQUID_NT_2_7 - Merged changes from SQUID_2_7 - *committed - rev 12632*
   * 12060 - HEAD - Windows port: Return the effective system pagesize in getpagesize() - *committed - rev 12633*
-  * 12061 - HEAD - Change/release notes for 2.6/2.7
-  * 12062 - SQUID_2_6 - Squid 2.6.STABLE20
-  * 12063 - SQUID_2_6 - Tag Z-SQUID_NT_2_6_merge-new_SQUID_2_6 - bootstrapped
-  * 12064 - SQUID_2_7 - Documentation update
-  * 12065 - SQUID_NT_2_6 - merged changes from SQUID_2_6
-  * 12066 - HEAD - Windows related DNS/host changes
-  * 12067 - SQUID_NT_2_6 - bootstrapped
-  * 12068 - SQUID_NT_2_6 - Revert unwanted changes
-  * 12069 - HEAD - net_db typo
+  * 12061 - HEAD - Change/release notes for 2.6/2.7 - *committed - rev 12635*
+  * 12062 - SQUID_2_6 - Squid 2.6.STABLE20 - *committed - rev 12636*
+  * 12063 - SQUID_2_6 - Tag Z-SQUID_NT_2_6_merge-new_SQUID_2_6 - bootstrapped - *committed - rev 12637*
+  * 12064 - SQUID_2_7 - Documentation update - *committed - rev 12638*
+  * 12065 - SQUID_NT_2_6 - merged changes from SQUID_2_6 - *committed - rev 12639*
+  * 12066 - HEAD - Windows related DNS/host changes - *committed - rev 12640*
+  * 12067 - SQUID_NT_2_6 - bootstrapped - *committed - rev 12641*
+  * 12068 - SQUID_NT_2_6 - Revert unwanted changes - *committed - rev 12642*
+  * 12069 - HEAD - net_db typo - *committed - rev 12643*
