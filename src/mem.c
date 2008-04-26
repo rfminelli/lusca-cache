@@ -263,11 +263,11 @@ memInit(void)
     disk_init_mem();
     fwdInitMem();
     httpHeaderInitMem();
-    /* Those below require conversion */
     stmemInitMem();
+    storeInitMem();
+    /* Those below require conversion */
     netdbInitMem();
     requestInitMem();
-    storeInitMem();
     cacheCfInitMem();
     clientdbInitMem();
     helperInitMem();
