@@ -265,12 +265,12 @@ memInit(void)
     httpHeaderInitMem();
     stmemInitMem();
     storeInitMem();
-    /* Those below require conversion */
     netdbInitMem();
     requestInitMem();
+    helperInitMem();
+    /* Those below require conversion */
     cacheCfInitMem();
     clientdbInitMem();
-    helperInitMem();
     storeSwapTLVInitMem();
     cachemgrRegister("mem",
 	"Memory Utilization",
