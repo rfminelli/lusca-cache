@@ -601,8 +601,6 @@ typedef enum {
     MEM_IDNS_QUERY,
 #endif
     MEM_EVENT,
-    MEM_TLV,
-    MEM_SWAP_LOG_DATA,
 #if USE_SSL
     MEM_ACL_CERT_DATA,
 #endif

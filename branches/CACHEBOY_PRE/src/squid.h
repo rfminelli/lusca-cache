@@ -540,5 +540,9 @@ extern MemPool * pool_http_hdr_cont_range;
 extern MemPool * pool_mem_node;
 extern MemPool * pool_storeentry;
 extern MemPool * pool_memobject;
+extern MemPool * pool_swap_tlv;
+extern MemPool * pool_swap_log_data;
+   
+
 
 #endif /* SQUID_H */

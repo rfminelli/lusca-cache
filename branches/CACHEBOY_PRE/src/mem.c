@@ -268,10 +268,10 @@ memInit(void)
     netdbInitMem();
     requestInitMem();
     helperInitMem();
-    /* Those below require conversion */
-    cacheCfInitMem();
     clientdbInitMem();
     storeSwapTLVInitMem();
+    /* Those below require conversion */
+    cacheCfInitMem();
     cachemgrRegister("mem",
 	"Memory Utilization",
 	memStats, 0, 1);
