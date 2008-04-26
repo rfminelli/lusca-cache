@@ -1088,13 +1088,13 @@ storeAufsDirCloseTmpSwapLog(SwapDir * sd)
 static void
 storeSwapLogDataFree(void *s)
 {
-    memFree(s, MEM_SWAP_LOG_DATA);
+    memPoolFree(pool_swap_log_data, s);
 }
 
 static void
 storeAufsWriteSwapLogheader(int fd)
 {
-    storeSwapLogHeader *hdr = memAllocate(MEM_SWAP_LOG_DATA);
+    storeSwapLogHeader *hdr = memPoolAlloc(pool_swap_log_data);
     hdr->op = SWAP_LOG_VERSION;
     hdr->version = 1;
     hdr->record_size = sizeof(storeSwapLogData);
@@ -1325,7 +1325,7 @@ static void
 storeAufsDirSwapLog(const SwapDir * sd, const StoreEntry * e, int op)
 {
     squidaioinfo_t *aioinfo = (squidaioinfo_t *) sd->fsdata;
-    storeSwapLogData *s = memAllocate(MEM_SWAP_LOG_DATA);
+    storeSwapLogData *s = memPoolAlloc(pool_swap_log_data);
     s->op = (char) op;
     s->swap_filen = e->swap_filen;
     s->timestamp = e->timestamp;
