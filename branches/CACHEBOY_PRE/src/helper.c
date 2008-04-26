@@ -54,11 +54,14 @@ static void helperRequestFree(helper_request * r);
 static void helperStatefulRequestFree(helper_stateful_request * r);
 static void StatefulEnqueue(statefulhelper * hlp, helper_stateful_request * r);
 
+static MemPool * pool_helper_req = NULL;
+static MemPool * pool_helper_stateful_req = NULL;
+
 void
 helperInitMem(void)
 {
-    memDataInit(MEM_HELPER_REQUEST, "helper_request", sizeof(helper_request), 0);
-    memDataInit(MEM_HELPER_STATEFUL_REQUEST, "helper_stateful_request", sizeof(helper_stateful_request), 0);
+    pool_helper_req = memPoolCreate("helper_request", sizeof(helper_request));
+    pool_helper_stateful_req = memPoolCreate("helper_stateful_request", sizeof(helper_stateful_request));
 }
 
 void
@@ -235,7 +238,7 @@ helperStatefulOpenServers(statefulhelper * hlp)
 void
 helperSubmit(helper * hlp, const char *buf, HLPCB * callback, void *data)
 {
-    helper_request *r = memAllocate(MEM_HELPER_REQUEST);
+    helper_request *r = memPoolAlloc(pool_helper_req);
     helper_server *srv;
     if (hlp == NULL) {
 	debug(84, 3) ("helperSubmit: hlp == NULL\n");
@@ -256,7 +259,7 @@ helperSubmit(helper * hlp, const char *buf, HLPCB * callback, void *data)
 void
 helperStatefulSubmit(statefulhelper * hlp, const char *buf, HLPSCB * callback, void *data, helper_stateful_server * srv)
 {
-    helper_stateful_request *r = memAllocate(MEM_HELPER_STATEFUL_REQUEST);
+    helper_stateful_request *r = memPoolAlloc(pool_helper_stateful_req);
     if (hlp == NULL) {
 	debug(84, 3) ("helperStatefulSubmit: hlp == NULL\n");
 	callback(data, 0, NULL);
@@ -1128,7 +1131,7 @@ helperRequestFree(helper_request * r)
 {
     cbdataUnlock(r->data);
     xfree(r->buf);
-    memFree(r, MEM_HELPER_REQUEST);
+    memPoolFree(pool_helper_req, r);
 }
 
 static void
@@ -1136,5 +1139,5 @@ helperStatefulRequestFree(helper_stateful_request * r)
 {
     cbdataUnlock(r->data);
     xfree(r->buf);
-    memFree(r, MEM_HELPER_STATEFUL_REQUEST);
+    memPoolFree(pool_helper_stateful_req, r);
 }
