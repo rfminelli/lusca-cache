@@ -680,9 +680,9 @@ info_get(StoreEntry * sentry)
 
     storeAppendPrintf(sentry, "Internal Data Structures:\n");
     storeAppendPrintf(sentry, "\t%6d StoreEntries\n",
-	memInUse(MEM_STOREENTRY));
+	memPoolInUseCount(pool_storeentry));
     storeAppendPrintf(sentry, "\t%6d StoreEntries with MemObjects\n",
-	memInUse(MEM_MEMOBJECT));
+	memPoolInUseCount(pool_memobject));
     storeAppendPrintf(sentry, "\t%6d Hot Object Cache Items\n",
 	hot_obj_count);
     storeAppendPrintf(sentry, "\t%6d on-disk objects\n",
