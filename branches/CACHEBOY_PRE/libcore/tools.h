@@ -5,5 +5,6 @@
 extern double toMB(size_t size);
 extern size_t toKB(size_t size);
 
+#define safe_free(x)    if (x) { xxfree(x); x = NULL; }
 
 #endif
