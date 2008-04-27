@@ -596,7 +596,6 @@ typedef enum {
     MEM_INTLIST,
     MEM_IPCACHE_ENTRY,
     MEM_MD5_DIGEST,
-    MEM_WORDLIST,
 #if !USE_DNSSERVERS
     MEM_IDNS_QUERY,
 #endif
