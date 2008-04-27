@@ -146,7 +146,6 @@ static int parseOneConfigFile(const char *file_name, int depth);
 void
 cacheCfInitMem(void)
 {
-    memDataInit(MEM_WORDLIST, "wordlist", sizeof(wordlist), 0);
     memDataInit(MEM_INTLIST, "intlist", sizeof(intlist), 0);
 }
 
@@ -158,69 +157,19 @@ self_destruct(void)
 	cfg_filename, config_lineno, config_input_line);
 }
 
-void
-wordlistDestroy(wordlist ** list)
-{
-    wordlist *w = NULL;
-    while ((w = *list) != NULL) {
-	*list = w->next;
-	safe_free(w->key);
-	memFree(w, MEM_WORDLIST);
-    }
-    *list = NULL;
-}
-
-const char *
-wordlistAdd(wordlist ** list, const char *key)
-{
-    while (*list)
-	list = &(*list)->next;
-    *list = memAllocate(MEM_WORDLIST);
-    (*list)->key = xstrdup(key);
-    (*list)->next = NULL;
-    return (*list)->key;
-}
-
-void
-wordlistJoin(wordlist ** list, wordlist ** wl)
-{
-    while (*list)
-	list = &(*list)->next;
-    *list = *wl;
-    *wl = NULL;
-}
-
-void
-wordlistAddWl(wordlist ** list, wordlist * wl)
-{
-    while (*list)
-	list = &(*list)->next;
-    for (; wl; wl = wl->next, list = &(*list)->next) {
-	*list = memAllocate(MEM_WORDLIST);
-	(*list)->key = xstrdup(wl->key);
-	(*list)->next = NULL;
-    }
-}
-
+/*
+ * This has to stay here until memBuf's have been moved out of src/
+ * and into libmem.
+ */
 void
 wordlistCat(const wordlist * w, MemBuf * mb)
 {
     while (NULL != w) {
-	memBufPrintf(mb, "%s\n", w->key);
-	w = w->next;
+        memBufPrintf(mb, "%s\n", w->key);
+        w = w->next;
     }
 }
 
-wordlist *
-wordlistDup(const wordlist * w)
-{
-    wordlist *D = NULL;
-    while (NULL != w) {
-	wordlistAdd(&D, w->key);
-	w = w->next;
-    }
-    return D;
-}
 
 void
 intlistDestroy(intlist ** list)

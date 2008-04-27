@@ -310,11 +310,6 @@ struct _aclCheck_t {
     acl *current_acl;		/* private, used by aclCheck */
 };
 
-struct _wordlist {
-    char *key;
-    wordlist *next;
-};
-
 struct _intlist {
     int i;
     intlist *next;
