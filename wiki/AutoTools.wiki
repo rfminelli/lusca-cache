@@ -20,3 +20,11 @@ Port versions:
 Dependencies (that I think are relevant):
 
   * m4-1.4.9,1
+
+== Ubuntu "Gutsy" ==
+
+Package Versions:
+
+  * autoconf : 2.61-4
+  * automake : 1:1.10+nogfdl-1
+
