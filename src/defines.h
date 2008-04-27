@@ -93,8 +93,6 @@
 #define COMM_NOCLOEXEC		0x02
 #define COMM_REUSEADDR		0x04
 
-#define safe_free(x)	if (x) { xxfree(x); x = NULL; }
-
 #define DISK_OK                   (0)
 #define DISK_ERROR               (-1)
 #define DISK_EOF                 (-2)
