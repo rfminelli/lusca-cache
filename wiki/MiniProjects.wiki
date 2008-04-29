@@ -2,8 +2,7 @@
 
 = Mini Projects =
 
-These are little projects which need doing that should be doable for a newcomer
-to the project.
+These are little projects which need doing that should be doable for a newcomer to the project.
 
 == Error Pages ==
 
@@ -14,15 +13,10 @@ My current playpen: [http://code.google.com/p/cacheboy/source/browse/playpen/err
 The basic outline:
 
   * Figure out a "good" CSS layout for the error documents
-  * Build one or two example CSS files to demonstrate the flexibility of the error
-    page layout
+  * Build one or two example CSS files to demonstrate the flexibility of the error page layout
   * Begin converting the error pages into the "new world order"
 
 Notes!
 
-  * Squid/Cacheboy -can- serve static content (as icons!) so the initial error
-    pages will need the CSS included in-line rather than referencing an external
-    CSS document. This should be done anyway as serving error pages can happen
-    during "errors" and it'd be unfortunate if something required on a error page
-    generated an error..
+  * Squid/Cacheboy -can- serve static content (as icons!) so the initial error pages will need the CSS included in-line rather than referencing an external CSS document. This should be done anyway as serving error pages can happen during "errors" and it'd be unfortunate if something required on a error page generated an error..
 
