@@ -18,5 +18,5 @@ The basic outline:
 
 Notes!
 
-  * Squid/Cacheboy -can- serve static content (as icons!) so the initial error pages will need the CSS included in-line rather than referencing an external CSS document. This should be done anyway as serving error pages can happen during "errors" and it'd be unfortunate if something required on a error page generated an error..
+  * Squid/Cacheboy -can- serve static content (as icons!) but its a terrible hack. The initial error pages will need the CSS included in-line rather than referencing an external CSS document. This should be done anyway as serving error pages can happen during "errors" and it'd be unfortunate if something required on a error page generated an error..
 
