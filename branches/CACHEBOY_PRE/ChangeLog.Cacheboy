@@ -1,5 +1,12 @@
 ChangeLog:
 
+-- Tagged: CACHEBOY_0.PRE4
+-- (30-April-2008)
+
+* Merge in Squid-2.HEAD changes.
+* More reshuffling of the memory allocator code and its use in the
+  codebase.
+
 -- Tagged: CACHEBOY_0.PRE3
 -- (23-April-2008)
 
