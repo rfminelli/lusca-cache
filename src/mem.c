@@ -40,27 +40,6 @@
 static MemPool *MemPools[MEM_MAX];
 
 /* string pools */
-#define mem_str_pool_count 3
-static const struct {
-    const char *name;
-    size_t obj_size;
-} StrPoolsAttrs[mem_str_pool_count] = {
-
-    {
-	"Short Strings", 36,
-    },				/* to fit rfc1123 and similar */
-    {
-	"Medium Strings", 128,
-    },				/* to fit most urls */
-    {
-	"Long Strings", 512
-    }				/* other */
-};
-static struct {
-    MemPool *pool;
-} StrPools[mem_str_pool_count];
-static MemMeter StrCountMeter;
-static MemMeter StrVolumeMeter;
 
 static MemMeter HugeBufCountMeter;
 static MemMeter HugeBufVolumeMeter;
@@ -79,7 +58,7 @@ memStringStats(StoreEntry * sentry)
 	"String Pool\t Impact\t\t\n"
 	" \t (%%strings)\t (%%volume)\n");
     /* table body */
-    for (i = 0; i < mem_str_pool_count; i++) {
+    for (i = 0; i < MEM_STR_POOL_COUNT; i++) {
 	const MemPool *pool = StrPools[i].pool;
 	const int plevel = pool->meter.inuse.level;
 	storeAppendPrintf(sentry, pfmt,
@@ -146,7 +125,7 @@ memDataInit(mem_type type, const char *name, size_t size, int max_pages_notused)
     MemPools[type] = memPoolCreate(name, size);
 }
 
-static void
+void
 memDataNonZero(mem_type type)
 {
     memPoolNonZero(MemPools[type]);
@@ -165,45 +144,6 @@ void
 memFree(void *p, int type)
 {
     memPoolFree(MemPools[type], p);
-}
-
-/* allocate a variable size buffer using best-fit pool */
-void *
-memAllocString(size_t net_size, size_t * gross_size)
-{
-    int i;
-    MemPool *pool = NULL;
-    assert(gross_size);
-    for (i = 0; i < mem_str_pool_count; i++) {
-	if (net_size <= StrPoolsAttrs[i].obj_size) {
-	    pool = StrPools[i].pool;
-	    break;
-	}
-    }
-    *gross_size = pool ? pool->obj_size : net_size;
-    assert(*gross_size >= net_size);
-    memMeterInc(StrCountMeter);
-    memMeterAdd(StrVolumeMeter, *gross_size);
-    return pool ? memPoolAlloc(pool) : xcalloc(1, net_size);
-}
-
-/* free buffer allocated with memAllocString() */
-void
-memFreeString(size_t size, void *buf)
-{
-    int i;
-    MemPool *pool = NULL;
-    assert(size && buf);
-    for (i = 0; i < mem_str_pool_count; i++) {
-	if (size <= StrPoolsAttrs[i].obj_size) {
-	    assert(size == StrPoolsAttrs[i].obj_size);
-	    pool = StrPools[i].pool;
-	    break;
-	}
-    }
-    memMeterDec(StrCountMeter);
-    memMeterDel(StrVolumeMeter, size);
-    pool ? memPoolFree(pool, buf) : xfree(buf);
 }
 
 /* Find the best fit MEM_X_BUF type */
@@ -284,21 +224,9 @@ memFreeBuf(size_t size, void *buf)
 	memMeterDel(HugeBufVolumeMeter, size);
     }
 }
-
-
 void
-memInit(void)
+memBuffersInit()
 {
-    int i;
-    memInitModule();
-    /* set all pointers to null */
-    memset(MemPools, '\0', sizeof(MemPools));
-    /*
-     * it does not hurt much to have a lot of pools since sizeof(MemPool) is
-     * small; someday we will figure out what to do with all the entries here
-     * that are never used or used only once; perhaps we should simply use
-     * malloc() for those? @?@
-     */
     memDataInit(MEM_2K_BUF, "2K Buffer", 2048, 10);
     memDataNonZero(MEM_2K_BUF);
     memDataInit(MEM_4K_BUF, "4K Buffer", 4096, 10);
@@ -311,67 +239,39 @@ memInit(void)
     memDataNonZero(MEM_32K_BUF);
     memDataInit(MEM_64K_BUF, "64K Buffer", 65536, 10);
     memDataNonZero(MEM_64K_BUF);
-    memDataInit(MEM_STORE_CLIENT_BUF, "Store Client Buffer", STORE_CLIENT_BUF_SZ, 0);
-    memDataNonZero(MEM_STORE_CLIENT_BUF);
-    memDataInit(MEM_ACL, "acl", sizeof(acl), 0);
-    memDataInit(MEM_ACL_DENY_INFO_LIST, "acl_deny_info_list",
-	sizeof(acl_deny_info_list), 0);
-    memDataInit(MEM_ACL_IP_DATA, "acl_ip_data", sizeof(acl_ip_data), 0);
-    memDataInit(MEM_ACL_LIST, "acl_list", sizeof(acl_list), 0);
-    memDataInit(MEM_ACL_NAME_LIST, "acl_name_list", sizeof(acl_name_list), 0);
-#if USE_SSL
-    memDataInit(MEM_ACL_CERT_DATA, "acl_cert_data", sizeof(acl_cert_data), 0);
-#endif
-    memDataInit(MEM_ACL_TIME_DATA, "acl_time_data", sizeof(acl_time_data), 0);
-    memDataInit(MEM_ACL_REQUEST_TYPE, "acl_request_type", sizeof(acl_request_type), 0);
-    memDataInit(MEM_AUTH_USER_T, "auth_user_t",
-	sizeof(auth_user_t), 0);
-    memDataInit(MEM_AUTH_USER_HASH, "auth_user_hash_pointer",
-	sizeof(auth_user_hash_pointer), 0);
-    memDataInit(MEM_ACL_PROXY_AUTH_MATCH, "acl_proxy_auth_match_cache",
-	sizeof(acl_proxy_auth_match_cache), 0);
-    memDataInit(MEM_ACL_USER_DATA, "acl_user_data",
-	sizeof(acl_user_data), 0);
-#if USE_CACHE_DIGESTS
-    memDataInit(MEM_CACHE_DIGEST, "CacheDigest", sizeof(CacheDigest), 0);
-#endif
-    memDataInit(MEM_LINK_LIST, "link_list", sizeof(link_list), 10);
-    memDataInit(MEM_DLINK_NODE, "dlink_node", sizeof(dlink_node), 10);
-    memDataInit(MEM_DREAD_CTRL, "dread_ctrl", sizeof(dread_ctrl), 0);
-    memDataInit(MEM_DWRITE_Q, "dwrite_q", sizeof(dwrite_q), 0);
-    memDataInit(MEM_FWD_SERVER, "FwdServer", sizeof(FwdServer), 0);
-    memDataInit(MEM_HTTP_REPLY, "HttpReply", sizeof(HttpReply), 0);
-    memDataInit(MEM_HTTP_HDR_ENTRY, "HttpHeaderEntry", sizeof(HttpHeaderEntry), 0);
-    memDataInit(MEM_HTTP_HDR_CC, "HttpHdrCc", sizeof(HttpHdrCc), 0);
-    memDataInit(MEM_HTTP_HDR_RANGE_SPEC, "HttpHdrRangeSpec", sizeof(HttpHdrRangeSpec), 0);
-    memDataInit(MEM_HTTP_HDR_RANGE, "HttpHdrRange", sizeof(HttpHdrRange), 0);
-    memDataInit(MEM_HTTP_HDR_CONTENT_RANGE, "HttpHdrContRange", sizeof(HttpHdrContRange), 0);
-    memDataInit(MEM_INTLIST, "intlist", sizeof(intlist), 0);
-    memDataInit(MEM_MEMOBJECT, "MemObject", sizeof(MemObject),
-	Squid_MaxFD >> 3);
-    memDataInit(MEM_MEM_NODE, "mem_node", sizeof(mem_node), 0);
-    memDataNonZero(MEM_MEM_NODE);
-    memDataInit(MEM_NETDBENTRY, "netdbEntry", sizeof(netdbEntry), 0);
-    memDataInit(MEM_NET_DB_NAME, "net_db_name", sizeof(net_db_name), 0);
-    memDataInit(MEM_RELIST, "relist", sizeof(relist), 0);
-    memDataInit(MEM_REQUEST_T, "request_t", sizeof(request_t),
-	Squid_MaxFD >> 3);
-    memDataInit(MEM_STOREENTRY, "StoreEntry", sizeof(StoreEntry), 0);
-    memDataInit(MEM_WORDLIST, "wordlist", sizeof(wordlist), 0);
-    memDataInit(MEM_CLIENT_INFO, "ClientInfo", sizeof(ClientInfo), 0);
-    memDataInit(MEM_MD5_DIGEST, "MD5 digest", SQUID_MD5_DIGEST_LENGTH, 0);
-    memDataInit(MEM_HELPER_REQUEST, "helper_request",
-	sizeof(helper_request), 0);
-    memDataInit(MEM_HELPER_STATEFUL_REQUEST, "helper_stateful_request",
-	sizeof(helper_stateful_request), 0);
-    memDataInit(MEM_TLV, "storeSwapTLV", sizeof(tlv), 0);
-    memDataInit(MEM_SWAP_LOG_DATA, "storeSwapLogData", sizeof(storeSwapLogData), 0);
+}
 
-    /* init string pools */
-    for (i = 0; i < mem_str_pool_count; i++) {
-	StrPools[i].pool = memPoolCreate(StrPoolsAttrs[i].name, StrPoolsAttrs[i].obj_size);
-	memPoolNonZero(StrPools[i].pool);
-    }
+
+void
+memInit(void)
+{
+    memInitModule();
+    /* set all pointers to null */
+    memset(MemPools, '\0', sizeof(MemPools));
+    /*
+     * it does not hurt much to have a lot of pools since sizeof(MemPool) is
+     * small; someday we will figure out what to do with all the entries here
+     * that are never used or used only once; perhaps we should simply use
+     * malloc() for those? @?@
+     */
+    aclInitMem();
+    memBuffersInit();
+    authenticateInitMem();
+#if USE_CACHE_DIGESTS
+    peerDigestInitMem();
+#endif
+    disk_init_mem();
+    fwdInitMem();
+    httpHeaderInitMem();
+    stmemInitMem();
+    storeInitMem();
+    netdbInitMem();
+    requestInitMem();
+    helperInitMem();
+    clientdbInitMem();
+    storeSwapTLVInitMem();
+    /* Those below require conversion */
+    cacheCfInitMem();
     cachemgrRegister("mem",
 	"Memory Utilization",
 	memStats, 0, 1);

@@ -48,11 +48,13 @@ static int cleanup_removed;
 
 #define CLIENT_DB_HASH_SIZE 467
 
+static MemPool * pool_client_info;
+
 static ClientInfo *
 clientdbAdd(struct in_addr addr)
 {
     ClientInfo *c;
-    c = memAllocate(MEM_CLIENT_INFO);
+    c = memPoolAlloc(pool_client_info);
     c->hash.key = xstrdup(xinet_ntoa(addr));
     c->addr = addr;
     hash_join(client_table, &c->hash);
@@ -62,6 +64,12 @@ clientdbAdd(struct in_addr addr)
 	eventAdd("client_db garbage collector", clientdbScheduledGC, NULL, 90, 0);
     }
     return c;
+}
+
+void
+clientdbInitMem(void)
+{
+    pool_client_info = memPoolCreate("ClientInfo", sizeof(ClientInfo));
 }
 
 void
@@ -229,7 +237,7 @@ clientdbFreeItem(void *data)
 {
     ClientInfo *c = data;
     safe_free(c->hash.key);
-    memFree(c, MEM_CLIENT_INFO);
+    memPoolFree(pool_client_info, c);
 }
 
 void

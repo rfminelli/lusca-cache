@@ -79,7 +79,7 @@ httpHdrCcCleanModule(void)
 HttpHdrCc *
 httpHdrCcCreate(void)
 {
-    HttpHdrCc *cc = memAllocate(MEM_HTTP_HDR_CC);
+    HttpHdrCc *cc = memPoolAlloc(pool_http_hdr_cc);
     cc->max_age = cc->s_maxage = cc->max_stale = cc->stale_if_error - 1;
     return cc;
 }
@@ -189,7 +189,7 @@ httpHdrCcDestroy(HttpHdrCc * cc)
     assert(cc);
     if (strBuf(cc->other))
 	stringClean(&cc->other);
-    memFree(cc, MEM_HTTP_HDR_CC);
+    memPoolFree(pool_http_hdr_cc, cc);
 }
 
 HttpHdrCc *

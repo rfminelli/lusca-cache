@@ -463,7 +463,7 @@ storeDigestCalcCap(void)
      */
     const int hi_cap = Config.Swap.maxSize / Config.Store.avgObjectSize;
     const int lo_cap = 1 + store_swap_size / Config.Store.avgObjectSize;
-    const int e_count = memInUse(MEM_STOREENTRY);
+    const int e_count = memPoolInUseCount(pool_storeentry);
     int cap = e_count ? e_count : hi_cap;
     debug(71, 2) ("storeDigestCalcCap: have: %d, want %d entries; limits: [%d, %d]\n",
 	e_count, cap, lo_cap, hi_cap);

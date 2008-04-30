@@ -54,6 +54,16 @@ static void helperRequestFree(helper_request * r);
 static void helperStatefulRequestFree(helper_stateful_request * r);
 static void StatefulEnqueue(statefulhelper * hlp, helper_stateful_request * r);
 
+static MemPool * pool_helper_req = NULL;
+static MemPool * pool_helper_stateful_req = NULL;
+
+void
+helperInitMem(void)
+{
+    pool_helper_req = memPoolCreate("helper_request", sizeof(helper_request));
+    pool_helper_stateful_req = memPoolCreate("helper_stateful_request", sizeof(helper_stateful_request));
+}
+
 void
 helperOpenServers(helper * hlp)
 {
@@ -228,7 +238,7 @@ helperStatefulOpenServers(statefulhelper * hlp)
 void
 helperSubmit(helper * hlp, const char *buf, HLPCB * callback, void *data)
 {
-    helper_request *r = memAllocate(MEM_HELPER_REQUEST);
+    helper_request *r = memPoolAlloc(pool_helper_req);
     helper_server *srv;
     if (hlp == NULL) {
 	debug(84, 3) ("helperSubmit: hlp == NULL\n");
@@ -249,7 +259,7 @@ helperSubmit(helper * hlp, const char *buf, HLPCB * callback, void *data)
 void
 helperStatefulSubmit(statefulhelper * hlp, const char *buf, HLPSCB * callback, void *data, helper_stateful_server * srv)
 {
-    helper_stateful_request *r = memAllocate(MEM_HELPER_STATEFUL_REQUEST);
+    helper_stateful_request *r = memPoolAlloc(pool_helper_stateful_req);
     if (hlp == NULL) {
 	debug(84, 3) ("helperStatefulSubmit: hlp == NULL\n");
 	callback(data, 0, NULL);
@@ -850,8 +860,8 @@ helperStatefulHandleRead(int fd, void *data)
 static void
 Enqueue(helper * hlp, helper_request * r)
 {
-    dlink_node *link = memAllocate(MEM_DLINK_NODE);
-    dlinkAddTail(r, link, &hlp->queue);
+    assert(DLINK_ISORPHAN(r->n));
+    dlinkAddTail(r, &r->n, &hlp->queue);
     hlp->stats.queue_size++;
     if (hlp->stats.queue_size < hlp->n_running)
 	return;
@@ -874,8 +884,8 @@ Enqueue(helper * hlp, helper_request * r)
 static void
 StatefulEnqueue(statefulhelper * hlp, helper_stateful_request * r)
 {
-    dlink_node *link = memAllocate(MEM_DLINK_NODE);
-    dlinkAddTail(r, link, &hlp->queue);
+    assert(DLINK_ISORPHAN(r->n));
+    dlinkAddTail(r, &r->n, &hlp->queue);
     hlp->stats.queue_size++;
     if (hlp->stats.queue_size < hlp->n_running)
 	return;
@@ -902,8 +912,7 @@ Dequeue(helper * hlp)
     helper_request *r = NULL;
     if ((link = hlp->queue.head)) {
 	r = link->data;
-	dlinkDelete(link, &hlp->queue);
-	memFree(link, MEM_DLINK_NODE);
+	dlinkDelete(&r->n, &hlp->queue);
 	hlp->stats.queue_size--;
     }
     return r;
@@ -916,8 +925,7 @@ StatefulDequeue(statefulhelper * hlp)
     helper_stateful_request *r = NULL;
     if ((link = hlp->queue.head)) {
 	r = link->data;
-	dlinkDelete(link, &hlp->queue);
-	memFree(link, MEM_DLINK_NODE);
+	dlinkDelete(&r->n, &hlp->queue);
 	hlp->stats.queue_size--;
     }
     return r;
@@ -1123,7 +1131,7 @@ helperRequestFree(helper_request * r)
 {
     cbdataUnlock(r->data);
     xfree(r->buf);
-    memFree(r, MEM_HELPER_REQUEST);
+    memPoolFree(pool_helper_req, r);
 }
 
 static void
@@ -1131,5 +1139,5 @@ helperStatefulRequestFree(helper_stateful_request * r)
 {
     cbdataUnlock(r->data);
     xfree(r->buf);
-    memFree(r, MEM_HELPER_STATEFUL_REQUEST);
+    memPoolFree(pool_helper_stateful_req, r);
 }

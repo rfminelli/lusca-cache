@@ -35,12 +35,14 @@
 
 #include "squid.h"
 
+MemPool *pool_mem_node = NULL;
+
 void
 stmemNodeFree(void *buf)
 {
     mem_node *p = (mem_node *) buf;
     if (!p->uses)
-	memFree(p, MEM_MEM_NODE);
+	memPoolFree(pool_mem_node, p);
     else
 	p->uses--;
 }
@@ -116,7 +118,7 @@ stmemAppend(mem_hdr * mem, const char *data, int len)
     }
     while (len > 0) {
 	len_to_copy = XMIN(len, SM_PAGE_SIZE);
-	p = memAllocate(MEM_MEM_NODE);	/* This is a non-zero'ed buffer; make sure you fully initialise it */
+	p = memPoolAlloc(pool_mem_node);	/* This is a non-zero'ed buffer; make sure you fully initialise it */
 	p->next = NULL;
 	p->len = len_to_copy;
 	p->uses = 0;
@@ -186,7 +188,7 @@ void
 stmemNodeRefCreate(mem_node_ref * r)
 {
     assert(r->node == NULL);
-    r->node = memAllocate(MEM_MEM_NODE);
+    r->node = memPoolAlloc(pool_mem_node);
     r->node->uses = 0;
     r->node->next = NULL;
     r->node->len = 4096;
@@ -255,4 +257,11 @@ stmemCopy(const mem_hdr * mem, squid_off_t offset, char *buf, size_t size)
 	p = p->next;
     }
     return size - bytes_to_go;
+}
+
+void
+stmemInitMem(void)
+{
+    pool_mem_node = memPoolCreate("mem_node", sizeof(mem_node));
+    memPoolNonZero(pool_mem_node);
 }

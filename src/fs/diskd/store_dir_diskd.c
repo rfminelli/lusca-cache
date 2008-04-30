@@ -1315,13 +1315,13 @@ storeDiskdDirCloseTmpSwapLog(SwapDir * sd)
 static void
 storeSwapLogDataFree(void *s)
 {
-    memFree(s, MEM_SWAP_LOG_DATA);
+    memPoolFree(pool_swap_log_data, s);
 }
 
 static void
 storeDiskdWriteSwapLogheader(int fd)
 {
-    storeSwapLogHeader *hdr = memAllocate(MEM_SWAP_LOG_DATA);
+    storeSwapLogHeader *hdr = memPoolAlloc(pool_swap_log_data);
     hdr->op = SWAP_LOG_VERSION;
     hdr->version = 1;
     hdr->record_size = sizeof(storeSwapLogData);
@@ -1547,7 +1547,7 @@ static void
 storeDiskdDirSwapLog(const SwapDir * sd, const StoreEntry * e, int op)
 {
     diskdinfo_t *diskdinfo = sd->fsdata;
-    storeSwapLogData *s = memAllocate(MEM_SWAP_LOG_DATA);
+    storeSwapLogData *s = memPoolAlloc(pool_swap_log_data);
     s->op = (char) op;
     s->swap_filen = e->swap_filen;
     s->timestamp = e->timestamp;

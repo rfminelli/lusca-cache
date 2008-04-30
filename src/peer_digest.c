@@ -60,6 +60,7 @@ static void peerDigestFetchSetStats(DigestFetchState * fetch);
 static int peerDigestSetCBlock(PeerDigest * pd, const char *buf);
 static int peerDigestUseful(const PeerDigest * pd);
 
+MemPool * pool_cache_digest = NULL;
 
 /* local constants */
 
@@ -75,6 +76,12 @@ static const time_t GlobDigestReqMinGap = 1 * 60;	/* seconds */
 static time_t pd_last_req_time = 0;	/* last call to Check */
 
 /* initialize peer digest */
+void
+peerDigestInitMem(void)
+{
+    pool_cache_digest = memPoolCreate("CacheDigest", sizeof(CacheDigest));
+}
+
 static void
 peerDigestInit(PeerDigest * pd, peer * p)
 {

@@ -41,18 +41,6 @@ typedef unsigned int swap_status_t;
 typedef signed int sfileno;
 typedef signed int sdirno;
 
-#if SIZEOF_INT64_T > SIZEOF_LONG && HAVE_STRTOLL
-typedef int64_t squid_off_t;
-#define SIZEOF_SQUID_OFF_T SIZEOF_INT64_T
-#define PRINTF_OFF_T PRId64
-#define strto_off_t (int64_t)strtoll
-#else
-typedef long squid_off_t;
-#define SIZEOF_SQUID_OFF_T SIZEOF_LONG
-#define PRINTF_OFF_T "ld"
-#define strto_off_t strtol
-#endif
-
 #if LARGE_CACHE_FILES
 typedef squid_off_t squid_file_sz;
 #define SIZEOF_SQUID_FILE_SZ SIZEOF_SQUID_OFF_T
@@ -70,17 +58,6 @@ struct _mem_node_ref {
      */
     int offset;
 };
-
-typedef struct {
-    squid_off_t bytes;
-    squid_off_t kb;
-} kb_t;
-
-typedef struct {
-    size_t count;
-    size_t bytes;
-    size_t gb;
-} gb_t;
 
 /*
  * grep '^struct' structs.h \
@@ -113,7 +90,6 @@ typedef struct _acl_access acl_access;
 typedef struct _acl_address acl_address;
 typedef struct _acl_tos acl_tos;
 typedef struct _aclCheck_t aclCheck_t;
-typedef struct _wordlist wordlist;
 typedef struct _intlist intlist;
 typedef struct _intrange intrange;
 typedef struct _ushortlist ushortlist;
@@ -192,8 +168,6 @@ typedef struct _refresh_t refresh_t;
 typedef struct _refresh_cc refresh_cc;
 typedef struct _CommWriteStateData CommWriteStateData;
 typedef struct _ErrorState ErrorState;
-typedef struct _dlink_node dlink_node;
-typedef struct _dlink_list dlink_list;
 typedef struct _StatCounters StatCounters;
 typedef struct _tlv tlv;
 typedef struct _storeSwapLogData storeSwapLogData;
@@ -202,10 +176,6 @@ typedef struct _storeSwapLogHeader storeSwapLogHeader;
 typedef struct _authConfig authConfig;
 typedef struct _cacheSwap cacheSwap;
 typedef struct _StatHist StatHist;
-typedef struct _String String;
-typedef struct _MemMeter MemMeter;
-typedef struct _MemPoolMeter MemPoolMeter;
-typedef struct _MemPool MemPool;
 typedef struct _ClientInfo ClientInfo;
 typedef struct _cd_guess_stats cd_guess_stats;
 typedef struct _CacheDigest CacheDigest;
@@ -384,9 +354,6 @@ typedef void (*vprintf_f) ();
 
 /* MD5 cache keys */
 typedef unsigned char cache_key;
-
-/* context-based debugging, the actual type is subject to change */
-typedef int Ctx;
 
 /* in case we want to change it later */
 typedef int mb_size_t;

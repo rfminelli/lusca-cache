@@ -144,6 +144,12 @@ static void dump_programline(StoreEntry *, const char *, const wordlist *);
 static int parseOneConfigFile(const char *file_name, int depth);
 
 void
+cacheCfInitMem(void)
+{
+    memDataInit(MEM_INTLIST, "intlist", sizeof(intlist), 0);
+}
+
+void
 self_destruct(void)
 {
     shutting_down = 1;
@@ -151,69 +157,19 @@ self_destruct(void)
 	cfg_filename, config_lineno, config_input_line);
 }
 
-void
-wordlistDestroy(wordlist ** list)
-{
-    wordlist *w = NULL;
-    while ((w = *list) != NULL) {
-	*list = w->next;
-	safe_free(w->key);
-	memFree(w, MEM_WORDLIST);
-    }
-    *list = NULL;
-}
-
-const char *
-wordlistAdd(wordlist ** list, const char *key)
-{
-    while (*list)
-	list = &(*list)->next;
-    *list = memAllocate(MEM_WORDLIST);
-    (*list)->key = xstrdup(key);
-    (*list)->next = NULL;
-    return (*list)->key;
-}
-
-void
-wordlistJoin(wordlist ** list, wordlist ** wl)
-{
-    while (*list)
-	list = &(*list)->next;
-    *list = *wl;
-    *wl = NULL;
-}
-
-void
-wordlistAddWl(wordlist ** list, wordlist * wl)
-{
-    while (*list)
-	list = &(*list)->next;
-    for (; wl; wl = wl->next, list = &(*list)->next) {
-	*list = memAllocate(MEM_WORDLIST);
-	(*list)->key = xstrdup(wl->key);
-	(*list)->next = NULL;
-    }
-}
-
+/*
+ * This has to stay here until memBuf's have been moved out of src/
+ * and into libmem.
+ */
 void
 wordlistCat(const wordlist * w, MemBuf * mb)
 {
     while (NULL != w) {
-	memBufPrintf(mb, "%s\n", w->key);
-	w = w->next;
+        memBufPrintf(mb, "%s\n", w->key);
+        w = w->next;
     }
 }
 
-wordlist *
-wordlistDup(const wordlist * w)
-{
-    wordlist *D = NULL;
-    while (NULL != w) {
-	wordlistAdd(&D, w->key);
-	w = w->next;
-    }
-    return D;
-}
 
 void
 intlistDestroy(intlist ** list)
@@ -464,7 +420,7 @@ configDoConfigure(void)
 {
     memset(&Config2, '\0', sizeof(SquidConfig2));
     /* init memory as early as possible */
-    memConfigure();
+    memConfigure(Config.onoff.mem_pools, Config.MemPools.limit, Config.onoff.zero_buffers);
     /* Sanity checks */
     if (Config.cacheSwap.swapDirs == NULL)
 	fatal("No cache_dir's specified in config file");
@@ -2033,11 +1989,11 @@ free_denyinfo(acl_deny_info_list ** list)
     for (a = *list; a; a = a_next) {
 	for (l = a->acl_list; l; l = l_next) {
 	    l_next = l->next;
-	    memFree(l, MEM_ACL_NAME_LIST);
+	    memPoolFree(acl_name_list_pool, l);
 	    l = NULL;
 	}
 	a_next = a->next;
-	memFree(a, MEM_ACL_DENY_INFO_LIST);
+	memPoolFree(acl_deny_pool, a);
 	a = NULL;
     }
     *list = NULL;
