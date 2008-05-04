@@ -22,6 +22,17 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
    * string *done*
    * membuf
 
+  * Next - error pages
+    * write some simple sed one-liners to take a CSS + template file and generate a static error page
+    * Convert the English directory to use this - ignore the other languages for now!
+
+  * Next phase - improving the communication code
+    * Bring over a very naive reference-counted buffer type
+    * Bring over a very, very basic writev() and readv() wrapper - remember about SSL and the FD_*_METHOD() stuff!
+    * Use the writev() wrapper for writing HTTP replies, avoiding the copying
+
+  * Next - resolve issue #10 (Service time differences!) if it hasn't been resolved already.
+
 = Benchmarking =
 
   * Benchmark with / without mempools - try to establish which areas of the codebase are (ab)using malloc far too often
