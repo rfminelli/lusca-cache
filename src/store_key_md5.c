@@ -36,6 +36,7 @@
 #include "squid.h"
 
 static cache_key null_key[SQUID_MD5_DIGEST_LENGTH];
+static MemPool * pool_md5_key = NULL;
 
 const char *
 storeKeyText(const unsigned char *key)
@@ -162,7 +163,7 @@ storeKeyPublicByRequestMethod(request_t * request, const method_t method)
 cache_key *
 storeKeyDup(const cache_key * key)
 {
-    cache_key *dup = memAllocate(MEM_MD5_DIGEST);
+    cache_key *dup = memPoolAlloc(pool_md5_key);
     xmemcpy(dup, key, SQUID_MD5_DIGEST_LENGTH);
     return dup;
 }
@@ -177,7 +178,7 @@ storeKeyCopy(cache_key * dst, const cache_key * src)
 void
 storeKeyFree(const cache_key * key)
 {
-    memFree((void *) key, MEM_MD5_DIGEST);
+    memPoolFree(pool_md5_key, (void *) key);
 }
 
 int
@@ -201,6 +202,6 @@ storeKeyNull(const cache_key * key)
 void
 storeKeyInit(void)
 {
-    memDataInit(MEM_MD5_DIGEST, "MD5 digest", SQUID_MD5_DIGEST_LENGTH, 0);
+    pool_md5_key = memPoolCreate("MD5 digest", SQUID_MD5_DIGEST_LENGTH);
     memset(null_key, '\0', SQUID_MD5_DIGEST_LENGTH);
 }
