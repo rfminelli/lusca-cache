@@ -598,9 +598,6 @@ typedef enum {
 #if !USE_DNSSERVERS
     MEM_IDNS_QUERY,
 #endif
-#if USE_SSL
-    MEM_ACL_CERT_DATA,
-#endif
     MEM_MAX
 } mem_type;
 
