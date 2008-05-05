@@ -93,6 +93,10 @@ SOURCE=..\..\..\lib\base64.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\lib\dirent.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\lib\drand48.c
 # End Source File
 # Begin Source File
@@ -130,10 +134,6 @@ SOURCE=..\..\..\lib\md5.c
 # Begin Source File
 
 SOURCE=..\..\..\lib\radix.c
-# End Source File
-# Begin Source File
-
-SOURCE=..\src\readdir.c
 # End Source File
 # Begin Source File
 
@@ -187,6 +187,14 @@ SOURCE=..\..\..\lib\win32lib.c
 # Begin Group "Header Files"
 
 # PROP Default_Filter "h;hpp;hxx;hm;inl"
+# Begin Source File
+
+SOURCE=..\include\dirent.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\include\getopt.h
+# End Source File
 # Begin Source File
 
 SOURCE=..\..\..\include\heap.h

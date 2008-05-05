@@ -32,7 +32,7 @@ EXTRA_DIST = \
 	include/cdefs.h \
 	include/crypt.h \
 	include/getopt.h \
-	include/Readdir.h \
+	include/dirent.h \
 	LDAP_auth/LDAP_auth.dsp \
 	LDAP_group/LDAP_group.dsp \
 	libaufs/libaufs.dsp \
@@ -67,6 +67,5 @@ EXTRA_DIST = \
 	squid_radius_auth/squid_radius_auth.dsp \
 	squidclient/squidclient.dsp \
 	src/encrypt.c \
-	src/readdir.c \
 	unlinkd/unlinkd.dsp \
 	win32_check_group/win32_check_group.dsp
