@@ -67,6 +67,7 @@ static struct {
 } FqdncacheStats;
 
 static dlink_list lru_list;
+MemPool * pool_fqdncache = NULL;
 
 #if USE_DNSSERVERS
 static HLPCB fqdncacheHandleReply;
@@ -104,7 +105,7 @@ fqdncacheRelease(fqdncache_entry * f)
     dlinkDelete(&f->lru, &lru_list);
     safe_free(f->hash.key);
     safe_free(f->error_message);
-    memFree(f, MEM_FQDNCACHE_ENTRY);
+    memPoolFree(pool_fqdncache, f);
 }
 
 /* return match for given name */
@@ -141,7 +142,7 @@ fqdncache_purgelru(void *notused)
     int removed = 0;
     eventAdd("fqdncache_purgelru", fqdncache_purgelru, NULL, 10.0, 1);
     for (m = lru_list.tail; m; m = prev) {
-	if (memInUse(MEM_FQDNCACHE_ENTRY) < fqdncache_low)
+	if (memPoolInUseCount(pool_fqdncache) < fqdncache_low)
 	    break;
 	prev = m->prev;
 	f = m->data;
@@ -178,7 +179,7 @@ static fqdncache_entry *
 fqdncacheCreateEntry(const char *name)
 {
     static fqdncache_entry *f;
-    f = memAllocate(MEM_FQDNCACHE_ENTRY);
+    f = memPoolAlloc(pool_fqdncache);
     f->hash.key = xstrdup(name);
     f->expires = squid_curtime + Config.negativeDnsTtl;
     return f;
@@ -422,8 +423,7 @@ fqdncache_init(void)
     cachemgrRegister("fqdncache",
 	"FQDN Cache Stats and Contents",
 	fqdnStats, 0, 1);
-    memDataInit(MEM_FQDNCACHE_ENTRY, "fqdncache_entry",
-	sizeof(fqdncache_entry), 0);
+    pool_fqdncache = memPoolCreate("fqdncache_entry", sizeof(fqdncache_entry));
 }
 
 const char *
@@ -472,7 +472,7 @@ fqdnStats(StoreEntry * sentry)
 	return;
     storeAppendPrintf(sentry, "FQDN Cache Statistics:\n");
     storeAppendPrintf(sentry, "FQDNcache Entries: %d\n",
-	memInUse(MEM_FQDNCACHE_ENTRY));
+	memPoolInUseCount(pool_fqdncache));
     storeAppendPrintf(sentry, "FQDNcache Requests: %d\n",
 	FqdncacheStats.requests);
     storeAppendPrintf(sentry, "FQDNcache Hits: %d\n",
@@ -543,7 +543,7 @@ fqdncacheFreeEntry(void *data)
 	safe_free(f->names[k]);
     safe_free(f->hash.key);
     safe_free(f->error_message);
-    memFree(f, MEM_FQDNCACHE_ENTRY);
+    memPoolFree(pool_fqdncache, f);
 }
 
 void
@@ -615,7 +615,7 @@ snmp_netFqdnFn(variable_list * Var, snint * ErrP)
     switch (Var->name[LEN_SQ_NET + 1]) {
     case FQDN_ENT:
 	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    memInUse(MEM_FQDNCACHE_ENTRY),
+	    memPoolInUseCount(pool_fqdncache),
 	    SMI_GAUGE32);
 	break;
     case FQDN_REQ:
