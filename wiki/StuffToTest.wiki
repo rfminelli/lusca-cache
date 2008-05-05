@@ -10,3 +10,4 @@ This is a list of "stuff" that has changed and needs further testing to make sur
   * HEAP replacement types - changed the queue used to shuffle objects around
   * FTP code - revision 12657 changed some of the command parsing stuff
   * intlist stuff - ASN, RTT and Method related ACLs.
+  * The debugging stuff has changed slightly (as some debugging is now in libcore/); check to make sure file -and- syslog debugging for cache_log works correctly.
