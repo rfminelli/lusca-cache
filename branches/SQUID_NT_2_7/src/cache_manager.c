@@ -200,7 +200,7 @@ cachemgrStart(int fd, request_t * request, StoreEntry * entry)
     cachemgrStateData *mgr = NULL;
     ErrorState *err = NULL;
     action_table *a;
-    debug(16, 3) ("objectcacheStart: '%s'\n", storeUrl(entry));
+    debug(16, 3) ("cachemgrStart: '%s'\n", storeUrl(entry));
     if ((mgr = cachemgrParseUrl(storeUrl(entry))) == NULL) {
 	err = errorCon(ERR_INVALID_URL, HTTP_NOT_FOUND, request);
 	err->url = xstrdup(storeUrl(entry));
@@ -276,8 +276,8 @@ static void
 cachemgrReconfigure(StoreEntry * sentry)
 {
     debug(16, 0) ("Reconfigure by command.\n");
-    reconfigure(SIGHUP);
     storeAppendPrintf(sentry, "Reconfiguring Squid Process ....");
+    reconfigure(SIGHUP);
 }
 
 static void
