@@ -50,11 +50,12 @@ static struct ev_entry *tasks = NULL;
 static OBJH eventDump;
 static int run_id = 0;
 static const char *last_event_ran = NULL;
+static MemPool * pool_event = NULL;
 
 void
 eventAdd(const char *name, EVH * func, void *arg, double when, int weight)
 {
-    struct ev_entry *event = memAllocate(MEM_EVENT);
+    struct ev_entry *event = memPoolAlloc(pool_event);
     struct ev_entry **E;
     event->func = func;
     event->arg = arg;
@@ -102,7 +103,7 @@ eventDelete(EVH * func, void *arg)
 	*E = event->next;
 	if (NULL != event->arg)
 	    cbdataUnlock(event->arg);
-	memFree(event, MEM_EVENT);
+	memPoolFree(pool_event, event);
 	return;
     }
     if (arg)
@@ -147,7 +148,7 @@ eventRun(void)
 		event->name, event->id);
 	    func(arg);
 	}
-	memFree(event, MEM_EVENT);
+	memPoolFree(pool_event, event);
     }
 }
 
@@ -164,7 +165,7 @@ eventCleanup(void)
 	    debug(41, 2) ("eventCleanup: cleaning '%s'\n", event->name);
 	    *p = event->next;
 	    cbdataUnlock(event->arg);
-	    memFree(event, MEM_EVENT);
+	    memPoolFree(pool_event, event);
 	} else {
 	    p = &event->next;
 	}
@@ -182,7 +183,7 @@ eventNextTime(void)
 void
 eventInit(void)
 {
-    memDataInit(MEM_EVENT, "event", sizeof(struct ev_entry), 0);
+    pool_event = memPoolCreate("event", sizeof(struct ev_entry));
     cachemgrRegister("events",
 	"Event Queue",
 	eventDump, 0, 1);
@@ -215,7 +216,7 @@ eventFreeMemory(void)
 	tasks = event->next;
 	if (NULL != event->arg)
 	    cbdataUnlock(event->arg);
-	memFree(event, MEM_EVENT);
+	memPoolFree(pool_event, event);
     }
     tasks = NULL;
 }
