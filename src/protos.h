@@ -868,23 +868,8 @@ extern StatHistBinDumper statHistIntDumper;
 /* MemMeter */
 
 /* mem */
-extern void memInit(void);
-extern void memClean(void);
 extern void memInitModule(void);
 extern void memCleanModule(void);
-extern void *memAllocate(mem_type);
-extern void *memAllocBuf(size_t net_size, size_t * gross_size);
-extern void *memReallocBuf(void *buf, size_t net_size, size_t * gross_size);
-extern void memFree(void *, int type);
-extern void memFree4K(void *);
-extern void memFree8K(void *);
-extern void memFreeBuf(size_t size, void *);
-extern FREE *memFreeBufFunc(size_t size);
-extern int memInUse(mem_type);
-extern size_t memTotalAllocated(void);
-extern void memDataInit(mem_type, const char *, size_t, int);
-extern void memDataNonZero(mem_type);
-extern void memCheckInit(void);
 
 /* MemPool */
 

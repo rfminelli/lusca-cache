@@ -5,14 +5,16 @@ libmem_a_SOURCES = \
 	MemStr.c \
 	String.c \
 	wordlist.c \
-	intlist.c
+	intlist.c \
+	MemBufs.c
 
 libmem_a_LIBADD = \
 	MemPool.o \
 	MemStr.o \
 	String.o \
 	wordlist.o \
-	intlist.o
+	intlist.o \
+	MemBufs.o
 
 noinst_LIBRARIES = \
 	libmem.a

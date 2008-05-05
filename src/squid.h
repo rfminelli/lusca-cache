@@ -411,6 +411,7 @@ struct rusage {
 #include "../libmem/String.h"
 #include "../libmem/wordlist.h"
 #include "../libmem/intlist.h"
+#include "../libmem/MemBufs.h"
 
 #include "defines.h"
 #include "enums.h"

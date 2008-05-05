@@ -89,7 +89,7 @@ memConfigure(int enable, size_t limit, int dozero)
 }
 
 void
-memInitModule(void)
+memPoolInit(void)
 {
     memset(&TheMeter, 0, sizeof(TheMeter));
     stackInit(&Pools);
@@ -98,7 +98,7 @@ memInitModule(void)
 }
 
 void
-memCleanModule(void)
+memPoolClean(void)
 {
     int i;
     int dirty_count = 0;
