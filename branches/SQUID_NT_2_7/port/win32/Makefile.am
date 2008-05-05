@@ -64,6 +64,7 @@ EXTRA_DIST = \
 	squid/squid.rc \
 	squid/squid.rc2 \
 	pinger/pinger.dsp \
+	squid_radius_auth/squid_radius_auth.dsp \
 	squidclient/squidclient.dsp \
 	src/encrypt.c \
 	src/readdir.c \

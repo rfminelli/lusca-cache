@@ -18,6 +18,7 @@ if exist %0\..\pinger\%1\pinger.exe copy %0\..\pinger\%1\pinger.exe %2\libexec\p
 copy %0\..\squidclient\%1\squidclient.exe %2\bin\squidclient.exe
 copy %0\..\ldap_auth\%1\ldap_auth.exe %2\libexec\squid_ldap_auth.exe
 copy %0\..\nt_auth\%1\nt_auth.exe %2\libexec\mswin_auth.exe
+copy %0\..\squid_radius_auth\%1\squid_radius_auth.exe %2\libexec\squid_radius_auth.exe
 copy %0\..\ncsa_auth\%1\ncsa_auth.exe %2\libexec\ncsa_auth.exe
 copy %0\..\digest_ldap_auth\%1\digest_ldap_auth.exe %2\libexec\digest_ldap_auth.exe
 copy %0\..\digest_pw_auth\%1\digest_pw_auth.exe %2\libexec\digest_pw_auth.exe
@@ -33,6 +34,7 @@ copy %0\..\..\..\src\squid.conf.default %2\etc\squid.conf.default
 copy %0\..\..\..\src\mime.conf.default %2\etc\mime.conf.default
 copy %0\..\..\..\tools\cachemgr.conf %2\etc\cachemgr.conf.default
 copy %0\..\..\..\src\mib.txt %2\share\mib.txt
+copy %0\..\..\..\helpers\basic_auth\squid_radius_auth\etc\squid_radius_auth.conf %2\etc\squid_radius_auth.conf.default
 
 pushd %0\..\..\..\errors
 for /D %%d IN (*) DO xcopy /Y /Q %%d\err_* %2\share\errors\%%d\
@@ -50,6 +52,7 @@ copy %0\..\..\..\doc\HTTP-codes.txt %2\docs\HTTP-codes.txt
 copy %0\..\..\..\doc\release-notes\release-2.7.html %2\docs\release-2.7.html
 type %0\..\..\..\helpers\basic_auth\NCSA\ncsa_auth.8 | man2htm2 > %2\docs\ncsa_auth.html
 type %0\..\..\..\helpers\basic_auth\LDAP\squid_ldap_auth.8 | man2htm2 > %2\docs\squid_ldap_auth.html
+type %0\..\..\..\helpers\basic_auth\squid_radius_auth\squid_radius_auth.8 | man2htm2 > %2\docs\squid_radius_auth.html
 type %0\..\..\..\helpers\external_acl\LDAP_group\squid_ldap_group.8 | man2htm2 > %2\docs\squid_ldap_group.html
 type %0\..\..\..\doc\squid.8 | man2htm2 > %2\docs\squid.html
 type %0\..\..\..\doc\cachemgr.cgi.8 | man2htm2 > %2\docs\cachemgr.cgi.html
