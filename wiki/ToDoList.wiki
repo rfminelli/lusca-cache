@@ -12,15 +12,15 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
    * dlink list *done*
    * debug/ctx *done*
    * gb_t *done*
-   * kb_t - needs squid_off_t to me moved!
-   * mem
+   * kb_t - *done*
+   * mem *done*
     * Move initialisation of types init'ed in mem.c out into component modules *(Done)*
-    * Convert the legacy mem.c types into locally-scoped MemPool types, reducing the mem.c stuff to buffers only
+    * Convert the legacy mem.c types into locally-scoped MemPool types, reducing the mem.c stuff to buffers only *(done)*
    * mempool *done*
    * memstr *done*
    * cbdata
    * string *done*
-   * membuf
+   * MemBuf
 
   * Next - error pages
     * write some simple sed one-liners to take a CSS + template file and generate a static error page
