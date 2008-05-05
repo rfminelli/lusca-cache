@@ -594,7 +594,6 @@ typedef enum {
     MEM_DONTFREE,
     MEM_FQDNCACHE_ENTRY,
     MEM_IPCACHE_ENTRY,
-    MEM_MD5_DIGEST,
     MEM_MAX
 } mem_type;
 
