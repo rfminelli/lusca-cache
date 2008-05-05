@@ -595,9 +595,6 @@ typedef enum {
     MEM_FQDNCACHE_ENTRY,
     MEM_IPCACHE_ENTRY,
     MEM_MD5_DIGEST,
-#if !USE_DNSSERVERS
-    MEM_IDNS_QUERY,
-#endif
     MEM_MAX
 } mem_type;
 
