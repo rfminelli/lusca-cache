@@ -227,7 +227,6 @@ typedef struct _delaySpec delaySpec;
 typedef void CWCB(int fd, char *, size_t size, int flag, void *data);
 typedef void CNCB(int fd, int status, void *);
 
-typedef void FREE(void *);
 typedef void CBDUNL(void *);
 typedef void FOCB(void *, int fd, int errcode);
 typedef void EVH(void *);

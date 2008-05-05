@@ -56,6 +56,8 @@ extern int memPoolWasUsed(const MemPool * pool);
 extern int memPoolInUseCount(const MemPool * pool);
 extern size_t memPoolInUseSize(const MemPool * pool);
 extern int memPoolUsedCount(const MemPool * pool);
+extern void memPoolInit(void);
+extern void memPoolClean(void);
 
 typedef struct {
 	int alloc_calls;

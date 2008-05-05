@@ -583,17 +583,6 @@ enum {
 
 #endif
 
-typedef enum {
-    MEM_NONE,
-    MEM_2K_BUF,
-    MEM_4K_BUF,
-    MEM_8K_BUF,
-    MEM_16K_BUF,
-    MEM_32K_BUF,
-    MEM_64K_BUF,
-    MEM_MAX
-} mem_type;
-
 /*
  * NOTE!  We must preserve the order of this list!
  */
