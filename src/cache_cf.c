@@ -144,12 +144,6 @@ static void dump_programline(StoreEntry *, const char *, const wordlist *);
 static int parseOneConfigFile(const char *file_name, int depth);
 
 void
-cacheCfInitMem(void)
-{
-    memDataInit(MEM_INTLIST, "intlist", sizeof(intlist), 0);
-}
-
-void
 self_destruct(void)
 {
     shutting_down = 1;
@@ -170,28 +164,6 @@ wordlistCat(const wordlist * w, MemBuf * mb)
     }
 }
 
-
-void
-intlistDestroy(intlist ** list)
-{
-    intlist *w = NULL;
-    intlist *n = NULL;
-    for (w = *list; w; w = n) {
-	n = w->next;
-	memFree(w, MEM_INTLIST);
-    }
-    *list = NULL;
-}
-
-int
-intlistFind(intlist * list, int i)
-{
-    intlist *w = NULL;
-    for (w = list; w; w = w->next)
-	if (w->i == i)
-	    return 1;
-    return 0;
-}
 
 /*
  * These functions is the same as atoi/l/f, except that they check for errors

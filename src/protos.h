@@ -85,10 +85,7 @@ extern int aclAuthenticated(aclCheck_t * checklist);
 /*
  * cache_cf.c
  */
-extern void cacheCfInitMem(void);
 extern int parseConfigFile(const char *file_name);
-extern void intlistDestroy(intlist **);
-extern int intlistFind(intlist * list, int i);
 extern void configFreeMemory(void);
 extern void wordlistCat(const wordlist *, MemBuf * mb);
 extern void allocate_new_swapdir(cacheSwap *);
