@@ -353,15 +353,14 @@ aclFindByName(const char *name)
 static void
 aclParseIntlist(void *curlist)
 {
-    intlist **Tail;
+    intlist *Tail, **Head = curlist;
     intlist *q = NULL;
     char *t = NULL;
-    for (Tail = curlist; *Tail; Tail = &((*Tail)->next));
+    for (Tail = *Head; Tail; Tail = Tail->next);
     while ((t = strtokFile())) {
-	q = memAllocate(MEM_INTLIST);
-	q->i = xatoi(t);
-	*(Tail) = q;
-	Tail = &q->next;
+        Tail = intlistAddTail(Tail, xatoi(t));
+        if (*Head == NULL)
+            *Head = Tail;
     }
 }
 
@@ -397,34 +396,33 @@ aclParsePortRange(void *curlist)
 static void
 aclParseProtoList(void *curlist)
 {
-    intlist **Tail;
-    intlist *q = NULL;
+    intlist *Tail, **Head = curlist;
     char *t = NULL;
     protocol_t protocol;
-    for (Tail = curlist; *Tail; Tail = &((*Tail)->next));
+    for (Tail = *Head; Tail; Tail = Tail->next);
     while ((t = strtokFile())) {
 	protocol = urlParseProtocol(t);
-	q = memAllocate(MEM_INTLIST);
-	q->i = (int) protocol;
-	*(Tail) = q;
-	Tail = &q->next;
+        Tail = intlistAddTail(Tail, (int) protocol);
+        if (*Head == NULL)
+            *Head = Tail;
     }
 }
 
 static void
 aclParseMethodList(void *curlist)
 {
-    intlist **Tail;
-    intlist *q = NULL;
+    intlist *Tail, **Head = curlist;
     char *t = NULL;
-    for (Tail = curlist; *Tail; Tail = &((*Tail)->next));
+    int i;
+
+    for (Tail = *Head; Tail; Tail = Tail->next);
     while ((t = strtokFile())) {
-	q = memAllocate(MEM_INTLIST);
-	q->i = (int) urlParseMethod(t, strlen(t));
-	if (q->i == METHOD_NONE)
+	i = (int) urlParseMethod(t, strlen(t));
+	if (i == METHOD_NONE)
 	    self_destruct();
-	*(Tail) = q;
-	Tail = &q->next;
+        Tail = intlistAddTail(Tail, i);
+        if (*Head == NULL)
+            *Head = Tail;
     }
 }
 

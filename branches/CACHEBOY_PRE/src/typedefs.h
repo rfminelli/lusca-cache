@@ -90,7 +90,6 @@ typedef struct _acl_access acl_access;
 typedef struct _acl_address acl_address;
 typedef struct _acl_tos acl_tos;
 typedef struct _aclCheck_t aclCheck_t;
-typedef struct _intlist intlist;
 typedef struct _intrange intrange;
 typedef struct _ushortlist ushortlist;
 typedef struct _relist relist;
