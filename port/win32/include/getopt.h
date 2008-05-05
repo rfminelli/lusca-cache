@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 1987, 1993, 1994, 1996
- *  The Regents of the University of California.  All rights reserved.
+ * Copyright (c) 1987, 1993, 1994
+ *      The Regents of the University of California.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -10,11 +10,7 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. All advertising materials mentioning features or use of this software
- *    must display the following acknowledgement:
- *  This product includes software developed by the University of
- *  California, Berkeley and its contributors.
- * 4. Neither the name of the University nor the names of its contributors
+ * 3. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
@@ -31,54 +27,23 @@
  * SUCH DAMAGE.
  */
 
-#ifndef __GETOPT_H__
-#define __GETOPT_H__
+#ifndef __GETOPT_H
+#define __GETOPT_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-extern int   opterr;      /* if error message should be printed */
-extern int   optind;      /* index into parent argv vector */
-extern int   optopt;      /* character checked for validity */
-extern int   optreset;    /* reset getopt */
-extern char *optarg;      /* argument associated with option */
+    extern int opterr;		/* if error message should be printed */
+    extern int optind;		/* index into parent argv vector */
+    extern int optopt;		/* character checked for validity */
+    extern int optreset;	/* reset getopt */
+    extern char *optarg;	/* argument associated with option */
 
-int getopt (int, char * const *, const char *);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* __GETOPT_H__ */
-
-#ifndef __UNISTD_GETOPT__
-#ifndef __GETOPT_LONG_H__
-#define __GETOPT_LONG_H__
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-struct option {
-	const char *name;
-	int  has_arg;
-	int *flag;
-	int val;
-};
-
-int getopt_long (int, char *const *, const char *, const struct option *, int *);
-#ifndef HAVE_DECL_GETOPT
-#define HAVE_DECL_GETOPT 1
-#endif
-
-#define no_argument             0
-#define required_argument       1
-#define optional_argument       2
+    int getopt(int nargc, char *const *nargv, const char *ostr);
 
 #ifdef __cplusplus
 }
-#endif
 
-#endif /* __GETOPT_LONG_H__ */
-#endif /* __UNISTD_GETOPT__ */
+#endif
+#endif
