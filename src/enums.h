@@ -591,7 +591,6 @@ typedef enum {
     MEM_16K_BUF,
     MEM_32K_BUF,
     MEM_64K_BUF,
-    MEM_DONTFREE,
     MEM_MAX
 } mem_type;
 
