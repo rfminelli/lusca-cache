@@ -1,5 +1,12 @@
 ChangeLog:
 
+-- Tagged: CACHEBOY_0.PRE5
+-- (6-May-2008)
+
+* Merge in Squid-2.HEAD changes.
+* Finish memory allocator shuffling; move buffer management into libmem/
+  and out of src/.
+
 -- Tagged: CACHEBOY_0.PRE4
 -- (30-April-2008)
 
