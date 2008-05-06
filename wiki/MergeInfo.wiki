@@ -1,0 +1,9 @@
+#summary Merge Points
+
+= Introduction =
+
+Subversion merging is annoying.
+
+= Details =
+
+25/Apr/2008: CACHEBOY_PRE: rev 12644
