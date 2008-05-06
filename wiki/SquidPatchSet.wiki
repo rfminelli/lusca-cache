@@ -45,23 +45,47 @@ The initial import included all patchsets up to 12036.
   * 12067 - SQUID_NT_2_6 - bootstrapped - *committed - rev 12641*
   * 12068 - SQUID_NT_2_6 - Revert unwanted changes - *committed - rev 12642*
   * 12069 - HEAD - net_db typo - *committed - rev 12643*
-  * 12070
-  * 12071
-  * 12072
-  * 12073
-  * 12074
-  * 12075
-  * 12076
-  * 12077
-  * 12078
-  * 12079
-  * 12080
-  * 12081
-  * 12082
-  * 12083
-  * 12084
-  * 12085
-  * 12086
-  * 12087
-  * 12088
-  * 12089
+  * 12070 - HEAD - Bug 2329: Range header ignored on HIT
+  * 12071 - SQUID_2_7 - Windows port: Return the effective system pagesize in getpagesize()
+  * 12072 - SQUID_2_7 - Windows port: Add support for the Windows machine DNS domain, and also automatically derived default domain
+  * 12073 - SQUID_2_7 - Bug 2329: Range header ignored on HIT
+  * 12074 - SQUID_2_6 - Windows port: Return the effective system pagesize in getpagesize()
+  * 12075 - SQUID_2_6 - Windows port: Add support for the Windows machine DNS domain, and also automatically derived default domain
+  * 12076 - SQUID_2_6 - Bug 2329: Range header ignored on HIT
+  * 12077 - HEAD - Documentation update preparing 2.6.STABLE20
+  * 12078 - SQUID_2_6 - Documentation update preparing 2.6.STABLE20
+  * 12079 - SQUID_2_7 - 2.6.STABLE20
+  * 12080 - HEAD - Corrected function names in debugging statements
+  * 12081 - HEAD - Corrected function names in debugging statements
+  * 12082 - SQUID_NT_2_6 - Merged changes from SQUID_2_6
+  * 12083 - SQUID_NT_2_7 - Merged changes from SQUID_2_7
+  * 12084 - HEAD - Windows port: The Window support is no more "EXPERIMENTAL" since long time ...
+  * 12085 - HEAD - Import reconfigure cachemgr action from nt Devel branch
+  * 12086 - HEAD - Removed the advertisement clause from BSD license
+  * 12087 - HEAD - Windows port: allow build of squid_radius_auth on Windows
+  * 12088 - HEAD - Windows port: clean no more needed type casts into dns code
+  * 12089 - HEAD - Windows port: add support for dirent-style functions
+  * 12090 - HEAD - Windows port: add support for getopt function
+  * 12091
+  * 12092
+  * 12093
+  * 12094
+  * 12095
+  * 12096
+  * 12097
+  * 12098
+  * 12099
+  * 12100
+  * 12101
+  * 12102
+  * 12103
+  * 12104
+  * 12105
+  * 12106
+  * 12107
+  * 12108
+  * 12109
+  * 12110
+  * 12111
+
+
