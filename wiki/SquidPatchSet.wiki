@@ -53,10 +53,10 @@ The initial import included all patchsets up to 12036.
   * 12075 - SQUID_2_6 - Windows port: Add support for the Windows machine DNS domain, and also automatically derived default domain - *committed - rev 12692*
   * 12076 - SQUID_2_6 - Bug 2329: Range header ignored on HIT - *committed - rev 12693*
   * 12077 - HEAD - Documentation update preparing 2.6.STABLE20 - *committed - rev 12694*
-  * 12078 - SQUID_2_6 - Documentation update preparing 2.6.STABLE20
-  * 12079 - SQUID_2_7 - 2.6.STABLE20
-  * 12080 - HEAD - Corrected function names in debugging statements
-  * 12081 - HEAD - Corrected function names in debugging statements
+  * 12078 - SQUID_2_6 - Documentation update preparing 2.6.STABLE20 - *committed - rev 12696*
+  * 12079 - SQUID_2_7 - 2.6.STABLE20 - *committed - rev 12697*
+  * 12080 - HEAD - Corrected function names in debugging statements - *committed - rev 12698*
+  * 12081 - HEAD - Corrected function names in debugging statements - *committed - rev 12699*
   * 12082 - SQUID_NT_2_6 - Merged changes from SQUID_2_6
   * 12083 - SQUID_NT_2_7 - Merged changes from SQUID_2_7
   * 12084 - HEAD - Windows port: The Window support is no more "EXPERIMENTAL" since long time ...
