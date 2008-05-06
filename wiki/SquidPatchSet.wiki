@@ -57,13 +57,13 @@ The initial import included all patchsets up to 12036.
   * 12079 - SQUID_2_7 - 2.6.STABLE20 - *committed - rev 12697*
   * 12080 - HEAD - Corrected function names in debugging statements - *committed - rev 12698*
   * 12081 - HEAD - Corrected function names in debugging statements - *committed - rev 12699*
-  * 12082 - SQUID_NT_2_6 - Merged changes from SQUID_2_6
-  * 12083 - SQUID_NT_2_7 - Merged changes from SQUID_2_7
-  * 12084 - HEAD - Windows port: The Window support is no more "EXPERIMENTAL" since long time ...
-  * 12085 - HEAD - Import reconfigure cachemgr action from nt Devel branch
-  * 12086 - HEAD - Removed the advertisement clause from BSD license
-  * 12087 - HEAD - Windows port: allow build of squid_radius_auth on Windows
-  * 12088 - HEAD - Windows port: clean no more needed type casts into dns code
+  * 12082 - SQUID_NT_2_6 - Merged changes from SQUID_2_6 - *committed - rev 12701*
+  * 12083 - SQUID_NT_2_7 - Merged changes from SQUID_2_7 - *committed - rev 12702*
+  * 12084 - HEAD - Windows port: The Window support is no more "EXPERIMENTAL" since long time ... - *committed - rev 12703*
+  * 12085 - HEAD - Import reconfigure cachemgr action from nt Devel branch - *committed - rev 12704*
+  * 12086 - HEAD - Removed the advertisement clause from BSD license - *committed - rev 12705*
+  * 12087 - HEAD - Windows port: allow build of squid_radius_auth on Windows - *committed - rev 12706*
+  * 12088 - HEAD - Windows port: clean no more needed type casts into dns code - *committed - rev 12707*
   * 12089 - HEAD - Windows port: add support for dirent-style functions
   * 12090 - HEAD - Windows port: add support for getopt function
   * 12091
