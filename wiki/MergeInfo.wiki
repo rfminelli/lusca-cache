@@ -6,5 +6,5 @@ Subversion merging is annoying.
 
 = Details =
 
-25/Apr/2008: CACHEBOY_PRE: rev 12644
-6/May/2008: Rev 12731: CACHEBOY_PRE: rev 12645:12728
+  * 25/Apr/2008: CACHEBOY_PRE: rev 12644
+  * 6/May/2008: Rev 12731: CACHEBOY_PRE: rev 12645:12728
