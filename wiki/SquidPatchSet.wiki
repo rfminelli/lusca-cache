@@ -64,8 +64,8 @@ The initial import included all patchsets up to 12036.
   * 12086 - HEAD - Removed the advertisement clause from BSD license - *committed - rev 12705*
   * 12087 - HEAD - Windows port: allow build of squid_radius_auth on Windows - *committed - rev 12706*
   * 12088 - HEAD - Windows port: clean no more needed type casts into dns code - *committed - rev 12707*
-  * 12089 - HEAD - Windows port: add support for dirent-style functions
-  * 12090 - HEAD - Windows port: add support for getopt function
+  * 12089 - HEAD - Windows port: add support for dirent-style functions - *committed - rev 12709*
+  * 12090 - HEAD - Windows port: add support for getopt function - *committed - rev 12710*
   * 12091
   * 12092
   * 12093
