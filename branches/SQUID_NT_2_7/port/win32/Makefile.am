@@ -29,7 +29,6 @@ EXTRA_DIST = \
 	dnsserver/dnsserver.dsp \
 	fake_auth/fake_auth.dsp \
 	include/autoconf.h \
-	include/cdefs.h \
 	include/crypt.h \
 	include/getopt.h \
 	include/dirent.h \
