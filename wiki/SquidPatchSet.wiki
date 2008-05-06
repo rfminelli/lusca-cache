@@ -45,10 +45,10 @@ The initial import included all patchsets up to 12036.
   * 12067 - SQUID_NT_2_6 - bootstrapped - *committed - rev 12641*
   * 12068 - SQUID_NT_2_6 - Revert unwanted changes - *committed - rev 12642*
   * 12069 - HEAD - net_db typo - *committed - rev 12643*
-  * 12070 - HEAD - Bug 2329: Range header ignored on HIT
-  * 12071 - SQUID_2_7 - Windows port: Return the effective system pagesize in getpagesize()
-  * 12072 - SQUID_2_7 - Windows port: Add support for the Windows machine DNS domain, and also automatically derived default domain
-  * 12073 - SQUID_2_7 - Bug 2329: Range header ignored on HIT
+  * 12070 - HEAD - Bug 2329: Range header ignored on HIT - *committed - rev 12686*
+  * 12071 - SQUID_2_7 - Windows port: Return the effective system pagesize in getpagesize() - *committed - rev 12687*
+  * 12072 - SQUID_2_7 - Windows port: Add support for the Windows machine DNS domain, and also automatically derived default domain - *committed - rev 12688*
+  * 12073 - SQUID_2_7 - Bug 2329: Range header ignored on HIT - *committed - rev 12689*
   * 12074 - SQUID_2_6 - Windows port: Return the effective system pagesize in getpagesize()
   * 12075 - SQUID_2_6 - Windows port: Add support for the Windows machine DNS domain, and also automatically derived default domain
   * 12076 - SQUID_2_6 - Bug 2329: Range header ignored on HIT
@@ -87,5 +87,3 @@ The initial import included all patchsets up to 12036.
   * 12109
   * 12110
   * 12111
-
-
