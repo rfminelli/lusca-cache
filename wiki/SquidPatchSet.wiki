@@ -49,10 +49,10 @@ The initial import included all patchsets up to 12036.
   * 12071 - SQUID_2_7 - Windows port: Return the effective system pagesize in getpagesize() - *committed - rev 12687*
   * 12072 - SQUID_2_7 - Windows port: Add support for the Windows machine DNS domain, and also automatically derived default domain - *committed - rev 12688*
   * 12073 - SQUID_2_7 - Bug 2329: Range header ignored on HIT - *committed - rev 12689*
-  * 12074 - SQUID_2_6 - Windows port: Return the effective system pagesize in getpagesize()
-  * 12075 - SQUID_2_6 - Windows port: Add support for the Windows machine DNS domain, and also automatically derived default domain
-  * 12076 - SQUID_2_6 - Bug 2329: Range header ignored on HIT
-  * 12077 - HEAD - Documentation update preparing 2.6.STABLE20
+  * 12074 - SQUID_2_6 - Windows port: Return the effective system pagesize in getpagesize() - *committed - rev 12691*
+  * 12075 - SQUID_2_6 - Windows port: Add support for the Windows machine DNS domain, and also automatically derived default domain - *committed - rev 12692*
+  * 12076 - SQUID_2_6 - Bug 2329: Range header ignored on HIT - *committed - rev 12693*
+  * 12077 - HEAD - Documentation update preparing 2.6.STABLE20 - *committed - rev 12694*
   * 12078 - SQUID_2_6 - Documentation update preparing 2.6.STABLE20
   * 12079 - SQUID_2_7 - 2.6.STABLE20
   * 12080 - HEAD - Corrected function names in debugging statements
