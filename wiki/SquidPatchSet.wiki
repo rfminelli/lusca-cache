@@ -66,21 +66,21 @@ The initial import included all patchsets up to 12036.
   * 12088 - HEAD - Windows port: clean no more needed type casts into dns code - *committed - rev 12707*
   * 12089 - HEAD - Windows port: add support for dirent-style functions - *committed - rev 12709*
   * 12090 - HEAD - Windows port: add support for getopt function - *committed - rev 12710*
-  * 12091 - HEAD - bootstrapped
-  * 12092 - HEAD - Bug #2306: Segfault on mgr:active_requests after delay pool statistics changes
-  * 12093 - HEAD - Bug #219: Reassign delay pools after reconfigure
-  * 12094 - HEAD - Make --with-large-files try to build 64-bit if possible
-  * 12095 - HEAD - bootstrapped
-  * 12096 - HEAD - Windows port: clean last remains of no more needed type casts into dns code
-  * 12097 - HEAD - BUg #2328: Slow filedescriptor leak when update_headers on
-  * 12098 - SQUID_2_7 - BUg #2328: Slow filedescriptor leak when update_headers on
-  * 12099 - SQUID_2_7 - Corrected function names in debugging statements
-  * 12100 - SQUID_2_7 - Windows port updates
-  * 12101 - SQUID_2_7 - This patch add the reconfigure restricted action to Cache Manager.
-  * 12102 - SQUID_2_7 - Removed advertisement clause from BSD licensed sources
-  * 12103 - SQUID_2_7 - Make --with-large-files try to build 64-bit if possible
-  * 12104 - SQUID_2_7 - bootstrapped
-  * 12105 - HEAD - Fix bug #2317: assertion failed: store.c:888: "size + state->buf_offset <= state->buf_size"
+  * 12091 - HEAD - bootstrapped - *committed - rev 12713*
+  * 12092 - HEAD - Bug #2306: Segfault on mgr:active_requests after delay pool statistics changes - *committed - rev 12714*
+  * 12093 - HEAD - Bug #219: Reassign delay pools after reconfigure - *committed - rev 12715*
+  * 12094 - HEAD - Make --with-large-files try to build 64-bit if possible - *committed - rev 12716*
+  * 12095 - HEAD - bootstrapped - *committed - rev 12717*
+  * 12096 - HEAD - Windows port: clean last remains of no more needed type casts into dns code - *committed - rev 12718*
+  * 12097 - HEAD - BUg #2328: Slow filedescriptor leak when update_headers on - *committed - rev 12719*
+  * 12098 - SQUID_2_7 - BUg #2328: Slow filedescriptor leak when update_headers on - *committed - 12720*
+  * 12099 - SQUID_2_7 - Corrected function names in debugging statements - *committed - 12721*
+  * 12100 - SQUID_2_7 - Windows port updates - *committed - 12723*
+  * 12101 - SQUID_2_7 - This patch add the reconfigure restricted action to Cache Manager. - *committed - 12724*
+  * 12102 - SQUID_2_7 - Removed advertisement clause from BSD licensed sources - *committed - 12725*
+  * 12103 - SQUID_2_7 - Make --with-large-files try to build 64-bit if possible - *committed - 12726*
+  * 12104 - SQUID_2_7 - bootstrapped - *committed - 12727*
+  * 12105 - HEAD - Fix bug #2317: assertion failed: store.c:888: "size + state->buf_offset <= state->buf_size" - *committed - 12728*
   * 12106 - SQUID_NT_2_7 - Removed files superseeded by new HEAD sources
   * 12107 - SQUID_NT_2_7 - Merged changes from SQUID_2_7
   * 12108 - SQUID_NT_2_7 - Updated include file for new dirent.c and getopt.c
