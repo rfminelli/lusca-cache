@@ -63,6 +63,7 @@ static void cachemgrStateFree(cachemgrStateData * mgr);
 static char *cachemgrPasswdGet(cachemgr_passwd *, const char *);
 static const char *cachemgrActionProtection(const action_table * at);
 static OBJH cachemgrShutdown;
+static OBJH cachemgrReconfigure;
 static OBJH cachemgrMenu;
 static OBJH cachemgrOfflineToggle;
 
@@ -199,7 +200,7 @@ cachemgrStart(int fd, request_t * request, StoreEntry * entry)
     cachemgrStateData *mgr = NULL;
     ErrorState *err = NULL;
     action_table *a;
-    debug(16, 3) ("objectcacheStart: '%s'\n", storeUrl(entry));
+    debug(16, 3) ("cachemgrStart: '%s'\n", storeUrl(entry));
     if ((mgr = cachemgrParseUrl(storeUrl(entry))) == NULL) {
 	err = errorCon(ERR_INVALID_URL, HTTP_NOT_FOUND, request);
 	err->url = xstrdup(storeUrl(entry));
@@ -272,6 +273,14 @@ cachemgrShutdown(StoreEntry * entryunused)
 }
 
 static void
+cachemgrReconfigure(StoreEntry * sentry)
+{
+    debug(16, 0) ("Reconfigure by command.\n");
+    storeAppendPrintf(sentry, "Reconfiguring Squid Process ....");
+    reconfigure(SIGHUP);
+}
+
+static void
 cachemgrOfflineToggle(StoreEntry * sentry)
 {
     Config.onoff.offline = !Config.onoff.offline;
@@ -331,6 +340,9 @@ cachemgrInit(void)
     cachemgrRegister("shutdown",
 	"Shut Down the Squid Process",
 	cachemgrShutdown, 1, 1);
+    cachemgrRegister("reconfigure",
+	"Reconfigure the Squid Process",
+	cachemgrReconfigure, 1, 1);
     cachemgrRegister("offline_toggle",
 	"Toggle offline_mode setting",
 	cachemgrOfflineToggle, 1, 1);

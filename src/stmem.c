@@ -103,7 +103,7 @@ stmemAppend(mem_hdr * mem, const char *data, int len)
     mem_node *p;
     int avail_len;
     int len_to_copy;
-    debug(19, 6) ("memAppend: len %d\n", len);
+    debug(19, 6) ("stmemAppend: len %d\n", len);
     /* Does the last block still contain empty space? 
      * If so, fill out the block before dropping into the
      * allocation loop */
@@ -159,14 +159,14 @@ stmemRef(const mem_hdr * mem, squid_off_t offset, mem_node_ref * r)
     mem_node *p = mem->head;
     volatile squid_off_t t_off = mem->origin_offset;
 
-    debug(19, 3) ("memRef: offset %" PRINTF_OFF_T "; initial offset in memory %d\n", offset, (int) mem->origin_offset);
+    debug(19, 3) ("stmemRef: offset %" PRINTF_OFF_T "; initial offset in memory %d\n", offset, (int) mem->origin_offset);
     if (p == NULL)
 	return 0;
     /* Seek our way into store */
     while ((t_off + p->len) <= offset) {
 	t_off += p->len;
 	if (!p->next) {
-	    debug(19, 1) ("memRef: p->next == NULL\n");
+	    debug(19, 1) ("stmemRef: p->next == NULL\n");
 	    return 0;
 	}
 	assert(p->next);
@@ -180,7 +180,7 @@ stmemRef(const mem_hdr * mem, squid_off_t offset, mem_node_ref * r)
     assert(r->offset >= 0);
     assert(r->offset >= 0);
     assert(p->len + t_off - offset > 0);
-    debug(19, 3) ("memRef: returning node %p, offset %d, %d bytes\n", p, (int) r->offset, (int) (p->len + t_off - offset));
+    debug(19, 3) ("stmemRef: returning node %p, offset %d, %d bytes\n", p, (int) r->offset, (int) (p->len + t_off - offset));
     return p->len + t_off - offset;
 }
 
@@ -223,7 +223,7 @@ stmemCopy(const mem_hdr * mem, squid_off_t offset, char *buf, size_t size)
     char *ptr_to_buf = NULL;
     int bytes_from_this_packet = 0;
     int bytes_into_this_packet = 0;
-    debug(19, 6) ("memCopy: offset %" PRINTF_OFF_T ": size %d\n", offset, (int) size);
+    debug(19, 6) ("stmemCopy: offset %" PRINTF_OFF_T ": size %d\n", offset, (int) size);
     if (p == NULL)
 	return 0;
     assert(size > 0);
@@ -231,7 +231,7 @@ stmemCopy(const mem_hdr * mem, squid_off_t offset, char *buf, size_t size)
     while ((t_off + p->len) < offset) {
 	t_off += p->len;
 	if (!p->next) {
-	    debug(19, 1) ("memCopy: p->next == NULL\n");
+	    debug(19, 1) ("stmemCopy: p->next == NULL\n");
 	    return 0;
 	}
 	assert(p->next);
