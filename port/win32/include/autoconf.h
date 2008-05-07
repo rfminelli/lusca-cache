@@ -93,7 +93,7 @@
 /* #undef HAVE_DB_185_H */
 
 /* Define to 1 if you have the <db.h> header file. */
-/* #undef HAVE_DB_H */
+#define HAVE_DB_H 1
 
 /* Define to 1 if you have the <dirent.h> header file, and it defines `DIR'.
    */

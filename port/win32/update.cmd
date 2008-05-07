@@ -28,6 +28,7 @@ copy %0\..\ntlm_win32_auth\%1\ntlm_win32_auth.exe %2\libexec\mswin_ntlm_auth.exe
 copy %0\..\negotiate_auth\%1\negotiate_auth.exe %2\libexec\mswin_negotiate_auth.exe
 copy %0\..\ldap_group\%1\ldap_group.exe %2\libexec\squid_ldap_group.exe
 copy %0\..\win32_check_group\%1\win32_check_group.exe %2\libexec\mswin_check_lm_group.exe
+copy %0\..\squid_session\%1\squid_session.exe %2\libexec\squid_session.exe
 copy %0\..\cachemgr\%1\cachemgr.exe %2\libexec\cachemgr.cgi
 
 copy %0\..\..\..\src\squid.conf.default %2\etc\squid.conf.default
@@ -54,6 +55,7 @@ type %0\..\..\..\helpers\basic_auth\NCSA\ncsa_auth.8 | man2htm2 > %2\docs\ncsa_a
 type %0\..\..\..\helpers\basic_auth\LDAP\squid_ldap_auth.8 | man2htm2 > %2\docs\squid_ldap_auth.html
 type %0\..\..\..\helpers\basic_auth\squid_radius_auth\squid_radius_auth.8 | man2htm2 > %2\docs\squid_radius_auth.html
 type %0\..\..\..\helpers\external_acl\LDAP_group\squid_ldap_group.8 | man2htm2 > %2\docs\squid_ldap_group.html
+type %0\..\..\..\helpers\external_acl\session\squid_session.8 | man2htm2 > %2\docs\squid_session.html
 type %0\..\..\..\doc\squid.8 | man2htm2 > %2\docs\squid.html
 type %0\..\..\..\doc\cachemgr.cgi.8 | man2htm2 > %2\docs\cachemgr.cgi.html
 
