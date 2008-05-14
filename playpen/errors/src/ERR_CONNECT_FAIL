@@ -38,9 +38,10 @@
         </div>
       </div>
 
-      <div id="footer">
-       <p>Your cache administrator is <A HREF="mailto:%w">%w</A>.</p>
-      </div>
+      <p>
+        <div id="footer">Your cache administrator is <A HREF="mailto:%w">%w</A>.</div>
+        <div id="signature">Generated %T by %h (%s).</div>
+      </p>
 
     </div>
   </body>
