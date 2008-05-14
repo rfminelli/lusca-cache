@@ -1,0 +1,48 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+  <head>
+    @STYLE@
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+    <title>ERROR: FTP PUT/upload failed</title>
+  </head>
+
+  <body>
+    <div id="container">
+      <div id="header">
+        <H1>ERROR</H1>
+        <H2>FTP PUT/upload failed</H2>
+      </div>
+
+      <div id="body">
+        <div id="what">
+          <p>While trying to PUT the following URL: <A HREF="%U">%U</A></p>
+        </div>
+        <div id="errortitle">
+          <p>The following error was encountered:</p>
+        </div>
+        <div id="errorwhat">
+          <p>FTP PUT/upload failed.</p>
+        </div>
+        <div id="errordescription">
+          <p>Squid sent the following FTP command:</p>
+          <PRE>
+            %f
+          </PRE>
+          <p>and then received this reply:</p>
+          <PRE>
+            %F
+          </PRE>
+          <P>This means that:</p>
+          <PRE>
+            Check path, permissions, diskspace and try again.
+          </PRE>
+        </div>
+      </div>
+
+      <div id="footer">
+       <p>Your cache administrator is <A HREF="mailto:%w">%w</A>.</p>
+      </div>
+
+    </div>
+  </body>
+</html>
