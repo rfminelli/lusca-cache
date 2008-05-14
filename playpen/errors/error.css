@@ -62,12 +62,29 @@ h4
 	padding: 10px 40px 10px 40px;
 }
 
+#headerok
+{
+	background-color: #006600;
+	color: #fff;
+	padding: 10px 40px 10px 40px;
+}
+
 #header h1
 {
 	font-size: 30px;
 }
 
 #header h2
+{
+	font-size: 14px;
+}
+
+#headerok h1
+{
+	font-size: 30px;
+}
+
+#headerok h2
 {
 	font-size: 14px;
 }
