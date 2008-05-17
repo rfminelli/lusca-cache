@@ -81,15 +81,15 @@ The initial import included all patchsets up to 12036.
   * 12103 - SQUID_2_7 - Make --with-large-files try to build 64-bit if possible - *committed - 12726*
   * 12104 - SQUID_2_7 - bootstrapped - *committed - 12727*
   * 12105 - HEAD - Fix bug #2317: assertion failed: store.c:888: "size + state->buf_offset <= state->buf_size" - *committed - 12728*
-  * 12106 - SQUID_NT_2_7 - Removed files superseeded by new HEAD sources
-  * 12107 - SQUID_NT_2_7 - Merged changes from SQUID_2_7
-  * 12108 - SQUID_NT_2_7 - Updated include file for new dirent.c and getopt.c
-  * 12109 - SQUID_NT_2_7 - Added squid_radius_auth helper to Visual Studio Project
-  * 12110 - SQUID_NT_2_7 - Updated the Visual Studio Project for dirent.c and getopt.c changes
-  * 12111 - SQUID_NT_2_7 - Bootstrapped
-  * 12112 - SQUID_NT_2_7 - Remove no more needed include file
-  * 12113 - HEAD - Windows port: allow build of squid_session on Windows
-  * 12114 - SQUID_2_7 - Windows port: allow build of squid_session on Windows
-  * 12115 - SQUID_NT_2_7 - Merged changes from SQUID_2_7
-  * 12116 - SQUID_NT_2_7 - Added squid_session to Visual Studio Project
-  * 12117 - HEAD - Bug #2335: fix error return in store_client.c leading to NULL dereference
+  * 12106 - SQUID_NT_2_7 - Removed files superseeded by new HEAD sources - *committed - 12746*
+  * 12107 - SQUID_NT_2_7 - Merged changes from SQUID_2_7 - *committed - 12748*
+  * 12108 - SQUID_NT_2_7 - Updated include file for new dirent.c and getopt.c - *committed - 12749*
+  * 12109 - SQUID_NT_2_7 - Added squid_radius_auth helper to Visual Studio Project - *committed - 12750*
+  * 12110 - SQUID_NT_2_7 - Updated the Visual Studio Project for dirent.c and getopt.c changes - *committed - 12751*
+  * 12111 - SQUID_NT_2_7 - Bootstrapped - *committed - 12752*
+  * 12112 - SQUID_NT_2_7 - Remove no more needed include file - *committed - 12753*
+  * 12113 - HEAD - Windows port: allow build of squid_session on Windows - *committed - 12754*
+  * 12114 - SQUID_2_7 - Windows port: allow build of squid_session on Windows - *committed - 12755*
+  * 12115 - SQUID_NT_2_7 - Merged changes from SQUID_2_7 - *committed - 12756*
+  * 12116 - SQUID_NT_2_7 - Added squid_session to Visual Studio Project - *committed - 12757*
+  * 12117 - HEAD - Bug #2335: fix error return in store_client.c leading to NULL dereference - *committed - 12758*
