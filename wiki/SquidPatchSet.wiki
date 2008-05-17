@@ -93,3 +93,4 @@ The initial import included all patchsets up to 12036.
   * 12115 - SQUID_NT_2_7 - Merged changes from SQUID_2_7 - *committed - 12756*
   * 12116 - SQUID_NT_2_7 - Added squid_session to Visual Studio Project - *committed - 12757*
   * 12117 - HEAD - Bug #2335: fix error return in store_client.c leading to NULL dereference - *committed - 12758*
+  * 12118 - HEAD - Put XMIN back for the case that sz > -1; we still dont' want to send > copy_size data over! - *committed - 12764*
