@@ -20,3 +20,14 @@ Notes!
 
   * Squid/Cacheboy -can- serve static content (as icons!) but its a terrible hack. The initial error pages will need the CSS included in-line rather than referencing an external CSS document. This should be done anyway as serving error pages can happen during "errors" and it'd be unfortunate if something required on a error page generated an error..
 
+== Remove the stdio calls ==
+
+I'd start by looking at the calls to inet_ntoa(), and thinking about how to remove them except where the IP addresses are being *displayed*. The inet_ntoa0 strings appear in a number of hash table key building places ; the hash code doesn't take a length parameter and expects a NUL terminated value.
+
+So I'd do this:
+
+  * Fix the hash table code to pass a ptr/key, not just ptr
+  * and make sure it works with non-NUL terminated data -and- data with NULs inline
+  * (Which will require significant codebase modifications (but not intrusive changes) all over the place!)
+  * Then, when this is done, change a few places which use inet_ntoa() to generate a key - starting with clientdb and persistent connections
+  * Rebenchmark!
