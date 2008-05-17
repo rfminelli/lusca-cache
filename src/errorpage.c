@@ -90,7 +90,7 @@ static const char *errorFindHardText(err_type type);
 static ErrorDynamicPageInfo *errorDynamicPageInfoCreate(int id, const char *page_name);
 static void errorDynamicPageInfoDestroy(ErrorDynamicPageInfo * info);
 static MemBuf errorBuildContent(ErrorState * err);
-static const char *errorConvert(char token, ErrorState * err);
+const char *errorConvert(char token, ErrorState * err);
 static CWCB errorSendComplete;
 
 /*
@@ -445,7 +445,7 @@ errorStateFree(ErrorState * err)
  * z - dns server error message                 x
  */
 
-static const char *
+const char *
 errorConvert(char token, ErrorState * err)
 {
     request_t *r = err->request;
