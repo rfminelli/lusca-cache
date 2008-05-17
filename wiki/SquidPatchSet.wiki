@@ -87,3 +87,9 @@ The initial import included all patchsets up to 12036.
   * 12109 - SQUID_NT_2_7 - Added squid_radius_auth helper to Visual Studio Project
   * 12110 - SQUID_NT_2_7 - Updated the Visual Studio Project for dirent.c and getopt.c changes
   * 12111 - SQUID_NT_2_7 - Bootstrapped
+  * 12112 - SQUID_NT_2_7 - Remove no more needed include file
+  * 12113 - HEAD - Windows port: allow build of squid_session on Windows
+  * 12114 - SQUID_2_7 - Windows port: allow build of squid_session on Windows
+  * 12115 - SQUID_NT_2_7 - Merged changes from SQUID_2_7
+  * 12116 - SQUID_NT_2_7 - Added squid_session to Visual Studio Project
+  * 12117 - HEAD - Bug #2335: fix error return in store_client.c leading to NULL dereference
