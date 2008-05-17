@@ -2,20 +2,20 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
   <head>
     @STYLE@
-    <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+    <meta http-equiv="Content-Type" content="text/html;charset=iso-8859-1" />
     <title>ERROR: FTP PUT/upload failed</title>
   </head>
 
   <body>
     <div id="container">
       <div id="header">
-        <H1>ERROR</H1>
-        <H2>FTP PUT/upload failed</H2>
+        <h1>ERROR</h1>
+        <h2>FTP PUT/upload failed</h2>
       </div>
 
       <div id="body">
         <div id="what">
-          <p>While trying to PUT the following URL: <A HREF="%U">%U</A></p>
+          <p>While trying to PUT the following URL: <a href="%U">%U</a></p>
         </div>
         <div id="errortitle">
           <p>The following error was encountered:</p>
@@ -40,7 +40,7 @@
       </div>
 
       <p>
-        <div id="footer">Your cache administrator is <A HREF="mailto:%w">%w</A>.</div>
+        <div id="footer">Your cache administrator is <a href="mailto:%w">%w</a>.</div>
         <div id="signature">Generated %T by %h (%s).</div>
       </p>
 

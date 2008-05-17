@@ -2,20 +2,20 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
   <head>
     @STYLE@
-    <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+    <meta http-equiv="Content-Type" content="text/html;charset=iso-8859-1" />
     <title>ERROR: The requested URL could not be retrieved</title>
   </head>
 
   <body>
     <div id="container">
       <div id="header">
-        <H1>ERROR</H1>
-        <H2>The requested URL could not be retrieved</H2>
+        <h1>ERROR</h1>
+        <h2>The requested URL could not be retrieved</h2>
       </div>
 
       <div id="body">
         <div id="what">
-          <p>While trying to retrieve the URL: <A HREF="%U">%U</A></p>
+          <p>While trying to retrieve the URL: <a href="%U">%U</a></p>
         </div>
         <div id="errortitle">
           <p>The following error was encountered:</p>
@@ -35,7 +35,7 @@
       </div>
 
       <p>
-        <div id="footer">Your cache administrator is <A HREF="mailto:%w">%w</A>.</div>
+        <div id="footer">Your cache administrator is <a href="mailto:%w">%w</a>.</div>
         <div id="signature">Generated %T by %h (%s).</div>
       </p>
 
