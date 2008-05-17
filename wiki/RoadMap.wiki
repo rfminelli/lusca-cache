@@ -34,14 +34,14 @@ Unless required, no large-scale changes will be made to the codebase until it ha
   * Break out some code into seperate library modules, including documentation and some unit testing *(In Progress)*
    * memory management *(Done)*
    * debugging *(Done)*
-   * buffers
-   * strings
+   * buffers *(Done)*
+   * strings *(Done)*
    * http request parsing
    * http reply construction
    * communication
   * Restructure the data paths:
     * Store -> Client buffer referencing *(Complete)*
-  * Error page improvements - more professional-looking error pages and more descriptive/helpful messages.
+  * Error page improvements - more professional-looking error pages and more descriptive/helpful messages. *(Done, not merged into tree)*
 
 === Cacheboy 1.0 (was Squid-2.8) ===
 
