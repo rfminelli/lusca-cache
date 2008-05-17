@@ -1,5 +1,11 @@
 ChangeLog:
 
+-- Tagged: CACHEBOY_0.PRE6.
+-- (17-May-2008)
+
+* Fixed a crash introduced by store_client tidyups in Squid-2.HEAD.
+  (Fixed in Squid-2.HEAD; ported to Cacheboy.)
+
 -- Tagged: CACHEBOY_0.PRE5
 -- (6-May-2008)
 
