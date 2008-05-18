@@ -5,6 +5,8 @@ ChangeLog:
 
 * Fixed a crash introduced by store_client tidyups in Squid-2.HEAD.
   (Fixed in Squid-2.HEAD; ported to Cacheboy.)
+* Added new English error pages - NewEnglish - which include
+  much better CSS and layout.
 
 -- Tagged: CACHEBOY_0.PRE5
 -- (6-May-2008)
