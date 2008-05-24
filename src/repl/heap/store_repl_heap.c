@@ -173,7 +173,7 @@ heap_walkInit(RemovalPolicy * policy)
 
 typedef struct _HeapPurgeData HeapPurgeData;
 struct _HeapPurgeData {
-    link_list *locked_entries;
+    fifo_list locked_entries;
     heap_key min_age;
 };
 
@@ -192,7 +192,7 @@ heap_purgeNext(RemovalPurgeWalker * walker)
     entry = heap_extractmin(heap->heap);
     if (storeEntryLocked(entry)) {
 	storeLockObject(entry);
-	linklistPush(&heap_walker->locked_entries, entry);
+	fifo_queue(&heap_walker->locked_entries, entry);
 	goto try_again;
     }
     heap_walker->min_age = age;
@@ -218,7 +218,7 @@ heap_purgeDone(RemovalPurgeWalker * walker)
     /*
      * Reinsert the locked entries
      */
-    while ((entry = linklistShift(&heap_walker->locked_entries))) {
+    while ((entry = fifo_dequeue(&heap_walker->locked_entries))) {
 	heap_node *node = heap_insert(heap->heap, entry);
 	SET_POLICY_NODE(entry, node);
 	storeUnlockObject(entry);
@@ -236,8 +236,8 @@ heap_purgeInit(RemovalPolicy * policy, int max_scan)
     heap->nwalkers += 1;
     walker = cbdataAlloc(RemovalPurgeWalker);
     heap_walk = xcalloc(1, sizeof(*heap_walk));
+    fifo_init(&heap_walk->locked_entries);
     heap_walk->min_age = 0.0;
-    heap_walk->locked_entries = NULL;
     walker->_policy = policy;
     walker->_data = heap_walk;
     walker->max_scan = max_scan;

@@ -59,6 +59,8 @@ static OBJH fwdStats;
 static STABH fwdAbort;
 static peer *fwdStateServerPeer(FwdState *);
 
+MemPool * pool_fwd_server = NULL;
+
 #define MAX_FWD_STATS_IDX 9
 static int FwdReplyCodes[MAX_FWD_STATS_IDX + 1][HTTP_INVALID_HEADER + 1];
 
@@ -82,7 +84,7 @@ fwdServerFree(FwdServer * fs)
 {
     if (fs->peer)
 	cbdataUnlock(fs->peer);
-    memFree(fs, MEM_FWD_SERVER);
+    memPoolFree(pool_fwd_server, fs);
 }
 
 static void
@@ -1143,6 +1145,16 @@ fwdComplete(FwdState * fwdState)
 	if (fwdState->server_fd < 0)
 	    fwdStateFree(fwdState);
     }
+}
+
+void
+fwdInitMem(void)
+{
+    /*
+     * Although we (currently) create FwdServers's in peer_select.c, the bulk of
+     * the manipulation logic is here!
+     */
+    pool_fwd_server = memPoolCreate("FwdServer", sizeof(FwdServer));
 }
 
 void
