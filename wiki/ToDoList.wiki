@@ -14,8 +14,8 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
    * gb_t *done*
    * kb_t - *done*
    * mem *done*
-    * Move initialisation of types init'ed in mem.c out into component modules *(Done)*
-    * Convert the legacy mem.c types into locally-scoped MemPool types, reducing the mem.c stuff to buffers only *(done)*
+    * Move initialisation of types init'ed in mem.c out into component modules *done*
+    * Convert the legacy mem.c types into locally-scoped MemPool types, reducing the mem.c stuff to buffers only *done*
    * mempool *done*
    * memstr *done*
    * cbdata
@@ -23,8 +23,8 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
    * MemBuf
 
   * Next - error pages
-    * write some simple sed one-liners to take a CSS + template file and generate a static error page
-    * Convert the English directory to use this - ignore the other languages for now!
+    * write some simple sed one-liners to take a CSS + template file and generate a static error page *done*
+    * Convert the English directory to use this - ignore the other languages for now! *done*
 
   * Next phase - improving the communication code
     * Bring over a very naive reference-counted buffer type
@@ -40,9 +40,9 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
 
 = Additions for Cacheboy-1.0 =
 
-  * Solaris Event Ports - shouldn't be difficult; can almost merge /dev/poll + kqueue support to get network-only IO ports implemented (and ignore trying to use AIO for now!) - *(Done)*
-  * Nothing else - get the codebase out there and stable!
-  * Error pages, perhaps?
+  * Solaris Event Ports - shouldn't be difficult; can almost merge /dev/poll + kqueue support to get network-only IO ports implemented (and ignore trying to use AIO for now!) - *done*
+  * Nothing else - get the codebase out there and stable! - *done*
+  * Error pages, perhaps? - *done, for english*
 
 = Additions for Cacheboy-1.1 =
 
