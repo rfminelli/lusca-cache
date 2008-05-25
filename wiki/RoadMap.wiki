@@ -41,7 +41,7 @@ Unless required, no large-scale changes will be made to the codebase until it ha
    * communication
   * Restructure the data paths:
     * Store -> Client buffer referencing *(Complete)*
-  * Error page improvements - more professional-looking error pages and more descriptive/helpful messages. *(Done, not merged into tree)*
+  * Error page improvements - more professional-looking error pages and more descriptive/helpful messages. *(Complete for English - see "EnglishNew" pages)*
 
 === Cacheboy 1.0 (was Squid-2.8) ===
 
