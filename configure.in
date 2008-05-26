@@ -1585,10 +1585,17 @@ AC_PATH_PROG(LN, ln, cp)
 AC_PATH_PROG(PERL, perl, none)
 dnl automake handles this AC_PATH_PROG(MAKEDEPEND, makedepend, $TRUE)
 AC_PATH_PROG(AR, ar, $FALSE)
+AC_CHECK_PROG(uudecode, uudecode$EXEEXT, yes)
 
 if test "$ac_cv_path_PERL" = "none"; then
 	echo "Perl is required to compile Squid"
 	echo "Please install Perl and then re-run configure"
+	exit 1
+fi
+
+if test "$ac_cv_prog_uudecode" != "yes"; then
+	echo "uudecode is required to compile Squid"
+	echo "Please install uudecode and then re-run configure"
 	exit 1
 fi
 
