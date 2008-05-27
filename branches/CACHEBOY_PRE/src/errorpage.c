@@ -255,6 +255,7 @@ errorPageName(int pageId)
     return "ERR_UNKNOWN";	/* should not happen */
 }
 
+CBDATA_TYPE(ErrorState);
 /*
  * Function:  errorCon
  *
@@ -264,6 +265,7 @@ ErrorState *
 errorCon(err_type type, http_status status, request_t * request)
 {
     ErrorState *err;
+    CBDATA_INIT_TYPE(ErrorState);
     err = cbdataAlloc(ErrorState);
     err->page_id = type;	/* has to be reset manually if needed */
     err->type = type;

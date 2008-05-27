@@ -1643,11 +1643,15 @@ GetUdpService(void)
     return GetService("udp");
 }
 
+CBDATA_TYPE(peer);
+
 static void
 parse_peer(peer ** head)
 {
     char *token = NULL;
     peer *p;
+    CBDATA_INIT_TYPE(peer);
+    CBDATA_INIT_TYPE_FREECB(peer, peerDestroy);
     p = cbdataAlloc(peer);
     p->http_port = CACHE_HTTP_PORT;
     p->icp.port = CACHE_ICP_PORT;

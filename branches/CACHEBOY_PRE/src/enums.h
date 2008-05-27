@@ -666,15 +666,8 @@ typedef enum {
     CBDATA_UNDEF = 0,
     CBDATA_acl_access,
     CBDATA_aclCheck_t,
-    CBDATA_clientHttpRequest,
-    CBDATA_ConnStateData,
-    CBDATA_ErrorState,
-    CBDATA_FwdState,
     CBDATA_generic_cbdata,
-    CBDATA_HttpStateData,
-    CBDATA_peer,
     CBDATA_ps_state,
-    CBDATA_store_client,
     CBDATA_FIRST_CUSTOM_TYPE = 1000
 } cbdata_type;
 

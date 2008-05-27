@@ -870,6 +870,7 @@ fwdReforward(FwdState * fwdState)
 
 /* PUBLIC FUNCTIONS */
 
+CBDATA_TYPE(FwdState);
 void
 fwdServersFree(FwdServer ** FS)
 {
@@ -890,6 +891,7 @@ fwdStartPeer(peer * p, StoreEntry * e, request_t * r)
 #if URL_CHECKSUM_DEBUG
     assert(e->mem_obj->chksum == url_checksum(e->mem_obj->url));
 #endif
+    CBDATA_INIT_TYPE(FwdState);
     fwdState = cbdataAlloc(FwdState);
     fwdState->entry = e;
     fwdState->client_fd = -1;
