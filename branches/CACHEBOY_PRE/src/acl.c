@@ -354,7 +354,6 @@ static void
 aclParseIntlist(void *curlist)
 {
     intlist *Tail, **Head = curlist;
-    intlist *q = NULL;
     char *t = NULL;
     for (Tail = *Head; Tail; Tail = Tail->next);
     while ((t = strtokFile())) {
