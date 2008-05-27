@@ -57,6 +57,8 @@ static void StatefulEnqueue(statefulhelper * hlp, helper_stateful_request * r);
 static MemPool * pool_helper_req = NULL;
 static MemPool * pool_helper_stateful_req = NULL;
 
+CBDATA_TYPE(helper_server);
+
 void
 helperInitMem(void)
 {
@@ -114,6 +116,7 @@ helperOpenServers(helper * hlp)
 	}
 	hlp->n_running++;
 	hlp->n_active++;
+	CBDATA_INIT_TYPE(helper_server);
 	srv = cbdataAlloc(helper_server);
 	srv->hIpc = hIpc;
 	srv->pid = pid;
@@ -146,6 +149,8 @@ helperOpenServers(helper * hlp)
     safe_free(procname);
     helperKickQueue(hlp);
 }
+
+CBDATA_TYPE(helper_stateful_server);
 
 void
 helperStatefulOpenServers(statefulhelper * hlp)
@@ -197,6 +202,7 @@ helperStatefulOpenServers(statefulhelper * hlp)
 	}
 	hlp->n_running++;
 	hlp->n_active++;
+	CBDATA_INIT_TYPE(helper_stateful_server);
 	srv = cbdataAlloc(helper_stateful_server);
 	srv->hIpc = hIpc;
 	srv->pid = pid;
@@ -576,10 +582,14 @@ helperStatefulShutdown(statefulhelper * hlp)
 }
 
 
+CBDATA_TYPE(helper);
+CBDATA_TYPE(statefulhelper);
+
 helper *
 helperCreate(const char *name)
 {
     helper *hlp;
+    CBDATA_INIT_TYPE(helper_server);
     hlp = cbdataAlloc(helper);
     hlp->id_name = name;
     return hlp;
@@ -589,6 +599,7 @@ statefulhelper *
 helperStatefulCreate(const char *name)
 {
     statefulhelper *hlp;
+    CBDATA_INIT_TYPE(statefulhelper);
     hlp = cbdataAlloc(statefulhelper);
     hlp->id_name = name;
     return hlp;
