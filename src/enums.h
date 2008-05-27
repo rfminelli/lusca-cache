@@ -674,9 +674,6 @@ typedef enum {
     CBDATA_HttpStateData,
     CBDATA_peer,
     CBDATA_ps_state,
-    CBDATA_RemovalPolicy,
-    CBDATA_RemovalPolicyWalker,
-    CBDATA_RemovalPurgeWalker,
     CBDATA_store_client,
     CBDATA_FIRST_CUSTOM_TYPE = 1000
 } cbdata_type;

@@ -546,6 +546,9 @@ extern MemPool * pool_memobject;
 extern MemPool * pool_swap_tlv;
 extern MemPool * pool_swap_log_data;
    
+CBDATA_GLOBAL_TYPE(RemovalPolicy);
+CBDATA_GLOBAL_TYPE(RemovalPolicyWalker);
+CBDATA_GLOBAL_TYPE(RemovalPurgeWalker);
 
 
 #endif /* SQUID_H */
