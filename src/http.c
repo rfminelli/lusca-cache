@@ -1461,6 +1461,8 @@ httpSendRequest(HttpStateData * httpState)
     comm_write_mbuf(fd, mb, sendHeaderDone, httpState);
 }
 
+CBDATA_TYPE(HttpStateData);
+
 void
 httpStart(FwdState * fwd)
 {
@@ -1471,6 +1473,7 @@ httpStart(FwdState * fwd)
     debug(11, 3) ("httpStart: \"%s %s\"\n",
 	RequestMethods[orig_req->method].str,
 	storeUrl(fwd->entry));
+    CBDATA_INIT_TYPE(HttpStateData);
     httpState = cbdataAlloc(HttpStateData);
     storeLockObject(fwd->entry);
     httpState->fwd = fwd;

@@ -169,18 +169,8 @@ cbdataInit(void)
 #define CREATE_CBDATA_FREE(type, free_func) cbdataInitType(CBDATA_##type, #type, sizeof(type), free_func)
     CREATE_CBDATA(acl_access);
     CREATE_CBDATA(aclCheck_t);
-    CREATE_CBDATA(clientHttpRequest);
-    CREATE_CBDATA(ConnStateData);
-    CREATE_CBDATA(ErrorState);
-    CREATE_CBDATA(FwdState);
     CREATE_CBDATA(generic_cbdata);
-    CREATE_CBDATA(HttpStateData);
-    CREATE_CBDATA_FREE(peer, peerDestroy);
     CREATE_CBDATA(ps_state);
-    CREATE_CBDATA(RemovalPolicy);
-    CREATE_CBDATA(RemovalPolicyWalker);
-    CREATE_CBDATA(RemovalPurgeWalker);
-    CREATE_CBDATA(store_client);
 #if HASHED_CBDATA
     cbdata_pool = memPoolCreate("cbdata", sizeof(cbdata));
     cbdata_htable = hash_create(cbdata_cmp, 1 << 12, cbdata_hash);

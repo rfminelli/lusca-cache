@@ -3656,10 +3656,13 @@ clientProcessMiss(clientHttpRequest * http)
     fwdStart(http->conn->fd, http->entry, r);
 }
 
+CBDATA_TYPE(clientHttpRequest);
+
 static clientHttpRequest *
 parseHttpRequestAbort(ConnStateData * conn, const char *uri)
 {
     clientHttpRequest *http;
+    CBDATA_INIT_TYPE(clientHttpRequest);
     http = cbdataAlloc(clientHttpRequest);
     http->conn = conn;
     http->start = current_time;
@@ -3761,6 +3764,7 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t * method_p, i
     assert(prefix_sz <= conn->in.offset);
 
     /* Ok, all headers are received */
+    CBDATA_INIT_TYPE(clientHttpRequest);
     http = cbdataAlloc(clientHttpRequest);
     http->http_ver = http_ver;
     http->conn = conn;
@@ -4607,6 +4611,8 @@ clientNatLookup(ConnStateData * conn)
 }
 #endif
 
+CBDATA_TYPE(ConnStateData);
+
 /* Handle a new connection on HTTP socket. */
 void
 httpAccept(int sock, void *data)
@@ -4634,6 +4640,7 @@ httpAccept(int sock, void *data)
 	F = &fd_table[fd];
 	debug(33, 4) ("httpAccept: FD %d: accepted port %d client %s:%d\n", fd, F->local_port, F->ipaddr, F->remote_port);
 	fd_note_static(fd, "client http connect");
+        CBDATA_INIT_TYPE(ConnStateData);
 	connState = cbdataAlloc(ConnStateData);
 	connState->port = s;
 	cbdataLock(connState->port);
