@@ -1252,6 +1252,8 @@ aclParseDenyInfoLine(acl_deny_info_list ** head)
     *T = A;
 }
 
+CBDATA_TYPE(acl_access);
+
 void
 aclParseAccessLine(acl_access ** head)
 {
@@ -1267,6 +1269,7 @@ aclParseAccessLine(acl_access ** head)
 	debug(28, 0) ("aclParseAccessLine: missing 'allow' or 'deny'.\n");
 	return;
     }
+    CBDATA_INIT_TYPE(acl_access);
     A = cbdataAlloc(acl_access);
 
     if (!strcmp(t, "allow"))
@@ -2446,11 +2449,14 @@ aclChecklistCacheInit(aclCheck_t * checklist)
     }
 }
 
+CBDATA_TYPE(aclCheck_t);
+
 aclCheck_t *
 aclChecklistCreate(const acl_access * A, request_t * request, const char *ident)
 {
     int i;
     aclCheck_t *checklist;
+    CBDATA_INIT_TYPE(aclCheck_t);
     checklist = cbdataAlloc(aclCheck_t);
     checklist->access_list = A;
     /*

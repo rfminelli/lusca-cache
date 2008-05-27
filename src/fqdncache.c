@@ -395,6 +395,7 @@ fqdncache_nbgethostbyaddr(struct in_addr addr, FQDNH * handler, void *handlerDat
     f->handlerData = handlerData;
     cbdataLock(handlerData);
     f->request_time = current_time;
+    CBDATA_INIT_TYPE(generic_cbdata);
     c = cbdataAlloc(generic_cbdata);
     c->data = f;
 #if USE_DNSSERVERS

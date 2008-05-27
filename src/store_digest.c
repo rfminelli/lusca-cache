@@ -352,6 +352,7 @@ storeDigestRewriteStart(void *datanotused)
     flags.cachable = 1;
     e = storeCreateEntry(url, flags, METHOD_GET);
     assert(e);
+    CBDATA_INIT_TYPE(generic_cbdata);
     sd_state.rewrite_lock = cbdataAlloc(generic_cbdata);
     sd_state.rewrite_lock->data = e;
     debug(71, 3) ("storeDigestRewriteStart: url: %s key: %s\n", url, storeKeyText(e->hash.key));

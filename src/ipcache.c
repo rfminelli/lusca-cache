@@ -454,6 +454,7 @@ ipcache_nbgethostbyname(const char *name, IPH * handler, void *handlerData)
     i->handlerData = handlerData;
     cbdataLock(handlerData);
     i->request_time = current_time;
+    CBDATA_INIT_TYPE(generic_cbdata);
     c = cbdataAlloc(generic_cbdata);
     c->data = i;
 #if USE_DNSSERVERS
