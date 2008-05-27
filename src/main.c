@@ -764,6 +764,7 @@ main(int argc, char **argv)
 	memInit();
 	memStringInit();
 	cbdataInit();
+	cbdataLocalInit();
 	eventInit();		/* eventInit() is required for config parsing */
 	storeFsInit();		/* required for config parsing */
 	authenticateSchemeInit();	/* required for config parsing */

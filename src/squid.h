@@ -322,12 +322,6 @@ struct rusage {
 #define LOCAL_ARRAY(type,name,size) static type name[size]
 #endif
 
-#if CBDATA_DEBUG
-#define cbdataAlloc(a,b)	cbdataAllocDbg(a,b,__FILE__,__LINE__)
-#define cbdataLock(a)		cbdataLockDbg(a,__FILE__,__LINE__)
-#define cbdataUnlock(a)		cbdataUnlockDbg(a,__FILE__,__LINE__)
-#endif
-
 #if USE_LEAKFINDER
 #define leakAdd(p) leakAddFL(p,__FILE__,__LINE__)
 #define leakTouch(p) leakTouchFL(p,__FILE__,__LINE__)
@@ -412,6 +406,8 @@ struct rusage {
 #include "../libmem/wordlist.h"
 #include "../libmem/intlist.h"
 #include "../libmem/MemBufs.h"
+
+#include "../libcb/cbdata.h"
 
 #include "defines.h"
 #include "enums.h"

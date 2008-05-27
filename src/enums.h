@@ -656,19 +656,6 @@ enum {
 };
 
 /*
- * cbdata types. similar to the MEM_* types above, but managed
- * in cbdata.c. A big difference is that these types are dynamically
- * allocated. This list is only a list of predefined types. Other types
- * are added runtime
- */
-typedef enum {
-    CBDATA_UNKNOWN = 0,
-    CBDATA_UNDEF = 0,
-    CBDATA_FIRST = 1,
-    CBDATA_FIRST_CUSTOM_TYPE = 1000
-} cbdata_type;
-
-/*
  * Return codes from checkVary(request)
  */
 enum {
