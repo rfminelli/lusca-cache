@@ -18,7 +18,7 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
     * Convert the legacy mem.c types into locally-scoped MemPool types, reducing the mem.c stuff to buffers only *done*
    * mempool *done*
    * memstr *done*
-   * cbdata
+   * cbdata *done*
    * string *done*
    * MemBuf
 
