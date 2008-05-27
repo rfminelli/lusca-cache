@@ -105,26 +105,8 @@ extern void parse_cachedir_options(SwapDir * sd, struct cache_dir_option *option
 extern void dump_cachedir_options(StoreEntry * e, struct cache_dir_option *options, SwapDir * sd);
 extern void parse_sockaddr_in_list_token(sockaddr_in_list **, char *);
 
-
-/*
- * cbdata.c
- */
-extern void cbdataInit(void);
-#if CBDATA_DEBUG
-extern void *cbdataInternalAllocDbg(cbdata_type type, int, const char *);
-extern void cbdataLockDbg(const void *p, const char *, int);
-extern void cbdataUnlockDbg(const void *p, const char *, int);
-#else
-extern void *cbdataInternalAlloc(cbdata_type type);
-extern void cbdataLock(const void *p);
-extern void cbdataUnlock(const void *p);
-#endif
-/* Note: Allocations is done using the cbdataAlloc macro */
-extern void *cbdataInternalFree(void *p);
-extern int cbdataValid(const void *p);
-extern void cbdataInitType(cbdata_type type, const char *label, int size, FREE * free_func);
-extern cbdata_type cbdataAddType(cbdata_type type, const char *label, int size, FREE * free_func);
-extern int cbdataLocked(const void *p);
+/* cbdata.c */
+extern void cbdataLocalInit(void);
 
 extern void clientdbInitMem(void);
 extern void clientdbInit(void);
