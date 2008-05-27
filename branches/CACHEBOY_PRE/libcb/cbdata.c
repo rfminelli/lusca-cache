@@ -70,6 +70,7 @@
 #include <sys/types.h>
 #include <string.h>
 
+#include "../libcore/valgrind.h"
 #include "../include/util.h"
 #include "../include/Array.h"
 #include "../include/Stack.h"
