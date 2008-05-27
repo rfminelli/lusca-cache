@@ -159,6 +159,7 @@ heap_walkInit(RemovalPolicy * policy)
     RemovalPolicyWalker *walker;
     HeapWalkData *heap_walk;
     heap->nwalkers += 1;
+    CBDATA_INIT_TYPE(RemovalPolicyWalker);
     walker = cbdataAlloc(RemovalPolicyWalker);
     heap_walk = xcalloc(1, sizeof(*heap_walk));
     heap_walk->current = 0;
@@ -234,6 +235,7 @@ heap_purgeInit(RemovalPolicy * policy, int max_scan)
     RemovalPurgeWalker *walker;
     HeapPurgeData *heap_walk;
     heap->nwalkers += 1;
+    CBDATA_INIT_TYPE(RemovalPurgeWalker);
     walker = cbdataAlloc(RemovalPurgeWalker);
     heap_walk = xcalloc(1, sizeof(*heap_walk));
     fifo_init(&heap_walk->locked_entries);
@@ -267,6 +269,7 @@ createRemovalPolicy_heap(wordlist * args)
     HeapPolicyData *heap_data;
     const char *keytype;
     /* Allocate the needed structures */
+    CBDATA_INIT_TYPE(RemovalPolicy);
     policy = cbdataAlloc(RemovalPolicy);
     heap_data = xcalloc(1, sizeof(*heap_data));
     /* Initialize the policy data */
