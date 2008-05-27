@@ -664,10 +664,7 @@ enum {
 typedef enum {
     CBDATA_UNKNOWN = 0,
     CBDATA_UNDEF = 0,
-    CBDATA_acl_access,
-    CBDATA_aclCheck_t,
-    CBDATA_generic_cbdata,
-    CBDATA_ps_state,
+    CBDATA_FIRST = 1,
     CBDATA_FIRST_CUSTOM_TYPE = 1000
 } cbdata_type;
 

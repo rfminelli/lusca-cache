@@ -167,14 +167,11 @@ cbdataInit(void)
 	cbdataDump, 0, 1);
 #define CREATE_CBDATA(type) cbdataInitType(CBDATA_##type, #type, sizeof(type), NULL)
 #define CREATE_CBDATA_FREE(type, free_func) cbdataInitType(CBDATA_##type, #type, sizeof(type), free_func)
-    CREATE_CBDATA(acl_access);
-    CREATE_CBDATA(aclCheck_t);
-    CREATE_CBDATA(generic_cbdata);
-    CREATE_CBDATA(ps_state);
 #if HASHED_CBDATA
     cbdata_pool = memPoolCreate("cbdata", sizeof(cbdata));
     cbdata_htable = hash_create(cbdata_cmp, 1 << 12, cbdata_hash);
 #endif
+    cbdata_types = CBDATA_FIRST_CUSTOM_TYPE + 1;
 }
 
 #define CBDATA_COOKIE(p) ((void *)((unsigned long)(p) ^ 0xDEADBEEF))

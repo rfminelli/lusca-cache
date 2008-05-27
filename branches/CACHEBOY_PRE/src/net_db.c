@@ -701,6 +701,7 @@ netdbPingSite(const char *hostname)
     if ((n = netdbLookupHost(hostname)) != NULL)
 	if (n->next_ping_time > squid_curtime)
 	    return;
+    CBDATA_INIT_TYPE(generic_cbdata);
     h = cbdataAlloc(generic_cbdata);
     h->data = xstrdup(hostname);
     ipcache_nbgethostbyname(hostname, netdbSendPing, h);
