@@ -48,3 +48,8 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
 
   * Tidy up and commit the ZPH patch stuff? this is already included in Squid-2.HEAD.
   * TPROXY-4 support - already coded up, just need to test it before committing! Or bring over what ends up in Squid-2.HEAD ?
+  * A writev() style vector method, as a basis for eventually shuffling around the header reply path?
+  * Code restructuring into external libraries:
+    * event queue (src/event.c)
+    * comm / fd / disk - these are somewhat intermingled; bring them over as a group and then tease them apart
+    * src/aufs/aiops - bring it outside of aufs in this phase; worry about eliminating copies and including writev() support at a later date
