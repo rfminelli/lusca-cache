@@ -61,12 +61,12 @@ The planned changes will include:
 
  * Client-side only IPv6 (ie, IPv6 clients connecting to Squid) - forwarding to IPv4 upstreams
   * Specifically for accelerator setups (ie, gatewaying v6 clients to existing v4 setups) but this allows the initial IPv6 code to take shape without requiring the extensive support in HTTP and FTP forwarding that would be required for a full-blown IPv6 implementation.
- * Config include support '''(Complete)'''
+ * Config include support *(Complete)*
  * Restructure the data paths:
-  * Server -> Store buffer referencing '''(Complete; not integrated)'''
+  * Server -> Store buffer referencing *(Complete; not integrated)*
  * Restructure HTTP request and reply paths to take advantage of buffer referencing (Complete; not integrated)
  * Abstract out tproxy code into os-independant subroutines - aim to support tproxy-2 (Linux), tproxy-4 (Linux), upcoming FreeBSD support (which will be similar to the tproxy-4 method.)
- * Migrate internals to reference counted buffers rather than memcpy() / string copying '''(Complete)'''
+ * Migrate internals to reference counted buffers rather than memcpy() / string copying *(Complete)*
  * Communications layer to seperate out SSL, TCP, (SCTP?), out of client/server side; and make Windows porting easier
 
 === Cacheboy 1.2 (was Squid-2.9) ===
