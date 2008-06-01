@@ -33,11 +33,6 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
 
   * Next - resolve issue #10 (Service time differences!) if it hasn't been resolved already.
 
-= Benchmarking =
-
-  * Benchmark with / without mempools - try to establish which areas of the codebase are (ab)using malloc far too often
-  * Try to figure out the 'best' buffer sizes for doing socket and disk IO
-
 = Additions for Cacheboy-1.0 =
 
   * Solaris Event Ports - shouldn't be difficult; can almost merge /dev/poll + kqueue support to get network-only IO ports implemented (and ignore trying to use AIO for now!) - *done*
@@ -53,3 +48,8 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
     * event queue (src/event.c)
     * comm / fd / disk - these are somewhat intermingled; bring them over as a group and then tease them apart
     * src/aufs/aiops - bring it outside of aufs in this phase; worry about eliminating copies and including writev() support at a later date
+
+= Benchmarking =
+
+  * Benchmark with / without mempools - try to establish which areas of the codebase are (ab)using malloc far too often
+  * Try to figure out the 'best' buffer sizes for doing socket and disk IO
