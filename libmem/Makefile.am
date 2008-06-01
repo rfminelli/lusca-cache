@@ -6,7 +6,8 @@ libmem_a_SOURCES = \
 	String.c \
 	wordlist.c \
 	intlist.c \
-	MemBufs.c
+	MemBufs.c \
+	MemBuf.c
 
 libmem_a_LIBADD = \
 	MemPool.o \
@@ -14,7 +15,8 @@ libmem_a_LIBADD = \
 	String.o \
 	wordlist.o \
 	intlist.o \
-	MemBufs.o
+	MemBufs.o \
+	MemBuf.o
 
 noinst_LIBRARIES = \
 	libmem.a

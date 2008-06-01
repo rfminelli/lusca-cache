@@ -951,19 +951,6 @@ struct _fileMap {
     unsigned long *file_map;
 };
 
-/* auto-growing memory-resident buffer with printf interface */
-/* note: when updating this struct, update MemBufNULL #define */
-struct _MemBuf {
-    /* public, read-only */
-    char *buf;
-    mb_size_t size;		/* used space, does not count 0-terminator */
-
-    /* private, stay away; use interface function instead */
-    mb_size_t max_capacity;	/* when grows: assert(new_capacity <= max_capacity) */
-    mb_size_t capacity;		/* allocated space */
-    unsigned stolen:1;		/* the buffer has been stolen for use by someone else */
-};
-
 /* see Packer.c for description */
 struct _Packer {
     /* protected, use interface functions instead */
