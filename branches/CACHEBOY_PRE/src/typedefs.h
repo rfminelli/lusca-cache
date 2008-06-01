@@ -145,7 +145,6 @@ typedef struct _pingerReplyData pingerReplyData;
 typedef struct _icp_common_t icp_common_t;
 typedef struct _Meta_data Meta_data;
 typedef struct _iostats iostats;
-typedef struct _MemBuf MemBuf;
 typedef struct _mem_node mem_node;
 typedef struct _mem_hdr mem_hdr;
 typedef struct _mem_node_ref mem_node_ref;
@@ -352,9 +351,6 @@ typedef void (*vprintf_f) ();
 
 /* MD5 cache keys */
 typedef unsigned char cache_key;
-
-/* in case we want to change it later */
-typedef int mb_size_t;
 
 /* iteration for HttpHdrRange */
 typedef int HttpHdrRangePos;

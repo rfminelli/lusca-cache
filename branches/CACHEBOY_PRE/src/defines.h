@@ -263,9 +263,6 @@
 /* handy to determine the #elements in a static array */
 #define countof(arr) (sizeof(arr)/sizeof(*arr))
 
-/* to initialize static variables (see also MemBufNull) */
-#define MemBufNULL { NULL, 0, 0, 0, 0 }
-
 /*
  * Max number of ICP messages to receive per call to icpHandleUdp
  */

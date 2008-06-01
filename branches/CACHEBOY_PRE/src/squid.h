@@ -406,6 +406,7 @@ struct rusage {
 #include "../libmem/wordlist.h"
 #include "../libmem/intlist.h"
 #include "../libmem/MemBufs.h"
+#include "../libmem/MemBuf.h"
 
 #include "../libcb/cbdata.h"
 
