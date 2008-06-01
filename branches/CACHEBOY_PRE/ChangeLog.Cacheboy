@@ -1,5 +1,8 @@
 ChangeLog:
 
+* Shuffled MemPools out of src/ and into libmem/
+* Shuffled cbdata out of src/ and into libmem/
+
 -- Tagged: CACHEBOY_1.0.
 -- (24-May-2008)
 
