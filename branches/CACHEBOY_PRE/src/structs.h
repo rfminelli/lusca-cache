@@ -351,9 +351,7 @@ struct _http_port_list {
     int vport;			/* virtual port support */
     int no_connection_auth;	/* Don't support connection oriented auth */
     unsigned int http11;	/* HTTP/1.1 support */
-#if LINUX_TPROXY
     unsigned int tproxy;
-#endif
     unsigned int act_as_origin;	/* Fake Date: headers in accelerator mode */
     unsigned int allow_direct:1;	/* Allow direct forwarding in accelerator mode */
     struct {
@@ -1861,9 +1859,7 @@ struct _request_flags {
     unsigned int no_connection_auth:1;	/* Connection oriented auth can not be supported */
     unsigned int pinned:1;	/* Request seont on a pinned connection */
     unsigned int auth_sent:1;	/* Authentication forwarded */
-#if LINUX_TPROXY
     unsigned int tproxy:1;
-#endif
     unsigned int collapsed:1;	/* This request was collapsed. Don't trust the store entry to be valid */
     unsigned int cache_validation:1;	/* This request is an internal cache validation */
     unsigned int no_direct:1;	/* Deny direct forwarding unless overriden by always_direct. Used in accelerator mode */
@@ -2259,9 +2255,7 @@ struct _FwdState {
 	unsigned int dont_retry:1;
 	unsigned int ftp_pasv_failed:1;
     } flags;
-#if LINUX_NETFILTER
     struct sockaddr_in src;
-#endif
     u_short orig_entry_flags;	/* Hack to be able to reset the entry proper */
 };
 

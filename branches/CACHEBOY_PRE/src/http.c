@@ -793,11 +793,9 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 	keep_alive = 0;
     if (keep_alive) {
 	int pinned = 0;
-#if LINUX_TPROXY
 	if (orig_request->flags.tproxy) {
 	    client_addr = &httpState->request->client_addr;
 	}
-#endif
 	/* yes we have to clear all these! */
 	commSetDefer(fd, NULL, NULL);
 	commSetTimeout(fd, -1, NULL, NULL);
