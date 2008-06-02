@@ -2882,11 +2882,9 @@ parse_http_port_option(http_port_list * s, char *token)
 	s->urlgroup = xstrdup(token + 9);
     } else if (strncmp(token, "protocol=", 9) == 0) {
 	s->protocol = xstrdup(token + 9);
-#if LINUX_TPROXY
     } else if (strcmp(token, "tproxy") == 0) {
 	s->tproxy = 1;
 	need_linux_tproxy = 1;
-#endif
     } else if (strcmp(token, "act-as-origin") == 0) {
 	s->act_as_origin = 1;
 	s->accel = 1;
@@ -2988,10 +2986,8 @@ dump_generic_http_port(StoreEntry * e, const char *n, const http_port_list * s)
 	storeAppendPrintf(e, " protocol=%s", s->protocol);
     if (s->no_connection_auth)
 	storeAppendPrintf(e, " no-connection-auth");
-#if LINUX_TPROXY
     if (s->tproxy)
 	storeAppendPrintf(e, " tproxy");
-#endif
     if (s->http11)
 	storeAppendPrintf(e, " http11");
     if (s->tcp_keepalive.enabled) {
