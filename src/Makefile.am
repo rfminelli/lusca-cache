@@ -97,6 +97,19 @@ if USE_EVENTPORTS
 COMMLOOP_SOURCE = comm_eventports.c
 endif
 
+if USE_CS_TPROXY2
+CS_SOURCE = cs_tproxy2.c
+endif
+if USE_CS_TPROXY4
+CS_SOURCE = cs_tproxy2.c
+endif
+if USE_CS_FREEBSD
+CS_SOURCE = cs_freebsd.c
+endif
+if USE_CS_NULL
+CS_SOURCE = cs_null.c
+endif
+
 SUBDIRS		= fs repl auth
 
 INCLUDES        = -I. -I$(srcdir) -I$(top_builddir)/include -I$(top_srcdir)/include
@@ -143,6 +156,10 @@ EXTRA_squid_SOURCES = \
 	comm_kqueue.c \
 	comm_devpoll.c \
 	comm_generic.c \
+	cs_null.c \
+	cs_tproxy2.c \
+	cs_tproxy4.c \
+	cs_freebsd.c \
 	ipc.c \
 	ipc_win32.c \
 	win32.c
@@ -163,6 +180,7 @@ squid_SOURCES = \
 	client_side_storeurl_rewrite.c \
 	comm.c \
 	$(COMMLOOP_SOURCE) \
+	$(CS_SOURCE) \
 	debug.c \
 	defines.h \
 	$(DELAY_POOL_SOURCE) \
