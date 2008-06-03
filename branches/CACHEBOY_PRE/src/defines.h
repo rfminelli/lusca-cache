@@ -92,6 +92,7 @@
 #define COMM_NONBLOCKING	0x01
 #define COMM_NOCLOEXEC		0x02
 #define COMM_REUSEADDR		0x04
+#define	COMM_TPROXY		0x08
 
 #define DISK_OK                   (0)
 #define DISK_ERROR               (-1)
