@@ -41,8 +41,8 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
 
 = Additions for Cacheboy-1.1 =
 
-  * Tidy up and commit the ZPH patch stuff? this is already included in Squid-2.HEAD.
-  * TPROXY-4 support - already coded up, just need to test it before committing! Or bring over what ends up in Squid-2.HEAD ?
+  * Tidy up and commit the ZPH patch stuff? this is already included in Squid-2.HEAD. *done, from squid-2.HEAD*
+  * TPROXY-4 support - already coded up, just need to test it before committing! Or bring over what ends up in Squid-2.HEAD ? *commited, not tested at all!*
   * A writev() style vector method, as a basis for eventually shuffling around the header reply path?
   * Code restructuring into external libraries:
     * event queue (src/event.c)
