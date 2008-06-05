@@ -228,7 +228,6 @@ typedef void CNCB(int fd, int status, void *);
 
 typedef void CBDUNL(void *);
 typedef void FOCB(void *, int fd, int errcode);
-typedef void EVH(void *);
 typedef void PF(int, void *);
 
 /* disk.c / diskd.c callback typedefs */

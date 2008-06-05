@@ -244,15 +244,8 @@ extern void idnsShutdown(void);
 extern void idnsALookup(const char *, IDNSCB *, void *);
 extern void idnsPTRLookup(const struct in_addr, IDNSCB *, void *);
 
-extern void eventAdd(const char *name, EVH * func, void *arg, double when, int);
-extern void eventAddIsh(const char *name, EVH * func, void *arg, double delta_ish, int);
-extern void eventRun(void);
-extern int eventNextTime(void);
-extern void eventDelete(EVH * func, void *arg);
-extern void eventInit(void);
-extern void eventCleanup(void);
-extern void eventFreeMemory(void);
-extern int eventFind(EVH *, void *);
+/* event.c */
+extern void eventLocalInit(void);
 
 extern void fd_init(void);
 extern void fd_close(int fd);
@@ -824,7 +817,9 @@ extern StatHistBinDumper statHistIntDumper;
 /* MemMeter */
 
 /* mem */
+extern void memInit(void);
 extern void memInitModule(void);
+extern void memClean(void);
 extern void memCleanModule(void);
 
 /* MemPool */

@@ -410,6 +410,8 @@ struct rusage {
 
 #include "../libcb/cbdata.h"
 
+#include "../libiapp/event.h"
+
 #include "defines.h"
 #include "enums.h"
 #include "typedefs.h"
