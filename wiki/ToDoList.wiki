@@ -53,3 +53,11 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
 
   * Benchmark with / without mempools - try to establish which areas of the codebase are (ab)using malloc far too often
   * Try to figure out the 'best' buffer sizes for doing socket and disk IO
+
+= Comm restructuring =
+
+This is more difficult than I thought. fd, disk and event moved out fine (but needed to move as one big chunk thanks to how everything is packed into the struct _fde); comm seems to initiate DNS lookups!
+
+commConnectStart() takes a host -and- a struct in_addr for some reason. Its only used in one place in forward.c, when the connection is using the original client destination after name resolution failed.
+
+This may need to be broken up into two bits - the "do dns lookup and call commConnect() with an IP address" bit (which will live in src/ for now, with the rest of the DNS code) and a commConnect() which simply initiates a connection to a single remote ip:port. This all may be slightly too intrusive to do in this pass, and may need to wait for a bit..
