@@ -75,11 +75,6 @@
 
 #define MAXHTTPPORTS			128
 
-#define DISK_OK                   (0)
-#define DISK_ERROR               (-1)
-#define DISK_EOF                 (-2)
-#define DISK_NO_SPACE_LEFT       (-6)
-
 #define DNS_INBUF_SZ 4096
 
 #define FQDN_LOOKUP_IF_MISS	0x01
@@ -303,15 +298,6 @@
 #define _WIN_SQUID_SERVICE_OPTION		"--ntservice"
 #define _WIN_SQUID_RUN_MODE_INTERACTIVE		0
 #define _WIN_SQUID_RUN_MODE_SERVICE		1
-#endif
-
-/*
- * Macro to find file access mode
- */
-#ifdef O_ACCMODE
-#define FILE_MODE(x) ((x)&O_ACCMODE)
-#else
-#define FILE_MODE(x) ((x)&(O_RDONLY|O_WRONLY|O_RDWR))
 #endif
 
 /* swap_filen is 25 bits, signed */
