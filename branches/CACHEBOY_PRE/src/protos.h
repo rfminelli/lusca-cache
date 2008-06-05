@@ -126,73 +126,9 @@ extern int clientGetPinnedInfo(const ConnStateData * conn, const request_t * req
 extern int clientGetPinnedConnection(ConnStateData * conn, const request_t * request, const peer * peer, int *auth);
 extern void clientReassignDelaypools(void);
 
-extern int commSetNonBlocking(int fd);
-extern int commUnsetNonBlocking(int fd);
-extern void commSetCloseOnExec(int fd);
-extern void commSetTcpKeepalive(int fd, int idle, int interval, int timeout);
-extern int commSetTos(int fd, int tos);
-extern int commSetSocketPriority(int fd, int prio);
-extern int commSetIPOption(int fd, uint8_t option, void *value, size_t size);
-extern int comm_accept(int fd, struct sockaddr_in *, struct sockaddr_in *);
-extern void comm_close(int fd);
-extern void comm_reset_close(int fd);
-#if LINGERING_CLOSE
-extern void comm_lingering_close(int fd);
-#endif
-extern void commConnectStart(int fd, const char *, u_short, CNCB *, void *, struct in_addr *addr);
-extern int comm_connect_addr(int sock, const struct sockaddr_in *);
-extern void comm_init(void);
-extern int comm_listen(int sock);
-extern int comm_open(int, int, struct in_addr, u_short port, int, const char *note);
-extern int comm_openex(int, int, struct in_addr, u_short, int, unsigned char TOS, const char *);
-extern int comm_fdopen(int, int, struct in_addr, u_short, int, const char *);
-extern int comm_fdopenex(int, int, struct in_addr, u_short, int, unsigned char, const char *);
-extern u_short comm_local_port(int fd);
-
-extern void commDeferFD(int fd);
-extern void commResumeFD(int fd);
-extern void commSetSelect(int, unsigned int, PF *, void *, time_t);
-extern void commRemoveSlow(int fd);
-extern void comm_add_close_handler(int fd, PF *, void *);
-extern void comm_remove_close_handler(int fd, PF *, void *);
-extern int comm_udp_sendto(int, const struct sockaddr_in *, int, const void *, int);
-extern void comm_write(int fd,
-    const char *buf,
-    int size,
-    CWCB * handler,
-    void *handler_data,
-    FREE *);
-extern void comm_write_mbuf(int fd, MemBuf mb, CWCB * handler, void *handler_data);
-extern void comm_write_header(int fd,
-    const char *buf,
-    int size,
-    const char *header,
-    size_t header_size,
-    CWCB * handler,
-    void *handler_data,
-    FREE *);
-extern void comm_write_mbuf_header(int fd, MemBuf mb, const char *header, size_t header_size, CWCB * handler, void *handler_data);
-extern void commCallCloseHandlers(int fd);
-extern int commSetTimeout(int fd, int, PF *, void *);
-extern void commSetDefer(int fd, DEFER * func, void *);
-extern int ignoreErrno(int);
-extern void commCloseAllSockets(void);
-
-
 /*
  * comm_select.c
  */
-extern void comm_select_init(void);
-extern void comm_select_postinit(void);
-extern void comm_select_shutdown(void);
-extern int comm_select(int);
-extern void commUpdateEvents(int fd);
-extern void commSetEvents(int fd, int need_read, int need_write);
-extern void commClose(int fd);
-extern void commOpen(int fd);
-extern void commUpdateReadHandler(int, PF *, void *);
-extern void commUpdateWriteHandler(int, PF *, void *);
-extern void comm_quick_poll_required(void);
 extern void comm_select_status(StoreEntry *);
 
 extern void packerToStoreInit(Packer * p, StoreEntry * e);
@@ -223,16 +159,6 @@ extern void xassert(const char *, const char *, int);
 /* packs, then prints an object using debug() */
 extern void debugObj(int section, int level, const char *label, void *obj, ObjPackMethod pm);
 
-/* disk.c */
-extern int file_open(const char *path, int mode);
-extern void file_close(int fd);
-extern void file_write(int, off_t, void *, size_t len, DWCB *, void *, FREE *);
-extern void file_write_mbuf(int fd, off_t, MemBuf mb, DWCB * handler, void *handler_data);
-extern void file_read(int, char *, size_t, off_t, DRCB *, void *);
-extern void disk_init(void);
-extern void disk_init_mem(void);
-
-
 /* dns.s */
 extern void dnsShutdown(void);
 extern void dnsInit(void);
@@ -246,18 +172,6 @@ extern void idnsPTRLookup(const struct in_addr, IDNSCB *, void *);
 
 /* event.c */
 extern void eventLocalInit(void);
-
-extern void fd_init(void);
-extern void fd_close(int fd);
-extern void fd_open(int fd, unsigned int type, const char *);
-extern void fd_note(int fd, const char *);
-extern void fd_note_static(int fd, const char *);
-extern void fd_bytes(int fd, int len, unsigned int type);
-extern void fdFreeMemory(void);
-extern void fdDumpOpen(void);
-extern int fdNFree(void);
-extern int fdUsageHigh(void);
-extern void fdAdjustReserved(void);
 
 extern fileMap *file_map_create(void);
 extern int file_map_allocate(fileMap *, int);

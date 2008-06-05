@@ -67,15 +67,10 @@ extern const char *memStatusStr[];
 extern const char *pingStatusStr[];
 extern const char *storeStatusStr[];
 extern const char *swapStatusStr[];
-extern fde *fd_table;		/* NULL */
-extern int Biggest_FD;		/* -1 */
-extern int Number_FD;		/* 0 */
-extern int Opening_FD;		/* 0 */
 extern int HttpSockets[MAXHTTPPORTS];
 extern int NDnsServersAlloc;	/* 0 */
 extern int NHttpSockets;	/* 0 */
 extern int RESERVED_FD;
-extern int Squid_MaxFD;		/* SQUID_MAXFD */
 extern int config_lineno;	/* 0 */
 extern int do_mallinfo;		/* 0 */
 extern int opt_reuseaddr;	/* 1 */

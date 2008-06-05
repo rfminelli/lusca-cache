@@ -98,11 +98,7 @@ typedef struct _http_port_list http_port_list;
 typedef struct _https_port_list https_port_list;
 typedef struct _SquidConfig SquidConfig;
 typedef struct _SquidConfig2 SquidConfig2;
-typedef struct _close_handler close_handler;
-typedef struct _dread_ctrl dread_ctrl;
-typedef struct _dwrite_q dwrite_q;
 typedef struct _ETag ETag;
-typedef struct _fde fde;
 typedef struct _fileMap fileMap;
 typedef struct _HttpReply http_reply;
 typedef struct _HttpStatusLine HttpStatusLine;
@@ -223,21 +219,8 @@ typedef struct _delaySpecSet delaySpecSet;
 typedef struct _delaySpec delaySpec;
 #endif
 
-typedef void CWCB(int fd, char *, size_t size, int flag, void *data);
-typedef void CNCB(int fd, int status, void *);
-
 typedef void CBDUNL(void *);
 typedef void FOCB(void *, int fd, int errcode);
-typedef void PF(int, void *);
-
-/* disk.c / diskd.c callback typedefs */
-typedef void DRCB(int, const char *buf, int size, int errflag, void *data);
-							/* Disk read CB */
-typedef void DWCB(int, int, size_t, void *);	/* disk write CB */
-typedef void DOCB(int, int errflag, void *data);	/* disk open CB */
-typedef void DCCB(int, int errflag, void *data);	/* disk close CB */
-typedef void DUCB(int errflag, void *data);	/* disk unlink CB */
-typedef void DTCB(int errflag, void *data);	/* disk trunc CB */
 
 typedef void FQDNH(const char *, void *);
 typedef void IDCB(const char *ident, void *data);
@@ -246,10 +229,6 @@ typedef void IRCB(peer *, peer_t, protocol_t, void *, void *data);
 typedef void PSC(FwdServer *, void *);
 typedef void RH(void *data, char *);
 typedef void UH(void *data, wordlist *);
-typedef int DEFER(int fd, void *data);
-typedef int READ_HANDLER(int, char *, int);
-typedef int WRITE_HANDLER(int, const char *, int);
-typedef void CBCB(char *buf, ssize_t size, void *data);
 typedef void BODY_HANDLER(request_t * req, char *, size_t, CBCB *, void *);
 
 typedef void STIOCB(void *their_data, int errflag, storeIOState *);
