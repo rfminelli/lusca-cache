@@ -1242,13 +1242,62 @@ xusleep(unsigned int usec)
 void
 keepCapabilities(void)
 {
-    cs_keepCapabilities();
+#if HAVE_PRCTL && defined(PR_SET_KEEPCAPS) && HAVE_SYS_CAPABILITY_H
+    if (prctl(PR_SET_KEEPCAPS, 1, 0, 0, 0)) {
+	/* Silent failure unless TPROXY is required. Maybe not started as root */
+#if LINUX_TPROXY
+	if (need_linux_tproxy)
+	    debug(1, 1) ("Error - tproxy support requires capability setting which has failed.  Continuing without tproxy support\n");
+	need_linux_tproxy = 0;
+#endif
+    }
+#endif
 }
 
 static void
 restoreCapabilities(int keep)
 {
-    cs_restoreCapabilities(keep);
+#if defined(_SQUID_LINUX_) && HAVE_SYS_CAPABILITY_H
+    cap_user_header_t head = (cap_user_header_t) xcalloc(1, sizeof(cap_user_header_t));
+    cap_user_data_t cap = (cap_user_data_t) xcalloc(1, sizeof(cap_user_data_t));
+
+    head->version = _LINUX_CAPABILITY_VERSION;
+    if (capget(head, cap) != 0) {
+	debug(50, 1) ("Can't get current capabilities\n");
+	goto nocap;
+    }
+    if (head->version != _LINUX_CAPABILITY_VERSION) {
+	debug(50, 1) ("Invalid capability version %d (expected %d)\n", head->version, _LINUX_CAPABILITY_VERSION);
+	goto nocap;
+    }
+    head->pid = 0;
+
+    cap->inheritable = 0;
+    cap->effective = (1 << CAP_NET_BIND_SERVICE);
+#if LINUX_TPROXY
+    if (need_linux_tproxy)
+	cap->effective |= (1 << CAP_NET_ADMIN) | (1 << CAP_NET_BROADCAST);
+#endif
+    if (!keep)
+	cap->permitted &= cap->effective;
+    if (capset(head, cap) != 0) {
+	/* Silent failure unless TPROXY is required */
+#if LINUX_TPROXY
+	if (need_linux_tproxy)
+	    debug(50, 1) ("Error enabling needed capabilities. Will continue without tproxy support\n");
+	need_linux_tproxy = 0;
+#endif
+    }
+  nocap:
+    xfree(head);
+    xfree(cap);
+#else
+#if LINUX_TPROXY
+    if (need_linux_tproxy)
+	debug(50, 1) ("Missing needed capability support. Will continue without tproxy support\n");
+    need_linux_tproxy = 0;
+#endif
+#endif
 }
 
 /* XXX this is ipv4-only aware atm */

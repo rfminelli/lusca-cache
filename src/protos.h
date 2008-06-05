@@ -1400,9 +1400,5 @@ extern void clientStoreURLRewriteAccessCheckDone(int answer, void *data);
 extern void clientStoreURLRewriteStart(clientHttpRequest * http);
 extern void clientStoreURLRewriteDone(void *data, char *result);
 
-/* Client-side spoof related stuff - src/cs_*.c */
-extern int cs_bind(int fd, struct in_addr addr, u_short port);
-extern void cs_keepCapabilities(void);
-extern void cs_restoreCapabilities(int keep);
 
 #endif /* SQUID_PROTOS_H */
