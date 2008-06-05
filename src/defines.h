@@ -75,32 +75,12 @@
 
 #define MAXHTTPPORTS			128
 
-#define COMM_OK		  (0)
-#define COMM_ERROR	 (-1)
-#define COMM_NOMESSAGE	 (-3)
-#define COMM_TIMEOUT	 (-4)
-#define COMM_SHUTDOWN	 (-5)
-#define COMM_INPROGRESS  (-6)
-#define COMM_ERR_CONNECT (-7)
-#define COMM_ERR_DNS     (-8)
-#define COMM_ERR_CLOSING (-9)
-
-/* Select types. */
-#define COMM_SELECT_READ   (0x1)
-#define COMM_SELECT_WRITE  (0x2)
-
-#define COMM_NONBLOCKING	0x01
-#define COMM_NOCLOEXEC		0x02
-#define COMM_REUSEADDR		0x04
-
 #define DISK_OK                   (0)
 #define DISK_ERROR               (-1)
 #define DISK_EOF                 (-2)
 #define DISK_NO_SPACE_LEFT       (-6)
 
 #define DNS_INBUF_SZ 4096
-
-#define FD_DESC_SZ		64
 
 #define FQDN_LOOKUP_IF_MISS	0x01
 #define FQDN_MAX_NAMES 5

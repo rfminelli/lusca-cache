@@ -837,38 +837,6 @@ struct _close_handler {
     close_handler *next;
 };
 
-struct _dread_ctrl {
-    int fd;
-    off_t file_offset;
-    size_t req_len;
-    char *buf;
-    int end_of_file;
-    DRCB *handler;
-    void *client_data;
-};
-
-struct _dwrite_q {
-    off_t file_offset;
-    char *buf;
-    size_t len;
-    size_t buf_offset;
-    dwrite_q *next;
-    FREE *free_func;
-};
-
-struct _CommWriteStateData {
-    int valid;
-    char *buf;
-    size_t size;
-    size_t offset;
-    CWCB *handler;
-    void *handler_data;
-    FREE *free_func;
-    char header[32];
-    size_t header_size;
-};
-
-
 /* ETag support is rudimantal;
  * this struct is likely to change
  * Note: "str" points to memory in HttpHeaderEntry (for now)
@@ -876,69 +844,6 @@ struct _CommWriteStateData {
 struct _ETag {
     const char *str;		/* quoted-string */
     int weak;			/* true if it is a weak validator */
-};
-
-struct _fde {
-    unsigned int type;
-    u_short local_port;
-    u_short remote_port;
-    struct in_addr local_addr;
-    unsigned char tos;
-    char ipaddr[16];		/* dotted decimal address of peer */
-    const char *desc;
-    char descbuf[FD_DESC_SZ];
-    struct {
-	unsigned int open:1;
-	unsigned int close_request:1;
-	unsigned int write_daemon:1;
-	unsigned int closing:1;
-	unsigned int socket_eof:1;
-	unsigned int nolinger:1;
-	unsigned int nonblocking:1;
-	unsigned int ipc:1;
-	unsigned int called_connect:1;
-	unsigned int nodelay:1;
-	unsigned int close_on_exec:1;
-	unsigned int backoff:1;	/* keep track of whether the fd is backed off */
-	unsigned int dnsfailed:1;	/* did the dns lookup fail */
-    } flags;
-    comm_pending read_pending;
-    comm_pending write_pending;
-    squid_off_t bytes_read;
-    squid_off_t bytes_written;
-    int uses;			/* ie # req's over persistent conn */
-    struct _fde_disk {
-	DWCB *wrt_handle;
-	void *wrt_handle_data;
-	dwrite_q *write_q;
-	dwrite_q *write_q_tail;
-	off_t offset;
-    } disk;
-    PF *read_handler;
-    void *read_data;
-    PF *write_handler;
-    void *write_data;
-    PF *timeout_handler;
-    time_t timeout;
-    void *timeout_data;
-    void *lifetime_data;
-    close_handler *close_handler;	/* linked list */
-    DEFER *defer_check;		/* check if we should defer read */
-    void *defer_data;
-    struct _CommWriteStateData rwstate;		/* State data for comm_write */
-    READ_HANDLER *read_method;
-    WRITE_HANDLER *write_method;
-#if USE_SSL
-    SSL *ssl;
-#endif
-#ifdef _SQUID_MSWIN_
-    struct {
-	long handle;
-    } win32;
-#endif
-#if DELAY_POOLS
-    int slow_id;
-#endif
 };
 
 struct _fileMap {

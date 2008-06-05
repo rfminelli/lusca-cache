@@ -163,20 +163,6 @@ typedef enum {
     ACL_PROXY_AUTH_NEEDED
 } acl_lookup_state;
 
-enum {
-    FD_NONE,
-    FD_LOG,
-    FD_FILE,
-    FD_SOCKET,
-    FD_PIPE,
-    FD_UNKNOWN
-};
-
-enum {
-    FD_READ,
-    FD_WRITE
-};
-
 typedef enum {
     PEER_NONE,
     PEER_SIBLING,
@@ -686,17 +672,6 @@ enum {
 };
 
 #endif
-
-/*
- * Special case pending filedescriptors. Set in fd_table[fd].read/write_pending
- */
-typedef enum {
-    COMM_PENDING_NORMAL,	/* No special processing required */
-    COMM_PENDING_WANTS_READ,	/* need to read, no matter what commSetSelect indicates */
-    COMM_PENDING_WANTS_WRITE,	/* need to write, no matter what commSetSelect indicates */
-    COMM_PENDING_NOW		/* needs to be called again, without needing to wait for readiness
-				 * for example when data is already buffered etc */
-} comm_pending;
 
 typedef enum {
     ST_OP_NONE,
