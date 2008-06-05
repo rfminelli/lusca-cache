@@ -492,9 +492,6 @@ struct rusage {
  */
 #define INDEXSD(i)   (&Config.cacheSwap.swapDirs[(i)])
 
-#define FD_READ_METHOD(fd, buf, len) (*fd_table[fd].read_method)(fd, buf, len)
-#define FD_WRITE_METHOD(fd, buf, len) (*fd_table[fd].write_method)(fd, buf, len)
-
 #ifndef IPPROTO_UDP
 #define IPPROTO_UDP 0
 #endif

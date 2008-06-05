@@ -1,6 +1,23 @@
 #ifndef	__LIBIAPP_COMM_H__
 #define	__LIBIAPP_COMM_H__
 
+/*
+ * Macro to find file access mode
+ */
+#ifdef O_ACCMODE
+#define FILE_MODE(x) ((x)&O_ACCMODE)
+#else
+#define FILE_MODE(x) ((x)&(O_RDONLY|O_WRONLY|O_RDWR))
+#endif
+
+#define DISK_OK                   (0)
+#define DISK_ERROR               (-1)
+#define DISK_EOF                 (-2)
+#define DISK_NO_SPACE_LEFT       (-6)
+
+#define FD_READ_METHOD(fd, buf, len) (*fd_table[fd].read_method)(fd, buf, len)
+#define FD_WRITE_METHOD(fd, buf, len) (*fd_table[fd].write_method)(fd, buf, len)
+
 enum {
     FD_NONE,
     FD_LOG,
