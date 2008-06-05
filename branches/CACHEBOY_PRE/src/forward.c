@@ -39,6 +39,9 @@
 #if LINUX_NETFILTER
 #include <linux/netfilter_ipv4.h>
 #endif
+#if LINUX_TPROXY
+#include <linux/netfilter_ipv4/ip_tproxy.h>
+#endif
 
 static PSC fwdStartComplete;
 static void fwdDispatch(FwdState *);
@@ -514,33 +517,6 @@ getOutgoingTOS(request_t * request)
     return aclMapTOS(Config.accessList.outgoing_tos, &ch);
 }
 
-static int
-fwdConnectCreateSocket(FwdState *fwdState, FwdServer *fs)
-{
-    int fd = -1;
-    struct in_addr outgoing;
-    unsigned short tos;
-    const char *url = storeUrl(fwdState->entry);
-
-    outgoing = getOutgoingAddr(fwdState->request);
-    tos = getOutgoingTOS(fwdState->request);
-    fwdState->request->out_ip = outgoing;
-
-    debug(17, 3) ("fwdConnectStart: got addr %s, tos %d\n", inet_ntoa(outgoing), tos);
-
-    /* If tproxy then try with the tproxy details. If this fails then retry w/ non-tproxy */
-    /* XXX at the moment the local port is still 0; should this change to support FreeBSD's tproxy derivative? -adrian */
-    if (fwdState->request->flags.tproxy) {
-        fd = comm_openex(SOCK_STREAM, IPPROTO_TCP, fwdState->src.sin_addr, 0,
-	  COMM_NONBLOCKING | COMM_TPROXY, tos, url);
-    }
-    if (fd == -1) {
-        fd = comm_openex(SOCK_STREAM, IPPROTO_TCP, outgoing, 0,
-	  COMM_NONBLOCKING, tos, url);
-    }
-    return fd;
-}
-
 static void
 fwdConnectStart(void *data)
 {
@@ -557,6 +533,9 @@ fwdConnectStart(void *data)
     int ftimeout = Config.Timeout.forward - (squid_curtime - fwdState->start);
     struct in_addr outgoing;
     unsigned short tos;
+#if LINUX_TPROXY
+    struct in_tproxy itp;
+#endif
     int idle = -1;
 
     assert(fs);
@@ -607,8 +586,10 @@ fwdConnectStart(void *data)
 	fwdConnectStart(fwdState);
 	return;
     }
+#if LINUX_TPROXY
     if (fd == -1 && fwdState->request->flags.tproxy)
 	fd = pconnPop(name, port, domain, &fwdState->request->client_addr, 0, NULL);
+#endif
     if (fd == -1) {
 	fd = pconnPop(name, port, domain, NULL, 0, &idle);
     }
@@ -655,7 +636,20 @@ fwdConnectStart(void *data)
 #if URL_CHECKSUM_DEBUG
     assert(fwdState->entry->mem_obj->chksum == url_checksum(url));
 #endif
-    fd = fwdConnectCreateSocket(fwdState, fs);
+    outgoing = getOutgoingAddr(fwdState->request);
+    tos = getOutgoingTOS(fwdState->request);
+
+    fwdState->request->out_ip = outgoing;
+
+    debug(17, 3) ("fwdConnectStart: got addr %s, tos %d\n",
+	inet_ntoa(outgoing), tos);
+    fd = comm_openex(SOCK_STREAM,
+	IPPROTO_TCP,
+	outgoing,
+	0,
+	COMM_NONBLOCKING,
+	tos,
+	url);
     if (fd < 0) {
 	debug(50, 4) ("fwdConnectStart: %s\n", xstrerror());
 	err = errorCon(ERR_SOCKET_FAILURE, HTTP_INTERNAL_SERVER_ERROR, fwdState->request);
@@ -686,6 +680,32 @@ fwdConnectStart(void *data)
     if (fs->peer) {
 	hierarchyNote(&fwdState->request->hier, fs->code, fs->peer->name);
     } else {
+#if LINUX_TPROXY
+	if (fwdState->request->flags.tproxy) {
+
+	    itp.v.addr.faddr.s_addr = fwdState->src.sin_addr.s_addr;
+	    itp.v.addr.fport = 0;
+
+	    /* If these syscalls fail then we just fallback to connecting
+	     * normally by simply ignoring the errors...
+	     */
+	    itp.op = TPROXY_ASSIGN;
+	    if (setsockopt(fd, SOL_IP, IP_TPROXY, &itp, sizeof(itp)) == -1) {
+		debug(20, 1) ("tproxy ip=%s,0x%x,port=%d ERROR ASSIGN\n",
+		    inet_ntoa(itp.v.addr.faddr),
+		    itp.v.addr.faddr.s_addr,
+		    itp.v.addr.fport);
+	    } else {
+		itp.op = TPROXY_FLAGS;
+		itp.v.flags = ITP_CONNECT;
+		if (setsockopt(fd, SOL_IP, IP_TPROXY, &itp, sizeof(itp)) == -1) {
+		    debug(20, 1) ("tproxy ip=%x,port=%d ERROR CONNECT\n",
+			itp.v.addr.faddr.s_addr,
+			itp.v.addr.fport);
+		}
+	    }
+	}
+#endif
 	hierarchyNote(&fwdState->request->hier, fs->code, fwdState->request->host);
     }
 
@@ -950,11 +970,13 @@ fwdStart(int fd, StoreEntry * e, request_t * r)
     fwdState->start = squid_curtime;
     fwdState->orig_entry_flags = e->flags;
 
+#if LINUX_TPROXY
     /* If we need to transparently proxy the request
      * then we need the client source address and port */
     fwdState->src.sin_family = AF_INET;
     fwdState->src.sin_addr = r->client_addr;
     fwdState->src.sin_port = r->client_port;
+#endif
 
     storeLockObject(e);
     if (!fwdState->request->flags.pinned)
