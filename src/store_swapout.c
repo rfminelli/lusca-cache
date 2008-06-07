@@ -61,6 +61,7 @@ storeSwapOutStart(StoreEntry * e)
     storeSwapTLVFree(tlv_list);
     mem->swap_hdr_sz = (size_t) swap_hdr_sz;
     /* Create the swap file */
+    CBDATA_INIT_TYPE(generic_cbdata);
     c = cbdataAlloc(generic_cbdata);
     c->data = e;
     mem->swapout.sio = storeCreate(e, storeSwapOutFileNotify, storeSwapOutFileClosed, c);
