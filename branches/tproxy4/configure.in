@@ -1140,20 +1140,23 @@ dnl "-64" from LDFLAGS
 	esac
 fi
 
-dnl Enable Linux transparent proxy support
-AC_ARG_ENABLE(linux-tproxy,
-[  --enable-linux-tproxy
-			  Enable real Transparent Proxy support for Netfilter TPROXY.],
-[ if test "$enableval" = "yes" ; then
-	echo "Linux Netfilter/TPROXY enabled"
-	AC_DEFINE(LINUX_TPROXY, 1, [Enable real Transparent Proxy support for Netfilter TPROXY.])
-	LINUX_TPROXY="yes"
-        if test -z "$LINUX_NETFILTER"; then
-	    echo "Linux-Netfilter Transparent Proxy automatically enabled"
-	    LINUX_NETFILTER="yes"
-	fi
+dnl Enable client IP address spoofing module selection
+CS_TYPE="null"
+AC_ARG_ENABLE(ipt,
+[  --enable-cs="type"
+		  Enable client IP address spoofing.
+			  The options are tproxy2, tproxy4, freebsd, or null (none).],
+[ CS_TYPE=$enableval ]
+[ if test -z "$CS_TYPE"; then
+    CS_TYPE="null"
   fi
 ])
+echo "Using ${CS_TYPE} for the client IP address spoofing"
+AM_CONDITIONAL([USE_CS_TPROXY2], [test $CS_TYPE = tproxy2])
+AM_CONDITIONAL([USE_CS_TPROXY4], [test $CS_TYPE = tproxy4])
+AM_CONDITIONAL([USE_CS_FREEBSD], [test $CS_TYPE = freebsd])
+AM_CONDITIONAL([USE_CS_NULL], [test $CS_TYPE = null])
+ 
 
 AM_CONDITIONAL(MAKE_LEAKFINDER, false)
 dnl Enable Leak Finding Functions

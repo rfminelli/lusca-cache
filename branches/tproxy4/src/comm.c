@@ -243,6 +243,8 @@ comm_fdopenex(int new_socket,
 	commSetCloseOnExec(new_socket);
     if ((flags & COMM_REUSEADDR))
 	commSetReuseAddr(new_socket);
+    if (flags & COMM_TPROXY)
+        F->flags.tproxy = 1;
     if (port > (u_short) 0) {
 #ifdef _SQUID_MSWIN_
 	if (sock_type != SOCK_DGRAM)
@@ -251,7 +253,12 @@ comm_fdopenex(int new_socket,
 	if (opt_reuseaddr)
 	    commSetReuseAddr(new_socket);
     }
-    if (addr.s_addr != no_addr.s_addr) {
+    if (F->flags.tproxy) {
+        if (cs_bind(new_socket, addr, port) != COMM_OK) {
+            comm_close(new_socket);
+            return -1;
+        }
+    } else if (addr.s_addr != no_addr.s_addr) {
 	if (commBind(new_socket, addr, port) != COMM_OK) {
 	    comm_close(new_socket);
 	    return -1;
