@@ -61,3 +61,15 @@ This is more difficult than I thought. fd, disk and event moved out fine (but ne
 commConnectStart() takes a host -and- a struct in_addr for some reason. Its only used in one place in forward.c, when the connection is using the original client destination after name resolution failed.
 
 This may need to be broken up into two bits - the "do dns lookup and call commConnect() with an IP address" bit (which will live in src/ for now, with the rest of the DNS code) and a commConnect() which simply initiates a connection to a single remote ip:port. This all may be slightly too intrusive to do in this pass, and may need to wait for a bit..
+
+= Removing all the inet_ntoa() calls, etc =
+
+This is slightly more difficult than it should be. Unfortunately, the output of inet_ntoa() that is squizzled away in the fde is then used when assembling various hash table entries.
+
+The hash table code assumes that keys are NUL terminated.
+
+The first pass to tidying up this mess is to rework the hash code so it can take a length parameter. "0" should be "NUL-terminated", an explicit length should be said explicit length. This should be attempted so to not introduce a performance regression due to lots of strlen() type calls to calculate lengths where they're unknown.
+
+The next pass is to find the places where hashes including text versions of IP addresses and port numbers are used, and instead convert -those- to binary data + length keys. i bet a more special-purpose data structure could be used in each case where a hash is used involving an IP address (client db, pconn db, etc) but this'll do for now.
+
+Finally, once all the places where inet_ntoa() and fde.desc are used and begin using binary versions where appropriate. This should cut back on the number of inet_ntoa() calls which abuse stdio functions inappropriately (its implemented using snprintf()!) and reduce the CPU overhead a % or two.
