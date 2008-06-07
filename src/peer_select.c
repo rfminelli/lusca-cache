@@ -142,6 +142,7 @@ peerSelect(request_t * request,
 	debug(44, 3) ("peerSelect: %s\n", storeUrl(entry));
     else
 	debug(44, 3) ("peerSelect: %s\n", RequestMethods[request->method].str);
+    CBDATA_INIT_TYPE(ps_state);
     psstate = cbdataAlloc(ps_state);
     psstate->request = requestLink(request);
     psstate->entry = entry;
@@ -680,7 +681,7 @@ peerHandlePingReply(peer * p, peer_t type, protocol_t proto, void *pingdata, voi
 void
 peerAddFwdServer(FwdServer ** FS, peer * p, hier_code code)
 {
-    FwdServer *fs = memAllocate(MEM_FWD_SERVER);
+    FwdServer *fs = memPoolAlloc(pool_fwd_server);
     debug(44, 5) ("peerAddFwdServer: adding %s %s\n",
 	p ? p->host : "DIRECT",
 	hier_strings[code]);

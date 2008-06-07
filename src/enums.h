@@ -163,20 +163,6 @@ typedef enum {
     ACL_PROXY_AUTH_NEEDED
 } acl_lookup_state;
 
-enum {
-    FD_NONE,
-    FD_LOG,
-    FD_FILE,
-    FD_SOCKET,
-    FD_PIPE,
-    FD_UNKNOWN
-};
-
-enum {
-    FD_READ,
-    FD_WRITE
-};
-
 typedef enum {
     PEER_NONE,
     PEER_SIBLING,
@@ -583,68 +569,6 @@ enum {
 
 #endif
 
-typedef enum {
-    MEM_NONE,
-    MEM_2K_BUF,
-    MEM_4K_BUF,
-    MEM_8K_BUF,
-    MEM_16K_BUF,
-    MEM_32K_BUF,
-    MEM_64K_BUF,
-    MEM_ACL,
-    MEM_ACL_DENY_INFO_LIST,
-    MEM_ACL_IP_DATA,
-    MEM_ACL_LIST,
-    MEM_ACL_NAME_LIST,
-    MEM_ACL_REQUEST_TYPE,
-    MEM_AUTH_USER_T,
-    MEM_AUTH_USER_HASH,
-    MEM_ACL_PROXY_AUTH_MATCH,
-    MEM_ACL_USER_DATA,
-    MEM_ACL_TIME_DATA,
-#if USE_CACHE_DIGESTS
-    MEM_CACHE_DIGEST,
-#endif
-    MEM_CLIENT_INFO,
-    MEM_STORE_CLIENT_BUF,
-    MEM_LINK_LIST,
-    MEM_DLINK_NODE,
-    MEM_DONTFREE,
-    MEM_DREAD_CTRL,
-    MEM_DWRITE_Q,
-    MEM_FQDNCACHE_ENTRY,
-    MEM_FWD_SERVER,
-    MEM_HELPER_REQUEST,
-    MEM_HELPER_STATEFUL_REQUEST,
-    MEM_HTTP_HDR_CC,
-    MEM_HTTP_HDR_CONTENT_RANGE,
-    MEM_HTTP_HDR_ENTRY,
-    MEM_HTTP_HDR_RANGE,
-    MEM_HTTP_HDR_RANGE_SPEC,
-    MEM_HTTP_REPLY,
-    MEM_INTLIST,
-    MEM_IPCACHE_ENTRY,
-    MEM_MD5_DIGEST,
-    MEM_MEMOBJECT,
-    MEM_MEM_NODE,
-    MEM_NETDBENTRY,
-    MEM_NET_DB_NAME,
-    MEM_RELIST,
-    MEM_REQUEST_T,
-    MEM_STOREENTRY,
-    MEM_WORDLIST,
-#if !USE_DNSSERVERS
-    MEM_IDNS_QUERY,
-#endif
-    MEM_EVENT,
-    MEM_TLV,
-    MEM_SWAP_LOG_DATA,
-#if USE_SSL
-    MEM_ACL_CERT_DATA,
-#endif
-    MEM_MAX
-} mem_type;
-
 /*
  * NOTE!  We must preserve the order of this list!
  */
@@ -718,36 +642,6 @@ enum {
 };
 
 /*
- * cbdata types. similar to the MEM_* types above, but managed
- * in cbdata.c. A big difference is that these types are dynamically
- * allocated. This list is only a list of predefined types. Other types
- * are added runtime
- */
-typedef enum {
-    CBDATA_UNKNOWN = 0,
-    CBDATA_UNDEF = 0,
-    CBDATA_acl_access,
-    CBDATA_aclCheck_t,
-    CBDATA_clientHttpRequest,
-    CBDATA_ConnStateData,
-    CBDATA_ErrorState,
-    CBDATA_FwdState,
-    CBDATA_generic_cbdata,
-    CBDATA_helper,
-    CBDATA_helper_server,
-    CBDATA_statefulhelper,
-    CBDATA_helper_stateful_server,
-    CBDATA_HttpStateData,
-    CBDATA_peer,
-    CBDATA_ps_state,
-    CBDATA_RemovalPolicy,
-    CBDATA_RemovalPolicyWalker,
-    CBDATA_RemovalPurgeWalker,
-    CBDATA_store_client,
-    CBDATA_FIRST_CUSTOM_TYPE = 1000
-} cbdata_type;
-
-/*
  * Return codes from checkVary(request)
  */
 enum {
@@ -778,17 +672,6 @@ enum {
 };
 
 #endif
-
-/*
- * Special case pending filedescriptors. Set in fd_table[fd].read/write_pending
- */
-typedef enum {
-    COMM_PENDING_NORMAL,	/* No special processing required */
-    COMM_PENDING_WANTS_READ,	/* need to read, no matter what commSetSelect indicates */
-    COMM_PENDING_WANTS_WRITE,	/* need to write, no matter what commSetSelect indicates */
-    COMM_PENDING_NOW		/* needs to be called again, without needing to wait for readiness
-				 * for example when data is already buffered etc */
-} comm_pending;
 
 typedef enum {
     ST_OP_NONE,
