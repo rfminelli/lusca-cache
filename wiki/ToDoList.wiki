@@ -26,6 +26,17 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
     * write some simple sed one-liners to take a CSS + template file and generate a static error page *done*
     * Convert the English directory to use this - ignore the other languages for now! *done*
 
+  * Next - whatever bits of the http code can easily be moved
+    * HttpVersion *done*
+    * HttpStatusLine *done*
+    * Header / HeaderEntry
+    * HttpRequest
+    * HttpReply
+    * Body related callback pipeline?
+    * HdrCC stuff
+    * Range request stuff
+    * What else?
+
   * Next phase - improving the communication code
     * Bring over a very naive reference-counted buffer type
     * Bring over a very, very basic writev() and readv() wrapper - remember about SSL and the FD_READ/WRITE_METHOD() stuff!
