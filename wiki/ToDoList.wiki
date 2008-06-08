@@ -84,3 +84,17 @@ The first pass to tidying up this mess is to rework the hash code so it can take
 The next pass is to find the places where hashes including text versions of IP addresses and port numbers are used, and instead convert -those- to binary data + length keys. i bet a more special-purpose data structure could be used in each case where a hash is used involving an IP address (client db, pconn db, etc) but this'll do for now.
 
 Finally, once all the places where inet_ntoa() and fde.desc are used and begin using binary versions where appropriate. This should cut back on the number of inet_ntoa() calls which abuse stdio functions inappropriately (its implemented using snprintf()!) and reduce the CPU overhead a % or two.
+
+= Storage related stuff =
+
+Eventually, once all of the data pipeline has been rescued and fixed, disk IO should be done in chunks greater than 4k. Finding the balance will take some time, but i bet 4k isn't it.
+
+The swaplog writing is blocking, even for AUFS. Thats just plain stupid.
+
+The rebuilding logic for COSS sucks because there's no per-stripe metadata being kept. That should really be revisited!
+
+The rebuild logic for AUFS sucks because both the swaplog reading is blocking and the directory rebuilding is blocking. This should be taught to properly use the async IO routines.
+
+It'd be nice if ufs and aufs were merged. It'd be doubly nice if ufs, aufs and diskd were merged -but- diskd's concept of disk IO is quite restrictive (there's an upper limit on the number of IOs that can be scheduled due to sysvshm and msgq limits.) Ideally, diskd IO would be scheduled through an AUFS-like intermediary queue so more IO can be queued versus dispatched, but .. save FreeBSD-4 and badly-setup Solaris machines, there's no need for diskd any more. Leave it as is, tidy up the disk code to provide blocking/aufs/POSIX AIO versions of the IO routines, then unify ufs/aufs.
+
+POSIX AIO under FreeBSD *should* allow for copy-free data in and out for disk IO (re-read the code to make sure!) In any case, FreeBSD's POSIX AIO + kqueue notification is probably sensible enough to do the bulk of IO with. Its just a shame there's no AIO open/close operators - AUFS threads are still needed for that.
