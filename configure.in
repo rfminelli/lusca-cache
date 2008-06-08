@@ -3217,6 +3217,7 @@ AC_OUTPUT([\
 	Makefile \
 	libhttp/Makefile \
 	libiapp/Makefile \
+	libstat/Makefile \
 	libcore/Makefile \
 	libmem/Makefile \
 	libcb/Makefile \

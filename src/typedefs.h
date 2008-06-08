@@ -168,7 +168,6 @@ typedef struct _storeSwapLogDataOld storeSwapLogDataOld;
 typedef struct _storeSwapLogHeader storeSwapLogHeader;
 typedef struct _authConfig authConfig;
 typedef struct _cacheSwap cacheSwap;
-typedef struct _StatHist StatHist;
 typedef struct _ClientInfo ClientInfo;
 typedef struct _cd_guess_stats cd_guess_stats;
 typedef struct _CacheDigest CacheDigest;
@@ -288,7 +287,6 @@ typedef void STFSRECONFIGURE(SwapDir *, int, char *);
 typedef void STFSSTARTUP(void);
 typedef void STFSSHUTDOWN(void);
 
-typedef double hbase_f(double);
 typedef void StatHistBinDumper(StoreEntry *, int idx, double val, double size, int count);
 
 /* authenticate.c authenticate scheme routines typedefs */
