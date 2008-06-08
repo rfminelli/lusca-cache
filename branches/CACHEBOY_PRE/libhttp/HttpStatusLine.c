@@ -57,6 +57,7 @@
 #include "../libmem/MemBufs.h"
 #include "../libmem/MemBuf.h"
 
+#include "HttpVersion.h"
 #include "HttpStatusLine.h"
 
 /* local constants */
