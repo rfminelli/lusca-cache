@@ -101,7 +101,6 @@ typedef struct _SquidConfig2 SquidConfig2;
 typedef struct _ETag ETag;
 typedef struct _fileMap fileMap;
 typedef struct _HttpReply http_reply;
-typedef struct _HttpStatusLine HttpStatusLine;
 typedef struct _HttpHeaderFieldAttrs HttpHeaderFieldAttrs;
 typedef struct _HttpHeaderFieldInfo HttpHeaderFieldInfo;
 typedef struct _HttpHeader HttpHeader;
@@ -205,8 +204,6 @@ typedef struct _RemovalPolicySettings RemovalPolicySettings;
 typedef struct _errormap errormap;
 typedef struct _PeerMonitor PeerMonitor;
 typedef struct _vary_id_t vary_id_t;
-
-typedef struct _http_version_t http_version_t;
 
 #if SQUID_SNMP
 typedef variable_list *(oid_ParseFn) (variable_list *, snint *);

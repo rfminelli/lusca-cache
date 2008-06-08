@@ -217,21 +217,8 @@ extern void httpBuildRequestHeader(request_t *, request_t *, StoreEntry *, HttpH
 extern void httpBuildVersion(http_version_t * version, unsigned int major, unsigned int minor);
 extern const char *httpMakeVaryMark(request_t * request, HttpReply * reply);
 
-/* Http Status Line */
-/* init/clean */
-extern void httpStatusLineInit(HttpStatusLine * sline);
-extern void httpStatusLineClean(HttpStatusLine * sline);
-/* set/get values */
-extern void httpStatusLineSet(HttpStatusLine * sline, http_version_t version,
-    http_status status, const char *reason);
-extern const char *httpStatusLineReason(const HttpStatusLine * sline);
-/* parse/pack */
-/* parse a 0-terminating buffer and fill internal structires; returns true on success */
-extern int httpStatusLineParse(HttpStatusLine * sline, const char *start,
-    const char *end);
-/* pack fields using Packer */
+/* HttpStatusLine.c */
 extern void httpStatusLinePackInto(const HttpStatusLine * sline, Packer * p);
-extern const char *httpStatusString(http_status status);
 
 /* Http Body */
 /* init/clean */
