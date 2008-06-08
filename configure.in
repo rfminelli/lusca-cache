@@ -3215,6 +3215,7 @@ dnl done
 
 AC_OUTPUT([\
 	Makefile \
+	libhttp/Makefile \
 	libiapp/Makefile \
 	libcore/Makefile \
 	libmem/Makefile \

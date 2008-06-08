@@ -410,6 +410,8 @@ struct rusage {
 
 #include "../libcb/cbdata.h"
 
+#include "../libhttp/HttpStatusLine.h"
+
 #include "../libiapp/event.h"
 #include "../libiapp/comm.h"
 

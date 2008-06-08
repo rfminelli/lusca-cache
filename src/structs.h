@@ -232,11 +232,6 @@ struct _delay_body_size {
 };
 
 
-struct _http_version_t {
-    unsigned int major;
-    unsigned int minor;
-};
-
 #if SQUID_SNMP
 
 struct _snmp_request_t {
@@ -860,14 +855,6 @@ struct _Packer {
     append_f append;
     vprintf_f packer_vprintf;
     void *real_handle;		/* first parameter to real append and vprintf */
-};
-
-/* http status line */
-struct _HttpStatusLine {
-    /* public, read only */
-    http_version_t version;
-    const char *reason;		/* points to a _constant_ string (default or supplied), never free()d */
-    http_status status;
 };
 
 /*
