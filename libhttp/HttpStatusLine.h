@@ -52,14 +52,6 @@ typedef enum {
     HTTP_HEADER_TOO_LARGE = 601 /* Header too large to process */
 } http_status;
 
-
-struct _http_version_t {
-    unsigned int major;
-    unsigned int minor;
-};
-
-typedef struct _http_version_t http_version_t;
-
 /* http status line */
 struct _HttpStatusLine {
     /* public, read only */
