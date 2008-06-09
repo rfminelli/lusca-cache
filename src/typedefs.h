@@ -103,14 +103,12 @@ typedef struct _fileMap fileMap;
 typedef struct _HttpReply http_reply;
 typedef struct _HttpHeaderFieldAttrs HttpHeaderFieldAttrs;
 typedef struct _HttpHeaderFieldInfo HttpHeaderFieldInfo;
-typedef struct _HttpHeader HttpHeader;
 typedef struct _HttpHdrCc HttpHdrCc;
 typedef struct _HttpHdrRangeSpec HttpHdrRangeSpec;
 typedef struct _HttpHdrRange HttpHdrRange;
 typedef struct _HttpHdrRangeIter HttpHdrRangeIter;
 typedef struct _HttpHdrContRange HttpHdrContRange;
 typedef struct _TimeOrTag TimeOrTag;
-typedef struct _HttpHeaderEntry HttpHeaderEntry;
 typedef struct _HttpHeaderFieldStat HttpHeaderFieldStat;
 typedef struct _HttpHeaderStat HttpHeaderStat;
 typedef struct _HttpBody HttpBody;
@@ -330,9 +328,6 @@ typedef int HttpHdrRangePos;
 
 /*iteration for headers; use HttpHeaderPos as opaque type, do not interpret */
 typedef int HttpHeaderPos;
-
-/* big mask for http headers */
-typedef char HttpHeaderMask[(HDR_ENUM_END + 7) / 8];
 
 /* a common objPackInto interface; used by debugObj */
 typedef void (*ObjPackMethod) (void *obj, Packer * p);
