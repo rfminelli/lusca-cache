@@ -97,4 +97,15 @@ typedef enum {
     CC_ENUM_END
 } http_hdr_cc_type;
 
+/* possible owners of http header */
+typedef enum {
+    hoNone,
+#if USE_HTCP
+    hoHtcpReply,
+#endif
+    hoRequest,
+    hoReply
+} http_hdr_owner_type;
+
+
 #endif

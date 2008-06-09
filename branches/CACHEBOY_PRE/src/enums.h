@@ -190,16 +190,6 @@ typedef enum {
     ftSize
 } field_type;
 
-/* possible owners of http header */
-typedef enum {
-    hoNone,
-#if USE_HTCP
-    hoHtcpReply,
-#endif
-    hoRequest,
-    hoReply
-} http_hdr_owner_type;
-
 typedef enum {
     HIER_NONE,
     HIER_DIRECT,
