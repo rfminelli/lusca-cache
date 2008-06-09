@@ -943,21 +943,6 @@ struct _HttpHeaderFieldInfo {
     HttpHeaderFieldStat stat;
 };
 
-struct _HttpHeaderEntry {
-    http_hdr_type id;
-    int active;
-    String name;
-    String value;
-};
-
-struct _HttpHeader {
-    /* protected, do not use these, use interface functions instead */
-    Array entries;		/* parsed entries in raw format */
-    HttpHeaderMask mask;	/* bit set <=> entry present */
-    http_hdr_owner_type owner;	/* request or reply */
-    int len;			/* length when packed, not counting terminating '\0' */
-};
-
 struct _HttpReply {
     /* unsupported, writable, may disappear/change in the future */
     int hdr_sz;			/* sums _stored_ status-line, headers, and <CRLF> */
