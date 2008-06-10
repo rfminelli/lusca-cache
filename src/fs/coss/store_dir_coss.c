@@ -543,14 +543,14 @@ storeCossDirWriteCleanDone(SwapDir * sd)
 static void
 storeSwapLogDataFree(void *s)
 {
-    memFree(s, MEM_SWAP_LOG_DATA);
+    memPoolFree(pool_swap_log_data, s);
 }
 
 static void
 storeCossDirSwapLog(const SwapDir * sd, const StoreEntry * e, int op)
 {
     CossInfo *cs = (CossInfo *) sd->fsdata;
-    storeSwapLogData *s = memAllocate(MEM_SWAP_LOG_DATA);
+    storeSwapLogData *s = memPoolAlloc(pool_swap_log_data);
     s->op = (char) op;
     s->swap_filen = e->swap_filen;
     s->timestamp = e->timestamp;

@@ -67,17 +67,11 @@ extern const char *memStatusStr[];
 extern const char *pingStatusStr[];
 extern const char *storeStatusStr[];
 extern const char *swapStatusStr[];
-extern fde *fd_table;		/* NULL */
-extern int Biggest_FD;		/* -1 */
-extern int Number_FD;		/* 0 */
-extern int Opening_FD;		/* 0 */
 extern int HttpSockets[MAXHTTPPORTS];
 extern int NDnsServersAlloc;	/* 0 */
 extern int NHttpSockets;	/* 0 */
 extern int RESERVED_FD;
-extern int Squid_MaxFD;		/* SQUID_MAXFD */
 extern int config_lineno;	/* 0 */
-extern int debugLevels[MAX_DEBUG_SECTIONS];
 extern int do_mallinfo;		/* 0 */
 extern int opt_reuseaddr;	/* 1 */
 extern int icmp_sock;		/* -1 */
@@ -131,10 +125,7 @@ extern double current_dtime;
 extern int store_hash_buckets;	/* 0 */
 extern hash_table *store_table;	/* NULL */
 extern dlink_list ClientActiveRequests;
-extern const String StringNull;	/* { 0, 0, NULL } */
-extern const MemBuf MemBufNull;	/* MemBufNULL */
 extern int hot_obj_count;	/* 0 */
-extern int _db_level;
 extern const int CacheDigestHashFuncCount;	/* 4 */
 extern CacheDigest *store_digest;	/* NULL */
 extern const char *StoreDigestFileName;		/* "store_digest" */
@@ -175,9 +166,7 @@ extern void *sbrk_start;	/* 0 */
 #endif
 extern int opt_send_signal;	/* -1 */
 extern int opt_no_daemon;	/* 0 */
-#if LINUX_TPROXY
 extern int need_linux_tproxy;	/* 0 */
-#endif
 extern int opt_parse_cfg_only;	/* 0 */
 extern int n_coss_dirs;		/* 0 */
 #ifdef LOG_LOCAL4

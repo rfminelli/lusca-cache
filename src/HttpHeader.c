@@ -252,9 +252,27 @@ static void httpHeaderNoteParsedEntry(http_hdr_type id, String value, int error)
 static void httpHeaderStatInit(HttpHeaderStat * hs, const char *label);
 static void httpHeaderStatDump(const HttpHeaderStat * hs, StoreEntry * e);
 
+MemPool * pool_http_reply = NULL;
+MemPool * pool_http_header_entry = NULL;
+MemPool * pool_http_hdr_cc = NULL;
+MemPool * pool_http_hdr_range_spec = NULL;
+MemPool * pool_http_hdr_range = NULL;
+MemPool * pool_http_hdr_cont_range = NULL;
+
 /*
  * Module initialization routines
  */
+
+void
+httpHeaderInitMem(void)
+{
+    pool_http_reply = memPoolCreate("HttpReply", sizeof(HttpReply));
+    pool_http_header_entry = memPoolCreate("HttpHeaderEntry", sizeof(HttpHeaderEntry));
+    pool_http_hdr_cc = memPoolCreate("HttpHdrCc", sizeof(HttpHdrCc));
+    pool_http_hdr_range_spec = memPoolCreate("HttpHdrRangeSpec", sizeof(HttpHdrRangeSpec));
+    pool_http_hdr_range = memPoolCreate("HttpHdrRange", sizeof(HttpHdrRange));
+    pool_http_hdr_cont_range = memPoolCreate("HttpHdrContRange", sizeof(HttpHdrContRange));
+}
 
 void
 httpHeaderInitModule(void)
@@ -1207,7 +1225,7 @@ httpHeaderEntryCreate(http_hdr_type id, const char *name, const char *value)
 {
     HttpHeaderEntry *e;
     assert_eid(id);
-    e = memAllocate(MEM_HTTP_HDR_ENTRY);
+    e = memPoolAlloc(pool_http_header_entry);
     e->id = id;
     if (id != HDR_OTHER)
 	e->name = Headers[id].name;
@@ -1224,7 +1242,7 @@ httpHeaderEntryCreate2(http_hdr_type id, String name, String value)
 {
     HttpHeaderEntry *e;
     assert_eid(id);
-    e = memAllocate(MEM_HTTP_HDR_ENTRY);
+    e = memPoolAlloc(pool_http_header_entry);
     e->id = id;
     if (id != HDR_OTHER)
 	e->name = Headers[id].name;
@@ -1249,7 +1267,7 @@ httpHeaderEntryDestroy(HttpHeaderEntry * e)
     assert(Headers[e->id].stat.aliveCount);
     Headers[e->id].stat.aliveCount--;
     e->id = -1;
-    memFree(e, MEM_HTTP_HDR_ENTRY);
+    memPoolFree(pool_http_header_entry, e);
 }
 
 /* parses and inits header entry, returns new entry on success */
@@ -1283,7 +1301,7 @@ httpHeaderEntryParseCreate(const char *field_start, const char *field_end)
 	    return NULL;
     }
     /* now we know we can parse it */
-    e = memAllocate(MEM_HTTP_HDR_ENTRY);
+    e = memPoolAlloc(pool_http_header_entry);
     debug(55, 9) ("creating entry %p: near '%s'\n", e, getStringPrefix(field_start, field_end));
     /* is it a "known" field? */
     id = httpHeaderIdByName(field_start, name_len, Headers, HDR_ENUM_END);
@@ -1307,7 +1325,7 @@ httpHeaderEntryParseCreate(const char *field_start, const char *field_end)
 	    strBuf(e->name), (int) (field_end - value_start));
 	if (e->id == HDR_OTHER)
 	    stringClean(&e->name);
-	memFree(e, MEM_HTTP_HDR_ENTRY);
+	memPoolFree(pool_http_header_entry, e);
 	return NULL;
     }
     /* set field value */
