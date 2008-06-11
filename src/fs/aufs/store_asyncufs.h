@@ -9,9 +9,9 @@
 
 /* Which operations to run async */
 #define ASYNC_OPEN 1
-#define ASYNC_CLOSE 0
+#define ASYNC_CLOSE 1
 #define ASYNC_CREATE 1
-#define ASYNC_WRITE 0
+#define ASYNC_WRITE 1
 #define ASYNC_READ 1
 
 struct _squidaioinfo_t {
