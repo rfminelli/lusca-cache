@@ -101,15 +101,11 @@ extern char *snmp_agentinfo;
 extern int n_disk_objects;	/* 0 */
 extern iostats IOStats;
 extern struct _acl_deny_info_list *DenyInfoList;	/* NULL */
-extern struct in_addr any_addr;
-extern struct in_addr local_addr;
-extern struct in_addr no_addr;
 extern struct in_addr theOutICPAddr;
 extern struct in_addr theOutSNMPAddr;
 extern struct timeval current_time;
 extern struct timeval squid_start;
 extern time_t squid_curtime;	/* 0 */
-extern int shutting_down;	/* 0 */
 extern int reconfiguring;	/* 0 */
 extern int store_dirs_rebuilding;	/* 1 */
 extern int store_swap_size;	/* 0 */
