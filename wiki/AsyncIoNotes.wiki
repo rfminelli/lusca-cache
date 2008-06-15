@@ -13,3 +13,11 @@ It appeared sometime during Squid-1.2beta. It tied into the filedescriptor / dis
 == Current Implementation ==
 
 There is one global thread pool and worker queue.
+
+== Shortcomings ==
+
+=== Integration ===
+
+=== Load balancing / scheduling / shedding ==
+
+== TODO list ==
