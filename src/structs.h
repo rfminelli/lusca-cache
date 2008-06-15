@@ -826,12 +826,6 @@ struct _SquidConfig2 {
     gid_t effectiveGroupID;
 };
 
-struct _close_handler {
-    PF *handler;
-    void *data;
-    close_handler *next;
-};
-
 /* ETag support is rudimantal;
  * this struct is likely to change
  * Note: "str" points to memory in HttpHeaderEntry (for now)
