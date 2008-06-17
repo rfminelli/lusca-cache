@@ -690,7 +690,6 @@ extern void identInit(void);
 extern void statInit(void);
 extern void statFreeMemory(void);
 extern double median_svc_get(int, int);
-extern void pconnHistCount(int, int);
 extern int stat5minClientRequests(void);
 extern double stat5minCPUUsage(void);
 extern const char *storeEntryFlags(const StoreEntry *);

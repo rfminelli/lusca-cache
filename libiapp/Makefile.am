@@ -5,7 +5,8 @@ libiapp_a_SOURCES = \
 	comm.c \
 	disk.c \
 	event.c \
-	globals.c
+	globals.c \
+	pconn_hist.c
 
 noinst_LIBRARIES = \
 	libiapp.a

@@ -43,9 +43,6 @@ struct _pconn {
 };
 
 #define PCONN_FDS_SZ	8	/* pconn set size, increase for better memcache hit rate */
-#define PCONN_HIST_SZ (1<<16)
-int client_pconn_hist[PCONN_HIST_SZ];
-int server_pconn_hist[PCONN_HIST_SZ];
 
 static PF pconnRead;
 static PF pconnTimeout;
@@ -263,16 +260,3 @@ pconnLookup(const char *peer, u_short port, const char *domain, struct in_addr *
     return hash_lookup(table, key);
 }
 
-void
-pconnHistCount(int what, int i)
-{
-    if (i >= PCONN_HIST_SZ)
-	i = PCONN_HIST_SZ - 1;
-    /* what == 0 for client, 1 for server */
-    if (what == 0)
-	client_pconn_hist[i]++;
-    else if (what == 1)
-	server_pconn_hist[i]++;
-    else
-	assert(0);
-}

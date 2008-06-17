@@ -420,6 +420,7 @@ struct rusage {
 #include "../libiapp/event.h"
 #include "../libiapp/comm.h"
 #include "../libiapp/globals.h"
+#include "../libiapp/pconn_hist.h"
 
 #include "defines.h"
 #include "enums.h"
