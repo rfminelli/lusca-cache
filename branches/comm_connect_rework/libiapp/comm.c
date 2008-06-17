@@ -69,6 +69,7 @@
  
 #include "globals.h"
 #include "comm.h"
+#include "pconn_hist.h"
 
 #if defined(_SQUID_CYGWIN_)
 #include <sys/ioctl.h>
@@ -615,10 +616,8 @@ comm_close(int fd)
     F->flags.closing = 1;
     CommWriteStateCallbackAndFree(fd, COMM_ERR_CLOSING);
     commCallCloseHandlers(fd);
-#if NOTYET
     if (F->uses)		/* assume persistent connect count */
 	pconnHistCount(1, F->uses);
-#endif
 #if USE_SSL
     if (F->ssl) {
 	if (!F->flags.close_request) {
