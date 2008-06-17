@@ -1,0 +1,10 @@
+
+* src/main.c has some assignments to iapp_ variables for copying bits of the
+  config from Config. out to libiapp; these need to go away before the code
+  is merged in.
+
+* libiapp/comm.c has a #if NOTYET around the pconn uses tracking code.
+  See if you can think of a way to migrate the pconn statistics stuff out
+  into libiapp somehow and get the pconn cachemgr info page to just reference
+  that.
+
