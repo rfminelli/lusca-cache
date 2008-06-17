@@ -409,6 +409,11 @@ mainReconfigure(void)
     errorClean();
     enter_suid();		/* root to read config file */
     parseConfigFile(ConfigFile);
+
+    /* XXX hacks for now to setup config options in libiapp; rethink this! -adrian */
+    iapp_tcpRcvBufSz = Config.tcpRcvBufsz;
+    iapp_useAcceptFilter = Config.accept_filter;
+
     setUmask(Config.umask);
     setEffectiveUser();
     _db_init(Config.debugOptions);
@@ -773,6 +778,10 @@ main(int argc, char **argv)
 
 	if (opt_parse_cfg_only)
 	    return parse_err;
+
+        /* XXX hacks for now to setup config options in libiapp; rethink this! -adrian */
+        iapp_tcpRcvBufSz = Config.tcpRcvBufsz;
+        iapp_useAcceptFilter = Config.accept_filter;
     }
     setUmask(Config.umask);
     if (-1 == opt_send_signal)

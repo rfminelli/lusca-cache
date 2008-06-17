@@ -265,10 +265,8 @@ comm_fdopenex(int new_socket,
 	if (sock_type != SOCK_DGRAM)
 #endif
 	    commSetNoLinger(new_socket);
-#if NOTYET
 	if (opt_reuseaddr)
 	    commSetReuseAddr(new_socket);
-#endif
     }
     if (addr.s_addr != no_addr.s_addr) {
 	if (commBind(new_socket, addr, port) != COMM_OK) {
@@ -283,10 +281,8 @@ comm_fdopenex(int new_socket,
 	    return -1;
     if (sock_type == SOCK_STREAM)
 	commSetTcpNoDelay(new_socket);
-#if NOTYET
-    if (Config.tcpRcvBufsz > 0 && sock_type == SOCK_STREAM)
-	commSetTcpRcvbuf(new_socket, Config.tcpRcvBufsz);
-#endif
+    if (iapp_tcpRcvBufSz > 0 && sock_type == SOCK_STREAM)
+	commSetTcpRcvbuf(new_socket, iapp_tcpRcvBufSz);
     return new_socket;
 }
 
@@ -307,8 +303,7 @@ comm_listen(int sock)
 	    sock, xstrerror());
 	return x;
     }
-#if NOTYET
-    if (Config.accept_filter && strcmp(Config.accept_filter, "none") != 0) {
+    if (iapp_useAcceptFilter && strcmp(iapp_useAcceptFilter, "none") != 0) {
 #ifdef SO_ACCEPTFILTER
 	struct accept_filter_arg afa;
 	bzero(&afa, sizeof(afa));
@@ -320,16 +315,15 @@ comm_listen(int sock)
 	    debug(5, 0) ("SO_ACCEPTFILTER '%s': %s\n", Config.accept_filter, xstrerror());
 #elif defined(TCP_DEFER_ACCEPT)
 	int seconds = 30;
-	if (strncmp(Config.accept_filter, "data=", 5) == 0)
-	    seconds = atoi(Config.accept_filter + 5);
+	if (strncmp(iapp_useAcceptFilter , "data=", 5) == 0)
+	    seconds = atoi(iapp_useAcceptFilter + 5);
 	x = setsockopt(sock, IPPROTO_TCP, TCP_DEFER_ACCEPT, &seconds, sizeof(seconds));
 	if (x < 0)
-	    debug(5, 0) ("TCP_DEFER_ACCEPT '%s': %s\n", Config.accept_filter, xstrerror());
+	    debug(5, 0) ("TCP_DEFER_ACCEPT '%s': %s\n", iapp_useAcceptFilter, xstrerror());
 #else
 	debug(5, 0) ("accept_filter not supported on your OS\n");
 #endif
     }
-#endif
     return sock;
 }
 
