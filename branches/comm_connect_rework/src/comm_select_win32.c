@@ -64,10 +64,10 @@ do_select_shutdown()
 {
 }
 
-void
-comm_select_status(StoreEntry * sentry)
+const char *
+comm_select_status(void)
 {
-    storeAppendPrintf(sentry, "\tIO loop method:                     select\n");
+    return("select (win32)");
 }
 
 void

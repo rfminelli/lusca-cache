@@ -129,7 +129,7 @@ extern void clientReassignDelaypools(void);
 /*
  * comm_select.c
  */
-extern void comm_select_status(StoreEntry *);
+extern const char * comm_select_status(void);
 
 extern void packerToStoreInit(Packer * p, StoreEntry * e);
 extern void packerToMemInit(Packer * p, MemBuf * mb);

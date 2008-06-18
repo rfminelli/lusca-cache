@@ -92,10 +92,10 @@ do_select_shutdown()
     safe_free(epoll_state);
 }
 
-void
-comm_select_status(StoreEntry * sentry)
+const char *
+comm_select_status(void)
 {
-    storeAppendPrintf(sentry, "\tIO loop method:                     epoll\n");
+    return("epoll");
 }
 
 void

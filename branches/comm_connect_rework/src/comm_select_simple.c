@@ -67,10 +67,10 @@ do_select_shutdown()
 {
 }
 
-void
-comm_select_status(StoreEntry * sentry)
+const char *
+comm_select_status(void)
 {
-    storeAppendPrintf(sentry, "\tIO loop method:                     select in POSIX mode\n");
+    return("select in POSIX mode");
 }
 
 void
