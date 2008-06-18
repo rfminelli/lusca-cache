@@ -11,4 +11,10 @@ extern const char *xinet_ntoa(const struct in_addr addr);
 #define XMIN(x,y) ((x)<(y)? (x) : (y))
 #define XMAX(x,y) ((x)>(y)? (x) : (y))
 
+extern struct timeval current_time;
+extern double current_dtime;
+extern time_t squid_curtime;    /* 0 */
+
+extern time_t getCurrentTime(void);
+
 #endif
