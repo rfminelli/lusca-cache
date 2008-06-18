@@ -67,9 +67,7 @@ extern const char *memStatusStr[];
 extern const char *pingStatusStr[];
 extern const char *storeStatusStr[];
 extern const char *swapStatusStr[];
-extern int HttpSockets[MAXHTTPPORTS];
 extern int NDnsServersAlloc;	/* 0 */
-extern int NHttpSockets;	/* 0 */
 extern int RESERVED_FD;
 extern int config_lineno;	/* 0 */
 extern int do_mallinfo;		/* 0 */
@@ -89,8 +87,6 @@ extern int opt_udp_hit_obj;	/* 0 */
 extern int opt_create_swap_dirs;	/* 0 */
 extern int opt_store_doublecheck;	/* 0 */
 extern int syslog_enable;	/* 0 */
-extern int theInIcpConnection;	/* -1 */
-extern int theOutIcpConnection;	/* -1 */
 extern int DnsSocket;		/* -1 */
 #ifdef SQUID_SNMP
 extern int theInSnmpConnection;	/* -1 */
@@ -102,9 +98,7 @@ extern iostats IOStats;
 extern struct _acl_deny_info_list *DenyInfoList;	/* NULL */
 extern struct in_addr theOutICPAddr;
 extern struct in_addr theOutSNMPAddr;
-extern struct timeval current_time;
 extern struct timeval squid_start;
-extern time_t squid_curtime;	/* 0 */
 extern int reconfiguring;	/* 0 */
 extern int store_dirs_rebuilding;	/* 1 */
 extern int store_swap_size;	/* 0 */
@@ -116,7 +110,6 @@ extern const char *icp_opcode_str[];
 extern const char *swap_log_op_str[];
 extern const char *lookup_t_str[];
 extern double request_failure_ratio;	/* 0.0 */
-extern double current_dtime;
 extern int store_hash_buckets;	/* 0 */
 extern hash_table *store_table;	/* NULL */
 extern dlink_list ClientActiveRequests;

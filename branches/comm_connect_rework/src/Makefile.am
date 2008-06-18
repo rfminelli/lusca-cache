@@ -72,31 +72,6 @@ MINGWEXLIB =
 IPC_SOURCE = ipc.c
 endif
 
-if USE_POLL
-COMMLOOP_SOURCE = comm_poll.c
-endif
-if USE_EPOLL
-COMMLOOP_SOURCE = comm_epoll.c
-endif
-if USE_SELECT
-COMMLOOP_SOURCE = comm_select.c
-endif
-if USE_SELECT_SIMPLE
-COMMLOOP_SOURCE = comm_select_simple.c
-endif
-if USE_SELECT_WIN32
-COMMLOOP_SOURCE = comm_select_win32.c
-endif
-if USE_KQUEUE
-COMMLOOP_SOURCE = comm_kqueue.c
-endif
-if USE_DEVPOLL
-COMMLOOP_SOURCE = comm_devpoll.c
-endif
-if USE_EVENTPORTS
-COMMLOOP_SOURCE = comm_eventports.c
-endif
-
 SUBDIRS		= fs repl auth
 
 INCLUDES        = -I. -I$(srcdir) -I$(top_builddir)/include -I$(top_srcdir)/include
@@ -162,7 +137,6 @@ squid_SOURCES = \
 	client_side_rewrite.c \
 	client_side_storeurl_rewrite.c \
 	comm.c \
-	$(COMMLOOP_SOURCE) \
 	debug.c \
 	defines.h \
 	$(DELAY_POOL_SOURCE) \

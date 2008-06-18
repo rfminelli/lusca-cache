@@ -413,6 +413,7 @@ mainReconfigure(void)
     /* XXX hacks for now to setup config options in libiapp; rethink this! -adrian */
     iapp_tcpRcvBufSz = Config.tcpRcvBufsz;
     iapp_useAcceptFilter = Config.accept_filter;
+    iapp_incomingRate = Config.incoming_rate;
 
     setUmask(Config.umask);
     setEffectiveUser();
@@ -782,6 +783,7 @@ main(int argc, char **argv)
         /* XXX hacks for now to setup config options in libiapp; rethink this! -adrian */
         iapp_tcpRcvBufSz = Config.tcpRcvBufsz;
         iapp_useAcceptFilter = Config.accept_filter;
+        iapp_incomingRate = Config.incoming_rate;
     }
     setUmask(Config.umask);
     if (-1 == opt_send_signal)
@@ -892,6 +894,8 @@ main(int argc, char **argv)
 	    fatal_dump("MAIN: Internal error -- this should never happen.");
 	    break;
 	}
+        /* Check for disk io callbacks */
+        storeDirCallback();
     }
     /* NOTREACHED */
     return 0;

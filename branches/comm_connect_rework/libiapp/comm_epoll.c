@@ -32,7 +32,40 @@
  *
  */
 
-#include "squid.h"
+#include "../include/config.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <math.h>
+#include <fcntl.h>
+#include <err.h>
+#include <sys/errno.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#include "../include/Array.h"
+#include "../include/Stack.h"
+#include "../include/util.h"
+#include "../libcore/valgrind.h"
+#include "../libcore/varargs.h"
+#include "../libcore/debug.h"
+#include "../libcore/kb.h"
+#include "../libcore/gb.h"
+#include "../libcore/tools.h"
+
+#include "../libmem/MemPool.h"
+#include "../libmem/MemBufs.h"
+#include "../libmem/MemBuf.h"
+
+#include "../libstat/StatHist.h"
+
+#include "../libcb/cbdata.h"
+
+#include "globals.h"
+#include "comm.h"
 
 #include <sys/epoll.h>
 
@@ -70,7 +103,7 @@ do_select_init()
 {
     kdpfd = epoll_create(Squid_MaxFD);
     if (kdpfd < 0)
-	fatalf("comm_select_init: epoll_create(): %s\n", xstrerror());
+	err(1, "comm_select_init: epoll_create()");
     fd_open(kdpfd, FD_UNKNOWN, "epoll ctl");
     commSetCloseOnExec(kdpfd);
 
@@ -174,7 +207,9 @@ do_comm_select(int msec)
 	assert(shutting_down);
 	return COMM_SHUTDOWN;
     }
+#if NOTYET
     statCounter.syscalls.polls++;
+#endif
     num = epoll_wait(kdpfd, events, MAX_EVENTS, msec);
     if (num < 0) {
 	getCurrentTime();
@@ -184,7 +219,9 @@ do_comm_select(int msec)
 	debug(5, 1) ("comm_select: epoll failure: %s\n", xstrerror());
 	return COMM_ERROR;
     }
+#if NOTYET
     statHistCount(&statCounter.select_fds_hist, num);
+#endif
 
     if (num == 0)
 	return COMM_TIMEOUT;
