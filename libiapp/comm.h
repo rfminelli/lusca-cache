@@ -294,6 +294,7 @@ extern void commOpen(int fd);
 extern void commUpdateReadHandler(int, PF *, void *);
 extern void commUpdateWriteHandler(int, PF *, void *);
 extern void comm_quick_poll_required(void);
+extern const char * comm_select_status(void);
 
 /* disk.c */
 extern int file_open(const char *path, int mode);
