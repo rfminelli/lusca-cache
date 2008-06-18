@@ -82,10 +82,10 @@ do_select_shutdown()
     safe_free(kqueue_state);
 }
 
-void
-comm_select_status(StoreEntry * sentry)
+const char *
+comm_select_status(void)
 {
-    storeAppendPrintf(sentry, "\tIO loop method:                     kqueue\n");
+    return("kqueue");
 }
 
 void
