@@ -1269,8 +1269,6 @@ extern int httpMsgParseRequestLine(HttpMsgBuf * hmsg);
 extern int httpMsgParseRequestHeader(request_t * req, HttpMsgBuf * hmsg);
 extern int httpMsgFindHeadersEnd(HttpMsgBuf * hmsg);
 
-extern const char *xinet_ntoa(const struct in_addr addr);
-
 /* client_side.c */
 extern aclCheck_t *clientAclChecklistCreate(const acl_access * acl, const clientHttpRequest * http);
 extern void clientInterpretRequestHeaders(clientHttpRequest * http);

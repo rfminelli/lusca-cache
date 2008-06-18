@@ -93,12 +93,6 @@ struct in_addr no_addr;
 
 extern time_t squid_curtime;	/* XXX */
 
-/* XXX only for now, until xinet_ntoa is put into libcore/ -adrian */
-#define	xinet_ntoa(a)		inet_ntoa(a)
-
-/* XXX only for now! */
-#define XMIN(x,y) ((x)<(y)? (x) : (y))
-
 static void
 CommWriteStateCallbackAndFree(int fd, int code)
 {
