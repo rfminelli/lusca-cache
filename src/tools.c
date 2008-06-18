@@ -1300,13 +1300,6 @@ restoreCapabilities(int keep)
 #endif
 }
 
-/* XXX this is ipv4-only aware atm */
-const char *
-xinet_ntoa(const struct in_addr addr)
-{
-    return inet_ntoa(addr);
-}
-
 /**
  * Parse a socket address (host:port), fill the given sockaddr_in structure
  * Returns FALSE on failure, TRUE on success

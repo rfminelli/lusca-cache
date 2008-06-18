@@ -447,9 +447,6 @@ struct rusage {
 #include "initgroups.h"
 #endif
 
-#define XMIN(x,y) ((x)<(y)? (x) : (y))
-#define XMAX(a,b) ((a)>(b)? (a) : (b))
-
 /*
  * Squid source files should not call these functions directly.
  * Use xmalloc, xfree, xcalloc, snprintf, and xstrdup instead.
