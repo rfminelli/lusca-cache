@@ -126,11 +126,6 @@ extern int clientGetPinnedInfo(const ConnStateData * conn, const request_t * req
 extern int clientGetPinnedConnection(ConnStateData * conn, const request_t * request, const peer * peer, int *auth);
 extern void clientReassignDelaypools(void);
 
-/*
- * comm_select.c
- */
-extern const char * comm_select_status(void);
-
 extern void packerToStoreInit(Packer * p, StoreEntry * e);
 extern void packerToMemInit(Packer * p, MemBuf * mb);
 extern void packerClean(Packer * p);
