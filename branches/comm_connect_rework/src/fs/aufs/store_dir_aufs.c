@@ -438,7 +438,7 @@ storeAufsDirRebuildFromDirectory(void *data)
 	    debug(47, 3) ("  %s %7d files opened so far.\n",
 		rb->sd->path, rb->counts.scancount);
 	debug(47, 9) ("file_in: fd=%d %08X\n", fd, filn);
-	statCounter.syscalls.disk.reads++;
+	CommStats.syscalls.disk.reads++;
 	if (FD_READ_METHOD(fd, hdr_buf, SM_PAGE_SIZE) < 0) {
 	    debug(47, 1) ("storeAufsDirRebuildFromDirectory: read(FD %d): %s\n",
 		fd, xstrerror());

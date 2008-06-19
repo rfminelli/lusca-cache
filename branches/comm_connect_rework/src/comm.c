@@ -155,9 +155,10 @@ commResetFD(ConnectStateData * cs)
     fde *F;
     if (!cbdataValid(cs->data))
 	return 0;
-    statCounter.syscalls.sock.sockets++;
+    CommStats.syscalls.sock.sockets++;
     fd2 = socket(AF_INET, SOCK_STREAM, 0);
-    statCounter.syscalls.sock.sockets++;
+    /* XXX why are there two increments? -adrian */
+    CommStats.syscalls.sock.sockets++;
     if (fd2 < 0) {
 	debug(5, 0) ("commResetFD: socket: %s\n", xstrerror());
 	if (ENFILE == errno || EMFILE == errno)

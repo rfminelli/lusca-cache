@@ -4163,7 +4163,7 @@ clientReadRequest(int fd, void *data)
 	    (long) conn->in.offset, (long) conn->in.size);
 	len = conn->in.size - conn->in.offset - 1;
     }
-    statCounter.syscalls.sock.reads++;
+    CommStats.syscalls.sock.reads++;
     size = FD_READ_METHOD(fd, conn->in.buf + conn->in.offset, len);
     if (size > 0) {
 	fd_bytes(fd, size, FD_READ);
