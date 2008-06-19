@@ -207,9 +207,7 @@ comm_call_slowfds(void)
 		commUpdateEvents(fd);
 	    }
 #endif
-#if NOTYET
-	    statCounter.select_fds++;
-#endif
+	    CommStats.select_fds++;
 	    check_incoming();
 	}
     }
@@ -267,9 +265,7 @@ comm_call_handlers(int fd, int read_event, int write_event)
 		if (F->flags.open && !F->read_handler)
 		    commUpdateEvents(fd);
 #endif
-#if NOTYET
-		statCounter.select_fds++;
-#endif
+		CommStats.select_fds++;
 		if (do_incoming)
 		    check_incoming();
 		break;
@@ -305,9 +301,7 @@ comm_call_handlers(int fd, int read_event, int write_event)
 	    if (F->flags.open)
 		commUpdateEvents(fd);
 #endif
-#if NOTYET
-	    statCounter.select_fds++;
-#endif
+	    CommStats.select_fds++;
 	    if (do_incoming)
 		check_incoming();
 	}
@@ -374,9 +368,7 @@ comm_select(int msec)
 	msec = 0;
 #endif
 
-#if NOTYET
-    statCounter.select_loops++;
-#endif
+    CommStats.select_loops++;
 
     /* Check timeouts once per second */
     if (last_timeout + 0.999 < current_dtime) {
@@ -395,9 +387,7 @@ comm_select(int msec)
     comm_call_slowfds();
 #endif
     getCurrentTime();
-#if NOTYET
-    statCounter.select_time += (current_dtime - start);
-#endif
+    CommStats.select_time += (current_dtime - start);
 
     if (rc == COMM_TIMEOUT)
 	debug(5, 8) ("comm_select: time out\n");

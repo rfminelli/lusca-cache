@@ -93,6 +93,8 @@ struct in_addr no_addr;
 
 extern time_t squid_curtime;	/* XXX */
 
+CommStatStruct CommStats;
+
 static void
 CommWriteStateCallbackAndFree(int fd, int code)
 {
@@ -153,7 +155,7 @@ commBind(int s, struct in_addr in_addr, u_short port)
     S.sin_family = AF_INET;
     S.sin_port = htons(port);
     S.sin_addr = in_addr;
-    //statCounter.syscalls.sock.binds++;
+    CommStats.syscalls.sock.binds++;
     if (bind(s, (struct sockaddr *) &S, sizeof(S)) == 0)
 	return COMM_OK;
     debug(5, 0) ("commBind: Cannot bind socket FD %d to %s:%d: %s\n",
@@ -193,7 +195,7 @@ comm_openex(int sock_type,
     int tos = 0;
 
     /* Create socket for accepting new connections. */
-    //statCounter.syscalls.sock.sockets++;
+    CommStats.syscalls.sock.sockets++;
     if ((new_socket = socket(AF_INET, sock_type, proto)) < 0) {
 	/* Increase the number of reserved fd's if calls to socket()
 	 * are failing because the open file table is full.  This
@@ -357,7 +359,7 @@ comm_connect_addr(int sock, const struct sockaddr_in *address)
     errno = 0;
     if (!F->flags.called_connect) {
 	F->flags.called_connect = 1;
-	//statCounter.syscalls.sock.connects++;
+	CommStats.syscalls.sock.connects++;
 	x = connect(sock, (struct sockaddr *) address, sizeof(*address));
 	if (x < 0)
 	    debug(5, 9) ("connect FD %d: %s\n", sock, xstrerror());
@@ -416,7 +418,7 @@ comm_accept(int fd, struct sockaddr_in *pn, struct sockaddr_in *me)
     socklen_t Slen;
     fde *F = NULL;
     Slen = sizeof(P);
-    //statCounter.syscalls.sock.accepts++;
+    CommStats.syscalls.sock.accepts++;
     if ((sock = accept(fd, (struct sockaddr *) &P, &Slen)) < 0) {
 	if (ignoreErrno(errno) || errno == ECONNREFUSED || errno == ECONNABORTED) {
 	    debug(5, 5) ("comm_accept: FD %d: %s\n", fd, xstrerror());
@@ -554,7 +556,7 @@ comm_close_finish(int fd)
 {
     fd_close(fd);		/* update fdstat */
     close(fd);
-    //statCounter.syscalls.sock.closes++;
+    CommStats.syscalls.sock.closes++;
 }
 
 #if USE_SSL
@@ -636,7 +638,7 @@ comm_udp_sendto(int fd,
     int len)
 {
     int x;
-    //statCounter.syscalls.sock.sendtos++;
+    CommStats.syscalls.sock.sendtos++;
     x = sendto(fd, buf, len, 0, (struct sockaddr *) to_addr, addr_len);
     if (x < 0) {
 #ifdef _SQUID_LINUX_
@@ -1010,7 +1012,7 @@ commHandleWrite(int fd, void *data)
 	len = FD_WRITE_METHOD(fd, state->buf + state->offset - state->header_size, nleft);
     debug(5, 5) ("commHandleWrite: write() returns %d\n", len);
     fd_bytes(fd, len, FD_WRITE);
-    //statCounter.syscalls.sock.writes++;
+    CommStats.syscalls.sock.writes++;
 
     if (len == 0) {
 	/* Note we even call write if nleft == 0 */

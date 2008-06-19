@@ -213,6 +213,38 @@ struct _fde {
 
 typedef struct _fde fde;
 
+/* .. XXX how the hell will this be threaded? */
+struct _CommStatStruct {
+    struct {
+        struct {
+            int opens;
+            int closes;
+            int reads;
+            int writes;
+            int seeks;
+            int unlinks;
+        } disk;
+        struct {
+            int accepts;
+            int sockets;
+            int connects;
+            int binds;
+            int closes;
+            int reads;
+            int writes;
+            int recvfroms;
+            int sendtos;
+        } sock;
+        int polls;
+        int selects;
+    } syscalls;
+    int select_fds;
+    int select_loops;
+    int select_time;
+};
+
+typedef struct _CommStatStruct CommStatStruct;
+
 extern void fd_init(void);
 extern void fd_close(int fd);
 extern void fd_open(int fd, unsigned int type, const char *);
@@ -316,7 +348,7 @@ extern struct in_addr any_addr;
 extern struct in_addr local_addr;
 extern struct in_addr no_addr;
 
-
+extern CommStatStruct CommStats;
 
 
 #endif
