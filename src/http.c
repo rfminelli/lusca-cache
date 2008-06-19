@@ -752,7 +752,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
      */
     if (len == 0 && buffer_filled >= 0) {
 	char buf2[4];
-	statCounter.syscalls.sock.reads++;
+	CommStats.syscalls.sock.reads++;
 	len = FD_READ_METHOD(fd, buf2, sizeof(buf2));
 	if ((len < 0 && !ignoreErrno(errno)) || len == 0) {
 	    keep_alive = 0;
@@ -861,7 +861,7 @@ httpReadReply(int fd, void *data)
 #endif
 
     errno = 0;
-    statCounter.syscalls.sock.reads++;
+    CommStats.syscalls.sock.reads++;
     len = FD_READ_METHOD(fd, buf, read_sz);
     buffer_filled = len == read_sz;
     debug(11, 5) ("httpReadReply: FD %d: len %d.\n", fd, (int) len);

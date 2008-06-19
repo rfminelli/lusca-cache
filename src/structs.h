@@ -1957,15 +1957,18 @@ struct _StatCounters {
 	int times_used;
     } netdb;
     int page_faults;
+#if 0
     int select_loops;
     int select_fds;
     double select_time;
+#endif
     double cputime;
     struct timeval timestamp;
     StatHist comm_icp_incoming;
     StatHist comm_dns_incoming;
     StatHist comm_http_incoming;
     StatHist select_fds_hist;
+#if 0
     struct {
 	struct {
 	    int opens;
@@ -1989,6 +1992,7 @@ struct _StatCounters {
 	int polls;
 	int selects;
     } syscalls;
+#endif
     int aborted_requests;
     struct {
 	int files_cleaned;

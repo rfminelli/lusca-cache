@@ -565,7 +565,7 @@ uniqueHostname(void)
 void
 safeunlink(const char *s, int quiet)
 {
-    statCounter.syscalls.disk.unlinks++;
+    CommStats.syscalls.disk.unlinks++;
     if (unlink(s) < 0 && !quiet)
 	debug(50, 1) ("safeunlink: Couldn't delete %s: %s\n", s, xstrerror());
 }
