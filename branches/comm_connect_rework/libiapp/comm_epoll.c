@@ -207,9 +207,7 @@ do_comm_select(int msec)
 	assert(shutting_down);
 	return COMM_SHUTDOWN;
     }
-#if NOTYET
-    statCounter.syscalls.polls++;
-#endif
+    CommStats.syscalls.polls++;
     num = epoll_wait(kdpfd, events, MAX_EVENTS, msec);
     if (num < 0) {
 	getCurrentTime();
