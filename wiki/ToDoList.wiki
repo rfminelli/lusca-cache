@@ -38,12 +38,13 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
     * What else?
 
 
-  * Next - bring out the event, comm, fd, disk code
+  * Next - bring out the event *done*, comm *done*, fd *done*, disk code *done*
   * Next - bring out the async io code
   * Next - improve communications code, cut #1
    * callback based recvfrom(); keep calling the handler for each recvfrom() called until deregistered
    * convert over recvfrom() users to use this - src/dns_internal.c ; src/htcp.c ; src/icmp.c ; src/icp_v2.c ; src/snmp_core.c ; src/wccp.c ; src/wccp2.c
    * what else? a comm_read() ? Remember the old argument of "provide buffer" versus "receive buffer"
+  * Wrap up the initialisation and event run stuff in libiapp/ so the main loop can be used outside of squid's src/
 
   * Next phase - improving the communication code #2
     * Bring over a very naive reference-counted buffer type
