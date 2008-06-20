@@ -75,40 +75,7 @@
 
 #define MAXHTTPPORTS			128
 
-#define COMM_OK		  (0)
-#define COMM_ERROR	 (-1)
-#define COMM_NOMESSAGE	 (-3)
-#define COMM_TIMEOUT	 (-4)
-#define COMM_SHUTDOWN	 (-5)
-#define COMM_INPROGRESS  (-6)
-#define COMM_ERR_CONNECT (-7)
-#define COMM_ERR_DNS     (-8)
-#define COMM_ERR_CLOSING (-9)
-
-/* Select types. */
-#define COMM_SELECT_READ   (0x1)
-#define COMM_SELECT_WRITE  (0x2)
-#define MAX_DEBUG_SECTIONS 100
-
-#define COMM_NONBLOCKING	0x01
-#define COMM_NOCLOEXEC		0x02
-#define COMM_REUSEADDR		0x04
-
-#define do_debug(SECTION, LEVEL) \
-	((_db_level = (LEVEL)) <= debugLevels[SECTION])
-#define debug(SECTION, LEVEL) \
-        !do_debug(SECTION, LEVEL) ? (void) 0 : _db_print
-
-#define safe_free(x)	if (x) { xxfree(x); x = NULL; }
-
-#define DISK_OK                   (0)
-#define DISK_ERROR               (-1)
-#define DISK_EOF                 (-2)
-#define DISK_NO_SPACE_LEFT       (-6)
-
 #define DNS_INBUF_SZ 4096
-
-#define FD_DESC_SZ		64
 
 #define FQDN_LOOKUP_IF_MISS	0x01
 #define FQDN_MAX_NAMES 5
@@ -262,10 +229,6 @@
 #define DEFAULT_SQUID_ERROR_DIR "/usr/local/squid/etc/errors"
 #endif
 
-/* gb_type operations */
-#define gb_flush_limit (0x3FFFFFFF)
-#define gb_inc(gb, delta) { if ((gb)->bytes > gb_flush_limit || delta > gb_flush_limit) gb_flush(gb); (gb)->bytes += delta; (gb)->count++; }
-
 /* iteration for HttpHdrRange */
 #define HttpHdrRangeInitPos (-1)
 
@@ -274,9 +237,6 @@
 
 /* handy to determine the #elements in a static array */
 #define countof(arr) (sizeof(arr)/sizeof(*arr))
-
-/* to initialize static variables (see also MemBufNull) */
-#define MemBufNULL { NULL, 0, 0, 0, 0 }
 
 /*
  * Max number of ICP messages to receive per call to icpHandleUdp
@@ -315,14 +275,6 @@
 #endif
 #endif
 
-/* cbdata macros */
-#define cbdataAlloc(type) ((type *)cbdataInternalAlloc(CBDATA_##type))
-#define cbdataFree(var) (var = (var != NULL ? cbdataInternalFree(var): NULL))
-#define CBDATA_TYPE(type)	static cbdata_type CBDATA_##type = 0
-#define CBDATA_GLOBAL_TYPE(type)	cbdata_type CBDATA_##type
-#define CBDATA_INIT_TYPE(type)	(CBDATA_##type ? 0 : (CBDATA_##type = cbdataAddType(CBDATA_##type, #type, sizeof(type), NULL)))
-#define CBDATA_INIT_TYPE_FREECB(type, free_func)	(CBDATA_##type ? 0 : (CBDATA_##type = cbdataAddType(CBDATA_##type, #type, sizeof(type), free_func)))
-
 #ifndef O_TEXT
 #define O_TEXT 0
 #endif
@@ -348,21 +300,9 @@
 #define _WIN_SQUID_RUN_MODE_SERVICE		1
 #endif
 
-/*
- * Macro to find file access mode
- */
-#ifdef O_ACCMODE
-#define FILE_MODE(x) ((x)&O_ACCMODE)
-#else
-#define FILE_MODE(x) ((x)&(O_RDONLY|O_WRONLY|O_RDWR))
-#endif
-
 /* swap_filen is 25 bits, signed */
 #define FILEMAP_MAX_SIZE (1<<24)
 #define FILEMAP_MAX (FILEMAP_MAX_SIZE - 65536)
-
-#define	DLINK_ISEMPTY(n)	( (n).head == NULL )
-#define	DLINK_HEAD(n)		( (n).head->data )
 
 #define	LOGFILE_SEQNO(n)	( (n)->sequence_number )
 
