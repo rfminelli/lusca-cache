@@ -73,6 +73,13 @@ commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *
 {
     ConnectStateData *cs;
     debug(5, 3) ("commConnectStart: FD %d, %s:%d\n", fd, host, (int) port);
+    /*
+     * XXX this wasn't ever here (it was in comm_init()) so its possible this may slow things
+     * XXX down a little; eventually this should migrate to a squid-specific comm_init()
+     * XXX (comm_local_init() ? comm_connect_init()? so its called once like the old init
+     * XXX function was. -adrian
+     */
+    CBDATA_INIT_TYPE(ConnectStateData);
     cs = cbdataAlloc(ConnectStateData);
     cs->fd = fd;
     cs->host = xstrdup(host);
