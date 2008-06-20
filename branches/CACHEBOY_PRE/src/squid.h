@@ -418,6 +418,7 @@ struct rusage {
 #include "../libhttp/HttpHeader.h"
 
 #include "../libiapp/event.h"
+#include "../libiapp/iapp_ssl.h"
 #include "../libiapp/comm.h"
 
 #include "defines.h"
