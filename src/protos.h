@@ -1279,5 +1279,7 @@ extern void clientStoreURLRewriteAccessCheckDone(int answer, void *data);
 extern void clientStoreURLRewriteStart(clientHttpRequest * http);
 extern void clientStoreURLRewriteDone(void *data, char *result);
 
+/* statIapp.c */
+extern void statIappStats(StoreEntry *sentry);
 
 #endif /* SQUID_PROTOS_H */

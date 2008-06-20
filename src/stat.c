@@ -963,6 +963,7 @@ statInit(void)
     cachemgrRegister("active_requests",
 	"Client-side Active Requests",
 	statClientRequests, 0, 1);
+    cachemgrRegister("iapp_stats", "libiapp statistics", statIappStats, 0, 1);
 }
 
 static void

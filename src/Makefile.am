@@ -212,6 +212,7 @@ squid_SOURCES = \
 	ssl.c \
 	$(SSLSOURCE) \
 	stat.c \
+	statIapp.c \
 	StatHist.c \
 	String.c \
 	stmem.c \
