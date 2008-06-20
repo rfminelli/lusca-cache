@@ -6,6 +6,8 @@ ChangeLog:
 * Shuffled the beginnings of comm, disk, filedescriptor and event management out of src/
   and into libiapp/
 * Shuffled a couple of basic HTTP types out of src/ and into libhttp/
+* Reworked the async IO disk notification code - it should be more efficient under
+  heavy network (and disk!) load.
 
 -- Tagged CACHEBOY_1.1
 
