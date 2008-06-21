@@ -5,7 +5,3 @@
 
 * start resolving naming space conflicts!
 
-* the iapp_stats mgr page counters aren't reflecting reality - accept, connect,
-  socket are all returning very low values. Figure out why!
-
-
