@@ -418,6 +418,7 @@ struct rusage {
 #include "../libhttp/HttpHeader.h"
 
 #include "../libiapp/event.h"
+#include "../libiapp/signals.h"
 #include "../libiapp/comm.h"
 #include "../libiapp/globals.h"
 #include "../libiapp/pconn_hist.h"
