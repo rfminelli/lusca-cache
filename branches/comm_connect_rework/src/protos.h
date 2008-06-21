@@ -952,7 +952,6 @@ extern void setSystemLimits(void);
 extern time_t getCurrentTime(void);
 extern int percent(int, int);
 extern double dpercent(double, double);
-extern void squid_signal(int sig, SIGHDLR *, int flags);
 extern pid_t readPidFile(void);
 extern struct in_addr inaddrFromHostent(const struct hostent *hp);
 extern int intAverage(int, int, int, int);
