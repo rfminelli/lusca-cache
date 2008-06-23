@@ -422,6 +422,7 @@ struct rusage {
 #include "../libiapp/comm.h"
 #include "../libiapp/globals.h"
 #include "../libiapp/pconn_hist.h"
+#include "../libiapp/mainloop.h"
 
 #include "defines.h"
 #include "enums.h"
