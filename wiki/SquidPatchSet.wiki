@@ -95,16 +95,16 @@ The initial import included all patchsets up to 12036.
   * 12117 - HEAD - Bug #2335: fix error return in store_client.c leading to NULL dereference - *committed - 12758*
   * 12118 - HEAD - Put XMIN back for the case that sz > -1; we still dont' want to send > copy_size data over! - *committed - 12764*
 
-  * 12119 - HEAD - Windows port: Added new mswin_check_ad_group external ACL helper
-  * 12120 - HEAD - Updated mswin_check_lm_group documentation
-  * 12121 - HEAD - Fixed typo in mswin_check_ad_group documentation
-  * 12122 - HEAD - Fix defaultsite=host:port accelerator mode again...
-  * 12123 - HEAD - Correct Via response header when seeing an HTTP/0.9 response
-  * 12124 - HEAD - Bootstrapped *Needs to be hand-extracted; cvsps broke*
-  * 12125 - HEAD - Forgotten to add Makefile.in to mswin_check_ad_group
-  * 12126 - HEAD - Bug #2350: Memory allocation problem in restoreCapabilities()
-  * 12127 - HEAD - Commit some basic docs for the store URL rewriter.
-  * 12128 - HEAD - Bug #1955: Clarify refresh_pattern override-expire option
+  * 12119 - HEAD - Windows port: Added new mswin_check_ad_group external ACL helper - *committed 12873*
+  * 12120 - HEAD - Updated mswin_check_lm_group documentation - *committed 12874*
+  * 12121 - HEAD - Fixed typo in mswin_check_ad_group documentation - *committed 12875*
+  * 12122 - HEAD - Fix defaultsite=host:port accelerator mode again... - *committed 12876*
+  * 12123 - HEAD - Correct Via response header when seeing an HTTP/0.9 response - *committed 12877*
+  * 12124 - HEAD - Bootstrapped *Needs to be hand-extracted; cvsps broke* - *committed - 12878*
+  * 12125 - HEAD - Forgotten to add Makefile.in to mswin_check_ad_group - *committed - 12879*
+  * 12126 - HEAD - Bug #2350: Memory allocation problem in restoreCapabilities() - *committed - 12880*
+  * 12127 - HEAD - Commit some basic docs for the store URL rewriter. - *committed - 12881*
+  * 12128 - HEAD - Bug #1955: Clarify refresh_pattern override-expire option - *committed - 12882*
   * 12129 - SQUID_2_7 - Windows port: Added new mswin_check_ad_group external ACL helper
   * 12130 - SQUID_2_7 - Updated mswin_check_lm_group documentation
   * 12131 - SQUID_2_7 - Fix defaultsite=host:port accelerator mode again...
