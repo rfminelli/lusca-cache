@@ -33,6 +33,7 @@ libiapp_a_SOURCES = \
 	globals.c \
 	pconn_hist.c \
 	signals.c \
+	mainloop.c \
 	$(COMMLOOP_SOURCE)
 
 noinst_LIBRARIES = \

@@ -870,12 +870,11 @@ main(int argc, char **argv)
 	    serverConnectionsClose();
 	    eventAdd("SquidShutdown", SquidShutdown, NULL, (double) (wait + 1), 1);
 	}
-	eventRun();
-	if ((loop_delay = eventNextTime()) < 0)
-	    loop_delay = 0;
+        /* Set a maximum loop delay; it'll be lowered elsewhere as appropriate */
+	loop_delay = 60000;
 	if (debug_log_flush() && loop_delay > 1000)
 	    loop_delay = 1000;
-	switch (comm_select(loop_delay)) {
+	switch (iapp_runonce(loop_delay)) {
 	case COMM_OK:
 	    errcount = 0;	/* reset if successful */
 	    break;
