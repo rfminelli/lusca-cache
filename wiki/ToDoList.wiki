@@ -57,22 +57,6 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
 
   * Next - resolve issue #10 (Service time differences!) if it hasn't been resolved already.
 
-= Additions for Cacheboy-1.0 =
-
-  * Solaris Event Ports - shouldn't be difficult; can almost merge /dev/poll + kqueue support to get network-only IO ports implemented (and ignore trying to use AIO for now!) - *done*
-  * Nothing else - get the codebase out there and stable! - *done*
-  * Error pages, perhaps? - *done, for english*
-
-= Additions for Cacheboy-1.1 =
-
-  * Tidy up and commit the ZPH patch stuff? this is already included in Squid-2.HEAD. *done, from squid-2.HEAD*
-  * TPROXY-4 support - already coded up, just need to test it before committing! Or bring over what ends up in Squid-2.HEAD ? *commited, not tested at all!*
-  * A writev() style vector method, as a basis for eventually shuffling around the header reply path?
-  * Code restructuring into external libraries:
-    * event queue (src/event.c) *done*
-    * comm / fd *done* / disk *done* - these are somewhat intermingled; bring them over as a group and then tease them apart
-    * src/aufs/aiops - bring it outside of aufs in this phase; worry about eliminating copies and including writev() support at a later date
-
 = Benchmarking =
 
   * Benchmark with / without mempools - try to establish which areas of the codebase are (ab)using malloc far too often
