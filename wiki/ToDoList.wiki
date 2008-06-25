@@ -96,12 +96,12 @@ It'd be nice if ufs and aufs were merged. It'd be doubly nice if ufs, aufs and d
 
 POSIX AIO under FreeBSD *should* allow for copy-free data in and out for disk IO (re-read the code to make sure!) In any case, FreeBSD's POSIX AIO + kqueue notification is probably sensible enough to do the bulk of IO with. Its just a shame there's no AIO open/close operators - AUFS threads are still needed for that.
 
-== TLV / Swap Metadata ==
+= TLV / Swap Metadata =
 
 It doesn't show up in any obvious fashion in the oprofile traces but there are a lot of small memory allocations going on due to the TLV code used by the swap metadata codebase. About 8 or so allocations are done for the TLV data along with allocations from the mempool. The allocations are all very short-lived and thus only show up in the counter data - they're never around long enough to show up in the cachemgr mgr:mem page.
 
 It should be relatively trivial to rework the swap metadata / TLV code to not use temporary buffers at all but to operate on a fixed sized buffer (for packing) and to do the unpacking on the currently supplied store buffer. This should drop the malloc()/free() rate by about 15 to 20%.
 
-== Statistics ==
+= Statistics =
 
 Squid keeps historical statistics for a lot of stuff which may end up being shared between threads. Trying to fine-grain lock all of that crap is probably going to hurt. Perhaps a lot of the statistics need to come -out- of Squid and be implemented externally. This is all pie-in-the-sky at the moment; it will be relevant when the core code begins to be threaded as there are shared comm statistics which I will be removing out of the normal histograms.
