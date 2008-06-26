@@ -143,36 +143,36 @@ The initial import included all patchsets up to 12036.
   * 12158 - HEAD - Updated Windows specific 2.7 release notes - *committed - 12900*
   * 12159 - HEAD - Bug #2283: Properly abort invalid/truncated messages - *committed - 12901*
   * 12164 - HEAD - Preparing for 2.7.STABLE2 - *committed - 12902*
-  * 12167
-  * 12170
-  * 12173
-  * 12174
-  * 12177
-  * 12179
-  * 12180
-  * 12181
-  * 12182
-  * 12183
-  * 12184
-  * 12185
-  * 12186
-  * 12193
-  * 12198
-  * 12202
-  * 12204
-  * 12206
-  * 12208
-  * 12209
-  * 12212
-  * 12213
-  * 12214
-  * 12215
-  * 12216
-  * 12217
-  * 12218
-  * 12226
-  * 12228
-  * 12230
-  * 12231
-  * 12232
-  * 12233
+  * 12167 - HEAD - Bootstrapped - *committed - 12904*
+  * 12170 - HEAD - Cosmetic cleanup of Windows specific release notes - *committed - 12905*
+  * 12173 - HEAD - forced commit for rev 12155 log message - ignored
+  * 12174 - HEAD - Fix Bug #2366: close ipc-created filedescriptors correctly on rotate. - *committed - 12906*
+  * 12177 - HEAD - Windows port: fix build error on Cygwin - *committed - 12907*
+  * 12179 - HEAD - Windows port: configure enhancements on MinGW and Cygwin - *committed - 12908*
+  * 12180 - HEAD - Windows port: always shutdown winsocks on program termination - *committed - 12909*
+  * 12181 - HEAD - delay_body_max_size is in 2.8 only. - *committed - 12910*
+  * 12182 - HEAD - Bootstrapped - *committed - 12911*
+  * 12183 - HEAD - Windows port: add option for control of IP address changes notification in squid.conf - *committed - 12912*
+  * 12184 - HEAD - Bug #2283: Properly abort invalid/truncated messages - *committed - 12913*
+  * 12185 - HEAD - Debug tool to run named events NOW - *committed - 12914*
+  * 12186 - HEAD - Bug #2372: Gracefully handle logfile permission errors on non-fatal logs - *committed - 12915*
+  * 12193 - HEAD - ChangeLog update - *committed - 12916*
+  * 12198 - HEAD - Fix build error on Solaris using gcc and --with-large-files - *committed - 12917*
+  * 12202 - HEAD - Bootstrapped - *committed - 12918*
+  * 12204 - HEAD - Allow 64 bit build on Solaris using gcc after fix of --with-large-files error - *committed - 12919*
+  * 12206 - HEAD - Bootstrapped - *committed - 12920*
+  * 12208 - HEAD - Make PEER_TCP_MAGIC_COUNT configurable - *committed - 12921*
+  * 12209 - HEAD - Bug #2377: Include the new connect-fail-limit= cache_peer option in config dumps - *committed - 12922*
+  * 12212 - HEAD - Bug #2192: http_port ... vport broken by recent changes in how accelerator mode deals with port numbers - *committed - 12923*
+  * 12213 - HEAD - Bug #2241: weights not applied properly in round-robin peer selection - *committed - 12924*
+  * 12214 - HEAD - Backout the patch for Bug #1893: Variant invalidation on PURGE and HTCP CLR - *commited - 12925*
+  * 12215 - HEAD - Off by one error in DNS label decompression could cause valid DNS messages to be rejected - *committed - 12926*
+  * 12216 - HEAD - logformat docs contain extra whitespace - *committed - 12927*
+  * 12217 - HEAD - Reject ridiculously large ASN.1 lengths - *committed - 12928*
+  * 12218 - HEAD - Fix SNMP reporting of counters with a value > 0xFF80000 - *committed - 12929*
+  * 12226 - HEAD - Correct spelling of WCCPv2 dst_port_hash to match the source - *committed - 12930*
+  * 12228 - HEAD - Documentation update preparing for 2.7.STABLE3 - *committed - 12931*
+  * 12230 - HEAD - Plug some "squid -k reconfigure" memory leaks. Mostly SSL related. - *committed - 12932*
+  * 12231 - HEAD - Bug #1993: Memory leak in http_reply_access deny processing - *committed - 12934*
+  * 12232 - HEAD - Bug #2378: Duplicate paths in FwdServers - *committed - 12933*
+  * 12233 - HEAD - Report the cache_peer name instead of hostname - *committed - 12935*
