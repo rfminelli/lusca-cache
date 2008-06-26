@@ -39,17 +39,6 @@
 
 #define PEER_MULTICAST_SIBLINGS 1
 
-struct _dlink_node {
-    void *data;
-    dlink_node *prev;
-    dlink_node *next;
-};
-
-struct _dlink_list {
-    dlink_node *head;
-    dlink_node *tail;
-};
-
 #if USE_SSL
 struct _acl_cert_data {
     splayNode *values;
@@ -221,13 +210,6 @@ struct _acl_arp_data {
 
 #endif
 
-struct _String {
-    /* never reference these directly! */
-    unsigned short int size;	/* buffer size; 64K limit */
-    unsigned short int len;	/* current length  */
-    char *buf;
-};
-
 struct _header_mangler {
     acl_access *access_list;
     char *replacement;
@@ -249,11 +231,6 @@ struct _delay_body_size {
     ushort pool;
 };
 
-
-struct _http_version_t {
-    unsigned int major;
-    unsigned int minor;
-};
 
 #if SQUID_SNMP
 
@@ -328,16 +305,6 @@ struct _aclCheck_t {
     acl *current_acl;		/* private, used by aclCheck */
 };
 
-struct _wordlist {
-    char *key;
-    wordlist *next;
-};
-
-struct _intlist {
-    int i;
-    intlist *next;
-};
-
 struct _intrange {
     int i;
     int j;
@@ -379,9 +346,7 @@ struct _http_port_list {
     int vport;			/* virtual port support */
     int no_connection_auth;	/* Don't support connection oriented auth */
     unsigned int http11;	/* HTTP/1.1 support */
-#if LINUX_TPROXY
     unsigned int tproxy;
-#endif
     unsigned int act_as_origin;	/* Fake Date: headers in accelerator mode */
     unsigned int allow_direct:1;	/* Allow direct forwarding in accelerator mode */
     struct {
@@ -868,38 +833,6 @@ struct _close_handler {
     close_handler *next;
 };
 
-struct _dread_ctrl {
-    int fd;
-    off_t file_offset;
-    size_t req_len;
-    char *buf;
-    int end_of_file;
-    DRCB *handler;
-    void *client_data;
-};
-
-struct _dwrite_q {
-    off_t file_offset;
-    char *buf;
-    size_t len;
-    size_t buf_offset;
-    dwrite_q *next;
-    FREE *free_func;
-};
-
-struct _CommWriteStateData {
-    int valid;
-    char *buf;
-    size_t size;
-    size_t offset;
-    CWCB *handler;
-    void *handler_data;
-    FREE *free_func;
-    char header[32];
-    size_t header_size;
-};
-
-
 /* ETag support is rudimantal;
  * this struct is likely to change
  * Note: "str" points to memory in HttpHeaderEntry (for now)
@@ -907,69 +840,6 @@ struct _CommWriteStateData {
 struct _ETag {
     const char *str;		/* quoted-string */
     int weak;			/* true if it is a weak validator */
-};
-
-struct _fde {
-    unsigned int type;
-    u_short local_port;
-    u_short remote_port;
-    struct in_addr local_addr;
-    unsigned char tos;
-    char ipaddr[16];		/* dotted decimal address of peer */
-    const char *desc;
-    char descbuf[FD_DESC_SZ];
-    struct {
-	unsigned int open:1;
-	unsigned int close_request:1;
-	unsigned int write_daemon:1;
-	unsigned int closing:1;
-	unsigned int socket_eof:1;
-	unsigned int nolinger:1;
-	unsigned int nonblocking:1;
-	unsigned int ipc:1;
-	unsigned int called_connect:1;
-	unsigned int nodelay:1;
-	unsigned int close_on_exec:1;
-	unsigned int backoff:1;	/* keep track of whether the fd is backed off */
-	unsigned int dnsfailed:1;	/* did the dns lookup fail */
-    } flags;
-    comm_pending read_pending;
-    comm_pending write_pending;
-    squid_off_t bytes_read;
-    squid_off_t bytes_written;
-    int uses;			/* ie # req's over persistent conn */
-    struct _fde_disk {
-	DWCB *wrt_handle;
-	void *wrt_handle_data;
-	dwrite_q *write_q;
-	dwrite_q *write_q_tail;
-	off_t offset;
-    } disk;
-    PF *read_handler;
-    void *read_data;
-    PF *write_handler;
-    void *write_data;
-    PF *timeout_handler;
-    time_t timeout;
-    void *timeout_data;
-    void *lifetime_data;
-    close_handler *close_handler;	/* linked list */
-    DEFER *defer_check;		/* check if we should defer read */
-    void *defer_data;
-    struct _CommWriteStateData rwstate;		/* State data for comm_write */
-    READ_HANDLER *read_method;
-    WRITE_HANDLER *write_method;
-#if USE_SSL
-    SSL *ssl;
-#endif
-#ifdef _SQUID_MSWIN_
-    struct {
-	long handle;
-    } win32;
-#endif
-#if DELAY_POOLS
-    int slow_id;
-#endif
 };
 
 struct _fileMap {
@@ -980,33 +850,12 @@ struct _fileMap {
     unsigned long *file_map;
 };
 
-/* auto-growing memory-resident buffer with printf interface */
-/* note: when updating this struct, update MemBufNULL #define */
-struct _MemBuf {
-    /* public, read-only */
-    char *buf;
-    mb_size_t size;		/* used space, does not count 0-terminator */
-
-    /* private, stay away; use interface function instead */
-    mb_size_t max_capacity;	/* when grows: assert(new_capacity <= max_capacity) */
-    mb_size_t capacity;		/* allocated space */
-    unsigned stolen:1;		/* the buffer has been stolen for use by someone else */
-};
-
 /* see Packer.c for description */
 struct _Packer {
     /* protected, use interface functions instead */
     append_f append;
     vprintf_f packer_vprintf;
     void *real_handle;		/* first parameter to real append and vprintf */
-};
-
-/* http status line */
-struct _HttpStatusLine {
-    /* public, read only */
-    http_version_t version;
-    const char *reason;		/* points to a _constant_ string (default or supplied), never free()d */
-    http_status status;
 };
 
 /*
@@ -1093,21 +942,6 @@ struct _HttpHeaderFieldInfo {
     String name;
     field_type type;
     HttpHeaderFieldStat stat;
-};
-
-struct _HttpHeaderEntry {
-    http_hdr_type id;
-    int active;
-    String name;
-    String value;
-};
-
-struct _HttpHeader {
-    /* protected, do not use these, use interface functions instead */
-    Array entries;		/* parsed entries in raw format */
-    HttpHeaderMask mask;	/* bit set <=> entry present */
-    http_hdr_owner_type owner;	/* request or reply */
-    int len;			/* length when packed, not counting terminating '\0' */
 };
 
 struct _HttpReply {
@@ -1898,9 +1732,7 @@ struct _request_flags {
     unsigned int no_connection_auth:1;	/* Connection oriented auth can not be supported */
     unsigned int pinned:1;	/* Request seont on a pinned connection */
     unsigned int auth_sent:1;	/* Authentication forwarded */
-#if LINUX_TPROXY
     unsigned int tproxy:1;
-#endif
     unsigned int collapsed:1;	/* This request was collapsed. Don't trust the store entry to be valid */
     unsigned int cache_validation:1;	/* This request is an internal cache validation */
     unsigned int no_direct:1;	/* Deny direct forwarding unless overriden by always_direct. Used in accelerator mode */
@@ -2047,20 +1879,6 @@ struct _ErrorState {
 	char *reply;
     } ftp;
     char *request_hdrs;
-};
-
-/*
- * "very generic" histogram; 
- * see important comments on hbase_f restrictions in StatHist.c
- */
-struct _StatHist {
-    int *bins;
-    int capacity;
-    double min;
-    double max;
-    double scale;
-    hbase_f *val_in;		/* e.g., log() for log-based histogram */
-    hbase_f *val_out;		/* e.g., exp() for log based histogram */
 };
 
 /*
@@ -2243,39 +2061,6 @@ struct _storeSwapLogDataOld {
 #endif
 
 
-/* object to track per-action memory usage (e.g. #idle objects) */
-struct _MemMeter {
-    ssize_t level;		/* current level (count or volume) */
-    ssize_t hwater_level;	/* high water mark */
-    time_t hwater_stamp;	/* timestamp of last high water mark change */
-};
-
-/* object to track per-pool memory usage (alloc = inuse+idle) */
-struct _MemPoolMeter {
-    MemMeter alloc;
-    MemMeter inuse;
-    MemMeter idle;
-    gb_t saved;
-    gb_t total;
-};
-
-/* a pool is a [growing] space for objects of the same size */
-struct _MemPool {
-    const char *label;
-    size_t obj_size;
-#if DEBUG_MEMPOOL
-    size_t real_obj_size;	/* with alignment */
-#endif
-    struct {
-	int dozero:1;
-    } flags;
-    Stack pstack;		/* stack for free pointers */
-    MemPoolMeter meter;
-#if DEBUG_MEMPOOL
-    MemPoolMeter diff_meter;
-#endif
-};
-
 struct _ClientInfo {
     hash_link hash;		/* must be first */
     struct in_addr addr;
@@ -2328,9 +2113,7 @@ struct _FwdState {
 	unsigned int dont_retry:1;
 	unsigned int ftp_pasv_failed:1;
     } flags;
-#if LINUX_NETFILTER
     struct sockaddr_in src;
-#endif
     u_short orig_entry_flags;	/* Hack to be able to reset the entry proper */
 };
 
@@ -2356,6 +2139,7 @@ struct _helper_request {
     HLPCB *callback;
     void *data;
     struct timeval dispatch_time;
+    dlink_node n;
 };
 
 struct _helper_stateful_request {
@@ -2363,6 +2147,7 @@ struct _helper_stateful_request {
     HLPSCB *callback;
     void *data;
     struct timeval dispatch_time;
+    dlink_node n;
 };
 
 

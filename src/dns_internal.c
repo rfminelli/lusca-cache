@@ -1031,7 +1031,6 @@ idnsInit(void)
 	idnsAddNameserver("127.0.0.1");
     }
     if (!init) {
-	memDataInit(MEM_IDNS_QUERY, "idns_query", sizeof(idns_query), 0);
 	cachemgrRegister("idns",
 	    "Internal DNS Statistics",
 	    idnsStats, 0, 1);
