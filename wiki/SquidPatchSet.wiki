@@ -105,6 +105,9 @@ The initial import included all patchsets up to 12036.
   * 12126 - HEAD - Bug #2350: Memory allocation problem in restoreCapabilities() - *committed - 12880*
   * 12127 - HEAD - Commit some basic docs for the store URL rewriter. - *committed - 12881*
   * 12128 - HEAD - Bug #1955: Clarify refresh_pattern override-expire option - *committed - 12882*
+
+*At this point I've decided to not bother mirroring patches from anything other than HEAD*
+
   * 12129 - SQUID_2_7 - Windows port: Added new mswin_check_ad_group external ACL helper
   * 12130 - SQUID_2_7 - Updated mswin_check_lm_group documentation
   * 12131 - SQUID_2_7 - Fix defaultsite=host:port accelerator mode again...
@@ -113,16 +116,63 @@ The initial import included all patchsets up to 12036.
   * 12134 - SQUID_2_7 - some basic docs for the store URL rewriter.
   * 12135 - SQUID_2_7 - Bug #1955: Clarify refresh_pattern override-expire option
   * 12136 - SQUID_2_7 - Bug #219: Reassign delay pools after reconfigure
-  * 12137 - HEAD - Bug #2223: flexible handling of x-forwarded-for
+  * 12137 - HEAD - Bug #2223: flexible handling of x-forwarded-for - *committed - 12890*
   * 12138 - SQUID_2_7 - Bug #2223: flexible handling of x-forwarded-for
   * 12139 - SQUID_2_7 - documentation update
   * 12140 - SQUID_2_7 - Bootstrapped *cvsps broke again*
-  * 12141 - HEAD - Dist mswin_ad_group
-  * 12142 - HEAD - mswin_ad_group was already disted
+  * 12141 - HEAD - Dist mswin_ad_group - *committed - 12891*
+  * 12142 - HEAD - mswin_ad_group was already disted - *committed - 12892*
   * 12143 - SQUID_2_7 - Resolve merge conflict in mswin_ad_group
   * 12144 - SQUID_2_7 - 2.7.STABLE1
   * 12145 - SQUID_2_7 - Bootstrapped (SQUID_2_7_STABLE1 ?)
-  * 12146 - HEAD - Merged 2.7 doc updates
+  * 12146 - HEAD - Merged 2.7 doc updates - *committed - 12893*
   * 12147 - SQUID_2_7 - Resolve merge conflict in Bug #219: Reassign delay pools after reconfigure
   * 12148 - SQUID_2_7 - Backout the patch for Bug #1893: Variant invalidation on PURGE and HTCP CLR
   * 12149 - SQUID_2_7 - Merged changes from SQUID_2_7 *cvsps broke again!*
+  * 12150 - SQUID_NT_2_7 - Added mswin_check_ad_group to Visual Studio Project
+  * 12151 - SQUID_NT_2_7 - Bootstrapped
+ 
+*Squid-2 HEAD patches only*
+
+  * 12152 - HEAD - Bug #2360: Move the SSL options before https_port so it gets inherited proper - *committed - 12894*
+  * 12153 - HEAD - Bug #2350: Linux Capabilities version mismatch causing startup crash on newer kernels - *committed - 12895*
+  * 12154 - HEAD - Correct Linux capabilities version check - *committed - 12896*
+  * 12155 - HEAD - cat - *committed - 12897*
+  * 12156 - HEAD - Fix build error on Windows: in_addr_t is not available. - *committed - 12898*
+  * 12157 - HEAD - Windows port: add support for crypt function - *committed - 12899*
+  * 12158 - HEAD - Updated Windows specific 2.7 release notes - *committed - 12900*
+  * 12159 - HEAD - Bug #2283: Properly abort invalid/truncated messages - *committed - 12901*
+  * 12164 - HEAD - Preparing for 2.7.STABLE2 - *committed - 12902*
+  * 12167
+  * 12170
+  * 12173
+  * 12174
+  * 12177
+  * 12179
+  * 12180
+  * 12181
+  * 12182
+  * 12183
+  * 12184
+  * 12185
+  * 12186
+  * 12193
+  * 12198
+  * 12202
+  * 12204
+  * 12206
+  * 12208
+  * 12209
+  * 12212
+  * 12213
+  * 12214
+  * 12215
+  * 12216
+  * 12217
+  * 12218
+  * 12226
+  * 12228
+  * 12230
+  * 12231
+  * 12232
+  * 12233
