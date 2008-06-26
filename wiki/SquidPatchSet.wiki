@@ -176,3 +176,13 @@ The initial import included all patchsets up to 12036.
   * 12231 - HEAD - Bug #1993: Memory leak in http_reply_access deny processing - *committed - 12934*
   * 12232 - HEAD - Bug #2378: Duplicate paths in FwdServers - *committed - 12933*
   * 12233 - HEAD - Report the cache_peer name instead of hostname - *committed - 12935*
+
+  * 12234 - HEAD - Bug #2388: acl documentation cleanup - *committed - 12941*
+  * 12235 - HEAD - Bug #2122: In some situations collapsed_forwarding could leak private information - *committed - 12942*
+  * 12236 - HEAD - Bug #2365: cachemgr.cgi fails to HTML encode config dumps properly - *committed - 12943*
+  * 12245 - HEAD - Bug #2376: Round-Robin becomes unbalanced when a peer dies and comes back - *committed - 12944*
+  * 12247 - HEAD - Documentation update preparing for 2.7.STABLE3 - *committed - 12945*
+  * 12251 - HEAD - Bug #2392: Oversized chunk header on port .. regression error - *committed 12946*
+  * 12253 - HEAD - Extend mgr:idns output to include the actual queries and the protocol used. - *committed - 12947*
+  * 12254 - HEAD - Bug #2387: The calculation of the number of hash buckets need to account for the memory size, not only disk size - *committed - 12948*
+  * 12255 - HEAD - Bug #2390: New hier_code ACL type - *committed - 12949*
