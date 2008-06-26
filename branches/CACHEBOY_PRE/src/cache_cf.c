@@ -1649,6 +1649,7 @@ static void
 parse_peer(peer ** head)
 {
     char *token = NULL;
+    void *arg = NULL;		/* throwaway arg to make eventAdd happy */
     peer *p;
     CBDATA_INIT_TYPE(peer);
     CBDATA_INIT_TYPE_FREECB(peer, peerDestroy);
@@ -1855,7 +1856,9 @@ parse_peer(peer ** head)
 	head = &(*head)->next;
     *head = p;
     Config.npeers++;
-    peerClearRR(p);
+    if (!reconfiguring && Config.npeers == 1) {
+	peerClearRRLoop(arg);
+    }
 }
 
 static void
