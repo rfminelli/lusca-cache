@@ -451,8 +451,8 @@ struct _SquidConfig {
 #endif
     } Timeout;
     squid_off_t maxRequestHeaderSize;
-    squid_off_t maxRequestBodySize;
     squid_off_t maxReplyHeaderSize;
+    dlink_list RequestBodySize;
     dlink_list ReplyBodySize;
     dlink_list DelayBodySize;
     struct {
@@ -676,6 +676,7 @@ struct _SquidConfig {
 #endif
 	int update_headers;
 	int ignore_expect_100;
+	int WIN32_IpAddrChangeMonitor;
     } onoff;
     acl *aclList;
     struct {
@@ -1114,6 +1115,7 @@ struct _clientHttpRequest {
 	char *location;
     } redirect;
     dlink_node active;
+    squid_off_t maxRequestBodySize;
     squid_off_t maxBodySize;
     squid_off_t delayMaxBodySize;
     ushort delayAssignedPool;
@@ -1374,6 +1376,7 @@ struct _peer {
     } sourcehash;
     char *login;		/* Proxy authorization */
     time_t connect_timeout;
+    int connect_fail_limit;
     int max_conn;
     struct {
 	char *url;
@@ -1579,11 +1582,6 @@ struct _RemovalPurgeWalker {
     void (*Done) (RemovalPurgeWalker * walker);
 };
 
-struct _vary_id_t {
-    time_t create_time;
-    unsigned int serial;
-};
-
 /* This structure can be freed while object is purged out from memory */
 struct _MemObject {
     method_t method;
@@ -1624,7 +1622,6 @@ struct _MemObject {
     StoreEntry *old_entry;
     time_t refresh_timestamp;
     time_t stale_while_revalidate;
-    vary_id_t vary_id;
 };
 
 struct _StoreEntry {
@@ -1805,7 +1802,6 @@ struct _request_t {
     char *vary_headers;		/* Used when varying entities are detected. Changes how the store key is calculated */
     String vary_encoding;	/* Used when varying entities are detected. Changes how the store key is calculated. */
     VaryData *vary;
-    vary_id_t vary_id;		/* Vary ID of the parent vary object */
     Array *etags;		/* possible known entity tags (Vary MISS) */
     char *etag;			/* current entity tag, cache validation */
     unsigned int done_etag:1;	/* We have done clientProcessETag on this, don't attempt it again */
