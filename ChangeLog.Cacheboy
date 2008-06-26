@@ -1,6 +1,11 @@
 ChangeLog:
 
 -- Tagged CACHEBOY_1.2
+
+-- (26-June-2008)
+
+* Merged in up to latest Squid-2.HEAD
+
 -- (20-June-2008)
 
 * Shuffled the beginnings of comm, disk, filedescriptor and event management out of src/
