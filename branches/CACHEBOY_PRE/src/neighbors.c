@@ -227,7 +227,7 @@ getSingleParent(request_t * request)
     }
     if (p != NULL && !p->options.no_query)
 	return NULL;
-    debug(15, 3) ("getSingleParent: returning %s\n", p ? p->host : "NULL");
+    debug(15, 3) ("getSingleParent: returning %s\n", p ? p->name : "NULL");
     return p;
 }
 #endif
@@ -245,7 +245,7 @@ getFirstUpParent(request_t * request)
 	    continue;
 	break;
     }
-    debug(15, 3) ("getFirstUpParent: returning %s\n", p ? p->host : "NULL");
+    debug(15, 3) ("getFirstUpParent: returning %s\n", p ? p->name : "NULL");
     return p;
 }
 
@@ -261,11 +261,16 @@ getRoundRobinParent(request_t * request)
 	    continue;
 	if (!peerHTTPOkay(p, request))
 	    continue;
-	if (p->weight == 1) {
-	    if (q && q->rr_count < p->rr_count)
-		continue;
-	} else if (p->weight == 0 || (q && q->rr_count < (p->rr_count / p->weight))) {
+	if (p->weight == 0)
 	    continue;
+
+	if (q) {
+	    if (p->weight == q->weight) {
+		if (q->rr_count < p->rr_count)
+		    continue;
+	    } else if ((double) q->rr_count / q->weight < (double) p->rr_count / p->weight) {
+		continue;
+	    }
 	}
 	q = p;
     }
@@ -298,7 +303,7 @@ getDefaultParent(request_t * request)
 	    continue;
 	if (!peerHTTPOkay(p, request))
 	    continue;
-	debug(15, 3) ("getDefaultParent: returning %s\n", p->host);
+	debug(15, 3) ("getDefaultParent: returning %s\n", p->name);
 	return p;
     }
     debug(15, 3) ("getDefaultParent: returning NULL\n");
@@ -320,7 +325,7 @@ getAnyParent(request_t * request)
 	    continue;
 	if (!peerHTTPOkay(p, request))
 	    continue;
-	debug(15, 3) ("getAnyParent: returning %s\n", p->host);
+	debug(15, 3) ("getAnyParent: returning %s\n", p->name);
 	return p;
     }
     debug(15, 3) ("getAnyParent: returning NULL\n");
@@ -446,12 +451,12 @@ neighborsUdpPing(request_t * request,
     for (i = 0, p = first_ping; i++ < Config.npeers; p = p->next) {
 	if (p == NULL)
 	    p = Config.peers;
-	debug(15, 5) ("neighborsUdpPing: Peer %s\n", p->host);
+	debug(15, 5) ("neighborsUdpPing: Peer %s\n", p->name);
 	if (!peerWouldBePinged(p, request))
 	    continue;		/* next peer */
 	peers_pinged++;
 	debug(15, 4) ("neighborsUdpPing: pinging peer %s for '%s'\n",
-	    p->host, url);
+	    p->name, url);
 	if (p->type == PEER_MULTICAST)
 	    mcastSetTtl(theOutIcpConnection, p->mcast.ttl);
 	debug(15, 3) ("neighborsUdpPing: key = '%s'\n", storeKeyText(entry->hash.key));
@@ -588,7 +593,7 @@ peerDigestLookup(peer * p, request_t * request)
     const cache_key *key = request ? storeKeyPublicByRequest(request) : NULL;
     assert(p);
     assert(request);
-    debug(15, 5) ("peerDigestLookup: peer %s\n", p->host);
+    debug(15, 5) ("peerDigestLookup: peer %s\n", p->name);
     /* does the peeer have a valid digest? */
     if (!p->digest) {
 	debug(15, 5) ("peerDigestLookup: gone!\n");
@@ -605,12 +610,12 @@ peerDigestLookup(peer * p, request_t * request)
 	    p->digest->flags.requested ? "" : "!");
 	return LOOKUP_NONE;
     }
-    debug(15, 5) ("peerDigestLookup: OK to lookup peer %s\n", p->host);
+    debug(15, 5) ("peerDigestLookup: OK to lookup peer %s\n", p->name);
     assert(p->digest->cd);
     /* does digest predict a hit? */
     if (!cacheDigestTest(p->digest->cd, key))
 	return LOOKUP_MISS;
-    debug(15, 5) ("peerDigestLookup: peer %s says HIT!\n", p->host);
+    debug(15, 5) ("peerDigestLookup: peer %s says HIT!\n", p->name);
     return LOOKUP_HIT;
 #endif
     return LOOKUP_NONE;
@@ -646,7 +651,7 @@ neighborsDigestSelect(request_t * request)
 	    continue;
 	p_rtt = netdbHostRtt(p->host);
 	debug(15, 5) ("neighborsDigestSelect: peer %s rtt: %d\n",
-	    p->host, p_rtt);
+	    p->name, p_rtt);
 	/* is this peer better than others in terms of rtt ? */
 	if (!best_p || (p_rtt && p_rtt < best_rtt)) {
 	    best_p = p;
@@ -654,7 +659,7 @@ neighborsDigestSelect(request_t * request)
 	    if (p_rtt)		/* informative choice (aka educated guess) */
 		ichoice_count++;
 	    debug(15, 4) ("neighborsDigestSelect: peer %s leads with rtt %d\n",
-		p->host, best_rtt);
+		p->name, best_rtt);
 	}
     }
     debug(15, 4) ("neighborsDigestSelect: choices: %d (%d)\n",
@@ -677,7 +682,7 @@ peerNoteDigestLookup(request_t * request, peer * p, lookup_t lookup)
 	*request->hier.cd_host = '\0';
     request->hier.cd_lookup = lookup;
     debug(15, 4) ("peerNoteDigestLookup: peer %s, lookup: %s\n",
-	p ? p->host : "<none>", lookup_t_str[lookup]);
+	p ? p->name : "<none>", lookup_t_str[lookup]);
 #endif
 }
 
@@ -845,7 +850,7 @@ neighborsUdpAck(const cache_key * key, icp_common_t * header, const struct socka
 	return;
     }
     debug(15, 3) ("neighborsUdpAck: %s for '%s' from %s \n",
-	opcode_d, storeKeyText(key), p ? p->host : "source");
+	opcode_d, storeKeyText(key), p ? p->name : "source");
     if (p) {
 	ntype = neighborType(p, mem->request);
     }
@@ -875,7 +880,7 @@ neighborsUdpAck(const cache_key * key, icp_common_t * header, const struct socka
 	}
     } else if (opcode == ICP_SECHO) {
 	if (p) {
-	    debug(15, 1) ("Ignoring SECHO from neighbor %s\n", p->host);
+	    debug(15, 1) ("Ignoring SECHO from neighbor %s\n", p->name);
 	    neighborCountIgnored(p);
 #if ALLOW_SOURCE_PING
 	} else if (Config.onoff.source_ping) {
@@ -889,8 +894,8 @@ neighborsUdpAck(const cache_key * key, icp_common_t * header, const struct socka
 	    neighborIgnoreNonPeer(from, opcode);
 	} else if (p->stats.pings_acked > 100) {
 	    if (100 * p->icp.counts[ICP_DENIED] / p->stats.pings_acked > 95) {
-		debug(15, 0) ("95%% of replies from '%s' are UDP_DENIED\n", p->host);
-		debug(15, 0) ("Disabling '%s', please check your configuration.\n", p->host);
+		debug(15, 0) ("95%% of replies from '%s' are UDP_DENIED\n", p->name);
+		debug(15, 0) ("Disabling '%s', please check your configuration.\n", p->name);
 		neighborRemove(p);
 		p = NULL;
 	    } else {
@@ -971,11 +976,33 @@ peerDestroy(void *data)
     safe_free(p->host);
     safe_free(p->name);
     safe_free(p->domain);
+    safe_free(p->login);
 #if USE_CACHE_DIGESTS
     if (p->digest) {
 	PeerDigest *pd = p->digest;
 	p->digest = NULL;
 	cbdataUnlock(pd);
+    }
+    safe_free(p->digest_url);
+#endif
+    safe_free(p->monitor.url)
+#if USE_SSL
+	safe_free(p->sslcert);
+    safe_free(p->sslkey);
+    safe_free(p->ssloptions);
+    safe_free(p->sslcipher);
+    safe_free(p->sslcafile);
+    safe_free(p->sslcapath);
+    safe_free(p->sslcrlfile);
+    safe_free(p->sslflags);
+    safe_free(p->ssldomain);
+    if (p->sslContext) {
+	SSL_CTX_free(p->sslContext);
+	p->sslContext = NULL;
+    }
+    if (p->sslSession) {
+	SSL_SESSION_free(p->sslSession);
+	p->sslSession = NULL;
     }
 #endif
 }
@@ -999,14 +1026,14 @@ peerDNSConfigure(const ipcache_addrs * ia, void *data)
     struct sockaddr_in *ap;
     int j;
     if (p->n_addresses == 0) {
-	debug(15, 1) ("Configuring %s %s/%d/%d\n", neighborTypeStr(p),
-	    p->host, p->http_port, p->icp.port);
+	debug(15, 1) ("Configuring %s %s %s/%d/%d\n", p->name, neighborTypeStr(p),
+	    p->name, p->http_port, p->icp.port);
 	if (p->type == PEER_MULTICAST)
 	    debug(15, 1) ("    Multicast TTL = %d\n", p->mcast.ttl);
     }
     p->n_addresses = 0;
     if (ia == NULL) {
-	debug(0, 0) ("WARNING: DNS lookup for '%s' failed!\n", p->host);
+	debug(0, 0) ("WARNING: DNS lookup of '%s' failed!\n", p->host);
 	return;
     }
     if ((int) ia->count < 1) {
@@ -1055,7 +1082,7 @@ peerConnectFailedSilent(peer * p)
 {
     p->stats.last_connect_failure = squid_curtime;
     if (!p->tcp_up) {
-	debug(15, 2) ("TCP connection to %s/%d dead\n", p->host, p->http_port);
+	debug(15, 2) ("TCP connection to %s (%s:%d) dead\n", p->name, p->host, p->http_port);
 	return;
     }
     p->tcp_up--;
@@ -1069,7 +1096,7 @@ peerConnectFailedSilent(peer * p)
 void
 peerConnectFailed(peer * p)
 {
-    debug(15, 1) ("TCP connection to %s/%d failed\n", p->host, p->http_port);
+    debug(15, 1) ("TCP connection to %s (%s:%d) failed\n", p->name, p->host, p->http_port);
     peerConnectFailedSilent(p);
 }
 
@@ -1077,7 +1104,7 @@ void
 peerConnectSucceded(peer * p)
 {
     if (!p->tcp_up) {
-	debug(15, 2) ("TCP connection to %s/%d succeded\n", p->host, p->http_port);
+	debug(15, 2) ("TCP connection to %s (%s:%d) succeded\n", p->name, p->host, p->http_port);
 	debug(15, 1) ("Detected REVIVED %s: %s\n",
 	    neighborTypeStr(p), p->name);
 	peerMonitorNow(p);
@@ -1085,7 +1112,7 @@ peerConnectSucceded(peer * p)
 	if (!p->n_addresses)
 	    ipcache_nbgethostbyname(p->host, peerDNSConfigure, p);
     }
-    p->tcp_up = PEER_TCP_MAGIC_COUNT;
+    p->tcp_up = p->connect_fail_limit;
 }
 
 static void
@@ -1112,7 +1139,7 @@ peerProbeConnect(peer * p)
     if (squid_curtime - p->stats.last_connect_probe == 0)
 	return ret;		/* don't probe to often */
     fd = comm_open(SOCK_STREAM, IPPROTO_TCP, getOutgoingAddr(NULL),
-	0, COMM_NONBLOCKING, p->host);
+	0, COMM_NONBLOCKING, p->name);
     if (fd < 0)
 	return ret;
     commSetTimeout(fd, ctimeout, peerProbeConnectTimeout, p);
@@ -1317,6 +1344,8 @@ dump_peer_options(StoreEntry * sentry, peer * p)
     }
     if (p->domain)
 	storeAppendPrintf(sentry, " forceddomain=%s", p->domain);
+    if (p->connect_fail_limit != PEER_TCP_MAGIC_COUNT)
+	storeAppendPrintf(sentry, " connect-fail-limit=%d", p->connect_fail_limit);
     storeAppendPrintf(sentry, "\n");
 }
 
