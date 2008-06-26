@@ -335,14 +335,16 @@ sigusr2_handle(int sig)
     /* no debug() here; bad things happen if the signal is delivered during _db_print() */
     if (state == 0) {
 #ifndef MEM_GEN_TRACE
-	_db_init(Config.Log.log, "ALL,10");
+	_db_init("ALL,10");
+	_db_init_log(Config.Log.log);
 #else
 	log_trace_done();
 #endif
 	state = 1;
     } else {
 #ifndef MEM_GEN_TRACE
-	_db_init(Config.Log.log, Config.debugOptions);
+	_db_init(Config.debugOptions);
+	_db_init_log(Config.Log.log);
 #else
 	log_trace_init("/tmp/squid.alloc");
 #endif
@@ -946,46 +948,6 @@ dlinkNodeDelete(dlink_node * m)
 }
 
 void
-dlinkAdd(void *data, dlink_node * m, dlink_list * list)
-{
-    m->data = data;
-    m->prev = NULL;
-    m->next = list->head;
-    if (list->head)
-	list->head->prev = m;
-    list->head = m;
-    if (list->tail == NULL)
-	list->tail = m;
-}
-
-void
-dlinkAddTail(void *data, dlink_node * m, dlink_list * list)
-{
-    m->data = data;
-    m->next = NULL;
-    m->prev = list->tail;
-    if (list->tail)
-	list->tail->next = m;
-    list->tail = m;
-    if (list->head == NULL)
-	list->head = m;
-}
-
-void
-dlinkDelete(dlink_node * m, dlink_list * list)
-{
-    if (m->next)
-	m->next->prev = m->prev;
-    if (m->prev)
-	m->prev->next = m->next;
-    if (m == list->head)
-	list->head = m->next;
-    if (m == list->tail)
-	list->tail = m->prev;
-    m->next = m->prev = NULL;
-}
-
-void
 kb_incr(kb_t * k, squid_off_t v)
 {
     k->bytes += v;
@@ -1006,43 +968,6 @@ kb_incr(kb_t * k, squid_off_t v)
 }
 
 void
-gb_flush(gb_t * g)
-{
-    g->gb += (g->bytes >> 30);
-    g->bytes &= (1 << 30) - 1;
-}
-
-double
-gb_to_double(const gb_t * g)
-{
-    return ((double) g->gb) * ((double) (1 << 30)) + ((double) g->bytes);
-}
-
-const char *
-gb_to_str(const gb_t * g)
-{
-    /*
-     * it is often convenient to call gb_to_str several times for _one_ printf
-     */
-#define max_cc_calls 5
-    typedef char GbBuf[32];
-    static GbBuf bufs[max_cc_calls];
-    static int call_id = 0;
-    double value = gb_to_double(g);
-    char *buf = bufs[call_id++];
-    if (call_id >= max_cc_calls)
-	call_id = 0;
-    /* select format */
-    if (value < 1e9)
-	snprintf(buf, sizeof(GbBuf), "%.2f MB", value / 1e6);
-    else if (value < 1e12)
-	snprintf(buf, sizeof(GbBuf), "%.2f GB", value / 1e9);
-    else
-	snprintf(buf, sizeof(GbBuf), "%.2f TB", value / 1e12);
-    return buf;
-}
-
-void
 debugObj(int section, int level, const char *label, void *obj, ObjPackMethod pm)
 {
     MemBuf mb;
@@ -1060,31 +985,6 @@ int
 stringHasWhitespace(const char *s)
 {
     return strpbrk(s, w_space) != NULL;
-}
-
-void
-linklistPush(link_list ** L, void *p)
-{
-    link_list *l = memAllocate(MEM_LINK_LIST);
-    l->next = NULL;
-    l->ptr = p;
-    while (*L)
-	L = &(*L)->next;
-    *L = l;
-}
-
-void *
-linklistShift(link_list ** L)
-{
-    void *p;
-    link_list *l;
-    if (NULL == *L)
-	return NULL;
-    l = *L;
-    p = l->ptr;
-    *L = (*L)->next;
-    memFree(l, MEM_LINK_LIST);
-    return p;
 }
 
 /*

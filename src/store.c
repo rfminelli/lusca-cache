@@ -94,6 +94,8 @@ static EVH storeLateRelease;
  * local variables
  */
 static Stack LateReleaseStack;
+MemPool * pool_memobject = NULL;
+MemPool * pool_storeentry = NULL;
 
 #if URL_CHECKSUM_DEBUG
 unsigned int
@@ -113,7 +115,7 @@ url_checksum(const char *url)
 static MemObject *
 new_MemObject(const char *url)
 {
-    MemObject *mem = memAllocate(MEM_MEMOBJECT);
+    MemObject *mem = memPoolAlloc(pool_memobject);
     mem->reply = httpReplyCreate();
     mem->url = xstrdup(url);
 #if URL_CHECKSUM_DEBUG
@@ -142,7 +144,7 @@ StoreEntry *
 new_StoreEntry(int mem_obj_flag, const char *url)
 {
     StoreEntry *e = NULL;
-    e = memAllocate(MEM_STOREENTRY);
+    e = memPoolAlloc(pool_storeentry);
     if (mem_obj_flag)
 	e->mem_obj = new_MemObject(url);
     debug(20, 3) ("new_StoreEntry: returning %p\n", e);
@@ -198,7 +200,7 @@ destroy_MemObject(StoreEntry * e)
     safe_free(mem->url);
     safe_free(mem->vary_headers);
     safe_free(mem->vary_encoding);
-    memFree(mem, MEM_MEMOBJECT);
+    memPoolFree(pool_memobject, mem);
 }
 
 static void
@@ -211,7 +213,7 @@ destroy_StoreEntry(void *data)
 	destroy_MemObject(e);
     storeHashDelete(e);
     assert(e->hash.key == NULL);
-    memFree(e, MEM_STOREENTRY);
+    memPoolFree(pool_storeentry, e);
 }
 
 /* ----- INTERFACE BETWEEN STORAGE MANAGER AND HASH TABLE FUNCTIONS --------- */
@@ -1441,7 +1443,7 @@ storeGetMemSpace(int size)
 	return;
     last_check = squid_curtime;
     pages_needed = (size / SM_PAGE_SIZE) + 1;
-    if (memInUse(MEM_MEM_NODE) + pages_needed < store_pages_max)
+    if (memPoolInUseCount(pool_mem_node) + pages_needed < store_pages_max)
 	return;
     debug(20, 3) ("storeGetMemSpace: Starting, need %d pages\n", pages_needed);
     /* XXX what to set as max_scan here? */
@@ -1450,7 +1452,7 @@ storeGetMemSpace(int size)
 	debug(20, 3) ("storeGetMemSpace: purging %p\n", e);
 	storePurgeMem(e);
 	released++;
-	if (memInUse(MEM_MEM_NODE) + pages_needed < store_pages_max) {
+	if (memPoolInUseCount(pool_mem_node) + pages_needed < store_pages_max) {
 	    debug(20, 3) ("storeGetMemSpace: we finally have enough free memory!\n");
 	    break;
 	}
@@ -1639,6 +1641,13 @@ storeInitHashValues(void)
     debug(20, 1) ("Using %d Store buckets\n", store_hash_buckets);
     debug(20, 1) ("Max Mem  size: %lu KB\n", (unsigned long int) (Config.memMaxSize >> 10));
     debug(20, 1) ("Max Swap size: %lu KB\n", (unsigned long int) Config.Swap.maxSize);
+}
+
+void
+storeInitMem(void)
+{
+    pool_storeentry = memPoolCreate("StoreEntry", sizeof(StoreEntry));
+    pool_memobject = memPoolCreate("MemObject", sizeof(MemObject));
 }
 
 void

@@ -799,11 +799,9 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 	keep_alive = 0;
     if (keep_alive) {
 	int pinned = 0;
-#if LINUX_TPROXY
 	if (orig_request->flags.tproxy) {
 	    client_addr = &httpState->request->client_addr;
 	}
-#endif
 	/* yes we have to clear all these! */
 	commSetDefer(fd, NULL, NULL);
 	commSetTimeout(fd, -1, NULL, NULL);
@@ -1479,6 +1477,8 @@ httpSendRequest(HttpStateData * httpState)
     comm_write_mbuf(fd, mb, sendHeaderDone, httpState);
 }
 
+CBDATA_TYPE(HttpStateData);
+
 void
 httpStart(FwdState * fwd)
 {
@@ -1489,6 +1489,7 @@ httpStart(FwdState * fwd)
     debug(11, 3) ("httpStart: \"%s %s\"\n",
 	RequestMethods[orig_req->method].str,
 	storeUrl(fwd->entry));
+    CBDATA_INIT_TYPE(HttpStateData);
     httpState = cbdataAlloc(HttpStateData);
     storeLockObject(fwd->entry);
     httpState->fwd = fwd;

@@ -142,6 +142,7 @@ peerSelect(request_t * request,
 	debug(44, 3) ("peerSelect: %s\n", storeUrl(entry));
     else
 	debug(44, 3) ("peerSelect: %s\n", RequestMethods[request->method].str);
+    CBDATA_INIT_TYPE(ps_state);
     psstate = cbdataAlloc(ps_state);
     psstate->request = requestLink(request);
     psstate->entry = entry;
@@ -691,7 +692,7 @@ peerAddFwdServer(FwdServer ** FS, peer * p, hier_code code)
 	}
 	FS = &(*FS)->next;
     }
-    fs = memAllocate(MEM_FWD_SERVER);
+    fs = memPoolAlloc(pool_fwd_server);
     fs->peer = p;
     fs->code = code;
     cbdataLock(fs->peer);
