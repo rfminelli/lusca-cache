@@ -24,4 +24,5 @@ This is more for Adrian to remember what to do then it is for others to do relea
   * Email cacheboy-users@ about it!
   * Update news section on website
   * Update blog!
+  * Freshmeat!
   * Update the FreeBSD port
