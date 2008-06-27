@@ -731,8 +731,8 @@ storeCossDirCallback(SwapDir * SD)
     CossInfo *cs = (CossInfo *) SD->fsdata;
     storeCossFreeDeadMemBufs(cs);
 #if USE_AUFSOPS
-    /* I believe this call, at the present, checks all callbacks for all SDs, not just ours */
-    return aioCheckCallbacks(SD);
+    /* There's no need to call aioCheckCallbacks() - this will happen through the aio notification pipe */
+    return 0;
 #else
     return a_file_callback(&cs->aq);
 #endif

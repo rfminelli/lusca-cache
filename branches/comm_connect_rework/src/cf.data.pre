@@ -483,12 +483,14 @@ DEFAULT: none
 DOC_START
 	Defining an Access List
 
-	acl aclname acltype string1 ...
+    Every access list definition must begin with an aclname and acltype, 
+    followed by either type-specific arguments or a quoted filename that
+    they are read from.
+
+	acl aclname acltype argument ...
 	acl aclname acltype "file" ...
 
-	when using "file", the file should contain one item per line
-
-	acltype is one of the types described below
+	when using "file", the file should contain one item per line.
 
 	By default, regular expressions are CASE-SENSITIVE.  To make
 	them case-insensitive, use the -i option.
@@ -516,16 +518,16 @@ DOC_START
 	  # if the reverse lookup fails.
 
 	acl aclname time     [day-abbrevs]  [h1:m1-h2:m2]
-	    day-abbrevs:
-		S - Sunday
-		M - Monday
-		T - Tuesday
-		W - Wednesday
-		H - Thursday
-		F - Friday
-		A - Saturday
-	    h1:m1 must be less than h2:m2
-	acl aclname url_regex [-i] ^http:// ...	# regex matching on whole URL
+	    # day-abbrevs:
+		# S - Sunday
+		# M - Monday
+		# T - Tuesday
+		# W - Wednesday
+		# H - Thursday
+		# F - Friday
+		# A - Saturday
+	    # h1:m1 must be less than h2:m2
+	acl aclname url_regex [-i] ^http:// ...	    # regex matching on whole URL
 	acl aclname urlpath_regex [-i] \.gif$ ...	# regex matching on URL path
 	acl aclname urllogin [-i] [^a-zA-Z0-9] ...	# regex matching on URL login field
 	acl aclname port     80 70 21 ...
@@ -593,7 +595,7 @@ DOC_START
 	  # clients may appear to come from multiple addresses if they are
 	  # going through proxy farms, so a limit of 1 may cause user problems.
 
-	acl aclname req_mime_type mime-type1 ...
+	acl aclname req_mime_type mime-type ...
 	  # regex match against the mime type of the request generated
 	  # by the client. Can be used to detect file upload or some
 	  # types HTTP tunneling requests.
@@ -605,7 +607,7 @@ DOC_START
 	  # thought of as a superset of "browser", "referer" and "mime-type"
 	  # ACLs.
 
-	acl aclname rep_mime_type mime-type1 ...
+	acl aclname rep_mime_type mime-type ...
 	  # regex match against the mime type of the reply received by
 	  # squid. Can be used to detect file download or some
 	  # types HTTP tunneling requests.
@@ -622,11 +624,19 @@ DOC_START
 	  #
 	  # acl many_spaces rep_header Content-Disposition -i [[:space:]]{3,}
 
-	acl acl_name external class_name [arguments...]
+	acl acl_name hier_code code...
+	  # string match against squid hierarchy code(s); e.g., DIRECT,  
+	  # PARENT_HIT, NONE, etc. 
+	  #
+	  # NOTE: This has no effect in http_access rules. It only has
+	  # effect in rules that affect the reply data stream such as
+	  # http_reply_access.      
+
+	acl aclname external class_name [arguments...]
 	  # external ACL lookup via a helper class defined by the
 	  # external_acl_type directive.
 
-	acl urlgroup group1 ...
+	acl aclname urlgroup group1 ...
 	  # match against the urlgroup as indicated by redirectors
 
 	acl aclname user_cert attribute values...
@@ -1004,6 +1014,121 @@ DOC_START
 DOC_END
 
 COMMENT_START
+ SSL OPTIONS
+ -----------------------------------------------------------------------------
+COMMENT_END
+
+NAME: ssl_unclean_shutdown
+IFDEF: USE_SSL
+TYPE: onoff
+DEFAULT: off
+LOC: Config.SSL.unclean_shutdown
+DOC_START
+	Some browsers (especially MSIE) bugs out on SSL shutdown
+	messages.
+DOC_END
+
+NAME: ssl_engine
+IFDEF: USE_SSL
+TYPE: string
+LOC: Config.SSL.ssl_engine
+DEFAULT: none
+DOC_START
+	The OpenSSL engine to use. You will need to set this if you
+	would like to use hardware SSL acceleration for example.
+DOC_END
+
+NAME: sslproxy_client_certificate
+IFDEF: USE_SSL
+DEFAULT: none
+LOC: Config.ssl_client.cert
+TYPE: string
+DOC_START
+	Client SSL Certificate to use when proxying https:// URLs
+DOC_END
+
+NAME: sslproxy_client_key
+IFDEF: USE_SSL
+DEFAULT: none
+LOC: Config.ssl_client.key
+TYPE: string
+DOC_START
+	Client SSL Key to use when proxying https:// URLs
+DOC_END
+
+NAME: sslproxy_version
+IFDEF: USE_SSL
+DEFAULT: 1
+LOC: Config.ssl_client.version
+TYPE: int
+DOC_START
+	SSL version level to use when proxying https:// URLs
+DOC_END
+
+NAME: sslproxy_options
+IFDEF: USE_SSL
+DEFAULT: none
+LOC: Config.ssl_client.options
+TYPE: string
+DOC_START
+	SSL engine options to use when proxying https:// URLs
+DOC_END
+
+NAME: sslproxy_cipher
+IFDEF: USE_SSL
+DEFAULT: none
+LOC: Config.ssl_client.cipher
+TYPE: string
+DOC_START
+	SSL cipher list to use when proxying https:// URLs
+DOC_END
+
+NAME: sslproxy_cafile
+IFDEF: USE_SSL
+DEFAULT: none
+LOC: Config.ssl_client.cafile
+TYPE: string
+DOC_START
+	file containing CA certificates to use when verifying server
+	certificates while proxying https:// URLs
+DOC_END
+
+NAME: sslproxy_capath
+IFDEF: USE_SSL
+DEFAULT: none
+LOC: Config.ssl_client.capath
+TYPE: string
+DOC_START
+	directory containing CA certificates to use when verifying
+	server certificates while proxying https:// URLs
+DOC_END
+
+NAME: sslproxy_flags
+IFDEF: USE_SSL
+DEFAULT: none
+LOC: Config.ssl_client.flags
+TYPE: string
+DOC_START
+	Various flags modifying the use of SSL while proxying https:// URLs:
+	    DONT_VERIFY_PEER    Accept certificates even if they fail to
+				verify.
+	    NO_DEFAULT_CA       Don't use the default CA list built in
+				to OpenSSL.
+DOC_END
+
+NAME: sslpassword_program
+IFDEF: USE_SSL
+DEFAULT: none
+LOC: Config.Program.ssl_password
+TYPE: string
+DOC_START
+	Specify a program used for entering SSL key passphrases
+	when using encrypted SSL certificate keys. If not specified
+	keys must either be unencrypted, or Squid started with the -N
+	option to allow it to query interactively for the passphrase.
+DOC_END
+
+COMMENT_START
  NETWORK OPTIONS
  -----------------------------------------------------------------------------
 COMMENT_END
@@ -1316,121 +1441,6 @@ DOC_START
 DOC_END
 
 COMMENT_START
- SSL OPTIONS
- -----------------------------------------------------------------------------
-COMMENT_END
-
-NAME: ssl_unclean_shutdown
-IFDEF: USE_SSL
-TYPE: onoff
-DEFAULT: off
-LOC: Config.SSL.unclean_shutdown
-DOC_START
-	Some browsers (especially MSIE) bugs out on SSL shutdown
-	messages.
-DOC_END
-
-NAME: ssl_engine
-IFDEF: USE_SSL
-TYPE: string
-LOC: Config.SSL.ssl_engine
-DEFAULT: none
-DOC_START
-	The OpenSSL engine to use. You will need to set this if you
-	would like to use hardware SSL acceleration for example.
-DOC_END
-
-NAME: sslproxy_client_certificate
-IFDEF: USE_SSL
-DEFAULT: none
-LOC: Config.ssl_client.cert
-TYPE: string
-DOC_START
-	Client SSL Certificate to use when proxying https:// URLs
-DOC_END
-
-NAME: sslproxy_client_key
-IFDEF: USE_SSL
-DEFAULT: none
-LOC: Config.ssl_client.key
-TYPE: string
-DOC_START
-	Client SSL Key to use when proxying https:// URLs
-DOC_END
-
-NAME: sslproxy_version
-IFDEF: USE_SSL
-DEFAULT: 1
-LOC: Config.ssl_client.version
-TYPE: int
-DOC_START
-	SSL version level to use when proxying https:// URLs
-DOC_END
-
-NAME: sslproxy_options
-IFDEF: USE_SSL
-DEFAULT: none
-LOC: Config.ssl_client.options
-TYPE: string
-DOC_START
-	SSL engine options to use when proxying https:// URLs
-DOC_END
-
-NAME: sslproxy_cipher
-IFDEF: USE_SSL
-DEFAULT: none
-LOC: Config.ssl_client.cipher
-TYPE: string
-DOC_START
-	SSL cipher list to use when proxying https:// URLs
-DOC_END
-
-NAME: sslproxy_cafile
-IFDEF: USE_SSL
-DEFAULT: none
-LOC: Config.ssl_client.cafile
-TYPE: string
-DOC_START
-	file containing CA certificates to use when verifying server
-	certificates while proxying https:// URLs
-DOC_END
-
-NAME: sslproxy_capath
-IFDEF: USE_SSL
-DEFAULT: none
-LOC: Config.ssl_client.capath
-TYPE: string
-DOC_START
-	directory containing CA certificates to use when verifying
-	server certificates while proxying https:// URLs
-DOC_END
-
-NAME: sslproxy_flags
-IFDEF: USE_SSL
-DEFAULT: none
-LOC: Config.ssl_client.flags
-TYPE: string
-DOC_START
-	Various flags modifying the use of SSL while proxying https:// URLs:
-	    DONT_VERIFY_PEER    Accept certificates even if they fail to
-				verify.
-	    NO_DEFAULT_CA       Don't use the default CA list built in
-				to OpenSSL.
-DOC_END
-
-NAME: sslpassword_program
-IFDEF: USE_SSL
-DEFAULT: none
-LOC: Config.Program.ssl_password
-TYPE: string
-DOC_START
-	Specify a program used for entering SSL key passphrases
-	when using encrypted SSL certificate keys. If not specified
-	keys must either be unencrypted, or Squid started with the -N
-	option to allow it to query interactively for the passphrase.
-DOC_END
-
-COMMENT_START
  OPTIONS WHICH AFFECT THE NEIGHBOR SELECTION ALGORITHM
  -----------------------------------------------------------------------------
 COMMENT_END
@@ -1481,6 +1491,7 @@ DOC_START
 		     no-delay
 		     login=user:password | PASS | *:password
 		     connect-timeout=nn
+		     connect-fail-limit=nn
 		     digest-url=url
 		     allow-miss
 		     max-conn=n
@@ -1597,6 +1608,10 @@ DOC_START
 		     use 'connect-timeout=nn' to specify a peer
 		     specific connect timeout (also see the
 		     peer_connect_timeout directive)
+
+		     use 'connect-fail-limit=nn' to specify how many times
+		     connecting to a peer must fail before it is marked as
+		     down. Default is 10.
 
 		     use 'digest-url=url' to tell Squid to fetch the cache
 		     digest (if digests are enabled) for this host from
@@ -2266,8 +2281,10 @@ DOC_START
 		sn	Unique sequence number per log line entry
 		%	a literal % character
 
-logformat squid  %ts.%03tu %6tr %>a %Ss/%03Hs %<st %rm %ru %un %Sh/%<A %mt
-logformat squidmime  %ts.%03tu %6tr %>a %Ss/%03Hs %<st %rm %ru %un %Sh/%<A %mt [%>h] [%<h]
+	The default formats available (which do not need re-defining) are:
+
+logformat squid %ts.%03tu %6tr %>a %Ss/%03Hs %<st %rm %ru %un %Sh/%<A %mt
+logformat squidmime %ts.%03tu %6tr %>a %Ss/%03Hs %<st %rm %ru %un %Sh/%<A %mt [%>h] [%<h]
 logformat common %>a %ui %un [%tl] "%rm %ru HTTP/%rv" %Hs %<st %Ss:%Sh
 logformat combined %>a %ui %un [%tl] "%rm %ru HTTP/%rv" %Hs %<st "%{Referer}>h" "%{User-Agent}>h" %Ss:%Sh
 DOC_END
@@ -2669,7 +2686,46 @@ TYPE: programline
 LOC: Config.Program.store_rewrite.command
 DEFAULT: none
 DOC_START
+	Specify the location of the executable for the Store URL rewriter.
+	The Store URL rewriter allows URLs to be "normalised" ; mapping
+	multiple URLs to a single URL representation for cache operations.
 
+	For example, if you request an object at:
+
+	http://srv1.example.com/image.gif
+
+	and a subsequent request for:
+
+	http://srv2.example.com/image.gif
+
+	then Squid will treat these both as different URLs and cache them
+	seperately.
+
+	This is almost the normal case, but an increasing number of sites
+	distribute the same content between multiple frontend hosts.
+	The Store URL rewriter allows you to rewrite these URLs to one URL
+	to use for cache operations, but not -fetches-. Fetches are still
+	made from the original site, but stored with the store URL rewritten
+	URL as the store key.
+
+	For each requested URL rewriter will receive on line with the format
+
+	URL <SP> client_ip "/" fqdn <SP> user <SP> method <SP> urlgroup
+	 [<SP> kvpairs] <NL>
+
+	In the future, the rewriter interface will be extended with
+	key=value pairs ("kvpairs" shown above).  Rewriter programs
+	should be prepared to receive and possibly ignore additional
+	whitespace-separated tokens on each input line.
+
+	And the rewriter may return a rewritten URL. The other components of
+	the request line does not need to be returned (ignored if they are).
+
+	By default, a Store URL rewriter is not used.
+
+	Please note - the normal URL rewriter rewrites Squid's _destination_
+	URL - ie, what it fetches. The Store URL rewriter rewrites Squid's
+	_store_ URL - ie, what it uses to store and retrieve objects.
 DOC_END
 
 NAME: storeurl_rewrite_children
@@ -2975,9 +3031,10 @@ DOC_START
 		 negative-ttl=NN
 
 		override-expire enforces min age even if the server
-		sent a Expires: header. Doing this VIOLATES the HTTP
-		standard.  Enabling this feature could make you liable
-		for problems which it causes.
+		sent an explicit expiry time (e.g., with the
+		Expires: header or Cache-Control: max-age). Doing this
+		VIOLATES the HTTP standard.  Enabling this feature
+		could make you liable for problems which it causes.
 
 		override-lastmod enforces min age even on objects
 		that were modified recently.
@@ -3234,17 +3291,24 @@ DOC_START
 DOC_END
 
 NAME: request_body_max_size
-COMMENT: (KB)
-TYPE: b_size_t
-DEFAULT: 0 KB
-LOC: Config.maxRequestBodySize
+COMMENT: bytes allow|deny acl acl...
+TYPE: body_size_t
+DEFAULT: none
+DEFAULT_IF_NONE: 0 allow all
+LOC: Config.RequestBodySize
 DOC_START
-	This specifies the maximum size for an HTTP request body.
-	In other words, the maximum size of a PUT/POST request.
-	A user who attempts to send a request with a body larger
-	than this limit receives an "Invalid Request" error message.
-	If you set this parameter to a zero (the default), there will
-	be no limit imposed.
+	This option specifies the maximum size of a request body in bytes.
+	It can be used to prevent users from uploading very large files. When
+	the request headers are received, the request_body_max_size lines are
+	processed, and the first line with a result of "allow" is used as the
+	maximum body size for this request.  This size is checked against the
+	content-length value in the request headers.  If the content length
+	value is larger than the allowed size, the request is denied and the
+	user receives an error message that says "the request or reply is too
+	large."
+
+	If you set this parameter to zero (the default), there will be
+	no limit imposed.
 DOC_END
 
 NAME: broken_posts
@@ -4268,7 +4332,7 @@ DOC_START
 
 	The relevant WCCPv2 flags:
 	+ src_ip_hash, dst_ip_hash
-	+ source_port_hash, dest_port_hash
+	+ source_port_hash, dst_port_hash
 	+ src_ip_alt_hash, dst_ip_alt_hash
 	+ src_port_alt_hash, dst_port_alt_hash
 	+ ports_source
@@ -5402,20 +5466,28 @@ DOC_START
 DOC_END
 
 NAME: forwarded_for
-COMMENT: on|off
-TYPE: onoff
+COMMENT: on|off|transparent|truncate|delete
+TYPE: forwarded_for
 DEFAULT: on
 LOC: opt_forwarded_for
 DOC_START
-	If set, Squid will include your system's IP address or name
-	in the HTTP requests it forwards.  By default it looks like
-	this:
+	If set to "on", Squid will append your client's IP address
+	in the HTTP requests it forwards. By default it looks like:
 
 		X-Forwarded-For: 192.1.2.3
 
-	If you disable this, it will appear as
+	If set to "off", it will appear as
 
 		X-Forwarded-For: unknown
+
+	If set to "transparent", Squid will not alter the
+	X-Forwarded-For header in any way.
+
+	If set to "delete", Squid will delete the entire
+	X-Forwarded-For header.
+
+	If set to "truncate", Squid will remove all existing
+	X-Forwarded-For entries, and place itself as the sole entry.
 DOC_END
 
 NAME: cachemgr_passwd
@@ -5696,6 +5768,20 @@ DOC_START
 	not being zero'ed. This may give a performance boost on certain
 	platforms but it may result in undefined behaviour at the present
 	time.
+DOC_END
+
+NAME: windows_ipaddrchangemonitor
+COMMENT: on|off
+TYPE: onoff
+DEFAULT: on
+LOC: Config.onoff.WIN32_IpAddrChangeMonitor
+DOC_START
+	On Windows Squid by default will monitor IP address changes and will 
+	reconfigure itself after any detected event. This is very useful for
+	proxies connected to internet with dial-up interfaces.
+	In some cases (a Proxy server acting as VPN gateway is one) it could be
+	desiderable to disable this behaviour setting this to 'off'.
+	Note: after changing this, Squid service must be restarted.
 DOC_END
 
 

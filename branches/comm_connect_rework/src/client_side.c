@@ -151,7 +151,7 @@ static int clientCheckContentLength(request_t * r);
 static DEFER httpAcceptDefer;
 static log_type clientProcessRequest2(clientHttpRequest * http);
 static int clientReplyBodyTooLarge(clientHttpRequest *, squid_off_t clen);
-static int clientRequestBodyTooLarge(squid_off_t clen);
+static int clientRequestBodyTooLarge(clientHttpRequest *, request_t *);
 static void clientProcessBody(ConnStateData * conn);
 static void clientEatRequestBody(clientHttpRequest *);
 static void clientAccessCheck(void *data);
@@ -714,6 +714,7 @@ clientProcessExpired(clientHttpRequest * http)
 	    entry = NULL;
 	}
 	if (entry) {
+	    http->request->flags.collapsed = 1;		/* Don't trust the store entry */
 	    storeLockObject(entry);
 	    hit = 1;
 	} else {
@@ -919,6 +920,11 @@ clientHandleIMSReply(void *data, HttpReply * rep)
     }
     http->old_entry = NULL;	/* done with old_entry */
     http->old_sc = NULL;
+    if (http->request->flags.collapsed && !http->flags.hit && EBIT_TEST(entry->flags, RELEASE_REQUEST)) {
+	/* Collapsed request, but the entry is not good to be sent */
+	clientProcessMiss(http);
+	return;
+    }
     assert(!EBIT_TEST(entry->flags, ENTRY_ABORTED));
     if (recopy) {
 	storeClientCopyHeaders(http->sc, entry,
@@ -1900,12 +1906,12 @@ clientBuildReplyHeader(clientHttpRequest * http, HttpReply * rep)
 	httpHeaderPutStr(hdr, HDR_TRANSFER_ENCODING, "chunked");
     }
     /* Append Via */
-    if (Config.onoff.via) {
+    if (Config.onoff.via && http->entry) {
 	LOCAL_ARRAY(char, bbuf, MAX_URL + 32);
 	String strVia = httpHeaderGetList(hdr, HDR_VIA);
 	snprintf(bbuf, MAX_URL + 32, "%d.%d %s",
-	    rep->sline.version.major,
-	    rep->sline.version.minor, ThisCache);
+	    http->entry->mem_obj->reply->sline.version.major,
+	    http->entry->mem_obj->reply->sline.version.minor, ThisCache);
 	strListAdd(&strVia, bbuf, ',');
 	httpHeaderDelById(hdr, HDR_VIA);
 	httpHeaderPutStr(hdr, HDR_VIA, strBuf(strVia));
@@ -2238,6 +2244,13 @@ clientCacheHit(void *data, HttpReply * rep)
 	    return;
 	}
     }
+    if (r->flags.collapsed && EBIT_TEST(e->flags, RELEASE_REQUEST)) {
+	/* collapsed_forwarding, but the joined request is not good
+	 * to be cached..
+	 */
+	clientProcessMiss(http);
+	return;
+    }
     /*
      * Got the headers, now grok them
      */
@@ -2285,16 +2298,6 @@ clientCacheHit(void *data, HttpReply * rep)
 	debug(33, 1) ("clientCacheHit: Vary object loop!\n");
 	storeClientUnregister(http->sc, e, http);
 	http->sc = NULL;
-	clientProcessMiss(http);
-	return;
-    case VARY_EXPIRED:
-	/* Variant is expired. Delete it and process as a miss. */
-	debug(33, 2) ("clientCacheHit: Variant expired, deleting\n");
-	storeClientUnregister(http->sc, e, http);
-	http->sc = NULL;
-	storeRelease(e);
-	storeUnlockObject(e);
-	http->entry = NULL;
 	clientProcessMiss(http);
 	return;
     }
@@ -2715,14 +2718,45 @@ clientDelayBodyTooLarge(clientHttpRequest * http, squid_off_t clen)
 }
 #endif
 
-static int
-clientRequestBodyTooLarge(squid_off_t clen)
+/*
+ * Calculates the maximum size allowed for an HTTP request body
+ */
+static void
+clientMaxRequestBodySize(request_t * request, clientHttpRequest * http)
 {
-    if (0 == Config.maxRequestBodySize)
+    body_size *bs;
+    aclCheck_t *checklist;
+    if (http->log_type == LOG_TCP_DENIED)
+	return;
+    bs = (body_size *) Config.RequestBodySize.head;
+    http->maxRequestBodySize = 0;
+    while (bs) {
+	checklist = clientAclChecklistCreate(bs->access_list, http);
+	if (aclCheckFast(bs->access_list, checklist) != 1) {
+	    /* deny - skip this entry */
+	    bs = (body_size *) bs->node.next;
+	} else {
+	    /* Allow - use this entry */
+	    http->maxRequestBodySize = bs->maxsize;
+	    bs = NULL;
+	    debug(58, 3) ("clientMaxRequestBodySize: Setting maxRequestBodySize to %ld\n", (long int) http->maxRequestBodySize);
+	}
+	aclChecklistFree(checklist);
+    }
+}
+
+static int
+clientRequestBodyTooLarge(clientHttpRequest * http, request_t * request)
+{
+
+    if (http->maxRequestBodySize == -1) {
+	clientMaxRequestBodySize(request, http);
+    }
+    if (0 == http->maxRequestBodySize)
 	return 0;		/* disabled */
-    if (clen < 0)
+    if (request->content_length < 0)
 	return 0;		/* unknown, bug? */
-    if (clen > Config.maxRequestBodySize)
+    if (request->content_length > http->maxRequestBodySize)
 	return 1;		/* too large */
     return 0;
 }
@@ -2970,6 +3004,9 @@ clientHttpReplyAccessCheckDone(int answer, void *data)
 	err = errorCon(page_id, HTTP_FORBIDDEN, http->orig_request);
 	storeClientUnregister(http->sc, http->entry, http);
 	http->sc = NULL;
+	if (http->reply)
+	    httpReplyDestroy(http->reply);
+	http->reply = NULL;
 	storeUnlockObject(http->entry);
 	http->log_type = LOG_TCP_DENIED;
 	http->entry = clientCreateStoreEntry(http, http->request->method,
@@ -3585,6 +3622,7 @@ clientProcessMiss(clientHttpRequest * http)
     debug(33, 4) ("clientProcessMiss: '%s %s'\n",
 	RequestMethods[r->method].str, url);
     http->flags.hit = 0;
+    r->flags.collapsed = 0;
     /*
      * We might have a left-over StoreEntry from a failed cache hit
      * or IMS request.
@@ -3771,6 +3809,7 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t * method_p, i
     http->start = current_time;
     http->req_sz = prefix_sz;
     http->range_iter.boundary = StringNull;
+    http->maxRequestBodySize = -1;
     dlinkAdd(http, &http->active, &ClientActiveRequests);
 
     debug(33, 5) ("parseHttpRequest: Request Header is\n%s\n", hmsg->buf + hmsg->req_end);
@@ -3874,7 +3913,7 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t * method_p, i
 	    http->uri = xcalloc(url_sz, 1);
 	    if (strchr(host, ':'))
 		snprintf(http->uri, url_sz, "%s://%s%s",
-		    conn->port->protocol, t, url);
+		    conn->port->protocol, host, url);
 	    else
 		snprintf(http->uri, url_sz, "%s://%s:%d%s",
 		    conn->port->protocol, host, port, url);
@@ -4085,7 +4124,7 @@ clientTryParseRequest(ConnStateData * conn)
 	    request->body_reader_data = conn;
 	    cbdataLock(conn);
 	    /* Is it too large? */
-	    if (clientRequestBodyTooLarge(request->content_length)) {
+	    if (clientRequestBodyTooLarge(http, request)) {
 		err = errorCon(ERR_TOO_BIG, HTTP_REQUEST_ENTITY_TOO_LARGE, request);
 		http->log_type = LOG_TCP_DENIED;
 		http->entry = clientCreateStoreEntry(http,
@@ -5101,8 +5140,6 @@ varyEvaluateMatch(StoreEntry * entry, request_t * request)
 	 */
 	vary = httpMakeVaryMark(request, entry->mem_obj->reply);
 	if (vary) {
-	    /* Save the vary_id for the second time through. */
-	    request->vary_id = entry->mem_obj->vary_id;
 	    return VARY_OTHER;
 	} else {
 	    /* Ouch.. we cannot handle this kind of variance */
@@ -5120,13 +5157,6 @@ varyEvaluateMatch(StoreEntry * entry, request_t * request)
 	    /* This request was merged before we knew the outcome. Don't trust the response */
 	    /* restart vary processing from the beginning */
 	    return VARY_RESTART;
-	} else if (request->vary_id.create_time != entry->mem_obj->vary_id.create_time ||
-	    request->vary_id.serial != entry->mem_obj->vary_id.serial) {
-	    /* vary_id mismatch, the variant must be expired */
-	    debug(33, 3) ("varyEvaluateMatch: vary ID mismatch, parent is %ld.%u, child is %ld.%u\n",
-		request->vary_id.create_time, request->vary_id.serial,
-		entry->mem_obj->vary_id.create_time, entry->mem_obj->vary_id.serial);
-	    return VARY_EXPIRED;
 	} else {
 	    return VARY_MATCH;
 	}

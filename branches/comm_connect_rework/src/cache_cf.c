@@ -1597,7 +1597,7 @@ dump_peer(StoreEntry * entry, const char *name, peer * p)
 	dump_peer_options(entry, p);
 	for (d = p->peer_domain; d; d = d->next) {
 	    storeAppendPrintf(entry, "cache_peer_domain %s %s%s\n",
-		p->host,
+		p->name,
 		d->do_ping ? null_string : "!",
 		d->domain);
 	}
@@ -1607,7 +1607,7 @@ dump_peer(StoreEntry * entry, const char *name, peer * p)
 	}
 	for (t = p->typelist; t; t = t->next) {
 	    storeAppendPrintf(entry, "neighbor_type_domain %s %s %s\n",
-		p->host,
+		p->name,
 		peer_type_str(t->type),
 		t->domain);
 	}
@@ -1649,6 +1649,7 @@ static void
 parse_peer(peer ** head)
 {
     char *token = NULL;
+    void *arg = NULL;		/* throwaway arg to make eventAdd happy */
     peer *p;
     CBDATA_INIT_TYPE(peer);
     CBDATA_INIT_TYPE_FREECB(peer, peerDestroy);
@@ -1659,7 +1660,7 @@ parse_peer(peer ** head)
     p->stats.logged_state = PEER_ALIVE;
     p->monitor.state = PEER_ALIVE;
     p->monitor.interval = 300;
-    p->tcp_up = PEER_TCP_MAGIC_COUNT;
+    p->connect_fail_limit = PEER_TCP_MAGIC_COUNT;
     if ((token = strtok(NULL, w_space)) == NULL)
 	self_destruct();
     p->host = xstrdup(token);
@@ -1719,7 +1720,7 @@ parse_peer(peer ** head)
 #if USE_CARP
 	} else if (!strcasecmp(token, "carp")) {
 	    if (p->type != PEER_PARENT)
-		fatalf("parse_peer: non-parent carp peer %s/%d\n", p->host, p->http_port);
+		fatalf("parse_peer: non-parent carp peer %s (%s:%d)\n", p->name, p->host, p->http_port);
 	    p->options.carp = 1;
 #endif
 #if DELAY_POOLS
@@ -1731,6 +1732,8 @@ parse_peer(peer ** head)
 	    rfc1738_unescape(p->login);
 	} else if (!strncasecmp(token, "connect-timeout=", 16)) {
 	    p->connect_timeout = xatoi(token + 16);
+	} else if (!strncasecmp(token, "connect-fail-limit=", 19)) {
+	    p->connect_fail_limit = xatoi(token + 19);
 #if USE_CACHE_DIGESTS
 	} else if (!strncasecmp(token, "digest-url=", 11)) {
 	    p->digest_url = xstrdup(token + 11);
@@ -1833,6 +1836,9 @@ parse_peer(peer ** head)
 	fatalf("ERROR: cache_peer %s specified twice\n", p->name);
     if (p->weight < 1)
 	p->weight = 1;
+    if (p->connect_fail_limit < 1)
+	p->connect_fail_limit = 1;
+    p->tcp_up = p->connect_fail_limit;
     p->icp.version = ICP_VERSION_CURRENT;
     p->test_fd = -1;
 #if USE_CACHE_DIGESTS
@@ -1850,7 +1856,9 @@ parse_peer(peer ** head)
 	head = &(*head)->next;
     *head = p;
     Config.npeers++;
-    peerClearRR(p);
+    if (!reconfiguring && Config.npeers == 1) {
+	peerClearRRLoop(arg);
+    }
 }
 
 static void
@@ -2755,6 +2763,58 @@ free_errormap(errormap ** head)
     }
 }
 
+static void
+parse_forwarded_for(forwarded_for_mode * mode)
+{
+    char *token = strtok(NULL, w_space);
+    if (!token)
+	self_destruct();
+    if (strcmp(token, "on") == 0)
+	*mode = FORWARDED_FOR_ON;
+    else if (strcmp(token, "off") == 0)
+	*mode = FORWARDED_FOR_OFF;
+    else if (strcmp(token, "unknown") == 0)
+	*mode = FORWARDED_FOR_OFF;
+    else if (strcmp(token, "transparent") == 0)
+	*mode = FORWARDED_FOR_TRANSPARENT;
+    else if (strcmp(token, "delete") == 0)
+	*mode = FORWARDED_FOR_DELETE;
+    else if (strcmp(token, "truncate") == 0)
+	*mode = FORWARDED_FOR_TRUNCATE;
+    else
+	self_destruct();
+}
+
+static void
+dump_forwarded_for(StoreEntry * entry, const char *name, forwarded_for_mode mode)
+{
+    const char *modestr = "unknown";
+    switch (mode) {
+    case FORWARDED_FOR_OFF:
+	modestr = "off";
+	break;
+    case FORWARDED_FOR_ON:
+	modestr = "on";
+	break;
+    case FORWARDED_FOR_TRANSPARENT:
+	modestr = "transparent";
+	break;
+    case FORWARDED_FOR_DELETE:
+	modestr = "delete";
+	break;
+    case FORWARDED_FOR_TRUNCATE:
+	modestr = "truncate";
+	break;
+    }
+    storeAppendPrintf(entry, "%s %s\n", name, modestr);
+}
+
+static void
+free_forwarded_for(forwarded_for_mode * mode)
+{
+    *mode = FORWARDED_FOR_ON;
+}
+
 #include "cf_parser.h"
 
 peer_t
@@ -2869,7 +2929,7 @@ parse_http_port_option(http_port_list * s, char *token)
 	s->vhost = 1;
 	s->accel = 1;
     } else if (strcmp(token, "vport") == 0) {
-	s->vport = ntohs(s->s.sin_port);
+	s->vport = -1;
 	s->accel = 1;
     } else if (strncmp(token, "vport=", 6) == 0) {
 	s->vport = xatos(token + 6);
@@ -3034,6 +3094,15 @@ cbdataFree_https_port(void *data)
     free_generic_http_port_data(&s->http);
     safe_free(s->cert);
     safe_free(s->key);
+    safe_free(s->cipher);
+    safe_free(s->options);
+    safe_free(s->clientca);
+    safe_free(s->cafile);
+    safe_free(s->capath);
+    safe_free(s->crlfile);
+    safe_free(s->dhfile);
+    safe_free(s->sslflags);
+    safe_free(s->sslcontext);
     if (s->sslContext)
 	SSL_CTX_free(s->sslContext);
     s->sslContext = NULL;
