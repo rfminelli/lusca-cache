@@ -527,7 +527,8 @@ extern peer *peerFindByName(const char *);
 extern peer *peerFindByNameAndPort(const char *, unsigned short);
 extern peer *getDefaultParent(request_t * request);
 extern peer *getRoundRobinParent(request_t * request);
-EVH peerClearRR;
+EVH peerClearRRLoop;
+extern void peerClearRR(void);
 extern peer *getAnyParent(request_t * request);
 extern lookup_t peerDigestLookup(peer * p, request_t * request);
 extern peer *neighborsDigestSelect(request_t * request);
@@ -744,6 +745,8 @@ extern StoreEntry *storeCreateEntry(const char *, request_flags, method_t);
 extern void storeSetPublicKey(StoreEntry *);
 extern void storeComplete(StoreEntry *);
 extern void storeInitMem(void);
+extern void storeRequestFailed(StoreEntry *, ErrorState * err);
+
 extern void storeInit(void);
 extern void storeAbort(StoreEntry *);
 extern void storeAppend(StoreEntry *, const char *, int);
@@ -1251,7 +1254,7 @@ extern int errorMapStart(const errormap * map, request_t * req, HttpReply * repl
 /* ETag support */
 void storeLocateVaryDone(VaryData * data);
 void storeLocateVary(StoreEntry * e, int offset, const char *vary_data, String accept_encoding, STLVCB * callback, void *cbdata);
-vary_id_t storeAddVary(const char *url, const method_t method, const cache_key * key, const char *etag, const char *vary, const char *vary_headers, const char *accept_encoding);
+void storeAddVary(const char *url, const method_t method, const cache_key * key, const char *etag, const char *vary, const char *vary_headers, const char *accept_encoding);
 
 rewritetoken *rewriteURLCompile(const char *urlfmt);
 char *internalRedirectProcessURL(clientHttpRequest * req, rewritetoken * head);

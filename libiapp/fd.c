@@ -59,6 +59,7 @@
 
 #include "../libcb/cbdata.h"
 
+#include "iapp_ssl.h"
 #include "comm.h"
 
 fde *fd_table = NULL;

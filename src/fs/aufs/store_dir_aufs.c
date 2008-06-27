@@ -1891,7 +1891,7 @@ storeAufsDirParse(SwapDir * sd, int index, char *path)
     sd->checkload = storeAufsDirCheckLoadAv;
     sd->refobj = storeAufsDirRefObj;
     sd->unrefobj = storeAufsDirUnrefObj;
-    sd->callback = aioCheckCallbacks;
+    sd->callback = NULL;
     sd->sync = aioSync;
     sd->obj.create = storeAufsCreate;
     sd->obj.open = storeAufsOpen;

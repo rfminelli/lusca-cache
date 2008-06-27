@@ -1,5 +1,24 @@
 ChangeLog:
 
+
+-- Tagged CACHEBOY_1.3
+
+-- (26-June-2008)
+
+* Merged in up to latest Squid-2.HEAD
+
+-- Tagged CACHEBOY_1.2
+
+-- (20-June-2008)
+
+* Shuffled the beginnings of comm, disk, filedescriptor and event management out of src/
+  and into libiapp/
+* Shuffled a couple of basic HTTP types out of src/ and into libhttp/
+* Reworked the async IO disk notification code - it should be more efficient under
+  heavy network (and disk!) load.
+
+-- Tagged CACHEBOY_1.1
+
 * Shuffled MemPools out of src/ and into libmem/
 * Shuffled cbdata out of src/ and into libmem/
 

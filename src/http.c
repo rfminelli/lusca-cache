@@ -229,7 +229,7 @@ httpCachableReply(HttpStateData * httpState)
     const char *v;
 #if HTTP_VIOLATIONS
     const refresh_t *R = NULL;
-    /* This strange looking define first looks up the refresh pattern
+    /* This strange looking define first looks up the frefresh pattern
      * and then checks if the specified flag is set. The main purpose
      * of this is to simplify the refresh pattern lookup
      */
@@ -646,6 +646,11 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
     int complete = httpState->eof;
     int keep_alive = !httpState->eof;
     storeBuffer(entry);
+    if (len == 0 && httpState->eof && httpState->flags.chunked) {
+	fwdFail(httpState->fwd, errorCon(ERR_INVALID_RESP, HTTP_BAD_GATEWAY, httpState->fwd->request));
+	comm_close(fd);
+	return;
+    }
     while (len > 0) {
 	if (httpState->chunk_size > 0) {
 	    size_t size = len;
@@ -669,6 +674,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 	    len -= size;
 	    if (strLen(httpState->chunkhdr) > 256) {
 		debug(11, 1) ("Oversized chunk header on port %d, url %s\n", comm_local_port(fd), entry->mem_obj->url);
+		fwdFail(httpState->fwd, errorCon(ERR_INVALID_RESP, HTTP_BAD_GATEWAY, httpState->fwd->request));
 		comm_close(fd);
 		return;
 	    }
@@ -677,18 +683,23 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 		    /* chunk header */
 		    char *end = NULL;
 		    int badchunk = 0;
+		    int emptychunk = 0;
 		    debug(11, 3) ("Chunk header '%s'\n", strBuf(httpState->chunkhdr));
+		    errno = 0;
 		    httpState->chunk_size = strto_off_t(strBuf(httpState->chunkhdr), &end, 16);
-		    if (end == strBuf(httpState->chunkhdr))
+		    if (errno)
 			badchunk = 1;
+		    else if (end == strBuf(httpState->chunkhdr))
+			emptychunk = 1;
 		    while (end && (*end == '\r' || *end == ' ' || *end == '\t'))
 			end++;
-		    if (httpState->chunk_size < 0 || !end || (*end != '\n' && *end != ';')) {
-			debug(11, 0) ("Invalid chunk header '%s'\n", strBuf(httpState->chunkhdr));
+		    if (httpState->chunk_size < 0 || badchunk || !end || (*end != '\n' && *end != ';')) {
+			debug(11, 1) ("Invalid chunk header '%s'\n", strBuf(httpState->chunkhdr));
+			fwdFail(httpState->fwd, errorCon(ERR_INVALID_RESP, HTTP_BAD_GATEWAY, httpState->fwd->request));
 			comm_close(fd);
 			return;
 		    }
-		    if (badchunk)
+		    if (emptychunk)
 			continue;	/* Skip blank lines */
 		    debug(11, 2) ("Chunk size %" PRINTF_OFF_T "\n", httpState->chunk_size);
 		    if (httpState->chunk_size == 0) {
@@ -960,7 +971,7 @@ httpReadReply(int fd, void *data)
 		    MemBuf mb;
 		    HttpReply *reply = entry->mem_obj->reply;
 		    httpReplyReset(reply);
-		    httpBuildVersion(&reply->sline.version, 1, 0);
+		    httpBuildVersion(&reply->sline.version, 0, 9);
 		    reply->sline.status = HTTP_OK;
 		    httpHeaderPutTime(&reply->header, HDR_DATE, squid_curtime);
 		    mb = httpReplyPack(reply);
@@ -1175,7 +1186,7 @@ httpBuildRequestHeader(request_t * request,
 	    }
 	    break;
 	case HDR_X_FORWARDED_FOR:
-	    if (!opt_forwarded_for)
+	    if (opt_forwarded_for == FORWARDED_FOR_TRANSPARENT)
 		httpHeaderAddClone(hdr_out, e);
 	    break;
 	case HDR_RANGE:
@@ -1226,11 +1237,23 @@ httpBuildRequestHeader(request_t * request,
 	stringClean(&strVia);
     }
     /* append X-Forwarded-For */
-    if (opt_forwarded_for) {
+    strFwd = StringNull;
+    switch (opt_forwarded_for) {
+    case FORWARDED_FOR_ON:
+    case FORWARDED_FOR_OFF:
 	strFwd = httpHeaderGetList(hdr_in, HDR_X_FORWARDED_FOR);
-	strListAdd(&strFwd,
-	    (((orig_request->client_addr.s_addr != no_addr.s_addr) && opt_forwarded_for) ?
+    case FORWARDED_FOR_TRUNCATE:
+	strListAdd(&strFwd, (((orig_request->client_addr.s_addr != no_addr.s_addr) && opt_forwarded_for != FORWARDED_FOR_OFF) ?
 		inet_ntoa(orig_request->client_addr) : "unknown"), ',');
+	break;
+    case FORWARDED_FOR_TRANSPARENT:
+	/* Handled above */
+	break;
+    case FORWARDED_FOR_DELETE:
+	/* Nothing to do */
+	break;
+    }
+    if (strLen(strFwd)) {
 	httpHeaderPutStr(hdr_out, HDR_X_FORWARDED_FOR, strBuf(strFwd));
 	stringClean(&strFwd);
     }

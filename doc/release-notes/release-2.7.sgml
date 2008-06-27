@@ -170,8 +170,6 @@ Squid is a WWW Cache application developed by the Web Caching community.
 
     <tag>external_refresh_check</tag>
     <p>new helper to allow custom cache validations in accelerator setups
-    <tag>delay_body_max_size</tag>
-    <p>new way of using delay pools based on response size
 
     <tag>ignore_ims_on_miss</tag>
     <p>optimization mainly targeted for accelerator setups
@@ -223,6 +221,9 @@ Squid is a WWW Cache application developed by the Web Caching community.
     <p>Suggested defaults adjusted to match the changes in the cache directive.
     <tag>url_rewrite_program</tag>
     <p>Future protocol change adding key=value pairs after the requests
+    <tag>forwarded_for</tag>
+    <p>Has several new modes, allowing one to finetune how/if the requesting
+    client IP should be forwarded in X-Forwarded-For
 </descrip>
 
 <sect1>Removed directives
@@ -268,7 +269,6 @@ Squid is a WWW Cache application developed by the Web Caching community.
 <item>Bug #457: does not handle swap.state corruption properly
 <item>Bug #410: unstable if runs out of disk space
 <item>Bug #355: diskd may appear slow on low loads
-<item>Bug #219: delay_pools stops working on -k reconfigure
 </itemize>
 
 <sect>Windows support
@@ -345,6 +345,7 @@ are supported.
 <p><itemize>
 <item>It's recommended to use '/' char in Squid paths instead of '\'
 <item>Paths with spaces (like 'C:\Programs Files\Squid) are NOT supported by Squid
+<item>Include wildcard patterns in squid.conf are NOT supported on Windows
 <item>When using ACL like 'acl aclname acltype "file"' the file must be in DOS text
 format (CR+LF) and the full Windows path must be specified, for example:
 
@@ -361,7 +362,7 @@ redirect_program c:/winnt/system32/cmd.exe /C c:/squid/libexec/redir.cmd</verb>
 <item>Building with MinGW, when the configure option --enable-truncate is used, Squid cannot run on Windows NT, only Windows 2000 and later are supported
 </itemize>
 
-<sect1>Known Limitations:
+<sect1>Known Limitations
 
 <p><itemize>
 <item>DISKD: still needs to be ported
@@ -372,7 +373,7 @@ redirect_program c:/winnt/system32/cmd.exe /C c:/squid/libexec/redir.cmd</verb>
 <item>File Descriptors number hard-limited to 2048 when building with MinGW.
 </itemize>
 
-<sect1>Using cache manager on Windows:
+<sect1>Using cache manager on Windows
 
 <p>On Windows, cache manager (cachemgr.cgi) can be used with Microsoft IIS or Apache.
 Some specific configuration could be needed:
@@ -402,6 +403,39 @@ ScriptAlias /squid/cgi-bin/ "c:/squid/libexec/"
     Allow from workstation.example.com
 &lt;/Location&gt;
 </verb>
+
+<sect>Key changes in squid-2.7.STABLE2
+
+<p>
+<itemize>
+	<item>Compile error if --enable-delaypools used
+	<item>Bug #1893: Variant invalidation support removed again, caused a lot content to not get cached.
+        <item>Bug #2350: Linux Capabilities version mismatch causing startup crash on newer kernels
+	<item>See also the list of <url
+		url="http://www.squid-cache.org/Versions/v2/2.7/changesets/SQUID_2_7_STABLE2.html"
+			name="squid-2.7.STABLE2 changes"> and the <url url="ChangeLog"
+				name="ChangeLog"> file for details.
+</itemize>
+
+<sect>Key changes in squid-2.7.STABLE3
+
+<p>
+<itemize>
+	<item>Byg #2376: Round-Robin peer selection becomes unbalanced when a peer dies and comes back
+	<item>Bug #2122: Private information leakage in collapsed_forwarding
+	<item>Bug #1993: Memory leak in http_reply_access deny processing
+	<item>Fix SNMP reporting of counters with a value > 0xFF80000
+	<item>Reject ridiculously large ASN.1 lengths
+	<item>Off by one error in DNS label decompression could cause valid DNS messages to be rejected
+	<item>Bug #2241: weights not applied properly in round-robin peer selection
+	<item>Bug #2192: http_port ... vport broken by recent changes in how accelerator mode deals with port numbers
+	<item>Fix build error on Solaris using gcc and --with-large-files
+	<item>Windows port: new option for control of IP address changes notification in squid.conf
+	<item>See also the list of <url
+		url="http://www.squid-cache.org/Versions/v2/2.7/changesets/SQUID_2_7_STABLE3.html"
+			name="squid-2.7.STABLE3 changes"> and the <url url="ChangeLog"
+				name="ChangeLog"> file for details.
+</itemize>
 
 </article>
 

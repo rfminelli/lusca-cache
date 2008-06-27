@@ -61,6 +61,7 @@
 
 #include "../libcb/cbdata.h"
 
+#include "iapp_ssl.h"
 #include "comm.h"
 
 static PF diskHandleRead;
