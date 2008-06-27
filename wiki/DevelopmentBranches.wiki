@@ -1,0 +1,6 @@
+#summary Current development branches
+
+= Details =
+
+  * CACHEBOY_PRE http://code.google.com/p/cacheboy/source/list?path=/branches/CACHEBOY_PRE - main cacheboy development branch; branched off Squid-2.HEAD ("trunk")
+  * comm_connect_rework http://code.google.com/p/cacheboy/source/list?path=/branches/comm_connect_rework - communications code reorganisation; branched off CACHEBOY_PRE
