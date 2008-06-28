@@ -28,7 +28,7 @@ intlistDestroy(intlist ** list)
     intlistCheckAlloc();
     for (w = *list; w; w = n) {
         n = w->next;
-        memPoolFree(w, pool_intlist);
+        memPoolFree(pool_intlist, w);
     }
     *list = NULL;
 }
