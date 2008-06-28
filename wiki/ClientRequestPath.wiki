@@ -20,57 +20,56 @@ stuff happens to parse and build a reqest.
 clientAccessCheck() - Config.accessList.http -> clientAccessCheckDone()
 
 clientAccessCheckDone()
-    ALLOWED ? redirect_state = REDIRECT_PENDING; -> clientRedirectStart()
-    DENIED ? If authentication required; add authentication headers; errorCon(); errorAppendEntry(); STOP
+  * ALLOWED ? redirect_state = REDIRECT_PENDING; -> clientRedirectStart()
+  * DENIED ? If authentication required; add authentication headers; errorCon(); errorAppendEntry(); STOP
 
 clientRedirectStart()
-    clientInternalRedirectAccessCheckDone() ; clientRedirectAccessCheckDone() ; clientRedirectDone()
+  * clientInternalRedirectAccessCheckDone() ; clientRedirectAccessCheckDone() ; clientRedirectDone()
 
 clientRedirectDone()
-    redirect_state = REDIRECT_DONE
-    -> clientStoreURLRewriteStart()
+  * redirect_state = REDIRECT_DONE -> clientStoreURLRewriteStart()
 
 
 clientStoreURLRewriteStart()
-    clientStoreURLRewriteAccessCheckDone() ; clientStoreURLRewriteDone()
+  * clientStoreURLRewriteAccessCheckDone() ; clientStoreURLRewriteDone()
 
 clientStoreURLRewriteDone()
-    -> clientFinishRewriteStuff()
+  * -> clientFinishRewriteStuff()
 
 clientFinishRewriteStuff()
-    -> clientInterpretRequestHeaders()
-    -> clientAccessCheck2()
+  * -> clientInterpretRequestHeaders()
+  * -> clientAccessCheck2()
 
 clientInterpretRequestHeaders()
-   (just fiddle with the headers after processing)
+  * (just fiddle with the headers after processing)
 
 clientAccessCheck2()
-  -> Config.accessList.http2 and clientAccessCheckDone2(); or clientCheckNoCache()
+  * -> Config.accessList.http2 and clientAccessCheckDone2(); or clientCheckNoCache()
 
 clientAccessCheckDone2()
-  -> auth? add auth stuff. fail auth/acl? errorCon(); errorAppendEntry(); STOP
-  -> clientCheckNoCache()
+  * -> auth? add auth stuff. fail auth/acl? errorCon(); errorAppendEntry(); STOP
+  * -> clientCheckNoCache()
 
 clientCheckNoCache()
-  -> Config.accessList.noCache and clientCheckNoCacheDone(); or clientCheckNoCacheDone()
+  * -> Config.accessList.noCache and clientCheckNoCacheDone(); or clientCheckNoCacheDone()
 
 clientCheckNoCacheDone()
-  -> clientProcessRequest()
+  * -> clientProcessRequest()
 
 clientProcessRequest() (called from a variety of places!)
-  Do method based stuff - CONNECT, TRACE, PURGE, handle 100-continue here? um..
-  A GET? clientProcessRequest2()
+  * Do method based stuff - CONNECT, TRACE, PURGE, handle 100-continue here? um..
+  * A GET? clientProcessRequest2()
 
 clientProcessRequest2() - I think http->entry may be set at this point if the object is in the cache, and NULL if it isn't!
-  storeGetPublicByRequest() on the request to perform the store lookup, only the cachable / internal requests go here
+  * storeGetPublicByRequest() on the request to perform the store lookup, only the cachable / internal requests go here
 
 .. not cachable? (ie, didn't get a http->entry) ..
 
 clientProcessMiss() - this is the beginning of the fowarding logic
-  Handle left over entry from a failed hit / ims
-  handle purge
-  clientOnlyIfCached() ? -> clientProcessOnlyIfCachedMiss()
-  deny double loops
-  Create the store entry
-  collapsed forwarding stuff?
-  fwdStart() <- this is where the request forwarding occurs
+  * Handle left over entry from a failed hit / ims
+  * handle purge
+  * clientOnlyIfCached() ? -> clientProcessOnlyIfCachedMiss()
+  * deny double loops
+  * Create the store entry
+  * collapsed forwarding stuff?
+  * fwdStart() <- this is where the request forwarding occurs
