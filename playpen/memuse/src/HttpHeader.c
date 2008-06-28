@@ -268,6 +268,7 @@ httpHeaderInitMem(void)
 {
     pool_http_reply = memPoolCreate("HttpReply", sizeof(HttpReply));
     pool_http_header_entry = memPoolCreate("HttpHeaderEntry", sizeof(HttpHeaderEntry));
+    memPoolNonZero(pool_http_header_entry);
     pool_http_hdr_cc = memPoolCreate("HttpHdrCc", sizeof(HttpHdrCc));
     pool_http_hdr_range_spec = memPoolCreate("HttpHdrRangeSpec", sizeof(HttpHdrRangeSpec));
     pool_http_hdr_range = memPoolCreate("HttpHdrRange", sizeof(HttpHdrRange));
