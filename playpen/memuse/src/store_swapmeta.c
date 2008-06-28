@@ -42,6 +42,7 @@ void
 storeSwapTLVInitMem(void)
 {
     pool_swap_tlv = memPoolCreate("storeSwapTLV", sizeof(tlv));
+    memPoolNonZero(pool_swap_tlv);
     /* XXX This doesn't strictly belong here! */
     pool_swap_log_data = memPoolCreate("storeSwapLogData", sizeof(storeSwapLogData));
 }
@@ -53,6 +54,7 @@ storeSwapTLVAdd(int type, const void *ptr, size_t len, tlv ** tail)
     t->type = (char) type;
     t->length = (int) len;
     t->value = xmalloc(len);
+    t->next = NULL;
     xmemcpy(t->value, ptr, len);
     *tail = t;
     return &t->next;		/* return new tail pointer */
