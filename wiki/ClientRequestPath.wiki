@@ -1,0 +1,60 @@
+#summary client-side request code path
+
+= Introduction =
+
+src/client_side.c contains all of the twisted incoming request processing - parsing, replying, cache logic, revalidation, refreshing.. its all in here.
+
+This isn't *complete* nor will it really be - I have a project to try and "fix" a few things in this codebase so I'm using this purely as a place to remember where I'm at..
+
+= Details =
+
+
+
+...
+
+clientAccessCheck() - Config.accessList.http -> clientAccessCheckDone()
+
+
+clientAccessCheckDone()
+    ALLOWED ? redirect_state = REDIRECT_PENDING; -> clientRedirectStart()
+    DENIED ? If authentication required; add authentication headers; errorCon(); errorAppendEntry(); STOP
+
+clientRedirectStart()
+    clientInternalRedirectAccessCheckDone() ; clientRedirectAccessCheckDone() ; clientRedirectDone()
+
+clientRedirectDone()
+    redirect_state = REDIRECT_DONE
+    -> clientStoreURLRewriteStart()
+
+
+clientStoreURLRewriteStart()
+    clientStoreURLRewriteAccessCheckDone() ; clientStoreURLRewriteDone()
+
+clientStoreURLRewriteDone()
+    -> clientFinishRewriteStuff()
+
+clientFinishRewriteStuff()
+    -> clientInterpretRequestHeaders()
+    -> clientAccessCheck2()
+
+clientInterpretRequestHeaders()
+   (just fiddle with the headers after processing)
+
+clientAccessCheck2()
+  -> Config.accessList.http2 and clientAccessCheckDone2(); or clientCheckNoCache()
+
+clientAccessCheckDone2()
+  -> auth? add auth stuff. fail auth/acl? errorCon(); errorAppendEntry(); STOP
+  -> clientCheckNoCache()
+
+clientCheckNoCache()
+  -> Config.accessList.noCache and clientCheckNoCacheDone(); or clientCheckNoCacheDone()
+
+clientCheckNoCacheDone()
+  -> clientProcessRequest()
+
+clientProcessRequest() (called from a variety of places!)
+  Do method based stuff - CONNECT, TRACE, PURGE, handle 100-continue here? um..
+  A GET? clientProcessRequest2()
+
+
