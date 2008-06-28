@@ -6,14 +6,18 @@ src/client_side.c contains all of the twisted incoming request processing - pars
 
 This isn't *complete* nor will it really be - I have a project to try and "fix" a few things in this codebase so I'm using this purely as a place to remember where I'm at..
 
+= TODO =
+
+  * Where's the vary/etag/refresh logic processing happening? They don't show up in this pipeline!
+
 = Details =
 
 
 
+stuff happens to parse and build a reqest.
 ...
 
 clientAccessCheck() - Config.accessList.http -> clientAccessCheckDone()
-
 
 clientAccessCheckDone()
     ALLOWED ? redirect_state = REDIRECT_PENDING; -> clientRedirectStart()
@@ -62,4 +66,11 @@ clientProcessRequest2() - I think http->entry may be set at this point if the ob
 
 .. not cachable? (ie, didn't get a http->entry) ..
 
-clientProcessMiss()
+clientProcessMiss() - this is the beginning of the fowarding logic
+  Handle left over entry from a failed hit / ims
+  handle purge
+  clientOnlyIfCached() ? -> clientProcessOnlyIfCachedMiss()
+  deny double loops
+  Create the store entry
+  collapsed forwarding stuff?
+  fwdStart() <- this is where the request forwarding occurs
