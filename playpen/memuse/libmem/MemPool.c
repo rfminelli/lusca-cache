@@ -168,7 +168,6 @@ memPoolCreate(const char *label, size_t obj_size)
     pool->real_obj_size = (obj_size & 7) ? (obj_size | 7) + 1 : obj_size;
 #endif
     pool->flags.dozero = 1;
-    stackInit(&pool->pstack);
     /* other members are set to 0 */
     stackPush(&Pools, pool);
     return pool;
@@ -191,7 +190,6 @@ memPoolDestroy(MemPool * pool)
 	    break;
 	}
     }
-    stackClean(&pool->pstack);
     xfree(pool);
 }
 
@@ -272,15 +270,7 @@ memPoolFree(MemPool * pool, void *obj)
 static void
 memPoolShrink(MemPool * pool, size_t new_limit)
 {
-    assert(pool);
-    while (pool->meter.idle.level > new_limit && pool->pstack.count > 0) {
-	memMeterDec(pool->meter.alloc);
-	memMeterDec(pool->meter.idle);
-	memMeterDel(TheMeter.idle, pool->obj_size);
-	memMeterDel(TheMeter.alloc, pool->obj_size);
-	xfree(stackPop(&pool->pstack));
-    }
-    assert(pool->meter.idle.level <= new_limit);	/* paranoid */
+    /* NULL operation now */
 }
 
 int
