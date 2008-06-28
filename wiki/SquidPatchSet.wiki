@@ -186,3 +186,9 @@ The initial import included all patchsets up to 12036.
   * 12253 - HEAD - Extend mgr:idns output to include the actual queries and the protocol used. - *committed - 12947*
   * 12254 - HEAD - Bug #2387: The calculation of the number of hash buckets need to account for the memory size, not only disk size - *committed - 12948*
   * 12255 - HEAD - Bug #2390: New hier_code ACL type - *committed - 12949*
+
+  * 12257 - HEAD - Bug #2393: DNS requests retried indefinitely at full speed on failed TCP connection - *committed - 12959*
+  * 12258 - HEAD - Bug #2393: DNS retransmit queue could get hold up - *committed - 12960*
+  * 12259 - HEAD - Correct socket syscalls statistics in commResetFD() - *committed - 12961*
+  * 12279 - HEAD - Preparign for 2.6.STABLE20 - *committed - 12962*
+  * 12283 - HEAD - Plug a small "squid -k reconfigure" race in the new round-robin counter management - *committed - 12963*
