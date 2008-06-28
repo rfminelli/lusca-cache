@@ -92,8 +92,8 @@ static void
 memPoolReport(MemPool * pool, StoreEntry * e, int diff)
 {
     assert(pool);
-    storeAppendPrintf(e, "%-20s\t %4d\t ",
-	pool->label, (int) pool->obj_size);
+    storeAppendPrintf(e, "%-20s %s \t %4d\t ",
+	pool->label, pool->flags.dozero ? "" : "(no-zero)", (int) pool->obj_size);
     memPoolMeterReport(&pool->meter, pool->obj_size,
 	pool->meter.alloc.level, pool->meter.inuse.level, e);
 #if DEBUG_MEMPOOL
