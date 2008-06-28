@@ -13,7 +13,6 @@ typedef struct _MemMeter MemMeter;
 struct _MemPoolMeter {
     MemMeter alloc;
     MemMeter inuse;
-    MemMeter idle;
     gb_t saved;
     gb_t total;
 };
