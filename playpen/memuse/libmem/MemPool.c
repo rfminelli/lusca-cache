@@ -216,33 +216,10 @@ memPoolAlloc(MemPool * pool)
     memMeterAdd(TheMeter.inuse, pool->obj_size);
     gb_inc(&mem_traffic_volume, pool->obj_size);
     mem_pool_alloc_calls++;
-    if (pool->pstack.count) {
-	assert(pool->meter.idle.level);
-	memMeterDec(pool->meter.idle);
-	memMeterDel(TheMeter.idle, pool->obj_size);
-	gb_inc(&pool->meter.saved, 1);
-	gb_inc(&TheMeter.saved, pool->obj_size);
-	obj = stackPop(&pool->pstack);
-#if DEBUG_MEMPOOL
-	(void) VALGRIND_MAKE_MEM_DEFINED(obj, pool->real_obj_size + sizeof(struct mempool_cookie));
-#else
-	(void) VALGRIND_MAKE_MEM_DEFINED(obj, pool->obj_size);
-#endif
-#if DEBUG_MEMPOOL
-	{
-	    struct mempool_cookie *cookie = (void *) (((unsigned char *) obj) + pool->real_obj_size);
-	    assert(cookie->cookie == MEMPOOL_COOKIE2(obj));
-	    assert(cookie->pool == pool);
-	    cookie->cookie = MEMPOOL_COOKIE(obj);
-	    (void) VALGRIND_MAKE_MEM_NOACCESS(cookie, sizeof(cookie));
-	}
-	if (Config.onoff.zero_buffers || pool->flags.dozero)
-	    memset(obj, 0, pool->obj_size);
-#endif
-    } else {
-	assert(!pool->meter.idle.level);
-	memMeterInc(pool->meter.alloc);
-	memMeterAdd(TheMeter.alloc, pool->obj_size);
+
+    assert(!pool->meter.idle.level);
+    memMeterInc(pool->meter.alloc);
+    memMeterAdd(TheMeter.alloc, pool->obj_size);
 #if DEBUG_MEMPOOL
 	{
 	    struct mempool_cookie *cookie;
@@ -253,12 +230,11 @@ memPoolAlloc(MemPool * pool)
 	    (void) VALGRIND_MAKE_MEM_NOACCESS(cookie, sizeof(cookie));
 	}
 #else
-	if (MemPoolConfig.do_zero || pool->flags.dozero)
-	    obj = xcalloc(1, pool->obj_size);
-	else
-	    obj = xmalloc(pool->obj_size);
+    if (MemPoolConfig.do_zero || pool->flags.dozero)
+        obj = xcalloc(1, pool->obj_size);
+    else
+        obj = xmalloc(pool->obj_size);
 #endif
-    }
     return obj;
 }
 
@@ -279,23 +255,17 @@ memPoolFree(MemPool * pool, void *obj)
 	cookie->cookie = MEMPOOL_COOKIE2(obj);
     }
 #endif
-    if (TheMeter.idle.level + pool->obj_size <= mem_idle_limit) {
-	memMeterInc(pool->meter.idle);
-	memMeterAdd(TheMeter.idle, pool->obj_size);
-	if (MemPoolConfig.do_zero || pool->flags.dozero)
+    if (MemPoolConfig.do_zero || pool->flags.dozero)
 #if DEBUG_MEMPOOL
-	    memset(obj, 0xf0, pool->obj_size);
-	(void) VALGRIND_MAKE_MEM_NOACCESS(obj, pool->real_obj_size + sizeof(struct mempool_cookie));
+        memset(obj, 0xf0, pool->obj_size);
+    (void) VALGRIND_MAKE_MEM_NOACCESS(obj, pool->real_obj_size + sizeof(struct mempool_cookie));
 #else
-	    memset(obj, 0, pool->obj_size);
-	(void) VALGRIND_MAKE_MEM_NOACCESS(obj, pool->obj_size);
+        memset(obj, 0, pool->obj_size);
+    (void) VALGRIND_MAKE_MEM_NOACCESS(obj, pool->obj_size);
 #endif
-	stackPush(&pool->pstack, obj);
-    } else {
-	memMeterDec(pool->meter.alloc);
-	memMeterDel(TheMeter.alloc, pool->obj_size);
-	xfree(obj);
-    }
+    memMeterDec(pool->meter.alloc);
+    memMeterDel(TheMeter.alloc, pool->obj_size);
+    xfree(obj);
     assert(pool->meter.idle.level <= pool->meter.alloc.level);
 }
 
