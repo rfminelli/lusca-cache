@@ -6,7 +6,6 @@ typedef char HttpHeaderMask[(HDR_ENUM_END + 7) / 8];
 
 struct _HttpHeaderEntry {
     http_hdr_type id;
-    int active;
     String name;
     String value;
 };
