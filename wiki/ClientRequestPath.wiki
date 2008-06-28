@@ -57,4 +57,9 @@ clientProcessRequest() (called from a variety of places!)
   Do method based stuff - CONNECT, TRACE, PURGE, handle 100-continue here? um..
   A GET? clientProcessRequest2()
 
+clientProcessRequest2() - I think http->entry may be set at this point if the object is in the cache, and NULL if it isn't!
+  storeGetPublicByRequest() on the request to perform the store lookup, only the cachable / internal requests go here
 
+.. not cachable? (ie, didn't get a http->entry) ..
+
+clientProcessMiss()
