@@ -424,12 +424,18 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
     Ctx ctx = ctx_enter(entry->mem_obj->url);
     debug(11, 3) ("httpProcessReplyHeader: key '%s'\n",
 	storeKeyText(entry->hash.key));
+    /* No reply buffer? Create one */
     if (memBufIsNull(&httpState->reply_hdr))
 	memBufDefInit(&httpState->reply_hdr);
     assert(httpState->reply_hdr_state == 0);
     old_size = httpState->reply_hdr.size;
+
+    /* Append the incoming data to that buffer */
     memBufAppend(&httpState->reply_hdr, buf, size);
+    /* hdr_len is the length of all data we haven't done anything with yet! */
     hdr_len = httpState->reply_hdr.size;
+
+    /* Do we have what looks like a valid reply? */
     if (hdr_len > 4 && strncmp(httpState->reply_hdr.buf, "HTTP/", 5)) {
 	debug(11, 3) ("httpProcessReplyHeader: Non-HTTP-compliant header: '%s'\n", httpState->reply_hdr.buf);
 	httpState->reply_hdr_state += 2;
@@ -440,9 +446,14 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	ctx_exit(ctx);
 	return 0;
     }
+    /* Find the end of the header block itself */
     hdr_size = headersEnd(httpState->reply_hdr.buf, hdr_len);
+
+    /* Clamp the header length to the parsed size, in case we've seen the whole reply */
     if (hdr_size)
 	hdr_len = hdr_size;
+
+    /* Have we overflowed? (either what we've read incomplete or complete) */
     if (hdr_len > Config.maxReplyHeaderSize) {
 	debug(11, 1) ("httpProcessReplyHeader: Too large reply header\n");
 	storeAppend(entry, httpState->reply_hdr.buf, httpState->reply_hdr.size);
@@ -461,32 +472,50 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	    return size;	/* headers not complete */
 	}
     }
+
+    /* -- We have complete headers at this point, but they're not yet parsed! -- */
+
+    /* Free the existing Vary headers for the linked StoreEntry */
     safe_free(entry->mem_obj->vary_headers);
     safe_free(entry->mem_obj->vary_encoding);
+
     /* Cut away any excess body data (only needed for debug?) */
     memBufAppend(&httpState->reply_hdr, "\0", 1);
     httpState->reply_hdr.buf[hdr_size] = '\0';
+
+    /* Make sure we've not tried to parse this lot before */
     httpState->reply_hdr_state++;
     assert(httpState->reply_hdr_state == 1);
     httpState->reply_hdr_state++;
     debug(11, 9) ("GOT HTTP REPLY HDR:\n---------\n%s\n----------\n",
 	httpState->reply_hdr.buf);
+
     /* Parse headers into reply structure */
     /* what happens if we fail to parse here? */
     httpReplyParse(reply, httpState->reply_hdr.buf, hdr_size);
+
+    /*
+     * done is the number of bytes consumed in -this- call; rather than the size
+     * of the reply headers. >1 read could have been done to pull in the data..
+     */
     done = hdr_size - old_size;
+
     /* Skip 1xx messages for now. Advertised in Via as an internal 1.0 hop */
     if (reply->sline.status >= 100 && reply->sline.status < 200) {
 	memBufClean(&httpState->reply_hdr);
 	httpReplyReset(reply);
 	httpState->reply_hdr_state = 0;
 	ctx_exit(ctx);
+        /* Skip the 1xx message, begin parsing after it */
 	if (done < size)
 	    return done + httpProcessReplyHeader(httpState, buf + done, size - done);
 	else
 	    return done;
     }
+
+    /* Append the ORIGINAL REPLY _BUT NO BODY_! Important! */
     storeAppend(entry, httpState->reply_hdr.buf, hdr_size);
+
     if (reply->sline.status >= HTTP_INVALID_HEADER) {
 	debug(11, 3) ("httpProcessReplyHeader: Non-HTTP-compliant header: '%s'\n", httpState->reply_hdr.buf);
 	memBufClean(&httpState->reply_hdr);
@@ -997,6 +1026,7 @@ httpReadReply(int fd, void *data)
 		return;
 	    }
 	}
+        /* The body starts "done" bytes in */
 	httpAppendBody(httpState, buf + done, len - done, buffer_filled);
 	return;
     }
