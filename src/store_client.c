@@ -104,6 +104,8 @@ storeClientType(StoreEntry * e)
 	return STORE_DISK_CLIENT;
 }
 
+CBDATA_TYPE(store_client);
+
 /* add client with fd to client list */
 store_client *
 storeClientRegister(StoreEntry * e, void *owner)
@@ -113,6 +115,7 @@ storeClientRegister(StoreEntry * e, void *owner)
     assert(mem);
     e->refcount++;
     mem->nclients++;
+    CBDATA_INIT_TYPE(store_client);
     sc = cbdataAlloc(store_client);
     sc->callback_data = NULL;
     sc->seen_offset = 0;

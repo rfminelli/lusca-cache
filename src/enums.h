@@ -164,20 +164,6 @@ typedef enum {
     ACL_PROXY_AUTH_NEEDED
 } acl_lookup_state;
 
-enum {
-    FD_NONE,
-    FD_LOG,
-    FD_FILE,
-    FD_SOCKET,
-    FD_PIPE,
-    FD_UNKNOWN
-};
-
-enum {
-    FD_READ,
-    FD_WRITE
-};
-
 typedef enum {
     PEER_NONE,
     PEER_SIBLING,
@@ -190,102 +176,6 @@ typedef enum {
     LOOKUP_HIT,
     LOOKUP_MISS
 } lookup_t;
-
-/* recognized or "known" header fields; @?@ add more! */
-typedef enum {
-    HDR_UNKNOWN = -1,
-    HDR_ACCEPT = 0,
-    HDR_ACCEPT_CHARSET,
-    HDR_ACCEPT_ENCODING,
-    HDR_ACCEPT_LANGUAGE,
-    HDR_ACCEPT_RANGES,
-    HDR_AGE,
-    HDR_ALLOW,
-    HDR_AUTHORIZATION,
-    HDR_CACHE_CONTROL,
-    HDR_CONNECTION,
-    HDR_CONTENT_BASE,
-    HDR_CONTENT_DISPOSITION,
-    HDR_CONTENT_ENCODING,
-    HDR_CONTENT_LANGUAGE,
-    HDR_CONTENT_LENGTH,
-    HDR_CONTENT_LOCATION,
-    HDR_CONTENT_MD5,
-    HDR_CONTENT_RANGE,
-    HDR_CONTENT_TYPE,
-    HDR_TE,
-    HDR_TRANSFER_ENCODING,
-    HDR_TRAILER,
-    HDR_COOKIE,
-    HDR_DATE,
-    HDR_ETAG,
-    HDR_EXPIRES,
-    HDR_FROM,
-    HDR_HOST,
-    HDR_IF_MATCH,
-    HDR_IF_MODIFIED_SINCE,
-    HDR_IF_NONE_MATCH,
-    HDR_IF_RANGE,
-    HDR_LAST_MODIFIED,
-    HDR_LINK,
-    HDR_LOCATION,
-    HDR_MAX_FORWARDS,
-    HDR_MIME_VERSION,
-    HDR_PRAGMA,
-    HDR_PROXY_AUTHENTICATE,
-    HDR_PROXY_AUTHENTICATION_INFO,
-    HDR_PROXY_AUTHORIZATION,
-    HDR_PROXY_CONNECTION,
-    HDR_PUBLIC,
-    HDR_RANGE,
-    HDR_REQUEST_RANGE,		/* some clients use this, sigh */
-    HDR_REFERER,
-    HDR_RETRY_AFTER,
-    HDR_SERVER,
-    HDR_SET_COOKIE,
-    HDR_UPGRADE,
-    HDR_USER_AGENT,
-    HDR_VARY,
-    HDR_VIA,
-    HDR_EXPECT,
-    HDR_WARNING,
-    HDR_WWW_AUTHENTICATE,
-    HDR_AUTHENTICATION_INFO,
-    HDR_X_CACHE,
-    HDR_X_CACHE_LOOKUP,		/* tmp hack, remove later */
-    HDR_X_FORWARDED_FOR,
-    HDR_X_REQUEST_URI,		/* appended if ADD_X_REQUEST_URI is #defined */
-    HDR_X_SQUID_ERROR,
-    HDR_NEGOTIATE,
-#if X_ACCELERATOR_VARY
-    HDR_X_ACCELERATOR_VARY,
-#endif
-    HDR_X_ERROR_URL,		/* errormap, requested URL */
-    HDR_X_ERROR_STATUS,		/* errormap, received HTTP status line */
-    HDR_FRONT_END_HTTPS,
-    HDR_PROXY_SUPPORT,
-    HDR_KEEP_ALIVE,
-    HDR_OTHER,
-    HDR_ENUM_END
-} http_hdr_type;
-
-typedef enum {
-    CC_PUBLIC,
-    CC_PRIVATE,
-    CC_NO_CACHE,
-    CC_NO_STORE,
-    CC_NO_TRANSFORM,
-    CC_MUST_REVALIDATE,
-    CC_PROXY_REVALIDATE,
-    CC_MAX_AGE,
-    CC_S_MAXAGE,
-    CC_MAX_STALE,
-    CC_ONLY_IF_CACHED,
-    CC_STALE_WHILE_REVALIDATE,
-    CC_STALE_IF_ERROR,
-    CC_OTHER,
-    CC_ENUM_END
-} http_hdr_cc_type;
 
 /* possible types for http header fields */
 typedef enum {
@@ -300,16 +190,6 @@ typedef enum {
     ftDate_1123_or_ETag,
     ftSize
 } field_type;
-
-/* possible owners of http header */
-typedef enum {
-    hoNone,
-#if USE_HTCP
-    hoHtcpReply,
-#endif
-    hoRequest,
-    hoReply
-} http_hdr_owner_type;
 
 typedef enum {
     HIER_NONE,
@@ -470,57 +350,6 @@ typedef enum {
     PROTO_MAX
 } protocol_t;
 
-typedef enum {
-    HTTP_STATUS_NONE = 0,
-    HTTP_CONTINUE = 100,
-    HTTP_SWITCHING_PROTOCOLS = 101,
-    HTTP_PROCESSING = 102,	/* RFC2518 section 10.1 */
-    HTTP_OK = 200,
-    HTTP_CREATED = 201,
-    HTTP_ACCEPTED = 202,
-    HTTP_NON_AUTHORITATIVE_INFORMATION = 203,
-    HTTP_NO_CONTENT = 204,
-    HTTP_RESET_CONTENT = 205,
-    HTTP_PARTIAL_CONTENT = 206,
-    HTTP_MULTI_STATUS = 207,	/* RFC2518 section 10.2 */
-    HTTP_MULTIPLE_CHOICES = 300,
-    HTTP_MOVED_PERMANENTLY = 301,
-    HTTP_MOVED_TEMPORARILY = 302,
-    HTTP_SEE_OTHER = 303,
-    HTTP_NOT_MODIFIED = 304,
-    HTTP_USE_PROXY = 305,
-    HTTP_TEMPORARY_REDIRECT = 307,
-    HTTP_BAD_REQUEST = 400,
-    HTTP_UNAUTHORIZED = 401,
-    HTTP_PAYMENT_REQUIRED = 402,
-    HTTP_FORBIDDEN = 403,
-    HTTP_NOT_FOUND = 404,
-    HTTP_METHOD_NOT_ALLOWED = 405,
-    HTTP_NOT_ACCEPTABLE = 406,
-    HTTP_PROXY_AUTHENTICATION_REQUIRED = 407,
-    HTTP_REQUEST_TIMEOUT = 408,
-    HTTP_CONFLICT = 409,
-    HTTP_GONE = 410,
-    HTTP_LENGTH_REQUIRED = 411,
-    HTTP_PRECONDITION_FAILED = 412,
-    HTTP_REQUEST_ENTITY_TOO_LARGE = 413,
-    HTTP_REQUEST_URI_TOO_LONG = 414,
-    HTTP_UNSUPPORTED_MEDIA_TYPE = 415,
-    HTTP_EXPECTATION_FAILED = 417,
-    HTTP_UNPROCESSABLE_ENTITY = 422,	/* RFC2518 section 10.3 */
-    HTTP_LOCKED = 423,		/* RFC2518 section 10.4 */
-    HTTP_FAILED_DEPENDENCY = 424,	/* RFC2518 section 10.5 */
-    HTTP_INTERNAL_SERVER_ERROR = 500,
-    HTTP_NOT_IMPLEMENTED = 501,
-    HTTP_BAD_GATEWAY = 502,
-    HTTP_SERVICE_UNAVAILABLE = 503,
-    HTTP_GATEWAY_TIMEOUT = 504,
-    HTTP_HTTP_VERSION_NOT_SUPPORTED = 505,
-    HTTP_INSUFFICIENT_STORAGE = 507,	/* RFC2518 section 10.6 */
-    HTTP_INVALID_HEADER = 600,	/* Squid header parsing error */
-    HTTP_HEADER_TOO_LARGE = 601	/* Header too large to process */
-} http_status;
-
 /*
  * These are for StoreEntry->flag, which is defined as a SHORT
  *
@@ -583,68 +412,6 @@ enum {
 };
 
 #endif
-
-typedef enum {
-    MEM_NONE,
-    MEM_2K_BUF,
-    MEM_4K_BUF,
-    MEM_8K_BUF,
-    MEM_16K_BUF,
-    MEM_32K_BUF,
-    MEM_64K_BUF,
-    MEM_ACL,
-    MEM_ACL_DENY_INFO_LIST,
-    MEM_ACL_IP_DATA,
-    MEM_ACL_LIST,
-    MEM_ACL_NAME_LIST,
-    MEM_ACL_REQUEST_TYPE,
-    MEM_AUTH_USER_T,
-    MEM_AUTH_USER_HASH,
-    MEM_ACL_PROXY_AUTH_MATCH,
-    MEM_ACL_USER_DATA,
-    MEM_ACL_TIME_DATA,
-#if USE_CACHE_DIGESTS
-    MEM_CACHE_DIGEST,
-#endif
-    MEM_CLIENT_INFO,
-    MEM_STORE_CLIENT_BUF,
-    MEM_LINK_LIST,
-    MEM_DLINK_NODE,
-    MEM_DONTFREE,
-    MEM_DREAD_CTRL,
-    MEM_DWRITE_Q,
-    MEM_FQDNCACHE_ENTRY,
-    MEM_FWD_SERVER,
-    MEM_HELPER_REQUEST,
-    MEM_HELPER_STATEFUL_REQUEST,
-    MEM_HTTP_HDR_CC,
-    MEM_HTTP_HDR_CONTENT_RANGE,
-    MEM_HTTP_HDR_ENTRY,
-    MEM_HTTP_HDR_RANGE,
-    MEM_HTTP_HDR_RANGE_SPEC,
-    MEM_HTTP_REPLY,
-    MEM_INTLIST,
-    MEM_IPCACHE_ENTRY,
-    MEM_MD5_DIGEST,
-    MEM_MEMOBJECT,
-    MEM_MEM_NODE,
-    MEM_NETDBENTRY,
-    MEM_NET_DB_NAME,
-    MEM_RELIST,
-    MEM_REQUEST_T,
-    MEM_STOREENTRY,
-    MEM_WORDLIST,
-#if !USE_DNSSERVERS
-    MEM_IDNS_QUERY,
-#endif
-    MEM_EVENT,
-    MEM_TLV,
-    MEM_SWAP_LOG_DATA,
-#if USE_SSL
-    MEM_ACL_CERT_DATA,
-#endif
-    MEM_MAX
-} mem_type;
 
 /*
  * NOTE!  We must preserve the order of this list!
@@ -718,36 +485,6 @@ enum {
 };
 
 /*
- * cbdata types. similar to the MEM_* types above, but managed
- * in cbdata.c. A big difference is that these types are dynamically
- * allocated. This list is only a list of predefined types. Other types
- * are added runtime
- */
-typedef enum {
-    CBDATA_UNKNOWN = 0,
-    CBDATA_UNDEF = 0,
-    CBDATA_acl_access,
-    CBDATA_aclCheck_t,
-    CBDATA_clientHttpRequest,
-    CBDATA_ConnStateData,
-    CBDATA_ErrorState,
-    CBDATA_FwdState,
-    CBDATA_generic_cbdata,
-    CBDATA_helper,
-    CBDATA_helper_server,
-    CBDATA_statefulhelper,
-    CBDATA_helper_stateful_server,
-    CBDATA_HttpStateData,
-    CBDATA_peer,
-    CBDATA_ps_state,
-    CBDATA_RemovalPolicy,
-    CBDATA_RemovalPolicyWalker,
-    CBDATA_RemovalPurgeWalker,
-    CBDATA_store_client,
-    CBDATA_FIRST_CUSTOM_TYPE = 1000
-} cbdata_type;
-
-/*
  * Return codes from checkVary(request)
  */
 enum {
@@ -777,17 +514,6 @@ enum {
 };
 
 #endif
-
-/*
- * Special case pending filedescriptors. Set in fd_table[fd].read/write_pending
- */
-typedef enum {
-    COMM_PENDING_NORMAL,	/* No special processing required */
-    COMM_PENDING_WANTS_READ,	/* need to read, no matter what commSetSelect indicates */
-    COMM_PENDING_WANTS_WRITE,	/* need to write, no matter what commSetSelect indicates */
-    COMM_PENDING_NOW		/* needs to be called again, without needing to wait for readiness
-				 * for example when data is already buffered etc */
-} comm_pending;
 
 typedef enum {
     ST_OP_NONE,
