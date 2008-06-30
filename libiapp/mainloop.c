@@ -10,6 +10,7 @@
  */
 #include "../include/Array.h"
 #include "../include/Stack.h"
+#include "../include/util.h"
 #include "../libcore/gb.h"
 #include "../libcore/kb.h"
 #include "../libcore/varargs.h"
@@ -31,6 +32,13 @@
 void
 iapp_init(void)
 {
+	memset(&local_addr, '\0', sizeof(struct in_addr));
+	safe_inet_addr("127.0.0.1", &local_addr);
+	memset(&any_addr, '\0', sizeof(struct in_addr));
+	safe_inet_addr("0.0.0.0", &any_addr);
+	memset(&no_addr, '\0', sizeof(struct in_addr));
+	safe_inet_addr("255.255.255.255", &no_addr);
+
 	memPoolInit();
 	memBuffersInit();
 	memStringInit();

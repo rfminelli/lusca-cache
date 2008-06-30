@@ -721,12 +721,6 @@ main(int argc, char **argv)
 #endif
 #endif /* HAVE_MALLOPT */
 
-    memset(&local_addr, '\0', sizeof(struct in_addr));
-    safe_inet_addr(localhost, &local_addr);
-    memset(&any_addr, '\0', sizeof(struct in_addr));
-    safe_inet_addr("0.0.0.0", &any_addr);
-    memset(&no_addr, '\0', sizeof(struct in_addr));
-    safe_inet_addr("255.255.255.255", &no_addr);
     squid_srandom(time(NULL));
 
     getCurrentTime();
