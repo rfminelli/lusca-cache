@@ -18,6 +18,7 @@
 #include "../libmem/MemBuf.h"
 
 #include "event.h"
+#include "iapp_ssl.h"
 #include "comm.h"
 #include "mainloop.h"
 
