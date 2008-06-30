@@ -538,8 +538,9 @@ info_get(StoreEntry * sentry)
 	statCounter.client_http.requests / (runtime / 60.0));
     storeAppendPrintf(sentry, "\tAverage ICP messages per minute since start:\t%.1f\n",
 	(statCounter.icp.pkts_sent + statCounter.icp.pkts_recv) / (runtime / 60.0));
+
     storeAppendPrintf(sentry, "\tSelect loop called: %d times, %0.3f ms avg\n",
-	statCounter.select_loops, 1000.0 * runtime / statCounter.select_loops);
+	CommStats.select_loops, 1000.0 * runtime / CommStats.select_loops);
 
     storeAppendPrintf(sentry, "Cache information for %s:\n",
 	appname);
@@ -676,7 +677,7 @@ info_get(StoreEntry * sentry)
 	RESERVED_FD);
     storeAppendPrintf(sentry, "\tStore Disk files open:                %4d\n",
 	store_open_disk_fd);
-    comm_select_status(sentry);
+    storeAppendPrintf(sentry, "\tIO loop method:                     %s\n", comm_select_status());
 
     storeAppendPrintf(sentry, "Internal Data Structures:\n");
     storeAppendPrintf(sentry, "\t%6d StoreEntries\n",
@@ -846,6 +847,7 @@ statAvgDump(StoreEntry * sentry, int minutes, int hours)
 	XAVG(unlink.requests));
     storeAppendPrintf(sentry, "page_faults = %f/sec\n",
 	XAVG(page_faults));
+#if 0
     storeAppendPrintf(sentry, "select_loops = %f/sec\n",
 	XAVG(select_loops));
     storeAppendPrintf(sentry, "select_fds = %f/sec\n",
@@ -854,6 +856,7 @@ statAvgDump(StoreEntry * sentry, int minutes, int hours)
 	f->select_fds > l->select_fds ?
 	(f->select_time - l->select_time) / (f->select_fds - l->select_fds)
 	: 0.0);
+#endif
     x = statHistDeltaMedian(&l->select_fds_hist, &f->select_fds_hist);
     storeAppendPrintf(sentry, "median_select_fds = %f\n", x);
     storeAppendPrintf(sentry, "swap.outs = %f/sec\n",
@@ -865,6 +868,7 @@ statAvgDump(StoreEntry * sentry, int minutes, int hours)
     storeAppendPrintf(sentry, "aborted_requests = %f/sec\n",
 	XAVG(aborted_requests));
 
+#if 0
     if (statCounter.syscalls.polls)
 	storeAppendPrintf(sentry, "syscalls.polls = %f/sec\n", XAVG(syscalls.polls));
     if (statCounter.syscalls.selects)
@@ -884,6 +888,7 @@ statAvgDump(StoreEntry * sentry, int minutes, int hours)
     storeAppendPrintf(sentry, "syscalls.sock.writes = %f/sec\n", XAVG(syscalls.sock.writes));
     storeAppendPrintf(sentry, "syscalls.sock.recvfroms = %f/sec\n", XAVG(syscalls.sock.recvfroms));
     storeAppendPrintf(sentry, "syscalls.sock.sendtos = %f/sec\n", XAVG(syscalls.sock.sendtos));
+#endif
 
     storeAppendPrintf(sentry, "cpu_time = %f seconds\n", ct);
     storeAppendPrintf(sentry, "wall_time = %f seconds\n", dt);
@@ -958,6 +963,7 @@ statInit(void)
     cachemgrRegister("active_requests",
 	"Client-side Active Requests",
 	statClientRequests, 0, 1);
+    cachemgrRegister("iapp_stats", "libiapp statistics", statIappStats, 0, 1);
 }
 
 static void
@@ -1241,8 +1247,10 @@ statCountersDump(StoreEntry * sentry)
 	f->unlink.requests);
     storeAppendPrintf(sentry, "page_faults = %d\n",
 	f->page_faults);
+#if 0
     storeAppendPrintf(sentry, "select_loops = %d\n",
 	f->select_loops);
+#endif
     storeAppendPrintf(sentry, "cpu_time = %f\n",
 	f->cputime);
     storeAppendPrintf(sentry, "wall_time = %f\n",

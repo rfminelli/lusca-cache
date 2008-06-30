@@ -827,12 +827,6 @@ struct _SquidConfig2 {
     gid_t effectiveGroupID;
 };
 
-struct _close_handler {
-    PF *handler;
-    void *data;
-    close_handler *next;
-};
-
 /* ETag support is rudimantal;
  * this struct is likely to change
  * Note: "str" points to memory in HttpHeaderEntry (for now)
@@ -1958,15 +1952,18 @@ struct _StatCounters {
 	int times_used;
     } netdb;
     int page_faults;
+#if 0
     int select_loops;
     int select_fds;
     double select_time;
+#endif
     double cputime;
     struct timeval timestamp;
     StatHist comm_icp_incoming;
     StatHist comm_dns_incoming;
     StatHist comm_http_incoming;
     StatHist select_fds_hist;
+#if 0
     struct {
 	struct {
 	    int opens;
@@ -1990,6 +1987,7 @@ struct _StatCounters {
 	int polls;
 	int selects;
     } syscalls;
+#endif
     int aborted_requests;
     struct {
 	int files_cleaned;

@@ -171,7 +171,7 @@ static inline void
 check_incoming(void)
 {
     comm_select_handled++;
-    if (comm_select_handled > Config.incoming_rate) {
+    if (comm_select_handled > iapp_incomingRate) {
 	comm_select_handled = 0;
 	do_check_incoming();
     }
@@ -207,7 +207,7 @@ comm_call_slowfds(void)
 		commUpdateEvents(fd);
 	    }
 #endif
-	    statCounter.select_fds++;
+	    CommStats.select_fds++;
 	    check_incoming();
 	}
     }
@@ -265,7 +265,7 @@ comm_call_handlers(int fd, int read_event, int write_event)
 		if (F->flags.open && !F->read_handler)
 		    commUpdateEvents(fd);
 #endif
-		statCounter.select_fds++;
+		CommStats.select_fds++;
 		if (do_incoming)
 		    check_incoming();
 		break;
@@ -301,7 +301,7 @@ comm_call_handlers(int fd, int read_event, int write_event)
 	    if (F->flags.open)
 		commUpdateEvents(fd);
 #endif
-	    statCounter.select_fds++;
+	    CommStats.select_fds++;
 	    if (do_incoming)
 		check_incoming();
 	}
@@ -314,9 +314,6 @@ checkTimeouts(void)
     int fd;
     fde *F = NULL;
     PF *callback;
-#if DELAY_POOLS
-    delayPoolsUpdate(NULL);
-#endif
     for (fd = 0; fd <= Biggest_FD; fd++) {
 	F = &fd_table[fd];
 	if (!F->flags.open)
@@ -371,10 +368,7 @@ comm_select(int msec)
 	msec = 0;
 #endif
 
-    statCounter.select_loops++;
-
-    /* Check for disk io callbacks */
-    storeDirCallback();
+    CommStats.select_loops++;
 
     /* Check timeouts once per second */
     if (last_timeout + 0.999 < current_dtime) {
@@ -393,7 +387,7 @@ comm_select(int msec)
     comm_call_slowfds();
 #endif
     getCurrentTime();
-    statCounter.select_time += (current_dtime - start);
+    CommStats.select_time += (current_dtime - start);
 
     if (rc == COMM_TIMEOUT)
 	debug(5, 8) ("comm_select: time out\n");

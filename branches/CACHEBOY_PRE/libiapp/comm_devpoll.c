@@ -144,10 +144,10 @@ do_select_shutdown()
     xfree(devpoll_state);
 }
 
-void
-comm_select_status(StoreEntry * sentry)
+const char *
+comm_select_status(void)
 {
-    storeAppendPrintf(sentry, "\tIO loop method:                     /dev/poll\n");
+    return("/dev/poll");
 }
 
 void

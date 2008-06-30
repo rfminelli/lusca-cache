@@ -734,7 +734,7 @@ helperHandleRead(int fd, void *data)
     helper *hlp = srv->parent;
     assert(fd == srv->rfd);
     assert(cbdataValid(data));
-    statCounter.syscalls.sock.reads++;
+    CommStats.syscalls.sock.reads++;
     /* XXX srv->rbuf should be reallocated if needed.. and start out quite small (not fixed 8KB as now..) */
     assert(srv->roffset < srv->rbuf_sz);
     len = FD_READ_METHOD(fd, srv->rbuf + srv->roffset, srv->rbuf_sz - srv->roffset - 1);
@@ -824,7 +824,7 @@ helperStatefulHandleRead(int fd, void *data)
     statefulhelper *hlp = srv->parent;
     assert(fd == srv->rfd);
     assert(cbdataValid(data));
-    statCounter.syscalls.sock.reads++;
+    CommStats.syscalls.sock.reads++;
     len = FD_READ_METHOD(fd, srv->buf + srv->offset, srv->buf_sz - srv->offset);
     fd_bytes(fd, len, FD_READ);
     debug(84, 5) ("helperStatefulHandleRead: %d bytes from %s #%d.\n",

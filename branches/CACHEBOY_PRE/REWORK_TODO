@@ -1,0 +1,7 @@
+
+* src/main.c has some assignments to iapp_ variables for copying bits of the
+  config from Config. out to libiapp; these need to go away before the code
+  is merged in.
+
+* start resolving naming space conflicts!
+

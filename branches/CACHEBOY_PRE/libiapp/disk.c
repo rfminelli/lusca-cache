@@ -70,10 +70,6 @@ static PF diskHandleWrite;
 static MemPool * pool_dread_ctrl;
 static MemPool * pool_dwrite_q;
 
-/*
- * XXX the statCounter stuff has been commented out; revisit that later! -adrian
- */
-
 #if defined(_SQUID_WIN32_) || defined(_SQUID_OS2_)
 static int
 diskWriteIsComplete(int fd)
@@ -107,7 +103,7 @@ file_open(const char *path, int mode)
 	mode |= O_APPEND;
     errno = 0;
     fd = open(path, mode, 0644);
-    //statCounter.syscalls.disk.opens++;
+    CommStats.syscalls.disk.opens++;
     if (fd < 0) {
 	debug(50, 3) ("file_open: error opening file %s: %s\n", path,
 	    xstrerror());
@@ -160,7 +156,7 @@ file_close(int fd)
 	("file_close: FD %d, really closing\n", fd);
     fd_close(fd);
     close(fd);
-    //statCounter.syscalls.disk.closes++;
+    CommStats.syscalls.disk.closes++;
 }
 
 /*
@@ -238,7 +234,7 @@ diskHandleWrite(int fd, void *notused)
 	fdd->write_q->buf + fdd->write_q->buf_offset,
 	fdd->write_q->len - fdd->write_q->buf_offset);
     debug(6, 3) ("diskHandleWrite: FD %d len = %d\n", fd, len);
-    //statCounter.syscalls.disk.writes++;
+    CommStats.syscalls.disk.writes++;
     fd_bytes(fd, len, FD_WRITE);
     if (len < 0) {
 	if (!ignoreErrno(errno)) {
@@ -405,14 +401,14 @@ diskHandleRead(int fd, void *data)
 	debug(6, 3) ("diskHandleRead: FD %d seeking to offset %d\n",
 	    fd, (int) ctrl_dat->file_offset);
 	lseek(fd, ctrl_dat->file_offset, SEEK_SET);	/* XXX ignore return? */
-	//statCounter.syscalls.disk.seeks++;
+	CommStats.syscalls.disk.seeks++;
 	F->disk.offset = ctrl_dat->file_offset;
     }
     errno = 0;
     len = FD_READ_METHOD(fd, ctrl_dat->buf, ctrl_dat->req_len);
     if (len > 0)
 	F->disk.offset += len;
-    //statCounter.syscalls.disk.reads++;
+    CommStats.syscalls.disk.reads++;
     fd_bytes(fd, len, FD_READ);
     if (len < 0) {
 	if (ignoreErrno(errno)) {

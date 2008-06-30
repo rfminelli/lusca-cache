@@ -1,6 +1,6 @@
 
 /*
- * $Id: comm_kqueue.c 11903 2007-05-20 13:45:11Z adrian $
+ * $Id$
  *
  * DEBUG: section 5     Socket Functions
  *
@@ -20,12 +20,12 @@
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation; either version 2 of the License, or
  *  (at your option) any later version.
- *
+ *  
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
- *
+ *  
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111, USA.
@@ -35,43 +35,44 @@
 #include "squid.h"
 #include "comm_generic.c"
 
-#include <port.h>
+#if HAVE_SYS_POLL_H
+#include <sys/poll.h>
+#elif HAVE_POLL_H
+#include <poll.h>
+#endif
 
-#define EV_LIST_SIZE	128
-
-static int ev_fd;
-static port_event_t *evlist;
+static struct pollfd *pfds;
+static int *pfd_map;
+static int nfds = 0;
 
 static void
 do_select_init()
 {
-    ev_fd = port_create();
-    if (ev_fd < 0)
-	fatalf("comm_select_init: port_create(): %s\n", xstrerror());
-    fd_open(ev_fd, FD_UNKNOWN, "evport ctl");
-    commSetCloseOnExec(ev_fd);
-    evlist = xcalloc(EV_LIST_SIZE, sizeof(port_event_t));
+    int i;
+    pfds = xcalloc(sizeof(*pfds), Squid_MaxFD);
+    pfd_map = xcalloc(sizeof(*pfd_map), Squid_MaxFD);
+    for (i = 0; i < Squid_MaxFD; i++) {
+	pfd_map[i] = -1;
+    }
 }
 
 void
 comm_select_postinit()
 {
-    debug(5, 1) ("Using Solaris Event Ports for the IO loop\n");
+    debug(5, 1) ("Using poll for the IO loop\n");
 }
 
 static void
 do_select_shutdown()
 {
-    fd_close(ev_fd);
-    close(ev_fd);
-    ev_fd = -1;
-    safe_free(evlist);
+    safe_free(pfds);
+    safe_free(pfd_map);
 }
 
-void
-comm_select_status(StoreEntry * sentry)
+const char *
+comm_select_status(void)
 {
-    storeAppendPrintf(sentry, "\tIO loop method:                     Solaris Event Ports\n");
+    return("poll");
 }
 
 void
@@ -88,52 +89,72 @@ commClose(int fd)
 void
 commSetEvents(int fd, int need_read, int need_write)
 {
-    int st_new = (need_read ? POLLIN : 0) | (need_write ? POLLOUT : 0);
+    int pfdn = pfd_map[fd];
+    struct pollfd *pfd = pfdn >= 0 ? &pfds[pfdn] : NULL;
+    short events = (need_read ? POLLRDNORM : 0) | (need_write ? POLLWRNORM : 0);
 
-    assert(fd >= 0);
-    debug(5, 8) ("commSetEvents(fd=%d, read=%d, write=%d)\n", fd, need_read, need_write);
+    if (!pfd && !events)
+	return;
 
-    if (st_new == 0)
-        port_dissociate(ev_fd, PORT_SOURCE_FD, fd);
-    else
-        port_associate(ev_fd, PORT_SOURCE_FD, fd, st_new, NULL);
+    if (!pfd) {
+	pfdn = nfds++;
+	pfd_map[fd] = pfdn;
+	pfd = &pfds[pfdn];
+	pfd->fd = fd;
+	pfd->events = events;
+    } else if (events) {
+	pfd->events = events;
+    } else {
+	pfd_map[fd] = -1;
+	nfds--;
+	*pfd = pfds[nfds];
+	pfds[nfds].events = 0;
+	pfds[nfds].revents = 0;
+	pfds[nfds].fd = -1;
+	if (pfd->fd >= 0)
+	    pfd_map[pfd->fd] = pfdn;
+    }
 }
 
 static int
 do_comm_select(int msec)
 {
+    int num;
     int i;
-    struct timespec timeout;
-    uint_t num = 1;
-    int r;
 
-    timeout.tv_sec = msec / 1000;
-    timeout.tv_nsec = (msec % 1000) * 1000000;
-
-    statCounter.syscalls.polls++;
-    r = port_getn(ev_fd, evlist, (uint_t) EV_LIST_SIZE, (uint_t *) &num, &timeout);
-
-    if (r < 0) {
+    if (nfds == 0) {
+	assert(shutting_down);
+	return COMM_SHUTDOWN;
+    }
+    statCounter.syscalls.selects++;
+    num = poll(pfds, nfds, msec);
+    if (num < 0) {
 	getCurrentTime();
-        if (errno == ETIME)
-            return COMM_TIMEOUT;
 	if (ignoreErrno(errno))
 	    return COMM_OK;
 
-	debug(5, 1) ("comm_select: port_getn() failure: %s\n", xstrerror());
+	debug(5, 1) ("comm_select: poll failure: %s\n", xstrerror());
 	return COMM_ERROR;
     }
     statHistCount(&statCounter.select_fds_hist, num);
+
     if (num == 0)
 	return COMM_TIMEOUT;
 
-    for (i = 0; i < num; i++) {
-        assert(evlist[i].portev_source == PORT_SOURCE_FD);
-	int fd = (int) evlist[i].portev_object;
-        if (evlist[i].portev_events & POLLIN) 
-	    comm_call_handlers(fd, 1, 0);
-	if (evlist[i].portev_events & POLLOUT)
-	    comm_call_handlers(fd, 0, 1);
+    for (i = nfds - 1; num > 0 && i >= 0; i--) {
+	struct pollfd *pfd = &pfds[i];
+	short read_event, write_event;
+
+	if (!pfd->revents)
+	    continue;
+
+	read_event = pfd->revents & (POLLRDNORM | POLLIN | POLLHUP | POLLERR);
+	write_event = pfd->revents & (POLLWRNORM | POLLOUT | POLLHUP | POLLERR);
+
+	pfd->revents = 0;
+
+	comm_call_handlers(pfd->fd, read_event, write_event);
+	num--;
     }
 
     return COMM_OK;

@@ -139,7 +139,7 @@ identReadReply(int fd, void *data)
     char *t = NULL;
     int len = -1;
     buf[0] = '\0';
-    statCounter.syscalls.sock.reads++;
+    CommStats.syscalls.sock.reads++;
     len = FD_READ_METHOD(fd, buf, BUFSIZ - 1);
     fd_bytes(fd, len, FD_READ);
     if (len <= 0) {

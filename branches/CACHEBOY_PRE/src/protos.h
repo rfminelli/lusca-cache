@@ -126,11 +126,6 @@ extern int clientGetPinnedInfo(const ConnStateData * conn, const request_t * req
 extern int clientGetPinnedConnection(ConnStateData * conn, const request_t * request, const peer * peer, int *auth);
 extern void clientReassignDelaypools(void);
 
-/*
- * comm_select.c
- */
-extern void comm_select_status(StoreEntry *);
-
 extern void packerToStoreInit(Packer * p, StoreEntry * e);
 extern void packerToMemInit(Packer * p, MemBuf * mb);
 extern void packerClean(Packer * p);
@@ -691,7 +686,6 @@ extern void identInit(void);
 extern void statInit(void);
 extern void statFreeMemory(void);
 extern double median_svc_get(int, int);
-extern void pconnHistCount(int, int);
 extern int stat5minClientRequests(void);
 extern double stat5minCPUUsage(void);
 extern const char *storeEntryFlags(const StoreEntry *);
@@ -961,7 +955,6 @@ extern void setSystemLimits(void);
 extern time_t getCurrentTime(void);
 extern int percent(int, int);
 extern double dpercent(double, double);
-extern void squid_signal(int sig, SIGHDLR *, int flags);
 extern pid_t readPidFile(void);
 extern struct in_addr inaddrFromHostent(const struct hostent *hp);
 extern int intAverage(int, int, int, int);
@@ -1273,8 +1266,6 @@ extern int httpMsgParseRequestLine(HttpMsgBuf * hmsg);
 extern int httpMsgParseRequestHeader(request_t * req, HttpMsgBuf * hmsg);
 extern int httpMsgFindHeadersEnd(HttpMsgBuf * hmsg);
 
-extern const char *xinet_ntoa(const struct in_addr addr);
-
 /* client_side.c */
 extern aclCheck_t *clientAclChecklistCreate(const acl_access * acl, const clientHttpRequest * http);
 extern void clientInterpretRequestHeaders(clientHttpRequest * http);
@@ -1290,5 +1281,7 @@ extern void clientStoreURLRewriteAccessCheckDone(int answer, void *data);
 extern void clientStoreURLRewriteStart(clientHttpRequest * http);
 extern void clientStoreURLRewriteDone(void *data, char *result);
 
+/* statIapp.c */
+extern void statIappStats(StoreEntry *sentry);
 
 #endif /* SQUID_PROTOS_H */

@@ -157,7 +157,6 @@ typedef struct _AccessLogEntry AccessLogEntry;
 typedef struct _cachemgr_passwd cachemgr_passwd;
 typedef struct _refresh_t refresh_t;
 typedef struct _refresh_cc refresh_cc;
-typedef struct _CommWriteStateData CommWriteStateData;
 typedef struct _ErrorState ErrorState;
 typedef struct _StatCounters StatCounters;
 typedef struct _tlv tlv;
@@ -235,7 +234,6 @@ typedef void STHCB(void *, HttpReply *);	/* store callback */
 typedef void STABH(void *);
 typedef void ERCB(int fd, void *, size_t);
 typedef void OBJH(StoreEntry *);
-typedef void SIGHDLR(int sig);
 typedef void STVLDCB(void *, int, int);
 typedef void HLPCB(void *, char *buf);
 typedef void HLPSCB(void *, void *lastserver, char *buf);

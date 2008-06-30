@@ -348,7 +348,7 @@ icpHandleUdp(int sock, void *data)
     while (max--) {
 	from_len = sizeof(from);
 	memset(&from, '\0', from_len);
-	statCounter.syscalls.sock.recvfroms++;
+	CommStats.syscalls.sock.recvfroms++;
 	len = recvfrom(sock,
 	    buf,
 	    SQUID_UDP_SO_RCVBUF - 1,

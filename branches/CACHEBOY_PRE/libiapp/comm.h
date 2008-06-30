@@ -15,6 +15,31 @@
 #define DISK_EOF                 (-2)
 #define DISK_NO_SPACE_LEFT       (-6)
 
+/*
+ * Hey dummy, don't be tempted to move this to lib/config.h.in
+ * again.  O_NONBLOCK will not be defined there because you didn't
+ * #include <fcntl.h> yet.
+ */
+#if defined(_SQUID_SUNOS_)
+/*
+ * We assume O_NONBLOCK is broken, or does not exist, on SunOS.
+ */
+#define SQUID_NONBLOCK O_NDELAY
+#elif defined(O_NONBLOCK)
+/*
+ * We used to assume O_NONBLOCK was broken on Solaris, but evidence
+ * now indicates that its fine on Solaris 8, and in fact required for
+ * properly detecting EOF on FIFOs.  So now we assume that if  
+ * its defined, it works correctly on all operating systems.
+ */
+#define SQUID_NONBLOCK O_NONBLOCK
+/*
+ * O_NDELAY is our fallback.
+ */
+#else
+#define SQUID_NONBLOCK O_NDELAY
+#endif
+
 #define FD_READ_METHOD(fd, buf, len) (*fd_table[fd].read_method)(fd, buf, len)
 #define FD_WRITE_METHOD(fd, buf, len) (*fd_table[fd].write_method)(fd, buf, len)
 
@@ -32,7 +57,9 @@ enum {
     FD_WRITE
 };
 
+
 typedef struct _close_handler close_handler;
+
 typedef struct _dread_ctrl dread_ctrl;
 typedef struct _dwrite_q dwrite_q;
 
@@ -52,6 +79,12 @@ typedef void DOCB(int, int errflag, void *data);        /* disk open CB */
 typedef void DCCB(int, int errflag, void *data);        /* disk close CB */
 typedef void DUCB(int errflag, void *data);     /* disk unlink CB */
 typedef void DTCB(int errflag, void *data);     /* disk trunc CB */
+
+struct _close_handler {
+    PF *handler;
+    void *data;
+    close_handler *next;
+};
 
 struct _dread_ctrl {
     int fd;
@@ -83,8 +116,7 @@ struct _CommWriteStateData {
     char header[32];
     size_t header_size;
 };
-
-
+typedef struct _CommWriteStateData CommWriteStateData;
 
 /* Special case pending filedescriptors. Set in fd_table[fd].read/write_pending
  */
@@ -181,6 +213,38 @@ struct _fde {
 
 typedef struct _fde fde;
 
+/* .. XXX how the hell will this be threaded? */
+struct _CommStatStruct {
+    struct {
+        struct {
+            int opens;
+            int closes;
+            int reads;
+            int writes;
+            int seeks;
+            int unlinks;
+        } disk;
+        struct {
+            int accepts;
+            int sockets;
+            int connects;
+            int binds;
+            int closes;
+            int reads;
+            int writes;
+            int recvfroms;
+            int sendtos;
+        } sock;
+        int polls;
+        int selects;
+    } syscalls;
+    int select_fds;
+    int select_loops;
+    int select_time;
+};
+
+typedef struct _CommStatStruct CommStatStruct;
+
 extern void fd_init(void);
 extern void fd_close(int fd);
 extern void fd_open(int fd, unsigned int type, const char *);
@@ -244,6 +308,9 @@ extern int commSetTimeout(int fd, int, PF *, void *);
 extern void commSetDefer(int fd, DEFER * func, void *);
 extern int ignoreErrno(int);
 extern void commCloseAllSockets(void);
+extern int commBind(int s, struct in_addr, u_short port);
+extern void commSetTcpNoDelay(int);
+extern void commSetTcpRcvbuf(int, int);
 
 /*
  * comm_select.c
@@ -259,6 +326,7 @@ extern void commOpen(int fd);
 extern void commUpdateReadHandler(int, PF *, void *);
 extern void commUpdateWriteHandler(int, PF *, void *);
 extern void comm_quick_poll_required(void);
+extern const char * comm_select_status(void);
 
 /* disk.c */
 extern int file_open(const char *path, int mode);
@@ -276,6 +344,11 @@ extern int Opening_FD;          /* 0 */
 extern int Squid_MaxFD;         /* SQUID_MAXFD */
 extern int RESERVED_FD;
 
+extern struct in_addr any_addr;
+extern struct in_addr local_addr;
+extern struct in_addr no_addr;
+
+extern CommStatStruct CommStats;
 
 
 #endif
