@@ -16,11 +16,29 @@
 #include "../libmem/MemPool.h"
 #include "../libmem/MemBufs.h"
 #include "../libmem/MemBuf.h"
+#include "../libmem/MemStr.h"
+#include "../libcb/cbdata.h"
 
 #include "event.h"
 #include "iapp_ssl.h"
 #include "comm.h"
 #include "mainloop.h"
+
+
+/*
+ * Configure the libraries required to bootstrap iapp.
+ */
+void
+iapp_init(void)
+{
+	memPoolInit();
+	memBuffersInit();
+	memStringInit();
+	cbdataInit();
+	eventInit();
+	comm_init();
+	comm_select_init();
+}
 
 int
 iapp_runonce(int msec)

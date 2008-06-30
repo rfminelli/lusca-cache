@@ -767,11 +767,9 @@ main(int argc, char **argv)
 #if USE_LEAKFINDER
 	leakInit();
 #endif
+	iapp_init();		/* required for configuration parsing */
 	memInit();
-	memStringInit();
-	cbdataInit();
 	cbdataLocalInit();
-	eventInit();		/* eventInit() is required for config parsing */
 	eventLocalInit();
 	storeFsInit();		/* required for config parsing */
 	authenticateSchemeInit();	/* required for config parsing */
@@ -827,10 +825,6 @@ main(int argc, char **argv)
     if (!opt_no_daemon)
 	watch_child(argv);
     setMaxFD();
-
-    /* init comm module */
-    comm_init();
-    comm_select_init();
 
     if (opt_no_daemon) {
 	/* we have to init fdstat here. */
