@@ -306,11 +306,11 @@ comm_listen(int sock)
 	struct accept_filter_arg afa;
 	bzero(&afa, sizeof(afa));
 	debug(5, 0) ("Installing accept filter '%s' on FD %d\n",
-	    Config.accept_filter, sock);
-	xstrncpy(afa.af_name, Config.accept_filter, sizeof(afa.af_name));
+	    iapp_useAcceptFilter, sock);
+	xstrncpy(afa.af_name, iapp_useAcceptFilter, sizeof(afa.af_name));
 	x = setsockopt(sock, SOL_SOCKET, SO_ACCEPTFILTER, &afa, sizeof(afa));
 	if (x < 0)
-	    debug(5, 0) ("SO_ACCEPTFILTER '%s': %s\n", Config.accept_filter, xstrerror());
+	    debug(5, 0) ("SO_ACCEPTFILTER '%s': %s\n", iapp_useAcceptFilter, xstrerror());
 #elif defined(TCP_DEFER_ACCEPT)
 	int seconds = 30;
 	if (strncmp(iapp_useAcceptFilter , "data=", 5) == 0)
