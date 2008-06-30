@@ -37,8 +37,6 @@
 
 /* module globals */
 
-static MemPool *MemPools[MEM_MAX];
-
 /* string pools */
 
 /* local routines */
@@ -114,11 +112,6 @@ memStats(StoreEntry * sentry)
 void
 memInit(void)
 {
-    memPoolInit();
-    /* set all pointers to null */
-    memset(MemPools, '\0', sizeof(MemPools));
-    memBuffersInit();
-
     aclInitMem();
     authenticateInitMem();
 #if USE_CACHE_DIGESTS
