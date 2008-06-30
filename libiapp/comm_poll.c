@@ -32,7 +32,44 @@
  *
  */
 
-#include "squid.h"
+#include "../include/config.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <math.h>
+#include <fcntl.h>
+#include <err.h>
+#include <sys/errno.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#include "../include/Array.h"
+#include "../include/Stack.h"
+#include "../include/util.h"
+#include "../libcore/valgrind.h"
+#include "../libcore/varargs.h"
+#include "../libcore/debug.h"
+#include "../libcore/kb.h"
+#include "../libcore/gb.h"
+#include "../libcore/tools.h"
+
+#include "../libmem/MemPool.h"
+#include "../libmem/MemBufs.h"
+#include "../libmem/MemBuf.h"
+
+#include "../libstat/StatHist.h"
+
+#include "../libcb/cbdata.h"
+
+#include "iapp_ssl.h"
+#include "globals.h"
+#include "comm.h"
+
+#include "comm_generic.c"
+
 #include "comm_generic.c"
 
 #if HAVE_SYS_POLL_H
