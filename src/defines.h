@@ -73,8 +73,6 @@
 #define ACL_ALLWEEK	0x7F
 #define ACL_WEEKDAYS	0x3E
 
-#define MAXHTTPPORTS			128
-
 #define DNS_INBUF_SZ 4096
 
 #define FQDN_LOOKUP_IF_MISS	0x01

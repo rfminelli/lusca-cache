@@ -32,17 +32,50 @@
  *
  */
 
-#include "squid.h"
+#include "../include/config.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <math.h>
+#include <fcntl.h>
+#include <err.h>
+#include <sys/errno.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#include "../include/Array.h"
+#include "../include/Stack.h"
+#include "../include/util.h"
+#include "../libcore/valgrind.h"
+#include "../libcore/varargs.h"
+#include "../libcore/debug.h"
+#include "../libcore/kb.h"
+#include "../libcore/gb.h"
+#include "../libcore/tools.h"
+
+#include "../libmem/MemPool.h"
+#include "../libmem/MemBufs.h"
+#include "../libmem/MemBuf.h"
+
+#include "../libstat/StatHist.h"
+
+#include "../libcb/cbdata.h"
+
+#include "globals.h"
+#include "comm.h"
+
 #include "comm_generic.c"
 
-#if HAVE_SYS_POLL_H
-#include <sys/poll.h>
-#elif HAVE_POLL_H
-#include <poll.h>
+#if HAVE_WINSOCK2_H
+#include <Winsock2.h>
 #endif
 
-static struct pollfd *pfds;
+static WSAPOLLFD *pfds;
 static int *pfd_map;
+static int *pfd_map_fd;
 static int nfds = 0;
 
 static void
@@ -51,8 +84,9 @@ do_select_init()
     int i;
     pfds = xcalloc(sizeof(*pfds), Squid_MaxFD);
     pfd_map = xcalloc(sizeof(*pfd_map), Squid_MaxFD);
+    pfd_map_fd = xcalloc(sizeof(*pfd_map_fd), Squid_MaxFD);
     for (i = 0; i < Squid_MaxFD; i++) {
-	pfd_map[i] = -1;
+	pfd_map_fd[i] = pfd_map[i] = -1;
     }
 }
 
@@ -67,30 +101,20 @@ do_select_shutdown()
 {
     safe_free(pfds);
     safe_free(pfd_map);
+    safe_Free(pfd_map_fd);
 }
 
-void
-comm_select_status(StoreEntry * sentry)
+const char *
+comm_select_status(void)
 {
-    storeAppendPrintf(sentry, "\tIO loop method:                     poll\n");
-}
-
-void
-commOpen(int fd)
-{
-}
-
-void
-commClose(int fd)
-{
-    commSetEvents(fd, 0, 0);
+    return("poll (win32)");
 }
 
 void
 commSetEvents(int fd, int need_read, int need_write)
 {
     int pfdn = pfd_map[fd];
-    struct pollfd *pfd = pfdn >= 0 ? &pfds[pfdn] : NULL;
+    WSAPOLLFD *pfd = pfdn >= 0 ? &pfds[pfdn] : NULL;
     short events = (need_read ? POLLRDNORM : 0) | (need_write ? POLLWRNORM : 0);
 
     if (!pfd && !events)
@@ -99,20 +123,23 @@ commSetEvents(int fd, int need_read, int need_write)
     if (!pfd) {
 	pfdn = nfds++;
 	pfd_map[fd] = pfdn;
+	pfd_map_fd[pfdn] = fd;
 	pfd = &pfds[pfdn];
-	pfd->fd = fd;
+	pfd->fd = _get_osfhandle(fd);
 	pfd->events = events;
     } else if (events) {
 	pfd->events = events;
     } else {
+	int *pfd_fd = &pfd_map_fd[pfdn];
 	pfd_map[fd] = -1;
 	nfds--;
 	*pfd = pfds[nfds];
+	*pfd_fd = pfd_map_fd[nfds];
 	pfds[nfds].events = 0;
 	pfds[nfds].revents = 0;
 	pfds[nfds].fd = -1;
 	if (pfd->fd >= 0)
-	    pfd_map[pfd->fd] = pfdn;
+	    pfd_map[*pfd_fd] = pfdn;
     }
 }
 
@@ -127,7 +154,7 @@ do_comm_select(int msec)
 	return COMM_SHUTDOWN;
     }
     statCounter.syscalls.selects++;
-    num = poll(pfds, nfds, msec);
+    num = WSAPoll(pfds, nfds, msec);
     if (num < 0) {
 	getCurrentTime();
 	if (ignoreErrno(errno))
@@ -142,7 +169,7 @@ do_comm_select(int msec)
 	return COMM_TIMEOUT;
 
     for (i = nfds - 1; num > 0 && i >= 0; i--) {
-	struct pollfd *pfd = &pfds[i];
+	WSAPOLLFD *pfd = &pfds[i];
 	short read_event, write_event;
 
 	if (!pfd->revents)
@@ -153,7 +180,7 @@ do_comm_select(int msec)
 
 	pfd->revents = 0;
 
-	comm_call_handlers(pfd->fd, read_event, write_event);
+	comm_call_handlers(pfd_map_fd[i], read_event, write_event);
 	num--;
     }
 

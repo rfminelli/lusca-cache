@@ -700,7 +700,7 @@ idnsReadTcp(int fd, void *data)
     int ns = (q->nsends - 1) % nns;
     if (!q->tcp_buffer)
 	q->tcp_buffer = memAllocBuf(1024, &q->tcp_buffer_size);
-    statCounter.syscalls.sock.reads++;
+    CommStats.syscalls.sock.reads++;
     n = FD_READ_METHOD(q->tcp_socket, q->tcp_buffer + q->tcp_buffer_offset, q->tcp_buffer_size - q->tcp_buffer_offset);
     if (n < 0 && ignoreErrno(errno)) {
 	commSetSelect(q->tcp_socket, COMM_SELECT_READ, idnsReadTcp, q, 0);
@@ -887,7 +887,7 @@ idnsRead(int fd, void *data)
     while (max--) {
 	from_len = sizeof(from);
 	memset(&from, '\0', from_len);
-	statCounter.syscalls.sock.recvfroms++;
+	CommStats.syscalls.sock.recvfroms++;
 	len = recvfrom(fd, rbuf, sizeof(rbuf), 0, (struct sockaddr *) &from, &from_len);
 	if (len == 0)
 	    break;

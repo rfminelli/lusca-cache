@@ -565,7 +565,7 @@ uniqueHostname(void)
 void
 safeunlink(const char *s, int quiet)
 {
-    statCounter.syscalls.disk.unlinks++;
+    CommStats.syscalls.disk.unlinks++;
     if (unlink(s) < 0 && !quiet)
 	debug(50, 1) ("safeunlink: Couldn't delete %s: %s\n", s, xstrerror());
 }
@@ -824,19 +824,6 @@ setSystemLimits(void)
 #endif /* RLIMIT_VMEM */
 }
 
-time_t
-getCurrentTime(void)
-{
-#if GETTIMEOFDAY_NO_TZP
-    gettimeofday(&current_time);
-#else
-    gettimeofday(&current_time, NULL);
-#endif
-    current_dtime = (double) current_time.tv_sec +
-	(double) current_time.tv_usec / 1000000.0;
-    return squid_curtime = current_time.tv_sec;
-}
-
 int
 percent(int a, int b)
 {
@@ -847,49 +834,6 @@ double
 dpercent(double a, double b)
 {
     return b ? (100.0 * a / b) : 0.0;
-}
-
-void
-squid_signal(int sig, SIGHDLR * func, int flags)
-{
-#if HAVE_SIGACTION
-    struct sigaction sa;
-    sa.sa_handler = func;
-    sa.sa_flags = flags;
-    sigemptyset(&sa.sa_mask);
-    if (sigaction(sig, &sa, NULL) < 0)
-	debug(50, 0) ("sigaction: sig=%d func=%p: %s\n", sig, func, xstrerror());
-#else
-#ifdef _SQUID_MSWIN_
-/*
- * On Windows, only SIGINT, SIGILL, SIGFPE, SIGTERM, SIGBREAK, SIGABRT and SIGSEGV
- * signals are supported, so we must care of don't call signal() for other value.
- * The SIGILL, SIGSEGV, and SIGTERM signals are not generated under Windows. They
- * are defined only for ANSI compatibility, so both SIGSEGV and SIGBUS are emulated
- * with an Exception Handler.
- */
-    switch (sig) {
-    case SIGINT:
-    case SIGILL:
-    case SIGFPE:
-    case SIGTERM:
-    case SIGBREAK:
-    case SIGABRT:
-	break;
-    case SIGSEGV:
-	WIN32_ExceptionHandlerInit();
-	break;
-    case SIGBUS:
-	WIN32_ExceptionHandlerInit();
-	return;
-	break;			/* Not reached */
-    default:
-	return;
-	break;			/* Not reached */
-    }
-#endif /* _SQUID_MSWIN_ */
-    signal(sig, func);
-#endif
 }
 
 struct in_addr
@@ -1301,13 +1245,6 @@ restoreCapabilities(int keep)
     need_linux_tproxy = 0;
 #endif
 #endif
-}
-
-/* XXX this is ipv4-only aware atm */
-const char *
-xinet_ntoa(const struct in_addr addr)
-{
-    return inet_ntoa(addr);
 }
 
 /**

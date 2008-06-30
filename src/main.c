@@ -409,6 +409,12 @@ mainReconfigure(void)
     errorClean();
     enter_suid();		/* root to read config file */
     parseConfigFile(ConfigFile);
+
+    /* XXX hacks for now to setup config options in libiapp; rethink this! -adrian */
+    iapp_tcpRcvBufSz = Config.tcpRcvBufsz;
+    iapp_useAcceptFilter = Config.accept_filter;
+    iapp_incomingRate = Config.incoming_rate;
+
     setUmask(Config.umask);
     setEffectiveUser();
     _db_init(Config.debugOptions);
@@ -773,6 +779,11 @@ main(int argc, char **argv)
 
 	if (opt_parse_cfg_only)
 	    return parse_err;
+
+        /* XXX hacks for now to setup config options in libiapp; rethink this! -adrian */
+        iapp_tcpRcvBufSz = Config.tcpRcvBufsz;
+        iapp_useAcceptFilter = Config.accept_filter;
+        iapp_incomingRate = Config.incoming_rate;
     }
     setUmask(Config.umask);
     if (-1 == opt_send_signal)
@@ -859,12 +870,11 @@ main(int argc, char **argv)
 	    serverConnectionsClose();
 	    eventAdd("SquidShutdown", SquidShutdown, NULL, (double) (wait + 1), 1);
 	}
-	eventRun();
-	if ((loop_delay = eventNextTime()) < 0)
-	    loop_delay = 0;
+        /* Set a maximum loop delay; it'll be lowered elsewhere as appropriate */
+	loop_delay = 60000;
 	if (debug_log_flush() && loop_delay > 1000)
 	    loop_delay = 1000;
-	switch (comm_select(loop_delay)) {
+	switch (iapp_runonce(loop_delay)) {
 	case COMM_OK:
 	    errcount = 0;	/* reset if successful */
 	    break;
@@ -883,6 +893,8 @@ main(int argc, char **argv)
 	    fatal_dump("MAIN: Internal error -- this should never happen.");
 	    break;
 	}
+        /* Check for disk io callbacks */
+        storeDirCallback();
     }
     /* NOTREACHED */
     return 0;

@@ -502,7 +502,7 @@ snmpHandleUdp(int sock, void *not_used)
     memset(&from, '\0', from_len);
     memset(buf, '\0', SNMP_REQUEST_SIZE);
 
-    statCounter.syscalls.sock.recvfroms++;
+    CommStats.syscalls.sock.recvfroms++;
 
     len = recvfrom(sock,
 	buf,

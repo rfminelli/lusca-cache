@@ -1,6 +1,6 @@
 
 /*
- * $Id$
+ * $Id: comm_kqueue.c 11903 2007-05-20 13:45:11Z adrian $
  *
  * DEBUG: section 5     Socket Functions
  *
@@ -20,12 +20,12 @@
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation; either version 2 of the License, or
  *  (at your option) any later version.
- *  
+ *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
- *  
+ *
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111, USA.
@@ -35,42 +35,43 @@
 #include "squid.h"
 #include "comm_generic.c"
 
-#if HAVE_SYS_TIME_H
-#include <sys/time.h>
-#endif
+#include <port.h>
 
-#if HAVE_SYS_SELECT_H
-#include <sys/select.h>
-#endif
+#define EV_LIST_SIZE	128
 
-static fd_set global_readfds;
-static fd_set global_writefds;
-static int nreadfds;
-static int nwritefds;
+static int ev_fd;
+static port_event_t *evlist;
 
 static void
 do_select_init()
 {
-    if (Squid_MaxFD > FD_SETSIZE)
-	Squid_MaxFD = FD_SETSIZE;
-    nreadfds = nwritefds = 0;
+    ev_fd = port_create();
+    if (ev_fd < 0)
+	fatalf("comm_select_init: port_create(): %s\n", xstrerror());
+    fd_open(ev_fd, FD_UNKNOWN, "evport ctl");
+    commSetCloseOnExec(ev_fd);
+    evlist = xcalloc(EV_LIST_SIZE, sizeof(port_event_t));
 }
 
 void
 comm_select_postinit()
 {
-    debug(5, 1) ("Using select in POSIX mode for the IO loop\n");
+    debug(5, 1) ("Using Solaris Event Ports for the IO loop\n");
 }
 
 static void
 do_select_shutdown()
 {
+    fd_close(ev_fd);
+    close(ev_fd);
+    ev_fd = -1;
+    safe_free(evlist);
 }
 
-void
-comm_select_status(StoreEntry * sentry)
+const char *
+comm_select_status(void)
 {
-    storeAppendPrintf(sentry, "\tIO loop method:                     select in POSIX mode\n");
+    return("event ports");
 }
 
 void
@@ -87,62 +88,53 @@ commClose(int fd)
 void
 commSetEvents(int fd, int need_read, int need_write)
 {
-    if (need_read && !FD_ISSET(fd, &global_readfds)) {
-	FD_SET(fd, &global_readfds);
-	nreadfds++;
-    } else if (!need_read && FD_ISSET(fd, &global_readfds)) {
-	FD_CLR(fd, &global_readfds);
-	nreadfds--;
-    }
-    if (need_write && !FD_ISSET(fd, &global_writefds)) {
-	FD_SET(fd, &global_writefds);
-	nwritefds++;
-    } else if (!need_write && FD_ISSET(fd, &global_writefds)) {
-	FD_CLR(fd, &global_writefds);
-	nwritefds--;
-    }
+    int st_new = (need_read ? POLLIN : 0) | (need_write ? POLLOUT : 0);
+
+    assert(fd >= 0);
+    debug(5, 8) ("commSetEvents(fd=%d, read=%d, write=%d)\n", fd, need_read, need_write);
+
+    if (st_new == 0)
+        port_dissociate(ev_fd, PORT_SOURCE_FD, fd);
+    else
+        port_associate(ev_fd, PORT_SOURCE_FD, fd, st_new, NULL);
 }
 
 static int
 do_comm_select(int msec)
 {
-    int num;
-    struct timeval tv;
-    fd_set readfds;
-    fd_set writefds;
-    fd_set errfds;
-    int fd;
+    int i;
+    struct timespec timeout;
+    uint_t num = 1;
+    int r;
 
-    if (nreadfds + nwritefds == 0) {
-	assert(shutting_down);
-	return COMM_SHUTDOWN;
-    }
-    memcpy(&readfds, &global_readfds, sizeof(fd_set));
-    memcpy(&writefds, &global_writefds, sizeof(fd_set));
-    memcpy(&errfds, &global_writefds, sizeof(fd_set));
-    tv.tv_sec = msec / 1000;
-    tv.tv_usec = (msec % 1000) * 1000;
-    statCounter.syscalls.selects++;
-    num = select(Biggest_FD + 1, &readfds, &writefds, &errfds, &tv);
+    timeout.tv_sec = msec / 1000;
+    timeout.tv_nsec = (msec % 1000) * 1000000;
 
-    if (num < 0) {
+    statCounter.syscalls.polls++;
+    r = port_getn(ev_fd, evlist, (uint_t) EV_LIST_SIZE, (uint_t *) &num, &timeout);
+
+    if (r < 0) {
 	getCurrentTime();
+        if (errno == ETIME)
+            return COMM_TIMEOUT;
 	if (ignoreErrno(errno))
 	    return COMM_OK;
 
-	debug(5, 1) ("comm_select: select failure: %s\n", xstrerror());
+	debug(5, 1) ("comm_select: port_getn() failure: %s\n", xstrerror());
 	return COMM_ERROR;
     }
     statHistCount(&statCounter.select_fds_hist, num);
-
     if (num == 0)
 	return COMM_TIMEOUT;
 
-    for (fd = 0; fd <= Biggest_FD; fd++) {
-	int read_event = FD_ISSET(fd, &readfds);
-	int write_event = FD_ISSET(fd, &writefds) || FD_ISSET(fd, &errfds);
-	if (read_event || write_event)
-	    comm_call_handlers(fd, read_event, write_event);
+    for (i = 0; i < num; i++) {
+        assert(evlist[i].portev_source == PORT_SOURCE_FD);
+	int fd = (int) evlist[i].portev_object;
+        if (evlist[i].portev_events & POLLIN) 
+	    comm_call_handlers(fd, 1, 0);
+	if (evlist[i].portev_events & POLLOUT)
+	    comm_call_handlers(fd, 0, 1);
     }
+
     return COMM_OK;
 }
