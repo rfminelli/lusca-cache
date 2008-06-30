@@ -90,8 +90,11 @@ static void
 do_select_init()
 {
     kq = kqueue();
+    assert(kq >= 0);
+#if 0
     if (kq < 0)
 	fatalf("comm_select_init: kqueue(): %s\n", xstrerror());
+#endif
     fd_open(kq, FD_UNKNOWN, "kqueue ctl");
     commSetCloseOnExec(kq);
     kqmax = KE_QUEUE_STEP;
@@ -182,7 +185,7 @@ do_comm_select(int msec)
     timeout.tv_sec = msec / 1000;
     timeout.tv_nsec = (msec % 1000) * 1000000;
 
-    statCounter.syscalls.polls++;
+    CommStats.syscalls.polls++;
     num = kevent(kq, kqlst, kqoff, ke, kqmax, &timeout);
     kqoff = 0;
     if (num < 0) {
@@ -193,7 +196,9 @@ do_comm_select(int msec)
 	debug(5, 1) ("comm_select: kevent failure: %s\n", xstrerror());
 	return COMM_ERROR;
     }
+#if NOTYET
     statHistCount(&statCounter.select_fds_hist, num);
+#endif
     if (num == 0)
 	return COMM_TIMEOUT;
 
