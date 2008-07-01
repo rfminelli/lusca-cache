@@ -19,7 +19,7 @@ SUBDIRS		=
 bin_PROGRAMS = \
 	tcptest
 
-tcptest_SOURCES = tcptest.c
+tcptest_SOURCES = tcptest.c tunnel.c
 
 LDADD = -L../../lib -L../../libcore -L../../libmem -L../../libcb -L../../libiapp -L../../libhttp -L../../libstat -lmiscutil -liapp -lmem -lcb -lcore -lmiscutil -lm
 
