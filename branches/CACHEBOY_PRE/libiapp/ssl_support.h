@@ -65,4 +65,9 @@ const char *sslGetUserCertificateChainPEM(SSL * ssl);
 
 #endif /* _SQUID_MSWIN_ */
 
+extern const char * ssl_password;
+extern const char * ssl_engine;
+extern int ssl_unclean_shutdown;
+
+
 #endif /* SQUID_SSL_SUPPORT_H */
