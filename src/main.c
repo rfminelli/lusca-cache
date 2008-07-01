@@ -414,9 +414,11 @@ mainReconfigure(void)
     iapp_tcpRcvBufSz = Config.tcpRcvBufsz;
     iapp_useAcceptFilter = Config.accept_filter;
     iapp_incomingRate = Config.incoming_rate;
+#if USE_SSL
     ssl_engine = Config.SSL.ssl_engine;
     ssl_unclean_shutdown = Config.SSL.unclean_shutdown;
     ssl_password = Config.Program.ssl_password;
+#endif
 
     setUmask(Config.umask);
     setEffectiveUser();
@@ -780,9 +782,11 @@ main(int argc, char **argv)
         iapp_tcpRcvBufSz = Config.tcpRcvBufsz;
         iapp_useAcceptFilter = Config.accept_filter;
         iapp_incomingRate = Config.incoming_rate;
+#if USE_SSL
         ssl_engine = Config.SSL.ssl_engine;
         ssl_unclean_shutdown = Config.SSL.unclean_shutdown;
         ssl_password = Config.Program.ssl_password;
+#endif
     }
     setUmask(Config.umask);
     if (-1 == opt_send_signal)
