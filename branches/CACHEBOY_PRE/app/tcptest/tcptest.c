@@ -49,6 +49,8 @@ acceptSock(int sfd, void *d)
 	/* Create tunnel */
 	safe_inet_addr("192.168.1.28", &dest.sin_addr);
 	dest.sin_port = htons(80);
+	dest.sin_family = AF_INET;
+	dest.sin_len = sizeof(struct sockaddr_in);
 	sslStart(fd, dest);
 	/* register for another pass */
 	commSetSelect(sfd, COMM_SELECT_READ, acceptSock, NULL, 0);
