@@ -37,11 +37,13 @@
 
 #include "tunnel.h"
 
+struct sockaddr_in dest;
+
 static void
 acceptSock(int sfd, void *d)
 {
 	int fd;
-	struct sockaddr_in peer, me, dest;
+	struct sockaddr_in peer, me;
 
 	bzero(&me, sizeof(me));
 	bzero(&peer, sizeof(peer));
@@ -49,10 +51,6 @@ acceptSock(int sfd, void *d)
 	debug(1, 2) ("acceptSock: FD %d: new socket!\n", fd);
 
 	/* Create tunnel */
-	safe_inet_addr("192.168.1.25", &dest.sin_addr);
-	dest.sin_port = htons(80);
-	dest.sin_family = AF_INET;
-	dest.sin_len = sizeof(struct sockaddr_in);
 	sslStart(fd, dest);
 	/* register for another pass */
 	commSetSelect(sfd, COMM_SELECT_READ, acceptSock, NULL, 0);
@@ -72,6 +70,11 @@ main(int argc, const char *argv[])
 
 	bzero(&s.sin_addr, sizeof(s.sin_addr));
 	s.sin_port = htons(8080);
+
+	safe_inet_addr("192.168.1.25", &dest.sin_addr);
+	dest.sin_port = htons(80);
+	dest.sin_family = AF_INET;
+	//dest.sin_len = sizeof(struct sockaddr_in);
 
 	fd = comm_open(SOCK_STREAM, IPPROTO_TCP, s.sin_addr, 8080, COMM_NONBLOCKING, "HTTP Socket");
 	assert(fd > 0);
