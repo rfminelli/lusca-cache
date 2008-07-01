@@ -764,6 +764,7 @@ main(int argc, char **argv)
 #if USE_LEAKFINDER
 	leakInit();
 #endif
+        libcore_set_fatalf(fatalvf);
 	iapp_init();		/* required for configuration parsing */
 	memInit();
 	cbdataLocalInit();

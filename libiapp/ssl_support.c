@@ -341,7 +341,7 @@ ssl_parse_options(const char *options)
 	    /* Special case.. hex specification */
 	    value = strtol(option + 2, NULL, 16);
 	} else {
-	    fatalf("Unknown SSL option '%s'", option);
+	    libcore_fatalf("Unknown SSL option '%s'", option);
 	    value = 0;		/* Keep GCC happy */
 	}
 	switch (mode) {
@@ -395,7 +395,7 @@ ssl_parse_flags(const char *flags)
 	    fl |= SSL_FLAG_VERIFY_CRL_ALL;
 #endif
 	else
-	    fatalf("Unknown ssl flag '%s'", flag);
+	    libcore_fatalf("Unknown ssl flag '%s'", flag);
 	flag = strtok(NULL, ":,");
     }
     safe_free(tmp);
@@ -415,17 +415,17 @@ ssl_initialize(void)
 	if (ssl_engine) {
 	    ENGINE *e;
 	    if (!(e = ENGINE_by_id(ssl_engine))) {
-		fatalf("Unable to find SSL engine '%s'\n", ssl_engine);
+		libcore_fatalf("Unable to find SSL engine '%s'\n", ssl_engine);
 	    }
 	    if (!ENGINE_set_default(e, ENGINE_METHOD_ALL)) {
 		int ssl_error = ERR_get_error();
-		fatalf("Failed to initialise SSL engine: %s\n",
+		libcore_fatalf("Failed to initialise SSL engine: %s\n",
 		    ERR_error_string(ssl_error, NULL));
 	    }
 	}
 #else
 	if (ssl_engine) {
-	    fatalf("Your OpenSSL has no SSL engine support\n");
+	    libcore_fatalf("Your OpenSSL has no SSL engine support\n");
 	}
 #endif
     }
@@ -495,7 +495,7 @@ sslCreateServerContext(const char *certfile, const char *keyfile, int version, c
     sslContext = SSL_CTX_new(method);
     if (sslContext == NULL) {
 	ssl_error = ERR_get_error();
-	fatalf("Failed to allocate SSL context: %s\n",
+	libcore_fatalf("Failed to allocate SSL context: %s\n",
 	    ERR_error_string(ssl_error, NULL));
     }
     SSL_CTX_set_options(sslContext, ssl_parse_options(options));
@@ -514,7 +514,7 @@ sslCreateServerContext(const char *certfile, const char *keyfile, int version, c
 	debug(83, 5) ("Using chiper suite %s.\n", cipher);
 	if (!SSL_CTX_set_cipher_list(sslContext, cipher)) {
 	    ssl_error = ERR_get_error();
-	    fatalf("Failed to set SSL cipher suite '%s': %s\n",
+	    libcore_fatalf("Failed to set SSL cipher suite '%s': %s\n",
 		cipher, ERR_error_string(ssl_error, NULL));
 	}
     }
@@ -654,7 +654,7 @@ sslCreateClientContext(const char *certfile, const char *keyfile, int version, c
     sslContext = SSL_CTX_new(method);
     if (sslContext == NULL) {
 	ssl_error = ERR_get_error();
-	fatalf("Failed to allocate SSL context: %s\n",
+	libcore_fatalf("Failed to allocate SSL context: %s\n",
 	    ERR_error_string(ssl_error, NULL));
     }
     SSL_CTX_set_options(sslContext, ssl_parse_options(options));
@@ -663,7 +663,7 @@ sslCreateClientContext(const char *certfile, const char *keyfile, int version, c
 	debug(83, 5) ("Using chiper suite %s.\n", cipher);
 	if (!SSL_CTX_set_cipher_list(sslContext, cipher)) {
 	    ssl_error = ERR_get_error();
-	    fatalf("Failed to set SSL cipher suite '%s': %s\n",
+	    libcore_fatalf("Failed to set SSL cipher suite '%s': %s\n",
 		cipher, ERR_error_string(ssl_error, NULL));
 	}
     }
@@ -671,20 +671,20 @@ sslCreateClientContext(const char *certfile, const char *keyfile, int version, c
 	debug(83, 1) ("Using certificate in %s\n", certfile);
 	if (!SSL_CTX_use_certificate_chain_file(sslContext, certfile)) {
 	    ssl_error = ERR_get_error();
-	    fatalf("Failed to acquire SSL certificate '%s': %s\n",
+	    libcore_fatalf("Failed to acquire SSL certificate '%s': %s\n",
 		certfile, ERR_error_string(ssl_error, NULL));
 	}
 	debug(83, 1) ("Using private key in %s\n", keyfile);
 	ssl_ask_password(sslContext, keyfile);
 	if (!SSL_CTX_use_PrivateKey_file(sslContext, keyfile, SSL_FILETYPE_PEM)) {
 	    ssl_error = ERR_get_error();
-	    fatalf("Failed to acquire SSL private key '%s': %s\n",
+	    libcore_fatalf("Failed to acquire SSL private key '%s': %s\n",
 		keyfile, ERR_error_string(ssl_error, NULL));
 	}
 	debug(83, 5) ("Comparing private and public SSL keys.\n");
 	if (!SSL_CTX_check_private_key(sslContext)) {
 	    ssl_error = ERR_get_error();
-	    fatalf("SSL private key '%s' does not match public key '%s': %s\n",
+	    libcore_fatalf("SSL private key '%s' does not match public key '%s': %s\n",
 		certfile, keyfile, ERR_error_string(ssl_error, NULL));
 	}
     }

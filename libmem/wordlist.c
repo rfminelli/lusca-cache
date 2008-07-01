@@ -5,6 +5,7 @@
 
 #include "../include/util.h"
 #include "../include/Stack.h"
+#include "../libcore/varargs.h" /* required for tools.h */
 #include "../libcore/tools.h"
 #include "../libcore/gb.h"
 #include "../libmem/MemPool.h"
