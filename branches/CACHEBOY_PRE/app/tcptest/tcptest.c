@@ -6,6 +6,7 @@
 #include <string.h>
 #include <math.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <sys/errno.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -31,6 +32,7 @@
 #include "libiapp/globals.h"
 #include "libiapp/comm.h"
 #include "libiapp/pconn_hist.h"
+#include "libiapp/signals.h"
 #include "libiapp/mainloop.h"
 
 #include "tunnel.h"
@@ -63,6 +65,7 @@ main(int argc, const char *argv[])
 	struct sockaddr_in s;
 
 	iapp_init();
+	squid_signal(SIGPIPE, SIG_IGN, SA_RESTART);
 
 	_db_init("ALL,1");
 	_db_set_stderr_debug(1);
