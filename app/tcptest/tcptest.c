@@ -47,7 +47,7 @@ acceptSock(int sfd, void *d)
 	debug(1, 1) ("acceptSock: FD %d: new socket!\n", fd);
 
 	/* Create tunnel */
-	safe_inet_addr("192.168.1.28", &dest.sin_addr);
+	safe_inet_addr("192.168.1.31", &dest.sin_addr);
 	dest.sin_port = htons(80);
 	dest.sin_family = AF_INET;
 	dest.sin_len = sizeof(struct sockaddr_in);
