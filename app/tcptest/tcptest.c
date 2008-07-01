@@ -33,18 +33,24 @@
 #include "libiapp/pconn_hist.h"
 #include "libiapp/mainloop.h"
 
+#include "tunnel.h"
+
 static void
 acceptSock(int sfd, void *d)
 {
 	int fd;
-	struct sockaddr_in peer, me;
-
+	struct sockaddr_in peer, me, dest;
 
 	bzero(&me, sizeof(me));
 	bzero(&peer, sizeof(peer));
 	fd = comm_accept(sfd, &peer, &me);
 	debug(1, 1) ("acceptSock: FD %d: new socket!\n", fd);
-	printf("foo! %d\n", fd);
+
+	/* Create tunnel */
+	safe_inet_addr("192.168.1.28", &dest.sin_addr);
+	dest.sin_port = htons(80);
+	sslStart(fd, dest);
+	/* register for another pass */
 	commSetSelect(sfd, COMM_SELECT_READ, acceptSock, NULL, 0);
 }
 
@@ -56,10 +62,11 @@ main(int argc, const char *argv[])
 
 	iapp_init();
 
+	_db_init("ALL,99");
+	_db_set_stderr_debug(99);
+
 	bzero(&s.sin_addr, sizeof(s.sin_addr));
 	s.sin_port = htons(8080);
-
-	debugLevels[1] = 99;
 
 	fd = comm_open(SOCK_STREAM, IPPROTO_TCP, s.sin_addr, 8080, COMM_NONBLOCKING, "HTTP Socket");
 	printf("new fd: %d\n", fd);
@@ -70,7 +77,7 @@ main(int argc, const char *argv[])
 	printf("beginning!\n");
 	while (1) {
 		printf("runonce!!\n");
-		iapp_runonce(1000);
+		iapp_runonce(60000);
 	}
 
 	exit(0);
