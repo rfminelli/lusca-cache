@@ -52,12 +52,6 @@ else
 PINGER = 
 endif
 
-if ENABLE_SSL
-SSLSOURCE = ssl_support.c
-else
-SSLSOURCE = 
-endif
-
 if ENABLE_WIN32SPECIFIC
 WIN32SOURCE = win32.c
 else
@@ -108,8 +102,6 @@ EXTRA_squid_SOURCES = \
 	snmp_core.c \
 	snmp_agent.c \
 	unlinkd.c \
-	ssl_support.c \
-	ssl_support.h \
 	comm_epoll.c \
 	comm_poll.c \
 	comm_select.c \
@@ -210,7 +202,6 @@ squid_SOURCES = \
 	$(SNMPSOURCE) \
 	squid.h \
 	ssl.c \
-	$(SSLSOURCE) \
 	stat.c \
 	statIapp.c \
 	StatHist.c \

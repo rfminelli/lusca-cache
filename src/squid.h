@@ -369,10 +369,6 @@ struct rusage {
 
 #include "squid_md5.h"
 
-#if USE_SSL
-#include "ssl_support.h"
-#endif
-
 #include "Stack.h"
 
 /* Needed for poll() on Linux at least */
@@ -421,6 +417,7 @@ struct rusage {
 #include "../libiapp/iapp_ssl.h"
 #include "../libiapp/signals.h"
 #include "../libiapp/iapp_ssl.h"
+#include "../libiapp/ssl_support.h"
 #include "../libiapp/comm.h"
 #include "../libiapp/globals.h"
 #include "../libiapp/pconn_hist.h"

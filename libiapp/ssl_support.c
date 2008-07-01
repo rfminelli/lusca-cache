@@ -33,7 +33,35 @@
  *
  */
 
-#include "squid.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <netinet/in.h>
+
+#include "../include/config.h"
+#include "../include/Array.h"
+#include "../include/Stack.h"
+#include "../include/util.h"
+#include "../libcore/gb.h"
+#include "../libcore/kb.h"
+#include "../libcore/varargs.h"
+#include "../libcore/tools.h"
+#include "../libcore/debug.h"
+#include "../libmem/MemPool.h"
+#include "../libmem/MemBufs.h"
+#include "../libmem/MemBuf.h"
+#include "../libmem/MemStr.h"
+#include "../libcb/cbdata.h"
+
+#include "event.h"
+#include "iapp_ssl.h"
+#include "ssl_support.h"
+#include "comm.h"
+#include "mainloop.h"
+
+const char * ssl_password = NULL;
+const char * ssl_engine = NULL;
+int ssl_unclean_shutdown = 1;
 
 /* MS VisualStudio Projects are monolithic, so we need the following
  * #if to include the code into the compile process only when we are
@@ -46,7 +74,7 @@ ssl_ask_password_cb(char *buf, int size, int rwflag, void *userdata)
     FILE *in;
     int len = 0;
     char cmdline[1024];
-    snprintf(cmdline, sizeof(cmdline), "\"%s\" \"%s\"", Config.Program.ssl_password, (const char *) userdata);
+    snprintf(cmdline, sizeof(cmdline), "\"%s\" \"%s\"", ssl_password, (const char *) userdata);
     in = popen(cmdline, "r");
     if (fgets(buf, size, in))
 	len = strlen(buf);
@@ -60,7 +88,7 @@ ssl_ask_password_cb(char *buf, int size, int rwflag, void *userdata)
 static void
 ssl_ask_password(SSL_CTX * context, const char *prompt)
 {
-    if (Config.Program.ssl_password) {
+    if (ssl_password) {
 	SSL_CTX_set_default_passwd_cb(context, ssl_ask_password_cb);
 	SSL_CTX_set_default_passwd_cb_userdata(context, (void *) prompt);
     }
@@ -98,11 +126,14 @@ ssl_temp_rsa_cb(SSL * ssl, int export, int keylen)
 	debug(83, 1) ("ssl_temp_rsa_cb: Failed to generate key %d\n", keylen);
 	return NULL;
     }
+#if NOTYET
+    /* XXX no way to expose debug_log yet! -adrian */
     if (newkey) {
 	if (do_debug(83, 5))
 	    PEM_write_RSAPrivateKey(debug_log, rsa, NULL, NULL, 0, NULL, NULL);
 	debug(83, 1) ("Generated ephemeral RSA key of length %d\n", keylen);
     }
+#endif
     return rsa;
 }
 
@@ -381,10 +412,10 @@ ssl_initialize(void)
 	SSL_load_error_strings();
 	SSL_library_init();
 #ifdef HAVE_OPENSSL_ENGINE_H
-	if (Config.SSL.ssl_engine) {
+	if (ssl_engine) {
 	    ENGINE *e;
-	    if (!(e = ENGINE_by_id(Config.SSL.ssl_engine))) {
-		fatalf("Unable to find SSL engine '%s'\n", Config.SSL.ssl_engine);
+	    if (!(e = ENGINE_by_id(ssl_engine))) {
+		fatalf("Unable to find SSL engine '%s'\n", ssl_engine);
 	    }
 	    if (!ENGINE_set_default(e, ENGINE_METHOD_ALL)) {
 		int ssl_error = ERR_get_error();
@@ -393,7 +424,7 @@ ssl_initialize(void)
 	    }
 	}
 #else
-	if (Config.SSL.ssl_engine) {
+	if (ssl_engine) {
 	    fatalf("Your OpenSSL has no SSL engine support\n");
 	}
 #endif
@@ -475,7 +506,7 @@ sslCreateServerContext(const char *certfile, const char *keyfile, int version, c
     if (fl & SSL_FLAG_NO_SESSION_REUSE) {
 	SSL_CTX_set_session_cache_mode(sslContext, SSL_SESS_CACHE_OFF);
     }
-    if (Config.SSL.unclean_shutdown) {
+    if (ssl_unclean_shutdown) {
 	debug(83, 5) ("Enabling quiet SSL shutdowns (RFC violation).\n");
 	SSL_CTX_set_quiet_shutdown(sslContext, 1);
     }

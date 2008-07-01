@@ -25,6 +25,12 @@ if USE_EVENTPORTS
 COMMLOOP_SOURCE = comm_eventports.c
 endif
 
+if ENABLE_SSL
+SSLSOURCE = ssl_support.c
+else
+SSLSOURCE =
+endif
+
 libiapp_a_SOURCES = \
 	fd.c \
 	comm.c \
@@ -34,7 +40,8 @@ libiapp_a_SOURCES = \
 	pconn_hist.c \
 	signals.c \
 	mainloop.c \
-	$(COMMLOOP_SOURCE)
+	$(COMMLOOP_SOURCE) \
+	$(SSLSOURCE)
 
 noinst_LIBRARIES = \
 	libiapp.a
