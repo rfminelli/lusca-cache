@@ -44,10 +44,10 @@ acceptSock(int sfd, void *d)
 	bzero(&me, sizeof(me));
 	bzero(&peer, sizeof(peer));
 	fd = comm_accept(sfd, &peer, &me);
-	debug(1, 1) ("acceptSock: FD %d: new socket!\n", fd);
+	debug(1, 2) ("acceptSock: FD %d: new socket!\n", fd);
 
 	/* Create tunnel */
-	safe_inet_addr("192.168.1.31", &dest.sin_addr);
+	safe_inet_addr("192.168.1.25", &dest.sin_addr);
 	dest.sin_port = htons(80);
 	dest.sin_family = AF_INET;
 	dest.sin_len = sizeof(struct sockaddr_in);
@@ -64,21 +64,18 @@ main(int argc, const char *argv[])
 
 	iapp_init();
 
-	_db_init("ALL,99");
-	_db_set_stderr_debug(99);
+	_db_init("ALL,1");
+	_db_set_stderr_debug(1);
 
 	bzero(&s.sin_addr, sizeof(s.sin_addr));
 	s.sin_port = htons(8080);
 
 	fd = comm_open(SOCK_STREAM, IPPROTO_TCP, s.sin_addr, 8080, COMM_NONBLOCKING, "HTTP Socket");
-	printf("new fd: %d\n", fd);
 	assert(fd > 0);
 	comm_listen(fd);
 	commSetSelect(fd, COMM_SELECT_READ, acceptSock, NULL, 0);
 
-	printf("beginning!\n");
 	while (1) {
-		printf("runonce!!\n");
 		iapp_runonce(60000);
 	}
 
