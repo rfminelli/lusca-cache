@@ -366,6 +366,7 @@ sslConnectDone(int fd, int status, void *data)
 {
     SslStateData *sslState = data;
     if (status != COMM_OK) {
+	debug(26, 3) ("commConnectDone: %p: FD %d: failure! errno %d\n", sslState, fd, errno);
 	comm_close(fd);
 	comm_close(sslState->client.fd);
     } else {
@@ -393,8 +394,11 @@ sslConnectHandle(int fd, void *data)
 
     SslStateData *sslState = data;
 
+    debug(26, 3) ("sslConnectHandle: FD %d: %p: trying\n", fd, sslState);
     ret = comm_connect_addr(sslState->server.fd, &sslState->peer);
+    debug(26, 3) ("sslConnectHandle: FD %d: %p: comm_connect_addr returned %d\n", fd, sslState, ret);
     if (ret == COMM_INPROGRESS) {
+        debug(26, 3) ("sslConnectHandle: FD %d: %p: re-scheduling for connect completion\n", fd, sslState);
     	commSetSelect(sslState->server.fd, COMM_SELECT_WRITE, sslConnectHandle, sslState, 0);
 	return;
     }
