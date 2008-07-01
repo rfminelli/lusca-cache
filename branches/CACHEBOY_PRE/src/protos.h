@@ -941,6 +941,7 @@ fatalf(const char *fmt,...) PRINTF_FORMAT_ARG1;
 #else
 extern void fatalf();
 #endif
+extern void fatalvf(const char *fmt, va_list args); 
 extern void fatal_dump(const char *message);
 extern void sigusr2_handle(int sig);
 extern void sig_child(int sig);

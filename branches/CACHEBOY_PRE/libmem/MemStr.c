@@ -44,8 +44,8 @@
 #include "../include/Stack.h"
 #include "../libcore/valgrind.h"
 #include "../libcore/gb.h"
+#include "../libcore/varargs.h" /* required for tools.h */
 #include "../libcore/tools.h"
-#include "../libcore/varargs.h"
 #include "../libcore/debug.h"
 
 #include "MemPool.h"

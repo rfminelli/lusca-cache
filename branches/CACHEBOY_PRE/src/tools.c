@@ -66,7 +66,6 @@ and report the trace back to squid-bugs@squid-cache.org.\n\
 Thanks!\n"
 
 static void fatal_common(const char *);
-static void fatalvf(const char *fmt, va_list args);
 static void mail_warranty(void);
 #if MEM_GEN_TRACE
 extern void log_trace_done();
@@ -434,7 +433,7 @@ fatalf(va_alist)
 
 
 /* used by fatalf */
-static void
+void
 fatalvf(const char *fmt, va_list args)
 {
     static char fatal_str[BUFSIZ];

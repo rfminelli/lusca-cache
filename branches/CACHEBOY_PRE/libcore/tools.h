@@ -17,4 +17,8 @@ extern time_t squid_curtime;    /* 0 */
 
 extern time_t getCurrentTime(void);
 
+extern void libcore_fatalf(const char *fmt, ...);
+typedef void FATALF_FUNC(const char *fmt, va_list args); 
+extern void libcore_set_fatalf(FATALF_FUNC *f);
+
 #endif
