@@ -65,6 +65,7 @@ typedef struct _dwrite_q dwrite_q;
 
 typedef void PF(int, void *);
 typedef void CWCB(int fd, char *, size_t size, int flag, void *data);
+typedef void CRCB(int fd, int size, int flag, int xerrno, void *data);
 typedef void CNCB(int fd, int status, void *);
 typedef int DEFER(int fd, void *data);
 typedef int READ_HANDLER(int, char *, int);
@@ -184,6 +185,15 @@ struct _fde {
         dwrite_q *write_q_tail;
         off_t offset;
     } disk;
+    struct {
+    	struct {
+		char *buf;
+		int size;
+		CRCB *cb;
+		void *cbdata;
+		int active;
+    	} read;
+    } comm;
     PF *read_handler;
     void *read_data;
     PF *write_handler;
@@ -303,6 +313,8 @@ extern void comm_write_header(int fd,
     void *handler_data,
     FREE *);
 extern void comm_write_mbuf_header(int fd, MemBuf mb, const char *header, size_t header_size, CWCB * handler, void *handler_data);
+extern void comm_read(int fd, char *buf, int size, CRCB *cb, void *data);
+extern int comm_read_cancel(int fd);
 extern void commCallCloseHandlers(int fd);
 extern int commSetTimeout(int fd, int, PF *, void *);
 extern void commSetDefer(int fd, DEFER * func, void *);
