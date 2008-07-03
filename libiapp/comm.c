@@ -1056,6 +1056,77 @@ commHandleWrite(int fd, void *data)
     }
 }
 
+static void
+commHandleRead(int fd, void *data)
+{
+	int ret;
+	CRCB *cb = fd_table[fd].comm.read.cb;
+	void *cbdata = fd_table[fd].comm.read.cbdata;
+
+	debug(5, 5) ("commHandleRead: FD %d\n", fd);
+	assert(fd_table[fd].flags.open);
+	assert(fd_table[fd].comm.read.active);
+
+	ret = FD_READ_METHOD(fd, fd_table[fd].comm.read.buf, fd_table[fd].comm.read.size);
+
+	fd_table[fd].comm.read.active = 0;
+	fd_table[fd].comm.read.buf = 0;
+	fd_table[fd].comm.read.size = 0;
+	fd_table[fd].comm.read.cb = NULL;
+	fd_table[fd].comm.read.cbdata = NULL;
+
+	if (ret < 0) {
+		cb(fd, ret, COMM_ERROR, errno, cbdata);
+	} else {
+		/* XXX there's no explicit EOF! So EOF is COMM_OK + 0 size data */
+		cb(fd, ret, COMM_OK, 0, cbdata);
+	}
+}
+
+/*
+ * Select a handler for read.
+ *
+ * The caller -must- ensure that the buffer / callback / callback data remain
+ * valid until the completion of the call -or- successful cancellation of
+ * the comm_read().
+ *
+ * Some APIs (eg POSIX AIO) do not guarantee operations can be cancelled -
+ * they may complete before cancellation occurs. In these cases, the operation
+ * may complete before or during the cancellation (and in particular, the buffer
+ * will be read into!) so a failed cancellation must turn into "wait for the
+ * now pending callback to fire before completing the shutdown process".
+ */
+void
+comm_read(int fd, char *buf, int size, CRCB *cb, void *cbdata)
+{
+	debug(5, 5) ("comm_read: FD %d, buf %p, size %d, cb %p, data %p\n", fd, buf, size, cb, cbdata);
+	assert(fd_table[fd].comm.read.active == 0);
+	assert(fd_table[fd].flags.open);
+
+	fd_table[fd].comm.read.buf = buf;
+	fd_table[fd].comm.read.size = size;
+	fd_table[fd].comm.read.cb = cb;
+	fd_table[fd].comm.read.cbdata = cbdata;
+	fd_table[fd].comm.read.active = 1;
+
+	commSetSelect(fd, COMM_SELECT_READ, commHandleRead, NULL, 0);
+}
+
+/*
+ * For now, just cancel it if its active; the operations aren't done asynchronous.
+ * This will change!
+ */
+int
+comm_read_cancel(int fd)
+{
+	debug(5, 5) ("comm_read_cancel: FD %d\n", fd);
+	if (! fd_table[fd].comm.read.active)
+		return -1;
+
+	fd_table[fd].comm.read.active = 0;
+	commSetSelect(fd, COMM_SELECT_READ, NULL, NULL, 0);
+	return 1;
+}
 
 
 /* Select for Writing on FD, until SIZE bytes are sent.  Call
