@@ -46,6 +46,8 @@
 #include <openssl/engine.h>
 #endif
 
+#if	USE_SSL
+
 SSL_CTX *sslCreateServerContext(const char *certfile, const char *keyfile, int version, const char *cipher, const char *options, const char *flags, const char *clientCA, const char *CAfile, const char *CApath, const char *CRLfile, const char *dhpath, const char *context);
 SSL_CTX *sslCreateClientContext(const char *certfile, const char *keyfile, int version, const char *cipher, const char *options, const char *flags, const char *CAfile, const char *CApath, const char *CRLfile);
 int ssl_read_method(int, char *, int);
@@ -69,5 +71,6 @@ extern const char * ssl_password;
 extern const char * ssl_engine;
 extern int ssl_unclean_shutdown;
 
+#endif
 
 #endif /* SQUID_SSL_SUPPORT_H */
