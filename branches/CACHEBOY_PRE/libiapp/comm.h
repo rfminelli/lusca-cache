@@ -313,8 +313,10 @@ extern void comm_write_header(int fd,
     void *handler_data,
     FREE *);
 extern void comm_write_mbuf_header(int fd, MemBuf mb, const char *header, size_t header_size, CWCB * handler, void *handler_data);
+/* comm_read / comm_read_cancel two functions are in testing and not to be used! */
 extern void comm_read(int fd, char *buf, int size, CRCB *cb, void *data);
 extern int comm_read_cancel(int fd);
+
 extern void commCallCloseHandlers(int fd);
 extern int commSetTimeout(int fd, int, PF *, void *);
 extern void commSetDefer(int fd, DEFER * func, void *);
