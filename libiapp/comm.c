@@ -1056,6 +1056,9 @@ commHandleWrite(int fd, void *data)
     }
 }
 
+/*
+ * XXX WARNING: This isn't to be used yet - its still under testing!
+ */
 static void
 commHandleRead(int fd, void *data)
 {
@@ -1095,6 +1098,8 @@ commHandleRead(int fd, void *data)
  * may complete before or during the cancellation (and in particular, the buffer
  * will be read into!) so a failed cancellation must turn into "wait for the
  * now pending callback to fire before completing the shutdown process".
+ *
+ * XXX WARNING: This isn't to be used yet - its still under testing!
  */
 void
 comm_read(int fd, char *buf, int size, CRCB *cb, void *cbdata)
@@ -1115,6 +1120,8 @@ comm_read(int fd, char *buf, int size, CRCB *cb, void *cbdata)
 /*
  * For now, just cancel it if its active; the operations aren't done asynchronous.
  * This will change!
+ *
+ * XXX WARNING: This isn't to be used yet - its still under testing!
  */
 int
 comm_read_cancel(int fd)
