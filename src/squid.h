@@ -423,6 +423,9 @@ struct rusage {
 #include "../libiapp/pconn_hist.h"
 #include "../libiapp/mainloop.h"
 
+#include "../libhelper/ipc.h"
+#include "../libhelper/helper.h"
+
 #include "defines.h"
 #include "enums.h"
 #include "typedefs.h"

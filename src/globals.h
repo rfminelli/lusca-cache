@@ -99,7 +99,6 @@ extern struct _acl_deny_info_list *DenyInfoList;	/* NULL */
 extern struct in_addr theOutICPAddr;
 extern struct in_addr theOutSNMPAddr;
 extern struct timeval squid_start;
-extern int reconfiguring;	/* 0 */
 extern int store_dirs_rebuilding;	/* 1 */
 extern int store_swap_size;	/* 0 */
 extern unsigned long store_mem_size;	/* 0 */

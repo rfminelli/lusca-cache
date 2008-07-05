@@ -441,7 +441,8 @@ comm_accept(int fd, struct sockaddr_in *pn, struct sockaddr_in *me)
 	*me = M;
     commSetCloseOnExec(sock);
     /* fdstat update */
-    fd_open(sock, FD_SOCKET, "HTTP Request");
+    fd_open(sock, FD_SOCKET, NULL);
+    fd_note_static(sock, "HTTP Request");
     F = &fd_table[sock];
     xstrncpy(F->ipaddr, xinet_ntoa(P.sin_addr), 16);
     F->remote_port = htons(P.sin_port);

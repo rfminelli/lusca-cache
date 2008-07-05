@@ -4,6 +4,7 @@
 #define MAXHTTPPORTS                    128
 
 extern int shutting_down;
+extern int reconfiguring;
 extern int opt_reuseaddr;
 extern int iapp_tcpRcvBufSz;
 extern const char * iapp_useAcceptFilter;

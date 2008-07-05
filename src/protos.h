@@ -1052,17 +1052,6 @@ extern void htcpSocketClose(void);
 
 /* String */
 
-/*
- * ipc.c
- */
-extern pid_t ipcCreate(int type,
-    const char *prog,
-    const char *const args[],
-    const char *name,
-    int *rfd,
-    int *wfd,
-    void **hIpc);
-
 /* CacheDigest */
 extern CacheDigest *cacheDigestCreate(int capacity, int bpe);
 extern void cacheDigestDestroy(CacheDigest * cd);
@@ -1121,25 +1110,8 @@ extern void delayUnregisterDelayIdPtr(delay_id * loc);
 #endif
 
 /* helper.c */
-extern void helperInitMem(void);
-extern void helperOpenServers(helper * hlp);
-extern void helperStatefulOpenServers(statefulhelper * hlp);
-extern void helperSubmit(helper * hlp, const char *buf, HLPCB * callback, void *data);
-extern void helperStatefulSubmit(statefulhelper * hlp, const char *buf, HLPSCB * callback, void *data, helper_stateful_server * lastserver);
 extern void helperStats(StoreEntry * sentry, helper * hlp);
 extern void helperStatefulStats(StoreEntry * sentry, statefulhelper * hlp);
-extern void helperShutdown(helper * hlp);
-extern void helperStatefulShutdown(statefulhelper * hlp);
-extern helper *helperCreate(const char *);
-extern statefulhelper *helperStatefulCreate(const char *);
-extern void helperFree(helper *);
-extern void helperStatefulFree(statefulhelper *);
-extern void helperStatefulReset(helper_stateful_server * srv);
-extern void helperStatefulReleaseServer(helper_stateful_server * srv);
-extern void *helperStatefulServerGetData(helper_stateful_server * srv);
-extern helper_stateful_server *helperStatefulGetServer(statefulhelper *);
-
-
 
 #if USE_LEAKFINDER
 extern void leakInit(void);

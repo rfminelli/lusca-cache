@@ -33,9 +33,43 @@
  *
  */
 
-#include "squid.h"
+#include "../include/config.h"
 
-#define HELPER_MAX_ARGS 64
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <math.h>
+#include <fcntl.h>
+#include <sys/errno.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#include "../include/Array.h"
+#include "../include/Stack.h"
+#include "../include/util.h"
+#include "../libcore/valgrind.h"
+#include "../libcore/varargs.h"
+#include "../libcore/debug.h"
+#include "../libcore/kb.h"
+#include "../libcore/gb.h"
+#include "../libcore/tools.h"
+#include "../libcore/dlink.h"
+#include "../libmem/wordlist.h"
+
+#include "../libmem/MemPool.h"
+#include "../libmem/MemBufs.h"
+#include "../libmem/MemBuf.h"
+
+#include "../libcb/cbdata.h"
+
+#include "../libiapp/iapp_ssl.h"
+#include "../libiapp/globals.h"
+#include "../libiapp/comm.h"
+
+#include "ipc.h"
+#include "helper.h"
 
 static PF helperHandleRead;
 static PF helperStatefulHandleRead;
@@ -107,6 +141,7 @@ helperOpenServers(helper * hlp)
 	    progname,
 	    args,
 	    shortname,
+	    0,		/* XXX This should be sleep_after_fork */
 	    &rfd,
 	    &wfd,
 	    &hIpc);
@@ -193,6 +228,7 @@ helperStatefulOpenServers(statefulhelper * hlp)
 	    progname,
 	    args,
 	    shortname,
+	    0,		/* XXX this should be sleep_after_fork */
 	    &rfd,
 	    &wfd,
 	    &hIpc);
@@ -355,108 +391,6 @@ helperStatefulServerGetData(helper_stateful_server * srv)
 /* return a pointer to the stateful routines data area */
 {
     return srv->data;
-}
-
-void
-helperStats(StoreEntry * sentry, helper * hlp)
-{
-    dlink_node *link;
-    storeAppendPrintf(sentry, "program: %s\n",
-	hlp->cmdline->key);
-    storeAppendPrintf(sentry, "number running: %d of %d\n",
-	hlp->n_running, hlp->n_to_start);
-    storeAppendPrintf(sentry, "requests sent: %d\n",
-	hlp->stats.requests);
-    storeAppendPrintf(sentry, "replies received: %d\n",
-	hlp->stats.replies);
-    storeAppendPrintf(sentry, "queue length: %d\n",
-	hlp->stats.queue_size);
-    storeAppendPrintf(sentry, "avg service time: %.2f msec\n",
-	(double) hlp->stats.avg_svc_time / 1000.0);
-    storeAppendPrintf(sentry, "\n");
-    storeAppendPrintf(sentry, "%7s\t%7s\t%7s\t%11s\t%9s\t%s\t%7s\t%7s\t%7s\n",
-	"#",
-	"FD",
-	"PID",
-	"# Requests",
-	"# Pending",
-	"Flags",
-	"Time",
-	"Offset",
-	"Request");
-    for (link = hlp->servers.head; link; link = link->next) {
-	helper_server *srv = link->data;
-	double tt = srv->requests[0] ? 0.001 *
-	tvSubMsec(srv->requests[0]->dispatch_time, current_time) : 0.0;
-	storeAppendPrintf(sentry, "%7d\t%7d\t%7d\t%11d\t%9d\t%c%c%c\t%7.3f\t%7d\t%s\n",
-	    srv->index + 1,
-	    srv->rfd,
-	    srv->pid,
-	    srv->stats.uses,
-	    srv->stats.pending,
-	    srv->stats.pending ? 'B' : ' ',
-	    srv->flags.closing ? 'C' : ' ',
-	    srv->flags.shutdown ? 'S' : ' ',
-	    tt < 0.0 ? 0.0 : tt,
-	    srv->roffset,
-	    srv->requests[0] ? log_quote(srv->requests[0]->buf) : "(none)");
-    }
-    storeAppendPrintf(sentry, "\nFlags key:\n\n");
-    storeAppendPrintf(sentry, "   B = BUSY\n");
-    storeAppendPrintf(sentry, "   C = CLOSING\n");
-    storeAppendPrintf(sentry, "   S = SHUTDOWN\n");
-}
-
-void
-helperStatefulStats(StoreEntry * sentry, statefulhelper * hlp)
-{
-    helper_stateful_server *srv;
-    dlink_node *link;
-    double tt;
-    storeAppendPrintf(sentry, "program: %s\n",
-	hlp->cmdline->key);
-    storeAppendPrintf(sentry, "number running: %d of %d\n",
-	hlp->n_running, hlp->n_to_start);
-    storeAppendPrintf(sentry, "requests sent: %d\n",
-	hlp->stats.requests);
-    storeAppendPrintf(sentry, "replies received: %d\n",
-	hlp->stats.replies);
-    storeAppendPrintf(sentry, "queue length: %d\n",
-	hlp->stats.queue_size);
-    storeAppendPrintf(sentry, "avg service time: %.2f msec\n",
-	(double) hlp->stats.avg_svc_time / 1000.0);
-    storeAppendPrintf(sentry, "\n");
-    storeAppendPrintf(sentry, "%7s\t%7s\t%7s\t%11s\t%s\t%7s\t%7s\t%7s\n",
-	"#",
-	"FD",
-	"PID",
-	"# Requests",
-	"Flags",
-	"Time",
-	"Offset",
-	"Request");
-    for (link = hlp->servers.head; link; link = link->next) {
-	srv = link->data;
-	tt = 0.001 * tvSubMsec(srv->dispatch_time,
-	    srv->flags.busy ? current_time : srv->answer_time);
-	storeAppendPrintf(sentry, "%7d\t%7d\t%7d\t%11d\t%c%c%c%c\t%7.3f\t%7d\t%s\n",
-	    srv->index + 1,
-	    srv->rfd,
-	    srv->pid,
-	    srv->stats.uses,
-	    srv->flags.busy ? 'B' : ' ',
-	    srv->flags.closing ? 'C' : ' ',
-	    srv->flags.reserved ? 'R' : ' ',
-	    srv->flags.shutdown ? 'S' : ' ',
-	    tt < 0.0 ? 0.0 : tt,
-	    srv->offset,
-	    srv->request ? log_quote(srv->request->buf) : "(none)");
-    }
-    storeAppendPrintf(sentry, "\nFlags key:\n\n");
-    storeAppendPrintf(sentry, "   B = BUSY\n");
-    storeAppendPrintf(sentry, "   C = CLOSING\n");
-    storeAppendPrintf(sentry, "   R = RESERVED or DEFERRED\n");
-    storeAppendPrintf(sentry, "   S = SHUTDOWN\n");
 }
 
 void

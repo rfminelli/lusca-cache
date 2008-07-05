@@ -23,6 +23,8 @@ int _db_level;
 
 static int opt_debug_stderr = -1;
 
+char * _debug_options = NULL;
+
 #define	MAX_DEBUG_CALLBACKS	16
 
 static struct {
@@ -195,17 +197,21 @@ void
 _db_init(const char *options)
 {
     int i;
-    char *p = NULL;
     char *s = NULL;
+    char *p;
 
     for (i = 0; i < MAX_DEBUG_SECTIONS; i++)
 	debugLevels[i] = -1;
 
+    if (_debug_options)
+        xfree(_debug_options);
+    _debug_options = NULL;
     if (options) {
-	p = xstrdup(options);
+	_debug_options = xstrdup(options);
+	p = xstrdup(options);	/* XXX need this copy so strtok() can be done */
 	for (s = strtok(p, w_space); s; s = strtok(NULL, w_space))
 	    debugArg(s);
-	xfree(p);
+        xfree(p);
     }
 }
 
