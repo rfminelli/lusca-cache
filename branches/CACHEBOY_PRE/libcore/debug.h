@@ -5,6 +5,7 @@
 
 extern int debugLevels[MAX_DEBUG_SECTIONS];
 extern int _db_level;
+extern char * _debug_options;
 
 #define do_debug(SECTION, LEVEL) \
     ((_db_level = (LEVEL)) <= debugLevels[SECTION])
@@ -35,5 +36,6 @@ extern void _db_register_handler(DBG_MSG *, int do_timestamp);
 extern void _db_unregister_all(void);
 extern void _db_set_stderr_debug(int value);
 extern int _db_stderr_debug_opt(void);
+
 
 #endif /* __LIBCORE_DEBUG_H__ */

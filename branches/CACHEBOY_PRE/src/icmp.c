@@ -194,6 +194,7 @@ icmpOpen(void)
 	Config.Program.pinger,
 	args,
 	"Pinger Socket",
+	Config.sleep_after_fork,
 	&rfd,
 	&wfd,
 	&hIpc);

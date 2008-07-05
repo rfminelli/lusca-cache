@@ -33,7 +33,40 @@
  *
  */
 
-#include "squid.h"
+#include "../include/config.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <math.h>
+#include <fcntl.h>
+#include <sys/errno.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#include "../include/Array.h"
+#include "../include/Stack.h"
+#include "../include/util.h"
+#include "../libcore/valgrind.h"
+#include "../libcore/varargs.h"
+#include "../libcore/debug.h"
+#include "../libcore/kb.h"
+#include "../libcore/gb.h"
+#include "../libcore/tools.h"
+
+#include "../libmem/MemPool.h"
+#include "../libmem/MemBufs.h"
+#include "../libmem/MemBuf.h"
+
+#include "../libcb/cbdata.h"
+
+#include "../libiapp/iapp_ssl.h"
+#include "../libiapp/globals.h"
+#include "../libiapp/comm.h"
+
+#include "ipc.h"
 
 static const char *hello_string = "hi there\n";
 #define HELLO_BUF_SZ 32
@@ -56,7 +89,7 @@ ipcCloseAllFD(int prfd, int pwfd, int crfd, int cwfd)
 }
 
 pid_t
-ipcCreate(int type, const char *prog, const char *const args[], const char *name, int *rfd, int *wfd, void **hIpc)
+ipcCreate(int type, const char *prog, const char *const args[], const char *name, int sleep_after_fork, int *rfd, int *wfd, void **hIpc)
 {
     pid_t pid;
     struct sockaddr_in CS;
@@ -234,8 +267,8 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	    *wfd = pwfd;
 	fd_table[prfd].flags.ipc = 1;
 	fd_table[pwfd].flags.ipc = 1;
-	if (Config.sleep_after_fork)
-	    xusleep(Config.sleep_after_fork);
+	if (sleep_after_fork)
+	    xusleep(sleep_after_fork);
 	return pid;
     }
     /* child */
@@ -274,9 +307,11 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	}
     }
 #if HAVE_PUTENV
-    env_str = xcalloc((tmp_s = strlen(Config.debugOptions) + 32), 1);
-    snprintf(env_str, tmp_s, "SQUID_DEBUG=%s", Config.debugOptions);
-    putenv(env_str);
+    if (_debug_options) {
+        env_str = xcalloc((tmp_s = strlen(_debug_options) + 32), 1);
+        snprintf(env_str, tmp_s, "SQUID_DEBUG=%s", _debug_options);
+        putenv(env_str);
+    }
 #endif
     /*
      * This double-dup stuff avoids problems when one of 
@@ -290,11 +325,17 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
     close(x);
     t1 = dup(crfd);
     t2 = dup(cwfd);
+#if NOTYET
     t3 = dup(fileno(debug_log));
+#endif
+    t3 = dup(fileno(stderr));
     assert(t1 > 2 && t2 > 2 && t3 > 2);
     close(crfd);
     close(cwfd);
+#if NOTYET
     close(fileno(debug_log));
+#endif
+    close(fileno(stderr));
     dup2(t1, 0);
     dup2(t2, 1);
     dup2(t3, 2);
@@ -310,7 +351,15 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
     setsid();
 #endif
     execvp(prog, (char *const *) args);
+#if NOTYET
     debug_log = fdopen(2, "a+");
+#endif
+
+    /*
+     * XXX this bit is slightly annoying - the debug() code in libcore/ doesn't
+     * XXX necessarily log to the debug logfile. This really should be looked at
+     * XXX when the debugging / debuglog code is sorted out.
+     */
     debug(54, 0) ("ipcCreate: %s: %s\n", prog, xstrerror());
     _exit(1);
     return 0;

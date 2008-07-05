@@ -112,8 +112,6 @@
 #define DIRECT_MAYBE 2
 #define DIRECT_YES   3
 
-#define REDIRECT_AV_FACTOR 1000
-
 #define REDIRECT_NONE 0
 #define REDIRECT_PENDING 1
 #define REDIRECT_DONE 2
@@ -171,31 +169,6 @@
 #define STORE_META_OK     0x03
 #define STORE_META_DIRTY  0x04
 #define STORE_META_BAD    0x05
-
-#define IPC_NONE 0
-#define IPC_TCP_SOCKET 1
-#define IPC_UDP_SOCKET 2
-#define IPC_FIFO 3
-#define IPC_UNIX_STREAM 4
-#define IPC_UNIX_DGRAM 5
-
-#if HAVE_SOCKETPAIR && defined (AF_UNIX)
-#define IPC_STREAM IPC_UNIX_STREAM
-#else
-#define IPC_STREAM IPC_TCP_SOCKET
-#endif
-
-/*
- * Do NOT use IPC_UNIX_DGRAM here because you can't
- * send() more than 4096 bytes on a socketpair() socket
- * at least on FreeBSD
- */
-#if HAVE_SOCKETPAIR && defined (AF_UNIX) && SUPPORTS_LARGE_AF_UNIX_DGRAM
-#define IPC_DGRAM IPC_UNIX_DGRAM
-#else
-#define IPC_DGRAM IPC_UDP_SOCKET
-#endif
-
 
 #define STORE_META_KEY STORE_META_KEY_MD5
 

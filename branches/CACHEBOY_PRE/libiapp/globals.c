@@ -3,6 +3,7 @@
 #include "globals.h"
 
 int shutting_down = 0;
+int reconfiguring = 0;
 int opt_reuseaddr = 1;
 int iapp_tcpRcvBufSz = 0;
 int iapp_incomingRate;
