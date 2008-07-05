@@ -3306,6 +3306,7 @@ AC_OUTPUT([\
 	Makefile \
 	app/Makefile \
 	app/tcptest/Makefile \
+	libhelper/Makefile \
 	libhttp/Makefile \
 	libiapp/Makefile \
 	libstat/Makefile \
