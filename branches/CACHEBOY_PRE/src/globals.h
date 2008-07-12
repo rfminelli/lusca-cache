@@ -87,7 +87,6 @@ extern int opt_udp_hit_obj;	/* 0 */
 extern int opt_create_swap_dirs;	/* 0 */
 extern int opt_store_doublecheck;	/* 0 */
 extern int syslog_enable;	/* 0 */
-extern int DnsSocket;		/* -1 */
 #ifdef SQUID_SNMP
 extern int theInSnmpConnection;	/* -1 */
 extern int theOutSnmpConnection;	/* -1 */

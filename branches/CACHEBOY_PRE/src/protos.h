@@ -154,16 +154,13 @@ extern void xassert(const char *, const char *, int);
 /* packs, then prints an object using debug() */
 extern void debugObj(int section, int level, const char *label, void *obj, ObjPackMethod pm);
 
-/* dns.s */
+/* dns.c */
 extern void dnsShutdown(void);
 extern void dnsInit(void);
 extern void dnsSubmit(const char *lookup, HLPCB * callback, void *data);
 
 /* dns_internal.c */
-extern void idnsInit(void);
-extern void idnsShutdown(void);
-extern void idnsALookup(const char *, IDNSCB *, void *);
-extern void idnsPTRLookup(const struct in_addr, IDNSCB *, void *);
+extern void idnsInternalInit(void);
 
 /* event.c */
 extern void eventLocalInit(void);
@@ -1040,7 +1037,6 @@ char *strwordtok(char *buf, char **t);
 void strwordquote(MemBuf * mb, const char *str);
 
 void setUmask(mode_t mask);
-int xusleep(unsigned int usec);
 void keepCapabilities(void);
 
 #if USE_HTCP

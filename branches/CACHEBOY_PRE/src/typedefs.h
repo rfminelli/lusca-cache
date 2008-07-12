@@ -228,7 +228,6 @@ typedef void ERCB(int fd, void *, size_t);
 typedef void OBJH(StoreEntry *);
 typedef void STVLDCB(void *, int, int);
 typedef void HLPCMDOPTS(int *argc, char **argv);
-typedef void IDNSCB(void *, rfc1035_rr *, int, const char *);
 
 typedef void STINIT(SwapDir *);
 typedef void STCHECKCONFIG(SwapDir *);

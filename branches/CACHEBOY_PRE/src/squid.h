@@ -426,6 +426,14 @@ struct rusage {
 #include "../libhelper/ipc.h"
 #include "../libhelper/helper.h"
 
+#include "../libsqdns/dns.h"
+
+#if USE_DNSSERVERS
+#include "../libsqdns/dns_external.h"
+#else
+#include "../libsqdns/dns_internal.h"
+#endif
+
 #include "defines.h"
 #include "enums.h"
 #include "typedefs.h"
