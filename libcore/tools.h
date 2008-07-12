@@ -21,4 +21,7 @@ extern void libcore_fatalf(const char *fmt, ...);
 typedef void FATALF_FUNC(const char *fmt, va_list args); 
 extern void libcore_set_fatalf(FATALF_FUNC *f);
 
+extern int xusleep(unsigned int usec);
+
+
 #endif
