@@ -45,13 +45,17 @@ acceptSock(int sfd, void *d)
 	int fd;
 	struct sockaddr_in peer, me;
 
-	bzero(&me, sizeof(me));
-	bzero(&peer, sizeof(peer));
-	fd = comm_accept(sfd, &peer, &me);
-	debug(1, 2) ("acceptSock: FD %d: new socket!\n", fd);
+	do {
+		bzero(&me, sizeof(me));
+		bzero(&peer, sizeof(peer));
+		fd = comm_accept(sfd, &peer, &me);
+		if (fd < 0)
+			break;
+		debug(1, 2) ("acceptSock: FD %d: new socket!\n", fd);
 
-	/* Create tunnel */
-	sslStart(fd, dest);
+		/* Create tunnel */
+		sslStart(fd, dest);
+	} while (1);
 	/* register for another pass */
 	commSetSelect(sfd, COMM_SELECT_READ, acceptSock, NULL, 0);
 }
