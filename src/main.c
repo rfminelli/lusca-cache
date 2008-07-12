@@ -436,7 +436,9 @@ mainReconfigure(void)
 #if USE_DNSSERVERS
     dnsInit();
 #else
+    idnsConfigure(Config.Addrs.udp_incoming, Config.Addrs.udp_outgoing, Config.onoff.ignore_unknown_nameservers, Config.Timeout.idns_retransmit, Config.Timeout.idns_query, Config.onoff.res_defnames);
     idnsInit();
+    idnsInternalInit();
 #endif
     redirectInit();
     storeurlInit();
@@ -599,7 +601,9 @@ mainInitialize(void)
 #if USE_DNSSERVERS
     dnsInit();
 #else
+    idnsConfigure(Config.Addrs.udp_incoming, Config.Addrs.udp_outgoing, Config.onoff.ignore_unknown_nameservers, Config.Timeout.idns_retransmit, Config.Timeout.idns_query, Config.onoff.res_defnames);
     idnsInit();
+    idnsInternalInit();
 #endif
     redirectInit();
     storeurlInit();
