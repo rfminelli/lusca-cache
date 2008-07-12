@@ -41,6 +41,7 @@
 #include <string.h>
 #include <math.h>
 #include <fcntl.h>
+#include <ctype.h>
 #include <sys/errno.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -607,7 +608,7 @@ helperServerFree(int fd, void *data)
 	if (hlp->n_active <= hlp->n_to_start / 2) {
 	    debug(84, 0) ("Too few %s processes are running\n", hlp->id_name);
 	    if (hlp->last_restart > squid_curtime - 30)
-		fatalf("The %s helpers are crashing too rapidly, need help!\n", hlp->id_name);
+		libcore_fatalf("The %s helpers are crashing too rapidly, need help!\n", hlp->id_name);
 	    debug(84, 0) ("Starting new helpers\n");
 	    helperOpenServers(hlp);
 	}
@@ -647,7 +648,7 @@ helperStatefulServerFree(int fd, void *data)
 	if (hlp->n_active <= hlp->n_to_start / 2) {
 	    debug(84, 0) ("Too few %s processes are running\n", hlp->id_name);
 	    if (hlp->last_restart > squid_curtime - 30)
-		fatalf("The %s helpers are crashing too rapidly, need help!\n", hlp->id_name);
+		libcore_fatalf("The %s helpers are crashing too rapidly, need help!\n", hlp->id_name);
 	    debug(84, 0) ("Starting new helpers\n");
 	    helperStatefulOpenServers(hlp);
 	}
@@ -819,7 +820,7 @@ Enqueue(helper * hlp, helper_request * r)
     debug(84, 1) ("WARNING: All %s processes are busy.\n", hlp->id_name);
     debug(84, 1) ("WARNING: up to %d pending requests queued\n", hlp->stats.max_queue_size);
     if (hlp->stats.queue_size > hlp->n_running * 2)
-	fatalf("Too many queued %s requests (%d on %d)", hlp->id_name, hlp->stats.queue_size, hlp->n_running);
+	libcore_fatalf("Too many queued %s requests (%d on %d)", hlp->id_name, hlp->stats.queue_size, hlp->n_running);
     if (squid_curtime - hlp->last_queue_warn < 300)
 	debug(84, 1) ("Consider increasing the number of %s processes to at least %d in your config file.\n", hlp->id_name, hlp->n_running + hlp->stats.max_queue_size);
     hlp->last_queue_warn = squid_curtime;
@@ -837,7 +838,7 @@ StatefulEnqueue(statefulhelper * hlp, helper_stateful_request * r)
     if (hlp->stats.queue_size > hlp->stats.max_queue_size)
 	hlp->stats.max_queue_size = hlp->stats.queue_size;
     if (hlp->stats.queue_size > hlp->n_running * 5)
-	fatalf("Too many queued %s requests (%d on %d)", hlp->id_name, hlp->stats.queue_size, hlp->n_running);
+	libcore_fatalf("Too many queued %s requests (%d on %d)", hlp->id_name, hlp->stats.queue_size, hlp->n_running);
     if (squid_curtime - hlp->last_queue_warn < 30)
 	return;
     if (shutting_down || reconfiguring)

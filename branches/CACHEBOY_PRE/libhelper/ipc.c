@@ -41,6 +41,7 @@
 #include <string.h>
 #include <math.h>
 #include <fcntl.h>
+#include <ctype.h>
 #include <sys/errno.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -111,7 +112,9 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
     assert(type != IPC_FIFO);
 #endif
 
+#if NOTYET
     requirePathnameExists(name, prog);
+#endif
 
     if (rfd)
 	*rfd = -1;
@@ -226,7 +229,9 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	debug(54, 3) ("ipcCreate: FD %d listening...\n", crfd);
     }
     /* flush or else we get dup data if unbuffered_logs is set */
+#if NOTYET
     logsFlush();
+#endif
     if ((pid = fork()) < 0) {
 	debug(54, 1) ("ipcCreate: fork: %s\n", xstrerror());
 	return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
