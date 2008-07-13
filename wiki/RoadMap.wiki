@@ -60,6 +60,21 @@ Cacheboy-1.3 will include bugfixes from Squid-2.HEAD to fix SNMP and Vary issues
 Cacheboy-1.4 will include the first set of intrusive code changes relating to modularising the core event, comm, disk and file descriptor management routines.
 Cacheboy-1.5 will include changes to the event loop to support signal events in a more sensible fashion.
 
+=== Cacheboy-1.3 ===
+
+  * comm *(done)*
+  * event scheduling *(done)*
+  * fd management *(done)*
+  * legacy blocking disk IO *(done)*
+
+=== Cacheboy-1.4 ===
+
+Preparation for IPv6 - complete refactoring out core network related code; begin modifications over to support IPv6 in the core libraries and leave the main Cacheboy application as IPv4 for now.
+
+  * migrate out DNS code into libsqdns
+   * migrate ipc and helper out into libhelper *(done)*
+   * migrate external and internal DNS into libsqdns *(done)*
+
 === Cacheboy 2.0 (was Squid-2.8) ===
 
 This release concentrates on modularising existing code whilst improving performance. These changes should keep future developments in mind (HTTP/1.1, inline content processing, more efficient storage methods, threading.) The aim is to reduce user-space CPU usage (specifically, without ACL lookups - these can use a lot of CPU; these can be re-evaluated later.)
