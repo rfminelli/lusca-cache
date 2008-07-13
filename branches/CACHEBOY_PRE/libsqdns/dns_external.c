@@ -33,48 +33,85 @@
  *
  */
 
-#include "squid.h"
+#include "../include/config.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <math.h>
+#include <fcntl.h>
+#include <sys/errno.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+  
+#include "../include/Array.h"
+#include "../include/Stack.h"
+#include "../include/util.h"
+#include "../include/hash.h"
+#include "../include/rfc1035.h"
+#include "../libcore/valgrind.h"
+#include "../libcore/varargs.h"
+#include "../libcore/debug.h"
+#include "../libcore/kb.h"
+#include "../libcore/gb.h"
+#include "../libcore/tools.h"
+#include "../libcore/dlink.h"
+ 
+#include "../libmem/MemPool.h"
+#include "../libmem/MemBufs.h"
+#include "../libmem/MemBuf.h"
+#include "../libmem/wordlist.h"
+ 
+#include "../libcb/cbdata.h"
+ 
+#include "../libiapp/iapp_ssl.h"
+#include "../libiapp/globals.h"
+#include "../libiapp/comm.h"
+#include "../libiapp/event.h"
+#include "../libiapp/pconn_hist.h"
+
+#include "../libhelper/ipc.h"
+#include "../libhelper/helper.h"
+ 
+#if defined(_SQUID_CYGWIN_)
+#include <sys/ioctl.h>
+#endif
+#ifdef HAVE_NETINET_TCP_H
+#include <netinet/tcp.h>
+#endif
+
+#include "dns.h"
+#include "dns_external.h"
+
 
 /* MS VisualStudio Projects are monolithic, so we need the following
  * #if to exclude the external DNS code from compile process when
  * using Internal DNS.
  */
 #if USE_DNSSERVERS
-static helper *dnsservers = NULL;
-
-static void
-dnsStats(StoreEntry * sentry)
-{
-    storeAppendPrintf(sentry, "Dnsserver Statistics:\n");
-    helperStats(sentry, dnsservers);
-}
+helper *dnsservers = NULL;
 
 void
-dnsInit(void)
+dnsInit(const char *dnsProg, int dnsChildren, wordlist *dnsNs, int res_defnames)
 {
-    static int init = 0;
     wordlist *w;
-    if (!Config.Program.dnsserver)
+    if (!dnsProg)
 	return;
     if (dnsservers == NULL)
 	dnsservers = helperCreate("dnsserver");
-    dnsservers->n_to_start = Config.dnsChildren;
+    dnsservers->n_to_start = dnsChildren;
     dnsservers->ipc_type = IPC_STREAM;
     assert(dnsservers->cmdline == NULL);
-    wordlistAdd(&dnsservers->cmdline, Config.Program.dnsserver);
-    if (Config.onoff.res_defnames)
+    wordlistAdd(&dnsservers->cmdline, dnsProg);
+    if (res_defnames)
 	wordlistAdd(&dnsservers->cmdline, "-D");
-    for (w = Config.dns_nameservers; w != NULL; w = w->next) {
+    for (w = dnsNs; w != NULL; w = w->next) {
 	wordlistAdd(&dnsservers->cmdline, "-s");
 	wordlistAdd(&dnsservers->cmdline, w->key);
     }
     helperOpenServers(dnsservers);
-    if (!init) {
-	cachemgrRegister("dns",
-	    "Dnsserver Statistics",
-	    dnsStats, 0, 1);
-	init = 1;
-    }
 }
 
 void
@@ -100,7 +137,7 @@ dnsSubmit(const char *lookup, HLPCB * callback, void *data)
 	if (first_warn == 0)
 	    first_warn = squid_curtime;
 	if (squid_curtime - first_warn > 3 * 60)
-	    fatal("DNS servers not responding for 3 minutes");
+	    libcore_fatalf("DNS servers not responding for 3 minutes: %d", first_warn);
 	debug(34, 1) ("dnsSubmit: queue overload, rejecting %s\n", lookup);
 	callback(data, (char *) "$fail Temporary network problem, please retry later");
 	return;
@@ -109,38 +146,4 @@ dnsSubmit(const char *lookup, HLPCB * callback, void *data)
     helperSubmit(dnsservers, buf, callback, data);
 }
 
-#ifdef SQUID_SNMP
-/*
- * The function to return the DNS via SNMP
- */
-variable_list *
-snmp_netDnsFn(variable_list * Var, snint * ErrP)
-{
-    variable_list *Answer = NULL;
-    debug(49, 5) ("snmp_netDnsFn: Processing request: %d\n", Var->name[LEN_SQ_NET + 1]);
-    snmpDebugOid(5, Var->name, Var->name_length);
-    *ErrP = SNMP_ERR_NOERROR;
-    switch (Var->name[LEN_SQ_NET + 1]) {
-    case DNS_REQ:
-	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    dnsservers->stats.requests,
-	    SMI_COUNTER32);
-	break;
-    case DNS_REP:
-	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    dnsservers->stats.replies,
-	    SMI_COUNTER32);
-	break;
-    case DNS_SERVERS:
-	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    dnsservers->n_running,
-	    SMI_COUNTER32);
-	break;
-    default:
-	*ErrP = SNMP_ERR_NOSUCHNAME;
-	break;
-    }
-    return Answer;
-}
-#endif /*SQUID_SNMP */
 #endif /* USE_DNSSERVERS */

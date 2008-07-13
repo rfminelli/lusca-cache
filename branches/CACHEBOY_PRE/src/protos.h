@@ -155,9 +155,7 @@ extern void xassert(const char *, const char *, int);
 extern void debugObj(int section, int level, const char *label, void *obj, ObjPackMethod pm);
 
 /* dns.c */
-extern void dnsShutdown(void);
-extern void dnsInit(void);
-extern void dnsSubmit(const char *lookup, HLPCB * callback, void *data);
+extern void dnsInternalInit(void);
 
 /* dns_internal.c */
 extern void idnsInternalInit(void);
