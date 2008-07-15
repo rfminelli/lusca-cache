@@ -244,7 +244,6 @@
 #endif
 
 #include "../libcore/varargs.h"
-#include "../libcore/syslog.h"
 
 /* Make sure syslog goes after stdarg/varargs */
 #ifdef HAVE_SYSLOG_H
@@ -254,6 +253,8 @@
 #endif
 #include <syslog.h>
 #endif
+
+#include "../libcore/syslog_ntoa.h"
 
 #if HAVE_MATH_H
 #include <math.h>
