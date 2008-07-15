@@ -3307,6 +3307,7 @@ AC_OUTPUT([\
 	app/Makefile \
 	app/tcptest/Makefile \
 	libsqdns/Makefile \
+	libsqinet/Makefile \
 	libhelper/Makefile \
 	libhttp/Makefile \
 	libiapp/Makefile \
