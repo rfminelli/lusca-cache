@@ -30,12 +30,6 @@ toKB(size_t size)
     return (size + 1024 - 1) / 1024;
 }
 
-const char *
-xinet_ntoa(const struct in_addr addr)
-{
-    return inet_ntoa(addr);
-}
-
 time_t
 getCurrentTime(void)
 {
