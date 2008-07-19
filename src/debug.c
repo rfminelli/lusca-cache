@@ -36,13 +36,9 @@
 #include "squid.h"
 
 static char *debug_log_file = NULL;
-static int Ctx_Lock = 0;
-static const char *debugLogTime(time_t);
-static void ctx_print(void);
 #if HAVE_SYSLOG
 static void _db_print_syslog(const char *format, va_list args);
 #endif
-static void _db_print_stderr(const char *format, va_list args);
 static void _db_print_file(const char *format, va_list args);
 
 #ifdef _SQUID_MSWIN_
@@ -55,80 +51,6 @@ extern int backtrace(void *, int);
 extern void backtrace_symbols_fd(void *, int, int);
 extern int setresuid(uid_t, uid_t, uid_t);
 #endif /* _SQUID_LINUX */
-
-void
-#if STDC_HEADERS
-_db_print(const char *format,...)
-{
-#else
-_db_print(va_alist)
-     va_dcl
-{
-    const char *format = NULL;
-#endif
-    LOCAL_ARRAY(char, f, BUFSIZ);
-    va_list args1;
-#if STDC_HEADERS
-    va_list args2;
-    va_list args3;
-#else
-#define args2 args1
-#define args3 args1
-#endif
-#ifdef _SQUID_MSWIN_
-    /* Multiple WIN32 threads may call this simultaneously */
-    if (!dbg_mutex) {
-	HMODULE krnl_lib = GetModuleHandle("Kernel32");
-	BOOL(FAR WINAPI * InitializeCriticalSectionAndSpinCount)
-	    (LPCRITICAL_SECTION, DWORD) = NULL;
-	if (krnl_lib)
-	    InitializeCriticalSectionAndSpinCount =
-		GetProcAddress(krnl_lib,
-		"InitializeCriticalSectionAndSpinCount");
-	dbg_mutex = xcalloc(1, sizeof(CRITICAL_SECTION));
-
-	if (InitializeCriticalSectionAndSpinCount) {
-	    /* let multiprocessor systems EnterCriticalSection() fast */
-	    if (!InitializeCriticalSectionAndSpinCount(dbg_mutex, 4000)) {
-		if (debug_log) {
-		    fprintf(debug_log, "FATAL: _db_print: can't initialize critical section\n");
-		    fflush(debug_log);
-		}
-		fprintf(stderr, "FATAL: _db_print: can't initialize critical section\n");
-		abort();
-	    } else
-		InitializeCriticalSection(dbg_mutex);
-	}
-    }
-    EnterCriticalSection(dbg_mutex);
-#endif
-    /* give a chance to context-based debugging to print current context */
-    if (!Ctx_Lock)
-	ctx_print();
-#if STDC_HEADERS
-    va_start(args1, format);
-    va_start(args2, format);
-    va_start(args3, format);
-#else
-    format = va_arg(args1, const char *);
-#endif
-    snprintf(f, BUFSIZ, "%s| %s",
-	debugLogTime(squid_curtime),
-	format);
-    _db_print_file(f, args1);
-    _db_print_stderr(f, args2);
-#if HAVE_SYSLOG
-    _db_print_syslog(format, args3);
-#endif
-#ifdef _SQUID_MSWIN_
-    LeaveCriticalSection(dbg_mutex);
-#endif
-    va_end(args1);
-#if STDC_HEADERS
-    va_end(args2);
-    va_end(args3);
-#endif
-}
 
 static int debug_log_dirty = 0;
 int
@@ -160,16 +82,6 @@ _db_print_file(const char *format, va_list args)
 	debug_log_dirty++;
 }
 
-static void
-_db_print_stderr(const char *format, va_list args)
-{
-    if (opt_debug_stderr < _db_level)
-	return;
-    if (debug_log == stderr)
-	return;
-    vfprintf(stderr, format, args);
-}
-
 #if HAVE_SYSLOG
 static void
 _db_print_syslog(const char *format, va_list args)
@@ -186,34 +98,6 @@ _db_print_syslog(const char *format, va_list args)
     syslog((_db_level == 0 ? LOG_WARNING : LOG_NOTICE) | syslog_facility, "%s", tmpbuf);
 }
 #endif /* HAVE_SYSLOG */
-
-static void
-debugArg(const char *arg)
-{
-    int s = 0;
-    int l = 0;
-    int i;
-    if (!strncasecmp(arg, "ALL", 3)) {
-	s = -1;
-	arg += 4;
-    } else {
-	s = atoi(arg);
-	while (*arg && *arg++ != ',');
-    }
-    l = atoi(arg);
-    assert(s >= -1);
-    assert(s < MAX_DEBUG_SECTIONS);
-    if (l < 0)
-	l = 0;
-    if (l > 10)
-	l = 10;
-    if (s >= 0) {
-	debugLevels[s] = l;
-	return;
-    }
-    for (i = 0; i < MAX_DEBUG_SECTIONS; i++)
-	debugLevels[i] = l;
-}
 
 static void
 debugOpenLog(const char *logfile)
@@ -240,119 +124,6 @@ debugOpenLog(const char *logfile)
 }
 
 #if HAVE_SYSLOG
-#ifdef LOG_LOCAL4
-static struct syslog_facility_name {
-    const char *name;
-    int facility;
-} syslog_facility_names[] = {
-
-#ifdef LOG_AUTH
-    {
-	"auth", LOG_AUTH
-    },
-#endif
-#ifdef LOG_AUTHPRIV
-    {
-	"authpriv", LOG_AUTHPRIV
-    },
-#endif
-#ifdef LOG_CRON
-    {
-	"cron", LOG_CRON
-    },
-#endif
-#ifdef LOG_DAEMON
-    {
-	"daemon", LOG_DAEMON
-    },
-#endif
-#ifdef LOG_FTP
-    {
-	"ftp", LOG_FTP
-    },
-#endif
-#ifdef LOG_KERN
-    {
-	"kern", LOG_KERN
-    },
-#endif
-#ifdef LOG_LPR
-    {
-	"lpr", LOG_LPR
-    },
-#endif
-#ifdef LOG_MAIL
-    {
-	"mail", LOG_MAIL
-    },
-#endif
-#ifdef LOG_NEWS
-    {
-	"news", LOG_NEWS
-    },
-#endif
-#ifdef LOG_SYSLOG
-    {
-	"syslog", LOG_SYSLOG
-    },
-#endif
-#ifdef LOG_USER
-    {
-	"user", LOG_USER
-    },
-#endif
-#ifdef LOG_UUCP
-    {
-	"uucp", LOG_UUCP
-    },
-#endif
-#ifdef LOG_LOCAL0
-    {
-	"local0", LOG_LOCAL0
-    },
-#endif
-#ifdef LOG_LOCAL1
-    {
-	"local1", LOG_LOCAL1
-    },
-#endif
-#ifdef LOG_LOCAL2
-    {
-	"local2", LOG_LOCAL2
-    },
-#endif
-#ifdef LOG_LOCAL3
-    {
-	"local3", LOG_LOCAL3
-    },
-#endif
-#ifdef LOG_LOCAL4
-    {
-	"local4", LOG_LOCAL4
-    },
-#endif
-#ifdef LOG_LOCAL5
-    {
-	"local5", LOG_LOCAL5
-    },
-#endif
-#ifdef LOG_LOCAL6
-    {
-	"local6", LOG_LOCAL6
-    },
-#endif
-#ifdef LOG_LOCAL7
-    {
-	"local7", LOG_LOCAL7
-    },
-#endif
-    {
-	NULL, 0
-    }
-};
-
-#endif
-
 void
 _db_set_syslog(const char *facility)
 {
@@ -364,13 +135,10 @@ _db_set_syslog(const char *facility)
     syslog_facility = LOG_LOCAL4;
 #endif
     if (facility) {
-	struct syslog_facility_name *n;
-	for (n = syslog_facility_names; n->name; n++) {
-	    if (strcmp(n->name, facility) == 0) {
-		syslog_facility = n->facility;
-		return;
-	    }
-	}
+        syslog_facility = syslog_ntoa(facility);
+        if (syslog_facility != 0)
+	    return;
+         
 	fprintf(stderr, "unknown syslog facility '%s'\n", facility);
 	exit(1);
     }
@@ -382,21 +150,12 @@ _db_set_syslog(const char *facility)
 #endif
 
 void
-_db_init(const char *logfile, const char *options)
+_db_init_log(const char *logfile)
 {
-    int i;
-    char *p = NULL;
-    char *s = NULL;
-
-    for (i = 0; i < MAX_DEBUG_SECTIONS; i++)
-	debugLevels[i] = -1;
-
-    if (options) {
-	p = xstrdup(options);
-	for (s = strtok(p, w_space); s; s = strtok(NULL, w_space))
-	    debugArg(s);
-	xfree(p);
-    }
+    _db_register_handler(_db_print_file, 1);
+#if HAVE_SYSLOG
+    _db_register_handler(_db_print_syslog, 0);
+#endif
     debugOpenLog(logfile);
 }
 
@@ -455,209 +214,3 @@ _db_rotate_log(void)
 	debugOpenLog(Config.Log.log);
 }
 
-static const char *
-debugLogTime(time_t t)
-{
-    struct tm *tm;
-    static char buf[128];
-    static time_t last_t = 0;
-    if (t != last_t) {
-	tm = localtime(&t);
-	strftime(buf, 127, "%Y/%m/%d %H:%M:%S", tm);
-	last_t = t;
-    }
-    return buf;
-}
-
-void
-xassert(const char *msg, const char *file, int line)
-{
-    debug(0, 0) ("assertion failed: %s:%d: \"%s\"\n", file, line, msg);
-#ifdef PRINT_STACK_TRACE
-#ifdef _SQUID_HPUX_
-    {
-	extern void U_STACK_TRACE(void);	/* link with -lcl */
-	fflush(debug_log);
-	dup2(fileno(debug_log), 2);
-	U_STACK_TRACE();
-    }
-#endif /* _SQUID_HPUX_ */
-#ifdef _SQUID_SOLARIS_
-    {				/* get ftp://opcom.sun.ca/pub/tars/opcom_stack.tar.gz and */
-	extern void opcom_stack_trace(void);	/* link with -lopcom_stack */
-	fflush(debug_log);
-	dup2(fileno(debug_log), fileno(stdout));
-	opcom_stack_trace();
-	fflush(stdout);
-    }
-#endif /* _SQUID_SOLARIS_ */
-#if HAVE_BACKTRACE_SYMBOLS_FD
-    {
-	static void *(callarray[8192]);
-	int n;
-	n = backtrace(callarray, 8192);
-	backtrace_symbols_fd(callarray, n, fileno(debug_log));
-    }
-#endif
-#endif /* PRINT_STACK_TRACE */
-
-    if (!shutting_down)
-	abort();
-}
-
-/*
- * Context-based Debugging
- *
- * Rationale
- * ---------
- * 
- * When you have a long nested processing sequence, it is often impossible
- * for low level routines to know in what larger context they operate. If a
- * routine coredumps, one can restore the context using debugger trace.
- * However, in many case you do not want to coredump, but just want to report
- * a potential problem. A report maybe useless out of problem context.
- * 
- * To solve this potential problem, use the following approach:
- * 
- * int
- * top_level_foo(const char *url)
- * {
- *      // define current context
- *      // note: we stack but do not dup ctx descriptions!
- *      Ctx ctx = ctx_enter(url);
- *      ...
- *      // go down; middle_level_bar will eventually call bottom_level_boo
- *      middle_level_bar(method, protocol);
- *      ...
- *      // exit, clean after yourself
- *      ctx_exit(ctx);
- * }
- * 
- * void
- * bottom_level_boo(int status, void *data)
- * {
- *      // detect exceptional condition, and simply report it, the context
- *      // information will be available somewhere close in the log file
- *      if (status == STRANGE_STATUS)
- *      debug(13, 6) ("DOS attack detected, data: %p\n", data);
- *      ...
- * }
- * 
- * Current implementation is extremely simple but still very handy. It has a
- * negligible overhead (descriptions are not duplicated).
- * 
- * When the _first_ debug message for a given context is printed, it is
- * prepended with the current context description. Context is printed with
- * the same debugging level as the original message.
- * 
- * Note that we do not print context every type you do ctx_enter(). This
- * approach would produce too many useless messages.  For the same reason, a
- * context description is printed at most _once_ even if you have 10
- * debugging messages within one context.
- * 
- * Contexts can be nested, of course. You must use ctx_enter() to enter a
- * context (push it onto stack).  It is probably safe to exit several nested
- * contexts at _once_ by calling ctx_exit() at the top level (this will pop
- * all context till current one). However, as in any stack, you cannot start
- * in the middle.
- * 
- * Analysis: 
- * i)   locate debugging message,
- * ii)  locate current context by going _upstream_ in your log file,
- * iii) hack away.
- *
- *
- * To-Do: 
- * -----
- *
- *       decide if we want to dup() descriptions (adds overhead) but allows to
- *       add printf()-style interface
- *
- * implementation:
- * ---------------
- *
- * descriptions for contexts over CTX_MAX_LEVEL limit are ignored, you probably
- * have a bug if your nesting goes that deep.
- */
-
-#define CTX_MAX_LEVEL 255
-
-/*
- * produce a warning when nesting reaches this level and then double
- * the level
- */
-static int Ctx_Warn_Level = 32;
-/* all descriptions has been printed up to this level */
-static int Ctx_Reported_Level = -1;
-/* descriptions are still valid or active up to this level */
-static int Ctx_Valid_Level = -1;
-/* current level, the number of nested ctx_enter() calls */
-static int Ctx_Current_Level = -1;
-/* saved descriptions (stack) */
-static const char *Ctx_Descrs[CTX_MAX_LEVEL + 1];
-/* "safe" get secription */
-static const char *ctx_get_descr(Ctx ctx);
-
-
-Ctx
-ctx_enter(const char *descr)
-{
-    Ctx_Current_Level++;
-
-    if (Ctx_Current_Level <= CTX_MAX_LEVEL)
-	Ctx_Descrs[Ctx_Current_Level] = descr;
-
-    if (Ctx_Current_Level == Ctx_Warn_Level) {
-	debug(0, 0) ("# ctx: suspiciously deep (%d) nesting:\n", Ctx_Warn_Level);
-	Ctx_Warn_Level *= 2;
-    }
-    return Ctx_Current_Level;
-}
-
-void
-ctx_exit(Ctx ctx)
-{
-    assert(ctx >= 0);
-    Ctx_Current_Level = (ctx >= 0) ? ctx - 1 : -1;
-    if (Ctx_Valid_Level > Ctx_Current_Level)
-	Ctx_Valid_Level = Ctx_Current_Level;
-}
-
-/*
- * the idea id to print each context description at most once but provide enough
- * info for deducing the current execution stack
- */
-static void
-ctx_print(void)
-{
-    /* lock so _db_print will not call us recursively */
-    Ctx_Lock++;
-    /* ok, user saw [0,Ctx_Reported_Level] descriptions */
-    /* first inform about entries popped since user saw them */
-    if (Ctx_Valid_Level < Ctx_Reported_Level) {
-	if (Ctx_Reported_Level != Ctx_Valid_Level + 1)
-	    _db_print("ctx: exit levels from %2d down to %2d\n",
-		Ctx_Reported_Level, Ctx_Valid_Level + 1);
-	else
-	    _db_print("ctx: exit level %2d\n", Ctx_Reported_Level);
-	Ctx_Reported_Level = Ctx_Valid_Level;
-    }
-    /* report new contexts that were pushed since last report */
-    while (Ctx_Reported_Level < Ctx_Current_Level) {
-	Ctx_Reported_Level++;
-	Ctx_Valid_Level++;
-	_db_print("ctx: enter level %2d: '%s'\n", Ctx_Reported_Level,
-	    ctx_get_descr(Ctx_Reported_Level));
-    }
-    /* unlock */
-    Ctx_Lock--;
-}
-
-/* checks for nulls and overflows */
-static const char *
-ctx_get_descr(Ctx ctx)
-{
-    if (ctx < 0 || ctx > CTX_MAX_LEVEL)
-	return "<lost>";
-    return Ctx_Descrs[ctx] ? Ctx_Descrs[ctx] : "<null>";
-}
