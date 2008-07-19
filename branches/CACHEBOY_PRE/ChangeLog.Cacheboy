@@ -1,13 +1,17 @@
 ChangeLog:
 
+-- (19-July-2008)
 
--- Tagged CACHEBOY_1.3
+* completed shuffling the communication related code out of src/ and into libiapp/
+* moved the DNS, helper, IPC code out of src/ and into external libraries
+-- Tagged CACHEBOY_1.4.PRE1
 
 -- (26-June-2008)
 
 * Merged in up to latest Squid-2.HEAD
 
 -- Tagged CACHEBOY_1.2
+-- Tagged CACHEBOY_1.3
 
 -- (20-June-2008)
 
