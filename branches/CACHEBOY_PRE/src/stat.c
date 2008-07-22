@@ -857,8 +857,6 @@ statAvgDump(StoreEntry * sentry, int minutes, int hours)
 	(f->select_time - l->select_time) / (f->select_fds - l->select_fds)
 	: 0.0);
 #endif
-    x = statHistDeltaMedian(&l->select_fds_hist, &f->select_fds_hist);
-    storeAppendPrintf(sentry, "median_select_fds = %f\n", x);
     storeAppendPrintf(sentry, "swap.outs = %f/sec\n",
 	XAVG(swap.outs));
     storeAppendPrintf(sentry, "swap.ins = %f/sec\n",
@@ -1061,7 +1059,6 @@ statCountersInitSpecial(StatCounters * C)
     statHistEnumInit(&C->comm_icp_incoming, INCOMING_ICP_MAX);
     statHistEnumInit(&C->comm_dns_incoming, INCOMING_DNS_MAX);
     statHistEnumInit(&C->comm_http_incoming, INCOMING_HTTP_MAX);
-    statHistIntInit(&C->select_fds_hist, 256);	/* was SQUID_MAXFD, but it is way too much. It is OK to crop this statistics */
 }
 
 /* add special cases here as they arrive */
@@ -1081,7 +1078,6 @@ statCountersClean(StatCounters * C)
     statHistClean(&C->comm_icp_incoming);
     statHistClean(&C->comm_dns_incoming);
     statHistClean(&C->comm_http_incoming);
-    statHistClean(&C->select_fds_hist);
 }
 
 /* add special cases here as they arrive */
@@ -1106,7 +1102,6 @@ statCountersCopy(StatCounters * dest, const StatCounters * orig)
     statHistCopy(&dest->cd.on_xition_count, &orig->cd.on_xition_count);
     statHistCopy(&dest->comm_icp_incoming, &orig->comm_icp_incoming);
     statHistCopy(&dest->comm_http_incoming, &orig->comm_http_incoming);
-    statHistCopy(&dest->select_fds_hist, &orig->select_fds_hist);
 }
 
 static void
@@ -1129,8 +1124,6 @@ statCountersHistograms(StoreEntry * sentry)
     statHistDump(&f->icp.reply_svc_time, sentry, NULL);
     storeAppendPrintf(sentry, "dns.svc_time histogram:\n");
     statHistDump(&f->dns.svc_time, sentry, NULL);
-    storeAppendPrintf(sentry, "select_fds_hist histogram:\n");
-    statHistDump(&f->select_fds_hist, sentry, NULL);
 }
 
 static void

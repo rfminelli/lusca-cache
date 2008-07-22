@@ -21,7 +21,7 @@ bin_PROGRAMS = \
 
 tcptest_SOURCES = tcptest.c tunnel.c
 
-LDADD = -L../../lib -L../../libcore -L../../libmem -L../../libcb -L../../libiapp -L../../libsqinet -L../../libhttp -L../../libstat -lmiscutil -liapp -lmem -lcb -lcore -lmiscutil -lm -lsqinet @SSLLIB@
+LDADD = -L../../lib -L../../libcore -L../../libmem -L../../libcb -L../../libiapp -L../../libsqinet -L../../libhttp -L../../libstat -lmiscutil -liapp -lmem -lcb -lcore -lstat -lmiscutil -lm -lsqinet @SSLLIB@
 
 $(OBJS): $(top_srcdir)/include/version.h ../include/autoconf.h
 

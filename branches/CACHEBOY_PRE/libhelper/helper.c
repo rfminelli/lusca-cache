@@ -65,6 +65,8 @@
 
 #include "../libcb/cbdata.h"
 
+#include "../libstat/StatHist.h"
+
 #include "../libiapp/iapp_ssl.h"
 #include "../libiapp/globals.h"
 #include "../libiapp/comm.h"

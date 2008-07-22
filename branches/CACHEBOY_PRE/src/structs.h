@@ -1962,7 +1962,6 @@ struct _StatCounters {
     StatHist comm_icp_incoming;
     StatHist comm_dns_incoming;
     StatHist comm_http_incoming;
-    StatHist select_fds_hist;
 #if 0
     struct {
 	struct {

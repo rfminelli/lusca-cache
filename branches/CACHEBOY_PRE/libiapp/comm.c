@@ -66,6 +66,10 @@
 #include "../libmem/MemBuf.h"
  
 #include "../libcb/cbdata.h"
+
+#include "../libsqinet/inet.h"
+
+#include "../libstat/StatHist.h"
  
 #include "iapp_ssl.h"
 #include "globals.h"
@@ -992,6 +996,7 @@ comm_init(void)
     RESERVED_FD = XMIN(100, Squid_MaxFD / 4);
     comm_write_pool = memPoolCreate("CommWriteStateData", sizeof(CommWriteStateData));
     conn_close_pool = memPoolCreate("close_handler", sizeof(close_handler));
+    statHistIntInit(&select_fds_hist, 256);
 }
 
 /* Write to FD. */
