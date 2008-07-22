@@ -13,5 +13,6 @@ extern int HttpSockets[MAXHTTPPORTS];
 extern int theInIcpConnection;  /* -1 */
 extern int theOutIcpConnection; /* -1 */
 extern int iapp_incomingRate;
+extern StatHist select_fds_hist;
 
 #endif

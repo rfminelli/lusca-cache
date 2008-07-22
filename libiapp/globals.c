@@ -1,5 +1,6 @@
 #include <stdio.h>
 
+#include "../libstat/StatHist.h"
 #include "globals.h"
 
 int shutting_down = 0;
@@ -12,3 +13,5 @@ int NHttpSockets = 0;
 int HttpSockets[MAXHTTPPORTS];
 int theInIcpConnection = -1;
 int theOutIcpConnection = -1;
+StatHist select_fds_hist;
+

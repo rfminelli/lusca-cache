@@ -67,7 +67,6 @@
 #include "../libcb/cbdata.h"
  
 #include "../libiapp/iapp_ssl.h"
-#include "../libiapp/globals.h"
 #include "../libiapp/comm.h"
 #include "../libiapp/event.h"
 #include "../libiapp/pconn_hist.h"
