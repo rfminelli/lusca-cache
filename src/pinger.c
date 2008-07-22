@@ -214,7 +214,7 @@ pingerOpen(void)
     atexit(Win32SockCleanup);
 
     getCurrentTime();
-    _db_init(NULL, "ALL,1");
+    _db_init("ALL,1");
     setmode(0, O_BINARY);
     setmode(1, O_BINARY);
     x = read(0, buf, sizeof(wpi));
@@ -526,7 +526,7 @@ main(int argc, char *argv[])
     if ((t = getenv("SQUID_DEBUG")))
 	debug_args = xstrdup(t);
     getCurrentTime();
-    _db_init(NULL, debug_args);
+    _db_init(debug_args);
 
     for (;;) {
 	tv.tv_sec = PINGER_TIMEOUT;

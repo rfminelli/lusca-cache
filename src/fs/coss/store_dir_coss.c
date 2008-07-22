@@ -543,14 +543,14 @@ storeCossDirWriteCleanDone(SwapDir * sd)
 static void
 storeSwapLogDataFree(void *s)
 {
-    memFree(s, MEM_SWAP_LOG_DATA);
+    memPoolFree(pool_swap_log_data, s);
 }
 
 static void
 storeCossDirSwapLog(const SwapDir * sd, const StoreEntry * e, int op)
 {
     CossInfo *cs = (CossInfo *) sd->fsdata;
-    storeSwapLogData *s = memAllocate(MEM_SWAP_LOG_DATA);
+    storeSwapLogData *s = memPoolAlloc(pool_swap_log_data);
     s->op = (char) op;
     s->swap_filen = e->swap_filen;
     s->timestamp = e->timestamp;
@@ -731,8 +731,8 @@ storeCossDirCallback(SwapDir * SD)
     CossInfo *cs = (CossInfo *) SD->fsdata;
     storeCossFreeDeadMemBufs(cs);
 #if USE_AUFSOPS
-    /* I believe this call, at the present, checks all callbacks for all SDs, not just ours */
-    return aioCheckCallbacks(SD);
+    /* There's no need to call aioCheckCallbacks() - this will happen through the aio notification pipe */
+    return 0;
 #else
     return a_file_callback(&cs->aq);
 #endif
