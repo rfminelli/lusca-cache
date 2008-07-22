@@ -1,5 +1,10 @@
 ChangeLog:
 
+-- (22-July-2008)
+
+* More light tidyups
+-- Tagged CACHEBOY_1.4.PRE2
+
 -- (19-July-2008)
 
 * completed shuffling the communication related code out of src/ and into libiapp/
