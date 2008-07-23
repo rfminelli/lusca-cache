@@ -148,21 +148,27 @@ _db_print(va_alist)
     snprintf(f, BUFSIZ, "%s| %s", debugLogTime(squid_curtime), format);
 
     _db_print_stderr(f, args1);
+    va_end(args1);
     int i;
 
     /* Send the string off to the individual section handlers */
     for (i = 0; i < db_callbacks.count; i++) {
+#if STDC_HEADERS
+        va_start(args1, format);
+#else
+        format = va_arg(args1, const char *);
+#endif
         if (db_callbacks.cbs[i].do_timestamp) {
 		db_callbacks.cbs[i].cb(f, args1);
 	} else {
 		db_callbacks.cbs[i].cb(format, args1);
 	}
+        va_end(args1);
     }
 
 #ifdef _SQUID_MSWIN_
     LeaveCriticalSection(dbg_mutex);
 #endif
-    va_end(args1);
 }
 
 static void
