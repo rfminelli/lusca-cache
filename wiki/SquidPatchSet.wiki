@@ -193,19 +193,18 @@ The initial import included all patchsets up to 12036.
   * 12279 - HEAD - Preparign for 2.6.STABLE20 - *committed - 12962*
   * 12283 - HEAD - Plug a small "squid -k reconfigure" race in the new round-robin counter management - *committed - 12963*
 
-  * 12283
-  * 12292
-  * 12295
-  * 12296
-  * 12297
-  * 12298
-  * 12299
-  * 12300
-  * 12301
-  * 12302
-  * 12303
-  * 12304
-  * 12311
+  * 12292 - HEAD - Windows port: fix typo in handling of notification of IP address changes - *committed - 13041*
+  * 12295 - HEAD - Document the "zph_mode option" setting, got left out when merging the zph patches - *committed - 13042*
+  * 12296 - HEAD - Bug 2396: Correct the opening of the PF device file. - *committed - 13043*
+  * 12297 - HEAD - URL encode the user name sent to digest helpers to escape "odd" characters such as doublequote (") - *committed - 13044*
+  * 12298 - HEAD - auth_param basic&digest utf8 on|of - *committed - 13045*
+  * 12299 - HEAD - Back out the digest url escaping change. - *committed - 13047*
+  * 12300 - HEAD - Make --with-large-files and --with-build-envirnment=default play nice together - *committed - 13048*
+  * 12301 - HEAD - Bootstrapped - *committed - 13049*
+  * 12302 - HEAD - Bug #2407: Spelling error in http_port tcpkeepalive option - *committed - 13050*
+  * 12303 - HEAD - Bug #2408: assertion failed: forward.c:529: "fs" - *committed - 13051*
+  * 12304 - HEAD - Bug #2408: Make forwarding logic a little more robust - *committed - 13052*
+  * 12311 - HEAD - Remove the --disable-carp option, keeping the CARP code always compiled in - *committed - 13053*
   * 12312
   * 12313
   * 12314
