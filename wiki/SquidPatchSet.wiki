@@ -205,16 +205,16 @@ The initial import included all patchsets up to 12036.
   * 12303 - HEAD - Bug #2408: assertion failed: forward.c:529: "fs" - *committed - 13051*
   * 12304 - HEAD - Bug #2408: Make forwarding logic a little more robust - *committed - 13052*
   * 12311 - HEAD - Remove the --disable-carp option, keeping the CARP code always compiled in - *committed - 13053*
-  * 12312
-  * 12313
-  * 12314
-  * 12315
-  * 12316
-  * 12317
-  * 12318
-  * 12323
-  * 12325
-  * 12326
-  * 12327
-  * 12328
-  * 12330
+  * 12312 - HEAD - Update userhash and sourcehash implementations - *committed - 13055*
+  * 12313 - HEAD - copy-paste spelling error in the updated userhash and sourcehash implementations - *commtited - 13056*
+  * 12314 - HEAD - Workaround for Linux-2.6.24 & 2.6.25 netfiler_ipv4.h include header __u32 problem - *committed - 13057*
+  * 12315 - HEAD - Correct sourcehash/userhash cachemgr descriptions - *committed - 13058*
+  * 12316 - HEAD - Make dns_nameserver work when using --disable-internal-dns on glibc based systems - *committed - 13059*
+  * 12317 - HEAD - Bootstrapped - *committed - 13060*
+  * 12318 - HEAD - Bug #2414: assertion failed: forward.c:110: "!EBIT_TEST(e->flags, ENTRY_FWD_HDR_WAIT)" - *committed - 13061*
+  * 12323 - HEAD - Make clientCacheHit bail out gracefuly if hitting an aborted object - *committed - 13062*
+  * 12325 - HEAD - Handle digest fetch errors gracefully - *committed - 13063*
+  * 12326 - HEAD - Allow reading of aborted objects - *committed - 13064*
+  * 12327 - HEAD - make clientHandleIMSReply deal properly if the old object got aborted - *committed - 13065*
+  * 12328 - HEAD - Bug #2406: access.log logs rewritten URL and strip_query_terms ineffective - *committed - 13066*
+  * 12330 - HEAD - Properly terminate aborted objects. Got broken again by the change to loosen ENTRY_ABORTED semantics. - *committed - 13067*
