@@ -192,3 +192,30 @@ The initial import included all patchsets up to 12036.
   * 12259 - HEAD - Correct socket syscalls statistics in commResetFD() - *committed - 12961*
   * 12279 - HEAD - Preparign for 2.6.STABLE20 - *committed - 12962*
   * 12283 - HEAD - Plug a small "squid -k reconfigure" race in the new round-robin counter management - *committed - 12963*
+
+  * 12283
+  * 12292
+  * 12295
+  * 12296
+  * 12297
+  * 12298
+  * 12299
+  * 12300
+  * 12301
+  * 12302
+  * 12303
+  * 12304
+  * 12311
+  * 12312
+  * 12313
+  * 12314
+  * 12315
+  * 12316
+  * 12317
+  * 12318
+  * 12323
+  * 12325
+  * 12326
+  * 12327
+  * 12328
+  * 12330
