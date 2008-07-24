@@ -92,6 +92,7 @@
 #endif
 
 #if LINUX_NETFILTER
+#include <linux/types.h>
 #include <linux/netfilter_ipv4.h>
 #endif
 
@@ -925,7 +926,10 @@ clientHandleIMSReply(void *data, HttpReply * rep)
 	clientProcessMiss(http);
 	return;
     }
-    assert(!EBIT_TEST(entry->flags, ENTRY_ABORTED));
+    if (EBIT_TEST(entry->flags, ENTRY_ABORTED)) {
+	/* Old object got aborted, not good */
+	clientProcessMiss(http);
+    }
     if (recopy) {
 	storeClientCopyHeaders(http->sc, entry,
 	    clientSendHeaders,
@@ -1161,7 +1165,9 @@ httpRequestFree(void *data)
 	mem = http->entry->mem_obj;
     if (http->out.size || http->log_type) {
 	http->al.icp.opcode = ICP_INVALID;
-	http->al.url = http->uri;
+	http->al.url = http->log_uri;
+	if (!http->al.url)
+	    http->al.url = urlCanonicalClean(request);
 	debug(33, 9) ("httpRequestFree: al.url='%s'\n", http->al.url);
 	http->al.cache.out_ip = request->out_ip;
 	if (http->reply && http->log_type != LOG_TCP_DENIED) {
@@ -1221,6 +1227,7 @@ httpRequestFree(void *data)
     if (request)
 	checkFailureRatio(request->err_type, http->al.hier.code);
     safe_free(http->uri);
+    safe_free(http->log_uri);
     safe_free(http->al.headers.request);
     safe_free(http->al.headers.reply);
     safe_free(http->al.cache.authuser);
@@ -2201,10 +2208,15 @@ clientCacheHit(void *data, HttpReply * rep)
 	http->log_type = LOG_TCP_SWAPFAIL_MISS;
 	clientProcessMiss(http);
 	return;
+    } else if (EBIT_TEST(e->flags, ENTRY_ABORTED)) {
+	/* aborted object */
+	debug(33, 3) ("clientCacheHit: hit an aborted object %s\n", http->uri);
+	http->log_type = LOG_TCP_SWAPFAIL_MISS;
+	clientProcessMiss(http);
+	return;
     }
     mem = e->mem_obj;
     debug(33, 3) ("clientCacheHit: %s = %d\n", http->uri, rep->sline.status);
-    assert(!EBIT_TEST(e->flags, ENTRY_ABORTED));
 
     /*
      * This particular logic is a bit hairy.
@@ -3133,11 +3145,6 @@ clientSendMoreData(void *data, mem_node_ref ref, ssize_t size)
 	debug(33, 1) ("clientSendMoreData: Deferring %s\n", storeUrl(entry));
 	stmemNodeUnref(&ref);
 	return;
-    } else if (entry && EBIT_TEST(entry->flags, ENTRY_ABORTED)) {
-	/* call clientWriteComplete so the client socket gets closed */
-	clientWriteComplete(fd, NULL, 0, COMM_OK, http);
-	stmemNodeUnref(&ref);
-	return;
     } else if (size < 0) {
 	/* call clientWriteComplete so the client socket gets closed */
 	clientWriteComplete(fd, NULL, 0, COMM_OK, http);
@@ -3290,7 +3297,7 @@ clientWriteComplete(int fd, char *bufnotused, size_t size, int errflag, void *da
 	debug(33, 1) ("WARNING: closing FD %d to prevent counter overflow\n", fd);
 	debug(33, 1) ("\tclient %s\n", inet_ntoa(http->conn->peer.sin_addr));
 	debug(33, 1) ("\treceived %d bytes\n", (int) http->out.size);
-	debug(33, 1) ("\tURI %s\n", http->log_uri);
+	debug(33, 1) ("\tURI %s\n", http->uri);
 	comm_close(fd);
     } else
 #endif
@@ -3300,7 +3307,7 @@ clientWriteComplete(int fd, char *bufnotused, size_t size, int errflag, void *da
 	debug(33, 1) ("\tclient %s\n", inet_ntoa(http->conn->peer.sin_addr));
 	debug(33, 1) ("\treceived %d bytes (offset %d)\n", (int) http->out.size,
 	    (int) http->out.offset);
-	debug(33, 1) ("\tURI %s\n", http->log_uri);
+	debug(33, 1) ("\tURI %s\n", http->uri);
 	comm_close(fd);
     } else
 #endif
@@ -3311,8 +3318,6 @@ clientWriteComplete(int fd, char *bufnotused, size_t size, int errflag, void *da
 	comm_close(fd);
     } else if (NULL == entry) {
 	comm_close(fd);		/* yuk */
-    } else if (EBIT_TEST(entry->flags, ENTRY_ABORTED)) {
-	comm_close(fd);
     } else if ((done = clientCheckTransferDone(http)) != 0 || size == 0) {
 	debug(33, 5) ("clientWriteComplete: FD %d transfer is DONE\n", fd);
 	/* We're finished case */
@@ -3321,6 +3326,9 @@ clientWriteComplete(int fd, char *bufnotused, size_t size, int errflag, void *da
 	    comm_close(fd);
 	} else if (clientGotNotEnough(http)) {
 	    debug(33, 5) ("clientWriteComplete: client didn't get all it expected\n");
+	    comm_close(fd);
+	} else if (EBIT_TEST(http->entry->flags, ENTRY_ABORTED)) {
+	    debug(33, 5) ("clientWriteComplete: aborted object\n");
 	    comm_close(fd);
 	} else if (http->request->flags.chunked_response) {
 	    /* Finish chunked transfer encoding */
@@ -3357,8 +3365,6 @@ clientWriteComplete(int fd, char *bufnotused, size_t size, int errflag, void *da
 #endif
 	/* More data will be coming from primary server; register with 
 	 * storage manager. */
-	if (EBIT_TEST(entry->flags, ENTRY_ABORTED))
-	    debug(33, 0) ("clientWriteComplete 2: ENTRY_ABORTED\n");
 	debug(33, 3) ("clientWriteComplete: copying from offset %d\n", (int) http->out.offset);
 	storeClientRef(http->sc, entry,
 	    http->out.offset,
@@ -4598,7 +4604,7 @@ clientNatLookup(ConnStateData * conn)
     static int pffd = -1;
     static time_t last_reported = 0;
     if (pffd < 0) {
-	pffd = open("/dev/pf", O_RDWR);
+	pffd = open("/dev/pf", O_RDONLY);
 	if (pffd >= 0)
 	    commSetCloseOnExec(pffd);
     }
