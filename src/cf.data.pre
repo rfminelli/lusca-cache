@@ -127,6 +127,13 @@ DOC_START
 
 	auth_param basic program @DEFAULT_PREFIX@/libexec/ncsa_auth @DEFAULT_PREFIX@/etc/passwd
 
+	"utf8" on|off
+
+	HTTP uses iso-latin-1 as characterset, while some authentication
+	backends such as LDAP expects UTF-8. If this is set to on Squid will
+	translate the HTTP iso-latin-1 charset to UTF-8 before sending the
+	username & password to the helper.
+
 	"children" numberofchildren
 	The number of authenticator processes to spawn. If you start too few
 	squid will have to wait for them to process a backlog of credential
@@ -193,6 +200,13 @@ DOC_START
 	Then, set this line to something like
 
 	auth_param digest program @DEFAULT_PREFIX@/libexec/digest_auth_pw @DEFAULT_PREFIX@/etc/digpass
+
+	"utf8" on|off
+
+	HTTP uses iso-latin-1 as characterset, while some authentication
+	backends such as LDAP expects UTF-8. If this is set to on Squid will
+	translate the HTTP iso-latin-1 charset to UTF-8 before sending the
+	username to the helper.
 
 	"children" numberofchildren
 	The number of authenticator processes to spawn. If you start too few
@@ -1217,7 +1231,7 @@ DOC_START
 	   name=	Specifies a internal name for the port. Defaults to
 			the port specification (port or addr:port)
 
-	   keepalive[=idle,interval,timeout]
+	   tcpkeepalive[=idle,interval,timeout]
 			Enable TCP keepalive probes of idle connections
 			idle is the initial time before TCP starts probing
 			the connection, interval how often to probe, and
@@ -1397,9 +1411,11 @@ DOC_START
 	This option enables packet level marking of HIT/MISS responses,
 	either using IP TOS or socket priority.
 	    off		Feature disabled
-	    tos		Set the IP TOS field
+	    tos		Set the IP TOS/Diffserv field
 	    priority	Set the socket priority (may get mapped to TOS by OS,
 			otherwise only usable in local rulesets)
+	    option	Embed the mark in an IP option field. See also
+	    		zph_option.
 
 	See also tcp_outgoing_tos for details/requirements about TOS usage.
 DOC_END
@@ -2273,6 +2289,7 @@ DOC_START
 		mt	MIME content type
 		rm	Request method (GET/POST etc)
 		ru	Request URL
+		rU	Rewritten URL when using url rewriters
 		rp	Request URL-Path excluding hostname
 		rv	Request protocol version
 		ea	Log string returned by external acl
