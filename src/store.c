@@ -1656,7 +1656,7 @@ storeInit(void)
 {
     storeKeyInit();
     storeInitHashValues();
-    store_table = hash_create(storeKeyHashCmp, 65536, storeKeyHashHash);
+    store_table = hash_create(storeKeyHashCmp, store_hash_buckets, storeKeyHashHash);
     mem_policy = createRemovalPolicy(Config.memPolicy);
     storeDigestInit();
     storeLogOpen();
