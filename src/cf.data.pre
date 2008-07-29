@@ -1867,8 +1867,9 @@ DOC_START
 	list this option multiple times. Note: never_direct overrides
 	this option.
 NOCOMMENT_START
-#We recommend you to use at least the following line.
-hierarchy_stoplist cgi-bin ?
+# We used to recommend you to use at least the following line;
+# this is now done using refresh_pattern entries.
+# hierarchy_stoplist cgi-bin ?
 NOCOMMENT_END
 DOC_END
 
