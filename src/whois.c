@@ -91,7 +91,7 @@ whoisReadReply(int fd, void *data)
     char *buf = memAllocate(MEM_4K_BUF);
     MemObject *mem = entry->mem_obj;
     int len;
-    statCounter.syscalls.sock.reads++;
+    CommStats.syscalls.sock.reads++;
     len = FD_READ_METHOD(fd, buf, 4095);
     buf[len] = '\0';
     debug(75, 3) ("whoisReadReply: FD %d read %d bytes\n", fd, len);

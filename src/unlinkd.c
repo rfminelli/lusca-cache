@@ -143,7 +143,7 @@ unlinkdUnlink(const char *path)
 	return;
     }
     statCounter.unlink.requests++;
-    statCounter.syscalls.disk.unlinks++;
+    CommStats.syscalls.disk.unlinks++;
     queuelen++;
 }
 
@@ -201,6 +201,7 @@ unlinkdInit(void)
 	Config.Program.unlinkd,
 	args,
 	"unlinkd",
+	Config.sleep_after_fork,
 	&unlinkd_rfd,
 	&unlinkd_wfd,
 	&hIpc);

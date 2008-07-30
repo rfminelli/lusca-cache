@@ -112,7 +112,7 @@ httpHdrRangeRespSpecPackInto(const HttpHdrRangeSpec * spec, Packer * p)
 HttpHdrContRange *
 httpHdrContRangeCreate(void)
 {
-    HttpHdrContRange *r = memAllocate(MEM_HTTP_HDR_CONTENT_RANGE);
+    HttpHdrContRange *r = memPoolAlloc(pool_http_hdr_cont_range);
     r->spec.offset = r->spec.length = range_spec_unknown;
     r->elength = range_spec_unknown;
     return r;
@@ -162,7 +162,7 @@ void
 httpHdrContRangeDestroy(HttpHdrContRange * range)
 {
     assert(range);
-    memFree(range, MEM_HTTP_HDR_CONTENT_RANGE);
+    memPoolFree(pool_http_hdr_cont_range, range);
 }
 
 HttpHdrContRange *

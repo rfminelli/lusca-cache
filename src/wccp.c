@@ -188,7 +188,7 @@ wccpHandleUdp(int sock, void *not_used)
     memset(&from, '\0', from_len);
     memset(&wccp_i_see_you, '\0', sizeof(wccp_i_see_you));
 
-    statCounter.syscalls.sock.recvfroms++;
+    CommStats.syscalls.sock.recvfroms++;
 
     len = recvfrom(sock,
 	(void *) &wccp_i_see_you,

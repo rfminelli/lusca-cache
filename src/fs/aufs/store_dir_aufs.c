@@ -438,7 +438,7 @@ storeAufsDirRebuildFromDirectory(void *data)
 	    debug(47, 3) ("  %s %7d files opened so far.\n",
 		rb->sd->path, rb->counts.scancount);
 	debug(47, 9) ("file_in: fd=%d %08X\n", fd, filn);
-	statCounter.syscalls.disk.reads++;
+	CommStats.syscalls.disk.reads++;
 	if (FD_READ_METHOD(fd, hdr_buf, SM_PAGE_SIZE) < 0) {
 	    debug(47, 1) ("storeAufsDirRebuildFromDirectory: read(FD %d): %s\n",
 		fd, xstrerror());
@@ -1088,13 +1088,13 @@ storeAufsDirCloseTmpSwapLog(SwapDir * sd)
 static void
 storeSwapLogDataFree(void *s)
 {
-    memFree(s, MEM_SWAP_LOG_DATA);
+    memPoolFree(pool_swap_log_data, s);
 }
 
 static void
 storeAufsWriteSwapLogheader(int fd)
 {
-    storeSwapLogHeader *hdr = memAllocate(MEM_SWAP_LOG_DATA);
+    storeSwapLogHeader *hdr = memPoolAlloc(pool_swap_log_data);
     hdr->op = SWAP_LOG_VERSION;
     hdr->version = 1;
     hdr->record_size = sizeof(storeSwapLogData);
@@ -1325,7 +1325,7 @@ static void
 storeAufsDirSwapLog(const SwapDir * sd, const StoreEntry * e, int op)
 {
     squidaioinfo_t *aioinfo = (squidaioinfo_t *) sd->fsdata;
-    storeSwapLogData *s = memAllocate(MEM_SWAP_LOG_DATA);
+    storeSwapLogData *s = memPoolAlloc(pool_swap_log_data);
     s->op = (char) op;
     s->swap_filen = e->swap_filen;
     s->timestamp = e->timestamp;
@@ -1891,7 +1891,7 @@ storeAufsDirParse(SwapDir * sd, int index, char *path)
     sd->checkload = storeAufsDirCheckLoadAv;
     sd->refobj = storeAufsDirRefObj;
     sd->unrefobj = storeAufsDirUnrefObj;
-    sd->callback = aioCheckCallbacks;
+    sd->callback = NULL;
     sd->sync = aioSync;
     sd->obj.create = storeAufsCreate;
     sd->obj.open = storeAufsOpen;
