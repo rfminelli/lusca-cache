@@ -1,5 +1,9 @@
 ChangeLog:
 
+-- (30-July-2008)
+
+* Tag CACHEBOY_1.4.
+
 -- (29-July-2008)
 
 * Fix regression in memory store index - my bad!
