@@ -948,7 +948,6 @@ extern void writePidFile(void);
 extern void setSocketShutdownLifetimes(int);
 extern void setMaxFD(void);
 extern void setSystemLimits(void);
-extern time_t getCurrentTime(void);
 extern int percent(int, int);
 extern double dpercent(double, double);
 extern pid_t readPidFile(void);

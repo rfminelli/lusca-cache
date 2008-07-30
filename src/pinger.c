@@ -493,18 +493,6 @@ pingerSendtoSquid(pingerReplyData * preply)
     }
 }
 
-time_t
-getCurrentTime(void)
-{
-#if GETTIMEOFDAY_NO_TZP
-    gettimeofday(&current_time);
-#else
-    gettimeofday(&current_time, NULL);
-#endif
-    return squid_curtime = current_time.tv_sec;
-}
-
-
 int
 main(int argc, char *argv[])
 {
