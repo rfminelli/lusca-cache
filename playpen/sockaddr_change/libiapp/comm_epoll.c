@@ -218,9 +218,7 @@ do_comm_select(int msec)
 	debug(5, 1) ("comm_select: epoll failure: %s\n", xstrerror());
 	return COMM_ERROR;
     }
-#if NOTYET
-    statHistCount(&statCounter.select_fds_hist, num);
-#endif
+    statHistCount(&select_fds_hist, num);
 
     if (num == 0)
 	return COMM_TIMEOUT;

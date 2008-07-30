@@ -83,7 +83,6 @@ sbin_PROGRAMS = \
 
 libexec_PROGRAMS = \
 	$(PINGER) \
-	$(DNSSERVER) \
 	$(UNLINKD) \
 	$(LOGFILED)
 
@@ -244,9 +243,12 @@ squid_LDADD = \
 	-L../libcore \
 	-L../libmem \
 	-L../libcb \
+	-L../libhelper \
 	-L../libiapp \
 	-L../libhttp \
 	-L../libstat \
+	-L../libsqdns \
+	-L../libsqinet \
 	@XTRA_OBJS@ \
 	@REPL_OBJS@ \
 	@STORE_OBJS@ \
@@ -257,10 +259,13 @@ squid_LDADD = \
 	@LIB_MALLOC@ \
 	@SSLLIB@ \
 	@LIB_EPOLL@ \
+	-lsqdns \
+	-lsqinet \
 	-lmiscutil \
 	-lcore \
 	-lmem \
 	-lcb \
+	-lhelper \
 	-liapp \
 	-lhttp \
 	-lstat \
@@ -301,7 +306,7 @@ sysconf_DATA = \
 data_DATA = \
 	mib.txt
 
-LDADD = -L../lib -L../libcore -L../libmem -L../libcb -L../libiapp -L../libhttp -L../libstat -lmiscutil -lcore -lmem -lcb -liapp -lhttp -lstat @XTRA_LIBS@
+LDADD = -L../lib -L../libcore -L../libmem -L../libcb -L../libhelper -L../libiapp -L../libhttp -L../libstat -L../libsqdns -L../libsqinet -lsqinet -lsqdns -lmiscutil -lcore -lmem -lcb -lhelper -liapp -lhttp -lstat @XTRA_LIBS@
 
 EXTRA_DIST = \
 	cf_gen_defines \

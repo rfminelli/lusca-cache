@@ -1073,6 +1073,7 @@ struct _clientHttpRequest {
     store_client *sc;		/* The store_client we're using */
     store_client *old_sc;	/* ... for entry to be validated */
     char *uri;
+    char *log_uri;
     struct {
 	squid_off_t offset;
 	squid_off_t size;
@@ -1323,9 +1324,7 @@ struct _peer {
 	unsigned int originserver:1;
 	unsigned int userhash:1;
 	unsigned int sourcehash:1;
-#if USE_CARP
 	unsigned int carp:1;
-#endif
 	unsigned int http11:1;	/* HTTP/1.1 support */
     } options;
     int weight;
@@ -1350,13 +1349,11 @@ struct _peer {
     int rr_count;
     peer *next;
     int test_fd;
-#if USE_CARP
     struct {
 	unsigned int hash;
 	double load_multiplier;
 	double load_factor;	/* normalized weight value */
     } carp;
-#endif
     struct {
 	unsigned int hash;
 	double load_multiplier;
@@ -1962,7 +1959,6 @@ struct _StatCounters {
     StatHist comm_icp_incoming;
     StatHist comm_dns_incoming;
     StatHist comm_http_incoming;
-    StatHist select_fds_hist;
 #if 0
     struct {
 	struct {
@@ -2131,122 +2127,6 @@ struct _htcpReplyData {
 
 #endif
 
-
-struct _helper_request {
-    char *buf;
-    HLPCB *callback;
-    void *data;
-    struct timeval dispatch_time;
-    dlink_node n;
-};
-
-struct _helper_stateful_request {
-    char *buf;
-    HLPSCB *callback;
-    void *data;
-    struct timeval dispatch_time;
-    dlink_node n;
-};
-
-
-struct _helper {
-    wordlist *cmdline;
-    dlink_list servers;
-    dlink_list queue;
-    const char *id_name;
-    int n_to_start;
-    int n_running;
-    int n_active;
-    int ipc_type;
-    int concurrency;
-    time_t last_queue_warn;
-    struct {
-	int requests;
-	int replies;
-	int queue_size;
-	int max_queue_size;
-	int avg_svc_time;
-    } stats;
-    time_t last_restart;
-};
-
-struct _helper_stateful {
-    wordlist *cmdline;
-    dlink_list servers;
-    dlink_list queue;
-    const char *id_name;
-    int n_to_start;
-    int n_running;
-    int n_active;
-    int ipc_type;
-    int concurrency;
-    MemPool *datapool;
-    HLPSAVAIL *IsAvailable;
-    HLPSRESET *Reset;
-    time_t last_queue_warn;
-    struct {
-	int requests;
-	int replies;
-	int queue_size;
-	int max_queue_size;
-	int avg_svc_time;
-    } stats;
-    time_t last_restart;
-};
-
-struct _helper_server {
-    int index;
-    int pid;
-    int rfd;
-    int wfd;
-    MemBuf wqueue;
-    char *rbuf;
-    size_t rbuf_sz;
-    int roffset;
-    dlink_node link;
-    helper *parent;
-    helper_request **requests;
-    struct _helper_flags {
-	unsigned int writing:1;
-	unsigned int closing:1;
-	unsigned int shutdown:1;
-    } flags;
-    struct {
-	int uses;
-	unsigned int pending;
-    } stats;
-    void *hIpc;
-};
-
-
-struct _helper_stateful_server {
-    int index;
-    int pid;
-    int rfd;
-    int wfd;
-    char *buf;
-    size_t buf_sz;
-    int offset;
-    struct timeval dispatch_time;
-    struct timeval answer_time;
-    dlink_node link;
-    statefulhelper *parent;
-    helper_stateful_request *request;
-    struct _helper_stateful_flags {
-	unsigned int alive:1;
-	unsigned int busy:1;
-	unsigned int closing:1;
-	unsigned int shutdown:1;
-	unsigned int reserved:1;
-    } flags;
-    struct {
-	int uses;
-	int submits;
-	int releases;
-    } stats;
-    void *data;			/* State data used by the calling routines */
-    void *hIpc;
-};
 
 /*
  * use this when you need to pass callback data to a blocking

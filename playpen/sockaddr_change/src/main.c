@@ -346,9 +346,7 @@ serverConnectionsOpen(void)
     netdbInit();
     asnInit();
     peerSelectInit();
-#if USE_CARP
     carpInit();
-#endif
     peerSourceHashInit();
     peerUserHashInit();
     peerMonitorInit();
@@ -434,9 +432,12 @@ mainReconfigure(void)
     useragentOpenLog();
     refererOpenLog();
 #if USE_DNSSERVERS
-    dnsInit();
+    dnsInit(Config.Program.dnsserver, Config.dnsChildren, Config.dns_nameservers, Config.onoff.res_defnames);
+    dnsInternalInit();
 #else
+    idnsConfigure(Config.Addrs.udp_incoming, Config.Addrs.udp_outgoing, Config.onoff.ignore_unknown_nameservers, Config.Timeout.idns_retransmit, Config.Timeout.idns_query, Config.onoff.res_defnames);
     idnsInit();
+    idnsInternalInit();
 #endif
     redirectInit();
     storeurlInit();
@@ -495,7 +496,8 @@ mainRotate(void)
 #endif
     icmpOpen();
 #if USE_DNSSERVERS
-    dnsInit();
+    dnsInit(Config.Program.dnsserver, Config.dnsChildren, Config.dns_nameservers, Config.onoff.res_defnames);
+    dnsInternalInit();
 #endif
     redirectInit();
     storeurlInit();
@@ -597,9 +599,12 @@ mainInitialize(void)
     fqdncache_init();
     parseEtcHosts();
 #if USE_DNSSERVERS
-    dnsInit();
+    dnsInit(Config.Program.dnsserver, Config.dnsChildren, Config.dns_nameservers, Config.onoff.res_defnames);
+    dnsInternalInit();
 #else
+    idnsConfigure(Config.Addrs.udp_incoming, Config.Addrs.udp_outgoing, Config.onoff.ignore_unknown_nameservers, Config.Timeout.idns_retransmit, Config.Timeout.idns_query, Config.onoff.res_defnames);
     idnsInit();
+    idnsInternalInit();
 #endif
     redirectInit();
     storeurlInit();

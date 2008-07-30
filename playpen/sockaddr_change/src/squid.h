@@ -244,7 +244,6 @@
 #endif
 
 #include "../libcore/varargs.h"
-#include "../libcore/syslog.h"
 
 /* Make sure syslog goes after stdarg/varargs */
 #ifdef HAVE_SYSLOG_H
@@ -254,6 +253,8 @@
 #endif
 #include <syslog.h>
 #endif
+
+#include "../libcore/syslog_ntoa.h"
 
 #if HAVE_MATH_H
 #include <math.h>
@@ -408,6 +409,8 @@ struct rusage {
 
 #include "../libstat/StatHist.h"
 
+#include "../libsqinet/inet.h"
+
 #include "../libhttp/HttpVersion.h"
 #include "../libhttp/HttpStatusLine.h"
 #include "../libhttp/HttpHeaderType.h"
@@ -422,6 +425,17 @@ struct rusage {
 #include "../libiapp/globals.h"
 #include "../libiapp/pconn_hist.h"
 #include "../libiapp/mainloop.h"
+
+#include "../libhelper/ipc.h"
+#include "../libhelper/helper.h"
+
+#include "../libsqdns/dns.h"
+
+#if USE_DNSSERVERS
+#include "../libsqdns/dns_external.h"
+#else
+#include "../libsqdns/dns_internal.h"
+#endif
 
 #include "defines.h"
 #include "enums.h"

@@ -87,7 +87,6 @@ extern int opt_udp_hit_obj;	/* 0 */
 extern int opt_create_swap_dirs;	/* 0 */
 extern int opt_store_doublecheck;	/* 0 */
 extern int syslog_enable;	/* 0 */
-extern int DnsSocket;		/* -1 */
 #ifdef SQUID_SNMP
 extern int theInSnmpConnection;	/* -1 */
 extern int theOutSnmpConnection;	/* -1 */
@@ -99,7 +98,6 @@ extern struct _acl_deny_info_list *DenyInfoList;	/* NULL */
 extern struct in_addr theOutICPAddr;
 extern struct in_addr theOutSNMPAddr;
 extern struct timeval squid_start;
-extern int reconfiguring;	/* 0 */
 extern int store_dirs_rebuilding;	/* 1 */
 extern int store_swap_size;	/* 0 */
 extern unsigned long store_mem_size;	/* 0 */

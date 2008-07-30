@@ -23,6 +23,8 @@ int _db_level;
 
 static int opt_debug_stderr = -1;
 
+char * _debug_options = NULL;
+
 #define	MAX_DEBUG_CALLBACKS	16
 
 static struct {
@@ -146,21 +148,27 @@ _db_print(va_alist)
     snprintf(f, BUFSIZ, "%s| %s", debugLogTime(squid_curtime), format);
 
     _db_print_stderr(f, args1);
+    va_end(args1);
     int i;
 
     /* Send the string off to the individual section handlers */
     for (i = 0; i < db_callbacks.count; i++) {
+#if STDC_HEADERS
+        va_start(args1, format);
+#else
+        format = va_arg(args1, const char *);
+#endif
         if (db_callbacks.cbs[i].do_timestamp) {
 		db_callbacks.cbs[i].cb(f, args1);
 	} else {
 		db_callbacks.cbs[i].cb(format, args1);
 	}
+        va_end(args1);
     }
 
 #ifdef _SQUID_MSWIN_
     LeaveCriticalSection(dbg_mutex);
 #endif
-    va_end(args1);
 }
 
 static void
@@ -195,17 +203,21 @@ void
 _db_init(const char *options)
 {
     int i;
-    char *p = NULL;
     char *s = NULL;
+    char *p;
 
     for (i = 0; i < MAX_DEBUG_SECTIONS; i++)
 	debugLevels[i] = -1;
 
+    if (_debug_options)
+        xfree(_debug_options);
+    _debug_options = NULL;
     if (options) {
-	p = xstrdup(options);
+	_debug_options = xstrdup(options);
+	p = xstrdup(options);	/* XXX need this copy so strtok() can be done */
 	for (s = strtok(p, w_space); s; s = strtok(NULL, w_space))
 	    debugArg(s);
-	xfree(p);
+        xfree(p);
     }
 }
 

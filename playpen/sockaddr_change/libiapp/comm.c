@@ -66,6 +66,10 @@
 #include "../libmem/MemBuf.h"
  
 #include "../libcb/cbdata.h"
+
+#include "../libsqinet/inet.h"
+
+#include "../libstat/StatHist.h"
  
 #include "iapp_ssl.h"
 #include "globals.h"
@@ -441,7 +445,8 @@ comm_accept(int fd, struct sockaddr_in *pn, struct sockaddr_in *me)
 	*me = M;
     commSetCloseOnExec(sock);
     /* fdstat update */
-    fd_open(sock, FD_SOCKET, "HTTP Request");
+    fd_open(sock, FD_SOCKET, NULL);
+    fd_note_static(sock, "HTTP Request");
     F = &fd_table[sock];
     xstrncpy(F->ipaddr, xinet_ntoa(P.sin_addr), 16);
     F->remote_port = htons(P.sin_port);
@@ -991,6 +996,7 @@ comm_init(void)
     RESERVED_FD = XMIN(100, Squid_MaxFD / 4);
     comm_write_pool = memPoolCreate("CommWriteStateData", sizeof(CommWriteStateData));
     conn_close_pool = memPoolCreate("close_handler", sizeof(close_handler));
+    statHistIntInit(&select_fds_hist, 256);
 }
 
 /* Write to FD. */
@@ -1056,6 +1062,9 @@ commHandleWrite(int fd, void *data)
     }
 }
 
+/*
+ * XXX WARNING: This isn't to be used yet - its still under testing!
+ */
 static void
 commHandleRead(int fd, void *data)
 {
@@ -1095,6 +1104,8 @@ commHandleRead(int fd, void *data)
  * may complete before or during the cancellation (and in particular, the buffer
  * will be read into!) so a failed cancellation must turn into "wait for the
  * now pending callback to fire before completing the shutdown process".
+ *
+ * XXX WARNING: This isn't to be used yet - its still under testing!
  */
 void
 comm_read(int fd, char *buf, int size, CRCB *cb, void *cbdata)
@@ -1115,6 +1126,8 @@ comm_read(int fd, char *buf, int size, CRCB *cb, void *cbdata)
 /*
  * For now, just cancel it if its active; the operations aren't done asynchronous.
  * This will change!
+ *
+ * XXX WARNING: This isn't to be used yet - its still under testing!
  */
 int
 comm_read_cancel(int fd)

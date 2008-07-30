@@ -429,6 +429,7 @@ storeDiskdDirInit(SwapDir * sd)
 	Config.Program.diskd,
 	args,
 	"diskd",
+	Config.sleep_after_fork,
 	&diskdinfo->rfd,
 	&diskdinfo->wfd,
 	&diskdinfo->hIpc);

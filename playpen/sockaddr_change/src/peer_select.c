@@ -55,9 +55,7 @@ const char *hier_strings[] =
     "CD_PARENT_HIT",
     "CD_SIBLING_HIT",
 #endif
-#if USE_CARP
     "CARP",
-#endif
     "ANY_PARENT",
     "USERHASH_PARENT",
     "SOURCEHASH_PARENT",
@@ -473,10 +471,8 @@ peerGetSomeParent(ps_state * ps)
 	code = USERHASH_PARENT;
     } else if ((p = peerSourceHashSelectParent(request))) {
 	code = SOURCEHASH_PARENT;
-#if USE_CARP
     } else if ((p = carpSelectParent(request))) {
 	code = CARP;
-#endif
     } else if ((p = getRoundRobinParent(request))) {
 	code = ROUNDROBIN_PARENT;
     } else if ((p = getFirstUpParent(request))) {
@@ -686,7 +682,7 @@ peerAddFwdServer(FwdServer ** FS, peer * p, hier_code code)
 	p ? p->name : "DIRECT",
 	hier_strings[code]);
     while (*FS) {
-	if ((*FS)->peer == p) {
+	if ((*FS)->peer == p && (*FS)->code != PINNED) {
 	    debug(44, 5) ("peerAddFwdServer: Skipping duplicate registration of %s\n", p ? p->name : "DIRECT");
 	    return;
 	}

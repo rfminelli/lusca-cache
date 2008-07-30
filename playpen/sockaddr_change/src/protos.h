@@ -154,16 +154,11 @@ extern void xassert(const char *, const char *, int);
 /* packs, then prints an object using debug() */
 extern void debugObj(int section, int level, const char *label, void *obj, ObjPackMethod pm);
 
-/* dns.s */
-extern void dnsShutdown(void);
-extern void dnsInit(void);
-extern void dnsSubmit(const char *lookup, HLPCB * callback, void *data);
+/* dns.c */
+extern void dnsInternalInit(void);
 
 /* dns_internal.c */
-extern void idnsInit(void);
-extern void idnsShutdown(void);
-extern void idnsALookup(const char *, IDNSCB *, void *);
-extern void idnsPTRLookup(const struct in_addr, IDNSCB *, void *);
+extern void idnsInternalInit(void);
 
 /* event.c */
 extern void eventLocalInit(void);
@@ -953,7 +948,6 @@ extern void writePidFile(void);
 extern void setSocketShutdownLifetimes(int);
 extern void setMaxFD(void);
 extern void setSystemLimits(void);
-extern time_t getCurrentTime(void);
 extern int percent(int, int);
 extern double dpercent(double, double);
 extern pid_t readPidFile(void);
@@ -1040,7 +1034,6 @@ char *strwordtok(char *buf, char **t);
 void strwordquote(MemBuf * mb, const char *str);
 
 void setUmask(mode_t mask);
-int xusleep(unsigned int usec);
 void keepCapabilities(void);
 
 #if USE_HTCP
@@ -1051,17 +1044,6 @@ extern void htcpSocketClose(void);
 #endif
 
 /* String */
-
-/*
- * ipc.c
- */
-extern pid_t ipcCreate(int type,
-    const char *prog,
-    const char *const args[],
-    const char *name,
-    int *rfd,
-    int *wfd,
-    void **hIpc);
 
 /* CacheDigest */
 extern CacheDigest *cacheDigestCreate(int capacity, int bpe);
@@ -1087,10 +1069,8 @@ extern char *internalRemoteUri(const char *, u_short, const char *, const char *
 extern const char *internalHostname(void);
 extern int internalHostnameIs(const char *);
 
-#if USE_CARP
 extern void carpInit(void);
 extern peer *carpSelectParent(request_t *);
-#endif
 
 extern void peerUserHashInit(void);
 extern peer *peerUserHashSelectParent(request_t *);
@@ -1121,25 +1101,8 @@ extern void delayUnregisterDelayIdPtr(delay_id * loc);
 #endif
 
 /* helper.c */
-extern void helperInitMem(void);
-extern void helperOpenServers(helper * hlp);
-extern void helperStatefulOpenServers(statefulhelper * hlp);
-extern void helperSubmit(helper * hlp, const char *buf, HLPCB * callback, void *data);
-extern void helperStatefulSubmit(statefulhelper * hlp, const char *buf, HLPSCB * callback, void *data, helper_stateful_server * lastserver);
 extern void helperStats(StoreEntry * sentry, helper * hlp);
 extern void helperStatefulStats(StoreEntry * sentry, statefulhelper * hlp);
-extern void helperShutdown(helper * hlp);
-extern void helperStatefulShutdown(statefulhelper * hlp);
-extern helper *helperCreate(const char *);
-extern statefulhelper *helperStatefulCreate(const char *);
-extern void helperFree(helper *);
-extern void helperStatefulFree(statefulhelper *);
-extern void helperStatefulReset(helper_stateful_server * srv);
-extern void helperStatefulReleaseServer(helper_stateful_server * srv);
-extern void *helperStatefulServerGetData(helper_stateful_server * srv);
-extern helper_stateful_server *helperStatefulGetServer(statefulhelper *);
-
-
 
 #if USE_LEAKFINDER
 extern void leakInit(void);

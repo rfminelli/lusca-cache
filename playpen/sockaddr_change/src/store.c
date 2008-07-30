@@ -1380,6 +1380,7 @@ storeRequestFailed(StoreEntry * e, ErrorState * err)
 	errorAppendEntry(e, err);
     } else {
 	EBIT_SET(e->flags, ENTRY_ABORTED);
+	EBIT_CLR(e->flags, ENTRY_FWD_HDR_WAIT);
     }
     e->store_status = STORE_OK;
     mem->object_sz = mem->inmem_hi;
@@ -1655,8 +1656,7 @@ storeInit(void)
 {
     storeKeyInit();
     storeInitHashValues();
-    store_table = hash_create(storeKeyHashCmp,
-	store_hash_buckets, storeKeyHashHash);
+    store_table = hash_create(storeKeyHashCmp, store_hash_buckets, storeKeyHashHash);
     mem_policy = createRemovalPolicy(Config.memPolicy);
     storeDigestInit();
     storeLogOpen();
