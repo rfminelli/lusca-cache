@@ -459,9 +459,11 @@ pingerReadRequest(void)
     int n;
     int guess_size;
     memset(&pecho, '\0', sizeof(pecho));
-    n = recv(socket_from_squid, (char *) &pecho, sizeof(pecho), 0);
-    if (n < 0)
+    n = read(socket_from_squid, (char *) &pecho, sizeof(pecho));
+    if (n < 0) {
+        debug(42, 0) ("pingerReadRequest: socket %d: read() failed; errno %d\n", socket_from_squid, errno);
 	return n;
+    }
     if (0 == n) {
 	/* EOF indicator */
 	fprintf(stderr, "EOF encountered\n");
@@ -507,14 +509,15 @@ main(int argc, char *argv[])
  * cevans - do this first. It grabs a raw socket. After this we can
  * drop privs
  */
-    pingerOpen();
-    setgid(getgid());
-    setuid(getuid());
-
     if ((t = getenv("SQUID_DEBUG")))
 	debug_args = xstrdup(t);
     getCurrentTime();
     _db_init(debug_args);
+    _db_set_stderr_debug(1);
+
+    pingerOpen();
+    setgid(getgid());
+    setuid(getuid());
 
     for (;;) {
 	tv.tv_sec = PINGER_TIMEOUT;
