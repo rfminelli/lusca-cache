@@ -131,10 +131,6 @@
 
 #define SM_PAGE_SIZE 4096
 
-#define EBIT_SET(flag, bit) 	((void)((flag) |= ((1L<<(bit)))))
-#define EBIT_CLR(flag, bit) 	((void)((flag) &= ~((1L<<(bit)))))
-#define EBIT_TEST(flag, bit) 	((flag) & ((1L<<(bit))))
-
 /* bit opearations on a char[] mask of unlimited length */
 #define CBIT_BIT(bit)           (1<<((bit)%8))
 #define CBIT_BIN(mask, bit)     (mask)[(bit)>>3]

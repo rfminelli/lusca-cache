@@ -179,7 +179,7 @@ do_comm_select(int msec)
     memcpy(current_errfds, global_writefds, fd_set_size);
     tv.tv_sec = msec / 1000;
     tv.tv_usec = (msec % 1000) * 1000;
-    statCounter.syscalls.selects++;
+    CommStats.syscalls.selects++;
     num = select(Biggest_FD + 1, current_readfds, current_writefds, current_errfds, &tv);
 
     if (num < 0) {
@@ -190,7 +190,7 @@ do_comm_select(int msec)
 	debug(5, 1) ("comm_select: select failure: %s\n", xstrerror());
 	return COMM_ERROR;
     }
-    statHistCount(&statCounter.select_fds_hist, num);
+    statHistCount(&select_fds_hist, num);
 
     if (num == 0)
 	return COMM_TIMEOUT;
