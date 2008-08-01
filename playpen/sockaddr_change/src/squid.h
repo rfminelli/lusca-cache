@@ -409,7 +409,7 @@ struct rusage {
 
 #include "../libstat/StatHist.h"
 
-#include "../libsqinet/inet.h"
+#include "../libsqinet/sqinet.h"
 
 #include "../libhttp/HttpVersion.h"
 #include "../libhttp/HttpStatusLine.h"
