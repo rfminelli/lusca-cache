@@ -1,7 +1,7 @@
 ## Process this file with automake to produce Makefile.in
 
 libsqinet_a_SOURCES = \
-	inet.c
+	sqinet.c
 
 noinst_LIBRARIES = \
 	libsqinet.a
