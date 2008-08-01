@@ -70,8 +70,6 @@
 
 #include "comm_generic.c"
 
-#include "comm_generic.c"
-
 #if HAVE_SYS_POLL_H
 #include <sys/poll.h>
 #elif HAVE_POLL_H
@@ -163,7 +161,7 @@ do_comm_select(int msec)
 	assert(shutting_down);
 	return COMM_SHUTDOWN;
     }
-    statCounter.syscalls.selects++;
+    CommStats.syscalls.selects++;
     num = poll(pfds, nfds, msec);
     if (num < 0) {
 	getCurrentTime();
@@ -173,7 +171,7 @@ do_comm_select(int msec)
 	debug(5, 1) ("comm_select: poll failure: %s\n", xstrerror());
 	return COMM_ERROR;
     }
-    statHistCount(&statCounter.select_fds_hist, num);
+    statHistCount(&select_fds_hist, num);
 
     if (num == 0)
 	return COMM_TIMEOUT;
