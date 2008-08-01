@@ -1,6 +1,8 @@
 #ifndef	__LIBSQINET_INET_H__
 #define	__LIBSQINET_INET_H__
 
+#define	MAX_IPSTRLEN	75
+
 struct _sqaddr {
 	struct sockaddr_storage st;
 };
