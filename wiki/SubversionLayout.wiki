@@ -1,0 +1,16 @@
+#summary How the source is laid out!
+
+= Introduction =
+
+The one thing to remember is that development doesn't happen off trunk.
+
+= Layout =
+
+  * Squid-2.HEAD is tracked in /svn/trunk
+  * Cacheboy development is in /svn/branches/CACHEBOY_PRE
+  * Project playpens are in /svn/playpen/ ; generally branched off CACHEBOY_PRE
+
+= Merging =
+
+  * Squid-2.HEAD changes are imported, changeset at a time, into /svn/trunk (so it should mostly resemble the CVS repository)
+  * Changes are then merged into /svn/branches/CACHEBOY_PRE, so it constantly tracks Squid-2.HEAD (this may change if Squid-2.HEAD becomes unnecessarily unstable for some reason..)
