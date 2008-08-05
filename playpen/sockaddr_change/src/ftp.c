@@ -1809,32 +1809,32 @@ ftpReadPasv(FtpStateData * ftpState)
     buf = ftpState->ctrl.last_reply + strcspn(ftpState->ctrl.last_reply, "0123456789");
     n = sscanf(buf, "%d,%d,%d,%d,%d,%d", &h1, &h2, &h3, &h4, &p1, &p2);
     if (n != 6 || p1 < 0 || p2 < 0 || p1 > 255 || p2 > 255) {
-	debug(9, 1) ("Odd PASV reply from %s: %s\n", fd_table[ftpState->ctrl.fd].ipaddr, ftpState->ctrl.last_reply);
+	debug(9, 1) ("Odd PASV reply from %s: %s\n", fd_table[ftpState->ctrl.fd].ipaddrstr, ftpState->ctrl.last_reply);
 	ftpSendPort(ftpState);
 	return;
     }
     snprintf(ipaddr, 1024, "%d.%d.%d.%d", h1, h2, h3, h4);
     if (!safe_inet_addr(ipaddr, NULL)) {
-	debug(9, 1) ("Unsafe PASV reply from %s: %s\n", fd_table[ftpState->ctrl.fd].ipaddr, ftpState->ctrl.last_reply);
+	debug(9, 1) ("Unsafe PASV reply from %s: %s\n", fd_table[ftpState->ctrl.fd].ipaddrstr, ftpState->ctrl.last_reply);
 	ftpSendPort(ftpState);
 	return;
     }
     port = ((p1 << 8) + p2);
     if (0 == port) {
-	debug(9, 1) ("Unsafe PASV reply from %s: %s\n", fd_table[ftpState->ctrl.fd].ipaddr, ftpState->ctrl.last_reply);
+	debug(9, 1) ("Unsafe PASV reply from %s: %s\n", fd_table[ftpState->ctrl.fd].ipaddrstr, ftpState->ctrl.last_reply);
 	ftpSendPort(ftpState);
 	return;
     }
     if (Config.Ftp.sanitycheck) {
 	if (port < 1024) {
-	    debug(9, 1) ("Unsafe PASV reply from %s: %s\n", fd_table[ftpState->ctrl.fd].ipaddr, ftpState->ctrl.last_reply);
+	    debug(9, 1) ("Unsafe PASV reply from %s: %s\n", fd_table[ftpState->ctrl.fd].ipaddrstr, ftpState->ctrl.last_reply);
 	    ftpSendPort(ftpState);
 	    return;
 	}
     }
     ftpState->data.port = port;
     if (Config.Ftp.sanitycheck)
-	ftpState->data.host = xstrdup(fd_table[ftpState->ctrl.fd].ipaddr);
+	ftpState->data.host = xstrdup(fd_table[ftpState->ctrl.fd].ipaddrstr);
     else
 	ftpState->data.host = xstrdup(ipaddr);
     safe_free(ftpState->ctrl.last_command);
@@ -1970,8 +1970,8 @@ ftpAcceptDataConnection(int fd, void *data)
     fd = comm_accept(fd, &my_peer, &me);
     if (Config.Ftp.sanitycheck) {
 	char *ipaddr = inet_ntoa(my_peer.sin_addr);
-	if (strcmp(fd_table[ftpState->ctrl.fd].ipaddr, ipaddr) != 0) {
-	    debug(9, 1) ("FTP data connection from unexpected server (%s:%d), expecting %s\n", ipaddr, (int) ntohs(my_peer.sin_port), fd_table[ftpState->ctrl.fd].ipaddr);
+	if (strcmp(fd_table[ftpState->ctrl.fd].ipaddrstr, ipaddr) != 0) {
+	    debug(9, 1) ("FTP data connection from unexpected server (%s:%d), expecting %s\n", ipaddr, (int) ntohs(my_peer.sin_port), fd_table[ftpState->ctrl.fd].ipaddrstr);
 	    comm_close(fd);
 	    commSetSelect(ftpState->data.fd,
 		COMM_SELECT_READ,

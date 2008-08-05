@@ -330,7 +330,7 @@ fwdConnectDone(int server_fd, int status, void *data)
     request_t *request = fwdState->request;
     assert(fwdState->server_fd == server_fd);
     if (Config.onoff.log_ip_on_direct && status != COMM_ERR_DNS && fs->code == HIER_DIRECT)
-	hierarchyNote(&fwdState->request->hier, fs->code, fd_table[server_fd].ipaddr);
+	hierarchyNote(&fwdState->request->hier, fs->code, fd_table[server_fd].ipaddrstr);
     if (status == COMM_ERR_DNS) {
 	/*
 	 * Only set the dont_retry flag if the DNS lookup fails on
@@ -378,8 +378,8 @@ fwdConnectTimeout(int fd, void *data)
     ErrorState *err;
     debug(17, 2) ("fwdConnectTimeout: FD %d: '%s'\n", fd, storeUrl(entry));
     assert(fd == fwdState->server_fd);
-    if (Config.onoff.log_ip_on_direct && fs->code == HIER_DIRECT && fd_table[fd].ipaddr[0])
-	hierarchyNote(&fwdState->request->hier, fs->code, fd_table[fd].ipaddr);
+    if (Config.onoff.log_ip_on_direct && fs->code == HIER_DIRECT && fd_table[fd].ipaddrstr[0])
+	hierarchyNote(&fwdState->request->hier, fs->code, fd_table[fd].ipaddrstr);
     if (entry->mem_obj->inmem_hi == 0) {
 	err = errorCon(ERR_CONNECT_FAIL, HTTP_GATEWAY_TIMEOUT, fwdState->request);
 	err->xerrno = ETIMEDOUT;
@@ -602,7 +602,7 @@ fwdConnectStart(void *data)
 	    if (fs->peer)
 		hierarchyNote(&fwdState->request->hier, fs->code, fs->peer->name);
 	    else if (Config.onoff.log_ip_on_direct && fs->code == HIER_DIRECT)
-		hierarchyNote(&fwdState->request->hier, fs->code, fd_table[fd].ipaddr);
+		hierarchyNote(&fwdState->request->hier, fs->code, fd_table[fd].ipaddrstr);
 	    else
 		hierarchyNote(&fwdState->request->hier, fs->code, name);
 	    if (fs->peer && idle >= 0 && idle < fs->peer->idle) {
