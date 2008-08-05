@@ -14,3 +14,9 @@ The one thing to remember is that development doesn't happen off trunk.
 
   * Squid-2.HEAD changes are imported, changeset at a time, into /svn/trunk (so it should mostly resemble the CVS repository)
   * Changes are then merged into /svn/branches/CACHEBOY_PRE, so it constantly tracks Squid-2.HEAD (this may change if Squid-2.HEAD becomes unnecessarily unstable for some reason..)
+  * Playpen work/changes are folded into /svn/branches/CACHEBOY_PRE when ready
+
+= Releases =
+
+  * Releases are made off /svn/branches/CACHEBOY_PRE by laying down tags in /svn/tags
+  * Major releases don't cause a branch yet - the codebase is still undergoing widescale changes and trying to deal with multiple concurrent branches would be a nightmare. This will change when the codebase settles down.
