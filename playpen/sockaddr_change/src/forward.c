@@ -778,7 +778,7 @@ fwdDispatch(FwdState * fwdState)
     fd_table[server_fd].uses++;
     if (fd_table[server_fd].uses == 1 && fs->peer)
 	peerConnectSucceded(fs->peer);
-    fwdState->request->out_ip = fd_table[server_fd].local_addr;
+    fwdState->request->out_ip = sqinet_get_v4_inaddr(&fd_table[server_fd].local_address, SQADDR_ASSERT_IS_V4);
     netdbPingSite(request->host);
     entry->mem_obj->refresh_timestamp = squid_curtime;
     if (fwdState->servers && (p = fwdState->servers->peer)) {

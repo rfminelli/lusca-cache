@@ -255,8 +255,9 @@ comm_fdopenex(int new_socket,
     fde *F = NULL;
 
     fd_open(new_socket, FD_SOCKET, note);
+    sqinet_init(&F->local_address);
     F = &fd_table[new_socket];
-    F->local_addr = addr;
+    sqinet_set_v4_inaddr(&F->local_address, &addr); 
     F->tos = tos;
     if (!(flags & COMM_NOCLOEXEC))
 	commSetCloseOnExec(new_socket);
@@ -560,6 +561,7 @@ comm_reset_close(int fd)
 static inline void
 comm_close_finish(int fd)
 {
+    sqinet_done(&fd_table[fd].local_address);
     fd_close(fd);		/* update fdstat */
     close(fd);
     CommStats.syscalls.sock.closes++;

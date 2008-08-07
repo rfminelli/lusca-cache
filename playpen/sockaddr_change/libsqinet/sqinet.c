@@ -26,7 +26,7 @@ sqinet_done(sqaddr_t *s)
 }
 
 int
-sqinet_copy_v4_inaddr(sqaddr_t *src, struct in_addr *dst, sqaddr_flags flags)
+sqinet_copy_v4_inaddr(const sqaddr_t *src, struct in_addr *dst, sqaddr_flags flags)
 {
 	struct sockaddr_in *s;
 
@@ -65,3 +65,28 @@ sqinet_set_v4_sockaddr(sqaddr_t *s, struct sockaddr_in *v4addr)
 	s->st.ss_family = AF_INET;
 	return 1;
 }
+
+struct in_addr
+sqinet_get_v4_inaddr(const sqaddr_t *s, sqaddr_flags flags)
+{
+	struct sockaddr_in *v4;
+
+	if (flags & SQADDR_ASSERT_IS_V4) {
+		assert(s->st.ss_family == AF_INET);
+	}
+	v4 = (struct sockaddr_in *) &s->st;
+	return v4->sin_addr;
+}
+
+int
+sqinet_is_anyaddr(const sqaddr_t *s)
+{
+	struct sockaddr_in *v4;
+
+	/* XXX for now, only handle v4 */
+	assert(s->st.ss_family == AF_INET);
+
+	v4 = (struct sockaddr_in *) &s->st;
+	return (v4->sin_addr.s_addr == INADDR_ANY);
+}
+

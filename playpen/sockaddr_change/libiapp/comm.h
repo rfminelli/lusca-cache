@@ -153,7 +153,7 @@ struct _fde {
     unsigned int type;
     u_short local_port;
     u_short remote_port;
-    struct in_addr local_addr;
+    sqaddr_t local_address;
     unsigned char tos;
     char ipaddrstr[MAX_IPSTRLEN]; /* dotted decimal address of peer - XXX should be MAX_IPSTRLEN */
     const char *desc;
