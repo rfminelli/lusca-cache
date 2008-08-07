@@ -107,6 +107,7 @@ _db_print(va_alist)
 #endif
     static char f[BUFSIZ];
     va_list args1;
+    int i;
 
 #ifdef _SQUID_MSWIN_
     /* Multiple WIN32 threads may call this simultaneously */
@@ -149,7 +150,6 @@ _db_print(va_alist)
 
     _db_print_stderr(f, args1);
     va_end(args1);
-    int i;
 
     /* Send the string off to the individual section handlers */
     for (i = 0; i < db_callbacks.count; i++) {
