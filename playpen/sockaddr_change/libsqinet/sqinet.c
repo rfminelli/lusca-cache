@@ -95,6 +95,31 @@ sqinet_get_v4_inaddr(const sqaddr_t *s, sqaddr_flags flags)
 }
 
 int
+sqinet_get_v4_sockaddr_ptr(const sqaddr_t *s, struct sockaddr_in *v4, sqaddr_flags flags)
+{
+	if (flags & SQADDR_ASSERT_IS_V4)
+		assert(s->st.ss_family == AF_INET);
+	if (flags & SQADDR_ASSERT_IS_V6)
+		assert(s->st.ss_family == AF_INET6);
+
+	*v4 = *(struct sockaddr_in *) &s->st;
+	return 1;
+}
+
+struct sockaddr_in
+sqinet_get_v4_sockaddr(const sqaddr_t *s, sqaddr_flags flags)
+{
+	if (flags & SQADDR_ASSERT_IS_V4)
+		assert(s->st.ss_family == AF_INET);
+	if (flags & SQADDR_ASSERT_IS_V6)
+		assert(s->st.ss_family == AF_INET6);
+
+	return * (struct sockaddr_in *) &s->st;
+}
+
+
+
+int
 sqinet_is_anyaddr(const sqaddr_t *s)
 {
 	struct sockaddr_in *v4;
