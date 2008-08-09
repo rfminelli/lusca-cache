@@ -281,7 +281,7 @@ extern void comm_reset_close(int fd);
 extern void comm_lingering_close(int fd);
 #endif
 extern void commConnectStart(int fd, const char *, u_short, CNCB *, void *, struct in_addr *addr);
-extern int comm_connect_addr(int sock, const struct sockaddr_in *);
+extern int comm_connect_addr(int sock, const sqaddr_t *addr);
 extern void comm_init(void);
 extern int comm_listen(int sock);
 extern int comm_open(int, int, struct in_addr, u_short port, int, const char *note);

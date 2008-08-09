@@ -351,26 +351,26 @@ commSetTimeout(int fd, int timeout, PF * handler, void *data)
 }
 
 int
-comm_connect_addr(int sock, const struct sockaddr_in *address)
+comm_connect_addr(int sock, const sqaddr_t *addr)
 {
     int status = COMM_OK;
     fde *F = &fd_table[sock];
     int x;
     int err = 0;
     socklen_t errlen;
-    assert(ntohs(address->sin_port) != 0);
+    assert(sqinet_get_port(addr) != 0);
     /* Establish connection. */
     errno = 0;
     if (!F->flags.called_connect) {
 	F->flags.called_connect = 1;
 	CommStats.syscalls.sock.connects++;
-	x = connect(sock, (struct sockaddr *) address, sizeof(*address));
+	x = connect(sock, sqinet_get_entry(addr), sqinet_get_length(addr));
 	if (x < 0)
 	    debug(5, 9) ("connect FD %d: %s\n", sock, xstrerror());
     } else {
 #if defined(_SQUID_NEWSOS6_)
 	/* Makoto MATSUSHITA <matusita@ics.es.osaka-u.ac.jp> */
-	connect(sock, (struct sockaddr *) address, sizeof(*address));
+	connect(sock, sqinet_get_entry(addr), sqinet_get_length(addr));
 	if (errno == EINVAL) {
 	    errlen = sizeof(err);
 	    x = getsockopt(sock, SOL_SOCKET, SO_ERROR, &err, &errlen);
@@ -400,8 +400,8 @@ comm_connect_addr(int sock, const struct sockaddr_in *address)
 	status = COMM_INPROGRESS;
     else
 	return COMM_ERROR;
-    xstrncpy(F->ipaddrstr, xinet_ntoa(address->sin_addr), MAX_IPSTRLEN);
-    F->remote_port = ntohs(address->sin_port);
+    sqinet_ntoa(addr, F->ipaddrstr, MAX_IPSTRLEN, 0);
+    F->remote_port = sqinet_get_port(addr);
     if (status == COMM_OK) {
 	debug(5, 10) ("comm_connect_addr: FD %d connected to %s:%d\n",
 	    sock, F->ipaddrstr, F->remote_port);

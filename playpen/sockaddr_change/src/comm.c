@@ -246,13 +246,24 @@ commReconnect(void *data)
 static void
 commConnectHandle(int fd, void *data)
 {
+    int r;
+    sqaddr_t a;
+
     ConnectStateData *cs = data;
     if (cs->S.sin_addr.s_addr == 0) {
 	cs->S.sin_family = AF_INET;
 	cs->S.sin_addr = cs->in_addr;
 	cs->S.sin_port = htons(cs->port);
     }
-    switch (comm_connect_addr(fd, &cs->S)) {
+    /*
+     * Create a temporary sqaddr_t for now; this should be pushed into
+     * ConnectStateData later.
+     */
+    sqinet_init(&a);
+    sqinet_set_v4_sockaddr(&a, &cs->S);
+    r = comm_connect_addr(fd, &a);
+    sqinet_done(&a);
+    switch(r) {
     case COMM_INPROGRESS:
 	debug(5, 5) ("commConnectHandle: FD %d: COMM_INPROGRESS\n", fd);
 	commSetSelect(fd, COMM_SELECT_WRITE, commConnectHandle, cs, 0);
