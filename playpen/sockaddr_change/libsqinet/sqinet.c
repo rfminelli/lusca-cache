@@ -116,3 +116,17 @@ sqinet_is_noaddr(const sqaddr_t *s)
 	v4 = (struct sockaddr_in *) &s->st;
 	return (v4->sin_addr.s_addr == INADDR_NONE);
 }
+
+int
+sqinet_get_port(const sqaddr_t *s)
+{
+	switch (s->st.ss_family) {
+		case AF_INET:
+			return ((struct sockaddr_in *) &s->st)->sin_port;
+		case AF_INET6:
+			return ((struct sockaddr_in6 *) &s->st)->sin6_port;
+		default:
+			assert(0);
+	}
+	return 0;
+}

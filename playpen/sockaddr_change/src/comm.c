@@ -191,6 +191,7 @@ commResetFD(ConnectStateData * cs)
      * yuck, this has assumptions about comm_open() arguments for
      * the original socket
      */
+    assert(F->local_port == sqinet_get_port(&F->local_address));
     if (commBind(cs->fd, &F->local_address) != COMM_OK) {
 	debug(5, 0) ("commResetFD: bind: %s\n", xstrerror());
 	return 0;
