@@ -56,6 +56,21 @@ sqinet_set_v4_inaddr(sqaddr_t *s, struct in_addr *v4addr)
 }
 
 int
+sqinet_set_v4_port(sqaddr_t *s, short port, sqaddr_flags flags)
+{
+	struct sockaddr_in *v4;
+
+	/* Must be a v4 address */
+	if (flags & SQADDR_ASSERT_IS_V4)
+		assert(s->st.ss_family == AF_INET);
+	if (s->st.ss_family != AF_INET)
+		return 0;
+	v4 = (struct sockaddr_in *) &s->st;
+	v4->sin_port = htons(port);
+	return 1;
+}
+
+int
 sqinet_set_v4_sockaddr(sqaddr_t *s, struct sockaddr_in *v4addr)
 {
 	struct sockaddr_in *v4;
@@ -90,3 +105,14 @@ sqinet_is_anyaddr(const sqaddr_t *s)
 	return (v4->sin_addr.s_addr == INADDR_ANY);
 }
 
+int
+sqinet_is_noaddr(const sqaddr_t *s)
+{
+	struct sockaddr_in *v4;
+
+	/* XXX for now, only handle v4 */
+	assert(s->st.ss_family == AF_INET);
+
+	v4 = (struct sockaddr_in *) &s->st;
+	return (v4->sin_addr.s_addr == INADDR_NONE);
+}
