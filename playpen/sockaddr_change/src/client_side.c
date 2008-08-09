@@ -4763,7 +4763,7 @@ clientNegotiateSSL(int fd, void *data)
     }
     fd_table[fd].read_pending = COMM_PENDING_NOW;
     if (SSL_session_reused(ssl)) {
-	debug(83, 2) ("clientNegotiateSSL: Session %p reused on FD %d (%s:%d)\n", SSL_get_session(ssl), fd, fd_table[fd].ipaddr, (int) fd_table[fd].remote_port);
+	debug(83, 2) ("clientNegotiateSSL: Session %p reused on FD %d (%s:%d)\n", SSL_get_session(ssl), fd, fd_table[fd].ipaddrstr, (int) fd_table[fd].remote_port);
     } else {
 	if (do_debug(83, 4)) {
 	    /* Write out the SSL session details.. actually the call below, but
@@ -4776,7 +4776,7 @@ clientNegotiateSSL(int fd, void *data)
 #endif
 	    /* Note: This does not automatically fflush the log file.. */
 	}
-	debug(83, 2) ("clientNegotiateSSL: New session %p on FD %d (%s:%d)\n", SSL_get_session(ssl), fd, fd_table[fd].ipaddr, (int) fd_table[fd].remote_port);
+	debug(83, 2) ("clientNegotiateSSL: New session %p on FD %d (%s:%d)\n", SSL_get_session(ssl), fd, fd_table[fd].ipaddrstr, (int) fd_table[fd].remote_port);
     }
     debug(83, 3) ("clientNegotiateSSL: FD %d negotiated cipher %s\n", fd,
 	SSL_get_cipher(ssl));
@@ -4846,7 +4846,7 @@ httpsAccept(int sock, void *data)
 	    break;
 	}
 	F = &fd_table[fd];
-	debug(33, 4) ("httpsAccept: FD %d: accepted port %d client %s:%d\n", fd, F->local_port, F->ipaddr, F->remote_port);
+	debug(33, 4) ("httpsAccept: FD %d: accepted port %d client %s:%d\n", fd, F->local_port, F->ipaddrstr, F->remote_port);
 	connState = cbdataAlloc(ConnStateData);
 	connState->port = (http_port_list *) s;
 	cbdataLock(connState->port);

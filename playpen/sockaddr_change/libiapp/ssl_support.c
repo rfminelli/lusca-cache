@@ -52,6 +52,7 @@
 #include "../libmem/MemBuf.h"
 #include "../libmem/MemStr.h"
 #include "../libcb/cbdata.h"
+#include "../libsqinet/sqinet.h"
 
 #include "event.h"
 #include "iapp_ssl.h"
