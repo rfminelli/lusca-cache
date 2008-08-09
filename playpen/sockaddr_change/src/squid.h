@@ -314,15 +314,6 @@ struct rusage {
 #define SA_RESETHAND SA_ONESHOT
 #endif
 
-#if LEAK_CHECK_MODE
-#define LOCAL_ARRAY(type,name,size) \
-        static type *local_##name=NULL; \
-        type *name = local_##name ? local_##name : \
-                ( local_##name = (type *)xcalloc(size, sizeof(type)) )
-#else
-#define LOCAL_ARRAY(type,name,size) static type name[size]
-#endif
-
 #if USE_LEAKFINDER
 #define leakAdd(p) leakAddFL(p,__FILE__,__LINE__)
 #define leakTouch(p) leakTouchFL(p,__FILE__,__LINE__)
