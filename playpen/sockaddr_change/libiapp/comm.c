@@ -50,6 +50,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netdb.h>
 
 #include "../include/Array.h"
 #include "../include/Stack.h"
@@ -152,22 +153,16 @@ comm_local_port(int fd)
 }
 
 int
-commBind(int s, struct in_addr in_addr, u_short port)
+commBind(int s, sqaddr_t *addr)
 {
-    struct sockaddr_in S;
-
-    memset(&S, '\0', sizeof(S));
-    S.sin_family = AF_INET;
-    S.sin_port = htons(port);
-    S.sin_addr = in_addr;
+    LOCAL_ARRAY(char, ip_buf, MAX_IPSTRLEN);
+    LOCAL_ARRAY(char, srv_buf, MAX_IPSTRLEN);
     CommStats.syscalls.sock.binds++;
-    if (bind(s, (struct sockaddr *) &S, sizeof(S)) == 0)
+    if (bind(s, sqinet_get_entry(addr), sqinet_get_length(addr)) == 0)
 	return COMM_OK;
-    debug(5, 0) ("commBind: Cannot bind socket FD %d to %s:%d: %s\n",
-	s,
-	S.sin_addr.s_addr == INADDR_ANY ? "*" : inet_ntoa(S.sin_addr),
-	(int) port,
-	xstrerror());
+    getnameinfo(sqinet_get_entry(addr), sqinet_get_family(addr),
+      ip_buf, MAX_IPSTRLEN, srv_buf, MAX_IPSTRLEN, NI_NUMERICHOST|NI_NUMERICSERV);
+    debug(5, 0) ("commBind: Cannot bind socket FD %d to %s:%s: %s\n", s, ip_buf, srv_buf, xstrerror());
     return COMM_ERROR;
 }
 
@@ -257,7 +252,10 @@ comm_fdopenex(int new_socket,
     fd_open(new_socket, FD_SOCKET, note);
     sqinet_init(&F->local_address);
     F = &fd_table[new_socket];
+
     sqinet_set_v4_inaddr(&F->local_address, &addr); 
+    sqinet_set_v4_port(&F->local_address, port, SQADDR_ASSERT_IS_V4);
+
     F->tos = tos;
     if (!(flags & COMM_NOCLOEXEC))
 	commSetCloseOnExec(new_socket);
@@ -271,8 +269,8 @@ comm_fdopenex(int new_socket,
 	if (opt_reuseaddr)
 	    commSetReuseAddr(new_socket);
     }
-    if (addr.s_addr != no_addr.s_addr) {
-	if (commBind(new_socket, addr, port) != COMM_OK) {
+    if (! sqinet_is_noaddr(&F->local_address)) {
+	if (commBind(new_socket, &F->local_address) != COMM_OK) {
 	    comm_close(new_socket);
 	    return -1;
 	}

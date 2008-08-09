@@ -322,7 +322,7 @@ extern int commSetTimeout(int fd, int, PF *, void *);
 extern void commSetDefer(int fd, DEFER * func, void *);
 extern int ignoreErrno(int);
 extern void commCloseAllSockets(void);
-extern int commBind(int s, struct in_addr, u_short port);
+extern int commBind(int s, sqaddr_t *addr);
 extern void commSetTcpNoDelay(int);
 extern void commSetTcpRcvbuf(int, int);
 
