@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <unistd.h>
 #include <strings.h>
+#include <netdb.h>
 
 #include "sqinet.h"
 
@@ -122,11 +123,22 @@ sqinet_get_port(const sqaddr_t *s)
 {
 	switch (s->st.ss_family) {
 		case AF_INET:
-			return ((struct sockaddr_in *) &s->st)->sin_port;
+			return ntohs(((struct sockaddr_in *) &s->st)->sin_port);
 		case AF_INET6:
-			return ((struct sockaddr_in6 *) &s->st)->sin6_port;
+			return ntohs(((struct sockaddr_in6 *) &s->st)->sin6_port);
 		default:
 			assert(0);
 	}
 	return 0;
+}
+
+int
+sqinet_ntoa(const sqaddr_t *s, char *hoststr, int hostlen, sqaddr_flags flags)
+{
+	if (flags & SQADDR_ASSERT_IS_V4)
+		assert(s->st.ss_family == AF_INET);
+	if (flags & SQADDR_ASSERT_IS_V6)
+		assert(s->st.ss_family == AF_INET6);
+
+	return getnameinfo((struct sockaddr *) (&s->st), sqinet_get_length(s), hoststr, hostlen, NULL, 0, NI_NUMERICHOST|NI_NUMERICSERV);
 }
