@@ -1960,39 +1960,45 @@ static void
 ftpAcceptDataConnection(int fd, void *data)
 {
     FtpStateData *ftpState = data;
-    struct sockaddr_in my_peer, me;
+    sqaddr_t my_peer, me;
     debug(9, 3) ("ftpAcceptDataConnection\n");
 
     if (EBIT_TEST(ftpState->entry->flags, ENTRY_ABORTED)) {
 	comm_close(ftpState->ctrl.fd);
-	return;
+	goto finish;
     }
     fd = comm_accept(fd, &my_peer, &me);
+    /* XXX this must be an IPv4 socket! Make it non-fatal.. */
+    if (sqinet_get_family(&my_peer) != AF_INET) {
+        debug(1, 1) ("ftpAcceptDataConnection: FD %d: (%s:%d) is not an IPv4 socket!\n", fd, fd_table[fd].ipaddrstr, fd_table[fd].local_port);
+        comm_close(fd);
+        goto finish;
+    }
     if (Config.Ftp.sanitycheck) {
-	char *ipaddr = inet_ntoa(my_peer.sin_addr);
+	char *ipaddr = inet_ntoa(sqinet_get_v4_inaddr(&my_peer, SQADDR_ASSERT_IS_V4));
 	if (strcmp(fd_table[ftpState->ctrl.fd].ipaddrstr, ipaddr) != 0) {
-	    debug(9, 1) ("FTP data connection from unexpected server (%s:%d), expecting %s\n", ipaddr, (int) ntohs(my_peer.sin_port), fd_table[ftpState->ctrl.fd].ipaddrstr);
+	    debug(9, 1) ("FTP data connection from unexpected server (%s:%d), expecting %s\n", ipaddr, (int) sqinet_get_port(&my_peer), fd_table[ftpState->ctrl.fd].ipaddrstr);
 	    comm_close(fd);
 	    commSetSelect(ftpState->data.fd,
 		COMM_SELECT_READ,
 		ftpAcceptDataConnection,
 		ftpState,
 		0);
-	    return;
+	    goto finish;
 	}
     }
     if (fd < 0) {
 	debug(9, 1) ("ftpAcceptDataConnection: comm_accept(%d): %s\n", fd, xstrerror());
 	/* XXX Need to set error message */
 	ftpFail(ftpState);
-	return;
+	goto finish;
     }
     /* Replace the Listen socket with the accepted data socket */
     comm_close(ftpState->data.fd);
     debug(9, 3) ("ftpAcceptDataConnection: Connected data socket on FD %d\n", fd);
     ftpState->data.fd = fd;
-    ftpState->data.port = ntohs(my_peer.sin_port);
-    ftpState->data.host = xstrdup(inet_ntoa(my_peer.sin_addr));
+    ftpState->data.port = sqinet_get_port(&my_peer);
+    ftpState->data.host = xstrdup(inet_ntoa(sqinet_get_v4_inaddr(&my_peer, SQADDR_ASSERT_IS_V4)));
     commSetTimeout(ftpState->ctrl.fd, -1, NULL, NULL);
     commSetTimeout(ftpState->data.fd, Config.Timeout.read, ftpTimeout,
 	ftpState);
@@ -2002,6 +2008,9 @@ ftpAcceptDataConnection(int fd, void *data)
      */
     /* Restart state (SENT_NLST/LIST/RETR) */
     FTP_SM_FUNCS[ftpState->state] (ftpState);
+finish:
+    sqinet_done(&my_peer);
+    sqinet_done(&me);
 }
 
 static void

@@ -274,7 +274,7 @@ extern void commSetTcpKeepalive(int fd, int idle, int interval, int timeout);
 extern int commSetTos(int fd, int tos);
 extern int commSetSocketPriority(int fd, int prio);
 extern int commSetIPOption(int fd, uint8_t option, void *value, size_t size);
-extern int comm_accept(int fd, struct sockaddr_in *, struct sockaddr_in *);
+extern int comm_accept(int fd, sqaddr_t *, sqaddr_t *);
 extern void comm_close(int fd);
 extern void comm_reset_close(int fd);
 #if LINGERING_CLOSE

@@ -414,44 +414,55 @@ comm_connect_addr(int sock, const sqaddr_t *addr)
 /* Wait for an incoming connection on FD.  FD should be a socket returned
  * from comm_listen. */
 int
-comm_accept(int fd, struct sockaddr_in *pn, struct sockaddr_in *me)
+comm_accept(int fd, sqaddr_t *pn, sqaddr_t *me)
 {
     int sock;
-    struct sockaddr_in P;
-    struct sockaddr_in M;
+    int ret = COMM_OK;
+    sqaddr_t loc, rem;
+
     socklen_t Slen;
     fde *F = NULL;
-    Slen = sizeof(P);
+
+    sqinet_init(&loc);
+    sqinet_init(&rem);
+    Slen = sqinet_get_maxlength(&rem);
+
     CommStats.syscalls.sock.accepts++;
-    if ((sock = accept(fd, (struct sockaddr *) &P, &Slen)) < 0) {
+    if ((sock = accept(fd, sqinet_get_entry(&rem), &Slen)) < 0) {
 	if (ignoreErrno(errno) || errno == ECONNREFUSED || errno == ECONNABORTED) {
 	    debug(5, 5) ("comm_accept: FD %d: %s\n", fd, xstrerror());
-	    return COMM_NOMESSAGE;
+            ret = COMM_NOMESSAGE;
+	    goto finish;
 	} else if (ENFILE == errno || EMFILE == errno) {
 	    debug(5, 3) ("comm_accept: FD %d: %s\n", fd, xstrerror());
-	    return COMM_ERROR;
+            ret = COMM_ERROR;
+	    goto finish;
 	} else {
 	    debug(5, 1) ("comm_accept: FD %d: %s\n", fd, xstrerror());
-	    return COMM_ERROR;
+            ret = COMM_ERROR;
+	    goto finish;
 	}
     }
     if (pn)
-	*pn = P;
-    Slen = sizeof(M);
-    memset(&M, '\0', Slen);
-    getsockname(sock, (struct sockaddr *) &M, &Slen);
+	sqinet_copy(pn, &rem);
+    Slen = sqinet_get_maxlength(&loc);
+    getsockname(sock, sqinet_get_entry(&loc), &Slen);
     if (me)
-	*me = M;
+        sqinet_copy(me, &loc);
     commSetCloseOnExec(sock);
     /* fdstat update */
     fd_open(sock, FD_SOCKET, NULL);
     fd_note_static(sock, "HTTP Request");
     F = &fd_table[sock];
-    xstrncpy(F->ipaddrstr, xinet_ntoa(P.sin_addr), MAX_IPSTRLEN);
-    F->remote_port = htons(P.sin_port);
-    F->local_port = htons(M.sin_port);
+    sqinet_ntoa(&rem, F->ipaddrstr, MAX_IPSTRLEN, 0);
+    F->remote_port = sqinet_get_port(&rem);
+    F->local_port = sqinet_get_port(&loc);
     commSetNonBlocking(sock);
-    return sock;
+    ret = sock;
+finish:
+    sqinet_done(&loc);
+    sqinet_done(&rem);
+    return ret;
 }
 
 void
