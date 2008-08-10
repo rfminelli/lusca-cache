@@ -133,6 +133,7 @@ wccpConnectionOpen(void)
 	Config.Wccp.address,
 	port,
 	COMM_NONBLOCKING,
+	COMM_TOS_DEFAULT,
 	"WCCP Socket");
     if (theWccpConnection < 0)
 	fatal("Cannot open WCCP Port");

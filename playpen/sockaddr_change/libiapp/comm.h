@@ -149,6 +149,8 @@ typedef enum {
 #define COMM_REUSEADDR          0x04
 #define FD_DESC_SZ              64
 
+#define	COMM_TOS_DEFAULT	0
+
 struct _fde {
     unsigned int type;
     u_short local_port;
@@ -284,8 +286,7 @@ extern void commConnectStart(int fd, const char *, u_short, CNCB *, void *, stru
 extern int comm_connect_addr(int sock, const sqaddr_t *addr);
 extern void comm_init(void);
 extern int comm_listen(int sock);
-extern int comm_open(int, int, struct in_addr, u_short port, int, const char *note);
-extern int comm_openex(int, int, struct in_addr, u_short, int, unsigned char TOS, const char *);
+extern int comm_open(int, int, struct in_addr, u_short, int, unsigned char TOS, const char *);
 extern int comm_fdopen(int, int, struct in_addr, u_short, int, const char *);
 extern int comm_fdopenex(int, int, struct in_addr, u_short, int, unsigned char, const char *);
 extern u_short comm_local_port(int fd);

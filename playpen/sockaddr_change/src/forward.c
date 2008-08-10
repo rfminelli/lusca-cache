@@ -431,7 +431,7 @@ fwdConnectIdleTimeout(int fd, void *data)
 static void
 openIdleConn(peer * peer, const char *domain, struct in_addr outgoing, unsigned short tos, int ctimeout)
 {
-    int fd = comm_openex(SOCK_STREAM,
+    int fd = comm_open(SOCK_STREAM,
 	IPPROTO_TCP,
 	outgoing,
 	0,
@@ -638,7 +638,7 @@ fwdConnectStart(void *data)
 
     debug(17, 3) ("fwdConnectStart: got addr %s, tos %d\n",
 	inet_ntoa(outgoing), tos);
-    fd = comm_openex(SOCK_STREAM,
+    fd = comm_open(SOCK_STREAM,
 	IPPROTO_TCP,
 	outgoing,
 	0,

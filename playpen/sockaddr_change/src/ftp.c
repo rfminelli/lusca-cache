@@ -1759,6 +1759,7 @@ ftpSendPasv(FtpStateData * ftpState)
 	addr.sin_addr,
 	0,
 	COMM_NONBLOCKING,
+	COMM_TOS_DEFAULT,
 	storeUrl(ftpState->entry));
     debug(9, 3) ("ftpSendPasv: Unconnected data socket created on FD %d\n", fd);
     if (fd < 0) {
@@ -1899,6 +1900,7 @@ ftpOpenListenSocket(FtpStateData * ftpState, int fallback)
 	addr.sin_addr,
 	port,
 	COMM_NONBLOCKING | (fallback ? COMM_REUSEADDR : 0),
+	COMM_TOS_DEFAULT,
 	storeUrl(ftpState->entry));
     debug(9, 3) ("ftpOpenListenSocket: Unconnected data socket created on FD %d\n", fd);
     if (fd < 0) {

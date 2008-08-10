@@ -5059,6 +5059,7 @@ clientHttpConnectionsOpen(void)
 		s->s.sin_addr,
 		ntohs(s->s.sin_port),
 		COMM_NONBLOCKING,
+		COMM_TOS_DEFAULT,
 		"HTTP Socket");
 	    leave_suid();
 	}
@@ -5102,6 +5103,7 @@ clientHttpsConnectionsOpen(void)
 	    s->http.s.sin_addr,
 	    ntohs(s->http.s.sin_port),
 	    COMM_NONBLOCKING,
+	    COMM_TOS_DEFAULT,
 	    "HTTPS Socket");
 	leave_suid();
 	if (fd < 0)
