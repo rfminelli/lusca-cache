@@ -118,6 +118,16 @@ sqinet_get_v4_sockaddr(const sqaddr_t *s, sqaddr_flags flags)
 	return * (struct sockaddr_in *) &s->st;
 }
 
+int
+sqinet_set_v6_sockaddr(sqaddr_t *s, struct sockaddr_in6 *v6addr)
+{
+	struct sockaddr_in6 *v6;
+
+	v6 = (struct sockaddr_in6 *) &s->st;
+	*v6 = *v6addr;
+	s->st.ss_family = AF_INET6;
+	return 1;
+}
 
 
 int
