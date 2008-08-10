@@ -210,22 +210,11 @@ comm_open(int sock_type,
     }
     /* update fdstat */
     debug(5, 5) ("comm_openex: FD %d is a new socket\n", new_socket);
-    return comm_fdopenex(new_socket, sock_type, addr, port, flags, tos, note);
+    return comm_fdopen(new_socket, sock_type, addr, port, flags, tos, note);
 }
 
 int
-comm_fdopen(int socket_fd,
-    int sock_type,
-    struct in_addr addr,
-    u_short port,
-    int flags,
-    const char *note)
-{
-    return comm_fdopenex(socket_fd, sock_type, addr, port, flags, 0, note);
-}
-
-int
-comm_fdopenex(int new_socket,
+comm_fdopen(int new_socket,
     int sock_type,
     struct in_addr addr,
     u_short port,

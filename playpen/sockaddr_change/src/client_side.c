@@ -5051,6 +5051,7 @@ clientHttpConnectionsOpen(void)
 		no_addr,
 		ntohs(s->s.sin_port),
 		COMM_NONBLOCKING,
+		COMM_TOS_DEFAULT,
 		"HTTP Socket");
 	} else {
 	    enter_suid();
