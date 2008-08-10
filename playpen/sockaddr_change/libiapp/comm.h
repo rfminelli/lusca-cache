@@ -288,6 +288,8 @@ extern void comm_init(void);
 extern int comm_listen(int sock);
 extern int comm_open(int, int, struct in_addr, u_short, int, unsigned char TOS, const char *);
 extern int comm_fdopen(int, int, struct in_addr, u_short, int, unsigned char, const char *);
+extern int comm_open6(int, int, sqaddr_t *addr, int, unsigned char TOS, const char *);
+extern int comm_fdopen6(int, int, sqaddr_t *addr, int, unsigned char, const char *);
 extern u_short comm_local_port(int fd);
 
 extern void commDeferFD(int fd);

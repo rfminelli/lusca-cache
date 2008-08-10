@@ -166,13 +166,27 @@ commBind(int s, sqaddr_t *addr)
     return COMM_ERROR;
 }
 
+int
+comm_open(int sock_type, int proto, struct in_addr addr, u_short port, int flags, unsigned char TOS, const char *note)
+{
+	sqaddr_t a;
+	int r;
+
+	sqinet_init(&a);
+	sqinet_set_v4_inaddr(&a, &addr);
+	sqinet_set_v4_port(&a, port, SQADDR_ASSERT_IS_V4);
+	r = comm_open6(sock_type, proto, &a, flags, TOS, note);
+	sqinet_done(&a);
+	return r;
+}
+
+
 /* Create a socket. Default is blocking, stream (TCP) socket.  IO_TYPE
  * is OR of flags specified in defines.h:COMM_* */
 int
-comm_open(int sock_type,
+comm_open6(int sock_type,
     int proto,
-    struct in_addr addr,
-    u_short port,
+    sqaddr_t *a,
     int flags,
     unsigned char TOS,
     const char *note)
@@ -182,7 +196,7 @@ comm_open(int sock_type,
 
     /* Create socket for accepting new connections. */
     CommStats.syscalls.sock.sockets++;
-    if ((new_socket = socket(AF_INET, sock_type, proto)) < 0) {
+    if ((new_socket = socket(sqinet_get_family(a), sock_type, proto)) < 0) {
 	/* Increase the number of reserved fd's if calls to socket()
 	 * are failing because the open file table is full.  This
 	 * limits the number of simultaneous clients */
@@ -210,14 +224,27 @@ comm_open(int sock_type,
     }
     /* update fdstat */
     debug(5, 5) ("comm_openex: FD %d is a new socket\n", new_socket);
-    return comm_fdopen(new_socket, sock_type, addr, port, flags, tos, note);
+    return comm_fdopen6(new_socket, sock_type, a, flags, tos, note);
 }
 
 int
-comm_fdopen(int new_socket,
+comm_fdopen(int new_socket, int sock_type, struct in_addr addr, u_short port, int flags, unsigned char tos, const char *note)
+{
+	sqaddr_t a;
+	int r;
+
+	sqinet_init(&a);
+	sqinet_set_v4_inaddr(&a, &addr);
+	sqinet_set_v4_port(&a, port, SQADDR_ASSERT_IS_V4);
+	r = comm_fdopen6(new_socket, sock_type, &a, flags, tos, note);
+	sqinet_done(&a);
+	return r;
+}
+
+int
+comm_fdopen6(int new_socket,
     int sock_type,
-    struct in_addr addr,
-    u_short port,
+    sqaddr_t *a,
     int flags,
     unsigned char tos,
     const char *note)
@@ -225,18 +252,17 @@ comm_fdopen(int new_socket,
     fde *F = NULL;
 
     fd_open(new_socket, FD_SOCKET, note);
-    sqinet_init(&F->local_address);
     F = &fd_table[new_socket];
 
-    sqinet_set_v4_inaddr(&F->local_address, &addr); 
-    sqinet_set_v4_port(&F->local_address, port, SQADDR_ASSERT_IS_V4);
+    sqinet_init(&(F->local_address));
+    sqinet_copy(&(F->local_address), a);
 
     F->tos = tos;
     if (!(flags & COMM_NOCLOEXEC))
 	commSetCloseOnExec(new_socket);
     if ((flags & COMM_REUSEADDR))
 	commSetReuseAddr(new_socket);
-    if (port > (u_short) 0) {
+    if (sqinet_get_port(a) > 0) {
 #ifdef _SQUID_MSWIN_
 	if (sock_type != SOCK_DGRAM)
 #endif
@@ -250,7 +276,7 @@ comm_fdopen(int new_socket,
 	    return -1;
 	}
     }
-    F->local_port = port;
+    F->local_port = sqinet_get_port(a);
 
     if (flags & COMM_NONBLOCKING)
 	if (commSetNonBlocking(new_socket) == COMM_ERROR)
