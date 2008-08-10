@@ -90,12 +90,16 @@ ipcCloseAllFD(int prfd, int pwfd, int crfd, int cwfd)
     return -1;
 }
 
+
+/*
+ * XXX CS/PS aren't being passed through sqinet_done()!
+ */
 pid_t
 ipcCreate(int type, const char *prog, const char *const args[], const char *name, int sleep_after_fork, int *rfd, int *wfd, void **hIpc)
 {
     pid_t pid;
-    struct sockaddr_in CS;
-    struct sockaddr_in PS;
+    sqaddr_t CS;
+    sqaddr_t PS;
     int crfd = -1;
     int prfd = -1;
     int cwfd = -1;
@@ -108,6 +112,7 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
     char *env_str;
 #endif
     int x;
+    LOCAL_ARRAY(char, tmp, MAX_IPSTRLEN);
 
 #if HAVE_POLL && defined(_SQUID_OSF_)
     assert(type != IPC_FIFO);
@@ -209,22 +214,24 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
     }
     if (type == IPC_TCP_SOCKET || type == IPC_UDP_SOCKET) {
-	len = sizeof(PS);
-	memset(&PS, '\0', len);
-	if (getsockname(pwfd, (struct sockaddr *) &PS, &len) < 0) {
+        sqinet_init(&PS);
+	len = sqinet_get_maxlength(&PS);
+	if (getsockname(pwfd, sqinet_get_entry(&CS), &len) < 0) {
 	    debug(54, 0) ("ipcCreate: getsockname: %s\n", xstrerror());
 	    return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
 	}
+        sqinet_ntoa(&PS, tmp, MAX_IPSTRLEN, 0);
 	debug(54, 3) ("ipcCreate: FD %d sockaddr %s:%d\n",
-	    pwfd, inet_ntoa(PS.sin_addr), ntohs(PS.sin_port));
-	len = sizeof(CS);
-	memset(&CS, '\0', len);
-	if (getsockname(crfd, (struct sockaddr *) &CS, &len) < 0) {
+	    pwfd, tmp, sqinet_get_port(&PS));
+        sqinet_init(&CS);
+	len = sqinet_get_maxlength(&CS);
+	if (getsockname(crfd, sqinet_get_entry(&CS), &len) < 0) {
 	    debug(54, 0) ("ipcCreate: getsockname: %s\n", xstrerror());
 	    return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
 	}
+        sqinet_ntoa(&CS, tmp, MAX_IPSTRLEN, 0);
 	debug(54, 3) ("ipcCreate: FD %d sockaddr %s:%d\n",
-	    crfd, inet_ntoa(CS.sin_addr), ntohs(CS.sin_port));
+	    crfd, tmp, sqinet_get_port(&CS));
     }
     if (type == IPC_TCP_SOCKET) {
 	if (listen(crfd, 1) < 0) {

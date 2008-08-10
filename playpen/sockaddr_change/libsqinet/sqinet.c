@@ -19,6 +19,7 @@ xinet_ntoa(const struct in_addr addr)
 void
 sqinet_init(sqaddr_t *s)
 {
+	bzero(s, sizeof(*s));
 }
 
 void
