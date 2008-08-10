@@ -128,6 +128,7 @@ sslStateFree(SslStateData * sslState)
     assert(sslState->server.fd == -1);
     safe_free(sslState->server.buf);
     safe_free(sslState->client.buf);
+    sqinet_done(&sslState->peer);
     cbdataFree(sslState);
 }
 
@@ -408,7 +409,7 @@ sslConnectHandle(int fd, void *data)
 
 CBDATA_TYPE(SslStateData);
 void
-sslStart(int fd, struct sockaddr_in peer)
+sslStart(int fd, sqaddr_t *peer)
 {
     /* Create state structure. */
     SslStateData *sslState = NULL;
@@ -426,7 +427,7 @@ sslStart(int fd, struct sockaddr_in peer)
 #endif
     /* Create socket. */
     bzero(&outgoing, sizeof(outgoing));
-    sock = comm_openex(SOCK_STREAM, IPPROTO_TCP, outgoing, 0, COMM_NONBLOCKING, tos, NULL);
+    sock = comm_open(SOCK_STREAM, IPPROTO_TCP, outgoing, 0, COMM_NONBLOCKING, tos, NULL);
     if (sock == COMM_ERROR) {
 	debug(26, 4) ("sslStart: Failed because we're out of sockets.\n");
 	comm_close(fd);
@@ -434,7 +435,7 @@ sslStart(int fd, struct sockaddr_in peer)
     }
     CBDATA_INIT_TYPE(SslStateData);
     sslState = cbdataAlloc(SslStateData);
-    sslState->peer = peer;
+    sqinet_copy(&sslState->peer, peer);
     sslState->client.fd = fd;
     sslState->server.fd = sock;
     sslState->server.buf = xmalloc(SQUID_TCP_SO_RCVBUF);

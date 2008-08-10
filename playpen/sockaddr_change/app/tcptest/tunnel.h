@@ -8,10 +8,10 @@ typedef struct {
         char *buf;
     } client, server;
     int connected;
-    struct sockaddr_in peer;
+    sqaddr_t peer;
 } SslStateData;
 
-extern void sslStart(int fd, struct sockaddr_in peer);
+extern void sslStart(int fd, sqaddr_t *peer);
 
 
 #endif
