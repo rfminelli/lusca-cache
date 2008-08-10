@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <unistd.h>
 #include <strings.h>
+#include <string.h>
 #include <netdb.h>
 
 #include "sqinet.h"
@@ -134,24 +135,47 @@ int
 sqinet_is_anyaddr(const sqaddr_t *s)
 {
 	struct sockaddr_in *v4;
+	struct sockaddr_in6 *v6;
+	struct in6_addr any6addr = IN6ADDR_ANY_INIT;
 
 	/* XXX for now, only handle v4 */
 	assert(s->st.ss_family == AF_INET);
 
-	v4 = (struct sockaddr_in *) &s->st;
-	return (v4->sin_addr.s_addr == INADDR_ANY);
+	switch(s->st.ss_family) {
+		case AF_INET:
+			v4 = (struct sockaddr_in *) &s->st;
+			return (v4->sin_addr.s_addr == INADDR_ANY);
+			break;
+		case AF_INET6:
+			v6 = (struct sockaddr_in6 *) &s->st;
+			return (memcmp(&v6->sin6_addr, &any6addr, sizeof(any6addr)) == 0);
+			break;
+		default:
+			assert(0);
+	}
+	return 0;
 }
 
 int
 sqinet_is_noaddr(const sqaddr_t *s)
 {
 	struct sockaddr_in *v4;
+	struct sockaddr_in6 *v6;
+	struct in6_addr no6addr = {{{ 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff }}};
 
-	/* XXX for now, only handle v4 */
-	assert(s->st.ss_family == AF_INET);
-
-	v4 = (struct sockaddr_in *) &s->st;
-	return (v4->sin_addr.s_addr == INADDR_NONE);
+	switch(s->st.ss_family) {
+		case AF_INET:
+			v4 = (struct sockaddr_in *) &s->st;
+			return (v4->sin_addr.s_addr == INADDR_NONE);
+			break;
+		case AF_INET6:
+			v6 = (struct sockaddr_in6 *) &s->st;
+			return (memcmp(&v6->sin6_addr, &no6addr, sizeof(no6addr)) == 0);
+			break;
+		default:
+			assert(0);
+	}
+	return 0;
 }
 
 int
