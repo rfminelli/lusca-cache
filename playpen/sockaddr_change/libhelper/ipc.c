@@ -216,7 +216,7 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
     if (type == IPC_TCP_SOCKET || type == IPC_UDP_SOCKET) {
         sqinet_init(&PS);
 	len = sqinet_get_maxlength(&PS);
-	if (getsockname(pwfd, sqinet_get_entry(&CS), &len) < 0) {
+	if (getsockname(pwfd, sqinet_get_entry(&PS), &len) < 0) {
 	    debug(54, 0) ("ipcCreate: getsockname: %s\n", xstrerror());
 	    return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
 	}
