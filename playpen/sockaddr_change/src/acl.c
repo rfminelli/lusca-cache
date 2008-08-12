@@ -1354,7 +1354,7 @@ aclMatchIp(void *dataptr, struct in_addr c)
      * static structure.
      */
     x.addr1 = c;
-    x.addr2 = any_addr;
+    SetAnyAddr(&x.addr2);
     SetNoAddr(&x.mask);
     x.next = NULL;
     *Top = splay_splay(&x, *Top, aclIpAddrNetworkCompare);
@@ -2760,11 +2760,11 @@ aclIpDataToStr(const acl_ip_data * ip, char *buf, int len)
     char b2[20];
     char b3[20];
     snprintf(b1, 20, "%s", inet_ntoa(ip->addr1));
-    if (ip->addr2.s_addr != any_addr.s_addr)
+    if (! IsAnyAddr(&ip->addr2))
 	snprintf(b2, 20, "-%s", inet_ntoa(ip->addr2));
     else
 	b2[0] = '\0';
-    if (ip->mask.s_addr != no_addr.s_addr)
+    if (! IsNoAddr(&ip->mask))
 	snprintf(b3, 20, "/%s", inet_ntoa(ip->mask));
     else
 	b3[0] = '\0';
