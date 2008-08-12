@@ -504,7 +504,7 @@ sslStart(clientHttpRequest * http, squid_off_t * size_ptr, int *status_ptr)
      * from peer_digest.c, asn.c, netdb.c, etc and should always
      * be allowed.  yuck, I know.
      */
-    if (request->client_addr.s_addr != no_addr.s_addr) {
+    if (! IsNoAddr(&request->client_addr)) {
 	/*
 	 * Check if this host is allowed to fetch MISSES from us (miss_access)
 	 */

@@ -629,7 +629,7 @@ htcpAccessCheck(acl_access * acl, htcpSpecifier * s, struct sockaddr_in *from)
     aclCheck_t checklist;
     memset(&checklist, '\0', sizeof(checklist));
     checklist.src_addr = from->sin_addr;
-    checklist.my_addr = no_addr;
+    SetNoAddr(&checklist.my_addr);
     checklist.request = s->request;
     return aclCheckFast(acl, &checklist);
 }
@@ -1132,7 +1132,7 @@ htcpInit(void)
     commSetSelect(htcpInSocket, COMM_SELECT_READ, htcpRecv, NULL, 0);
     debug(31, 1) ("Accepting HTCP messages on port %d, FD %d.\n",
 	(int) Config.Port.htcp, htcpInSocket);
-    if (Config.Addrs.udp_outgoing.s_addr != no_addr.s_addr) {
+    if (! IsNoAddr(&Config.Addrs.udp_outgoing)) {
 	enter_suid();
 	htcpOutSocket = comm_open(SOCK_DGRAM,
 	    IPPROTO_UDP,
