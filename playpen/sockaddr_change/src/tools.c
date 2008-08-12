@@ -501,7 +501,7 @@ getMyHostname(void)
     if (present)
 	return host;
     host[0] = '\0';
-    memcpy(&sa, &any_addr, sizeof(sa));
+    SetAnyAddr(&sa);
     if (Config.Sockaddr.http && IsAnyAddr(&sa))
 	memcpy(&sa, &Config.Sockaddr.http->s.sin_addr, sizeof(sa));
 #if USE_SSL
