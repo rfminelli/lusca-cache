@@ -17,6 +17,30 @@ xinet_ntoa(const struct in_addr addr)
     return inet_ntoa(addr);
 }
 
+int
+IsNoAddr(struct in_addr *s)
+{
+	return s->s_addr == INADDR_NONE;
+}
+
+int
+IsAnyAddr(struct in_addr *s)
+{
+	return s->s_addr == INADDR_ANY;
+}
+
+void
+SetNoAddr(struct in_addr *s)
+{
+	s->s_addr = INADDR_NONE;
+}
+
+void
+SetAnyAddr(struct in_addr *s)
+{
+	s->s_addr = INADDR_ANY;
+}
+
 void
 sqinet_init(sqaddr_t *s)
 {

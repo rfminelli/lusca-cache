@@ -14,6 +14,11 @@ typedef enum {
 	SQADDR_ASSERT_IS_V6 = 0x02,
 } sqaddr_flags;
 
+extern const char *xinet_ntoa(const struct in_addr addr);
+extern int IsNoAddr(struct in_addr *a);
+extern int IsAnyAddr(struct in_addr *a);
+extern void SetNoAddr(struct in_addr *a);
+extern void SetAnyAddr(struct in_addr *a);
 
 extern void sqinet_init(sqaddr_t *s);
 extern void sqinet_done(sqaddr_t *s);
@@ -30,7 +35,6 @@ extern int sqinet_is_anyaddr(const sqaddr_t *s);
 extern int sqinet_is_noaddr(const sqaddr_t *s);
 extern int sqinet_ntoa(const sqaddr_t *s, char *hoststr, int hostlen, sqaddr_flags flags);
 
-extern const char *xinet_ntoa(const struct in_addr addr);
 
 static inline struct sockaddr * sqinet_get_entry(sqaddr_t *s) { return (struct sockaddr *) &(s->st); }
 static inline int sqinet_get_family(const sqaddr_t *s) { return s->st.ss_family; }
