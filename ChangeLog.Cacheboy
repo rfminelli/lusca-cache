@@ -1,5 +1,10 @@
 ChangeLog:
 
+-- (12-August-2008)
+
+* Fixed poll/select compile issues
+* Tag CACHEBOY_1.4.1.
+
 -- (30-July-2008)
 
 * Tag CACHEBOY_1.4.
