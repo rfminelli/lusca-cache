@@ -18,13 +18,13 @@ xinet_ntoa(const struct in_addr addr)
 }
 
 int
-IsNoAddr(struct in_addr *s)
+IsNoAddr(const struct in_addr *s)
 {
 	return s->s_addr == INADDR_NONE;
 }
 
 int
-IsAnyAddr(struct in_addr *s)
+IsAnyAddr(const struct in_addr *s)
 {
 	return s->s_addr == INADDR_ANY;
 }

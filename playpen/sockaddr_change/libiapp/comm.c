@@ -93,7 +93,6 @@ static PF commHandleWrite;
 static MemPool *comm_write_pool = NULL;
 static MemPool *conn_close_pool = NULL;
 
-struct in_addr any_addr;
 struct in_addr local_addr;
 struct in_addr no_addr;
 

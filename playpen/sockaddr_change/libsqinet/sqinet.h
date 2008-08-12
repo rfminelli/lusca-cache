@@ -15,8 +15,8 @@ typedef enum {
 } sqaddr_flags;
 
 extern const char *xinet_ntoa(const struct in_addr addr);
-extern int IsNoAddr(struct in_addr *a);
-extern int IsAnyAddr(struct in_addr *a);
+extern int IsNoAddr(const struct in_addr *a);
+extern int IsAnyAddr(const struct in_addr *a);
 extern void SetNoAddr(struct in_addr *a);
 extern void SetAnyAddr(struct in_addr *a);
 
