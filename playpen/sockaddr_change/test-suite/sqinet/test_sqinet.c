@@ -9,6 +9,7 @@
 #include <string.h>
 #include <netdb.h>
 
+#include "libsqinet/inet_legacy.h"
 #include "libsqinet/sqinet.h"
 
 static int

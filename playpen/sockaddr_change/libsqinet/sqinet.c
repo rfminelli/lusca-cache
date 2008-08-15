@@ -12,81 +12,12 @@
 #include "sqinet.h"
 
 /*!
- * @function
- *	xinet_ntoa
- * @abstract 
- *	A wrapper around inet_ntoa() which was intended to be the "fast" replacement
- *	where inet_ntoa() is being called very frequently.
- * @discussion
- *	For the time being this function simply calls inet_ntoa() and returns the
- *	result.
+ * @header sqinet - IPv4/IPv6 management functions
  *
- * @param	addr	IPv4 address to convert.
- * @return		a pointer to a static const char * buffer
- * 			containing the IPv4 address.
- */
-const char *
-xinet_ntoa(const struct in_addr addr)
-{
-    return inet_ntoa(addr);
-}
-
-/*!
- * @function
- *	IsNoAddr
- * @abstract
- *	Return whether the given IPv4 address is equivalent to INADDR_NONE (255.255.255.255.)
+ * These functions provide an IPv4/IPv6 aware end-point identifier type.
  *
- * @param	s	Pointer to the IPv4 address to check.
- * @return		1 if the IPv4 address is INADDR_NONE, 0 otherwise.
+ * @copyright Adrian Chadd <adrian@squid-cache.org>
  */
-int
-IsNoAddr(const struct in_addr *s)
-{
-	return s->s_addr == INADDR_NONE;
-}
-
-/*!
- * @function
- *	IsAnyAddr
- * @abstract
- *	Return whether the given IPv4 address is equivalent to INADDR_ANY (0.0.0.0.)
- * @param	s	Pointer to the IPv4 address to check.
- * @return		1 if the IPv4 address is INADDR_NONE, 0 otherwise.
- */
-int
-IsAnyAddr(const struct in_addr *s)
-{
-	return s->s_addr == INADDR_ANY;
-}
-
-/*!
- * @function
- *	SetNoAddr
- * @abstract
- *	Set the given IPv4 address to INADDR_NONE (255.255.255.255.)
- *
- * @param	s	Pointer to the IPv4 address to set to INADDR_NONE.
- */
-void
-SetNoAddr(struct in_addr *s)
-{
-	s->s_addr = INADDR_NONE;
-}
-
-/*!
- * @function
- *	SetAnyAddr
- * @abstract
- *	Set the given IPv4 address to INADDR_ANY (0.0.0.0.)
- *
- * @param	s	Pointer to the IPv4 address to set to INADDR_ANY.
- */
-void
-SetAnyAddr(struct in_addr *s)
-{
-	s->s_addr = INADDR_ANY;
-}
 
 /*!
  * @function
@@ -237,6 +168,19 @@ sqinet_set_v4_sockaddr(sqaddr_t *s, struct sockaddr_in *v4addr)
 	return 1;
 }
 
+/*!
+ * @function
+ *	sqinet_get_v4_inaddr
+ * @abstract
+ *	return a struct in_addr containing the IPv4 address, or INADDR_NONE
+ *	for uninitialised or IPv6 address.
+ * @discussion
+ *	The method for returning "invalid" addresses is a bit silly..
+ *
+ * @param	s	pointer to sqaddr_t to return the IPv4 address of.
+ * @param	flags	control behaviour on error.
+ * @return		IPv4 address via in_addr, or INADDR_NONE on error/IPv6 address.
+ */
 struct in_addr
 sqinet_get_v4_inaddr(const sqaddr_t *s, sqaddr_flags flags)
 {
@@ -245,10 +189,24 @@ sqinet_get_v4_inaddr(const sqaddr_t *s, sqaddr_flags flags)
 	if (flags & SQADDR_ASSERT_IS_V4) {
 		assert(s->st.ss_family == AF_INET);
 	}
+	if (s->st.ss_family != AF_INET)
+		return INADDR_NONE;
+
 	v4 = (struct sockaddr_in *) &s->st;
 	return v4->sin_addr;
 }
 
+/*!
+ * @function
+ *	sqinet_get_v4_sockaddr_ptr
+ * @abstract
+ *	populate a sockaddr_in containing the IPv4 address/port.
+ *
+ * @param	s	pointer to sqaddr_t to return the IPv4 details of.
+ * @param	v4	pointer to destination sockaddr_in.
+ * @param	flags	control behaviour on error.
+ * @return		1 on successful assignment of the IPv4 details, 0 on error.
+ */
 int
 sqinet_get_v4_sockaddr_ptr(const sqaddr_t *s, struct sockaddr_in *v4, sqaddr_flags flags)
 {
@@ -256,11 +214,27 @@ sqinet_get_v4_sockaddr_ptr(const sqaddr_t *s, struct sockaddr_in *v4, sqaddr_fla
 		assert(s->st.ss_family == AF_INET);
 	if (flags & SQADDR_ASSERT_IS_V6)
 		assert(s->st.ss_family == AF_INET6);
+	if(s->st.ss_family != AF_INET)
+		return 0;
 
 	*v4 = *(struct sockaddr_in *) &s->st;
 	return 1;
 }
 
+/*!
+ * @function
+ *	sqinet_get_v4_sockaddr_ptr
+ * @abstract
+ *	return a sockaddr_in containing the IPv4 address/port.
+ * @discussion
+ *	The routine assumes the sqaddr_t family is IPv4 and will
+ *	blindly return a typecast'ed sockaddr_in regardless.
+ *	This should really be addressed..
+ *
+ * @param	s	pointer to sqaddr_t to return the IPv4 details of.
+ * @param	flags	control behaviour on error.
+ * @return		sockaddr_in containing the IPv4 address/port details.
+ */
 struct sockaddr_in
 sqinet_get_v4_sockaddr(const sqaddr_t *s, sqaddr_flags flags)
 {
@@ -272,6 +246,23 @@ sqinet_get_v4_sockaddr(const sqaddr_t *s, sqaddr_flags flags)
 	return * (struct sockaddr_in *) &s->st;
 }
 
+/*!
+ * @function
+ *	sqinet_set_v6_sockaddr
+ * @abstract
+ *	Set the sqaddr_t to the given IPv6 address/port.
+ * @discussion
+ *	This should be called on a freshly init'ed sqaddr_t before it
+ *	has had another address set.
+ *
+ *	Some study of the IPv6 sockaddr_in6 fields will be prudent before
+ *	calling this function. Pay attention to what the default values
+ *	of the "new" IPv6 fields besides just the address/port fields.
+ *
+ * @param	s	pointer to the sqaddr_t to set the IPv6 details of.
+ * @param	v4addr	pointer to the sockaddr_in containing the IPv6 details.
+ * @return		1 if value set successfully, 0 if error.
+ */
 int
 sqinet_set_v6_sockaddr(sqaddr_t *s, struct sockaddr_in6 *v6addr)
 {

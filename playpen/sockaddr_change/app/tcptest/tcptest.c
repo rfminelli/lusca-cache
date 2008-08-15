@@ -28,6 +28,7 @@
   
 #include "libcb/cbdata.h"
 
+#include "libsqinet/inet_legacy.h"
 #include "libsqinet/sqinet.h"
 
 #include "libiapp/iapp_ssl.h"

@@ -2,6 +2,7 @@
 
 libsqinet_a_SOURCES = \
 	sqinet.c
+	inet_legacy.c
 
 noinst_LIBRARIES = \
 	libsqinet.a

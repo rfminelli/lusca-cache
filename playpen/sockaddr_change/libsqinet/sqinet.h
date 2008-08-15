@@ -21,12 +21,6 @@ typedef enum {
 	SQATON_PASSIVE = 0x8
 } sqaton_flags;
 
-extern const char *xinet_ntoa(const struct in_addr addr);
-extern int IsNoAddr(const struct in_addr *a);
-extern int IsAnyAddr(const struct in_addr *a);
-extern void SetNoAddr(struct in_addr *a);
-extern void SetAnyAddr(struct in_addr *a);
-
 extern void sqinet_init(sqaddr_t *s);
 extern void sqinet_done(sqaddr_t *s);
 extern int sqinet_copy_v4_inaddr(const sqaddr_t *s, struct in_addr *dst, sqaddr_flags flags);
