@@ -162,9 +162,6 @@ sqinet_is_anyaddr(const sqaddr_t *s)
 	struct sockaddr_in6 *v6;
 	struct in6_addr any6addr = IN6ADDR_ANY_INIT;
 
-	/* XXX for now, only handle v4 */
-	assert(s->st.ss_family == AF_INET);
-
 	switch(s->st.ss_family) {
 		case AF_INET:
 			v4 = (struct sockaddr_in *) &s->st;
@@ -216,6 +213,24 @@ sqinet_get_port(const sqaddr_t *s)
 	return 0;
 }
 
+void
+sqinet_set_port(const sqaddr_t *s, short port, sqaddr_flags flags)
+{
+	if (flags & SQADDR_ASSERT_IS_V4)
+		assert(s->st.ss_family == AF_INET);
+	if (flags & SQADDR_ASSERT_IS_V6)
+		assert(s->st.ss_family == AF_INET6);
+
+	switch (s->st.ss_family) {
+		case AF_INET:
+			((struct sockaddr_in *) &s->st)->sin_port = htons(port);
+		case AF_INET6:
+			((struct sockaddr_in6 *) &s->st)->sin6_port = htons(port);
+		default:
+			assert(0);
+	}
+}
+
 int
 sqinet_ntoa(const sqaddr_t *s, char *hoststr, int hostlen, sqaddr_flags flags)
 {
@@ -225,4 +240,50 @@ sqinet_ntoa(const sqaddr_t *s, char *hoststr, int hostlen, sqaddr_flags flags)
 		assert(s->st.ss_family == AF_INET6);
 
 	return getnameinfo((struct sockaddr *) (&s->st), sqinet_get_length(s), hoststr, hostlen, NULL, 0, NI_NUMERICHOST|NI_NUMERICSERV);
+}
+
+/*
+ * Perform a IP string -> sockaddr translation.
+ *
+ * The sqaddr_t must be init'ed (not asserted at the moment.)
+ * The port won't be filled in - the caller can do that with a sqinet_set_port() call
+ * when its written.
+ */
+int
+sqinet_aton(sqaddr_t *s, char *hoststr, sqaton_flags flags)
+{
+	struct addrinfo hints, *r = NULL;
+	int err;
+
+	bzero(&hints, sizeof(hints));
+	if (flags & SQATON_FAMILY_IPv4)
+		hints.ai_family = AF_INET;
+	if (flags & SQATON_FAMILY_IPv6)
+		hints.ai_family = AF_INET6;
+	if (flags & SQATON_PASSIVE)
+		hints.ai_flags |= AI_PASSIVE;
+
+	err = getaddrinfo(hoststr, NULL, &hints, &r);
+	if (err != 0) {
+		if (r != NULL)
+			freeaddrinfo(r);
+		return 0;
+	}
+	if (r == NULL) {
+		return 0;
+	}
+
+	/* Just set the current sqaddr_t st to the first res pointer */
+	/* We need to ensure that the lengths are compatible */
+	/*
+	 * Its a bit annoying that this API copies the data when most instances
+	 * the caller is using this to do some kind of parsing and can use r->ai_addr
+	 * direct. We may wish to replace this with a seperate function to -just- do
+	 * IP string (+ port) -> sockaddr conversion which bypasses the damned
+	 * allocation + copy overhead. Only if it matters..
+	 */
+	assert(r->ai_addrlen <= sizeof(s->st));
+	memcpy(&s->st, r->ai_addr, r->ai_addrlen);
+	freeaddrinfo(r);
+	return 1;
 }

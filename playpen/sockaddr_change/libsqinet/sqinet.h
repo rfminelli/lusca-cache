@@ -14,6 +14,13 @@ typedef enum {
 	SQADDR_ASSERT_IS_V6 = 0x02,
 } sqaddr_flags;
 
+typedef enum {
+	SQATON_NONE = 0x0,
+	SQATON_FAMILY_IPv4 = 0x2,
+	SQATON_FAMILY_IPv6 = 0x4,
+	SQATON_PASSIVE = 0x8
+} sqaton_flags;
+
 extern const char *xinet_ntoa(const struct in_addr addr);
 extern int IsNoAddr(const struct in_addr *a);
 extern int IsAnyAddr(const struct in_addr *a);
@@ -28,13 +35,14 @@ extern int sqinet_set_v4_port(sqaddr_t *s, short port, sqaddr_flags flags);
 extern int sqinet_set_v4_sockaddr(sqaddr_t *s, struct sockaddr_in *v4addr);
 extern int sqinet_set_v6_sockaddr(sqaddr_t *s, struct sockaddr_in6 *v6addr);
 extern int sqinet_get_port(const sqaddr_t *s);
+extern void sqinet_set_port(const sqaddr_t *s, short port, sqaddr_flags flags);
 extern struct in_addr sqinet_get_v4_inaddr(const sqaddr_t *s, sqaddr_flags flags);
 extern int sqinet_get_v4_sockaddr_ptr(const sqaddr_t *s, struct sockaddr_in *v4, sqaddr_flags flags);
 extern struct sockaddr_in sqinet_get_v4_sockaddr(const sqaddr_t *s, sqaddr_flags flags);
 extern int sqinet_is_anyaddr(const sqaddr_t *s);
 extern int sqinet_is_noaddr(const sqaddr_t *s);
 extern int sqinet_ntoa(const sqaddr_t *s, char *hoststr, int hostlen, sqaddr_flags flags);
-
+extern int sqinet_aton(sqaddr_t *s, char *hoststr, sqaton_flags flags);
 
 static inline struct sockaddr * sqinet_get_entry(sqaddr_t *s) { return (struct sockaddr *) &(s->st); }
 static inline int sqinet_get_family(const sqaddr_t *s) { return s->st.ss_family; }
