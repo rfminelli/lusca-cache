@@ -185,12 +185,13 @@ struct in_addr
 sqinet_get_v4_inaddr(const sqaddr_t *s, sqaddr_flags flags)
 {
 	struct sockaddr_in *v4;
+	struct in_addr none_addr = { INADDR_NONE };
 
 	if (flags & SQADDR_ASSERT_IS_V4) {
 		assert(s->st.ss_family == AF_INET);
 	}
 	if (s->st.ss_family != AF_INET)
-		return INADDR_NONE;
+		return none_addr;
 
 	v4 = (struct sockaddr_in *) &s->st;
 	return v4->sin_addr;
