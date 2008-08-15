@@ -55,13 +55,20 @@ test1b(void)
 		printf("FAILED: a.s_addr != htonl(0x00000000) (%X)\n", ntohl(a.s_addr));
 		return 0;
 	}
-
 	if (! sqinet_is_anyaddr(&s)) {
 		printf("FAILED: sqinet_is_anyaddr(&s) is false!\n");
 		return 0;
 	}
 	if (sqinet_is_noaddr(&s)) {
 		printf("FAILED: sqinet_is_noaddr(&s) is true when it should be false!\n");
+		return 0;
+	}
+	if (! IsAnyAddr(&a)) {
+		printf("FAILED: IsAnyAddr(&a) is false!\n");
+		return 0;
+	}
+	if (IsNoAddr(&a)) {
+		printf("FAILED: IsNoAddr(&a) is true when it should be false!\n");
 		return 0;
 	}
 	printf("OK - 0.0.0.0 is anyaddr\n");
@@ -96,6 +103,14 @@ test1c(void)
 		printf("FAILED: sqinet_is_anyaddr(&s) is true when it should be false!\n");
 		return 0;
 	}
+	if (IsAnyAddr(&a)) {
+		printf("FAILED: IsAnyAddr(&a) is true when it should be false!\n");
+		return 0;
+	}
+	if (! IsNoAddr(&a)) {
+		printf("FAILED: IsNoAddr(&a) is false!\n");
+		return 0;
+	}
 	printf("OK - 255.255.255.255 is noaddr\n");
 }
 
@@ -103,8 +118,9 @@ test1c(void)
 int
 main(int argc, const char *argv[])
 {
-	printf("Test 1: IPv4 localhost address checks:\n");
+	printf("Test 1: IPv4 address checks:\n");
 	test1a();
 	test1b();
 	test1c();
+	printf("Test 2: IPv6 address checks:\n");
 }
