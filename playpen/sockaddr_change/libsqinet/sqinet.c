@@ -11,12 +11,15 @@
 
 #include "sqinet.h"
 
-/**
- * A wrapper around inet_ntoa() which was intended to be the "fast" replacement
- * where inet_ntoa() is being called very frequently.
- *
- * For the time being this function simply calls inet_ntoa() and returns the
- * result.
+/*!
+ * @function
+ *	xinet_ntoa
+ * @abstract 
+ *	A wrapper around inet_ntoa() which was intended to be the "fast" replacement
+ *	where inet_ntoa() is being called very frequently.
+ * @discussion
+ *	For the time being this function simply calls inet_ntoa() and returns the
+ *	result.
  *
  * @param	addr	IPv4 address to convert.
  * @return		a pointer to a static const char * buffer
@@ -28,8 +31,11 @@ xinet_ntoa(const struct in_addr addr)
     return inet_ntoa(addr);
 }
 
-/**
- * Return whether the given IPv4 address is equivalent to INADDR_NONE (255.255.255.255.)
+/*!
+ * @function
+ *	IsNoAddr
+ * @abstract
+ *	Return whether the given IPv4 address is equivalent to INADDR_NONE (255.255.255.255.)
  *
  * @param	s	Pointer to the IPv4 address to check.
  * @return		1 if the IPv4 address is INADDR_NONE, 0 otherwise.
@@ -40,8 +46,11 @@ IsNoAddr(const struct in_addr *s)
 	return s->s_addr == INADDR_NONE;
 }
 
-/**
- * Return whether the given IPv4 address is equivalent to INADDR_ANY (0.0.0.0.)
+/*!
+ * @function
+ *	IsAnyAddr
+ * @abstract
+ *	Return whether the given IPv4 address is equivalent to INADDR_ANY (0.0.0.0.)
  * @param	s	Pointer to the IPv4 address to check.
  * @return		1 if the IPv4 address is INADDR_NONE, 0 otherwise.
  */
@@ -51,8 +60,11 @@ IsAnyAddr(const struct in_addr *s)
 	return s->s_addr == INADDR_ANY;
 }
 
-/**
- * Set the given IPv4 address to INADDR_NONE (255.255.255.255.)
+/*!
+ * @function
+ *	SetNoAddr
+ * @abstract
+ *	Set the given IPv4 address to INADDR_NONE (255.255.255.255.)
  *
  * @param	s	Pointer to the IPv4 address to set to INADDR_NONE.
  */
@@ -62,8 +74,11 @@ SetNoAddr(struct in_addr *s)
 	s->s_addr = INADDR_NONE;
 }
 
-/**
- * Set the given IPv4 address to INADDR_ANY (0.0.0.0.)
+/*!
+ * @function
+ *	SetAnyAddr
+ * @abstract
+ *	Set the given IPv4 address to INADDR_ANY (0.0.0.0.)
  *
  * @param	s	Pointer to the IPv4 address to set to INADDR_ANY.
  */
@@ -73,10 +88,15 @@ SetAnyAddr(struct in_addr *s)
 	s->s_addr = INADDR_ANY;
 }
 
-/**
- * Initialise the given sqaddr_t pointer. This for now zero's the sqaddr_t and
- * will eventually set an init'ed flag to 1 for subsequent verification and
- * assert or debug that the given sqaddr_t is uninitialised.
+/*!
+ * @function
+ *	sqinet_init
+ * @abstract
+ *	Initialise the given sqaddr_t for use.
+ * @discussion
+ * 	This for now zero's the sqaddr_t and will eventually set an init'ed flag to 1
+ *	for subsequent verification and assert or debug that the given sqaddr_t is
+ *	uninitialised.
  *
  * @param	s	pointer sqaddr_t to initialise.
  */
@@ -86,12 +106,15 @@ sqinet_init(sqaddr_t *s)
 	bzero(s, sizeof(*s));
 }
 
-/**
- * Finish using the given sqaddr_t. It should be called in situations where
- * the sqaddr_t is finished being used.
- *
- * It is currently a no-op; no debugging is being done to ensure that sqaddr_t's
- * are properly init'ed and done'd.
+/*!
+ * @function
+ *	sqinet_done
+ * @abstract
+ *	Finish using the given sqaddr_t. It should be called in situations where
+ *	the sqaddr_t is finished being used.
+ * @discussion
+ *	It is currently a no-op; no debugging is being done to ensure that sqaddr_t's
+ *	are properly init'ed and done'd.
  *
  * @param	s	pointer to sqaddr_t to finish using.
  */
@@ -100,16 +123,18 @@ sqinet_done(sqaddr_t *s)
 {
 }
 
-/**
- * Copy the given sqaddr_t IPv4 address to the given in_addr pointer after checking
- * the sqaddr_t is an IPv4 address.
+/*!
+ * @function
+ *	sqinet_copy_v4_inaddr
+ * @abstract
+ *	Copy the given sqaddr_t IPv4 address to the given in_addr pointer after checking
+ *	the sqaddr_t is an IPv4 address.
  *
  * @param	src	pointer to the sqaddr_t to copy the IPv4 address from.
  * @param	dst	pointer to the in_addr to set with the IPv4 address.
  * @param	flags	ORed flags from sqaddr_flags enum; control the behaviour
  * 			in face of errors.
  * @return		1 if successful, 0 if failure and SQADDR_ASSERT_IS_V4 isn't set. 
- * @see			sqaddr_flags
  */
 int
 sqinet_copy_v4_inaddr(const sqaddr_t *src, struct in_addr *dst, sqaddr_flags flags)
@@ -127,6 +152,20 @@ sqinet_copy_v4_inaddr(const sqaddr_t *src, struct in_addr *dst, sqaddr_flags fla
 	return 1;
 }
 
+/*!
+ * @function
+ *	sqinet_set_v4_inaddr
+ * @abstract
+ *	Set the given sqaddr_t to the given IPv4 address. The IPv4 port is set to 0.
+ * @discussion
+ *	The sqaddr_t should be init'ed but not assigned any particular address.
+ *	The code does not currently check that the sqaddr_t is init'ed or previously assigned
+ *	and will silently overwrite the existing address.
+ *
+ * @param	s	pointer to the sqaddr_t to set the IPv4 address of.
+ * @param	v4addr	pointer to the in_addr to set the IPv4 address from.
+ * @return		1 is succesful, 0 if failure (eg not initialised, address not set.)
+ */
 int
 sqinet_set_v4_inaddr(sqaddr_t *s, struct in_addr *v4addr)
 {
@@ -141,6 +180,24 @@ sqinet_set_v4_inaddr(sqaddr_t *s, struct in_addr *v4addr)
 	return 1;
 }
 
+/*!
+ * @function
+ *	sqinet_set_v4_port
+ * @abstract
+ *	Set the IPv4 port of the given sqaddr_t.
+ * @discussion
+ *	It may be more sensible to write an sqinet_set_port() function which
+ *	does the "correct" thing after checking the type.
+ *
+ *	It also may be more sensible to only allow the port to be set once
+ * 	and then enforce the user to call a "clear" function before setting
+ *	a new port.
+ *
+ * @param	s	pointer to the sqaddr_t to set the IPv4 port of.
+ * @param	port	IPv4 port to set in host byte order.
+ * @param	flags	Determine behaviour of function if error.
+ * @return		1 if port value set successfully, 0 if error.
+ */
 int
 sqinet_set_v4_port(sqaddr_t *s, short port, sqaddr_flags flags)
 {
@@ -156,6 +213,19 @@ sqinet_set_v4_port(sqaddr_t *s, short port, sqaddr_flags flags)
 	return 1;
 }
 
+/*!
+ * @function
+ *	sqinet_set_v4_sockaddr
+ * @abstract
+ *	Set the sqaddr_t to the given IPv4 address/port.
+ * @discussion
+ *	This should be called on a freshly init'ed sqaddr_t before it
+ *	has had another address set.
+ *
+ * @param	s	pointer to the sqaddr_t to set the IPv4 address/port of.
+ * @param	v4addr	pointer to the sockaddr_in containing the IPv4 address/port.
+ * @return		1 if value set successfully, 0 if error.
+ */
 int
 sqinet_set_v4_sockaddr(sqaddr_t *s, struct sockaddr_in *v4addr)
 {
@@ -236,6 +306,19 @@ sqinet_is_anyaddr(const sqaddr_t *s)
 	return 0;
 }
 
+/*!
+ * @function
+ *	sqinet_is_noaddr
+ * @abstract
+ *	Return whether the given sqaddr_t is set to "no address".
+ * @discussion
+ *	"no address" is all-ones (ie, ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff and 255.255.255.255)
+ *
+ *	This routine will assert() if the passed-in sqaddr_t is not initialised.
+ *
+ * @param	s	pointer to sqaddr_t to check.
+ * @return		1 if sqaddr_t is "no address", 0 otherwise.
+ */
 int
 sqinet_is_noaddr(const sqaddr_t *s)
 {
@@ -258,6 +341,17 @@ sqinet_is_noaddr(const sqaddr_t *s)
 	return 0;
 }
 
+/*!
+ * @function
+ *	sqinet_get_port
+ * @abstract
+ *	Return the IPv4 or IPv6 port of the given sqaddr_t.
+ * @discussion
+ *	This routine will assert() if the passed-in sqaddr_t is not initialised.
+ *
+ * @param	s	pointer to sqaddr_t to return the port for.
+ * @return		the IPv4 or IPv6 port in host-byte order.
+ */
 int
 sqinet_get_port(const sqaddr_t *s)
 {
@@ -272,6 +366,23 @@ sqinet_get_port(const sqaddr_t *s)
 	return 0;
 }
 
+/*!
+ * @function
+ *	sqinet_set_port
+ * @abstract
+ *	Set the IPv4 or IPv6 port of the given sqaddr_t.
+ * @discussion
+ *	The port should only be set after the sqinet_t is init'ed and has
+ *	an IPv4 or IPv6 family assigned.
+ *	It also may be more sensible to only allow the port to be set once
+ * 	and then enforce the user to call a "clear" function before setting
+ *	a new port.
+ *
+ * @param	s	pointer to the sqaddr_t to set the port of.
+ * @param	port	port to set in host byte order.
+ * @param	flags	Determine behaviour of function if error.
+ * @return		1 if port value set successfully, 0 if error.
+ */
 void
 sqinet_set_port(const sqaddr_t *s, short port, sqaddr_flags flags)
 {
@@ -301,12 +412,28 @@ sqinet_ntoa(const sqaddr_t *s, char *hoststr, int hostlen, sqaddr_flags flags)
 	return getnameinfo((struct sockaddr *) (&s->st), sqinet_get_length(s), hoststr, hostlen, NULL, 0, NI_NUMERICHOST|NI_NUMERICSERV);
 }
 
-/*
- * Perform a IP string -> sockaddr translation.
+/*!
+ * @function
+ *	sqinet_aton
+ * @abstract
+ *	Perform a IP string -> sockaddr translation.
+ * @discussion
+ *	The sqaddr_t must be init'ed and not already set (not asserted
+ *	at the moment.)
  *
- * The sqaddr_t must be init'ed (not asserted at the moment.)
- * The port won't be filled in - the caller can do that with a sqinet_set_port() call
- * when its written.
+ *	The port won't be filled in - the caller can do that with a
+ *	sqinet_set_{v4,v6}_port() call.
+ *
+ *	It may be prudent to set the port to 0 just in case - assuming
+ *	the caller has just init'ed the sqaddr_t and thus the port will
+ *	be 0.
+ *
+ * @param	s	pointer to sqaddr_t
+ * @param	hoststr	host string to convert to a sockaddr.
+ * @param	flags	Control the behaviour:
+ *			- SQATON_FAMILY_IPv4: given string is an IPv4 address.
+ *			- SQATON_FAMILY_IPv6: given string is an IPv6 address.
+ * @return		1 if the sqaddr_t has been set with the new address; 0 on failure.
  */
 int
 sqinet_aton(sqaddr_t *s, char *hoststr, sqaton_flags flags)
