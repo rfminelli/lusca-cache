@@ -11,47 +11,106 @@
 
 #include "sqinet.h"
 
+/**
+ * A wrapper around inet_ntoa() which was intended to be the "fast" replacement
+ * where inet_ntoa() is being called very frequently.
+ *
+ * For the time being this function simply calls inet_ntoa() and returns the
+ * result.
+ *
+ * @param	addr	IPv4 address to convert.
+ * @return		a pointer to a static const char * buffer
+ * 			containing the IPv4 address.
+ */
 const char *
 xinet_ntoa(const struct in_addr addr)
 {
     return inet_ntoa(addr);
 }
 
+/**
+ * Return whether the given IPv4 address is equivalent to INADDR_NONE (255.255.255.255.)
+ *
+ * @param	s	Pointer to the IPv4 address to check.
+ * @return		1 if the IPv4 address is INADDR_NONE, 0 otherwise.
+ */
 int
 IsNoAddr(const struct in_addr *s)
 {
 	return s->s_addr == INADDR_NONE;
 }
 
+/**
+ * Return whether the given IPv4 address is equivalent to INADDR_ANY (0.0.0.0.)
+ * @param	s	Pointer to the IPv4 address to check.
+ * @return		1 if the IPv4 address is INADDR_NONE, 0 otherwise.
+ */
 int
 IsAnyAddr(const struct in_addr *s)
 {
 	return s->s_addr == INADDR_ANY;
 }
 
+/**
+ * Set the given IPv4 address to INADDR_NONE (255.255.255.255.)
+ *
+ * @param	s	Pointer to the IPv4 address to set to INADDR_NONE.
+ */
 void
 SetNoAddr(struct in_addr *s)
 {
 	s->s_addr = INADDR_NONE;
 }
 
+/**
+ * Set the given IPv4 address to INADDR_ANY (0.0.0.0.)
+ *
+ * @param	s	Pointer to the IPv4 address to set to INADDR_ANY.
+ */
 void
 SetAnyAddr(struct in_addr *s)
 {
 	s->s_addr = INADDR_ANY;
 }
 
+/**
+ * Initialise the given sqaddr_t pointer. This for now zero's the sqaddr_t and
+ * will eventually set an init'ed flag to 1 for subsequent verification and
+ * assert or debug that the given sqaddr_t is uninitialised.
+ *
+ * @param	s	pointer sqaddr_t to initialise.
+ */
 void
 sqinet_init(sqaddr_t *s)
 {
 	bzero(s, sizeof(*s));
 }
 
+/**
+ * Finish using the given sqaddr_t. It should be called in situations where
+ * the sqaddr_t is finished being used.
+ *
+ * It is currently a no-op; no debugging is being done to ensure that sqaddr_t's
+ * are properly init'ed and done'd.
+ *
+ * @param	s	pointer to sqaddr_t to finish using.
+ */
 void
 sqinet_done(sqaddr_t *s)
 {
 }
 
+/**
+ * Copy the given sqaddr_t IPv4 address to the given in_addr pointer after checking
+ * the sqaddr_t is an IPv4 address.
+ *
+ * @param	src	pointer to the sqaddr_t to copy the IPv4 address from.
+ * @param	dst	pointer to the in_addr to set with the IPv4 address.
+ * @param	flags	ORed flags from sqaddr_flags enum; control the behaviour
+ * 			in face of errors.
+ * @return		1 if successful, 0 if failure and SQADDR_ASSERT_IS_V4 isn't set. 
+ * @see			sqaddr_flags
+ */
 int
 sqinet_copy_v4_inaddr(const sqaddr_t *src, struct in_addr *dst, sqaddr_flags flags)
 {
