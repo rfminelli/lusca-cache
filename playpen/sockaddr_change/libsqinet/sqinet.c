@@ -283,7 +283,19 @@ sqinet_set_v6_sockaddr(sqaddr_t *s, struct sockaddr_in6 *v6addr)
 	return 1;
 }
 
-
+/*!
+ * @function
+ *	sqinet_is_anyaddr
+ * @abstract
+ *	Return whether the given sqaddr_t is a v4 or v6 ANY_ADDR
+ * @discussion
+ *	"ANY_ADDR" is defined as an all-zero's address.
+ *
+ *	This function will assert() if the sqaddr_t has no family.
+ *
+ * @param	s	pointer to sqaddr_t to check.
+ * @return		1 if sqaddr_t is an ANY_ADDR (all zero's), 0 otherwise.
+ */
 int
 sqinet_is_anyaddr(const sqaddr_t *s)
 {
@@ -401,6 +413,23 @@ sqinet_set_port(const sqaddr_t *s, short port, sqaddr_flags flags)
 	}
 }
 
+/*!
+ * @function
+ *	sqinet_ntoa
+ * @abstract
+ *	Convert an IPv4 or IPv6 address to a string.
+ * @discussion
+ *	This function doesn't verify that the sqaddr has been setup properly
+ *	and currently just passes everything to getnameinfo().
+ *
+ *	This function calls getnameinfo() which may not be thread-safe!
+ *
+ * @param	s	sqaddr_t to convert to an IPv4/IPv6 string.
+ * @param	hoststr	destination buffer pointer
+ * @param	hostlen	length of destination buffer
+ * @param	flags	enforce the address type
+ * @return		1 on success, 0 on failure.
+ */
 int
 sqinet_ntoa(const sqaddr_t *s, char *hoststr, int hostlen, sqaddr_flags flags)
 {
@@ -409,7 +438,7 @@ sqinet_ntoa(const sqaddr_t *s, char *hoststr, int hostlen, sqaddr_flags flags)
 	if (flags & SQADDR_ASSERT_IS_V6)
 		assert(s->st.ss_family == AF_INET6);
 
-	return getnameinfo((struct sockaddr *) (&s->st), sqinet_get_length(s), hoststr, hostlen, NULL, 0, NI_NUMERICHOST|NI_NUMERICSERV);
+	return (getnameinfo((struct sockaddr *) (&s->st), sqinet_get_length(s), hoststr, hostlen, NULL, 0, NI_NUMERICHOST|NI_NUMERICSERV) == 0);
 }
 
 /*!
