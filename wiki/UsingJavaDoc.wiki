@@ -1,0 +1,11 @@
+#summary Using JavaDoc in Cacheboy.
+
+= Introduction =
+
+I'm evaluating the usefulness of JavaDoc comments in Cacheboy.
+
+= Details =
+
+  * HeaderDoc - http://developer.apple.com/opensource/tools/headerdoc.html
+  * The Java API Documentation Generator - http://java.sun.com/j2se/1.5.0/docs/tooldocs/windows/javadoc.html
+  * How To Write JavaDoc - http://java.sun.com/j2se/javadoc/writingdoccomments/
