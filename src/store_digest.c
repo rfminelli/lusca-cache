@@ -352,6 +352,7 @@ storeDigestRewriteStart(void *datanotused)
     flags.cachable = 1;
     e = storeCreateEntry(url, flags, METHOD_GET);
     assert(e);
+    CBDATA_INIT_TYPE(generic_cbdata);
     sd_state.rewrite_lock = cbdataAlloc(generic_cbdata);
     sd_state.rewrite_lock->data = e;
     debug(71, 3) ("storeDigestRewriteStart: url: %s key: %s\n", url, storeKeyText(e->hash.key));
@@ -463,7 +464,7 @@ storeDigestCalcCap(void)
      */
     const int hi_cap = Config.Swap.maxSize / Config.Store.avgObjectSize;
     const int lo_cap = 1 + store_swap_size / Config.Store.avgObjectSize;
-    const int e_count = memInUse(MEM_STOREENTRY);
+    const int e_count = memPoolInUseCount(pool_storeentry);
     int cap = e_count ? e_count : hi_cap;
     debug(71, 2) ("storeDigestCalcCap: have: %d, want %d entries; limits: [%d, %d]\n",
 	e_count, cap, lo_cap, hi_cap);

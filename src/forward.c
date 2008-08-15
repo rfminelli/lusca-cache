@@ -61,6 +61,8 @@ static OBJH fwdStats;
 static STABH fwdAbort;
 static peer *fwdStateServerPeer(FwdState *);
 
+MemPool * pool_fwd_server = NULL;
+
 #define MAX_FWD_STATS_IDX 9
 static int FwdReplyCodes[MAX_FWD_STATS_IDX + 1][HTTP_INVALID_HEADER + 1];
 
@@ -84,7 +86,7 @@ fwdServerFree(FwdServer * fs)
 {
     if (fs->peer)
 	cbdataUnlock(fs->peer);
-    memFree(fs, MEM_FWD_SERVER);
+    memPoolFree(pool_fwd_server, fs);
 }
 
 static void
@@ -873,6 +875,7 @@ fwdReforward(FwdState * fwdState)
 
 /* PUBLIC FUNCTIONS */
 
+CBDATA_TYPE(FwdState);
 void
 fwdServersFree(FwdServer ** FS)
 {
@@ -893,6 +896,7 @@ fwdStartPeer(peer * p, StoreEntry * e, request_t * r)
 #if URL_CHECKSUM_DEBUG
     assert(e->mem_obj->chksum == url_checksum(e->mem_obj->url));
 #endif
+    CBDATA_INIT_TYPE(FwdState);
     fwdState = cbdataAlloc(FwdState);
     fwdState->entry = e;
     fwdState->client_fd = -1;
@@ -962,6 +966,7 @@ fwdStart(int fd, StoreEntry * e, request_t * r)
     default:
 	break;
     }
+    CBDATA_INIT_TYPE(FwdState);
     fwdState = cbdataAlloc(FwdState);
     fwdState->entry = e;
     fwdState->client_fd = fd;
@@ -1148,6 +1153,16 @@ fwdComplete(FwdState * fwdState)
 	if (fwdState->server_fd < 0)
 	    fwdStateFree(fwdState);
     }
+}
+
+void
+fwdInitMem(void)
+{
+    /*
+     * Although we (currently) create FwdServers's in peer_select.c, the bulk of
+     * the manipulation logic is here!
+     */
+    pool_fwd_server = memPoolCreate("FwdServer", sizeof(FwdServer));
 }
 
 void

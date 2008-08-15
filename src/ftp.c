@@ -936,7 +936,7 @@ ftpDataRead(int fd, void *data)
     delay_id = delayMostBytesAllowed(entry->mem_obj, &read_sz);
 #endif
     memset(ftpState->data.buf + ftpState->data.offset, '\0', read_sz);
-    statCounter.syscalls.sock.reads++;
+    CommStats.syscalls.sock.reads++;
     len = FD_READ_METHOD(fd, ftpState->data.buf + ftpState->data.offset, read_sz);
     if (len > 0) {
 	fd_bytes(fd, len, FD_READ);
@@ -1236,9 +1236,8 @@ ftpParseControlReply(char *buf, size_t len, int *codep, int *used)
     char *end;
     int usable;
     int complete = 0;
-    wordlist *head = NULL;
-    wordlist *list;
-    wordlist **tail = &head;
+    wordlist *list = NULL;
+    char *k;
     int offset;
     int linelen;
     int code = -1;
@@ -1277,22 +1276,19 @@ ftpParseControlReply(char *buf, size_t len, int *codep, int *used)
 	if (linelen > 3)
 	    if (*s >= '0' && *s <= '9' && (*(s + 3) == '-' || *(s + 3) == ' '))
 		offset = 4;
-	list = memAllocate(MEM_WORDLIST);
-	list->key = xmalloc(linelen - offset);
-	xstrncpy(list->key, s + offset, linelen - offset);
+        k = wordlistAddBuf(&list, s + offset, linelen - offset);
+        /* XXX The old code also got its fingers into the wordlist entry -after- it was added! - [ahc] */
 	if (Config.Ftp.telnet)
-	    decodeTelnet(list->key);
-	debug(9, 7) ("%d %s\n", code, list->key);
-	*tail = list;
-	tail = &list->next;
+	    decodeTelnet(k);
+	debug(9, 7) ("%d %s\n", code, k);
     }
     *used = (int) (s - sbuf);
     safe_free(sbuf);
     if (!complete)
-	wordlistDestroy(&head);
+	wordlistDestroy(&list);
     if (codep)
 	*codep = code;
-    return head;
+    return list;
 }
 
 static void
@@ -1331,7 +1327,7 @@ ftpReadControlReply(int fd, void *data)
 	return;
     }
     assert(ftpState->ctrl.offset < ftpState->ctrl.size);
-    statCounter.syscalls.sock.reads++;
+    CommStats.syscalls.sock.reads++;
     len = FD_READ_METHOD(fd,
 	ftpState->ctrl.buf + ftpState->ctrl.offset,
 	ftpState->ctrl.size - ftpState->ctrl.offset);
@@ -1548,7 +1544,6 @@ ftpReadType(FtpStateData * ftpState)
 static void
 ftpTraverseDirectory(FtpStateData * ftpState)
 {
-    wordlist *w;
     debug(9, 4) ("ftpTraverseDirectory %s\n",
 	ftpState->filepath ? ftpState->filepath : "<NULL>");
 
@@ -1563,10 +1558,7 @@ ftpTraverseDirectory(FtpStateData * ftpState)
 	return;
     }
     /* Go to next path component */
-    w = ftpState->pathcomps;
-    ftpState->filepath = w->key;
-    ftpState->pathcomps = w->next;
-    memFree(w, MEM_WORDLIST);
+    ftpState->filepath = wordlistPopHead(&(ftpState->pathcomps));
     /* Check if we are to CWD or RETR */
     if (ftpState->pathcomps != NULL || ftpState->flags.isdir) {
 	ftpSendCwd(ftpState);

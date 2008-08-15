@@ -911,7 +911,7 @@ wccp2HandleUdp(int sock, void *not_used)
     from_len = sizeof(struct sockaddr_in);
     memset(&from, '\0', from_len);
 
-    statCounter.syscalls.sock.recvfroms++;
+    CommStats.syscalls.sock.recvfroms++;
 
     len = recvfrom(sock,
 	&wccp2_i_see_you,
