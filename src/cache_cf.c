@@ -2900,7 +2900,7 @@ parse_http_port_specification(http_port_list * s, char *token)
 	self_destruct();
     s->s.sin_port = htons(port);
     if (NULL == host)
-	s->s.sin_addr = any_addr;
+	SetAnyAddr(&s->s.sin_addr);
     else if (1 == safe_inet_addr(host, &s->s.sin_addr))
 	(void) 0;
     else if ((hp = gethostbyname(host))) {

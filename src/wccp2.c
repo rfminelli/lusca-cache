@@ -538,7 +538,7 @@ wccp2Init(void)
 
     /* Calculate the number of routers configured in the config file */
     for (s = Config.Wccp2.router; s; s = s->next) {
-	if (s->s.sin_addr.s_addr != any_addr.s_addr) {
+	if (! IsAnyAddr(&s->s.sin_addr)) {
 	    /* Increment the counter */
 	    wccp2_numrouters++;
 	}
@@ -671,7 +671,7 @@ wccp2Init(void)
 
 	/* Add each router.  Keep this functionality here to make sure the received_id can be updated in the packet */
 	for (s = Config.Wccp2.router; s; s = s->next) {
-	    if (s->s.sin_addr.s_addr != any_addr.s_addr) {
+	    if (! IsAnyAddr(&s->s.sin_addr)) {
 		wccp2_here_i_am_header.length += sizeof(struct wccp2_router_id_element_t);
 		assert(wccp2_here_i_am_header.length <= WCCP_RESPONSE_SIZE);
 
@@ -1021,7 +1021,7 @@ wccp2HandleUdp(int sock, void *not_used)
     }
     /* Check that the router address is configured on this router */
     for (router_list_ptr = &service_list_ptr->router_list_head; router_list_ptr->next != NULL; router_list_ptr = router_list_ptr->next) {
-	if (router_list_ptr->router_sendto_address.s_addr == from.sin_addr.s_addr)
+        if (router_list_ptr->router_sendto_address.s_addr == from.sin_addr.s_addr)
 	    break;
     }
     if (router_list_ptr->next == NULL) {

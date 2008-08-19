@@ -1279,7 +1279,7 @@ accessLogInit(void)
     fvdbInit();
 #endif
 #if MULTICAST_MISS_STREAM
-    if (Config.mcast_miss.addr.s_addr != no_addr.s_addr) {
+    if (! IsNoAddr(&Config.mcast_miss.addr)) {
 	memset(&mcast_miss_to, '\0', sizeof(mcast_miss_to));
 	mcast_miss_to.sin_family = AF_INET;
 	mcast_miss_to.sin_port = htons(Config.mcast_miss.port);

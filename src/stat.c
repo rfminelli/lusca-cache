@@ -426,7 +426,7 @@ fdRemoteAddr(const fde * f)
     if (*f->ipaddr)
 	snprintf(buf, 32, "%s.%d", f->ipaddr, (int) f->remote_port);
     else {
-	if (f->local_addr.s_addr != any_addr.s_addr) {
+	if (! IsAnyAddr(&f->local_addr)) {
 	    snprintf(buf, 32, "%s.%d", inet_ntoa(f->local_addr), (int) f->local_port);
 	} else {
 	    snprintf(buf, 32, "*.%d", (int) f->local_port);

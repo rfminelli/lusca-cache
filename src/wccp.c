@@ -112,7 +112,7 @@ wccpInit(void)
     last_id = 0;
     last_assign_buckets_change = 0;
     number_caches = 0;
-    if (Config.Wccp.router.s_addr != any_addr.s_addr)
+    if (! IsAnyAddr(&Config.Wccp.router))
 	if (!eventFind(wccpHereIam, NULL))
 	    eventAdd("wccpHereIam", wccpHereIam, NULL, 5.0, 1);
 }
@@ -124,7 +124,7 @@ wccpConnectionOpen(void)
     struct sockaddr_in router, local;
     socklen_t local_len, router_len;
     debug(80, 5) ("wccpConnectionOpen: Called\n");
-    if (Config.Wccp.router.s_addr == any_addr.s_addr) {
+    if (IsAnyAddr(&Config.Wccp.router)) {
 	debug(1, 1) ("WCCP Disabled.\n");
 	return;
     }

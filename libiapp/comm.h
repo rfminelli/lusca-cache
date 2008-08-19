@@ -358,7 +358,6 @@ extern int Opening_FD;          /* 0 */
 extern int Squid_MaxFD;         /* SQUID_MAXFD */
 extern int RESERVED_FD;
 
-extern struct in_addr any_addr;
 extern struct in_addr local_addr;
 extern struct in_addr no_addr;
 

@@ -587,7 +587,7 @@ netdbExchangeHandleReply(void *data, mem_node_ref nr, ssize_t size)
     while (size >= rec_sz) {
 	debug(38, 5) ("netdbExchangeHandleReply: in parsing loop, size = %ld\n",
 	    (long int) size);
-	addr.s_addr = any_addr.s_addr;
+	SetAnyAddr(&addr);
 	hops = rtt = 0.0;
 	for (o = 0; o < rec_sz;) {
 	    switch ((int) *(p + o)) {
@@ -614,7 +614,7 @@ netdbExchangeHandleReply(void *data, mem_node_ref nr, ssize_t size)
 		goto finish;
 	    }
 	}
-	if (addr.s_addr != any_addr.s_addr && rtt > 0)
+	if (! IsAnyAddr(&addr) && rtt > 0)
 	    netdbExchangeUpdatePeer(addr, ex->p, rtt, hops);
 	assert(o == rec_sz);
 	ex->used += rec_sz;
