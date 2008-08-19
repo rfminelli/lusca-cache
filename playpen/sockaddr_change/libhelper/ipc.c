@@ -218,6 +218,7 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	len = sqinet_get_maxlength(&PS);
 	if (getsockname(pwfd, sqinet_get_entry(&PS), &len) < 0) {
 	    debug(54, 0) ("ipcCreate: getsockname: %s\n", xstrerror());
+	    sqinet_done(&PS);
 	    return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
 	}
         sqinet_ntoa(&PS, tmp, MAX_IPSTRLEN, 0);
@@ -227,6 +228,8 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	len = sqinet_get_maxlength(&CS);
 	if (getsockname(crfd, sqinet_get_entry(&CS), &len) < 0) {
 	    debug(54, 0) ("ipcCreate: getsockname: %s\n", xstrerror());
+	    sqinet_done(&PS);
+	    sqinet_done(&CS);
 	    return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
 	}
         sqinet_ntoa(&CS, tmp, MAX_IPSTRLEN, 0);
@@ -236,6 +239,8 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
     if (type == IPC_TCP_SOCKET) {
 	if (listen(crfd, 1) < 0) {
 	    debug(54, 1) ("ipcCreate: listen FD %d: %s\n", crfd, xstrerror());
+	    sqinet_done(&PS);
+	    sqinet_done(&CS);
 	    return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
 	}
 	debug(54, 3) ("ipcCreate: FD %d listening...\n", crfd);
@@ -255,8 +260,11 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	    comm_close(cwfd);
 	cwfd = crfd = -1;
 	if (type == IPC_TCP_SOCKET || type == IPC_UDP_SOCKET) {
-	    if (comm_connect_addr(pwfd, &CS) == COMM_ERROR)
+	    if (comm_connect_addr(pwfd, &CS) == COMM_ERROR) {
+	        sqinet_done(&PS);
+	        sqinet_done(&CS);
 		return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
+	    }
 	}
 	memset(hello_buf, '\0', HELLO_BUF_SZ);
 	if (type == IPC_UDP_SOCKET)
@@ -266,11 +274,15 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	if (x < 0) {
 	    debug(54, 0) ("ipcCreate: PARENT: hello read test failed\n");
 	    debug(54, 0) ("--> read: %s\n", xstrerror());
+	    sqinet_done(&PS);
+	    sqinet_done(&CS);
 	    return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
 	} else if (strcmp(hello_buf, hello_string)) {
 	    debug(54, 0) ("ipcCreate: PARENT: hello read test failed\n");
 	    debug(54, 0) ("--> read returned %d\n", x);
 	    debug(54, 0) ("--> got '%s'\n", rfc1738_escape(hello_buf));
+	    sqinet_done(&PS);
+	    sqinet_done(&CS);
 	    return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
 	}
 	commSetTimeout(prfd, -1, NULL, NULL);
@@ -286,6 +298,8 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	fd_table[pwfd].flags.ipc = 1;
 	if (sleep_after_fork)
 	    xusleep(sleep_after_fork);
+	sqinet_done(&PS);
+	sqinet_done(&CS);
 	return pid;
     }
     /* child */
@@ -300,26 +314,35 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	debug(54, 3) ("ipcCreate: calling accept on FD %d\n", crfd);
 	if ((fd = accept(crfd, NULL, NULL)) < 0) {
 	    debug(54, 0) ("ipcCreate: FD %d accept: %s\n", crfd, xstrerror());
+	    sqinet_done(&PS);
+	    sqinet_done(&CS);
 	    _exit(1);
 	}
 	debug(54, 3) ("ipcCreate: CHILD accepted new FD %d\n", fd);
 	close(crfd);
 	cwfd = crfd = fd;
     } else if (type == IPC_UDP_SOCKET) {
-	if (comm_connect_addr(crfd, &PS) == COMM_ERROR)
+	if (comm_connect_addr(crfd, &PS) == COMM_ERROR) {
+	    sqinet_done(&PS);
+	    sqinet_done(&CS);
 	    return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
+	}
     }
     if (type == IPC_UDP_SOCKET) {
 	x = send(cwfd, hello_string, strlen(hello_string) + 1, 0);
 	if (x < 0) {
 	    debug(54, 0) ("sendto FD %d: %s\n", cwfd, xstrerror());
 	    debug(54, 0) ("ipcCreate: CHILD: hello write test failed\n");
+	    sqinet_done(&PS);
+	    sqinet_done(&CS);
 	    _exit(1);
 	}
     } else {
 	if (write(cwfd, hello_string, strlen(hello_string) + 1) < 0) {
 	    debug(54, 0) ("write FD %d: %s\n", cwfd, xstrerror());
 	    debug(54, 0) ("ipcCreate: CHILD: hello write test failed\n");
+	    sqinet_done(&PS);
+	    sqinet_done(&CS);
 	    _exit(1);
 	}
     }
@@ -340,6 +363,8 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	assert(x > -1);
     } while (x < 3 && x > -1);
     close(x);
+    sqinet_done(&PS);
+    sqinet_done(&CS);
     t1 = dup(crfd);
     t2 = dup(cwfd);
 #if NOTYET
