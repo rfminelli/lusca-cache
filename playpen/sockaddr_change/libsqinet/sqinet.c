@@ -35,6 +35,7 @@ void
 sqinet_init(sqaddr_t *s)
 {
 	bzero(s, sizeof(*s));
+	s->init = 1;
 }
 
 /*!
@@ -52,6 +53,8 @@ sqinet_init(sqaddr_t *s)
 void
 sqinet_done(sqaddr_t *s)
 {
+	/* XXX we can't yet enforce that this is only deinit'ed once */
+	s->init = 0;
 }
 
 /*!
@@ -72,6 +75,7 @@ sqinet_copy_v4_inaddr(const sqaddr_t *src, struct in_addr *dst, sqaddr_flags fla
 {
 	struct sockaddr_in *s;
 
+	assert(src->init);
 	/* Must be a v4 address */
 	if (flags & SQADDR_ASSERT_IS_V4)
 		assert(src->st.ss_family == AF_INET);
@@ -102,6 +106,7 @@ sqinet_set_v4_inaddr(sqaddr_t *s, struct in_addr *v4addr)
 {
 	struct sockaddr_in *v4;
 
+	assert(s->init);
 	s->st.ss_family = AF_INET;
 
 	v4 = (struct sockaddr_in *) &s->st;
@@ -134,6 +139,7 @@ sqinet_set_v4_port(sqaddr_t *s, short port, sqaddr_flags flags)
 {
 	struct sockaddr_in *v4;
 
+	assert(s->init);
 	/* Must be a v4 address */
 	if (flags & SQADDR_ASSERT_IS_V4)
 		assert(s->st.ss_family == AF_INET);
@@ -162,6 +168,7 @@ sqinet_set_v4_sockaddr(sqaddr_t *s, struct sockaddr_in *v4addr)
 {
 	struct sockaddr_in *v4;
 
+	assert(s->init);
 	v4 = (struct sockaddr_in *) &s->st;
 	*v4 = *v4addr;
 	s->st.ss_family = AF_INET;
@@ -187,6 +194,7 @@ sqinet_get_v4_inaddr(const sqaddr_t *s, sqaddr_flags flags)
 	struct sockaddr_in *v4;
 	struct in_addr none_addr = { INADDR_NONE };
 
+	assert(s->init);
 	if (flags & SQADDR_ASSERT_IS_V4) {
 		assert(s->st.ss_family == AF_INET);
 	}
@@ -211,6 +219,7 @@ sqinet_get_v4_inaddr(const sqaddr_t *s, sqaddr_flags flags)
 int
 sqinet_get_v4_sockaddr_ptr(const sqaddr_t *s, struct sockaddr_in *v4, sqaddr_flags flags)
 {
+	assert(s->init);
 	if (flags & SQADDR_ASSERT_IS_V4)
 		assert(s->st.ss_family == AF_INET);
 	if (flags & SQADDR_ASSERT_IS_V6)
@@ -239,6 +248,7 @@ sqinet_get_v4_sockaddr_ptr(const sqaddr_t *s, struct sockaddr_in *v4, sqaddr_fla
 struct sockaddr_in
 sqinet_get_v4_sockaddr(const sqaddr_t *s, sqaddr_flags flags)
 {
+	assert(s->init);
 	if (flags & SQADDR_ASSERT_IS_V4)
 		assert(s->st.ss_family == AF_INET);
 	if (flags & SQADDR_ASSERT_IS_V6)
@@ -269,6 +279,7 @@ sqinet_set_v6_sockaddr(sqaddr_t *s, struct sockaddr_in6 *v6addr)
 {
 	struct sockaddr_in6 *v6;
 
+	assert(s->init);
 	v6 = (struct sockaddr_in6 *) &s->st;
 	*v6 = *v6addr;
 	s->st.ss_family = AF_INET6;
@@ -295,6 +306,7 @@ sqinet_is_anyaddr(const sqaddr_t *s)
 	struct sockaddr_in6 *v6;
 	struct in6_addr any6addr = IN6ADDR_ANY_INIT;
 
+	assert(s->init);
 	switch(s->st.ss_family) {
 		case AF_INET:
 			v4 = (struct sockaddr_in *) &s->st;
@@ -330,6 +342,7 @@ sqinet_is_noaddr(const sqaddr_t *s)
 	struct sockaddr_in6 *v6;
 	struct in6_addr no6addr = {{{ 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff }}};
 
+	assert(s->init);
 	switch(s->st.ss_family) {
 		case AF_INET:
 			v4 = (struct sockaddr_in *) &s->st;
@@ -359,6 +372,7 @@ sqinet_is_noaddr(const sqaddr_t *s)
 int
 sqinet_get_port(const sqaddr_t *s)
 {
+	assert(s->init);
 	switch (s->st.ss_family) {
 		case AF_INET:
 			return ntohs(((struct sockaddr_in *) &s->st)->sin_port);
@@ -390,6 +404,7 @@ sqinet_get_port(const sqaddr_t *s)
 void
 sqinet_set_port(const sqaddr_t *s, short port, sqaddr_flags flags)
 {
+	assert(s->init);
 	if (flags & SQADDR_ASSERT_IS_V4)
 		assert(s->st.ss_family == AF_INET);
 	if (flags & SQADDR_ASSERT_IS_V6)
@@ -425,6 +440,7 @@ sqinet_set_port(const sqaddr_t *s, short port, sqaddr_flags flags)
 int
 sqinet_ntoa(const sqaddr_t *s, char *hoststr, int hostlen, sqaddr_flags flags)
 {
+	assert(s->init);
 	if (flags & SQADDR_ASSERT_IS_V4)
 		assert(s->st.ss_family == AF_INET);
 	if (flags & SQADDR_ASSERT_IS_V6)
@@ -462,6 +478,7 @@ sqinet_aton(sqaddr_t *s, char *hoststr, sqaton_flags flags)
 	struct addrinfo hints, *r = NULL;
 	int err;
 
+	assert(s->init);
 	bzero(&hints, sizeof(hints));
 	if (flags & SQATON_FAMILY_IPv4)
 		hints.ai_family = AF_INET;

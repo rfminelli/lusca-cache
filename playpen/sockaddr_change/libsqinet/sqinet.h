@@ -4,6 +4,7 @@
 #define	MAX_IPSTRLEN	75
 
 struct _sqaddr {
+	int init;
 	struct sockaddr_storage st;
 };
 typedef struct _sqaddr sqaddr_t;
