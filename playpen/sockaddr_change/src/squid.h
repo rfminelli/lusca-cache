@@ -402,6 +402,7 @@ struct rusage {
 
 #include "../libsqinet/inet_legacy.h"
 #include "../libsqinet/sqinet.h"
+#include "../libsqinet/inet_legacy.h"
 
 #include "../libhttp/HttpVersion.h"
 #include "../libhttp/HttpStatusLine.h"

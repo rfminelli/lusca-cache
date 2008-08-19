@@ -16,8 +16,7 @@ check_PROGRAMS=
 
 SUBDIRS		= 
 
-bin_PROGRAMS = \
-	tcptest
+noinst_PROGRAMS = tcptest
 
 tcptest_SOURCES = tcptest.c tunnel.c
 

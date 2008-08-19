@@ -9,6 +9,9 @@ extern size_t toKB(size_t size);
 
 #define XMIN(x,y) ((x)<(y)? (x) : (y))
 #define XMAX(x,y) ((x)>(y)? (x) : (y))
+#define EBIT_SET(flag, bit)     ((void)((flag) |= ((1L<<(bit)))))
+#define EBIT_CLR(flag, bit)     ((void)((flag) &= ~((1L<<(bit)))))
+#define EBIT_TEST(flag, bit)    ((flag) & ((1L<<(bit))))
 
 extern struct timeval current_time;
 extern double current_dtime;
