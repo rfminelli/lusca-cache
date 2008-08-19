@@ -1022,7 +1022,7 @@ wccp2HandleUdp(int sock, void *not_used)
     }
     /* Check that the router address is configured on this router */
     for (router_list_ptr = &service_list_ptr->router_list_head; router_list_ptr->next != NULL; router_list_ptr = router_list_ptr->next) {
-	if (IsAnyAddr(&router_list_ptr->router_sendto_address))
+	if (router_list_ptr->router_sendto_address.s_addr == from.sin_addr.s_addr)
 	    break;
     }
     if (router_list_ptr->next == NULL) {
