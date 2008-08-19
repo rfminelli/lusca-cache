@@ -518,7 +518,7 @@ aclParseIpData(const char *t)
 	q->mask.s_addr = 0;
 	return q;
     }
-    q->mask.s_addr = no_addr.s_addr;	/* 255.255.255.255 */
+    SetNoAddr(&q->mask);	/* 255.255.255.255 */
     if (sscanf(t, SCAN_ACL1, addr1, addr2, mask) == 3) {
 	(void) 0;
     } else if (sscanf(t, SCAN_ACL2, addr1, addr2, &c) == 2) {
@@ -546,7 +546,7 @@ aclParseIpData(const char *t)
 		r = *Q = memPoolAlloc(acl_ip_data_pool);
 	    xmemcpy(&r->addr1.s_addr, *x, sizeof(r->addr1.s_addr));
 	    r->addr2.s_addr = 0;
-	    r->mask.s_addr = no_addr.s_addr;	/* 255.255.255.255 */
+	    SetNoAddr(&r->mask);	/* 255.255.255.255 */
 	    Q = &r->next;
 	    debug(28, 3) ("%s --> %s\n", addr1, inet_ntoa(r->addr1));
 	}
@@ -1354,8 +1354,8 @@ aclMatchIp(void *dataptr, struct in_addr c)
      * static structure.
      */
     x.addr1 = c;
-    x.addr2 = any_addr;
-    x.mask = no_addr;
+    SetAnyAddr(&x.addr2);
+    SetNoAddr(&x.mask);
     x.next = NULL;
     *Top = splay_splay(&x, *Top, aclIpAddrNetworkCompare);
     debug(28, 3) ("aclMatchIp: '%s' %s\n",
@@ -2760,11 +2760,11 @@ aclIpDataToStr(const acl_ip_data * ip, char *buf, int len)
     char b2[20];
     char b3[20];
     snprintf(b1, 20, "%s", inet_ntoa(ip->addr1));
-    if (ip->addr2.s_addr != any_addr.s_addr)
+    if (! IsAnyAddr(&ip->addr2))
 	snprintf(b2, 20, "-%s", inet_ntoa(ip->addr2));
     else
 	b2[0] = '\0';
-    if (ip->mask.s_addr != no_addr.s_addr)
+    if (! IsNoAddr(&ip->mask))
 	snprintf(b3, 20, "/%s", inet_ntoa(ip->mask));
     else
 	b3[0] = '\0';
@@ -2886,9 +2886,9 @@ aclDumpIpListWalkee(void *node, void *state)
     wordlist **W = state;
     memBufDefInit(&mb);
     memBufPrintf(&mb, "%s", inet_ntoa(ip->addr1));
-    if (ip->addr2.s_addr != any_addr.s_addr)
+    if (! IsAnyAddr(&ip->addr2))
 	memBufPrintf(&mb, "-%s", inet_ntoa(ip->addr2));
-    if (ip->mask.s_addr != no_addr.s_addr)
+    if (! IsNoAddr(&ip->mask))
 	memBufPrintf(&mb, "/%s", inet_ntoa(ip->mask));
     wordlistAdd(W, mb.buf);
     memBufClean(&mb);

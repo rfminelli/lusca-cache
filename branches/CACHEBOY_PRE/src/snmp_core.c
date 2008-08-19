@@ -409,7 +409,7 @@ snmpConnectionOpen(void)
 	commSetSelect(theInSnmpConnection, COMM_SELECT_READ, snmpHandleUdp, NULL, 0);
 	debug(1, 1) ("Accepting SNMP messages on port %d, FD %d.\n",
 	    (int) port, theInSnmpConnection);
-	if (Config.Addrs.snmp_outgoing.s_addr != no_addr.s_addr) {
+	if (! IsNoAddr(&Config.Addrs.snmp_outgoing)) {
 	    enter_suid();
 	    theOutSnmpConnection = comm_open(SOCK_DGRAM,
 		IPPROTO_UDP,

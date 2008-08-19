@@ -501,18 +501,18 @@ getMyHostname(void)
     if (present)
 	return host;
     host[0] = '\0';
-    memcpy(&sa, &any_addr, sizeof(sa));
-    if (Config.Sockaddr.http && sa.s_addr == any_addr.s_addr)
+    SetAnyAddr(&sa);
+    if (Config.Sockaddr.http && IsAnyAddr(&sa))
 	memcpy(&sa, &Config.Sockaddr.http->s.sin_addr, sizeof(sa));
 #if USE_SSL
-    if (Config.Sockaddr.https && sa.s_addr == any_addr.s_addr)
+    if (Config.Sockaddr.https && IsAnyAddr(&sa))
 	memcpy(&sa, &Config.Sockaddr.https->http.s.sin_addr, sizeof(sa));
 #endif
     /*
      * If the first http_port address has a specific address, try a
      * reverse DNS lookup on it.
      */
-    if (sa.s_addr != any_addr.s_addr) {
+    if (! IsAnyAddr(&sa)) {
 	h = gethostbyaddr((char *) &sa,
 	    sizeof(sa), AF_INET);
 	if (h != NULL) {
@@ -1242,7 +1242,7 @@ parse_sockaddr(char *s, struct sockaddr_in *addr)
     }
     addr->sin_port = htons(port);
     if (NULL == host)
-	addr->sin_addr = any_addr;
+	SetAnyAddr(&addr->sin_addr);
     else if (1 == safe_inet_addr(host, &addr->sin_addr))
 	(void) 0;
     else if ((hp = gethostbyname(host)))	/* dont use ipcache */

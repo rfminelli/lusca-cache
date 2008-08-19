@@ -53,8 +53,8 @@ requestCreate(method_t method, protocol_t protocol, const char *urlpath)
 	stringReset(&req->urlpath, urlpath);
     req->max_forwards = -1;
     req->lastmod = -1;
-    req->client_addr = no_addr;
-    req->my_addr = no_addr;
+    SetNoAddr(&req->client_addr);
+    SetNoAddr(&req->my_addr);
     httpHeaderInit(&req->header, hoRequest);
     return req;
 }
