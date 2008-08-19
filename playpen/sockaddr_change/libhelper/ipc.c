@@ -92,7 +92,9 @@ ipcCloseAllFD(int prfd, int pwfd, int crfd, int cwfd)
 
 
 /*
- * XXX CS/PS aren't being passed through sqinet_done()!
+ * Some issues with this routine at the moment!
+ *
+ * + All of the FDs are comm_close()'ed but they're not all created via the comm layer! Gah, etc; so they're "faked" enough for now
  */
 pid_t
 ipcCreate(int type, const char *prog, const char *const args[], const char *name, int sleep_after_fork, int *rfd, int *wfd, void **hIpc)
@@ -174,6 +176,10 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	fd_open(cwfd = p2c[1], FD_PIPE, "IPC FIFO Child Write");
 	fd_open(crfd = c2p[0], FD_PIPE, "IPC FIFO Child Read");
 	fd_open(pwfd = c2p[1], FD_PIPE, "IPC FIFO Parent Write");
+	sqinet_init(&fd_table[prfd].local_address);
+	sqinet_init(&fd_table[cwfd].local_address);
+	sqinet_init(&fd_table[crfd].local_address);
+	sqinet_init(&fd_table[pwfd].local_address);
 #if HAVE_SOCKETPAIR && defined(AF_UNIX)
     } else if (type == IPC_UNIX_STREAM) {
 	int fds[2];
@@ -188,6 +194,8 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	setsockopt(fds[1], SOL_SOCKET, SO_RCVBUF, (void *) &buflen, sizeof(buflen));
 	fd_open(prfd = pwfd = fds[0], FD_PIPE, "IPC UNIX STREAM Parent");
 	fd_open(crfd = cwfd = fds[1], FD_PIPE, "IPC UNIX STREAM Parent");
+	sqinet_init(&fd_table[prfd].local_address);
+	sqinet_init(&fd_table[crfd].local_address);
     } else if (type == IPC_UNIX_DGRAM) {
 	int fds[2];
 	if (socketpair(AF_UNIX, SOCK_DGRAM, 0, fds) < 0) {
@@ -196,6 +204,8 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	}
 	fd_open(prfd = pwfd = fds[0], FD_PIPE, "IPC UNIX DGRAM Parent");
 	fd_open(crfd = cwfd = fds[1], FD_PIPE, "IPC UNIX DGRAM Parent");
+	sqinet_init(&fd_table[prfd].local_address);
+	sqinet_init(&fd_table[crfd].local_address);
 #endif
     } else {
 	assert(IPC_NONE);
@@ -213,18 +223,20 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	debug(54, 0) ("ipcCreate: Failed to create server FD.\n");
 	return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
     }
+    sqinet_init(&PS);
+    sqinet_init(&CS);
+
     if (type == IPC_TCP_SOCKET || type == IPC_UDP_SOCKET) {
-        sqinet_init(&PS);
 	len = sqinet_get_maxlength(&PS);
 	if (getsockname(pwfd, sqinet_get_entry(&PS), &len) < 0) {
 	    debug(54, 0) ("ipcCreate: getsockname: %s\n", xstrerror());
 	    sqinet_done(&PS);
+	    sqinet_done(&CS);
 	    return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
 	}
         sqinet_ntoa(&PS, tmp, MAX_IPSTRLEN, 0);
 	debug(54, 3) ("ipcCreate: FD %d sockaddr %s:%d\n",
 	    pwfd, tmp, sqinet_get_port(&PS));
-        sqinet_init(&CS);
 	len = sqinet_get_maxlength(&CS);
 	if (getsockname(crfd, sqinet_get_entry(&CS), &len) < 0) {
 	    debug(54, 0) ("ipcCreate: getsockname: %s\n", xstrerror());
