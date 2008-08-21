@@ -67,7 +67,7 @@
  
 #include "../libcb/cbdata.h"
 
-#include "../libsqinet/inet.h"
+#include "../libsqinet/sqinet.h"
 #include "../libsqinet/inet_legacy.h"
 
 #include "../libstat/StatHist.h"
