@@ -172,23 +172,9 @@ commBind(int s, struct in_addr in_addr, u_short port)
 }
 
 /* Create a socket. Default is blocking, stream (TCP) socket.  IO_TYPE
- * is OR of flags specified in comm.h. Defaults TOS */
-int
-comm_open(int sock_type,
-    int proto,
-    struct in_addr addr,
-    u_short port,
-    int flags,
-    const char *note)
-{
-    return comm_openex(sock_type, proto, addr, port, flags, 0, note);
-}
-
-
-/* Create a socket. Default is blocking, stream (TCP) socket.  IO_TYPE
  * is OR of flags specified in defines.h:COMM_* */
 int
-comm_openex(int sock_type,
+comm_open(int sock_type,
     int proto,
     struct in_addr addr,
     u_short port,

@@ -210,6 +210,7 @@ identStart(struct sockaddr_in *me, struct sockaddr_in *my_peer, IDCB * callback,
 	me->sin_addr,
 	0,
 	COMM_NONBLOCKING,
+	COMM_TOS_DEFAULT,
 	"ident");
     if (fd == COMM_ERROR) {
 	/* Failed to get a local socket */

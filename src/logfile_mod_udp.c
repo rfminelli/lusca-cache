@@ -182,6 +182,7 @@ logfile_mod_udp_open(Logfile * lf, const char *path, size_t bufsz, int fatal_fla
 	no_addr,
 	0,
 	COMM_NONBLOCKING,
+	COMM_TOS_DEFAULT,
 	"UDP log socket");
     if (ll->fd < 0) {
 	if (lf->flags.fatal) {

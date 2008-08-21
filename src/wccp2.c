@@ -770,6 +770,7 @@ wccp2ConnectionOpen(void)
 	Config.Wccp2.address,
 	port,
 	COMM_NONBLOCKING,
+	COMM_TOS_DEFAULT,
 	"WCCPv2 Socket");
     if (theWccp2Connection < 0)
 	fatal("Cannot open WCCP Port");

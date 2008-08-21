@@ -81,7 +81,7 @@ main(int argc, const char *argv[])
 	dest.sin_family = AF_INET;
 	//dest.sin_len = sizeof(struct sockaddr_in);
 
-	fd = comm_open(SOCK_STREAM, IPPROTO_TCP, s.sin_addr, 8080, COMM_NONBLOCKING, "HTTP Socket");
+	fd = comm_open(SOCK_STREAM, IPPROTO_TCP, s.sin_addr, 8080, COMM_NONBLOCKING, COMM_TOS_DEFAULT, "HTTP Socket");
 	assert(fd > 0);
 	comm_listen(fd);
 	commSetSelect(fd, COMM_SELECT_READ, acceptSock, NULL, 0);

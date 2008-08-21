@@ -1124,6 +1124,7 @@ htcpInit(void)
 	Config.Addrs.udp_incoming,
 	Config.Port.htcp,
 	COMM_NONBLOCKING,
+	COMM_TOS_DEFAULT,
 	"HTCP Socket");
     leave_suid();
     if (htcpInSocket < 0)
@@ -1138,6 +1139,7 @@ htcpInit(void)
 	    Config.Addrs.udp_outgoing,
 	    Config.Port.htcp,
 	    COMM_NONBLOCKING,
+	    COMM_TOS_DEFAULT,
 	    "Outgoing HTCP Socket");
 	leave_suid();
 	if (htcpOutSocket < 0)

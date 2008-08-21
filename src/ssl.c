@@ -523,7 +523,7 @@ sslStart(clientHttpRequest * http, squid_off_t * size_ptr, int *status_ptr)
     outgoing = getOutgoingAddr(request);
     tos = getOutgoingTOS(request);
     /* Create socket. */
-    sock = comm_openex(SOCK_STREAM,
+    sock = comm_open(SOCK_STREAM,
 	IPPROTO_TCP,
 	outgoing,
 	0,

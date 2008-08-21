@@ -1148,7 +1148,7 @@ peerProbeConnect(peer * p)
     if (squid_curtime - p->stats.last_connect_probe == 0)
 	return ret;		/* don't probe to often */
     fd = comm_open(SOCK_STREAM, IPPROTO_TCP, getOutgoingAddr(NULL),
-	0, COMM_NONBLOCKING, p->name);
+	0, COMM_NONBLOCKING, COMM_TOS_DEFAULT, p->name);
     if (fd < 0)
 	return ret;
     commSetTimeout(fd, ctimeout, peerProbeConnectTimeout, p);
