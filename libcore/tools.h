@@ -25,5 +25,13 @@ extern void libcore_set_fatalf(FATALF_FUNC *f);
 
 extern int xusleep(unsigned int usec);
 
+#if LEAK_CHECK_MODE
+#define LOCAL_ARRAY(type,name,size) \
+        static type *local_##name=NULL; \
+        type *name = local_##name ? local_##name : \
+                ( local_##name = (type *)xcalloc(size, sizeof(type)) )
+#else
+#define LOCAL_ARRAY(type,name,size) static type name[size]
+#endif
 
 #endif
