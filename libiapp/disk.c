@@ -61,6 +61,8 @@
 
 #include "../libcb/cbdata.h"
 
+#include "../libsqinet/sqinet.h"
+
 #include "iapp_ssl.h"
 #include "comm.h"
 

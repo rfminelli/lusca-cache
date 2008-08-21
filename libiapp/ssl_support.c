@@ -36,6 +36,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 #include <netinet/in.h>
 
 #include "../include/config.h"
@@ -52,6 +54,7 @@
 #include "../libmem/MemBuf.h"
 #include "../libmem/MemStr.h"
 #include "../libcb/cbdata.h"
+#include "../libsqinet/sqinet.h"
 
 #include "event.h"
 #include "iapp_ssl.h"
