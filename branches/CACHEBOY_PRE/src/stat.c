@@ -420,16 +420,16 @@ info_get_mallstat(int size, int number, int oldnum, void *data)
 static const char *
 fdRemoteAddr(const fde * f)
 {
-    LOCAL_ARRAY(char, buf, 32);
+    LOCAL_ARRAY(char, buf, SQUIDHOSTNAMELEN);
     if (f->type != FD_SOCKET)
 	return null_string;
-    if (*f->ipaddr)
-	snprintf(buf, 32, "%s.%d", f->ipaddr, (int) f->remote_port);
+    if (*f->ipaddrstr)
+	snprintf(buf, SQUIDHOSTNAMELEN, "%s.%d", f->ipaddrstr, (int) f->remote_port);
     else {
 	if (! IsAnyAddr(&f->local_addr)) {
-	    snprintf(buf, 32, "%s.%d", inet_ntoa(f->local_addr), (int) f->local_port);
+	    snprintf(buf, SQUIDHOSTNAMELEN, "%s.%d", inet_ntoa(f->local_addr), (int) f->local_port);
 	} else {
-	    snprintf(buf, 32, "*.%d", (int) f->local_port);
+	    snprintf(buf, SQUIDHOSTNAMELEN, "*.%d", (int) f->local_port);
 	}
     }
     return buf;
