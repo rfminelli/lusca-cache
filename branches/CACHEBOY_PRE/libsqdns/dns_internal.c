@@ -412,6 +412,7 @@ idnsRetryTcp(idns_query * q)
 	addr,
 	0,
 	COMM_NONBLOCKING,
+	COMM_TOS_DEFAULT,
 	"DNS TCP Socket");
     q->queue_t = q->sent_t = current_time;
     dlinkAdd(q, &q->lru, &idns_lru_list);
@@ -655,6 +656,7 @@ idnsInit(void)
 	    addr,
 	    0,
 	    COMM_NONBLOCKING,
+	    COMM_TOS_DEFAULT,
 	    "DNS Socket");
 	if (DnsSocket < 0)
 	    libcore_fatalf("Could not create a DNS socket: errno %d", errno);

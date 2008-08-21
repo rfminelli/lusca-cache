@@ -128,12 +128,14 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	    local_addr,
 	    0,
 	    COMM_NOCLOEXEC,
+	    COMM_TOS_DEFAULT,
 	    name);
 	prfd = pwfd = comm_open(SOCK_STREAM,
 	    IPPROTO_TCP,	/* protocol */
 	    local_addr,
 	    0,			/* port */
 	    0,			/* blocking */
+	    COMM_TOS_DEFAULT,
 	    name);
     } else if (type == IPC_UDP_SOCKET) {
 	crfd = cwfd = comm_open(SOCK_DGRAM,
@@ -141,12 +143,14 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	    local_addr,
 	    0,
 	    COMM_NOCLOEXEC,
+	    COMM_TOS_DEFAULT,
 	    name);
 	prfd = pwfd = comm_open(SOCK_DGRAM,
 	    IPPROTO_UDP,
 	    local_addr,
 	    0,
 	    0,
+	    COMM_TOS_DEFAULT,
 	    name);
     } else if (type == IPC_FIFO) {
 	int p2c[2];

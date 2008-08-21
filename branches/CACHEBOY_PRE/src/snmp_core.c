@@ -402,6 +402,7 @@ snmpConnectionOpen(void)
 	    Config.Addrs.snmp_incoming,
 	    port,
 	    COMM_NONBLOCKING,
+	    COMM_TOS_DEFAULT,
 	    "SNMP Port");
 	leave_suid();
 	if (theInSnmpConnection < 0)
@@ -416,6 +417,7 @@ snmpConnectionOpen(void)
 		Config.Addrs.snmp_outgoing,
 		port,
 		COMM_NONBLOCKING,
+	        COMM_TOS_DEFAULT,
 		"SNMP Port");
 	    leave_suid();
 	    if (theOutSnmpConnection < 0)

@@ -424,7 +424,7 @@ sslStart(int fd, struct sockaddr_in peer)
 #endif
     /* Create socket. */
     bzero(&outgoing, sizeof(outgoing));
-    sock = comm_openex(SOCK_STREAM, IPPROTO_TCP, outgoing, 0, COMM_NONBLOCKING, tos, NULL);
+    sock = comm_open(SOCK_STREAM, IPPROTO_TCP, outgoing, 0, COMM_NONBLOCKING, tos, NULL);
     if (sock == COMM_ERROR) {
 	debug(26, 4) ("sslStart: Failed because we're out of sockets.\n");
 	comm_close(fd);

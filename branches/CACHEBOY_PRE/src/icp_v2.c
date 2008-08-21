@@ -415,6 +415,7 @@ icpConnectionsOpen(void)
 	Config.Addrs.udp_incoming,
 	port,
 	COMM_NONBLOCKING,
+	COMM_TOS_DEFAULT,
 	"ICP Socket");
     leave_suid();
     if (theInIcpConnection < 0)
@@ -437,6 +438,7 @@ icpConnectionsOpen(void)
 	    addr,
 	    port,
 	    COMM_NONBLOCKING,
+	    COMM_TOS_DEFAULT,
 	    "ICP Port");
 	leave_suid();
 	if (theOutIcpConnection < 0)

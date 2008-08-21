@@ -36,7 +36,7 @@
 const char *
 xinet_ntoa(const struct in_addr addr)
 {
-    return inet_ntoa(addr);
+    return(inet_ntoa(addr));
 }
 
 /*!
