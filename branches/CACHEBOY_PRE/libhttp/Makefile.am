@@ -2,6 +2,7 @@
 
 libhttp_a_SOURCES = \
 	HttpStatusLine.c \
+	HttpHeaderType.c \
 	HttpVersion.c
 
 noinst_LIBRARIES = \

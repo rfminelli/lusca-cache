@@ -914,13 +914,6 @@ struct _HttpHdrRangeIter {
     String boundary;		/* boundary for multipart responses */
 };
 
-/* constant attributes of http header fields */
-struct _HttpHeaderFieldAttrs {
-    const char *name;
-    http_hdr_type id;
-    field_type type;
-};
-
 /* per field statistics */
 struct _HttpHeaderFieldStat {
     int aliveCount;		/* created but not destroyed (count) */
