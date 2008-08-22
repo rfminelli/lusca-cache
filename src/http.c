@@ -763,7 +763,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
      */
     if (len == 0 && buffer_filled >= 0) {
 	char buf2[4];
-	statCounter.syscalls.sock.reads++;
+	CommStats.syscalls.sock.reads++;
 	len = FD_READ_METHOD(fd, buf2, sizeof(buf2));
 	if ((len < 0 && !ignoreErrno(errno)) || len == 0) {
 	    keep_alive = 0;
@@ -804,11 +804,9 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 	keep_alive = 0;
     if (keep_alive) {
 	int pinned = 0;
-#if LINUX_TPROXY
 	if (orig_request->flags.tproxy) {
 	    client_addr = &httpState->request->client_addr;
 	}
-#endif
 	/* yes we have to clear all these! */
 	commSetDefer(fd, NULL, NULL);
 	commSetTimeout(fd, -1, NULL, NULL);
@@ -874,7 +872,7 @@ httpReadReply(int fd, void *data)
 #endif
 
     errno = 0;
-    statCounter.syscalls.sock.reads++;
+    CommStats.syscalls.sock.reads++;
     len = FD_READ_METHOD(fd, buf, read_sz);
     buffer_filled = len == read_sz;
     debug(11, 5) ("httpReadReply: FD %d: len %d.\n", fd, (int) len);
@@ -1484,6 +1482,8 @@ httpSendRequest(HttpStateData * httpState)
     comm_write_mbuf(fd, mb, sendHeaderDone, httpState);
 }
 
+CBDATA_TYPE(HttpStateData);
+
 void
 httpStart(FwdState * fwd)
 {
@@ -1494,6 +1494,7 @@ httpStart(FwdState * fwd)
     debug(11, 3) ("httpStart: \"%s %s\"\n",
 	RequestMethods[orig_req->method].str,
 	storeUrl(fwd->entry));
+    CBDATA_INIT_TYPE(HttpStateData);
     httpState = cbdataAlloc(HttpStateData);
     storeLockObject(fwd->entry);
     httpState->fwd = fwd;

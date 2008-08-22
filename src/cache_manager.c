@@ -212,7 +212,7 @@ cachemgrStart(int fd, request_t * request, StoreEntry * entry)
     storeLockObject(entry);
     entry->expires = squid_curtime;
     debug(16, 5) ("CACHEMGR: %s requesting '%s'\n",
-	fd_table[fd].ipaddr, mgr->action);
+	fd_table[fd].ipaddrstr, mgr->action);
     /* get additional info from request headers */
     cachemgrParseHeaders(mgr, request);
     /* Check password */
@@ -225,11 +225,11 @@ cachemgrStart(int fd, request_t * request, StoreEntry * entry)
 	if (mgr->passwd)
 	    debug(16, 1) ("CACHEMGR: %s@%s: incorrect password for '%s'\n",
 		mgr->user_name ? mgr->user_name : "<unknown>",
-		fd_table[fd].ipaddr, mgr->action);
+		fd_table[fd].ipaddrstr, mgr->action);
 	else
 	    debug(16, 1) ("CACHEMGR: %s@%s: password needed for '%s'\n",
 		mgr->user_name ? mgr->user_name : "<unknown>",
-		fd_table[fd].ipaddr, mgr->action);
+		fd_table[fd].ipaddrstr, mgr->action);
 	rep = errorBuildReply(err);
 	errorStateFree(err);
 	/*
@@ -246,7 +246,7 @@ cachemgrStart(int fd, request_t * request, StoreEntry * entry)
     }
     debug(16, 1) ("CACHEMGR: %s@%s requesting '%s'\n",
 	mgr->user_name ? mgr->user_name : "<unknown>",
-	fd_table[fd].ipaddr, mgr->action);
+	fd_table[fd].ipaddrstr, mgr->action);
     /* retrieve object requested */
     a = cachemgrFindAction(mgr->action);
     assert(a != NULL);

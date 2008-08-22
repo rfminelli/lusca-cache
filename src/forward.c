@@ -61,6 +61,8 @@ static OBJH fwdStats;
 static STABH fwdAbort;
 static peer *fwdStateServerPeer(FwdState *);
 
+MemPool * pool_fwd_server = NULL;
+
 #define MAX_FWD_STATS_IDX 9
 static int FwdReplyCodes[MAX_FWD_STATS_IDX + 1][HTTP_INVALID_HEADER + 1];
 
@@ -84,7 +86,7 @@ fwdServerFree(FwdServer * fs)
 {
     if (fs->peer)
 	cbdataUnlock(fs->peer);
-    memFree(fs, MEM_FWD_SERVER);
+    memPoolFree(pool_fwd_server, fs);
 }
 
 static void
@@ -328,7 +330,7 @@ fwdConnectDone(int server_fd, int status, void *data)
     request_t *request = fwdState->request;
     assert(fwdState->server_fd == server_fd);
     if (Config.onoff.log_ip_on_direct && status != COMM_ERR_DNS && fs->code == HIER_DIRECT)
-	hierarchyNote(&fwdState->request->hier, fs->code, fd_table[server_fd].ipaddr);
+	hierarchyNote(&fwdState->request->hier, fs->code, fd_table[server_fd].ipaddrstr);
     if (status == COMM_ERR_DNS) {
 	/*
 	 * Only set the dont_retry flag if the DNS lookup fails on
@@ -376,8 +378,8 @@ fwdConnectTimeout(int fd, void *data)
     ErrorState *err;
     debug(17, 2) ("fwdConnectTimeout: FD %d: '%s'\n", fd, storeUrl(entry));
     assert(fd == fwdState->server_fd);
-    if (Config.onoff.log_ip_on_direct && fs->code == HIER_DIRECT && fd_table[fd].ipaddr[0])
-	hierarchyNote(&fwdState->request->hier, fs->code, fd_table[fd].ipaddr);
+    if (Config.onoff.log_ip_on_direct && fs->code == HIER_DIRECT && fd_table[fd].ipaddrstr[0])
+	hierarchyNote(&fwdState->request->hier, fs->code, fd_table[fd].ipaddrstr);
     if (entry->mem_obj->inmem_hi == 0) {
 	err = errorCon(ERR_CONNECT_FAIL, HTTP_GATEWAY_TIMEOUT, fwdState->request);
 	err->xerrno = ETIMEDOUT;
@@ -429,7 +431,7 @@ fwdConnectIdleTimeout(int fd, void *data)
 static void
 openIdleConn(peer * peer, const char *domain, struct in_addr outgoing, unsigned short tos, int ctimeout)
 {
-    int fd = comm_openex(SOCK_STREAM,
+    int fd = comm_open(SOCK_STREAM,
 	IPPROTO_TCP,
 	outgoing,
 	0,
@@ -600,7 +602,7 @@ fwdConnectStart(void *data)
 	    if (fs->peer)
 		hierarchyNote(&fwdState->request->hier, fs->code, fs->peer->name);
 	    else if (Config.onoff.log_ip_on_direct && fs->code == HIER_DIRECT)
-		hierarchyNote(&fwdState->request->hier, fs->code, fd_table[fd].ipaddr);
+		hierarchyNote(&fwdState->request->hier, fs->code, fd_table[fd].ipaddrstr);
 	    else
 		hierarchyNote(&fwdState->request->hier, fs->code, name);
 	    if (fs->peer && idle >= 0 && idle < fs->peer->idle) {
@@ -636,7 +638,7 @@ fwdConnectStart(void *data)
 
     debug(17, 3) ("fwdConnectStart: got addr %s, tos %d\n",
 	inet_ntoa(outgoing), tos);
-    fd = comm_openex(SOCK_STREAM,
+    fd = comm_open(SOCK_STREAM,
 	IPPROTO_TCP,
 	outgoing,
 	0,
@@ -776,7 +778,7 @@ fwdDispatch(FwdState * fwdState)
     fd_table[server_fd].uses++;
     if (fd_table[server_fd].uses == 1 && fs->peer)
 	peerConnectSucceded(fs->peer);
-    fwdState->request->out_ip = fd_table[server_fd].local_addr;
+    fwdState->request->out_ip = sqinet_get_v4_inaddr(&fd_table[server_fd].local_address, SQADDR_ASSERT_IS_V4);
     netdbPingSite(request->host);
     entry->mem_obj->refresh_timestamp = squid_curtime;
     if (fwdState->servers && (p = fwdState->servers->peer)) {
@@ -873,6 +875,7 @@ fwdReforward(FwdState * fwdState)
 
 /* PUBLIC FUNCTIONS */
 
+CBDATA_TYPE(FwdState);
 void
 fwdServersFree(FwdServer ** FS)
 {
@@ -893,6 +896,7 @@ fwdStartPeer(peer * p, StoreEntry * e, request_t * r)
 #if URL_CHECKSUM_DEBUG
     assert(e->mem_obj->chksum == url_checksum(e->mem_obj->url));
 #endif
+    CBDATA_INIT_TYPE(FwdState);
     fwdState = cbdataAlloc(FwdState);
     fwdState->entry = e;
     fwdState->client_fd = -1;
@@ -919,7 +923,7 @@ fwdStart(int fd, StoreEntry * e, request_t * r)
      * from peer_digest.c, asn.c, netdb.c, etc and should always
      * be allowed.  yuck, I know.
      */
-    if (r->client_addr.s_addr != no_addr.s_addr && r->protocol != PROTO_INTERNAL && r->protocol != PROTO_CACHEOBJ) {
+    if (! IsNoAddr(&r->client_addr) && r->protocol != PROTO_INTERNAL && r->protocol != PROTO_CACHEOBJ) {
 	/*      
 	 * Check if this host is allowed to fetch MISSES from us (miss_access)
 	 */
@@ -962,6 +966,7 @@ fwdStart(int fd, StoreEntry * e, request_t * r)
     default:
 	break;
     }
+    CBDATA_INIT_TYPE(FwdState);
     fwdState = cbdataAlloc(FwdState);
     fwdState->entry = e;
     fwdState->client_fd = fd;
@@ -1148,6 +1153,16 @@ fwdComplete(FwdState * fwdState)
 	if (fwdState->server_fd < 0)
 	    fwdStateFree(fwdState);
     }
+}
+
+void
+fwdInitMem(void)
+{
+    /*
+     * Although we (currently) create FwdServers's in peer_select.c, the bulk of
+     * the manipulation logic is here!
+     */
+    pool_fwd_server = memPoolCreate("FwdServer", sizeof(FwdServer));
 }
 
 void

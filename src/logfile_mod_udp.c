@@ -150,6 +150,7 @@ logfile_mod_udp_open(Logfile * lf, const char *path, size_t bufsz, int fatal_fla
 {
     l_udp_t *ll;
     struct sockaddr_in addr;
+    sqaddr_t address;
     char *strAddr;
 
     lf->f_close = logfile_mod_udp_close;
@@ -182,6 +183,7 @@ logfile_mod_udp_open(Logfile * lf, const char *path, size_t bufsz, int fatal_fla
 	no_addr,
 	0,
 	COMM_NONBLOCKING,
+	COMM_TOS_DEFAULT,
 	"UDP log socket");
     if (ll->fd < 0) {
 	if (lf->flags.fatal) {
@@ -191,14 +193,18 @@ logfile_mod_udp_open(Logfile * lf, const char *path, size_t bufsz, int fatal_fla
 	    return FALSE;
 	}
     }
-    if (comm_connect_addr(ll->fd, &addr)) {
+    sqinet_init(&address);
+    sqinet_set_v4_sockaddr(&address, &addr);
+    if (comm_connect_addr(ll->fd, &address)) {
 	if (lf->flags.fatal) {
 	    fatalf("Unable to connect to %s for UDP log: %s\n", lf->path, xstrerror());
 	} else {
 	    debug(50, 1) ("Unable to connect to %s for UDP log: %s\n", lf->path, xstrerror());
+	    sqinet_done(&address);
 	    return FALSE;
 	}
     }
+    sqinet_done(&address);
     if (ll->fd == -1) {
 	if (ENOENT == errno && fatal_flag) {
 	    fatalf("Cannot open '%s' because\n"
