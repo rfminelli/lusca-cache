@@ -50,6 +50,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netdb.h>
 
 #include "../include/Array.h"
 #include "../include/Stack.h"
@@ -68,7 +69,6 @@
 #include "../libcb/cbdata.h"
 
 #include "../libsqinet/sqinet.h"
-#include "../libsqinet/inet_legacy.h"
 
 #include "../libstat/StatHist.h"
  
@@ -152,32 +152,40 @@ comm_local_port(int fd)
 }
 
 int
-commBind(int s, struct in_addr in_addr, u_short port)
+commBind(int s, sqaddr_t *addr)
 {
-    struct sockaddr_in S;
-
-    memset(&S, '\0', sizeof(S));
-    S.sin_family = AF_INET;
-    S.sin_port = htons(port);
-    S.sin_addr = in_addr;
+    LOCAL_ARRAY(char, ip_buf, MAX_IPSTRLEN);
+    LOCAL_ARRAY(char, srv_buf, MAX_IPSTRLEN);
     CommStats.syscalls.sock.binds++;
-    if (bind(s, (struct sockaddr *) &S, sizeof(S)) == 0)
+    if (bind(s, sqinet_get_entry(addr), sqinet_get_length(addr)) == 0)
 	return COMM_OK;
-    debug(5, 0) ("commBind: Cannot bind socket FD %d to %s:%d: %s\n",
-	s,
-	S.sin_addr.s_addr == INADDR_ANY ? "*" : inet_ntoa(S.sin_addr),
-	(int) port,
-	xstrerror());
+    getnameinfo(sqinet_get_entry(addr), sqinet_get_family(addr),
+      ip_buf, MAX_IPSTRLEN, srv_buf, MAX_IPSTRLEN, NI_NUMERICHOST|NI_NUMERICSERV);
+    debug(5, 0) ("commBind: Cannot bind socket FD %d to %s:%s: %s\n", s, ip_buf, srv_buf, xstrerror());
     return COMM_ERROR;
 }
+
+int
+comm_open(int sock_type, int proto, struct in_addr addr, u_short port, int flags, unsigned char TOS, const char *note)
+{
+	sqaddr_t a;
+	int r;
+
+	sqinet_init(&a);
+	sqinet_set_v4_inaddr(&a, &addr);
+	sqinet_set_v4_port(&a, port, SQADDR_ASSERT_IS_V4);
+	r = comm_open6(sock_type, proto, &a, flags, TOS, note);
+	sqinet_done(&a);
+	return r;
+}
+
 
 /* Create a socket. Default is blocking, stream (TCP) socket.  IO_TYPE
  * is OR of flags specified in defines.h:COMM_* */
 int
-comm_open(int sock_type,
+comm_open6(int sock_type,
     int proto,
-    struct in_addr addr,
-    u_short port,
+    sqaddr_t *a,
     int flags,
     unsigned char TOS,
     const char *note)
@@ -187,7 +195,7 @@ comm_open(int sock_type,
 
     /* Create socket for accepting new connections. */
     CommStats.syscalls.sock.sockets++;
-    if ((new_socket = socket(AF_INET, sock_type, proto)) < 0) {
+    if ((new_socket = socket(sqinet_get_family(a), sock_type, proto)) < 0) {
 	/* Increase the number of reserved fd's if calls to socket()
 	 * are failing because the open file table is full.  This
 	 * limits the number of simultaneous clients */
@@ -215,25 +223,27 @@ comm_open(int sock_type,
     }
     /* update fdstat */
     debug(5, 5) ("comm_openex: FD %d is a new socket\n", new_socket);
-    return comm_fdopenex(new_socket, sock_type, addr, port, flags, tos, note);
+    return comm_fdopen6(new_socket, sock_type, a, flags, tos, note);
 }
 
 int
-comm_fdopen(int socket_fd,
-    int sock_type,
-    struct in_addr addr,
-    u_short port,
-    int flags,
-    const char *note)
+comm_fdopen(int new_socket, int sock_type, struct in_addr addr, u_short port, int flags, unsigned char tos, const char *note)
 {
-    return comm_fdopenex(socket_fd, sock_type, addr, port, flags, 0, note);
+	sqaddr_t a;
+	int r;
+
+	sqinet_init(&a);
+	sqinet_set_v4_inaddr(&a, &addr);
+	sqinet_set_v4_port(&a, port, SQADDR_ASSERT_IS_V4);
+	r = comm_fdopen6(new_socket, sock_type, &a, flags, tos, note);
+	sqinet_done(&a);
+	return r;
 }
 
 int
-comm_fdopenex(int new_socket,
+comm_fdopen6(int new_socket,
     int sock_type,
-    struct in_addr addr,
-    u_short port,
+    sqaddr_t *a,
     int flags,
     unsigned char tos,
     const char *note)
@@ -242,13 +252,16 @@ comm_fdopenex(int new_socket,
 
     fd_open(new_socket, FD_SOCKET, note);
     F = &fd_table[new_socket];
-    F->local_addr = addr;
+
+    sqinet_init(&(F->local_address));
+    sqinet_copy(&(F->local_address), a);
+
     F->tos = tos;
     if (!(flags & COMM_NOCLOEXEC))
 	commSetCloseOnExec(new_socket);
     if ((flags & COMM_REUSEADDR))
 	commSetReuseAddr(new_socket);
-    if (port > (u_short) 0) {
+    if (sqinet_get_port(a) > 0) {
 #ifdef _SQUID_MSWIN_
 	if (sock_type != SOCK_DGRAM)
 #endif
@@ -256,13 +269,13 @@ comm_fdopenex(int new_socket,
 	if (opt_reuseaddr)
 	    commSetReuseAddr(new_socket);
     }
-    if (addr.s_addr != no_addr.s_addr) {
-	if (commBind(new_socket, addr, port) != COMM_OK) {
+    if (! sqinet_is_noaddr(&F->local_address)) {
+	if (commBind(new_socket, &F->local_address) != COMM_OK) {
 	    comm_close(new_socket);
 	    return -1;
 	}
     }
-    F->local_port = port;
+    F->local_port = sqinet_get_port(a);
 
     if (flags & COMM_NONBLOCKING)
 	if (commSetNonBlocking(new_socket) == COMM_ERROR)
@@ -338,26 +351,26 @@ commSetTimeout(int fd, int timeout, PF * handler, void *data)
 }
 
 int
-comm_connect_addr(int sock, const struct sockaddr_in *address)
+comm_connect_addr(int sock, const sqaddr_t *addr)
 {
     int status = COMM_OK;
     fde *F = &fd_table[sock];
     int x;
     int err = 0;
     socklen_t errlen;
-    assert(ntohs(address->sin_port) != 0);
+    assert(sqinet_get_port(addr) != 0);
     /* Establish connection. */
     errno = 0;
     if (!F->flags.called_connect) {
 	F->flags.called_connect = 1;
 	CommStats.syscalls.sock.connects++;
-	x = connect(sock, (struct sockaddr *) address, sizeof(*address));
+	x = connect(sock, sqinet_get_entry(addr), sqinet_get_length(addr));
 	if (x < 0)
 	    debug(5, 9) ("connect FD %d: %s\n", sock, xstrerror());
     } else {
 #if defined(_SQUID_NEWSOS6_)
 	/* Makoto MATSUSHITA <matusita@ics.es.osaka-u.ac.jp> */
-	connect(sock, (struct sockaddr *) address, sizeof(*address));
+	connect(sock, sqinet_get_entry(addr), sqinet_get_length(addr));
 	if (errno == EINVAL) {
 	    errlen = sizeof(err);
 	    x = getsockopt(sock, SOL_SOCKET, SO_ERROR, &err, &errlen);
@@ -387,8 +400,8 @@ comm_connect_addr(int sock, const struct sockaddr_in *address)
 	status = COMM_INPROGRESS;
     else
 	return COMM_ERROR;
-    xstrncpy(F->ipaddrstr, xinet_ntoa(address->sin_addr), MAX_IPSTRLEN);
-    F->remote_port = ntohs(address->sin_port);
+    sqinet_ntoa(addr, F->ipaddrstr, MAX_IPSTRLEN, 0);
+    F->remote_port = sqinet_get_port(addr);
     if (status == COMM_OK) {
 	debug(5, 10) ("comm_connect_addr: FD %d connected to %s:%d\n",
 	    sock, F->ipaddrstr, F->remote_port);
@@ -401,44 +414,55 @@ comm_connect_addr(int sock, const struct sockaddr_in *address)
 /* Wait for an incoming connection on FD.  FD should be a socket returned
  * from comm_listen. */
 int
-comm_accept(int fd, struct sockaddr_in *pn, struct sockaddr_in *me)
+comm_accept(int fd, sqaddr_t *pn, sqaddr_t *me)
 {
     int sock;
-    struct sockaddr_in P;
-    struct sockaddr_in M;
+    int ret = COMM_OK;
+    sqaddr_t loc, rem;
+
     socklen_t Slen;
     fde *F = NULL;
-    Slen = sizeof(P);
+
+    sqinet_init(&loc);
+    sqinet_init(&rem);
+    Slen = sqinet_get_maxlength(&rem);
+
     CommStats.syscalls.sock.accepts++;
-    if ((sock = accept(fd, (struct sockaddr *) &P, &Slen)) < 0) {
+    if ((sock = accept(fd, sqinet_get_entry(&rem), &Slen)) < 0) {
 	if (ignoreErrno(errno) || errno == ECONNREFUSED || errno == ECONNABORTED) {
 	    debug(5, 5) ("comm_accept: FD %d: %s\n", fd, xstrerror());
-	    return COMM_NOMESSAGE;
+            ret = COMM_NOMESSAGE;
+	    goto finish;
 	} else if (ENFILE == errno || EMFILE == errno) {
 	    debug(5, 3) ("comm_accept: FD %d: %s\n", fd, xstrerror());
-	    return COMM_ERROR;
+            ret = COMM_ERROR;
+	    goto finish;
 	} else {
 	    debug(5, 1) ("comm_accept: FD %d: %s\n", fd, xstrerror());
-	    return COMM_ERROR;
+            ret = COMM_ERROR;
+	    goto finish;
 	}
     }
     if (pn)
-	*pn = P;
-    Slen = sizeof(M);
-    memset(&M, '\0', Slen);
-    getsockname(sock, (struct sockaddr *) &M, &Slen);
+	sqinet_copy(pn, &rem);
+    Slen = sqinet_get_maxlength(&loc);
+    getsockname(sock, sqinet_get_entry(&loc), &Slen);
     if (me)
-	*me = M;
+        sqinet_copy(me, &loc);
     commSetCloseOnExec(sock);
     /* fdstat update */
     fd_open(sock, FD_SOCKET, NULL);
     fd_note_static(sock, "HTTP Request");
     F = &fd_table[sock];
-    xstrncpy(F->ipaddrstr, xinet_ntoa(P.sin_addr), MAX_IPSTRLEN);
-    F->remote_port = htons(P.sin_port);
-    F->local_port = htons(M.sin_port);
+    sqinet_ntoa(&rem, F->ipaddrstr, MAX_IPSTRLEN, 0);
+    F->remote_port = sqinet_get_port(&rem);
+    F->local_port = sqinet_get_port(&loc);
     commSetNonBlocking(sock);
-    return sock;
+    ret = sock;
+finish:
+    sqinet_done(&loc);
+    sqinet_done(&rem);
+    return ret;
 }
 
 void
@@ -546,6 +570,7 @@ comm_reset_close(int fd)
 static inline void
 comm_close_finish(int fd)
 {
+    sqinet_done(&fd_table[fd].local_address);
     fd_close(fd);		/* update fdstat */
     close(fd);
     CommStats.syscalls.sock.closes++;
