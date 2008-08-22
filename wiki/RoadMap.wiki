@@ -83,13 +83,13 @@ Implement IPv6 support in core libraries. Cacheboy/Squid will still be an IPv4 o
 Additionally, do a bit of a drive-by reorganisation of the HTTP parser and header management code in preparation for a large rewrite. (Well, integration of the seemingly working parser and support routines from the s27_adri branch from 2007/early 2008.)
 
   * Shift various bits of the HTTP code out from src/ and into libhttp/
-    * Header Entry
+    * Header Entry *(done)*
     * Basic Header management
     * Header entry parsing
     * Header parsing
     * Header statistics
     * Header attributes
-    * What else from src/Http**.c can be moved in this pass?
+    * What else from src/Http{Stuff}.c can be moved in this pass?
   * Rework the header entry API to be slightly more sensible
     * (This needs to be planned and documented somewhere!) 
 
