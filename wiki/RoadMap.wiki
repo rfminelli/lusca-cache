@@ -80,6 +80,19 @@ Implement IPv6 support in core libraries. Cacheboy/Squid will still be an IPv4 o
   * Implement IPv6 test TCP proxy for testing basic IPv6 functionality *(done)*
   * Implement IPv6 DNS tests for testing basic IPv6 resolution functionality
 
+Additionally, do a bit of a drive-by reorganisation of the HTTP parser and header management code in preparation for a large rewrite. (Well, integration of the seemingly working parser and support routines from the s27_adri branch from 2007/early 2008.)
+
+  * Shift various bits of the HTTP code out from src/ and into libhttp/
+    * Header Entry
+    * Basic Header management
+    * Header entry parsing
+    * Header parsing
+    * Header statistics
+    * Header attributes
+    * What else from src/Http*.c can be moved in this pass?
+  * Rework the header entry API to be slightly more sensible
+    * (This needs to be planned and documented somewhere!) 
+
 === Cacheboy-1.6 ===
 
 Implement IPv6 support in the client-side.
@@ -89,6 +102,26 @@ Implement IPv6 support in the client-side.
   * Implement IPv6 http_port bindings
   * Ensure basic logging, forwarding, etc of IPv6 connections are correctly handled - eg, logging IPv6 addresses, X-Forwarded-For, etc.
   * IPv6 related changes for DNS related rules - this will be tricky!
+
+=== Cacheboy-1.7? ===
+
+HTTP and memory allocation related cleanups.
+
+  * Bring over the s27_adri header and header entry management/parser code
+  * Reduce the memory allocator overhead by creating a proper vector-of-thing type, rather than using Array of pointers.
+  * Fix the TLV code to not abuse the memory allocator so hard (work is already done in another branch; it needs to be brought over and made stable)
+  * Consider gutting the MemPools code - turn it into just an inline wrapper around malloc/calloc/free with a little statistics keeping
+    * Benchmark to make sure this is fast enough!
+    * Its possible it will be a little slower thanks to stuff like Short Strings
+    * It may also be possible to just leave it where it is for now until after the String/buffer related cleanups occur.
+
+=== Cacheboy-1.8 ===
+
+String and buffer related cleanups.
+
+  * Begin upgrading String to a proper refcounted, non-NUL-terminated string class
+  * Investigate and bring over the "buffer" types
+  * Implement and test zero-copy String "cloning" to speed up the HTTP code (ie, where it spends time copying all those damned strings.)
 
 === Cacheboy 2.0 (was Squid-2.8) ===
 
