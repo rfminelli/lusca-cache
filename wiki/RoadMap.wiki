@@ -66,7 +66,7 @@ Cacheboy 1.X point releases will continue breaking out the code into seperate mo
 
 Preparation for IPv6 - complete refactoring out core network related code; begin modifications over to support IPv6 in the core libraries and leave the main Cacheboy application as IPv4 for now.
 
-  * migrate out DNS code into libsqdns
+  * migrate out DNS code into libsqdns *(done)*
    * migrate ipc and helper out into libhelper *(done)*
    * migrate external and internal DNS into libsqdns *(done)*
 
@@ -74,9 +74,10 @@ Preparation for IPv6 - complete refactoring out core network related code; begin
 
 Implement IPv6 support in core libraries. Cacheboy/Squid will still be an IPv4 only application but minimal changes will be made to ensure that the current IPv4-only code gets IPv4-only addresses.
 
-  * Modify the base libraries to support IPv6 for communcation and dns
-  * Modify Squid/Cacheboy application enough to support IPv4-only (and assert when IPv6 addresses appear where they shouldn't during conversions)
-  * Implement IPv6 test TCP proxy for testing basic IPv6 functionality
+  * Modify the base libraries to support IPv6 for communcation *(done)*
+    * and dns
+  * Modify Squid/Cacheboy application enough to support IPv4-only (and gracefully fail when IPv6 addresses appear where they shouldn't during conversions) *(done)*
+  * Implement IPv6 test TCP proxy for testing basic IPv6 functionality *(done)*
   * Implement IPv6 DNS tests for testing basic IPv6 resolution functionality
 
 === Cacheboy-1.6 ===
