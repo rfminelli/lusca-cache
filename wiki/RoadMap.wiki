@@ -11,7 +11,7 @@ The aim is to maintain and develop the Cacheboy derivative to meet performance, 
 This roadmap covers approximately twelve months of development and testing time, if required funding is obtained.
 The Squid-2.X releases indicate achievements made before the Cacheboy codebase branched from Squid-2.HEAD.
 
-This is all very dynamic and can change at any time - feel free to browse the subversion history to see how this roadmap has evolved over time.
+This is all very dynamic and can change at any time - feel free to [http://code.google.com/p/cacheboy/source/list?path=/wiki/RoadMap.wiki browse] the subversion history to see how this roadmap has evolved over time.
 
 Adrian's ToDoList covers the changes Adrian has planned and is currently working on.
 
