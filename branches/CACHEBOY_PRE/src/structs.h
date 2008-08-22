@@ -914,23 +914,6 @@ struct _HttpHdrRangeIter {
     String boundary;		/* boundary for multipart responses */
 };
 
-/* per field statistics */
-struct _HttpHeaderFieldStat {
-    int aliveCount;		/* created but not destroyed (count) */
-    int seenCount;		/* #fields we've seen */
-    int parsCount;		/* #parsing attempts */
-    int errCount;		/* #pasring errors */
-    int repCount;		/* #repetitons */
-};
-
-/* compiled version of HttpHeaderFieldAttrs plus stats */
-struct _HttpHeaderFieldInfo {
-    http_hdr_type id;
-    String name;
-    field_type type;
-    HttpHeaderFieldStat stat;
-};
-
 struct _HttpReply {
     /* unsupported, writable, may disappear/change in the future */
     int hdr_sz;			/* sums _stored_ status-line, headers, and <CRLF> */

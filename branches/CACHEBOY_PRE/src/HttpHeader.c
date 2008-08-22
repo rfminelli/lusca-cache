@@ -59,8 +59,6 @@
  * local constants and vars
  */
 
-static HttpHeaderFieldInfo *Headers = NULL;
-
 /*
  * headers with field values defined as #(values) in HTTP/1.1
  * Headers that are currently not recognized, are commented out.
@@ -200,12 +198,10 @@ httpHeaderInitModule(void)
     int i;
     /* check that we have enough space for masks */
     assert(8 * sizeof(HttpHeaderMask) >= HDR_ENUM_END);
-#if NOTYET
-    /* all headers must be described */
-    assert(countof(HeadersAttrs) == HDR_ENUM_END);
-#endif
-    if (!Headers)
-	Headers = httpHeaderBuildFieldsInfo(HeadersAttrs, HDR_ENUM_END);
+
+    /* Setup the libhttp/ header stuff */
+    httpHeaderInitLibrary();
+
     /* create masks */
     httpHeaderMaskInit(&ListHeadersMask, 0);
     httpHeaderCalcMask(&ListHeadersMask, ListHeadersArr, countof(ListHeadersArr));

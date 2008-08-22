@@ -21,5 +21,8 @@ struct _HttpHeader {
 };
 typedef struct _HttpHeader HttpHeader;
 
+extern HttpHeaderFieldInfo *Headers;
+
+extern void httpHeaderInitLibrary(void);
 
 #endif

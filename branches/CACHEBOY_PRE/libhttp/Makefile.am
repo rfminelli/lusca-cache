@@ -3,6 +3,10 @@
 libhttp_a_SOURCES = \
 	HttpStatusLine.c \
 	HttpHeaderType.c \
+	HttpHeader.c \
+	HttpHeaderTools.c \
+	HttpHeaderFieldInfo.c \
+	HttpHeaderFieldStat.c \
 	HttpVersion.c
 
 noinst_LIBRARIES = \
