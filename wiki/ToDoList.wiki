@@ -29,7 +29,7 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
   * Next - whatever bits of the http code can easily be moved
     * HttpVersion *done*
     * HttpStatusLine *done*
-    * Header / HeaderEntry
+    * Header / HeaderEntry *somewhat done*
     * HttpRequest
     * HttpReply
     * Body related callback pipeline?
