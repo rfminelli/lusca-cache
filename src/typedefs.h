@@ -307,9 +307,6 @@ typedef unsigned char cache_key;
 /* iteration for HttpHdrRange */
 typedef int HttpHdrRangePos;
 
-/*iteration for headers; use HttpHeaderPos as opaque type, do not interpret */
-typedef int HttpHeaderPos;
-
 /* a common objPackInto interface; used by debugObj */
 typedef void (*ObjPackMethod) (void *obj, Packer * p);
 

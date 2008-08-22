@@ -161,9 +161,6 @@ static int HeaderEntryParsedCount = 0;
 
 #define assert_eid(id) assert((id) < HDR_ENUM_END)
 
-static HttpHeaderEntry *httpHeaderEntryCreate(http_hdr_type id, const char *name, const char *value);
-static HttpHeaderEntry *httpHeaderEntryCreate2(http_hdr_type id, String name, String value);
-static void httpHeaderEntryDestroy(HttpHeaderEntry * e);
 static HttpHeaderEntry *httpHeaderEntryParseCreate(const char *field_start, const char *field_end);
 static void httpHeaderNoteParsedEntry(http_hdr_type id, String value, int error);
 
@@ -171,7 +168,6 @@ static void httpHeaderStatInit(HttpHeaderStat * hs, const char *label);
 static void httpHeaderStatDump(const HttpHeaderStat * hs, StoreEntry * e);
 
 MemPool * pool_http_reply = NULL;
-MemPool * pool_http_header_entry = NULL;
 MemPool * pool_http_hdr_cc = NULL;
 MemPool * pool_http_hdr_range_spec = NULL;
 MemPool * pool_http_hdr_range = NULL;
@@ -185,7 +181,6 @@ void
 httpHeaderInitMem(void)
 {
     pool_http_reply = memPoolCreate("HttpReply", sizeof(HttpReply));
-    pool_http_header_entry = memPoolCreate("HttpHeaderEntry", sizeof(HttpHeaderEntry));
     pool_http_hdr_cc = memPoolCreate("HttpHdrCc", sizeof(HttpHdrCc));
     pool_http_hdr_range_spec = memPoolCreate("HttpHdrRangeSpec", sizeof(HttpHdrRangeSpec));
     pool_http_hdr_range = memPoolCreate("HttpHdrRange", sizeof(HttpHdrRange));
@@ -520,24 +515,6 @@ httpHeaderPackInto(const HttpHeader * hdr, Packer * p)
 	httpHeaderEntryPackInto(e, p);
 }
 
-/* returns next valid entry */
-HttpHeaderEntry *
-httpHeaderGetEntry(const HttpHeader * hdr, HttpHeaderPos * pos)
-{
-    assert(hdr && pos);
-    assert(*pos >= HttpHeaderInitPos && *pos < hdr->entries.count);
-    for ((*pos)++; *pos < hdr->entries.count; (*pos)++) {
-	if (hdr->entries.items[*pos])
-	    return hdr->entries.items[*pos];
-    }
-    return NULL;
-}
-
-/*
- * returns a pointer to a specified entry if any 
- * note that we return one entry so it does not make much sense to ask for
- * "list" headers
- */
 HttpHeaderEntry *
 httpHeaderFindEntry(const HttpHeader * hdr, http_hdr_type id)
 {
@@ -549,21 +526,21 @@ httpHeaderFindEntry(const HttpHeader * hdr, http_hdr_type id)
 
     /* check mask first */
     if (!CBIT_TEST(hdr->mask, id))
-	return NULL;
+        return NULL;
     /* looks like we must have it, do linear search */
     while ((e = httpHeaderGetEntry(hdr, &pos))) {
-	if (e->id == id)
-	    return e;
+        if (e->id == id)
+            return e;
     }
     /* hm.. we thought it was there, but it was not found */
     assert(0);
-    return NULL;		/* not reached */
+    return NULL;                /* not reached */
 }
 
 /*
  * same as httpHeaderFindEntry
  */
-static HttpHeaderEntry *
+HttpHeaderEntry *
 httpHeaderFindLastEntry(const HttpHeader * hdr, http_hdr_type id)
 {
     HttpHeaderPos pos = HttpHeaderInitPos;
@@ -575,13 +552,13 @@ httpHeaderFindLastEntry(const HttpHeader * hdr, http_hdr_type id)
 
     /* check mask first */
     if (!CBIT_TEST(hdr->mask, id))
-	return NULL;
+        return NULL;
     /* looks like we must have it, do linear search */
     while ((e = httpHeaderGetEntry(hdr, &pos))) {
-	if (e->id == id)
-	    result = e;
+        if (e->id == id)
+            result = e;
     }
-    assert(result);		/* must be there! */
+    assert(result);             /* must be there! */
     return result;
 }
 
@@ -665,46 +642,6 @@ httpHeaderRefreshMask(HttpHeader * hdr)
 }
 
 
-
-/* appends an entry; 
- * does not call httpHeaderEntryClone() so one should not reuse "*e"
- */
-void
-httpHeaderAddEntry(HttpHeader * hdr, HttpHeaderEntry * e)
-{
-    assert(hdr && e);
-    assert_eid(e->id);
-
-    debug(55, 7) ("%p adding entry: %d at %d\n",
-	hdr, e->id, hdr->entries.count);
-    if (CBIT_TEST(hdr->mask, e->id))
-	Headers[e->id].stat.repCount++;
-    else
-	CBIT_SET(hdr->mask, e->id);
-    arrayAppend(&hdr->entries, e);
-    /* increment header length, allow for ": " and crlf */
-    hdr->len += strLen(e->name) + 2 + strLen(e->value) + 2;
-}
-
-/* inserts an entry at the given position; 
- * does not call httpHeaderEntryClone() so one should not reuse "*e"
- */
-void
-httpHeaderInsertEntry(HttpHeader * hdr, HttpHeaderEntry * e, int pos)
-{
-    assert(hdr && e);
-    assert_eid(e->id);
-
-    debug(55, 7) ("%p adding entry: %d at %d\n",
-	hdr, e->id, hdr->entries.count);
-    if (CBIT_TEST(hdr->mask, e->id))
-	Headers[e->id].stat.repCount++;
-    else
-	CBIT_SET(hdr->mask, e->id);
-    arrayInsert(&hdr->entries, e, pos);
-    /* increment header length, allow for ": " and crlf */
-    hdr->len += strLen(e->name) + 2 + strLen(e->value) + 2;
-}
 
 /* return a list of entries with the same id separated by ',' and ws */
 String
@@ -1138,56 +1075,6 @@ httpHeaderGetTimeOrTag(const HttpHeader * hdr, http_hdr_type id)
  * HttpHeaderEntry
  */
 
-static HttpHeaderEntry *
-httpHeaderEntryCreate(http_hdr_type id, const char *name, const char *value)
-{
-    HttpHeaderEntry *e;
-    assert_eid(id);
-    e = memPoolAlloc(pool_http_header_entry);
-    e->id = id;
-    if (id != HDR_OTHER)
-	e->name = Headers[id].name;
-    else
-	stringInit(&e->name, name);
-    stringInit(&e->value, value);
-    Headers[id].stat.aliveCount++;
-    debug(55, 9) ("created entry %p: '%s: %s'\n", e, strBuf(e->name), strBuf(e->value));
-    return e;
-}
-
-static HttpHeaderEntry *
-httpHeaderEntryCreate2(http_hdr_type id, String name, String value)
-{
-    HttpHeaderEntry *e;
-    assert_eid(id);
-    e = memPoolAlloc(pool_http_header_entry);
-    e->id = id;
-    if (id != HDR_OTHER)
-	e->name = Headers[id].name;
-    else
-	stringLimitInit(&e->name, strBuf(name), strLen(name));
-    stringLimitInit(&e->value, strBuf(value), strLen(value));
-    Headers[id].stat.aliveCount++;
-    debug(55, 9) ("created entry %p: '%s: %s'\n", e, strBuf(e->name), strBuf(e->value));
-    return e;
-}
-
-static void
-httpHeaderEntryDestroy(HttpHeaderEntry * e)
-{
-    assert(e);
-    assert_eid(e->id);
-    debug(55, 9) ("destroying entry %p: '%s: %s'\n", e, strBuf(e->name), strBuf(e->value));
-    /* clean name if needed */
-    if (e->id == HDR_OTHER)
-	stringClean(&e->name);
-    stringClean(&e->value);
-    assert(Headers[e->id].stat.aliveCount);
-    Headers[e->id].stat.aliveCount--;
-    e->id = -1;
-    memPoolFree(pool_http_header_entry, e);
-}
-
 /* parses and inits header entry, returns new entry on success */
 static HttpHeaderEntry *
 httpHeaderEntryParseCreate(const char *field_start, const char *field_end)
@@ -1252,18 +1139,6 @@ httpHeaderEntryParseCreate(const char *field_start, const char *field_end)
     Headers[id].stat.aliveCount++;
     debug(55, 9) ("created entry %p: '%s: %s'\n", e, strBuf(e->name), strBuf(e->value));
     return e;
-}
-
-HttpHeaderEntry *
-httpHeaderEntryClone(const HttpHeaderEntry * e)
-{
-    return httpHeaderEntryCreate2(e->id, e->name, e->value);
-}
-
-void
-httpHeaderAddClone(HttpHeader * hdr, const HttpHeaderEntry * e)
-{
-    httpHeaderAddEntry(hdr, httpHeaderEntryClone(e));
 }
 
 void

@@ -34,4 +34,11 @@ extern int xusleep(unsigned int usec);
 #define LOCAL_ARRAY(type,name,size) static type name[size]
 #endif
 
+/* bit opearations on a char[] mask of unlimited length */
+#define CBIT_BIT(bit)           (1<<((bit)%8))
+#define CBIT_BIN(mask, bit)     (mask)[(bit)>>3]
+#define CBIT_SET(mask, bit)     ((void)(CBIT_BIN(mask, bit) |= CBIT_BIT(bit)))
+#define CBIT_CLR(mask, bit)     ((void)(CBIT_BIN(mask, bit) &= ~CBIT_BIT(bit)))
+#define CBIT_TEST(mask, bit)    ((CBIT_BIN(mask, bit) & CBIT_BIT(bit)) != 0)
+
 #endif
