@@ -40,6 +40,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <math.h>
+#include <ctype.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 
