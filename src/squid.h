@@ -407,7 +407,10 @@ struct rusage {
 #include "../libhttp/HttpVersion.h"
 #include "../libhttp/HttpStatusLine.h"
 #include "../libhttp/HttpHeaderType.h"
+#include "../libhttp/HttpHeaderFieldStat.h"
+#include "../libhttp/HttpHeaderFieldInfo.h"
 #include "../libhttp/HttpHeader.h"
+#include "../libhttp/HttpHeaderTools.h"
 
 #include "../libiapp/event.h"
 #include "../libiapp/iapp_ssl.h"

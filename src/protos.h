@@ -267,8 +267,6 @@ extern void httpHdrContRangePackInto(const HttpHdrContRange * crange, Packer * p
 extern void httpHdrContRangeSet(HttpHdrContRange *, HttpHdrRangeSpec, squid_off_t);
 
 /* Http Header Tools */
-extern HttpHeaderFieldInfo *httpHeaderBuildFieldsInfo(const HttpHeaderFieldAttrs * attrs, int count);
-extern void httpHeaderDestroyFieldsInfo(HttpHeaderFieldInfo * info, int count);
 extern int httpHeaderIdByName(const char *name, int name_len, const HttpHeaderFieldInfo * attrs, int end);
 extern int httpHeaderIdByNameDef(const char *name, int name_len);
 extern const char *httpHeaderNameById(int id);
