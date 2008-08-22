@@ -89,7 +89,7 @@ Additionally, do a bit of a drive-by reorganisation of the HTTP parser and heade
     * Header parsing
     * Header statistics
     * Header attributes
-    * What else from src/Http*.c can be moved in this pass?
+    * What else from src/Http**.c can be moved in this pass?
   * Rework the header entry API to be slightly more sensible
     * (This needs to be planned and documented somewhere!) 
 
