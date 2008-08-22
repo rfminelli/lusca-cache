@@ -1,5 +1,10 @@
 ChangeLog:
 
+-- (22-August-2008)
+
+* Integrate IPv6 core into Squid
+* Begin reorganising the HTTP code into libhttp/
+
 -- (12-August-2008)
 
 * Fixed poll/select compile issues
