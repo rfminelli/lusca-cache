@@ -1152,9 +1152,24 @@ comm_read_cancel(int fd)
 	return 1;
 }
 
-
-/* Select for Writing on FD, until SIZE bytes are sent.  Call
- * *HANDLER when complete. */
+/*!
+ * @function
+ *	comm_write
+ * @abstract
+ *	Write the data at {buf, size} to the given file descriptor.
+ *
+ *	Call {handler, handler_data} on completion IFF handler_data is still valid.
+ *
+ *	Call free_func on buf on completion.
+ *
+ * @discussion
+ *	The data -will- be written to the socket regardless of whether the
+ *	handler_data cbdata pointer is valid or not. The caller MUST make
+ *	sure the data buffer remains valid for the duration of the call.
+ *
+ *	The callback will also not happen if the socket is closed before the
+ *	write has fully completed.
+ */
 void
 comm_write(int fd, const char *buf, int size, CWCB * handler, void *handler_data, FREE * free_func)
 {
@@ -1177,8 +1192,25 @@ comm_write(int fd, const char *buf, int size, CWCB * handler, void *handler_data
     commSetSelect(fd, COMM_SELECT_WRITE, commHandleWrite, NULL, 0);
 }
 
-/* Select for Writing on FD, until SIZE bytes are sent.  Call
- * *HANDLER when complete. */
+/*!
+ * @function
+ *	comm_write_header
+ * @abstract
+ *	Write the header at {header, header_size} and the data at {buf, size} to
+ *	the given file descriptor.
+ *
+ *	Call {handler, handler_data} on completion IFF handler_data is still valid.
+ *
+ *	Call free_func on buf on completion.
+ *
+ * @discussion
+ *	The data -will- be written to the socket regardless of whether the
+ *	handler_data cbdata pointer is valid or not. The caller MUST make
+ *	sure the data buffer remains valid for the duration of the call.
+ *
+ *	The callback will also not happen if the socket is closed before the
+ *	write has fully completed.
+ */
 void
 comm_write_header(int fd, const char *buf, int size, const char *header, size_t header_size, CWCB * handler, void *handler_data, FREE * free_func)
 {
