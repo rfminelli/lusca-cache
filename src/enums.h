@@ -177,20 +177,6 @@ typedef enum {
     LOOKUP_MISS
 } lookup_t;
 
-/* possible types for http header fields */
-typedef enum {
-    ftInvalid = HDR_ENUM_END,	/* to catch nasty errors with hdr_id<->fld_type clashes */
-    ftInt,
-    ftStr,
-    ftDate_1123,
-    ftETag,
-    ftPCc,
-    ftPContRange,
-    ftPRange,
-    ftDate_1123_or_ETag,
-    ftSize
-} field_type;
-
 typedef enum {
     HIER_NONE,
     HIER_DIRECT,
