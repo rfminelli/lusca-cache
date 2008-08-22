@@ -4664,22 +4664,32 @@ httpAccept(int sock, void *data)
     int fd = -1;
     fde *F;
     ConnStateData *connState = NULL;
-    struct sockaddr_in peer;
-    struct sockaddr_in me;
+    sqaddr_t peer;
+    sqaddr_t me;
     int max = INCOMING_HTTP_MAX;
 #if USE_IDENT
     static aclCheck_t identChecklist;
 #endif
     commSetSelect(sock, COMM_SELECT_READ, httpAccept, data, 0);
     while (max-- && !httpAcceptDefer(sock, NULL)) {
-	memset(&peer, '\0', sizeof(struct sockaddr_in));
-	memset(&me, '\0', sizeof(struct sockaddr_in));
+        sqinet_init(&peer);
+        sqinet_init(&me);
 	if ((fd = comm_accept(sock, &peer, &me)) < 0) {
 	    if (!ignoreErrno(errno))
 		debug(50, 1) ("httpAccept: FD %d: accept failure: %s\n",
 		    sock, xstrerror());
-	    break;
+            sqinet_done(&peer);
+            sqinet_done(&me);
+            break;
 	}
+        if (sqinet_get_family(&peer) != AF_INET) {
+            debug(1, 1) ("httpAccept: FD %d: (%s:%d) is not an IPv4 socket!\n", fd, fd_table[fd].ipaddrstr, fd_table[fd].local_port);
+            comm_close(fd);
+            sqinet_done(&peer);
+            sqinet_done(&me);
+            break;
+       }
+
 	F = &fd_table[fd];
 	debug(33, 4) ("httpAccept: FD %d: accepted port %d client %s:%d\n", fd, F->local_port, F->ipaddrstr, F->remote_port);
 	fd_note_static(fd, "client http connect");
@@ -4687,31 +4697,33 @@ httpAccept(int sock, void *data)
 	connState = cbdataAlloc(ConnStateData);
 	connState->port = s;
 	cbdataLock(connState->port);
-	connState->peer = peer;
-	connState->log_addr = peer.sin_addr;
+	sqinet_get_v4_sockaddr_ptr(&peer, &connState->peer, SQADDR_ASSERT_IS_V4);
+	connState->log_addr = connState->peer.sin_addr;
 	connState->log_addr.s_addr &= Config.Addrs.client_netmask.s_addr;
-	connState->me = me;
+	sqinet_get_v4_sockaddr_ptr(&me, &connState->me, SQADDR_ASSERT_IS_V4);
 	connState->fd = fd;
 	connState->pinning.fd = -1;
 	connState->in.buf = memAllocBuf(CLIENT_REQ_BUF_SZ, &connState->in.size);
 	comm_add_close_handler(fd, connStateFree, connState);
 	if (Config.onoff.log_fqdn)
-	    fqdncache_gethostbyaddr(peer.sin_addr, FQDN_LOOKUP_IF_MISS);
+	    fqdncache_gethostbyaddr(sqinet_get_v4_inaddr(&peer, SQADDR_ASSERT_IS_V4), FQDN_LOOKUP_IF_MISS);
 	commSetTimeout(fd, Config.Timeout.request, requestTimeout, connState);
 #if USE_IDENT
-	identChecklist.src_addr = peer.sin_addr;
-	identChecklist.my_addr = me.sin_addr;
-	identChecklist.my_port = ntohs(me.sin_port);
+	identChecklist.src_addr = sqinet_get_v4_inaddr(&peer, SQADDR_ASSERT_IS_V4);
+	identChecklist.my_addr = sqinet_get_v4_inaddr(&me, SQADDR_ASSERT_IS_V4);
+	identChecklist.my_port = sqinet_get_port(&me);
 	if (aclCheckFast(Config.accessList.identLookup, &identChecklist))
-	    identStart(&me, &peer, clientIdentDone, connState);
+	    identStart(&connState->me, &connState->peer, clientIdentDone, connState);
 #endif
 	commSetSelect(fd, COMM_SELECT_READ, clientReadRequest, connState, 0);
 	commSetDefer(fd, clientReadDefer, connState);
 	if (s->tcp_keepalive.enabled) {
 	    commSetTcpKeepalive(fd, s->tcp_keepalive.idle, s->tcp_keepalive.interval, s->tcp_keepalive.timeout);
 	}
-	clientdbEstablished(peer.sin_addr, 1);
+	clientdbEstablished(sqinet_get_v4_inaddr(&peer, SQADDR_ASSERT_IS_V4), 1);
 	incoming_sockets_accepted++;
+        sqinet_done(&peer);
+        sqinet_done(&me);
     }
 }
 
@@ -4828,8 +4840,8 @@ httpsAccept(int sock, void *data)
     https_port_list *s = data;
     int fd = -1;
     ConnStateData *connState = NULL;
-    struct sockaddr_in peer;
-    struct sockaddr_in me;
+    sqaddr_t peer;
+    sqaddr_t me;
     int max = INCOMING_HTTP_MAX;
 #if USE_IDENT
     static aclCheck_t identChecklist;
@@ -4837,43 +4849,55 @@ httpsAccept(int sock, void *data)
     commSetSelect(sock, COMM_SELECT_READ, httpsAccept, s, 0);
     while (max-- && !httpAcceptDefer(sock, NULL)) {
 	fde *F;
-	memset(&peer, '\0', sizeof(struct sockaddr_in));
-	memset(&me, '\0', sizeof(struct sockaddr_in));
+	sqinet_init(&peer);
+	sqinet_init(&me);
 	if ((fd = comm_accept(sock, &peer, &me)) < 0) {
 	    if (!ignoreErrno(errno))
 		debug(50, 1) ("httpsAccept: FD %d: accept failure: %s\n",
 		    sock, xstrerror());
+            sqinet_done(&peer);
+            sqinet_done(&me);
 	    break;
 	}
+        if (sqinet_get_family(&peer) != AF_INET) {
+            debug(1, 1) ("httpsAccept: FD %d: (%s:%d) is not an IPv4 socket!\n", fd, fd_table[fd].ipaddrstr, fd_table[fd].local_port);
+            comm_close(fd);
+            sqinet_done(&peer);
+            sqinet_done(&me);
+            break;
+       }
+
 	F = &fd_table[fd];
 	debug(33, 4) ("httpsAccept: FD %d: accepted port %d client %s:%d\n", fd, F->local_port, F->ipaddrstr, F->remote_port);
 	connState = cbdataAlloc(ConnStateData);
 	connState->port = (http_port_list *) s;
 	cbdataLock(connState->port);
-	connState->peer = peer;
-	connState->log_addr = peer.sin_addr;
+	sqinet_get_v4_sockaddr_ptr(&peer, &connState->peer, SQADDR_ASSERT_IS_V4);
+	connState->log_addr = connState->peer.sin_addr;
 	connState->log_addr.s_addr &= Config.Addrs.client_netmask.s_addr;
-	connState->me = me;
+	sqinet_get_v4_sockaddr_ptr(&me, &connState->me, SQADDR_ASSERT_IS_V4);
 	connState->fd = fd;
 	connState->pinning.fd = -1;
 	connState->in.buf = memAllocBuf(CLIENT_REQ_BUF_SZ, &connState->in.size);
 	comm_add_close_handler(fd, connStateFree, connState);
 	if (Config.onoff.log_fqdn)
-	    fqdncache_gethostbyaddr(peer.sin_addr, FQDN_LOOKUP_IF_MISS);
+	    fqdncache_gethostbyaddr(connState->peer.sin_addr, FQDN_LOOKUP_IF_MISS);
 	commSetTimeout(fd, Config.Timeout.request, requestTimeout, connState);
 #if USE_IDENT
-	identChecklist.src_addr = peer.sin_addr;
-	identChecklist.my_addr = me.sin_addr;
-	identChecklist.my_port = ntohs(me.sin_port);
+	identChecklist.src_addr = sqinet_get_v4_inaddr(&peer, SQADDR_ASSERT_IS_V4);
+	identChecklist.my_addr = sqinet_get_v4_inaddr(&me, SQADDR_ASSERT_IS_V4);
+	identChecklist.my_port = sqinet_get_port(&me);
 	if (aclCheckFast(Config.accessList.identLookup, &identChecklist))
-	    identStart(&me, &peer, clientIdentDone, connState);
+	    identStart(&connState->me, &connState->peer, clientIdentDone, connState);
 #endif
 	if (s->http.tcp_keepalive.enabled) {
 	    commSetTcpKeepalive(fd, s->http.tcp_keepalive.idle, s->http.tcp_keepalive.interval, s->http.tcp_keepalive.timeout);
 	}
-	clientdbEstablished(peer.sin_addr, 1);
+	clientdbEstablished(sqinet_get_v4_inaddr(&peer, SQADDR_ASSERT_IS_V4), 1);
 	incoming_sockets_accepted++;
 	httpsAcceptSSL(connState, s->sslContext);
+        sqinet_done(&peer);
+        sqinet_done(&me);
     }
 }
 
@@ -5027,6 +5051,7 @@ clientHttpConnectionsOpen(void)
 		no_addr,
 		ntohs(s->s.sin_port),
 		COMM_NONBLOCKING,
+		COMM_TOS_DEFAULT,
 		"HTTP Socket");
 	} else {
 	    enter_suid();

@@ -155,7 +155,7 @@ struct _fde {
     unsigned int type;
     u_short local_port;
     u_short remote_port;
-    struct in_addr local_addr;
+    sqaddr_t local_address;
     unsigned char tos;
     char ipaddrstr[MAX_IPSTRLEN]; /* dotted decimal address of peer - XXX should be MAX_IPSTRLEN */
     const char *desc;
@@ -276,19 +276,20 @@ extern void commSetTcpKeepalive(int fd, int idle, int interval, int timeout);
 extern int commSetTos(int fd, int tos);
 extern int commSetSocketPriority(int fd, int prio);
 extern int commSetIPOption(int fd, uint8_t option, void *value, size_t size);
-extern int comm_accept(int fd, struct sockaddr_in *, struct sockaddr_in *);
+extern int comm_accept(int fd, sqaddr_t *, sqaddr_t *);
 extern void comm_close(int fd);
 extern void comm_reset_close(int fd);
 #if LINGERING_CLOSE
 extern void comm_lingering_close(int fd);
 #endif
 extern void commConnectStart(int fd, const char *, u_short, CNCB *, void *, struct in_addr *addr);
-extern int comm_connect_addr(int sock, const struct sockaddr_in *);
+extern int comm_connect_addr(int sock, const sqaddr_t *addr);
 extern void comm_init(void);
 extern int comm_listen(int sock);
 extern int comm_open(int, int, struct in_addr, u_short, int, unsigned char TOS, const char *);
-extern int comm_fdopen(int, int, struct in_addr, u_short, int, const char *);
-extern int comm_fdopenex(int, int, struct in_addr, u_short, int, unsigned char, const char *);
+extern int comm_fdopen(int, int, struct in_addr, u_short, int, unsigned char, const char *);
+extern int comm_open6(int, int, sqaddr_t *addr, int, unsigned char TOS, const char *);
+extern int comm_fdopen6(int, int, sqaddr_t *addr, int, unsigned char, const char *);
 extern u_short comm_local_port(int fd);
 
 extern void commDeferFD(int fd);
@@ -323,7 +324,7 @@ extern int commSetTimeout(int fd, int, PF *, void *);
 extern void commSetDefer(int fd, DEFER * func, void *);
 extern int ignoreErrno(int);
 extern void commCloseAllSockets(void);
-extern int commBind(int s, struct in_addr, u_short port);
+extern int commBind(int s, sqaddr_t *addr);
 extern void commSetTcpNoDelay(int);
 extern void commSetTcpRcvbuf(int, int);
 
