@@ -131,13 +131,6 @@
 
 #define SM_PAGE_SIZE 4096
 
-/* bit opearations on a char[] mask of unlimited length */
-#define CBIT_BIT(bit)           (1<<((bit)%8))
-#define CBIT_BIN(mask, bit)     (mask)[(bit)>>3]
-#define CBIT_SET(mask, bit) 	((void)(CBIT_BIN(mask, bit) |= CBIT_BIT(bit)))
-#define CBIT_CLR(mask, bit) 	((void)(CBIT_BIN(mask, bit) &= ~CBIT_BIT(bit)))
-#define CBIT_TEST(mask, bit) 	((CBIT_BIN(mask, bit) & CBIT_BIT(bit)) != 0)
-
 #define MAX_FILES_PER_DIR (1<<20)
 
 #define MAX_URL  4096
@@ -198,9 +191,6 @@
 
 /* iteration for HttpHdrRange */
 #define HttpHdrRangeInitPos (-1)
-
-/* use this and only this to initialize HttpHeaderPos */
-#define HttpHeaderInitPos (-1)
 
 /* handy to determine the #elements in a static array */
 #define countof(arr) (sizeof(arr)/sizeof(*arr))
