@@ -295,9 +295,6 @@ extern void httpHeaderPutStrf();
 extern void httpHeaderInitModule(void);
 extern void httpHeaderInitMem(void);
 extern void httpHeaderCleanModule(void);
-/* init/clean */
-extern void httpHeaderInit(HttpHeader * hdr, http_hdr_owner_type owner);
-extern void httpHeaderClean(HttpHeader * hdr);
 /* append/update */
 extern void httpHeaderUpdate(HttpHeader * old, const HttpHeader * fresh, const HttpHeaderMask * denied_mask);
 /* parse/pack */

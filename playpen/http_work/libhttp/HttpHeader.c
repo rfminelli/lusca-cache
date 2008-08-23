@@ -61,6 +61,8 @@
 
 #include "../libcb/cbdata.h"
 
+#include "../libstat/StatHist.h"
+
 #include "HttpVersion.h"
 #include "HttpStatusLine.h"
 #include "HttpHeaderType.h"
@@ -68,6 +70,7 @@
 #include "HttpHeaderFieldInfo.h"
 #include "HttpHeaderEntry.h"
 #include "HttpHeader.h"
+#include "HttpHeaderStats.h"
 #include "HttpHeaderTools.h"
 
 HttpHeaderFieldInfo *Headers = NULL;
@@ -87,6 +90,56 @@ httpHeaderInitLibrary(void)
     if (! pool_http_header_entry)
         pool_http_header_entry = memPoolCreate("HttpHeaderEntry", sizeof(HttpHeaderEntry));
 }
+
+void
+httpHeaderInit(HttpHeader * hdr, http_hdr_owner_type owner)
+{
+    assert(hdr);
+    assert(owner > hoNone && owner <= hoReply);
+    debug(55, 7) ("init-ing hdr: %p owner: %d\n", hdr, owner);
+    memset(hdr, 0, sizeof(*hdr));
+    hdr->owner = owner;
+    arrayInit(&hdr->entries);
+}
+
+void
+httpHeaderClean(HttpHeader * hdr)
+{
+    HttpHeaderPos pos = HttpHeaderInitPos;
+    HttpHeaderEntry *e;
+
+    assert(hdr);
+    assert(hdr->owner > hoNone && hdr->owner <= hoReply);
+    debug(55, 7) ("cleaning hdr: %p owner: %d\n", hdr, hdr->owner);
+
+    /*
+     * An unfortunate bug.  The hdr->entries array is initialized
+     * such that count is set to zero.  httpHeaderClean() seems to
+     * be called both when 'hdr' is created, and destroyed.  Thus,
+     * we accumulate a large number of zero counts for 'hdr' before
+     * it is ever used.  Can't think of a good way to fix it, except
+     * adding a state variable that indicates whether or not 'hdr'
+     * has been used.  As a hack, just never count zero-sized header
+     * arrays.
+     */
+    if (0 != hdr->entries.count)
+        statHistCount(&HttpHeaderStats[hdr->owner].hdrUCountDistr, hdr->entries.count);
+    HttpHeaderStats[hdr->owner].destroyedCount++;
+    HttpHeaderStats[hdr->owner].busyDestroyedCount += hdr->entries.count > 0;
+    while ((e = httpHeaderGetEntry(hdr, &pos))) {
+        /* tmp hack to try to avoid coredumps */
+        if (e->id >= HDR_ENUM_END) {
+            debug(55, 0) ("httpHeaderClean BUG: entry[%d] is invalid (%d). Ignored.\n",
+                (int) pos, e->id);
+        } else {
+            statHistCount(&HttpHeaderStats[hdr->owner].fieldTypeDistr, e->id);
+            /* yes, this destroy() leaves us in an inconsistent state */
+            httpHeaderEntryDestroy(e);
+        }
+    }
+    arrayClean(&hdr->entries);
+}
+
 
 /* appends an entry;
  * does not call httpHeaderEntryClone() so one should not reuse "*e"
