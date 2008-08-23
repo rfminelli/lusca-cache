@@ -192,9 +192,6 @@
 /* iteration for HttpHdrRange */
 #define HttpHdrRangeInitPos (-1)
 
-/* handy to determine the #elements in a static array */
-#define countof(arr) (sizeof(arr)/sizeof(*arr))
-
 /*
  * Max number of ICP messages to receive per call to icpHandleUdp
  */

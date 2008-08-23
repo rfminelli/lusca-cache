@@ -141,18 +141,6 @@ static http_hdr_type RequestHeadersArr[] =
     HDR_USER_AGENT, HDR_X_FORWARDED_FOR, HDR_TE, HDR_EXPECT
 };
 
-/* header accounting */
-static HttpHeaderStat HttpHeaderStats[] =
-{
-    {"all"},
-#if USE_HTCP
-    {"HTCP reply"},
-#endif
-    {"request"},
-    {"reply"}
-};
-static int HttpHeaderStatCount = countof(HttpHeaderStats);
-
 static int HeaderEntryParsedCount = 0;
 
 /*

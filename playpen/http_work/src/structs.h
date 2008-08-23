@@ -1968,22 +1968,6 @@ struct _StatCounters {
     } swap;
 };
 
-/* per header statistics */
-struct _HttpHeaderStat {
-    const char *label;
-    HttpHeaderMask *owner_mask;
-
-    StatHist hdrUCountDistr;
-    StatHist fieldTypeDistr;
-    StatHist ccTypeDistr;
-
-    int parsedCount;
-    int ccParsedCount;
-    int destroyedCount;
-    int busyDestroyedCount;
-};
-
-
 struct _tlv {
     char type;
     int length;

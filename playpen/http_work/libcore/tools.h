@@ -41,4 +41,7 @@ extern int xusleep(unsigned int usec);
 #define CBIT_CLR(mask, bit)     ((void)(CBIT_BIN(mask, bit) &= ~CBIT_BIT(bit)))
 #define CBIT_TEST(mask, bit)    ((CBIT_BIN(mask, bit) & CBIT_BIT(bit)) != 0)
 
+/* handy to determine the #elements in a static array */
+#define countof(arr) (sizeof(arr)/sizeof(*arr))
+
 #endif
