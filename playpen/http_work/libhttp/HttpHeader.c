@@ -108,6 +108,61 @@ httpHeaderAddEntry(HttpHeader * hdr, HttpHeaderEntry * e)
     hdr->len += strLen(e->name) + 2 + strLen(e->value) + 2;
 }
 
+/*!
+ * @function
+ *	httpHeaderAddEntryStr
+ * @abstract
+ *	Append a header entry to the give hdr.
+ *
+ * @param	hdr		HttpHeader to append the entry to.
+ * @param	id		http_hdr_type; HDR_OTHER == uses NUL-terminated attrib;
+ *				else attrib is ignored.
+ * @param	value		NUL-terminated header value.
+ *
+ * @discussion
+ *	The attrib/value strings will be copied even if the values passed in are static.
+ *
+ *	strlen() will be run on the strings as appropriate. Call httpHeaderEntryAddStr2() if
+ *	the length of the string is known up front.
+ *
+ *	For now this routine simply calls httpHeaderEntryCreate() to create the entry and
+ *	then httpHeaderAddEntry() to add it; the plan is to eliminate the httpHeaderEntryCreate()
+ *	allocator overhead.
+ */
+void
+httpHeaderAddEntryStr(HttpHeader *hdr, http_hdr_type id, const char *attrib, const char *value)
+{
+	httpHeaderAddEntry(hdr, httpHeaderEntryCreate(id, attrib, value));
+}
+
+/*!
+ * @function
+ *	httpHeaderInsertEntryStr
+ * @abstract
+ *	Insert a header entry into the give hdr at position pos
+ *
+ * @param	hdr		HttpHeader to append the entry to.
+ * @param	pos		position in the array to insert.
+ * @param	id		http_hdr_type; HDR_OTHER == uses NUL-terminated attrib;
+ *				else attrib is ignored.
+ * @param	value		NUL-terminated header value.
+ *
+ * @discussion
+ *	The attrib/value strings will be copied even if the values passed in are static.
+ *
+ *	strlen() will be run on the strings as appropriate. Call httpHeaderEntryAddStr2() if
+ *	the length of the string is known up front.
+ *
+ *	For now this routine simply calls httpHeaderEntryCreate() to create the entry and
+ *	then httpHeaderInsertEntry() to add it; the plan is to eliminate the httpHeaderEntryCreate()
+ *	allocator overhead.
+ */
+void
+httpHeaderInsertEntryStr(HttpHeader *hdr, int pos, http_hdr_type id, const char *attrib, const char *value)
+{
+	httpHeaderInsertEntry(hdr, httpHeaderEntryCreate(id, attrib, value), pos);
+}
+
 /* inserts an entry at the given position;
  * does not call httpHeaderEntryClone() so one should not reuse "*e"
  */

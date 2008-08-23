@@ -790,7 +790,7 @@ httpHeaderPutInt(HttpHeader * hdr, http_hdr_type id, int number)
     assert_eid(id);
     assert(Headers[id].type == ftInt);	/* must be of an appropriate type */
     assert(number >= 0);
-    httpHeaderAddEntry(hdr, httpHeaderEntryCreate(id, NULL, xitoa(number)));
+    httpHeaderAddEntryStr(hdr, id, NULL, xitoa(number));
 }
 
 void
@@ -801,7 +801,7 @@ httpHeaderPutSize(HttpHeader * hdr, http_hdr_type id, squid_off_t number)
     assert(Headers[id].type == ftSize);		/* must be of an appropriate type */
     assert(number >= 0);
     snprintf(size, sizeof(size), "%" PRINTF_OFF_T, number);
-    httpHeaderAddEntry(hdr, httpHeaderEntryCreate(id, NULL, size));
+    httpHeaderAddEntryStr(hdr, id, NULL, size);
 }
 
 void
@@ -810,7 +810,7 @@ httpHeaderPutTime(HttpHeader * hdr, http_hdr_type id, time_t htime)
     assert_eid(id);
     assert(Headers[id].type == ftDate_1123);	/* must be of an appropriate type */
     assert(htime >= 0);
-    httpHeaderAddEntry(hdr, httpHeaderEntryCreate(id, NULL, mkrfc1123(htime)));
+    httpHeaderAddEntryStr(hdr, id, NULL, mkrfc1123(htime));
 }
 
 void
@@ -819,7 +819,7 @@ httpHeaderInsertTime(HttpHeader * hdr, int pos, http_hdr_type id, time_t htime)
     assert_eid(id);
     assert(Headers[id].type == ftDate_1123);	/* must be of an appropriate type */
     assert(htime >= 0);
-    httpHeaderInsertEntry(hdr, httpHeaderEntryCreate(id, NULL, mkrfc1123(htime)), pos);
+    httpHeaderInsertEntryStr(hdr, pos, id, NULL, mkrfc1123(htime));
 }
 
 void
@@ -828,7 +828,7 @@ httpHeaderPutStr(HttpHeader * hdr, http_hdr_type id, const char *str)
     assert_eid(id);
     assert(Headers[id].type == ftStr);	/* must be of an appropriate type */
     assert(str);
-    httpHeaderAddEntry(hdr, httpHeaderEntryCreate(id, NULL, str));
+    httpHeaderAddEntryStr(hdr, id, NULL, str);
 }
 
 void
@@ -851,7 +851,7 @@ httpHeaderPutCc(HttpHeader * hdr, const HttpHdrCc * cc)
     packerToMemInit(&p, &mb);
     httpHdrCcPackInto(cc, &p);
     /* put */
-    httpHeaderAddEntry(hdr, httpHeaderEntryCreate(HDR_CACHE_CONTROL, NULL, mb.buf));
+    httpHeaderAddEntryStr(hdr, HDR_CACHE_CONTROL, NULL, mb.buf);
     /* cleanup */
     packerClean(&p);
     memBufClean(&mb);
@@ -870,7 +870,7 @@ httpHeaderPutContRange(HttpHeader * hdr, const HttpHdrContRange * cr)
     packerToMemInit(&p, &mb);
     httpHdrContRangePackInto(cr, &p);
     /* put */
-    httpHeaderAddEntry(hdr, httpHeaderEntryCreate(HDR_CONTENT_RANGE, NULL, mb.buf));
+    httpHeaderAddEntryStr(hdr, HDR_CONTENT_RANGE, NULL, mb.buf);
     /* cleanup */
     packerClean(&p);
     memBufClean(&mb);
@@ -889,7 +889,7 @@ httpHeaderPutRange(HttpHeader * hdr, const HttpHdrRange * range)
     packerToMemInit(&p, &mb);
     httpHdrRangePackInto(range, &p);
     /* put */
-    httpHeaderAddEntry(hdr, httpHeaderEntryCreate(HDR_RANGE, NULL, mb.buf));
+    httpHeaderAddEntryStr(hdr, HDR_RANGE, NULL, mb.buf);
     /* cleanup */
     packerClean(&p);
     memBufClean(&mb);
@@ -901,7 +901,7 @@ httpHeaderPutExt(HttpHeader * hdr, const char *name, const char *value)
 {
     assert(name && value);
     debug(55, 8) ("%p adds ext entry '%s: %s'\n", hdr, name, value);
-    httpHeaderAddEntry(hdr, httpHeaderEntryCreate(HDR_OTHER, name, value));
+    httpHeaderAddEntryStr(hdr, HDR_OTHER, name, value);
 }
 
 int
