@@ -27,6 +27,8 @@ clientTryParseRequest() - parse a request
   * urlCheckRequest() - can this request be handled?
   * check content length; reject transfer encoding
   * check request-body size?
+  * set keepalive flag - clientSetKeepaliveFlag()
+  * if (there is a request body) - set body handler; set request->body_reader = clientReadBody;
   * call clientCheckFollowXForwardedFor()
 
 clientCheckFollowXForwardedFor()
@@ -99,3 +101,37 @@ clientProcessMiss() - this is the beginning of the fowarding logic
   * Create the store entry
   * collapsed forwarding stuff?
   * fwdStart() <- this is where the request forwarding occurs
+
+
+== What about the Squid-2 body reader stuff? ==
+
+=== Variables involved ===
+
+  * request_t->body_reader
+  * request_t->body_reader_data
+
+  * connStateData->body.callback
+  * connStateData->body.cbdata
+  * connStateData->body.request
+  * connStateData->body.buf
+  * connStateData->body.bufsize
+
+=== How does it work? ===
+
+  * clientTryParseRequest() determines there's an expected request body and sets request->body_reader = clientReadBody and request->body_reader_data to conn.
+  * mumble, something needs to set conn->body.{callback,cbdata,request,buf,bufsize}
+  * clientReadRequest() checks if there's a conn->body.callback ; if so, it'll call clientProcessBody()
+    * lots of other places call clientProcessBody(), gah
+  * clientProcessBody() consumes data from conn->in.{buf,offset}, calls the conn->body.callback callback (and zero's all of that out for the next request)
+
+
+=== Random notes to think about ===
+
+  * So the client-side code assigns the body reader
+  * then at some later point, the server-side (http.c) code schedules a read via:
+    *   httpSendRequest() on completed connect()
+    *   -> httpSendRequestEntry() if httpState->orig_request->body_reader != NULL
+    *   ----> requestReadBody()
+    *   ------> if (request->body_reader) then request->body_reader() ; else call the callback immediately signifying end-of-body
+    * And at this point, request->body_reader is clientReadBody(); which sets up the conn->body.{stuff} entries and calls clientProcessBody() to grab whatevers accumulated.
+
