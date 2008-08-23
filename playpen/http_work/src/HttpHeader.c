@@ -297,21 +297,6 @@ httpHeaderClean(HttpHeader * hdr)
     arrayClean(&hdr->entries);
 }
 
-/* append entries (also see httpHeaderUpdate) */
-void
-httpHeaderAppend(HttpHeader * dest, const HttpHeader * src)
-{
-    const HttpHeaderEntry *e;
-    HttpHeaderPos pos = HttpHeaderInitPos;
-    assert(src && dest);
-    assert(src != dest);
-    debug(55, 7) ("appending hdr: %p += %p\n", dest, src);
-
-    while ((e = httpHeaderGetEntry(src, &pos))) {
-	httpHeaderAddClone(dest, e);
-    }
-}
-
 static void
 httpHeaderRepack(HttpHeader * hdr)
 {

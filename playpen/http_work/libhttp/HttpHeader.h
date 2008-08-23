@@ -28,6 +28,7 @@ extern void httpHeaderInitLibrary(void);
 extern void httpHeaderAddClone(HttpHeader * hdr, const HttpHeaderEntry * e);
 extern void httpHeaderAddEntry(HttpHeader * hdr, HttpHeaderEntry * e);
 extern void httpHeaderInsertEntry(HttpHeader * hdr, HttpHeaderEntry * e, int pos);
+extern void httpHeaderAppend(HttpHeader * dest, const HttpHeader * src);
 extern HttpHeaderEntry *httpHeaderGetEntry(const HttpHeader * hdr, HttpHeaderPos * pos);
 extern HttpHeaderEntry *httpHeaderFindEntry(const HttpHeader * hdr, http_hdr_type id);
 extern HttpHeaderEntry *httpHeaderFindLastEntry(const HttpHeader * hdr, http_hdr_type id);

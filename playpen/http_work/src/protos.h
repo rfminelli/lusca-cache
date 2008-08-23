@@ -299,7 +299,6 @@ extern void httpHeaderCleanModule(void);
 extern void httpHeaderInit(HttpHeader * hdr, http_hdr_owner_type owner);
 extern void httpHeaderClean(HttpHeader * hdr);
 /* append/update */
-extern void httpHeaderAppend(HttpHeader * dest, const HttpHeader * src);
 extern void httpHeaderUpdate(HttpHeader * old, const HttpHeader * fresh, const HttpHeaderMask * denied_mask);
 /* parse/pack */
 extern int httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_end);
