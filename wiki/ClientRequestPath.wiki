@@ -14,10 +14,36 @@ This isn't *complete* nor will it really be - I have a project to try and "fix" 
 
 
 
-stuff happens to parse and build a reqest.
-...
+clientReadRequest() - the general read handler
 
-clientAccessCheck() - Config.accessList.http -> clientAccessCheckDone()
+  * conn->in.offset > 0 && conn->body.callback != NULL ? call clientProcessBody(conn);
+  * call clientTryParseRequest(); consume x bytes from input buffer
+
+clientTryParseRequest() - parse a request
+
+  * parseHttpRequest() - parse the request
+  * urlParse() - parse the URL, post-accelerator-munging, but pre rewrite munging
+  * check for internal requests; if so; assemble a replacement "internal" URI
+  * urlCheckRequest() - can this request be handled?
+  * check content length; reject transfer encoding
+  * check request-body size?
+  * call clientCheckFollowXForwardedFor()
+
+clientCheckFollowXForwardedFor()
+
+  * if followXFF ACL and XFF header; clientFollowXForwardedForStart()
+  * .. else clientAccessCheck()
+
+clientFollowXForwardedForStart()
+
+  * walk the XFF header, doing ACL checks against those IPs
+  * when complete, clientAccessCheck()
+
+
+
+clientAccessCheck()
+
+  * Config.accessList.http -> clientAccessCheckDone()
 
 clientAccessCheckDone()
   * ALLOWED ? redirect_state = REDIRECT_PENDING; -> clientRedirectStart()
