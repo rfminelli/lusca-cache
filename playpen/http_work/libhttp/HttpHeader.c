@@ -91,6 +91,22 @@ httpHeaderInitLibrary(void)
         pool_http_header_entry = memPoolCreate("HttpHeaderEntry", sizeof(HttpHeaderEntry));
 }
 
+/*!
+ * @function
+ *	httpHeaderInit
+ * @abstract
+ *	Initialize a HttpHeader set.
+ *
+ * @param	hdr	pointer to HttpHeader to initalize.
+ * @param	owner	what kind of http state owns this - request or reply.
+ *
+ * @discussion
+ *	Use this to initialize a HttpHeader that is embedded into some other
+ *	"state" structure.
+ *
+ *	It bzero's the region, sets up the owner type and initializes the entry
+ *	array.
+ */
 void
 httpHeaderInit(HttpHeader * hdr, http_hdr_owner_type owner)
 {
@@ -102,6 +118,25 @@ httpHeaderInit(HttpHeader * hdr, http_hdr_owner_type owner)
     arrayInit(&hdr->entries);
 }
 
+/*!
+ * @function
+ *	httpHeaderClean
+ * @abstract
+ *	Free the data associated with this HttpHeader; keep statistics.
+ *
+ * @param	hdr	HttpHeader to clean.
+ *
+ * @discussion
+ *	Plenty of existing code seems to initialize and clean HttpHeader
+ *	structs before anything is parsed; the statistics for "0" headers
+ *	therefore would be massively skewed and is thus not kept.
+ *
+ *	Any HttpHeaderEntry items in the hdr->entries Array are destroyed,
+ *	regardless whether anything is referencing them (they shouldn't be!)
+ *
+ *	This highlights the desire not to use HttpHeaderEntry pointers
+ *	for anything other than for quick, ephemeral working.
+ */
 void
 httpHeaderClean(HttpHeader * hdr)
 {
@@ -255,7 +290,20 @@ httpHeaderAddClone(HttpHeader * hdr, const HttpHeaderEntry * e)
     httpHeaderAddEntry(hdr, httpHeaderEntryClone(e));
 }
 
-/* append entries (also see httpHeaderUpdate) */
+/*!
+ * @function
+ *	httpHeaderAppend
+ * @abstract
+ *	Append the headers from "src" to the end of "dest"
+ *
+ * @param	dest		HttpHeader to copy headers to.
+ * @param	src		HttpHeader to copy headers from.
+ *
+ * @discussion
+ *
+ *	Headers are cloned correctly - so both modifying and freeing
+ *	the entries in "src" will not affect the entries in "dst".
+ */
 void
 httpHeaderAppend(HttpHeader * dest, const HttpHeader * src)
 {
