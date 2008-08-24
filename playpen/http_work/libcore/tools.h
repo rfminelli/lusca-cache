@@ -44,4 +44,8 @@ extern int xusleep(unsigned int usec);
 /* handy to determine the #elements in a static array */
 #define countof(arr) (sizeof(arr)/sizeof(*arr))
 
+extern const char *w_space;
+
+extern int stringHasWhitespace(const char *);
+
 #endif

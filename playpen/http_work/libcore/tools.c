@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/time.h>
+#include <string.h>
 
 #include "../include/config.h"
 #include "varargs.h"
@@ -13,6 +14,8 @@
 double current_dtime;
 time_t squid_curtime = 0;
 struct timeval current_time;
+
+const char *w_space = "\t\n\r";
 
 static void libcore_internal_fatalf(const char *fmt, va_list args);
 
@@ -78,3 +81,9 @@ xusleep(unsigned int usec)
     return select(0, NULL, NULL, NULL, &sl);
 }  
 
+
+int
+stringHasWhitespace(const char *s)
+{
+    return strpbrk(s, w_space) != NULL;
+}

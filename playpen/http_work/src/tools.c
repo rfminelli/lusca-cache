@@ -904,12 +904,6 @@ debugObj(int section, int level, const char *label, void *obj, ObjPackMethod pm)
     memBufClean(&mb);
 }
 
-int
-stringHasWhitespace(const char *s)
-{
-    return strpbrk(s, w_space) != NULL;
-}
-
 /*
  * Same as rename(2) but complains if something goes wrong;
  * the caller is responsible for handing and explaining the 

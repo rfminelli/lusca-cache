@@ -60,7 +60,6 @@ extern const char *const version_string;	/* VERSION */
 extern const char *const full_appname_string;	/* PACKAGE "/" VERSION */
 extern const char *const appname_string;	/* PACKAGE */
 extern char *visible_appname_string;
-extern const char *const w_space;	/* " \t\n\r" */
 extern const char *fdTypeStr[];
 extern const char *hier_strings[];
 extern const char *memStatusStr[];
