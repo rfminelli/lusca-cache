@@ -391,6 +391,7 @@ struct rusage {
 #include "../libmem/MemPool.h"
 #include "../libmem/MemStr.h"
 #include "../libmem/String.h"
+#include "../libmem/StrList.h"
 #include "../libmem/wordlist.h"
 #include "../libmem/intlist.h"
 #include "../libmem/MemBufs.h"
