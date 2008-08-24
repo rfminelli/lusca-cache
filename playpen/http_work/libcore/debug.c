@@ -7,6 +7,7 @@
 #include "../include/util.h"
 #include "varargs.h"
 #include "debug.h"
+#include "tools.h"
 #include "ctx.h"
 
 /* XXX this library relies on the squid x* memory allocation/free routines */
@@ -36,7 +37,6 @@ static struct {
 } db_callbacks = { 0 };
 
 static const char *debugLogTime(time_t);
-static const char *w_space = " \t\n\r";
 
 #ifdef _SQUID_MSWIN_
 extern LPCRITICAL_SECTION dbg_mutex;
