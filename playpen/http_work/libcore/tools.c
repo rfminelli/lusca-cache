@@ -15,7 +15,7 @@ double current_dtime;
 time_t squid_curtime = 0;
 struct timeval current_time;
 
-const char *w_space = "\t\n\r";
+const char *w_space = " \t\n\r";
 
 static void libcore_internal_fatalf(const char *fmt, va_list args);
 
