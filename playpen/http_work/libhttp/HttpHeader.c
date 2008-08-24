@@ -76,8 +76,6 @@
 HttpHeaderFieldInfo *Headers = NULL;
 MemPool * pool_http_header_entry = NULL;
 
-#define assert_eid(id) assert((id) < HDR_ENUM_END)
-
 void
 httpHeaderInitLibrary(void)
 {
