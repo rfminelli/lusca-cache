@@ -28,6 +28,7 @@ extern void httpHeaderInitLibrary(void);
 /* init/clean */
 extern void httpHeaderInit(HttpHeader * hdr, http_hdr_owner_type owner);
 extern void httpHeaderClean(HttpHeader * hdr);
+extern int httpHeaderReset(HttpHeader * hdr);
 extern void httpHeaderAddClone(HttpHeader * hdr, const HttpHeaderEntry * e);
 extern void httpHeaderAddEntry(HttpHeader * hdr, HttpHeaderEntry * e);
 extern void httpHeaderInsertEntry(HttpHeader * hdr, HttpHeaderEntry * e, int pos);

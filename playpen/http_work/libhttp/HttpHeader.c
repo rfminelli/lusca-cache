@@ -173,6 +173,39 @@ httpHeaderClean(HttpHeader * hdr)
     arrayClean(&hdr->entries);
 }
 
+/* just handy in parsing: resets and returns false */
+/*!
+ * @function
+ *	httpHeaderReset
+ * @abstract
+ *	Reset the current header back to the initial state after the
+ *	first httpHeaderInit() call, deallocating the header entries
+ *	and (in the future) resetting the parser state.
+ *
+ *	This function returns 0.
+ *
+ * @discussion
+ *	The http header parser doesn't currently handle incremental
+ *	parsing - this routine gets called quite a bit when parsing
+ *	fails for any reason.
+ *
+ *	The function returns 0 so it can be called in a return; eg
+ *	'return httpHeaderReset(hdr)' to reset the headers and
+ *	return false.
+ *
+ * @param	hdr	HttpHeader to reset state
+ * @return		0 (false)
+ */
+int 
+httpHeaderReset(HttpHeader * hdr)
+{
+    http_hdr_owner_type ho = hdr->owner;
+    assert(hdr);
+    ho = hdr->owner;
+    httpHeaderClean(hdr);
+    httpHeaderInit(hdr, ho);
+    return 0;
+}   
 
 /* appends an entry;
  * does not call httpHeaderEntryClone() so one should not reuse "*e"

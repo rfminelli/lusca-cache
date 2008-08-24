@@ -212,18 +212,6 @@ httpHeaderUpdate(HttpHeader * old, const HttpHeader * fresh, const HttpHeaderMas
     httpHeaderRepack(old);
 }
 
-/* just handy in parsing: resets and returns false */
-int
-httpHeaderReset(HttpHeader * hdr)
-{
-    http_hdr_owner_type ho = hdr->owner;
-    assert(hdr);
-    ho = hdr->owner;
-    httpHeaderClean(hdr);
-    httpHeaderInit(hdr, ho);
-    return 0;
-}
-
 int
 httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_end)
 {
