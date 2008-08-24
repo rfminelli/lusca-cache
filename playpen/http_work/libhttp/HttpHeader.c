@@ -81,10 +81,8 @@ MemPool * pool_http_header_entry = NULL;
 void
 httpHeaderInitLibrary(void)
 {
-#if NOTYET
     /* all headers must be described */
-    assert(countof(HeadersAttrs) == HDR_ENUM_END);
-#endif
+    assert(HeadersAttrsCount == HDR_ENUM_END);
     if (!Headers)
         Headers = httpHeaderBuildFieldsInfo(HeadersAttrs, HDR_ENUM_END);
     if (! pool_http_header_entry)
