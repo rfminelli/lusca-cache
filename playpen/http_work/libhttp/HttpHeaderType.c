@@ -33,6 +33,20 @@
  *
  */
 
+#include "../include/config.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <math.h>
+#include <fcntl.h>
+#include <sys/errno.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+
+#include "../libcore/tools.h"
+
 #include "HttpHeaderType.h"
 
 /*
@@ -115,3 +129,6 @@ const HttpHeaderFieldAttrs HeadersAttrs[] =
     {"Keep-Alive", HDR_KEEP_ALIVE, ftStr},
     {"Other:", HDR_OTHER, ftStr}	/* ':' will not allow matches */
 };
+
+const int HeadersAttrsCount = countof(HeadersAttrs);
+

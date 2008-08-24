@@ -9,6 +9,7 @@ libhttp_a_SOURCES = \
 	HttpHeaderFieldInfo.c \
 	HttpHeaderFieldStat.c \
 	HttpHeaderStats.c \
+	HttpHeaderVars.c \
 	HttpVersion.c
 
 noinst_LIBRARIES = \

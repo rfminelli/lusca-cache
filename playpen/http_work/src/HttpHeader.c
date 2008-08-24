@@ -59,87 +59,9 @@
  * local constants and vars
  */
 
-/*
- * headers with field values defined as #(values) in HTTP/1.1
- * Headers that are currently not recognized, are commented out.
- */
 static HttpHeaderMask ListHeadersMask;	/* set run-time using  ListHeadersArr */
-static http_hdr_type ListHeadersArr[] =
-{
-    HDR_ACCEPT,
-    HDR_ACCEPT_CHARSET, HDR_ACCEPT_ENCODING, HDR_ACCEPT_LANGUAGE,
-    HDR_ACCEPT_RANGES, HDR_ALLOW,
-    HDR_CACHE_CONTROL,
-    HDR_CONTENT_ENCODING,
-    HDR_CONTENT_LANGUAGE,
-    HDR_CONNECTION,
-    HDR_IF_MATCH, HDR_IF_NONE_MATCH,
-    HDR_LINK, HDR_PRAGMA,
-    HDR_PROXY_CONNECTION,
-    HDR_PROXY_SUPPORT,
-    HDR_TE,
-    HDR_TRAILER,
-    HDR_TRANSFER_ENCODING,
-    HDR_UPGRADE,
-    HDR_VARY,
-    HDR_VIA,
-    /* HDR_WARNING, */
-    HDR_WWW_AUTHENTICATE,
-    HDR_AUTHENTICATION_INFO,
-    HDR_PROXY_AUTHENTICATION_INFO,
-    HDR_EXPECT,
-#if X_ACCELERATOR_VARY
-    HDR_X_ACCELERATOR_VARY,
-#endif
-    HDR_X_FORWARDED_FOR
-};
-
-/* general-headers */
-static http_hdr_type GeneralHeadersArr[] =
-{
-    HDR_CACHE_CONTROL, HDR_CONNECTION, HDR_DATE, HDR_PRAGMA,
-    HDR_TRANSFER_ENCODING,
-    HDR_TRAILER,
-    HDR_UPGRADE,
-    HDR_VIA
-};
-
-/* entity-headers */
-static http_hdr_type EntityHeadersArr[] =
-{
-    HDR_ALLOW, HDR_CONTENT_BASE, HDR_CONTENT_DISPOSITION,
-    HDR_CONTENT_ENCODING, HDR_CONTENT_LANGUAGE, HDR_CONTENT_LENGTH,
-    HDR_CONTENT_LOCATION, HDR_CONTENT_MD5, HDR_CONTENT_RANGE,
-    HDR_CONTENT_TYPE, HDR_ETAG, HDR_EXPIRES, HDR_LAST_MODIFIED, HDR_LINK,
-    HDR_OTHER
-};
-
 static HttpHeaderMask ReplyHeadersMask;		/* set run-time using ReplyHeaders */
-static http_hdr_type ReplyHeadersArr[] =
-{
-    HDR_ACCEPT, HDR_ACCEPT_CHARSET, HDR_ACCEPT_ENCODING, HDR_ACCEPT_LANGUAGE,
-    HDR_ACCEPT_RANGES, HDR_AGE,
-    HDR_LOCATION, HDR_MAX_FORWARDS,
-    HDR_MIME_VERSION, HDR_PUBLIC, HDR_RETRY_AFTER, HDR_SERVER, HDR_SET_COOKIE,
-    HDR_VARY,
-    HDR_WARNING, HDR_PROXY_CONNECTION, HDR_X_CACHE,
-    HDR_X_CACHE_LOOKUP,
-    HDR_X_REQUEST_URI,
-#if X_ACCELERATOR_VARY
-    HDR_X_ACCELERATOR_VARY,
-#endif
-    HDR_X_SQUID_ERROR
-};
-
 static HttpHeaderMask RequestHeadersMask;	/* set run-time using RequestHeaders */
-static http_hdr_type RequestHeadersArr[] =
-{
-    HDR_AUTHORIZATION, HDR_FROM, HDR_HOST,
-    HDR_IF_MATCH, HDR_IF_MODIFIED_SINCE, HDR_IF_NONE_MATCH,
-    HDR_IF_RANGE, HDR_MAX_FORWARDS, HDR_PROXY_CONNECTION,
-    HDR_PROXY_AUTHORIZATION, HDR_RANGE, HDR_REFERER, HDR_REQUEST_RANGE,
-    HDR_USER_AGENT, HDR_X_FORWARDED_FOR, HDR_TE, HDR_EXPECT
-};
 
 static int HeaderEntryParsedCount = 0;
 
@@ -187,15 +109,15 @@ httpHeaderInitModule(void)
 
     /* create masks */
     httpHeaderMaskInit(&ListHeadersMask, 0);
-    httpHeaderCalcMask(&ListHeadersMask, ListHeadersArr, countof(ListHeadersArr));
+    httpHeaderCalcMask(&ListHeadersMask, ListHeadersArr, ListHeadersArrCount);
     httpHeaderMaskInit(&ReplyHeadersMask, 0);
-    httpHeaderCalcMask(&ReplyHeadersMask, ReplyHeadersArr, countof(ReplyHeadersArr));
-    httpHeaderCalcMask(&ReplyHeadersMask, GeneralHeadersArr, countof(GeneralHeadersArr));
-    httpHeaderCalcMask(&ReplyHeadersMask, EntityHeadersArr, countof(EntityHeadersArr));
+    httpHeaderCalcMask(&ReplyHeadersMask, ReplyHeadersArr, ReplyHeadersArrCount);
+    httpHeaderCalcMask(&ReplyHeadersMask, GeneralHeadersArr, GeneralHeadersArrCount);
+    httpHeaderCalcMask(&ReplyHeadersMask, EntityHeadersArr, EntityHeadersArrCount);
     httpHeaderMaskInit(&RequestHeadersMask, 0);
-    httpHeaderCalcMask(&RequestHeadersMask, RequestHeadersArr, countof(RequestHeadersArr));
-    httpHeaderCalcMask(&RequestHeadersMask, GeneralHeadersArr, countof(GeneralHeadersArr));
-    httpHeaderCalcMask(&RequestHeadersMask, EntityHeadersArr, countof(EntityHeadersArr));
+    httpHeaderCalcMask(&RequestHeadersMask, RequestHeadersArr, RequestHeadersArrCount);
+    httpHeaderCalcMask(&RequestHeadersMask, GeneralHeadersArr, GeneralHeadersArrCount);
+    httpHeaderCalcMask(&RequestHeadersMask, EntityHeadersArr, EntityHeadersArrCount);
     /* init header stats */
     assert(HttpHeaderStatCount == hoReply + 1);
     for (i = 0; i < HttpHeaderStatCount; i++)

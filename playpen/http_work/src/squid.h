@@ -412,6 +412,7 @@ struct rusage {
 #include "../libhttp/HttpHeaderEntry.h"
 #include "../libhttp/HttpHeader.h"
 #include "../libhttp/HttpHeaderStats.h"
+#include "../libhttp/HttpHeaderVars.h"
 #include "../libhttp/HttpHeaderTools.h"
 
 #include "../libiapp/event.h"
