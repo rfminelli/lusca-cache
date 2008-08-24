@@ -40,27 +40,6 @@ static int httpHeaderStrCmp(const char *h1, const char *h2, int len);
 #endif
 static void httpHeaderPutStrvf(HttpHeader * hdr, http_hdr_type id, const char *fmt, va_list vargs);
 
-
-void
-httpHeaderMaskInit(HttpHeaderMask * mask, int value)
-{
-    memset(mask, value, sizeof(*mask));
-}
-
-/* calculates a bit mask of a given array; does not reset mask! */
-void
-httpHeaderCalcMask(HttpHeaderMask * mask, const http_hdr_type * enums, int count)
-{
-    int i;
-    assert(mask && enums);
-    assert(count < sizeof(*mask) * 8);	/* check for overflow */
-
-    for (i = 0; i < count; ++i) {
-	assert(!CBIT_TEST(*mask, enums[i]));	/* check for duplicates */
-	CBIT_SET(*mask, enums[i]);
-    }
-}
-
 /* same as httpHeaderPutStr, but formats the string using snprintf first */
 void
 #if STDC_HEADERS
