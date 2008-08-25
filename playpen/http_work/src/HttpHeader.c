@@ -59,10 +59,6 @@
  * local constants and vars
  */
 
-static HttpHeaderMask ListHeadersMask;	/* set run-time using  ListHeadersArr */
-static HttpHeaderMask ReplyHeadersMask;		/* set run-time using ReplyHeaders */
-static HttpHeaderMask RequestHeadersMask;	/* set run-time using RequestHeaders */
-
 /*
  * local routines
  */
@@ -103,17 +99,6 @@ httpHeaderInitModule(void)
     /* Setup the libhttp/ header stuff */
     httpHeaderInitLibrary();
 
-    /* create masks */
-    httpHeaderMaskInit(&ListHeadersMask, 0);
-    httpHeaderCalcMask(&ListHeadersMask, ListHeadersArr, ListHeadersArrCount);
-    httpHeaderMaskInit(&ReplyHeadersMask, 0);
-    httpHeaderCalcMask(&ReplyHeadersMask, ReplyHeadersArr, ReplyHeadersArrCount);
-    httpHeaderCalcMask(&ReplyHeadersMask, GeneralHeadersArr, GeneralHeadersArrCount);
-    httpHeaderCalcMask(&ReplyHeadersMask, EntityHeadersArr, EntityHeadersArrCount);
-    httpHeaderMaskInit(&RequestHeadersMask, 0);
-    httpHeaderCalcMask(&RequestHeadersMask, RequestHeadersArr, RequestHeadersArrCount);
-    httpHeaderCalcMask(&RequestHeadersMask, GeneralHeadersArr, GeneralHeadersArrCount);
-    httpHeaderCalcMask(&RequestHeadersMask, EntityHeadersArr, EntityHeadersArrCount);
     /* init header stats */
     assert(HttpHeaderStatCount == hoReply + 1);
     for (i = 0; i < HttpHeaderStatCount; i++)
@@ -207,53 +192,6 @@ httpHeaderPackInto(const HttpHeader * hdr, Packer * p)
     /* pack all entries one by one */
     while ((e = httpHeaderGetEntry(hdr, &pos)))
 	httpHeaderEntryPackInto(e, p);
-}
-
-HttpHeaderEntry *
-httpHeaderFindEntry(const HttpHeader * hdr, http_hdr_type id)
-{
-    HttpHeaderPos pos = HttpHeaderInitPos;
-    HttpHeaderEntry *e;
-    assert(hdr);
-    assert_eid(id);
-    assert(!CBIT_TEST(ListHeadersMask, id));
-
-    /* check mask first */
-    if (!CBIT_TEST(hdr->mask, id))
-        return NULL;
-    /* looks like we must have it, do linear search */
-    while ((e = httpHeaderGetEntry(hdr, &pos))) {
-        if (e->id == id)
-            return e;
-    }
-    /* hm.. we thought it was there, but it was not found */
-    assert(0);
-    return NULL;                /* not reached */
-}
-
-/*
- * same as httpHeaderFindEntry
- */
-HttpHeaderEntry *
-httpHeaderFindLastEntry(const HttpHeader * hdr, http_hdr_type id)
-{
-    HttpHeaderPos pos = HttpHeaderInitPos;
-    HttpHeaderEntry *e;
-    HttpHeaderEntry *result = NULL;
-    assert(hdr);
-    assert_eid(id);
-    assert(!CBIT_TEST(ListHeadersMask, id));
-
-    /* check mask first */
-    if (!CBIT_TEST(hdr->mask, id))
-        return NULL;
-    /* looks like we must have it, do linear search */
-    while ((e = httpHeaderGetEntry(hdr, &pos))) {
-        if (e->id == id)
-            result = e;
-    }
-    assert(result);             /* must be there! */
-    return result;
 }
 
 /*

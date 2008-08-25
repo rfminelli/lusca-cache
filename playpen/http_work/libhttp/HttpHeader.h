@@ -23,6 +23,12 @@ typedef struct _HttpHeader HttpHeader;
 extern HttpHeaderFieldInfo *Headers;
 extern MemPool * pool_http_header_entry;
 
+/* XXX as mentioned in HttpHeader.c ; these probably shouldn't be here? */
+extern HttpHeaderMask ListHeadersMask;
+extern HttpHeaderMask ReplyHeadersMask;
+extern HttpHeaderMask RequestHeadersMask;
+
+
 extern void httpHeaderInitLibrary(void);
 
 /* init/clean */
