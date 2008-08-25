@@ -40,7 +40,7 @@ Unless required, no large-scale changes will be made to the codebase until it ha
    * debugging *(Done)*
    * buffers *(Done)*
    * strings *(Done)*
-   * http request parsing
+   * http request parsing *(Done - Cacheboy-1.5)*
    * http reply construction
    * communication
   * Restructure the data paths:
@@ -84,11 +84,11 @@ Additionally, do a bit of a drive-by reorganisation of the HTTP parser and heade
 
   * Shift various bits of the HTTP code out from src/ and into libhttp/
     * Header Entry *(done)*
-    * Basic Header management
-    * Header entry parsing
-    * Header parsing
-    * Header statistics
-    * Header attributes
+    * Basic Header management *(done)*
+    * Header entry parsing *(done)*
+    * Header parsing *(done)*
+    * Header statistics *(done)*
+    * Header attributes *(done)*
     * What else from src/Http{Stuff}.c can be moved in this pass?
   * Rework the header entry API to be slightly more sensible
     * (This needs to be planned and documented somewhere!) 
