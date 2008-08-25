@@ -53,7 +53,7 @@ This will be the first stable release. Again, unless required, no large-scale ch
 
 === Cacheboy 1.X ==
 
-Cacheboy 1.X point releases will continue breaking out the code into seperate mostly self-contained modules with a minimum of reorganisation.
+Cacheboy 1.X point releases will continue breaking out the code into seperate libraries with well-described interdependencies, along with some basic groundwork for improved performance and flexibility.
 
 === Cacheboy-1.3 ===
 
