@@ -22,6 +22,7 @@
 #include "libmem/MemBufs.h"
 #include "libmem/MemBuf.h"
 #include "libmem/String.h"
+#include "libmem/MemStr.h"
 
 #include "libcb/cbdata.h"
 
@@ -40,12 +41,57 @@
 #include "libhttp/HttpHeaderStats.h"
 #include "libhttp/HttpHeaderTools.h"
 #include "libhttp/HttpHeaderMask.h"
+#include "libhttp/HttpHeaderParse.h"
 
+static int
+test1a(void)
+{
+	HttpHeader hdr;
+
+	printf("test1a: test initialisation/destruction/reset\n");
+	httpHeaderInit(&hdr, hoRequest);
+	httpHeaderReset(&hdr);
+	httpHeaderClean(&hdr);
+	return 1;
+}
+
+static int
+test1b(void)
+{
+	HttpHeader hdr;
+	HttpHeaderPos pos = HttpHeaderInitPos;
+	const HttpHeaderEntry *e;
+
+	int ret;
+	const char *hdrs = "Host: www.creative.net.au\r\nContent-type: text/html\r\nFoo: bar\r\n\r\n";
+	const char *hdr_start = hdrs;
+	const char *hdr_end = hdr_start + strlen(hdrs);
+
+	printf("test1b: test parsing sample headers\n");
+	httpHeaderInit(&hdr, hoRequest);
+	ret = httpHeaderParse(&hdr, hdr_start, hdr_end);
+
+	printf("  retval from parse: %d\n", ret);
+	while ((e = httpHeaderGetEntry(&hdr, &pos))) {
+		printf("  Parsed Header: %s: %s\n", strBuf(e->name), strBuf(e->value));
+	}
+
+	httpHeaderClean(&hdr);
+	return 1;
+}
 
 int
 main(int argc, const char *argv[])
 {
 	printf("%s: initializing\n", argv[0]);
+	_db_init("ALL,99");
+	_db_set_stderr_debug(99);
+	memPoolInit();
+	memBuffersInit();
+	memStringInit();
 	httpHeaderInitLibrary();
+	test1a();
+	test1b();
+	exit(0);
 }
 
