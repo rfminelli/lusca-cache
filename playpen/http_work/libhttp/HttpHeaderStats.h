@@ -20,4 +20,6 @@ typedef struct _HttpHeaderStat HttpHeaderStat;
 extern HttpHeaderStat HttpHeaderStats[];
 extern int HttpHeaderStatCount;
 
+extern void httpHeaderStatInit(HttpHeaderStat * hs, const char *label);
+
 #endif

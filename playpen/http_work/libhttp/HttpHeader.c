@@ -72,6 +72,7 @@
 #include "HttpHeader.h"
 #include "HttpHeaderStats.h"
 #include "HttpHeaderTools.h"
+#include "HttpHeaderMask.h"
 
 HttpHeaderFieldInfo *Headers = NULL;
 MemPool * pool_http_header_entry = NULL;
@@ -346,3 +347,82 @@ httpHeaderAppend(HttpHeader * dest, const HttpHeader * src)
         httpHeaderAddClone(dest, e);
     }
 }
+
+/*
+ * deletes all fields with a given name if any, returns #fields deleted;
+ */
+int
+httpHeaderDelByName(HttpHeader * hdr, const char *name)
+{
+    int count = 0;
+    HttpHeaderPos pos = HttpHeaderInitPos;
+    HttpHeaderEntry *e;
+    httpHeaderMaskInit(&hdr->mask, 0);  /* temporal inconsistency */
+    debug(55, 7) ("deleting '%s' fields in hdr %p\n", name, hdr);
+    while ((e = httpHeaderGetEntry(hdr, &pos))) {
+        if (!strCaseCmp(e->name, name)) {
+            httpHeaderDelAt(hdr, pos);
+            count++;
+        } else
+            CBIT_SET(hdr->mask, e->id);
+    }
+    return count;
+}
+
+/* deletes all entries with a given id, returns the #entries deleted */
+int
+httpHeaderDelById(HttpHeader * hdr, http_hdr_type id)
+{
+    int count = 0;
+    HttpHeaderPos pos = HttpHeaderInitPos;
+    HttpHeaderEntry *e;
+    debug(55, 8) ("%p del-by-id %d\n", hdr, id);
+    assert(hdr);
+    assert_eid(id);
+    assert(id != HDR_OTHER);    /* does not make sense */
+    if (!CBIT_TEST(hdr->mask, id))
+        return 0;
+    while ((e = httpHeaderGetEntry(hdr, &pos))) {
+        if (e->id == id) {
+            httpHeaderDelAt(hdr, pos);
+            count++;
+        }
+    }
+    CBIT_CLR(hdr->mask, id);
+    assert(count);
+    return count;
+}
+
+/*
+ * deletes an entry at pos and leaves a gap; leaving a gap makes it
+ * possible to iterate(search) and delete fields at the same time
+ * WARNING: Doesn't update the header mask. Call httpHeaderRefreshMask
+ * when done with the delete operations.
+ */
+void
+httpHeaderDelAt(HttpHeader * hdr, HttpHeaderPos pos)
+{
+    HttpHeaderEntry *e;
+    assert(pos >= HttpHeaderInitPos && pos < hdr->entries.count);
+    e = hdr->entries.items[pos];
+    hdr->entries.items[pos] = NULL;
+    /* decrement header length, allow for ": " and crlf */
+    hdr->len -= strLen(e->name) + 2 + strLen(e->value) + 2;
+    assert(hdr->len >= 0);
+    httpHeaderEntryDestroy(e);
+}
+
+int
+httpHeaderIdByName(const char *name, int name_len, const HttpHeaderFieldInfo * info, int end)
+{
+    int i;
+    for (i = 0; i < end; ++i) {
+        if (name_len >= 0 && name_len != strLen(info[i].name))
+            continue;
+        if (!strncasecmp(name, strBuf(info[i].name),
+                name_len < 0 ? strLen(info[i].name) + 1 : name_len))
+            return i;
+    }
+    return -1;
+}
+

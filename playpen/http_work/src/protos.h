@@ -267,7 +267,6 @@ extern void httpHdrContRangePackInto(const HttpHdrContRange * crange, Packer * p
 extern void httpHdrContRangeSet(HttpHdrContRange *, HttpHdrRangeSpec, squid_off_t);
 
 /* Http Header Tools */
-extern int httpHeaderIdByName(const char *name, int name_len, const HttpHeaderFieldInfo * attrs, int end);
 extern int httpHeaderIdByNameDef(const char *name, int name_len);
 extern const char *httpHeaderNameById(int id);
 extern void httpHeaderMaskInit(HttpHeaderMask * mask, int value);
@@ -321,9 +320,6 @@ extern String httpHeaderGetStrOrList(const HttpHeader * hdr, http_hdr_type id);
 extern String httpHeaderGetByName(const HttpHeader * hdr, const char *name);
 extern String httpHeaderGetListMember(const HttpHeader * hdr, http_hdr_type id, const char *member, const char separator);
 extern String httpHeaderGetByNameListMember(const HttpHeader * hdr, const char *name, const char *member, const char separator);
-extern int httpHeaderDelByName(HttpHeader * hdr, const char *name);
-extern int httpHeaderDelById(HttpHeader * hdr, http_hdr_type id);
-extern void httpHeaderDelAt(HttpHeader * hdr, HttpHeaderPos pos);
 extern void httpHeaderRefreshMask(HttpHeader * hdr);
 /* avoid using these low level routines */
 extern void httpHeaderEntryPackInto(const HttpHeaderEntry * e, Packer * p);
@@ -1002,7 +998,6 @@ extern void asnFreeMemory(void);
 /* tools.c */
 extern dlink_node *dlinkNodeNew(void);
 
-extern int stringHasWhitespace(const char *);
 extern int stringHasCntl(const char *);
 extern void linklistPush(link_list **, void *);
 extern void *linklistShift(link_list **);

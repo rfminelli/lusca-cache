@@ -127,42 +127,6 @@ getStringPrefix(const char *str, const char *end)
 }
 
 /*
- * parses an int field, complains if soemthing went wrong, returns true on
- * success
- */
-int
-httpHeaderParseInt(const char *start, int *value)
-{
-    char *end;
-    long v;
-    assert(value);
-    errno = 0;
-    v = *value = strtol(start, &end, 10);
-    if (start == end || errno != 0 || v != *value) {
-	debug(66, 2) ("failed to parse an int header field near '%s'\n", start);
-	*value = -1;
-	return 0;
-    }
-    return 1;
-}
-
-int
-httpHeaderParseSize(const char *start, squid_off_t * value)
-{
-    char *end;
-    errno = 0;
-    assert(value);
-    *value = strto_off_t(start, &end, 10);
-    if (start == end || errno != 0) {
-	debug(66, 2) ("failed to parse an int header field near '%s'\n", start);
-	*value = -1;
-	return 0;
-    }
-    return 1;
-}
-
-
-/*
  * parses a given string then packs compiled headers and compares the result
  * with the original, reports discrepancies
  */

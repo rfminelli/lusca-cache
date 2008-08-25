@@ -43,4 +43,10 @@ extern void httpHeaderAddEntryString(HttpHeader *hdr, http_hdr_type id, String n
 
 extern void httpHeaderInsertEntryStr(HttpHeader *hdr, int pos, http_hdr_type id, const char *attrib, const char *value);
 
+extern int httpHeaderDelByName(HttpHeader * hdr, const char *name);
+extern int httpHeaderDelById(HttpHeader * hdr, http_hdr_type id);
+extern void httpHeaderDelAt(HttpHeader * hdr, HttpHeaderPos pos);
+extern int httpHeaderIdByName(const char *name, int name_len, const HttpHeaderFieldInfo * attrs, int end);
+
+
 #endif
