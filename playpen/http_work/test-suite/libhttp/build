@@ -1,0 +1,9 @@
+#!/bin/sh
+
+CFLAGS="-I../.."
+LDFLAGS="-L../../libhttp -L../../libcore -L../../libmem -L../../libsqinet -L../../lib -L../../libstat -L../../libiapp"
+LIBS="-lhttp -lmem -lcore -lstat -liapp -lmiscutil -lm"
+
+gcc ${CFLAGS}  test_libhttp_1.c -o test_libhttp_1 ${LDFLAGS} ${LIBS}
+
+./test_libhttp_1
