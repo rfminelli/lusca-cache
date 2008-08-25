@@ -92,22 +92,9 @@ httpHeaderInitMem(void)
 void
 httpHeaderInitModule(void)
 {
-    int i;
-    /* check that we have enough space for masks */
-    assert(8 * sizeof(HttpHeaderMask) >= HDR_ENUM_END);
-
     /* Setup the libhttp/ header stuff */
     httpHeaderInitLibrary();
 
-    /* init header stats */
-    assert(HttpHeaderStatCount == hoReply + 1);
-    for (i = 0; i < HttpHeaderStatCount; i++)
-	httpHeaderStatInit(HttpHeaderStats + i, HttpHeaderStats[i].label);
-    HttpHeaderStats[hoRequest].owner_mask = &RequestHeadersMask;
-    HttpHeaderStats[hoReply].owner_mask = &ReplyHeadersMask;
-#if USE_HTCP
-    HttpHeaderStats[hoHtcpReply].owner_mask = &ReplyHeadersMask;
-#endif
     /* init dependent modules */
     httpHdrCcInitModule();
     /* register with cache manager */
