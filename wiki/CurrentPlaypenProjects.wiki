@@ -10,8 +10,8 @@ Here's a link to current and past "playpen" projects where various bits of exper
   * Overview: Introduce IPv4/IPv6 agnostic types and code into selected parts of the Squid core whilst maintaining the IPv4-only Squid src/ code.
   * Status: Complete; merged (link?)
 
-== http ==
+== http_work ==
 
-  * Link: http://code.google.com/p/cacheboy/source/list?path=/playpen/http
+  * Link: http://code.google.com/p/cacheboy/source/list?path=/playpen/http_work
   * Overview: reorganise the HTTP parser related code into libhttp/ in preparation for a partial rewrite
   * Status: Complete; not merged
