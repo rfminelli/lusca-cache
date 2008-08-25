@@ -2,7 +2,7 @@
 
 = Introduction =
 
-Welcome to Cacheboy. This is a fork of the Squid-2.HEAD sources from early April, 2008.
+Welcome to Cacheboy. This is a fork of the Squid-2.HEAD sources from early April, 2008 with subsequent updates merged in as needed.
 
 = What? =
 
