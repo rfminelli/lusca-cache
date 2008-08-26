@@ -267,22 +267,15 @@ extern void httpHdrContRangePackInto(const HttpHdrContRange * crange, Packer * p
 extern void httpHdrContRangeSet(HttpHdrContRange *, HttpHdrRangeSpec, squid_off_t);
 
 /* Http Header Tools */
-extern int httpHeaderIdByName(const char *name, int name_len, const HttpHeaderFieldInfo * attrs, int end);
 extern int httpHeaderIdByNameDef(const char *name, int name_len);
 extern const char *httpHeaderNameById(int id);
 extern void httpHeaderMaskInit(HttpHeaderMask * mask, int value);
 extern void httpHeaderCalcMask(HttpHeaderMask * mask, const http_hdr_type * enums, int count);
 extern int httpHeaderHasConnDir(const HttpHeader * hdr, const char *directive);
 extern void httpHeaderAddContRange(HttpHeader *, HttpHdrRangeSpec, squid_off_t);
-extern void strListAdd(String * str, const char *item, char del);
-extern void strListAddUnique(String * str, const char *item, char del);
-extern int strListIsMember(const String * str, const char *item, char del);
-extern int strIsSubstr(const String * list, const char *s);
-extern int strListGetItem(const String * str, char del, const char **item, int *ilen, const char **pos);
 extern const char *getStringPrefix(const char *str, const char *end);
 extern int httpHeaderParseInt(const char *start, int *val);
 extern int httpHeaderParseSize(const char *start, squid_off_t * sz);
-extern int httpHeaderReset(HttpHeader * hdr);
 #if STDC_HEADERS
 extern void
 httpHeaderPutStrf(HttpHeader * hdr, http_hdr_type id, const char *fmt,...) PRINTF_FORMAT_ARG3;
@@ -295,11 +288,7 @@ extern void httpHeaderPutStrf();
 extern void httpHeaderInitModule(void);
 extern void httpHeaderInitMem(void);
 extern void httpHeaderCleanModule(void);
-/* init/clean */
-extern void httpHeaderInit(HttpHeader * hdr, http_hdr_owner_type owner);
-extern void httpHeaderClean(HttpHeader * hdr);
 /* append/update */
-extern void httpHeaderAppend(HttpHeader * dest, const HttpHeader * src);
 extern void httpHeaderUpdate(HttpHeader * old, const HttpHeader * fresh, const HttpHeaderMask * denied_mask);
 /* parse/pack */
 extern int httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_end);
@@ -331,9 +320,6 @@ extern String httpHeaderGetStrOrList(const HttpHeader * hdr, http_hdr_type id);
 extern String httpHeaderGetByName(const HttpHeader * hdr, const char *name);
 extern String httpHeaderGetListMember(const HttpHeader * hdr, http_hdr_type id, const char *member, const char separator);
 extern String httpHeaderGetByNameListMember(const HttpHeader * hdr, const char *name, const char *member, const char separator);
-extern int httpHeaderDelByName(HttpHeader * hdr, const char *name);
-extern int httpHeaderDelById(HttpHeader * hdr, http_hdr_type id);
-extern void httpHeaderDelAt(HttpHeader * hdr, HttpHeaderPos pos);
 extern void httpHeaderRefreshMask(HttpHeader * hdr);
 /* avoid using these low level routines */
 extern void httpHeaderEntryPackInto(const HttpHeaderEntry * e, Packer * p);
@@ -1012,7 +998,6 @@ extern void asnFreeMemory(void);
 /* tools.c */
 extern dlink_node *dlinkNodeNew(void);
 
-extern int stringHasWhitespace(const char *);
 extern int stringHasCntl(const char *);
 extern void linklistPush(link_list **, void *);
 extern void *linklistShift(link_list **);

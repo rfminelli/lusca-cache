@@ -130,5 +130,6 @@ struct _HttpHeaderFieldAttrs {
 typedef struct _HttpHeaderFieldAttrs HttpHeaderFieldAttrs;
 
 extern const HttpHeaderFieldAttrs HeadersAttrs[];
+extern const int HeadersAttrsCount;
 
 #endif

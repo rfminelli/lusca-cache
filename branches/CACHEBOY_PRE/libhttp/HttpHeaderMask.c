@@ -2,7 +2,7 @@
 /*
  * $Id: HttpHeader.c 12651 2008-04-25 16:47:11Z adrian.chadd $
  *
- * DEBUG: section 55    HTTP Header
+ * DEBUG: section 55    HTTP Header Mask
  * AUTHOR: Alex Rousskov
  *
  * SQUID Web Proxy Cache          http://www.squid-cache.org/
@@ -61,24 +61,37 @@
 
 #include "../libcb/cbdata.h"
 
+#include "../libstat/StatHist.h"
+
 #include "HttpVersion.h"
 #include "HttpStatusLine.h"
 #include "HttpHeaderType.h"
 #include "HttpHeaderFieldStat.h"
 #include "HttpHeaderFieldInfo.h"
 #include "HttpHeaderEntry.h"
-#include "HttpHeaderTools.h"
 #include "HttpHeader.h"
+#include "HttpHeaderStats.h"
+#include "HttpHeaderTools.h"
 
+#include "HttpHeaderMask.h"
 
-/* handy to printf prefixes of potentially very long buffers */
-const char *
-getStringPrefix(const char *str, const char *end)
+void
+httpHeaderMaskInit(HttpHeaderMask * mask, int value)
 {
-#define SHORT_PREFIX_SIZE 512
-    LOCAL_ARRAY(char, buf, SHORT_PREFIX_SIZE);
-    const int sz = 1 + (end ? end - str : strlen(str));
-    xstrncpy(buf, str, (sz > SHORT_PREFIX_SIZE) ? SHORT_PREFIX_SIZE : sz);
-    return buf;
+    memset(mask, value, sizeof(*mask));
+}
+
+/* calculates a bit mask of a given array; does not reset mask! */
+void
+httpHeaderCalcMask(HttpHeaderMask * mask, const http_hdr_type * enums, int count)
+{
+    int i;
+    assert(mask && enums);
+    assert(count < sizeof(*mask) * 8);  /* check for overflow */
+
+    for (i = 0; i < count; ++i) {
+        assert(!CBIT_TEST(*mask, enums[i]));    /* check for duplicates */
+        CBIT_SET(*mask, enums[i]);
+    }
 }
 

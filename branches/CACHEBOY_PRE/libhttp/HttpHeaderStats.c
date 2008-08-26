@@ -59,6 +59,8 @@
 #include "../libmem/MemBuf.h"
 #include "../libmem/String.h"
 
+#include "../libstat/StatHist.h"
+
 #include "../libcb/cbdata.h"
 
 #include "HttpVersion.h"
@@ -67,18 +69,31 @@
 #include "HttpHeaderFieldStat.h"
 #include "HttpHeaderFieldInfo.h"
 #include "HttpHeaderEntry.h"
-#include "HttpHeaderTools.h"
 #include "HttpHeader.h"
+#include "HttpHeaderStats.h"
+#include "HttpHeaderTools.h"
 
-
-/* handy to printf prefixes of potentially very long buffers */
-const char *
-getStringPrefix(const char *str, const char *end)
+/* header accounting */
+HttpHeaderStat HttpHeaderStats[] =
 {
-#define SHORT_PREFIX_SIZE 512
-    LOCAL_ARRAY(char, buf, SHORT_PREFIX_SIZE);
-    const int sz = 1 + (end ? end - str : strlen(str));
-    xstrncpy(buf, str, (sz > SHORT_PREFIX_SIZE) ? SHORT_PREFIX_SIZE : sz);
-    return buf;
+    {"all"},
+#if USE_HTCP
+    {"HTCP reply"},
+#endif
+    {"request"},
+    {"reply"}
+};
+int HttpHeaderStatCount = countof(HttpHeaderStats);
+
+void
+httpHeaderStatInit(HttpHeaderStat * hs, const char *label)
+{
+    assert(hs);
+    assert(label);
+    memset(hs, 0, sizeof(HttpHeaderStat));
+    hs->label = label;
+    statHistEnumInit(&hs->hdrUCountDistr, 32);  /* not a real enum */
+    statHistEnumInit(&hs->fieldTypeDistr, HDR_ENUM_END);
+    statHistEnumInit(&hs->ccTypeDistr, CC_ENUM_END);
 }
 

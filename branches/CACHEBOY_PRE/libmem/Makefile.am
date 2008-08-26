@@ -4,6 +4,7 @@ libmem_a_SOURCES = \
 	MemPool.c \
 	MemStr.c \
 	String.c \
+	StrList.c \
 	wordlist.c \
 	intlist.c \
 	MemBufs.c \
@@ -13,6 +14,7 @@ libmem_a_LIBADD = \
 	MemPool.o \
 	MemStr.o \
 	String.o \
+	StrList.o \
 	wordlist.o \
 	intlist.o \
 	MemBufs.o \

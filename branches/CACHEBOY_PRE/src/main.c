@@ -412,6 +412,7 @@ mainReconfigure(void)
     iapp_tcpRcvBufSz = Config.tcpRcvBufsz;
     iapp_useAcceptFilter = Config.accept_filter;
     iapp_incomingRate = Config.incoming_rate;
+    httpConfig_relaxed_parser = Config.onoff.relaxed_header_parser;
 #if USE_SSL
     ssl_engine = Config.SSL.ssl_engine;
     ssl_unclean_shutdown = Config.SSL.unclean_shutdown;
@@ -787,6 +788,7 @@ main(int argc, char **argv)
         iapp_tcpRcvBufSz = Config.tcpRcvBufsz;
         iapp_useAcceptFilter = Config.accept_filter;
         iapp_incomingRate = Config.incoming_rate;
+        httpConfig_relaxed_parser = Config.onoff.relaxed_header_parser;
 #if USE_SSL
         ssl_engine = Config.SSL.ssl_engine;
         ssl_unclean_shutdown = Config.SSL.unclean_shutdown;
