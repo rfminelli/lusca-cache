@@ -123,7 +123,7 @@ clientProcessMiss() - this is the beginning of the fowarding logic
   * clientReadRequest() checks if there's a conn->body.callback ; if so, it'll call clientProcessBody()
     * lots of other places call clientProcessBody(), gah
   * clientProcessBody() consumes data from conn->in.{buf,offset}, calls the conn->body.callback callback (and zero's all of that out for the next request)
-
+  * the client-side deferred read callback stops reading client-side data if there's a request body and the conn->in buffer is full
 
 === Random notes to think about ===
 
@@ -134,4 +134,3 @@ clientProcessMiss() - this is the beginning of the fowarding logic
     *   ----> requestReadBody()
     *   ------> if (request->body_reader) then request->body_reader() ; else call the callback immediately signifying end-of-body
     * And at this point, request->body_reader is clientReadBody(); which sets up the conn->body.{stuff} entries and calls clientProcessBody() to grab whatevers accumulated.
-
