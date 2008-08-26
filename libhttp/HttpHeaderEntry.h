@@ -2,6 +2,8 @@
 
 #define	__LIBHTTP_HTTPHEADERENTRY_H__
 
+#define assert_eid(id) assert((id) < HDR_ENUM_END)
+
 struct _HttpHeaderEntry {
     http_hdr_type id;
     int active;

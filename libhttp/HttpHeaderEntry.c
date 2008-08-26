@@ -70,8 +70,6 @@
 #include "HttpHeader.h"
 #include "HttpHeaderTools.h"
 
-#define assert_eid(id) assert((id) < HDR_ENUM_END)
-
 /*
  * HttpHeaderEntry
  */

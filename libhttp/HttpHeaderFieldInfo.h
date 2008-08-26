@@ -10,4 +10,7 @@ struct _HttpHeaderFieldInfo {
 };
 typedef struct _HttpHeaderFieldInfo HttpHeaderFieldInfo;
 
+extern HttpHeaderFieldInfo * httpHeaderBuildFieldsInfo(const HttpHeaderFieldAttrs * attrs, int count);
+extern void httpHeaderDestroyFieldsInfo(HttpHeaderFieldInfo * table, int count);
+
 #endif
