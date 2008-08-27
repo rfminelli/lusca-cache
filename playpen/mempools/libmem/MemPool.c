@@ -21,10 +21,6 @@
 
 extern time_t squid_curtime;
 
-/* exported */
-unsigned int mem_pool_alloc_calls = 0;
-unsigned int mem_pool_free_calls = 0;
-
 /* module globals */
 
 /* huge constant to set mem_idle_limit to "unlimited" */
@@ -192,7 +188,7 @@ memPoolAlloc(MemPool * pool)
     gb_inc(&TheMeter.total, pool->obj_size);
     memMeterAdd(TheMeter.inuse, pool->obj_size);
     gb_inc(&mem_traffic_volume, pool->obj_size);
-    mem_pool_alloc_calls++;
+    MemPoolStats.alloc_calls++;
 
     memMeterInc(pool->meter.alloc);
     memMeterAdd(TheMeter.alloc, pool->obj_size);
@@ -220,7 +216,7 @@ memPoolFree(MemPool * pool, void *obj)
     assert(pool && obj);
     memMeterDec(pool->meter.inuse);
     memMeterDel(TheMeter.inuse, pool->obj_size);
-    mem_pool_free_calls++;
+    MemPoolStats.free_calls++;
     (void) VALGRIND_CHECK_MEM_IS_ADDRESSABLE(obj, pool->obj_size);
 #if DEBUG_MEMPOOL
     {
