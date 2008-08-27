@@ -79,12 +79,6 @@ memConfigure(int enable, size_t limit, int dozero)
 	new_pool_limit = MemPoolConfig.limit;
     else
 	new_pool_limit = mem_unlimited_size;
-    /* shrink memory pools if needed */
-    if (TheMeter.idle.level > new_pool_limit) {
-	debug(63, 1) ("Shrinking idle mem pools to %.2f MB\n", toMB(new_pool_limit));
-	memShrink(new_pool_limit);
-    }
-    assert(TheMeter.idle.level <= new_pool_limit);
     mem_idle_limit = new_pool_limit;
 }
 
@@ -123,22 +117,7 @@ memPoolClean(void)
 static void
 memShrink(size_t new_limit)
 {
-    size_t start_limit = TheMeter.idle.level;
-    int i;
-    debug(63, 1) ("memShrink: started with %ld KB goal: %ld KB\n",
-	(long int) toKB(TheMeter.idle.level), (long int) toKB(new_limit));
-    /* first phase: cut proportionally to the pool idle size */
-    for (i = 0; i < Pools.count && TheMeter.idle.level > new_limit; ++i) {
-	MemPool *pool = Pools.items[i];
-	const size_t target_pool_size = (size_t) ((double) pool->meter.idle.level * new_limit) / start_limit;
-	memPoolShrink(pool, target_pool_size);
-    }
-    debug(63, 1) ("memShrink: 1st phase done with %ld KB left\n", (long int) toKB(TheMeter.idle.level));
-    /* second phase: cut to 0 */
-    for (i = 0; i < Pools.count && TheMeter.idle.level > new_limit; ++i)
-	memPoolShrink(Pools.items[i], 0);
-    debug(63, 1) ("memShrink: 2nd phase done with %ld KB left\n", (long int) toKB(TheMeter.idle.level));
-    assert(TheMeter.idle.level <= new_limit);	/* paranoid */
+	/* NULL operation */
 }
 
 /* MemPoolMeter */
@@ -215,7 +194,6 @@ memPoolAlloc(MemPool * pool)
     gb_inc(&mem_traffic_volume, pool->obj_size);
     mem_pool_alloc_calls++;
 
-    assert(!pool->meter.idle.level);
     memMeterInc(pool->meter.alloc);
     memMeterAdd(TheMeter.alloc, pool->obj_size);
 #if DEBUG_MEMPOOL
@@ -264,7 +242,6 @@ memPoolFree(MemPool * pool, void *obj)
     memMeterDec(pool->meter.alloc);
     memMeterDel(TheMeter.alloc, pool->obj_size);
     xfree(obj);
-    assert(pool->meter.idle.level <= pool->meter.alloc.level);
 }
 
 static void

@@ -48,10 +48,10 @@ static const size_t mem_unlimited_size = 2 * 1024 * MB - 1;
 
 static void
 memPoolMeterReport(const MemPoolMeter * pm, size_t obj_size,
-    int alloc_count, int inuse_count, int idle_count, StoreEntry * e)
+    int alloc_count, int inuse_count, StoreEntry * e)
 {
     assert(pm);
-    storeAppendPrintf(e, "%d\t %ld\t %ld\t %.2f\t %d\t %d\t %ld\t %ld\t %d\t %d\t %ld\t %ld\t %ld\t %.2f\t %.2f\t %.2f\t %ld\n",
+    storeAppendPrintf(e, "%d\t %ld\t %ld\t %.2f\t %d\t %d\t %ld\t %ld\t %d\t %ld\n",
     /* alloc */
 	alloc_count,
 	(long int) toKB(obj_size * pm->alloc.level),
@@ -63,16 +63,7 @@ memPoolMeterReport(const MemPoolMeter * pm, size_t obj_size,
 	(long int) toKB(obj_size * pm->inuse.level),
 	(long int) toKB(obj_size * pm->inuse.hwater_level),
 	xpercentInt(pm->inuse.level, pm->alloc.level),
-    /* idle */
-	idle_count,
-	(long int) toKB(obj_size * pm->idle.level),
-	(long int) toKB(obj_size * pm->idle.hwater_level),
-    /* (int)rint(xpercent(pm->idle.level, pm->alloc.level)), */
-    /* saved */
-	(long int) pm->saved.count,
-	xpercent(pm->saved.count, mem_traffic_volume.count),
-	xpercent(obj_size * gb_to_double(&pm->saved), gb_to_double(&mem_traffic_volume)),
-	xpercent(pm->saved.count, pm->total.count),
+    /* total */
 	(long int) pm->total.count);
 }
 
@@ -93,8 +84,7 @@ memPoolDiffReport(const MemPool * pool, StoreEntry * e)
 	return;
     storeAppendPrintf(e, " \t \t ");
     memPoolMeterReport(&diff, pool->obj_size,
-	diff.alloc.level, pool->meter.inuse.level, pool->meter.idle.level,
-	e);
+	diff.alloc.level, pool->meter.inuse.level, e);
 }
 #endif
 
@@ -105,8 +95,7 @@ memPoolReport(MemPool * pool, StoreEntry * e, int diff)
     storeAppendPrintf(e, "%-20s\t %4d\t ",
 	pool->label, (int) pool->obj_size);
     memPoolMeterReport(&pool->meter, pool->obj_size,
-	pool->meter.alloc.level, pool->meter.inuse.level, pool->meter.idle.level,
-	e);
+	pool->meter.alloc.level, pool->meter.inuse.level, e);
 #if DEBUG_MEMPOOL
     if (diff)
 	memPoolDiffReport(pool, e);
@@ -121,7 +110,6 @@ memReport(StoreEntry * e)
     size_t overhd_size = 0;
     int alloc_count = 0;
     int inuse_count = 0;
-    int idle_count = 0;
     int i;
     int diff = 0;
 #if DEBUG_MEMPOOL
@@ -140,12 +128,10 @@ memReport(StoreEntry * e)
     storeAppendPrintf(e, "Current memory usage:\n");
     /* heading */
     storeAppendPrintf(e, "Pool\t Obj Size\t"
-	"Allocated\t\t\t\t\t In Use\t\t\t\t Idle\t\t\t Allocations Saved\t\t\t Hit Rate\t\n"
+	"Allocated\t\t\t\t\t In Use\t\t\t\t Hit Rate\t\n"
 	" \t (bytes)\t"
 	"(#)\t (KB)\t high (KB)\t high (hrs)\t impact (%%total)\t"
-	"(#)\t (KB)\t high (KB)\t portion (%%alloc)\t"
 	"(#)\t (KB)\t high (KB)\t"
-	"(number)\t (%%num)\t (%%vol)\t"
 	"(%%num)\t"
 	"(number)"
 	"\n");
@@ -156,15 +142,14 @@ memReport(StoreEntry * e)
 	    memPoolReport(pool, e, diff);
 	    alloc_count += pool->meter.alloc.level;
 	    inuse_count += pool->meter.inuse.level;
-	    idle_count += pool->meter.idle.level;
 	}
 	overhd_size += sizeof(MemPool) + sizeof(MemPool *) +
 	    strlen(pool->label) + 1;
     }
     overhd_size += sizeof(Pools) + Pools.capacity * sizeof(MemPool *);
     /* totals */
-    storeAppendPrintf(e, "%-20s\t %-4s\t ", "Total", "-");
-    memPoolMeterReport(&TheMeter, 1, alloc_count, inuse_count, idle_count, e);
+    storeAppendPrintf(e, "%-20s\t\t ", "Total", "-");
+    memPoolMeterReport(&TheMeter, 1, alloc_count, inuse_count, e);
     storeAppendPrintf(e, "Cumulative allocated volume: %s\n", gb_to_str(&mem_traffic_volume));
     /* overhead */
     storeAppendPrintf(e, "Current overhead: %ld bytes (%.3f%%)\n",
