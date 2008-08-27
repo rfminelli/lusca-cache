@@ -66,6 +66,8 @@ static struct {
 
 static dlink_list lru_list;
 
+static MemPool * pool_ipcache;
+
 static FREE ipcacheFreeEntry;
 #if USE_DNSSERVERS
 static HLPCB ipcacheHandleReply;
@@ -152,7 +154,7 @@ ipcache_purgelru(void *voidnotused)
     int removed = 0;
     eventAdd("ipcache_purgelru", ipcache_purgelru, NULL, 10.0, 1);
     for (m = lru_list.tail; m; m = prev) {
-	if (memInUse(MEM_IPCACHE_ENTRY) < ipcache_low)
+	if (memPoolInUseCount(pool_ipcache) < ipcache_low)
 	    break;
 	prev = m->prev;
 	i = m->data;
@@ -189,7 +191,7 @@ static ipcache_entry *
 ipcacheCreateEntry(const char *name)
 {
     static ipcache_entry *i;
-    i = memAllocate(MEM_IPCACHE_ENTRY);
+    i = memPoolAlloc(pool_ipcache);
     i->hash.key = xstrdup(name);
     i->expires = squid_curtime + Config.negativeDnsTtl;
     return i;
@@ -452,6 +454,7 @@ ipcache_nbgethostbyname(const char *name, IPH * handler, void *handlerData)
     i->handlerData = handlerData;
     cbdataLock(handlerData);
     i->request_time = current_time;
+    CBDATA_INIT_TYPE(generic_cbdata);
     c = cbdataAlloc(generic_cbdata);
     c->data = i;
 #if USE_DNSSERVERS
@@ -489,7 +492,7 @@ ipcache_init(void)
     cachemgrRegister("ipcache",
 	"IP Cache Stats and Contents",
 	stat_ipcache_get, 0, 1);
-    memDataInit(MEM_IPCACHE_ENTRY, "ipcache_entry", sizeof(ipcache_entry), 0);
+    pool_ipcache = memPoolCreate("ipcache_entry", sizeof(ipcache_entry));
 }
 
 const ipcache_addrs *
@@ -554,7 +557,7 @@ stat_ipcache_get(StoreEntry * sentry)
     assert(ip_table != NULL);
     storeAppendPrintf(sentry, "IP Cache Statistics:\n");
     storeAppendPrintf(sentry, "IPcache Entries:  %d\n",
-	memInUse(MEM_IPCACHE_ENTRY));
+	memPoolInUseCount(pool_ipcache));
     storeAppendPrintf(sentry, "IPcache Requests: %d\n",
 	IpcacheStats.requests);
     storeAppendPrintf(sentry, "IPcache Hits:             %d\n",
@@ -735,7 +738,7 @@ ipcacheFreeEntry(void *data)
     safe_free(i->addrs.bad_mask);
     safe_free(i->hash.key);
     safe_free(i->error_message);
-    memFree(i, MEM_IPCACHE_ENTRY);
+    memPoolFree(pool_ipcache, i);
 }
 
 void
@@ -815,7 +818,7 @@ snmp_netIpFn(variable_list * Var, snint * ErrP)
     switch (Var->name[LEN_SQ_NET + 1]) {
     case IP_ENT:
 	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    memInUse(MEM_IPCACHE_ENTRY),
+	    memPoolInUseCount(pool_ipcache),
 	    SMI_GAUGE32);
 	break;
     case IP_REQ:

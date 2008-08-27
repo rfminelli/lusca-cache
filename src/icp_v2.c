@@ -225,7 +225,7 @@ icpHandleIcpV2(int fd, struct sockaddr_in from, char *buf, int len)
 	}
 	memset(&checklist, '\0', sizeof(checklist));
 	checklist.src_addr = from.sin_addr;
-	checklist.my_addr = no_addr;
+	SetNoAddr(&checklist.my_addr);
 	checklist.request = icp_request;
 	allow = aclCheckFast(Config.accessList.icp, &checklist);
 	if (!allow) {
@@ -348,7 +348,7 @@ icpHandleUdp(int sock, void *data)
     while (max--) {
 	from_len = sizeof(from);
 	memset(&from, '\0', from_len);
-	statCounter.syscalls.sock.recvfroms++;
+	CommStats.syscalls.sock.recvfroms++;
 	len = recvfrom(sock,
 	    buf,
 	    SQUID_UDP_SO_RCVBUF - 1,
@@ -415,6 +415,7 @@ icpConnectionsOpen(void)
 	Config.Addrs.udp_incoming,
 	port,
 	COMM_NONBLOCKING,
+	COMM_TOS_DEFAULT,
 	"ICP Socket");
     leave_suid();
     if (theInIcpConnection < 0)
@@ -429,13 +430,15 @@ icpConnectionsOpen(void)
     debug(12, 1) ("Accepting ICP messages at %s, port %d, FD %d.\n",
 	inet_ntoa(Config.Addrs.udp_incoming),
 	(int) port, theInIcpConnection);
-    if ((addr = Config.Addrs.udp_outgoing).s_addr != no_addr.s_addr) {
+    addr = Config.Addrs.udp_outgoing;
+    if (! IsNoAddr(&addr)) {
 	enter_suid();
 	theOutIcpConnection = comm_open(SOCK_DGRAM,
 	    IPPROTO_UDP,
 	    addr,
 	    port,
 	    COMM_NONBLOCKING,
+	    COMM_TOS_DEFAULT,
 	    "ICP Port");
 	leave_suid();
 	if (theOutIcpConnection < 0)
