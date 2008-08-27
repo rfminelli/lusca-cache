@@ -159,8 +159,7 @@ memReport(StoreEntry * e)
 	    idle_count += pool->meter.idle.level;
 	}
 	overhd_size += sizeof(MemPool) + sizeof(MemPool *) +
-	    strlen(pool->label) + 1 +
-	    pool->pstack.capacity * sizeof(void *);
+	    strlen(pool->label) + 1;
     }
     overhd_size += sizeof(Pools) + Pools.capacity * sizeof(MemPool *);
     /* totals */
