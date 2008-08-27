@@ -1,5 +1,14 @@
 ChangeLog:
 
+-- (27-August-2008)
+
+* Integrate /playpen/http_work into Squid - HTTP parser related code modularity/reorganisation into libhttp/
+* Tag CACHEBOY_1.5.PRE2.
+
+-- (23-August-2008)
+
+* Tag CACHEBOY_1.5.PRE1.
+
 -- (22-August-2008)
 
 * Integrate IPv6 core into Squid
