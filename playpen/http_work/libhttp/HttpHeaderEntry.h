@@ -18,4 +18,10 @@ extern HttpHeaderEntry * httpHeaderEntryCreate2(http_hdr_type id, String name, S
 extern void httpHeaderEntryDestroy(HttpHeaderEntry * e);
 extern HttpHeaderEntry * httpHeaderEntryClone(const HttpHeaderEntry * e);
 
+/* new low-level routines */
+extern void httpHeaderEntryInitStr(HttpHeaderEntry *e, http_hdr_type id, const char *name, const char *value);
+extern void httpHeaderEntryInitString(HttpHeaderEntry *e, http_hdr_type id, String name, String value);
+extern void httpHeaderEntryDone(HttpHeaderEntry *e);
+extern void httpHeaderEntryCopy(HttpHeaderEntry *dst, HttpHeaderEntry *src);
+
 #endif

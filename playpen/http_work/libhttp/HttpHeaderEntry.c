@@ -74,6 +74,67 @@
  * HttpHeaderEntry
  */
 
+/* XXX new functions */
+void
+httpHeaderEntryInitString(HttpHeaderEntry *e, http_hdr_type id, String name, String value)
+{
+	assert(e->active == 0);
+
+	e->id = id;
+	if (id != HDR_OTHER)
+		e->name = Headers[id].name;
+	else
+		e->name = stringDup(&name);
+	e->value = stringDup(&value);
+	Headers[id].stat.aliveCount++;
+	e->active = 1;
+
+	debug(55, 9) ("httpHeaderEntryInitString: entry %p: '%s: %s'\n", e,
+	    strBuf(e->name), strBuf(e->value));
+}
+
+void
+httpHeaderEntryInitStr(HttpHeaderEntry *e, http_hdr_type id, const char *name, const char *value)
+{
+	assert(e->active == 0);
+
+	e->id = id;
+	if (id != HDR_OTHER)
+		e->name = Headers[id].name;
+	else
+		stringInit(&e->name, name);
+	stringInit(&e->value, value);
+	Headers[id].stat.aliveCount++;
+	e->active = 1;
+
+	debug(55, 9) ("httpHeaderEntryInitString: entry %p: '%s: %s'\n", e,
+	    strBuf(e->name), strBuf(e->value));
+}
+
+void
+httpHeaderEntryDone(HttpHeaderEntry *e)
+{
+	assert(e);
+	assert_eid(e->id);
+	debug(55, 9) ("httpHeaderEntryDone: entry %p: '%s: %s'\n", e, strBuf(e->name), strBuf(e->value));
+	/* clean name if needed */
+	if (e->id == HDR_OTHER)
+		stringClean(&e->name);
+	stringClean(&e->value);
+	assert(Headers[e->id].stat.aliveCount);
+	Headers[e->id].stat.aliveCount--;
+	e->id = -1;
+	e->active = 0;
+}
+
+void
+httpHeaderEntryCopy(HttpHeaderEntry *dst, HttpHeaderEntry *src)
+{
+	httpHeaderEntryInitString(dst, src->id, src->name, src->value);
+}
+
+/* XXX old functions */
+
 HttpHeaderEntry *
 httpHeaderEntryCreate(http_hdr_type id, const char *name, const char *value)
 {
