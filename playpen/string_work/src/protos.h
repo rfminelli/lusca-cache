@@ -300,6 +300,7 @@ extern void httpHeaderPutSize(HttpHeader * hdr, http_hdr_type type, squid_off_t 
 extern void httpHeaderPutTime(HttpHeader * hdr, http_hdr_type type, time_t htime);
 extern void httpHeaderInsertTime(HttpHeader * hdr, int pos, http_hdr_type type, time_t htime);
 extern void httpHeaderPutStr(HttpHeader * hdr, http_hdr_type type, const char *str);
+extern void httpHeaderPutString(HttpHeader * hdr, http_hdr_type type, String str);
 extern void httpHeaderPutAuth(HttpHeader * hdr, const char *auth_scheme, const char *realm);
 extern void httpHeaderPutCc(HttpHeader * hdr, const HttpHdrCc * cc);
 extern void httpHeaderPutContRange(HttpHeader * hdr, const HttpHdrContRange * cr);

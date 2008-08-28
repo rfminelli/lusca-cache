@@ -18,6 +18,7 @@ typedef struct _String String;
 #define stringLen(s)     ((/* const */ int)(s)->len)
 #define stringBuf(s)     ((const char*)(s)->buf)
 
+#define	strIsNotNull(s)		((s)->buf != NULL)
 #define strChr(s,ch)  ((const char*)strchr(strBuf(s), (ch)))
 #define strRChr(s,ch) ((const char*)strrchr(strBuf(s), (ch)))
 #define strStr(s,str) ((const char*)strstr(strBuf(s), (str)))  

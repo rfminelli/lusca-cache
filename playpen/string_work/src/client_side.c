@@ -1921,7 +1921,7 @@ clientBuildReplyHeader(clientHttpRequest * http, HttpReply * rep)
 	    http->entry->mem_obj->reply->sline.version.minor, ThisCache);
 	strListAdd(&strVia, bbuf, ',');
 	httpHeaderDelById(hdr, HDR_VIA);
-	httpHeaderPutStr(hdr, HDR_VIA, strBuf(strVia));
+	httpHeaderPutString(hdr, HDR_VIA, strVia);
 	stringClean(&strVia);
     }
     /* Signal keep-alive if needed */

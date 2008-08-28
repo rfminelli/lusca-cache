@@ -387,6 +387,15 @@ httpHeaderPutStr(HttpHeader * hdr, http_hdr_type id, const char *str)
 }
 
 void
+httpHeaderPutString(HttpHeader * hdr, http_hdr_type id, String str)
+{
+    assert_eid(id);
+    assert(Headers[id].type == ftStr);	/* must be of an appropriate type */
+    assert(strIsNotNull(&str));
+    httpHeaderAddEntryString(hdr, id, StringNull, str);
+}
+
+void
 httpHeaderPutAuth(HttpHeader * hdr, const char *auth_scheme, const char *realm)
 {
     assert(hdr && auth_scheme && realm);
