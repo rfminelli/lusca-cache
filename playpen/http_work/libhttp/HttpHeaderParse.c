@@ -157,7 +157,6 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 
         if (e->id == HDR_CONTENT_LENGTH) {
             squid_off_t l1;
-            HttpHeaderEntry *e2;
             if (!httpHeaderParseSize(strBuf(e->value), &l1)) {
                 debug(55, 1) ("WARNING: Unparseable content-length '%s'\n", strBuf(e->value));
                 return httpHeaderReset(hdr);
@@ -207,7 +206,6 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
     }
 
     /* now we know we can parse it */
-    debug(55, 9) ("creating entry %p: near '%s'\n", e, getStringPrefix(field_start, field_end));
     /* is it a "known" field? */
     id = httpHeaderIdByName(field_start, name_len, Headers, HDR_ENUM_END);
     if (id < 0)
@@ -220,13 +218,13 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
 	field_end--;
     if (field_end - value_start > 65534) {
 	/* String must be LESS THAN 64K and it adds a terminating NULL */
-	debug(55, 1) ("WARNING: ignoring '%s' header of %d bytes\n",
-	    strBuf(e->name), (int) (field_end - value_start));
+	debug(55, 1) ("WARNING: ignoring '%.*s' header of %d bytes\n", name_len, field_start, field_end - value_start);
 	return NULL;
     }
 
     /* Add the parsed details to the HttpHeader */
     e = httpHeaderAddEntryStr2(hdr, id, field_start, name_len, value_start, field_end - value_start);
+    debug(55, 9) ("creating entry %p: near '%s'\n", e, getStringPrefix(field_start, field_end));
 
     Headers[id].stat.seenCount++;
     Headers[id].stat.aliveCount++;
