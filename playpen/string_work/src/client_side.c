@@ -2485,7 +2485,7 @@ clientProcessHit(clientHttpRequest * http)
 static void
 clientPackTermBound(String boundary, MemBuf * mb)
 {
-    memBufPrintf(mb, "\r\n--%s--\r\n", strBuf(boundary));
+    memBufPrintf(mb, "\r\n--%.*s--\r\n", stringLen(&boundary), stringBuf(&boundary));
     debug(33, 6) ("clientPackTermBound: buf offset: %ld\n", (long int) mb->size);
 }
 
@@ -2501,7 +2501,7 @@ clientPackRangeHdr(const HttpReply * rep, const HttpHdrRangeSpec * spec, String 
     /* put boundary */
     debug(33, 5) ("clientPackRangeHdr: appending boundary: %.*s\n", stringLen(&boundary), stringBuf(&boundary));
     /* rfc2046 requires to _prepend_ boundary with <crlf>! */
-    memBufPrintf(mb, "\r\n--%s\r\n", strBuf(boundary));
+    memBufPrintf(mb, "\r\n--%.*s\r\n", stringLen(&boundary), stringBuf(&boundary));
 
     /* stuff the header with required entries and pack it */
     httpHeaderInit(&hdr, hoReply);

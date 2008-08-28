@@ -67,7 +67,8 @@ whoisStart(FwdState * fwd)
     comm_add_close_handler(fd, whoisClose, p);
     l = strLen(p->request->urlpath) + 3;
     buf = xmalloc(l);
-    snprintf(buf, l, "%s\r\n", strBuf(p->request->urlpath) + 1);
+    /* XXX this is naughty and should use a substr! [ahc] */
+    snprintf(buf, l, "%.*s\r\n", stringLen(&p->request->urlpath) - 1, stringBuf(&p->request->urlpath) + 1);
     comm_write(fd, buf, strlen(buf), NULL, p, xfree);
     commSetSelect(fd, COMM_SELECT_READ, whoisReadReply, p, 0);
     commSetTimeout(fd, Config.Timeout.read, whoisTimeout, p);

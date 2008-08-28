@@ -433,7 +433,7 @@ urlCanonical(request_t * request)
     if (request->canonical)
 	return request->canonical;
     if (request->protocol == PROTO_URN) {
-	snprintf(urlbuf, MAX_URL, "urn:%s", strBuf(request->urlpath));
+	snprintf(urlbuf, MAX_URL, "urn:%.*s", stringLen(&request->urlpath), stringBuf(&request->urlpath));
     } else {
 	switch (request->method) {
 	case METHOD_CONNECT:
@@ -473,7 +473,7 @@ urlCanonicalClean(const request_t * request)
     static const char ts[] = "://";
 
     if (request->protocol == PROTO_URN) {
-	snprintf(buf, MAX_URL, "urn:%s", strBuf(request->urlpath));
+	snprintf(buf, MAX_URL, "urn:%.*s", stringLen(&request->urlpath), stringBuf(&request->urlpath));
     } else {
 	switch (request->method) {
 	case METHOD_CONNECT:

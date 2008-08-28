@@ -125,7 +125,7 @@ urnStart(request_t * r, StoreEntry * e)
     } else {
 	host = xstrdup(strBuf(r->urlpath));
     }
-    snprintf(urlres, 4096, "http://%s/uri-res/N2L?urn:%s", host, strBuf(r->urlpath));
+    snprintf(urlres, 4096, "http://%s/uri-res/N2L?urn:%.*s", host, stringLen(&r->urlpath), stringBuf(&r->urlpath));
     safe_free(host);
     urlres_r = urlParse(METHOD_GET, urlres);
     if (urlres_r == NULL) {
