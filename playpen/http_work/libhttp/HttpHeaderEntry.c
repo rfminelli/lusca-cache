@@ -94,7 +94,7 @@ httpHeaderEntryInitString(HttpHeaderEntry *e, http_hdr_type id, String name, Str
 }
 
 void
-httpHeaderEntryInitStr(HttpHeaderEntry *e, http_hdr_type id, const char *name, const char *value)
+httpHeaderEntryInitStr(HttpHeaderEntry *e, http_hdr_type id, const char *name, int name_len, const char *value, int value_len)
 {
 	assert(e->active == 0);
 
@@ -102,8 +102,8 @@ httpHeaderEntryInitStr(HttpHeaderEntry *e, http_hdr_type id, const char *name, c
 	if (id != HDR_OTHER)
 		e->name = Headers[id].name;
 	else
-		stringInit(&e->name, name);
-	stringInit(&e->value, value);
+		stringLimitInit(&e->name, name, name_len);
+	stringLimitInit(&e->value, value, value_len);
 	Headers[id].stat.aliveCount++;
 	e->active = 1;
 
