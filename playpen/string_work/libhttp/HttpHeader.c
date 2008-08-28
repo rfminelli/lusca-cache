@@ -287,6 +287,12 @@ httpHeaderAddEntryStr(HttpHeader *hdr, http_hdr_type id, const char *attrib, con
 	httpHeaderAddEntry(hdr, httpHeaderEntryCreate(id, attrib, value));
 }
 
+void
+httpHeaderAddEntryString(HttpHeader *hdr, http_hdr_type id, String attrib, String value)
+{
+	httpHeaderAddEntry(hdr, httpHeaderEntryCreate2(id, attrib, value));
+}
+
 /*!
  * @function
  *	httpHeaderInsertEntryStr
