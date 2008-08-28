@@ -139,8 +139,11 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 	    }
 	    break;		/* terminating blank line */
 	}
+
+	/* httpHeaderEntryParseCreate() now appends the entry for us */
+	/* "e" is now just a reference so this code can verify the usefulness of the entry */
 	e = httpHeaderEntryParseCreate(hdr, field_start, field_end);
-	if (NULL == e) {
+	if (e == NULL) {
 	    debug(55, 1) ("WARNING: unparseable HTTP header field {%s}\n",
 		getStringPrefix(field_start, field_end));
 	    debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
@@ -150,54 +153,20 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 	    else
 		return httpHeaderReset(hdr);
 	}
-	if (e->id == HDR_CONTENT_LENGTH) {
-	    squid_off_t l1;
-	    HttpHeaderEntry *e2;
-	    if (!httpHeaderParseSize(strBuf(e->value), &l1)) {
-		debug(55, 1) ("WARNING: Unparseable content-length '%s'\n", strBuf(e->value));
-		httpHeaderEntryDestroy(e);
-		return httpHeaderReset(hdr);
-	    }
-	    e2 = httpHeaderFindEntry(hdr, e->id);
-	    if (e2 && strCmp(e->value, strBuf(e2->value)) != 0) {
-		squid_off_t l2;
-		debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2) ("WARNING: found two conflicting content-length headers in {%s}\n", getStringPrefix(header_start, header_end));
-		if (!httpConfig_relaxed_parser) {
-		    httpHeaderEntryDestroy(e);
-		    return httpHeaderReset(hdr);
-		}
-		if (!httpHeaderParseSize(strBuf(e2->value), &l2)) {
-		    debug(55, 1) ("WARNING: Unparseable content-length '%s'\n", strBuf(e->value));
-		    httpHeaderEntryDestroy(e);
-		    return httpHeaderReset(hdr);
-		}
-		if (l1 > l2) {
-		    httpHeaderDelById(hdr, e2->id);
-		} else {
-		    httpHeaderEntryDestroy(e);
-		    continue;
-		}
-	    } else if (e2) {
-		debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
-		    ("NOTICE: found double content-length header\n");
-		if (httpConfig_relaxed_parser) {
-		    httpHeaderEntryDestroy(e);
-		    continue;
-		} else {
-		    httpHeaderEntryDestroy(e);
-		    return httpHeaderReset(hdr);
-		}
-	    }
-	}
-	if (e->id == HDR_OTHER && stringHasWhitespace(strBuf(e->name))) {
-	    debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
-		("WARNING: found whitespace in HTTP header name {%s}\n", getStringPrefix(field_start, field_end));
-	    if (!httpConfig_relaxed_parser) {
-		httpHeaderEntryDestroy(e);
-		return httpHeaderReset(hdr);
-	    }
-	}
-	httpHeaderAddEntry(hdr, e);
+
+        if (e->id == HDR_CONTENT_LENGTH) {
+            squid_off_t l1;
+            HttpHeaderEntry *e2;
+            if (!httpHeaderParseSize(strBuf(e->value), &l1)) {
+                debug(55, 1) ("WARNING: Unparseable content-length '%s'\n", strBuf(e->value));
+                httpHeaderEntryDestroy(e);
+                return httpHeaderReset(hdr);
+            }
+        }
+
+	/* XXX check for duplicate content-length */
+	/* XXX check for whitespace in HDR_OTHER field name */
+
     }
     return 1;			/* even if no fields where found, it is a valid header */
 }
@@ -270,6 +239,7 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
     Headers[id].stat.seenCount++;
     Headers[id].stat.aliveCount++;
     debug(55, 9) ("created entry %p: '%s: %s'\n", e, strBuf(e->name), strBuf(e->value));
+    httpHeaderAddEntry(hdr, e);
     return e;
 }
 
