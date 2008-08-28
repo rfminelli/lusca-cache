@@ -119,12 +119,12 @@ httpHdrCcParseInit(HttpHdrCc * cc, const String * str)
 	type = httpHeaderIdByName(item, nlen,
 	    CcFieldsInfo, CC_ENUM_END);
 	if (type < 0) {
-	    debug(65, 2) ("hdr cc: unknown cache-directive: near '%s' in '%s'\n", item, strBuf(*str));
+	    debug(65, 2) ("hdr cc: unknown cache-directive: near '%s' in '%.*s'\n", item, stringLen(str), stringBuf(str));
 	    type = CC_OTHER;
 	}
 	if (EBIT_TEST(cc->mask, type)) {
 	    if (type != CC_OTHER)
-		debug(65, 2) ("hdr cc: ignoring duplicate cache-directive: near '%s' in '%s'\n", item, strBuf(*str));
+		debug(65, 2) ("hdr cc: ignoring duplicate cache-directive: near '%s' in '%.*s'\n", item, stringLen(str), stringBuf(str));
 	    CcFieldsInfo[type].stat.repCount++;
 	    continue;
 	}

@@ -1105,7 +1105,7 @@ snmpDebugOid(int lvl, oid * Name, snint Len)
 	strCat(objid, mbuf);
     }
 
-    debug(49, lvl) ("   oid = %s\n", strBuf(objid));
+    debug(49, lvl) ("   oid = %.*s\n", stringLen(&objid), stringBuf(&objid));
     stringClean(&objid);
 }
 

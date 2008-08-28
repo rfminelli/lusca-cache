@@ -2499,7 +2499,7 @@ clientPackRangeHdr(const HttpReply * rep, const HttpHdrRangeSpec * spec, String 
     assert(spec);
 
     /* put boundary */
-    debug(33, 5) ("clientPackRangeHdr: appending boundary: %s\n", strBuf(boundary));
+    debug(33, 5) ("clientPackRangeHdr: appending boundary: %.*s\n", stringLen(&boundary), stringBuf(&boundary));
     /* rfc2046 requires to _prepend_ boundary with <crlf>! */
     memBufPrintf(mb, "\r\n--%s\r\n", strBuf(boundary));
 

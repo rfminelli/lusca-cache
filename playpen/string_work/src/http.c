@@ -405,7 +405,7 @@ httpMakeVaryMark(request_t * request, HttpReply * reply)
 	request->vary_hdr = xstrdup(strBuf(vary));
 	request->vary_headers = xstrdup(strBuf(vstr));
     }
-    debug(11, 3) ("httpMakeVaryMark: %s\n", strBuf(vstr));
+    debug(11, 3) ("httpMakeVaryMark: %.*s\n", stringLen(&vstr), stringBuf(&vstr));
     stringClean(&vary);
     stringClean(&vstr);
     return request->vary_headers;
@@ -511,7 +511,7 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	    }
 	    if (item) {
 		/* Can't handle other transfer-encodings */
-		debug(11, 1) ("Unexpected transfer encoding '%s'\n", strBuf(tr));
+		debug(11, 1) ("Unexpected transfer encoding '%.*s'\n", stringLen(&tr), stringBuf(&tr));
 		reply->sline.status = HTTP_INVALID_HEADER;
 		return done;
 	    }
@@ -684,7 +684,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 		    char *end = NULL;
 		    int badchunk = 0;
 		    int emptychunk = 0;
-		    debug(11, 3) ("Chunk header '%s'\n", strBuf(httpState->chunkhdr));
+		    debug(11, 3) ("Chunk header '%.*s'\n", stringLen(&httpState->chunkhdr), stringBuf(&httpState->chunkhdr));
 		    errno = 0;
 		    httpState->chunk_size = strto_off_t(strBuf(httpState->chunkhdr), &end, 16);
 		    if (errno)
@@ -694,7 +694,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 		    while (end && (*end == '\r' || *end == ' ' || *end == '\t'))
 			end++;
 		    if (httpState->chunk_size < 0 || badchunk || !end || (*end != '\n' && *end != ';')) {
-			debug(11, 1) ("Invalid chunk header '%s'\n", strBuf(httpState->chunkhdr));
+			debug(11, 1) ("Invalid chunk header '%.*s'\n", stringLen(&httpState->chunkhdr), stringBuf(&httpState->chunkhdr));
 			fwdFail(httpState->fwd, errorCon(ERR_INVALID_RESP, HTTP_BAD_GATEWAY, httpState->fwd->request));
 			comm_close(fd);
 			return;

@@ -154,7 +154,8 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 	    squid_off_t l1;
 	    HttpHeaderEntry *e2;
 	    if (!httpHeaderParseSize(strBuf(e->value), &l1)) {
-		debug(55, 1) ("WARNING: Unparseable content-length '%s'\n", strBuf(e->value));
+		debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n",
+                  stringLen(&e->value), stringBuf(&e->value));
 		httpHeaderEntryDestroy(e);
 		return httpHeaderReset(hdr);
 	    }
@@ -167,7 +168,8 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 		    return httpHeaderReset(hdr);
 		}
 		if (!httpHeaderParseSize(strBuf(e2->value), &l2)) {
-		    debug(55, 1) ("WARNING: Unparseable content-length '%s'\n", strBuf(e->value));
+		    debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n",
+                      stringLen(&e->value), stringBuf(&e->value));
 		    httpHeaderEntryDestroy(e);
 		    return httpHeaderReset(hdr);
 		}
@@ -268,7 +270,9 @@ httpHeaderEntryParseCreate(const char *field_start, const char *field_end)
     stringLimitInit(&e->value, value_start, field_end - value_start);
     Headers[id].stat.seenCount++;
     Headers[id].stat.aliveCount++;
-    debug(55, 9) ("created entry %p: '%s: %s'\n", e, strBuf(e->name), strBuf(e->value));
+    debug(55, 9) ("created entry %p: '%.*s: %.*s'\n", e,
+                  stringLen(&e->name), stringBuf(&e->name),
+                  stringLen(&e->value), stringBuf(&e->value));
     return e;
 }
 
