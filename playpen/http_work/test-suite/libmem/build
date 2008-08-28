@@ -1,0 +1,11 @@
+#!/bin/sh
+
+CFLAGS="-g -Wall -Werror -I../.."
+LDFLAGS="-L../../libhttp -L../../libcore -L../../libmem -L../../libsqinet -L../../lib -L../../libstat -L../../libiapp"
+LIBS="-lmem -lcore -lstat -lmiscutil -lm"
+
+rm test_vector_1
+
+gcc ${CFLAGS} test_vector_1.c -o test_vector_1 ${LDFLAGS} ${LIBS}
+
+./test_vector_1

@@ -8,6 +8,7 @@ libmem_a_SOURCES = \
 	wordlist.c \
 	intlist.c \
 	MemBufs.c \
+	Vector.c \
 	MemBuf.c
 
 libmem_a_LIBADD = \
@@ -18,6 +19,7 @@ libmem_a_LIBADD = \
 	wordlist.o \
 	intlist.o \
 	MemBufs.o \
+	Vector.o \
 	MemBuf.o
 
 noinst_LIBRARIES = \
