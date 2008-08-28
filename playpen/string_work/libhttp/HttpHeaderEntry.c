@@ -103,8 +103,8 @@ httpHeaderEntryCreate2(http_hdr_type id, String name, String value)
     if (id != HDR_OTHER)
         e->name = Headers[id].name;
     else
-        stringLimitInit(&e->name, strBuf(name), strLen(name));
-    stringLimitInit(&e->value, strBuf(value), strLen(value));
+        e->name = stringDup(&name);
+    e->value = stringDup(&value);
     Headers[id].stat.aliveCount++;
     debug(55, 9) ("created entry %p: '%.*s: %.*s'\n", e,
       stringLen(&e->name), stringBuf(&e->name),

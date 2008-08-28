@@ -235,9 +235,7 @@ httpHeaderGetStrOrList(const HttpHeader * hdr, http_hdr_type id)
     if (CBIT_TEST(ListHeadersMask, id))
 	return httpHeaderGetList(hdr, id);
     if ((e = httpHeaderFindEntry(hdr, id))) {
-	String s;
-	stringLimitInit(&s, strBuf(e->value), strLen(e->value));
-	return s;
+        return stringDup(&e->value);
     }
     return StringNull;
 }
