@@ -50,7 +50,7 @@ vector_done(vector_t *v)
 
 
 void *
-vector_get(vector_t *v, int offset)
+vector_get(const vector_t *v, int offset)
 {
 	if (offset > v->used_count)
 		return NULL;

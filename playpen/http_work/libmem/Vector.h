@@ -11,7 +11,7 @@ typedef struct _vector_t vector_t;
 
 void vector_init(vector_t *v, int obj_size, int obj_count);
 void vector_done(vector_t *v);
-void * vector_get(vector_t *v, int offset);
+void * vector_get(const vector_t *v, int offset);
 void * vector_append(vector_t *v);
 void * vector_insert(vector_t *v, int position);
 
