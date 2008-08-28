@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 
 #include "../include/config.h"
 #include "../include/util.h"
@@ -73,3 +74,23 @@ vector_append(vector_t *v)
 	return ((char *) v->data + (v->obj_size * offset));
 }
 
+void *
+vector_insert(vector_t *v, int offset)
+{
+	void *t;
+	int position = offset;
+
+	if (position >= v->alloc_count)
+		(void) vector_grow(v, v->alloc_count + 1);
+
+	/* If we're asked to insert past the end of the list, just turn this into an effective append */
+	if (position > v->used_count)
+		position = v->used_count;
+
+	/* Relocate the rest */
+	if (position < v->alloc_count)
+		memmove((char *) v->data + (position + 1) * v->obj_size,
+		    (char *) v->data + position * v->obj_size, (v->used_count - position) * v->obj_size);
+	v->used_count++;
+	return ((char *) v->data + (v->obj_size * position));
+}
