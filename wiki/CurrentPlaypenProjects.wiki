@@ -14,4 +14,16 @@ Here's a link to current and past "playpen" projects where various bits of exper
 
   * Link: http://code.google.com/p/cacheboy/source/list?path=/playpen/http_work
   * Overview: reorganise the HTTP parser related code into libhttp/ in preparation for a partial rewrite
+  * Status: Complete; merged (link?)
+
+== mempools ==
+
+  * Link: http://code.google.com/p/cacheboy/source/list?path=/playpen/mempools
+  * Overview: remove the caching part of mempools, turning it into just an allocator wrapper w/ statistics
   * Status: Complete; not merged
+
+== string_work ==
+
+  * Link: http://code.google.com/p/cacheboy/source/list?path=/playpen/string_work
+  * Overview: tidy up the use of String in Squid in preparation for a more sensible string library
+  * Status: In progress
