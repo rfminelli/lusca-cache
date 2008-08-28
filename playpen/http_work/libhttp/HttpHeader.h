@@ -13,7 +13,7 @@ typedef int HttpHeaderPos;
 
 struct _HttpHeader {
     /* protected, do not use these, use interface functions instead */
-    Array entries;              /* parsed entries in raw format */
+    vector_t entries;
     HttpHeaderMask mask;        /* bit set <=> entry present */
     http_hdr_owner_type owner;  /* request or reply */
     int len;                    /* length when packed, not counting terminating '\0' */
@@ -36,15 +36,13 @@ extern void httpHeaderInit(HttpHeader * hdr, http_hdr_owner_type owner);
 extern void httpHeaderClean(HttpHeader * hdr);
 extern int httpHeaderReset(HttpHeader * hdr);
 extern void httpHeaderAddClone(HttpHeader * hdr, const HttpHeaderEntry * e);
-extern void httpHeaderAddEntry(HttpHeader * hdr, HttpHeaderEntry * e);
-extern void httpHeaderInsertEntry(HttpHeader * hdr, HttpHeaderEntry * e, int pos);
 extern void httpHeaderAppend(HttpHeader * dest, const HttpHeader * src);
 extern HttpHeaderEntry *httpHeaderGetEntry(const HttpHeader * hdr, HttpHeaderPos * pos);
 extern HttpHeaderEntry *httpHeaderFindEntry(const HttpHeader * hdr, http_hdr_type id);
 extern HttpHeaderEntry *httpHeaderFindLastEntry(const HttpHeader * hdr, http_hdr_type id);
 
 extern void httpHeaderAddEntryStr(HttpHeader *hdr, http_hdr_type id, const char *attrib, const char *value);
-extern void httpHeaderAddEntryStr2(HttpHeader *hdr, http_hdr_type id, const char *attrib, int attrib_len, const char *value, int value_len);
+extern HttpHeaderEntry * httpHeaderAddEntryStr2(HttpHeader *hdr, http_hdr_type id, const char *attrib, int attrib_len, const char *value, int value_len);
 extern void httpHeaderAddEntryString(HttpHeader *hdr, http_hdr_type id, String name, String value);
 
 extern void httpHeaderInsertEntryStr(HttpHeader *hdr, int pos, http_hdr_type id, const char *attrib, const char *value);

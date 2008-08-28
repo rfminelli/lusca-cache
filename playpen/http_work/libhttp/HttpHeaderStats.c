@@ -58,6 +58,7 @@
 #include "../libmem/MemBufs.h"
 #include "../libmem/MemBuf.h"
 #include "../libmem/String.h"
+#include "../libmem/Vector.h"
 
 #include "../libstat/StatHist.h"
 

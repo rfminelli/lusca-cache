@@ -59,6 +59,7 @@
 #include "../libmem/MemBufs.h"
 #include "../libmem/MemBuf.h"
 #include "../libmem/String.h"
+#include "../libmem/Vector.h"
 
 #include "../libcb/cbdata.h"
 
@@ -159,7 +160,6 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
             HttpHeaderEntry *e2;
             if (!httpHeaderParseSize(strBuf(e->value), &l1)) {
                 debug(55, 1) ("WARNING: Unparseable content-length '%s'\n", strBuf(e->value));
-                httpHeaderEntryDestroy(e);
                 return httpHeaderReset(hdr);
             }
         }
@@ -207,19 +207,12 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
     }
 
     /* now we know we can parse it */
-    e = memPoolAlloc(pool_http_header_entry);
     debug(55, 9) ("creating entry %p: near '%s'\n", e, getStringPrefix(field_start, field_end));
     /* is it a "known" field? */
     id = httpHeaderIdByName(field_start, name_len, Headers, HDR_ENUM_END);
     if (id < 0)
 	id = HDR_OTHER;
-    assert_eid(id);
-    e->id = id;
-    /* set field name */
-    if (id == HDR_OTHER)
-	stringLimitInit(&e->name, field_start, name_len);
-    else
-	e->name = Headers[id].name;
+
     /* trim field value */
     while (value_start < field_end && xisspace(*value_start))
 	value_start++;
@@ -229,17 +222,15 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
 	/* String must be LESS THAN 64K and it adds a terminating NULL */
 	debug(55, 1) ("WARNING: ignoring '%s' header of %d bytes\n",
 	    strBuf(e->name), (int) (field_end - value_start));
-	if (e->id == HDR_OTHER)
-	    stringClean(&e->name);
-	memPoolFree(pool_http_header_entry, e);
 	return NULL;
     }
-    /* set field value */
-    stringLimitInit(&e->value, value_start, field_end - value_start);
+
+    /* Add the parsed details to the HttpHeader */
+    e = httpHeaderAddEntryStr2(hdr, id, field_start, name_len, value_start, field_end - value_start);
+
     Headers[id].stat.seenCount++;
     Headers[id].stat.aliveCount++;
     debug(55, 9) ("created entry %p: '%s: %s'\n", e, strBuf(e->name), strBuf(e->value));
-    httpHeaderAddEntry(hdr, e);
     return e;
 }
 

@@ -119,21 +119,31 @@ httpHeaderRepack(HttpHeader * hdr)
 {
     HttpHeaderPos dp = HttpHeaderInitPos;
     HttpHeaderPos pos = HttpHeaderInitPos;
+    HttpHeaderEntry *e, *e2;
 
     /* XXX breaks layering for now! ie, getting grubby fingers in without httpHeaderEntryGet() */
     dp = 0;
     pos = 0;
-    while (dp < hdr->entries.count) {
-	for (; dp < hdr->entries.count && hdr->entries.items[dp] == NULL; dp++);
-	if (dp >= hdr->entries.count)
+    while (dp < vector_numentries(&hdr->entries)) {
+	for (; dp < vector_numentries(&hdr->entries); dp++) {
+	    e = vector_get(&hdr->entries, dp);
+	    assert(e);
+            if (e->active)
+                break;
+	}
+	if (dp >= vector_numentries(&hdr->entries))
 	    break;
-	hdr->entries.items[pos] = hdr->entries.items[dp];
-	if (dp != pos)
-	    hdr->entries.items[dp] = NULL;
+        if (dp != pos) {
+	    e = vector_get(&hdr->entries, pos);
+	    e2 = vector_get(&hdr->entries, dp);
+	    *e = *e2;
+	    e2->active = 0;
+        }
 	pos++;
 	dp++;
     }
-    arrayShrink(&hdr->entries, pos);
+    /* XXX even worse! */
+    hdr->entries.used_count = pos;
 }
 
 /* use fresh entries to replace old ones */

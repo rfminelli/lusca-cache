@@ -58,6 +58,7 @@
 #include "../libmem/MemBufs.h"
 #include "../libmem/MemBuf.h"
 #include "../libmem/String.h"
+#include "../libmem/Vector.h"
 
 #include "../libcb/cbdata.h"
 
@@ -146,7 +147,7 @@ httpHeaderInit(HttpHeader * hdr, http_hdr_owner_type owner)
     debug(55, 7) ("init-ing hdr: %p owner: %d\n", hdr, owner);
     memset(hdr, 0, sizeof(*hdr));
     hdr->owner = owner;
-    arrayInit(&hdr->entries);
+    vector_init(&hdr->entries, sizeof(HttpHeaderEntry), 16);
 }
 
 /*!
@@ -188,10 +189,10 @@ httpHeaderClean(HttpHeader * hdr)
      * has been used.  As a hack, just never count zero-sized header
      * arrays.
      */
-    if (0 != hdr->entries.count)
-        statHistCount(&HttpHeaderStats[hdr->owner].hdrUCountDistr, hdr->entries.count);
+    if (vector_numentries(&hdr->entries))
+        statHistCount(&HttpHeaderStats[hdr->owner].hdrUCountDistr, vector_numentries(&hdr->entries));
     HttpHeaderStats[hdr->owner].destroyedCount++;
-    HttpHeaderStats[hdr->owner].busyDestroyedCount += hdr->entries.count > 0;
+    HttpHeaderStats[hdr->owner].busyDestroyedCount += vector_numentries(&hdr->entries) > 0;
     while ((e = httpHeaderGetEntry(hdr, &pos))) {
         /* tmp hack to try to avoid coredumps */
         if (e->id >= HDR_ENUM_END) {
@@ -200,10 +201,10 @@ httpHeaderClean(HttpHeader * hdr)
         } else {
             statHistCount(&HttpHeaderStats[hdr->owner].fieldTypeDistr, e->id);
             /* yes, this destroy() leaves us in an inconsistent state */
-            httpHeaderEntryDestroy(e);
+            httpHeaderEntryDone(e);
         }
     }
-    arrayClean(&hdr->entries);
+    vector_done(&hdr->entries);
 }
 
 /* just handy in parsing: resets and returns false */
@@ -240,22 +241,22 @@ httpHeaderReset(HttpHeader * hdr)
     return 0;
 }   
 
-/* appends an entry;
- * does not call httpHeaderEntryClone() so one should not reuse "*e"
+/* 
+ * Updates the header hdr with the length/mask info from HttpHeaderEntry e
+ * e isn't added to hdr->entries here; the caller must do it!
  */
-void
-httpHeaderAddEntry(HttpHeader * hdr, HttpHeaderEntry * e)
+static void
+httpHeaderUpdateEntryDetails(HttpHeader * hdr, HttpHeaderEntry * e)
 {
     assert(hdr && e);
     assert_eid(e->id);
 
     debug(55, 7) ("%p adding entry: %d at %d\n",
-        hdr, e->id, hdr->entries.count);
+        hdr, e->id, vector_numentries(&hdr->entries));
     if (CBIT_TEST(hdr->mask, e->id))
         Headers[e->id].stat.repCount++;
     else
         CBIT_SET(hdr->mask, e->id);
-    arrayAppend(&hdr->entries, e);
     /* increment header length, allow for ": " and crlf */
     hdr->len += strLen(e->name) + 2 + strLen(e->value) + 2;
 }
@@ -284,13 +285,41 @@ httpHeaderAddEntry(HttpHeader * hdr, HttpHeaderEntry * e)
 void
 httpHeaderAddEntryStr(HttpHeader *hdr, http_hdr_type id, const char *attrib, const char *value)
 {
-	httpHeaderAddEntry(hdr, httpHeaderEntryCreate(id, attrib, value));
+	HttpHeaderEntry *e;
+
+	e = vector_append(&hdr->entries);
+	assert(e);
+	e->active = 0;
+	
+	httpHeaderEntryInitStr(e, id, attrib, attrib ? strlen(attrib) : 0, value, value ? strlen(value) : 0);
+	httpHeaderUpdateEntryDetails(hdr, e);
+}
+
+HttpHeaderEntry *
+httpHeaderAddEntryStr2(HttpHeader *hdr, http_hdr_type id, const char *attrib, int attrib_len, const char *value, int value_len)
+{
+	HttpHeaderEntry *e;
+
+	e = vector_append(&hdr->entries);
+	assert(e);
+	e->active = 0;
+	
+	httpHeaderEntryInitStr(e, id, attrib, attrib_len, value, value_len);
+	httpHeaderUpdateEntryDetails(hdr, e);
+	return e;
 }
 
 void
 httpHeaderAddEntryString(HttpHeader *hdr, http_hdr_type id, String attrib, String value)
 {
-	httpHeaderAddEntry(hdr, httpHeaderEntryCreate2(id, attrib, value));
+	HttpHeaderEntry *e;
+
+	e = vector_append(&hdr->entries);
+	assert(e);
+	e->active = 0;
+	
+	httpHeaderEntryInitString(e, id, attrib, value);
+	httpHeaderUpdateEntryDetails(hdr, e);
 }
 
 /*!
@@ -318,38 +347,27 @@ httpHeaderAddEntryString(HttpHeader *hdr, http_hdr_type id, String attrib, Strin
 void
 httpHeaderInsertEntryStr(HttpHeader *hdr, int pos, http_hdr_type id, const char *attrib, const char *value)
 {
-	httpHeaderInsertEntry(hdr, httpHeaderEntryCreate(id, attrib, value), pos);
-}
+	HttpHeaderEntry *e;
 
-/* inserts an entry at the given position;
- * does not call httpHeaderEntryClone() so one should not reuse "*e"
- */
-void
-httpHeaderInsertEntry(HttpHeader * hdr, HttpHeaderEntry * e, int pos)
-{
-    assert(hdr && e);
-    assert_eid(e->id);
-
-    debug(55, 7) ("%p adding entry: %d at %d\n",
-        hdr, e->id, hdr->entries.count);
-    if (CBIT_TEST(hdr->mask, e->id))
-        Headers[e->id].stat.repCount++;
-    else
-        CBIT_SET(hdr->mask, e->id);
-    arrayInsert(&hdr->entries, e, pos);
-    /* increment header length, allow for ": " and crlf */
-    hdr->len += strLen(e->name) + 2 + strLen(e->value) + 2;
+	e = vector_insert(&hdr->entries, pos);
+	assert(e);
+	e->active = 0;
+	
+	httpHeaderEntryInitStr(e, id, attrib, attrib ? strlen(attrib) : 0, value, value ? strlen(value) : 0);
+	httpHeaderUpdateEntryDetails(hdr, e);
 }
 
 /* returns next valid entry */
 HttpHeaderEntry *
 httpHeaderGetEntry(const HttpHeader * hdr, HttpHeaderPos * pos)
 {
+    HttpHeaderEntry *e;
     assert(hdr && pos);
-    assert(*pos >= HttpHeaderInitPos && *pos < hdr->entries.count);
-    for ((*pos)++; *pos < hdr->entries.count; (*pos)++) {
-        if (hdr->entries.items[*pos])
-            return hdr->entries.items[*pos];
+    assert(*pos >= HttpHeaderInitPos && *pos < vector_numentries(&hdr->entries));
+    for ((*pos)++; *pos < vector_numentries(&hdr->entries); (*pos)++) {
+        e = vector_get(&hdr->entries, *pos);
+	if (e->active)
+            return e;
     }
     return NULL;
 }
@@ -357,7 +375,7 @@ httpHeaderGetEntry(const HttpHeader * hdr, HttpHeaderPos * pos)
 void
 httpHeaderAddClone(HttpHeader * hdr, const HttpHeaderEntry * e)
 {
-    httpHeaderAddEntry(hdr, httpHeaderEntryClone(e));
+    httpHeaderAddEntryString(hdr, e->id, e->name, e->value);
 }
 
 /*!
@@ -443,13 +461,13 @@ void
 httpHeaderDelAt(HttpHeader * hdr, HttpHeaderPos pos)
 {
     HttpHeaderEntry *e;
-    assert(pos >= HttpHeaderInitPos && pos < hdr->entries.count);
-    e = hdr->entries.items[pos];
-    hdr->entries.items[pos] = NULL;
+    assert(pos >= HttpHeaderInitPos && pos < vector_numentries(&hdr->entries));
+    e = vector_get(&hdr->entries, pos);
     /* decrement header length, allow for ": " and crlf */
     hdr->len -= strLen(e->name) + 2 + strLen(e->value) + 2;
     assert(hdr->len >= 0);
-    httpHeaderEntryDestroy(e);
+    /* This marks the entry as inactive */
+    httpHeaderEntryDone(e);
 }
 
 int
