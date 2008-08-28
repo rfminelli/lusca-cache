@@ -15,8 +15,8 @@ typedef struct _String String;
 #define strBuf(s)     ((const char*)(s).buf)
 
 /* The new stuff */
-#define stringLen(s)     ((/* const */ int)(s).len)
-#define stringBuf(s)     ((const char*)(s).buf)
+#define stringLen(s)     ((/* const */ int)(s)->len)
+#define stringBuf(s)     ((const char*)(s)->buf)
 
 #define strChr(s,ch)  ((const char*)strchr(strBuf(s), (ch)))
 #define strRChr(s,ch) ((const char*)strrchr(strBuf(s), (ch)))
