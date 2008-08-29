@@ -13,8 +13,16 @@ Here's a link to current and past "playpen" projects where various bits of exper
 == http_work ==
 
   * Link: http://code.google.com/p/cacheboy/source/list?path=/playpen/http_work
+
+=== First stage ===
+
   * Overview: reorganise the HTTP parser related code into libhttp/ in preparation for a partial rewrite
   * Status: Complete; merged (link?)
+
+=== Second stage ===
+
+  * Overview: optimise the header parser by introducing a Vector type and allocating header entries out of that rather than malloc'ing each individually
+  * Status: Complete; writing unit tests
 
 == mempools ==
 
@@ -26,4 +34,15 @@ Here's a link to current and past "playpen" projects where various bits of exper
 
   * Link: http://code.google.com/p/cacheboy/source/list?path=/playpen/string_work
   * Overview: tidy up the use of String in Squid in preparation for a more sensible string library
+  * Status: complete; not merged
+
+== hash_work ==
+
+  * Link: http://code.google.com/p/cacheboy/source/list?path=/playpen/hash_work
+  * Overview: Implement a hash table which doesn't require text data as the hash key
+  * Status: Not begun
+
+  * Overview
   * Status: In progress
+
+== 
