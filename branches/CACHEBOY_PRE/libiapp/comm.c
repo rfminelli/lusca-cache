@@ -393,6 +393,7 @@ comm_connect_try(int fd, void *data)
 	F->comm.connect.cb = NULL;
 	F->comm.connect.cbdata = NULL;
 	F->comm.connect.active = 0;
+	sqinet_done(&F->comm.connect.addr);
 	if (cbdataValid(cbdata))
 		cb(fd, r, cbdata);
 	cbdataUnlock(cbdata);
