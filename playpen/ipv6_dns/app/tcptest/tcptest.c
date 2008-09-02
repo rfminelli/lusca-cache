@@ -76,6 +76,13 @@ main(int argc, const char *argv[])
 	sqaddr_t lcl4, lcl6;
 	struct sockaddr_in s4, t;
 	struct sockaddr_in6 s6;
+	const char *host;
+	short port;
+
+	if (argc < 2) {
+		printf("Usage: %s <host> <port>\n", argv[0]);
+		exit(1);
+	}
 
 	iapp_init();
 	squid_signal(SIGPIPE, SIG_IGN, SA_RESTART);
@@ -87,7 +94,7 @@ main(int argc, const char *argv[])
 	s4.sin_port = htons(8080);
 	s4.sin_len = sizeof(struct sockaddr_in);
 	sqinet_init(&lcl4);
-	sqinet_set_v4_sockaddr(&lcl6, &s4);
+	sqinet_set_v4_sockaddr(&lcl4, &s4);
 
 	bzero(&s6, sizeof(s6));
 	/* ANY_ADDR is all 0's here.. :) */
@@ -96,14 +103,20 @@ main(int argc, const char *argv[])
 	sqinet_init(&lcl6);
 	sqinet_set_v6_sockaddr(&lcl6, &s6);
 
+	host = argv[1];
+	port = atoi(argv[2]);
+
+	debug(1, 1) ("main: forwarding to %s:%d\n", host, port);
+
 	bzero(&t, sizeof(t));
-	t.sin_port = htons(80);
+	t.sin_port = htons(port);
 	t.sin_family = AF_INET;
-	safe_inet_addr("192.168.4.4", &t.sin_addr);
+	safe_inet_addr(host, &t.sin_addr);
 	sqinet_init(&dest);
 	sqinet_set_v4_sockaddr(&dest, &t);
 
-	fd = comm_open6(SOCK_STREAM, IPPROTO_TCP, &lcl6, COMM_NONBLOCKING, COMM_TOS_DEFAULT, "HTTP Socket");
+	fd = comm_open6(SOCK_STREAM, IPPROTO_TCP, &lcl6, COMM_NONBLOCKING, COMM_TOS_DEFAULT, "HTTP Socket v6");
+	fd = comm_open6(SOCK_STREAM, IPPROTO_TCP, &lcl4, COMM_NONBLOCKING, COMM_TOS_DEFAULT, "HTTP Socket v4");
 
 	assert(fd > 0);
 	comm_listen(fd);

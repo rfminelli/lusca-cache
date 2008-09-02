@@ -195,6 +195,12 @@ struct _fde {
 		void *cbdata;
 		int active;
     	} read;
+	struct {
+		CNCB *cb;
+		void *cbdata;
+		sqaddr_t addr;
+		int active;
+	} connect;
     } comm;
     PF *read_handler;
     void *read_data;
@@ -282,8 +288,8 @@ extern void comm_reset_close(int fd);
 #if LINGERING_CLOSE
 extern void comm_lingering_close(int fd);
 #endif
-extern void commConnectStart(int fd, const char *, u_short, CNCB *, void *, struct in_addr *addr);
 extern int comm_connect_addr(int sock, const sqaddr_t *addr);
+extern void comm_connect_begin(int fd, const sqaddr_t *addr, CNCB *cb, void *cbdata);
 extern void comm_init(void);
 extern int comm_listen(int sock);
 extern int comm_open(int, int, struct in_addr, u_short, int, unsigned char TOS, const char *);

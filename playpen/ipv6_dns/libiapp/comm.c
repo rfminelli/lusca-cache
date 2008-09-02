@@ -350,6 +350,112 @@ commSetTimeout(int fd, int timeout, PF * handler, void *data)
     return F->timeout = squid_curtime + (time_t) timeout;
 }
 
+/*!
+ * @function
+ *	comm_connect_try
+ * @abstract
+ *	Attempt an async callback-driven socket connect()
+ * @discussion
+ *	This is the IO callback for comm_connect_begin(); it handles the actual
+ *	connection attempt and will either reschedule the callback or call the
+ *	completion callback with the return state from conn_connect_addr().
+ *
+ * @param	fd	filedescriptor to try and connect()
+ * @param	data	unused
+ */
+static void
+comm_connect_try(int fd, void *data)
+{
+	int r;
+	fde *F;
+	CNCB *cb;
+	void *cbdata;
+
+	assert(fd >= 0);
+	assert(fd < Squid_MaxFD);
+	F = &fd_table[fd];
+	assert(F->flags.open);
+	assert(F->comm.connect.active);
+
+	debug(5, 3) ("comm_connect_try: FD %d\n", fd);
+	r = comm_connect_addr(fd, &F->comm.connect.addr);
+	debug(5, 3) ("comm_connect_try: FD %d: retval %d\n", fd, r);
+	if (r == COMM_INPROGRESS) {
+		debug(5, 3) ("comm_connect_try: FD %d: retrying!\n", fd);
+		commSetSelect(fd, COMM_SELECT_WRITE, comm_connect_try, NULL, 0);
+		return;
+	}
+
+	/* completion has occured either way - call the callback with the connect results */
+	debug(5, 3) ("comm_connect_try: FD %d: completed (%s)!\n", fd, r == COMM_OK ? "OK" : "FAIL");
+	cb = F->comm.connect.cb;
+	cbdata = F->comm.connect.cbdata;
+	F->comm.connect.cb = NULL;
+	F->comm.connect.cbdata = NULL;
+	F->comm.connect.active = 0;
+	if (cbdataValid(cbdata))
+		cb(fd, r, cbdata);
+	cbdataUnlock(cbdata);
+}
+
+/*!
+ * @function
+ *	comm_connect_begin
+ * @abstract
+ *	Begin an asynchronous callback-driven connect() process.
+ * @discussion
+ *	This function mirrors existing functionality in commConnectStart() but without
+ *	the seperate memory allocation per attempt and the DNS lookup. commConnectStart()
+ *	handles DNS resolution if required through the fqdncache; noting up/down
+ *	hosts and handling IP address rotation for hosts as required.
+ *
+ *	Essentially, this is a lower-level function intended to replace most of
+ *	the logic of commConnectStart() and related calls.
+ *
+ *	This function has no way of cancelling pending connect()s; it'll just not call the
+ *	callback on an invalid cbdata pointer.
+ *
+ *	The callback will currently never be called if comm_close() is called before
+ *	the connect() has had time to complete (successfully or not.) This is in line with
+ *	other comm_ related callbacks but may not be such a good idea moving forward.
+ *
+ *	Like commConnectStart(), the connect() -may- succeed after the first call and
+ *	the callback -may- be immediately called. Too much existing code (well, all 8 uses)
+ *	currently relies on and works with this behaviour. This should be investigated
+ *	at a later date so callbacks occur -seperate- to their IO events having completed.
+ *	This will however require some code auditing!
+ *
+ * @param	fd	currently open filedescriptor to connect() to remote host
+ * @param	addr	sqaddr_t reference containing end-point information
+ * @param	cb	callback to call on completion
+ * @param	cbdata	callback data for above callback (NULL permitted)
+ */
+void
+comm_connect_begin(int fd, const sqaddr_t *addr, CNCB *cb, void *cbdata)
+{
+	fde *F;
+	assert(fd >= 0);
+	assert(fd < Squid_MaxFD);
+	F = &fd_table[fd];
+	assert(F->flags.open);
+
+	debug(5, 3) ("comm_connect_begin: FD %d\n", fd);
+
+	/* XXX must never, ever call comm_connect_begin() on a connecting socket! */
+	assert(! F->comm.connect.active);
+
+	/* Record info */
+	F->comm.connect.cb = cb;
+	F->comm.connect.cbdata = cbdata;
+	cbdataLock(F->comm.connect.cbdata);
+	sqinet_init(&F->comm.connect.addr);
+	sqinet_copy(&F->comm.connect.addr, addr);
+	F->comm.connect.active = 1;
+
+	/* Begin attempting to connect */
+	comm_connect_try(fd, NULL);
+}
+
 int
 comm_connect_addr(int sock, const sqaddr_t *addr)
 {
@@ -627,6 +733,8 @@ comm_close(int fd)
     assert(F->flags.open);
     assert(F->type != FD_FILE);
     F->flags.closing = 1;
+    if (F->comm.connect.active)
+	cbdataUnlock(F->comm.connect.cbdata);
     CommWriteStateCallbackAndFree(fd, COMM_ERR_CLOSING);
     commCallCloseHandlers(fd);
     if (F->uses)		/* assume persistent connect count */
