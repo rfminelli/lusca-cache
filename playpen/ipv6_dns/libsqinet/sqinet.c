@@ -473,7 +473,7 @@ sqinet_ntoa(const sqaddr_t *s, char *hoststr, int hostlen, sqaddr_flags flags)
  * @return		1 if the sqaddr_t has been set with the new address; 0 on failure.
  */
 int
-sqinet_aton(sqaddr_t *s, char *hoststr, sqaton_flags flags)
+sqinet_aton(sqaddr_t *s, const char *hoststr, sqaton_flags flags)
 {
 	struct addrinfo hints, *r = NULL;
 	int err;
@@ -510,4 +510,65 @@ sqinet_aton(sqaddr_t *s, char *hoststr, sqaton_flags flags)
 	memcpy(&s->st, r->ai_addr, r->ai_addrlen);
 	freeaddrinfo(r);
 	return 1;
+}
+
+/*!
+ * @function
+ *	sqinet_compare_port
+ * @abstract
+ *	Return whether two sqaddr_t entries point to the same address family and ports
+ * @param	a	pointer to sqaddr_t
+ * @param	b	pointer to sqaddr_t
+ * @return		1 whether the address families and ports are equivalent, 0 otherwise
+ */
+int
+sqinet_compare_port(const sqaddr_t *a, const sqaddr_t *b)
+{
+	assert(a->init);
+	assert(b->init);
+	if (a->st.ss_family != b->st.ss_family)
+		return 0;
+	switch (a->st.ss_family) {
+		case AF_INET:
+			return (((struct sockaddr_in *) &a->st)->sin_port) == (((struct sockaddr_in *) &a->st)->sin_port);
+		break;
+		case AF_INET6:
+			return (((struct sockaddr_in6 *) &a->st)->sin6_port) == (((struct sockaddr_in6 *) &a->st)->sin6_port);
+		break;
+		default:
+			assert(1==0);
+	}
+	return 0;
+}
+
+/*!
+ * @function
+ *	sqinet_compare_addr
+ * @abstract
+ *	Return whether two sqaddr_t entries point to the same address family and address
+ * @param	a	pointer to sqaddr_t
+ * @param	b	pointer to sqaddr_t
+ * @return		1 whether the address families and addresses are equivalent, 0 otherwise
+ */
+int
+sqinet_compare_addr(const sqaddr_t *a, const sqaddr_t *b)
+{
+	assert(a->init);
+	assert(b->init);
+	if (a->st.ss_family != b->st.ss_family)
+		return 0;
+	switch (a->st.ss_family) {
+		case AF_INET:
+			return (((struct sockaddr_in *) &a->st)->sin_addr.s_addr) == (((struct sockaddr_in *) &a->st)->sin_addr.s_addr);
+		break;
+		case AF_INET6:
+			return memcmp(
+				&(((struct sockaddr_in6 *) &a->st)->sin6_addr),
+				&(((struct sockaddr_in6 *) &a->st)->sin6_addr),
+				sizeof((((struct sockaddr_in6 *) &a->st)->sin6_addr)) == 0);
+		break;
+		default:
+			assert(1==0);
+	}
+	return 0;
 }
