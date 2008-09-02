@@ -95,6 +95,7 @@ main(int argc, char *argv[])
     int t;
     FILE *fp;
     char buf[LOGFILE_BUF_LEN];
+    char *wbuf = NULL;
     int rotate_count = 10;
     int do_buffer = 1;
 
@@ -106,6 +107,10 @@ main(int argc, char *argv[])
     if (fp == NULL) {
 	perror("fopen");
 	exit(1);
+    }
+    wbuf = malloc(LOGFILE_BUF_LEN);
+    if (wbuf) {
+        setbuffer(fp, wbuf, LOGFILE_BUF_LEN);
     }
     setbuf(stdout, NULL);
     close(2);
@@ -131,6 +136,9 @@ main(int argc, char *argv[])
 		perror("fopen");
 		exit(1);
 	    }
+            if (wbuf) {
+                setbuffer(fp, wbuf, LOGFILE_BUF_LEN);
+            }
 	    break;
 	case 'T':
 	    break;
