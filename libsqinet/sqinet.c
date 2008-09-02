@@ -164,7 +164,7 @@ sqinet_set_v4_port(sqaddr_t *s, short port, sqaddr_flags flags)
  * @return		1 if value set successfully, 0 if error.
  */
 int
-sqinet_set_v4_sockaddr(sqaddr_t *s, struct sockaddr_in *v4addr)
+sqinet_set_v4_sockaddr(sqaddr_t *s, const struct sockaddr_in *v4addr)
 {
 	struct sockaddr_in *v4;
 
@@ -275,7 +275,7 @@ sqinet_get_v4_sockaddr(const sqaddr_t *s, sqaddr_flags flags)
  * @return		1 if value set successfully, 0 if error.
  */
 int
-sqinet_set_v6_sockaddr(sqaddr_t *s, struct sockaddr_in6 *v6addr)
+sqinet_set_v6_sockaddr(sqaddr_t *s, const struct sockaddr_in6 *v6addr)
 {
 	struct sockaddr_in6 *v6;
 
