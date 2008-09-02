@@ -30,7 +30,7 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
     * HttpVersion *done*
     * HttpStatusLine *done*
     * Header / HeaderEntry *somewhat done*
-    * Shuffle the header sanity checks (eg one-Content-Length header only! check) out of httpHeaderParse() and into a seperate function - make httpHeaderParse() _JUST_ parse headers.
+    * Shuffle the header sanity checks (eg one-Content-Length header only! check) out of httpHeaderParse() and into a seperate function - make httpHeaderParse() _JUST_ parse headers - *done, somewhat, in http_work branch*
     * HttpRequest
     * HttpReply
     * Body related callback pipeline?
