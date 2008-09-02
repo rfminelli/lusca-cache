@@ -376,8 +376,10 @@ sqinet_get_port(const sqaddr_t *s)
 	switch (s->st.ss_family) {
 		case AF_INET:
 			return ntohs(((struct sockaddr_in *) &s->st)->sin_port);
+			break;
 		case AF_INET6:
 			return ntohs(((struct sockaddr_in6 *) &s->st)->sin6_port);
+			break;
 		default:
 			assert(0);
 	}
@@ -413,8 +415,10 @@ sqinet_set_port(const sqaddr_t *s, short port, sqaddr_flags flags)
 	switch (s->st.ss_family) {
 		case AF_INET:
 			((struct sockaddr_in *) &s->st)->sin_port = htons(port);
+			break;
 		case AF_INET6:
 			((struct sockaddr_in6 *) &s->st)->sin6_port = htons(port);
+			break;
 		default:
 			assert(0);
 	}
