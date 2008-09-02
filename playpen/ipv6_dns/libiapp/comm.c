@@ -648,29 +648,42 @@ comm_close(int fd)
 
 /* Send a udp datagram to specified TO_ADDR. */
 int
-comm_udp_sendto(int fd,
-    const struct sockaddr_in *to_addr,
-    int addr_len,
+comm_udp_sendto6(int fd,
+    const sqaddr_t *to_addr,
     const void *buf,
     int len)
 {
     int x;
+    LOCAL_ARRAY(char, sbuf, 256);
     CommStats.syscalls.sock.sendtos++;
-    x = sendto(fd, buf, len, 0, (struct sockaddr *) to_addr, addr_len);
+    x = sendto(fd, buf, len, 0, sqinet_get_entry(to_addr), sqinet_get_length(to_addr));
     if (x < 0) {
+        (void) sqinet_ntoa(to_addr, sbuf, sizeof(sbuf), SQADDR_NONE);
 #ifdef _SQUID_LINUX_
 	if (ECONNREFUSED != errno)
 #endif
 	    debug(5, 1) ("comm_udp_sendto: FD %d, %s, port %d: %s\n",
 		fd,
-		inet_ntoa(to_addr->sin_addr),
-		(int) htons(to_addr->sin_port),
+		sbuf,
+		(int) sqinet_get_port(to_addr),
 		xstrerror());
 	return COMM_ERROR;
     }
     return x;
 }
 
+int
+comm_udp_sendto(int fd, const struct sockaddr_in *to_addr, int addr_len, const void *buf, int len)
+{
+	sqaddr_t A;
+	int i;
+
+	sqinet_init(&A);
+	sqinet_set_v4_sockaddr(&A, to_addr);
+	i = comm_udp_sendto6(fd, &A, buf, len);
+	sqinet_done(&A);
+	return i;
+}
 void
 commSetDefer(int fd, DEFER * func, void *data)
 {

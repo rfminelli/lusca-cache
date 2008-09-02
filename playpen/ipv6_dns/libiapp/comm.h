@@ -299,6 +299,7 @@ extern void commRemoveSlow(int fd);
 extern void comm_add_close_handler(int fd, PF *, void *);
 extern void comm_remove_close_handler(int fd, PF *, void *);
 extern int comm_udp_sendto(int, const struct sockaddr_in *, int, const void *, int);
+extern int comm_udp_sendto6(int, const sqaddr_t *, const void *, int);
 extern void comm_write(int fd,
     const char *buf,
     int size,
