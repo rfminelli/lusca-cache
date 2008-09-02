@@ -1225,4 +1225,8 @@ extern void clientStoreURLRewriteDone(void *data, char *result);
 /* statIapp.c */
 extern void statIappStats(StoreEntry *sentry);
 
+/* comm.c */
+extern void commConnectStart(int fd, const char *, u_short, CNCB *, void *, struct in_addr *addr);
+
+
 #endif /* SQUID_PROTOS_H */
