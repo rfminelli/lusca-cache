@@ -36,7 +36,7 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
     * Body related callback pipeline?
     * HdrCC stuff
     * Range request stuff
-    * Shuffle the httpHeader routines which append/insert/delete header entries to work with attribute/value/id's direct rather than taking a HttpHeaderEntry *(done everywhere but httpHeaderParse)*
+    * Shuffle the httpHeader routines which append/insert/delete header entries to work with attribute/value/id's direct rather than taking a HttpHeaderEntry *(done in http_work branch)*
       * (This removes the requirement that HttpHeaderEntry 'ies are seperately created from the HttpHeader items list; I can then cut back on individually allocating Entries and just allocate one big lot in one hit.)
     * What else?
 
