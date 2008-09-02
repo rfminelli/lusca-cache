@@ -458,6 +458,6 @@ sslStart(int fd, sqaddr_t *peer)
 	sslConnectTimeout,
 	sslState);
     /* We do this manually for now as there's no async connect() support in libiapp yet */
-    sslConnectHandle(sslState->server.fd, sslState);
+    comm_connect_begin(sslState->server.fd, &sslState->peer, sslConnectDone, sslState);
 }
 
