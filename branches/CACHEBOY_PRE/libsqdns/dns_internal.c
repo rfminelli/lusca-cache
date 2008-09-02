@@ -404,6 +404,9 @@ idnsRetryTcp(idns_query * q)
 {
     struct in_addr addr;
     int ns = (q->nsends - 1) % nns;
+    sqaddr_t DST;
+
+    sqinet_init(&DST);
     idnsTcpCleanup(q);
     if (DnsConfig.udp_outgoing.s_addr != no_addr.s_addr)
 	addr = DnsConfig.udp_outgoing;
@@ -418,13 +421,9 @@ idnsRetryTcp(idns_query * q)
 	"DNS TCP Socket");
     q->queue_t = q->sent_t = current_time;
     dlinkAdd(q, &q->lru, &idns_lru_list);
-    commConnectStart(q->tcp_socket,
-	inet_ntoa(nameservers[ns].S.sin_addr),
-	ntohs(nameservers[ns].S.sin_port),
-	idnsSendTcpQuery,
-	q,
-	NULL
-	);
+    sqinet_set_v4_sockaddr(&DST, &nameservers[ns].S);
+    comm_connect_begin(q->tcp_socket, &DST, idnsSendTcpQuery, q);
+    sqinet_done(&DST);
 }
 
 static void
