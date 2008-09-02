@@ -48,17 +48,30 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
     * modify app/tcptest to test v4/v6 sockets *done*
     * write documentation of new core
 
+  * IPv6 DNS changes
+    * External DNS - worry about later
+    * Internal DNS - using husni's Squid-2.6 IPv6 patch as inspiration
+      * Migrate bits of core comm code to support it - *done*
+      * Convert socket level code to support querying/replying v4/v6 sockets - in progress
+      * Bring over AAAA record support
+      * Handle IPv4 and IPv6 PTR records
+      * Tie it all together? What else is needed?
+    * FQDN cache (hostname -> IP)
+    * IP cache (IP -> hostname)
+    * Modify Squid internals which issue DNS lookups to use sqinet instead of in_addr
+
   * Bring out the event *done*, comm *done*, fd *done*, disk code *done*
   * Think about how to bring signal handlers out into registered event callbacks, rather than calling signal handlers in the signal context and then checking for global variables each pass through the comm loop!
    * This may end up requiring an AsyncCalls like event/callback queue to be written, which isn't a bad thing!
    * .. just don't use it for comm! Use it for signals, timed/immediate "newschool" events (which don't rely on cbdata validity to run; require the user to unregister the event instead!) and disk callbacks (without cbdata requirements too!)
   * Bring out the async io code
+  
   * Improve communications code, cut #1
    * callback based recvfrom(); keep calling the handler for each recvfrom() called until deregistered
    * convert over recvfrom() users to use this - src/dns_internal.c ; src/htcp.c ; src/icmp.c ; src/icp_v2.c ; src/snmp_core.c ; src/wccp.c ; src/wccp2.c
    * what else? a comm_read() ? Remember the old argument of "provide buffer" versus "receive buffer"
-  * Wrap up the initialisation and event run stuff in libiapp/ so the main loop can be used outside of squid's src/
-  * .. And then write some example code which reuses the core Squid libraries in Yet Another Test TCP proxy! There should be enough code to do this - perhaps break out the source/destination interception code into a pair of libraries..?
+  * Wrap up the initialisation and event run stuff in libiapp/ so the main loop can be used outside of squid's src/ - *done*
+  * .. And then write some example code which reuses the core Squid libraries in Yet Another Test TCP proxy! There should be enough code to do this - perhaps break out the source/destination interception code into a pair of libraries..? - *done*
 
   * Next phase - improving the communication code #2
     * Bring over a very naive reference-counted buffer type
