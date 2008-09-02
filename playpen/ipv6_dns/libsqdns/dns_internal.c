@@ -524,7 +524,6 @@ idnsRead(int fd, void *data)
     while (max--) {
 	sqinet_init(&from);
 	from_len = sqinet_get_length(&from);
-	memset(&from, '\0', from_len);
 	CommStats.syscalls.sock.recvfroms++;
 	len = recvfrom(fd, rbuf, sizeof(rbuf), 0, sqinet_get_entry(&from), &from_len);
 	if (len == 0)
