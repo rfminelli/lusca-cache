@@ -119,7 +119,7 @@ DnsConfigStruct DnsConfig;
 
 static void idnsCacheQuery(idns_query * q);
 static void idnsSendQuery(idns_query * q);
-static int idnsFromKnownNameserver(struct sockaddr_in *from);
+static int idnsFromKnownNameserver(sqaddr_t *from);
 static idns_query *idnsFindQuery(unsigned short id);
 static void idnsGrokReply(const char *buf, size_t sz);
 static PF idnsRead;
@@ -130,15 +130,19 @@ static void idnsRcodeCount(int, int);
 void
 idnsAddNameserver(const char *buf)
 {
-    struct in_addr A;
-    if (!safe_inet_addr(buf, &A)) {
+    sqaddr_t A;
+    LOCAL_ARRAY(char, sbuf, 256);
+
+    sqinet_init(&A);
+
+    if (! sqinet_aton(&A, buf, SQATON_PASSIVE)) {
 	debug(78, 0) ("WARNING: rejecting '%s' as a name server, because it is not a numeric IP address\n", buf);
-	return;
+        goto finish;
     }
-    if (A.s_addr == 0) {
+    if (sqinet_is_anyaddr(&A)) {
 	debug(78, 0) ("WARNING: Squid does not accept 0.0.0.0 in DNS server specifications.\n");
 	debug(78, 0) ("Will be using 127.0.0.1 instead, assuming you meant that DNS is running on the same machine\n");
-	safe_inet_addr("127.0.0.1", &A);
+	(void) sqinet_aton(&A, "127.0.0.1", SQATON_PASSIVE);
     }
     if (nns == nns_alloc) {
 	int oldalloc = nns_alloc;
@@ -154,12 +158,14 @@ idnsAddNameserver(const char *buf)
 	    safe_free(oldptr);
     }
     assert(nns < nns_alloc);
-    nameservers[nns].S.sin_family = AF_INET;
-    nameservers[nns].S.sin_port = htons(NS_DEFAULTPORT);
-    nameservers[nns].S.sin_addr.s_addr = A.s_addr;
-    debug(78, 3) ("idnsAddNameserver: Added nameserver #%d: %s\n",
-	nns, inet_ntoa(nameservers[nns].S.sin_addr));
+    sqinet_init(&nameservers[nns].S);
+    sqinet_copy(&nameservers[nns].S, &A);
+    sqinet_set_port(&nameservers[nns].S, NS_DEFAULTPORT, SQADDR_NONE);
+    sqinet_ntoa(&A, sbuf, sizeof(sbuf), SQADDR_NONE);
+    debug(78, 3) ("idnsAddNameserver: Added nameserver #%d: %s\n", nns, sbuf);
     nns++;
+finish:
+    sqinet_done(&A);
 }
 
 void
@@ -241,11 +247,7 @@ idnsSendQuery(idns_query * q)
     idnsTcpCleanup(q);
   try_again:
     ns = q->nsends % nns;
-    x = comm_udp_sendto(DnsSocket,
-	&nameservers[ns].S,
-	sizeof(nameservers[ns].S),
-	q->buf,
-	q->sz);
+    x = comm_udp_sendto6(DnsSocket, &nameservers[ns].S, q->buf, q->sz);
     q->nsends++;
     q->queue_t = q->sent_t = current_time;
     if (x < 0) {
@@ -263,13 +265,14 @@ idnsSendQuery(idns_query * q)
 }
 
 static int
-idnsFromKnownNameserver(struct sockaddr_in *from)
+idnsFromKnownNameserver(sqaddr_t *from)
 {
     int i;
     for (i = 0; i < nns; i++) {
-	if (nameservers[i].S.sin_addr.s_addr != from->sin_addr.s_addr)
+	/* XXX even though these functions do it; should I write an address protocol equivalence check? [ahc] */
+        if (! sqinet_compare_addr(&(nameservers[i].S), from))
 	    continue;
-	if (nameservers[i].S.sin_port != from->sin_port)
+        if (! sqinet_compare_port(&(nameservers[i].S), from))
 	    continue;
 	return i;
     }
@@ -402,28 +405,24 @@ idnsSendTcpQuery(int fd, int status, void *data)
 static void
 idnsRetryTcp(idns_query * q)
 {
-    struct in_addr addr;
+    sqaddr_t addr;
     int ns = (q->nsends - 1) % nns;
-    sqaddr_t DST;
 
-    sqinet_init(&DST);
+    sqinet_init(&addr);
     idnsTcpCleanup(q);
-    if (DnsConfig.udp_outgoing.s_addr != no_addr.s_addr)
-	addr = DnsConfig.udp_outgoing;
+    if (!sqinet_is_noaddr(&DnsConfig.udp_outgoing))
+	sqinet_copy(&addr, &DnsConfig.udp_outgoing);
     else
-	addr = DnsConfig.udp_incoming;
-    q->tcp_socket = comm_open(SOCK_STREAM,
+	sqinet_copy(&addr, &DnsConfig.udp_incoming);
+    q->tcp_socket = comm_open6(SOCK_STREAM,
 	IPPROTO_TCP,
-	addr,
-	0,
+	&addr,
 	COMM_NONBLOCKING,
 	COMM_TOS_DEFAULT,
 	"DNS TCP Socket");
     q->queue_t = q->sent_t = current_time;
     dlinkAdd(q, &q->lru, &idns_lru_list);
-    sqinet_set_v4_sockaddr(&DST, &nameservers[ns].S);
-    comm_connect_begin(q->tcp_socket, &DST, idnsSendTcpQuery, q);
-    sqinet_done(&DST);
+    comm_connect_begin(q->tcp_socket, &nameservers[ns].S, idnsSendTcpQuery, q);
 }
 
 static void
@@ -517,16 +516,17 @@ static void
 idnsRead(int fd, void *data)
 {
     ssize_t len;
-    struct sockaddr_in from;
+    sqaddr_t from;
     socklen_t from_len;
     int max = INCOMING_DNS_MAX;
     static char rbuf[SQUID_UDP_SO_RCVBUF];
     int ns;
     while (max--) {
-	from_len = sizeof(from);
+	sqinet_init(&from);
+	from_len = sqinet_get_length(&from);
 	memset(&from, '\0', from_len);
 	CommStats.syscalls.sock.recvfroms++;
-	len = recvfrom(fd, rbuf, sizeof(rbuf), 0, (struct sockaddr *) &from, &from_len);
+	len = recvfrom(fd, rbuf, sizeof(rbuf), 0, sqinet_get_entry(&from), &from_len);
 	if (len == 0)
 	    break;
 	if (len < 0) {
@@ -541,26 +541,26 @@ idnsRead(int fd, void *data)
 #endif
 		debug(50, 1) ("idnsRead: FD %d recvfrom: %s\n",
 		    fd, xstrerror());
+	    sqinet_done(&from);
 	    break;
 	}
 	fd_bytes(DnsSocket, len, FD_READ);
-	debug(78, 3) ("idnsRead: FD %d: received %d bytes from %s.\n",
-	    fd,
-	    (int) len,
-	    inet_ntoa(from.sin_addr));
+	debug(78, 3) ("idnsRead: FD %d: received %d bytes\n", fd, (int) len);
 	ns = idnsFromKnownNameserver(&from);
 	if (ns >= 0) {
 	    nameservers[ns].nreplies++;
 	} else if (DnsConfig.ignore_unknown_nameservers) {
 	    static time_t last_warning = 0;
+	    LOCAL_ARRAY(char, sbuf, 256);
 	    if (squid_curtime - last_warning > 60) {
-		debug(78, 1) ("WARNING: Reply from unknown nameserver [%s]\n",
-		    inet_ntoa(from.sin_addr));
+		(void) sqinet_ntoa(&from, sbuf, sizeof(sbuf), SQADDR_NONE);
+		debug(78, 1) ("WARNING: Reply from unknown nameserver [%s]\n", sbuf);
 		last_warning = squid_curtime;
 	    }
 	    continue;
 	}
 	idnsGrokReply(rbuf, len);
+	sqinet_done(&from);
     }
     if (idns_lru_list.head)
 	commSetSelect(DnsSocket, COMM_SELECT_READ, idnsRead, NULL, 0);
@@ -627,12 +627,15 @@ idnsRcodeCount(int rcode, int attempt)
 /* ====================================================================== */
 
 void
-idnsConfigure(struct in_addr incoming_addr, struct in_addr outgoing_addr,
+idnsConfigure(sqaddr_t *incoming_addr, sqaddr_t *outgoing_addr,
     int ignore_unknown_nameservers, int idns_retransmit,
     int idns_query, int res_defnames)
 {
-	DnsConfig.udp_incoming = incoming_addr;
-	DnsConfig.udp_outgoing = outgoing_addr;
+	sqinet_init(&DnsConfig.udp_incoming);
+	sqinet_init(&DnsConfig.udp_outgoing);
+
+	sqinet_copy(&DnsConfig.udp_incoming, incoming_addr);
+	sqinet_copy(&DnsConfig.udp_outgoing, outgoing_addr);
 	DnsConfig.ignore_unknown_nameservers = ignore_unknown_nameservers;
 	DnsConfig.idns_retransmit = idns_retransmit;
 	DnsConfig.idns_query = idns_query;
@@ -646,16 +649,16 @@ idnsInit(void)
     static int init = 0;
     CBDATA_INIT_TYPE(idns_query);
     if (DnsSocket < 0) {
-	int port;
-	struct in_addr addr;
-	if (DnsConfig.udp_outgoing.s_addr != no_addr.s_addr)
-	    addr = DnsConfig.udp_outgoing;
+	LOCAL_ARRAY(char, buf, 256);
+	sqaddr_t addr;
+	sqinet_init(&addr);
+	if (! sqinet_is_noaddr(&DnsConfig.udp_outgoing))
+	    sqinet_copy(&addr, &DnsConfig.udp_outgoing);
 	else
-	    addr = DnsConfig.udp_incoming;
-	DnsSocket = comm_open(SOCK_DGRAM,
+	    sqinet_copy(&addr, &DnsConfig.udp_incoming);
+	DnsSocket = comm_open6(SOCK_DGRAM,
 	    IPPROTO_UDP,
-	    addr,
-	    0,
+	    &addr,
 	    COMM_NONBLOCKING,
 	    COMM_TOS_DEFAULT,
 	    "DNS Socket");
@@ -664,10 +667,11 @@ idnsInit(void)
 	/* Ouch... we can't call functions using debug from a debug
 	 * statement. Doing so messes up the internal _db_level
 	 */
-	port = comm_local_port(DnsSocket);
+	(void) sqinet_ntoa(&addr, buf, sizeof(buf), SQADDR_NONE);
 	debug(78, 1) ("DNS Socket created at %s, port %d, FD %d\n",
-	    inet_ntoa(addr),
-	    port, DnsSocket);
+	    buf,
+	    sqinet_get_port(&addr), DnsSocket);
+	sqinet_done(&addr);
     }
     assert(0 == nns);
     if (!init) {

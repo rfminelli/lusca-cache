@@ -62,7 +62,7 @@ struct _idns_query {
 };
 
 struct _ns {
-    struct sockaddr_in S;
+    sqaddr_t S;
     int nqueries;
     int nreplies;
 };
@@ -74,7 +74,7 @@ struct _sp {
 
 
 typedef struct {
-        struct in_addr udp_incoming, udp_outgoing;
+        sqaddr_t udp_incoming, udp_outgoing;
         int ignore_unknown_nameservers;
         int idns_retransmit;
         int idns_query;
@@ -90,7 +90,7 @@ extern int nns;
 extern int npc;
 extern dlink_list idns_lru_list;
 
-extern void idnsConfigure(struct in_addr incoming_addr, struct in_addr outgoing_addr,
+extern void idnsConfigure(sqaddr_t *incoming_addr, sqaddr_t *outgoing_addr,
     int ignore_unknown_nameservers, int idns_retransmit,
     int idns_query, int res_defnames);
 
