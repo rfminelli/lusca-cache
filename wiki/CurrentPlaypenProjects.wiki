@@ -40,9 +40,11 @@ Here's a link to current and past "playpen" projects where various bits of exper
 
   * Link: http://code.google.com/p/cacheboy/source/list?path=/playpen/hash_work
   * Overview: Implement a hash table which doesn't require text data as the hash key
-  * Status: Not begun
-
   * Overview
   * Status: In progress
 
-== 
+== ipv6 dns ==
+
+  * Link: http://code.google.com/p/cacheboy/source/list?path=/playpen/ipv6_dns
+  * Overview: implement IPv6 support in the internal DNS code
+  * Status: Not begun
