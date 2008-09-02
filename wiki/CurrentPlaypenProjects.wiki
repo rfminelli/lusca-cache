@@ -47,4 +47,4 @@ Here's a link to current and past "playpen" projects where various bits of exper
 
   * Link: http://code.google.com/p/cacheboy/source/list?path=/playpen/ipv6_dns
   * Overview: implement IPv6 support in the internal DNS code
-  * Status: Not begun
+  * Status: Begun
