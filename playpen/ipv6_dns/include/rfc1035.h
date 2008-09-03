@@ -85,6 +85,11 @@ extern ssize_t rfc1035BuildAQuery(const char *hostname,
     size_t sz,
     unsigned short qid,
     rfc1035_query * query);
+extern ssize_t rfc1035BuildAAAAQuery(const char *hostname,
+    char *buf,
+    size_t sz,
+    unsigned short qid,
+    rfc1035_query * query);
 extern ssize_t rfc1035BuildPTRQuery(const struct in_addr,
     char *buf,
     size_t sz,
@@ -101,6 +106,7 @@ extern const char *rfc1035_error_message;
 
 #define RFC1035_TYPE_A 1
 #define RFC1035_TYPE_CNAME 5
+#define	RFC1035_TYPE_AAAA 28
 #define RFC1035_TYPE_PTR 12
 #define RFC1035_CLASS_IN 1
 
