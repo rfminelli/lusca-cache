@@ -826,6 +826,12 @@ idnsALookup(const char *name, IDNSCB * callback, void *data)
     idnsSendQuery(q);
 }
 
+/*
+ * Begin a PTR record lookup on the given address.
+ *
+ * Currently this function hard-codes an IPv4 PTR query string; it should eventually
+ * just ask an sqinet_ routine to generate it and pass it on.
+ */
 void
 idnsPTRLookup(const struct in_addr addr, IDNSCB * callback, void *data)
 {
