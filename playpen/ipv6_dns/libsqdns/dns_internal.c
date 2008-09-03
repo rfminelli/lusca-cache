@@ -716,6 +716,65 @@ idnsCacheQuery(idns_query * q)
     hash_join(idns_lookup_hash, &q->hash);
 }
 
+/*
+ * Initiate a AAAA lookup.
+ *
+ * This function has NOT YET BEEN TESTED!
+ */
+void
+idnsAAAALookup(const char *name, IDNSCB * callback, void *data)
+{
+    unsigned int i;
+    int nd = 0;
+    idns_query *q;
+    char query_key[RFC1035_MAXHOSTNAMESZ+5];
+    snprintf(query_key, RFC1035_MAXHOSTNAMESZ+5, "%s%d", name, RFC1035_TYPE_AAAA);
+    if (idnsCachedLookup(query_key, callback, data))
+        return;
+    q = cbdataAlloc(idns_query);
+    q->tcp_socket = -1;
+    q->id = idnsQueryID();
+
+    for (i = 0; i < strlen(name); i++) {
+        if (name[i] == '.') {
+            nd++;
+        }
+    }
+
+    if (DnsConfig.res_defnames && npc > 0 && name[strlen(name) - 1] != '.') {
+        q->do_searchpath = 1;
+    } else {
+        q->do_searchpath = 0;
+    }
+    strcpy(q->orig, name);
+    strcpy(q->name, q->orig);
+    if (q->do_searchpath && nd < DnsConfig.ndots) {
+        q->domain = 0;
+        strcat(q->name, ".");
+        strcat(q->name, searchpath[q->domain].domain);
+        debug(78, 3) ("idnsALookup: searchpath used for %s\n",
+            q->name);
+    }
+    q->sz = rfc1035BuildAAAAQuery(q->name, q->buf, sizeof(q->buf), q->id,
+        &q->query);
+
+    if (q->sz < 0) {
+        /* problem with query data -- query not sent */
+        callback(data, NULL, 0, "Internal error");
+        cbdataFree(q);
+        return;
+    }
+    debug(78, 3) ("idnsAAAALookup: buf is %d bytes for %s, id = %#hx\n",
+        (int) q->sz, q->name, q->id);
+    q->callback = callback;
+    q->callback_data = data;
+    cbdataLock(q->callback_data);
+    q->start_t = current_time;
+    idnsCacheQuery(q);
+    idnsSendQuery(q);
+}
+
+
 void
 idnsALookup(const char *name, IDNSCB * callback, void *data)
 {
@@ -782,7 +841,7 @@ idnsPTRLookup(const struct in_addr addr, IDNSCB * callback, void *data)
     ipi = (unsigned int) ntohl(addr.s_addr);
     (void) snprintf(buf, sizeof(buf), "%u.%u.%u.%u.in-addr.arpa", ipi & 255, (ipi >> 8) & 255, (ipi >> 16) & 255, (ipi >> 24) & 255);
 
-    q->sz = rfc1035BuildPTRQuery(buf, AF_INET, q->buf, sizeof(q->buf), q->id, &q->query);
+    q->sz = rfc1035BuildPTRQuery(buf, q->buf, sizeof(q->buf), q->id, &q->query);
     debug(78, 3) ("idnsPTRLookup: buf is %d bytes for %s, id = %#hx\n",
 	(int) q->sz, ip, q->id);
     if (q->sz < 0) {

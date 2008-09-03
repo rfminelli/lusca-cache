@@ -703,8 +703,7 @@ rfc1035BuildAAAAQuery(const char *hostname, char *buf, size_t sz, unsigned short
  *
  * [ahc]
  * "ipaddress" is a text representation of the record
- * (x.x.x.x.in-addr.arpa for v4, fe) and "family" is either
- * AF_INET or AF_INET6. This ugliness is done because lib/
+ * (x.x.x.x.in-addr.arpa for v4, fe). This ugliness is done because lib/
  * shouldn't rely on anything in the other library directories
  * and so I can't use libsqinet/ and sqaddr_t in lib/ .
  *
@@ -712,7 +711,7 @@ rfc1035BuildAAAAQuery(const char *hostname, char *buf, size_t sz, unsigned short
  * external library which can rely on libsqinet/.
  */
 ssize_t
-rfc1035BuildPTRQuery(const char *ipaddress, short family, char *buf, size_t sz, unsigned short qid, rfc1035_query * query)
+rfc1035BuildPTRQuery(const char *ipaddress, char *buf, size_t sz, unsigned short qid, rfc1035_query * query)
 {
     static rfc1035_message h;
     size_t offset = 0;
