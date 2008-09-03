@@ -90,7 +90,7 @@ extern ssize_t rfc1035BuildAAAAQuery(const char *hostname,
     size_t sz,
     unsigned short qid,
     rfc1035_query * query);
-extern ssize_t rfc1035BuildPTRQuery(const struct in_addr,
+extern ssize_t rfc1035BuildPTRQuery(const char *address, short family,
     char *buf,
     size_t sz,
     unsigned short qid,

@@ -770,12 +770,19 @@ idnsALookup(const char *name, IDNSCB * callback, void *data)
 void
 idnsPTRLookup(const struct in_addr addr, IDNSCB * callback, void *data)
 {
+    LOCAL_ARRAY(char, buf, 256);
     idns_query *q;
+    unsigned int ipi;
     const char *ip = inet_ntoa(addr);
     q = cbdataAlloc(idns_query);
     q->tcp_socket = -1;
     q->id = idnsQueryID();
-    q->sz = rfc1035BuildPTRQuery(addr, q->buf, sizeof(q->buf), q->id, &q->query);
+
+    /* XXX Build a v4 reverse DNS address string */
+    ipi = (unsigned int) ntohl(addr.s_addr);
+    (void) snprintf(buf, sizeof(buf), "%u.%u.%u.%u.in-addr.arpa", ipi & 255, (ipi >> 8) & 255, (ipi >> 16) & 255, (ipi >> 24) & 255);
+
+    q->sz = rfc1035BuildPTRQuery(buf, AF_INET, q->buf, sizeof(q->buf), q->id, &q->query);
     debug(78, 3) ("idnsPTRLookup: buf is %d bytes for %s, id = %#hx\n",
 	(int) q->sz, ip, q->id);
     if (q->sz < 0) {

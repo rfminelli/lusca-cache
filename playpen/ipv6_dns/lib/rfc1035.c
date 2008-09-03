@@ -695,21 +695,23 @@ rfc1035BuildAAAAQuery(const char *hostname, char *buf, size_t sz, unsigned short
  * specifies the size of the buffer, on return it contains
  * the size of the message (i.e. how much to write).
  * Returns the size of the query
+ *
+ * [ahc]
+ * "ipaddress" is a text representation of the record
+ * (x.x.x.x.in-addr.arpa for v4, fe) and "family" is either
+ * AF_INET or AF_INET6. This ugliness is done because lib/
+ * shouldn't rely on anything in the other library directories
+ * and so I can't use libsqinet/ and sqaddr_t in lib/ .
+ *
+ * I'd like to eventually see this code out of lib/ and into an
+ * external library which can rely on libsqinet/.
  */
 ssize_t
-rfc1035BuildPTRQuery(const struct in_addr addr, char *buf, size_t sz, unsigned short qid, rfc1035_query * query)
+rfc1035BuildPTRQuery(const char *ipaddress, short family, char *buf, size_t sz, unsigned short qid, rfc1035_query * query)
 {
     static rfc1035_message h;
     size_t offset = 0;
-    static char rev[32];
-    unsigned int i;
     memset(&h, '\0', sizeof(h));
-    i = (unsigned int) ntohl(addr.s_addr);
-    snprintf(rev, 32, "%u.%u.%u.%u.in-addr.arpa.",
-	i & 255,
-	(i >> 8) & 255,
-	(i >> 16) & 255,
-	(i >> 24) & 255);
     h.id = qid;
     h.qr = 0;
     h.rd = 1;
@@ -718,13 +720,13 @@ rfc1035BuildPTRQuery(const struct in_addr addr, char *buf, size_t sz, unsigned s
     offset += rfc1035HeaderPack(buf + offset, sz - offset, &h);
     offset += rfc1035QuestionPack(buf + offset,
 	sz - offset,
-	rev,
+	ipaddress,
 	RFC1035_TYPE_PTR,
 	RFC1035_CLASS_IN);
     if (query) {
 	query->qtype = RFC1035_TYPE_PTR;
 	query->qclass = RFC1035_CLASS_IN;
-	xstrncpy(query->name, rev, sizeof(query->name));
+	xstrncpy(query->name, ipaddress, sizeof(query->name));
     }
     assert(offset <= sz);
     return offset;
