@@ -114,6 +114,7 @@ dlink_list idns_lru_list;
 static int event_queued = 0;
 static hash_table *idns_lookup_hash = NULL;
 static int DnsSocket = -1;
+static int DnsSocketv6 = -1;
 
 DnsConfigStruct DnsConfig;
 
@@ -641,37 +642,51 @@ idnsConfigure(sqaddr_t *incoming_addr, sqaddr_t *outgoing_addr,
 	DnsConfig.res_defnames = res_defnames;
 }
 
+static int
+idnsInitSocket(sqaddr_t *addr, const char *note)
+{
+	LOCAL_ARRAY(char, buf, 256);
+	int fd;
+
+	fd = comm_open6(SOCK_DGRAM, IPPROTO_UDP, addr, COMM_NONBLOCKING, COMM_TOS_DEFAULT, note);
+	if (fd < 0)
+	    libcore_fatalf("Could not create a DNS socket: errno %d", errno);
+	/* Ouch... we can't call functions using debug from a debug
+	 * statement. Doing so messes up the internal _db_level
+	 */
+	(void) sqinet_ntoa(addr, buf, sizeof(buf), SQADDR_NONE);
+	debug(78, 1) ("DNS Socket created at %s, port %d, FD %d\n", buf, comm_local_port(fd), fd);
+	return fd;
+}
 
 void
 idnsInit(void)
 {
     static int init = 0;
     CBDATA_INIT_TYPE(idns_query);
+
+    /* IPv4 socket */
     if (DnsSocket < 0) {
-	LOCAL_ARRAY(char, buf, 256);
 	sqaddr_t addr;
 	sqinet_init(&addr);
 	if (! sqinet_is_noaddr(&DnsConfig.udp_outgoing))
 	    sqinet_copy(&addr, &DnsConfig.udp_outgoing);
 	else
 	    sqinet_copy(&addr, &DnsConfig.udp_incoming);
-	DnsSocket = comm_open6(SOCK_DGRAM,
-	    IPPROTO_UDP,
-	    &addr,
-	    COMM_NONBLOCKING,
-	    COMM_TOS_DEFAULT,
-	    "DNS Socket");
-	if (DnsSocket < 0)
-	    libcore_fatalf("Could not create a DNS socket: errno %d", errno);
-	/* Ouch... we can't call functions using debug from a debug
-	 * statement. Doing so messes up the internal _db_level
-	 */
-	(void) sqinet_ntoa(&addr, buf, sizeof(buf), SQADDR_NONE);
-	debug(78, 1) ("DNS Socket created at %s, port %d, FD %d\n",
-	    buf,
-	    sqinet_get_port(&addr), DnsSocket);
+	DnsSocket = idnsInitSocket(&addr, "IPv4 DNS UDP Socket");
 	sqinet_done(&addr);
     }
+
+    /* IPv6 socket */
+    if (DnsSocketv6 < 0) {
+	sqaddr_t addr;
+	sqinet_init(&addr);
+	/* XXX for now, bind to anyaddr; make it configurable later! */
+	sqinet_aton(&addr, "::0", SQATON_PASSIVE);
+	DnsSocketv6 = idnsInitSocket(&addr, "IPv6 DNS UDP Socket");
+	sqinet_done(&addr);
+    }
+    
     assert(0 == nns);
     if (!init) {
 	memset(RcodeMatrix, '\0', sizeof(RcodeMatrix));
@@ -684,10 +699,12 @@ idnsInit(void)
 void
 idnsShutdown(void)
 {
-    if (DnsSocket < 0)
+    if (DnsSocket < 0 && DnsSocketv6 < 0)
 	return;
     comm_close(DnsSocket);
     DnsSocket = -1;
+    comm_close(DnsSocketv6);
+    DnsSocketv6 = -1;
     idnsFreeNameservers();
     idnsFreeSearchpath();
 }
