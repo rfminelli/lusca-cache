@@ -843,22 +843,6 @@ inaddrFromHostent(const struct hostent *hp)
     return s;
 }
 
-double
-doubleAverage(double cur, double new, int N, int max)
-{
-    if (N > max)
-	N = max;
-    return (cur * (N - 1.0) + new) / N;
-}
-
-int
-intAverage(int cur, int new, int n, int max)
-{
-    if (n > max)
-	n = max;
-    return (cur * (n - 1) + new) / n;
-}
-
 void
 logsFlush(void)
 {
