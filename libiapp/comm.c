@@ -130,7 +130,7 @@ CommWriteStateCallbackAndFree(int fd, int code)
 u_short
 comm_local_port(int fd)
 {
-    struct sockaddr_in addr;
+    sqaddr_t addr;
     socklen_t addr_len = 0;
     fde *F = &fd_table[fd];
 
@@ -141,13 +141,16 @@ comm_local_port(int fd)
     }
     if (F->local_port)
 	return F->local_port;
-    addr_len = sizeof(addr);
-    if (getsockname(fd, (struct sockaddr *) &addr, &addr_len)) {
+
+    sqinet_init(&addr);
+    addr_len = sqinet_get_length(&addr);
+    if (getsockname(fd, sqinet_get_entry(&addr), &addr_len)) {
 	debug(5, 1) ("comm_local_port: Failed to retrieve TCP/UDP port number for socket: FD %d: %s\n", fd, xstrerror());
 	return 0;
     }
-    F->local_port = ntohs(addr.sin_port);
+    F->local_port = sqinet_get_port(&addr);
     debug(5, 6) ("comm_local_port: FD %d: port %d\n", fd, (int) F->local_port);
+    sqinet_done(&addr);
     return F->local_port;
 }
 
