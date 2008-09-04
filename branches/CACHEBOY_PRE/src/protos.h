@@ -930,8 +930,6 @@ extern int percent(int, int);
 extern double dpercent(double, double);
 extern pid_t readPidFile(void);
 extern struct in_addr inaddrFromHostent(const struct hostent *hp);
-extern int intAverage(int, int, int, int);
-extern double doubleAverage(double, double, int, int);
 extern void debug_trap(const char *);
 extern void logsFlush(void);
 extern const char *checkNullString(const char *p);
