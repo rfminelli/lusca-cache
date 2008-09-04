@@ -474,6 +474,7 @@ sqinet_ntoa(const sqaddr_t *s, char *hoststr, int hostlen, sqaddr_flags flags)
  * @param	flags	Control the behaviour:
  *			- SQATON_FAMILY_IPv4: given string is an IPv4 address.
  *			- SQATON_FAMILY_IPv6: given string is an IPv6 address.
+ *			- SQATON_PASSIVE: setup return socket address for an incoming connection?
  * @return		1 if the sqaddr_t has been set with the new address; 0 on failure.
  */
 int
