@@ -48,4 +48,8 @@ extern const char *w_space;
 
 extern int stringHasWhitespace(const char *);
 
+extern int intAverage(int, int, int, int);
+extern double doubleAverage(double, double, int, int);
+
+
 #endif
