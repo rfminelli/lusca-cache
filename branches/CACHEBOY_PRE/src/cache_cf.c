@@ -760,6 +760,33 @@ free_acl_access(acl_access ** head)
 }
 
 static void
+dump_sqaddr_t(StoreEntry *entry, const char *name, sqaddr_t addr)
+{
+	LOCAL_ARRAY(char, sbuf, 256);
+	(void) sqinet_ntoa(&addr, sbuf, sizeof(sbuf), SQADDR_NONE);
+	storeAppendPrintf(entry, "%s %s\n", name, sbuf);
+}
+
+static void
+parse_sqaddr_t(sqaddr_t *addr)
+{
+	char *token = strtok(NULL, w_space);
+	sqinet_init(addr);
+	if (token == NULL)
+		self_destruct();
+
+	/* XXX for now only support numeric addresses, not hostnames */
+	if (sqinet_aton(addr, token, SQATON_PASSIVE) == 0)
+		self_destruct();
+}
+
+static void
+free_sqaddr_t(sqaddr_t *addr)
+{
+	sqinet_done(addr);
+}
+
+static void
 dump_address(StoreEntry * entry, const char *name, struct in_addr addr)
 {
     storeAppendPrintf(entry, "%s %s\n", name, inet_ntoa(addr));

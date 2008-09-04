@@ -369,8 +369,10 @@ idnsStats(StoreEntry * sentry)
     storeAppendPrintf(sentry, "IP ADDRESS      # QUERIES # REPLIES\n");
     storeAppendPrintf(sentry, "--------------- --------- ---------\n");
     for (i = 0; i < nns; i++) {
+	LOCAL_ARRAY(char, sbuf, 256);
+	(void) sqinet_ntoa(&nameservers[i].S, sbuf, sizeof(sbuf), SQADDR_NONE);
 	storeAppendPrintf(sentry, "%-15s %9d %9d\n",
-	    inet_ntoa(nameservers[i].S.sin_addr),
+	    sbuf,
 	    nameservers[i].nqueries,
 	    nameservers[i].nreplies);
     }

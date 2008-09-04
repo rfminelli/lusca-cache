@@ -377,6 +377,9 @@ serverConnectionsClose(void)
 static void
 mainReconfigure(void)
 {
+#if !USE_DNSSERVERS
+	sqaddr_t ai, ao;
+#endif
     debug(1, 1) ("Reconfiguring Squid Cache (version %s)...\n", version_string);
     reconfiguring = 1;
     /* Already called serverConnectionsClose and ipcacheShutdownServers() */
@@ -436,7 +439,13 @@ mainReconfigure(void)
     dnsInit(Config.Program.dnsserver, Config.dnsChildren, Config.dns_nameservers, Config.onoff.res_defnames);
     dnsInternalInit();
 #else
-    idnsConfigure(Config.Addrs.udp_incoming, Config.Addrs.udp_outgoing, Config.onoff.ignore_unknown_nameservers, Config.Timeout.idns_retransmit, Config.Timeout.idns_query, Config.onoff.res_defnames);
+    sqinet_init(&ai);
+    sqinet_init(&ao);
+    sqinet_set_v4_inaddr(&ai, &Config.Addrs.udp_incoming);
+    sqinet_set_v4_inaddr(&ao, &Config.Addrs.udp_outgoing);
+    idnsConfigure(&ai, &ao, Config.onoff.ignore_unknown_nameservers, Config.Timeout.idns_retransmit, Config.Timeout.idns_query, Config.onoff.res_defnames);
+    sqinet_done(&ai);
+    sqinet_done(&ao);
     idnsInit();
     idnsInternalInit();
 #endif
@@ -550,6 +559,9 @@ mainSetCwd(void)
 static void
 mainInitialize(void)
 {
+#if !USE_DNSSERVERS
+	sqaddr_t ai, ao;
+#endif
     /* chroot if configured to run inside chroot */
     if (Config.chroot_dir && (chroot(Config.chroot_dir) != 0 || chdir("/") != 0)) {
 	fatal("failed to chroot");
@@ -603,7 +615,13 @@ mainInitialize(void)
     dnsInit(Config.Program.dnsserver, Config.dnsChildren, Config.dns_nameservers, Config.onoff.res_defnames);
     dnsInternalInit();
 #else
-    idnsConfigure(Config.Addrs.udp_incoming, Config.Addrs.udp_outgoing, Config.onoff.ignore_unknown_nameservers, Config.Timeout.idns_retransmit, Config.Timeout.idns_query, Config.onoff.res_defnames);
+    sqinet_init(&ai);
+    sqinet_init(&ao);
+    sqinet_set_v4_inaddr(&ai, &Config.Addrs.udp_incoming);
+    sqinet_set_v4_inaddr(&ao, &Config.Addrs.udp_outgoing);
+    idnsConfigure(&ai, &ao, Config.onoff.ignore_unknown_nameservers, Config.Timeout.idns_retransmit, Config.Timeout.idns_query, Config.onoff.res_defnames);
+    sqinet_done(&ai);
+    sqinet_done(&ao);
     idnsInit();
     idnsInternalInit();
 #endif
