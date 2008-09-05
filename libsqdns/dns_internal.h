@@ -91,8 +91,7 @@ extern int nns;
 extern int npc;
 extern dlink_list idns_lru_list;
 
-extern void idnsConfigure(sqaddr_t *incoming_addr, sqaddr_t *outgoing_addr,
-    int ignore_unknown_nameservers, int idns_retransmit,
+extern void idnsConfigure(int ignore_unknown_nameservers, int idns_retransmit,
     int idns_query, int res_defnames);
 extern void idnsConfigureV4Addresses(sqaddr_t *incoming_addr, sqaddr_t *outgoing_addr);
 extern void idnsConfigureV6Addresses(sqaddr_t *incoming_addr, sqaddr_t *outgoing_addr);
