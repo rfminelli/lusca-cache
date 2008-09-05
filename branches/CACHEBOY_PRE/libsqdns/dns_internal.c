@@ -627,15 +627,9 @@ idnsRcodeCount(int rcode, int attempt)
 /* ====================================================================== */
 
 void
-idnsConfigure(sqaddr_t *incoming_addr, sqaddr_t *outgoing_addr,
-    int ignore_unknown_nameservers, int idns_retransmit,
-    int idns_query, int res_defnames)
+idnsConfigure(int ignore_unknown_nameservers, int idns_retransmit, int idns_query, int res_defnames)
 {
-	sqinet_init(&DnsConfig.udp4_incoming);
-	sqinet_init(&DnsConfig.udp4_outgoing);
-
-	sqinet_copy(&DnsConfig.udp4_incoming, incoming_addr);
-	sqinet_copy(&DnsConfig.udp4_outgoing, outgoing_addr);
+	/* XXX This doesn't setup the addresses - do that immediately after calling this! */
 	DnsConfig.ignore_unknown_nameservers = ignore_unknown_nameservers;
 	DnsConfig.idns_retransmit = idns_retransmit;
 	DnsConfig.idns_query = idns_query;
@@ -645,11 +639,19 @@ idnsConfigure(sqaddr_t *incoming_addr, sqaddr_t *outgoing_addr,
 void
 idnsConfigureV4Addresses(sqaddr_t *incoming_addr, sqaddr_t *outgoing_addr)
 {
+	sqinet_init(&DnsConfig.udp4_incoming);
+	sqinet_init(&DnsConfig.udp4_outgoing);
+	sqinet_copy(&DnsConfig.udp4_incoming, incoming_addr);
+	sqinet_copy(&DnsConfig.udp4_outgoing, outgoing_addr);
 }
 
 void
 idnsConfigureV6Addresses(sqaddr_t *incoming_addr, sqaddr_t *outgoing_addr)
 {
+	sqinet_init(&DnsConfig.udp6_incoming);
+	sqinet_init(&DnsConfig.udp6_outgoing);
+	sqinet_copy(&DnsConfig.udp6_incoming, incoming_addr);
+	sqinet_copy(&DnsConfig.udp6_outgoing, outgoing_addr);
 }
 
 static int

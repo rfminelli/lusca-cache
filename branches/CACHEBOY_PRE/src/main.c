@@ -443,7 +443,8 @@ mainReconfigure(void)
     sqinet_init(&ao);
     sqinet_set_v4_inaddr(&ai, &Config.Addrs.udp_incoming);
     sqinet_set_v4_inaddr(&ao, &Config.Addrs.udp_outgoing);
-    idnsConfigure(&ai, &ao, Config.onoff.ignore_unknown_nameservers, Config.Timeout.idns_retransmit, Config.Timeout.idns_query, Config.onoff.res_defnames);
+    idnsConfigure(Config.onoff.ignore_unknown_nameservers, Config.Timeout.idns_retransmit, Config.Timeout.idns_query, Config.onoff.res_defnames);
+    idnsConfigureV4Addresses(&ai, &ao);
     sqinet_done(&ai);
     sqinet_done(&ao);
     idnsInit();
@@ -619,7 +620,8 @@ mainInitialize(void)
     sqinet_init(&ao);
     sqinet_set_v4_inaddr(&ai, &Config.Addrs.udp_incoming);
     sqinet_set_v4_inaddr(&ao, &Config.Addrs.udp_outgoing);
-    idnsConfigure(&ai, &ao, Config.onoff.ignore_unknown_nameservers, Config.Timeout.idns_retransmit, Config.Timeout.idns_query, Config.onoff.res_defnames);
+    idnsConfigure(Config.onoff.ignore_unknown_nameservers, Config.Timeout.idns_retransmit, Config.Timeout.idns_query, Config.onoff.res_defnames);
+    idnsConfigureV4Addresses(&ai, &ao);
     sqinet_done(&ai);
     sqinet_done(&ao);
     idnsInit();
