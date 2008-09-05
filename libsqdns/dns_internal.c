@@ -411,10 +411,10 @@ idnsRetryTcp(idns_query * q)
 
     sqinet_init(&addr);
     idnsTcpCleanup(q);
-    if (!sqinet_is_noaddr(&DnsConfig.udp_outgoing))
-	sqinet_copy(&addr, &DnsConfig.udp_outgoing);
+    if (!sqinet_is_noaddr(&DnsConfig.udp4_outgoing))
+	sqinet_copy(&addr, &DnsConfig.udp4_outgoing);
     else
-	sqinet_copy(&addr, &DnsConfig.udp_incoming);
+	sqinet_copy(&addr, &DnsConfig.udp4_incoming);
     q->tcp_socket = comm_open6(SOCK_STREAM,
 	IPPROTO_TCP,
 	&addr,
@@ -631,11 +631,11 @@ idnsConfigure(sqaddr_t *incoming_addr, sqaddr_t *outgoing_addr,
     int ignore_unknown_nameservers, int idns_retransmit,
     int idns_query, int res_defnames)
 {
-	sqinet_init(&DnsConfig.udp_incoming);
-	sqinet_init(&DnsConfig.udp_outgoing);
+	sqinet_init(&DnsConfig.udp4_incoming);
+	sqinet_init(&DnsConfig.udp4_outgoing);
 
-	sqinet_copy(&DnsConfig.udp_incoming, incoming_addr);
-	sqinet_copy(&DnsConfig.udp_outgoing, outgoing_addr);
+	sqinet_copy(&DnsConfig.udp4_incoming, incoming_addr);
+	sqinet_copy(&DnsConfig.udp4_outgoing, outgoing_addr);
 	DnsConfig.ignore_unknown_nameservers = ignore_unknown_nameservers;
 	DnsConfig.idns_retransmit = idns_retransmit;
 	DnsConfig.idns_query = idns_query;
@@ -679,10 +679,10 @@ idnsInit(void)
     if (DnsSocket < 0) {
 	sqaddr_t addr;
 	sqinet_init(&addr);
-	if (! sqinet_is_noaddr(&DnsConfig.udp_outgoing))
-	    sqinet_copy(&addr, &DnsConfig.udp_outgoing);
+	if (! sqinet_is_noaddr(&DnsConfig.udp4_outgoing))
+	    sqinet_copy(&addr, &DnsConfig.udp4_outgoing);
 	else
-	    sqinet_copy(&addr, &DnsConfig.udp_incoming);
+	    sqinet_copy(&addr, &DnsConfig.udp4_incoming);
 	DnsSocket = idnsInitSocket(&addr, "IPv4 DNS UDP Socket");
 	sqinet_done(&addr);
     }

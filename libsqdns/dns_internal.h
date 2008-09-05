@@ -74,7 +74,8 @@ struct _sp {
 
 
 typedef struct {
-        sqaddr_t udp_incoming, udp_outgoing;
+        sqaddr_t udp4_incoming, udp4_outgoing;
+        sqaddr_t udp6_incoming, udp6_outgoing;
         int ignore_unknown_nameservers;
         int idns_retransmit;
         int idns_query;
