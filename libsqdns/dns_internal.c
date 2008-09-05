@@ -642,6 +642,16 @@ idnsConfigure(sqaddr_t *incoming_addr, sqaddr_t *outgoing_addr,
 	DnsConfig.res_defnames = res_defnames;
 }
 
+void
+idnsConfigureV4Addresses(sqaddr_t *incoming_addr, sqaddr_t *outgoing_addr)
+{
+}
+
+void
+idnsConfigureV6Addresses(sqaddr_t *incoming_addr, sqaddr_t *outgoing_addr)
+{
+}
+
 static int
 idnsInitSocket(sqaddr_t *addr, const char *note)
 {
