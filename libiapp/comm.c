@@ -164,7 +164,7 @@ commBind(int s, sqaddr_t *addr)
 	return COMM_OK;
     getnameinfo(sqinet_get_entry(addr), sqinet_get_family(addr),
       ip_buf, MAX_IPSTRLEN, srv_buf, MAX_IPSTRLEN, NI_NUMERICHOST|NI_NUMERICSERV);
-    debug(5, 0) ("commBind: Cannot bind socket FD %d to %s:%s: %s\n", s, ip_buf, srv_buf, xstrerror());
+    debug(5, 0) ("commBind: Cannot bind socket FD %d to %s port %s: %s\n", s, ip_buf, srv_buf, xstrerror());
     return COMM_ERROR;
 }
 
