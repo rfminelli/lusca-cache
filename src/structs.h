@@ -583,6 +583,8 @@ struct _SquidConfig {
 	struct in_addr snmp_outgoing;
 #endif
 	struct in_addr client_netmask;
+	sqaddr_t udp_incoming6;
+	sqaddr_t udp_outgoing6;
     } Addrs;
     squid_off_t tcpRcvBufsz;
     squid_off_t udpMaxHitObjsz;
