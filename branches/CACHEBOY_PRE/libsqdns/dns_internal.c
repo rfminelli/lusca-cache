@@ -428,10 +428,26 @@ idnsRetryTcp(idns_query * q)
 
     sqinet_init(&addr);
     idnsTcpCleanup(q);
-    if (!sqinet_is_noaddr(&DnsConfig.udp4_outgoing))
-	sqinet_copy(&addr, &DnsConfig.udp4_outgoing);
-    else
-	sqinet_copy(&addr, &DnsConfig.udp4_incoming);
+
+    switch(sqinet_get_family(&nameservers[ns].S)) {
+	case AF_INET:
+    		if (!sqinet_is_noaddr(&DnsConfig.udp4_outgoing))
+			sqinet_copy(&addr, &DnsConfig.udp4_outgoing);
+		else
+			sqinet_copy(&addr, &DnsConfig.udp4_incoming);
+		break;
+	case AF_INET6:
+    		if (!sqinet_is_noaddr(&DnsConfig.udp6_outgoing))
+			sqinet_copy(&addr, &DnsConfig.udp6_outgoing);
+		else
+			sqinet_copy(&addr, &DnsConfig.udp6_incoming);
+		break;
+	default:
+		/* XXX this error handling is horrible? */
+		debug(1, 1) ("idnsRetryTcp: Nameserver %d: can't select an address family!\n", ns);
+		return;
+    }
+
     q->tcp_socket = comm_open6(SOCK_STREAM,
 	IPPROTO_TCP,
 	&addr,
