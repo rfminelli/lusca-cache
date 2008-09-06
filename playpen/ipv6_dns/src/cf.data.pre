@@ -4661,6 +4661,29 @@ DOC_START
 	have the same value since they both use the same port.
 DOC_END
 
+NAME: udp_outgoing_address6
+TYPE: address6
+LOC: Config.Addrs.udp_outgoing6
+DEFAULT: ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+DOC_START
+	udp_outgoing_address6	is used for UDP IPv6 packets sent out to
+				other caches.
+
+	See: udp_outgoing_address for a description of this option.
+
+DOC_END
+
+NAME: udp_incoming_address6
+TYPE: address6
+LOC: Config.Addrs.udp_incoming6
+DEFAULT: ::0
+DOC_START
+	udp_incoming_address6	is used for UDP IPv6 packets received from
+				other caches.
+
+	See: udp_incoming_address for a description of this option.
+DOC_END
+
 NAME: icp_hit_stale
 COMMENT: on|off
 TYPE: onoff

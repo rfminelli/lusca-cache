@@ -114,6 +114,7 @@ dlink_list idns_lru_list;
 static int event_queued = 0;
 static hash_table *idns_lookup_hash = NULL;
 static int DnsSocket = -1;
+static int DnsSocketv6 = -1;
 
 DnsConfigStruct DnsConfig;
 
@@ -140,7 +141,7 @@ idnsAddNameserver(const char *buf)
         goto finish;
     }
     if (sqinet_is_anyaddr(&A)) {
-	debug(78, 0) ("WARNING: Squid does not accept 0.0.0.0 in DNS server specifications.\n");
+	debug(78, 0) ("WARNING: Squid does not accept 0.0.0.0 / ::0 in DNS server specifications.\n");
 	debug(78, 0) ("Will be using 127.0.0.1 instead, assuming you meant that DNS is running on the same machine\n");
 	(void) sqinet_aton(&A, "127.0.0.1", SQATON_PASSIVE);
     }
@@ -236,18 +237,35 @@ idnsSendQuery(idns_query * q)
 {
     int x;
     int ns;
-    if (DnsSocket < 0) {
-	debug(78, 1) ("idnsSendQuery: Can't send query, no DNS socket!\n");
-	return;
-    }
+    int ds = -1;
+
     /* XXX Select nameserver */
     assert(nns > 0);
     assert(q->lru.next == NULL);
     assert(q->lru.prev == NULL);
     idnsTcpCleanup(q);
+
   try_again:
     ns = q->nsends % nns;
-    x = comm_udp_sendto6(DnsSocket, &nameservers[ns].S, q->buf, q->sz);
+    ds = -1;
+
+    /* Select a Dns Socket based on the address family of the nameserver */
+    switch(sqinet_get_family(&nameservers[ns].S)) {
+	case AF_INET:
+		ds = DnsSocket;
+		break;
+	case AF_INET6:
+		ds = DnsSocketv6;
+		break;
+    }
+    if (ds < 0) {
+		/* XXX I don't like this failure mode but its inherited from the previous code! -[ahc] */
+		debug(78, 1) ("idnsSendQuery: Can't send query, no DNS socket for address family %d!\n", sqinet_get_family(&nameservers[ns].S));
+		return;
+    }
+
+    x = comm_udp_sendto6(ds, &nameservers[ns].S, q->buf, q->sz);
+
     q->nsends++;
     q->queue_t = q->sent_t = current_time;
     if (x < 0) {
@@ -256,8 +274,8 @@ idnsSendQuery(idns_query * q)
 	if (q->nsends % nns != 0)
 	    goto try_again;
     } else {
-	fd_bytes(DnsSocket, x, FD_WRITE);
-	commSetSelect(DnsSocket, COMM_SELECT_READ, idnsRead, NULL, 0);
+	fd_bytes(ds, x, FD_WRITE);
+	commSetSelect(ds, COMM_SELECT_READ, idnsRead, NULL, 0);
     }
     nameservers[ns].nqueries++;
     dlinkAdd(q, &q->lru, &idns_lru_list);
@@ -410,10 +428,26 @@ idnsRetryTcp(idns_query * q)
 
     sqinet_init(&addr);
     idnsTcpCleanup(q);
-    if (!sqinet_is_noaddr(&DnsConfig.udp_outgoing))
-	sqinet_copy(&addr, &DnsConfig.udp_outgoing);
-    else
-	sqinet_copy(&addr, &DnsConfig.udp_incoming);
+
+    switch(sqinet_get_family(&nameservers[ns].S)) {
+	case AF_INET:
+    		if (!sqinet_is_noaddr(&DnsConfig.udp4_outgoing))
+			sqinet_copy(&addr, &DnsConfig.udp4_outgoing);
+		else
+			sqinet_copy(&addr, &DnsConfig.udp4_incoming);
+		break;
+	case AF_INET6:
+    		if (!sqinet_is_noaddr(&DnsConfig.udp6_outgoing))
+			sqinet_copy(&addr, &DnsConfig.udp6_outgoing);
+		else
+			sqinet_copy(&addr, &DnsConfig.udp6_incoming);
+		break;
+	default:
+		/* XXX this error handling is horrible? */
+		debug(1, 1) ("idnsRetryTcp: Nameserver %d: can't select an address family!\n", ns);
+		return;
+    }
+
     q->tcp_socket = comm_open6(SOCK_STREAM,
 	IPPROTO_TCP,
 	&addr,
@@ -543,7 +577,7 @@ idnsRead(int fd, void *data)
 	    sqinet_done(&from);
 	    break;
 	}
-	fd_bytes(DnsSocket, len, FD_READ);
+	fd_bytes(fd, len, FD_READ);
 	debug(78, 3) ("idnsRead: FD %d: received %d bytes\n", fd, (int) len);
 	ns = idnsFromKnownNameserver(&from);
 	if (ns >= 0) {
@@ -561,8 +595,21 @@ idnsRead(int fd, void *data)
 	idnsGrokReply(rbuf, len);
 	sqinet_done(&from);
     }
-    if (idns_lru_list.head)
-	commSetSelect(DnsSocket, COMM_SELECT_READ, idnsRead, NULL, 0);
+
+    /*
+     * XXX This is a bit annoying. This next bit of code reschedules another
+     * XXX read if there are pending events to receive replies for.
+     * XXX idnsRead() will happily read replies for both v4 and v6 udp sockets;
+     * XXX but at this point we don't know whether the pending replies are for
+     * XXX one or the other (or both!)
+     * XXX So for now, just register read interest for both..
+     */
+    if (idns_lru_list.head) {
+	if (DnsSocket != -1)
+	    commSetSelect(DnsSocket, COMM_SELECT_READ, idnsRead, NULL, 0);
+	if (DnsSocketv6 != -1)
+	    commSetSelect(DnsSocketv6, COMM_SELECT_READ, idnsRead, NULL, 0);
+    }
 }
 
 static void
@@ -626,52 +673,80 @@ idnsRcodeCount(int rcode, int attempt)
 /* ====================================================================== */
 
 void
-idnsConfigure(sqaddr_t *incoming_addr, sqaddr_t *outgoing_addr,
-    int ignore_unknown_nameservers, int idns_retransmit,
-    int idns_query, int res_defnames)
+idnsConfigure(int ignore_unknown_nameservers, int idns_retransmit, int idns_query, int res_defnames)
 {
-	sqinet_init(&DnsConfig.udp_incoming);
-	sqinet_init(&DnsConfig.udp_outgoing);
-
-	sqinet_copy(&DnsConfig.udp_incoming, incoming_addr);
-	sqinet_copy(&DnsConfig.udp_outgoing, outgoing_addr);
+	/* XXX This doesn't setup the addresses - do that immediately after calling this! */
 	DnsConfig.ignore_unknown_nameservers = ignore_unknown_nameservers;
 	DnsConfig.idns_retransmit = idns_retransmit;
 	DnsConfig.idns_query = idns_query;
 	DnsConfig.res_defnames = res_defnames;
 }
 
+void
+idnsConfigureV4Addresses(sqaddr_t *incoming_addr, sqaddr_t *outgoing_addr)
+{
+	sqinet_init(&DnsConfig.udp4_incoming);
+	sqinet_init(&DnsConfig.udp4_outgoing);
+	sqinet_copy(&DnsConfig.udp4_incoming, incoming_addr);
+	sqinet_copy(&DnsConfig.udp4_outgoing, outgoing_addr);
+}
+
+void
+idnsConfigureV6Addresses(sqaddr_t *incoming_addr, sqaddr_t *outgoing_addr)
+{
+	sqinet_init(&DnsConfig.udp6_incoming);
+	sqinet_init(&DnsConfig.udp6_outgoing);
+	sqinet_copy(&DnsConfig.udp6_incoming, incoming_addr);
+	sqinet_copy(&DnsConfig.udp6_outgoing, outgoing_addr);
+}
+
+static int
+idnsInitSocket(sqaddr_t *addr, const char *note)
+{
+	LOCAL_ARRAY(char, buf, 256);
+	int fd;
+
+	fd = comm_open6(SOCK_DGRAM, IPPROTO_UDP, addr, COMM_NONBLOCKING, COMM_TOS_DEFAULT, note);
+	if (fd < 0)
+	    libcore_fatalf("Could not create a DNS socket: errno %d", errno);
+	/* Ouch... we can't call functions using debug from a debug
+	 * statement. Doing so messes up the internal _db_level
+	 */
+	(void) sqinet_ntoa(addr, buf, sizeof(buf), SQADDR_NONE);
+	debug(78, 1) ("DNS Socket created at %s, port %d, FD %d\n", buf, comm_local_port(fd), fd);
+	return fd;
+}
 
 void
 idnsInit(void)
 {
     static int init = 0;
     CBDATA_INIT_TYPE(idns_query);
+
+    /* IPv4 socket */
     if (DnsSocket < 0) {
-	LOCAL_ARRAY(char, buf, 256);
 	sqaddr_t addr;
 	sqinet_init(&addr);
-	if (! sqinet_is_noaddr(&DnsConfig.udp_outgoing))
-	    sqinet_copy(&addr, &DnsConfig.udp_outgoing);
+	if (! sqinet_is_noaddr(&DnsConfig.udp4_outgoing))
+	    sqinet_copy(&addr, &DnsConfig.udp4_outgoing);
 	else
-	    sqinet_copy(&addr, &DnsConfig.udp_incoming);
-	DnsSocket = comm_open6(SOCK_DGRAM,
-	    IPPROTO_UDP,
-	    &addr,
-	    COMM_NONBLOCKING,
-	    COMM_TOS_DEFAULT,
-	    "DNS Socket");
-	if (DnsSocket < 0)
-	    libcore_fatalf("Could not create a DNS socket: errno %d", errno);
-	/* Ouch... we can't call functions using debug from a debug
-	 * statement. Doing so messes up the internal _db_level
-	 */
-	(void) sqinet_ntoa(&addr, buf, sizeof(buf), SQADDR_NONE);
-	debug(78, 1) ("DNS Socket created at %s, port %d, FD %d\n",
-	    buf,
-	    sqinet_get_port(&addr), DnsSocket);
+	    sqinet_copy(&addr, &DnsConfig.udp4_incoming);
+	DnsSocket = idnsInitSocket(&addr, "IPv4 DNS UDP Socket");
 	sqinet_done(&addr);
     }
+
+    /* IPv6 socket */
+    if (DnsSocketv6 < 0) {
+	sqaddr_t addr;
+	sqinet_init(&addr);
+	if (! sqinet_is_noaddr(&DnsConfig.udp6_outgoing))
+	    sqinet_copy(&addr, &DnsConfig.udp6_outgoing);
+	else
+	    sqinet_copy(&addr, &DnsConfig.udp6_incoming);
+	DnsSocketv6 = idnsInitSocket(&addr, "IPv6 DNS UDP Socket");
+	sqinet_done(&addr);
+    }
+    
     assert(0 == nns);
     if (!init) {
 	memset(RcodeMatrix, '\0', sizeof(RcodeMatrix));
@@ -684,10 +759,12 @@ idnsInit(void)
 void
 idnsShutdown(void)
 {
-    if (DnsSocket < 0)
+    if (DnsSocket < 0 && DnsSocketv6 < 0)
 	return;
     comm_close(DnsSocket);
     DnsSocket = -1;
+    comm_close(DnsSocketv6);
+    DnsSocketv6 = -1;
     idnsFreeNameservers();
     idnsFreeSearchpath();
 }

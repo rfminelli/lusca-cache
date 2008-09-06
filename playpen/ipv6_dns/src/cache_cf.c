@@ -760,7 +760,7 @@ free_acl_access(acl_access ** head)
 }
 
 static void
-dump_sqaddr_t(StoreEntry *entry, const char *name, sqaddr_t addr)
+dump_address46(StoreEntry *entry, const char *name, sqaddr_t addr)
 {
 	LOCAL_ARRAY(char, sbuf, 256);
 	(void) sqinet_ntoa(&addr, sbuf, sizeof(sbuf), SQADDR_NONE);
@@ -768,7 +768,7 @@ dump_sqaddr_t(StoreEntry *entry, const char *name, sqaddr_t addr)
 }
 
 static void
-parse_sqaddr_t(sqaddr_t *addr)
+parse_address46(sqaddr_t *addr)
 {
 	char *token = strtok(NULL, w_space);
 	sqinet_init(addr);
@@ -781,7 +781,35 @@ parse_sqaddr_t(sqaddr_t *addr)
 }
 
 static void
-free_sqaddr_t(sqaddr_t *addr)
+free_address46(sqaddr_t *addr)
+{
+	sqinet_done(addr);
+}
+
+static void
+dump_address6(StoreEntry *entry, const char *name, sqaddr_t addr)
+{
+	LOCAL_ARRAY(char, sbuf, 256);
+	(void) sqinet_ntoa(&addr, sbuf, sizeof(sbuf), SQADDR_NONE);
+	storeAppendPrintf(entry, "%s %s\n", name, sbuf);
+}
+
+static void
+parse_address6(sqaddr_t *addr)
+{
+	char *token = strtok(NULL, w_space);
+	sqinet_init(addr);
+	if (token == NULL)
+		self_destruct();
+
+	/* XXX for now only support numeric addresses, not hostnames */
+	/* XXX and this should enforce IPv6 only! */
+	if (sqinet_aton(addr, token, SQATON_FAMILY_IPv6 | SQATON_PASSIVE) == 0)
+		self_destruct();
+}
+
+static void
+free_address6(sqaddr_t *addr)
 {
 	sqinet_done(addr);
 }

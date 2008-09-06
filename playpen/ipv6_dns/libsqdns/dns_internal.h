@@ -74,7 +74,8 @@ struct _sp {
 
 
 typedef struct {
-        sqaddr_t udp_incoming, udp_outgoing;
+        sqaddr_t udp4_incoming, udp4_outgoing;
+        sqaddr_t udp6_incoming, udp6_outgoing;
         int ignore_unknown_nameservers;
         int idns_retransmit;
         int idns_query;
@@ -90,9 +91,10 @@ extern int nns;
 extern int npc;
 extern dlink_list idns_lru_list;
 
-extern void idnsConfigure(sqaddr_t *incoming_addr, sqaddr_t *outgoing_addr,
-    int ignore_unknown_nameservers, int idns_retransmit,
+extern void idnsConfigure(int ignore_unknown_nameservers, int idns_retransmit,
     int idns_query, int res_defnames);
+extern void idnsConfigureV4Addresses(sqaddr_t *incoming_addr, sqaddr_t *outgoing_addr);
+extern void idnsConfigureV6Addresses(sqaddr_t *incoming_addr, sqaddr_t *outgoing_addr);
 
 extern void idnsAddNameserver(const char *buf);
 extern void idnsAddPathComponent(const char *buf);

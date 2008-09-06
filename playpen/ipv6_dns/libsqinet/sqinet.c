@@ -566,10 +566,10 @@ sqinet_compare_addr(const sqaddr_t *a, const sqaddr_t *b)
 			return (((struct sockaddr_in *) &a->st)->sin_addr.s_addr) == (((struct sockaddr_in *) &a->st)->sin_addr.s_addr);
 		break;
 		case AF_INET6:
-			return memcmp(
+			return (memcmp(
 				&(((struct sockaddr_in6 *) &a->st)->sin6_addr),
 				&(((struct sockaddr_in6 *) &a->st)->sin6_addr),
-				sizeof((((struct sockaddr_in6 *) &a->st)->sin6_addr)) == 0);
+				sizeof((((struct sockaddr_in6 *) &a->st)->sin6_addr))) == 0);
 		break;
 		default:
 			assert(1==0);

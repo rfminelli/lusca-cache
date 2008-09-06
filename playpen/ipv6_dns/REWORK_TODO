@@ -17,3 +17,6 @@
   option accessible and thus it doesn't sleep at all before fork. Figure out a
   clean way to get that value, possibly passed into the helper create functions.
 
+* The internal DNS code is beginning to grow IPv6 awareness; the external DNS code
+  however doesn't know the first thing about it. This should be rectified!
+

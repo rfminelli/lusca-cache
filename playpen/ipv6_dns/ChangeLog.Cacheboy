@@ -1,5 +1,27 @@
 ChangeLog:
 
+-- (6-September-2008)
+
+* Implement v4/v6 aware UDP and TCP transport for the internal DNS code
+  so IPv6 DNS servers can be configured.
+
+  (The DNS code still only resolves v4 addresses.)
+
+* Tag CACHEBOY_1.5.PRE4.
+
+
+-- (2-September-2008)
+
+* Implement an async callback based stream socket connect function,
+  mostly mirroring the existing async callback-based _DNS lookup_ using
+  function - primarily so the DNS code can use it to connect to TCP endpoints
+  without needing to go through the name cache!
+
+* Convert internal DNS over to use this code, so libsqdns/ is now properly
+  decoupled from the rest of src/ and can be used/tested seperately.
+
+* Tag CACHEBOY_1.5.PRE3.
+
 -- (27-August-2008)
 
 * Integrate /playpen/http_work into Squid - HTTP parser related code modularity/reorganisation into libhttp/

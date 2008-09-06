@@ -6,6 +6,8 @@ acl_address		acl
 acl_b_size_t		acl
 acl_tos			acl
 address
+address46
+address6
 authparam
 b_int64_t
 b_size_t
@@ -57,4 +59,3 @@ refreshCheckHelper
 rewrite			acl
 zph_mode
 forwarded_for
-sqaddr_t
