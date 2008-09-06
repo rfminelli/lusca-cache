@@ -1,5 +1,15 @@
 ChangeLog:
 
+-- (6-September-2008)
+
+* Implement v4/v6 aware UDP and TCP transport for the internal DNS code
+  so IPv6 DNS servers can be configured.
+
+  (The DNS code still only resolves v4 addresses.)
+
+* Tag CACHEBOY_1.5.PRE4.
+
+
 -- (2-September-2008)
 
 * Implement an async callback based stream socket connect function,
