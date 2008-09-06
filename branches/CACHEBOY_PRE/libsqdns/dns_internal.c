@@ -141,7 +141,7 @@ idnsAddNameserver(const char *buf)
         goto finish;
     }
     if (sqinet_is_anyaddr(&A)) {
-	debug(78, 0) ("WARNING: Squid does not accept 0.0.0.0 in DNS server specifications.\n");
+	debug(78, 0) ("WARNING: Squid does not accept 0.0.0.0 / ::0 in DNS server specifications.\n");
 	debug(78, 0) ("Will be using 127.0.0.1 instead, assuming you meant that DNS is running on the same machine\n");
 	(void) sqinet_aton(&A, "127.0.0.1", SQATON_PASSIVE);
     }
@@ -237,18 +237,35 @@ idnsSendQuery(idns_query * q)
 {
     int x;
     int ns;
-    if (DnsSocket < 0) {
-	debug(78, 1) ("idnsSendQuery: Can't send query, no DNS socket!\n");
-	return;
-    }
+    int ds = -1;
+
     /* XXX Select nameserver */
     assert(nns > 0);
     assert(q->lru.next == NULL);
     assert(q->lru.prev == NULL);
     idnsTcpCleanup(q);
+
   try_again:
     ns = q->nsends % nns;
-    x = comm_udp_sendto6(DnsSocket, &nameservers[ns].S, q->buf, q->sz);
+    ds = -1;
+
+    /* Select a Dns Socket based on the address family of the nameserver */
+    switch(sqinet_get_family(&nameservers[ns].S)) {
+	case AF_INET:
+		ds = DnsSocket;
+		break;
+	case AF_INET6:
+		ds = DnsSocketv6;
+		break;
+    }
+    if (ds < 0) {
+		/* XXX I don't like this failure mode but its inherited from the previous code! -[ahc] */
+		debug(78, 1) ("idnsSendQuery: Can't send query, no DNS socket for address family %d!\n", sqinet_get_family(&nameservers[ns].S));
+		return;
+    }
+
+    x = comm_udp_sendto6(ds, &nameservers[ns].S, q->buf, q->sz);
+
     q->nsends++;
     q->queue_t = q->sent_t = current_time;
     if (x < 0) {
@@ -257,8 +274,8 @@ idnsSendQuery(idns_query * q)
 	if (q->nsends % nns != 0)
 	    goto try_again;
     } else {
-	fd_bytes(DnsSocket, x, FD_WRITE);
-	commSetSelect(DnsSocket, COMM_SELECT_READ, idnsRead, NULL, 0);
+	fd_bytes(ds, x, FD_WRITE);
+	commSetSelect(ds, COMM_SELECT_READ, idnsRead, NULL, 0);
     }
     nameservers[ns].nqueries++;
     dlinkAdd(q, &q->lru, &idns_lru_list);
@@ -544,7 +561,7 @@ idnsRead(int fd, void *data)
 	    sqinet_done(&from);
 	    break;
 	}
-	fd_bytes(DnsSocket, len, FD_READ);
+	fd_bytes(fd, len, FD_READ);
 	debug(78, 3) ("idnsRead: FD %d: received %d bytes\n", fd, (int) len);
 	ns = idnsFromKnownNameserver(&from);
 	if (ns >= 0) {
@@ -562,8 +579,21 @@ idnsRead(int fd, void *data)
 	idnsGrokReply(rbuf, len);
 	sqinet_done(&from);
     }
-    if (idns_lru_list.head)
-	commSetSelect(DnsSocket, COMM_SELECT_READ, idnsRead, NULL, 0);
+
+    /*
+     * XXX This is a bit annoying. This next bit of code reschedules another
+     * XXX read if there are pending events to receive replies for.
+     * XXX idnsRead() will happily read replies for both v4 and v6 udp sockets;
+     * XXX but at this point we don't know whether the pending replies are for
+     * XXX one or the other (or both!)
+     * XXX So for now, just register read interest for both..
+     */
+    if (idns_lru_list.head) {
+	if (DnsSocket != -1)
+	    commSetSelect(DnsSocket, COMM_SELECT_READ, idnsRead, NULL, 0);
+	if (DnsSocketv6 != -1)
+	    commSetSelect(DnsSocketv6, COMM_SELECT_READ, idnsRead, NULL, 0);
+    }
 }
 
 static void
@@ -693,8 +723,10 @@ idnsInit(void)
     if (DnsSocketv6 < 0) {
 	sqaddr_t addr;
 	sqinet_init(&addr);
-	/* XXX for now, bind to anyaddr; make it configurable later! */
-	sqinet_aton(&addr, "::0", SQATON_PASSIVE);
+	if (! sqinet_is_noaddr(&DnsConfig.udp6_outgoing))
+	    sqinet_copy(&addr, &DnsConfig.udp6_outgoing);
+	else
+	    sqinet_copy(&addr, &DnsConfig.udp6_incoming);
 	DnsSocketv6 = idnsInitSocket(&addr, "IPv6 DNS UDP Socket");
 	sqinet_done(&addr);
     }
