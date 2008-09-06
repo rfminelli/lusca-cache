@@ -1,0 +1,134 @@
+ChangeLog:
+
+-- (6-September-2008)
+
+* Implement v4/v6 aware UDP and TCP transport for the internal DNS code
+  so IPv6 DNS servers can be configured.
+
+  (The DNS code still only resolves v4 addresses.)
+
+* Tag CACHEBOY_1.5.PRE4.
+
+
+-- (2-September-2008)
+
+* Implement an async callback based stream socket connect function,
+  mostly mirroring the existing async callback-based _DNS lookup_ using
+  function - primarily so the DNS code can use it to connect to TCP endpoints
+  without needing to go through the name cache!
+
+* Convert internal DNS over to use this code, so libsqdns/ is now properly
+  decoupled from the rest of src/ and can be used/tested seperately.
+
+* Tag CACHEBOY_1.5.PRE3.
+
+-- (27-August-2008)
+
+* Integrate /playpen/http_work into Squid - HTTP parser related code modularity/reorganisation into libhttp/
+* Tag CACHEBOY_1.5.PRE2.
+
+-- (23-August-2008)
+
+* Tag CACHEBOY_1.5.PRE1.
+
+-- (22-August-2008)
+
+* Integrate IPv6 core into Squid
+* Begin reorganising the HTTP code into libhttp/
+
+-- (12-August-2008)
+
+* Fixed poll/select compile issues
+* Don't install tcptest in "make install"; its just a test program
+* Tag CACHEBOY_1.4.1.
+
+-- (30-July-2008)
+
+* Tag CACHEBOY_1.4.
+
+-- (29-July-2008)
+
+* Fix regression in memory store index - my bad!
+* Tag CACHEBOY_1.4.PRE4.
+
+-- (22-July-2008)
+
+* More light tidyups
+* Tagged CACHEBOY_1.4.PRE2
+
+-- (19-July-2008)
+
+* completed shuffling the communication related code out of src/ and into libiapp/
+* moved the DNS, helper, IPC code out of src/ and into external libraries
+* Tagged CACHEBOY_1.4.PRE1
+
+-- (26-June-2008)
+
+* Merged in up to latest Squid-2.HEAD
+
+* Tagged CACHEBOY_1.2
+* Tagged CACHEBOY_1.3
+
+-- (20-June-2008)
+
+* Shuffled the beginnings of comm, disk, filedescriptor and event management out of src/
+  and into libiapp/
+* Shuffled a couple of basic HTTP types out of src/ and into libhttp/
+* Reworked the async IO disk notification code - it should be more efficient under
+  heavy network (and disk!) load.
+
+* Tagged CACHEBOY_1.1
+
+* Shuffled MemPools out of src/ and into libmem/
+* Shuffled cbdata out of src/ and into libmem/
+
+* Tagged: CACHEBOY_1.0.
+-- (24-May-2008)
+
+* Tagged: CACHEBOY_0.PRE6.
+-- (17-May-2008)
+
+* Fixed a crash introduced by store_client tidyups in Squid-2.HEAD.
+  (Fixed in Squid-2.HEAD; ported to Cacheboy.)
+* Added new English error pages - NewEnglish - which include
+  much better CSS and layout.
+
+* Tagged: CACHEBOY_0.PRE5
+-- (6-May-2008)
+
+* Merge in Squid-2.HEAD changes.
+* Finish memory allocator shuffling; move buffer management into libmem/
+  and out of src/.
+
+* Tagged: CACHEBOY_0.PRE4
+-- (30-April-2008)
+
+* Merge in Squid-2.HEAD changes.
+* More reshuffling of the memory allocator code and its use in the
+  codebase.
+
+* Tagged: CACHEBOY_0.PRE3
+-- (23-April-2008)
+
+* Add in a O(1) FIFO type (allocator overhead notwithstanding) - use it for
+  the heap allocation code.
+
+* Tagged: CACHEBOY_0.PRE2
+-- (21-April-2008)
+
+* The helper code now doesn't use a temporary list structure to store
+  queued requests (tested)
+* The aufs storage code now doesn't use a temporary list structure to store
+  temporary lists of pending reads and writes (tested)
+* Continued to shuffle around code into seperate libraries
+* Changed the way legacy memory pools are initialised - the same MemPools
+  code is used but they're setup slightly differently. Instability could
+  arise if objects are assigned to the wrong pool.
+* Removed some unused memory pool types.
+
+* Tagged: CACHEBOY_0.PRE1
+
+* Various code modules have been shuffled out of the main src/ directory
+  and into library subdirectories as part of code housekeeping.
+
+-- Imported Squid-2.HEAD.

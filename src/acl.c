@@ -109,6 +109,39 @@ static void aclDestroyCertList(void *data);
 
 static int aclCacheMatchAcl(dlink_list * cache, squid_acl acltype, void *data, char *MatchParam);
 
+static MemPool *acl_pool = NULL;
+MemPool *acl_deny_pool = NULL;
+static MemPool *acl_ip_data_pool = NULL;
+static MemPool *acl_list_pool = NULL;
+MemPool *acl_name_list_pool = NULL;
+#if USE_SSL
+static MemPool *acl_cert_data_pool = NULL;
+#endif
+static MemPool *acl_time_data_pool = NULL;
+static MemPool *acl_request_type_pool = NULL;
+static MemPool *acl_proxy_auth_pool = NULL;
+static MemPool *acl_user_data_pool = NULL;
+static MemPool *acl_relist_pool = NULL;
+
+
+void
+aclInitMem(void)
+{
+    acl_pool = memPoolCreate("acl", sizeof(acl));
+    acl_deny_pool = memPoolCreate("acl_deny_info_list", sizeof(acl_deny_info_list));
+    acl_ip_data_pool = memPoolCreate("acl_ip_data", sizeof(acl_ip_data));
+    acl_list_pool = memPoolCreate("acl_list", sizeof(acl_list));
+    acl_name_list_pool = memPoolCreate("acl_name_list", sizeof(acl_name_list));
+#if USE_SSL
+    acl_cert_data_pool = memPoolCreate("acl_cert_data", sizeof(acl_cert_data));
+#endif
+    acl_time_data_pool = memPoolCreate("acl_time_data", sizeof(acl_time_data));
+    acl_request_type_pool = memPoolCreate("acl_request_type", sizeof(acl_request_type));
+    acl_proxy_auth_pool = memPoolCreate("acl_proxy_auth_match_cache", sizeof(acl_proxy_auth_match_cache));
+    acl_user_data_pool = memPoolCreate("acl_user_data", sizeof(acl_user_data));
+    acl_relist_pool = memPoolCreate("relist", sizeof(relist));
+}
+
 static squid_acl
 aclStrToType(const char *s)
 {
@@ -324,15 +357,13 @@ aclFindByName(const char *name)
 static void
 aclParseIntlist(void *curlist)
 {
-    intlist **Tail;
-    intlist *q = NULL;
+    intlist *Tail, **Head = curlist;
     char *t = NULL;
-    for (Tail = curlist; *Tail; Tail = &((*Tail)->next));
+    for (Tail = *Head; Tail; Tail = Tail->next);
     while ((t = strtokFile())) {
-	q = memAllocate(MEM_INTLIST);
-	q->i = xatoi(t);
-	*(Tail) = q;
-	Tail = &q->next;
+        Tail = intlistAddTail(Tail, xatoi(t));
+        if (*Head == NULL)
+            *Head = Tail;
     }
 }
 
@@ -368,34 +399,33 @@ aclParsePortRange(void *curlist)
 static void
 aclParseProtoList(void *curlist)
 {
-    intlist **Tail;
-    intlist *q = NULL;
+    intlist *Tail, **Head = curlist;
     char *t = NULL;
     protocol_t protocol;
-    for (Tail = curlist; *Tail; Tail = &((*Tail)->next));
+    for (Tail = *Head; Tail; Tail = Tail->next);
     while ((t = strtokFile())) {
 	protocol = urlParseProtocol(t);
-	q = memAllocate(MEM_INTLIST);
-	q->i = (int) protocol;
-	*(Tail) = q;
-	Tail = &q->next;
+        Tail = intlistAddTail(Tail, (int) protocol);
+        if (*Head == NULL)
+            *Head = Tail;
     }
 }
 
 static void
 aclParseMethodList(void *curlist)
 {
-    intlist **Tail;
-    intlist *q = NULL;
+    intlist *Tail, **Head = curlist;
     char *t = NULL;
-    for (Tail = curlist; *Tail; Tail = &((*Tail)->next));
+    int i;
+
+    for (Tail = *Head; Tail; Tail = Tail->next);
     while ((t = strtokFile())) {
-	q = memAllocate(MEM_INTLIST);
-	q->i = (int) urlParseMethod(t, strlen(t));
-	if (q->i == METHOD_NONE)
+	i = (int) urlParseMethod(t, strlen(t));
+	if (i == METHOD_NONE)
 	    self_destruct();
-	*(Tail) = q;
-	Tail = &q->next;
+        Tail = intlistAddTail(Tail, i);
+        if (*Head == NULL)
+            *Head = Tail;
     }
 }
 
@@ -406,7 +436,7 @@ aclParseType(void *current)
     acl_request_type *type;
     char *t = NULL;
     if (!*p)
-	*p = memAllocate(MEM_ACL_REQUEST_TYPE);
+	*p = memPoolAlloc(acl_request_type_pool);
     type = *p;
     while ((t = strtokFile())) {
 	if (strcmp(t, "accelerated") == 0) {
@@ -475,7 +505,7 @@ aclParseIpData(const char *t)
     LOCAL_ARRAY(char, addr1, 256);
     LOCAL_ARRAY(char, addr2, 256);
     LOCAL_ARRAY(char, mask, 256);
-    acl_ip_data *q = memAllocate(MEM_ACL_IP_DATA);
+    acl_ip_data *q = memPoolAlloc(acl_ip_data_pool);
     acl_ip_data *r;
     acl_ip_data **Q;
     struct hostent *hp;
@@ -488,7 +518,7 @@ aclParseIpData(const char *t)
 	q->mask.s_addr = 0;
 	return q;
     }
-    q->mask.s_addr = no_addr.s_addr;	/* 255.255.255.255 */
+    SetNoAddr(&q->mask);	/* 255.255.255.255 */
     if (sscanf(t, SCAN_ACL1, addr1, addr2, mask) == 3) {
 	(void) 0;
     } else if (sscanf(t, SCAN_ACL2, addr1, addr2, &c) == 2) {
@@ -513,10 +543,10 @@ aclParseIpData(const char *t)
 	Q = &q;
 	for (x = hp->h_addr_list; x != NULL && *x != NULL; x++) {
 	    if ((r = *Q) == NULL)
-		r = *Q = memAllocate(MEM_ACL_IP_DATA);
+		r = *Q = memPoolAlloc(acl_ip_data_pool);
 	    xmemcpy(&r->addr1.s_addr, *x, sizeof(r->addr1.s_addr));
 	    r->addr2.s_addr = 0;
-	    r->mask.s_addr = no_addr.s_addr;	/* 255.255.255.255 */
+	    SetNoAddr(&r->mask);	/* 255.255.255.255 */
 	    Q = &r->next;
 	    debug(28, 3) ("%s --> %s\n", addr1, inet_ntoa(r->addr1));
 	}
@@ -635,7 +665,7 @@ aclParseTimeSpec(void *curlist)
 		debug(28, 0) ("aclParseTimeSpec: ERROR: Bad time range '%s'\n", t);
 		self_destruct();
 	    }
-	    q = memAllocate(MEM_ACL_TIME_DATA);
+	    q = memPoolAlloc(acl_time_data_pool);
 	    q->start = h1 * 60 + m1;
 	    q->stop = h2 * 60 + m2;
 	    q->weekbits = weekbits;
@@ -653,7 +683,7 @@ aclParseTimeSpec(void *curlist)
 	}
     }
     if (weekbits) {
-	q = memAllocate(MEM_ACL_TIME_DATA);
+	q = memPoolAlloc(acl_time_data_pool);
 	q->start = 0 * 60 + 0;
 	q->stop = 24 * 60 + 0;
 	q->weekbits = weekbits;
@@ -690,7 +720,7 @@ aclParseRegexList(void *curlist)
 		t, errbuf);
 	    continue;
 	}
-	q = memAllocate(MEM_RELIST);
+	q = memPoolAlloc(acl_relist_pool);
 	q->pattern = xstrdup(t);
 	q->regex = comp;
 	*(Tail) = q;
@@ -797,7 +827,7 @@ aclParseUserList(void **current)
     debug(28, 2) ("aclParseUserList: parsing user list\n");
     if (*current == NULL) {
 	debug(28, 3) ("aclParseUserList: current is null. Creating\n");
-	*current = memAllocate(MEM_ACL_USER_DATA);
+	*current = memPoolAlloc(acl_user_data_pool);
     }
     t = strtokFile();
     if (!t) {
@@ -871,7 +901,7 @@ aclParseCertList(void *curlist)
 	if (strcasecmp((*datap)->attribute, attribute) != 0)
 	    self_destruct();
     } else {
-	*datap = memAllocate(MEM_ACL_CERT_DATA);
+	*datap = memPoolAlloc(acl_cert_data_pool);
 	(*datap)->attribute = xstrdup(attribute);
     }
     Top = &(*datap)->values;
@@ -922,7 +952,7 @@ aclDestroyCertList(void *curlist)
     if (!*datap)
 	return;
     splay_destroy((*datap)->values, xfree);
-    memFree(*datap, MEM_ACL_CERT_DATA);
+    memPoolFree(acl_cert_data_pool, *datap);
     *datap = NULL;
 }
 
@@ -978,7 +1008,7 @@ aclParseAclLine(acl ** head)
     }
     if ((A = aclFindByName(aclname)) == NULL) {
 	debug(28, 3) ("aclParseAclLine: Creating ACL '%s'\n", aclname);
-	A = memAllocate(MEM_ACL);
+	A = memPoolAlloc(acl_pool);
 	xstrncpy(A->name, aclname, ACL_NAME_SZ);
 	A->type = acltype;
 	A->cfgline = xstrdup(config_input_line);
@@ -1204,14 +1234,14 @@ aclParseDenyInfoLine(acl_deny_info_list ** head)
 	debug(28, 0) ("aclParseDenyInfoLine: missing 'error page' parameter.\n");
 	return;
     }
-    A = memAllocate(MEM_ACL_DENY_INFO_LIST);
+    A = memPoolAlloc(acl_deny_pool);
     A->err_page_id = errorReservePageId(t);
     A->err_page_name = xstrdup(t);
     A->next = (acl_deny_info_list *) NULL;
     /* next expect a list of ACL names */
     Tail = &A->acl_list;
     while ((t = strtok(NULL, w_space))) {
-	L = memAllocate(MEM_ACL_NAME_LIST);
+	L = memPoolAlloc(acl_name_list_pool);
 	xstrncpy(L->name, t, ACL_NAME_SZ);
 	*Tail = L;
 	Tail = &L->next;
@@ -1220,12 +1250,14 @@ aclParseDenyInfoLine(acl_deny_info_list ** head)
 	debug(28, 0) ("%s line %d: %s\n",
 	    cfg_filename, config_lineno, config_input_line);
 	debug(28, 0) ("aclParseDenyInfoLine: deny_info line contains no ACL's, skipping\n");
-	memFree(A, MEM_ACL_DENY_INFO_LIST);
+	memPoolFree(acl_deny_pool, A);
 	return;
     }
     for (B = *head, T = head; B; T = &B->next, B = B->next);	/* find the tail */
     *T = A;
 }
+
+CBDATA_TYPE(acl_access);
 
 void
 aclParseAccessLine(acl_access ** head)
@@ -1242,6 +1274,7 @@ aclParseAccessLine(acl_access ** head)
 	debug(28, 0) ("aclParseAccessLine: missing 'allow' or 'deny'.\n");
 	return;
     }
+    CBDATA_INIT_TYPE(acl_access);
     A = cbdataAlloc(acl_access);
 
     if (!strcmp(t, "allow"))
@@ -1281,7 +1314,7 @@ aclParseAclList(acl_list ** head)
     /* next expect a list of ACL names, possibly preceeded
      * by '!' for negation */
     while ((t = strtok(NULL, w_space))) {
-	L = memAllocate(MEM_ACL_LIST);
+	L = memPoolAlloc(acl_list_pool);
 	L->op = 1;		/* defaults to non-negated */
 	if (*t == '!') {
 	    /* negated ACL */
@@ -1293,7 +1326,7 @@ aclParseAclList(acl_list ** head)
 	if (a == NULL) {
 	    debug(28, 0) ("ACL name '%s' not defined!\n", t);
 	    self_destruct();
-	    memFree(L, MEM_ACL_LIST);
+	    memPoolFree(acl_list_pool, L);
 	    continue;
 	}
 	L->acl = a;
@@ -1321,8 +1354,8 @@ aclMatchIp(void *dataptr, struct in_addr c)
      * static structure.
      */
     x.addr1 = c;
-    x.addr2 = any_addr;
-    x.mask = no_addr;
+    SetAnyAddr(&x.addr2);
+    SetNoAddr(&x.mask);
     x.next = NULL;
     *Top = splay_splay(&x, *Top, aclIpAddrNetworkCompare);
     debug(28, 3) ("aclMatchIp: '%s' %s\n",
@@ -1451,7 +1484,7 @@ aclCacheMatchAcl(dlink_list * cache, squid_acl acltype, void *data,
 	fatal("aclCacheMatchAcl: unknown or unexpected ACL type");
 	return 0;		/* NOTREACHED */
     }
-    auth_match = memAllocate(MEM_ACL_PROXY_AUTH_MATCH);
+    auth_match = memPoolAlloc(acl_proxy_auth_pool);
     auth_match->matchrv = matchrv;
     auth_match->acl_data = data;
     dlinkAddTail(auth_match, &auth_match->link, cache);
@@ -1469,7 +1502,7 @@ aclCacheMatchFlush(dlink_list * cache)
 	tmplink = link;
 	link = link->next;
 	dlinkDelete(tmplink, cache);
-	memFree(auth_match, MEM_ACL_PROXY_AUTH_MATCH);
+	memPoolFree(acl_proxy_auth_pool, auth_match);
     }
 }
 
@@ -2425,11 +2458,14 @@ aclChecklistCacheInit(aclCheck_t * checklist)
     }
 }
 
+CBDATA_TYPE(aclCheck_t);
+
 aclCheck_t *
 aclChecklistCreate(const acl_access * A, request_t * request, const char *ident)
 {
     int i;
     aclCheck_t *checklist;
+    CBDATA_INIT_TYPE(aclCheck_t);
     checklist = cbdataAlloc(aclCheck_t);
     checklist->access_list = A;
     /*
@@ -2475,7 +2511,7 @@ aclDestroyTimeList(acl_time_data * data)
     acl_time_data *next = NULL;
     for (; data; data = next) {
 	next = data->next;
-	memFree(data, MEM_ACL_TIME_DATA);
+	memPoolFree(acl_time_data_pool, data);
     }
 }
 
@@ -2487,14 +2523,14 @@ aclDestroyRegexList(relist * data)
 	next = data->next;
 	regfree(&data->regex);
 	safe_free(data->pattern);
-	memFree(data, MEM_RELIST);
+	memPoolFree(acl_relist_pool, data);
     }
 }
 
 static void
 aclFreeIpData(void *p)
 {
-    memFree(p, MEM_ACL_IP_DATA);
+    memPoolFree(acl_ip_data_pool, p);
 }
 
 static void
@@ -2503,13 +2539,13 @@ aclFreeUserData(void *data)
     acl_user_data *d = data;
     if (d->names)
 	splay_destroy(d->names, xfree);
-    memFree(d, MEM_ACL_USER_DATA);
+    memPoolFree(acl_user_data_pool, d);
 }
 
 static void
 aclDestroyType(acl_request_type * type)
 {
-    memFree(type, MEM_ACL_REQUEST_TYPE);
+    memPoolFree(acl_request_type_pool, type);
 }
 
 void
@@ -2612,7 +2648,7 @@ aclDestroyAcls(acl ** head)
 	    break;
 	}
 	safe_free(a->cfgline);
-	memFree(a, MEM_ACL);
+	memPoolFree(acl_pool, a);
     }
     *head = NULL;
 }
@@ -2623,7 +2659,7 @@ aclDestroyAclList(acl_list ** head)
     acl_list *l;
     for (l = *head; l; l = *head) {
 	*head = l->next;
-	memFree(l, MEM_ACL_LIST);
+	memPoolFree(acl_list_pool, l);
     }
 }
 
@@ -2660,7 +2696,7 @@ aclDestroyDenyInfoList(acl_deny_info_list ** list)
 	}
 	a_next = a->next;
 	xfree(a->err_page_name);
-	memFree(a, MEM_ACL_DENY_INFO_LIST);
+	memPoolFree(acl_deny_pool, a);
     }
     *list = NULL;
 }
@@ -2724,11 +2760,11 @@ aclIpDataToStr(const acl_ip_data * ip, char *buf, int len)
     char b2[20];
     char b3[20];
     snprintf(b1, 20, "%s", inet_ntoa(ip->addr1));
-    if (ip->addr2.s_addr != any_addr.s_addr)
+    if (! IsAnyAddr(&ip->addr2))
 	snprintf(b2, 20, "-%s", inet_ntoa(ip->addr2));
     else
 	b2[0] = '\0';
-    if (ip->mask.s_addr != no_addr.s_addr)
+    if (! IsNoAddr(&ip->mask))
 	snprintf(b3, 20, "/%s", inet_ntoa(ip->mask));
     else
 	b3[0] = '\0';
@@ -2850,9 +2886,9 @@ aclDumpIpListWalkee(void *node, void *state)
     wordlist **W = state;
     memBufDefInit(&mb);
     memBufPrintf(&mb, "%s", inet_ntoa(ip->addr1));
-    if (ip->addr2.s_addr != any_addr.s_addr)
+    if (! IsAnyAddr(&ip->addr2))
 	memBufPrintf(&mb, "-%s", inet_ntoa(ip->addr2));
-    if (ip->mask.s_addr != no_addr.s_addr)
+    if (! IsNoAddr(&ip->mask))
 	memBufPrintf(&mb, "/%s", inet_ntoa(ip->mask));
     wordlistAdd(W, mb.buf);
     memBufClean(&mb);
