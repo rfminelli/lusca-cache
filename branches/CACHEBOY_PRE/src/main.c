@@ -445,6 +445,7 @@ mainReconfigure(void)
     sqinet_set_v4_inaddr(&ao, &Config.Addrs.udp_outgoing);
     idnsConfigure(Config.onoff.ignore_unknown_nameservers, Config.Timeout.idns_retransmit, Config.Timeout.idns_query, Config.onoff.res_defnames);
     idnsConfigureV4Addresses(&ai, &ao);
+    idnsConfigureV6Addresses(&Config.Addrs.udp_incoming6, &Config.Addrs.udp_outgoing6);
     sqinet_done(&ai);
     sqinet_done(&ao);
     idnsInit();
@@ -622,6 +623,7 @@ mainInitialize(void)
     sqinet_set_v4_inaddr(&ao, &Config.Addrs.udp_outgoing);
     idnsConfigure(Config.onoff.ignore_unknown_nameservers, Config.Timeout.idns_retransmit, Config.Timeout.idns_query, Config.onoff.res_defnames);
     idnsConfigureV4Addresses(&ai, &ao);
+    idnsConfigureV6Addresses(&Config.Addrs.udp_incoming6, &Config.Addrs.udp_outgoing6);
     sqinet_done(&ai);
     sqinet_done(&ao);
     idnsInit();
