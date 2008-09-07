@@ -75,7 +75,7 @@ Preparation for IPv6 - complete refactoring out core network related code; begin
 Implement IPv6 support in core libraries. Cacheboy/Squid will still be an IPv4 only application but minimal changes will be made to ensure that the current IPv4-only code gets IPv4-only addresses.
 
   * Modify the base libraries to support IPv6 for communcation *(done)*
-    * and dns
+    * and dns *(done)*
   * Modify Squid/Cacheboy application enough to support IPv4-only (and gracefully fail when IPv6 addresses appear where they shouldn't during conversions) *(done)*
   * Implement IPv6 test TCP proxy for testing basic IPv6 functionality *(done)*
   * Implement IPv6 DNS tests for testing basic IPv6 resolution functionality
