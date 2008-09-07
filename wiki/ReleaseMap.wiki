@@ -1,0 +1,57 @@
+#summary What is actually going on in the releases?
+
+= Introduction =
+
+The RoadMap page may be .. cluttered and disorganised. Its primarily designed so Adrian can document and keep track of what is going on.
+
+This is a higher-level summary.
+
+= Cacheboy-1.X =
+
+Cacheboy-1.X is mostly focused on breaking apart the Squid codebase into higher level modules. These modules can then be tested and re-used independently of the Squid application.
+
+== Cacheboy-1.0 ==
+
+  * Initial port to subversion
+
+== Cacheboy-1.1 ==
+
+  * Initial modularity groundwork - debugging and core routines, basic HTTP types
+
+== Cacheboy-1.2 ==
+
+  * Further modularity groundwork - Strings, Memory allocation routines
+
+== Cacheboy-1.3 ==
+
+  * Further modularity work - communications, event scheduling, filedescriptor management
+  * Merged in current Squid-2.HEAD changes
+
+== Cacheboy-1.4 ==
+
+  * Modularity work - further communications and callback management
+  * Merged in current Squid-2.HEAD changes
+
+== Cacheboy-1.5 ==
+
+  * Modularity work - internal/external DNS, IPC helper code
+  * IPv6 - core, DNS transport (internal and external)
+
+== Cacheboy-1.6 ==
+
+  * Modularity work - fqdncache, ipcache (the hostname<->IP translation and caches)
+  * IPv6 - DNS record resolution (internal and external)
+  * IPv6 - ACL source/destination IP, network, hostnames
+  * IPv6 - client-side code, client database
+  * IPv6 - SNMP (if possible?)
+
+== Cacheboy-1.7 ==
+
+  * Modularity work - HTTP core - Headers; Header and Header entry parsing; response packing
+  * Performance - HTTP header parsing optimisations
+
+== Cacheboy-1.8 ==
+
+  * Reference counted buffers and string management
+  * Replacement HTTP request/reply parser
+  * Modularity work - HTTP server-side, HTTP client-side
