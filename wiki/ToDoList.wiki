@@ -52,9 +52,9 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
     * External DNS - worry about later
     * Internal DNS - using husni's Squid-2.6 IPv6 patch as inspiration
       * Migrate bits of core comm code to support it - *done*
-      * Convert socket level code to support querying/replying v4/v6 sockets - in progress
-      * Bring over AAAA record support
-      * Handle IPv4 and IPv6 PTR records
+      * Convert socket level code to support querying/replying v4/v6 sockets - *done*
+      * Bring over AAAA record support - *in progress*
+      * Handle IPv4 and IPv6 PTR records *in progress*
       * Tie it all together? What else is needed?
     * FQDN cache (hostname -> IP)
     * IP cache (IP -> hostname)
