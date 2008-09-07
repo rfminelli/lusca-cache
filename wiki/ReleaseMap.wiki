@@ -12,46 +12,74 @@ Cacheboy-1.X is mostly focused on breaking apart the Squid codebase into higher 
 
 == Cacheboy-1.0 ==
 
-  * Initial port to subversion
+|| What || Status || Begun Date || Completed Date || URL ||
+|| Initial Subversion Port || Completed || || || ||
 
 == Cacheboy-1.1 ==
 
-  * Initial modularity groundwork - debugging and core routines, basic HTTP types
+|| What || Status || Begun Date || Completed Date || URL ||
+|| Modularity - debugging || Completed || || || ||
+|| Modularity - core || Completed || || || ||
+|| Modularity - basic HTTP types || Completed || || || ||
 
 == Cacheboy-1.2 ==
 
-  * Further modularity groundwork - Strings, Memory allocation routines
+|| What || Status || Begun Date || Completed Date || URL ||
+|| Modularity - MemBuf || Completed || || || ||
+|| Modularity - String Allocation || Completed || || || ||
+|| Modularity - MemPools || Completed || || || ||
 
 == Cacheboy-1.3 ==
 
-  * Further modularity work - communications, event scheduling, filedescriptor management
-  * Merged in current Squid-2.HEAD changes
+|| What || Status || Begun Date || Completed Date || URL ||
+|| Modularity - network communication || Completed || || || ||
+|| Modularity - event scheduling || Completed || || || ||
+|| Modularity - legacy disk IO || Completed || || || ||
+|| Merge - Squid-2.HEAD changes || Completed || || || ||
 
 == Cacheboy-1.4 ==
 
-  * Modularity work - further communications and callback management
-  * Merged in current Squid-2.HEAD changes
+|| What || Status || Begun Date || Completed Date || URL ||
+|| Modularity - communications || Completed || || || ||
+|| Modularity - callback management || Completed || || || ||
+|| Merge - Squid-2.HEAD changes || Completed || || || ||
 
 == Cacheboy-1.5 ==
 
-  * Modularity work - internal/external DNS, IPC helper code
-  * IPv6 - core, DNS transport (internal and external)
+|| What || Status || Begun Date || Completed Date || URL ||
+|| Modularity - DNS || Completed || August 2008 || August 2008 || ||
+|| Modularity - IPC || Completed || August 2008 || August 2008 || ||
+|| Modularity - Helpers || Completed || August 2008 || August 2008 || ||
+|| IPv6 - communication core || Completed || August 2008 || August 2008 || || 
+|| IPv6 - DNS transport - internal || Completed || August 2008 || 5-Sep-2008 || ||
+|| IPv6 - DNS transport - external || In Progress || August 2008 || || ||
 
 == Cacheboy-1.6 ==
 
-  * Modularity work - fqdncache, ipcache (the hostname<->IP translation and caches)
-  * IPv6 - DNS record resolution (internal and external)
-  * IPv6 - ACL source/destination IP, network, hostnames
-  * IPv6 - client-side code, client database
-  * IPv6 - SNMP (if possible?)
+|| What || Status || Begun Date || Completed Date || URL ||
+|| Modularity - fqdncache || Not Started || || || ||
+|| Modularity - ipcache || Not Started || || || ||
+|| IPv6 - DNS records (internal) || In Progress || 01-Sep-2008 || || ||
+|| IPv6 - DNS records (external) || Not Started || || || ||
+|| IPv6 - ACL - src/dst IP || Not Started || || || ||
+|| IPv6 - ACL - src/dst forward DNS || Not Started || || || ||
+|| IPv6 - ACL - src/dst reverse DNS || Not Started || || || ||
+|| IPv6 - client-side || Not Started || || || ||
+|| IPv6 - SNMP || Not Started || || || ||
 
 == Cacheboy-1.7 ==
 
-  * Modularity work - HTTP core - Headers; Header and Header entry parsing; response packing
-  * Performance - HTTP header parsing optimisations
+|| What || Status || Begun Date || Completed Date || URL ||
+|| Modularity - HTTP - Headers || In Progress || August 2008 ||  || ||
+|| Modularity - HTTP - Header Parsing || In Progress || August 2008 || || ||
+|| Modularity - HTTP - Response Packing || Not Started || || || ||
+|| Performance - HTTP - Header Parsing || In Progress || August 2008 || || ||
 
 == Cacheboy-1.8 ==
 
-  * Reference counted buffers and string management
-  * Replacement HTTP request/reply parser
-  * Modularity work - HTTP server-side, HTTP client-side
+|| What || Status || Begun Date || Completed Date || URL ||
+|| Performance - refcounted buffers || Pending || August 2007 || || ||
+|| Performance - refcounted strings || In Progress || August 2007 || || ||
+|| Performance - replacement HTTP parsers || In Progress || August 2007 || || ||
+|| Modularity - HTTP - Server-side || Not Started || || || ||
+|| Modularity - HTTP - Client-side || Not Started || || || ||
