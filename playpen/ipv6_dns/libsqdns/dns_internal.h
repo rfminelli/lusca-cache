@@ -106,6 +106,6 @@ extern void idnsInit(void);
 extern void idnsShutdown(void);
 extern void idnsALookup(const char *, IDNSCB *, void *);
 extern void idnsAAAALookup(const char *, IDNSCB * callback, void *data);
-extern void idnsPTRLookup(const struct in_addr, IDNSCB *, void *);
+extern void idnsPTRLookup(const sqaddr_t *addr, IDNSCB *, void *);
 
 #endif

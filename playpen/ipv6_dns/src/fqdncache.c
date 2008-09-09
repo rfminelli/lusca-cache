@@ -357,6 +357,8 @@ fqdncache_nbgethostbyaddr(struct in_addr addr, FQDNH * handler, void *handlerDat
     fqdncache_entry *f = NULL;
     char *name = inet_ntoa(addr);
     generic_cbdata *c;
+    sqaddr_t a;
+
     assert(handler);
     debug(35, 4) ("fqdncache_nbgethostbyaddr: Name '%s'.\n", name);
     FqdncacheStats.requests++;
@@ -401,7 +403,10 @@ fqdncache_nbgethostbyaddr(struct in_addr addr, FQDNH * handler, void *handlerDat
 #if USE_DNSSERVERS
     dnsSubmit(hashKeyStr(&f->hash), fqdncacheHandleReply, c);
 #else
-    idnsPTRLookup(addr, fqdncacheHandleReply, c);
+    sqinet_init(&a);
+    sqinet_set_v4_inaddr(&a, &addr);
+    idnsPTRLookup(&a, fqdncacheHandleReply, c);
+    sqinet_done(&a);
 #endif
 }
 

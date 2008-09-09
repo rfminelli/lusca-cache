@@ -910,23 +910,22 @@ idnsALookup(const char *name, IDNSCB * callback, void *data)
  * just ask an sqinet_ routine to generate it and pass it on.
  */
 void
-idnsPTRLookup(const struct in_addr addr, IDNSCB * callback, void *data)
+idnsPTRLookup(const sqaddr_t *addr, IDNSCB * callback, void *data)
 {
     LOCAL_ARRAY(char, buf, 256);
     idns_query *q;
-    unsigned int ipi;
-    const char *ip = inet_ntoa(addr);
+    int r;
     q = cbdataAlloc(idns_query);
     q->tcp_socket = -1;
     q->id = idnsQueryID();
 
-    /* XXX Build a v4 reverse DNS address string */
-    ipi = (unsigned int) ntohl(addr.s_addr);
-    (void) snprintf(buf, sizeof(buf), "%u.%u.%u.%u.in-addr.arpa", ipi & 255, (ipi >> 8) & 255, (ipi >> 16) & 255, (ipi >> 24) & 255);
+    /* Build the reverse dns string */
+    r = sqinet_assemble_rev(addr, buf, sizeof(buf));
+    assert(r > 0);
 
     q->sz = rfc1035BuildPTRQuery(buf, q->buf, sizeof(q->buf), q->id, &q->query);
     debug(78, 3) ("idnsPTRLookup: buf is %d bytes for %s, id = %#hx\n",
-	(int) q->sz, ip, q->id);
+	(int) q->sz, buf, q->id);
     if (q->sz < 0) {
 	/* problem with query data -- query not sent */
 	callback(data, NULL, 0, "Internal error");
