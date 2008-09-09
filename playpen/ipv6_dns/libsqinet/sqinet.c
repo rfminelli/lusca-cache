@@ -531,7 +531,7 @@ sqinet_aton(sqaddr_t *s, const char *hoststr, sqaton_flags flags)
  * @return	length if success, 0 on failure
  */
 int
-sqinet_assemble_revdns(const sqaddr_t *s, char *buf, int len)
+sqinet_assemble_rev(const sqaddr_t *s, char *buf, int len)
 {
 	int r, i;
 	unsigned int ipi;
