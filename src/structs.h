@@ -2090,14 +2090,6 @@ struct _htcpReplyData {
 #endif
 
 
-/*
- * use this when you need to pass callback data to a blocking
- * operation, but you don't want to add that pointer to cbdata
- */
-struct _generic_cbdata {
-    void *data;
-};
-
 struct _store_rebuild_data {
     int objcount;		/* # objects successfully reloaded */
     int expcount;		/* # objects expired */

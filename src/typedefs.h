@@ -165,7 +165,6 @@ typedef struct _CacheDigest CacheDigest;
 typedef struct _Version Version;
 typedef struct _FwdState FwdState;
 typedef struct _FwdServer FwdServer;
-typedef struct _generic_cbdata generic_cbdata;
 typedef struct _storeIOState storeIOState;
 typedef struct _queued_read queued_read;
 typedef struct _queued_write queued_write;
