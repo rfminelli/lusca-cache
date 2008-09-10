@@ -519,6 +519,62 @@ sqinet_aton(sqaddr_t *s, const char *hoststr, sqaton_flags flags)
 
 /*!
  * @function
+ *	sqinet_assemble_rev
+ * @abstract
+ *	Assemble a DNS reverse record entry for the given IP address.
+ * @discussion
+ *	This function assumes the caller passes in a big enough buffer even though "len" is
+ *	given; it should be re-engineered to error out if buf isn't long enough.
+ *
+ * @param	s	pointer to sqaddr_t
+ * @param	buf	buffer to write into
+ * @param	buflen	length of buffer
+ * @return	length if success, 0 on failure
+ */
+int
+sqinet_assemble_rev(const sqaddr_t *s, char *buf, int len)
+{
+	int r, i;
+	unsigned int ipi;
+	struct in_addr a4;
+	struct in6_addr a6;
+	unsigned const char *s6;
+
+	assert(s->init);
+	switch (s->st.ss_family) {
+		case AF_INET:
+			a4 = (((struct sockaddr_in *) &s->st)->sin_addr);
+			ipi = (unsigned int) ntohl(a4.s_addr);
+			r = snprintf(buf, len, "%u.%u.%u.%u.in-addr.arpa", ipi & 255, (ipi >> 8) & 255, (ipi >> 16) & 255, (ipi >> 24) & 255);
+			return r;
+			break;
+		case AF_INET6:
+			/*
+			 * XXX two things:
+			 * XXX + is this stuff endian-friendly? Husni had endian logic in his version of this!
+			 * XXX + we're not checking the length of the available buffer at all the right places!
+			 */
+			a6 = (((struct sockaddr_in6 *) &s->st)->sin6_addr);
+			s6 = a6.s6_addr;
+			r = 0;
+			for (i = 0; i < 16; i++) {
+				printf("  %d: got %X\n", i, s6[i]);
+				r += snprintf(buf + r, len - r, "%x.%x.", s6[i] & 0x0f, (s6[i] >> 4) & 0x0f);
+				/* Make sure we've got space for the ip6.arpa bit at the end */
+				if (r + 10 >= len) {
+					return 0;
+				}
+			}
+			/* XXX this is very risky and doesn't verify there's space left! */
+			strcat(buf + r, "ip6.arpa");
+			return r + 8;
+			break;
+	}
+	return 0;
+}
+
+/*!
+ * @function
  *	sqinet_compare_port
  * @abstract
  *	Return whether two sqaddr_t entries point to the same address family and ports
