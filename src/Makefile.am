@@ -249,6 +249,7 @@ squid_LDADD = \
 	-L../libstat \
 	-L../libsqdns \
 	-L../libsqinet \
+	-L../libsqname \
 	@XTRA_OBJS@ \
 	@REPL_OBJS@ \
 	@STORE_OBJS@ \
@@ -264,6 +265,7 @@ squid_LDADD = \
 	-lmiscutil \
 	-lcore \
 	-lmem \
+	-lsqname \
 	-lcb \
 	-lhelper \
 	-liapp \
@@ -306,7 +308,7 @@ sysconf_DATA = \
 data_DATA = \
 	mib.txt
 
-LDADD = -L../lib -L../libcore -L../libmem -L../libcb -L../libhelper -L../libiapp -L../libhttp -L../libstat -L../libsqdns -L../libsqinet -lsqinet -lsqdns -lmiscutil -lcore -lmem -lcb -lhelper -liapp -lhttp -lstat @XTRA_LIBS@
+LDADD = -L../lib -L../libcore -L../libmem -L../libsqname -L../libcb -L../libhelper -L../libiapp -L../libhttp -L../libstat -L../libsqdns -L../libsqinet -lsqinet -lsqdns -lmiscutil -lcore -lmem -lsqname -lcb -lhelper -liapp -lhttp -lstat @XTRA_LIBS@
 
 EXTRA_DIST = \
 	cf_gen_defines \

@@ -114,7 +114,6 @@ typedef struct _icpUdpData icpUdpData;
 typedef struct _clientHttpRequest clientHttpRequest;
 typedef struct _ConnStateData ConnStateData;
 typedef struct _ConnCloseHelperData ConnCloseHelperData;
-typedef struct _ipcache_addrs ipcache_addrs;
 typedef struct _domain_ping domain_ping;
 typedef struct _domain_type domain_type;
 typedef struct _DynPool DynPool;
@@ -201,9 +200,7 @@ typedef struct _delaySpec delaySpec;
 typedef void CBDUNL(void *);
 typedef void FOCB(void *, int fd, int errcode);
 
-typedef void FQDNH(const char *, void *);
 typedef void IDCB(const char *ident, void *data);
-typedef void IPH(const ipcache_addrs *, void *);
 typedef void IRCB(peer *, peer_t, protocol_t, void *, void *data);
 typedef void PSC(FwdServer *, void *);
 typedef void RH(void *data, char *);

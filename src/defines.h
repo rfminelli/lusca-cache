@@ -68,9 +68,6 @@
 
 #define DNS_INBUF_SZ 4096
 
-#define FQDN_LOOKUP_IF_MISS	0x01
-#define FQDN_MAX_NAMES 5
-
 #define HTTP_REPLY_FIELD_SZ 128
 
 #define BUF_TYPE_8K 	1
@@ -84,8 +81,6 @@
 #define IDENT_NONE 0
 #define IDENT_PENDING 1
 #define IDENT_DONE 2
-
-#define IP_LOOKUP_IF_MISS	0x01
 
 #define MAX_MIME 4096
 

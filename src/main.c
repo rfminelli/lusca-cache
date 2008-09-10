@@ -426,9 +426,14 @@ mainReconfigure(void)
     setEffectiveUser();
     _db_init(Config.debugOptions);
     _db_init_log(Config.Log.log);
+
+    /* XXX the ipcache/fqdncache config variables need to be set before this is called! */
+    ipcache_local_params();
+    fqdncache_local_params();
     ipcache_restart();		/* clear stuck entries */
-    authenticateUserCacheRestart();	/* clear stuck ACL entries */
     fqdncache_restart();	/* sigh, fqdncache too */
+
+    authenticateUserCacheRestart();	/* clear stuck ACL entries */
     parseEtcHosts();
     errorInitialize();		/* reload error pages */
     accessLogInit();
@@ -610,8 +615,15 @@ mainInitialize(void)
     comm_select_postinit();
     if (!configured_once)
 	disk_init();		/* disk_init must go before ipcache_init() */
-    ipcache_init();
+
+    /* XXX the ipcache/fqdncache config variables need to be set before this is called! */
+    ipcache_local_params();
+    fqdncache_local_params();
+    ipcache_init(Config.dns_testname_list);
+    ipcache_init_local();
     fqdncache_init();
+    fqdncache_init_local();
+
     parseEtcHosts();
 #if USE_DNSSERVERS
     dnsInit(Config.Program.dnsserver, Config.dnsChildren, Config.dns_nameservers, Config.onoff.res_defnames);
