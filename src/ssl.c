@@ -218,7 +218,7 @@ sslReadServer(int fd, void *data)
 #if DELAY_POOLS
     read_sz = delayBytesWanted(sslState->delay_id, 1, read_sz);
 #endif
-    statCounter.syscalls.sock.reads++;
+    CommStats.syscalls.sock.reads++;
     len = FD_READ_METHOD(fd, sslState->server.buf + sslState->server.len, read_sz);
     debug(26, 3) ("sslReadServer: FD %d, read   %d bytes\n", fd, len);
     if (len > 0) {
@@ -260,7 +260,7 @@ sslReadClient(int fd, void *data)
     debug(26, 3) ("sslReadClient: FD %d, reading %d bytes at offset %d\n",
 	fd, SQUID_TCP_SO_RCVBUF - sslState->client.len,
 	sslState->client.len);
-    statCounter.syscalls.sock.reads++;
+    CommStats.syscalls.sock.reads++;
     len = FD_READ_METHOD(fd,
 	sslState->client.buf + sslState->client.len,
 	SQUID_TCP_SO_RCVBUF - sslState->client.len);
@@ -300,7 +300,7 @@ sslWriteServer(int fd, void *data)
     assert(fd == sslState->server.fd);
     debug(26, 3) ("sslWriteServer: FD %d, %d bytes to write\n",
 	fd, sslState->client.len);
-    statCounter.syscalls.sock.writes++;
+    CommStats.syscalls.sock.writes++;
     len = FD_WRITE_METHOD(fd,
 	sslState->client.buf,
 	sslState->client.len);
@@ -345,7 +345,7 @@ sslWriteClient(int fd, void *data)
     assert(fd == sslState->client.fd);
     debug(26, 3) ("sslWriteClient: FD %d, %d bytes to write\n",
 	fd, sslState->server.len);
-    statCounter.syscalls.sock.writes++;
+    CommStats.syscalls.sock.writes++;
     len = FD_WRITE_METHOD(fd,
 	sslState->server.buf,
 	sslState->server.len);
@@ -424,7 +424,7 @@ sslConnectDone(int fd, int status, void *data)
 	    sslState->servers->peer->name);
     else if (Config.onoff.log_ip_on_direct)
 	hierarchyNote(&sslState->request->hier, sslState->servers->code,
-	    fd_table[sslState->server.fd].ipaddr);
+	    fd_table[sslState->server.fd].ipaddrstr);
     else
 	hierarchyNote(&sslState->request->hier, sslState->servers->code,
 	    sslState->host);
@@ -472,7 +472,7 @@ sslConnectTimeout(int fd, void *data)
 	    sslState->servers->peer->name);
     else if (Config.onoff.log_ip_on_direct)
 	hierarchyNote(&sslState->request->hier, sslState->servers->code,
-	    fd_table[sslState->server.fd].ipaddr);
+	    fd_table[sslState->server.fd].ipaddrstr);
     else
 	hierarchyNote(&sslState->request->hier, sslState->servers->code,
 	    sslState->host);
@@ -504,7 +504,7 @@ sslStart(clientHttpRequest * http, squid_off_t * size_ptr, int *status_ptr)
      * from peer_digest.c, asn.c, netdb.c, etc and should always
      * be allowed.  yuck, I know.
      */
-    if (request->client_addr.s_addr != no_addr.s_addr) {
+    if (! IsNoAddr(&request->client_addr)) {
 	/*
 	 * Check if this host is allowed to fetch MISSES from us (miss_access)
 	 */
@@ -523,7 +523,7 @@ sslStart(clientHttpRequest * http, squid_off_t * size_ptr, int *status_ptr)
     outgoing = getOutgoingAddr(request);
     tos = getOutgoingTOS(request);
     /* Create socket. */
-    sock = comm_openex(SOCK_STREAM,
+    sock = comm_open(SOCK_STREAM,
 	IPPROTO_TCP,
 	outgoing,
 	0,

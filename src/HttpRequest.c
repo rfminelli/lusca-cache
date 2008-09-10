@@ -35,18 +35,26 @@
 
 #include "squid.h"
 
+static MemPool * pool_request_t = NULL;
+
+void
+requestInitMem(void)
+{
+    pool_request_t = memPoolCreate("request_t", sizeof(request_t));
+}
+
 request_t *
 requestCreate(method_t method, protocol_t protocol, const char *urlpath)
 {
-    request_t *req = memAllocate(MEM_REQUEST_T);
+    request_t *req = memPoolAlloc(pool_request_t);
     req->method = method;
     req->protocol = protocol;
     if (urlpath)
 	stringReset(&req->urlpath, urlpath);
     req->max_forwards = -1;
     req->lastmod = -1;
-    req->client_addr = no_addr;
-    req->my_addr = no_addr;
+    SetNoAddr(&req->client_addr);
+    SetNoAddr(&req->my_addr);
     httpHeaderInit(&req->header, hoRequest);
     return req;
 }
@@ -85,7 +93,7 @@ requestDestroy(request_t * req)
     if (req->pinned_connection)
 	cbdataUnlock(req->pinned_connection);
     req->pinned_connection = NULL;
-    memFree(req, MEM_REQUEST_T);
+    memPoolFree(pool_request_t, req);
 }
 
 request_t *
