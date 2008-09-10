@@ -33,6 +33,9 @@ test1a(void)
 		return 0;
 	}
 	printf("OK - htonl(0x7f000001)\n");
+	buf[0] = 0;
+	e = sqinet_assemble_rev(&s, buf, 128);
+	printf("  revdns is %s\n", buf);
 	return 1;
 }
 
@@ -72,6 +75,7 @@ test1b(void)
 		printf("FAILED: IsNoAddr(&a) is true when it should be false!\n");
 		return 0;
 	}
+	buf[0] = 0;
 	printf("OK - 0.0.0.0 is anyaddr\n");
 	e = sqinet_assemble_rev(&s, buf, 128);
 	printf("  revdns is %s\n", buf);
@@ -115,6 +119,7 @@ test1c(void)
 		return 0;
 	}
 	printf("OK - 255.255.255.255 is noaddr\n");
+	buf[0] = 0;
 	e = sqinet_assemble_rev(&s, buf, 128);
 	printf("  revdns is %s\n", buf);
 }
@@ -142,6 +147,7 @@ test2a(void)
 		printf("FAILED: sqinet_is_anyaddr(&s) is false when it should be true!\n");
 		return 0;
 	}
+	buf[0] = 0;
 	e = sqinet_assemble_rev(&s, buf, 128);
 	printf("  revdns is %s\n", buf);
 	printf("OK - ::0 is noaddr\n");
