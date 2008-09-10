@@ -7,6 +7,13 @@ extern size_t toKB(size_t size);
 
 #define safe_free(x)    if (x) { xxfree(x); x = NULL; }
 
+#ifndef TRUE
+#define TRUE 1
+#endif
+#ifndef FALSE
+#define FALSE 0
+#endif
+
 #define XMIN(x,y) ((x)<(y)? (x) : (y))
 #define XMAX(x,y) ((x)>(y)? (x) : (y))
 #define EBIT_SET(flag, bit)     ((void)((flag) |= ((1L<<(bit)))))
@@ -50,6 +57,5 @@ extern int stringHasWhitespace(const char *);
 
 extern int intAverage(int, int, int, int);
 extern double doubleAverage(double, double, int, int);
-
 
 #endif

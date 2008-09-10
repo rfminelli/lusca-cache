@@ -34,13 +34,6 @@
 #ifndef SQUID_DEFINES_H
 #define SQUID_DEFINES_H
 
-#ifndef TRUE
-#define TRUE 1
-#endif
-#ifndef FALSE
-#define FALSE 0
-#endif
-
 /* Define load weights for cache_dir types */
 #define MAX_LOAD_VALUE 1000
 
