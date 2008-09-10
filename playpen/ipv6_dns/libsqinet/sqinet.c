@@ -550,18 +550,23 @@ sqinet_assemble_rev(const sqaddr_t *s, char *buf, int len)
 		case AF_INET6:
 			/*
 			 * XXX two things:
-			 * XXX + move the buf pointer along (and len!) so its not an inefficient O(n) seek before append; and
 			 * XXX + is this stuff endian-friendly? Husni had endian logic in his version of this!
+			 * XXX + we're not checking the length of the available buffer at all the right places!
 			 */
 			a6 = (((struct sockaddr_in6 *) &s->st)->sin6_addr);
 			s6 = a6.s6_addr;
 			r = 0;
 			for (i = 0; i < 16; i++) {
-				r += snprintf(buf, len, "%x.%x.", s6[i] & 0x0f, (s6[i] >> 4) & 0x0f);
+				printf("  %d: got %X\n", i, s6[i]);
+				r += snprintf(buf + r, len - r, "%x.%x.", s6[i] & 0x0f, (s6[i] >> 4) & 0x0f);
+				/* Make sure we've got space for the ip6.arpa bit at the end */
+				if (r + 10 >= len) {
+					return 0;
+				}
 			}
 			/* XXX this is very risky and doesn't verify there's space left! */
-			strcat(buf, ".ip6.arpa");
-			return r;
+			strcat(buf + r, "ip6.arpa");
+			return r + 8;
 			break;
 	}
 	return 0;
