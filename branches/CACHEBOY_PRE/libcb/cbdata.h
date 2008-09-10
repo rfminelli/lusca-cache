@@ -51,4 +51,17 @@ extern int cbdataCount;
 #define cbdataUnlock(a)         cbdataUnlockDbg(a,__FILE__,__LINE__)
 #endif
 
+/* Generic cbdata stuff */
+
+/*
+ * use this when you need to pass callback data to a blocking
+ * operation, but you don't want to add that pointer to cbdata
+ */
+struct _generic_cbdata {
+    void *data;
+};
+typedef struct _generic_cbdata generic_cbdata;
+
+CBDATA_GLOBAL_TYPE(generic_cbdata);
+
 #endif
