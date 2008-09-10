@@ -1,5 +1,9 @@
 ChangeLog:
 
+-- (10-September-2008)
+
+* Branch CACHEBOY_1.5.
+
 -- (6-September-2008)
 
 * Implement v4/v6 aware UDP and TCP transport for the internal DNS code
@@ -8,7 +12,6 @@ ChangeLog:
   (The DNS code still only resolves v4 addresses.)
 
 * Tag CACHEBOY_1.5.PRE4.
-
 
 -- (2-September-2008)
 
