@@ -1139,14 +1139,6 @@ struct _ConnStateData {
     int tos_priority;		/* Used by zph to avoid updating the tos/priority when not needed */
 };
 
-struct _ipcache_addrs {
-    struct in_addr *in_addrs;
-    unsigned char *bad_mask;
-    unsigned char count;
-    unsigned char cur;
-    unsigned char badcount;
-};
-
 struct _domain_ping {
     char *domain;
     int do_ping;		/* boolean */

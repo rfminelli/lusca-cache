@@ -171,17 +171,9 @@ extern void file_map_bit_reset(fileMap *, int);
 extern void filemapFreeMemory(fileMap *);
 
 
-extern void fqdncache_nbgethostbyaddr(struct in_addr, FQDNH *, void *);
-extern const char *fqdncache_gethostbyaddr(struct in_addr, int flags);
-extern void fqdncache_init(void);
+extern void fqdncache_local_params(void);
+extern void fqdncache_init_local(void);
 extern void fqdnStats(StoreEntry *);
-extern void fqdncacheReleaseInvalid(const char *);
-extern const char *fqdnFromAddr(struct in_addr);
-extern int fqdncacheQueueDrain(void);
-extern void fqdncacheFreeMemory(void);
-extern void fqdncache_restart(void);
-extern EVH fqdncache_purgelru;
-extern void fqdncacheAddEntryFromHosts(char *addr, wordlist * hostnames);
 
 extern void ftpStart(FwdState *);
 extern char *ftpUrlWith2f(const request_t *);
@@ -442,22 +434,9 @@ extern void icpConnectionClose(void);
 extern int icpSetCacheKey(const cache_key * key);
 extern const cache_key *icpGetCacheKey(const char *url, int reqnum);
 
-extern void ipcache_nbgethostbyname(const char *name,
-    IPH * handler,
-    void *handlerData);
-extern EVH ipcache_purgelru;
-extern const ipcache_addrs *ipcache_gethostbyname(const char *, int flags);
-extern void ipcacheInvalidate(const char *);
-extern void ipcacheInvalidateNegative(const char *);
-extern void ipcache_init(void);
+extern void ipcache_local_params(void);
+extern void ipcache_init_local(void);
 extern void stat_ipcache_get(StoreEntry *);
-extern void ipcacheCycleAddr(const char *name, ipcache_addrs *);
-extern void ipcacheMarkBadAddr(const char *name, struct in_addr);
-extern void ipcacheMarkGoodAddr(const char *name, struct in_addr);
-extern void ipcacheFreeMemory(void);
-extern ipcache_addrs *ipcacheCheckNumeric(const char *name);
-extern void ipcache_restart(void);
-extern int ipcacheAddEntryFromHosts(const char *name, const char *ipaddr);
 
 extern char *mime_get_header(const char *mime, const char *header);
 extern char *mime_get_header_field(const char *mime, const char *name, const char *prefix);
