@@ -57,6 +57,14 @@ sqinet_done(sqaddr_t *s)
 	s->init = 0;
 }
 
+void
+sqinet_set_family(sqaddr_t *s, int af_family)
+{
+	assert(s->init);
+	assert(s->st.ss_family == 0);
+	s->st.ss_family = af_family;
+}
+
 /*!
  * @function
  *	sqinet_copy_v4_inaddr
@@ -286,6 +294,29 @@ sqinet_set_v6_sockaddr(sqaddr_t *s, const struct sockaddr_in6 *v6addr)
 	return 1;
 }
 
+void
+sqinet_set_anyaddr(sqaddr_t *s)
+{
+	struct sockaddr_in *v4;
+	struct sockaddr_in6 *v6;
+	struct in6_addr any6addr = IN6ADDR_ANY_INIT;
+
+	assert(s->init);
+	switch(s->st.ss_family) {
+		case AF_INET:
+			v4 = (struct sockaddr_in *) &s->st;
+			v4->sin_addr.s_addr = INADDR_ANY;
+			break;
+		case AF_INET6:
+			v6 = (struct sockaddr_in6 *) &s->st;
+			v6->sin6_addr = any6addr;
+			break;
+		default:
+			assert(0);
+	}
+	return;
+}
+
 /*!
  * @function
  *	sqinet_is_anyaddr
@@ -321,6 +352,30 @@ sqinet_is_anyaddr(const sqaddr_t *s)
 	}
 	return 0;
 }
+
+void
+sqinet_set_noaddr(sqaddr_t *s)
+{
+	struct sockaddr_in *v4;
+	struct sockaddr_in6 *v6;
+	struct in6_addr no6addr = {{{ 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff }}};
+
+	assert(s->init);
+	switch(s->st.ss_family) {
+		case AF_INET:
+			v4 = (struct sockaddr_in *) &s->st;
+			v4->sin_addr.s_addr = INADDR_NONE;
+			break;
+		case AF_INET6:
+			v6 = (struct sockaddr_in6 *) &s->st;
+			v6->sin6_addr = no6addr;
+			break;
+		default:
+			assert(0);
+	}
+	return;
+}
+
 
 /*!
  * @function
@@ -632,4 +687,26 @@ sqinet_compare_addr(const sqaddr_t *a, const sqaddr_t *b)
 			assert(1==0);
 	}
 	return 0;
+}
+
+void
+sqinet_mask_addr(sqaddr_t *dst, const sqaddr_t *mask)
+{
+	int i;
+	assert(dst->init);
+	assert(mask->init);
+	assert (dst->st.ss_family == mask->st.ss_family);
+	switch (dst->st.ss_family) {
+		case AF_INET:
+			(((struct sockaddr_in *) &dst->st)->sin_addr.s_addr) &= (((struct sockaddr_in *) &mask->st)->sin_addr.s_addr);
+		break;
+		case AF_INET6:
+			for (i = 0; i < 16; i++)
+				(((struct sockaddr_in6 *) &dst->st)->sin6_addr.s6_addr[i]) &= (((struct sockaddr_in6 *) &mask->st)->sin6_addr.s6_addr[i]);
+		break;
+		default:
+			assert(1==0);
+	}
+	return;
+
 }

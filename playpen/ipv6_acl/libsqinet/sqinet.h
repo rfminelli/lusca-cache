@@ -24,6 +24,7 @@ typedef enum {
 
 extern void sqinet_init(sqaddr_t *s);
 extern void sqinet_done(sqaddr_t *s);
+extern void sqinet_set_family(sqaddr_t *s, int af_family);
 extern int sqinet_copy_v4_inaddr(const sqaddr_t *s, struct in_addr *dst, sqaddr_flags flags);
 extern int sqinet_set_v4_inaddr(sqaddr_t *s, struct in_addr *v4addr);
 extern int sqinet_set_v4_port(sqaddr_t *s, short port, sqaddr_flags flags);
@@ -34,7 +35,9 @@ extern void sqinet_set_port(const sqaddr_t *s, short port, sqaddr_flags flags);
 extern struct in_addr sqinet_get_v4_inaddr(const sqaddr_t *s, sqaddr_flags flags);
 extern int sqinet_get_v4_sockaddr_ptr(const sqaddr_t *s, struct sockaddr_in *v4, sqaddr_flags flags);
 extern struct sockaddr_in sqinet_get_v4_sockaddr(const sqaddr_t *s, sqaddr_flags flags);
+extern void sqinet_set_anyaddr(sqaddr_t *s);
 extern int sqinet_is_anyaddr(const sqaddr_t *s);
+extern void sqinet_set_noaddr(sqaddr_t *s);
 extern int sqinet_is_noaddr(const sqaddr_t *s);
 extern int sqinet_ntoa(const sqaddr_t *s, char *hoststr, int hostlen, sqaddr_flags flags);
 extern int sqinet_aton(sqaddr_t *s, const char *hoststr, sqaton_flags flags);
@@ -48,5 +51,9 @@ static inline int sqinet_get_maxlength(const sqaddr_t *s) { return sizeof(s->st)
 static inline int sqinet_copy(sqaddr_t *dst, const sqaddr_t *src) { *dst = *src; return 1; }
 extern int sqinet_compare_port(const sqaddr_t *a, const sqaddr_t *b);
 extern int sqinet_compare_addr(const sqaddr_t *a, const sqaddr_t *b);
+
+extern void sqinet_mask_addr(sqaddr_t *dst, const sqaddr_t *mask);
+extern int sqinet_host_compare(sqaddr_t *a, sqaddr_t *b);
+extern int sqinet_range_compare(sqaddr_t *a, sqaddr_t *b_start, sqaddr_t *b_end);
 
 #endif
