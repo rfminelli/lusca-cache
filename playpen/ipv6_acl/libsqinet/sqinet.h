@@ -53,7 +53,7 @@ extern int sqinet_compare_port(const sqaddr_t *a, const sqaddr_t *b);
 extern int sqinet_compare_addr(const sqaddr_t *a, const sqaddr_t *b);
 
 extern void sqinet_mask_addr(sqaddr_t *dst, const sqaddr_t *mask);
-extern int sqinet_host_compare(sqaddr_t *a, sqaddr_t *b);
-extern int sqinet_range_compare(sqaddr_t *a, sqaddr_t *b_start, sqaddr_t *b_end);
+extern int sqinet_host_compare(const sqaddr_t *a, const sqaddr_t *b);
+extern int sqinet_range_compare(const sqaddr_t *a, const sqaddr_t *b_start, const sqaddr_t *b_end);
 
 #endif
