@@ -9,6 +9,7 @@
 #include <string.h>
 #include <netdb.h>
 
+#include "util.h"		/* for memrcmp(); perhaps that should be broken out? */
 #include "sqinet.h"
 
 /*!
@@ -709,4 +710,96 @@ sqinet_mask_addr(sqaddr_t *dst, const sqaddr_t *mask)
 	}
 	return;
 
+}
+
+/*
+ * This is likely an un-necessary mostly-duplicate of sqinet_compare_addr();
+ * should they eventually be folded into the same routine? Probably!
+ *
+ * note the memrcmp() call - the data is in network order (big-endian);
+ * this comparison function is designed for use by stuff like the splay
+ * code; and thus wants memcmp-like semantics. The way to give it that
+ * is to compare the IP address from the least significant bits first;
+ * that way we can order them great or less than each other.
+ */
+int
+sqinet_host_compare(const sqaddr_t *a, const sqaddr_t *b)
+{
+	assert(a->init);
+	assert(b->init);
+	assert (a->st.ss_family == b->st.ss_family);
+	switch (a->st.ss_family) {
+		case AF_INET:
+			return (memrcmp(
+				&(((struct sockaddr_in *) &a->st)->sin_addr),
+				&(((struct sockaddr_in *) &b->st)->sin_addr),
+				sizeof((((struct sockaddr_in *) &a->st)->sin_addr))));
+		break;
+		case AF_INET6:
+			return (memrcmp(
+				&(((struct sockaddr_in6 *) &a->st)->sin6_addr),
+				&(((struct sockaddr_in6 *) &b->st)->sin6_addr),
+				sizeof((((struct sockaddr_in6 *) &a->st)->sin6_addr))));
+		break;
+		default:
+			assert(1==0);
+	}
+	return -1;
+}
+
+int
+sqinet_range_compare(const sqaddr_t *a, const sqaddr_t *b_start, const sqaddr_t *b_end)
+{
+	return 0;
+	struct in_addr in4_a, in4_b_start, in4_b_end;
+	struct in6_addr *in6_a, *in6_b_start, *in6_b_end;
+	const int in6_size = sizeof(struct in6_addr);
+
+	assert(a->init);
+	assert(b_start->init);
+	assert(b_end->init);
+
+	assert (a->st.ss_family == b_start->st.ss_family);
+	assert (a->st.ss_family == b_end->st.ss_family);
+
+	switch (a->st.ss_family) {
+		case AF_INET:
+			in4_a = (((struct sockaddr_in *) &a->st)->sin_addr);
+			in4_b_start = (((struct sockaddr_in *) &b_start->st)->sin_addr);
+			in4_b_end = (((struct sockaddr_in *) &b_end->st)->sin_addr);
+			if (ntohl(in4_a.s_addr) > ntohl(in4_b_end.s_addr))
+				return 1;
+			if (ntohl(in4_a.s_addr) < ntohl(in4_b_start.s_addr))
+				return -1;
+			return 0;
+		break;
+		case AF_INET6:
+			in6_a = &(((struct sockaddr_in6 *) &a->st)->sin6_addr);
+			in6_b_start = &(((struct sockaddr_in6 *) &b_start->st)->sin6_addr);
+			in6_b_end = &(((struct sockaddr_in6 *) &b_end->st)->sin6_addr);
+
+			if (memrcmp(in6_a, in6_b_end, in6_size) > 0)
+				return 1;
+			if (memrcmp(in6_a, in6_b_start, in6_size) < 0)
+				return -1;
+			return 0;
+		break;
+		default:
+			assert(1==0);
+	}
+	return -1;
+}
+
+int
+sqinet_host_is_netaddr(const sqaddr_t *a, const sqaddr_t *mask)
+{
+	sqaddr_t tmp;
+	int r;
+
+	sqinet_init(&tmp);
+	sqinet_copy(&tmp, a);
+	sqinet_mask_addr(&tmp, mask);
+	r = (sqinet_host_compare(a, &tmp) == 0);
+	sqinet_done(&tmp);
+	return r;
 }
