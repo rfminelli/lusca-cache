@@ -421,6 +421,9 @@ mainReconfigure(void)
     ssl_unclean_shutdown = Config.SSL.unclean_shutdown;
     ssl_password = Config.Program.ssl_password;
 #endif
+#if USE_IDENT
+    identConfigTimeout(Config.Timeout.ident);
+#endif
 
     setUmask(Config.umask);
     setEffectiveUser();
@@ -828,6 +831,9 @@ main(int argc, char **argv)
         ssl_engine = Config.SSL.ssl_engine;
         ssl_unclean_shutdown = Config.SSL.unclean_shutdown;
         ssl_password = Config.Program.ssl_password;
+#endif
+#if USE_IDENT
+        identConfigTimeout(Config.Timeout.ident);
 #endif
     }
     setUmask(Config.umask);

@@ -405,6 +405,8 @@ struct rusage {
 #include "../libsqinet/sqinet.h"
 #include "../libsqinet/inet_legacy.h"
 
+#include "../libsqident/ident.h"
+
 #include "../libhttp/HttpVersion.h"
 #include "../libhttp/HttpStatusLine.h"
 #include "../libhttp/HttpHeaderType.h"
@@ -430,6 +432,8 @@ struct rusage {
 
 #include "../libhelper/ipc.h"
 #include "../libhelper/helper.h"
+
+#include "../libsqident/ident.h"
 
 #include "../libsqdns/dns.h"
 
