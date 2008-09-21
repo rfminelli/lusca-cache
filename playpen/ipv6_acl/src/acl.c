@@ -513,14 +513,17 @@ decode_v6_addr(const char *asc, sqaddr_t *A)
 {
 	int a, r;
 
+	/* Try to parse an IPv6 address */
+	r = sqinet_aton(A, asc, SQATON_FAMILY_IPv6);
+	if (r)
+		return 1;
+
 	/* Is it a CIDR netmask? Store it away */
 	r = sscanf(asc, "%d", &a);
 	if (r > 0) {
 		return sqinet_set_mask_addr(A, a);
 	}
-	
-	/* Try to parse an IPv6 address */
-	return sqinet_aton(A, asc, SQATON_NONE);
+	return 0;
 }
 
 /* Stolen shamelessly from Squid-3; thanks Amos! */
