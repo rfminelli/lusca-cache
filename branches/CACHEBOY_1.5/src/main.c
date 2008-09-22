@@ -795,6 +795,7 @@ main(int argc, char **argv)
 	leakInit();
 #endif
         libcore_set_fatalf(fatalvf);
+        setMaxFD();
 	iapp_init();		/* required for configuration parsing */
 	memInit();
 	cbdataLocalInit();
@@ -858,7 +859,6 @@ main(int argc, char **argv)
     }
     if (!opt_no_daemon)
 	watch_child(argv);
-    setMaxFD();
 
     if (opt_no_daemon) {
 	/* we have to init fdstat here. */
