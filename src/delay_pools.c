@@ -137,6 +137,13 @@ delayIdPtrHashCmp(const void *a, const void *b)
     return a != b;
 }
 
+static void
+delayPoolsUpdateEvent(void *unused)
+{
+    delayPoolsUpdate(NULL);
+    eventAdd("delayPoolsUpdateEvent", delayPoolsUpdateEvent, NULL, 1.0, 1);
+}
+
 void
 delayPoolsInit(void)
 {
@@ -144,6 +151,7 @@ delayPoolsInit(void)
     delay_no_delay = xcalloc(1, Squid_MaxFD);
     cachemgrRegister("delay", "Delay Pool Levels", delayPoolStats, 0, 1);
     cachemgrRegister("delay2", "Delay Pool Statistics", delayPoolStatsNew, 0, 1);
+    eventAdd("delayPoolsUpdateEvent", delayPoolsUpdateEvent, NULL, 1.0, 1);
 }
 
 void

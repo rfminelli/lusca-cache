@@ -139,7 +139,7 @@ identReadReply(int fd, void *data)
     char *t = NULL;
     int len = -1;
     buf[0] = '\0';
-    statCounter.syscalls.sock.reads++;
+    CommStats.syscalls.sock.reads++;
     len = FD_READ_METHOD(fd, buf, BUFSIZ - 1);
     fd_bytes(fd, len, FD_READ);
     if (len <= 0) {
@@ -210,6 +210,7 @@ identStart(struct sockaddr_in *me, struct sockaddr_in *my_peer, IDCB * callback,
 	me->sin_addr,
 	0,
 	COMM_NONBLOCKING,
+	COMM_TOS_DEFAULT,
 	"ident");
     if (fd == COMM_ERROR) {
 	/* Failed to get a local socket */

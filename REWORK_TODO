@@ -1,0 +1,22 @@
+
+* src/main.c has some assignments to iapp_ variables for copying bits of the
+  config from Config. out to libiapp; these need to go away before the code
+  is merged in.
+
+* start resolving naming space conflicts!
+
+* the debug_log stream is still defined in src/ when it should really be defined
+  as part of an external debug logfile library. A lot of "stuff" happens to use
+  this that has been shifted out into external libraries.
+
+  So, create a debuglog library, migrate all the code out into -it-, then
+  grep through the lib*/ code and find the places where debug_log related code
+  has been commented out. Then make it work. :)
+
+* libhelper/helper.c doesn't currently have the Config.sleep_after_fork config
+  option accessible and thus it doesn't sleep at all before fork. Figure out a
+  clean way to get that value, possibly passed into the helper create functions.
+
+* The internal DNS code is beginning to grow IPv6 awareness; the external DNS code
+  however doesn't know the first thing about it. This should be rectified!
+
