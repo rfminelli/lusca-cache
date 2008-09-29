@@ -18,6 +18,7 @@
 #include <netdb.h>
 
 #include "../include/util.h"		/* for memrcmp(); perhaps that should be broken out? */
+#include "../include/hash.h"		/* for hash4() */
 #include "sqinet.h"
 
 /* bit opearations on a char[] IP mask of unlimited length - reverse bit order */
@@ -866,4 +867,26 @@ sqinet_host_is_netaddr(const sqaddr_t *a, const sqaddr_t *mask)
 	r = (sqinet_host_compare(a, &tmp) == 0);
 	sqinet_done(&tmp);
 	return r;
+}
+
+unsigned int
+sqinet_hash_host_key(const sqaddr_t *addr, unsigned int size)
+{
+	const struct in_addr *in4;
+	const struct in6_addr *in6;
+
+	/* XXX not very fast? */
+	switch (addr->st.ss_family) {
+		case AF_INET:
+			in4 = &(((struct sockaddr_in *) &addr->st)->sin_addr);
+			return hash4(in4, sizeof(*in4));
+			break;
+		case AF_INET6:
+			in6 = &(((struct sockaddr_in6 *) &addr->st)->sin6_addr);
+			return hash4(in6, sizeof(*in6));
+			break;
+		default:
+			assert(1==0);
+	}
+	return -1;
 }

@@ -58,4 +58,6 @@ extern int sqinet_host_compare(const sqaddr_t *a, const sqaddr_t *b);
 extern int sqinet_range_compare(const sqaddr_t *a, const sqaddr_t *b_start, const sqaddr_t *b_end);
 extern int sqinet_host_is_netaddr(const sqaddr_t *a, const sqaddr_t *mask);
 
+extern unsigned int sqinet_hash_host_key(const sqaddr_t *a, unsigned int size);
+
 #endif
