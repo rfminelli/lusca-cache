@@ -665,6 +665,7 @@ authenticateDigestAuthenticateUser(auth_user_request_t * auth_user_request, requ
     auth_user_t *auth_user;
     digest_request_h *digest_request;
     digest_user_h *digest_user;
+    LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
 
     HASHHEX SESSIONKEY;
     HASHHEX HA2 = "";
@@ -727,16 +728,17 @@ authenticateDigestAuthenticateUser(auth_user_request_t * auth_user_request, requ
 		return;
 	    } else {
 		const char *useragent = httpHeaderGetStr(&request->header, HDR_USER_AGENT);
-		static struct in_addr last_broken_addr;
+		static sqaddr_t last_broken_addr;
 		static int seen_broken_client = 0;
 
 		if (!seen_broken_client) {
-		    last_broken_addr = no_addr;
+                    sqinet_init(&last_broken_addr);
 		    seen_broken_client = 1;
 		}
-		if (memcmp(&last_broken_addr, &request->client_addr, sizeof(last_broken_addr)) != 0) {
-		    debug(29, 1) ("\nDigest POST bug detected from %s using '%s'. Please upgrade browser. See Bug #630 for details.\n", inet_ntoa(request->client_addr), useragent ? useragent : "-");
-		    last_broken_addr = request->client_addr;
+		if (sqinet_host_compare(&last_broken_addr, &request->client_addr) != 0) {
+                    (void) sqinet_ntoa(&request->client_addr, buf, sizeof(buf), SQADDR_NONE);
+		    debug(29, 1) ("\nDigest POST bug detected from %s using '%s'. Please upgrade browser. See Bug #630 for details.\n", buf, useragent ? useragent : "-");
+                    sqinet_copy(&last_broken_addr, &request->client_addr);
 		}
 	    }
 	} else {
