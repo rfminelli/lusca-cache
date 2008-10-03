@@ -20,7 +20,7 @@ noinst_PROGRAMS = tcptest
 
 tcptest_SOURCES = tcptest.c tunnel.c
 
-LDADD = -L../../lib -L../../libcore -L../../libmem -L../../libcb -L../../libiapp -L../../libsqinet -L../../libhttp -L../../libstat -lmiscutil -liapp -lmem -lcb -lcore -lstat -lmiscutil -lm -lsqinet @SSLLIB@
+LDADD = -L../../lib -L../../libcore -L../../libmem -L../../libcb -L../../libiapp -L../../libsqinet -L../../libhttp -L../../libstat -liapp -lmem -lcb -lcore -lstat -lm -lsqinet -lmiscutil @SSLLIB@
 
 $(OBJS): $(top_srcdir)/include/version.h ../include/autoconf.h
 
