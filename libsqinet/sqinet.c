@@ -73,6 +73,14 @@ sqinet_done(sqaddr_t *s)
 	s->init = 0;
 }
 
+void
+sqinet_set_family(sqaddr_t *s, int af_family)
+{
+	assert(s->init);
+	assert(s->st.ss_family == 0);
+	s->st.ss_family = af_family;
+}
+
 /*!
  * @function
  *	sqinet_set_mask_addr
@@ -352,6 +360,29 @@ sqinet_set_v6_sockaddr(sqaddr_t *s, const struct sockaddr_in6 *v6addr)
 	return 1;
 }
 
+void
+sqinet_set_anyaddr(sqaddr_t *s)
+{
+	struct sockaddr_in *v4;
+	struct sockaddr_in6 *v6;
+	struct in6_addr any6addr = IN6ADDR_ANY_INIT;
+
+	assert(s->init);
+	switch(s->st.ss_family) {
+		case AF_INET:
+			v4 = (struct sockaddr_in *) &s->st;
+			v4->sin_addr.s_addr = INADDR_ANY;
+			break;
+		case AF_INET6:
+			v6 = (struct sockaddr_in6 *) &s->st;
+			v6->sin6_addr = any6addr;
+			break;
+		default:
+			assert(0);
+	}
+	return;
+}
+
 /*!
  * @function
  *	sqinet_is_anyaddr
@@ -387,6 +418,30 @@ sqinet_is_anyaddr(const sqaddr_t *s)
 	}
 	return 0;
 }
+
+void
+sqinet_set_noaddr(sqaddr_t *s)
+{
+	struct sockaddr_in *v4;
+	struct sockaddr_in6 *v6;
+	struct in6_addr no6addr = {{{ 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff }}};
+
+	assert(s->init);
+	switch(s->st.ss_family) {
+		case AF_INET:
+			v4 = (struct sockaddr_in *) &s->st;
+			v4->sin_addr.s_addr = INADDR_NONE;
+			break;
+		case AF_INET6:
+			v6 = (struct sockaddr_in6 *) &s->st;
+			v6->sin6_addr = no6addr;
+			break;
+		default:
+			assert(0);
+	}
+	return;
+}
+
 
 /*!
  * @function
@@ -721,7 +776,6 @@ sqinet_mask_addr(sqaddr_t *dst, const sqaddr_t *mask)
 	return;
 
 }
-
 /*
  * This is likely an un-necessary mostly-duplicate of sqinet_compare_addr();
  * should they eventually be folded into the same routine? Probably!
@@ -835,3 +889,4 @@ sqinet_hash_host_key(const sqaddr_t *addr, unsigned int size)
 	}
 	return -1;
 }
+
