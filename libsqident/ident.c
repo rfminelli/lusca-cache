@@ -71,6 +71,7 @@
 
 #include "../libsqinet/sqinet.h"
 
+#include "../libiapp/iapp_ssl.h"
 #include "../libiapp/comm.h"
 
 #include "ident.h"
