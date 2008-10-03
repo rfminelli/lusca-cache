@@ -50,4 +50,6 @@ static inline int sqinet_copy(sqaddr_t *dst, const sqaddr_t *src) { *dst = *src;
 extern int sqinet_compare_port(const sqaddr_t *a, const sqaddr_t *b);
 extern int sqinet_compare_addr(const sqaddr_t *a, const sqaddr_t *b);
 
+extern unsigned int sqinet_hash_host_key(const sqaddr_t *a, unsigned int size);
+
 #endif
