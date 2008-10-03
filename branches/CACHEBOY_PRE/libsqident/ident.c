@@ -226,6 +226,19 @@ CBDATA_TYPE(IdentStateData);
 
 /**** PUBLIC FUNCTIONS ****/
 
+void
+identStart4(struct sockaddr_in *me, struct sockaddr_in *my_peer, IDCB * callback, void *data)
+{
+	sqaddr_t m, p;
+	sqinet_init(&m);
+	sqinet_init(&p);
+	sqinet_set_v4_sockaddr(&m, me);
+	sqinet_set_v4_sockaddr(&p, my_peer);
+	identStart(&m, &p, callback, data);
+	sqinet_done(&m);
+	sqinet_done(&p);
+}
+
 /*
  * start a TCP connection to the peer host on port 113
  */
