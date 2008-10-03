@@ -124,6 +124,29 @@ test1c(void)
 	printf("  revdns is %s\n", buf);
 }
 
+void
+test1d(void)
+{
+	sqaddr_t s;
+	int i, r;
+	char buf[128];
+
+	printf("  sqinet_set_mask_addr does what it should!\n");
+	for (i = 0; i <= 32; i++) {
+		printf("  masklen %d: ", i);
+		sqinet_init(&s);
+		sqinet_set_family(&s, AF_INET);
+		r = sqinet_set_mask_addr(&s, i);
+		if (r != 1) {
+			printf("  .. got error in loop %d!\n", i);
+		} else {
+			r = sqinet_ntoa(&s, buf, sizeof(buf), SQADDR_NONE);
+			printf("return: %s\n", buf);
+		}
+		sqinet_done(&s);
+	}
+}
+
 static int
 test2a(void)
 {
@@ -153,6 +176,30 @@ test2a(void)
 	printf("OK - ::0 is noaddr\n");
 }
 
+void
+test2b(void)
+{
+	sqaddr_t s;
+	int i, r;
+	char buf[128];
+
+	printf("  sqinet_set_mask_addr (v6) does what it should!\n");
+	for (i = 0; i <= 128; i++) {
+		printf("  masklen %d: ", i);
+		sqinet_init(&s);
+		sqinet_set_family(&s, AF_INET6);
+		r = sqinet_set_mask_addr(&s, i);
+		if (r != 1) {
+			printf("  .. got error in loop %d!\n", i);
+		} else {
+			r = sqinet_ntoa(&s, buf, sizeof(buf), SQADDR_NONE);
+			printf("return: %s\n", buf);
+		}
+		sqinet_done(&s);
+	}
+}
+
+
 
 int
 main(int argc, const char *argv[])
@@ -161,6 +208,8 @@ main(int argc, const char *argv[])
 	test1a();
 	test1b();
 	test1c();
+	test1d();
 	printf("Test 2: IPv6 address checks:\n");
 	test2a();
+	test2b();
 }
