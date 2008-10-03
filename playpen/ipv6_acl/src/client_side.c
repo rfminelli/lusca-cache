@@ -4713,7 +4713,7 @@ httpAccept(int sock, void *data)
 	identChecklist.my_addr = sqinet_get_v4_inaddr(&me, SQADDR_ASSERT_IS_V4);
 	identChecklist.my_port = sqinet_get_port(&me);
 	if (aclCheckFast(Config.accessList.identLookup, &identChecklist))
-	    identStart(&connState->me, &connState->peer, clientIdentDone, connState);
+	    identStart4(&connState->me, &connState->peer, clientIdentDone, connState);
 #endif
 	commSetSelect(fd, COMM_SELECT_READ, clientReadRequest, connState, 0);
 	commSetDefer(fd, clientReadDefer, connState);
@@ -4888,7 +4888,7 @@ httpsAccept(int sock, void *data)
 	identChecklist.my_addr = sqinet_get_v4_inaddr(&me, SQADDR_ASSERT_IS_V4);
 	identChecklist.my_port = sqinet_get_port(&me);
 	if (aclCheckFast(Config.accessList.identLookup, &identChecklist))
-	    identStart(&connState->me, &connState->peer, clientIdentDone, connState);
+	    identStart4(&connState->me, &connState->peer, clientIdentDone, connState);
 #endif
 	if (s->http.tcp_keepalive.enabled) {
 	    commSetTcpKeepalive(fd, s->http.tcp_keepalive.idle, s->http.tcp_keepalive.interval, s->http.tcp_keepalive.timeout);
