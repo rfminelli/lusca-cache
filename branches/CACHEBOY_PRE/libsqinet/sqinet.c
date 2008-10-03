@@ -1,3 +1,11 @@
+/*!
+ * @header sqinet - IPv4/IPv6 management functions
+ *
+ * These functions provide an IPv4/IPv6 aware end-point identifier type.
+ *
+ * @copyright Adrian Chadd <adrian@squid-cache.org>
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/socket.h>
@@ -9,15 +17,22 @@
 #include <string.h>
 #include <netdb.h>
 
+#include "../include/util.h"		/* for memrcmp(); perhaps that should be broken out? */
 #include "sqinet.h"
 
-/*!
- * @header sqinet - IPv4/IPv6 management functions
- *
- * These functions provide an IPv4/IPv6 aware end-point identifier type.
- *
- * @copyright Adrian Chadd <adrian@squid-cache.org>
+/* bit opearations on a char[] IP mask of unlimited length - reverse bit order */
+/* Based off CBIT_*, the important difference is the IBIT_BIT bit selector */
+
+/* ie, bit position iteration happens from high bit to low bit in each byte,
+ * versus CBIT_ which occurs low bit to high bit in each byte.
  */
+
+#define IBIT_BIT(bit)           (1<<( 7 - ((bit)%8)))
+#define IBIT_BIN(mask, bit)     (mask)[(bit)>>3]
+#define IBIT_SET(mask, bit)     ((void)(IBIT_BIN(mask, bit) |= IBIT_BIT(bit)))
+#define IBIT_CLR(mask, bit)     ((void)(IBIT_BIN(mask, bit) &= ~IBIT_BIT(bit)))
+#define IBIT_TEST(mask, bit)    ((IBIT_BIN(mask, bit) & IBIT_BIT(bit)) != 0)
+
 
 /*!
  * @function
@@ -55,6 +70,56 @@ sqinet_done(sqaddr_t *s)
 {
 	/* XXX we can't yet enforce that this is only deinit'ed once */
 	s->init = 0;
+}
+
+/*!
+ * @function
+ *	sqinet_set_mask_addr
+ * @abstract
+ *	Set an address value containing the CIDR "mask". The address will be
+ *	partially overwritten by '1' bits; callers should ensure the address
+ *	is all 0's (ie, any addr) by either calling sqinet_init() and sqinet_set_family()
+ *	or, if the sqaddr is already init'ed, setting the value to anyaddr.
+ *
+ * @discussion
+ *	The sqaddr type is slightly overloaded as both an IP address and netmask
+ *	"container". Its a bit unfortunate but it works out well enough in practice.
+ *	This function sets a CIDR mask value by setting '1' to the mask bits.
+ *	It -probably- should set 0 bits for the rest but I'm assuming for now that
+ *	the callee will only do this to a freshly setup sqaddr.
+ *
+ * @param	dst 	pointer to sqaddr_t to modify
+ * @param	masklen	number of mask bits to set in the sqaddr_t address field
+ * @return		1 if successful, 0 if error (for example, >32 mask bits requested
+ *			for an AF_INET address.)
+ */
+int
+sqinet_set_mask_addr(sqaddr_t *dst, int masklen)
+{
+	int i;
+	unsigned char * p = NULL;
+	int plen = 0;
+
+	assert(dst->init);
+
+	switch (dst->st.ss_family) {
+		case AF_INET:
+			p = (unsigned char *) &(((struct sockaddr_in *) &dst->st)->sin_addr);
+			plen = 32;
+			break;
+		case AF_INET6:
+			p = (unsigned char *) &(((struct sockaddr_in6 *) &dst->st)->sin6_addr);
+			plen = 128;
+			break;
+		default:
+			assert(1==0);
+	}
+
+	for (i = 0; i <= plen && masklen > 0; i++, masklen--) {
+		IBIT_SET(p, i);
+	}
+
+	return 1;
 }
 
 /*!

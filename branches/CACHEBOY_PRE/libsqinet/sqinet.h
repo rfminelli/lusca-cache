@@ -24,6 +24,7 @@ typedef enum {
 
 extern void sqinet_init(sqaddr_t *s);
 extern void sqinet_done(sqaddr_t *s);
+extern int sqinet_set_mask_addr(sqaddr_t *dst, int masklen);
 extern int sqinet_copy_v4_inaddr(const sqaddr_t *s, struct in_addr *dst, sqaddr_flags flags);
 extern int sqinet_set_v4_inaddr(sqaddr_t *s, struct in_addr *v4addr);
 extern int sqinet_set_v4_port(sqaddr_t *s, short port, sqaddr_flags flags);
