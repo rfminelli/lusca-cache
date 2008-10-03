@@ -712,10 +712,10 @@ sqinet_compare_port(const sqaddr_t *a, const sqaddr_t *b)
 		return 0;
 	switch (a->st.ss_family) {
 		case AF_INET:
-			return (((struct sockaddr_in *) &a->st)->sin_port) == (((struct sockaddr_in *) &a->st)->sin_port);
+			return (((struct sockaddr_in *) &a->st)->sin_port) == (((struct sockaddr_in *) &b->st)->sin_port);
 		break;
 		case AF_INET6:
-			return (((struct sockaddr_in6 *) &a->st)->sin6_port) == (((struct sockaddr_in6 *) &a->st)->sin6_port);
+			return (((struct sockaddr_in6 *) &a->st)->sin6_port) == (((struct sockaddr_in6 *) &b->st)->sin6_port);
 		break;
 		default:
 			assert(1==0);
@@ -741,12 +741,12 @@ sqinet_compare_addr(const sqaddr_t *a, const sqaddr_t *b)
 		return 0;
 	switch (a->st.ss_family) {
 		case AF_INET:
-			return (((struct sockaddr_in *) &a->st)->sin_addr.s_addr) == (((struct sockaddr_in *) &a->st)->sin_addr.s_addr);
+			return (((struct sockaddr_in *) &a->st)->sin_addr.s_addr) == (((struct sockaddr_in *) &b->st)->sin_addr.s_addr);
 		break;
 		case AF_INET6:
 			return (memcmp(
 				&(((struct sockaddr_in6 *) &a->st)->sin6_addr),
-				&(((struct sockaddr_in6 *) &a->st)->sin6_addr),
+				&(((struct sockaddr_in6 *) &b->st)->sin6_addr),
 				sizeof((((struct sockaddr_in6 *) &a->st)->sin6_addr))) == 0);
 		break;
 		default:
