@@ -38,6 +38,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "../include/config.h"
 #include "../include/util.h"
