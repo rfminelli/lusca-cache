@@ -62,7 +62,6 @@
 #include "../libmem/MemPool.h"
 #include "../libmem/MemBufs.h"
 #include "../libmem/MemBuf.h"
-#include "../libmem/wordlist.h"
  
 #include "../libcb/cbdata.h"
 
@@ -71,7 +70,6 @@
 #include "../libiapp/iapp_ssl.h"
 #include "../libiapp/comm.h"
 #include "../libiapp/event.h"
-#include "../libiapp/pconn_hist.h"
    
 #if defined(_SQUID_CYGWIN_)
 #include <sys/ioctl.h>

@@ -628,13 +628,6 @@ extern void reconfigure(int);
 extern void start_announce(void *unused);
 extern void sslStart(clientHttpRequest *, squid_off_t *, int *);
 
-/* ident.c */
-#if USE_IDENT
-extern void identStart(struct sockaddr_in *me, struct sockaddr_in *my_peer,
-    IDCB * callback, void *cbdata);
-extern void identInit(void);
-#endif
-
 extern void statInit(void);
 extern void statFreeMemory(void);
 extern double median_svc_get(int, int);

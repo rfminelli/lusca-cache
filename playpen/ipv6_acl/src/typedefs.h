@@ -200,7 +200,6 @@ typedef struct _delaySpec delaySpec;
 typedef void CBDUNL(void *);
 typedef void FOCB(void *, int fd, int errcode);
 
-typedef void IDCB(const char *ident, void *data);
 typedef void IRCB(peer *, peer_t, protocol_t, void *, void *data);
 typedef void PSC(FwdServer *, void *);
 typedef void RH(void *data, char *);
