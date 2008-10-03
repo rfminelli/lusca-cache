@@ -76,7 +76,7 @@
 #include "ident.h"
 
 #define IDENT_PORT 113
-#define IDENT_KEY_SZ 50
+#define IDENT_KEY_SZ (MAX_IPSTRLEN*2)
 
 typedef struct _IdentClient {
     IDCB *callback;
@@ -87,8 +87,8 @@ typedef struct _IdentClient {
 typedef struct _IdentStateData {
     hash_link hash;		/* must be first */
     int fd;			/* IDENT fd */
-    struct sockaddr_in me;
-    struct sockaddr_in my_peer;
+    sqaddr_t me;
+    sqaddr_t my_peer;
     IdentClient *clients;
 } IdentStateData;
 
@@ -126,6 +126,8 @@ identClose(int fdnotused, void *data)
     comm_close(state->fd);
     hash_remove_link(ident_hash, (hash_link *) state);
     safe_free(state->hash.key);
+    sqinet_done(&state->me);
+    sqinet_done(&state->my_peer);
     cbdataFree(state);
 }
 
@@ -133,8 +135,9 @@ static void
 identTimeout(int fd, void *data)
 {
     IdentStateData *state = data;
-    debug(30, 3) ("identTimeout: FD %d, %s\n", fd,
-	inet_ntoa(state->my_peer.sin_addr));
+    LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
+    (void) sqinet_ntoa(&state->my_peer, buf, sizeof(buf), SQADDR_NONE);
+    debug(30, 3) ("identTimeout: FD %d: %s\n", fd, buf);
     comm_close(fd);
 }
 
@@ -163,8 +166,7 @@ identConnectDone(int fd, int status, void *data)
     }
     memBufDefInit(&mb);
     memBufPrintf(&mb, "%d, %d\r\n",
-	ntohs(state->my_peer.sin_port),
-	ntohs(state->me.sin_port));
+        sqinet_get_port(&state->my_peer), sqinet_get_port(&state->me));
     comm_write_mbuf(fd, mb, NULL, state);
     commSetSelect(fd, COMM_SELECT_READ, identReadReply, state, 0);
     commSetTimeout(fd, ident_timeout, identTimeout, state);
@@ -227,54 +229,60 @@ CBDATA_TYPE(IdentStateData);
  * start a TCP connection to the peer host on port 113
  */
 void
-identStart(struct sockaddr_in *me, struct sockaddr_in *my_peer, IDCB * callback, void *data)
+identStart(sqaddr_t *me, sqaddr_t *my_peer, IDCB * callback, void *data)
 {
     IdentStateData *state;
     int fd;
+    LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
     char key1[IDENT_KEY_SZ];
     char key2[IDENT_KEY_SZ];
     char key[IDENT_KEY_SZ];
-    sqaddr_t sqp;
+
+    (void) sqinet_ntoa(me, buf, sizeof(buf), SQADDR_NONE);
     snprintf(key1, IDENT_KEY_SZ, "%s:%d",
-	inet_ntoa(me->sin_addr),
-	ntohs(me->sin_port));
+        buf,
+	sqinet_get_port(me));
+
+    (void) sqinet_ntoa(my_peer, buf, sizeof(buf), SQADDR_NONE);
     snprintf(key2, IDENT_KEY_SZ, "%s:%d",
-	inet_ntoa(my_peer->sin_addr),
-	ntohs(my_peer->sin_port));
+        buf,
+	sqinet_get_port(my_peer));
     snprintf(key, IDENT_KEY_SZ, "%s,%s", key1, key2);
     if ((state = hash_lookup(ident_hash, key)) != NULL) {
 	identClientAdd(state, callback, data);
 	return;
     }
-    fd = comm_open(SOCK_STREAM,
+    /* This replicates the previous behaviour - set port to 0; connect() will figure it out? */
+    /* XXX need to verify that the sqaddr gets the right local port details on connect()! */
+    CBDATA_INIT_TYPE(IdentStateData);
+    state = cbdataAlloc(IdentStateData);
+    state->hash.key = xstrdup(key);
+    sqinet_init(&state->me);
+    sqinet_copy(&state->me, me);
+    sqinet_init(&state->my_peer);
+    sqinet_copy(&state->my_peer, my_peer);
+
+    sqinet_set_port(&state->me, 0, SQADDR_NONE);
+    fd = comm_open6(SOCK_STREAM,
 	IPPROTO_TCP,
-	me->sin_addr,
-	0,
+	&state->me,
 	COMM_NONBLOCKING,
 	COMM_TOS_DEFAULT,
 	"ident");
     if (fd == COMM_ERROR) {
 	/* Failed to get a local socket */
+        cbdataFree(state);
 	callback(NULL, data);
 	return;
     }
-    CBDATA_INIT_TYPE(IdentStateData);
-    state = cbdataAlloc(IdentStateData);
-    state->hash.key = xstrdup(key);
     state->fd = fd;
-    state->me = *me;
-    state->my_peer = *my_peer;
     identClientAdd(state, callback, data);
     hash_join(ident_hash, &state->hash);
     comm_add_close_handler(fd,
 	identClose,
 	state);
     commSetTimeout(fd, ident_timeout, identTimeout, state);
-    sqinet_init(&sqp);
-    sqinet_set_v4_sockaddr(&sqp, &state->my_peer);
-    sqinet_set_port(&sqp, IDENT_PORT, SQADDR_NONE);
-    comm_connect_begin(fd, &sqp, identConnectDone, state);
-    sqinet_done(&sqp);
+    comm_connect_begin(fd, &state->my_peer, identConnectDone, state);
 }
 
 void
