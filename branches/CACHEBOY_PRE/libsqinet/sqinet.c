@@ -776,6 +776,7 @@ sqinet_mask_addr(sqaddr_t *dst, const sqaddr_t *mask)
 	return;
 
 }
+
 /*
  * This is likely an un-necessary mostly-duplicate of sqinet_compare_addr();
  * should they eventually be folded into the same routine? Probably!
@@ -889,4 +890,3 @@ sqinet_hash_host_key(const sqaddr_t *addr, unsigned int size)
 	}
 	return -1;
 }
-
