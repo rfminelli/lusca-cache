@@ -735,6 +735,25 @@ xitoa(int num)
     return buf;
 }
 
+/*
+ * reverse memory compare; useful for comparing network-order byte strings without
+ * first translating them.
+ *
+ * Both memory regions are assumed to be the same length.
+ */
+int
+memrcmp(const void *s1, const void *s2, int n)
+{
+	const unsigned char *p1 = s1 + n, *p2 = s2 + n;
+	if (n == 0)
+		return (0);
+	do {
+		if (*p1-- != *p2--)
+			return (*++p1 - *++p2);
+	} while (--n != 0);
+	return (0);
+}
+
 /* A default failure notifier when the main program hasn't installed any */
 void
 default_failure_notify(const char *message)
