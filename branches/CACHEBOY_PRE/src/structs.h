@@ -2012,7 +2012,7 @@ struct _storeSwapLogDataOld {
 
 struct _ClientInfo {
     hash_link hash;		/* must be first */
-    struct in_addr addr;
+    sqaddr_t addr;
     struct {
 	int result_hist[LOG_TYPE_MAX];
 	int n_requests;

@@ -110,11 +110,11 @@ extern void cbdataLocalInit(void);
 
 extern void clientdbInitMem(void);
 extern void clientdbInit(void);
-extern void clientdbUpdate(struct in_addr, log_type, protocol_t, squid_off_t);
-extern int clientdbCutoffDenied(struct in_addr);
+extern void clientdbUpdate(sqaddr_t *, log_type, protocol_t, squid_off_t);
+extern int clientdbCutoffDenied(sqaddr_t *);
 extern void clientdbDump(StoreEntry *);
 extern void clientdbFreeMemory(void);
-extern int clientdbEstablished(struct in_addr, int);
+extern int clientdbEstablished(sqaddr_t *, int);
 
 extern char *clientConstructTraceEcho(clientHttpRequest *);
 extern int checkNegativeHit(StoreEntry *);
@@ -396,7 +396,7 @@ extern void snmpConnectionClose(void);
 extern void snmpDebugOid(int lvl, oid * Name, snint Len);
 extern void addr2oid(struct in_addr addr, oid * Dest);
 extern struct in_addr *oid2addr(oid * id);
-extern struct in_addr *client_entry(struct in_addr *current);
+extern sqaddr_t *client_entry(sqaddr_t **current);
 extern variable_list *snmp_basicFn(variable_list *, snint *);
 extern variable_list *snmp_confFn(variable_list *, snint *);
 extern variable_list *snmp_sysFn(variable_list *, snint *);
