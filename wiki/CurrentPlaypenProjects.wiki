@@ -47,4 +47,14 @@ Here's a link to current and past "playpen" projects where various bits of exper
 
   * Link: http://code.google.com/p/cacheboy/source/list?path=/playpen/ipv6_dns
   * Overview: implement IPv6 support in the internal DNS code
-  * Status: Begun
+  * Status: Completed basic stuff
+
+== ipv6_acl ==
+
+  * Link: http://code.google.com/p/cacheboy/source/list?path=/playpen/ipv6_acl
+  * Overview: ACL support for src/myip IPv6 support
+  * Status - completed
+
+== ipv6_clientdb ==
+
+== ipv6_request ==
