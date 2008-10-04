@@ -2006,10 +2006,7 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	return rv;
 	/* NOTREACHED */
     case ACL_MY_IP:
-	sqinet_init(&sa);
-	sqinet_set_v4_inaddr(&sa, &checklist->my_addr);
-	rv = aclMatchIp(&ae->data, &sa);
-	sqinet_done(&sa);
+	rv = aclMatchIp(&ae->data, &checklist->my_addr);
 	return rv;
 	/* NOTREACHED */
     case ACL_DST_IP:

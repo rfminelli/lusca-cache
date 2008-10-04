@@ -497,8 +497,10 @@ accessLogCustom(AccessLogEntry * al, customlog * log)
 	    /* case LFT_SERVER_PORT: */
 
 	case LFT_LOCAL_IP:
-	    if (al->request)
-		out = inet_ntoa(al->request->my_addr);
+	    if (al->request) {
+		(void) sqinet_ntoa(&al->request->my_addr, tmp, sizeof(tmp), SQADDR_NONE);
+		out = tmp;
+            }
 	    break;
 
 	case LFT_LOCAL_PORT:
