@@ -1478,18 +1478,17 @@ statClientRequests(StoreEntry * s)
 	conn = http->conn;
 	storeAppendPrintf(s, "Connection: %p\n", conn);
 	if (conn) {
+	    LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
 	    fd = conn->fd;
 	    storeAppendPrintf(s, "\tFD %d, read %" PRINTF_OFF_T ", wrote %" PRINTF_OFF_T "\n", fd,
 		fd_table[fd].bytes_read, fd_table[fd].bytes_written);
 	    storeAppendPrintf(s, "\tFD desc: %s\n", fd_table[fd].desc);
 	    storeAppendPrintf(s, "\tin: buf %p, offset %ld, size %ld\n",
 		conn->in.buf, (long int) conn->in.offset, (long int) conn->in.size);
-	    storeAppendPrintf(s, "\tpeer: %s:%d\n",
-		inet_ntoa(conn->peer.sin_addr),
-		ntohs(conn->peer.sin_port));
-	    storeAppendPrintf(s, "\tme: %s:%d\n",
-		inet_ntoa(conn->me.sin_addr),
-		ntohs(conn->me.sin_port));
+	    (void) sqinet_ntoa(&conn->peer, buf, sizeof(buf), SQADDR_NONE);
+	    storeAppendPrintf(s, "\tpeer: %s:%d\n", buf, sqinet_get_port(&conn->peer));
+	    (void) sqinet_ntoa(&conn->me, buf, sizeof(buf), SQADDR_NONE);
+	    storeAppendPrintf(s, "\tme: %s:%d\n", buf, sqinet_get_port(&conn->me));
 	    storeAppendPrintf(s, "\tnrequests: %d\n",
 		conn->nrequests);
 	    storeAppendPrintf(s, "\tdefer: n %d, until %ld\n",
