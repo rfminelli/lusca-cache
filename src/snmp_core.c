@@ -911,6 +911,10 @@ client_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn
     u_char *cp = NULL;
     struct in_addr *laddr = NULL;
 
+    /* XXX for now, the client db stuff is disabled */
+    return NULL;
+
+#if NOTYET
     if (*len <= current->len) {
 	instance = xmalloc(sizeof(name) * (*len + 4));
 	xmemcpy(instance, name, (sizeof(name) * *len));
@@ -938,6 +942,7 @@ client_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn
     }
     *Fn = current->parsefunction;
     return (instance);
+#endif
 }
 
 
