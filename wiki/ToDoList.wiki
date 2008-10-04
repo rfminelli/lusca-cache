@@ -60,6 +60,19 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
     * IP cache (IP -> hostname)
     * Modify Squid internals which issue DNS lookups to use sqinet instead of in_addr
 
+  * IPv6 ACL changes
+    * convert IP code over to use sqaddr for the splay tree - *done*
+    * implement src6 - *done*
+    * implement myip6 - *done*
+    * implement dst6
+    * .. what else?
+
+  * IPv6 request handling changes
+    * connstatedata - *done*
+    * error state
+    * request_t
+    * .. what else?
+
   * Bring out the event *done*, comm *done*, fd *done*, disk code *done*
   * Think about how to bring signal handlers out into registered event callbacks, rather than calling signal handlers in the signal context and then checking for global variables each pass through the comm loop!
    * This may end up requiring an AsyncCalls like event/callback queue to be written, which isn't a bad thing!
