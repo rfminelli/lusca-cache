@@ -1146,6 +1146,7 @@ clientUpdateCounters(clientHttpRequest * http)
 static void
 httpRequestFree(void *data)
 {
+    sqaddr_t ad;
     clientHttpRequest *http = data;
     ConnStateData *conn = http->conn;
     StoreEntry *e;
@@ -1219,7 +1220,10 @@ httpRequestFree(void *data)
 	    http->al.reply = http->reply;
 	    accessLogLog(&http->al, http->acl_checklist);
 	    clientUpdateCounters(http);
-	    clientdbUpdate(conn->peer.sin_addr, http->log_type, PROTO_HTTP, http->out.size);
+	    sqinet_init(&ad);
+	    sqinet_set_v4_sockaddr(&ad, &conn->peer);
+	    clientdbUpdate(&ad, http->log_type, PROTO_HTTP, http->out.size);
+	    sqinet_done(&ad);
 	}
     }
     if (http->acl_checklist)
@@ -1270,12 +1274,16 @@ httpRequestFree(void *data)
 static void
 connStateFree(int fd, void *data)
 {
+    sqaddr_t ad;
     ConnStateData *connState = data;
     dlink_node *n;
     clientHttpRequest *http;
     debug(33, 3) ("connStateFree: FD %d\n", fd);
     assert(connState != NULL);
-    clientdbEstablished(connState->peer.sin_addr, -1);	/* decrement */
+    sqinet_init(&ad);
+    sqinet_set_v4_sockaddr(&ad, &connState->peer);
+    clientdbEstablished(&ad, -1);	/* decrement */
+    sqinet_done(&ad);
     n = connState->reqs.head;
     while (n != NULL) {
 	http = n->data;
@@ -4720,7 +4728,7 @@ httpAccept(int sock, void *data)
 	if (s->tcp_keepalive.enabled) {
 	    commSetTcpKeepalive(fd, s->tcp_keepalive.idle, s->tcp_keepalive.interval, s->tcp_keepalive.timeout);
 	}
-	clientdbEstablished(sqinet_get_v4_inaddr(&peer, SQADDR_ASSERT_IS_V4), 1);
+	clientdbEstablished(&peer, 1);
 	incoming_sockets_accepted++;
         sqinet_done(&peer);
         sqinet_done(&me);
@@ -4893,7 +4901,7 @@ httpsAccept(int sock, void *data)
 	if (s->http.tcp_keepalive.enabled) {
 	    commSetTcpKeepalive(fd, s->http.tcp_keepalive.idle, s->http.tcp_keepalive.interval, s->http.tcp_keepalive.timeout);
 	}
-	clientdbEstablished(sqinet_get_v4_inaddr(&peer, SQADDR_ASSERT_IS_V4), 1);
+	clientdbEstablished(&peer, 1);
 	incoming_sockets_accepted++;
 	httpsAcceptSSL(connState, s->sslContext);
         sqinet_done(&peer);
