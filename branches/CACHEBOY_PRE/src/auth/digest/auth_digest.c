@@ -727,12 +727,13 @@ authenticateDigestAuthenticateUser(auth_user_request_t * auth_user_request, requ
 		return;
 	    } else {
 		const char *useragent = httpHeaderGetStr(&request->header, HDR_USER_AGENT);
-		static struct in_addr last_broken_addr;
+		LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
+		sqaddr_t last_broken_addr;
 		sqaddr_t a;
 		static int seen_broken_client = 0;
 
 		if (!seen_broken_client) {
-		    last_broken_addr = no_addr;
+		    sqinet_init(&last_broken_addr);
 		    seen_broken_client = 1;
 		}
 
