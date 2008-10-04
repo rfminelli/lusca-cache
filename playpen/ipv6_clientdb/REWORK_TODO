@@ -27,3 +27,5 @@
 * Migrate the damned client_db over to use a splay tree or something; using
   a hash table of textual IP addresses is just plain stupid.
 
+* Figure out what to do about ipv6 SNMP support for clientdb and such. Look at Squid3
+  for some inspiration?
