@@ -69,7 +69,7 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
 
   * IPv6 request handling changes
     * connstatedata - *done*
-    * error state
+    * error state - *done*
     * request_t
     * .. what else?
 
