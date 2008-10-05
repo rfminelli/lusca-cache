@@ -1,0 +1,53 @@
+#summary Current IPv6 support in Cacheboy
+
+= Overview =
+
+The IPv6 support in Cacheboy is not as fully-featured as Squid-3.HEAD / Squid-3.1; it is still in development.
+
+The current aim is to thoroughly test and deploy client-side IPv6 before moving onto a complete IPv6 implementation.
+
+== Protocols ==
+
+  * Client-side handling: done
+  * Server-side handling: not done
+  * HTCP: not done
+  * ICPv2: not done
+  * ICPv3: not done
+  * SNMP: not done
+  * FTP: not done
+  * Gopher: not done
+
+== Modules ==
+
+  * External DNS: not done
+  * Internal DNS: done
+  * FQDNCache: not done
+  * IPCache: not done
+  * Incoming network connections: done
+  * Outgoing network connections: done
+  * Logging: done; address not yet wrapped in []'s
+  * Redirectors: done; address not wrapped in []'s
+  * Client database: done
+  * Persistent connection logic: done
+
+== ACLs ==
+
+  * Support for src6 and myip6
+  * No support for dst6 - requires FQDNCache to function
+  * No support for srcdomain / srcregex - requires IPCache to function
+
+== Headers ==
+
+ * X-Forwarded-For: supported; but doesn't yet wrap the IPv6 address in []'s
+
+== SNMP ==
+
+ * Client database: not done
+ * Peer database: not done
+
+== Other ==
+
+  * FQDN entry logging: not done; requires FQDNCache to function
+  * Hostname from http_port configuration: not done; requires DNS to function
+  * Various debugging: logging the _IP_ address requires a conditional call to sqinet_ntoa() (ie, only if the debugging call will output something); the debugging code thus needs to be extended first!
+
