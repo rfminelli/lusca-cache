@@ -936,7 +936,7 @@ fwdStart(int fd, StoreEntry * e, request_t * r)
      * from peer_digest.c, asn.c, netdb.c, etc and should always
      * be allowed.  yuck, I know.
      */
-    if (! IsNoAddr(&r->client_addr) && r->protocol != PROTO_INTERNAL && r->protocol != PROTO_CACHEOBJ) {
+    if (! sqinet_is_noaddr(&r->client_addr) && r->protocol != PROTO_INTERNAL && r->protocol != PROTO_CACHEOBJ) {
 	/*      
 	 * Check if this host is allowed to fetch MISSES from us (miss_access)
 	 */
