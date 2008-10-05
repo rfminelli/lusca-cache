@@ -51,3 +51,7 @@ The current aim is to thoroughly test and deploy client-side IPv6 before moving 
   * Hostname from http_port configuration: not done; requires DNS to function
   * Various debugging: logging the _IP_ address requires a conditional call to sqinet_ntoa() (ie, only if the debugging call will output something); the debugging code thus needs to be extended first!
 
+== Notes ==
+
+ * The proxy doesn't bind to an IPv6 HTTP incoming socket by default. Use "http_port [v6addr]:port" to achieve this.
+ * There are currently no IPv6 default ACL rules and so by default IPv6 requests will be denied. You will need to add a http_access, http_reply_access and miss_access line for the relevant IPv6 networks you wish to allow requests/replies.
