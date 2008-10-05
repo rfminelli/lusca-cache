@@ -640,7 +640,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
     StoreEntry *entry = httpState->entry;
     const request_t *request = httpState->request;
     const request_t *orig_request = httpState->orig_request;
-    struct in_addr *client_addr = NULL;
+    struct in_addr client_addr;
     u_short client_port = 0;
     int fd = httpState->fd;
     int complete = httpState->eof;
@@ -651,6 +651,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 	comm_close(fd);
 	return;
     }
+    SetAnyAddr(&client_addr);
     while (len > 0) {
 	if (httpState->chunk_size > 0) {
 	    size_t size = len;
@@ -805,7 +806,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
     if (keep_alive) {
 	int pinned = 0;
 	if (orig_request->flags.tproxy) {
-	    client_addr = &httpState->request->client_addr;
+	    client_addr = sqinet_get_v4_inaddr(&httpState->request->client_addr, SQADDR_ASSERT_IS_V4);
 	}
 	/* yes we have to clear all these! */
 	commSetDefer(fd, NULL, NULL);
@@ -825,11 +826,11 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 	    clientPinConnection(orig_request->pinned_connection, fd, orig_request, httpState->peer, request->flags.connection_auth);
 	} else if (httpState->peer) {
 	    if (httpState->peer->options.originserver)
-		pconnPush(fd, httpState->peer->name, httpState->peer->http_port, httpState->orig_request->host, client_addr, client_port);
+		pconnPush(fd, httpState->peer->name, httpState->peer->http_port, httpState->orig_request->host, &client_addr, client_port);
 	    else
-		pconnPush(fd, httpState->peer->name, httpState->peer->http_port, "*", client_addr, client_port);
+		pconnPush(fd, httpState->peer->name, httpState->peer->http_port, "*", &client_addr, client_port);
 	} else {
-	    pconnPush(fd, request->host, request->port, NULL, client_addr, client_port);
+	    pconnPush(fd, request->host, request->port, NULL, &client_addr, client_port);
 	}
 	fwdComplete(httpState->fwd);
 	httpState->fd = -1;
@@ -1065,6 +1066,7 @@ httpBuildRequestHeader(request_t * request,
     String strFwd;
     HttpHeaderPos pos = HttpHeaderInitPos;
     String etags = StringNull;
+    LOCAL_ARRAY(char, hbuf, MAX_IPSTRLEN);
 
     httpHeaderInit(hdr_out, hoRequest);
     /* append our IMS header */
@@ -1243,8 +1245,12 @@ httpBuildRequestHeader(request_t * request,
     case FORWARDED_FOR_OFF:
 	strFwd = httpHeaderGetList(hdr_in, HDR_X_FORWARDED_FOR);
     case FORWARDED_FOR_TRUNCATE:
-	strListAdd(&strFwd, (((orig_request->client_addr.s_addr != no_addr.s_addr) && opt_forwarded_for != FORWARDED_FOR_OFF) ?
-		inet_ntoa(orig_request->client_addr) : "unknown"), ',');
+	if ((! sqinet_is_noaddr(&orig_request->client_addr)) && opt_forwarded_for != FORWARDED_FOR_OFF) {
+		(void) sqinet_ntoa(&orig_request->client_addr, hbuf, sizeof(hbuf), SQADDR_NONE);
+		strListAdd(&strFwd, hbuf, ',');
+	} else {
+		strListAdd(&strFwd, "unknown", ',');
+	}
 	break;
     case FORWARDED_FOR_TRANSPARENT:
 	/* Handled above */
@@ -1581,10 +1587,11 @@ httpRequestBodyHandler(char *buf, ssize_t size, void *data)
     httpState->body_buf = NULL;
     if (size > 0) {
 	if (httpState->reply_hdr_state >= 2 && !httpState->flags.abuse_detected) {
+	    LOCAL_ARRAY(char, hbuf, MAX_IPSTRLEN);
 	    httpState->flags.abuse_detected = 1;
+	    (void) sqinet_ntoa(&httpState->orig_request->client_addr, hbuf, sizeof(hbuf), SQADDR_NONE);
 	    debug(11, 1) ("httpRequestBodyHandler: Likely proxy abuse detected '%s' -> '%s'\n",
-		inet_ntoa(httpState->orig_request->client_addr),
-		storeUrl(httpState->entry));
+		hbuf, storeUrl(httpState->entry));
 	    if (httpState->entry->mem_obj->reply->sline.status == HTTP_INVALID_HEADER) {
 		memFree8K(buf);
 		comm_close(httpState->fd);

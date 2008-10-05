@@ -49,12 +49,16 @@ requestCreate(method_t method, protocol_t protocol, const char *urlpath)
     request_t *req = memPoolAlloc(pool_request_t);
     req->method = method;
     req->protocol = protocol;
+    sqinet_init(&req->client_addr);
+#if FOLLOW_X_FORWARDED_FOR
+    sqinet_init(&req->indirect_client_addr);
+#endif
     if (urlpath)
 	stringReset(&req->urlpath, urlpath);
     req->max_forwards = -1;
     req->lastmod = -1;
     sqinet_init(&req->my_addr);
-    SetNoAddr(&req->client_addr);
+    // SetNoAddr(&req->client_addr);
     httpHeaderInit(&req->header, hoRequest);
     return req;
 }
@@ -67,6 +71,10 @@ requestDestroy(request_t * req)
 	requestAbortBody(req);
     if (req->auth_user_request)
 	authenticateAuthUserRequestUnlock(req->auth_user_request);
+    sqinet_done(&req->client_addr);
+#if FOLLOW_X_FORWARDED_FOR
+    sqinet_done(&req->indirect_client_addr);
+#endif
     safe_free(req->store_url);
     safe_free(req->canonical);
     safe_free(req->vary_hdr);
@@ -137,7 +145,8 @@ httpRequestPackDebug(request_t * req, Packer * p)
     LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
     assert(req && p);
     /* Client info */
-    packerPrintf(p, "Client: %s ", inet_ntoa(req->client_addr));
+    (void) sqinet_ntoa(&req->client_addr, buf, sizeof(buf), SQADDR_NONE);
+    packerPrintf(p, "Client: %s ", buf);
     (void) sqinet_ntoa(&req->my_addr, buf, sizeof(buf), SQADDR_NONE);
     packerPrintf(p, "http_port: %s:%d", buf, req->my_port);
     if (req->auth_user_request && authenticateUserRequestUsername(req->auth_user_request))

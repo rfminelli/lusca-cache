@@ -221,9 +221,11 @@ clientFollowXForwardedForStart(void *data)
     request_t *request = http->request;
     request->x_forwarded_for_iterator = httpHeaderGetList(
 	&request->header, HDR_X_FORWARDED_FOR);
+#if NOTYET
     debug(33, 5) ("clientFollowXForwardedForStart: indirect_client_addr=%s XFF='%s'\n",
 	inet_ntoa(request->indirect_client_addr),
 	strBuf(request->x_forwarded_for_iterator));
+#endif
     clientFollowXForwardedForNext(http);
 }
 
@@ -232,9 +234,11 @@ clientFollowXForwardedForNext(void *data)
 {
     clientHttpRequest *http = data;
     request_t *request = http->request;
+#if NOTYET
     debug(33, 5) ("clientFollowXForwardedForNext: indirect_client_addr=%s XFF='%s'\n",
 	inet_ntoa(request->indirect_client_addr),
 	strBuf(request->x_forwarded_for_iterator));
+#endif
     if (strLen(request->x_forwarded_for_iterator) != 0) {
 	/* check the acl to see whether to believe the X-Forwarded-For header */
 	http->acl_checklist = clientAclChecklistCreate(
@@ -268,8 +272,10 @@ clientFollowXForwardedForDone(int answer, void *data)
 	const char *asciiaddr;
 	int l;
 	struct in_addr addr;
+#if NOTYET
 	debug(33, 5) ("clientFollowXForwardedForDone: indirect_client_addr=%s is trusted\n",
 	    inet_ntoa(request->indirect_client_addr));
+#endif
 	p = strBuf(request->x_forwarded_for_iterator);
 	l = strLen(request->x_forwarded_for_iterator);
 
@@ -297,10 +303,12 @@ clientFollowXForwardedForDone(int answer, void *data)
 		asciiaddr);
 	    goto done;
 	}
+#if NOTYET
 	debug(33, 3) ("clientFollowXForwardedForDone: changing indirect_client_addr from %s to '%s'\n",
 	    inet_ntoa(request->indirect_client_addr),
 	    asciiaddr);
-	request->indirect_client_addr = addr;
+#endif
+	sqinet_set_v4_inaddr(&request->indirect_client_addr, &addr);
 	strCut(request->x_forwarded_for_iterator, l);
 	if (!Config.onoff.acl_uses_indirect_client) {
 	    /*
@@ -312,11 +320,15 @@ clientFollowXForwardedForDone(int answer, void *data)
 	clientFollowXForwardedForNext(http);
 	return;
     } else if (answer == ACCESS_DENIED) {
+#if NOTYET
 	debug(33, 5) ("clientFollowXForwardedForDone: indirect_client_addr=%s not trusted\n",
 	    inet_ntoa(request->indirect_client_addr));
+#endif
     } else {
+#if NOTYET
 	debug(33, 5) ("clientFollowXForwardedForDone: indirect_client_addr=%s nothing more to do\n",
 	    inet_ntoa(request->indirect_client_addr));
+#endif
     }
   done:
     /* clean up, and pass control to clientAccessCheck */
@@ -327,7 +339,7 @@ clientFollowXForwardedForDone(int answer, void *data)
 	 * instead of the direct client.
 	 */
 	ConnStateData *conn = http->conn;
-	sqinet_set_v4_inaddr(&conn->log_addr, &request->indirect_client_addr);
+	sqinet_copy(&conn->log_addr, &request->indirect_client_addr);
 #if NOTYET
 	conn->log_addr.s_addr &= Config.Addrs.client_netmask.s_addr;
 	debug(33, 3) ("clientFollowXForwardedForDone: setting log_addr=%s\n",
@@ -4107,7 +4119,7 @@ clientTryParseRequest(ConnStateData * conn)
 	request->content_length = httpHeaderGetSize(&request->header,
 	    HDR_CONTENT_LENGTH);
 	request->flags.internal = http->flags.internal;
-	request->client_addr = sqinet_get_v4_inaddr(&conn->peer, SQADDR_ASSERT_IS_V4);
+	sqinet_copy(&request->client_addr, &conn->peer);
 	request->client_port = sqinet_get_port(&conn->peer);
 #if FOLLOW_X_FORWARDED_FOR
 	request->indirect_client_addr = request->client_addr;
