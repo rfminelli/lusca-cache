@@ -336,7 +336,7 @@ struct _sockaddr_in_list {
 
 struct _http_port_list {
     http_port_list *next;
-    struct sockaddr_in s;
+    sqaddr_t s;
     char *protocol;		/* protocol name */
     char *name;			/* visible name */
     char *defaultsite;		/* default web site */
