@@ -6,6 +6,12 @@ The IPv6 support in Cacheboy is not as fully-featured as Squid-3.HEAD / Squid-3.
 
 The current aim is to thoroughly test and deploy client-side IPv6 before moving onto a complete IPv6 implementation.
 
+The current implementation supports very basic client-side only IPv6 functionality but at a cost of the SNMP client database MIB along with some functionality limited to IPv4. It should be enough for a small edge deployment of an IPv6 service for testing and evaluation.
+
+
+
+Adrian
+
 == Protocols ==
 
   * Client-side handling: done
