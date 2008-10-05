@@ -323,10 +323,13 @@ delay_id
 delayClient(clientHttpRequest * http)
 {
     request_t *r;
+    struct in_addr ia;
     aclCheck_t ch;
     ushort pool;
     assert(http);
     r = http->request;
+
+    /* XXX We don't handle IPv6 addresses! */
 
     memset(&ch, '\0', sizeof(ch));
     ch.conn = http->conn;
@@ -339,9 +342,14 @@ delayClient(clientHttpRequest * http)
 	if (Config.Delay.access[pool] && aclCheckFast(Config.Delay.access[pool], &ch))
 	    break;
     }
+    if (sqinet_get_family(&ch.src_addr) != AF_INET) {
+	debug(77, 1) ("delayClient: IPv6 isn't supported!\n");
+	return delayId(0, 0);
+    }
     if (pool == Config.Delay.pools)
 	return delayId(0, 0);
-    return delayPoolClient(pool, ch.src_addr.s_addr);
+    ia = sqinet_get_v4_inaddr(&ch.src_addr, SQADDR_ASSERT_IS_V4);
+    return delayPoolClient(pool, ia.s_addr);
 }
 
 delay_id

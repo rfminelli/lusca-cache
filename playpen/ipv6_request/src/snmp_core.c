@@ -553,7 +553,8 @@ snmpDecodePacket(snmp_request_t * rq)
     rq->session.Version = SNMP_VERSION_1;
     Community = snmp_parse(&rq->session, PDU, buf, len);
     memset(&checklist, '\0', sizeof(checklist));
-    checklist.src_addr = rq->from.sin_addr;
+    sqinet_init(&checklist.src_addr);
+    sqinet_set_v4_sockaddr(&checklist.src_addr, &rq->from);
     checklist.snmp_community = (char *) Community;
 
     if (Community)
