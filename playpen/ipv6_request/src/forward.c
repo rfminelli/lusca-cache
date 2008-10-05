@@ -643,7 +643,7 @@ fwdConnectStart(void *data)
     outgoing = getOutgoingAddr(fwdState->request);
     tos = getOutgoingTOS(fwdState->request);
 
-    fwdState->request->out_ip = outgoing;
+    sqinet_set_v4_inaddr(&fwdState->request->out_ip, &outgoing);
 
     debug(17, 3) ("fwdConnectStart: got addr %s, tos %d\n",
 	inet_ntoa(outgoing), tos);
@@ -791,7 +791,7 @@ fwdDispatch(FwdState * fwdState)
     fd_table[server_fd].uses++;
     if (fd_table[server_fd].uses == 1 && fs->peer)
 	peerConnectSucceded(fs->peer);
-    fwdState->request->out_ip = sqinet_get_v4_inaddr(&fd_table[server_fd].local_address, SQADDR_ASSERT_IS_V4);
+    sqinet_copy(&fwdState->request->out_ip, &fd_table[server_fd].local_address);
     netdbPingSite(request->host);
     entry->mem_obj->refresh_timestamp = squid_curtime;
     if (fwdState->servers && (p = fwdState->servers->peer)) {
