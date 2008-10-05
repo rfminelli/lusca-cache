@@ -2519,6 +2519,14 @@ aclCheck(aclCheck_t * checklist)
     aclCheckCallback(checklist, allow != ACCESS_DENIED ? ACCESS_DENIED : ACCESS_ALLOWED);
 }
 
+/*
+ * Handle unwinding any immediately local storage to the checklist.
+ *
+ * aclCheck_t's are sometimes allocated and sometimes used in stack frames;
+ * the latter never bothered to call any acl.c functions for setup and teardown.
+ * This (and aclChecklistStart()) allows for the setup/teardown of the
+ * inline sqaddr_t's.
+ */
 void
 aclChecklistDone(aclCheck_t *checklist)
 {
@@ -2683,6 +2691,14 @@ aclChecklistCacheInit(aclCheck_t * checklist)
 }
 
 
+/*
+ * Handle setting up immediately local storage to the checklist.
+ *
+ * aclCheck_t's are sometimes allocated and sometimes used in stack frames;
+ * the latter never bothered to call any acl.c functions for setup and teardown.
+ * This (and aclChecklistDone()) allows for the setup/teardown of the
+ * inline sqaddr_t's.
+ */
 void
 aclChecklistSetup(aclCheck_t *checklist)
 {
