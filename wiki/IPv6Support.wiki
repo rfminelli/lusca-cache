@@ -53,5 +53,5 @@ The current aim is to thoroughly test and deploy client-side IPv6 before moving 
 
 == Notes ==
 
- * The proxy doesn't bind to an IPv6 HTTP incoming socket by default. Use "http_port [v6addr]:port" to achieve this.
+ * The proxy doesn't bind to an IPv6 HTTP incoming socket by default. Use "http_port [ v6addr ]:port" to achieve this.
  * There are currently no IPv6 default ACL rules and so by default IPv6 requests will be denied. You will need to add a http_access, http_reply_access and miss_access line for the relevant IPv6 networks you wish to allow requests/replies.
