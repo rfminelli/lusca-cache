@@ -16,6 +16,8 @@ Adrian
 
  * dns_nameserver - currently takes IPv6 addresses w/out the [] format
  * http_port - currently takes addresses in [] format
+ * acl src6 - currently takes addresses w/out the [] format
+ * acl myip6 - currently takes addresses w/out the [] format
 
 == Protocols ==
 
