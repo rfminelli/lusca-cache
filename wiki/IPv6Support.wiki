@@ -12,6 +12,11 @@ The current implementation supports very basic client-side only IPv6 functionali
 
 Adrian
 
+== Configuration Parameters ==
+
+ * dns_nameserver - currently takes IPv6 addresses w/out the [] format
+ * http_port - currently takes addresses in [] format
+
 == Protocols ==
 
   * Client-side handling: done
