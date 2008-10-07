@@ -111,7 +111,7 @@ storeurlStart(clientHttpRequest * http, RH * handler, void *data)
     }
     r = cbdataAlloc(storeurlStateData);
     r->orig_url = xstrdup(http->uri);
-    r->client_addr = conn->log_addr;
+    r->client_addr = sqinet_get_v4_inaddr(&conn->log_addr, SQADDR_ASSERT_IS_V4);
     r->client_ident = NULL;
     if (http->request->auth_user_request)
 	r->client_ident = authenticateUserRequestUsername(http->request->auth_user_request);

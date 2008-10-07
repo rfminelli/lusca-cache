@@ -1118,9 +1118,9 @@ struct _ConnStateData {
     /* the user details for connection based authentication */
     auth_user_request_t *auth_user_request;
     dlink_list reqs;
-    struct sockaddr_in peer;
-    struct sockaddr_in me;
-    struct in_addr log_addr;
+    sqaddr_t peer;
+    sqaddr_t me;
+    sqaddr_t log_addr;
     char rfc931[USER_IDENT_SZ];
     int nrequests;
     struct {
