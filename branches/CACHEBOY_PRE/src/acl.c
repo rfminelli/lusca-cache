@@ -2028,12 +2028,12 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	}
 	/* NOTREACHED */
     case ACL_SRC_IP6:
-	if (sqinet_get_family(&checklist->src_addr) != AF_INET)
+	if (sqinet_get_family(&checklist->src_addr) != AF_INET6)
 	    return 0;
 	rv = aclMatchIp(&ae->data, &checklist->src_addr);
 	return rv;
     case ACL_MY_IP6:
-	if (sqinet_get_family(&checklist->my_addr) != AF_INET)
+	if (sqinet_get_family(&checklist->my_addr) != AF_INET6)
 	    return 0;
 	rv = aclMatchIp(&ae->data, &checklist->my_addr);
 	return rv;
