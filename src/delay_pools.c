@@ -332,10 +332,13 @@ delayClient(clientHttpRequest * http)
     /* XXX We don't handle IPv6 addresses! */
 
     memset(&ch, '\0', sizeof(ch));
+    aclChecklistSetup(&ch);
     ch.conn = http->conn;
     ch.request = r;
+    sqinet_set_v4_inaddr(&ch.src_addr, &r->client_addr);
     if (r->client_addr.s_addr == INADDR_BROADCAST) {
 	debug(77, 2) ("delayClient: WARNING: Called with 'allones' address, ignoring\n");
+        aclChecklistDone(&ch);
 	return delayId(0, 0);
     }
     for (pool = 0; pool < Config.Delay.pools; pool++) {
@@ -343,12 +346,13 @@ delayClient(clientHttpRequest * http)
 	    break;
     }
     if (sqinet_get_family(&ch.src_addr) != AF_INET) {
-	debug(77, 1) ("delayClient: IPv6 isn't supported!\n");
+        aclChecklistDone(&ch);
 	return delayId(0, 0);
     }
     if (pool == Config.Delay.pools)
 	return delayId(0, 0);
     ia = sqinet_get_v4_inaddr(&ch.src_addr, SQADDR_ASSERT_IS_V4);
+    aclChecklistDone(&ch);
     return delayPoolClient(pool, ia.s_addr);
 }
 
