@@ -63,11 +63,13 @@ icpLogIcp(struct in_addr caddr, log_type logcode, int len, const char *url, int 
     memset(&al, '\0', sizeof(al));
     al.icp.opcode = ICP_QUERY;
     al.url = url;
-    al.cache.caddr = caddr;
+    sqinet_init(&al.cache.caddr);
+    sqinet_set_v4_inaddr(&al.cache.caddr, &caddr);
     al.cache.size = len;
     al.cache.code = logcode;
     al.cache.msec = delay;
     accessLogLog(&al, NULL);
+    sqinet_done(&al.cache.caddr);
 }
 
 void

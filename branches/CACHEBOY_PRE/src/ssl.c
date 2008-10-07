@@ -555,7 +555,7 @@ sslStart(clientHttpRequest * http, squid_off_t * size_ptr, int *status_ptr)
     sslState->client.buf = xmalloc(SQUID_TCP_SO_RCVBUF);
     /* Copy any pending data from the client connection */
     sslState->client.len = http->conn->in.offset;
-    sslState->request->out_ip = outgoing;
+    sqinet_set_v4_inaddr(&sslState->request->out_ip, &outgoing);
     if (sslState->client.len > 0) {
 	if (sslState->client.len > SQUID_TCP_SO_RCVBUF) {
 	    safe_free(sslState->client.buf);
