@@ -98,8 +98,8 @@ storeurlStart(clientHttpRequest * http, RH * handler, void *data)
     const char *fqdn;
     char *urlgroup = conn->port->urlgroup;
     char buf[8192];
-    char claddr[20];
-    char myaddr[20];
+    char claddr[MAX_IPSTRLEN];
+    char myaddr[MAX_IPSTRLEN];
     assert(http);
     assert(handler);
     debug(61, 5) ("storeurlStart: '%s'\n", http->uri);
@@ -133,7 +133,7 @@ storeurlStart(clientHttpRequest * http, RH * handler, void *data)
     if ((fqdn = fqdncache_gethostbyaddr(r->client_addr, 0)) == NULL)
 	fqdn = dash_str;
     xstrncpy(claddr, inet_ntoa(r->client_addr), 20);
-    xstrncpy(myaddr, inet_ntoa(http->request->my_addr), 20);
+    (void) sqinet_ntoa(&http->request->my_addr, myaddr, sizeof(myaddr), SQADDR_NONE);
     snprintf(buf, 8191, "%s %s/%s %s %s %s myip=%s myport=%d",
 	r->orig_url,
 	claddr,

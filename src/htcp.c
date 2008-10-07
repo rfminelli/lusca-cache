@@ -629,7 +629,7 @@ htcpAccessCheck(acl_access * acl, htcpSpecifier * s, struct sockaddr_in *from)
     aclCheck_t checklist;
     memset(&checklist, '\0', sizeof(checklist));
     checklist.src_addr = from->sin_addr;
-    SetNoAddr(&checklist.my_addr);
+    sqinet_init(&checklist.my_addr);
     checklist.request = s->request;
     return aclCheckFast(acl, &checklist);
 }
