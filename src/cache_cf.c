@@ -2935,13 +2935,46 @@ check_null_sockaddr_in_list(const sockaddr_in_list * s)
 #endif /* USE_WCCPv2 */
 
 static void
-parse_http_port_specification(http_port_list * s, char *token)
+parse_http_port_specification_v6(http_port_list *s, char *token)
+{
+	u_short port;
+	char *host = NULL;
+	char *t = NULL;
+	char *ht = xstrdup(token);
+
+	/* For now, assume its -only- a host */
+	/* Format: [host]:port */
+	if (ht[0] != '[') {
+		debug(3, 0) ("invalid IPv6 address: %s\n", token);
+		xfree(ht);
+		return;
+	}
+
+	host = ht + 1;
+	t = strchr(ht, ']');
+	if (t == NULL) {
+		debug(3, 0) ("invalid IPv6 address: %s\n", token);
+		xfree(ht);
+	}
+	*t++ = '\0';
+	port = xatoi(t + 1);
+
+	sqinet_init(&s->s);
+	(void) sqinet_aton(&s->s, host, SQATON_FAMILY_IPv6 | SQATON_PASSIVE);
+	sqinet_set_port(&s->s, port, SQADDR_ASSERT_IS_V6);
+}
+
+static void
+parse_http_port_specification_v4(http_port_list * s, char *token)
 {
     char *host = NULL;
     const struct hostent *hp;
     unsigned short port = 0;
+    struct in_addr ia;
     char *t;
     s->name = xstrdup(token);
+    sqinet_init(&s->s);
+    sqinet_set_family(&s->s, AF_INET);
     if ((t = strchr(token, ':'))) {
 	/* host:port */
 	host = token;
@@ -2953,17 +2986,27 @@ parse_http_port_specification(http_port_list * s, char *token)
     }
     if (port == 0)
 	self_destruct();
-    s->s.sin_port = htons(port);
     if (NULL == host)
-	SetAnyAddr(&s->s.sin_addr);
-    else if (1 == safe_inet_addr(host, &s->s.sin_addr))
+	sqinet_set_anyaddr(&s->s);
+    else if (1 == sqinet_aton(&s->s, host, SQATON_FAMILY_IPv4 | SQATON_PASSIVE))
 	(void) 0;
     else if ((hp = gethostbyname(host))) {
 	/* dont use ipcache */
-	s->s.sin_addr = inaddrFromHostent(hp);
+	ia = inaddrFromHostent(hp);
+	sqinet_set_v4_inaddr(&s->s, &ia);
 	s->defaultsite = xstrdup(host);
     } else
 	self_destruct();
+    sqinet_set_port(&s->s, port, SQADDR_ASSERT_IS_V4);
+}
+
+static void
+parse_http_port_specification(http_port_list *s, char *token)
+{
+	if (token[0] == '[')
+		parse_http_port_specification_v6(s, token);
+	else
+		parse_http_port_specification_v4(s, token);
 }
 
 static void
@@ -3042,6 +3085,7 @@ free_generic_http_port_data(http_port_list * s)
     safe_free(s->name);
     safe_free(s->protocol);
     safe_free(s->defaultsite);
+    sqinet_done(&s->s);
 }
 
 static void
@@ -3077,10 +3121,9 @@ parse_http_port_list(http_port_list ** head)
 static void
 dump_generic_http_port(StoreEntry * e, const char *n, const http_port_list * s)
 {
-    storeAppendPrintf(e, "%s %s:%d",
-	n,
-	inet_ntoa(s->s.sin_addr),
-	ntohs(s->s.sin_port));
+    LOCAL_ARRAY(char, hbuf, MAX_IPSTRLEN);
+    (void) sqinet_ntoa(&s->s, hbuf, sizeof(hbuf), SQATON_NONE);
+    storeAppendPrintf(e, "%s %s:%d", n, hbuf, sqinet_get_port(&s->s));
     if (s->transparent)
 	storeAppendPrintf(e, " transparent");
     if (s->accel)

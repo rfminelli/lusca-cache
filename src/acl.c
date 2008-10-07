@@ -1993,14 +1993,20 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
     debug(28, 3) ("aclMatchAcl: checking '%s'\n", ae->cfgline);
     switch (ae->type) {
     case ACL_SRC_IP:
+	if (sqinet_get_family(&checklist->src_addr) != AF_INET)
+	    return 0;
 	rv = aclMatchIp(&ae->data, &checklist->src_addr);
 	return rv;
 	/* NOTREACHED */
     case ACL_MY_IP:
+	if (sqinet_get_family(&checklist->src_addr) != AF_INET)
+	    return 0;
 	rv = aclMatchIp(&ae->data, &checklist->my_addr);
 	return rv;
 	/* NOTREACHED */
     case ACL_DST_IP:
+	if (sqinet_get_family(&checklist->src_addr) != AF_INET)
+	    return 0;
 	ia = ipcache_gethostbyname(r->host, IP_LOOKUP_IF_MISS);
 	if (ia) {
 	    for (k = 0; k < (int) ia->count; k++) {
@@ -2022,9 +2028,15 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	}
 	/* NOTREACHED */
     case ACL_SRC_IP6:
-	return 0;	/* XXX for now; no v6 address to compare! */
+	if (sqinet_get_family(&checklist->src_addr) != AF_INET)
+	    return 0;
+	rv = aclMatchIp(&ae->data, &checklist->src_addr);
+	return rv;
     case ACL_MY_IP6:
-	return 0;	/* XXX for now; no v6 address to compare! */
+	if (sqinet_get_family(&checklist->my_addr) != AF_INET)
+	    return 0;
+	rv = aclMatchIp(&ae->data, &checklist->my_addr);
+	return rv;
     case ACL_DST_DOMAIN:
 	if (aclMatchDomainList(&ae->data, r->host))
 	    return 1;

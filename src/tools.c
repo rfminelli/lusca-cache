@@ -498,6 +498,7 @@ getMyHostname(void)
     struct in_addr sa;
     if (Config.visibleHostname != NULL)
 	return Config.visibleHostname;
+#if NOTYET
     if (present)
 	return host;
     host[0] = '\0';
@@ -527,9 +528,12 @@ getMyHostname(void)
 		return host;
 
 	}
+#endif
 	debug(50, 1) ("WARNING: failed to resolve %s to a fully qualified hostname\n",
 	    inet_ntoa(sa));
+#if NOTYET
     }
+#endif
     /*
      * Get the host name and store it in host to return
      */
@@ -1100,11 +1104,11 @@ strwordquote(MemBuf * mb, const char *str)
 int
 getMyPort(void)
 {
-    if (Config.Sockaddr.http)
-	return ntohs(Config.Sockaddr.http->s.sin_port);
+    if (Config.Sockaddr.http && Config.Sockaddr.http->s.init)
+	return sqinet_get_port(&Config.Sockaddr.http->s);
 #if USE_SSL
-    if (Config.Sockaddr.https)
-	return ntohs(Config.Sockaddr.https->http.s.sin_port);
+    if (Config.Sockaddr.https && Config.Sockaddr.https->http.s.init)
+	return sqinet_get_port(&Config.Sockaddr.https->http.s);
 #endif
     fatal("No port defined");
     return 0;			/* NOT REACHED */

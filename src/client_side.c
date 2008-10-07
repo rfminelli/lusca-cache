@@ -4709,6 +4709,7 @@ httpAccept(int sock, void *data)
             sqinet_done(&me);
             break;
 	}
+#if 0
         if (sqinet_get_family(&peer) != AF_INET) {
             debug(1, 1) ("httpAccept: FD %d: (%s:%d) is not an IPv4 socket!\n", fd, fd_table[fd].ipaddrstr, fd_table[fd].local_port);
             comm_close(fd);
@@ -4716,6 +4717,7 @@ httpAccept(int sock, void *data)
             sqinet_done(&me);
             break;
        }
+#endif
 
 	F = &fd_table[fd];
 	debug(33, 4) ("httpAccept: FD %d: accepted port %d client %s:%d\n", fd, F->local_port, F->ipaddrstr, F->remote_port);
@@ -5074,6 +5076,7 @@ static void
 clientHttpConnectionsOpen(void)
 {
     http_port_list *s;
+    LOCAL_ARRAY(char, hbuf, MAX_IPSTRLEN);
     int fd;
     for (s = Config.Sockaddr.http; s; s = s->next) {
 	if (MAXHTTPPORTS == NHttpSockets) {
@@ -5091,16 +5094,15 @@ clientHttpConnectionsOpen(void)
 	    comm_fdopen(fd,
 		SOCK_STREAM,
 		no_addr,
-		ntohs(s->s.sin_port),
+		sqinet_get_port(&s->s),
 		COMM_NONBLOCKING,
 		COMM_TOS_DEFAULT,
 		"HTTP Socket");
 	} else {
 	    enter_suid();
-	    fd = comm_open(SOCK_STREAM,
+	    fd = comm_open6(SOCK_STREAM,
 		IPPROTO_TCP,
-		s->s.sin_addr,
-		ntohs(s->s.sin_port),
+		&s->s,
 		COMM_NONBLOCKING,
 		COMM_TOS_DEFAULT,
 		"HTTP Socket");
@@ -5115,12 +5117,13 @@ clientHttpConnectionsOpen(void)
 	 * peg the CPU with select() when we hit the FD limit.
 	 */
 	commSetDefer(fd, httpAcceptDefer, NULL);
+	(void) sqinet_ntoa(&s->s, hbuf, sizeof(hbuf), SQATON_NONE);
 	debug(1, 1) ("Accepting %s HTTP connections at %s, port %d, FD %d.\n",
 	    s->transparent ? "transparently proxied" :
 	    s->accel ? "accelerated" :
 	    "proxy",
-	    inet_ntoa(s->s.sin_addr),
-	    (int) ntohs(s->s.sin_port),
+	    hbuf,
+	    (int) sqinet_get_port(&s->s),
 	    fd);
 	HttpSockets[NHttpSockets++] = fd;
     }
@@ -5131,6 +5134,7 @@ static void
 clientHttpsConnectionsOpen(void)
 {
     https_port_list *s;
+    LOCAL_ARRAY(char, hbuf, MAX_IPSTRLEN);
     int fd;
     for (s = Config.Sockaddr.https; s; s = (https_port_list *) s->http.next) {
 	if (MAXHTTPPORTS == NHttpSockets) {
@@ -5141,10 +5145,9 @@ clientHttpsConnectionsOpen(void)
 	if (!s->sslContext)
 	    continue;
 	enter_suid();
-	fd = comm_open(SOCK_STREAM,
+	fd = comm_open6(SOCK_STREAM,
 	    IPPROTO_TCP,
-	    s->http.s.sin_addr,
-	    ntohs(s->http.s.sin_port),
+	    &s->http.s,
 	    COMM_NONBLOCKING,
 	    COMM_TOS_DEFAULT,
 	    "HTTPS Socket");
@@ -5154,10 +5157,9 @@ clientHttpsConnectionsOpen(void)
 	comm_listen(fd);
 	commSetSelect(fd, COMM_SELECT_READ, httpsAccept, s, 0);
 	commSetDefer(fd, httpAcceptDefer, NULL);
-	debug(1, 1) ("Accepting HTTPS connections at %s, port %d, FD %d.\n",
-	    inet_ntoa(s->http.s.sin_addr),
-	    (int) ntohs(s->http.s.sin_port),
-	    fd);
+	(void) sqinet_ntoa(&s->http.s, hbuf, sizeof(hbuf), SQATON_NONE);
+	debug(1, 1) ("Accepting HTTPS connections at %s, port %d, FD %d.\n", hbuf,
+	    (int) sqinet_get_port(&s->http.s), fd);
 	HttpSockets[NHttpSockets++] = fd;
     }
 }
