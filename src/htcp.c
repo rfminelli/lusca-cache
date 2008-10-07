@@ -626,12 +626,15 @@ htcpUnpackDetail(char *buf, int sz)
 static int
 htcpAccessCheck(acl_access * acl, htcpSpecifier * s, struct sockaddr_in *from)
 {
+    int r;
     aclCheck_t checklist;
     memset(&checklist, '\0', sizeof(checklist));
-    checklist.src_addr = from->sin_addr;
-    sqinet_init(&checklist.my_addr);
+    aclChecklistSetup(&checklist);
+    sqinet_set_v4_sockaddr(&checklist.src_addr, from);
     checklist.request = s->request;
-    return aclCheckFast(acl, &checklist);
+    r = aclCheckFast(acl, &checklist);
+    aclChecklistDone(&checklist);
+    return r;
 }
 
 static void

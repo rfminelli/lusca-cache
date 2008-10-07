@@ -494,22 +494,30 @@ struct in_addr
 getOutgoingAddr(request_t * request)
 {
     aclCheck_t ch;
+    struct in_addr r;
     memset(&ch, '\0', sizeof(aclCheck_t));
+    aclChecklistSetup(&ch);
     if (request) {
 	ch.request = request;
     }
-    return aclMapAddr(Config.accessList.outgoing_address, &ch);
+    r = aclMapAddr(Config.accessList.outgoing_address, &ch);
+    aclChecklistDone(&ch);
+    return r;
 }
 
 unsigned long
 getOutgoingTOS(request_t * request)
 {
     aclCheck_t ch;
+    long r;
     memset(&ch, '\0', sizeof(aclCheck_t));
+    aclChecklistSetup(&ch);
     if (request) {
 	ch.request = request;
     }
-    return aclMapTOS(Config.accessList.outgoing_tos, &ch);
+    r = aclMapTOS(Config.accessList.outgoing_tos, &ch);
+    aclChecklistDone(&ch);
+    return r;
 }
 
 static void
@@ -532,6 +540,7 @@ fwdConnectStart(void *data)
     struct in_tproxy itp;
 #endif
     int idle = -1;
+    struct in_addr ia;
 
     assert(fs);
     assert(fwdState->server_fd == -1);
@@ -709,9 +718,13 @@ fwdConnectStart(void *data)
      * peer, then don't cache, and use the IP that the client's DNS lookup
      * returned
      */
+
+    /* For now, there's -only- IPv4 source IP support in commConnectStart */
+    assert(sqinet_get_family(&fwdState->request->my_addr) == AF_INET);
+    ia = sqinet_get_v4_inaddr(&fwdState->request->my_addr, SQADDR_ASSERT_IS_V4);
     if (fwdState->request->flags.transparent && (fwdState->n_tries > 1) && (NULL == fs->peer)) {
 	storeRelease(fwdState->entry);
-	commConnectStart(fd, host, port, fwdConnectDone, fwdState, &fwdState->request->my_addr);
+	commConnectStart(fd, host, port, fwdConnectDone, fwdState, &ia);
     } else {
 	commConnectStart(fd, host, port, fwdConnectDone, fwdState, NULL);
     }
