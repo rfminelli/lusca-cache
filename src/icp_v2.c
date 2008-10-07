@@ -49,21 +49,27 @@ static void
 icpLogIcp(struct in_addr caddr, log_type logcode, int len, const char *url, int delay)
 {
     AccessLogEntry al;
+    sqaddr_t ad;
     if (LOG_TAG_NONE == logcode)
 	return;
     if (LOG_ICP_QUERY == logcode)
 	return;
-    clientdbUpdate(caddr, logcode, PROTO_ICP, len);
+    sqinet_init(&ad);
+    sqinet_set_v4_inaddr(&ad, &caddr);
+    clientdbUpdate(&ad, logcode, PROTO_ICP, len);
+    sqinet_done(&ad);
     if (!Config.onoff.log_udp)
 	return;
     memset(&al, '\0', sizeof(al));
     al.icp.opcode = ICP_QUERY;
     al.url = url;
-    al.cache.caddr = caddr;
+    sqinet_init(&al.cache.caddr);
+    sqinet_set_v4_inaddr(&al.cache.caddr, &caddr);
     al.cache.size = len;
     al.cache.code = logcode;
     al.cache.msec = delay;
     accessLogLog(&al, NULL);
+    sqinet_done(&al.cache.caddr);
 }
 
 void
@@ -193,6 +199,8 @@ icpHandleIcpV2(int fd, struct sockaddr_in from, char *buf, int len)
     u_num32 flags = 0;
     int rtt = 0;
     int hops = 0;
+    int r;
+    sqaddr_t ad;
     xmemcpy(&header, buf, sizeof(icp_common_t));
     /*
      * Only these fields need to be converted
@@ -224,23 +232,28 @@ icpHandleIcpV2(int fd, struct sockaddr_in from, char *buf, int len)
 	    break;
 	}
 	memset(&checklist, '\0', sizeof(checklist));
-	checklist.src_addr = from.sin_addr;
-	checklist.my_addr = no_addr;
+	aclChecklistSetup(&checklist);
+	sqinet_set_v4_sockaddr(&checklist.src_addr, &from);
 	checklist.request = icp_request;
 	allow = aclCheckFast(Config.accessList.icp, &checklist);
+	aclChecklistDone(&checklist);
 	if (!allow) {
 	    debug(12, 2) ("icpHandleIcpV2: Access Denied for %s by %s.\n",
 		inet_ntoa(from.sin_addr), AclMatchedName);
-	    if (clientdbCutoffDenied(from.sin_addr)) {
+            sqinet_init(&ad);
+	    sqinet_set_v4_sockaddr(&ad, &from);
+	    r = clientdbCutoffDenied(&ad);
+	    if (r) {
 		/*
 		 * count this DENIED query in the clientdb, even though
 		 * we're not sending an ICP reply...
 		 */
-		clientdbUpdate(from.sin_addr, LOG_UDP_DENIED, PROTO_ICP, 0);
+		clientdbUpdate(&ad, LOG_UDP_DENIED, PROTO_ICP, 0);
 	    } else {
 		reply = icpCreateMessage(ICP_DENIED, 0, url, header.reqnum, 0);
 		icpUdpSend(fd, &from, reply, LOG_UDP_DENIED, 0);
 	    }
+	    sqinet_done(&ad);
 	    break;
 	}
 	if (header.flags & ICP_FLAG_SRC_RTT) {
@@ -348,7 +361,7 @@ icpHandleUdp(int sock, void *data)
     while (max--) {
 	from_len = sizeof(from);
 	memset(&from, '\0', from_len);
-	statCounter.syscalls.sock.recvfroms++;
+	CommStats.syscalls.sock.recvfroms++;
 	len = recvfrom(sock,
 	    buf,
 	    SQUID_UDP_SO_RCVBUF - 1,
@@ -415,6 +428,7 @@ icpConnectionsOpen(void)
 	Config.Addrs.udp_incoming,
 	port,
 	COMM_NONBLOCKING,
+	COMM_TOS_DEFAULT,
 	"ICP Socket");
     leave_suid();
     if (theInIcpConnection < 0)
@@ -429,13 +443,15 @@ icpConnectionsOpen(void)
     debug(12, 1) ("Accepting ICP messages at %s, port %d, FD %d.\n",
 	inet_ntoa(Config.Addrs.udp_incoming),
 	(int) port, theInIcpConnection);
-    if ((addr = Config.Addrs.udp_outgoing).s_addr != no_addr.s_addr) {
+    addr = Config.Addrs.udp_outgoing;
+    if (! IsNoAddr(&addr)) {
 	enter_suid();
 	theOutIcpConnection = comm_open(SOCK_DGRAM,
 	    IPPROTO_UDP,
 	    addr,
 	    port,
 	    COMM_NONBLOCKING,
+	    COMM_TOS_DEFAULT,
 	    "ICP Port");
 	leave_suid();
 	if (theOutIcpConnection < 0)

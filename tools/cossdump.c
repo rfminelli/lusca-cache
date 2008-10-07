@@ -26,6 +26,8 @@
 #endif
 
 #include "../src/defines.h"
+/* XXX Needed for stuff in enums.h; remove later! -adrian */
+#include "../libhttp/HttpHeaderType.h"
 #include "../src/enums.h"
 
 struct _tlv;

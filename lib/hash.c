@@ -359,6 +359,21 @@ hashKeyStr(hash_link * hl)
     return (const char *) hl->key;
 }
 
+void
+hash_print(hash_table *hid)
+{
+    int i,n;
+    hash_link *l;
+    for (i = 0; i < hid->count; i++) {
+       l = hid->buckets[i];
+       n = 0;
+       while (l != NULL)
+               l = l->next;
+       printf("%d: %d", i, n);
+    }
+    printf("\n");
+}
+
 
 #ifdef USE_HASH_DRIVER
 /*

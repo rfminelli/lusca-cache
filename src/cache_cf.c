@@ -151,91 +151,19 @@ self_destruct(void)
 	cfg_filename, config_lineno, config_input_line);
 }
 
-void
-wordlistDestroy(wordlist ** list)
-{
-    wordlist *w = NULL;
-    while ((w = *list) != NULL) {
-	*list = w->next;
-	safe_free(w->key);
-	memFree(w, MEM_WORDLIST);
-    }
-    *list = NULL;
-}
-
-const char *
-wordlistAdd(wordlist ** list, const char *key)
-{
-    while (*list)
-	list = &(*list)->next;
-    *list = memAllocate(MEM_WORDLIST);
-    (*list)->key = xstrdup(key);
-    (*list)->next = NULL;
-    return (*list)->key;
-}
-
-void
-wordlistJoin(wordlist ** list, wordlist ** wl)
-{
-    while (*list)
-	list = &(*list)->next;
-    *list = *wl;
-    *wl = NULL;
-}
-
-void
-wordlistAddWl(wordlist ** list, wordlist * wl)
-{
-    while (*list)
-	list = &(*list)->next;
-    for (; wl; wl = wl->next, list = &(*list)->next) {
-	*list = memAllocate(MEM_WORDLIST);
-	(*list)->key = xstrdup(wl->key);
-	(*list)->next = NULL;
-    }
-}
-
+/*
+ * This has to stay here until memBuf's have been moved out of src/
+ * and into libmem.
+ */
 void
 wordlistCat(const wordlist * w, MemBuf * mb)
 {
     while (NULL != w) {
-	memBufPrintf(mb, "%s\n", w->key);
-	w = w->next;
+        memBufPrintf(mb, "%s\n", w->key);
+        w = w->next;
     }
 }
 
-wordlist *
-wordlistDup(const wordlist * w)
-{
-    wordlist *D = NULL;
-    while (NULL != w) {
-	wordlistAdd(&D, w->key);
-	w = w->next;
-    }
-    return D;
-}
-
-void
-intlistDestroy(intlist ** list)
-{
-    intlist *w = NULL;
-    intlist *n = NULL;
-    for (w = *list; w; w = n) {
-	n = w->next;
-	memFree(w, MEM_INTLIST);
-    }
-    *list = NULL;
-}
-
-int
-intlistFind(intlist * list, int i)
-{
-    intlist *w = NULL;
-    for (w = list; w; w = w->next)
-	if (w->i == i)
-	    return 1;
-    return 0;
-}
 
 /*
  * These functions is the same as atoi/l/f, except that they check for errors
@@ -464,7 +392,7 @@ configDoConfigure(void)
 {
     memset(&Config2, '\0', sizeof(SquidConfig2));
     /* init memory as early as possible */
-    memConfigure();
+    memConfigure(Config.onoff.mem_pools, Config.MemPools.limit, Config.onoff.zero_buffers);
     /* Sanity checks */
     if (Config.cacheSwap.swapDirs == NULL)
 	fatal("No cache_dir's specified in config file");
@@ -829,6 +757,61 @@ static void
 free_acl_access(acl_access ** head)
 {
     aclDestroyAccessList(head);
+}
+
+static void
+dump_address46(StoreEntry *entry, const char *name, sqaddr_t addr)
+{
+	LOCAL_ARRAY(char, sbuf, 256);
+	(void) sqinet_ntoa(&addr, sbuf, sizeof(sbuf), SQADDR_NONE);
+	storeAppendPrintf(entry, "%s %s\n", name, sbuf);
+}
+
+static void
+parse_address46(sqaddr_t *addr)
+{
+	char *token = strtok(NULL, w_space);
+	sqinet_init(addr);
+	if (token == NULL)
+		self_destruct();
+
+	/* XXX for now only support numeric addresses, not hostnames */
+	if (sqinet_aton(addr, token, SQATON_PASSIVE) == 0)
+		self_destruct();
+}
+
+static void
+free_address46(sqaddr_t *addr)
+{
+	sqinet_done(addr);
+}
+
+static void
+dump_address6(StoreEntry *entry, const char *name, sqaddr_t addr)
+{
+	LOCAL_ARRAY(char, sbuf, 256);
+	(void) sqinet_ntoa(&addr, sbuf, sizeof(sbuf), SQADDR_NONE);
+	storeAppendPrintf(entry, "%s %s\n", name, sbuf);
+}
+
+static void
+parse_address6(sqaddr_t *addr)
+{
+	char *token = strtok(NULL, w_space);
+	sqinet_init(addr);
+	if (token == NULL)
+		self_destruct();
+
+	/* XXX for now only support numeric addresses, not hostnames */
+	/* XXX and this should enforce IPv6 only! */
+	if (sqinet_aton(addr, token, SQATON_FAMILY_IPv6 | SQATON_PASSIVE) == 0)
+		self_destruct();
+}
+
+static void
+free_address6(sqaddr_t *addr)
+{
+	sqinet_done(addr);
 }
 
 static void
@@ -1715,11 +1698,16 @@ GetUdpService(void)
     return GetService("udp");
 }
 
+CBDATA_TYPE(peer);
+
 static void
 parse_peer(peer ** head)
 {
     char *token = NULL;
+    void *arg = NULL;		/* throwaway arg to make eventAdd happy */
     peer *p;
+    CBDATA_INIT_TYPE(peer);
+    CBDATA_INIT_TYPE_FREECB(peer, peerDestroy);
     p = cbdataAlloc(peer);
     p->http_port = CACHE_HTTP_PORT;
     p->icp.port = CACHE_ICP_PORT;
@@ -1921,7 +1909,9 @@ parse_peer(peer ** head)
 	head = &(*head)->next;
     *head = p;
     Config.npeers++;
-    peerClearRRStart();
+    if (!reconfiguring && Config.npeers == 1) {
+	peerClearRRLoop(arg);
+    }
 }
 
 static void
@@ -2036,11 +2026,11 @@ free_denyinfo(acl_deny_info_list ** list)
     for (a = *list; a; a = a_next) {
 	for (l = a->acl_list; l; l = l_next) {
 	    l_next = l->next;
-	    memFree(l, MEM_ACL_NAME_LIST);
+	    memPoolFree(acl_name_list_pool, l);
 	    l = NULL;
 	}
 	a_next = a->next;
-	memFree(a, MEM_ACL_DENY_INFO_LIST);
+	memPoolFree(acl_deny_pool, a);
 	a = NULL;
     }
     *list = NULL;
@@ -2945,13 +2935,46 @@ check_null_sockaddr_in_list(const sockaddr_in_list * s)
 #endif /* USE_WCCPv2 */
 
 static void
-parse_http_port_specification(http_port_list * s, char *token)
+parse_http_port_specification_v6(http_port_list *s, char *token)
+{
+	u_short port;
+	char *host = NULL;
+	char *t = NULL;
+	char *ht = xstrdup(token);
+
+	/* For now, assume its -only- a host */
+	/* Format: [host]:port */
+	if (ht[0] != '[') {
+		debug(3, 0) ("invalid IPv6 address: %s\n", token);
+		xfree(ht);
+		return;
+	}
+
+	host = ht + 1;
+	t = strchr(ht, ']');
+	if (t == NULL) {
+		debug(3, 0) ("invalid IPv6 address: %s\n", token);
+		xfree(ht);
+	}
+	*t++ = '\0';
+	port = xatoi(t + 1);
+
+	sqinet_init(&s->s);
+	(void) sqinet_aton(&s->s, host, SQATON_FAMILY_IPv6 | SQATON_PASSIVE);
+	sqinet_set_port(&s->s, port, SQADDR_ASSERT_IS_V6);
+}
+
+static void
+parse_http_port_specification_v4(http_port_list * s, char *token)
 {
     char *host = NULL;
     const struct hostent *hp;
     unsigned short port = 0;
+    struct in_addr ia;
     char *t;
     s->name = xstrdup(token);
+    sqinet_init(&s->s);
+    sqinet_set_family(&s->s, AF_INET);
     if ((t = strchr(token, ':'))) {
 	/* host:port */
 	host = token;
@@ -2963,17 +2986,27 @@ parse_http_port_specification(http_port_list * s, char *token)
     }
     if (port == 0)
 	self_destruct();
-    s->s.sin_port = htons(port);
     if (NULL == host)
-	s->s.sin_addr = any_addr;
-    else if (1 == safe_inet_addr(host, &s->s.sin_addr))
+	sqinet_set_anyaddr(&s->s);
+    else if (1 == sqinet_aton(&s->s, host, SQATON_FAMILY_IPv4 | SQATON_PASSIVE))
 	(void) 0;
     else if ((hp = gethostbyname(host))) {
 	/* dont use ipcache */
-	s->s.sin_addr = inaddrFromHostent(hp);
+	ia = inaddrFromHostent(hp);
+	sqinet_set_v4_inaddr(&s->s, &ia);
 	s->defaultsite = xstrdup(host);
     } else
 	self_destruct();
+    sqinet_set_port(&s->s, port, SQADDR_ASSERT_IS_V4);
+}
+
+static void
+parse_http_port_specification(http_port_list *s, char *token)
+{
+	if (token[0] == '[')
+		parse_http_port_specification_v6(s, token);
+	else
+		parse_http_port_specification_v4(s, token);
 }
 
 static void
@@ -3005,11 +3038,9 @@ parse_http_port_option(http_port_list * s, char *token)
 	s->urlgroup = xstrdup(token + 9);
     } else if (strncmp(token, "protocol=", 9) == 0) {
 	s->protocol = xstrdup(token + 9);
-#if LINUX_TPROXY
     } else if (strcmp(token, "tproxy") == 0) {
 	s->tproxy = 1;
 	need_linux_tproxy = 1;
-#endif
     } else if (strcmp(token, "act-as-origin") == 0) {
 	s->act_as_origin = 1;
 	s->accel = 1;
@@ -3054,6 +3085,7 @@ free_generic_http_port_data(http_port_list * s)
     safe_free(s->name);
     safe_free(s->protocol);
     safe_free(s->defaultsite);
+    sqinet_done(&s->s);
 }
 
 static void
@@ -3089,10 +3121,9 @@ parse_http_port_list(http_port_list ** head)
 static void
 dump_generic_http_port(StoreEntry * e, const char *n, const http_port_list * s)
 {
-    storeAppendPrintf(e, "%s %s:%d",
-	n,
-	inet_ntoa(s->s.sin_addr),
-	ntohs(s->s.sin_port));
+    LOCAL_ARRAY(char, hbuf, MAX_IPSTRLEN);
+    (void) sqinet_ntoa(&s->s, hbuf, sizeof(hbuf), SQATON_NONE);
+    storeAppendPrintf(e, "%s %s:%d", n, hbuf, sqinet_get_port(&s->s));
     if (s->transparent)
 	storeAppendPrintf(e, " transparent");
     if (s->accel)
@@ -3111,10 +3142,8 @@ dump_generic_http_port(StoreEntry * e, const char *n, const http_port_list * s)
 	storeAppendPrintf(e, " protocol=%s", s->protocol);
     if (s->no_connection_auth)
 	storeAppendPrintf(e, " no-connection-auth");
-#if LINUX_TPROXY
     if (s->tproxy)
 	storeAppendPrintf(e, " tproxy");
-#endif
     if (s->http11)
 	storeAppendPrintf(e, " http11");
     if (s->tcp_keepalive.enabled) {

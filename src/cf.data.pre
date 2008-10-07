@@ -509,10 +509,18 @@ DOC_START
 	By default, regular expressions are CASE-SENSITIVE.  To make
 	them case-insensitive, use the -i option.
 
+	IPv4 addresses:
+
 	acl aclname src      ip-address/netmask ... (clients IP address)
 	acl aclname src      addr1-addr2/netmask ... (range of addresses)
 	acl aclname dst      ip-address/netmask ... (URL host's IP address)
 	acl aclname myip     ip-address/netmask ... (local socket IP address)
+
+	IPv6 addresses:
+
+	acl aclname src6	ipv6_address/netmask	 (don't include []'s)
+	acl aclname src6	ipv6 addr1-addr2/netmask (don't include []'s)
+	acl aclname myip	ipv6-address/netmask	 (don't include []'s)
 
 	acl aclname arp      mac-address ... (xx:xx:xx:xx:xx:xx notation)
 	  # The arp ACL requires the special configure option --enable-arp-acl.
@@ -676,6 +684,7 @@ acl javascript rep_mime_type -i ^application/x-javascript$
 NOCOMMENT_START
 #Recommended minimum configuration:
 acl all src all
+acl all6 src6 ::0/0
 acl manager proto cache_object
 acl localhost src 127.0.0.1/32
 acl to_localhost dst 127.0.0.0/8
@@ -1155,6 +1164,7 @@ DOC_START
 	Usage:	port [options]
 		hostname:port [options]
 		1.2.3.4:port [options]
+		[IPv6 address]:port [options]
 
 	The socket addresses where Squid will listen for HTTP client
 	requests.  You may specify multiple socket addresses.
@@ -1164,6 +1174,11 @@ DOC_START
 	address.  This replaces the old 'tcp_incoming_address'
 	option.  Most likely, you do not need to bind to a specific
 	address, so you can use the port number alone.
+
+	Binding to a port by itself will only bind to the IPv4 port (for now.)
+	IPv6 requires explicit address binding so the parser can determine it
+	is an IPv6 address. (You could try binding to [::0]:port for binding to
+	all addresses..?)
 
 	If you are running Squid in accelerator mode, you
 	probably want to listen on port 80 also, or instead.
@@ -1867,8 +1882,9 @@ DOC_START
 	list this option multiple times. Note: never_direct overrides
 	this option.
 NOCOMMENT_START
-#We recommend you to use at least the following line.
-hierarchy_stoplist cgi-bin ?
+# We used to recommend you to use at least the following line;
+# this is now done using refresh_pattern entries.
+# hierarchy_stoplist cgi-bin ?
 NOCOMMENT_END
 DOC_END
 
@@ -4658,6 +4674,29 @@ DOC_START
 
 	NOTE, udp_incoming_address and udp_outgoing_address can not
 	have the same value since they both use the same port.
+DOC_END
+
+NAME: udp_outgoing_address6
+TYPE: address6
+LOC: Config.Addrs.udp_outgoing6
+DEFAULT: ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+DOC_START
+	udp_outgoing_address6	is used for UDP IPv6 packets sent out to
+				other caches.
+
+	See: udp_outgoing_address for a description of this option.
+
+DOC_END
+
+NAME: udp_incoming_address6
+TYPE: address6
+LOC: Config.Addrs.udp_incoming6
+DEFAULT: ::0
+DOC_START
+	udp_incoming_address6	is used for UDP IPv6 packets received from
+				other caches.
+
+	See: udp_incoming_address for a description of this option.
 DOC_END
 
 NAME: icp_hit_stale

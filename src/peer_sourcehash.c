@@ -137,8 +137,10 @@ peerSourceHashSelectParent(request_t * request)
     double score;
     double high_score = 0;
     const char *key = NULL;
+    LOCAL_ARRAY(char, hbuf, MAX_IPSTRLEN);
 
-    key = inet_ntoa(request->client_addr);
+    (void) sqinet_ntoa(&request->client_addr, hbuf, sizeof(hbuf), SQADDR_NONE);
+    key = hbuf;
 
     /* calculate hash key */
     debug(39, 2) ("peerSourceHashSelectParent: Calculating hash for %s\n", key);

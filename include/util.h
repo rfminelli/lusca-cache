@@ -119,6 +119,7 @@ extern int xpercentInt(double part, double whole);
 extern double xdiv(double nom, double denom);
 
 extern const char *xitoa(int num);
+extern int memrcmp(const void *s1, const void *s2, int n);
 
 #if !HAVE_DRAND48
 double drand48(void);

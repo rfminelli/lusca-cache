@@ -98,8 +98,8 @@ redirectStart(clientHttpRequest * http, RH * handler, void *data)
     const char *fqdn;
     char *urlgroup = conn->port->urlgroup;
     char buf[8192];
-    char claddr[20];
-    char myaddr[20];
+    char claddr[MAX_IPSTRLEN];
+    char myaddr[MAX_IPSTRLEN];
     assert(http);
     assert(handler);
     debug(61, 5) ("redirectStart: '%s'\n", http->uri);
@@ -111,7 +111,7 @@ redirectStart(clientHttpRequest * http, RH * handler, void *data)
     }
     r = cbdataAlloc(redirectStateData);
     r->orig_url = xstrdup(http->uri);
-    r->client_addr = conn->log_addr;
+    r->client_addr = sqinet_get_v4_inaddr(&conn->log_addr, SQADDR_ASSERT_IS_V4);
     r->client_ident = NULL;
     if (http->request->auth_user_request)
 	r->client_ident = authenticateUserRequestUsername(http->request->auth_user_request);
@@ -133,7 +133,7 @@ redirectStart(clientHttpRequest * http, RH * handler, void *data)
     if ((fqdn = fqdncache_gethostbyaddr(r->client_addr, 0)) == NULL)
 	fqdn = dash_str;
     xstrncpy(claddr, inet_ntoa(r->client_addr), 20);
-    xstrncpy(myaddr, inet_ntoa(http->request->my_addr), 20);
+    (void) sqinet_ntoa(&http->request->my_addr, myaddr, sizeof(myaddr), SQADDR_NONE);
     snprintf(buf, 8191, "%s %s/%s %s %s %s myip=%s myport=%d",
 	r->orig_url,
 	claddr,
@@ -355,6 +355,7 @@ char *
 internalRedirectProcessURL(clientHttpRequest * req, rewritetoken * head)
 {
     char *dev = NULL;
+    LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
     size_t len = 0;
     debug(85, 5) ("internalRedirectProcessURL: start\n");
     for (; head != NULL; head = head->next) {
@@ -371,13 +372,15 @@ internalRedirectProcessURL(clientHttpRequest * req, rewritetoken * head)
 	    str_len = head->str_len;
 	    break;
 	case RFT_CLIENT_IPADDRESS:
-	    str = inet_ntoa(req->conn->peer.sin_addr);
+	    (void) sqinet_ntoa(&req->conn->peer, buf, sizeof(buf), SQADDR_NONE);
+	    str = buf;
 	    break;
 	case RFT_LOCAL_IPADDRESS:
-	    str = inet_ntoa(req->conn->me.sin_addr);
+	    (void) sqinet_ntoa(&req->conn->me, buf, sizeof(buf), SQADDR_NONE);
+	    str = buf;
 	    break;
 	case RFT_LOCAL_PORT:
-	    ulong = ntohs(req->conn->me.sin_port);
+	    ulong = sqinet_get_port(&req->conn->me);
 	    do_ulong = 1;
 	    break;
 	case RFT_EPOCH_SECONDS:

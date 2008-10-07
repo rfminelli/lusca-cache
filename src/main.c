@@ -377,6 +377,9 @@ serverConnectionsClose(void)
 static void
 mainReconfigure(void)
 {
+#if !USE_DNSSERVERS
+	sqaddr_t ai, ao;
+#endif
     debug(1, 1) ("Reconfiguring Squid Cache (version %s)...\n", version_string);
     reconfiguring = 1;
     /* Already called serverConnectionsClose and ipcacheShutdownServers() */
@@ -407,12 +410,33 @@ mainReconfigure(void)
     errorClean();
     enter_suid();		/* root to read config file */
     parseConfigFile(ConfigFile);
+
+    /* XXX hacks for now to setup config options in libiapp; rethink this! -adrian */
+    iapp_tcpRcvBufSz = Config.tcpRcvBufsz;
+    iapp_useAcceptFilter = Config.accept_filter;
+    iapp_incomingRate = Config.incoming_rate;
+    httpConfig_relaxed_parser = Config.onoff.relaxed_header_parser;
+#if USE_SSL
+    ssl_engine = Config.SSL.ssl_engine;
+    ssl_unclean_shutdown = Config.SSL.unclean_shutdown;
+    ssl_password = Config.Program.ssl_password;
+#endif
+#if USE_IDENT
+    identConfigTimeout(Config.Timeout.ident);
+#endif
+
     setUmask(Config.umask);
     setEffectiveUser();
-    _db_init(Config.Log.log, Config.debugOptions);
+    _db_init(Config.debugOptions);
+    _db_init_log(Config.Log.log);
+
+    /* XXX the ipcache/fqdncache config variables need to be set before this is called! */
+    ipcache_local_params();
+    fqdncache_local_params();
     ipcache_restart();		/* clear stuck entries */
-    authenticateUserCacheRestart();	/* clear stuck ACL entries */
     fqdncache_restart();	/* sigh, fqdncache too */
+
+    authenticateUserCacheRestart();	/* clear stuck ACL entries */
     parseEtcHosts();
     errorInitialize();		/* reload error pages */
     accessLogInit();
@@ -420,9 +444,20 @@ mainReconfigure(void)
     useragentOpenLog();
     refererOpenLog();
 #if USE_DNSSERVERS
-    dnsInit();
+    dnsInit(Config.Program.dnsserver, Config.dnsChildren, Config.dns_nameservers, Config.onoff.res_defnames);
+    dnsInternalInit();
 #else
+    sqinet_init(&ai);
+    sqinet_init(&ao);
+    sqinet_set_v4_inaddr(&ai, &Config.Addrs.udp_incoming);
+    sqinet_set_v4_inaddr(&ao, &Config.Addrs.udp_outgoing);
+    idnsConfigure(Config.onoff.ignore_unknown_nameservers, Config.Timeout.idns_retransmit, Config.Timeout.idns_query, Config.onoff.res_defnames);
+    idnsConfigureV4Addresses(&ai, &ao);
+    idnsConfigureV6Addresses(&Config.Addrs.udp_incoming6, &Config.Addrs.udp_outgoing6);
+    sqinet_done(&ai);
+    sqinet_done(&ao);
     idnsInit();
+    idnsInternalInit();
 #endif
     redirectInit();
     storeurlInit();
@@ -481,7 +516,8 @@ mainRotate(void)
 #endif
     icmpOpen();
 #if USE_DNSSERVERS
-    dnsInit();
+    dnsInit(Config.Program.dnsserver, Config.dnsChildren, Config.dns_nameservers, Config.onoff.res_defnames);
+    dnsInternalInit();
 #endif
     redirectInit();
     storeurlInit();
@@ -533,6 +569,9 @@ mainSetCwd(void)
 static void
 mainInitialize(void)
 {
+#if !USE_DNSSERVERS
+	sqaddr_t ai, ao;
+#endif
     /* chroot if configured to run inside chroot */
     if (Config.chroot_dir && (chroot(Config.chroot_dir) != 0 || chdir("/") != 0)) {
 	fatal("failed to chroot");
@@ -548,7 +587,8 @@ mainInitialize(void)
     if (icpPortNumOverride != 1)
 	Config.Port.icp = (u_short) icpPortNumOverride;
 
-    _db_init(Config.Log.log, Config.debugOptions);
+    _db_init(Config.debugOptions);
+    _db_init_log(Config.Log.log);
     fd_open(fileno(debug_log), FD_LOG, Config.Log.log);
 #if MEM_GEN_TRACE
     log_trace_init("/tmp/squid.alloc");
@@ -578,13 +618,31 @@ mainInitialize(void)
     comm_select_postinit();
     if (!configured_once)
 	disk_init();		/* disk_init must go before ipcache_init() */
-    ipcache_init();
+
+    /* XXX the ipcache/fqdncache config variables need to be set before this is called! */
+    ipcache_local_params();
+    fqdncache_local_params();
+    ipcache_init(Config.dns_testname_list);
+    ipcache_init_local();
     fqdncache_init();
+    fqdncache_init_local();
+
     parseEtcHosts();
 #if USE_DNSSERVERS
-    dnsInit();
+    dnsInit(Config.Program.dnsserver, Config.dnsChildren, Config.dns_nameservers, Config.onoff.res_defnames);
+    dnsInternalInit();
 #else
+    sqinet_init(&ai);
+    sqinet_init(&ao);
+    sqinet_set_v4_inaddr(&ai, &Config.Addrs.udp_incoming);
+    sqinet_set_v4_inaddr(&ao, &Config.Addrs.udp_outgoing);
+    idnsConfigure(Config.onoff.ignore_unknown_nameservers, Config.Timeout.idns_retransmit, Config.Timeout.idns_query, Config.onoff.res_defnames);
+    idnsConfigureV4Addresses(&ai, &ao);
+    idnsConfigureV6Addresses(&Config.Addrs.udp_incoming6, &Config.Addrs.udp_outgoing6);
+    sqinet_done(&ai);
+    sqinet_done(&ao);
     idnsInit();
+    idnsInternalInit();
 #endif
     redirectInit();
     storeurlInit();
@@ -711,12 +769,6 @@ main(int argc, char **argv)
 #endif
 #endif /* HAVE_MALLOPT */
 
-    memset(&local_addr, '\0', sizeof(struct in_addr));
-    safe_inet_addr(localhost, &local_addr);
-    memset(&any_addr, '\0', sizeof(struct in_addr));
-    safe_inet_addr("0.0.0.0", &any_addr);
-    memset(&no_addr, '\0', sizeof(struct in_addr));
-    safe_inet_addr("255.255.255.255", &no_addr);
     squid_srandom(time(NULL));
 
     getCurrentTime();
@@ -757,15 +809,32 @@ main(int argc, char **argv)
 #if USE_LEAKFINDER
 	leakInit();
 #endif
+        libcore_set_fatalf(fatalvf);
+        setMaxFD();
+	iapp_init();		/* required for configuration parsing */
 	memInit();
-	cbdataInit();
-	eventInit();		/* eventInit() is required for config parsing */
+	cbdataLocalInit();
+	eventLocalInit();
 	storeFsInit();		/* required for config parsing */
 	authenticateSchemeInit();	/* required for config parsing */
 	parse_err = parseConfigFile(ConfigFile);
 
 	if (opt_parse_cfg_only)
 	    return parse_err;
+
+        /* XXX hacks for now to setup config options in libiapp; rethink this! -adrian */
+        iapp_tcpRcvBufSz = Config.tcpRcvBufsz;
+        iapp_useAcceptFilter = Config.accept_filter;
+        iapp_incomingRate = Config.incoming_rate;
+        httpConfig_relaxed_parser = Config.onoff.relaxed_header_parser;
+#if USE_SSL
+        ssl_engine = Config.SSL.ssl_engine;
+        ssl_unclean_shutdown = Config.SSL.unclean_shutdown;
+        ssl_password = Config.Program.ssl_password;
+#endif
+#if USE_IDENT
+        identConfigTimeout(Config.Timeout.ident);
+#endif
     }
     setUmask(Config.umask);
     if (-1 == opt_send_signal)
@@ -808,11 +877,6 @@ main(int argc, char **argv)
     }
     if (!opt_no_daemon)
 	watch_child(argv);
-    setMaxFD();
-
-    /* init comm module */
-    comm_init();
-    comm_select_init();
 
     if (opt_no_daemon) {
 	/* we have to init fdstat here. */
@@ -852,12 +916,11 @@ main(int argc, char **argv)
 	    serverConnectionsClose();
 	    eventAdd("SquidShutdown", SquidShutdown, NULL, (double) (wait + 1), 1);
 	}
-	eventRun();
-	if ((loop_delay = eventNextTime()) < 0)
-	    loop_delay = 0;
+        /* Set a maximum loop delay; it'll be lowered elsewhere as appropriate */
+	loop_delay = 60000;
 	if (debug_log_flush() && loop_delay > 1000)
 	    loop_delay = 1000;
-	switch (comm_select(loop_delay)) {
+	switch (iapp_runonce(loop_delay)) {
 	case COMM_OK:
 	    errcount = 0;	/* reset if successful */
 	    break;
@@ -876,6 +939,8 @@ main(int argc, char **argv)
 	    fatal_dump("MAIN: Internal error -- this should never happen.");
 	    break;
 	}
+        /* Check for disk io callbacks */
+        storeDirCallback();
     }
     /* NOTREACHED */
     return 0;
@@ -1020,7 +1085,7 @@ watch_child(char *argv[])
 	fatalf(_PATH_DEVNULL " %s\n", xstrerror());
     if (!opt_stdin_overrides_http_port)
 	dup2(nullfd, 0);
-    if (opt_debug_stderr < 0) {
+    if (_db_stderr_debug_opt() < 0) {
 	dup2(nullfd, 1);
 	dup2(nullfd, 2);
     }
