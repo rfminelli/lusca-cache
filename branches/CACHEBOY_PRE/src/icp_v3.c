@@ -79,10 +79,11 @@ icpHandleIcpV3(int fd, struct sockaddr_in from, char *buf, int len)
 	    break;
 	}
 	memset(&checklist, '\0', sizeof(checklist));
-	checklist.src_addr = from.sin_addr;
-        sqinet_init(&checklist.my_addr);
+	aclChecklistSetup(&checklist);
+	sqinet_set_v4_sockaddr(&checklist.src_addr, &from);
 	checklist.request = icp_request;
 	allow = aclCheckFast(Config.accessList.icp, &checklist);
+	aclChecklistDone(&checklist);
 	if (!allow) {
 	    debug(12, 2) ("icpHandleIcpV3: Access Denied for %s by %s.\n",
 		inet_ntoa(from.sin_addr), AclMatchedName);

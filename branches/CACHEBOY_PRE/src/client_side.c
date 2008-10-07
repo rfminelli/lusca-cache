@@ -4730,13 +4730,13 @@ httpAccept(int sock, void *data)
 	    fqdncache_gethostbyaddr(sqinet_get_v4_inaddr(&peer, SQADDR_ASSERT_IS_V4), FQDN_LOOKUP_IF_MISS);
 	commSetTimeout(fd, Config.Timeout.request, requestTimeout, connState);
 #if USE_IDENT
-	identChecklist.src_addr = sqinet_get_v4_inaddr(&peer, SQADDR_ASSERT_IS_V4);
-        sqinet_init(&identChecklist.my_addr);
+        aclChecklistSetup(&identChecklist);
+	sqinet_copy(&identChecklist.src_addr, &peer);
 	sqinet_copy(&identChecklist.my_addr, &me);
 	identChecklist.my_port = sqinet_get_port(&me);
 	if (aclCheckFast(Config.accessList.identLookup, &identChecklist))
 	    identStart(&connState->me, &connState->peer, clientIdentDone, connState);
-        sqinet_done(&identChecklist.my_addr);
+        aclChecklistDone(&identChecklist);
 #endif
 	commSetSelect(fd, COMM_SELECT_READ, clientReadRequest, connState, 0);
 	commSetDefer(fd, clientReadDefer, connState);
@@ -4912,13 +4912,13 @@ httpsAccept(int sock, void *data)
 	    fqdncache_gethostbyaddr(sqinet_get_v4_inaddr(&connState->peer, SQADDR_ASSERT_IS_V4), FQDN_LOOKUP_IF_MISS);
 	commSetTimeout(fd, Config.Timeout.request, requestTimeout, connState);
 #if USE_IDENT
-	identChecklist.src_addr = sqinet_get_v4_inaddr(&peer, SQADDR_ASSERT_IS_V4);
-        sqinet_init(&identChecklist.my_addr);
+        aclChecklistSetup(&identChecklist);
+	sqinet_copy(&identChecklist.src_addr, &peer);
 	sqinet_copy(&identChecklist.my_addr, &me);
 	identChecklist.my_port = sqinet_get_port(&me);
 	if (aclCheckFast(Config.accessList.identLookup, &identChecklist))
 	    identStart(&connState->me, &connState->peer, clientIdentDone, connState);
-	sqinet_done(&identChecklist.my_addr);
+        aclChecklistDone(&identChecklist);
 #endif
 	if (s->http.tcp_keepalive.enabled) {
 	    commSetTcpKeepalive(fd, s->http.tcp_keepalive.idle, s->http.tcp_keepalive.interval, s->http.tcp_keepalive.timeout);

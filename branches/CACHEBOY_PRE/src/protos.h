@@ -81,6 +81,8 @@ extern wordlist *aclDumpGeneric(const acl *);
 extern int aclPurgeMethodInUse(acl_access *);
 extern void aclCacheMatchFlush(dlink_list * cache);
 extern int aclAuthenticated(aclCheck_t * checklist);
+extern void aclChecklistSetup(aclCheck_t *checklist);
+extern void aclChecklistDone(aclCheck_t *checklist);
 
 /*
  * cache_cf.c
