@@ -4042,7 +4042,7 @@ clientTryParseRequest(ConnStateData * conn)
 	if (parser_return_code < 0) {
 	    debug(33, 1) ("clientTryParseRequest: FD %d (%s:%d) Invalid Request\n", fd, fd_table[fd].ipaddrstr, fd_table[fd].remote_port);
 	    err = errorCon(ERR_INVALID_REQ, HTTP_BAD_REQUEST, NULL);
-	    err->src_addr = sqinet_get_v4_inaddr(&conn->peer, SQADDR_ASSERT_IS_V4);
+	    sqinet_copy(&err->src_addr, &conn->peer);
 	    err->request_hdrs = xstrdup(conn->in.buf);
 	    http->log_type = LOG_TCP_DENIED;
 	    http->entry = clientCreateStoreEntry(http, method, null_request_flags);
@@ -4052,7 +4052,7 @@ clientTryParseRequest(ConnStateData * conn)
 	if ((request = urlParse(method, http->uri)) == NULL) {
 	    debug(33, 5) ("Invalid URL: %s\n", http->uri);
 	    err = errorCon(ERR_INVALID_URL, HTTP_BAD_REQUEST, NULL);
-	    err->src_addr = sqinet_get_v4_inaddr(&conn->peer, SQADDR_ASSERT_IS_V4);
+	    sqinet_copy(&err->src_addr, &conn->peer);
 	    err->url = xstrdup(http->uri);
 	    http->al.http.code = err->http_status;
 	    http->log_type = LOG_TCP_DENIED;
@@ -4180,7 +4180,7 @@ clientTryParseRequest(ConnStateData * conn)
 	    debug(33, 1) ("Config 'request_header_max_size'= %ld bytes.\n",
 		(long int) Config.maxRequestHeaderSize);
 	    err = errorCon(ERR_TOO_BIG, HTTP_REQUEST_URI_TOO_LONG, NULL);
-	    err->src_addr = sqinet_get_v4_inaddr(&conn->peer, SQADDR_ASSERT_IS_V4);
+	    sqinet_copy(&err->src_addr, &conn->peer);
 	    http = parseHttpRequestAbort(conn, "error:request-too-large");
 	    /* add to the client request queue */
 	    dlinkAddTail(http, &http->node, &conn->reqs);
