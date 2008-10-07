@@ -720,9 +720,9 @@ fwdConnectStart(void *data)
      */
 
     /* For now, there's -only- IPv4 source IP support in commConnectStart */
-    assert(sqinet_get_family(&fwdState->request->my_addr) == AF_INET);
-    ia = sqinet_get_v4_inaddr(&fwdState->request->my_addr, SQADDR_ASSERT_IS_V4);
     if (fwdState->request->flags.transparent && (fwdState->n_tries > 1) && (NULL == fs->peer)) {
+        assert(sqinet_get_family(&fwdState->request->my_addr) == AF_INET);
+        ia = sqinet_get_v4_inaddr(&fwdState->request->my_addr, SQADDR_ASSERT_IS_V4);
 	storeRelease(fwdState->entry);
 	commConnectStart(fd, host, port, fwdConnectDone, fwdState, &ia);
     } else {
