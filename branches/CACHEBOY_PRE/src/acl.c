@@ -2653,11 +2653,11 @@ aclChecklistCacheInit(aclCheck_t * checklist)
 
 #if FOLLOW_X_FORWARDED_FOR
 	if (Config.onoff.acl_uses_indirect_client) {
-	    sqinet_set_v4_inaddr(&(checklist->src_addr), &request->indirect_client_addr);
+	    sqinet_copy(&checklist->src_addr, &request->indirect_client_addr);
 	} else
 #endif /* FOLLOW_X_FORWARDED_FOR */
-	    sqinet_set_v4_inaddr(&(checklist->src_addr), &request->client_addr);
-	checklist->my_addr = request->my_addr;
+	    sqinet_copy(&checklist->src_addr, &request->client_addr);
+	sqinet_copy(&checklist->my_addr, &request->my_addr);
 	checklist->my_port = request->my_port;
 #if 0 && USE_IDENT
 	/*
