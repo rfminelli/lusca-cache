@@ -498,7 +498,7 @@ authTryGetUser(auth_user_request_t ** auth_user_request, ConnStateData * conn, r
     else {
 	sqaddr_t a;
 	sqinet_init(&a);
-	sqinet_set_v4_inaddr(&a, &request->client_addr);
+	sqinet_copy(&a, &request->client_addr);
 	request->auth_user_request = authenticateAuthUserRequestFindByIp(&a);
 	sqinet_done(&a);
 	if (request->auth_user_request)
