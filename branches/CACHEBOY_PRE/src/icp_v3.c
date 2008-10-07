@@ -80,7 +80,7 @@ icpHandleIcpV3(int fd, struct sockaddr_in from, char *buf, int len)
 	}
 	memset(&checklist, '\0', sizeof(checklist));
 	checklist.src_addr = from.sin_addr;
-	SetNoAddr(&checklist.my_addr);
+        sqinet_init(&checklist.my_addr);
 	checklist.request = icp_request;
 	allow = aclCheckFast(Config.accessList.icp, &checklist);
 	if (!allow) {

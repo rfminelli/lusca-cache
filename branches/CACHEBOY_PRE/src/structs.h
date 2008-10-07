@@ -288,7 +288,7 @@ struct _aclCheck_t {
     const acl_access *access_list;
     struct in_addr src_addr;
     struct in_addr dst_addr;
-    struct in_addr my_addr;
+    sqaddr_t my_addr;
     unsigned short my_port;
     request_t *request;
     /* for acls that look at reply data */
@@ -1751,7 +1751,7 @@ struct _request_t {
 #if FOLLOW_X_FORWARDED_FOR
     struct in_addr indirect_client_addr;	/* after following X-Forwarded-For */
 #endif				/* FOLLOW_X_FORWARDED_FOR */
-    struct in_addr my_addr;
+    sqaddr_t my_addr;
     unsigned short my_port;		/* XXX fold my_port into my_addr! */
     HttpHeader header;
     squid_off_t content_length;

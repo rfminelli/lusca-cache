@@ -53,8 +53,8 @@ requestCreate(method_t method, protocol_t protocol, const char *urlpath)
 	stringReset(&req->urlpath, urlpath);
     req->max_forwards = -1;
     req->lastmod = -1;
+    sqinet_init(&req->my_addr);
     SetNoAddr(&req->client_addr);
-    SetNoAddr(&req->my_addr);
     httpHeaderInit(&req->header, hoRequest);
     return req;
 }
@@ -93,6 +93,7 @@ requestDestroy(request_t * req)
     if (req->pinned_connection)
 	cbdataUnlock(req->pinned_connection);
     req->pinned_connection = NULL;
+    sqinet_done(&req->my_addr);
     memPoolFree(pool_request_t, req);
 }
 
@@ -133,10 +134,12 @@ httpRequestPack(const request_t * req, Packer * p)
 void
 httpRequestPackDebug(request_t * req, Packer * p)
 {
+    LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
     assert(req && p);
     /* Client info */
     packerPrintf(p, "Client: %s ", inet_ntoa(req->client_addr));
-    packerPrintf(p, "http_port: %s:%d", inet_ntoa(req->my_addr), req->my_port);
+    (void) sqinet_ntoa(&req->my_addr, buf, sizeof(buf), SQADDR_NONE);
+    packerPrintf(p, "http_port: %s:%d", buf, req->my_port);
     if (req->auth_user_request && authenticateUserRequestUsername(req->auth_user_request))
 	packerPrintf(p, "user: %s", authenticateUserRequestUsername(req->auth_user_request));
     packerPrintf(p, "\n");
