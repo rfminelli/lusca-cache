@@ -50,6 +50,7 @@ requestCreate(method_t method, protocol_t protocol, const char *urlpath)
     req->method = method;
     req->protocol = protocol;
     sqinet_init(&req->client_addr);
+    sqinet_init(&req->out_ip);
 #if FOLLOW_X_FORWARDED_FOR
     sqinet_init(&req->indirect_client_addr);
 #endif
@@ -72,6 +73,7 @@ requestDestroy(request_t * req)
     if (req->auth_user_request)
 	authenticateAuthUserRequestUnlock(req->auth_user_request);
     sqinet_done(&req->client_addr);
+    sqinet_done(&req->out_ip);
 #if FOLLOW_X_FORWARDED_FOR
     sqinet_done(&req->indirect_client_addr);
 #endif

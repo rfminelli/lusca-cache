@@ -1183,7 +1183,7 @@ httpRequestFree(void *data)
 	if (!http->al.url)
 	    http->al.url = urlCanonicalClean(request);
 	debug(33, 9) ("httpRequestFree: al.url='%s'\n", http->al.url);
-	http->al.cache.out_ip = request->out_ip;
+	sqinet_copy(&http->al.cache.out_ip, &request->out_ip);
 	if (http->reply && http->log_type != LOG_TCP_DENIED) {
 	    http->al.http.code = http->reply->sline.status;
 	    http->al.http.content_type = strBuf(http->reply->content_type);
@@ -1191,7 +1191,9 @@ httpRequestFree(void *data)
 	    http->al.http.code = mem->reply->sline.status;
 	    http->al.http.content_type = strBuf(mem->reply->content_type);
 	}
-	http->al.cache.caddr = sqinet_get_v4_inaddr(&conn->log_addr, SQADDR_ASSERT_IS_V4);
+        sqinet_init(&http->al.cache.caddr);
+        sqinet_init(&http->al.cache.out_ip);
+	sqinet_copy(&http->al.cache.caddr, &conn->log_addr);
 	http->al.cache.size = http->out.size;
 	http->al.cache.code = http->log_type;
 	http->al.cache.msec = tvSubMsec(http->start, current_time);
@@ -1245,6 +1247,8 @@ httpRequestFree(void *data)
     safe_free(http->al.headers.request);
     safe_free(http->al.headers.reply);
     safe_free(http->al.cache.authuser);
+    sqinet_done(&http->al.cache.caddr);
+    sqinet_done(&http->al.cache.out_ip);
     http->al.request = NULL;
     safe_free(http->redirect.location);
     stringClean(&http->range_iter.boundary);
