@@ -335,8 +335,8 @@ delayClient(clientHttpRequest * http)
     aclChecklistSetup(&ch);
     ch.conn = http->conn;
     ch.request = r;
-    sqinet_set_v4_inaddr(&ch.src_addr, &r->client_addr);
-    if (r->client_addr.s_addr == INADDR_BROADCAST) {
+    sqinet_copy(&ch.src_addr, &r->client_addr);
+    if (sqinet_is_noaddr(&r->client_addr)) {
 	debug(77, 2) ("delayClient: WARNING: Called with 'allones' address, ignoring\n");
         aclChecklistDone(&ch);
 	return delayId(0, 0);

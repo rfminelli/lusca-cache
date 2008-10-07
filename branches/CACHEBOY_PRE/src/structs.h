@@ -1747,9 +1747,9 @@ struct _request_t {
     int max_forwards;
     /* these in_addr's could probably be sockaddr_in's */
     unsigned short client_port;		/* XXX fold client_port into client_addr! */
-    struct in_addr client_addr;
+    sqaddr_t client_addr;
 #if FOLLOW_X_FORWARDED_FOR
-    struct in_addr indirect_client_addr;	/* after following X-Forwarded-For */
+    sqaddr_t indirect_client_addr;	/* after following X-Forwarded-For */
 #endif				/* FOLLOW_X_FORWARDED_FOR */
     sqaddr_t my_addr;
     unsigned short my_port;		/* XXX fold my_port into my_addr! */
