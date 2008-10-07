@@ -640,7 +640,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
     StoreEntry *entry = httpState->entry;
     const request_t *request = httpState->request;
     const request_t *orig_request = httpState->orig_request;
-    struct in_addr client_addr;
+    sqaddr_t client_addr;
     u_short client_port = 0;
     int fd = httpState->fd;
     int complete = httpState->eof;
@@ -651,7 +651,8 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 	comm_close(fd);
 	return;
     }
-    SetAnyAddr(&client_addr);
+    /* XXX this needs to be double-checked to make sure the sqinet_done() is called! */
+    sqinet_init(&client_addr);
     while (len > 0) {
 	if (httpState->chunk_size > 0) {
 	    size_t size = len;
@@ -806,7 +807,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
     if (keep_alive) {
 	int pinned = 0;
 	if (orig_request->flags.tproxy) {
-	    client_addr = sqinet_get_v4_inaddr(&httpState->request->client_addr, SQADDR_ASSERT_IS_V4);
+	    sqinet_copy(&client_addr, &httpState->request->client_addr);
 	}
 	/* yes we have to clear all these! */
 	commSetDefer(fd, NULL, NULL);

@@ -273,7 +273,7 @@ errorCon(err_type type, http_status status, request_t * request)
     sqinet_init(&err->src_addr);
     if (request != NULL) {
 	err->request = requestLink(request);
-	sqinet_set_v4_inaddr(&err->src_addr, &request->client_addr);
+	sqinet_copy(&err->src_addr, &request->client_addr);
     }
     return err;
 }
