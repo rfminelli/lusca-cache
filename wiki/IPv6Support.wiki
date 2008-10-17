@@ -38,8 +38,8 @@ Adrian
   * IPCache: not done
   * Incoming network connections: done
   * Outgoing network connections: done
-  * Logging: done; address not yet wrapped in []'s
-  * Redirectors: done; address not wrapped in []'s
+  * Logging: done
+  * Redirectors: done
   * Client database: done
   * Persistent connection logic: done
 
@@ -51,7 +51,7 @@ Adrian
 
 == Headers ==
 
- * X-Forwarded-For: supported; but doesn't yet wrap the IPv6 address in []'s
+ * X-Forwarded-For: done
 
 == SNMP ==
 
