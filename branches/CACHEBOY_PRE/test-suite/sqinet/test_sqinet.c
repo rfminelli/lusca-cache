@@ -140,7 +140,7 @@ test1d(void)
 		if (r != 1) {
 			printf("  .. got error in loop %d!\n", i);
 		} else {
-			r = sqinet_ntoa(&s, buf, sizeof(buf), SQADDR_NONE);
+			r = sqinet_ntoa(&s, buf, sizeof(buf), SQADDR_NO_BRACKET_V6);
 			printf("return: %s\n", buf);
 		}
 		sqinet_done(&s);
@@ -192,7 +192,7 @@ test2b(void)
 		if (r != 1) {
 			printf("  .. got error in loop %d!\n", i);
 		} else {
-			r = sqinet_ntoa(&s, buf, sizeof(buf), SQADDR_NONE);
+			r = sqinet_ntoa(&s, buf, sizeof(buf), SQADDR_NO_BRACKET_V6);
 			printf("return: %s\n", buf);
 		}
 		sqinet_done(&s);
