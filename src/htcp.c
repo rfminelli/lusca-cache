@@ -626,12 +626,15 @@ htcpUnpackDetail(char *buf, int sz)
 static int
 htcpAccessCheck(acl_access * acl, htcpSpecifier * s, struct sockaddr_in *from)
 {
+    int r;
     aclCheck_t checklist;
     memset(&checklist, '\0', sizeof(checklist));
-    checklist.src_addr = from->sin_addr;
-    checklist.my_addr = no_addr;
+    aclChecklistSetup(&checklist);
+    sqinet_set_v4_sockaddr(&checklist.src_addr, from);
     checklist.request = s->request;
-    return aclCheckFast(acl, &checklist);
+    r = aclCheckFast(acl, &checklist);
+    aclChecklistDone(&checklist);
+    return r;
 }
 
 static void
@@ -1092,7 +1095,9 @@ htcpRecv(int fd, void *data)
     static struct sockaddr_in from;
     socklen_t flen = sizeof(struct sockaddr_in);
     memset(&from, '\0', flen);
+#if NOTYET
     statCounter.syscalls.sock.recvfroms++;
+#endif
     /* Receive up to 8191 bytes, leaving room for a null */
     len = recvfrom(fd, buf, sizeof(buf) - 1, 0, (struct sockaddr *) &from, &flen);
     debug(31, 3) ("htcpRecv: FD %d, %d bytes from %s:%d\n",
@@ -1122,6 +1127,7 @@ htcpInit(void)
 	Config.Addrs.udp_incoming,
 	Config.Port.htcp,
 	COMM_NONBLOCKING,
+	COMM_TOS_DEFAULT,
 	"HTCP Socket");
     leave_suid();
     if (htcpInSocket < 0)
@@ -1129,13 +1135,14 @@ htcpInit(void)
     commSetSelect(htcpInSocket, COMM_SELECT_READ, htcpRecv, NULL, 0);
     debug(31, 1) ("Accepting HTCP messages on port %d, FD %d.\n",
 	(int) Config.Port.htcp, htcpInSocket);
-    if (Config.Addrs.udp_outgoing.s_addr != no_addr.s_addr) {
+    if (! IsNoAddr(&Config.Addrs.udp_outgoing)) {
 	enter_suid();
 	htcpOutSocket = comm_open(SOCK_DGRAM,
 	    IPPROTO_UDP,
 	    Config.Addrs.udp_outgoing,
 	    Config.Port.htcp,
 	    COMM_NONBLOCKING,
+	    COMM_TOS_DEFAULT,
 	    "Outgoing HTCP Socket");
 	leave_suid();
 	if (htcpOutSocket < 0)

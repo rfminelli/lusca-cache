@@ -35,18 +35,31 @@
 
 #include "squid.h"
 
+static MemPool * pool_request_t = NULL;
+
+void
+requestInitMem(void)
+{
+    pool_request_t = memPoolCreate("request_t", sizeof(request_t));
+}
+
 request_t *
 requestCreate(method_t method, protocol_t protocol, const char *urlpath)
 {
-    request_t *req = memAllocate(MEM_REQUEST_T);
+    request_t *req = memPoolAlloc(pool_request_t);
     req->method = method;
     req->protocol = protocol;
+    sqinet_init(&req->client_addr);
+    sqinet_init(&req->out_ip);
+#if FOLLOW_X_FORWARDED_FOR
+    sqinet_init(&req->indirect_client_addr);
+#endif
     if (urlpath)
 	stringReset(&req->urlpath, urlpath);
     req->max_forwards = -1;
     req->lastmod = -1;
-    req->client_addr = no_addr;
-    req->my_addr = no_addr;
+    sqinet_init(&req->my_addr);
+    // SetNoAddr(&req->client_addr);
     httpHeaderInit(&req->header, hoRequest);
     return req;
 }
@@ -59,6 +72,11 @@ requestDestroy(request_t * req)
 	requestAbortBody(req);
     if (req->auth_user_request)
 	authenticateAuthUserRequestUnlock(req->auth_user_request);
+    sqinet_done(&req->client_addr);
+    sqinet_done(&req->out_ip);
+#if FOLLOW_X_FORWARDED_FOR
+    sqinet_done(&req->indirect_client_addr);
+#endif
     safe_free(req->store_url);
     safe_free(req->canonical);
     safe_free(req->vary_hdr);
@@ -85,7 +103,8 @@ requestDestroy(request_t * req)
     if (req->pinned_connection)
 	cbdataUnlock(req->pinned_connection);
     req->pinned_connection = NULL;
-    memFree(req, MEM_REQUEST_T);
+    sqinet_done(&req->my_addr);
+    memPoolFree(pool_request_t, req);
 }
 
 request_t *
@@ -125,10 +144,13 @@ httpRequestPack(const request_t * req, Packer * p)
 void
 httpRequestPackDebug(request_t * req, Packer * p)
 {
+    LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
     assert(req && p);
     /* Client info */
-    packerPrintf(p, "Client: %s ", inet_ntoa(req->client_addr));
-    packerPrintf(p, "http_port: %s:%d", inet_ntoa(req->my_addr), req->my_port);
+    (void) sqinet_ntoa(&req->client_addr, buf, sizeof(buf), SQADDR_NONE);
+    packerPrintf(p, "Client: %s ", buf);
+    (void) sqinet_ntoa(&req->my_addr, buf, sizeof(buf), SQADDR_NONE);
+    packerPrintf(p, "http_port: %s:%d", buf, req->my_port);
     if (req->auth_user_request && authenticateUserRequestUsername(req->auth_user_request))
 	packerPrintf(p, "user: %s", authenticateUserRequestUsername(req->auth_user_request));
     packerPrintf(p, "\n");

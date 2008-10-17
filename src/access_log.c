@@ -469,13 +469,17 @@ accessLogCustom(AccessLogEntry * al, customlog * log)
 	    out = fmt->data.string;
 	    break;
 	case LFT_CLIENT_IP_ADDRESS:
-	    out = inet_ntoa(al->cache.caddr);
+	    (void) sqinet_ntoa(&al->cache.caddr, tmp, sizeof(tmp), SQATON_NONE);
+	    out = tmp;
 	    break;
 
 	case LFT_CLIENT_FQDN:
+#if NOTYET
 	    out = fqdncache_gethostbyaddr(al->cache.caddr, FQDN_LOOKUP_IF_MISS);
 	    if (!out)
-		out = inet_ntoa(al->cache.caddr);
+#endif
+	    (void) sqinet_ntoa(&al->cache.caddr, tmp, sizeof(tmp), SQATON_NONE);
+	    out = tmp;
 	    break;
 
 	case LFT_CLIENT_PORT:
@@ -491,14 +495,17 @@ accessLogCustom(AccessLogEntry * al, customlog * log)
 	    out = al->hier.host;
 	    break;
 	case LFT_OUTGOING_IP:
-	    out = xstrdup(inet_ntoa(al->cache.out_ip));
+	    (void) sqinet_ntoa(&al->cache.out_ip, tmp, sizeof(tmp), SQATON_NONE);
+	    out = tmp;
 	    break;
 
 	    /* case LFT_SERVER_PORT: */
 
 	case LFT_LOCAL_IP:
-	    if (al->request)
-		out = inet_ntoa(al->request->my_addr);
+	    if (al->request) {
+		(void) sqinet_ntoa(&al->request->my_addr, tmp, sizeof(tmp), SQADDR_NONE);
+		out = tmp;
+            }
 	    break;
 
 	case LFT_LOCAL_PORT:
@@ -1052,10 +1059,14 @@ accessLogSquid(AccessLogEntry * al, Logfile * logfile)
 {
     const char *client = NULL;
     const char *user = NULL;
+    LOCAL_ARRAY(char, hbuf, MAX_IPSTRLEN);
+#if NOTYET
     if (Config.onoff.log_fqdn)
 	client = fqdncache_gethostbyaddr(al->cache.caddr, FQDN_LOOKUP_IF_MISS);
     if (client == NULL)
-	client = inet_ntoa(al->cache.caddr);
+#endif
+        (void) sqinet_ntoa(&al->cache.caddr, hbuf, sizeof(hbuf), SQATON_NONE);
+	client = hbuf;
     user = accessLogFormatName(al->cache.authuser);
     if (!user)
 	user = accessLogFormatName(al->cache.rfc931);
@@ -1110,12 +1121,16 @@ accessLogSquid(AccessLogEntry * al, Logfile * logfile)
 static void
 accessLogCommon(AccessLogEntry * al, Logfile * logfile)
 {
+    LOCAL_ARRAY(char, hbuf, MAX_IPSTRLEN);
     const char *client = NULL;
     char *user1 = NULL, *user2 = NULL;
+#if 0
     if (Config.onoff.log_fqdn)
 	client = fqdncache_gethostbyaddr(al->cache.caddr, 0);
     if (client == NULL)
-	client = inet_ntoa(al->cache.caddr);
+#endif
+        (void) sqinet_ntoa(&al->cache.caddr, hbuf, sizeof(hbuf), SQATON_NONE);
+	client = hbuf;
     user1 = accessLogFormatName(al->cache.authuser);
     user2 = accessLogFormatName(al->cache.rfc931);
     logfilePrintf(logfile, "%s %s %s [%s] \"%s %s HTTP/%d.%d\" %d %" PRINTF_OFF_T " %s:%s",
@@ -1279,7 +1294,7 @@ accessLogInit(void)
     fvdbInit();
 #endif
 #if MULTICAST_MISS_STREAM
-    if (Config.mcast_miss.addr.s_addr != no_addr.s_addr) {
+    if (! IsNoAddr(&Config.mcast_miss.addr)) {
 	memset(&mcast_miss_to, '\0', sizeof(mcast_miss_to));
 	mcast_miss_to.sin_family = AF_INET;
 	mcast_miss_to.sin_port = htons(Config.mcast_miss.port);

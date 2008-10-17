@@ -47,6 +47,7 @@ icpHandleIcpV3(int fd, struct sockaddr_in from, char *buf, int len)
     request_t *icp_request = NULL;
     int allow = 0;
     aclCheck_t checklist;
+    sqaddr_t ad;
     xmemcpy(&header, buf, sizeof(icp_common_t));
     /*
      * Only these fields need to be converted
@@ -78,23 +79,27 @@ icpHandleIcpV3(int fd, struct sockaddr_in from, char *buf, int len)
 	    break;
 	}
 	memset(&checklist, '\0', sizeof(checklist));
-	checklist.src_addr = from.sin_addr;
-	checklist.my_addr = no_addr;
+	aclChecklistSetup(&checklist);
+	sqinet_set_v4_sockaddr(&checklist.src_addr, &from);
 	checklist.request = icp_request;
 	allow = aclCheckFast(Config.accessList.icp, &checklist);
+	aclChecklistDone(&checklist);
 	if (!allow) {
 	    debug(12, 2) ("icpHandleIcpV3: Access Denied for %s by %s.\n",
 		inet_ntoa(from.sin_addr), AclMatchedName);
-	    if (clientdbCutoffDenied(from.sin_addr)) {
+            sqinet_init(&ad);
+	    sqinet_set_v4_sockaddr(&ad, &from);
+	    if (clientdbCutoffDenied(&ad)) {
 		/*
 		 * count this DENIED query in the clientdb, even though
 		 * we're not sending an ICP reply...
 		 */
-		clientdbUpdate(from.sin_addr, LOG_UDP_DENIED, PROTO_ICP, 0);
+		clientdbUpdate(&ad, LOG_UDP_DENIED, PROTO_ICP, 0);
 	    } else {
 		reply = icpCreateMessage(ICP_DENIED, 0, url, header.reqnum, 0);
 		icpUdpSend(fd, &from, reply, LOG_UDP_DENIED, 0);
 	    }
+            sqinet_done(&ad);
 	    break;
 	}
 	/* The peer is allowed to use this cache */

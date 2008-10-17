@@ -90,7 +90,7 @@ static const char *errorFindHardText(err_type type);
 static ErrorDynamicPageInfo *errorDynamicPageInfoCreate(int id, const char *page_name);
 static void errorDynamicPageInfoDestroy(ErrorDynamicPageInfo * info);
 static MemBuf errorBuildContent(ErrorState * err);
-static const char *errorConvert(char token, ErrorState * err);
+const char *errorConvert(char token, ErrorState * err);
 static CWCB errorSendComplete;
 
 /*
@@ -255,6 +255,7 @@ errorPageName(int pageId)
     return "ERR_UNKNOWN";	/* should not happen */
 }
 
+CBDATA_TYPE(ErrorState);
 /*
  * Function:  errorCon
  *
@@ -264,13 +265,15 @@ ErrorState *
 errorCon(err_type type, http_status status, request_t * request)
 {
     ErrorState *err;
+    CBDATA_INIT_TYPE(ErrorState);
     err = cbdataAlloc(ErrorState);
     err->page_id = type;	/* has to be reset manually if needed */
     err->type = type;
     err->http_status = status;
+    sqinet_init(&err->src_addr);
     if (request != NULL) {
 	err->request = requestLink(request);
-	err->src_addr = request->client_addr;
+	sqinet_copy(&err->src_addr, &request->client_addr);
     }
     return err;
 }
@@ -410,6 +413,7 @@ errorStateFree(ErrorState * err)
     if (err->auth_user_request)
 	authenticateAuthUserRequestUnlock(err->auth_user_request);
     err->auth_user_request = NULL;
+    sqinet_done(&err->src_addr);
     cbdataFree(err);
 }
 
@@ -445,9 +449,10 @@ errorStateFree(ErrorState * err)
  * z - dns server error message                 x
  */
 
-static const char *
+const char *
 errorConvert(char token, ErrorState * err)
 {
+    LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
     request_t *r = err->request;
     static MemBuf mb = MemBufNULL;
     const char *p = NULL;	/* takes priority over mb if set */
@@ -507,7 +512,8 @@ errorConvert(char token, ErrorState * err)
 	    p = "[unknown host]";
 	break;
     case 'i':
-	memBufPrintf(&mb, "%s", inet_ntoa(err->src_addr));
+        (void) sqinet_ntoa(&err->src_addr, buf, sizeof(buf), SQADDR_NONE);
+	memBufPrintf(&mb, "%s", buf);
 	break;
     case 'I':
 	if (r && r->hier.host) {
