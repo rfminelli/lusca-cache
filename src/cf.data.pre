@@ -716,6 +716,7 @@ TYPE: acl_access
 LOC: Config.accessList.http
 DEFAULT: none
 DEFAULT_IF_NONE: deny all
+DEFAULT_IF_NONE: deny all6
 DOC_START
 	Allowing or Denying access based on defined access lists
 
@@ -778,6 +779,7 @@ TYPE: acl_access
 LOC: Config.accessList.reply
 DEFAULT: none
 DEFAULT_IF_NONE: allow all
+DEFAULT_IF_NONE: allow all6
 DOC_START
 	Allow replies to client requests. This is complementary to http_access.
 
@@ -884,6 +886,7 @@ TYPE: acl_access
 IFDEF: USE_IDENT
 DEFAULT: none
 DEFAULT_IF_NONE: deny all
+DEFAULT_IF_NONE: deny all6
 LOC: Config.accessList.identLookup
 DOC_START
 	A list of ACL elements which, if matched, cause an ident
@@ -956,6 +959,7 @@ IFDEF: FOLLOW_X_FORWARDED_FOR
 LOC: Config.accessList.followXFF
 DEFAULT: none
 DEFAULT_IF_NONE: deny all
+DEFAULT_IF_NONE: deny all6
 DOC_START
 	Allowing or Denying the X-Forwarded-For header to be followed to
 	find the original source of a request.
@@ -2781,6 +2785,7 @@ NAME: rewrite_access
 TYPE: acl_access
 DEFAULT: none
 DEFAULT_IF_NONE: deny all
+DEFAULT_IF_NONE: deny all6
 LOC: Config.accessList.rewrite
 DOC_START
 	If defined, this access list specifies which requests are
