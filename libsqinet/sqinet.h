@@ -14,7 +14,7 @@ typedef enum {
 	SQADDR_NONE = 0x00,
 	SQADDR_ASSERT_IS_V4 = 0x01,
 	SQADDR_ASSERT_IS_V6 = 0x02,
-	SQADDR_BRACKET_V6 = 0x04,
+	SQADDR_NO_BRACKET_V6 = 0x04,
 } sqaddr_flags;
 
 typedef enum {

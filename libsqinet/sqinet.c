@@ -574,7 +574,7 @@ sqinet_ntoa(const sqaddr_t *s, char *hoststr, int hostlen, sqaddr_flags flags)
 		assert(s->st.ss_family == AF_INET6);
 
 	/* Handle the crazy [] wrapped address logic here */
-	if (flags & SQADDR_BRACKET_V6 && s->st.ss_family == AF_INET6) {
+	if (! (flags & SQADDR_NO_BRACKET_V6) && s->st.ss_family == AF_INET6) {
 		assert(hostlen > 2);
 		*hoststr = '[';
 		hoststr++;
@@ -582,7 +582,7 @@ sqinet_ntoa(const sqaddr_t *s, char *hoststr, int hostlen, sqaddr_flags flags)
 	}
 
 	retval = getnameinfo((struct sockaddr *) (&s->st), sqinet_get_length(s), hoststr, hostlen, NULL, 0, NI_NUMERICHOST|NI_NUMERICSERV);
-	if (flags & SQADDR_BRACKET_V6 && s->st.ss_family == AF_INET6) {
+	if (! (flags & SQADDR_NO_BRACKET_V6) && s->st.ss_family == AF_INET6) {
 		hoststr[strlen(hoststr)] = ']';
 	}
 	return (retval == 0);
