@@ -4610,22 +4610,33 @@ clientNatLookup(ConnStateData * conn)
 static int
 clientNatLookup(ConnStateData * conn)
 {
-    socklen_t sock_sz = sizeof(conn->me);
-    struct in_addr orig_addr = conn->me.sin_addr;
+    socklen_t sock_sz = sqinet_get_length(&conn->me);
+    sqaddr_t orig_addr;
     static time_t last_reported = 0;
+    int r;
+
+    sqinet_init(&orig_addr);
+    sqinet_copy(&orig_addr, &conn->me);
+
     /* If the call fails the address structure will be unchanged */
-    if (getsockopt(conn->fd, SOL_IP, SO_ORIGINAL_DST, &conn->me, &sock_sz) != 0) {
+    if (getsockopt(conn->fd, SOL_IP, SO_ORIGINAL_DST, sqinet_get_entry(&conn->me), &sock_sz) != 0) {
 	if (squid_curtime - last_reported > 60) {
 	    debug(50, 1) ("clientNatLookup: NF getsockopt(SO_ORIGINAL_DST) failed: %s\n", xstrerror());
 	    last_reported = squid_curtime;
 	}
-	return -1;
+	r = -1;
+	goto fin;
     }
+#if NOTYET
     debug(33, 5) ("clientNatLookup: addr = %s", inet_ntoa(conn->me.sin_addr));
-    if (orig_addr.s_addr != conn->me.sin_addr.s_addr)
-	return 0;
+#endif
+    if (! sqinet_compare_addr(&orig_addr, &conn->me))
+	r = 0;
     else
-	return -1;
+	r = -1;
+fin:
+    sqinet_done(&orig_addr);
+    return r;
 }
 #elif PF_TRANSPARENT
 static int
