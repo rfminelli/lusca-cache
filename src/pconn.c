@@ -58,20 +58,29 @@ static MemPool *pconn_fds_pool = NULL;
 
 #define	PCONN_KEYLEN	(SQUIDHOSTNAMELEN + 30)
 
+/*
+ * client_address was once NULL or had a non-0'ed address.
+ * Now it may be NULL, or non-NULL but not pointing at anything,
+ * or non-NULL but set to any_addr (all 0's), etc..
+ */
 static int
 pconnKey(char *buf, const char *host, u_short port, const char *domain,
     sqaddr_t *client_address, u_short client_port)
 {
     LOCAL_ARRAY(char, hbuf, MAX_IPSTRLEN);
-    if (client_address)
-	(void) sqinet_ntoa(client_address, hbuf, sizeof(hbuf), SQADDR_NONE);
+    int use_clientaddr = 0;
 
-    if (domain && client_address)
+    if (client_address && sqinet_get_family(client_address) != 0 && ! sqinet_is_anyaddr(client_address)) {
+	(void) sqinet_ntoa(client_address, hbuf, sizeof(hbuf), SQADDR_NONE);
+	use_clientaddr = 1;
+    }
+
+    if (domain && use_clientaddr)
 	return snprintf(buf, PCONN_KEYLEN, "%s.%d:%s.%d/%s", host, (int) port,
 	    hbuf, (int) client_port, domain);
-    else if (domain && (!client_address))
+    else if (domain && (!use_clientaddr))
 	return snprintf(buf, PCONN_KEYLEN, "%s.%d/%s", host, (int) port, domain);
-    else if ((!domain) && client_address)
+    else if ((!domain) && use_clientaddr)
 	return snprintf(buf, PCONN_KEYLEN, "%s.%d:%s.%d", host, (int) port,
 	    hbuf, (int) client_port);
     else
