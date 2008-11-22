@@ -492,6 +492,7 @@ mainRotate(void)
     dnsShutdown();
 #endif
     redirectShutdown();
+    storeurlShutdown();
     locationRewriteShutdown();
     authenticateShutdown();
     externalAclShutdown();
@@ -1148,6 +1149,7 @@ SquidShutdown(void *unused)
     idnsShutdown();
 #endif
     redirectShutdown();
+    storeurlShutdown();
     externalAclShutdown();
     refreshCheckShutdown();
     locationRewriteShutdown();
