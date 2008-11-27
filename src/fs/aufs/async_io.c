@@ -293,7 +293,7 @@ aioTruncate(const char *path, off_t length, AIOCB * callback, void *callback_dat
 #endif
 
 int
-aioCheckCallbacks(SwapDir * SD)
+aioCheckCallbacks(void)
 {
     squidaio_result_t *resultp;
     squidaio_ctrl_t *ctrlp;
@@ -365,7 +365,7 @@ aioSync(SwapDir * SD)
     /* Flush all pending operations */
     debug(32, 1) ("aioSync: flushing pending I/O operations\n");
     do {
-	aioCheckCallbacks(SD);
+	aioCheckCallbacks();
     } while (squidaio_sync());
     debug(32, 1) ("aioSync: done\n");
 }
