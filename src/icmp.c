@@ -76,9 +76,7 @@ icmpRecv(int unused1, void *unused2)
     static struct sockaddr_in F;
     commSetSelect(icmp_sock, COMM_SELECT_READ, icmpRecv, NULL, 0);
     memset(&preply, '\0', sizeof(pingerReplyData));
-#if NOTYET
-    statCounter.syscalls.sock.recvfroms++;
-#endif
+    CommStats.syscalls.sock.recvfroms++;
     n = recv(icmp_sock,
 	(char *) &preply,
 	sizeof(pingerReplyData),

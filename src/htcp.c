@@ -1095,9 +1095,7 @@ htcpRecv(int fd, void *data)
     static struct sockaddr_in from;
     socklen_t flen = sizeof(struct sockaddr_in);
     memset(&from, '\0', flen);
-#if NOTYET
-    statCounter.syscalls.sock.recvfroms++;
-#endif
+    CommStats.syscalls.sock.recvfroms++;
     /* Receive up to 8191 bytes, leaving room for a null */
     len = recvfrom(fd, buf, sizeof(buf) - 1, 0, (struct sockaddr *) &from, &flen);
     debug(31, 3) ("htcpRecv: FD %d, %d bytes from %s:%d\n",
