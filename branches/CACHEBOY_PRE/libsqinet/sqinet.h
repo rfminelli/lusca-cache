@@ -24,6 +24,7 @@ typedef enum {
 	SQATON_PASSIVE = 0x8,
 } sqaton_flags;
 
+static inline int sqinet_is_init(sqaddr_t *s) { return (s->init); }
 extern void sqinet_init(sqaddr_t *s);
 extern void sqinet_done(sqaddr_t *s);
 extern void sqinet_set_family(sqaddr_t *s, int af_family);
