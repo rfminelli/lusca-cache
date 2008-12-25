@@ -1,7 +1,8 @@
 #ifndef	__LIBSQINET_INET_H__
 #define	__LIBSQINET_INET_H__
 
-#define	MAX_IPSTRLEN	75
+/* Max size of IPv4/IPv6 expanded addresses _PLUS_ the []'s for v6 addresses */
+#define	MAX_IPSTRLEN	77
 
 struct _sqaddr {
 	int init;
@@ -13,13 +14,14 @@ typedef enum {
 	SQADDR_NONE = 0x00,
 	SQADDR_ASSERT_IS_V4 = 0x01,
 	SQADDR_ASSERT_IS_V6 = 0x02,
+	SQADDR_NO_BRACKET_V6 = 0x04,
 } sqaddr_flags;
 
 typedef enum {
 	SQATON_NONE = 0x0,
 	SQATON_FAMILY_IPv4 = 0x2,
 	SQATON_FAMILY_IPv6 = 0x4,
-	SQATON_PASSIVE = 0x8
+	SQATON_PASSIVE = 0x8,
 } sqaton_flags;
 
 extern void sqinet_init(sqaddr_t *s);
