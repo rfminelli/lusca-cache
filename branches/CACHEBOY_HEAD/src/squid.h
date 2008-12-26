@@ -407,6 +407,8 @@ struct rusage {
 
 #include "../libsqident/ident.h"
 
+#include "../libmime/MimeHdrs.h"
+
 #include "../libhttp/HttpVersion.h"
 #include "../libhttp/HttpStatusLine.h"
 #include "../libhttp/HttpHeaderType.h"

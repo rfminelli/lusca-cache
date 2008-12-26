@@ -405,7 +405,6 @@ extern void stat_ipcache_get(StoreEntry *);
 
 extern char *mime_get_header(const char *mime, const char *header);
 extern char *mime_get_header_field(const char *mime, const char *name, const char *prefix);
-extern size_t headersEnd(const char *, size_t);
 extern const char *mime_get_auth(const char *hdr, const char *auth_scheme, const char **auth_field);
 
 extern void mimeInit(char *filename);
