@@ -253,7 +253,6 @@ extern void httpHeaderMaskInit(HttpHeaderMask * mask, int value);
 extern void httpHeaderCalcMask(HttpHeaderMask * mask, const http_hdr_type * enums, int count);
 extern void httpHeaderAddContRange(HttpHeader *, HttpHdrRangeSpec, squid_off_t);
 extern int httpHeaderParseInt(const char *start, int *val);
-extern int httpHeaderParseSize(const char *start, squid_off_t * sz);
 
 /* Http Header */
 extern void httpHeaderInitModule(void);
