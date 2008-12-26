@@ -53,6 +53,8 @@ extern int httpHeaderDelByName(HttpHeader * hdr, const char *name);
 extern int httpHeaderDelById(HttpHeader * hdr, http_hdr_type id);
 extern void httpHeaderDelAt(HttpHeader * hdr, HttpHeaderPos pos);
 extern int httpHeaderIdByName(const char *name, int name_len, const HttpHeaderFieldInfo * attrs, int end);
-
+extern String httpHeaderGetByName(const HttpHeader * hdr, const char *name);
+extern int httpHeaderIdByNameDef(const char *name, int name_len);
+extern const char *httpHeaderNameById(int id);
 
 #endif

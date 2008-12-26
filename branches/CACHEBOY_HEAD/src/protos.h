@@ -259,8 +259,6 @@ extern void httpHdrContRangePackInto(const HttpHdrContRange * crange, Packer * p
 extern void httpHdrContRangeSet(HttpHdrContRange *, HttpHdrRangeSpec, squid_off_t);
 
 /* Http Header Tools */
-extern int httpHeaderIdByNameDef(const char *name, int name_len);
-extern const char *httpHeaderNameById(int id);
 extern void httpHeaderMaskInit(HttpHeaderMask * mask, int value);
 extern void httpHeaderCalcMask(HttpHeaderMask * mask, const http_hdr_type * enums, int count);
 extern int httpHeaderHasConnDir(const HttpHeader * hdr, const char *directive);
@@ -307,11 +305,6 @@ extern HttpHdrContRange *httpHeaderGetContRange(const HttpHeader * hdr);
 extern const char *httpHeaderGetStr(const HttpHeader * hdr, http_hdr_type id);
 extern const char *httpHeaderGetLastStr(const HttpHeader * hdr, http_hdr_type id);
 extern const char *httpHeaderGetAuth(const HttpHeader * hdr, http_hdr_type id, const char *auth_scheme);
-extern String httpHeaderGetList(const HttpHeader * hdr, http_hdr_type id);
-extern String httpHeaderGetStrOrList(const HttpHeader * hdr, http_hdr_type id);
-extern String httpHeaderGetByName(const HttpHeader * hdr, const char *name);
-extern String httpHeaderGetListMember(const HttpHeader * hdr, http_hdr_type id, const char *member, const char separator);
-extern String httpHeaderGetByNameListMember(const HttpHeader * hdr, const char *name, const char *member, const char separator);
 extern void httpHeaderRefreshMask(HttpHeader * hdr);
 /* avoid using these low level routines */
 extern void httpHeaderEntryPackInto(const HttpHeaderEntry * e, Packer * p);

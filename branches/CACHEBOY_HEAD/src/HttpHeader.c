@@ -196,138 +196,6 @@ httpHeaderRefreshMask(HttpHeader * hdr)
     }
 }
 
-
-
-/* return a list of entries with the same id separated by ',' and ws */
-String
-httpHeaderGetList(const HttpHeader * hdr, http_hdr_type id)
-{
-    String s = StringNull;
-    HttpHeaderEntry *e;
-    HttpHeaderPos pos = HttpHeaderInitPos;
-    debug(55, 6) ("%p: joining for id %d\n", hdr, id);
-    /* only fields from ListHeaders array can be "listed" */
-    assert(CBIT_TEST(ListHeadersMask, id));
-    if (!CBIT_TEST(hdr->mask, id))
-	return s;
-    while ((e = httpHeaderGetEntry(hdr, &pos))) {
-	if (e->id == id)
-	    strListAdd(&s, strBuf(e->value), ',');
-    }
-    /*
-     * note: we might get an empty (len==0) string if there was an "empty"
-     * header; we must not get a NULL string though.
-     */
-    assert(strBuf(s));
-    /* temporary warning: remove it! @?@ @?@ @?@ */
-    if (!strLen(s))
-	debug(55, 3) ("empty list header: %s (%d)\n", strBuf(Headers[id].name), id);
-    debug(55, 6) ("%p: joined for id %d: %s\n", hdr, id, strBuf(s));
-    return s;
-}
-
-/* return a string or list of entries with the same id separated by ',' and ws */
-String
-httpHeaderGetStrOrList(const HttpHeader * hdr, http_hdr_type id)
-{
-    HttpHeaderEntry *e;
-
-    if (CBIT_TEST(ListHeadersMask, id))
-	return httpHeaderGetList(hdr, id);
-    if ((e = httpHeaderFindEntry(hdr, id))) {
-	String s;
-	stringLimitInit(&s, strBuf(e->value), strLen(e->value));
-	return s;
-    }
-    return StringNull;
-}
-
-/*
- * Returns the value of the specified header.
- */
-String
-httpHeaderGetByName(const HttpHeader * hdr, const char *name)
-{
-    http_hdr_type id;
-    HttpHeaderPos pos = HttpHeaderInitPos;
-    HttpHeaderEntry *e;
-    String result = StringNull;
-
-    assert(hdr);
-    assert(name);
-
-    /* First try the quick path */
-    id = httpHeaderIdByNameDef(name, strlen(name));
-    if (id != -1)
-	return httpHeaderGetStrOrList(hdr, id);
-
-    /* Sorry, an unknown header name. Do linear search */
-    while ((e = httpHeaderGetEntry(hdr, &pos))) {
-	if (e->id == HDR_OTHER && strCaseCmp(e->name, name) == 0) {
-	    strListAdd(&result, strBuf(e->value), ',');
-	}
-    }
-    return result;
-}
-
-/*
- * returns a pointer to a specified entry if any 
- * note that we return one entry so it does not make much sense to ask for
- * "list" headers
- */
-String
-httpHeaderGetByNameListMember(const HttpHeader * hdr, const char *name, const char *member, const char separator)
-{
-    String result = StringNull;
-    String header;
-    const char *pos = NULL;
-    const char *item;
-    int ilen;
-    int mlen = strlen(member);
-
-    assert(hdr);
-    assert(name);
-
-    header = httpHeaderGetByName(hdr, name);
-
-    while (strListGetItem(&header, separator, &item, &ilen, &pos)) {
-	if (strncmp(item, member, mlen) == 0 && item[mlen] == '=') {
-	    stringAppend(&result, item + mlen + 1, ilen - mlen - 1);
-	    break;
-	}
-    }
-    stringClean(&header);
-    return result;
-}
-
-/*
- * returns a the value of the specified list member, if any.
- */
-String
-httpHeaderGetListMember(const HttpHeader * hdr, http_hdr_type id, const char *member, const char separator)
-{
-    String result = StringNull;
-    String header;
-    const char *pos = NULL;
-    const char *item;
-    int ilen;
-    int mlen = strlen(member);
-
-    assert(hdr);
-    assert_eid(id);
-
-    header = httpHeaderGetStrOrList(hdr, id);
-
-    while (strListGetItem(&header, separator, &item, &ilen, &pos)) {
-	if (strncmp(item, member, mlen) == 0 && item[mlen] == '=') {
-	    stringAppend(&result, item + mlen + 1, ilen - mlen - 1);
-	    break;
-	}
-    }
-    stringClean(&header);
-    return result;
-}
-
 /* test if a field is present */
 int
 httpHeaderHas(const HttpHeader * hdr, http_hdr_type id)
@@ -744,6 +612,7 @@ httpHeaderStoreReport(StoreEntry * e)
     storeAppendPrintf(e, "Hdr Fields Parsed: %d\n", HeaderEntryParsedCount);
 }
 
+#if 0
 int
 httpHeaderIdByNameDef(const char *name, int name_len)
 {
@@ -760,3 +629,4 @@ httpHeaderNameById(int id)
     assert(id >= 0 && id < HDR_ENUM_END);
     return strBuf(Headers[id].name);
 }
+#endif

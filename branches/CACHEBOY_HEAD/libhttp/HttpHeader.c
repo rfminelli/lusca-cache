@@ -58,6 +58,7 @@
 #include "../libmem/MemBufs.h"
 #include "../libmem/MemBuf.h"
 #include "../libmem/String.h"
+#include "../libmem/StrList.h"
 
 #include "../libcb/cbdata.h"
 
@@ -74,6 +75,7 @@
 #include "HttpHeaderTools.h"
 #include "HttpHeaderMask.h"
 #include "HttpHeaderVars.h"
+#include "HttpHeaderList.h"
 
 HttpHeaderFieldInfo *Headers = NULL;
 MemPool * pool_http_header_entry = NULL;
@@ -505,5 +507,50 @@ httpHeaderFindLastEntry(const HttpHeader * hdr, http_hdr_type id)
     }
     assert(result);             /* must be there! */
     return result;
+}
+
+/*
+ * Returns the value of the specified header. 
+ */     
+String      
+httpHeaderGetByName(const HttpHeader * hdr, const char *name)
+{       
+    http_hdr_type id;
+    HttpHeaderPos pos = HttpHeaderInitPos;
+    HttpHeaderEntry *e;
+    String result = StringNull;
+
+    assert(hdr);
+    assert(name);
+
+    /* First try the quick path */
+    id = httpHeaderIdByNameDef(name, strlen(name));
+    if (id != -1)
+        return httpHeaderGetStrOrList(hdr, id);
+    
+    /* Sorry, an unknown header name. Do linear search */
+    while ((e = httpHeaderGetEntry(hdr, &pos))) {
+        if (e->id == HDR_OTHER && strCaseCmp(e->name, name) == 0) {
+            strListAdd(&result, strBuf(e->value), ',');
+        }
+    }
+    return result;
+}   
+
+int
+httpHeaderIdByNameDef(const char *name, int name_len)
+{
+    if (!Headers)
+        Headers = httpHeaderBuildFieldsInfo(HeadersAttrs, HDR_ENUM_END);
+    return httpHeaderIdByName(name, name_len, Headers, HDR_ENUM_END);
+}
+
+const char *
+httpHeaderNameById(int id)
+{
+    if (!Headers)
+        Headers = httpHeaderBuildFieldsInfo(HeadersAttrs, HDR_ENUM_END);
+    assert(id >= 0 && id < HDR_ENUM_END);
+    return strBuf(Headers[id].name);
 }
 
