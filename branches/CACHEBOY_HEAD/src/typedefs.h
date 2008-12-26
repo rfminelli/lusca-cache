@@ -101,7 +101,6 @@ typedef struct _SquidConfig2 SquidConfig2;
 typedef struct _ETag ETag;
 typedef struct _fileMap fileMap;
 typedef struct _HttpReply http_reply;
-typedef struct _HttpHdrCc HttpHdrCc;
 typedef struct _HttpHdrRangeSpec HttpHdrRangeSpec;
 typedef struct _HttpHdrRange HttpHdrRange;
 typedef struct _HttpHdrRangeIter HttpHdrRangeIter;

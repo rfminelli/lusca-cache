@@ -68,7 +68,6 @@
 static void httpHeaderStatDump(const HttpHeaderStat * hs, StoreEntry * e);
 
 MemPool * pool_http_reply = NULL;
-MemPool * pool_http_hdr_cc = NULL;
 MemPool * pool_http_hdr_range_spec = NULL;
 MemPool * pool_http_hdr_range = NULL;
 MemPool * pool_http_hdr_cont_range = NULL;
@@ -81,7 +80,6 @@ void
 httpHeaderInitMem(void)
 {
     pool_http_reply = memPoolCreate("HttpReply", sizeof(HttpReply));
-    pool_http_hdr_cc = memPoolCreate("HttpHdrCc", sizeof(HttpHdrCc));
     pool_http_hdr_range_spec = memPoolCreate("HttpHdrRangeSpec", sizeof(HttpHdrRangeSpec));
     pool_http_hdr_range = memPoolCreate("HttpHdrRange", sizeof(HttpHdrRange));
     pool_http_hdr_cont_range = memPoolCreate("HttpHdrContRange", sizeof(HttpHdrContRange));
@@ -326,80 +324,6 @@ httpHeaderPutExt(HttpHeader * hdr, const char *name, const char *value)
     debug(55, 8) ("%p adds ext entry '%s: %s'\n", hdr, name, value);
     httpHeaderAddEntryStr(hdr, HDR_OTHER, name, value);
 }
-
-#if 0
-int
-httpHeaderGetInt(const HttpHeader * hdr, http_hdr_type id)
-{
-    HttpHeaderEntry *e;
-    int value = -1;
-    int ok;
-    assert_eid(id);
-    assert(Headers[id].type == ftInt);	/* must be of an appropriate type */
-    if ((e = httpHeaderFindEntry(hdr, id))) {
-	ok = httpHeaderParseInt(strBuf(e->value), &value);
-	httpHeaderNoteParsedEntry(e->id, e->value, !ok);
-    }
-    return value;
-}
-
-squid_off_t
-httpHeaderGetSize(const HttpHeader * hdr, http_hdr_type id)
-{
-    HttpHeaderEntry *e;
-    squid_off_t value = -1;
-    int ok;
-    assert_eid(id);
-    assert(Headers[id].type == ftSize);		/* must be of an appropriate type */
-    if ((e = httpHeaderFindEntry(hdr, id))) {
-	ok = httpHeaderParseSize(strBuf(e->value), &value);
-	httpHeaderNoteParsedEntry(e->id, e->value, !ok);
-    }
-    return value;
-}
-
-time_t
-httpHeaderGetTime(const HttpHeader * hdr, http_hdr_type id)
-{
-    HttpHeaderEntry *e;
-    time_t value = -1;
-    assert_eid(id);
-    assert(Headers[id].type == ftDate_1123);	/* must be of an appropriate type */
-    if ((e = httpHeaderFindEntry(hdr, id))) {
-	value = parse_rfc1123(strBuf(e->value), strLen(e->value));
-	httpHeaderNoteParsedEntry(e->id, e->value, value < 0);
-    }
-    return value;
-}
-
-/* sync with httpHeaderGetLastStr */
-const char *
-httpHeaderGetStr(const HttpHeader * hdr, http_hdr_type id)
-{
-    HttpHeaderEntry *e;
-    assert_eid(id);
-    assert(Headers[id].type == ftStr);	/* must be of an appropriate type */
-    if ((e = httpHeaderFindEntry(hdr, id))) {
-	httpHeaderNoteParsedEntry(e->id, e->value, 0);	/* no errors are possible */
-	return strBuf(e->value);
-    }
-    return NULL;
-}
-
-/* unusual */
-const char *
-httpHeaderGetLastStr(const HttpHeader * hdr, http_hdr_type id)
-{
-    HttpHeaderEntry *e;
-    assert_eid(id);
-    assert(Headers[id].type == ftStr);	/* must be of an appropriate type */
-    if ((e = httpHeaderFindLastEntry(hdr, id))) {
-	httpHeaderNoteParsedEntry(e->id, e->value, 0);	/* no errors are possible */
-	return strBuf(e->value);
-    }
-    return NULL;
-}
-#endif
 
 HttpHdrCc *
 httpHeaderGetCc(const HttpHeader * hdr)

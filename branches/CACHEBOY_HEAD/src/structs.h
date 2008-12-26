@@ -870,17 +870,6 @@ struct _HttpHdrExtField {
     String value;		/* field-value from HTTP/1.1 */
 };
 
-/* http cache control header field */
-struct _HttpHdrCc {
-    int mask;
-    int max_age;
-    int s_maxage;
-    int max_stale;
-    int stale_while_revalidate;
-    int stale_if_error;
-    String other;
-};
-
 /* http byte-range-spec */
 struct _HttpHdrRangeSpec {
     squid_off_t offset;

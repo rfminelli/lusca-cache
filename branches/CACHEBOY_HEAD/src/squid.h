@@ -422,6 +422,7 @@ struct rusage {
 #include "../libhttp/HttpHeaderParse.h"
 #include "../libhttp/HttpHeaderGet.h"
 #include "../libhttp/HttpHeaderPut.h"
+#include "../libhttp/HttpHdrCc.h"
 
 #include "../libiapp/event.h"
 #include "../libiapp/iapp_ssl.h"
@@ -543,7 +544,6 @@ extern MemPool *pool_cache_digest;
 extern MemPool *pool_fwd_server;
 extern MemPool * pool_http_reply;
 extern MemPool * pool_http_header_entry;
-extern MemPool * pool_http_hdr_cc;
 extern MemPool * pool_http_hdr_range_spec;
 extern MemPool * pool_http_hdr_range;
 extern MemPool * pool_http_hdr_cont_range;

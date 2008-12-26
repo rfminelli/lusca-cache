@@ -214,17 +214,7 @@ extern void httpBodySet(HttpBody * body, MemBuf * mb);
 extern void httpBodyPackInto(const HttpBody * body, Packer * p);
 
 /* Http Cache Control Header Field */
-extern void httpHdrCcInitModule(void);
-extern void httpHdrCcCleanModule(void);
-extern HttpHdrCc *httpHdrCcCreate(void);
-extern HttpHdrCc *httpHdrCcParseCreate(const String * str);
-extern void httpHdrCcDestroy(HttpHdrCc * cc);
-extern HttpHdrCc *httpHdrCcDup(const HttpHdrCc * cc);
 extern void httpHdrCcPackInto(const HttpHdrCc * cc, Packer * p);
-extern void httpHdrCcJoinWith(HttpHdrCc * cc, const HttpHdrCc * new_cc);
-extern void httpHdrCcSetMaxAge(HttpHdrCc * cc, int max_age);
-extern void httpHdrCcSetSMaxAge(HttpHdrCc * cc, int s_maxage);
-extern void httpHdrCcUpdateStats(const HttpHdrCc * cc, StatHist * hist);
 extern void httpHdrCcStatDumper(StoreEntry * sentry, int idx, double val, double size, int count);
 
 /* Http Range Header Field */
