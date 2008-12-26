@@ -203,62 +203,6 @@ httpHeaderHas(const HttpHeader * hdr, http_hdr_type id)
     return CBIT_TEST(hdr->mask, id);
 }
 
-#if 0
-void
-httpHeaderPutInt(HttpHeader * hdr, http_hdr_type id, int number)
-{
-    assert_eid(id);
-    assert(Headers[id].type == ftInt);	/* must be of an appropriate type */
-    assert(number >= 0);
-    httpHeaderAddEntryStr(hdr, id, NULL, xitoa(number));
-}
-
-void
-httpHeaderPutSize(HttpHeader * hdr, http_hdr_type id, squid_off_t number)
-{
-    char size[64];
-    assert_eid(id);
-    assert(Headers[id].type == ftSize);		/* must be of an appropriate type */
-    assert(number >= 0);
-    snprintf(size, sizeof(size), "%" PRINTF_OFF_T, number);
-    httpHeaderAddEntryStr(hdr, id, NULL, size);
-}
-
-void
-httpHeaderPutTime(HttpHeader * hdr, http_hdr_type id, time_t htime)
-{
-    assert_eid(id);
-    assert(Headers[id].type == ftDate_1123);	/* must be of an appropriate type */
-    assert(htime >= 0);
-    httpHeaderAddEntryStr(hdr, id, NULL, mkrfc1123(htime));
-}
-
-void
-httpHeaderInsertTime(HttpHeader * hdr, int pos, http_hdr_type id, time_t htime)
-{
-    assert_eid(id);
-    assert(Headers[id].type == ftDate_1123);	/* must be of an appropriate type */
-    assert(htime >= 0);
-    httpHeaderInsertEntryStr(hdr, pos, id, NULL, mkrfc1123(htime));
-}
-
-void
-httpHeaderPutStr(HttpHeader * hdr, http_hdr_type id, const char *str)
-{
-    assert_eid(id);
-    assert(Headers[id].type == ftStr);	/* must be of an appropriate type */
-    assert(str);
-    httpHeaderAddEntryStr(hdr, id, NULL, str);
-}
-
-void
-httpHeaderPutAuth(HttpHeader * hdr, const char *auth_scheme, const char *realm)
-{
-    assert(hdr && auth_scheme && realm);
-    httpHeaderPutStrf(hdr, HDR_WWW_AUTHENTICATE, "%s realm=\"%s\"", auth_scheme, realm);
-}
-#endif
-
 void
 httpHeaderPutCc(HttpHeader * hdr, const HttpHdrCc * cc)
 {
@@ -527,21 +471,3 @@ httpHeaderStoreReport(StoreEntry * e)
     storeAppendPrintf(e, "Hdr Fields Parsed: %d\n", HeaderEntryParsedCount);
 }
 
-#if 0
-int
-httpHeaderIdByNameDef(const char *name, int name_len)
-{
-    if (!Headers)
-	Headers = httpHeaderBuildFieldsInfo(HeadersAttrs, HDR_ENUM_END);
-    return httpHeaderIdByName(name, name_len, Headers, HDR_ENUM_END);
-}
-
-const char *
-httpHeaderNameById(int id)
-{
-    if (!Headers)
-	Headers = httpHeaderBuildFieldsInfo(HeadersAttrs, HDR_ENUM_END);
-    assert(id >= 0 && id < HDR_ENUM_END);
-    return strBuf(Headers[id].name);
-}
-#endif
