@@ -58,6 +58,7 @@
 #include "../libmem/MemBufs.h"
 #include "../libmem/MemBuf.h"
 #include "../libmem/String.h"
+#include "../libmem/StrList.h"
 
 #include "../libcb/cbdata.h"
 
@@ -67,9 +68,35 @@
 #include "HttpHeaderFieldStat.h"
 #include "HttpHeaderFieldInfo.h"
 #include "HttpHeaderEntry.h"
-#include "HttpHeaderTools.h"
 #include "HttpHeader.h"
+#include "HttpHeaderGet.h"
+#include "HttpHeaderList.h"
+#include "HttpHeaderTools.h"
 
+/*
+ * return true if a given directive is found in at least one of
+ * the "connection" header-fields note: if HDR_PROXY_CONNECTION is
+ * present we ignore HDR_CONNECTION.
+ */
+int
+httpHeaderHasConnDir(const HttpHeader * hdr, const char *directive)
+{   
+    String list;
+    http_hdr_type ht;
+    int res;
+    /* what type of header do we have? */
+    if (httpHeaderHas(hdr, HDR_PROXY_CONNECTION))
+        ht = HDR_PROXY_CONNECTION;
+    else if (httpHeaderHas(hdr, HDR_CONNECTION))
+        ht = HDR_CONNECTION;
+    else
+        return 0;
+    
+    list = httpHeaderGetList(hdr, ht);
+    res = strListIsMember(&list, directive, ',');
+    stringClean(&list);
+    return res;
+}
 
 /* handy to printf prefixes of potentially very long buffers */
 const char *

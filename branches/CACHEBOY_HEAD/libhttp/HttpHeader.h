@@ -56,5 +56,6 @@ extern int httpHeaderIdByName(const char *name, int name_len, const HttpHeaderFi
 extern String httpHeaderGetByName(const HttpHeader * hdr, const char *name);
 extern int httpHeaderIdByNameDef(const char *name, int name_len);
 extern const char *httpHeaderNameById(int id);
+extern int httpHeaderHas(const HttpHeader * hdr, http_hdr_type id);
 
 #endif

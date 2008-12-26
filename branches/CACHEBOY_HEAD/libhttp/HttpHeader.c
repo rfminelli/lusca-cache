@@ -554,3 +554,14 @@ httpHeaderNameById(int id)
     return strBuf(Headers[id].name);
 }
 
+/* test if a field is present */
+int 
+httpHeaderHas(const HttpHeader * hdr, http_hdr_type id)
+{
+    assert(hdr);
+    assert_eid(id);
+    assert(id != HDR_OTHER);
+    debug(55, 7) ("%p lookup for %d\n", hdr, id);
+    return CBIT_TEST(hdr->mask, id); 
+}
+

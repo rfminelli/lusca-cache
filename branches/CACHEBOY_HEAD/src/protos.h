@@ -251,9 +251,7 @@ extern void httpHdrContRangeSet(HttpHdrContRange *, HttpHdrRangeSpec, squid_off_
 /* Http Header Tools */
 extern void httpHeaderMaskInit(HttpHeaderMask * mask, int value);
 extern void httpHeaderCalcMask(HttpHeaderMask * mask, const http_hdr_type * enums, int count);
-extern int httpHeaderHasConnDir(const HttpHeader * hdr, const char *directive);
 extern void httpHeaderAddContRange(HttpHeader *, HttpHdrRangeSpec, squid_off_t);
-extern const char *getStringPrefix(const char *str, const char *end);
 extern int httpHeaderParseInt(const char *start, int *val);
 extern int httpHeaderParseSize(const char *start, squid_off_t * sz);
 
@@ -267,7 +265,6 @@ extern void httpHeaderUpdate(HttpHeader * old, const HttpHeader * fresh, const H
 extern int httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_end);
 extern void httpHeaderPackInto(const HttpHeader * hdr, Packer * p);
 /* field manipulation */
-extern int httpHeaderHas(const HttpHeader * hdr, http_hdr_type type);
 extern void httpHeaderPutCc(HttpHeader * hdr, const HttpHdrCc * cc);
 extern void httpHeaderPutContRange(HttpHeader * hdr, const HttpHdrContRange * cr);
 extern void httpHeaderPutRange(HttpHeader * hdr, const HttpHdrRange * range);

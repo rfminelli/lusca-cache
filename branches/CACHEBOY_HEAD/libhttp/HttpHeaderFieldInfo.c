@@ -67,8 +67,8 @@
 #include "HttpHeaderFieldStat.h"
 #include "HttpHeaderFieldInfo.h"
 #include "HttpHeaderEntry.h"
-#include "HttpHeaderTools.h"
 #include "HttpHeader.h"
+#include "HttpHeaderTools.h"
 
 HttpHeaderFieldInfo *
 httpHeaderBuildFieldsInfo(const HttpHeaderFieldAttrs * attrs, int count)
