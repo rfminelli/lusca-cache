@@ -266,13 +266,6 @@ extern void httpHeaderAddContRange(HttpHeader *, HttpHdrRangeSpec, squid_off_t);
 extern const char *getStringPrefix(const char *str, const char *end);
 extern int httpHeaderParseInt(const char *start, int *val);
 extern int httpHeaderParseSize(const char *start, squid_off_t * sz);
-#if STDC_HEADERS
-extern void
-httpHeaderPutStrf(HttpHeader * hdr, http_hdr_type id, const char *fmt,...) PRINTF_FORMAT_ARG3;
-#else
-extern void httpHeaderPutStrf();
-#endif
-
 
 /* Http Header */
 extern void httpHeaderInitModule(void);
@@ -285,25 +278,14 @@ extern int httpHeaderParse(HttpHeader * hdr, const char *header_start, const cha
 extern void httpHeaderPackInto(const HttpHeader * hdr, Packer * p);
 /* field manipulation */
 extern int httpHeaderHas(const HttpHeader * hdr, http_hdr_type type);
-extern void httpHeaderPutInt(HttpHeader * hdr, http_hdr_type type, int number);
-extern void httpHeaderPutSize(HttpHeader * hdr, http_hdr_type type, squid_off_t number);
-extern void httpHeaderPutTime(HttpHeader * hdr, http_hdr_type type, time_t htime);
-extern void httpHeaderInsertTime(HttpHeader * hdr, int pos, http_hdr_type type, time_t htime);
-extern void httpHeaderPutStr(HttpHeader * hdr, http_hdr_type type, const char *str);
-extern void httpHeaderPutAuth(HttpHeader * hdr, const char *auth_scheme, const char *realm);
 extern void httpHeaderPutCc(HttpHeader * hdr, const HttpHdrCc * cc);
 extern void httpHeaderPutContRange(HttpHeader * hdr, const HttpHdrContRange * cr);
 extern void httpHeaderPutRange(HttpHeader * hdr, const HttpHdrRange * range);
 extern void httpHeaderPutExt(HttpHeader * hdr, const char *name, const char *value);
-extern int httpHeaderGetInt(const HttpHeader * hdr, http_hdr_type id);
-extern squid_off_t httpHeaderGetSize(const HttpHeader * hdr, http_hdr_type id);
-extern time_t httpHeaderGetTime(const HttpHeader * hdr, http_hdr_type id);
 extern TimeOrTag httpHeaderGetTimeOrTag(const HttpHeader * hdr, http_hdr_type id);
 extern HttpHdrCc *httpHeaderGetCc(const HttpHeader * hdr);
 extern HttpHdrRange *httpHeaderGetRange(const HttpHeader * hdr);
 extern HttpHdrContRange *httpHeaderGetContRange(const HttpHeader * hdr);
-extern const char *httpHeaderGetStr(const HttpHeader * hdr, http_hdr_type id);
-extern const char *httpHeaderGetLastStr(const HttpHeader * hdr, http_hdr_type id);
 extern const char *httpHeaderGetAuth(const HttpHeader * hdr, http_hdr_type id, const char *auth_scheme);
 extern void httpHeaderRefreshMask(HttpHeader * hdr);
 /* avoid using these low level routines */

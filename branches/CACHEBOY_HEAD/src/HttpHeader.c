@@ -65,8 +65,6 @@
 
 #define assert_eid(id) assert((id) < HDR_ENUM_END)
 
-static void httpHeaderNoteParsedEntry(http_hdr_type id, String value, int error);
-
 static void httpHeaderStatDump(const HttpHeaderStat * hs, StoreEntry * e);
 
 MemPool * pool_http_reply = NULL;
@@ -207,6 +205,7 @@ httpHeaderHas(const HttpHeader * hdr, http_hdr_type id)
     return CBIT_TEST(hdr->mask, id);
 }
 
+#if 0
 void
 httpHeaderPutInt(HttpHeader * hdr, http_hdr_type id, int number)
 {
@@ -260,6 +259,7 @@ httpHeaderPutAuth(HttpHeader * hdr, const char *auth_scheme, const char *realm)
     assert(hdr && auth_scheme && realm);
     httpHeaderPutStrf(hdr, HDR_WWW_AUTHENTICATE, "%s realm=\"%s\"", auth_scheme, realm);
 }
+#endif
 
 void
 httpHeaderPutCc(HttpHeader * hdr, const HttpHdrCc * cc)
@@ -327,6 +327,7 @@ httpHeaderPutExt(HttpHeader * hdr, const char *name, const char *value)
     httpHeaderAddEntryStr(hdr, HDR_OTHER, name, value);
 }
 
+#if 0
 int
 httpHeaderGetInt(const HttpHeader * hdr, http_hdr_type id)
 {
@@ -398,6 +399,7 @@ httpHeaderGetLastStr(const HttpHeader * hdr, http_hdr_type id)
     }
     return NULL;
 }
+#endif
 
 HttpHdrCc *
 httpHeaderGetCc(const HttpHeader * hdr)
@@ -506,17 +508,6 @@ httpHeaderEntryPackInto(const HttpHeaderEntry * e, Packer * p)
     packerAppend(p, ": ", 2);
     packerAppend(p, strBuf(e->value), strLen(e->value));
     packerAppend(p, "\r\n", 2);
-}
-
-static void
-httpHeaderNoteParsedEntry(http_hdr_type id, String context, int error)
-{
-    Headers[id].stat.parsCount++;
-    if (error) {
-	Headers[id].stat.errCount++;
-	debug(55, 2) ("cannot parse hdr field: '%s: %s'\n",
-	    strBuf(Headers[id].name), strBuf(context));
-    }
 }
 
 /*

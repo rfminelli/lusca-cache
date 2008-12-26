@@ -38,45 +38,6 @@
 #if UNUSED_CODE
 static int httpHeaderStrCmp(const char *h1, const char *h2, int len);
 #endif
-static void httpHeaderPutStrvf(HttpHeader * hdr, http_hdr_type id, const char *fmt, va_list vargs);
-
-/* same as httpHeaderPutStr, but formats the string using snprintf first */
-void
-#if STDC_HEADERS
-httpHeaderPutStrf(HttpHeader * hdr, http_hdr_type id, const char *fmt,...)
-#else
-httpHeaderPutStrf(va_alist)
-     va_dcl
-#endif
-{
-#if STDC_HEADERS
-    va_list args;
-    va_start(args, fmt);
-#else
-    va_list args;
-    HttpHeader *hdr = NULL;
-    http_hdr_type id = HDR_ENUM_END;
-    const char *fmt = NULL;
-    va_start(args);
-    hdr = va_arg(args, HttpHeader *);
-    id = va_arg(args, http_hdr_type);
-    fmt = va_arg(args, char *);
-#endif
-    httpHeaderPutStrvf(hdr, id, fmt, args);
-    va_end(args);
-}
-
-/* used by httpHeaderPutStrf */
-static void
-httpHeaderPutStrvf(HttpHeader * hdr, http_hdr_type id, const char *fmt, va_list vargs)
-{
-    MemBuf mb;
-    memBufDefInit(&mb);
-    memBufVPrintf(&mb, fmt, vargs);
-    httpHeaderPutStr(hdr, id, mb.buf);
-    memBufClean(&mb);
-}
-
 
 /* wrapper arrounf PutContRange */
 void

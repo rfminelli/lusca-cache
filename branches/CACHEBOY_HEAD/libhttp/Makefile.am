@@ -13,7 +13,9 @@ libhttp_a_SOURCES = \
 	HttpHeaderMask.c \
 	HttpHeaderParse.c \
 	HttpVersion.c \
-	HttpHeaderList.c
+	HttpHeaderList.c \
+	HttpHeaderPut.c \
+	HttpHeaderGet.c
 
 noinst_LIBRARIES = \
 	libhttp.a
