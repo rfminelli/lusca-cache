@@ -142,9 +142,7 @@ httpHeaderPutSize(HttpHeader * hdr, http_hdr_type id, squid_off_t number)
     assert_eid(id);
     assert(Headers[id].type == ftSize);         /* must be of an appropriate type */
     assert(number >= 0);
-    //snprintf(size, sizeof(size), "%" PRINTF_OFF_T, number);
-    /* XXX this is a hack, needs to be absolutely sorted out! -adrian */
-    snprintf(size, sizeof(size), "%qd", number);
+    snprintf(size, sizeof(size), "%" PRINTF_OFF_T, number);
     httpHeaderAddEntryStr(hdr, id, NULL, size);
 }
 
