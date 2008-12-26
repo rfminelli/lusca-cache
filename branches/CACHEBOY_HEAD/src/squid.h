@@ -425,6 +425,7 @@ struct rusage {
 #include "../libhttp/HttpHeaderGet.h"
 #include "../libhttp/HttpHeaderPut.h"
 #include "../libhttp/HttpHdrCc.h"
+#include "../libhttp/HttpMsg.h"
 
 #include "../libiapp/event.h"
 #include "../libiapp/iapp_ssl.h"

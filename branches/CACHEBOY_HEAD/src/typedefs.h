@@ -323,8 +323,6 @@ typedef void ERRMAPCB(StoreEntry *, int body_offset, squid_off_t content_length,
 typedef struct _VaryData VaryData;
 typedef void STLVCB(VaryData * vary, void *cbdata);
 
-typedef struct _HttpMsgBuf HttpMsgBuf;
-
 typedef struct rms rms_t;
 
 typedef void LOGLINESTART(Logfile *);

@@ -2193,19 +2193,6 @@ struct _VaryData {
     Array etags;
 };
 
-struct _HttpMsgBuf {
-    const char *buf;
-    size_t size;
-    /* offset of first/last byte of headers */
-    int h_start, h_end, h_len;
-    /* offset of first/last byte of request, including any padding */
-    int req_start, req_end, r_len;
-    int m_start, m_end, m_len;
-    int u_start, u_end, u_len;
-    int v_start, v_end, v_len;
-    int v_maj, v_min;
-};
-
 /* request method str stuff; should probably be a String type.. */
 struct rms {
     char *str;
