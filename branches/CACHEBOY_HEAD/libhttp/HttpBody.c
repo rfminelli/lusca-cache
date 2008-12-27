@@ -33,12 +33,54 @@
  *
  */
 
-#include "squid.h"
+#include "../include/config.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+#include "../include/Array.h"
+#include "../include/Stack.h"
+#include "../include/util.h"
+#include "../libcore/valgrind.h"
+#include "../libcore/varargs.h"
+#include "../libcore/debug.h"
+#include "../libcore/kb.h"
+#include "../libcore/gb.h"
+#include "../libcore/tools.h"
+
+#include "../libmem/MemPool.h"
+#include "../libmem/MemBufs.h"
+#include "../libmem/MemBuf.h"
+
+#include "HttpBody.h"
 
 void
-httpBodyPackInto(const HttpBody * body, Packer * p)
+httpBodyInit(HttpBody * body)
 {
-    assert(body && p);
-    if (body->mb.size)
-	packerAppend(p, body->mb.buf, body->mb.size);
+    body->mb = MemBufNull;
 }
+
+void
+httpBodyClean(HttpBody * body)
+{
+    assert(body);
+    if (!memBufIsNull(&body->mb))
+	memBufClean(&body->mb);
+}
+
+/* set body by absorbing mb */
+void
+httpBodySet(HttpBody * body, MemBuf * mb)
+{
+    assert(body);
+    assert(memBufIsNull(&body->mb));
+    body->mb = *mb;		/* absorb */
+}
+
+#if UNUSED_CODE
+const char *
+httpBodyPtr(const HttpBody * body)
+{
+    return body->mb.buf ? body->mb.buf : "";
+}
+#endif

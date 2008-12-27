@@ -19,7 +19,8 @@ libhttp_a_SOURCES = \
 	HttpHdrCc.c \
 	HttpMsg.c \
 	HttpHdrRange.c \
-	HttpHdrContRange.c
+	HttpHdrContRange.c \
+	HttpBody.c
 
 noinst_LIBRARIES = \
 	libhttp.a

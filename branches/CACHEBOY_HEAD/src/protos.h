@@ -202,14 +202,6 @@ extern const char *httpMakeVaryMark(request_t * request, HttpReply * reply);
 extern void httpStatusLinePackInto(const HttpStatusLine * sline, Packer * p);
 
 /* Http Body */
-/* init/clean */
-extern void httpBodyInit(HttpBody * body);
-extern void httpBodyClean(HttpBody * body);
-/* get body ptr (always use this) */
-extern const char *httpBodyPtr(const HttpBody * body);
-/* set body, does not clone mb so you should not reuse it */
-extern void httpBodySet(HttpBody * body, MemBuf * mb);
-
 /* pack */
 extern void httpBodyPackInto(const HttpBody * body, Packer * p);
 

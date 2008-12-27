@@ -855,15 +855,6 @@ struct _Packer {
     void *real_handle;		/* first parameter to real append and vprintf */
 };
 
-/*
- * Note: HttpBody is used only for messages with a small content that is
- * known a priory (e.g., error messages).
- */
-struct _HttpBody {
-    /* private */
-    MemBuf mb;
-};
-
 /* http header extention field */
 struct _HttpHdrExtField {
     String name;		/* field-name  from HTTP/1.1 (no column after name) */
