@@ -404,6 +404,7 @@ struct rusage {
 #include "../libhttp/HttpHdrRange.h"
 #include "../libhttp/HttpHdrContRange.h"
 #include "../libhttp/HttpBody.h"
+#include "../libhttp/HttpReply.h"
 
 #include "../libiapp/event.h"
 #include "../libiapp/iapp_ssl.h"
