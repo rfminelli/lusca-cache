@@ -276,35 +276,6 @@ httpHeaderGetAuth(const HttpHeader * hdr, http_hdr_type id, const char *auth_sch
     return base64_decode(field);
 }
 
-#if 0
-TimeOrTag
-httpHeaderGetTimeOrTag(const HttpHeader * hdr, http_hdr_type id)
-{
-    TimeOrTag tot;
-    HttpHeaderEntry *e;
-    assert(Headers[id].type == ftDate_1123_or_ETag);	/* must be of an appropriate type */
-    memset(&tot, 0, sizeof(tot));
-    if ((e = httpHeaderFindEntry(hdr, id))) {
-	const char *str = strBuf(e->value);
-	/* try as an ETag */
-	if (*str == '"' || (str[0] == 'W' && str[1] == '/')) {
-	    tot.tag = str;
-	    tot.time = -1;
-	    tot.valid = 1;
-	} else {
-	    /* or maybe it is time? */
-	    tot.time = parse_rfc1123(str, strLen(e->value));
-	    if (tot.time >= 0)
-		tot.valid = 1;
-	    tot.tag = NULL;
-	}
-    } else {
-	tot.time = -1;
-    }
-    return tot;
-}
-#endif
-
 /*
  * HttpHeaderEntry
  */
