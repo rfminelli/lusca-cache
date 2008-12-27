@@ -39,5 +39,6 @@ extern int httpHdrRangeParseInit(HttpHdrRange * range, const String * range_spec
 extern void httpHdrRangeDestroy(HttpHdrRange * range);
 extern HttpHdrRange *httpHdrRangeDup(const HttpHdrRange * range);
 extern HttpHdrRangeSpec *httpHdrRangeGetSpec(const HttpHdrRange * range, HttpHdrRangePos * pos);
+extern HttpHdrRange *httpHeaderGetRange(const HttpHeader * hdr);
 
 #endif

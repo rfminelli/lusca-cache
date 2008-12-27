@@ -493,3 +493,22 @@ httpHdrRangeOffsetLimit(HttpHdrRange * range)
 	return 0;
     return 1;
 }
+
+
+HttpHdrRange *
+httpHeaderGetRange(const HttpHeader * hdr)
+{
+    HttpHdrRange *r = NULL;
+    HttpHeaderEntry *e;
+    /* some clients will send "Request-Range" _and_ *matching* "Range"
+     * who knows, some clients might send Request-Range only;
+     * this "if" should work correctly in both cases;
+     * hopefully no clients send mismatched headers! */
+    if ((e = httpHeaderFindEntry(hdr, HDR_RANGE)) ||
+        (e = httpHeaderFindEntry(hdr, HDR_REQUEST_RANGE))) {
+        r = httpHdrRangeParseCreate(&e->value);
+        httpHeaderNoteParsedEntry(e->id, e->value, !r);
+    }
+    return r;
+}
+

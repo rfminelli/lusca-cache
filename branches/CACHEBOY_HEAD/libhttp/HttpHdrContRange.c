@@ -212,3 +212,16 @@ httpHdrContRangeSet(HttpHdrContRange * cr, HttpHdrRangeSpec spec, squid_off_t en
     cr->spec = spec;
     cr->elength = ent_len;
 }
+
+HttpHdrContRange *
+httpHeaderGetContRange(const HttpHeader * hdr)
+{
+    HttpHdrContRange *cr = NULL;
+    HttpHeaderEntry *e;
+    if ((e = httpHeaderFindEntry(hdr, HDR_CONTENT_RANGE))) {
+        cr = httpHdrContRangeParseCreate(strBuf(e->value)); 
+        httpHeaderNoteParsedEntry(e->id, e->value, !cr);
+    }
+    return cr;
+}
+

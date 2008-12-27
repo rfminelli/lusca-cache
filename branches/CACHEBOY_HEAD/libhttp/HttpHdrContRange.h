@@ -17,5 +17,7 @@ extern int httpHdrContRangeParseInit(HttpHdrContRange * crange, const char *cran
 extern void httpHdrContRangeDestroy(HttpHdrContRange * crange); 
 extern HttpHdrContRange *httpHdrContRangeDup(const HttpHdrContRange * crange);
 extern void httpHdrContRangeSet(HttpHdrContRange *, HttpHdrRangeSpec, squid_off_t);
+extern HttpHdrContRange *httpHeaderGetContRange(const HttpHeader * hdr);
+
 
 #endif
