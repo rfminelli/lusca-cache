@@ -171,21 +171,6 @@ httpHeaderPackInto(const HttpHeader * hdr, Packer * p)
 	httpHeaderEntryPackInto(e, p);
 }
 
-/*
- * Refreshes the header mask. Useful after httpHeaderDelAt constructs
- */
-void
-httpHeaderRefreshMask(HttpHeader * hdr)
-{
-    HttpHeaderPos pos = HttpHeaderInitPos;
-    HttpHeaderEntry *e;
-    httpHeaderMaskInit(&hdr->mask, 0);
-    debug(55, 7) ("refreshing the mask in hdr %p\n", hdr);
-    while ((e = httpHeaderGetEntry(hdr, &pos))) {
-	CBIT_SET(hdr->mask, e->id);
-    }
-}
-
 void
 httpHeaderPutCc(HttpHeader * hdr, const HttpHdrCc * cc)
 {

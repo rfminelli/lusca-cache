@@ -244,7 +244,6 @@ extern void httpHeaderPutRange(HttpHeader * hdr, const HttpHdrRange * range);
 extern void httpHeaderPutExt(HttpHeader * hdr, const char *name, const char *value);
 extern HttpHdrCc *httpHeaderGetCc(const HttpHeader * hdr);
 extern const char *httpHeaderGetAuth(const HttpHeader * hdr, http_hdr_type id, const char *auth_scheme);
-extern void httpHeaderRefreshMask(HttpHeader * hdr);
 /* avoid using these low level routines */
 extern void httpHeaderEntryPackInto(const HttpHeaderEntry * e, Packer * p);
 /* store report about current header usage and other stats */
