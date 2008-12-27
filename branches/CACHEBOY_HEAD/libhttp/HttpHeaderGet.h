@@ -7,6 +7,6 @@ extern time_t httpHeaderGetTime(const HttpHeader * hdr, http_hdr_type id);
 extern const char * httpHeaderGetStr(const HttpHeader * hdr, http_hdr_type id);
 extern const char * httpHeaderGetLastStr(const HttpHeader * hdr, http_hdr_type id);
 extern TimeOrTag httpHeaderGetTimeOrTag(const HttpHeader * hdr, http_hdr_type id);
-
+extern const char *httpHeaderGetAuth(const HttpHeader * hdr, http_hdr_type id, const char *auth_scheme);
 
 #endif
