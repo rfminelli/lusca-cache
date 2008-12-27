@@ -104,60 +104,6 @@ httpHeaderCleanModule(void)
  * HttpHeader Implementation
  */
 
-static void
-httpHeaderRepack(HttpHeader * hdr)
-{
-    HttpHeaderPos dp = HttpHeaderInitPos;
-    HttpHeaderPos pos = HttpHeaderInitPos;
-
-    /* XXX breaks layering for now! ie, getting grubby fingers in without httpHeaderEntryGet() */
-    dp = 0;
-    pos = 0;
-    while (dp < hdr->entries.count) {
-	for (; dp < hdr->entries.count && hdr->entries.items[dp] == NULL; dp++);
-	if (dp >= hdr->entries.count)
-	    break;
-	hdr->entries.items[pos] = hdr->entries.items[dp];
-	if (dp != pos)
-	    hdr->entries.items[dp] = NULL;
-	pos++;
-	dp++;
-    }
-    arrayShrink(&hdr->entries, pos);
-}
-
-/* use fresh entries to replace old ones */
-void
-httpHeaderUpdate(HttpHeader * old, const HttpHeader * fresh, const HttpHeaderMask * denied_mask)
-{
-    const HttpHeaderEntry *e;
-    HttpHeaderPos pos = HttpHeaderInitPos;
-
-    assert(old && fresh);
-    assert(old != fresh);
-    debug(55, 7) ("updating hdr: %p <- %p\n", old, fresh);
-
-    while ((e = httpHeaderGetEntry(fresh, &pos))) {
-	/* deny bad guys (ok to check for HDR_OTHER) here */
-	if (denied_mask && CBIT_TEST(*denied_mask, e->id))
-	    continue;
-	if (e->id != HDR_OTHER)
-	    httpHeaderDelById(old, e->id);
-	else
-	    httpHeaderDelByName(old, strBuf(e->name));
-    }
-    pos = HttpHeaderInitPos;
-    while ((e = httpHeaderGetEntry(fresh, &pos))) {
-	/* deny bad guys (ok to check for HDR_OTHER) here */
-	if (denied_mask && CBIT_TEST(*denied_mask, e->id))
-	    continue;
-	httpHeaderAddClone(old, e);
-    }
-
-    /* And now, repack the array to "fill in the holes" */
-    httpHeaderRepack(old);
-}
-
 /* packs all the entries using supplied packer */
 void
 httpHeaderPackInto(const HttpHeader * hdr, Packer * p)

@@ -233,8 +233,6 @@ extern void httpHeaderAddContRange(HttpHeader *, HttpHdrRangeSpec, squid_off_t);
 extern void httpHeaderInitModule(void);
 extern void httpHeaderInitMem(void);
 extern void httpHeaderCleanModule(void);
-/* append/update */
-extern void httpHeaderUpdate(HttpHeader * old, const HttpHeader * fresh, const HttpHeaderMask * denied_mask);
 /* parse/pack */
 extern void httpHeaderPackInto(const HttpHeader * hdr, Packer * p);
 /* field manipulation */
