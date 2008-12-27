@@ -870,15 +870,6 @@ struct _HttpHdrExtField {
     String value;		/* field-value from HTTP/1.1 */
 };
 
-/* data for iterating thru range specs */
-struct _HttpHdrRangeIter {
-    HttpHdrRangePos pos;
-    const HttpHdrRangeSpec *spec;	/* current spec at pos */
-    squid_off_t debt_size;	/* bytes left to send from the current spec */
-    squid_off_t prefix_size;	/* the size of the incoming HTTP msg prefix */
-    String boundary;		/* boundary for multipart responses */
-};
-
 struct _HttpReply {
     /* unsupported, writable, may disappear/change in the future */
     int hdr_sz;			/* sums _stored_ status-line, headers, and <CRLF> */

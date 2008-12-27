@@ -19,6 +19,20 @@ struct _HttpHdrRangeSpec {
 };  
 typedef struct _HttpHdrRangeSpec HttpHdrRangeSpec; 
 
+/* iteration for HttpHdrRange */
+typedef int HttpHdrRangePos;
+
+/* data for iterating thru range specs */ 
+struct _HttpHdrRangeIter {
+    HttpHdrRangePos pos; 
+    const HttpHdrRangeSpec *spec;       /* current spec at pos */
+    squid_off_t debt_size;      /* bytes left to send from the current spec */
+    squid_off_t prefix_size;    /* the size of the incoming HTTP msg prefix */
+    String boundary;            /* boundary for multipart responses */
+};  
+typedef struct _HttpHdrRangeIter HttpHdrRangeIter;
+
+
 /* There may be more than one byte range specified in the request.
  * This object holds all range specs in order of their appearence
  * in the request because we SHOULD preserve that order.
@@ -28,8 +42,6 @@ struct _HttpHdrRange {
 };
 typedef struct _HttpHdrRange HttpHdrRange;
 
-/* iteration for HttpHdrRange */
-typedef int HttpHdrRangePos;
 
 extern squid_off_t cfg_range_offset_limit;
 
@@ -40,5 +52,12 @@ extern void httpHdrRangeDestroy(HttpHdrRange * range);
 extern HttpHdrRange *httpHdrRangeDup(const HttpHdrRange * range);
 extern HttpHdrRangeSpec *httpHdrRangeGetSpec(const HttpHdrRange * range, HttpHdrRangePos * pos);
 extern HttpHdrRange *httpHeaderGetRange(const HttpHeader * hdr);
+/* adjust specs after the length is known */
+extern int httpHdrRangeCanonize(HttpHdrRange *, squid_off_t);
+extern int httpHdrRangeIsComplex(const HttpHdrRange * range);
+extern int httpHdrRangeWillBeComplex(const HttpHdrRange * range);
+extern squid_off_t httpHdrRangeFirstOffset(const HttpHdrRange * range);
+extern squid_off_t httpHdrRangeLowestOffset(const HttpHdrRange * range, squid_off_t);
+extern int httpHdrRangeOffsetLimit(HttpHdrRange *);
 
 #endif

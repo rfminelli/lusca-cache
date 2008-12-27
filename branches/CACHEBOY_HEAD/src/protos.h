@@ -219,25 +219,15 @@ extern void httpHdrCcStatDumper(StoreEntry * sentry, int idx, double val, double
 
 /* Http Range Header Field */
 extern void httpHdrRangePackInto(const HttpHdrRange * range, Packer * p);
-/* adjust specs after the length is known */
-extern int httpHdrRangeCanonize(HttpHdrRange *, squid_off_t);
 /* other */
 extern String httpHdrRangeBoundaryStr(clientHttpRequest * http);
-extern int httpHdrRangeIsComplex(const HttpHdrRange * range);
-extern int httpHdrRangeWillBeComplex(const HttpHdrRange * range);
-extern squid_off_t httpHdrRangeFirstOffset(const HttpHdrRange * range);
-extern squid_off_t httpHdrRangeLowestOffset(const HttpHdrRange * range, squid_off_t);
-extern int httpHdrRangeOffsetLimit(HttpHdrRange *);
 
 
 /* Http Content Range Header Field */
 extern void httpHdrContRangePackInto(const HttpHdrContRange * crange, Packer * p);
 
 /* Http Header Tools */
-extern void httpHeaderMaskInit(HttpHeaderMask * mask, int value);
-extern void httpHeaderCalcMask(HttpHeaderMask * mask, const http_hdr_type * enums, int count);
 extern void httpHeaderAddContRange(HttpHeader *, HttpHdrRangeSpec, squid_off_t);
-extern int httpHeaderParseInt(const char *start, int *val);
 
 /* Http Header */
 extern void httpHeaderInitModule(void);
@@ -246,7 +236,6 @@ extern void httpHeaderCleanModule(void);
 /* append/update */
 extern void httpHeaderUpdate(HttpHeader * old, const HttpHeader * fresh, const HttpHeaderMask * denied_mask);
 /* parse/pack */
-extern int httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_end);
 extern void httpHeaderPackInto(const HttpHeader * hdr, Packer * p);
 /* field manipulation */
 extern void httpHeaderPutCc(HttpHeader * hdr, const HttpHdrCc * cc);
@@ -261,10 +250,6 @@ extern void httpHeaderEntryPackInto(const HttpHeaderEntry * e, Packer * p);
 /* store report about current header usage and other stats */
 extern void httpHeaderStoreReport(StoreEntry * e);
 extern void httpHdrMangleList(HttpHeader *, request_t *);
-
-/* Http Msg (currently in HttpReply.c @?@ ) */
-extern int httpMsgIsPersistent(http_version_t http_ver, const HttpHeader * hdr);
-extern int httpMsgIsolateHeaders(const char **parse_start, int l, const char **blk_start, const char **blk_end);
 
 /* Http Reply */
 extern void httpReplyInitModule(void);
