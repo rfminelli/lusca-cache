@@ -1,6 +1,14 @@
 #ifndef	__LIBHTTP_HTTP_MSG_H__
 #define	__LIBHTTP_HTTP_MSG_H__
 
+/* parse state of HttpReply or HttpRequest */
+typedef enum {
+    psReadyToParseStartLine = 0,
+    psReadyToParseHeaders,
+    psParsed,
+    psError
+} HttpMsgParseState;
+
 struct _HttpMsgBuf {
     const char *buf;
     size_t size;

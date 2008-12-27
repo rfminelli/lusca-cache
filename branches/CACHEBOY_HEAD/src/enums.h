@@ -434,16 +434,6 @@ typedef enum {
     SWAP_LOG_MAX
 } swap_log_op;
 
-
-/* parse state of HttpReply or HttpRequest */
-typedef enum {
-    psReadyToParseStartLine = 0,
-    psReadyToParseHeaders,
-    psParsed,
-    psError
-} HttpMsgParseState;
-
-
 enum {
     MEDIAN_HTTP,
     MEDIAN_ICP_QUERY,
