@@ -26,5 +26,6 @@ extern void httpHdrCcJoinWith(HttpHdrCc * cc, const HttpHdrCc * new_cc);
 extern void httpHdrCcSetMaxAge(HttpHdrCc * cc, int max_age);
 extern void httpHdrCcSetSMaxAge(HttpHdrCc * cc, int s_maxage);
 extern void httpHdrCcUpdateStats(const HttpHdrCc * cc, StatHist * hist);
+extern HttpHdrCc *httpHeaderGetCc(const HttpHeader * hdr);
 
 #endif

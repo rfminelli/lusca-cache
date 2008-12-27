@@ -237,23 +237,6 @@ httpHeaderPutExt(HttpHeader * hdr, const char *name, const char *value)
     httpHeaderAddEntryStr(hdr, HDR_OTHER, name, value);
 }
 
-HttpHdrCc *
-httpHeaderGetCc(const HttpHeader * hdr)
-{
-    HttpHdrCc *cc;
-    String s;
-    if (!CBIT_TEST(hdr->mask, HDR_CACHE_CONTROL))
-	return NULL;
-    s = httpHeaderGetList(hdr, HDR_CACHE_CONTROL);
-    cc = httpHdrCcParseCreate(&s);
-    HttpHeaderStats[hdr->owner].ccParsedCount++;
-    if (cc)
-	httpHdrCcUpdateStats(cc, &HttpHeaderStats[hdr->owner].ccTypeDistr);
-    httpHeaderNoteParsedEntry(HDR_CACHE_CONTROL, s, !cc);
-    stringClean(&s);
-    return cc;
-}
-
 /*
  * HttpHeaderEntry
  */
