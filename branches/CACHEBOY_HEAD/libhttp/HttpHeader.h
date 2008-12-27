@@ -20,6 +20,14 @@ struct _HttpHeader {
 };
 typedef struct _HttpHeader HttpHeader;
 
+/* some fields can hold either time or etag specs (e.g. If-Range) */
+struct _TimeOrTag {
+    const char *tag;            /* entity tag */
+    time_t time;
+    int valid;                  /* true if struct is usable */
+};  
+typedef struct _TimeOrTag TimeOrTag;
+
 extern HttpHeaderFieldInfo *Headers;
 extern MemPool * pool_http_header_entry;
 

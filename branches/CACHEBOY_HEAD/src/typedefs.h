@@ -102,7 +102,6 @@ typedef struct _ETag ETag;
 typedef struct _fileMap fileMap;
 typedef struct _HttpReply http_reply;
 typedef struct _HttpHdrRangeIter HttpHdrRangeIter;
-typedef struct _TimeOrTag TimeOrTag;
 typedef struct _HttpBody HttpBody;
 typedef struct _HttpReply HttpReply;
 typedef struct _HttpStateData HttpStateData;

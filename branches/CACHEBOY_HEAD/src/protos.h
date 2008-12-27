@@ -253,7 +253,6 @@ extern void httpHeaderPutCc(HttpHeader * hdr, const HttpHdrCc * cc);
 extern void httpHeaderPutContRange(HttpHeader * hdr, const HttpHdrContRange * cr);
 extern void httpHeaderPutRange(HttpHeader * hdr, const HttpHdrRange * range);
 extern void httpHeaderPutExt(HttpHeader * hdr, const char *name, const char *value);
-extern TimeOrTag httpHeaderGetTimeOrTag(const HttpHeader * hdr, http_hdr_type id);
 extern HttpHdrCc *httpHeaderGetCc(const HttpHeader * hdr);
 extern const char *httpHeaderGetAuth(const HttpHeader * hdr, http_hdr_type id, const char *auth_scheme);
 extern void httpHeaderRefreshMask(HttpHeader * hdr);

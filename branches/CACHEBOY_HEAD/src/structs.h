@@ -870,13 +870,6 @@ struct _HttpHdrExtField {
     String value;		/* field-value from HTTP/1.1 */
 };
 
-/* some fields can hold either time or etag specs (e.g. If-Range) */
-struct _TimeOrTag {
-    const char *tag;		/* entity tag */
-    time_t time;
-    int valid;			/* true if struct is usable */
-};
-
 /* data for iterating thru range specs */
 struct _HttpHdrRangeIter {
     HttpHdrRangePos pos;

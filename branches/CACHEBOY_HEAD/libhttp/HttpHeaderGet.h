@@ -6,5 +6,7 @@ extern squid_off_t httpHeaderGetSize(const HttpHeader * hdr, http_hdr_type id);
 extern time_t httpHeaderGetTime(const HttpHeader * hdr, http_hdr_type id);
 extern const char * httpHeaderGetStr(const HttpHeader * hdr, http_hdr_type id);
 extern const char * httpHeaderGetLastStr(const HttpHeader * hdr, http_hdr_type id);
+extern TimeOrTag httpHeaderGetTimeOrTag(const HttpHeader * hdr, http_hdr_type id);
+
 
 #endif

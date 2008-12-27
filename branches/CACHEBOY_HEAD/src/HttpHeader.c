@@ -291,6 +291,7 @@ httpHeaderGetAuth(const HttpHeader * hdr, http_hdr_type id, const char *auth_sch
     return base64_decode(field);
 }
 
+#if 0
 TimeOrTag
 httpHeaderGetTimeOrTag(const HttpHeader * hdr, http_hdr_type id)
 {
@@ -317,6 +318,7 @@ httpHeaderGetTimeOrTag(const HttpHeader * hdr, http_hdr_type id)
     }
     return tot;
 }
+#endif
 
 /*
  * HttpHeaderEntry
