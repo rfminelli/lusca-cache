@@ -77,8 +77,17 @@
 #include "HttpHeaderVars.h"
 #include "HttpHeaderList.h"
 
+/* XXX just for the mempool initialisation hackery */
+#include "HttpHdrRange.h"
+#include "HttpHdrContRange.h"
+
 HttpHeaderFieldInfo *Headers = NULL;
 MemPool * pool_http_header_entry = NULL;
+
+/* XXX these shouldn't be here? */
+MemPool * pool_http_hdr_range_spec = NULL;
+MemPool * pool_http_hdr_range = NULL;
+MemPool * pool_http_hdr_cont_range = NULL;
 
 /* XXX these masks probably shouldn't be here */
 HttpHeaderMask ListHeadersMask;  /* set run-time using  ListHeadersArr */
@@ -99,6 +108,15 @@ httpHeaderInitLibrary(void)
         Headers = httpHeaderBuildFieldsInfo(HeadersAttrs, HDR_ENUM_END);
     if (! pool_http_header_entry)
         pool_http_header_entry = memPoolCreate("HttpHeaderEntry", sizeof(HttpHeaderEntry));
+
+    /* XXX these shouldn't be here; the header code shouldn't rely on the range code just for initialisation! */
+    /* XXX so shuffle these out into their relevant modules later on and remove the above #include! */
+    if (! pool_http_hdr_range_spec)
+        pool_http_hdr_range_spec = memPoolCreate("HttpHdrRangeSpec", sizeof(HttpHdrRangeSpec));
+    if (! pool_http_hdr_range)
+        pool_http_hdr_range = memPoolCreate("HttpHdrRange", sizeof(HttpHdrRange));
+    if (! pool_http_hdr_cont_range)
+        pool_http_hdr_cont_range = memPoolCreate("HttpHdrContRange", sizeof(HttpHdrContRange));
 
     /* create masks */
     /* XXX should only do this once, no? */

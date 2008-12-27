@@ -68,9 +68,6 @@
 static void httpHeaderStatDump(const HttpHeaderStat * hs, StoreEntry * e);
 
 MemPool * pool_http_reply = NULL;
-MemPool * pool_http_hdr_range_spec = NULL;
-MemPool * pool_http_hdr_range = NULL;
-MemPool * pool_http_hdr_cont_range = NULL;
 
 /*
  * Module initialization routines
@@ -80,9 +77,6 @@ void
 httpHeaderInitMem(void)
 {
     pool_http_reply = memPoolCreate("HttpReply", sizeof(HttpReply));
-    pool_http_hdr_range_spec = memPoolCreate("HttpHdrRangeSpec", sizeof(HttpHdrRangeSpec));
-    pool_http_hdr_range = memPoolCreate("HttpHdrRange", sizeof(HttpHdrRange));
-    pool_http_hdr_cont_range = memPoolCreate("HttpHdrContRange", sizeof(HttpHdrContRange));
 }
 
 void

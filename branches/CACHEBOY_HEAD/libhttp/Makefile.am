@@ -17,7 +17,9 @@ libhttp_a_SOURCES = \
 	HttpHeaderPut.c \
 	HttpHeaderGet.c \
 	HttpHdrCc.c \
-	HttpMsg.c
+	HttpMsg.c \
+	HttpHdrRange.c \
+	HttpHdrContRange.c
 
 noinst_LIBRARIES = \
 	libhttp.a

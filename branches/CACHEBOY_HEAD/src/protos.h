@@ -218,14 +218,7 @@ extern void httpHdrCcPackInto(const HttpHdrCc * cc, Packer * p);
 extern void httpHdrCcStatDumper(StoreEntry * sentry, int idx, double val, double size, int count);
 
 /* Http Range Header Field */
-extern HttpHdrRange *httpHdrRangeParseCreate(const String * range_spec);
-/* returns true if ranges are valid; inits HttpHdrRange */
-extern int httpHdrRangeParseInit(HttpHdrRange * range, const String * range_spec);
-extern void httpHdrRangeDestroy(HttpHdrRange * range);
-extern HttpHdrRange *httpHdrRangeDup(const HttpHdrRange * range);
 extern void httpHdrRangePackInto(const HttpHdrRange * range, Packer * p);
-/* iterate through specs */
-extern HttpHdrRangeSpec *httpHdrRangeGetSpec(const HttpHdrRange * range, HttpHdrRangePos * pos);
 /* adjust specs after the length is known */
 extern int httpHdrRangeCanonize(HttpHdrRange *, squid_off_t);
 /* other */
@@ -238,15 +231,7 @@ extern int httpHdrRangeOffsetLimit(HttpHdrRange *);
 
 
 /* Http Content Range Header Field */
-extern HttpHdrContRange *httpHdrContRangeCreate(void);
-extern HttpHdrContRange *httpHdrContRangeParseCreate(const char *crange_spec);
-/* returns true if range is valid; inits HttpHdrContRange */
-extern int httpHdrContRangeParseInit(HttpHdrContRange * crange, const char *crange_spec);
-extern void httpHdrContRangeDestroy(HttpHdrContRange * crange);
-extern HttpHdrContRange *httpHdrContRangeDup(const HttpHdrContRange * crange);
 extern void httpHdrContRangePackInto(const HttpHdrContRange * crange, Packer * p);
-/* inits with given spec */
-extern void httpHdrContRangeSet(HttpHdrContRange *, HttpHdrRangeSpec, squid_off_t);
 
 /* Http Header Tools */
 extern void httpHeaderMaskInit(HttpHeaderMask * mask, int value);

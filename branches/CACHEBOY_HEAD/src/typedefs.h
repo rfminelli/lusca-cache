@@ -101,10 +101,7 @@ typedef struct _SquidConfig2 SquidConfig2;
 typedef struct _ETag ETag;
 typedef struct _fileMap fileMap;
 typedef struct _HttpReply http_reply;
-typedef struct _HttpHdrRangeSpec HttpHdrRangeSpec;
-typedef struct _HttpHdrRange HttpHdrRange;
 typedef struct _HttpHdrRangeIter HttpHdrRangeIter;
-typedef struct _HttpHdrContRange HttpHdrContRange;
 typedef struct _TimeOrTag TimeOrTag;
 typedef struct _HttpBody HttpBody;
 typedef struct _HttpReply HttpReply;
@@ -296,9 +293,6 @@ typedef void (*vprintf_f) ();
 
 /* MD5 cache keys */
 typedef unsigned char cache_key;
-
-/* iteration for HttpHdrRange */
-typedef int HttpHdrRangePos;
 
 /* a common objPackInto interface; used by debugObj */
 typedef void (*ObjPackMethod) (void *obj, Packer * p);

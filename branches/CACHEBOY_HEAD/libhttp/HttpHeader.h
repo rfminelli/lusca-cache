@@ -28,6 +28,10 @@ extern HttpHeaderMask ListHeadersMask;
 extern HttpHeaderMask ReplyHeadersMask;
 extern HttpHeaderMask RequestHeadersMask;
 
+/* XXX as mentioned in HttpHeader.c ; these probably shouldn't be here either?! */
+extern MemPool * pool_http_hdr_range_spec;
+extern MemPool * pool_http_hdr_range;
+extern MemPool * pool_http_hdr_cont_range;
 
 extern void httpHeaderInitLibrary(void);
 

@@ -177,9 +177,6 @@
 #define DEFAULT_SQUID_ERROR_DIR "/usr/local/squid/etc/errors"
 #endif
 
-/* iteration for HttpHdrRange */
-#define HttpHdrRangeInitPos (-1)
-
 /*
  * Max number of ICP messages to receive per call to icpHandleUdp
  */

@@ -870,26 +870,6 @@ struct _HttpHdrExtField {
     String value;		/* field-value from HTTP/1.1 */
 };
 
-/* http byte-range-spec */
-struct _HttpHdrRangeSpec {
-    squid_off_t offset;
-    squid_off_t length;
-};
-
-/* There may be more than one byte range specified in the request.
- * This object holds all range specs in order of their appearence
- * in the request because we SHOULD preserve that order.
- */
-struct _HttpHdrRange {
-    Stack specs;
-};
-
-/* http content-range header field */
-struct _HttpHdrContRange {
-    HttpHdrRangeSpec spec;
-    squid_off_t elength;	/* entity length, not content length */
-};
-
 /* some fields can hold either time or etag specs (e.g. If-Range) */
 struct _TimeOrTag {
     const char *tag;		/* entity tag */
