@@ -48,7 +48,7 @@
  *	Find the end of the MIME (HTTP?) headers, if any, and return the length.
  * @param	mime		start of headers (not the request/reply)
  * @param	l		size of the headers
- * @result	The length of the headers, or 0 if the headers were incomplete.
+ * @return	The length of the headers, or 0 if the headers were incomplete.
  *
  * @discussion
  *	This function pre-supposes that the headers exist - ie, they at the very
