@@ -115,6 +115,18 @@ wordlistAdd(wordlist ** list, const char *key)
 }
 
 
+/*!
+ * @function
+ *	wordlistJoin
+ * @abstract
+ *	join together two wordlists
+ * @param	list		target list
+ * @param	wl		wordlist to join to 'list'
+ *
+ * @discussion
+ *	'wl' (the second list) is joined to the first and then set to NULL;
+ *	thus the list 'wl' is unavailable after this call.
+ */
 void
 wordlistJoin(wordlist ** list, wordlist ** wl)
 {   
@@ -148,6 +160,14 @@ wordlistCat(const wordlist * w, MemBuf * mb)
 }
 #endif
 
+/*!
+ * @function
+ *	wordlistDup
+ * @abstract
+ *	Duplicate a wordlist
+ * @param	w	the wordlist to duplicate
+ * @return	the duplicated list
+ */
 wordlist *
 wordlistDup(const wordlist * w)
 {   
@@ -159,6 +179,20 @@ wordlistDup(const wordlist * w)
     return D;
 }
 
+/*!
+ * @function
+ *	wordlistPopHead
+ * @abstract
+ *	Remove and return the top-most item on the word list
+ * @param	head	pointer to the head item on the list
+ * @return	the key value (which must be free()'ed once used), or NULL if no entry
+ *		was available.
+ *
+ * @discussion
+ *	The list itself is modified on POP - the top-most item is removed
+ *	and the head pointer is updated to point to the new item head, or NULL
+ *	if the list is now empty.
+ */
 char *
 wordlistPopHead(wordlist **head)
 {
