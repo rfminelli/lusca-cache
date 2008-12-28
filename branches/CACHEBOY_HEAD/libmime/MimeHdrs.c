@@ -41,7 +41,26 @@
 
 #include "MimeHdrs.h"
 
-
+/*
+ * @function
+ *	headersEnd
+ * @abstract
+ *	Find the end of the MIME (HTTP?) headers, if any, and return the length.
+ * @param	mime		start of headers (not the request/reply)
+ * @param	l		size of the headers
+ * @result	The length of the headers, or 0 if the headers were incomplete.
+ *
+ * @discussion
+ *	This function pre-supposes that the headers exist - ie, they at the very
+ *	least "empty". Calling this for requests with no headers (as seperate
+ *	to "empty headers") - eg HTTP/0.9 requests - will simply confuse matters.
+ *
+ *	This routine was once the sole biggest CPU user at high request rates,
+ *	somehow the combination of inefficiently complication and
+ * 	inefficient use. The latter has been mostly fixed; the remaining uses
+ *	of this function should be eliminated and replaced with just better
+ *	code design.
+ * 
 size_t
 headersEnd(const char *mime, size_t l)
 {
