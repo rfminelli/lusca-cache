@@ -55,7 +55,24 @@
 
 #include "StrList.h"
 
-/* returns true iff "m" is a member of the list */
+/*!
+ * @function
+ *	strListIsMember
+ * @abstract
+ *	returns true iff "m" is a member of the list
+ * @param	list		String containing the list of items
+ * @param	m		the item to search for
+ * @param	del		The delimiter to search using
+ * @return	1 if the item was found, 0 otherwise
+ *
+ * @discussion
+ *	The delimiter is seperate to the general functionality
+ *	here of handling double quotes and whitespace.
+ *
+ *	This (and the other strList) functions may not be as
+ *	efficient as they could be, and may be used in places
+ *	they shouldn't be.
+ */
 int
 strListIsMember(const String * list, const char *m, char del)
 {
@@ -72,7 +89,15 @@ strListIsMember(const String * list, const char *m, char del)
     return 0;
 }
 
-/* returns true iff "s" is a substring of a member of the list, >1 if more than once */
+/*!
+ * @function
+ *	strIsSubstr
+ * @abstract
+ *	returns true iff "s" is a substring of a member of the list, >1 if more than once
+ * @param	list	String containing the list of items
+ * @param	s	the item to search the string list for
+ * @result	1 if 's' is part of a member of the list, 0 if not, >1 if more than one was found
+ */
 int
 strIsSubstr(const String * list, const char *s)
 {
@@ -86,7 +111,15 @@ strIsSubstr(const String * list, const char *s)
     return 1;
 }
 
-/* appends an item to the list */
+/*!
+ * @function
+ *	strListAdd
+ * @abstract
+ *	Append an item to the string list
+ * @param	str	String list
+ * @param	item	item to add
+ * @param	del	list item delimiter to use
+ */
 void
 strListAdd(String * str, const char *item, char del)
 {
@@ -101,7 +134,15 @@ strListAdd(String * str, const char *item, char del)
     stringAppend(str, item, strlen(item));
 }
 
-/* appends an item to the list if not already there */
+/*!
+ * @function
+ *	strListAddunique
+ * @abstract
+ *	Append an item to the string list if it doesn't already exist
+ * @param	str	String list
+ * @param	item	unique item to add
+ * @param	del	list item delimiter to use
+ */
 void
 strListAddUnique(String * str, const char *item, char del)
 {
@@ -109,13 +150,24 @@ strListAddUnique(String * str, const char *item, char del)
 	strListAdd(str, item, del);
 }
 
-/*
- * iterates through a 0-terminated string of items separated by 'del's.
- * white space around 'del' is considered to be a part of 'del'
- * like strtok, but preserves the source, and can iterate several strings at once
+/*!
+ * @function
+ *	strListGetItem
+ * @abstract
+ *	search through a String of items separated by the given delimiter
+ * @param	str		String list of items
+ * @param	del		list delimiter
+ * @param	item		returned item
+ * @param	ilen		length of returned item
+ * @param	pos		Iterator start position
+ * @return	1 if the item was found, 0 otherwise.
  *
- * returns true if next item is found.
- * init pos with NULL to start iteration.
+ * @discussion
+ *	Iterates through a 0-terminated string of items separated by 'del's.
+ *	White space around 'del' is considered to be a part of 'del'.
+ *	Like strtok, but preserves the source, and can iterate several strings at once.
+ *
+ *	Init pos with NULL to start iteration.
  */
 int
 strListGetItem(const String * str, char del, const char **item, int *ilen, const char **pos)
