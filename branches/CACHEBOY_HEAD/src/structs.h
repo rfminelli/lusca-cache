@@ -62,11 +62,10 @@ struct _acl_user_ip_data {
     } flags;
 };
 
-/* XXX sockaddr_storage is 128 bytes each; this dramatically blows out the damned size of this! */
 struct _acl_ip_data {
-    sqaddr_t addr1;	/* if addr2 non-zero then its a range */
-    sqaddr_t addr2;
-    sqaddr_t mask;
+    struct in_addr addr1;	/* if addr2 non-zero then its a range */
+    struct in_addr addr2;
+    struct in_addr mask;
     acl_ip_data *next;		/* used for parsing, not for storing */
 };
 
