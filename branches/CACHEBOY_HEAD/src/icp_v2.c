@@ -49,15 +49,11 @@ static void
 icpLogIcp(struct in_addr caddr, log_type logcode, int len, const char *url, int delay)
 {
     AccessLogEntry al;
-    sqaddr_t ad;
     if (LOG_TAG_NONE == logcode)
 	return;
     if (LOG_ICP_QUERY == logcode)
 	return;
-    sqinet_init(&ad);
-    sqinet_set_v4_inaddr(&ad, &caddr);
-    clientdbUpdate(&ad, logcode, PROTO_ICP, len);
-    sqinet_done(&ad);
+    clientdbUpdate(caddr, logcode, PROTO_ICP, len);
     if (!Config.onoff.log_udp)
 	return;
     memset(&al, '\0', sizeof(al));
@@ -197,8 +193,6 @@ icpHandleIcpV2(int fd, struct sockaddr_in from, char *buf, int len)
     u_num32 flags = 0;
     int rtt = 0;
     int hops = 0;
-    int r;
-    sqaddr_t ad;
     xmemcpy(&header, buf, sizeof(icp_common_t));
     /*
      * Only these fields need to be converted
@@ -237,20 +231,16 @@ icpHandleIcpV2(int fd, struct sockaddr_in from, char *buf, int len)
 	if (!allow) {
 	    debug(12, 2) ("icpHandleIcpV2: Access Denied for %s by %s.\n",
 		inet_ntoa(from.sin_addr), AclMatchedName);
-            sqinet_init(&ad);
-	    sqinet_set_v4_sockaddr(&ad, &from);
-	    r = clientdbCutoffDenied(&ad);
-	    if (r) {
+	    if (clientdbCutoffDenied(from.sin_addr)) {
 		/*
 		 * count this DENIED query in the clientdb, even though
 		 * we're not sending an ICP reply...
 		 */
-		clientdbUpdate(&ad, LOG_UDP_DENIED, PROTO_ICP, 0);
+		clientdbUpdate(from.sin_addr, LOG_UDP_DENIED, PROTO_ICP, 0);
 	    } else {
 		reply = icpCreateMessage(ICP_DENIED, 0, url, header.reqnum, 0);
 		icpUdpSend(fd, &from, reply, LOG_UDP_DENIED, 0);
 	    }
-	    sqinet_done(&ad);
 	    break;
 	}
 	if (header.flags & ICP_FLAG_SRC_RTT) {

@@ -1954,7 +1954,6 @@ static int
 aclMatchAcl(acl * ae, aclCheck_t * checklist)
 {
     request_t *r = checklist->request;
-    sqaddr_t ad;
     const ipcache_addrs *ia = NULL;
     const char *fqdn = NULL;
     char *esc_buf;
@@ -2117,10 +2116,7 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	return k;
 	/* NOTREACHED */
     case ACL_MAXCONN:
-	sqinet_init(&ad);
-	sqinet_set_v4_inaddr(&ad, &checklist->src_addr);
-	k = clientdbEstablished(&ad, 0);
-	sqinet_done(&ad);
+	k = clientdbEstablished(checklist->src_addr, 0);
 	return ((k > ((intlist *) ae->data)->i) ? 1 : 0);
 	/* NOTREACHED */
     case ACL_URL_PORT:

@@ -1933,7 +1933,7 @@ struct _storeSwapLogDataOld {
 
 struct _ClientInfo {
     hash_link hash;		/* must be first */
-    sqaddr_t addr;
+    struct in_addr addr;
     struct {
 	int result_hist[LOG_TYPE_MAX];
 	int n_requests;

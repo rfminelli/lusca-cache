@@ -36,7 +36,7 @@
 #include "squid.h"
 
 static hash_table *client_table = NULL;
-static ClientInfo *clientdbAdd(sqaddr_t *addr);
+static ClientInfo *clientdbAdd(struct in_addr addr);
 static FREE clientdbFreeItem;
 static void clientdbStartGC(void);
 static void clientdbScheduledGC(void *);
@@ -51,17 +51,12 @@ static int cleanup_removed;
 static MemPool * pool_client_info;
 
 static ClientInfo *
-clientdbAdd(sqaddr_t *a)
+clientdbAdd(struct in_addr addr)
 {
-    LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
-
     ClientInfo *c;
-
-    (void) sqinet_ntoa(a, buf, sizeof(buf), SQADDR_NONE);
     c = memPoolAlloc(pool_client_info);
-    c->hash.key = xstrdup(buf);
-    sqinet_init(&c->addr);
-    sqinet_copy(&c->addr, a);
+    c->hash.key = xstrdup(xinet_ntoa(addr));
+    c->addr = addr;
     hash_join(client_table, &c->hash);
     statCounter.client_http.clients++;
     if ((statCounter.client_http.clients > max_clients) && !cleanup_running && cleanup_scheduled < 2) {
@@ -82,7 +77,7 @@ clientdbInit(void)
 {
     if (client_table)
 	return;
-    client_table = hash_create((HASHCMP *) strcmp, CLIENT_DB_HASH_SIZE, (HASHHASH *) hash_string);
+    client_table = hash_create((HASHCMP *) strcmp, CLIENT_DB_HASH_SIZE, hash_string);
     cachemgrRegister("client_list",
 	"Cache Client List",
 	clientdbDump,
@@ -90,15 +85,13 @@ clientdbInit(void)
 }
 
 void
-clientdbUpdate(sqaddr_t *addr, log_type ltype, protocol_t p, squid_off_t size)
+clientdbUpdate(struct in_addr addr, log_type ltype, protocol_t p, squid_off_t size)
 {
-    LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
     const char *key;
     ClientInfo *c;
     if (!Config.onoff.client_db)
 	return;
-    (void) sqinet_ntoa(addr, buf, sizeof(buf), SQADDR_NONE);
-    key = buf;
+    key = xinet_ntoa(addr);
     c = (ClientInfo *) hash_lookup(client_table, key);
     if (c == NULL)
 	c = clientdbAdd(addr);
@@ -128,15 +121,13 @@ clientdbUpdate(sqaddr_t *addr, log_type ltype, protocol_t p, squid_off_t size)
  * -1.  To get the current value, simply call with delta = 0.
  */
 int
-clientdbEstablished(sqaddr_t *addr, int delta)
+clientdbEstablished(struct in_addr addr, int delta)
 {
-    LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
     const char *key;
     ClientInfo *c;
     if (!Config.onoff.client_db)
 	return 0;
-    (void) sqinet_ntoa(addr, buf, sizeof(buf), SQADDR_NONE);
-    key = buf;
+    key = xinet_ntoa(addr);
     c = (ClientInfo *) hash_lookup(client_table, key);
     if (c == NULL)
 	c = clientdbAdd(addr);
@@ -148,9 +139,8 @@ clientdbEstablished(sqaddr_t *addr, int delta)
 
 #define CUTOFF_SECONDS 3600
 int
-clientdbCutoffDenied(sqaddr_t *addr)
+clientdbCutoffDenied(struct in_addr addr)
 {
-    LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
     const char *key;
     int NR;
     int ND;
@@ -158,8 +148,7 @@ clientdbCutoffDenied(sqaddr_t *addr)
     ClientInfo *c;
     if (!Config.onoff.client_db)
 	return 0;
-    (void) sqinet_ntoa(addr, buf, sizeof(buf), SQADDR_NONE);
-    key = buf;
+    key = xinet_ntoa(addr);
     c = (ClientInfo *) hash_lookup(client_table, key);
     if (c == NULL)
 	return 0;
@@ -203,10 +192,7 @@ clientdbDump(StoreEntry * sentry)
     hash_first(client_table);
     while ((c = (ClientInfo *) hash_next(client_table))) {
 	storeAppendPrintf(sentry, "Address: %s\n", hashKeyStr(&c->hash));
-#if NOTYET
-        /* The FQDN code doesn't currently support ipv6 */
 	storeAppendPrintf(sentry, "Name: %s\n", fqdnFromAddr(c->addr));
-#endif
 	storeAppendPrintf(sentry, "Currently established connections: %d\n",
 	    c->n_established);
 	storeAppendPrintf(sentry, "    ICP Requests %d\n",
@@ -321,15 +307,13 @@ clientdbStartGC(void)
 }
 
 #if SQUID_SNMP
-sqaddr_t *
-client_entry(sqaddr_t **current)
+struct in_addr *
+client_entry(struct in_addr *current)
 {
-    LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
     ClientInfo *c = NULL;
     const char *key;
     if (current) {
-        (void) sqinet_ntoa(*current, buf, sizeof(buf), SQADDR_NONE);
-        key = buf;
+	key = xinet_ntoa(*current);
 	hash_first(client_table);
 	while ((c = (ClientInfo *) hash_next(client_table))) {
 	    if (!strcmp(key, hashKeyStr(&c->hash)))
@@ -352,20 +336,13 @@ variable_list *
 snmp_meshCtblFn(variable_list * Var, snint * ErrP)
 {
     variable_list *Answer = NULL;
-    LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
     static char key[16];
     ClientInfo *c = NULL;
     int aggr = 0;
     log_type l;
-
-    /* XXX For now, we're not implementing the SNMP fixes for client-db; do it later! */
-    *ErrP = SNMP_ERR_NOSUCHNAME;
-    return NULL;
-#if NOTYET
     *ErrP = SNMP_ERR_NOERROR;
     debug(49, 6) ("snmp_meshCtblFn: Current : \n");
     snmpDebugOid(6, Var->name, Var->name_length);
-    /* FIXME INET6 : This must implement the key for IPv6 address */
     snprintf(key, sizeof(key), "%d.%d.%d.%d", Var->name[LEN_SQ_NET + 3], Var->name[LEN_SQ_NET + 4],
 	Var->name[LEN_SQ_NET + 5], Var->name[LEN_SQ_NET + 6]);
     debug(49, 5) ("snmp_meshCtblFn: [%s] requested!\n", key);
@@ -377,15 +354,9 @@ snmp_meshCtblFn(variable_list * Var, snint * ErrP)
     }
     switch (Var->name[LEN_SQ_NET + 2]) {
     case MESH_CTBL_ADDR:
-          /* Stolen shamelessly from Squid-3 */
-          Answer = snmp_var_new(Var->name, Var->name_length);
-            // InetAddress doesn't have its own ASN.1 type,
-            // like IpAddr does (SMI_IPADDRESS)
-            // See: rfc4001.txt
-          Answer->type = ASN_OCTET_STR;
-	  (void) sqinet_ntoa(&c->addr, buf, sizeof(buf), SQADDR_NONE);
-          Answer->val_len = strlen(buf);
-          Answer->val.string =  (u_char *) xstrdup(buf);
+	Answer = snmp_var_new_integer(Var->name, Var->name_length,
+	    (snint) c->addr.s_addr,
+	    SMI_IPADDRESS);
 	break;
     case MESH_CTBL_HTBYTES:
 	Answer = snmp_var_new_integer(Var->name, Var->name_length,
@@ -439,7 +410,6 @@ snmp_meshCtblFn(variable_list * Var, snint * ErrP)
 	break;
     }
     return Answer;
-#endif
 }
 
 #endif /*SQUID_SNMP */
