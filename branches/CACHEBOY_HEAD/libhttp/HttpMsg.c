@@ -159,6 +159,24 @@ httpMsgIsPersistent(http_version_t http_ver, const HttpHeader * hdr)
 
 /* Adrian's replacement message buffer code to parse the request/reply line */
 
+
+/*!
+ * @function
+ *	HttpMsgBufInit()
+ * @abstract
+ *	Initialize the given HttpMsgBuf for use with the given buffer/size
+ * @param	hmsg	HttpMsgBuf to init
+ * @param	buf	buffer to work on
+ * @param	len	Length of buffer to work on
+ *
+ * @discussion
+ *	The HttpMsgBuf* routines exist as a sort of go-between between
+ *	the old-style in-line hacky request parsing, and something "better".
+ *	For now it's not incremental (but it could be with a little more
+ *	effort) and it only handles the request line and not the request
+ *	headers.
+ *
+ */
 void
 HttpMsgBufInit(HttpMsgBuf * hmsg, const char *buf, size_t size)
 {
@@ -169,6 +187,20 @@ HttpMsgBufInit(HttpMsgBuf * hmsg, const char *buf, size_t size)
     hmsg->r_len = hmsg->u_len = hmsg->m_len = hmsg->v_len = hmsg->h_len = 0;
 }
 
+/*!
+ * @function
+ *	httpMsgBufDone()
+ * @abstract
+ *	Free any state associated with the given HttpMsgBuf
+ * @param	hmsg	HttpMsgBuf to clean up after
+ *
+ * @discussion
+ *	The hmsg isn't malloc'ed - its assumed to be part of another structure -
+ *	so it isn't freed.
+ *
+ *	This function is -currently- NULL but may grow later to dereference
+ *	some kind of ref-counted request buffer.
+ */
 void
 httpMsgBufDone(HttpMsgBuf * hmsg)
 {
@@ -176,18 +208,22 @@ httpMsgBufDone(HttpMsgBuf * hmsg)
 }
 
 
-/*
- * Attempt to parse the request line.
+/*!
+ * @function
+ *	httpMsgParseRequestLine
+ * @abstract
+ *	Attempt to parse the request line.
+ * @param	hmsg	httpMsgBuf to attempt to parse the request line from.
+ * @result	1 if parsed correctly; 0 if more data is needed, -1 if error.
  *
- * This will set the values in hmsg that it determines. One may end up 
- * with a partially-parsed buffer; the return value tells you whether
- * the values are valid or not.
+ * @discussion
+ *	This will set the values in hmsg that it determines. One may end up 
+ *	with a partially-parsed buffer; the return value tells you whether
+ *	the values are valid or not.
  *
- * @return 1 if parsed correctly, 0 if more is needed, -1 if error
- *
- * TODO:
- *   * have it indicate "error" and "not enough" as two separate conditions!
- *   * audit this code as off-by-one errors are probably everywhere!
+ *	TODO:
+ *   	- have it indicate "error" and "not enough" as two separate conditions!
+ *	- audit this code as off-by-one errors are probably everywhere!
  */
 int
 httpMsgParseRequestLine(HttpMsgBuf * hmsg)
