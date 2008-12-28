@@ -1,3 +1,11 @@
+/*!
+ * @header StrList - HTTP-like String List manipulation functions
+ *
+ * These functions implement manipulation of a HTTP-like string list of
+ * items.
+ *
+ * @copyright Alex Rousskov <rousskov@measurement-factory.com> and others
+ */
 
 /*
  * $Id$
