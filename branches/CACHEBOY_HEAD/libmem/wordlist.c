@@ -41,10 +41,10 @@ void
 wordlistDestroy(wordlist ** list)
 {   
     wordlist *w = NULL;
+    wordlistInitMem();
     while ((w = *list) != NULL) {
         *list = w->next;
         safe_free(w->key);
-	wordlistInitMem();
         memPoolFree(pool_wordlist, w);
     }
     *list = NULL;
