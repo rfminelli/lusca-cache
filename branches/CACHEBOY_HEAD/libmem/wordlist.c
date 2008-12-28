@@ -50,6 +50,27 @@ wordlistDestroy(wordlist ** list)
     *list = NULL;
 }
 
+
+/*!
+ * @function
+ *	wordlistAddBuf
+ * @abstract
+ *	Add a (buf,len) string to the wordlist.
+ * @param	list	wordlist to append the item to
+ * @param	buf	pointer to the beginning of the string in memory
+ * @param	len	length of the string
+ * @return	the newly-allocated C string key
+ *
+ * @discussion
+ *	The list pointer is not a pointer to the list, its a pointer to the
+ *	first item in the list.
+ *
+ *	The wordlist is given a private copy of the key; the caller does not
+ *	need to keep it around after this call.
+ *
+ *	The list is a single-linked list, so the performance of this append
+ *	operator is unfortunately O(n).
+ */
 char *
 wordlistAddBuf(wordlist ** list, const char *buf, int len)
 {
@@ -62,6 +83,25 @@ wordlistAddBuf(wordlist ** list, const char *buf, int len)
     return (*list)->key;
 }
 
+/*!
+ * @function
+ *	wordlistAdd
+ * @abstract
+ *	Add a C string to the wordlist.
+ * @param	list	wordlist to append the item to
+ * @param	key	the C string to add to the list
+ * @return	the newly-allocated C string key
+ *
+ * @discussion
+ *	The list pointer is not a pointer to the list, its a pointer to the
+ *	first item in the list.
+ *
+ *	The wordlist is given a private copy of the key; the caller does not
+ *	need to keep it around after this call.
+ *
+ *	The list is a single-linked list, so the performance of this append
+ *	operator is unfortunately O(n).
+ */
 char *
 wordlistAdd(wordlist ** list, const char *key)
 {   
@@ -87,10 +127,10 @@ wordlistJoin(wordlist ** list, wordlist ** wl)
 void
 wordlistAddWl(wordlist ** list, wordlist * wl)
 {   
+    wordlistInitMem();
     while (*list)
         list = &(*list)->next;
     for (; wl; wl = wl->next, list = &(*list)->next) {
-        wordlistInitMem();
         *list = memPoolAlloc(pool_wordlist);
         (*list)->key = xstrdup(wl->key);
         (*list)->next = NULL;
