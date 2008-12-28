@@ -14,6 +14,12 @@
 
 static MemPool * pool_wordlist = NULL;
 
+/*!
+ * @function
+ * 	wordlistInitMem
+ * @abstract
+ *	allocate resources required for the wordlist code.
+ */
 static inline void
 wordlistInitMem(void)
 {
@@ -21,6 +27,16 @@ wordlistInitMem(void)
 		pool_wordlist = memPoolCreate("wordlist", sizeof(wordlist));
 }
 
+/*
+ * @function
+ *	wordlistDestroy
+ * @abstract
+ *	Destroy and deallocate the given wordlist.
+ * @param	wordlist		pointer to the pointer of the first wordlist item
+ *
+ * @abstract
+ *	The wordlist is walked and freed; the wordlist pointer is then set to NULL.
+ */
 void
 wordlistDestroy(wordlist ** list)
 {   
