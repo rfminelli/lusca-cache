@@ -43,9 +43,8 @@
 CBDATA_TYPE(auth_user_ip_t);
 
 static void authenticateDecodeAuth(const char *proxy_auth, auth_user_request_t * auth_user_request);
-static auth_acl_t authenticateAuthenticate(auth_user_request_t ** auth_user_request, http_hdr_type headertype, request_t * request, ConnStateData * conn, const sqaddr_t *ipaddr);
-static void authenticateAuthUserRequestUnlinkIp(const sqaddr_t *ipaddr);
-static void authenticateUserNameCachePrint(StoreEntry *e);
+static auth_acl_t authenticateAuthenticate(auth_user_request_t ** auth_user_request, http_hdr_type headertype, request_t * request, ConnStateData * conn, struct in_addr src_addr);
+static void authenticateAuthUserRequestUnlinkIp(const struct in_addr ipaddr);
 
 static MemPool * pool_mem_auth_user;
 static MemPool * pool_mem_auth_user_hash;
@@ -257,8 +256,7 @@ authenticateAuthUserRemoveIpEntry(auth_user_t * auth_user, auth_user_ip_t * ipda
 {
     /* remove the node */
     dlinkDelete(&ipdata->node, &auth_user->ip_list);
-    authenticateAuthUserRequestUnlinkIp(&ipdata->ipaddr);
-    sqinet_done(&ipdata->ipaddr);
+    authenticateAuthUserRequestUnlinkIp(ipdata->ipaddr);
     cbdataFree(ipdata);
     /* catch incipient underflow */
     assert(auth_user->ipcount);
@@ -267,32 +265,48 @@ authenticateAuthUserRemoveIpEntry(auth_user_t * auth_user, auth_user_ip_t * ipda
 
 typedef struct {
     hash_link hash;		/* must be first */
-    sqaddr_t ipaddr;
+    struct in_addr ipaddr;
     auth_user_request_t *auth_user_request;
     time_t last_seen;
 } auth_user_request_ip_hash_t;
 MemPool *auth_user_request_ip_pool = NULL;
 hash_table *auth_user_request_ip_hash = NULL;
 
+static unsigned int
+hash_in_addr(const void *a, unsigned int size)
+{
+    const struct in_addr *ipaddr = a;
+    const uint32_t ip = ntohl(ipaddr->s_addr);
+    return ip % size;
+}
+
+static int
+cmp_in_addr(const struct in_addr *a, const struct in_addr *b)
+{
+    const uint32_t ipa = ntohl(a->s_addr);
+    const uint32_t ipb = ntohl(b->s_addr);
+
+    return memcmp(&ipa, &ipb, 4);
+}
+
 static void
-authenticateAuthUserRequestUnlinkIp(const sqaddr_t *ipaddr)
+authenticateAuthUserRequestUnlinkIp(const struct in_addr ipaddr)
 {
     auth_user_request_ip_hash_t *hash_entry;
 
     if (!auth_user_request_ip_hash)
 	return;
 
-    hash_entry = hash_lookup(auth_user_request_ip_hash, ipaddr);
+    hash_entry = hash_lookup(auth_user_request_ip_hash, &ipaddr);
     if (hash_entry) {
 	hash_remove_link(auth_user_request_ip_hash, &hash_entry->hash);
 	authenticateAuthUserRequestUnlock(hash_entry->auth_user_request);
-        sqinet_done(&hash_entry->ipaddr);
 	memPoolFree(auth_user_request_ip_pool, hash_entry);
     }
 }
 
 static void
-authenticateAuthUserRequestLinkIp(auth_user_request_t * auth_user_request, const sqaddr_t *ipaddr, request_t * request)
+authenticateAuthUserRequestLinkIp(auth_user_request_t * auth_user_request, const struct in_addr ipaddr, request_t * request)
 {
     auth_user_request_ip_hash_t *hash_entry;
 
@@ -303,15 +317,13 @@ authenticateAuthUserRequestLinkIp(auth_user_request_t * auth_user_request, const
 	return;
 
     if (!auth_user_request_ip_hash) {
-        /* note the -host- comparison here! */
-	auth_user_request_ip_hash = hash_create((HASHCMP *) sqinet_host_compare, 7921, (HASHHASH *) sqinet_hash_host_key);
+	auth_user_request_ip_hash = hash_create((HASHCMP *) cmp_in_addr, 7921, hash_in_addr);
 	auth_user_request_ip_pool = memPoolCreate("auth_user_request_ip_hash_t", sizeof(auth_user_request_ip_hash_t));
     }
     authenticateAuthUserRequestUnlinkIp(ipaddr);
 
     hash_entry = memPoolAlloc(auth_user_request_ip_pool);
-    sqinet_init(&hash_entry->ipaddr);
-    sqinet_copy(&hash_entry->ipaddr, ipaddr);
+    hash_entry->ipaddr = ipaddr;
     hash_entry->hash.key = &hash_entry->ipaddr;
     hash_entry->auth_user_request = auth_user_request;
     authenticateAuthUserRequestLock(hash_entry->auth_user_request);
@@ -320,7 +332,7 @@ authenticateAuthUserRequestLinkIp(auth_user_request_t * auth_user_request, const
 }
 
 static auth_user_request_t *
-authenticateAuthUserRequestFindByIp(const sqaddr_t *ipaddr)
+authenticateAuthUserRequestFindByIp(const struct in_addr ipaddr)
 {
     time_t delta = Config.authenticateIpShortcircuitTTL;
     auth_user_request_ip_hash_t *hash_entry;
@@ -342,11 +354,11 @@ authenticateAuthUserRequestFindByIp(const sqaddr_t *ipaddr)
 }
 
 static void
-authenticateAuthUserRequestSetIp(auth_user_request_t * auth_user_request, const sqaddr_t *ipaddr, request_t * request)
+authenticateAuthUserRequestSetIp(auth_user_request_t * auth_user_request, struct in_addr ipaddr, request_t * request)
 {
     auth_user_ip_t *ipdata, *next;
     auth_user_t *auth_user;
-    LOCAL_ARRAY(char, ip1, MAX_IPSTRLEN);
+    char *ip1;
     int found = 0;
     CBDATA_INIT_TYPE(auth_user_ip_t);
     if (!auth_user_request->auth_user)
@@ -361,7 +373,7 @@ authenticateAuthUserRequestSetIp(auth_user_request_t * auth_user_request, const 
     while ((ipdata = next) != NULL) {
 	next = (auth_user_ip_t *) ipdata->node.next;
 	/* walk the ip list */
-        if (sqinet_host_compare(&ipdata->ipaddr, ipaddr) == 0) {
+	if (ipdata->ipaddr.s_addr == ipaddr.s_addr) {
 	    /* This ip has already been seen. */
 	    found = 1;
 	    /* update IP ttl */
@@ -379,18 +391,18 @@ authenticateAuthUserRequestSetIp(auth_user_request_t * auth_user_request, const 
 
     /* This ip is not in the seen list */
     ipdata = cbdataAlloc(auth_user_ip_t);
-    sqinet_init(&ipdata->ipaddr);
     ipdata->ip_expiretime = squid_curtime;
-    sqinet_copy(&ipdata->ipaddr, ipaddr);
+    ipdata->ipaddr = ipaddr;
     dlinkAddTail(ipdata, &ipdata->node, &auth_user->ip_list);
     auth_user->ipcount++;
 
-    sqinet_ntoa(ipaddr, ip1, sizeof(ip1), SQADDR_NONE);
+    ip1 = xstrdup(inet_ntoa(ipaddr));
     debug(29, 2) ("authenticateAuthUserRequestSetIp: user '%s' has been seen at a new IP address (%s)\n", authenticateUserUsername(auth_user), ip1);
+    safe_free(ip1);
 }
 
 void
-authenticateAuthUserRequestRemoveIp(auth_user_request_t * auth_user_request, const sqaddr_t *ipaddr)
+authenticateAuthUserRequestRemoveIp(auth_user_request_t * auth_user_request, struct in_addr ipaddr)
 {
     auth_user_ip_t *ipdata;
     auth_user_t *auth_user;
@@ -400,7 +412,7 @@ authenticateAuthUserRequestRemoveIp(auth_user_request_t * auth_user_request, con
     ipdata = (auth_user_ip_t *) auth_user->ip_list.head;
     while (ipdata) {
 	/* walk the ip list */
-	if (sqinet_host_compare(&ipdata->ipaddr, ipaddr) == 0) {
+	if (ipdata->ipaddr.s_addr == ipaddr.s_addr) {
 	    authenticateAuthUserRemoveIpEntry(auth_user, ipdata);
 	    return;
 	}
@@ -496,11 +508,7 @@ authTryGetUser(auth_user_request_t ** auth_user_request, ConnStateData * conn, r
     else if (conn && conn->auth_user_request)
 	return conn->auth_user_request;
     else {
-	sqaddr_t a;
-	sqinet_init(&a);
-	sqinet_set_v4_inaddr(&a, &request->client_addr);
-	request->auth_user_request = authenticateAuthUserRequestFindByIp(&a);
-	sqinet_done(&a);
+	request->auth_user_request = authenticateAuthUserRequestFindByIp(request->client_addr);
 	if (request->auth_user_request)
 	    authenticateAuthUserRequestLock(request->auth_user_request);
 	return request->auth_user_request;
@@ -527,11 +535,10 @@ authTryGetUser(auth_user_request_t ** auth_user_request, ConnStateData * conn, r
  * the authenticateStart routine for rv==AUTH_ACL_HELPER
  */
 auth_acl_t
-authenticateAuthenticate(auth_user_request_t ** auth_user_request, http_hdr_type headertype, request_t * request, ConnStateData * conn, const sqaddr_t *src_addr)
+authenticateAuthenticate(auth_user_request_t ** auth_user_request, http_hdr_type headertype, request_t * request, ConnStateData * conn, struct in_addr src_addr)
 {
     const char *proxy_auth;
     assert(headertype != 0);
-    LOCAL_ARRAY(char, ip1, MAX_IPSTRLEN);
 
     proxy_auth = httpHeaderGetStr(&request->header, headertype);
 
@@ -594,9 +601,8 @@ authenticateAuthenticate(auth_user_request_t ** auth_user_request, http_hdr_type
 	if (proxy_auth && !request->auth_user_request && conn && conn->auth_user_request) {
 	    int id = authenticateAuthSchemeId(proxy_auth) + 1;
 	    if (!conn->auth_user_request->auth_user || conn->auth_user_request->auth_user->auth_module != id) {
-		sqinet_ntoa(src_addr, ip1, sizeof(ip1), SQADDR_NONE);
 		debug(29, 1) ("authenticateAuthenticate: Unexpected change of authentication scheme from '%s' to '%s' (client %s)\n",
-		    authscheme_list[conn->auth_user_request->auth_user->auth_module - 1].typestr, proxy_auth, ip1);
+		    authscheme_list[conn->auth_user_request->auth_user->auth_module - 1].typestr, proxy_auth, inet_ntoa(src_addr));
 		authenticateAuthUserRequestUnlock(conn->auth_user_request);
 		conn->auth_user_request = NULL;
 		conn->auth_type = AUTH_UNKNOWN;
@@ -697,7 +703,7 @@ authenticateAuthenticate(auth_user_request_t ** auth_user_request, http_hdr_type
 }
 
 auth_acl_t
-authenticateTryToAuthenticateAndSetAuthUser(auth_user_request_t ** auth_user_request, http_hdr_type headertype, request_t * request, ConnStateData * conn, const sqaddr_t *src_addr)
+authenticateTryToAuthenticateAndSetAuthUser(auth_user_request_t ** auth_user_request, http_hdr_type headertype, request_t * request, ConnStateData * conn, struct in_addr src_addr)
 {
     /* If we have already been called, return the cached value */
     auth_user_request_t *t = authTryGetUser(auth_user_request, conn, request);
@@ -825,8 +831,6 @@ authenticateInit(authConfig * config)
     }
     if (!proxy_auth_username_cache)
 	authenticateInitUserCache();
-
-    cachemgrRegister("auth", "Authentication", authenticateUserNameCachePrint, 0, 1);
 }
 
 void
@@ -1130,26 +1134,7 @@ authSchemeAdd(const char *type, AUTHSSETUP * setup)
     setup(&authscheme_list[i]);
 }
 
-static void
-authenticateUserNameCachePrint(StoreEntry *e)
-{
-	auth_user_hash_pointer *u;
-        auth_user_ip_t *i;
-	dlink_node *n;
-	LOCAL_ARRAY(char, ibuf, MAX_IPSTRLEN);
-	hash_first(proxy_auth_username_cache);
-	while ((u = (auth_user_hash_pointer *) hash_next(proxy_auth_username_cache))) {
-		storeAppendPrintf(e, "(type %d) (ref %d)\n", u->auth_user->auth_module, u->auth_user->references);
-		n = u->auth_user->ip_list.head;
-		while (n) {
-			i = n->data;
-			sqinet_ntoa(&i->ipaddr, ibuf, sizeof(ibuf), SQADDR_NONE);
-			storeAppendPrintf(e, "  IP %s; expires %d\n", ibuf, (int) i->ip_expiretime);
-			n = n->next;
-		}
-	}
-	hash_last(proxy_auth_username_cache);
-}
+
 
 /* UserNameCacheAdd: add a auth_user structure to the username cache */
 void

@@ -1765,16 +1765,12 @@ aclMatchUserMaxIP(void *data, auth_user_request_t * auth_user_request,
 
     /* this is a match */
     if (acldata->flags.strict) {
-        sqaddr_t a;
-	sqinet_init(&a);
-	sqinet_set_v4_inaddr(&a, &src_addr);
 	/*
 	 * simply deny access - the user name is already associated with
 	 * the request 
 	 */
 	/* remove _this_ ip, as it is the culprit for going over the limit */
-	authenticateAuthUserRequestRemoveIp(auth_user_request, &a);
-	sqinet_done(&a);
+	authenticateAuthUserRequestRemoveIp(auth_user_request, src_addr);
 	debug(28, 4) ("aclMatchUserMaxIP: Denying access in strict mode\n");
     } else {
 	/*
@@ -1904,9 +1900,6 @@ aclAuthenticated(aclCheck_t * checklist)
 {
     request_t *r = checklist->request;
     http_hdr_type headertype;
-    sqaddr_t a;
-    int rv;
-
     if (NULL == r) {
 	return -1;
     } else if (r->flags.accelerated) {
@@ -1921,11 +1914,7 @@ aclAuthenticated(aclCheck_t * checklist)
     }
     /* get authed here */
     /* Note: this fills in checklist->auth_user_request when applicable (auth incomplete) */
-    sqinet_init(&a);
-    sqinet_set_v4_inaddr(&a, &checklist->src_addr);
-    rv = authenticateTryToAuthenticateAndSetAuthUser(&checklist->auth_user_request, headertype, checklist->request, checklist->conn, &a);
-    sqinet_done(&a);
-    switch (rv) {
+    switch (authenticateTryToAuthenticateAndSetAuthUser(&checklist->auth_user_request, headertype, checklist->request, checklist->conn, checklist->src_addr)) {
     case AUTH_ACL_CANNOT_AUTHENTICATE:
 	debug(28, 4) ("aclAuthenticated: returning  0 user authenticated but not authorised.\n");
 	return 0;

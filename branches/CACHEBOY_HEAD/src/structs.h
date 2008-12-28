@@ -106,7 +106,7 @@ struct _auth_user_hash_pointer {
 struct _auth_user_ip_t {
     dlink_node node;
     /* IP addr this user authenticated from */
-    sqaddr_t ipaddr;
+    struct in_addr ipaddr;
     time_t ip_expiretime;
 };
 
@@ -1667,13 +1667,13 @@ struct _request_t {
     int imslen;
     int max_forwards;
     /* these in_addr's could probably be sockaddr_in's */
-    unsigned short client_port;		/* XXX fold client_port into client_addr! */
+    unsigned short client_port;
     struct in_addr client_addr;
 #if FOLLOW_X_FORWARDED_FOR
     struct in_addr indirect_client_addr;	/* after following X-Forwarded-For */
 #endif				/* FOLLOW_X_FORWARDED_FOR */
     struct in_addr my_addr;
-    unsigned short my_port;		/* XXX fold my_port into my_addr! */
+    unsigned short my_port;
     HttpHeader header;
     squid_off_t content_length;
     HierarchyLogEntry hier;
