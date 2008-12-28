@@ -121,7 +121,7 @@ int
 strListGetItem(const String * str, char del, const char **item, int *ilen, const char **pos)
 {
     size_t len;
-    static char delim[3][8] =
+    char delim[3][8] =
     {
 	"\"?,",
 	"\"\\",
