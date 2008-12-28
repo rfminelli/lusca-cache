@@ -231,7 +231,6 @@ extern void httpHeaderPackInto(const HttpHeader * hdr, Packer * p);
 extern void httpHeaderPutCc(HttpHeader * hdr, const HttpHdrCc * cc);
 extern void httpHeaderPutContRange(HttpHeader * hdr, const HttpHdrContRange * cr);
 extern void httpHeaderPutRange(HttpHeader * hdr, const HttpHdrRange * range);
-extern void httpHeaderPutExt(HttpHeader * hdr, const char *name, const char *value);
 /* avoid using these low level routines */
 extern void httpHeaderEntryPackInto(const HttpHeaderEntry * e, Packer * p);
 /* store report about current header usage and other stats */

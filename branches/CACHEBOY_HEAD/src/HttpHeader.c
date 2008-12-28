@@ -174,15 +174,6 @@ httpHeaderPutRange(HttpHeader * hdr, const HttpHdrRange * range)
     memBufClean(&mb);
 }
 
-/* add extension header (these fields are not parsed/analyzed/joined, etc.) */
-void
-httpHeaderPutExt(HttpHeader * hdr, const char *name, const char *value)
-{
-    assert(name && value);
-    debug(55, 8) ("%p adds ext entry '%s: %s'\n", hdr, name, value);
-    httpHeaderAddEntryStr(hdr, HDR_OTHER, name, value);
-}
-
 /*
  * HttpHeaderEntry
  */

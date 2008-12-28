@@ -172,3 +172,12 @@ httpHeaderPutAuth(HttpHeader * hdr, const char *auth_scheme, const char *realm)
     httpHeaderPutStrf(hdr, HDR_WWW_AUTHENTICATE, "%s realm=\"%s\"", auth_scheme, realm);
 }
 
+/* add extension header (these fields are not parsed/analyzed/joined, etc.) */
+void
+httpHeaderPutExt(HttpHeader * hdr, const char *name, const char *value)
+{
+    assert(name && value);
+    debug(55, 8) ("%p adds ext entry '%s: %s'\n", hdr, name, value);
+    httpHeaderAddEntryStr(hdr, HDR_OTHER, name, value);
+}
+
