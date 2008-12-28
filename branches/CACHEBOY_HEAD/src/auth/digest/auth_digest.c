@@ -728,22 +728,16 @@ authenticateDigestAuthenticateUser(auth_user_request_t * auth_user_request, requ
 	    } else {
 		const char *useragent = httpHeaderGetStr(&request->header, HDR_USER_AGENT);
 		static struct in_addr last_broken_addr;
-		sqaddr_t a;
 		static int seen_broken_client = 0;
 
 		if (!seen_broken_client) {
 		    last_broken_addr = no_addr;
 		    seen_broken_client = 1;
 		}
-
-		sqinet_init(&a);
-		sqinet_set_v4_inaddr(&a, &request->client_addr);
-		if (sqinet_host_compare(&last_broken_addr, &a) != 0) {
-                    (void) sqinet_ntoa(&a, buf, sizeof(buf), SQADDR_NONE);
-		    debug(29, 1) ("\nDigest POST bug detected from %s using '%s'. Please upgrade browser. See Bug #630 for details.\n", buf, useragent ? useragent : "-");
-                    sqinet_copy(&last_broken_addr, &a);
+		if (memcmp(&last_broken_addr, &request->client_addr, sizeof(last_broken_addr)) != 0) {
+		    debug(29, 1) ("\nDigest POST bug detected from %s using '%s'. Please upgrade browser. See Bug #630 for details.\n", inet_ntoa(request->client_addr), useragent ? useragent : "-");
+		    last_broken_addr = request->client_addr;
 		}
-		sqinet_done(&a);
 	    }
 	} else {
 	    digest_request->flags.credentials_ok = 3;
