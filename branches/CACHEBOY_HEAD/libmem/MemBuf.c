@@ -38,6 +38,8 @@
  */
 
 /*
+ * @header MemBuf - a printf-like interface to a memory buffer
+ *
  * Rationale:
  * ----------
  * 
