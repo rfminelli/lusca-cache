@@ -14,6 +14,12 @@
 
 static MemPool * pool_intlist = NULL;
 
+/*!
+ * @function
+ *	intlistCheckAlloc
+ * @abstract
+ *	Check and initialise the memory pool if needed
+ */
 static void
 intlistCheckAlloc(void)
 {
@@ -21,6 +27,17 @@ intlistCheckAlloc(void)
 		pool_intlist = memPoolCreate("intlist", sizeof(intlist));
 }
 
+/*!
+ * @function
+ *	intlistDestroy
+ * @abstract
+ *	Free the given intlist and its entries
+ * @param	list		pointer to intlist to free
+ *
+ * @discussion
+ *	"list" is a pointer to the intlist; it is set to NULL once the list
+ *	is freed.
+ */
 void
 intlistDestroy(intlist ** list)
 {
@@ -34,6 +51,15 @@ intlistDestroy(intlist ** list)
     *list = NULL;
 }
 
+/*!
+ * @function
+ *	intlistFind
+ * @abstract
+ *	Find the first instance of the given value in the intlist
+ * @param	list	intlist to search
+ * @param	i	value to find
+ * @return	1 whether the value was found, 0 otherwise
+ */
 int
 intlistFind(intlist * list, int i)
 {
@@ -44,6 +70,19 @@ intlistFind(intlist * list, int i)
     return 0;
 }
 
+/*!
+ * @function
+ *	intlistAddTail
+ * @abstract
+ *	Append an integer value to the given intlist
+ * @param	list	the intlist to append to, or NULL if there is no list
+ * @param	i	the integer value to add
+ * @return	the list itself
+ *
+ * @discussion
+ *	The intlist is a single linked list with only a head pointer; thus
+ *	the append operation is O(n).
+ */
 intlist *
 intlistAddTail(intlist * list, int i)
 {
