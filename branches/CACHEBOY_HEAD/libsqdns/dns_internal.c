@@ -113,6 +113,8 @@ static int event_queued = 0;
 static hash_table *idns_lookup_hash = NULL;
 static int DnsSocket = -1;
 static int DnsSocketv6 = -1;
+static int num_v4_ns = 0;
+static int num_v6_ns = 0;
 
 DnsConfigStruct DnsConfig;
 
@@ -125,6 +127,36 @@ static PF idnsRead;
 static EVH idnsCheckQueue;
 static void idnsTickleQueue(void);
 static void idnsRcodeCount(int, int);
+static int idnsInitSocket(sqaddr_t *addr, const char *note);
+
+static void
+idnsOpenSockets(void)
+{
+    /* IPv4 socket */
+    if (DnsSocket < 0 && num_v4_ns > 0) {
+	sqaddr_t addr;
+	sqinet_init(&addr);
+	if (! sqinet_is_noaddr(&DnsConfig.udp4_outgoing))
+	    sqinet_copy(&addr, &DnsConfig.udp4_outgoing);
+	else
+	    sqinet_copy(&addr, &DnsConfig.udp4_incoming);
+	DnsSocket = idnsInitSocket(&addr, "IPv4 DNS UDP Socket");
+	sqinet_done(&addr);
+    }
+
+    /* IPv6 socket */
+    if (DnsSocketv6 < 0 && num_v6_ns > 0) {
+	sqaddr_t addr;
+	sqinet_init(&addr);
+	if (! sqinet_is_noaddr(&DnsConfig.udp6_outgoing))
+	    sqinet_copy(&addr, &DnsConfig.udp6_outgoing);
+	else
+	    sqinet_copy(&addr, &DnsConfig.udp6_incoming);
+	DnsSocketv6 = idnsInitSocket(&addr, "IPv6 DNS UDP Socket");
+	sqinet_done(&addr);
+    }
+    
+}
 
 void
 idnsAddNameserver(const char *buf)
@@ -156,6 +188,10 @@ idnsAddNameserver(const char *buf)
 	if (oldptr)
 	    safe_free(oldptr);
     }
+    if (sqinet_get_family(&A) == AF_INET)
+    	num_v4_ns ++;
+    else if (sqinet_get_family(&A) == AF_INET6)
+    	num_v6_ns ++;
     assert(nns < nns_alloc);
     sqinet_init(&nameservers[nns].S);
     sqinet_copy(&nameservers[nns].S, &A);
@@ -163,6 +199,7 @@ idnsAddNameserver(const char *buf)
     sqinet_ntoa(&A, sbuf, sizeof(sbuf), SQADDR_NONE);
     debug(78, 3) ("idnsAddNameserver: Added nameserver #%d: %s\n", nns, sbuf);
     nns++;
+    idnsOpenSockets();
 finish:
     sqinet_done(&A);
 }
@@ -196,6 +233,8 @@ idnsFreeNameservers(void)
 {
     safe_free(nameservers);
     nns = nns_alloc = 0;
+    num_v4_ns = 0;
+    num_v6_ns = 0;
 }
 
 void
@@ -715,36 +754,18 @@ idnsInitSocket(sqaddr_t *addr, const char *note)
 	return fd;
 }
 
+/*!
+ * @function
+ *	idnsInit
+ * @abstract
+ *	Setup the internal DNS resolver
+ */
 void
 idnsInit(void)
 {
     static int init = 0;
     CBDATA_INIT_TYPE(idns_query);
 
-    /* IPv4 socket */
-    if (DnsSocket < 0) {
-	sqaddr_t addr;
-	sqinet_init(&addr);
-	if (! sqinet_is_noaddr(&DnsConfig.udp4_outgoing))
-	    sqinet_copy(&addr, &DnsConfig.udp4_outgoing);
-	else
-	    sqinet_copy(&addr, &DnsConfig.udp4_incoming);
-	DnsSocket = idnsInitSocket(&addr, "IPv4 DNS UDP Socket");
-	sqinet_done(&addr);
-    }
-
-    /* IPv6 socket */
-    if (DnsSocketv6 < 0) {
-	sqaddr_t addr;
-	sqinet_init(&addr);
-	if (! sqinet_is_noaddr(&DnsConfig.udp6_outgoing))
-	    sqinet_copy(&addr, &DnsConfig.udp6_outgoing);
-	else
-	    sqinet_copy(&addr, &DnsConfig.udp6_incoming);
-	DnsSocketv6 = idnsInitSocket(&addr, "IPv6 DNS UDP Socket");
-	sqinet_done(&addr);
-    }
-    
     assert(0 == nns);
     if (!init) {
 	memset(RcodeMatrix, '\0', sizeof(RcodeMatrix));
