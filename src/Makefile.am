@@ -52,12 +52,6 @@ else
 PINGER = 
 endif
 
-if ENABLE_SSL
-SSLSOURCE = ssl_support.c
-else
-SSLSOURCE = 
-endif
-
 if ENABLE_WIN32SPECIFIC
 WIN32SOURCE = win32.c
 else
@@ -70,28 +64,6 @@ IPC_SOURCE = ipc_win32.c
 else
 MINGWEXLIB =
 IPC_SOURCE = ipc.c
-endif
-
-if USE_POLL
-COMMLOOP_SOURCE = comm_poll.c
-endif
-if USE_EPOLL
-COMMLOOP_SOURCE = comm_epoll.c
-endif
-if USE_SELECT
-COMMLOOP_SOURCE = comm_select.c
-endif
-if USE_SELECT_SIMPLE
-COMMLOOP_SOURCE = comm_select_simple.c
-endif
-if USE_SELECT_WIN32
-COMMLOOP_SOURCE = comm_select_win32.c
-endif
-if USE_KQUEUE
-COMMLOOP_SOURCE = comm_kqueue.c
-endif
-if USE_DEVPOLL
-COMMLOOP_SOURCE = comm_devpoll.c
 endif
 
 SUBDIRS		= fs repl auth
@@ -111,7 +83,6 @@ sbin_PROGRAMS = \
 
 libexec_PROGRAMS = \
 	$(PINGER) \
-	$(DNSSERVER) \
 	$(UNLINKD) \
 	$(LOGFILED)
 
@@ -130,8 +101,6 @@ EXTRA_squid_SOURCES = \
 	snmp_core.c \
 	snmp_agent.c \
 	unlinkd.c \
-	ssl_support.c \
-	ssl_support.h \
 	comm_epoll.c \
 	comm_poll.c \
 	comm_select.c \
@@ -159,7 +128,6 @@ squid_SOURCES = \
 	client_side_rewrite.c \
 	client_side_storeurl_rewrite.c \
 	comm.c \
-	$(COMMLOOP_SOURCE) \
 	debug.c \
 	defines.h \
 	$(DELAY_POOL_SOURCE) \
@@ -233,8 +201,8 @@ squid_SOURCES = \
 	$(SNMPSOURCE) \
 	squid.h \
 	ssl.c \
-	$(SSLSOURCE) \
 	stat.c \
+	statIapp.c \
 	StatHist.c \
 	String.c \
 	stmem.c \
@@ -272,6 +240,18 @@ nodist_squid_SOURCES = \
 
 squid_LDADD = \
 	-L../lib \
+	-L../libcore \
+	-L../libmem \
+	-L../libcb \
+	-L../libmime \
+	-L../libhelper \
+	-L../libiapp \
+	-L../libhttp \
+	-L../libstat \
+	-L../libsqdns \
+	-L../libsqident \
+	-L../libsqinet \
+	-L../libsqname \
 	@XTRA_OBJS@ \
 	@REPL_OBJS@ \
 	@STORE_OBJS@ \
@@ -282,7 +262,19 @@ squid_LDADD = \
 	@LIB_MALLOC@ \
 	@SSLLIB@ \
 	@LIB_EPOLL@ \
+	-lsqdns \
+	-lsqident \
+	-lsqinet \
 	-lmiscutil \
+	-lcore \
+	-lmem \
+	-lsqname \
+	-lcb \
+	-lhelper \
+	-lmime \
+	-liapp \
+	-lhttp \
+	-lstat \
 	@XTRA_LIBS@ \
 	$(MINGWEXLIB)
 
@@ -320,7 +312,7 @@ sysconf_DATA = \
 data_DATA = \
 	mib.txt
 
-LDADD = -L../lib -lmiscutil @XTRA_LIBS@
+LDADD = -L../lib -L../libcore -L../libmem -L../libsqname -L../libcb -L../libhelper -L../libmime -L../libiapp -L../libhttp -L../libstat -L../libsqdns -L../libsqident -L../libsqinet -lsqinet -lsqdns -lmiscutil -lcore -lmem -lsqname -lcb -lsqident -lhelper -lmime -liapp -lhttp -lstat @XTRA_LIBS@
 
 EXTRA_DIST = \
 	cf_gen_defines \

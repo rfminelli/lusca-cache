@@ -34,13 +34,6 @@
 #ifndef SQUID_DEFINES_H
 #define SQUID_DEFINES_H
 
-#ifndef TRUE
-#define TRUE 1
-#endif
-#ifndef FALSE
-#define FALSE 0
-#endif
-
 /* Define load weights for cache_dir types */
 #define MAX_LOAD_VALUE 1000
 
@@ -73,45 +66,7 @@
 #define ACL_ALLWEEK	0x7F
 #define ACL_WEEKDAYS	0x3E
 
-#define MAXHTTPPORTS			128
-
-#define COMM_OK		  (0)
-#define COMM_ERROR	 (-1)
-#define COMM_NOMESSAGE	 (-3)
-#define COMM_TIMEOUT	 (-4)
-#define COMM_SHUTDOWN	 (-5)
-#define COMM_INPROGRESS  (-6)
-#define COMM_ERR_CONNECT (-7)
-#define COMM_ERR_DNS     (-8)
-#define COMM_ERR_CLOSING (-9)
-
-/* Select types. */
-#define COMM_SELECT_READ   (0x1)
-#define COMM_SELECT_WRITE  (0x2)
-#define MAX_DEBUG_SECTIONS 100
-
-#define COMM_NONBLOCKING	0x01
-#define COMM_NOCLOEXEC		0x02
-#define COMM_REUSEADDR		0x04
-
-#define do_debug(SECTION, LEVEL) \
-	((_db_level = (LEVEL)) <= debugLevels[SECTION])
-#define debug(SECTION, LEVEL) \
-        !do_debug(SECTION, LEVEL) ? (void) 0 : _db_print
-
-#define safe_free(x)	if (x) { xxfree(x); x = NULL; }
-
-#define DISK_OK                   (0)
-#define DISK_ERROR               (-1)
-#define DISK_EOF                 (-2)
-#define DISK_NO_SPACE_LEFT       (-6)
-
 #define DNS_INBUF_SZ 4096
-
-#define FD_DESC_SZ		64
-
-#define FQDN_LOOKUP_IF_MISS	0x01
-#define FQDN_MAX_NAMES 5
 
 #define HTTP_REPLY_FIELD_SZ 128
 
@@ -126,8 +81,6 @@
 #define IDENT_NONE 0
 #define IDENT_PENDING 1
 #define IDENT_DONE 2
-
-#define IP_LOOKUP_IF_MISS	0x01
 
 #define MAX_MIME 4096
 
@@ -147,8 +100,6 @@
 #define DIRECT_MAYBE 2
 #define DIRECT_YES   3
 
-#define REDIRECT_AV_FACTOR 1000
-
 #define REDIRECT_NONE 0
 #define REDIRECT_PENDING 1
 #define REDIRECT_DONE 2
@@ -167,17 +118,6 @@
 #define LOG_DISABLE 0
 
 #define SM_PAGE_SIZE 4096
-
-#define EBIT_SET(flag, bit) 	((void)((flag) |= ((1L<<(bit)))))
-#define EBIT_CLR(flag, bit) 	((void)((flag) &= ~((1L<<(bit)))))
-#define EBIT_TEST(flag, bit) 	((flag) & ((1L<<(bit))))
-
-/* bit opearations on a char[] mask of unlimited length */
-#define CBIT_BIT(bit)           (1<<((bit)%8))
-#define CBIT_BIN(mask, bit)     (mask)[(bit)>>3]
-#define CBIT_SET(mask, bit) 	((void)(CBIT_BIN(mask, bit) |= CBIT_BIT(bit)))
-#define CBIT_CLR(mask, bit) 	((void)(CBIT_BIN(mask, bit) &= ~CBIT_BIT(bit)))
-#define CBIT_TEST(mask, bit) 	((CBIT_BIN(mask, bit) & CBIT_BIT(bit)) != 0)
 
 #define MAX_FILES_PER_DIR (1<<20)
 
@@ -206,31 +146,6 @@
 #define STORE_META_OK     0x03
 #define STORE_META_DIRTY  0x04
 #define STORE_META_BAD    0x05
-
-#define IPC_NONE 0
-#define IPC_TCP_SOCKET 1
-#define IPC_UDP_SOCKET 2
-#define IPC_FIFO 3
-#define IPC_UNIX_STREAM 4
-#define IPC_UNIX_DGRAM 5
-
-#if HAVE_SOCKETPAIR && defined (AF_UNIX)
-#define IPC_STREAM IPC_UNIX_STREAM
-#else
-#define IPC_STREAM IPC_TCP_SOCKET
-#endif
-
-/*
- * Do NOT use IPC_UNIX_DGRAM here because you can't
- * send() more than 4096 bytes on a socketpair() socket
- * at least on FreeBSD
- */
-#if HAVE_SOCKETPAIR && defined (AF_UNIX) && SUPPORTS_LARGE_AF_UNIX_DGRAM
-#define IPC_DGRAM IPC_UNIX_DGRAM
-#else
-#define IPC_DGRAM IPC_UDP_SOCKET
-#endif
-
 
 #define STORE_META_KEY STORE_META_KEY_MD5
 
@@ -262,30 +177,10 @@
 #define DEFAULT_SQUID_ERROR_DIR "/usr/local/squid/etc/errors"
 #endif
 
-/* gb_type operations */
-#define gb_flush_limit (0x3FFFFFFF)
-#define gb_inc(gb, delta) { if ((gb)->bytes > gb_flush_limit || delta > gb_flush_limit) gb_flush(gb); (gb)->bytes += delta; (gb)->count++; }
-
-/* iteration for HttpHdrRange */
-#define HttpHdrRangeInitPos (-1)
-
-/* use this and only this to initialize HttpHeaderPos */
-#define HttpHeaderInitPos (-1)
-
-/* handy to determine the #elements in a static array */
-#define countof(arr) (sizeof(arr)/sizeof(*arr))
-
-/* to initialize static variables (see also MemBufNull) */
-#define MemBufNULL { NULL, 0, 0, 0, 0 }
-
 /*
  * Max number of ICP messages to receive per call to icpHandleUdp
  */
 #define INCOMING_ICP_MAX 15
-/*
- * Max number of DNS messages to receive per call to DNS read handler
- */
-#define INCOMING_DNS_MAX 15
 /*
  * Max number of HTTP connections to accept per call to httpAccept
  * and PER HTTP PORT
@@ -315,14 +210,6 @@
 #endif
 #endif
 
-/* cbdata macros */
-#define cbdataAlloc(type) ((type *)cbdataInternalAlloc(CBDATA_##type))
-#define cbdataFree(var) (var = (var != NULL ? cbdataInternalFree(var): NULL))
-#define CBDATA_TYPE(type)	static cbdata_type CBDATA_##type = 0
-#define CBDATA_GLOBAL_TYPE(type)	cbdata_type CBDATA_##type
-#define CBDATA_INIT_TYPE(type)	(CBDATA_##type ? 0 : (CBDATA_##type = cbdataAddType(CBDATA_##type, #type, sizeof(type), NULL)))
-#define CBDATA_INIT_TYPE_FREECB(type, free_func)	(CBDATA_##type ? 0 : (CBDATA_##type = cbdataAddType(CBDATA_##type, #type, sizeof(type), free_func)))
-
 #ifndef O_TEXT
 #define O_TEXT 0
 #endif
@@ -348,21 +235,9 @@
 #define _WIN_SQUID_RUN_MODE_SERVICE		1
 #endif
 
-/*
- * Macro to find file access mode
- */
-#ifdef O_ACCMODE
-#define FILE_MODE(x) ((x)&O_ACCMODE)
-#else
-#define FILE_MODE(x) ((x)&(O_RDONLY|O_WRONLY|O_RDWR))
-#endif
-
 /* swap_filen is 25 bits, signed */
 #define FILEMAP_MAX_SIZE (1<<24)
 #define FILEMAP_MAX (FILEMAP_MAX_SIZE - 65536)
-
-#define	DLINK_ISEMPTY(n)	( (n).head == NULL )
-#define	DLINK_HEAD(n)		( (n).head->data )
 
 #define	LOGFILE_SEQNO(n)	( (n)->sequence_number )
 
