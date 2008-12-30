@@ -432,6 +432,8 @@ struct rusage {
 #include "../libsqdns/dns_internal.h"
 #endif
 
+#include "../libstmem/stmem.h"
+
 #include "defines.h"
 #include "enums.h"
 #include "typedefs.h"

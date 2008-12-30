@@ -1388,19 +1388,6 @@ struct _iostats {
     } Http, Ftp, Gopher;
 };
 
-struct _mem_node {
-    char data[SM_PAGE_SIZE];
-    int len;
-    int uses;
-    mem_node *next;
-};
-
-struct _mem_hdr {
-    mem_node *head;
-    mem_node *tail;
-    squid_off_t origin_offset;
-};
-
 /* keep track each client receiving data from that particular StoreEntry */
 struct _store_client {
     int type;

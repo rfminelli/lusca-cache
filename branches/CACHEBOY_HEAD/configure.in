@@ -3315,6 +3315,7 @@ AC_OUTPUT([\
 	libmem/Makefile \
 	libcb/Makefile \
 	libsqname/Makefile \
+	libstmem/Makefile \
 	lib/Makefile \
 	scripts/Makefile \
 	scripts/RunCache \

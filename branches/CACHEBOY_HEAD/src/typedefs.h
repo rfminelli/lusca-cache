@@ -49,16 +49,6 @@ typedef size_t squid_file_sz;
 #define SIZEOF_SQUID_FILE_SZ SIZEOF_SIZE_T
 #endif
 
-struct _mem_node_ref {
-    struct _mem_node *node;
-    /*
-     * the caller asked for a specific offset into the object;
-     * this particular offset is the offset into the above mem_node
-     * to get at said data.
-     */
-    int offset;
-};
-
 /*
  * grep '^struct' structs.h \
  * | perl -ne '($a,$b)=split;$c=$b;$c=~s/^_//; print "typedef struct $b $c;\n";'
@@ -124,9 +114,6 @@ typedef struct _pingerReplyData pingerReplyData;
 typedef struct _icp_common_t icp_common_t;
 typedef struct _Meta_data Meta_data;
 typedef struct _iostats iostats;
-typedef struct _mem_node mem_node;
-typedef struct _mem_hdr mem_hdr;
-typedef struct _mem_node_ref mem_node_ref;
 typedef struct _store_client store_client;
 typedef struct _MemObject MemObject;
 typedef struct _StoreEntry StoreEntry;

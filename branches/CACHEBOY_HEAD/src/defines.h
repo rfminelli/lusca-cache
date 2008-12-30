@@ -117,8 +117,6 @@
 #define LOG_ENABLE  1
 #define LOG_DISABLE 0
 
-#define SM_PAGE_SIZE 4096
-
 #define MAX_FILES_PER_DIR (1<<20)
 
 #define MAX_URL  4096

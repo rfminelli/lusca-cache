@@ -560,22 +560,6 @@ extern void memCleanModule(void);
 /* Mem */
 extern void memReport(StoreEntry * e);
 
-extern void stmemInitMem(void);
-extern squid_off_t stmemFreeDataUpto(mem_hdr *, squid_off_t);
-extern void stmemAppend(mem_hdr *, const char *, int);
-extern ssize_t stmemCopy(const mem_hdr *, squid_off_t, char *, size_t);
-extern void stmemFree(mem_hdr *);
-extern void stmemFreeData(mem_hdr *);
-extern void stmemNodeFree(void *);
-extern char *stmemNodeGet(mem_node *);
-extern int stmemRef(const mem_hdr * mem, squid_off_t offset, mem_node_ref * r);
-extern void stmemNodeUnref(mem_node_ref * r);
-extern mem_node_ref stmemNodeRef(mem_node_ref * r);
-extern void stmemNodeRefCreate(mem_node_ref * r);
-
-
-
-
 /* ----------------------------------------------------------------- */
 
 /*

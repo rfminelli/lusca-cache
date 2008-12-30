@@ -93,7 +93,6 @@ extern struct in_addr theOutSNMPAddr;
 extern struct timeval squid_start;
 extern int store_dirs_rebuilding;	/* 1 */
 extern int store_swap_size;	/* 0 */
-extern unsigned long store_mem_size;	/* 0 */
 extern time_t hit_only_mode_until;	/* 0 */
 extern StatCounters statCounter;
 extern const char *err_type_str[];

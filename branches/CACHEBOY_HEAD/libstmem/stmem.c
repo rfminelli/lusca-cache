@@ -33,7 +33,27 @@
  *
  */
 
-#include "squid.h"
+#include "../include/config.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+
+#include "../include/Array.h"
+#include "../include/Stack.h"
+
+#include "../libcore/kb.h"
+#include "../libcore/gb.h"
+#include "../libcore/tools.h"
+
+#include "../libmem/MemPool.h"
+
+#include "../libsqdebug/debug.h"
+
+#include "stmem.h"
+
+unsigned long store_mem_size = 0;
 
 MemPool *pool_mem_node = NULL;
 
