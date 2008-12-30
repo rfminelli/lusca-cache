@@ -2,8 +2,6 @@
 
 libcore_a_SOURCES = \
 	dlink.c \
-	ctx.c \
-	debug.c \
 	syslog_ntoa.c \
 	gb.c \
 	tools.c \
@@ -12,8 +10,6 @@ libcore_a_SOURCES = \
 
 libcore_a_LIBADD = \
 	dlink.o \
-	ctx.o \
-	debug.o \
 	syslog_ntoa.o \
 	gb.o \
 	tools.o \

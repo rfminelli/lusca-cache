@@ -34,7 +34,6 @@
 #ifndef SQUID_GLOBALS_H
 #define SQUID_GLOBALS_H
 
-extern FILE *debug_log;		/* NULL */
 extern SquidConfig Config;
 extern SquidConfig2 Config2;
 extern char *ConfigFile;	/* NULL */
@@ -72,15 +71,11 @@ extern int do_mallinfo;		/* 0 */
 extern int icmp_sock;		/* -1 */
 extern int neighbors_do_private_keys;	/* 1 */
 extern int opt_catch_signals;	/* 1 */
-extern int opt_debug_stderr;	/* -1 */
 extern int opt_dns_tests;	/* 1 */
 extern int opt_foreground_rebuild;	/* 0 */
 extern forwarded_for_mode opt_forwarded_for;	/* FORWARDED_FOR_ON */
 extern int opt_reload_hit_only;	/* 0 */
 extern int opt_stdin_overrides_http_port;	/* 0 */
-#if HAVE_SYSLOG
-extern int opt_syslog_enable;	/* 0 */
-#endif
 extern int opt_udp_hit_obj;	/* 0 */
 extern int opt_create_swap_dirs;	/* 0 */
 extern int opt_store_doublecheck;	/* 0 */
@@ -153,8 +148,5 @@ extern int opt_no_daemon;	/* 0 */
 extern int need_linux_tproxy;	/* 0 */
 extern int opt_parse_cfg_only;	/* 0 */
 extern int n_coss_dirs;		/* 0 */
-#ifdef LOG_LOCAL4
-extern int syslog_facility;	/* LOG_LOCAL4 */
-#endif
 
 #endif /* SQUID_GLOBALS_H */

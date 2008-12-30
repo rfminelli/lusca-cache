@@ -5,24 +5,23 @@
 
 #include "../include/config.h"
 #include "../include/util.h"
-#include "varargs.h"
+#include "../libcore/varargs.h"
 #include "debug.h"
-#include "tools.h"
+#include "../libcore/tools.h"
 #include "ctx.h"
 
 /* XXX this library relies on the squid x* memory allocation/free routines */
 #include "../include/util.h"
 
-/* XXX for now these routines rely on squid_curtime and shutting_down being defined */
-/* XXX at the best possible moment these should be moved into the core library */
 
-extern time_t squid_curtime;  /* 0 */
+#include "debug_file.h"
+#include "debug_syslog.h"
+
 extern int shutting_down;
+int opt_debug_stderr = -1;
 
 int debugLevels[MAX_DEBUG_SECTIONS];
 int _db_level;
-
-static int opt_debug_stderr = -1;
 
 char * _debug_options = NULL;
 
@@ -270,3 +269,14 @@ xassert(const char *msg, const char *file, int line)
     if (!shutting_down)
 	abort();
 }
+
+void  
+_db_init_log(const char *logfile)
+{
+    _db_register_handler(_db_print_file, 1);
+#if HAVE_SYSLOG
+    _db_register_handler(_db_print_syslog, 0);
+#endif
+    debugOpenLog(logfile);
+}   
+

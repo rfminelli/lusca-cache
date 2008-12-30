@@ -3311,6 +3311,7 @@ AC_OUTPUT([\
 	libiapp/Makefile \
 	libstat/Makefile \
 	libcore/Makefile \
+	libsqdebug/Makefile \
 	libmem/Makefile \
 	libcb/Makefile \
 	libsqname/Makefile \

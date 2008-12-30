@@ -32,14 +32,26 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111, USA.
  *
  */
+#include "../include/config.h"
 
-#include "squid.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+
+#include "../include/util.h"
+#include "../libcore/varargs.h"
+#include "../libcore/tools.h"
+
+#include "debug.h"
+#include "ctx.h"
+#include "debug_file.h"
 
 static char *debug_log_file = NULL;
-#if HAVE_SYSLOG
-static void _db_print_syslog(const char *format, va_list args);
-#endif
-static void _db_print_file(const char *format, va_list args);
+FILE *debug_log = NULL;
+
+int opt_debug_rotate_count = 5;
+int opt_debug_buffered_logs = 1;
+char * opt_debug_log = NULL;
 
 #ifdef _SQUID_MSWIN_
 extern LPCRITICAL_SECTION dbg_mutex;
@@ -67,7 +79,7 @@ debug_log_flush(void)
     return debug_log_dirty;
 }
 
-static void
+void
 _db_print_file(const char *format, va_list args)
 {
     if (debug_log == NULL)
@@ -76,30 +88,13 @@ _db_print_file(const char *format, va_list args)
     if (!Ctx_Lock)
 	ctx_print();
     vfprintf(debug_log, format, args);
-    if (!Config.onoff.buffered_logs)
+    if (! opt_debug_buffered_logs)
 	fflush(debug_log);
     else
 	debug_log_dirty++;
 }
 
-#if HAVE_SYSLOG
-static void
-_db_print_syslog(const char *format, va_list args)
-{
-    LOCAL_ARRAY(char, tmpbuf, BUFSIZ);
-    /* level 0,1 go to syslog */
-    if (_db_level > 1)
-	return;
-    if (0 == opt_syslog_enable)
-	return;
-    tmpbuf[0] = '\0';
-    vsnprintf(tmpbuf, BUFSIZ, format, args);
-    tmpbuf[BUFSIZ - 1] = '\0';
-    syslog((_db_level == 0 ? LOG_WARNING : LOG_NOTICE) | syslog_facility, "%s", tmpbuf);
-}
-#endif /* HAVE_SYSLOG */
-
-static void
+void
 debugOpenLog(const char *logfile)
 {
     if (logfile == NULL) {
@@ -121,42 +116,6 @@ debugOpenLog(const char *logfile)
 #ifdef _SQUID_WIN32_
     setmode(fileno(debug_log), O_TEXT);
 #endif
-}
-
-#if HAVE_SYSLOG
-void
-_db_set_syslog(const char *facility)
-{
-    opt_syslog_enable = 1;
-#ifdef LOG_LOCAL4
-#ifdef LOG_DAEMON
-    syslog_facility = LOG_DAEMON;
-#else
-    syslog_facility = LOG_LOCAL4;
-#endif
-    if (facility) {
-        syslog_facility = syslog_ntoa(facility);
-        if (syslog_facility != 0)
-	    return;
-         
-	fprintf(stderr, "unknown syslog facility '%s'\n", facility);
-	exit(1);
-    }
-#else
-    if (facility)
-	fprintf(stderr, "syslog facility type not supported on your system\n");
-#endif
-}
-#endif
-
-void
-_db_init_log(const char *logfile)
-{
-    _db_register_handler(_db_print_file, 1);
-#if HAVE_SYSLOG
-    _db_register_handler(_db_print_syslog, 0);
-#endif
-    debugOpenLog(logfile);
 }
 
 void
@@ -183,7 +142,7 @@ _db_rotate_log(void)
      * used everywhere debug.c is used.
      */
     /* Rotate numbers 0 through N up one */
-    for (i = Config.Log.rotateNumber; i > 1;) {
+    for (i = opt_debug_rotate_count ; i > 1;) {
 	i--;
 	snprintf(from, MAXPATHLEN, "%s.%d", debug_log_file, i - 1);
 	snprintf(to, MAXPATHLEN, "%s.%d", debug_log_file, i);
@@ -201,7 +160,7 @@ _db_rotate_log(void)
 	fclose(debug_log);
 #endif
     /* Rotate the current log to .0 */
-    if (Config.Log.rotateNumber > 0) {
+    if (opt_debug_rotate_count > 0) {
 	snprintf(to, MAXPATHLEN, "%s.%d", debug_log_file, 0);
 #ifdef _SQUID_MSWIN_
 	remove(to);
@@ -211,6 +170,6 @@ _db_rotate_log(void)
     /* Close and reopen the log.  It may have been renamed "manually"
      * before HUP'ing us. */
     if (debug_log != stderr)
-	debugOpenLog(Config.Log.log);
+	debugOpenLog(opt_debug_log);
 }
 

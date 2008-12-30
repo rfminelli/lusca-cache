@@ -86,7 +86,7 @@ libexec_PROGRAMS = \
 	$(UNLINKD) \
 	$(LOGFILED)
 
-cf_gen_SOURCES = cf_gen.c defines.h debug.c
+cf_gen_SOURCES = cf_gen.c defines.h 
 nodist_cf_gen_SOURCES = globals.c
 nodist_cf_gen_HEADER = cf_gen_defines.h
 cf_gen.$(OBJEXT): cf_gen_defines.h
@@ -128,7 +128,6 @@ squid_SOURCES = \
 	client_side_rewrite.c \
 	client_side_storeurl_rewrite.c \
 	comm.c \
-	debug.c \
 	defines.h \
 	$(DELAY_POOL_SOURCE) \
 	disk.c \
@@ -241,6 +240,7 @@ nodist_squid_SOURCES = \
 squid_LDADD = \
 	-L../lib \
 	-L../libcore \
+	-L../libsqdebug \
 	-L../libmem \
 	-L../libcb \
 	-L../libmime \
@@ -266,6 +266,7 @@ squid_LDADD = \
 	-lsqident \
 	-lsqinet \
 	-lmiscutil \
+	-lsqdebug \
 	-lcore \
 	-lmem \
 	-lsqname \
@@ -290,8 +291,7 @@ unlinkd-daemon.o: unlinkd.c
 	$(COMPILE) -DUNLINK_DAEMON -c $(srcdir)/unlinkd.c -o $@
 
 pinger_SOURCES = \
-	pinger.c \
-	debug.c
+	pinger.c
 
 nodist_pinger_SOURCES = \
 	globals.c
@@ -312,7 +312,7 @@ sysconf_DATA = \
 data_DATA = \
 	mib.txt
 
-LDADD = -L../lib -L../libcore -L../libmem -L../libsqname -L../libcb -L../libhelper -L../libmime -L../libiapp -L../libhttp -L../libstat -L../libsqdns -L../libsqident -L../libsqinet -lsqinet -lsqdns -lmiscutil -lcore -lmem -lsqname -lcb -lsqident -lhelper -lmime -liapp -lhttp -lstat @XTRA_LIBS@
+LDADD = -L../lib -L../libcore -L../libsqdebug -L../libmem -L../libsqname -L../libcb -L../libhelper -L../libmime -L../libiapp -L../libhttp -L../libstat -L../libsqdns -L../libsqident -L../libsqinet -lsqinet -lsqdns -lmiscutil -lsqdebug -lcore -lmem -lsqname -lcb -lsqident -lhelper -lmime -liapp -lhttp -lstat @XTRA_LIBS@
 
 EXTRA_DIST = \
 	cf_gen_defines \

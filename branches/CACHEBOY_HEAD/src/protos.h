@@ -137,18 +137,6 @@ packerPrintf(Packer * p, const char *fmt,...) PRINTF_FORMAT_ARG2;
 extern void packerPrintf();
 #endif
 
-
-extern void _db_init_log(const char *logfile);
-extern void _db_set_syslog(const char *facility);
-extern void _db_rotate_log(void);
-
-#if STDC_HEADERS
-extern void
-_db_print(const char *,...) PRINTF_FORMAT_ARG1;
-#else
-extern void _db_print();
-#endif
-extern int debug_log_flush(void);
 extern void xassert(const char *, const char *, int);
 
 /* packs, then prints an object using debug() */

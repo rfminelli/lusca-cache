@@ -352,11 +352,14 @@ struct rusage {
 
 #include "../libcore/dlink.h"
 #include "../libcore/fifo.h"
-#include "../libcore/ctx.h"
-#include "../libcore/debug.h"
 #include "../libcore/tools.h"
 #include "../libcore/kb.h"
 #include "../libcore/gb.h"
+
+#include "../libsqdebug/ctx.h"
+#include "../libsqdebug/debug.h"
+#include "../libsqdebug/debug_syslog.h"
+#include "../libsqdebug/debug_file.h"
 
 #include "../libmem/MemPool.h"
 #include "../libmem/MemStr.h"
