@@ -84,4 +84,10 @@ extern double doubleAverage(double, double, int, int);
 #endif
 #endif
 
+#define SQUID_MAXPATHLEN 256
+#ifndef MAXPATHLEN
+#define MAXPATHLEN SQUID_MAXPATHLEN
+#endif
+
+
 #endif
