@@ -173,3 +173,10 @@ _db_rotate_log(void)
 	debugOpenLog(opt_debug_log);
 }
 
+void
+logsFlush(void)
+{ 
+    if (debug_log)
+        fflush(debug_log);
+}
+

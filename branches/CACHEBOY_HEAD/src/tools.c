@@ -843,13 +843,6 @@ inaddrFromHostent(const struct hostent *hp)
     return s;
 }
 
-void
-logsFlush(void)
-{
-    if (debug_log)
-	fflush(debug_log);
-}
-
 const char *
 checkNullString(const char *p)
 {

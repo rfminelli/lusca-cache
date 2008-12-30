@@ -804,7 +804,6 @@ extern double dpercent(double, double);
 extern pid_t readPidFile(void);
 extern struct in_addr inaddrFromHostent(const struct hostent *hp);
 extern void debug_trap(const char *);
-extern void logsFlush(void);
 extern const char *checkNullString(const char *p);
 extern void squid_getrusage(struct rusage *r);
 extern double rusage_cputime(struct rusage *r);
