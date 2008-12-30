@@ -52,10 +52,12 @@
 #include "../include/util.h"
 #include "../libcore/valgrind.h"
 #include "../libcore/varargs.h"
-#include "../libcore/debug.h"
 #include "../libcore/kb.h"
 #include "../libcore/gb.h"
 #include "../libcore/tools.h"
+
+#include "../libsqdebug/debug.h"
+#include "../libsqdebug/debug_file.h"
 
 #include "../libmem/MemPool.h"
 #include "../libmem/MemBufs.h"
@@ -94,7 +96,11 @@ ipcCloseAllFD(int prfd, int pwfd, int crfd, int cwfd)
 /*
  * Some issues with this routine at the moment!
  *
- * + All of the FDs are comm_close()'ed but they're not all created via the comm layer! Gah, etc; so they're "faked" enough for now
+ * + All of the FDs are comm_close()'ed but they're not all created via the comm layer!
+ *   Gah, etc; so they're "faked" enough for now
+ * + This does direct fiddling of debug_log for child processes (so logging works in case
+ *   exec() fails) AND it dup's the debug_log FD directly. This means it gets its grubby
+ *   hands direct into the debug file code which is probably not a great idea.
  */
 pid_t
 ipcCreate(int type, const char *prog, const char *const args[], const char *name, int sleep_after_fork, int *rfd, int *wfd, void **hIpc)
@@ -258,9 +264,7 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	debug(54, 3) ("ipcCreate: FD %d listening...\n", crfd);
     }
     /* flush or else we get dup data if unbuffered_logs is set */
-#if NOTYET
     logsFlush();
-#endif
     if ((pid = fork()) < 0) {
 	debug(54, 1) ("ipcCreate: fork: %s\n", xstrerror());
 	return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
@@ -379,16 +383,12 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
     sqinet_done(&CS);
     t1 = dup(crfd);
     t2 = dup(cwfd);
-#if NOTYET
     t3 = dup(fileno(debug_log));
-#endif
     t3 = dup(fileno(stderr));
     assert(t1 > 2 && t2 > 2 && t3 > 2);
     close(crfd);
     close(cwfd);
-#if NOTYET
     close(fileno(debug_log));
-#endif
     close(fileno(stderr));
     dup2(t1, 0);
     dup2(t2, 1);
@@ -405,15 +405,8 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
     setsid();
 #endif
     execvp(prog, (char *const *) args);
-#if NOTYET
     debug_log = fdopen(2, "a+");
-#endif
 
-    /*
-     * XXX this bit is slightly annoying - the debug() code in libcore/ doesn't
-     * XXX necessarily log to the debug logfile. This really should be looked at
-     * XXX when the debugging / debuglog code is sorted out.
-     */
     debug(54, 0) ("ipcCreate: %s: %s\n", prog, xstrerror());
     _exit(1);
     return 0;
