@@ -425,6 +425,9 @@ mainReconfigure(void)
 #if USE_IDENT
     identConfigTimeout(Config.Timeout.ident);
 #endif
+    opt_debug_log = Config.Log.log;
+    opt_debug_rotate_count = Config.Log.rotateNumber;
+    opt_debug_buffered_logs = Config.onoff.buffered_logs;
 
     setUmask(Config.umask);
     setEffectiveUser();
@@ -838,6 +841,9 @@ main(int argc, char **argv)
 #if USE_IDENT
         identConfigTimeout(Config.Timeout.ident);
 #endif
+        opt_debug_log = Config.Log.log;
+        opt_debug_rotate_count = Config.Log.rotateNumber;
+        opt_debug_buffered_logs = Config.onoff.buffered_logs;
     }
     setUmask(Config.umask);
     if (-1 == opt_send_signal)
