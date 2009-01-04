@@ -780,9 +780,11 @@ idnsShutdown(void)
 {
     if (DnsSocket < 0 && DnsSocketv6 < 0)
 	return;
-    comm_close(DnsSocket);
+    if (DnsSocket > -1)
+        comm_close(DnsSocket);
     DnsSocket = -1;
-    comm_close(DnsSocketv6);
+    if (DnsSocketv6 > -1)
+        comm_close(DnsSocketv6);
     DnsSocketv6 = -1;
     idnsFreeNameservers();
     idnsFreeSearchpath();
