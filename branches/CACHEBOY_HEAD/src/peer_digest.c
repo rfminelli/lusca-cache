@@ -348,7 +348,7 @@ peerDigestFetchReply(void *data, mem_node_ref nr, ssize_t size)
     PeerDigest *pd = fetch->pd;
     http_status status;
     HttpReply *reply;
-    assert(pd && buf);
+    assert(pd);
     assert(!fetch->offset);
 
     if (nr.node) {
