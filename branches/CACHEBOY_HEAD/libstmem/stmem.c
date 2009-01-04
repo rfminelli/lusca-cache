@@ -142,6 +142,23 @@ stmemFreeDataUpto(mem_hdr * mem, squid_off_t target_offset)
 }
 
 /* Append incoming data. */
+/*!
+ * @funtion
+ *	stmemAppend
+ * @abstract
+ *	Append some data to the stmem list.
+ * @param	mem	stmem list to append to.
+ * @param	data	buffer containing data to append.
+ * @param	len	Amount of data to append.
+ *
+ * @discussion
+ *	This routine appends data to the end of the list and can't insert
+ *	data into a sparse list (which is good, as stmem doesn't really handle
+ *	"sparse" type objects!) and will allocate/extend the stmem list as needed.
+ *
+ *	Even if the caller supplies the data in a SM_PAGE_SIZE buffer, the
+ *	data is appended in SM_PAGE_SIZE chunks. Annoying, but its how it is.
+ */
 void
 stmemAppend(mem_hdr * mem, const char *data, int len)
 {
