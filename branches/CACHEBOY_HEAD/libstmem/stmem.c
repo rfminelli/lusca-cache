@@ -33,6 +33,22 @@
  *
  */
 
+/*!
+ * @header storage memory routines.
+ *
+ *	The stmem routines provide a simple memory buffer system for in-flight
+ *	data. It has also been (ab)used to store entire objects in memory,
+ *	effectively a "memory cache", although this was not its primary design
+ *	goal.
+ *
+ *	Data is appended via stmemAppend(), and accessed either via stmemRef()
+ *	or stmemCopy(). stmemFreeDataUpTo() allows the beginning of the
+ *	buffer to be freed, allowing the non-transferred part of large objects
+ *	to be left in memory whilst the rest is free()'ed (and, presumably, either
+ *	not needed anymore, or on disk.)
+ */
+
+
 #include "../include/config.h"
 
 #include <stdio.h>
