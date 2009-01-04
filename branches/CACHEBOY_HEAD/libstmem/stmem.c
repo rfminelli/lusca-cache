@@ -67,6 +67,19 @@ stmemNodeFree(void *buf)
 	p->uses--;
 }
 
+
+/*!
+ * @function
+ *	stmemNodeGet
+ * @abstract
+ *	Take a reference to an stmemNode data range, return the data.
+ * @param	p	mem_node to return the data for
+ * @return	the data page for the given mem_node
+ *
+ * @discussion
+ *	The reference count on the given page is incremented before the page
+ *	is returned.
+ */
 char *
 stmemNodeGet(mem_node * p)
 {
@@ -74,6 +87,18 @@ stmemNodeGet(mem_node * p)
     return p->data;
 }
 
+/*!
+ * @function
+ *	stmemNodeFree
+ * @abstract
+ *	Free the stmem list.
+ * @param	mem	stmem list to free
+ *
+ * @discussion
+ *	This function calls stmemNodeFree() on all pages - any pages which
+ *	are currently referenced will not be freed until their refcount
+ *	reaches 0.
+ */
 void
 stmemFree(mem_hdr * mem)
 {
@@ -204,6 +229,17 @@ stmemRef(const mem_hdr * mem, squid_off_t offset, mem_node_ref * r)
     return p->len + t_off - offset;
 }
 
+/*!
+ * @function
+ *	stmemNodeRefCreate
+ * @abstract
+ *	Initialise the given mem_node_ref to a blank, private 4k mem_node.
+ * @param	r	mem_node_ref to create an empty page for.
+ *
+ * @discussion
+ *	The stmem node refcount is set to 0; the page is freed the minute this
+ *	reference is cleared.
+ */
 void
 stmemNodeRefCreate(mem_node_ref * r)
 {
@@ -211,10 +247,18 @@ stmemNodeRefCreate(mem_node_ref * r)
     r->node = memPoolAlloc(pool_mem_node);
     r->node->uses = 0;
     r->node->next = NULL;
-    r->node->len = 4096;
+    r->node->len = SM_PAGE_SIZE;
     r->offset = 0;
 }
 
+/*!
+ * @function
+ *	stmemNodeRef
+ * @abstract
+ *	Create a copy of an existing memnode reference.
+ * @param	r	mem_node_ref to create a opy of
+ * @return	a new mem_node_ref referencing the same page, offset, length as r.
+ */
 mem_node_ref
 stmemNodeRef(mem_node_ref * r)
 {
@@ -224,6 +268,16 @@ stmemNodeRef(mem_node_ref * r)
     return r2;
 }
 
+/*!
+ * @function
+ *	stmemNodeUnref
+ * @abstract
+ *	Delete/clear the given reference; clear the stmem page if needed.
+ * @param	r	mem_node_ref to dereference and clear.
+ *
+ * @discussion
+ *	stmemNodeFree() is called on the passed in node; it may be freed.
+ */
 void
 stmemNodeUnref(mem_node_ref * r)
 {
@@ -234,6 +288,22 @@ stmemNodeUnref(mem_node_ref * r)
     r->offset = -1;
 }
 
+/*!
+ * @function
+ *	stmemCopy
+ * @abstract
+ *	Copy data from an stmem list into the given buffer.
+ * @param	mem	stmem list to copy from.
+ * @param	offset	offset in the list to begin copying from.
+ * @param	buf	buffer to copy into.
+ * @param	size	size of 'buf'.
+ * @return	0 if no data can be copied; the number of bytes copied if possible.
+ *
+ * @discussion
+ *	This begins searching from the beginning of the list; and thus is quite
+ *	slow (O(n)) for large objects in memory. This obviously needs to be
+ *	fixed somehow.
+ */
 ssize_t
 stmemCopy(const mem_hdr * mem, squid_off_t offset, char *buf, size_t size)
 {
@@ -279,6 +349,12 @@ stmemCopy(const mem_hdr * mem, squid_off_t offset, char *buf, size_t size)
     return size - bytes_to_go;
 }
 
+/*!
+ * @function
+ *	stmemInitMem
+ * @abstract
+ *	Setup the stmem system.
+ */
 void
 stmemInitMem(void)
 {
