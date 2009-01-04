@@ -35,6 +35,9 @@
 
 #include "squid.h"
 
+static MemPool * pool_netdb_name;
+static MemPool * pool_netdb_entry;
+
 #if USE_ICMP
 
 typedef struct {
@@ -72,6 +75,7 @@ static void netdbExchangeDone(void *);
 void netdbDump(StoreEntry * sentry);
 #endif
 
+
 /* We have to keep a local list of peer names.  The Peers structure
  * gets freed during a reconfigure.  We want this database to
  * remain persisitent, so _net_db_peer->peername points into this
@@ -101,7 +105,7 @@ netdbHashDelete(const char *key)
 static void
 netdbHostInsert(netdbEntry * n, const char *hostname)
 {
-    net_db_name *x = memAllocate(MEM_NET_DB_NAME);
+    net_db_name *x = memPoolAlloc(pool_netdb_name);
     x->hash.key = xstrdup(hostname);
     x->next = n->hosts;
     n->hosts = x;
@@ -128,7 +132,7 @@ netdbHostDelete(const net_db_name * x)
     }
     hash_remove_link(host_table, (hash_link *) x);
     xfree(x->hash.key);
-    memFree((void *) x, MEM_NET_DB_NAME);
+    memPoolFree(pool_netdb_name, (void *) x);
 }
 
 static netdbEntry *
@@ -154,7 +158,7 @@ netdbRelease(netdbEntry * n)
     n->n_peers_alloc = 0;
     if (n->link_count == 0) {
 	netdbHashDelete(n->network);
-	memFree(n, MEM_NETDBENTRY);
+	memPoolFree(pool_netdb_entry, n);
     }
 }
 
@@ -178,10 +182,10 @@ netdbPurgeLRU(void)
     int k = 0;
     int list_count = 0;
     int removed = 0;
-    list = xcalloc(memInUse(MEM_NETDBENTRY), sizeof(netdbEntry *));
+    list = xcalloc(memPoolInUseCount(pool_netdb_entry), sizeof(netdbEntry *));
     hash_first(addr_table);
     while ((n = (netdbEntry *) hash_next(addr_table))) {
-	assert(list_count < memInUse(MEM_NETDBENTRY));
+	assert(list_count < memPoolInUseCount(pool_netdb_entry));
 	*(list + list_count) = n;
 	list_count++;
     }
@@ -190,7 +194,7 @@ netdbPurgeLRU(void)
 	sizeof(netdbEntry *),
 	netdbLRU);
     for (k = 0; k < list_count; k++) {
-	if (memInUse(MEM_NETDBENTRY) < Config.Netdb.low)
+	if (memPoolInUseCount(pool_netdb_entry) < Config.Netdb.low)
 	    break;
 	netdbRelease(*(list + k));
 	removed++;
@@ -211,10 +215,10 @@ static netdbEntry *
 netdbAdd(struct in_addr addr)
 {
     netdbEntry *n;
-    if (memInUse(MEM_NETDBENTRY) > Config.Netdb.high)
+    if (memPoolInUseCount(pool_netdb_entry) > Config.Netdb.high)
 	netdbPurgeLRU();
     if ((n = netdbLookupAddr(addr)) == NULL) {
-	n = memAllocate(MEM_NETDBENTRY);
+	n = memPoolAlloc(pool_netdb_entry);
 	netdbHashInsert(n, addr);
     }
     return n;
@@ -486,7 +490,7 @@ netdbReloadState(void)
 	if ((q = strtok(NULL, w_space)) == NULL)
 	    continue;
 	N.last_use_time = (time_t) atoi(q);
-	n = memAllocate(MEM_NETDBENTRY);
+	n = memPoolAlloc(pool_netdb_entry);
 	xmemcpy(n, &N, sizeof(netdbEntry));
 	netdbHashInsert(n, addr);
 	while ((q = strtok(NULL, w_space)) != NULL) {
@@ -518,7 +522,7 @@ netdbFreeNetdbEntry(void *data)
 {
     netdbEntry *n = data;
     safe_free(n->peers);
-    memFree(n, MEM_NETDBENTRY);
+    memPoolFree(pool_netdb_entry, n);
 }
 
 static void
@@ -526,13 +530,13 @@ netdbFreeNameEntry(void *data)
 {
     net_db_name *x = data;
     xfree(x->hash.key);
-    memFree(x, MEM_NET_DB_NAME);
+    memPoolFree(pool_netdb_name, x);
 }
 
 static void
 netdbExchangeHandleReply(void *data, mem_node_ref nr, ssize_t size)
 {
-    const char *buf = nr.node->data + nr.offset;
+    const char *buf = NULL;
     netdbExchangeState *ex = data;
     int rec_sz = 0;
     ssize_t o;
@@ -544,7 +548,12 @@ netdbExchangeHandleReply(void *data, mem_node_ref nr, ssize_t size)
     HttpReply *rep;
     size_t hdr_sz;
     int nused = 0;
-    assert(size <= nr.node->len - nr.offset);
+
+    /* Did we get any data? */
+    if (nr.node) {
+        assert(size <= nr.node->len - nr.offset);
+	buf = nr.node->data + nr.offset;
+    }
 
     rec_sz = 0;
     rec_sz += 1 + sizeof(addr.s_addr);
@@ -583,7 +592,7 @@ netdbExchangeHandleReply(void *data, mem_node_ref nr, ssize_t size)
     while (size >= rec_sz) {
 	debug(38, 5) ("netdbExchangeHandleReply: in parsing loop, size = %ld\n",
 	    (long int) size);
-	addr.s_addr = any_addr.s_addr;
+	SetAnyAddr(&addr);
 	hops = rtt = 0.0;
 	for (o = 0; o < rec_sz;) {
 	    switch ((int) *(p + o)) {
@@ -610,7 +619,7 @@ netdbExchangeHandleReply(void *data, mem_node_ref nr, ssize_t size)
 		goto finish;
 	    }
 	}
-	if (addr.s_addr != any_addr.s_addr && rtt > 0)
+	if (! IsAnyAddr(&addr) && rtt > 0)
 	    netdbExchangeUpdatePeer(addr, ex->p, rtt, hops);
 	assert(o == rec_sz);
 	ex->used += rec_sz;
@@ -663,6 +672,13 @@ netdbExchangeDone(void *data)
 /* PUBLIC FUNCTIONS */
 
 void
+netdbInitMem(void)
+{
+    pool_netdb_entry = memPoolCreate("netdbEntry", sizeof(netdbEntry));
+    pool_netdb_name = memPoolCreate("net_db_name", sizeof(net_db_name));
+}
+
+void
 netdbInit(void)
 {
 #if USE_ICMP
@@ -690,6 +706,7 @@ netdbPingSite(const char *hostname)
     if ((n = netdbLookupHost(hostname)) != NULL)
 	if (n->next_ping_time > squid_curtime)
 	    return;
+    CBDATA_INIT_TYPE(generic_cbdata);
     h = cbdataAlloc(generic_cbdata);
     h->data = xstrdup(hostname);
     ipcache_nbgethostbyname(hostname, netdbSendPing, h);
@@ -765,14 +782,14 @@ netdbDump(StoreEntry * sentry)
 	"RTT",
 	"Hops",
 	"Hostnames");
-    list = xcalloc(memInUse(MEM_NETDBENTRY), sizeof(netdbEntry *));
+    list = xcalloc(memPoolInUseCount(pool_netdb_entry), sizeof(netdbEntry *));
     i = 0;
     hash_first(addr_table);
     while ((n = (netdbEntry *) hash_next(addr_table)))
 	*(list + i++) = n;
-    if (i != memInUse(MEM_NETDBENTRY))
+    if (i != memPoolInUseCount(pool_netdb_entry))
 	debug(38, 0) ("WARNING: netdb_addrs count off, found %d, expected %d\n",
-	    i, memInUse(MEM_NETDBENTRY));
+	    i, memPoolInUseCount(pool_netdb_entry));
     qsort((char *) list,
 	i,
 	sizeof(netdbEntry *),

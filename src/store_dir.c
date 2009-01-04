@@ -313,7 +313,7 @@ storeDirStats(StoreEntry * sentry)
 
     storeAppendPrintf(sentry, "Store Directory Statistics:\n");
     storeAppendPrintf(sentry, "Store Entries          : %d\n",
-	memInUse(MEM_STOREENTRY));
+	memPoolInUseCount(pool_storeentry));
     storeAppendPrintf(sentry, "Maximum Swap Size      : %8ld KB\n",
 	(long int) Config.Swap.maxSize);
     storeAppendPrintf(sentry, "Current Store Swap Size: %8d KB\n",

@@ -40,7 +40,6 @@
  * using Internal DNS.
  */
 #if USE_DNSSERVERS
-static helper *dnsservers = NULL;
 
 static void
 dnsStats(StoreEntry * sentry)
@@ -50,63 +49,13 @@ dnsStats(StoreEntry * sentry)
 }
 
 void
-dnsInit(void)
+dnsInternalInit(void)
 {
     static int init = 0;
-    wordlist *w;
-    if (!Config.Program.dnsserver)
-	return;
-    if (dnsservers == NULL)
-	dnsservers = helperCreate("dnsserver");
-    dnsservers->n_to_start = Config.dnsChildren;
-    dnsservers->ipc_type = IPC_STREAM;
-    assert(dnsservers->cmdline == NULL);
-    wordlistAdd(&dnsservers->cmdline, Config.Program.dnsserver);
-    if (Config.onoff.res_defnames)
-	wordlistAdd(&dnsservers->cmdline, "-D");
-    for (w = Config.dns_nameservers; w != NULL; w = w->next) {
-	wordlistAdd(&dnsservers->cmdline, "-s");
-	wordlistAdd(&dnsservers->cmdline, w->key);
-    }
-    helperOpenServers(dnsservers);
     if (!init) {
-	cachemgrRegister("dns",
-	    "Dnsserver Statistics",
-	    dnsStats, 0, 1);
+	cachemgrRegister("dns", "Dnsserver Statistics", dnsStats, 0, 1);
 	init = 1;
     }
-}
-
-void
-dnsShutdown(void)
-{
-    if (!dnsservers)
-	return;
-    helperShutdown(dnsservers);
-    wordlistDestroy(&dnsservers->cmdline);
-    if (!shutting_down)
-	return;
-    helperFree(dnsservers);
-    dnsservers = NULL;
-}
-
-void
-dnsSubmit(const char *lookup, HLPCB * callback, void *data)
-{
-    char buf[256];
-    static time_t first_warn = 0;
-    snprintf(buf, 256, "%s\n", lookup);
-    if (dnsservers->stats.queue_size >= dnsservers->n_running * 2) {
-	if (first_warn == 0)
-	    first_warn = squid_curtime;
-	if (squid_curtime - first_warn > 3 * 60)
-	    fatal("DNS servers not responding for 3 minutes");
-	debug(34, 1) ("dnsSubmit: queue overload, rejecting %s\n", lookup);
-	callback(data, (char *) "$fail Temporary network problem, please retry later");
-	return;
-    }
-    first_warn = 0;
-    helperSubmit(dnsservers, buf, callback, data);
 }
 
 #ifdef SQUID_SNMP

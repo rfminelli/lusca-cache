@@ -429,6 +429,7 @@ storeDiskdDirInit(SwapDir * sd)
 	Config.Program.diskd,
 	args,
 	"diskd",
+	Config.sleep_after_fork,
 	&diskdinfo->rfd,
 	&diskdinfo->wfd,
 	&diskdinfo->hIpc);
@@ -615,7 +616,7 @@ storeDiskdDirRebuildFromDirectory(void *data)
 	    debug(20, 3) ("  %s %7d files opened so far.\n",
 		rb->sd->path, rb->counts.scancount);
 	debug(20, 9) ("file_in: fd=%d %08X\n", fd, filn);
-	statCounter.syscalls.disk.reads++;
+	CommStats.syscalls.disk.reads++;
 	if (FD_READ_METHOD(fd, hdr_buf, SM_PAGE_SIZE) < 0) {
 	    debug(20, 1) ("storeDiskdDirRebuildFromDirectory: read(FD %d): %s\n",
 		fd, xstrerror());
@@ -1315,13 +1316,13 @@ storeDiskdDirCloseTmpSwapLog(SwapDir * sd)
 static void
 storeSwapLogDataFree(void *s)
 {
-    memFree(s, MEM_SWAP_LOG_DATA);
+    memPoolFree(pool_swap_log_data, s);
 }
 
 static void
 storeDiskdWriteSwapLogheader(int fd)
 {
-    storeSwapLogHeader *hdr = memAllocate(MEM_SWAP_LOG_DATA);
+    storeSwapLogHeader *hdr = memPoolAlloc(pool_swap_log_data);
     hdr->op = SWAP_LOG_VERSION;
     hdr->version = 1;
     hdr->record_size = sizeof(storeSwapLogData);
@@ -1547,7 +1548,7 @@ static void
 storeDiskdDirSwapLog(const SwapDir * sd, const StoreEntry * e, int op)
 {
     diskdinfo_t *diskdinfo = sd->fsdata;
-    storeSwapLogData *s = memAllocate(MEM_SWAP_LOG_DATA);
+    storeSwapLogData *s = memPoolAlloc(pool_swap_log_data);
     s->op = (char) op;
     s->swap_filen = e->swap_filen;
     s->timestamp = e->timestamp;

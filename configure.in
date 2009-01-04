@@ -1,11 +1,11 @@
 dnl
 dnl  Configuration input file for Squid
 dnl
-dnl  $Id$
+dnl  $Id: configure.in 12542 2008-04-13 13:27:23Z adrian.chadd $
 dnl
 dnl
 dnl
-AC_INIT(Squid Web Proxy, 2.HEAD-CVS, http://www.squid-cache.org/bugs/, squid)
+AC_INIT(Cacheboy/Squid Web Proxy, CACHEBOY_1.6.PRE4, http://code.google.com/p/cacheboy, Cacheboy)
 AC_PREREQ(2.52)
 AM_CONFIG_HEADER(include/autoconf.h)
 AC_CONFIG_AUX_DIR(cfgaux)
@@ -944,6 +944,22 @@ AC_ARG_ENABLE(devpoll,
   esac
 ])
 
+dnl Enable Solaris Event Ports
+AC_ARG_ENABLE(eventports,
+[  --enable-eventports    Use Solaris event ports instead of poll],
+[
+  case "$enableval" in
+  yes)
+    echo "Forcing eventports to be enabled"
+    SELECT_TYPE="eventports"
+    ;;
+  no)
+    echo "Forcing eventports to be disabled"
+    ;;
+  esac
+])
+
+
 
 dnl Disable HTTP violations
 HTTP_VIOLATIONS=1
@@ -1569,10 +1585,17 @@ AC_PATH_PROG(LN, ln, cp)
 AC_PATH_PROG(PERL, perl, none)
 dnl automake handles this AC_PATH_PROG(MAKEDEPEND, makedepend, $TRUE)
 AC_PATH_PROG(AR, ar, $FALSE)
+AC_CHECK_PROG(uudecode, uudecode$EXEEXT, yes)
 
 if test "$ac_cv_path_PERL" = "none"; then
 	echo "Perl is required to compile Squid"
 	echo "Please install Perl and then re-run configure"
+	exit 1
+fi
+
+if test "$ac_cv_prog_uudecode" != "yes"; then
+	echo "uudecode is required to compile Squid"
+	echo "Please install uudecode and then re-run configure"
 	exit 1
 fi
 
@@ -2482,7 +2505,7 @@ AM_CONDITIONAL([USE_SELECT_SIMPLE], [test $SELECT_TYPE = select_simple])
 AM_CONDITIONAL([USE_SELECT_WIN32], [test $SELECT_TYPE = select_win32])
 AM_CONDITIONAL([USE_KQUEUE], [test $SELECT_TYPE = kqueue])
 AM_CONDITIONAL([USE_DEVPOLL], [test $SELECT_TYPE = devpoll])
-
+AM_CONDITIONAL([USE_EVENTPORTS], [test $SELECT_TYPE = eventports])
 
 dnl Hmm.. some OS:es (i.e. FreeBSD) can't handle large AF_UNIX dgram packets.
 dnl Verify that at least 16K is supported, if not fall back on using
@@ -3277,6 +3300,22 @@ dnl done
 
 AC_OUTPUT([\
 	Makefile \
+	app/Makefile \
+	app/tcptest/Makefile \
+	libmime/Makefile \
+	libsqdns/Makefile \
+	libsqident/Makefile \
+	libsqinet/Makefile \
+	libhelper/Makefile \
+	libhttp/Makefile \
+	libiapp/Makefile \
+	libstat/Makefile \
+	libcore/Makefile \
+	libsqdebug/Makefile \
+	libmem/Makefile \
+	libcb/Makefile \
+	libsqname/Makefile \
+	libstmem/Makefile \
 	lib/Makefile \
 	scripts/Makefile \
 	scripts/RunCache \
