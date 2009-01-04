@@ -343,14 +343,18 @@ peerDigestRequest(PeerDigest * pd)
 static void
 peerDigestFetchReply(void *data, mem_node_ref nr, ssize_t size)
 {
-    const char *buf = nr.node->data + nr.offset;
+    const char *buf = NULL;
     DigestFetchState *fetch = data;
     PeerDigest *pd = fetch->pd;
     http_status status;
     HttpReply *reply;
     assert(pd && buf);
     assert(!fetch->offset);
-    assert(size <= nr.node->len - nr.offset);
+
+    if (nr.node) {
+        assert(size <= nr.node->len - nr.offset);
+        buf = nr.node->data + nr.offset;
+    }
 
     if (peerDigestFetchedEnough(fetch, size, "peerDigestFetchReply"))
 	goto finish;
@@ -498,7 +502,10 @@ peerDigestSwapInMask(void *data, mem_node_ref nr, ssize_t size)
 
     /* Copy data into the peer digest mask */
     if (size > 0) {
-	assert(size + fetch->mask_offset < pd->cd->mask_size);
+        /* clamp the data fetched to only be the left over data for the mask; there may be more data! */
+	if (size + fetch->mask_offset > pd->cd->mask_size)
+		size = pd->cd->mask_size - fetch->mask_offset;
+	/* assert(size + fetch->mask_offset < pd->cd->mask_size); */
 	memcpy(pd->cd->mask + fetch->mask_offset, buf, size);
     }
     stmemNodeUnref(&nr);
