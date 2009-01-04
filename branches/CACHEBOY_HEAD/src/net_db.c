@@ -536,7 +536,7 @@ netdbFreeNameEntry(void *data)
 static void
 netdbExchangeHandleReply(void *data, mem_node_ref nr, ssize_t size)
 {
-    const char *buf = nr.node->data + nr.offset;
+    const char *buf = NULL;
     netdbExchangeState *ex = data;
     int rec_sz = 0;
     ssize_t o;
@@ -548,7 +548,12 @@ netdbExchangeHandleReply(void *data, mem_node_ref nr, ssize_t size)
     HttpReply *rep;
     size_t hdr_sz;
     int nused = 0;
-    assert(size <= nr.node->len - nr.offset);
+
+    /* Did we get any data? */
+    if (nr.node) {
+        assert(size <= nr.node->len - nr.offset);
+	buf = nr.node->data + nr.offset;
+    }
 
     rec_sz = 0;
     rec_sz += 1 + sizeof(addr.s_addr);
