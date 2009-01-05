@@ -447,14 +447,6 @@ struct rusage {
 #include "tempnam.h"
 #endif
 
-#if !HAVE_SNPRINTF
-#include "snprintf.h"
-#endif
-
-#if !HAVE_STRSEP
-#include "strsep.h"
-#endif
-
 #if !HAVE_INITGROUPS
 #include "initgroups.h"
 #endif

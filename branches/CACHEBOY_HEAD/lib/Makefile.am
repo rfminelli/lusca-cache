@@ -3,16 +3,6 @@
 #  $Id$
 #
 
-if NEED_OWN_SNPRINTF
-SNPRINTFSOURCE=snprintf.c
-else
-SNPRINTFSOURCE=
-endif
-if NEED_OWN_STRSEP
-STRSEPSOURCE=strsep.c
-else
-STRSEPSOURCE=
-endif
 if ENABLE_WIN32SPECIFIC
 LIBSSPWIN32=libsspwin32.a
 else
@@ -42,8 +32,6 @@ EXTRA_libmiscutil_a_SOURCES = \
 	dirent.c \
 	encrypt.c \
 	getopt.c \
-	snprintf.c \
-	strsep.c \
 	win32lib.c
 libmiscutil_a_SOURCES = \
 	Array.c \
@@ -61,10 +49,8 @@ libmiscutil_a_SOURCES = \
 	rfc1738.c \
 	rfc2617.c \
 	safe_inet_addr.c \
-	$(SNPRINTFSOURCE) \
 	splay.c \
 	Stack.c \
-	$(STRSEPSOURCE) \
 	stub_memaccount.c \
 	util.c \
 	uudecode.c \

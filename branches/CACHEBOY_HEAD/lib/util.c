@@ -73,7 +73,6 @@
 #endif
 
 #include "util.h"
-#include "snprintf.h"
 
 static void default_failure_notify(const char *);
 

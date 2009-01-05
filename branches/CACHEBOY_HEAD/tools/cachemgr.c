@@ -132,7 +132,6 @@
 #include <assert.h>
 
 #include "util.h"
-#include "snprintf.h"
 
 #ifndef DEFAULT_CACHEMGR_CONFIG
 #define DEFAULT_CACHEMGR_CONFIG "/etc/squid/cachemgr.conf"
