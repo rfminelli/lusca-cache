@@ -4,6 +4,7 @@
 
   * Internal DNS code supports IPv6 and IPv4 DNS hosts (but still currently only implements an IPv4 aware API even if most of the internal code implements IPv4/IPv6 lookups.)
   * AUFS defaults to all operations being async, versus Squid's default of only open(), read() and unlink() - improving Solaris and FreeBSD performance.
+  * Parts of the Swap Metadata TLV code were rewritten to dramatically reduce the number of malloc() and free() calls made during object creation and swapout/swapin.
 
 = Structural Changes =
 
