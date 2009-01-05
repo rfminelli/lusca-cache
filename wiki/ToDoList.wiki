@@ -6,6 +6,33 @@ A whole lot of cleanup work needs to be done to make the more difficult work les
 
 This page is meant primarily as a kick for Adrian to remember what he needs to do.
 
+= Current Focus =
+
+  * HTTP Code Restructuring
+    * Shuffle the httpHeader routines which append/insert/delete header entries to work with attribute/value/id's direct rather than taking a HttpHeaderEntry *(done in http_work branch)*
+      * (This removes the requirement that HttpHeaderEntry 'ies are seperately created from the HttpHeader items list; I can then cut back on individually allocating Entries and just allocate one big lot in one hit.)
+    * Introduce the replacement header parser, lifted from other work
+      * Is more efficient, is prepped for copy-free parsing, is prepped for incremental parsing
+
+  * HTTP Code replacement
+    * Look at lifting out the messy parsing related stuff from client_side.c and http.c; replace with a single call to a parsing function which returns a completely parsed and checked HTTP request and/or reply + headers.
+
+  * String and refcounted buffer stuff
+    * See if buf_t's can be introduced into this codebase with a new, completely replacement String implementation
+      * ie, try "skipping" the requirement for converting String users over to non-NUL-terminated stuff, even though the work has been done elsewhere and seems to work out fine
+    * What else in the short term?
+
+  * Storage / disk changes
+    * See about breaking out the aufs ops stuff into a seperate library
+    * See about implementing some scatter/gathering API addons to disk_* and aio_*
+    * Modify the disk write API so stmem's can be written and free'd without the current "hack" (which god is so god forsaken ugly it doesn't deserve mention) - this way stmem's can be made >4k where appropriate and can finally have metadata separated from the data again! (so malloc implementations such as freebsd can suddenly a] have efficient memory use rather than rounding up to the nearest 4k page for that 4108 byte allocation (ie, allocating 8k :) and b] provide page-aligned data accesses for reading, just to make socket and disk IO optimisations by the OS possible.
+
+  * Network / disk API changes
+    * implement cancel'able comm_read and comm_write (and comm_readv/comm_writev analogues) variants so "other" routines can start using them
+      * ie, don't have them rely on cbdata'ed callback data to determine whether the IO can happen
+      * this makes things like POSIX AIO for socket (and later, disk) IO completely possible!
+      * Changing the existing code over to use these functions should be a priority at this point - but it'll be potentially very, very tricky!
+
 = Code Changes =
 
   * Begin shuffling stuff out of src/ that isn't strictly required to be there and is trivial to reorganise (makes code reuse and unit testing easier to sort out)
@@ -29,22 +56,20 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
   * Next - whatever bits of the http code can easily be moved
     * HttpVersion *done*
     * HttpStatusLine *done*
-    * Header / HeaderEntry *somewhat done*
+    * Header / HeaderEntry *done*
     * Shuffle the header sanity checks (eg one-Content-Length header only! check) out of httpHeaderParse() and into a seperate function - make httpHeaderParse() _JUST_ parse headers - *done, somewhat, in http_work branch*
     * HttpRequest
     * HttpReply
     * Body related callback pipeline?
-    * HdrCC stuff
-    * Range request stuff
-    * Shuffle the httpHeader routines which append/insert/delete header entries to work with attribute/value/id's direct rather than taking a HttpHeaderEntry *(done in http_work branch)*
-      * (This removes the requirement that HttpHeaderEntry 'ies are seperately created from the HttpHeader items list; I can then cut back on individually allocating Entries and just allocate one big lot in one hit.)
+    * HdrCC stuff *done*
+    * Range request stuff *basic stuff done*
     * What else?
 
   * IPv6 core changes
     * bring over ipv6 support utilities *done*
     * modify libiapp/ comm core to support v6 *done*
     * write unit tests *in progress*
-    * modify src/ to support new API, but only v4 sockets for client-side handling for now *done*
+    * modify src/ to support new API, but only v4 sockets for client-side handling for now *done in v6 branch*
     * modify app/tcptest to test v4/v6 sockets *done*
     * write documentation of new core
 
@@ -61,9 +86,9 @@ This page is meant primarily as a kick for Adrian to remember what he needs to d
     * Modify Squid internals which issue DNS lookups to use sqinet instead of in_addr
 
   * IPv6 ACL changes
-    * convert IP code over to use sqaddr for the splay tree - *done*
-    * implement src6 - *done*
-    * implement myip6 - *done*
+    * convert IP code over to use sqaddr for the splay tree - *done in v6 branch*
+    * implement src6 - *done in v6 branch*
+    * implement myip6 - *done in v6 branch*
     * implement dst6
     * .. what else?
 
