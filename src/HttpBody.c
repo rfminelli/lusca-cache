@@ -35,30 +35,6 @@
 
 #include "squid.h"
 
-
-void
-httpBodyInit(HttpBody * body)
-{
-    body->mb = MemBufNull;
-}
-
-void
-httpBodyClean(HttpBody * body)
-{
-    assert(body);
-    if (!memBufIsNull(&body->mb))
-	memBufClean(&body->mb);
-}
-
-/* set body by absorbing mb */
-void
-httpBodySet(HttpBody * body, MemBuf * mb)
-{
-    assert(body);
-    assert(memBufIsNull(&body->mb));
-    body->mb = *mb;		/* absorb */
-}
-
 void
 httpBodyPackInto(const HttpBody * body, Packer * p)
 {
@@ -66,11 +42,3 @@ httpBodyPackInto(const HttpBody * body, Packer * p)
     if (body->mb.size)
 	packerAppend(p, body->mb.buf, body->mb.size);
 }
-
-#if UNUSED_CODE
-const char *
-httpBodyPtr(const HttpBody * body)
-{
-    return body->mb.buf ? body->mb.buf : "";
-}
-#endif

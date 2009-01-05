@@ -112,7 +112,7 @@ wccpInit(void)
     last_id = 0;
     last_assign_buckets_change = 0;
     number_caches = 0;
-    if (Config.Wccp.router.s_addr != any_addr.s_addr)
+    if (! IsAnyAddr(&Config.Wccp.router))
 	if (!eventFind(wccpHereIam, NULL))
 	    eventAdd("wccpHereIam", wccpHereIam, NULL, 5.0, 1);
 }
@@ -124,7 +124,7 @@ wccpConnectionOpen(void)
     struct sockaddr_in router, local;
     socklen_t local_len, router_len;
     debug(80, 5) ("wccpConnectionOpen: Called\n");
-    if (Config.Wccp.router.s_addr == any_addr.s_addr) {
+    if (IsAnyAddr(&Config.Wccp.router)) {
 	debug(1, 1) ("WCCP Disabled.\n");
 	return;
     }
@@ -133,6 +133,7 @@ wccpConnectionOpen(void)
 	Config.Wccp.address,
 	port,
 	COMM_NONBLOCKING,
+	COMM_TOS_DEFAULT,
 	"WCCP Socket");
     if (theWccpConnection < 0)
 	fatal("Cannot open WCCP Port");
@@ -188,7 +189,7 @@ wccpHandleUdp(int sock, void *not_used)
     memset(&from, '\0', from_len);
     memset(&wccp_i_see_you, '\0', sizeof(wccp_i_see_you));
 
-    statCounter.syscalls.sock.recvfroms++;
+    CommStats.syscalls.sock.recvfroms++;
 
     len = recvfrom(sock,
 	(void *) &wccp_i_see_you,

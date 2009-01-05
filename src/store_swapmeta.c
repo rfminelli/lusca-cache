@@ -35,10 +35,21 @@
 
 #include "squid.h"
 
+MemPool * pool_swap_tlv = NULL;
+MemPool * pool_swap_log_data = NULL;
+
+void
+storeSwapTLVInitMem(void)
+{
+    pool_swap_tlv = memPoolCreate("storeSwapTLV", sizeof(tlv));
+    /* XXX This doesn't strictly belong here! */
+    pool_swap_log_data = memPoolCreate("storeSwapLogData", sizeof(storeSwapLogData));
+}
+
 static tlv **
 storeSwapTLVAdd(int type, const void *ptr, size_t len, tlv ** tail)
 {
-    tlv *t = memAllocate(MEM_TLV);
+    tlv *t = memPoolAlloc(pool_swap_tlv);
     t->type = (char) type;
     t->length = (int) len;
     t->value = xmalloc(len);
@@ -54,7 +65,7 @@ storeSwapTLVFree(tlv * n)
     while ((t = n) != NULL) {
 	n = t->next;
 	xfree(t->value);
-	memFree(t, MEM_TLV);
+	memPoolFree(pool_swap_tlv, t);
     }
 }
 
