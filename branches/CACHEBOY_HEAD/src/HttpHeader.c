@@ -63,8 +63,6 @@
  * local routines
  */
 
-#define assert_eid(id) assert((id) < HDR_ENUM_END)
-
 static void httpHeaderStatDump(const HttpHeaderStat * hs, StoreEntry * e);
 
 MemPool * pool_http_reply = NULL;
