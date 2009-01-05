@@ -2,8 +2,8 @@
 
 = Features =
 
-* Internal DNS code supports IPv6 and IPv4 DNS hosts (but still currently only implements an IPv4 aware API even if most of the internal code implements IPv4/IPv6 lookups.)
-* AUFS defaults to all operations being async, versus Squid's default of only open(), read() and unlink() - improving Solaris and FreeBSD performance.
+  * Internal DNS code supports IPv6 and IPv4 DNS hosts (but still currently only implements an IPv4 aware API even if most of the internal code implements IPv4/IPv6 lookups.)
+  * AUFS defaults to all operations being async, versus Squid's default of only open(), read() and unlink() - improving Solaris and FreeBSD performance.
 
 = Structural Changes =
 
