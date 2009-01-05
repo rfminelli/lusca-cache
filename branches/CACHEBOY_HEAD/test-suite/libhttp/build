@@ -1,8 +1,8 @@
 #!/bin/sh
 
 CFLAGS="-g -Wall -Werror -I../.."
-LDFLAGS="-L../../libhttp -L../../libcore -L../../libmem -L../../libsqinet -L../../lib -L../../libstat -L../../libiapp"
-LIBS="-lhttp -lmem -lcore -lstat -liapp -lmiscutil -lm"
+LDFLAGS="-L../../libhttp -L../../libsqdebug  -L../../libcore -L../../libmem -L../../libsqinet -L../../lib -L../../libstat -L../../libiapp"
+LIBS="-lhttp -lmem -lsqdebug -lcore -lstat -liapp -lmiscutil -lm"
 
 rm test_libhttp_1
 
