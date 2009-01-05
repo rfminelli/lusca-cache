@@ -92,7 +92,7 @@ httpHeaderGetList(const HttpHeader * hdr, http_hdr_type id)
         return s;
     while ((e = httpHeaderGetEntry(hdr, &pos))) {
         if (e->id == id)
-            strListAdd(&s, strBuf(e->value), ',');
+            strListAddStr(&s, strBuf(e->value), strLen(e->value), ',');
     }
     /*
      * note: we might get an empty (len==0) string if there was an "empty"

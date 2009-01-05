@@ -129,7 +129,7 @@ strIsSubstr(const String * list, const char *s)
  * @param	del	list item delimiter to use
  */
 void
-strListAdd(String * str, const char *item, char del)
+strListAddStr(String * str, const char *item, int len, char del)
 {
     assert(str && item);
     if (strLen(*str)) {
@@ -140,6 +140,12 @@ strListAdd(String * str, const char *item, char del)
 	stringAppend(str, buf, 2);
     }
     stringAppend(str, item, strlen(item));
+}
+
+void
+strListAdd(String *str, const char *item, char del)
+{
+    strListAddStr(str, item, strlen(item), del);
 }
 
 /*!

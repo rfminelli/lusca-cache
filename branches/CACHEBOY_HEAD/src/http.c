@@ -357,12 +357,12 @@ httpMakeVaryMark(request_t * request, HttpReply * reply)
     stringClean(&vstr);
     hdr = httpHeaderGetList(&reply->header, HDR_VARY);
     if (strBuf(hdr))
-	strListAdd(&vary, strBuf(hdr), ',');
+	strListAddStr(&vary, strBuf(hdr), strLen(hdr), ',');
     stringClean(&hdr);
 #if X_ACCELERATOR_VARY
     hdr = httpHeaderGetList(&reply->header, HDR_X_ACCELERATOR_VARY);
     if (strBuf(hdr))
-	strListAdd(&vary, strBuf(hdr), ',');
+	strListAddStr(&vary, strBuf(hdr), strLen(hdr), ',');
     stringClean(&hdr);
 #endif
     while (strListGetItem(&vary, ',', &item, &ilen, &pos)) {

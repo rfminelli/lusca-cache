@@ -1063,13 +1063,13 @@ storeSetPublicKey(StoreEntry * e)
 	    String varyhdr;
 	    varyhdr = httpHeaderGetList(&mem->reply->header, HDR_VARY);
 	    if (strBuf(varyhdr))
-		strListAdd(&vary, strBuf(varyhdr), ',');
+		strListAddStr(&vary, strBuf(varyhdr), strLen(varyhdr), ',');
 	    stringClean(&varyhdr);
 #if X_ACCELERATOR_VARY
 	    /* This needs to match the order in http.c:httpMakeVaryMark */
 	    varyhdr = httpHeaderGetList(&mem->reply->header, HDR_X_ACCELERATOR_VARY);
 	    if (strBuf(varyhdr))
-		strListAdd(&vary, strBuf(varyhdr), ',');
+		strListAddStr(&vary, strBuf(varyhdr), strLen(varyhdr), ',');
 	    stringClean(&varyhdr);
 #endif
 	    storeAddVary(mem->url, mem->method, newkey, httpHeaderGetStr(&mem->reply->header, HDR_ETAG), strBuf(vary), mem->vary_headers, mem->vary_encoding);
