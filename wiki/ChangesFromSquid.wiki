@@ -22,6 +22,7 @@ A large amount of code has been moved out of src/ and into individual top-level 
   * storage memory pipeline in libstmem/
   * Internal and external DNS code in libsqdns/
   * name-resolution related functions (fqdncache and ipcache) in libsqname/
+  * IPv4/IPv6 address manipulation routines in libsqinet/
 
 = Bug Fixes =
 
