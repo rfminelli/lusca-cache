@@ -14,4 +14,4 @@ int HttpSockets[MAXHTTPPORTS];
 int theInIcpConnection = -1;
 int theOutIcpConnection = -1;
 StatHist select_fds_hist;
-
+int need_linux_tproxy = 0;

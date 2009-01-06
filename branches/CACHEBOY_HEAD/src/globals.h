@@ -144,7 +144,6 @@ extern void *sbrk_start;	/* 0 */
 #endif
 extern int opt_send_signal;	/* -1 */
 extern int opt_no_daemon;	/* 0 */
-extern int need_linux_tproxy;	/* 0 */
 extern int opt_parse_cfg_only;	/* 0 */
 extern int n_coss_dirs;		/* 0 */
 

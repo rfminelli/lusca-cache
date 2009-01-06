@@ -14,5 +14,6 @@ extern int theInIcpConnection;  /* -1 */
 extern int theOutIcpConnection; /* -1 */
 extern int iapp_incomingRate;
 extern StatHist select_fds_hist;
+extern int need_linux_tproxy;   /* 0 */
 
 #endif
