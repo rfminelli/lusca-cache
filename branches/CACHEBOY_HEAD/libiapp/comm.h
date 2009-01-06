@@ -147,6 +147,8 @@ typedef enum {
 #define COMM_NONBLOCKING        0x01
 #define COMM_NOCLOEXEC          0x02
 #define COMM_REUSEADDR          0x04
+#define	COMM_TPROXY		0x08
+
 #define FD_DESC_SZ              64
 
 #define	COMM_TOS_DEFAULT	0
