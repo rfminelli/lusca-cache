@@ -281,7 +281,8 @@ comm_fdopen6(int new_socket,
     if (F->flags.tproxy) {
         if (comm_ips_bind(new_socket, &F->local_address) != COMM_OK) {
             debug(1, 1) ("comm_fdopen6: FD %d: TPROXY comm_ips_bind failed? Why?\n", new_socket);
-            F->flags.tproxy = 0;
+            comm_close(new_socket);
+            return -1;
         }
     } else if (! sqinet_is_noaddr(&F->local_address)) {
 	if (commBind(new_socket, &F->local_address) != COMM_OK) {
