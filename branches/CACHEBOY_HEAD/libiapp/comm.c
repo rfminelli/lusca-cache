@@ -169,7 +169,7 @@ commBind(int s, sqaddr_t *addr)
 }
 
 int
-comm_open(int sock_type, int proto, struct in_addr addr, u_short port, int flags, unsigned char TOS, const char *note)
+comm_open(int sock_type, int proto, struct in_addr addr, u_short port, comm_flags_t flags, unsigned char TOS, const char *note)
 {
 	sqaddr_t a;
 	int r;
@@ -189,7 +189,7 @@ int
 comm_open6(int sock_type,
     int proto,
     sqaddr_t *a,
-    int flags,
+    comm_flags_t flags,
     unsigned char TOS,
     const char *note)
 {
@@ -230,7 +230,7 @@ comm_open6(int sock_type,
 }
 
 int
-comm_fdopen(int new_socket, int sock_type, struct in_addr addr, u_short port, int flags, unsigned char tos, const char *note)
+comm_fdopen(int new_socket, int sock_type, struct in_addr addr, u_short port, comm_flags_t flags, unsigned char tos, const char *note)
 {
 	sqaddr_t a;
 	int r;
@@ -247,7 +247,7 @@ int
 comm_fdopen6(int new_socket,
     int sock_type,
     sqaddr_t *a,
-    int flags,
+    comm_flags_t flags,
     unsigned char tos,
     const char *note)
 {

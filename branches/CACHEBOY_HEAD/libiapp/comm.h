@@ -144,13 +144,16 @@ typedef enum {
 #define COMM_SELECT_READ   (0x1)
 #define COMM_SELECT_WRITE  (0x2)
 
-#define COMM_NONBLOCKING        0x01
-#define COMM_NOCLOEXEC          0x02
-#define COMM_REUSEADDR          0x04
-#define	COMM_TPROXY		0x08
+typedef enum {
+	COMM_NONBLOCKING = 1,
+	COMM_NOCLOEXEC = 2,
+	COMM_REUSEADDR = 4,
+	COMM_TPROXY = 8
+} comm_flags_t;
 
 #define FD_DESC_SZ              64
 
+/* The default "no TOS" value */
 #define	COMM_TOS_DEFAULT	0
 
 struct _fde {
@@ -294,10 +297,10 @@ extern int comm_connect_addr(int sock, const sqaddr_t *addr);
 extern void comm_connect_begin(int fd, const sqaddr_t *addr, CNCB *cb, void *cbdata);
 extern void comm_init(void);
 extern int comm_listen(int sock);
-extern int comm_open(int, int, struct in_addr, u_short, int, unsigned char TOS, const char *);
-extern int comm_fdopen(int, int, struct in_addr, u_short, int, unsigned char, const char *);
-extern int comm_open6(int, int, sqaddr_t *addr, int, unsigned char TOS, const char *);
-extern int comm_fdopen6(int, int, sqaddr_t *addr, int, unsigned char, const char *);
+extern int comm_open(int, int, struct in_addr, u_short, comm_flags_t flags, unsigned char TOS, const char *);
+extern int comm_fdopen(int, int, struct in_addr, u_short, comm_flags_t flags, unsigned char, const char *);
+extern int comm_open6(int, int, sqaddr_t *addr, comm_flags_t flags, unsigned char TOS, const char *);
+extern int comm_fdopen6(int, int, sqaddr_t *addr, comm_flags_t flags, unsigned char, const char *);
 extern u_short comm_local_port(int fd);
 
 extern void commDeferFD(int fd);
