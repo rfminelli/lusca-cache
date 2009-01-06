@@ -54,8 +54,6 @@
 
 const String StringNull = { 0, 0, NULL };
 
-
-
 static void
 stringInitBuf(String * s, size_t sz)
 {
