@@ -11,12 +11,13 @@
 #include <netinet/in.h>
 
 #include "../libstat/StatHist.h"
+#include "../libsqinet/sqinet.h"
 #include "fd_types.h"
 #include "comm_types.h"
 #include "globals.h"
 
 int
-comm_ips_bind(int fd, struct in_addr addr, u_short port)
+comm_ips_bind(int fd, sqaddr_t *a)
 {
     return COMM_ERROR;
 }

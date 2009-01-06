@@ -127,6 +127,7 @@ struct _fde {
         unsigned int close_on_exec:1;
         unsigned int backoff:1; /* keep track of whether the fd is backed off */
         unsigned int dnsfailed:1;       /* did the dns lookup fail */
+	unsigned int tproxy:1;		/* should the source address of this FD be spoofed via comm_ips_bind()? */
     } flags;
     comm_pending read_pending;
     comm_pending write_pending;

@@ -14,6 +14,7 @@
 
 #include "../libstat/StatHist.h"
 
+#include "../libsqinet/sqinet.h"
 #include "../libsqdebug/debug.h"
 
 #include "fd_types.h"
@@ -36,11 +37,15 @@ typedef uint32_t __u32;
 #endif
 
 int
-comm_ips_bind(int fd, struct in_addr addr, u_short port)
+comm_ips_bind(int fd, sqaddr_t *a)
 {
+	if (sqinet_get_family(a) != AF_INET)
+		return COMM_ERROR;
+	u_short port = sqinet_get_port(a);
+
 	struct in_tproxy itp;
 
-        itp.v.addr.faddr.s_addr = addr;
+        itp.v.addr.faddr.s_addr = sqinet_get_v4_addr(a);
 	/* XXX the "port" is 0 here - so tproxy2 selects an outbound port rather than also spoofing the port */
         itp.v.addr.fport = 0;
         

@@ -267,6 +267,8 @@ comm_fdopen6(int new_socket,
 	commSetCloseOnExec(new_socket);
     if ((flags & COMM_REUSEADDR))
 	commSetReuseAddr(new_socket);
+    if ((flags & COMM_TPROXY))
+      F->flags.tproxy = 1;
     if (sqinet_get_port(a) > 0) {
 #ifdef _SQUID_MSWIN_
 	if (sock_type != SOCK_DGRAM)
@@ -275,7 +277,13 @@ comm_fdopen6(int new_socket,
 	if (opt_reuseaddr)
 	    commSetReuseAddr(new_socket);
     }
-    if (! sqinet_is_noaddr(&F->local_address)) {
+
+    if (F->flags.tproxy) {
+        if (comm_ips_bind(new_socket, &F->local_address) != COMM_OK) {
+            debug(1, 1) ("comm_fdopen6: FD %d: TPROXY comm_ips_bind failed? Why?\n", new_socket);
+            F->flags.tproxy = 0;
+        }
+    } else if (! sqinet_is_noaddr(&F->local_address)) {
 	if (commBind(new_socket, &F->local_address) != COMM_OK) {
 	    comm_close(new_socket);
 	    return -1;
