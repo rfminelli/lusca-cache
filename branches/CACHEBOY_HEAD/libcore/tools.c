@@ -7,6 +7,10 @@
 #include <sys/time.h>
 #include <string.h>
 
+#if HAVE_BACKTRACE_SYMBOLS_FD
+#include <execinfo.h>
+#endif
+
 #include "../include/config.h"
 #include "varargs.h"
 #include "tools.h"
@@ -103,3 +107,33 @@ intAverage(int cur, int new, int n, int max)
         n = max;
     return (cur * (n - 1) + new) / n;
 }
+
+void
+doBacktrace(void)
+{
+        fprintf(stderr, "backtrace:\n"); fflush(stderr);
+#if HAVE_BACKTRACE_SYMBOLS_FD
+    {   
+        static void *(callarray[8192]);
+        int n;
+        n = backtrace(callarray, 8192);
+        backtrace_symbols_fd(callarray, n, fileno(stderr));
+    }
+#endif
+#ifdef _SQUID_HPUX_
+    {   
+        extern void U_STACK_TRACE(void);        /* link with -lcl */
+        U_STACK_TRACE();
+        fflush(stderr);
+    }
+#endif /* _SQUID_HPUX_ */
+#ifdef _SQUID_SOLARIS_
+    {                           /* get ftp://opcom.sun.ca/pub/tars/opcom_stack.tar.gz and */
+        extern void opcom_stack_trace(void);    /* link with -lopcom_stack */
+	/* XXX does this dump to stdout or stderr? */
+        opcom_stack_trace();
+        fflush(stdout);
+    }
+#endif /* _SQUID_SOLARIS_ */
+}
+

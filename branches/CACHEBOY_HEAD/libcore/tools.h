@@ -58,6 +58,8 @@ extern int stringHasWhitespace(const char *);
 extern int intAverage(int, int, int, int);
 extern double doubleAverage(double, double, int, int);
 
+extern void doBacktrace(void);
+
 /* XXX this probably shouldn't be in here! */
 /*
  * ISO C99 Standard printf() macros for 64 bit integers
@@ -88,6 +90,5 @@ extern double doubleAverage(double, double, int, int);
 #ifndef MAXPATHLEN
 #define MAXPATHLEN SQUID_MAXPATHLEN
 #endif
-
 
 #endif
