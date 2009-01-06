@@ -71,6 +71,8 @@
 
 #include "../libiapp/iapp_ssl.h"
 #include "../libiapp/globals.h"
+#include "../libiapp/fd_types.h"
+#include "../libiapp/comm_types.h"
 #include "../libiapp/comm.h"
 
 #include "ipc.h"

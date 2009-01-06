@@ -27,6 +27,8 @@
 
 #include "event.h"
 #include "iapp_ssl.h"
+#include "fd_types.h"
+#include "comm_types.h"
 #include "comm.h"
 #include "mainloop.h"
 

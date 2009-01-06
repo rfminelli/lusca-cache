@@ -65,6 +65,8 @@
 #include "libsqinet/sqinet.h"
 
 #include "libiapp/iapp_ssl.h"
+#include "libiapp/fd_types.h"
+#include "libiapp/comm_types.h"
 #include "libiapp/comm.h"
 #include "libiapp/pconn_hist.h"
 #include "libiapp/mainloop.h"

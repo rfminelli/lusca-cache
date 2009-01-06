@@ -63,7 +63,10 @@
 
 #include "../libsqinet/sqinet.h"
 
+/* XXX at some point, comm.h should be split to disk, fd and comm includes */
 #include "iapp_ssl.h"
+#include "fd_types.h"
+#include "comm_types.h"
 #include "comm.h"
 
 static PF diskHandleRead;

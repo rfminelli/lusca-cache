@@ -74,6 +74,8 @@
  
 #include "iapp_ssl.h"
 #include "globals.h"
+#include "fd_types.h"
+#include "comm_types.h"
 #include "comm.h"
 #include "pconn_hist.h"
 

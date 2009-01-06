@@ -62,6 +62,8 @@
 #include "../libsqinet/sqinet.h"
 
 #include "iapp_ssl.h"
+#include "fd_types.h"
+#include "comm_types.h"
 #include "comm.h"
 
 fde *fd_table = NULL;

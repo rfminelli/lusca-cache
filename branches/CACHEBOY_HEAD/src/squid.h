@@ -409,6 +409,8 @@ struct rusage {
 #include "../libiapp/signals.h"
 #include "../libiapp/iapp_ssl.h"
 #include "../libiapp/ssl_support.h"
+#include "../libiapp/fd_types.h"
+#include "../libiapp/comm_types.h"
 #include "../libiapp/comm.h"
 #include "../libiapp/globals.h"
 #include "../libiapp/pconn_hist.h"
