@@ -7,6 +7,8 @@
 #include <dlfcn.h>
 
 static int (* next_vsnprintf) (char *str, size_t size, const char *format, va_list ap) = NULL;
+static int (* next_vfprintf) (FILE *stream, const char *format, va_list ap) = NULL;
+static int (* next_snprintf) (char *str, size_t size, const char *format, ...) = NULL;
 
 static void show_stackframe() {
   void *trace[16];
@@ -29,4 +31,33 @@ vsnprintf(char *str, size_t size, const char *format, va_list ap)
 	}
 	show_stackframe();
 	return next_vsnprintf(str, size, format, ap);
+}
+
+int
+vfprintf(FILE *stream, const char *fmt, va_list ap)
+{
+        if (next_vfprintf == NULL) {
+                next_vfprintf = dlsym(RTLD_NEXT, "vfprintf");
+        }
+        show_stackframe();
+        return next_vfprintf(stream, fmt, ap);
+
+}
+
+int
+snprintf(char *str, size_t size, const char *fmt, ...)
+{
+	va_list a;
+	int i;
+
+	va_start(a, fmt);
+	if (next_vsnprintf == NULL) {
+		next_vsnprintf = dlsym(RTLD_NEXT, "vsnprintf");
+	}
+	if (next_snprintf == NULL) {
+		next_snprintf = dlsym(RTLD_NEXT, "snprintf");
+	}
+	i = next_vsnprintf(str, size, fmt, a);	
+	va_end(a);
+	return i;
 }
