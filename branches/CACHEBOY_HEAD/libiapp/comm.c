@@ -78,6 +78,7 @@
 #include "comm_types.h"
 #include "comm.h"
 #include "pconn_hist.h"
+#include "comm_ips.h"
 
 #if defined(_SQUID_CYGWIN_)
 #include <sys/ioctl.h>
