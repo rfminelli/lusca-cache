@@ -3,7 +3,7 @@
  * Only compile this in if the other modules aren't included
  */
 
-#if (!LINUX_TPROXY)
+#if (!LINUX_TPROXY) && (!FREEBSD_TPROXY)
 
 #include <stdio.h>
 #include <stdlib.h>
