@@ -304,7 +304,16 @@ httpHeaderAddEntry(HttpHeader * hdr, HttpHeaderEntry * e)
 void
 httpHeaderAddEntryStr(HttpHeader *hdr, http_hdr_type id, const char *attrib, const char *value)
 {
-	httpHeaderAddEntry(hdr, httpHeaderEntryCreate(id, attrib, value));
+	httpHeaderAddEntryStr2(hdr, id, attrib, -1, value, -1);
+}
+
+/*
+ * -1 means "don't know length, call strlen()
+ */
+void
+httpHeaderAddEntryStr2(HttpHeader *hdr, http_hdr_type id, const char *a, int al, const char *v, int vl)
+{
+	httpHeaderAddEntry(hdr, httpHeaderEntryCreateL(id, a, al, v, vl));
 }
 
 /*!

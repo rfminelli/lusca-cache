@@ -77,15 +77,29 @@
 HttpHeaderEntry *
 httpHeaderEntryCreate(http_hdr_type id, const char *name, const char *value)
 {
+    return httpHeaderEntryCreateL(id, name, -1, value, -1);
+}
+
+/*
+ * A length of -1 means "unknown; call strlen()
+ */
+HttpHeaderEntry *
+httpHeaderEntryCreateL(http_hdr_type id, const char *name, int al, const char *value, int vl)
+{
     HttpHeaderEntry *e;
     assert_eid(id);
     e = memPoolAlloc(pool_http_header_entry);
     e->id = id;
     if (id != HDR_OTHER)
         e->name = Headers[id].name;
-    else
+    else if (al == -1)
         stringInit(&e->name, name);
-    stringInit(&e->value, value);
+    else
+        stringLimitInit(&e->name, name, al);
+    if (vl == -1)
+        stringInit(&e->value, value);
+    else
+        stringLimitInit(&e->value, value, vl);
     Headers[id].stat.aliveCount++;
     debug(55, 9) ("created entry %p: '%s: %s'\n", e, strBuf(e->name), strBuf(e->value));
     return e;

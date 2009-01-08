@@ -128,7 +128,7 @@ httpHeaderPutCc(HttpHeader * hdr, const HttpHdrCc * cc)
     packerToMemInit(&p, &mb);
     httpHdrCcPackInto(cc, &p);
     /* put */
-    httpHeaderAddEntryStr(hdr, HDR_CACHE_CONTROL, NULL, mb.buf);
+    httpHeaderAddEntryStr2(hdr, HDR_CACHE_CONTROL, NULL, -1, mb.buf, mb.size);
     /* cleanup */
     packerClean(&p);
     memBufClean(&mb);
@@ -147,7 +147,7 @@ httpHeaderPutContRange(HttpHeader * hdr, const HttpHdrContRange * cr)
     packerToMemInit(&p, &mb);
     httpHdrContRangePackInto(cr, &p);
     /* put */
-    httpHeaderAddEntryStr(hdr, HDR_CONTENT_RANGE, NULL, mb.buf);
+    httpHeaderAddEntryStr2(hdr, HDR_CONTENT_RANGE, NULL, -1, mb.buf, mb.size);
     /* cleanup */
     packerClean(&p);
     memBufClean(&mb);
@@ -166,7 +166,7 @@ httpHeaderPutRange(HttpHeader * hdr, const HttpHdrRange * range)
     packerToMemInit(&p, &mb);
     httpHdrRangePackInto(range, &p);
     /* put */
-    httpHeaderAddEntryStr(hdr, HDR_RANGE, NULL, mb.buf);
+    httpHeaderAddEntryStr2(hdr, HDR_RANGE, NULL, -1, mb.buf, mb.size);
     /* cleanup */
     packerClean(&p);
     memBufClean(&mb);
