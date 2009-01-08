@@ -3,6 +3,8 @@
  * Only compile this in if the other modules aren't included
  */
 
+#include "../include/config.h"
+
 #if (!LINUX_TPROXY) && (!FREEBSD_TPROXY)
 
 #include <stdio.h>

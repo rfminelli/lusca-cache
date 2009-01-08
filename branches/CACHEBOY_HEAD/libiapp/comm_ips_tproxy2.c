@@ -1,6 +1,6 @@
-#if LINUX_TPROXY
-
 #include "../include/config.h"
+
+#if LINUX_TPROXY
 
 #include <stdio.h>
 #include <stdlib.h>
