@@ -10,8 +10,13 @@ struct _String {
 
 typedef struct _String String;
 
+/* Code using these two define's don't treat the buffer as a NUL-terminated C string */
+#define strLen2(s)     ((/* const */ int)(s).len)
+#define strBuf2(s)     ((const char*)(s).buf)
+
 #define strLen(s)     ((/* const */ int)(s).len)
 #define strBuf(s)     ((const char*)(s).buf)
+
 #define strChr(s,ch)  ((const char*)strchr(strBuf(s), (ch)))
 #define strRChr(s,ch) ((const char*)strrchr(strBuf(s), (ch)))
 #define strStr(s,str) ((const char*)strstr(strBuf(s), (str)))  
