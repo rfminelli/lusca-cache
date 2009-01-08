@@ -235,4 +235,5 @@ icmpClose(void)
 #endif
     icmp_sock = -1;
 #endif
+    icmpOpen();
 }
