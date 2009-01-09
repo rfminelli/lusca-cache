@@ -620,20 +620,6 @@ xstrndup(const char *s, size_t n)
 }
 
 /*
- * xstrduplen() - string dup with the given length. NUL terminate the string -
- * assume the given buffer is not a C buffer.
- */
-char *
-xstrnduplen(const char *s, size_t l)
-{
-	char *d;
-	d = xmalloc(l + 1);
-	memcpy(d, s, l);
-	d[l] = '\0';
-	return d;
-}
-
-/*
  * xstrerror() - strerror() wrapper
  */
 const char *

@@ -62,7 +62,6 @@ extern const char *mkrfc1123(time_t);
 extern char *uudecode(const char *);
 extern char *xstrdup(const char *);
 extern char *xstrndup(const char *, size_t);
-extern char * xstrnduplen(const char *s, size_t l);
 extern const char *xstrerror(void);
 extern int tvSubMsec(struct timeval, struct timeval);
 extern int tvSubUsec(struct timeval, struct timeval);
