@@ -89,6 +89,15 @@ httpHeaderPutStr(HttpHeader * hdr, http_hdr_type id, const char *str)
     httpHeaderAddEntryStr(hdr, id, NULL, str);
 }
 
+void
+httpHeaderPutString(HttpHeader *hdr, http_hdr_type id, String *s)
+{
+    assert_eid(id);
+    assert(Headers[id].type == ftStr);  /* must be of an appropriate type */
+    assert(s);
+    httpHeaderAddEntryString(hdr, id, NULL, s);
+}
+
 /* same as httpHeaderPutStr, but formats the string using snprintf first */
 void
 #if STDC_HEADERS

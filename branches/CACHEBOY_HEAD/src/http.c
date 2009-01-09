@@ -1080,7 +1080,7 @@ httpBuildRequestHeader(request_t * request,
 	    strListAddUnique(&etags, request->etags->items[i], ',');
     }
     if (strLen(etags))
-	httpHeaderPutStr(hdr_out, HDR_IF_NONE_MATCH, strBuf(etags));
+	httpHeaderPutString(hdr_out, HDR_IF_NONE_MATCH, &etags);
     stringClean(&etags);
     /* decide if we want to do Ranges ourselves 
      * (and fetch the whole object now)
@@ -1233,7 +1233,7 @@ httpBuildRequestHeader(request_t * request,
 	strListAdd(&strVia, bbuf, ',');
 	if (flags.http11)
 	    strListAdd(&strVia, "1.0 internal", ',');
-	httpHeaderPutStr(hdr_out, HDR_VIA, strBuf(strVia));
+	httpHeaderPutString(hdr_out, HDR_VIA, &strVia);
 	stringClean(&strVia);
     }
     /* append X-Forwarded-For */
@@ -1254,7 +1254,7 @@ httpBuildRequestHeader(request_t * request,
 	break;
     }
     if (strLen(strFwd)) {
-	httpHeaderPutStr(hdr_out, HDR_X_FORWARDED_FOR, strBuf(strFwd));
+	httpHeaderPutString(hdr_out, HDR_X_FORWARDED_FOR, &strFwd);
 	stringClean(&strFwd);
     }
     /* append Host if not there already */

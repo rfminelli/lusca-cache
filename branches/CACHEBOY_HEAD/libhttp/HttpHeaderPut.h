@@ -2,6 +2,7 @@
 #define	__LIBHTTP_HTTP_HEADER_PUT_H__
 
 extern void httpHeaderPutStr(HttpHeader * hdr, http_hdr_type type, const char *str);
+extern void httpHeaderPutString(HttpHeader *hdr, http_hdr_type id, String *s);
 #if STDC_HEADERS 
 extern void
 httpHeaderPutStrf(HttpHeader * hdr, http_hdr_type id, const char *fmt,...) PRINTF_FORMAT_ARG3;
