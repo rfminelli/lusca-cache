@@ -87,7 +87,7 @@ stringDup(const String * s)
 {
     String dup;
     assert(s);
-    stringInit(&dup, s->buf);
+    stringLimitInit(&dup, s->buf, s->len);
     return dup;
 }
 
