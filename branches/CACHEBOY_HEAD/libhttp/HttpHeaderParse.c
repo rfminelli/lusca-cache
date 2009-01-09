@@ -268,7 +268,7 @@ httpHeaderEntryParseCreate(const char *field_start, const char *field_end)
     stringLimitInit(&e->value, value_start, field_end - value_start);
     Headers[id].stat.seenCount++;
     Headers[id].stat.aliveCount++;
-    debug(55, 9) ("created entry %p: '%s.*: %.*s'\n", e, strLen2(e->name), strBuf2(e->name), strLen2(e->value), strBuf2(e->value));
+    debug(55, 9) ("created entry %p: '%.*s: %.*s'\n", e, strLen2(e->name), strBuf2(e->name), strLen2(e->value), strBuf2(e->value));
     return e;
 }
 
