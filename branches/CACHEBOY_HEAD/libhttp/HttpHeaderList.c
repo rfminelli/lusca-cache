@@ -92,7 +92,7 @@ httpHeaderGetList(const HttpHeader * hdr, http_hdr_type id)
         return s;
     while ((e = httpHeaderGetEntry(hdr, &pos))) {
         if (e->id == id)
-            strListAddStr(&s, strBuf(e->value), strLen(e->value), ',');
+            strListAddStr(&s, strBuf2(e->value), strLen2(e->value), ',');
     }
     /*
      * note: we might get an empty (len==0) string if there was an "empty"
@@ -101,8 +101,8 @@ httpHeaderGetList(const HttpHeader * hdr, http_hdr_type id)
     assert(strBuf(s));
     /* temporary warning: remove it! @?@ @?@ @?@ */
     if (!strLen(s))
-        debug(55, 3) ("empty list header: %s (%d)\n", strBuf(Headers[id].name), id);
-    debug(55, 6) ("%p: joined for id %d: %s\n", hdr, id, strBuf(s));
+        debug(55, 3) ("empty list header: %.*s (%d)\n", strLen2(Headers[id].name), strBuf2(Headers[id].name), id);
+    debug(55, 6) ("%p: joined for id %d: %.*s\n", hdr, id, strLen2(s), strBuf2(s));
     return s;
 }
 

@@ -265,7 +265,7 @@ httpHdrRangeParseInit(HttpHdrRange * range, const String * str)
     int count = 0;
     assert(range && str);
     RangeParsedCount++;
-    debug(64, 8) ("parsing range field: '%s'\n", strBuf(*str));
+    debug(64, 8) ("parsing range field: '%.*s'\n", strLen2(*str), strBuf2(*str));
     /* check range type */
     if (strNCaseCmp(*str, "bytes=", 6))
 	return 0;
