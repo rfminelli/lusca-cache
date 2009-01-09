@@ -106,7 +106,7 @@ httpHeaderEntryCreateL(http_hdr_type id, const char *name, int al, const char *v
 }
 
 HttpHeaderEntry *
-httpHeaderEntryCreate2(http_hdr_type id, String name, String value)
+httpHeaderEntryCreate2(http_hdr_type id, const String *name, const String *value)
 {
     HttpHeaderEntry *e;
     assert_eid(id);
@@ -115,8 +115,8 @@ httpHeaderEntryCreate2(http_hdr_type id, String name, String value)
     if (id != HDR_OTHER)
         e->name = Headers[id].name;
     else
-	e->name = stringDup(&name);
-    e->value = stringDup(&value);
+	e->name = stringDup(name);
+    e->value = stringDup(value);
     Headers[id].stat.aliveCount++;
     debug(55, 9) ("created entry %p: '%s: %s'\n", e, strBuf(e->name), strBuf(e->value));
     return e;
@@ -141,6 +141,6 @@ httpHeaderEntryDestroy(HttpHeaderEntry * e)
 HttpHeaderEntry *
 httpHeaderEntryClone(const HttpHeaderEntry * e)
 {
-    return httpHeaderEntryCreate2(e->id, e->name, e->value);
+    return httpHeaderEntryCreate2(e->id, &e->name, &e->value);
 }
 
