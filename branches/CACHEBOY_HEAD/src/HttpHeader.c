@@ -180,9 +180,9 @@ void
 httpHeaderEntryPackInto(const HttpHeaderEntry * e, Packer * p)
 {
     assert(e && p);
-    packerAppend(p, strBuf(e->name), strLen(e->name));
+    packerAppend(p, strBuf2(e->name), strLen2(e->name));
     packerAppend(p, ": ", 2);
-    packerAppend(p, strBuf(e->value), strLen(e->value));
+    packerAppend(p, strBuf2(e->value), strLen2(e->value));
     packerAppend(p, "\r\n", 2);
 }
 

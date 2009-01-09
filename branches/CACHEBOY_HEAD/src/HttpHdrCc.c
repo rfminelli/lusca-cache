@@ -45,7 +45,7 @@ httpHdrCcPackInto(const HttpHdrCc * cc, Packer * p)
 	if (EBIT_TEST(cc->mask, flag) && flag != CC_OTHER) {
 
 	    /* print option name */
-	    packerPrintf(p, (pcount ? ", %s" : "%s"), strBuf(CcFieldsInfo[flag].name));
+	    packerPrintf(p, (pcount ? ", %.*s" : "%.*s"), strLen2(CcFieldsInfo[flag].name), strBuf2(CcFieldsInfo[flag].name));
 
 	    /* handle options with values */
 	    if (flag == CC_MAX_AGE)
@@ -64,7 +64,7 @@ httpHdrCcPackInto(const HttpHdrCc * cc, Packer * p)
 	}
     }
     if (strLen(cc->other))
-	packerPrintf(p, (pcount ? ", %s" : "%s"), strBuf(cc->other));
+	packerPrintf(p, (pcount ? ", %.*s" : "%.*s"), strLen2(cc->other), strBuf2(cc->other));
 }
 
 void
