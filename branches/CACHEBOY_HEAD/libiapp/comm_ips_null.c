@@ -5,7 +5,7 @@
 
 #include "../include/config.h"
 
-#if (!LINUX_TPROXY) && (!FREEBSD_TPROXY)
+#if (!LINUX_TPROXY) && (!FREEBSD_TPROXY) && (!LINUX_TPROXY4)
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -42,6 +42,7 @@ libiapp_a_SOURCES = \
 	mainloop.c \
 	comm_ips_null.c \
 	comm_ips_tproxy2.c \
+	comm_ips_tproxy4.c \
 	comm_ips_freebsd.c \
 	$(COMMLOOP_SOURCE) \
 	$(SSLSOURCE)

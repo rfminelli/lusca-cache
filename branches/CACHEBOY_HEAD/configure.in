@@ -1140,14 +1140,29 @@ dnl "-64" from LDFLAGS
 	;;
 esac
 
-dnl Enable Linux transparent proxy support
+dnl Enable Linux transparent proxy support v2
 AC_ARG_ENABLE(linux-tproxy,
 [  --enable-linux-tproxy
-			  Enable real Transparent Proxy support for Netfilter TPROXY.],
+			  Enable real Transparent Proxy support for Netfilter TPROXY v2.],
 [ if test "$enableval" = "yes" ; then
 	echo "Linux Netfilter/TPROXY enabled"
-	AC_DEFINE(LINUX_TPROXY, 1, [Enable real Transparent Proxy support for Netfilter TPROXY.])
+	AC_DEFINE(LINUX_TPROXY, 1, [Enable real Transparent Proxy support for Netfilter TPROXY v2.])
 	LINUX_TPROXY="yes"
+        if test -z "$LINUX_NETFILTER"; then
+	    echo "Linux-Netfilter Transparent Proxy automatically enabled"
+	    LINUX_NETFILTER="yes"
+	fi
+  fi
+])
+
+dnl Enable Linux transparent proxy v4 support
+AC_ARG_ENABLE(linux-tproxy4,
+[  --enable-linux-tproxy4
+			  Enable real Transparent Proxy support for Netfilter TPROXY v4.],
+[ if test "$enableval" = "yes" ; then
+	echo "Linux Netfilter/TPROXY v4 enabled"
+	AC_DEFINE(LINUX_TPROXY4, 1, [Enable real Transparent Proxy support for Netfilter TPROXY v4.])
+	LINUX_TPROXY4="yes"
         if test -z "$LINUX_NETFILTER"; then
 	    echo "Linux-Netfilter Transparent Proxy automatically enabled"
 	    LINUX_NETFILTER="yes"
