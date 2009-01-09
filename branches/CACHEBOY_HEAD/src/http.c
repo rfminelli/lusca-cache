@@ -357,12 +357,12 @@ httpMakeVaryMark(request_t * request, HttpReply * reply)
     stringClean(&vstr);
     hdr = httpHeaderGetList(&reply->header, HDR_VARY);
     if (strBuf(hdr))
-	strListAddStr(&vary, strBuf(hdr), strLen(hdr), ',');
+	strListAddStr(&vary, strBuf2(hdr), strLen2(hdr), ',');
     stringClean(&hdr);
 #if X_ACCELERATOR_VARY
     hdr = httpHeaderGetList(&reply->header, HDR_X_ACCELERATOR_VARY);
     if (strBuf(hdr))
-	strListAddStr(&vary, strBuf(hdr), strLen(hdr), ',');
+	strListAddStr(&vary, strBuf2(hdr), strLen2(hdr), ',');
     stringClean(&hdr);
 #endif
     while (strListGetItem(&vary, ',', &item, &ilen, &pos)) {
@@ -405,7 +405,7 @@ httpMakeVaryMark(request_t * request, HttpReply * reply)
 	request->vary_hdr = xstrdup(strBuf(vary));
 	request->vary_headers = xstrdup(strBuf(vstr));
     }
-    debug(11, 3) ("httpMakeVaryMark: %s\n", strBuf(vstr));
+    debug(11, 3) ("httpMakeVaryMark: %.*s\n", strLen2(vstr), strBuf2(vstr));
     stringClean(&vary);
     stringClean(&vstr);
     return request->vary_headers;
@@ -511,7 +511,7 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	    }
 	    if (item) {
 		/* Can't handle other transfer-encodings */
-		debug(11, 1) ("Unexpected transfer encoding '%s'\n", strBuf(tr));
+		debug(11, 1) ("Unexpected transfer encoding '%.*s'\n", strLen2(tr), strBuf2(tr));
 		reply->sline.status = HTTP_INVALID_HEADER;
 		return done;
 	    }
@@ -684,7 +684,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 		    char *end = NULL;
 		    int badchunk = 0;
 		    int emptychunk = 0;
-		    debug(11, 3) ("Chunk header '%s'\n", strBuf(httpState->chunkhdr));
+		    debug(11, 3) ("Chunk header '%.*s'\n", strLen2(httpState->chunkhdr), strBuf2(httpState->chunkhdr));
 		    errno = 0;
 		    httpState->chunk_size = strto_off_t(strBuf(httpState->chunkhdr), &end, 16);
 		    if (errno)
@@ -694,7 +694,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 		    while (end && (*end == '\r' || *end == ' ' || *end == '\t'))
 			end++;
 		    if (httpState->chunk_size < 0 || badchunk || !end || (*end != '\n' && *end != ';')) {
-			debug(11, 1) ("Invalid chunk header '%s'\n", strBuf(httpState->chunkhdr));
+			debug(11, 1) ("Invalid chunk header '%.*s'\n", strLen2(httpState->chunkhdr), strBuf2(httpState->chunkhdr));
 			fwdFail(httpState->fwd, errorCon(ERR_INVALID_RESP, HTTP_BAD_GATEWAY, httpState->fwd->request));
 			comm_close(fd);
 			return;
@@ -1107,11 +1107,11 @@ httpBuildRequestHeader(request_t * request,
 
     strConnection = httpHeaderGetList(hdr_in, HDR_CONNECTION);
     while ((e = httpHeaderGetEntry(hdr_in, &pos))) {
-	debug(11, 5) ("httpBuildRequestHeader: %s: %s\n",
-	    strBuf(e->name), strBuf(e->value));
+	debug(11, 5) ("httpBuildRequestHeader: %.*s: %.*s\n",
+	    strLen2(e->name), strBuf2(e->name), strLen2(e->value), strBuf2(e->value));
 	if (!httpRequestHdrAllowed(e, &strConnection)) {
-	    debug(11, 2) ("'%s' header is a hop-by-hop connections header\n",
-		strBuf(e->name));
+	    debug(11, 2) ("'%.*s' header is a hop-by-hop connections header\n",
+		strLen2(e->name), strBuf2(e->name));
 	    continue;
 	}
 	switch (e->id) {

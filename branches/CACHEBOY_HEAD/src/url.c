@@ -433,7 +433,7 @@ urlCanonical(request_t * request)
     if (request->canonical)
 	return request->canonical;
     if (request->protocol == PROTO_URN) {
-	snprintf(urlbuf, MAX_URL, "urn:%s", strBuf(request->urlpath));
+	snprintf(urlbuf, MAX_URL, "urn:%.*s", strLen2(request->urlpath), strBuf2(request->urlpath));
     } else {
 	switch (request->method) {
 	case METHOD_CONNECT:
@@ -443,13 +443,14 @@ urlCanonical(request_t * request)
 	    portbuf[0] = '\0';
 	    if (request->port != urlDefaultPort(request->protocol))
 		snprintf(portbuf, 32, ":%d", request->port);
-	    snprintf(urlbuf, MAX_URL, "%s://%s%s%s%s%s",
+	    snprintf(urlbuf, MAX_URL, "%s://%s%s%s%s%.*s",
 		ProtocolStr[request->protocol],
 		request->login,
 		*request->login ? "@" : null_string,
 		request->host,
 		portbuf,
-		strBuf(request->urlpath));
+		strLen2(request->urlpath),
+		strBuf2(request->urlpath));
 	    break;
 	}
     }
@@ -473,7 +474,7 @@ urlCanonicalClean(const request_t * request)
     static const char ts[] = "://";
 
     if (request->protocol == PROTO_URN) {
-	snprintf(buf, MAX_URL, "urn:%s", strBuf(request->urlpath));
+	snprintf(buf, MAX_URL, "urn:%.*s", strLen2(request->urlpath), strBuf2(request->urlpath));
     } else {
 	switch (request->method) {
 	case METHOD_CONNECT:
