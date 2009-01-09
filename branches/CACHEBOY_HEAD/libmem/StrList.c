@@ -139,7 +139,7 @@ strListAddStr(String * str, const char *item, int len, char del)
 	buf[2] = '\0';
 	stringAppend(str, buf, 2);
     }
-    stringAppend(str, item, strlen(item));
+    stringAppend(str, item, len);
 }
 
 void
