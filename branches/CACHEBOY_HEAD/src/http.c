@@ -1396,9 +1396,11 @@ httpBuildRequestPrefix(request_t * request,
     http_state_flags flags)
 {
     const int offset = mb->size;
-    memBufPrintf(mb, "%s %s HTTP/1.%d\r\n",
+    memBufPrintf(mb, "%.*s %.*s HTTP/1.%d\r\n",
+	RequestMethods[request->method].len,
 	RequestMethods[request->method].str,
-	strLen(request->urlpath) ? strBuf(request->urlpath) : "/",
+	strLen2(request->urlpath) ? strLen2(request->urlpath) : 1,
+	strLen2(request->urlpath) ? strBuf2(request->urlpath) : "/",
 	flags.http11);
     /* build and pack headers */
     {
