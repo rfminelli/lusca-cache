@@ -28,6 +28,7 @@ typedef struct _String String;
 #define strCut(s,pos) (((s).len = pos) , ((s).buf[pos] = '\0'))
 #define strCutPtr(s,ptr) (((s).len = (ptr)-(s).buf) , ((s).buf[(s).len] = '\0'))
 #define strCat(s,str)  stringAppend(&(s), (str), strlen(str))
+
 extern void stringInit(String * s, const char *str);
 extern void stringLimitInit(String * s, const char *str, int len);
 extern String stringDup(const String * s);
@@ -35,6 +36,8 @@ extern void stringClean(String * s);
 extern void stringReset(String * s, const char *str);
 extern void stringAppend(String * s, const char *buf, int len);
 /* extern void stringAppendf(String *s, const char *fmt, ...) PRINTF_FORMAT_ARG2; */
+
+extern char * stringDupToC(String *s);
 
 extern const String StringNull; /* { 0, 0, NULL } */
 

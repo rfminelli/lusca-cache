@@ -128,3 +128,17 @@ stringAppend(String * s, const char *str, int len)
 	*s = snew;
     }
 }
+
+/*
+ * This routine REQUIRES the string to be something and not NULL
+ */
+char *
+stringDupToC(String *s)
+{
+	char *d;
+	assert(s->buf);
+	d = xmalloc(s->len + 1);
+	memcpy(d, s->buf, s->len);
+	d[s->len] = '\0';
+	return d;
+}
