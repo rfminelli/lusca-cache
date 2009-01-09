@@ -402,8 +402,8 @@ httpMakeVaryMark(request_t * request, HttpReply * reply)
     safe_free(request->vary_hdr);
     safe_free(request->vary_headers);
     if (strBuf(vary) && strBuf(vstr)) {
-	request->vary_hdr = xstrdup(strBuf(vary));
-	request->vary_headers = xstrdup(strBuf(vstr));
+	request->vary_hdr = stringDupToC(&vary);
+	request->vary_headers = stringDupToC(&vstr);
     }
     debug(11, 3) ("httpMakeVaryMark: %.*s\n", strLen2(vstr), strBuf2(vstr));
     stringClean(&vary);
@@ -541,7 +541,7 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	}
 	entry->mem_obj->vary_headers = xstrdup(vary);
 	if (strBuf(httpState->orig_request->vary_encoding))
-	    entry->mem_obj->vary_encoding = xstrdup(strBuf(httpState->orig_request->vary_encoding));
+	    entry->mem_obj->vary_encoding = stringDupToC(&httpState->orig_request->vary_encoding);
     }
     if (entry->mem_obj->old_entry)
 	EBIT_CLR(entry->mem_obj->old_entry->flags, REFRESH_FAILURE);

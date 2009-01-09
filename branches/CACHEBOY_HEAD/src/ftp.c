@@ -1519,7 +1519,7 @@ ftpReadType(FtpStateData * ftpState)
     char *d, *p;
     debug(9, 3) ("This is ftpReadType\n");
     if (code == 200) {
-	p = path = xstrdup(strBuf(ftpState->request->urlpath));
+	p = path = stringDupToC(&ftpState->request->urlpath);
 	if (*p == '/')
 	    p++;
 	while (*p) {
@@ -2371,7 +2371,7 @@ ftpTrySlashHack(FtpStateData * ftpState)
 	wordlistDestroy(&ftpState->pathcomps);
     safe_free(ftpState->filepath);
     /* Build the new path (urlpath begins with /) */
-    path = xstrdup(strBuf(ftpState->request->urlpath));
+    path = stringDupToC(&ftpState->request->urlpath);
     rfc1738_unescape(path);
     ftpState->filepath = path;
     /* And off we go */

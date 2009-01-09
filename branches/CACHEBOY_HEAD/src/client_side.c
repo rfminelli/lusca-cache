@@ -3692,7 +3692,7 @@ clientProcessMiss(clientHttpRequest * http)
 	    http->entry->mem_obj->vary_headers = xstrdup(r->vary_headers);
 	safe_free(http->entry->mem_obj->vary_encoding);
 	if (strBuf(r->vary_encoding))
-	    http->entry->mem_obj->vary_encoding = xstrdup(strBuf(r->vary_encoding));
+	    http->entry->mem_obj->vary_encoding = stringDupToC(&r->vary_encoding);
 	http->entry->mem_obj->request = requestLink(r);
 	EBIT_SET(http->entry->flags, KEY_EARLY_PUBLIC);
 	storeSetPublicKey(http->entry);

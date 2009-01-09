@@ -1913,7 +1913,7 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	return aclMatchTime(ae->data, squid_curtime);
 	/* NOTREACHED */
     case ACL_URLPATH_REGEX:
-	esc_buf = xstrdup(strBuf(r->urlpath));
+	esc_buf = stringDupToC(&r->urlpath);
 	rfc1738_unescape(esc_buf);
 	k = aclMatchRegex(ae->data, esc_buf);
 	safe_free(esc_buf);
