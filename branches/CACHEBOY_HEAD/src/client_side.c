@@ -2501,7 +2501,7 @@ clientPackRangeHdr(const HttpReply * rep, const HttpHdrRangeSpec * spec, String 
     /* put boundary */
     debug(33, 5) ("clientPackRangeHdr: appending boundary: %.*s\n", strLen2(boundary), strBuf2(boundary));
     /* rfc2046 requires to _prepend_ boundary with <crlf>! */
-    memBufPrintf(mb, "\r\n--%s\r\n", strBuf(boundary));
+    memBufPrintf(mb, "\r\n--%.*s\r\n", strLen2(boundary), strBuf2(boundary));
 
     /* stuff the header with required entries and pack it */
     httpHeaderInit(&hdr, hoReply);
