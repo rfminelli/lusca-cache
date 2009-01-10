@@ -564,7 +564,7 @@ httpHeaderGetByName(const HttpHeader * hdr, const char *name)
     /* Sorry, an unknown header name. Do linear search */
     while ((e = httpHeaderGetEntry(hdr, &pos))) {
         if (e->id == HDR_OTHER && strCaseCmp(e->name, name) == 0) {
-            strListAddStr(&result, strBuf(e->value), strLen(e->value), ',');
+            strListAddStr(&result, strBuf2(e->value), strLen2(e->value), ',');
         }
     }
     return result;
