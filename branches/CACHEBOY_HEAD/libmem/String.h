@@ -10,10 +10,20 @@ struct _String {
 
 typedef struct _String String;
 
-/* Code using these two define's don't treat the buffer as a NUL-terminated C string */
+/* Code using these define's don't treat the buffer as a NUL-terminated C string */
 #define strLen2(s)     ((/* const */ int)(s).len)
 #define strBuf2(s)     ((const char*)(s).buf)
 
+/*
+ * These two functions return whether the string is set to some value, even if
+ * its an empty string. A few Squid functions do if (strBuf(str)) to see if
+ * something has set the string to a value; these functions replace them.
+ */
+
+#define	strIsNull(s)	( (s).buf == NULL )
+#define	strIsNotNull(s)	( (s).buf != NULL )
+
+/* These are legacy routines which may or may not expect NUL-termination or not */
 #define strLen(s)     ((/* const */ int)(s).len)
 #define strBuf(s)     ((const char*)(s).buf)
 
