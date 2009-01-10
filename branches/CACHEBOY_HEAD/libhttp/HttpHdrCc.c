@@ -235,7 +235,7 @@ void
 httpHdrCcDestroy(HttpHdrCc * cc)
 {
     assert(cc);
-    if (strBuf(cc->other))
+    if (strIsNotNull(cc->other))
 	stringClean(&cc->other);
     memPoolFree(pool_http_hdr_cc, cc);
 }

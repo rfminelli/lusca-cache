@@ -147,7 +147,7 @@ storeKeyPublicByRequestMethod(request_t * request, const method_t method)
     if (request->vary_headers) {
 	SQUID_MD5Update(&M, (unsigned char *) "\0V", 2);
 	SQUID_MD5Update(&M, (unsigned char *) request->vary_headers, strlen(request->vary_headers));
-	if (strBuf(request->vary_encoding)) {
+	if (strIsNotNull(request->vary_encoding)) {
 	    SQUID_MD5Update(&M, (unsigned char *) "\0E", 2);
 	    SQUID_MD5Update(&M, (unsigned char *) strBuf2(request->vary_encoding), strLen2(request->vary_encoding));
 	}

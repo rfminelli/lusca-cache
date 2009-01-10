@@ -156,7 +156,7 @@ clientRedirectDone(void *data, char *result)
 	    old_request->body_reader_data = NULL;
 	}
 	new_request->content_length = old_request->content_length;
-	if (strBuf(old_request->extacl_log))
+	if (strIsNotNull(old_request->extacl_log))
 	    new_request->extacl_log = stringDup(&old_request->extacl_log);
 	if (old_request->extacl_user)
 	    new_request->extacl_user = xstrdup(old_request->extacl_user);

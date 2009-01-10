@@ -767,7 +767,7 @@ aclMatchHeader(acl_hdr_data * hdrs, const HttpHeader * hdr)
 	    header = httpHeaderGetStrOrList(hdr, hd->hdr_id);
 	else
 	    header = httpHeaderGetByName(hdr, hd->hdr_name);
-	if (!strBuf(header))
+	if (strIsNull(header))
 	    continue;
 	ret = aclMatchRegex(hd->reglist, strBuf(header));
 	stringClean(&header);

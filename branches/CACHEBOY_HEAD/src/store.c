@@ -975,7 +975,7 @@ storeLocateVary(StoreEntry * e, int offset, const char *vary_data, String accept
 	VaryData_pool = memPoolCreate("VaryData", sizeof(VaryData));
     state = cbdataAlloc(LocateVaryState);
     state->vary_data = xstrdup(vary_data);
-    if (strBuf(accept_encoding))
+    if (strIsNotNull(accept_encoding))
 	state->accept_encoding = stringDupToC(&accept_encoding);
     state->data = memPoolAlloc(VaryData_pool);
     state->e = e;
@@ -1062,13 +1062,13 @@ storeSetPublicKey(StoreEntry * e)
 	    String vary = StringNull;
 	    String varyhdr;
 	    varyhdr = httpHeaderGetList(&mem->reply->header, HDR_VARY);
-	    if (strBuf(varyhdr))
+	    if (strIsNotNull(varyhdr))
 		strListAddStr(&vary, strBuf2(varyhdr), strLen2(varyhdr), ',');
 	    stringClean(&varyhdr);
 #if X_ACCELERATOR_VARY
 	    /* This needs to match the order in http.c:httpMakeVaryMark */
 	    varyhdr = httpHeaderGetList(&mem->reply->header, HDR_X_ACCELERATOR_VARY);
-	    if (strBuf(varyhdr))
+	    if (strIsNotNull(varyhdr))
 		strListAddStr(&vary, strBuf2(varyhdr), strLen2(varyhdr), ',');
 	    stringClean(&varyhdr);
 #endif

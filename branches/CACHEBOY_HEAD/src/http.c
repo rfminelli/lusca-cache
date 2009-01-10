@@ -356,12 +356,12 @@ httpMakeVaryMark(request_t * request, HttpReply * reply)
 
     stringClean(&vstr);
     hdr = httpHeaderGetList(&reply->header, HDR_VARY);
-    if (strBuf(hdr))
+    if (strIsNotNull(hdr))
 	strListAddStr(&vary, strBuf2(hdr), strLen2(hdr), ',');
     stringClean(&hdr);
 #if X_ACCELERATOR_VARY
     hdr = httpHeaderGetList(&reply->header, HDR_X_ACCELERATOR_VARY);
-    if (strBuf(hdr))
+    if (strIsNotNull(hdr))
 	strListAddStr(&vary, strBuf2(hdr), strLen2(hdr), ',');
     stringClean(&hdr);
 #endif
@@ -401,7 +401,7 @@ httpMakeVaryMark(request_t * request, HttpReply * reply)
     }
     safe_free(request->vary_hdr);
     safe_free(request->vary_headers);
-    if (strBuf(vary) && strBuf(vstr)) {
+    if (strIsNotNull(vary) && strIsNotNull(vstr)) {
 	request->vary_hdr = stringDupToC(&vary);
 	request->vary_headers = stringDupToC(&vstr);
     }
@@ -540,7 +540,7 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	    goto no_cache;	/* XXX Would be better if this was used by the swicht statement below */
 	}
 	entry->mem_obj->vary_headers = xstrdup(vary);
-	if (strBuf(httpState->orig_request->vary_encoding))
+	if (strIsNotNull(httpState->orig_request->vary_encoding))
 	    entry->mem_obj->vary_encoding = stringDupToC(&httpState->orig_request->vary_encoding);
     }
     if (entry->mem_obj->old_entry)
