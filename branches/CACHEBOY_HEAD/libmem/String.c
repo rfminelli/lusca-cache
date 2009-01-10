@@ -133,12 +133,19 @@ stringAppend(String * s, const char *str, int len)
  * This routine REQUIRES the string to be something and not NULL
  */
 char *
-stringDupToC(String *s)
+stringDupToCOffset(String *s, int offset)
 {
 	char *d;
 	assert(s->buf);
-	d = xmalloc(s->len + 1);
-	memcpy(d, s->buf, s->len);
-	d[s->len] = '\0';
+	assert(offset < s->len);		/* DUP'ing a 0 byte string seems pointless.. */
+	d = xmalloc(s->len + 1 - offset);
+	memcpy(d, s->buf, s->len - offset);
+	d[s->len - offset] = '\0';
 	return d;
+}
+
+char *
+stringDupToC(String *s)
+{
+	return stringDupToCOffset(s, 0);
 }

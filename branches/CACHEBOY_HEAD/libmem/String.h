@@ -48,6 +48,7 @@ extern void stringAppend(String * s, const char *buf, int len);
 /* extern void stringAppendf(String *s, const char *fmt, ...) PRINTF_FORMAT_ARG2; */
 
 extern char * stringDupToC(String *s);
+extern char * stringDupToCOffset(String *s, int offset);
 
 extern const String StringNull; /* { 0, 0, NULL } */
 
