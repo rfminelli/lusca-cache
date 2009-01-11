@@ -90,6 +90,15 @@ httpHeaderPutStr(HttpHeader * hdr, http_hdr_type id, const char *str)
 }
 
 void
+httpHeaderPutStr2(HttpHeader * hdr, http_hdr_type id, const char *str, int len)
+{   
+    assert_eid(id);
+    assert(Headers[id].type == ftStr);  /* must be of an appropriate type */
+    assert(str);
+    httpHeaderAddEntryStr2(hdr, id, NULL, -1, str, len);
+}
+
+void
 httpHeaderPutString(HttpHeader *hdr, http_hdr_type id, String *s)
 {
     assert_eid(id);
