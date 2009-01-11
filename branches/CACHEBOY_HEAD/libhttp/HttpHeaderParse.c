@@ -237,33 +237,35 @@ httpHeaderEntryParseCreate(const char *field_start, const char *field_end)
 	    return NULL;
     }
     /* now we know we can parse it */
-    e = memPoolAlloc(pool_http_header_entry);
-    debug(55, 9) ("creating entry %p: near '%.*s'\n", e, charBufferSize(field_start, field_end), field_start);
+
+
     /* is it a "known" field? */
     id = httpHeaderIdByName(field_start, name_len, Headers, HDR_ENUM_END);
     if (id < 0)
 	id = HDR_OTHER;
     assert_eid(id);
+
+    /* trim field value */
+    while (value_start < field_end && xisspace(*value_start))
+	value_start++;
+    while (value_start < field_end && xisspace(field_end[-1]))
+	field_end--;
+
+    if (field_end - value_start > 65534) {
+	/* String must be LESS THAN 64K and it adds a terminating NULL */
+	debug(55, 1) ("WARNING: ignoring '%.*s' header of %d bytes\n",
+	   charBufferSize(field_start, field_end), field_start,  charBufferSize(value_start, field_end));
+	return NULL;
+    }
+
+    e = memPoolAlloc(pool_http_header_entry);
+    debug(55, 9) ("creating entry %p: near '%.*s'\n", e, charBufferSize(field_start, field_end), field_start);
     e->id = id;
     /* set field name */
     if (id == HDR_OTHER)
 	stringLimitInit(&e->name, field_start, name_len);
     else
 	e->name = Headers[id].name;
-    /* trim field value */
-    while (value_start < field_end && xisspace(*value_start))
-	value_start++;
-    while (value_start < field_end && xisspace(field_end[-1]))
-	field_end--;
-    if (field_end - value_start > 65534) {
-	/* String must be LESS THAN 64K and it adds a terminating NULL */
-	debug(55, 1) ("WARNING: ignoring '%s' header of %d bytes\n",
-	    strBuf(e->name), (int) (field_end - value_start));
-	if (e->id == HDR_OTHER)
-	    stringClean(&e->name);
-	memPoolFree(pool_http_header_entry, e);
-	return NULL;
-    }
     /* set field value */
     stringLimitInit(&e->value, value_start, field_end - value_start);
     Headers[id].stat.seenCount++;
