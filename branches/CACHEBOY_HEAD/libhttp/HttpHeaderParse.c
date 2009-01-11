@@ -86,11 +86,11 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 
     assert(hdr);
     assert(header_start && header_end);
-    debug(55, 7) ("parsing hdr: (%p)\n%s\n", hdr, getStringPrefix(header_start, header_end));
+    debug(55, 7) ("parsing hdr: (%p)\n%.*s\n", hdr, charBufferSize(header_start, header_end), header_start);
     HttpHeaderStats[hdr->owner].parsedCount++;
     if (memchr(header_start, '\0', header_end - header_start)) {
-	debug(55, 1) ("WARNING: HTTP header contains NULL characters {%s}\n",
-	    getStringPrefix(header_start, header_end));
+	debug(55, 1) ("WARNING: HTTP header contains NULL characters {%.*s}\n",
+	    charBufferSize(header_start, header_end), header_start);
 	return httpHeaderReset(hdr);
     }
     /* common format headers are "<name>:[ws]<value>" lines delimited by <CRLF>.
@@ -110,14 +110,14 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 		/* Ignore CR CR LF in relaxed mode */
 		if (httpConfig_relaxed_parser && field_end > this_line + 1 && field_end[-1] == '\r') {
 		    debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
-			("WARNING: Double CR characters in HTTP header {%s}\n", getStringPrefix(field_start, field_end));
+			("WARNING: Double CR characters in HTTP header {%.*s}\n", charBufferSize(field_start, field_end), field_start);
 		    field_end--;
 		}
 	    }
 	    /* Barf on stray CR characters */
 	    if (memchr(this_line, '\r', field_end - this_line)) {
-		debug(55, 1) ("WARNING: suspicious CR characters in HTTP header {%s}\n",
-		    getStringPrefix(field_start, field_end));
+		debug(55, 1) ("WARNING: suspicious CR characters in HTTP header {%.*s}\n",
+		    charBufferSize(field_start, field_end), field_start);
 		if (httpConfig_relaxed_parser) {
 		    char *p = (char *) this_line;	/* XXX Warning! This destroys original header content and violates specifications somewhat */
 		    while ((p = memchr(p, '\r', field_end - p)) != NULL)
@@ -126,25 +126,25 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 		    return httpHeaderReset(hdr);
 	    }
 	    if (this_line + 1 == field_end && this_line > field_start) {
-		debug(55, 1) ("WARNING: Blank continuation line in HTTP header {%s}\n",
-		    getStringPrefix(header_start, header_end));
+		debug(55, 1) ("WARNING: Blank continuation line in HTTP header {%.*s}\n",
+		    charBufferSize(header_start, header_end), header_start);
 		return httpHeaderReset(hdr);
 	    }
 	} while (field_ptr < header_end && (*field_ptr == ' ' || *field_ptr == '\t'));
 	if (field_start == field_end) {
 	    if (field_ptr < header_end) {
-		debug(55, 1) ("WARNING: unparseable HTTP header field near {%s}\n",
-		    getStringPrefix(field_start, header_end));
+		debug(55, 1) ("WARNING: unparseable HTTP header field near {%.*s}\n",
+		    charBufferSize(field_start, field_end), field_start);
 		return httpHeaderReset(hdr);
 	    }
 	    break;		/* terminating blank line */
 	}
 	e = httpHeaderEntryParseCreate(field_start, field_end);
 	if (NULL == e) {
-	    debug(55, 1) ("WARNING: unparseable HTTP header field {%s}\n",
-		getStringPrefix(field_start, field_end));
+	    debug(55, 1) ("WARNING: unparseable HTTP header field {%.*s}\n",
+		charBufferSize(field_start, field_end), field_start);
 	    debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
-		(" in {%s}\n", getStringPrefix(header_start, header_end));
+		(" in {%.*s}\n", charBufferSize(header_start, header_end), header_start);
 	    if (httpConfig_relaxed_parser)
 		continue;
 	    else
@@ -161,7 +161,7 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 	    e2 = httpHeaderFindEntry(hdr, e->id);
 	    if (e2 && strCmp(e->value, strBuf(e2->value)) != 0) {
 		squid_off_t l2;
-		debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2) ("WARNING: found two conflicting content-length headers in {%s}\n", getStringPrefix(header_start, header_end));
+		debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2) ("WARNING: found two conflicting content-length headers in {%.*s}\n", charBufferSize(header_start, header_end), header_start);
 		if (!httpConfig_relaxed_parser) {
 		    httpHeaderEntryDestroy(e);
 		    return httpHeaderReset(hdr);
@@ -191,7 +191,7 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 	}
 	if (e->id == HDR_OTHER && stringHasWhitespace(strBuf(e->name))) {
 	    debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
-		("WARNING: found whitespace in HTTP header name {%s}\n", getStringPrefix(field_start, field_end));
+		("WARNING: found whitespace in HTTP header name {%.*s}\n", charBufferSize(field_start, field_end), field_start);
 	    if (!httpConfig_relaxed_parser) {
 		httpHeaderEntryDestroy(e);
 		return httpHeaderReset(hdr);
@@ -230,7 +230,7 @@ httpHeaderEntryParseCreate(const char *field_start, const char *field_end)
     }
     if (httpConfig_relaxed_parser && xisspace(field_start[name_len - 1])) {
 	debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
-	    ("NOTICE: Whitespace after header name in '%s'\n", getStringPrefix(field_start, field_end));
+	    ("NOTICE: Whitespace after header name in '%.*s'\n", charBufferSize(field_start, field_end), field_start);
 	while (name_len > 0 && xisspace(field_start[name_len - 1]))
 	    name_len--;
 	if (!name_len)
@@ -238,7 +238,7 @@ httpHeaderEntryParseCreate(const char *field_start, const char *field_end)
     }
     /* now we know we can parse it */
     e = memPoolAlloc(pool_http_header_entry);
-    debug(55, 9) ("creating entry %p: near '%s'\n", e, getStringPrefix(field_start, field_end));
+    debug(55, 9) ("creating entry %p: near '%.*s'\n", e, charBufferSize(field_start, field_end), field_start);
     /* is it a "known" field? */
     id = httpHeaderIdByName(field_start, name_len, Headers, HDR_ENUM_END);
     if (id < 0)
