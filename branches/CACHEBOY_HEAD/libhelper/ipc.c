@@ -386,12 +386,10 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
     t1 = dup(crfd);
     t2 = dup(cwfd);
     t3 = dup(fileno(debug_log));
-    t3 = dup(fileno(stderr));
     assert(t1 > 2 && t2 > 2 && t3 > 2);
     close(crfd);
     close(cwfd);
     close(fileno(debug_log));
-    close(fileno(stderr));
     dup2(t1, 0);
     dup2(t2, 1);
     dup2(t3, 2);
