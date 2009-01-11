@@ -102,6 +102,7 @@ httpHeaderEntryCreateL(http_hdr_type id, const char *name, int al, const char *v
         stringLimitInit(&e->value, value, vl);
     Headers[id].stat.aliveCount++;
     debug(55, 9) ("created entry %p: '%.*s: %.*s'\n", e, strLen2(e->name), strBuf2(e->name), strLen2(e->value), strBuf2(e->value));
+    e->active = 1;
     return e;
 }
 
@@ -119,6 +120,7 @@ httpHeaderEntryCreate2(http_hdr_type id, const String *name, const String *value
     e->value = stringDup(value);
     Headers[id].stat.aliveCount++;
     debug(55, 9) ("created entry %p: '%.*s: %.*s'\n", e, strLen2(e->name), strBuf2(e->name), strLen2(e->value), strBuf2(e->value));
+    e->active = 1;
     return e;
 }
 
@@ -135,6 +137,7 @@ httpHeaderEntryDestroy(HttpHeaderEntry * e)
     assert(Headers[e->id].stat.aliveCount);
     Headers[e->id].stat.aliveCount--;
     e->id = -1;
+    e->active = 0;
     memPoolFree(pool_http_header_entry, e);
 }
 

@@ -12,6 +12,8 @@ struct _HttpHeaderEntry {
 };
 typedef struct _HttpHeaderEntry HttpHeaderEntry;
 
+static inline int httpHeaderEntryIsActive(HttpHeaderEntry *e) { return (e->active); };
+
 /* avoid using these low level routines */
 extern HttpHeaderEntry * httpHeaderEntryCreate(http_hdr_type id, const char *name, const char *value);
 extern HttpHeaderEntry * httpHeaderEntryCreateL(http_hdr_type id, const char *name, int al, const char *value, int vl);
