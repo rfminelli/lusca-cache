@@ -313,8 +313,8 @@ httpHeaderNoteParsedEntry(http_hdr_type id, String context, int error)
     Headers[id].stat.parsCount++;
     if (error) {
         Headers[id].stat.errCount++;
-        debug(55, 2) ("cannot parse hdr field: '%s: %s'\n",
-            strBuf(Headers[id].name), strBuf(context));
+        debug(55, 2) ("cannot parse hdr field: '%.*s: %.*s'\n",
+            strLen2(Headers[id].name),  strBuf2(Headers[id].name), strLen2(context), strBuf2(context));
     }
 }
 
