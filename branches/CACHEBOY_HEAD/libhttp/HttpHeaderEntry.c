@@ -77,12 +77,11 @@
 /*
  * A length of -1 means "unknown; call strlen()
  */
-HttpHeaderEntry *
-httpHeaderEntryCreate(http_hdr_type id, const char *name, int al, const char *value, int vl)
+void
+httpHeaderEntryCreate(HttpHeaderEntry *e, http_hdr_type id, const char *name, int al, const char *value, int vl)
 {
-    HttpHeaderEntry *e;
     assert_eid(id);
-    e = memPoolAlloc(pool_http_header_entry);
+    assert(! e->active);
     e->id = id;
     if (id != HDR_OTHER)
         e->name = Headers[id].name;
@@ -97,15 +96,13 @@ httpHeaderEntryCreate(http_hdr_type id, const char *name, int al, const char *va
     Headers[id].stat.aliveCount++;
     debug(55, 9) ("created entry %p: '%.*s: %.*s'\n", e, strLen2(e->name), strBuf2(e->name), strLen2(e->value), strBuf2(e->value));
     e->active = 1;
-    return e;
 }
 
-HttpHeaderEntry *
-httpHeaderEntryCreate2(http_hdr_type id, const String *name, const String *value)
+void
+httpHeaderEntryCreate2(HttpHeaderEntry *e, http_hdr_type id, const String *name, const String *value)
 {
-    HttpHeaderEntry *e;
     assert_eid(id);
-    e = memPoolAlloc(pool_http_header_entry);
+    assert(! e->active);
     e->id = id;
     if (id != HDR_OTHER)
         e->name = Headers[id].name;
@@ -115,7 +112,6 @@ httpHeaderEntryCreate2(http_hdr_type id, const String *name, const String *value
     Headers[id].stat.aliveCount++;
     debug(55, 9) ("created entry %p: '%.*s: %.*s'\n", e, strLen2(e->name), strBuf2(e->name), strLen2(e->value), strBuf2(e->value));
     e->active = 1;
-    return e;
 }
 
 void
@@ -132,12 +128,11 @@ httpHeaderEntryDestroy(HttpHeaderEntry * e)
     Headers[e->id].stat.aliveCount--;
     e->id = -1;
     e->active = 0;
-    memPoolFree(pool_http_header_entry, e);
 }
 
-HttpHeaderEntry *
-httpHeaderEntryClone(const HttpHeaderEntry * e)
+void
+httpHeaderEntryClone(HttpHeaderEntry *new_e, const HttpHeaderEntry * e)
 {
-    return httpHeaderEntryCreate2(e->id, &e->name, &e->value);
+    httpHeaderEntryCreate2(new_e, e->id, &e->name, &e->value);
 }
 

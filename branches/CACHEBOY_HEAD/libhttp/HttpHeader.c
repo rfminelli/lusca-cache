@@ -221,6 +221,7 @@ httpHeaderClean(HttpHeader * hdr)
             statHistCount(&HttpHeaderStats[hdr->owner].fieldTypeDistr, e->id);
             /* yes, this destroy() leaves us in an inconsistent state */
             httpHeaderEntryDestroy(e);
+	    memPoolFree(pool_http_header_entry, e);
         }
     }
     arrayClean(&hdr->entries);
@@ -313,13 +314,17 @@ httpHeaderAddEntryStr(HttpHeader *hdr, http_hdr_type id, const char *attrib, con
 void
 httpHeaderAddEntryStr2(HttpHeader *hdr, http_hdr_type id, const char *a, int al, const char *v, int vl)
 {
-	httpHeaderAddEntry(hdr, httpHeaderEntryCreate(id, a, al, v, vl));
+	HttpHeaderEntry *e = memPoolAlloc(pool_http_header_entry);
+	httpHeaderEntryCreate(e, id, a, al, v, vl);
+	httpHeaderAddEntry(hdr, e);
 }
 
 void
 httpHeaderAddEntryString(HttpHeader *hdr, http_hdr_type id, const String *a, const String *v)
 {
-	httpHeaderAddEntry(hdr, httpHeaderEntryCreate2(id, a, v));
+	HttpHeaderEntry *e = memPoolAlloc(pool_http_header_entry);
+	httpHeaderEntryCreate2(e, id, a, v);
+	httpHeaderAddEntry(hdr, e);
 }
 
 /*!
@@ -347,7 +352,9 @@ httpHeaderAddEntryString(HttpHeader *hdr, http_hdr_type id, const String *a, con
 void
 httpHeaderInsertEntryStr(HttpHeader *hdr, int pos, http_hdr_type id, const char *attrib, const char *value)
 {
-	httpHeaderInsertEntry(hdr, httpHeaderEntryCreate(id, attrib, -1, value, -1), pos);
+	HttpHeaderEntry *e = memPoolAlloc(pool_http_header_entry);
+	httpHeaderEntryCreate(e, id, attrib, -1, value, -1);
+	httpHeaderInsertEntry(hdr, e, pos);
 }
 
 /* inserts an entry at the given position;
@@ -386,7 +393,9 @@ httpHeaderGetEntry(const HttpHeader * hdr, HttpHeaderPos * pos)
 void
 httpHeaderAddClone(HttpHeader * hdr, const HttpHeaderEntry * e)
 {
-    httpHeaderAddEntry(hdr, httpHeaderEntryClone(e));
+    HttpHeaderEntry *ne = memPoolAlloc(pool_http_header_entry);
+    httpHeaderEntryClone(ne, e);
+    httpHeaderAddEntry(hdr, ne);
 }
 
 /*!
@@ -479,6 +488,7 @@ httpHeaderDelAt(HttpHeader * hdr, HttpHeaderPos pos)
     hdr->len -= strLen(e->name) + 2 + strLen(e->value) + 2;
     assert(hdr->len >= 0);
     httpHeaderEntryDestroy(e);
+    memPoolFree(pool_http_header_entry, e);
 }
 
 int

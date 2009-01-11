@@ -205,6 +205,7 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 	r = httpHeaderParseCheckEntry(hdr, e);
 	if (r <= 0) {
 		httpHeaderEntryDestroy(e);
+                memPoolFree(pool_http_header_entry, e);
 		e = NULL;
 	}
 	if (r < 0)
