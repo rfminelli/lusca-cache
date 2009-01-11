@@ -78,11 +78,63 @@
 int httpConfig_relaxed_parser = 0;
 int HeaderEntryParsedCount = 0;
 
+/*
+ * -1: invalid header, return error
+ * 0: invalid header, don't add, continue
+ * 1: valid header, add
+ */
+static int
+httpHeaderParseCheckEntry(HttpHeader *hdr, HttpHeaderEntry *e)
+{
+	if (e->id == HDR_CONTENT_LENGTH) {
+	    squid_off_t l1;
+	    HttpHeaderEntry *e2;
+	    if (!httpHeaderParseSize(strBuf(e->value), &l1)) {
+		debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n", strLen2(e->value), strBuf2(e->value));
+		return -1;
+	    }
+	    e2 = httpHeaderFindEntry(hdr, e->id);
+	    if (e2 && strCmp(e->value, strBuf(e2->value)) != 0) {
+		squid_off_t l2;
+		debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2) ("WARNING: found two conflicting content-length headers\n");
+		if (!httpConfig_relaxed_parser) {
+		    return -1;
+		}
+		if (!httpHeaderParseSize(strBuf(e2->value), &l2)) {
+		    debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n", strLen2(e->value), strBuf2(e->value));
+		    return -1;
+		}
+		if (l1 > l2) {
+		    httpHeaderDelById(hdr, e2->id);
+		} else {
+		    return 0;
+		}
+	    } else if (e2) {
+		debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
+		    ("NOTICE: found double content-length header\n");
+		if (httpConfig_relaxed_parser) {
+		    return 0;
+		} else {
+		    return -1;
+		}
+	    }
+	}
+	if (e->id == HDR_OTHER && stringHasWhitespace(strBuf(e->name))) {
+	    debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
+		("WARNING: found whitespace in HTTP header name {%.*s}\n", strLen2(e->name), strBuf2(e->name));
+	    if (!httpConfig_relaxed_parser) {
+		return -1;
+	    }
+	}
+	return 1;
+}
+
 int
 httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_end)
 {
     const char *field_ptr = header_start;
     HttpHeaderEntry *e;
+    int r;
 
     assert(hdr);
     assert(header_start && header_end);
@@ -150,54 +202,15 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 	    else
 		return httpHeaderReset(hdr);
 	}
-	if (e->id == HDR_CONTENT_LENGTH) {
-	    squid_off_t l1;
-	    HttpHeaderEntry *e2;
-	    if (!httpHeaderParseSize(strBuf(e->value), &l1)) {
-		debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n", strLen2(e->value), strBuf2(e->value));
+	r = httpHeaderParseCheckEntry(hdr, e);
+	if (r <= 0) {
 		httpHeaderEntryDestroy(e);
-		return httpHeaderReset(hdr);
-	    }
-	    e2 = httpHeaderFindEntry(hdr, e->id);
-	    if (e2 && strCmp(e->value, strBuf(e2->value)) != 0) {
-		squid_off_t l2;
-		debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2) ("WARNING: found two conflicting content-length headers in {%.*s}\n", charBufferSize(header_start, header_end), header_start);
-		if (!httpConfig_relaxed_parser) {
-		    httpHeaderEntryDestroy(e);
-		    return httpHeaderReset(hdr);
-		}
-		if (!httpHeaderParseSize(strBuf(e2->value), &l2)) {
-		    debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n", strLen2(e->value), strBuf2(e->value));
-		    httpHeaderEntryDestroy(e);
-		    return httpHeaderReset(hdr);
-		}
-		if (l1 > l2) {
-		    httpHeaderDelById(hdr, e2->id);
-		} else {
-		    httpHeaderEntryDestroy(e);
-		    continue;
-		}
-	    } else if (e2) {
-		debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
-		    ("NOTICE: found double content-length header\n");
-		if (httpConfig_relaxed_parser) {
-		    httpHeaderEntryDestroy(e);
-		    continue;
-		} else {
-		    httpHeaderEntryDestroy(e);
-		    return httpHeaderReset(hdr);
-		}
-	    }
+		e = NULL;
 	}
-	if (e->id == HDR_OTHER && stringHasWhitespace(strBuf(e->name))) {
-	    debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
-		("WARNING: found whitespace in HTTP header name {%.*s}\n", charBufferSize(field_start, field_end), field_start);
-	    if (!httpConfig_relaxed_parser) {
-		httpHeaderEntryDestroy(e);
+	if (r < 0)
 		return httpHeaderReset(hdr);
-	    }
-	}
-	httpHeaderAddEntry(hdr, e);
+	if (e)
+		httpHeaderAddEntry(hdr, e);
     }
     return 1;			/* even if no fields where found, it is a valid header */
 }
