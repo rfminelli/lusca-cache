@@ -74,17 +74,11 @@
  * HttpHeaderEntry
  */
 
-HttpHeaderEntry *
-httpHeaderEntryCreate(http_hdr_type id, const char *name, const char *value)
-{
-    return httpHeaderEntryCreateL(id, name, -1, value, -1);
-}
-
 /*
  * A length of -1 means "unknown; call strlen()
  */
 HttpHeaderEntry *
-httpHeaderEntryCreateL(http_hdr_type id, const char *name, int al, const char *value, int vl)
+httpHeaderEntryCreate(http_hdr_type id, const char *name, int al, const char *value, int vl)
 {
     HttpHeaderEntry *e;
     assert_eid(id);

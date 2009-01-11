@@ -313,7 +313,7 @@ httpHeaderAddEntryStr(HttpHeader *hdr, http_hdr_type id, const char *attrib, con
 void
 httpHeaderAddEntryStr2(HttpHeader *hdr, http_hdr_type id, const char *a, int al, const char *v, int vl)
 {
-	httpHeaderAddEntry(hdr, httpHeaderEntryCreateL(id, a, al, v, vl));
+	httpHeaderAddEntry(hdr, httpHeaderEntryCreate(id, a, al, v, vl));
 }
 
 void
@@ -347,7 +347,7 @@ httpHeaderAddEntryString(HttpHeader *hdr, http_hdr_type id, const String *a, con
 void
 httpHeaderInsertEntryStr(HttpHeader *hdr, int pos, http_hdr_type id, const char *attrib, const char *value)
 {
-	httpHeaderInsertEntry(hdr, httpHeaderEntryCreate(id, attrib, value), pos);
+	httpHeaderInsertEntry(hdr, httpHeaderEntryCreate(id, attrib, -1, value, -1), pos);
 }
 
 /* inserts an entry at the given position;
