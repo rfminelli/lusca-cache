@@ -369,6 +369,7 @@ struct rusage {
 #include "../libmem/intlist.h"
 #include "../libmem/MemBufs.h"
 #include "../libmem/MemBuf.h"
+#include "../libmem/Vector.h"
 
 #include "../libcb/cbdata.h"
 

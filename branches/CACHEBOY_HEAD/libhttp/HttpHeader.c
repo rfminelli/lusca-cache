@@ -261,24 +261,29 @@ httpHeaderReset(HttpHeader * hdr)
     return 0;
 }   
 
+static void
+httpHeaderAddInfo(HttpHeader *hdr, HttpHeaderEntry *e)
+{
+    assert(hdr && e);
+    assert_eid(e->id);
+
+    if (CBIT_TEST(hdr->mask, e->id))
+        Headers[e->id].stat.repCount++;
+    else
+        CBIT_SET(hdr->mask, e->id);
+    /* increment header length, allow for ": " and crlf */
+    hdr->len += strLen(e->name) + 2 + strLen(e->value) + 2;
+}
+
 /* appends an entry;
  * does not call httpHeaderEntryClone() so one should not reuse "*e"
  */
 void
 httpHeaderAddEntry(HttpHeader * hdr, HttpHeaderEntry * e)
 {
-    assert(hdr && e);
-    assert_eid(e->id);
-
-    debug(55, 7) ("%p adding entry: %d at %d\n",
-        hdr, e->id, hdr->entries.count);
-    if (CBIT_TEST(hdr->mask, e->id))
-        Headers[e->id].stat.repCount++;
-    else
-        CBIT_SET(hdr->mask, e->id);
+    debug(55, 7) ("%p adding entry: %d at %d\n", hdr, e->id, hdr->entries.count);
+    httpHeaderAddInfo(hdr, e);
     arrayAppend(&hdr->entries, e);
-    /* increment header length, allow for ": " and crlf */
-    hdr->len += strLen(e->name) + 2 + strLen(e->value) + 2;
 }
 
 /*!
@@ -363,18 +368,9 @@ httpHeaderInsertEntryStr(HttpHeader *hdr, int pos, http_hdr_type id, const char 
 void
 httpHeaderInsertEntry(HttpHeader * hdr, HttpHeaderEntry * e, int pos)
 {
-    assert(hdr && e);
-    assert_eid(e->id);
-
-    debug(55, 7) ("%p adding entry: %d at %d\n",
-        hdr, e->id, hdr->entries.count);
-    if (CBIT_TEST(hdr->mask, e->id))
-        Headers[e->id].stat.repCount++;
-    else
-        CBIT_SET(hdr->mask, e->id);
+    debug(55, 7) ("%p adding entry: %d at %d\n", hdr, e->id, hdr->entries.count);
+    httpHeaderAddInfo(hdr, e);
     arrayInsert(&hdr->entries, e, pos);
-    /* increment header length, allow for ": " and crlf */
-    hdr->len += strLen(e->name) + 2 + strLen(e->value) + 2;
 }
 
 /* returns next valid entry */
