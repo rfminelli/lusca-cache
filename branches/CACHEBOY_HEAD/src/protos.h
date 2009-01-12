@@ -726,6 +726,7 @@ extern char *storeSwapMetaPack(tlv * tlv_list, int *length);
 extern tlv *storeSwapMetaBuild(StoreEntry * e);
 extern tlv *storeSwapMetaUnpack(const char *buf, int *hdrlen);
 extern void storeSwapTLVFree(tlv * n);
+extern char * storeSwapMetaAssemble(StoreEntry *e, int *length);
 
 /*
  * store_rebuild.c

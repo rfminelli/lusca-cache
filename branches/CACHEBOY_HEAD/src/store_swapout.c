@@ -47,7 +47,6 @@ storeSwapOutStart(StoreEntry * e)
     generic_cbdata *c;
     MemObject *mem = e->mem_obj;
     int swap_hdr_sz = 0;
-    tlv *tlv_list;
     char *buf;
     assert(mem);
     /* Build the swap metadata, so the filesystem will know how much
@@ -56,9 +55,7 @@ storeSwapOutStart(StoreEntry * e)
     debug(20, 5) ("storeSwapOutStart: Begin SwapOut '%s' to dirno %d, fileno %08X\n",
 	storeUrl(e), e->swap_dirn, e->swap_filen);
     e->swap_status = SWAPOUT_WRITING;
-    tlv_list = storeSwapMetaBuild(e);
-    buf = storeSwapMetaPack(tlv_list, &swap_hdr_sz);
-    storeSwapTLVFree(tlv_list);
+    buf = storeSwapMetaAssemble(e, &swap_hdr_sz);
     mem->swap_hdr_sz = (size_t) swap_hdr_sz;
     /* Create the swap file */
     CBDATA_INIT_TYPE(generic_cbdata);
