@@ -54,6 +54,7 @@ libmiscutil_a_SOURCES = \
 	stub_memaccount.c \
 	util.c \
 	uudecode.c \
+	Vector.c \
 	$(WIN32SRC)
 libmiscutil_a_LIBADD = \
 	@LIBOBJS@
