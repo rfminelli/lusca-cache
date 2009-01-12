@@ -332,6 +332,7 @@ struct rusage {
 #include "squid_md5.h"
 
 #include "Stack.h"
+#include "../include/Vector.h"
 
 /* Needed for poll() on Linux at least */
 #if USE_POLL
@@ -369,7 +370,6 @@ struct rusage {
 #include "../libmem/intlist.h"
 #include "../libmem/MemBufs.h"
 #include "../libmem/MemBuf.h"
-#include "../libmem/Vector.h"
 
 #include "../libcb/cbdata.h"
 
