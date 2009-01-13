@@ -316,12 +316,13 @@ httpHeaderAddEntryStr(HttpHeader *hdr, http_hdr_type id, const char *attrib, con
 /*
  * -1 means "don't know length, call strlen()
  */
-void
+HttpHeaderEntry *
 httpHeaderAddEntryStr2(HttpHeader *hdr, http_hdr_type id, const char *a, int al, const char *v, int vl)
 {
 	HttpHeaderEntry *e = memPoolAlloc(pool_http_header_entry);
 	httpHeaderEntryCreate(e, id, a, al, v, vl);
 	httpHeaderAddEntry(hdr, e);
+	return e;
 }
 
 void
