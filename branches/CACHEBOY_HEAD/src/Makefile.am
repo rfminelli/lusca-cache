@@ -266,7 +266,6 @@ squid_LDADD = \
 	-lsqdns \
 	-lsqident \
 	-lsqinet \
-	-lmiscutil \
 	-lsqdebug \
 	-lcore \
 	-lmem \
@@ -277,6 +276,7 @@ squid_LDADD = \
 	-liapp \
 	-lhttp \
 	-lstat \
+	-lmiscutil \
 	@XTRA_LIBS@ \
 	$(MINGWEXLIB)
 
@@ -313,7 +313,7 @@ sysconf_DATA = \
 data_DATA = \
 	mib.txt
 
-LDADD = -L../lib -L../libcore -L../libsqdebug -L../libmem -L../libsqname -L../libcb -L../libhelper -L../libmime -L../libstmem -L../libiapp -L../libhttp -L../libstat -L../libsqdns -L../libsqident -L../libsqinet -lsqinet -lsqdns -lmiscutil -lsqdebug -lcore -lmem -lsqname -lcb -lsqident -lhelper -lmime -lstmem -liapp -lhttp -lstat @XTRA_LIBS@
+LDADD = -L../lib -L../libcore -L../libsqdebug -L../libmem -L../libsqname -L../libcb -L../libhelper -L../libmime -L../libstmem -L../libiapp -L../libhttp -L../libstat -L../libsqdns -L../libsqident -L../libsqinet -lsqinet -lsqdns -lsqdebug -lcore -lmem -lsqname -lcb -lsqident -lhelper -lmime -lstmem -liapp -lhttp -lstat -lmiscutil @XTRA_LIBS@
 
 EXTRA_DIST = \
 	cf_gen_defines \
