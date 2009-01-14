@@ -63,7 +63,6 @@ comm_ips_bind(int fd, sqaddr_t *a)
 void
 comm_ips_keepCapabilities(void)
 {
-#if HAVE_PRCTL && defined(PR_SET_KEEPCAPS) && HAVE_SYS_CAPABILITY_H
     if (prctl(PR_SET_KEEPCAPS, 1, 0, 0, 0)) {
 	/* Silent failure unless TPROXY is required. Maybe not started as root */
 	if (need_linux_tproxy) {
@@ -71,13 +70,11 @@ comm_ips_keepCapabilities(void)
 		need_linux_tproxy = 0;
 	}
     }
-#endif
 }
 
 static void
 comm_ips_restoreCapabilities(int keep)
 {
-#if defined(_SQUID_LINUX_) && HAVE_SYS_CAPABILITY_H
     cap_user_header_t head = (cap_user_header_t) xcalloc(1, sizeof(cap_user_header_t));
     cap_user_data_t cap = (cap_user_data_t) xcalloc(1, sizeof(cap_user_data_t));
 
@@ -107,11 +104,6 @@ comm_ips_restoreCapabilities(int keep)
   nocap:
     xfree(head);
     xfree(cap);
-#else
-    if (need_linux_tproxy)
-	debug(50, 1) ("Missing needed capability support. Will continue without tproxy support\n");
-    need_linux_tproxy = 0;
-#endif
 }
 
 #endif /* LINUX_TPROXY4 */
