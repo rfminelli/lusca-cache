@@ -35,8 +35,15 @@ typedef uint32_t __u32;
 #define IP_TRANSPARENT 19
 #endif
 
+#include "../include/util.h"
+
+#include "../libcore/tools.h"
+#include "../libcore/varargs.h"
+#include "../libcore/debug.h"
+
 #include "../libstat/StatHist.h"
 #include "../libsqinet/sqinet.h"
+
 #include "fd_types.h"
 #include "comm_types.h"
 #include "globals.h"
