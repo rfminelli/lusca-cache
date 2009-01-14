@@ -368,6 +368,11 @@ storeAufsDirInit(SwapDir * sd)
     storeAufsDirInitBitmap(sd);
     if (storeAufsDirVerifyCacheDirs(sd) < 0)
 	fatal(errmsg);
+
+    /* Override the default number of threads if needed before squidaio_init() is called */
+    if (Config.aiops.n_aiops_threads > -1)
+	squidaio_nthreads = Config.aiops.n_aiops_threads;
+
     squidaio_init();
     storeAufsDirOpenSwapLog(sd);
     storeAufsDirRebuild(sd);

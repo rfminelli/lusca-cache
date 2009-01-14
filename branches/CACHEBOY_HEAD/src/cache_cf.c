@@ -2612,7 +2612,6 @@ free_delay_body_size_t(dlink_list * bodylist)
 }
 #endif
 
-
 static int
 check_null_body_size_t(dlink_list bodylist)
 {

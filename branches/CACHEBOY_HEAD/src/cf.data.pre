@@ -5825,5 +5825,14 @@ DOC_START
 	Note: after changing this, Squid service must be restarted.
 DOC_END
 
+NAME: n_aiops_threads
+COMMENT: (number of threads)
+TYPE: int
+LOC: Config.aiops.n_aiops_threads
+DEFAULT: -1
+DOC_START
+	Override the compile-time/run-time number of total aio threads.
+	The default value (-1) means "use the legacy compile-time calculation."
+DOC_END
 
 EOF
