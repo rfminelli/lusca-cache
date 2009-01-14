@@ -72,7 +72,7 @@ comm_ips_keepCapabilities(void)
     }
 }
 
-static void
+void
 comm_ips_restoreCapabilities(int keep)
 {
     cap_user_header_t head = (cap_user_header_t) xcalloc(1, sizeof(cap_user_header_t));
