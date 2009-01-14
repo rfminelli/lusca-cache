@@ -68,6 +68,7 @@
 #include "fd_types.h"
 #include "comm_types.h"
 #include "comm.h"
+#include "disk.h"
 
 static PF diskHandleRead;
 static PF diskHandleWrite;

@@ -307,15 +307,6 @@ extern void commUpdateWriteHandler(int, PF *, void *);
 extern void comm_quick_poll_required(void);
 extern const char * comm_select_status(void);
 
-/* disk.c */
-extern int file_open(const char *path, int mode);
-extern void file_close(int fd);
-extern void file_write(int, off_t, void *, size_t len, DWCB *, void *, FREE *);
-extern void file_write_mbuf(int fd, off_t, MemBuf mb, DWCB * handler, void *handler_data);
-extern void file_read(int, char *, size_t, off_t, DRCB *, void *);
-extern void disk_init(void);
-extern void disk_init_mem(void);
-
 extern fde *fd_table;
 extern int Biggest_FD;          /* -1 */
 extern int Number_FD;           /* 0 */

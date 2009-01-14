@@ -413,6 +413,7 @@ struct rusage {
 #include "../libiapp/fd_types.h"
 #include "../libiapp/comm_types.h"
 #include "../libiapp/comm.h"
+#include "../libiapp/disk.h"
 #include "../libiapp/comm_ips.h"
 #include "../libiapp/globals.h"
 #include "../libiapp/pconn_hist.h"
