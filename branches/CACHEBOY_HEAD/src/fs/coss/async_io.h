@@ -1,5 +1,5 @@
-#ifndef __ASYNC_IO_H__
-#define __ASYNC_IO_H__
+#ifndef __AIO_ASYNC_IO_H__
+#define __AIO_ASYNC_IO_H__
 
 #define MAX_ASYNCOP		128
 

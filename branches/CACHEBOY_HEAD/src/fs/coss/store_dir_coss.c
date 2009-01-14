@@ -38,12 +38,13 @@
 #include <aio.h>
 #endif
 
-#include "async_io.h"
-#include "store_coss.h"
 
 #if USE_AUFSOPS
 #include "../aufs/async_io.h"
+#else
+#include "async_io.h"
 #endif
+#include "store_coss.h"
 
 #define STORE_META_BUFSZ 4096
 #define HITONLY_BUFS 2
@@ -144,6 +145,8 @@ storeCossDirInit(SwapDir * sd)
     }
 #if USE_AUFSOPS
     aioInit();
+    if (Config.aiops.n_aiops_threads > -1)
+        squidaio_nthreads = Config.aiops.n_aiops_threads;
     squidaio_init();
 #else
     a_file_setupqueue(&cs->aq);

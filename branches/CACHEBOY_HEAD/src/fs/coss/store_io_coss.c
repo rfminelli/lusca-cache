@@ -37,11 +37,12 @@
 #if HAVE_AIO_H
 #include <aio.h>
 #endif
-#include "async_io.h"
-#include "store_coss.h"
 #if USE_AUFSOPS
 #include "../aufs/async_io.h"
+#else
+#include "async_io.h"
 #endif
+#include "store_coss.h"
 
 #if USE_AUFSOPS
 static AIOCB storeCossWriteMemBufDone;

@@ -24,7 +24,7 @@ typedef struct _cossstripe CossStripe;
 
 #define SWAPDIR_COSS "coss"
 
-#if USE_AUFSOPS
+#if 0 &&  USE_AUFSOPS
 /* XXX a hack; the async ops should be broken out! */
 typedef void AIOCB(int fd, void *cbdata, const char *buf,
     int aio_return, int aio_errno);
