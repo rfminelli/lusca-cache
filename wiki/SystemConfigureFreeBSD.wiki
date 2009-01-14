@@ -58,5 +58,23 @@ kern.filedelay=7
 
 That seems to have stopped the frequency of blocking disk writes in the main process and halted the "WARNING - Disk I/O Overloading" / "WARNING - Queue Congestion" messages.
 
+== Filesystems ==
+
+Create the cache partitions with softupdates. Duh.
+
+I haven't yet sat down and tweaked the FS parameters and recorded the results, sorry. I'll do that at some point.
+
+Mount the filesystems noatime - softupdates helps, but not bothering to even -update- metadata on file reads helps even more, especially on read-heavy workloads.
+
+For example, from my fstab:
+
+{{{
+/dev/aacd1s1d           /local/2                ufs     rw,noatime              2       2
+/dev/aacd2s1d           /local/3                ufs     rw,noatime              2       2
+/dev/aacd3s1d           /local/4                ufs     rw,noatime              2       2
+}}}
+
+Use aufs and plenty of threads. FreeBSD 7 and above have excellent threading support. FreeBSD-6 can do disk threads as long as you choose the correct threading library. Have a play.
+
 
 = Other =
