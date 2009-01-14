@@ -1240,6 +1240,7 @@ commHandleRead(int fd, void *data)
 	}
 }
 
+#if 0
 /*
  * Select a handler for read.
  *
@@ -1288,6 +1289,7 @@ comm_read_cancel(int fd)
 	commSetSelect(fd, COMM_SELECT_READ, NULL, NULL, 0);
 	return 1;
 }
+#endif
 
 /*!
  * @function
