@@ -426,6 +426,8 @@ storeDirWriteCleanLogs(int reopen)
     start = current_time;
     for (dirn = 0; dirn < Config.cacheSwap.n_configured; dirn++) {
 	sd = &Config.cacheSwap.swapDirs[dirn];
+	if (sd->log.clean.start == NULL)
+		continue;
 	if (sd->log.clean.start(sd) < 0) {
 	    debug(20, 1) ("log.clean.start() failed for dir #%d\n", sd->index);
 	    continue;
@@ -463,7 +465,8 @@ storeDirWriteCleanLogs(int reopen)
     /* Flush */
     for (dirn = 0; dirn < Config.cacheSwap.n_configured; dirn++) {
 	sd = &Config.cacheSwap.swapDirs[dirn];
-	sd->log.clean.done(sd);
+	if (sd->log.clean.done)
+	    sd->log.clean.done(sd);
     }
     if (reopen)
 	storeDirOpenSwapLogs();
