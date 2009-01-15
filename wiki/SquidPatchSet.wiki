@@ -12,6 +12,8 @@ At some point a tool should be written to do this!
 
 The initial import included all patchsets up to 12036.
 
+== Stuff merged into trunk and then cross-merged into CACHEBOY_PRE / CACHEBOY_HEAD ==
+
   * 12037 - *committed*
   * 12038 - *committed*
   * 12039 - *committed*
@@ -218,3 +220,57 @@ The initial import included all patchsets up to 12036.
   * 12327 - HEAD - make clientHandleIMSReply deal properly if the old object got aborted - *committed - 13065*
   * 12328 - HEAD - Bug #2406: access.log logs rewritten URL and strip_query_terms ineffective - *committed - 13066*
   * 12330 - HEAD - Properly terminate aborted objects. Got broken again by the change to loosen ENTRY_ABORTED semantics. - *committed - 13067*
+
+== Stuff merged into trunk but not yet into CACHEBOY_HEAD ==
+
+  * 12337 - HEAD - Increase buffer in authenticateNegotiateStart - *committed - 13603*
+  * 12338 - HEAD - Help output with squid_ldap_group - *committed - 13604*
+  * 12339 - HEAD - Adrian's write-side delay pool code - *committed - 13605*
+  * 12341 - HEAD - Prepare for 2.7.STABLE4 - *committed - 13606*
+  * 12346 - HEAD - conditional compile delay pools code - *committed - 13607*
+  * 12347 - HEAD - Documentation update for 2.7.STABLE4 - *committed - 13608*
+  * 12351 - HEAD - Namespace cleanup after the delay_access fix - *committed - 13609*
+  * 12352 - HEAD - upgrade_http0.9 option - *committed - 13610*
+  * 12353 - HEAD - Benno's work on supporting arbitrary unknown methods - *committed - 13611*
+  * 12354 - HEAD - Trim trailing whitespace - *committed - 13612*
+  * 12355 - HEAD - Make purge behaviour more RFC compliant - *committed - 13613*
+  * 12356 - HEAD - UTF-8 in config file where it shouldn't be - *committed - 13614*
+  * 12357 - HEAD - Fix digest code w/ method changes - *committed - 13615*
+  * 12358 - HEAD - GCC warnings (*NOTE*: this is potentially dangerous code?) - *committed - 13616*
+  * 12359 - HEAD - MIME type ACL clarification - *committed - 13617*
+  * 12360 - HEAD - convert upgrade_http0.9 to ACL; add header - *committed - 13618*
+  * 12361 - HEAD - Generate squid.conf.clean - *committed - 13619*
+  * 12362 - HEAD - Update http0.9 default docs - *committed - 13620*
+  * 12363 - HEAD - Shutdown store_url helpers on reconfigure - *committed - 13621*
+  * 12364 - HEAD - Fix GCC related breakage - *committed - 13622*
+  * 12365 - HEAD - bootstrapped - *committed - 13623*
+  * 12366 - HEAD - HTTP CLR enhancements - *committed - 13624*
+  * 12367 - HEAD - Remove unneeded checks - *committed - 13625*
+  * 12368 - HEAD - Sync urlAbsolute / httpRemovePublicByHeader with Squid3 - *committed - 13626*
+  * 12369 - HEAD - Fix STABLE_BRANCH - *committed - 13627*
+  * 12370 - HEAD - Langpack compatibility stuff - *committed - 13628*
+  * 12371 - HEAD - Fix rebuild logic a bit - *committed - 13629*
+  * 12372 - HEAD - bootstrapped - *committed - 13630*
+  * 12373 - HEAD - Fix aborted IMS object handling - *committed - 13631*
+  * 12379 - HEAD - Increase kerberos token buffer length - *committed - 13632*
+  * 12381 - HEAD - Limit stale-if-error to 500-504 responses - *committed - 13633*
+  * 12384 - HEAD - Really add new templates - *committed - 13634*
+  * 12385 - HEAD - fix perm issues with -k reconfigure - *committed - 13635*
+  * 12386 - HEAD - Return new headers after IMS request validation - *committed - 13636*
+  * 12388 - HEAD - Fix build error on windows - *committed - 13637*
+  * 12397 - HEAD - Don't set expire header on error pages - *committed - 13638*
+  * 12398 - HEAD - Windows port fixes - *committed - 13639*
+  * 12401 - HEAD - back out purge method changes; fixes IMS handling - *committed - 13640*
+  * 12402 - HEAD - Delayed forwarding support - *committed - 13641*
+  * 12404 - HEAD - Prepare 2.7.STABLE5 - *committed - 13642*
+  * 12407 - HEAD - Prepare 2.6.STABLE22 - *committed - 13643*
+  * 12410 - HEAD - Fix tproxy url - *committed - 13644*
+  * 12411 - HEAD - Bootstrapped - *committed - 13645*
+  * 12416 - HEAD - 2.6.STABLE22 ChangeLog - *committed - 13646*
+  * 12417 - HEAD - Correct Latency measurements - *committed - 13647*
+  * 12418 - HEAD - Fix kqueue typo in above patch - *committed - 13648*
+  * 12419 - HEAD - collapsed_forwarding_timeout directive - *committed - 13649*
+  * 12420 - HEAD - Fix error in upgrade_http0.9 rule - *committed - 13650*
+  * 12421 - HEAD - Bootstrapped - *committed - 13651*
+  * 12423 - HEAD - Cross-reference authenticate_ip_shortcircuit_access and authenticate_ip_shortcircuit_ttl - *committed - 13652*
+  * 12424 - HEAD - Fix Visual Studio errors - *committed - 13653*
