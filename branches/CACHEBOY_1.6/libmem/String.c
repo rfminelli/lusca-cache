@@ -137,7 +137,7 @@ stringDupToCOffset(String *s, int offset)
 {
 	char *d;
 	assert(s->buf);
-	assert(offset < s->len);		/* DUP'ing a 0 byte string seems pointless.. */
+	assert(offset <= s->len);
 	d = xmalloc(s->len + 1 - offset);
 	memcpy(d, s->buf, s->len - offset);
 	d[s->len - offset] = '\0';
