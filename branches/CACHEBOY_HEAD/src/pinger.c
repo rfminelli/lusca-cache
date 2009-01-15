@@ -542,13 +542,13 @@ main(int argc, char *argv[])
 	if (FD_ISSET(icmp_sock, &R))
 	    pingerRecv();
 	if (PINGER_TIMEOUT + last_check_time < squid_curtime) {
-	    debug(42, 1) ("pinger: timeout occured\n");
+	    debug(42, 2) ("pinger: timeout occured\n");
 	    if (send(socket_to_squid, (char *) &tv, 0, 0) < 0) {
 		debug(42, 0) ("Pinger: send socket_to_squid failed\n");
 		pingerClose();
 		exit(1);
 	    } else {
-		debug(42, 1) ("Pinger: send socket_to_squid OK\n");
+		debug(42, 2) ("Pinger: send socket_to_squid OK\n");
 	    }
 	    last_check_time = squid_curtime;
 	}
