@@ -15,3 +15,5 @@ Subversion merging is annoying.
   * 29/June/2008: r12965: CACHEBOY_PRE: rev 12951:12962 from trunk
   * 30/June/2008: r12993: CACHEBOY_PRE: rev Merge 12833:12957 from branches/comm_connect_rework
   * 24/July/2008: : r13069: CACHEBOY_PRE: rev 12963:13067 from trunk
+
+  * 15/Jan/2009: : r13601: CACHEBOY_1.6: rev 13599:13600 from CACHEBOY_HEAD
