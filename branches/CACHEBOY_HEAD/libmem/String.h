@@ -38,6 +38,7 @@ typedef struct _String String;
 #define strCut(s,pos) (((s).len = pos) , ((s).buf[pos] = '\0'))
 #define strCutPtr(s,ptr) (((s).len = (ptr)-(s).buf) , ((s).buf[(s).len] = '\0'))
 #define strCat(s,str)  stringAppend(&(s), (str), strlen(str))
+#define	strCatStr(ds, ss)	stringAppend(&(ds), strBuf2(ss), strLen(ss))
 
 extern void stringInit(String * s, const char *str);
 extern void stringLimitInit(String * s, const char *str, int len);
