@@ -199,14 +199,15 @@ httpHeaderFieldStatDumper(StoreEntry * sentry, int idx, double val, double size,
 {
     const int id = (int) val;
     const int valid_id = id >= 0 && id < HDR_ENUM_END;
-    const char *name = valid_id ? strBuf(Headers[id].name) : "INVALID";
+    const int name_len = valid_id ? strLen(Headers[id].name) : 7;
+    const char *name = valid_id ? strBuf2(Headers[id].name) : "INVALID";
     int visible = count > 0;
     /* for entries with zero count, list only those that belong to current type of message */
     if (!visible && valid_id && dump_stat->owner_mask)
 	visible = CBIT_TEST(*dump_stat->owner_mask, id);
     if (visible)
-	storeAppendPrintf(sentry, "%2d\t %-20s\t %5d\t %6.2f\n",
-	    id, name, count, xdiv(count, dump_stat->busyDestroyedCount));
+	storeAppendPrintf(sentry, "%2d\t %-20.*s\t %5d\t %6.2f\n",
+	    id, name_len, name, count, xdiv(count, dump_stat->busyDestroyedCount));
 }
 
 static void
@@ -267,8 +268,8 @@ httpHeaderStoreReport(StoreEntry * e)
 	"id", "name", "#alive", "%err", "%repeat");
     for (ht = 0; ht < HDR_ENUM_END; ht++) {
 	HttpHeaderFieldInfo *f = Headers + ht;
-	storeAppendPrintf(e, "%2d\t %-20s\t %5d\t %6.3f\t %6.3f\n",
-	    f->id, strBuf(f->name), f->stat.aliveCount,
+	storeAppendPrintf(e, "%2d\t %-20.*s\t %5d\t %6.3f\t %6.3f\n",
+	    f->id, strLen(f->name), strBuf2(f->name), f->stat.aliveCount,
 	    xpercent(f->stat.errCount, f->stat.parsCount),
 	    xpercent(f->stat.repCount, f->stat.seenCount));
     }
