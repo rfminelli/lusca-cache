@@ -1,0 +1,21 @@
+#summary Upgrading HTTP/0.9 responses to HTTP/1.0
+
+= Introduction =
+
+Squid-2.HEAD / Squid-2.7 saw the introduction of response upgrading, from HTTP/0.9 to HTTP/1.0. This broke a few things, such as Shoutcast. The reasons behind this change and the fixes required to the Squid/Cacheboy configuration are detailed below.
+
+= Details =
+
+
+The HTTP/0.9 "support" was a bit strange. Basically, responses which weren't parsable by the server-side code (src/http.c) were treated as HTTP/0.9 - no response headers, just the  result verbatim sent back to the client.
+
+Squid then grew some support to "upgrade" responses from HTTP/0.9 to HTTP/1.0, which included proper status lines and response headers.
+
+Unfortunately this broke applications which used valid-looking HTTP requests with NOT-VALID looking HTTP responses. This included Shoutcast.
+
+So the support was modified to upgrade responses based on an ACL - and Squid shipped with a regex URL match on the first line of the Shoutcast response.
+
+= Implications? =
+
+  * This may make forwarding Shoutcast requests/replies through a cache hierarchy kind of difficult!
+  * This may impact performance - another regex lookup in the critical path.. :/
