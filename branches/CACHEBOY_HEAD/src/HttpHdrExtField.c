@@ -95,6 +95,6 @@ httpHdrExtFieldDup(HttpHdrExtField * f)
 {
     assert(f);
     return httpHdrExtFieldDoCreate(
-	strBuf(f->name), strLen(f->name),
-	strBuf(f->value), strLen(f->value));
+	strBuf2(f->name), strLen(f->name),
+	strBuf2(f->value), strLen(f->value));
 }
