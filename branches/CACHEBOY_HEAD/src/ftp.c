@@ -1030,11 +1030,17 @@ ftpCheckUrlpath(FtpStateData * ftpState)
 {
     request_t *request = ftpState->request;
     int l;
-    const char *t;
-    if ((t = strRChr(request->urlpath, ';')) != NULL) {
+    const char *t = NULL;
+    int i;
+
+    i = strRChr(&request->urlpath, ';');
+    if (i > -1)
+        t = strBuf(request->urlpath) + i;
+
+    if (t != NULL) {
 	if (strncasecmp(t + 1, "type=", 5) == 0) {
 	    ftpState->typecode = (char) xtoupper(*(t + 6));
-	    strCutPtr(request->urlpath, t);
+	    strCut(request->urlpath, i);
 	}
     }
     l = strLen(request->urlpath);
@@ -1479,7 +1485,7 @@ ftpReadPass(FtpStateData * ftpState)
 static void
 ftpSendType(FtpStateData * ftpState)
 {
-    const char *t;
+    int i;
     const char *filename;
     char mode;
     /*
@@ -1496,8 +1502,11 @@ ftpSendType(FtpStateData * ftpState)
 	if (ftpState->flags.isdir) {
 	    mode = 'A';
 	} else {
-	    t = strRChr(ftpState->request->urlpath, '/');
-	    filename = t ? t + 1 : strBuf(ftpState->request->urlpath);
+	    i = strRChr(&ftpState->request->urlpath, '/');
+	    if (i < 0)
+		filename = strBuf(ftpState->request->urlpath);
+            else
+                filename = strBuf(ftpState->request->urlpath) + i + 1;
 	    mode = mimeGetTransferMode(filename);
 	}
 	break;
@@ -2544,9 +2553,9 @@ ftpAppendSuccessHeader(FtpStateData * ftpState)
     const char *mime_enc = NULL;
     String urlpath = ftpState->request->urlpath;
     const char *filename = NULL;
-    const char *t = NULL;
     StoreEntry *e = ftpState->entry;
     http_reply *reply = e->mem_obj->reply;
+    int i;
 
     if (ftpState->flags.http_header_sent)
 	return;
@@ -2554,7 +2563,11 @@ ftpAppendSuccessHeader(FtpStateData * ftpState)
     assert(e->mem_obj->inmem_hi == 0);
     EBIT_CLR(e->flags, ENTRY_FWD_HDR_WAIT);
     storeBuffer(e);		/* released when done processing current data payload */
-    filename = (t = strRChr(urlpath, '/')) ? t + 1 : strBuf(urlpath);
+    i = strRChr(&urlpath, '/');
+    if (i < 0)
+        filename = strBuf(urlpath);
+    else
+        filename = strBuf(urlpath) + i + 1;
     if (ftpState->flags.isdir) {
 	mime_type = "text/html";
     } else {

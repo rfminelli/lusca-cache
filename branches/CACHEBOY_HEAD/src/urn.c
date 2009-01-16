@@ -101,7 +101,7 @@ urnStart(request_t * r, StoreEntry * e)
 {
     LOCAL_ARRAY(char, urlres, 4096);
     request_t *urlres_r = NULL;
-    const char *t;
+    int i;
     char *host;
     UrnState *urnState;
     StoreEntry *urlres_e;
@@ -118,10 +118,9 @@ urnStart(request_t * r, StoreEntry * e)
 	stringReset(&r->urlpath, new_path);
 	xfree(new_path);
     }
-    if ((t = strChr(r->urlpath, ':')) != NULL) {
-	strCutPtr(r->urlpath, t);
-	host = stringDupToC(&r->urlpath);
-	strSet(r->urlpath, t, ':');
+    i = strChr(&r->urlpath, ':');
+    if (i != -1) {
+        host = stringDupSubstrToC(&r->urlpath, i);
     } else {
 	host = stringDupToC(&r->urlpath);
     }

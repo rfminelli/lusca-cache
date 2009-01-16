@@ -36,12 +36,8 @@ extern int strRChr(String *s, char c);
 
 /* These functions need to be re-evaluated and -absolutely- reimplemented or removed */
 
-/* This function doesn't NUL terminate or grow the buffer?! */
-#define strSet(s,ptr,ch) (s).buf[ptr-(s).buf] = (ch)
 /* These is okish */
 #define strCut(s,pos) (((s).len = pos) , ((s).buf[pos] = '\0'))
-/* This function should be removed! */
-#define strCutPtr(s,ptr) (((s).len = (ptr)-(s).buf) , ((s).buf[(s).len] = '\0'))
 
 /*
  * These two functions return whether the string is set to some value, even if
