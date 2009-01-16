@@ -577,7 +577,7 @@ gopherToHTML(GopherStateData * gopherState, char *inbuf, int len)
     }				/* while loop */
 
     if (strLen(outbuf) > 0) {
-	storeAppend(entry, strBuf(outbuf), strLen(outbuf));
+	storeAppend(entry, strBuf2(outbuf), strLen2(outbuf));
 	/* now let start sending stuff to client */
 	storeBufferFlush(entry);
     }
