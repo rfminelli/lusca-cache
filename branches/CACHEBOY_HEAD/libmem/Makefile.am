@@ -8,7 +8,8 @@ libmem_a_SOURCES = \
 	wordlist.c \
 	intlist.c \
 	MemBufs.c \
-	MemBuf.c
+	MemBuf.c \
+	buf.c
 
 noinst_LIBRARIES = \
 	libmem.a
