@@ -78,6 +78,9 @@ static const char *hello_string = "hi there\n";
 #define HELLO_BUF_SZ 32
 static char hello_buf[HELLO_BUF_SZ];
 
+/* XXX */
+extern void no_suid(void);
+
 static int
 ipcCloseAllFD(int prfd, int pwfd, int crfd, int cwfd)
 {
