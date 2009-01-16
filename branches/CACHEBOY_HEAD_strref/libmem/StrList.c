@@ -56,9 +56,11 @@
 #include "../libcore/varargs.h" /* required for tools.h */
 #include "../libcore/tools.h"
 #include "../libcore/debug.h"
+#include "../libcore/dlink.h"
   
 #include "MemPool.h"
 #include "MemStr.h"
+#include "buf.h"
 #include "String.h"
 
 #include "StrList.h"
@@ -198,9 +200,9 @@ strListGetItem(const String * str, char del, const char **item, int *ilen, const
     delim[2][1] = del;
     assert(str && item && pos);
     if (!*pos) {
-	*pos = strBuf(*str);
-	if (!*pos)
-	    return 0;
+        if (strIsNull(*str))
+            return 0;
+        *pos = strBuf(*str);
     }
     /* skip leading whitespace and delimiters */
     *pos += strspn(*pos, delim[2]);
