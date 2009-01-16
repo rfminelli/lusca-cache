@@ -231,3 +231,14 @@ buf_make_immutable(buf_t *buf, int newofs)
 	return 1;
 }
 
+
+int
+buf_truncate(buf_t *b, int newlen, buf_flags_t flags)
+{
+	if (newlen > b->len)
+		return 0;
+	b->len = newlen;
+	if (flags & BF_APPEND_NUL)
+		b->b[b->len] = '\0';
+	return 1;
+}
