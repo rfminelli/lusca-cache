@@ -818,6 +818,7 @@ main(int argc, char **argv)
         setMaxFD();
 	iapp_init();		/* required for configuration parsing */
 	memInit();
+	buf_init();
 	cbdataLocalInit();
 	eventLocalInit();
 	storeFsInit();		/* required for config parsing */
