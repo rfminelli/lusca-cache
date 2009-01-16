@@ -80,6 +80,8 @@
 #include "pconn_hist.h"
 #include "comm_ips.h"
 
+#include "ssl_support.h"
+
 #if defined(_SQUID_CYGWIN_)
 #include <sys/ioctl.h>
 #endif
@@ -1210,6 +1212,7 @@ commHandleWrite(int fd, void *data)
     }
 }
 
+#if 0
 /*
  * XXX WARNING: This isn't to be used yet - its still under testing!
  */
@@ -1240,7 +1243,6 @@ commHandleRead(int fd, void *data)
 	}
 }
 
-#if 0
 /*
  * Select a handler for read.
  *
