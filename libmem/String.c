@@ -46,20 +46,37 @@
 #include "../libcore/gb.h"
 #include "../libcore/varargs.h" /* required for tools.h */
 #include "../libcore/tools.h"
+#include "../libcore/dlink.h"
 #include "../libcore/debug.h"
-  
+
 #include "MemPool.h"
 #include "MemStr.h"
+#include "buf.h"
 #include "String.h"
 
-const String StringNull = { 0, 0, NULL };
+const String StringNull = { NULL };
 
-static void
-stringInitBuf(String * s, size_t sz)
+/*
+ * Call this function before writing to a String. This function creates
+ * a local buf if required.
+ */
+void
+strMakePrivate(String *s)
 {
-    s->buf = memAllocString(sz, &sz);
-    assert(sz < 65536);
-    s->size = sz;
+	buf_t *b;
+
+	if (! s->b)
+		return;
+
+	if (buf_refcnt(s->b) == 1)		/* already private */
+		return;
+
+	/* XXX are there off-by-one errors due to the NUL termination and the size logic in buf_ routines? */
+	b = buf_create_size(buf_capacity(s->b));
+	assert(b);
+	buf_append(b, buf_buf(s->b), buf_len(s->b), BF_APPEND_NUL);
+	s->b = buf_deref(s->b);
+	s->b = b;	/* is now a private copy */
 }
 
 void
@@ -76,10 +93,8 @@ void
 stringLimitInit(String * s, const char *str, int len)
 {
     assert(s && str);
-    stringInitBuf(s, len + 1);
-    s->len = len;
-    xmemcpy(s->buf, str, len);
-    s->buf[len] = '\0';
+    s->b = buf_create_size(len + 1);		/* Trailing \0 */
+    buf_append(s->b, str, len, BF_APPEND_NUL);
 }
 
 String
@@ -87,7 +102,7 @@ stringDup(const String * s)
 {
     String dup;
     assert(s);
-    stringLimitInit(&dup, s->buf, s->len);
+    dup.b = buf_ref(s->b);
     return dup;
 }
 
@@ -95,8 +110,8 @@ void
 stringClean(String * s)
 {
     assert(s);
-    if (s->buf)
-	memFreeString(s->size, s->buf);
+    if (s->b)
+        (void) buf_deref(s->b);
     *s = StringNull;
 }
 
@@ -112,21 +127,10 @@ stringAppend(String * s, const char *str, int len)
 {
     assert(s);
     assert(str && len >= 0);
-    if (s->len + len < s->size) {
-	strncat(s->buf, str, len);
-	s->len += len;
-    } else {
-	String snew = StringNull;
-	snew.len = s->len + len;
-	stringInitBuf(&snew, snew.len + 1);
-	if (s->buf)
-	    xmemcpy(snew.buf, s->buf, s->len);
-	if (len)
-	    xmemcpy(snew.buf + s->len, str, len);
-	snew.buf[snew.len] = '\0';
-	stringClean(s);
-	*s = snew;
-    }
+    strMakePrivate(s);
+    if (s->b == NULL)
+        s->b = buf_create_size(len + 1);
+    (void) buf_append(s->b, str, len, BF_APPEND_NUL);
 }
 
 /*
@@ -136,11 +140,11 @@ char *
 stringDupToCOffset(String *s, int offset)
 {
 	char *d;
-	assert(s->buf);
-	assert(offset <= s->len);
-	d = xmalloc(s->len + 1 - offset);
-	memcpy(d, s->buf, s->len - offset);
-	d[s->len - offset] = '\0';
+	assert(s->b);
+	assert(offset <= strLen(*s));
+	d = xmalloc(strLen(*s) + 1 - offset);
+	memcpy(d, strBuf(*s),  strLen(*s) - offset);
+	d[strLen(*s) - offset] = '\0';
 	return d;
 }
 
@@ -154,11 +158,11 @@ char *
 stringDupSubstrToC(String *s, int len)
 {
 	char *d;
-	int l = XMIN(len, s->len);
-	assert(s->buf);
-	assert(len <= s->len);
+	int l = XMIN(len, strLen(*s));
+	assert(s->b);
+	assert(len <= strLen(*s));
 	d = xmalloc(l + 1);
-	memcpy(d, s->buf, l + 1);
+	memcpy(d, strBuf(*s), l + 1);
 	d[l] = '\0';
 	return d;
 
@@ -194,8 +198,6 @@ strRChr(String *s, char ch)
 extern void
 strCut(String *s, int offset)
 {
-	assert(offset < strLen(*s));
-	s->buf[offset] = '\0';
-	s->len = offset;
+	buf_truncate(s->b, offset, BF_APPEND_NUL);
 }
 

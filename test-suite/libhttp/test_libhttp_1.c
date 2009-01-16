@@ -17,10 +17,12 @@
 #include "libcore/kb.h"
 #include "libcore/gb.h"
 #include "libcore/tools.h"
+#include "libcore/dlink.h"
 
 #include "libmem/MemPool.h"
 #include "libmem/MemBufs.h"
 #include "libmem/MemBuf.h"
+#include "libmem/buf.h"
 #include "libmem/String.h"
 #include "libmem/MemStr.h"
 
@@ -89,6 +91,7 @@ main(int argc, const char *argv[])
 	memPoolInit();
 	memBuffersInit();
 	memStringInit();
+	buf_init();
 	httpHeaderInitLibrary();
 	test1a();
 	test1b();
