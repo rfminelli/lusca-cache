@@ -548,9 +548,10 @@ errorConvert(char token, ErrorState * err)
     case 'R':
 	if (NULL != r) {
 	    Packer p;
-	    memBufPrintf(&mb, "%s %s HTTP/%d.%d\n",
+	    memBufPrintf(&mb, "%s %.*s HTTP/%d.%d\n",
 		RequestMethods[r->method].str,
-		strLen(r->urlpath) ? strBuf(r->urlpath) : "/",
+		strLen2(r->urlpath) ? strLen2(r->urlpath) : 1,
+		strLen2(r->urlpath) ? strBuf2(r->urlpath) : "/",
 		r->http_ver.major, r->http_ver.minor);
 	    packerToMemInit(&p, &mb);
 	    httpHeaderPackInto(&r->header, &p);

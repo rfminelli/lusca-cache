@@ -221,9 +221,10 @@ clientFollowXForwardedForStart(void *data)
     request_t *request = http->request;
     request->x_forwarded_for_iterator = httpHeaderGetList(
 	&request->header, HDR_X_FORWARDED_FOR);
-    debug(33, 5) ("clientFollowXForwardedForStart: indirect_client_addr=%s XFF='%s'\n",
+    debug(33, 5) ("clientFollowXForwardedForStart: indirect_client_addr=%s XFF='%.*s'\n",
 	inet_ntoa(request->indirect_client_addr),
-	strBuf(request->x_forwarded_for_iterator));
+	strLen2(request->x_forwarded_for_iterator),
+	strBuf2(request->x_forwarded_for_iterator));
     clientFollowXForwardedForNext(http);
 }
 
@@ -232,9 +233,10 @@ clientFollowXForwardedForNext(void *data)
 {
     clientHttpRequest *http = data;
     request_t *request = http->request;
-    debug(33, 5) ("clientFollowXForwardedForNext: indirect_client_addr=%s XFF='%s'\n",
+    debug(33, 5) ("clientFollowXForwardedForNext: indirect_client_addr=%s XFF='%.*s'\n",
 	inet_ntoa(request->indirect_client_addr),
-	strBuf(request->x_forwarded_for_iterator));
+	strLen2(request->x_forwarded_for_iterator),
+	strBuf2(request->x_forwarded_for_iterator));
     if (strLen(request->x_forwarded_for_iterator) != 0) {
 	/* check the acl to see whether to believe the X-Forwarded-For header */
 	http->acl_checklist = clientAclChecklistCreate(
@@ -1394,12 +1396,11 @@ clientInterpretRequestHeaders(clientHttpRequest * http)
 	int may_pin = 0;
 	while ((e = httpHeaderGetEntry(req_hdr, &pos))) {
 	    if (e->id == HDR_AUTHORIZATION || e->id == HDR_PROXY_AUTHORIZATION) {
-		const char *value = strBuf(e->value);
-		if (strncasecmp(value, "NTLM ", 5) == 0
+		if (strNCaseCmp(e->value, "NTLM ", 5) == 0
 		    ||
-		    strncasecmp(value, "Negotiate ", 10) == 0
+		    strNCaseCmp(e->value, "Negotiate ", 10) == 0
 		    ||
-		    strncasecmp(value, "Kerberos ", 9) == 0) {
+		    strNCaseCmp(e->value, "Kerberos ", 9) == 0) {
 		    if (e->id == HDR_AUTHORIZATION) {
 			request->flags.connection_auth = 1;
 			may_pin = 1;
