@@ -227,8 +227,6 @@ storeCossDirRebuild(SwapDir * sd)
 {
     RebuildState *rb;
     int clean = 0;
-    int zero = 0;
-    FILE *fp;
     CBDATA_INIT_TYPE(RebuildState);
     rb = cbdataAlloc(RebuildState);
     rb->sd = sd;
