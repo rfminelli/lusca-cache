@@ -119,7 +119,6 @@ buf_create_const_int(const void *data, size_t len, const char *file, int line)
 	b = memPoolAlloc(buf_pool);
 	if (! b)
 		return NULL;
-	bzero(b, sizeof(*b));
 	dlinkAddTail(b, &b->node, &buf_active_list);
 	buf_active_num++;
 	debug(85, 5) ("buf_create: %p\n", b);
