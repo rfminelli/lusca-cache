@@ -48,6 +48,7 @@ extern int sqinet_aton(sqaddr_t *s, const char *hoststr, sqaton_flags flags);
 extern int sqinet_assemble_rev(const sqaddr_t *s, char *buf, int len);
 
 static inline struct sockaddr * sqinet_get_entry(sqaddr_t *s) { return (struct sockaddr *) &(s->st); }
+static inline const struct sockaddr * sqinet_get_entry_ro(const sqaddr_t *s) { return (struct sockaddr *) &(s->st); }
 static inline int sqinet_get_family(const sqaddr_t *s) { return s->st.ss_family; }
 static inline int sqinet_get_length(const sqaddr_t *s) { if (s->st.ss_family == AF_INET) return sizeof(struct sockaddr_in); else return sizeof(struct sockaddr_in6); }
 static inline int sqinet_get_maxlength(const sqaddr_t *s) { return sizeof(s->st); }

@@ -486,7 +486,7 @@ comm_connect_addr(int sock, const sqaddr_t *addr)
     if (!F->flags.called_connect) {
 	F->flags.called_connect = 1;
 	CommStats.syscalls.sock.connects++;
-	x = connect(sock, sqinet_get_entry(addr), sqinet_get_length(addr));
+	x = connect(sock, sqinet_get_entry_ro(addr), sqinet_get_length(addr));
 	if (x < 0)
 	    debug(5, 9) ("connect FD %d: %s\n", sock, xstrerror());
     } else {
@@ -780,7 +780,7 @@ comm_udp_sendto6(int fd,
     int x;
     LOCAL_ARRAY(char, sbuf, 256);
     CommStats.syscalls.sock.sendtos++;
-    x = sendto(fd, buf, len, 0, sqinet_get_entry(to_addr), sqinet_get_length(to_addr));
+    x = sendto(fd, buf, len, 0, sqinet_get_entry_ro(to_addr), sqinet_get_length(to_addr));
     if (x < 0) {
         (void) sqinet_ntoa(to_addr, sbuf, sizeof(sbuf), SQADDR_NONE);
 #ifdef _SQUID_LINUX_
