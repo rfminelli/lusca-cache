@@ -63,7 +63,7 @@ void aioRead(int, off_t offset, int size, AIOCB *, void *);
 void aioStat(char *, struct stat *, AIOCB *, void *);
 void aioUnlink(const char *, AIOCB *, void *);
 void aioTruncate(const char *, off_t length, AIOCB *, void *);
-int aioCheckCallbacks(SwapDir *);
+int aioCheckCallbacks(void);
 void aioSync(SwapDir *);
 int aioQueueSize(void);
 

@@ -35,110 +35,59 @@
 
 #include "squid.h"
 
-struct rms {
-    method_t method;
-    int string_len;
-};
-
-/*
- * It is currently VERY, VERY IMPORTANT that these be in order of their
- * definition in the method_code_t enum.
- */
-static struct rms request_methods[] =
+rms_t RequestMethods[] =
 {
-    {
-	{METHOD_NONE, "NONE",
-	    {0, 0}}, 4},
-    {
-	{METHOD_GET, "GET",
-	    {1, 0}}, 3},
-    {
-	{METHOD_POST, "POST",
-	    {0, 1}}, 4},
-    {
-	{METHOD_PUT, "PUT",
-	    {0, 1}}, 3},
-    {
-	{METHOD_HEAD, "HEAD",
-	    {1, 0}}, 4},
-    {
-	{METHOD_CONNECT, "CONNECT",
-	    {0, 0}}, 7},
-    {
-	{METHOD_TRACE, "TRACE",
-	    {0, 0}}, 5},
-    {
-	{METHOD_PURGE, "PURGE",
-	    {0, 1}}, 5},
-    {
-	{METHOD_OPTIONS, "OPTIONS",
-	    {0, 0}}, 7},
-    {
-	{METHOD_DELETE, "DELETE",
-	    {0, 1}}, 6},
-    {
-	{METHOD_PROPFIND, "PROPFIND",
-	    {0, 0}}, 8},
-    {
-	{METHOD_PROPPATCH, "PROPPATCH",
-	    {0, 1}}, 9},
-    {
-	{METHOD_MKCOL, "MKCOL",
-	    {0, 1}}, 5},
-    {
-	{METHOD_COPY, "COPY",
-	    {0, 0}}, 4},
-    {
-	{METHOD_MOVE, "MOVE",
-	    {0, 1}}, 4},
-    {
-	{METHOD_LOCK, "LOCK",
-	    {0, 0}}, 4},
-    {
-	{METHOD_UNLOCK, "UNLOCK",
-	    {0, 0}}, 6},
-    {
-	{METHOD_BMOVE, "BMOVE",
-	    {0, 1}}, 5},
-    {
-	{METHOD_BDELETE, "BDELETE",
-	    {0, 1}}, 7},
-    {
-	{METHOD_BPROPFIND, "BPROPFIND",
-	    {0, 0}}, 9},
-    {
-	{METHOD_BPROPPATCH, "BPROPPATCH",
-	    {0, 0}}, 10},
-    {
-	{METHOD_BCOPY, "BCOPY",
-	    {0, 0}}, 5},
-    {
-	{METHOD_SEARCH, "SEARCH",
-	    {0, 0}}, 6},
-    {
-	{METHOD_SUBSCRIBE, "SUBSCRIBE",
-	    {0, 0}}, 9},
-    {
-	{METHOD_UNSUBSCRIBE, "UNSUBSCRIBE",
-	    {0, 0}}, 11},
-    {
-	{METHOD_POLL, "POLL",
-	    {0, 0}}, 4},
-    {
-	{METHOD_REPORT, "REPORT",
-	    {0, 0}}, 6},
-    {
-	{METHOD_MKACTIVITY, "MKACTIVITY",
-	    {0, 0}}, 10},
-    {
-	{METHOD_CHECKOUT, "CHECKOUT",
-	    {0, 0}}, 8},
-    {
-	{METHOD_MERGE, "MERGE",
-	    {0, 0}}, 5},
-    {
-	{METHOD_OTHER, NULL,
-	    {0, 0}}, 0},
+    {(char *) "NONE", 4},
+    {(char *) "GET", 3},
+    {(char *) "POST", 4},
+    {(char *) "PUT", 3},
+    {(char *) "HEAD", 4},
+    {(char *) "CONNECT", 7},
+    {(char *) "TRACE", 5},
+    {(char *) "PURGE", 5},
+    {(char *) "OPTIONS", 7},
+    {(char *) "DELETE", 6},
+    {(char *) "PROPFIND", 8},
+    {(char *) "PROPPATCH", 9},
+    {(char *) "MKCOL", 5},
+    {(char *) "COPY", 4},
+    {(char *) "MOVE", 4},
+    {(char *) "LOCK", 4},
+    {(char *) "UNLOCK", 6},
+    {(char *) "BMOVE", 5},
+    {(char *) "BDELETE", 7},
+    {(char *) "BPROPFIND", 9},
+    {(char *) "BPROPPATCH", 10},
+    {(char *) "BCOPY", 5},
+    {(char *) "SEARCH", 6},
+    {(char *) "SUBSCRIBE", 9},
+    {(char *) "UNSUBSCRIBE", 11},
+    {(char *) "POLL", 4},
+    {(char *) "REPORT", 6},
+    {(char *) "MKACTIVITY", 10},
+    {(char *) "CHECKOUT", 8},
+    {(char *) "MERGE", 5},
+    {(char *) "%EXT00", 6},
+    {(char *) "%EXT01", 6},
+    {(char *) "%EXT02", 6},
+    {(char *) "%EXT03", 6},
+    {(char *) "%EXT04", 6},
+    {(char *) "%EXT05", 6},
+    {(char *) "%EXT06", 6},
+    {(char *) "%EXT07", 6},
+    {(char *) "%EXT08", 6},
+    {(char *) "%EXT09", 6},
+    {(char *) "%EXT10", 6},
+    {(char *) "%EXT11", 6},
+    {(char *) "%EXT12", 6},
+    {(char *) "%EXT13", 6},
+    {(char *) "%EXT14", 6},
+    {(char *) "%EXT15", 6},
+    {(char *) "%EXT16", 6},
+    {(char *) "%EXT17", 6},
+    {(char *) "%EXT18", 6},
+    {(char *) "%EXT19", 6},
+    {(char *) "ERROR", 5},
 };
 
 const char *ProtocolStr[] =
@@ -160,7 +109,7 @@ const char *ProtocolStr[] =
     "TOTAL"
 };
 
-static request_t *urnParse(method_t * method, char *urn);
+static request_t *urnParse(method_t method, char *urn);
 static const char valid_hostname_chars_u[] =
 "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 "abcdefghijklmnopqrstuvwxyz"
@@ -228,83 +177,24 @@ urlInitialize(void)
     /* more cases? */
 }
 
-method_t *
-urlMethodGetKnown(const char *s, int len)
+method_t
+urlParseMethod(const char *s, int len)
 {
-    struct rms *rms;
-
-    for (rms = request_methods; rms->string_len != 0; rms++) {
-	if (len != rms->string_len) {
-	    continue;
-	}
-	if (strncasecmp(s, rms->method.string, len) == 0) {
-	    return (&rms->method);
-	}
+    method_t method = METHOD_NONE;
+    /*
+     * This check for '%' makes sure that we don't
+     * match one of the extension method placeholders,
+     * which have the form %EXT[0-9][0-9]
+     */
+    if (*s == '%')
+	return METHOD_NONE;
+    for (method++; method < METHOD_ENUM_END; method++) {
+	if (len == RequestMethods[method].len && 0 == strncasecmp(s, RequestMethods[method].str, len))
+	    return method;
     }
-
-    return (NULL);
+    return METHOD_NONE;
 }
 
-method_t *
-urlMethodGet(const char *s, int len)
-{
-    method_t *method;
-
-    method = urlMethodGetKnown(s, len);
-    if (method != NULL) {
-	return (method);
-    }
-    method = xmalloc(sizeof(method_t));
-    method->code = METHOD_OTHER;
-    method->string = xstrndup(s, len + 1);
-    method->flags.cachable = 0;
-    method->flags.purges_all = 1;
-
-    return (method);
-}
-
-method_t *
-urlMethodGetKnownByCode(method_code_t code)
-{
-    if (code < 0 || code >= METHOD_OTHER) {
-	return (NULL);
-    }
-    return (&request_methods[code].method);
-}
-
-method_t *
-urlMethodDup(method_t * orig)
-{
-    method_t *method;
-
-    if (orig == NULL) {
-	return (NULL);
-    }
-    if (orig->code != METHOD_OTHER) {
-	return (orig);
-    }
-    method = xmalloc(sizeof(method_t));
-    method->code = orig->code;
-    method->string = xstrdup(orig->string);
-    method->flags.cachable = orig->flags.cachable;
-    method->flags.purges_all = orig->flags.purges_all;
-
-    return (method);
-}
-
-void
-urlMethodFree(method_t * method)
-{
-
-    if (method == NULL) {
-	return;
-    }
-    if (method->code != METHOD_OTHER) {
-	return;
-    }
-    xfree((char *) method->string);
-    xfree(method);
-}
 
 protocol_t
 urlParseProtocol(const char *s)
@@ -366,7 +256,7 @@ urlDefaultPort(protocol_t p)
  * being "end of host with implied path of /".
  */
 request_t *
-urlParse(method_t * method, char *url)
+urlParse(method_t method, char *url)
 {
     LOCAL_ARRAY(char, proto, MAX_URL);
     LOCAL_ARRAY(char, login, MAX_URL);
@@ -389,7 +279,7 @@ urlParse(method_t * method, char *url)
 	debug(23, 1) ("urlParse: URL too large (%d bytes)\n", l);
 	return NULL;
     }
-    if (method->code == METHOD_CONNECT) {
+    if (method == METHOD_CONNECT) {
 	port = CONNECT_PORT;
 	if (sscanf(url, "%[^:]:%d", host, &port) < 1)
 	    return NULL;
@@ -529,7 +419,7 @@ urlParse(method_t * method, char *url)
 }
 
 static request_t *
-urnParse(method_t * method, char *urn)
+urnParse(method_t method, char *urn)
 {
     debug(50, 5) ("urnParse: %s\n", urn);
     return requestCreate(method, PROTO_URN, urn + 4);
@@ -543,9 +433,9 @@ urlCanonical(request_t * request)
     if (request->canonical)
 	return request->canonical;
     if (request->protocol == PROTO_URN) {
-	snprintf(urlbuf, MAX_URL, "urn:%s", strBuf(request->urlpath));
+	snprintf(urlbuf, MAX_URL, "urn:%.*s", strLen2(request->urlpath), strBuf2(request->urlpath));
     } else {
-	switch (request->method->code) {
+	switch (request->method) {
 	case METHOD_CONNECT:
 	    snprintf(urlbuf, MAX_URL, "%s:%d", request->host, request->port);
 	    break;
@@ -553,113 +443,18 @@ urlCanonical(request_t * request)
 	    portbuf[0] = '\0';
 	    if (request->port != urlDefaultPort(request->protocol))
 		snprintf(portbuf, 32, ":%d", request->port);
-	    snprintf(urlbuf, MAX_URL, "%s://%s%s%s%s%s",
+	    snprintf(urlbuf, MAX_URL, "%s://%s%s%s%s%.*s",
 		ProtocolStr[request->protocol],
 		request->login,
 		*request->login ? "@" : null_string,
 		request->host,
 		portbuf,
-		strBuf(request->urlpath));
+		strLen2(request->urlpath),
+		strBuf2(request->urlpath));
 	    break;
 	}
     }
     return (request->canonical = xstrdup(urlbuf));
-}
-
-/*
- * Test if a URL is relative.
- *
- * RFC 2396, Section 5 (Page 17) implies that in a relative URL, a '/' will
- * appear before a ':'.
- */
-int
-urlIsRelative(const char *url)
-{
-    const char *p;
-
-    if (url == NULL) {
-	return (0);
-    }
-    if (*url == '\0') {
-	return (0);
-    }
-    for (p = url; *p != '\0' && *p != ':' && *p != '/'; p++);
-
-    if (*p == ':') {
-	return (0);
-    }
-    return (1);
-}
-
-/*
- * Convert a relative URL to an absolute URL using the context of a given
- * request.
- *
- * It is assumed that you have already ensured that the URL is relative.
- *
- * If NULL is returned it is an indication that the method in use in the
- * request does not distinguish between relative and absolute and you should
- * use the url unchanged.
- *
- * If non-NULL is returned, it is up to the caller to free the resulting
- * memory using safe_free().
- */
-char *
-urlMakeAbsolute(request_t * req, const char *relUrl)
-{
-    char *urlbuf;
-    const char *path, *last_slash;
-    size_t urllen, pathlen;
-
-    if (req->method->code == METHOD_CONNECT) {
-	return (NULL);
-    }
-    urlbuf = (char *) xmalloc(MAX_URL * sizeof(char));
-
-    if (req->protocol == PROTO_URN) {
-	snprintf(urlbuf, MAX_URL, "urn:%s", strBuf(req->urlpath));
-	return (urlbuf);
-    }
-    if (req->port != urlDefaultPort(req->protocol)) {
-	urllen = snprintf(urlbuf, MAX_URL, "%s://%s%s%s:%d",
-	    ProtocolStr[req->protocol],
-	    req->login,
-	    *req->login ? "@" : null_string,
-	    req->host,
-	    req->port
-	    );
-    } else {
-	urllen = snprintf(urlbuf, MAX_URL, "%s://%s%s%s",
-	    ProtocolStr[req->protocol],
-	    req->login,
-	    *req->login ? "@" : null_string,
-	    req->host
-	    );
-    }
-
-    if (relUrl[0] == '/') {
-	strncpy(&urlbuf[urllen], relUrl, MAX_URL - urllen - 1);
-    } else {
-	path = strBuf(req->urlpath);
-	last_slash = strrchr(path, '/');
-	if (last_slash == NULL) {
-	    urlbuf[urllen++] = '/';
-	    strncpy(&urlbuf[urllen], relUrl, MAX_URL - urllen - 1);
-	} else {
-	    last_slash++;
-	    pathlen = last_slash - path;
-	    if (pathlen > MAX_URL - urllen - 1) {
-		pathlen = MAX_URL - urllen - 1;
-	    }
-	    strncpy(&urlbuf[urllen], path, pathlen);
-	    urllen += pathlen;
-	    if (urllen + 1 < MAX_URL) {
-		strncpy(&urlbuf[urllen], relUrl, MAX_URL - urllen - 1);
-	    }
-	}
-    }
-
-    return (urlbuf);
 }
 
 /*
@@ -679,9 +474,9 @@ urlCanonicalClean(const request_t * request)
     static const char ts[] = "://";
 
     if (request->protocol == PROTO_URN) {
-	snprintf(buf, MAX_URL, "urn:%s", strBuf(request->urlpath));
+	snprintf(buf, MAX_URL, "urn:%.*s", strLen2(request->urlpath), strBuf2(request->urlpath));
     } else {
-	switch (request->method->code) {
+	switch (request->method) {
 	case METHOD_CONNECT:
 	    snprintf(buf, MAX_URL, "%s:%d", request->host, request->port);
 	    break;
@@ -832,11 +627,11 @@ urlCheckRequest(const request_t * r)
 {
     int rc = 0;
     /* protocol "independent" methods */
-    if (r->method->code == METHOD_CONNECT)
+    if (r->method == METHOD_CONNECT)
 	return 1;
-    if (r->method->code == METHOD_TRACE)
+    if (r->method == METHOD_TRACE)
 	return 1;
-    if (r->method->code == METHOD_PURGE)
+    if (r->method == METHOD_PURGE)
 	return 1;
     /* does method match the protocol? */
     switch (r->protocol) {
@@ -847,14 +642,14 @@ urlCheckRequest(const request_t * r)
 	rc = 1;
 	break;
     case PROTO_FTP:
-	if (r->method->code == METHOD_PUT)
+	if (r->method == METHOD_PUT)
 	    rc = 1;
     case PROTO_GOPHER:
     case PROTO_WAIS:
     case PROTO_WHOIS:
-	if (r->method->code == METHOD_GET)
+	if (r->method == METHOD_GET)
 	    rc = 1;
-	else if (r->method->code == METHOD_HEAD)
+	else if (r->method == METHOD_HEAD)
 	    rc = 1;
 	break;
     case PROTO_HTTPS:
@@ -904,4 +699,62 @@ urlHostname(const char *url)
 	xmemmove(host, t, strlen(t) + 1);
     }
     return host;
+}
+
+static void
+urlExtMethodAdd(const char *mstr)
+{
+    method_t method = 0;
+    for (method++; method < METHOD_ENUM_END; method++) {
+	if (0 == strcmp(mstr, RequestMethods[method].str)) {
+	    debug(23, 2) ("Extension method '%s' already exists\n", mstr);
+	    return;
+	}
+	if (0 != strncmp("%EXT", RequestMethods[method].str, 4))
+	    continue;
+	/* Don't free statically allocated "%EXTnn" string */
+	if (0 == strncmp("%EXT_", RequestMethods[method].str, 5))
+	    safe_free(RequestMethods[method].str);
+	RequestMethods[method].str = xstrdup(mstr);
+	RequestMethods[method].len = strlen(mstr);
+	debug(23, 1) ("Extension method '%s' added, enum=%d\n", mstr, (int) method);
+	return;
+    }
+    debug(23, 1) ("WARNING: Could not add new extension method '%s' due to lack of array space\n", mstr);
+}
+
+void
+parse_extension_method(rms_t(*foo)[])
+{
+    char *token;
+    char *t = strtok(NULL, "");
+    while ((token = strwordtok(NULL, &t))) {
+	urlExtMethodAdd(token);
+    }
+}
+
+void
+free_extension_method(rms_t(*foo)[])
+{
+    method_t method;
+    for (method = METHOD_EXT00; method < METHOD_ENUM_END; method++) {
+	if (RequestMethods[method].str[0] != '%') {
+	    char buf[32];
+	    snprintf(buf, sizeof(buf), "%%EXT_%02d", method - METHOD_EXT00);
+	    safe_free(RequestMethods[method].str);
+	    RequestMethods[method].str = xstrdup(buf);
+	    RequestMethods[method].len = strlen(buf);
+	}
+    }
+}
+
+void
+dump_extension_method(StoreEntry * entry, const char *name, rms_t * methods)
+{
+    method_t method;
+    for (method = METHOD_EXT00; method < METHOD_ENUM_END; method++) {
+	if (RequestMethods[method].str[0] != '%') {
+	    storeAppendPrintf(entry, "%s %s\n", name, RequestMethods[method].str);
+	}
+    }
 }

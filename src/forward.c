@@ -40,9 +40,6 @@
 #include <linux/types.h>
 #include <linux/netfilter_ipv4.h>
 #endif
-#if LINUX_TPROXY
-#include <linux/netfilter_ipv4/ip_tproxy.h>
-#endif
 
 static PSC fwdStartComplete;
 static void fwdDispatch(FwdState *);
@@ -60,6 +57,8 @@ static void fwdLogReplyStatus(int tries, http_status status);
 static OBJH fwdStats;
 static STABH fwdAbort;
 static peer *fwdStateServerPeer(FwdState *);
+
+MemPool * pool_fwd_server = NULL;
 
 #define MAX_FWD_STATS_IDX 9
 static int FwdReplyCodes[MAX_FWD_STATS_IDX + 1][HTTP_INVALID_HEADER + 1];
@@ -84,7 +83,7 @@ fwdServerFree(FwdServer * fs)
 {
     if (fs->peer)
 	cbdataUnlock(fs->peer);
-    memFree(fs, MEM_FWD_SERVER);
+    memPoolFree(pool_fwd_server, fs);
 }
 
 static void
@@ -160,7 +159,7 @@ fwdCheckRetriable(FwdState * fwdState)
 	return 0;
 
     /* RFC2616 9.1 Safe and Idempotent Methods */
-    switch (fwdState->request->method->code) {
+    switch (fwdState->request->method) {
 	/* 9.1.1 Safe Methods */
     case METHOD_GET:
     case METHOD_HEAD:
@@ -328,7 +327,7 @@ fwdConnectDone(int server_fd, int status, void *data)
     request_t *request = fwdState->request;
     assert(fwdState->server_fd == server_fd);
     if (Config.onoff.log_ip_on_direct && status != COMM_ERR_DNS && fs->code == HIER_DIRECT)
-	hierarchyNote(&fwdState->request->hier, fs->code, fd_table[server_fd].ipaddr);
+	hierarchyNote(&fwdState->request->hier, fs->code, fd_table[server_fd].ipaddrstr);
     if (status == COMM_ERR_DNS) {
 	/*
 	 * Only set the dont_retry flag if the DNS lookup fails on
@@ -376,8 +375,8 @@ fwdConnectTimeout(int fd, void *data)
     ErrorState *err;
     debug(17, 2) ("fwdConnectTimeout: FD %d: '%s'\n", fd, storeUrl(entry));
     assert(fd == fwdState->server_fd);
-    if (Config.onoff.log_ip_on_direct && fs->code == HIER_DIRECT && fd_table[fd].ipaddr[0])
-	hierarchyNote(&fwdState->request->hier, fs->code, fd_table[fd].ipaddr);
+    if (Config.onoff.log_ip_on_direct && fs->code == HIER_DIRECT && fd_table[fd].ipaddrstr[0])
+	hierarchyNote(&fwdState->request->hier, fs->code, fd_table[fd].ipaddrstr);
     if (entry->mem_obj->inmem_hi == 0) {
 	err = errorCon(ERR_CONNECT_FAIL, HTTP_GATEWAY_TIMEOUT, fwdState->request);
 	err->xerrno = ETIMEDOUT;
@@ -429,7 +428,7 @@ fwdConnectIdleTimeout(int fd, void *data)
 static void
 openIdleConn(peer * peer, const char *domain, struct in_addr outgoing, unsigned short tos, int ctimeout)
 {
-    int fd = comm_openex(SOCK_STREAM,
+    int fd = comm_open(SOCK_STREAM,
 	IPPROTO_TCP,
 	outgoing,
 	0,
@@ -510,6 +509,33 @@ getOutgoingTOS(request_t * request)
     return aclMapTOS(Config.accessList.outgoing_tos, &ch);
 }
 
+static int
+fwdConnectCreateSocket(FwdState *fwdState, FwdServer *fs)
+{
+    int fd = -1;
+    struct in_addr outgoing;
+    unsigned short tos;
+    const char *url = storeUrl(fwdState->entry);
+
+    outgoing = getOutgoingAddr(fwdState->request);
+    tos = getOutgoingTOS(fwdState->request);
+    fwdState->request->out_ip = outgoing;
+
+    debug(17, 3) ("fwdConnectStart: got addr %s, tos %d\n", inet_ntoa(outgoing), tos);
+
+    /* If tproxy then try with the tproxy details. If this fails then retry w/ non-tproxy */
+    /* XXX at the moment the local port is still 0; should this change to support FreeBSD's tproxy derivative? -adrian */
+    if (fwdState->request->flags.tproxy) {
+        fd = comm_open(SOCK_STREAM, IPPROTO_TCP, fwdState->src.sin_addr, 0,
+          COMM_NONBLOCKING | COMM_TPROXY, tos, url);
+    }
+    if (fd == -1) {
+        fd = comm_open(SOCK_STREAM, IPPROTO_TCP, outgoing, 0,
+          COMM_NONBLOCKING, tos, url);
+    }
+    return fd;
+}
+
 static void
 fwdConnectStart(void *data)
 {
@@ -526,9 +552,6 @@ fwdConnectStart(void *data)
     int ftimeout = Config.Timeout.forward - (squid_curtime - fwdState->start);
     struct in_addr outgoing;
     unsigned short tos;
-#if LINUX_TPROXY
-    struct in_tproxy itp;
-#endif
     int idle = -1;
 
     assert(fs);
@@ -579,10 +602,8 @@ fwdConnectStart(void *data)
 	fwdRestart(fwdState);
 	return;
     }
-#if LINUX_TPROXY
     if (fd == -1 && fwdState->request->flags.tproxy)
 	fd = pconnPop(name, port, domain, &fwdState->request->client_addr, 0, NULL);
-#endif
     if (fd == -1) {
 	fd = pconnPop(name, port, domain, NULL, 0, &idle);
     }
@@ -600,7 +621,7 @@ fwdConnectStart(void *data)
 	    if (fs->peer)
 		hierarchyNote(&fwdState->request->hier, fs->code, fs->peer->name);
 	    else if (Config.onoff.log_ip_on_direct && fs->code == HIER_DIRECT)
-		hierarchyNote(&fwdState->request->hier, fs->code, fd_table[fd].ipaddr);
+		hierarchyNote(&fwdState->request->hier, fs->code, fd_table[fd].ipaddrstr);
 	    else
 		hierarchyNote(&fwdState->request->hier, fs->code, name);
 	    if (fs->peer && idle >= 0 && idle < fs->peer->idle) {
@@ -632,17 +653,7 @@ fwdConnectStart(void *data)
     outgoing = getOutgoingAddr(fwdState->request);
     tos = getOutgoingTOS(fwdState->request);
 
-    fwdState->request->out_ip = outgoing;
-
-    debug(17, 3) ("fwdConnectStart: got addr %s, tos %d\n",
-	inet_ntoa(outgoing), tos);
-    fd = comm_openex(SOCK_STREAM,
-	IPPROTO_TCP,
-	outgoing,
-	0,
-	COMM_NONBLOCKING,
-	tos,
-	url);
+    fd = fwdConnectCreateSocket(fwdState, fs);
     if (fd < 0) {
 	debug(50, 4) ("fwdConnectStart: %s\n", xstrerror());
 	err = errorCon(ERR_SOCKET_FAILURE, HTTP_INTERNAL_SERVER_ERROR, fwdState->request);
@@ -673,32 +684,6 @@ fwdConnectStart(void *data)
     if (fs->peer) {
 	hierarchyNote(&fwdState->request->hier, fs->code, fs->peer->name);
     } else {
-#if LINUX_TPROXY
-	if (fwdState->request->flags.tproxy) {
-
-	    itp.v.addr.faddr.s_addr = fwdState->src.sin_addr.s_addr;
-	    itp.v.addr.fport = 0;
-
-	    /* If these syscalls fail then we just fallback to connecting
-	     * normally by simply ignoring the errors...
-	     */
-	    itp.op = TPROXY_ASSIGN;
-	    if (setsockopt(fd, SOL_IP, IP_TPROXY, &itp, sizeof(itp)) == -1) {
-		debug(20, 1) ("tproxy ip=%s,0x%x,port=%d ERROR ASSIGN\n",
-		    inet_ntoa(itp.v.addr.faddr),
-		    itp.v.addr.faddr.s_addr,
-		    itp.v.addr.fport);
-	    } else {
-		itp.op = TPROXY_FLAGS;
-		itp.v.flags = ITP_CONNECT;
-		if (setsockopt(fd, SOL_IP, IP_TPROXY, &itp, sizeof(itp)) == -1) {
-		    debug(20, 1) ("tproxy ip=%x,port=%d ERROR CONNECT\n",
-			itp.v.addr.faddr.s_addr,
-			itp.v.addr.fport);
-		}
-	    }
-	}
-#endif
 	hierarchyNote(&fwdState->request->hier, fs->code, fwdState->request->host);
     }
 
@@ -759,7 +744,9 @@ fwdDispatch(FwdState * fwdState)
     int server_fd = fwdState->server_fd;
     FwdServer *fs = fwdState->servers;
     debug(17, 3) ("fwdDispatch: FD %d: Fetching '%s %s'\n",
-	fwdState->client_fd, request->method->string, storeUrl(entry));
+	fwdState->client_fd,
+	RequestMethods[request->method].str,
+	storeUrl(entry));
     /*
      * Assert that server_fd is set.  This is to guarantee that fwdState
      * is attached to something and will be deallocated when server_fd
@@ -774,7 +761,7 @@ fwdDispatch(FwdState * fwdState)
     fd_table[server_fd].uses++;
     if (fd_table[server_fd].uses == 1 && fs->peer)
 	peerConnectSucceded(fs->peer);
-    fwdState->request->out_ip = fd_table[server_fd].local_addr;
+    fwdState->request->out_ip = sqinet_get_v4_inaddr(&fd_table[server_fd].local_address, SQADDR_ASSERT_IS_V4);
     netdbPingSite(request->host);
     entry->mem_obj->refresh_timestamp = squid_curtime;
     if (fwdState->servers && (p = fwdState->servers->peer)) {
@@ -871,6 +858,7 @@ fwdReforward(FwdState * fwdState)
 
 /* PUBLIC FUNCTIONS */
 
+CBDATA_TYPE(FwdState);
 void
 fwdServersFree(FwdServer ** FS)
 {
@@ -891,6 +879,7 @@ fwdStartPeer(peer * p, StoreEntry * e, request_t * r)
 #if URL_CHECKSUM_DEBUG
     assert(e->mem_obj->chksum == url_checksum(e->mem_obj->url));
 #endif
+    CBDATA_INIT_TYPE(FwdState);
     fwdState = cbdataAlloc(FwdState);
     fwdState->entry = e;
     fwdState->client_fd = -1;
@@ -917,7 +906,7 @@ fwdStart(int fd, StoreEntry * e, request_t * r)
      * from peer_digest.c, asn.c, netdb.c, etc and should always
      * be allowed.  yuck, I know.
      */
-    if (r->client_addr.s_addr != no_addr.s_addr && r->protocol != PROTO_INTERNAL && r->protocol != PROTO_CACHEOBJ) {
+    if (! IsNoAddr(&r->client_addr) && r->protocol != PROTO_INTERNAL && r->protocol != PROTO_CACHEOBJ) {
 	/*      
 	 * Check if this host is allowed to fetch MISSES from us (miss_access)
 	 */
@@ -960,6 +949,7 @@ fwdStart(int fd, StoreEntry * e, request_t * r)
     default:
 	break;
     }
+    CBDATA_INIT_TYPE(FwdState);
     fwdState = cbdataAlloc(FwdState);
     fwdState->entry = e;
     fwdState->client_fd = fd;
@@ -968,13 +958,12 @@ fwdStart(int fd, StoreEntry * e, request_t * r)
     fwdState->start = squid_curtime;
     fwdState->orig_entry_flags = e->flags;
 
-#if LINUX_TPROXY
     /* If we need to transparently proxy the request
      * then we need the client source address and port */
+    /* XXX should we only do this if the request has the tproxy flag set?! */
     fwdState->src.sin_family = AF_INET;
     fwdState->src.sin_addr = r->client_addr;
     fwdState->src.sin_port = r->client_port;
-#endif
 
     storeLockObject(e);
     if (!fwdState->request->flags.pinned)
@@ -1149,6 +1138,16 @@ fwdComplete(FwdState * fwdState)
 }
 
 void
+fwdInitMem(void)
+{
+    /*
+     * Although we (currently) create FwdServers's in peer_select.c, the bulk of
+     * the manipulation logic is here!
+     */
+    pool_fwd_server = memPoolCreate("FwdServer", sizeof(FwdServer));
+}
+
+void
 fwdInit(void)
 {
     cachemgrRegister("forward",
@@ -1240,7 +1239,8 @@ fwdLog(FwdState * fwdState)
     logfilePrintf(logfile, "%9d.%03d %03d %s %s\n",
 	(int) current_time.tv_sec,
 	(int) current_time.tv_usec / 1000,
-	fwdState->last_status, fwdState->request->method->string,
+	fwdState->last_status,
+	RequestMethods[fwdState->request->method].str,
 	fwdState->request->canonical);
 }
 

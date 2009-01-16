@@ -1156,7 +1156,7 @@ accessLogLog(AccessLogEntry * al, aclCheck_t * checklist)
     if (al->icp.opcode)
 	al->private.method_str = icp_opcode_str[al->icp.opcode];
     else
-	al->private.method_str = al->http.method->string;
+	al->private.method_str = RequestMethods[al->http.method].str;
     if (al->hier.host[0] == '\0')
 	xstrncpy(al->hier.host, dash_str, SQUIDHOSTNAMELEN);
 
@@ -1198,7 +1198,7 @@ accessLogLog(AccessLogEntry * al, aclCheck_t * checklist)
 #if MULTICAST_MISS_STREAM
     if (al->cache.code != LOG_TCP_MISS)
 	(void) 0;
-    else if (al->http.method->code != METHOD_GET)
+    else if (al->http.method != METHOD_GET)
 	(void) 0;
     else if (mcast_miss_fd < 0)
 	(void) 0;
@@ -1279,7 +1279,7 @@ accessLogInit(void)
     fvdbInit();
 #endif
 #if MULTICAST_MISS_STREAM
-    if (Config.mcast_miss.addr.s_addr != no_addr.s_addr) {
+    if (! IsNoAddr(&Config.mcast_miss.addr)) {
 	memset(&mcast_miss_to, '\0', sizeof(mcast_miss_to));
 	mcast_miss_to.sin_family = AF_INET;
 	mcast_miss_to.sin_port = htons(Config.mcast_miss.port);
@@ -1443,12 +1443,12 @@ mcast_encode(unsigned int *ibuf, size_t isize, const unsigned int *key)
 
 #if HEADERS_LOG
 void
-headersLog(int cs, int pq, method_t * m, void *data)
+headersLog(int cs, int pq, method_t m, void *data)
 {
     HttpReply *rep;
     request_t *req;
     unsigned short magic = 0;
-    unsigned char M = (unsigned char) m->code;
+    unsigned char M = (unsigned char) m;
     unsigned short S;
     char *hmask;
     int ccmask = 0;

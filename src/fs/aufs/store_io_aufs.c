@@ -96,7 +96,7 @@ storeAufsOpen(SwapDir * SD, StoreEntry * e, STFNCB * file_callback,
     sio->e = e;
     cbdataLock(callback_data);
     Opening_FD++;
-    statCounter.syscalls.disk.opens++;
+    CommStats.syscalls.disk.opens++;
 #if ASYNC_OPEN
     aioOpen(path, O_RDONLY | O_BINARY | O_NOATIME, 0644, storeAufsOpenDone, sio);
 #else
@@ -151,7 +151,7 @@ storeAufsCreate(SwapDir * SD, StoreEntry * e, STFNCB * file_callback, STIOCB * c
     sio->e = (StoreEntry *) e;
     cbdataLock(callback_data);
     Opening_FD++;
-    statCounter.syscalls.disk.opens++;
+    CommStats.syscalls.disk.opens++;
 #if ASYNC_CREATE
     aioOpen(path, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0644, storeAufsOpenDone, sio);
 #else
@@ -193,7 +193,7 @@ storeAufsRead(SwapDir * SD, storeIOState * sio, char *buf, size_t size, squid_of
 	struct _queued_read *q;
 	debug(79, 3) ("storeAufsRead: queueing read because FD < 0\n");
 	assert(aiostate->flags.opening);
-	assert(aiostate->pending_reads == NULL);
+        assert(DLINK_ISEMPTY(aiostate->pending_reads));
 	q = memPoolAlloc(aufs_qread_pool);
 	q->buf = buf;
 	q->size = size;
@@ -201,7 +201,7 @@ storeAufsRead(SwapDir * SD, storeIOState * sio, char *buf, size_t size, squid_of
 	q->callback = callback;
 	q->callback_data = callback_data;
 	cbdataLock(q->callback_data);
-	linklistPush(&(aiostate->pending_reads), q);
+        dlinkAddTail(q, &q->n, &aiostate->pending_reads);
 	return;
     }
     sio->read.callback = callback;
@@ -214,7 +214,7 @@ storeAufsRead(SwapDir * SD, storeIOState * sio, char *buf, size_t size, squid_of
     aiostate->flags.reading = 1;
 #if ASYNC_READ
     aioRead(aiostate->fd, (off_t) offset, size, storeAufsReadDone, sio);
-    statCounter.syscalls.disk.reads++;
+    CommStats.syscalls.disk.reads++;
 #else
     file_read(aiostate->fd, buf, size, (off_t) offset, storeAufsReadDone, sio);
     /* file_read() increments syscalls.disk.reads */
@@ -238,7 +238,7 @@ storeAufsWrite(SwapDir * SD, storeIOState * sio, char *buf, size_t size, squid_o
 	q->size = size;
 	q->offset = (off_t) offset;
 	q->free_func = free_func;
-	linklistPush(&(aiostate->pending_writes), q);
+        dlinkAddTail(q, &q->n, &aiostate->pending_writes);
 	return;
     }
 #if ASYNC_WRITE
@@ -250,13 +250,13 @@ storeAufsWrite(SwapDir * SD, storeIOState * sio, char *buf, size_t size, squid_o
 	q->size = size;
 	q->offset = (off_t) offset;
 	q->free_func = free_func;
-	linklistPush(&(aiostate->pending_writes), q);
+        dlinkAddTail(q, &q->n, &aiostate->pending_writes);
 	return;
     }
     aiostate->flags.writing = 1;
     aioWrite(aiostate->fd, (off_t) offset, buf, size, storeAufsWriteDone, sio,
 	free_func);
-    statCounter.syscalls.disk.writes++;
+    CommStats.syscalls.disk.writes++;
 #else
     file_write(aiostate->fd, (off_t) offset, buf, size, storeAufsWriteDone, sio,
 	free_func);
@@ -272,7 +272,7 @@ storeAufsUnlink(SwapDir * SD, StoreEntry * e)
     storeAufsDirReplRemove(e);
     storeAufsDirMapBitReset(SD, e->swap_filen);
     storeAufsDirUnlinkFile(SD, e->swap_filen);
-    statCounter.syscalls.disk.unlinks++;
+    CommStats.syscalls.disk.unlinks++;
 }
 
 void
@@ -295,7 +295,7 @@ static int
 storeAufsKickWriteQueue(storeIOState * sio)
 {
     squidaiostate_t *aiostate = (squidaiostate_t *) sio->fsstate;
-    struct _queued_write *q = linklistShift(&aiostate->pending_writes);
+    struct _queued_write *q = dlinkRemoveHead(&aiostate->pending_writes);
     if (NULL == q)
 	return 0;
     debug(79, 3) ("storeAufsKickWriteQueue: writing queued chunk of %ld bytes\n",
@@ -309,7 +309,7 @@ static int
 storeAufsKickReadQueue(storeIOState * sio)
 {
     squidaiostate_t *aiostate = (squidaiostate_t *) sio->fsstate;
-    struct _queued_read *q = linklistShift(&(aiostate->pending_reads));
+    struct _queued_read *q = dlinkRemoveHead(&aiostate->pending_reads);
     if (NULL == q)
 	return 0;
     debug(79, 3) ("storeAufsKickReadQueue: reading queued request of %ld bytes\n",
@@ -496,7 +496,7 @@ storeAufsIOCallback(storeIOState * sio, int errflag)
     file_close(fd);
 #endif
     store_open_disk_fd--;
-    statCounter.syscalls.disk.closes++;
+    CommStats.syscalls.disk.closes++;
     debug(79, 9) ("%s:%d\n", __FILE__, __LINE__);
 }
 
@@ -531,12 +531,12 @@ storeAufsIOFreeEntry(void *siop)
     squidaiostate_t *aiostate = (squidaiostate_t *) sio->fsstate;
     struct _queued_write *qw;
     struct _queued_read *qr;
-    while ((qw = linklistShift(&aiostate->pending_writes))) {
+    while ((qw = dlinkRemoveHead(&aiostate->pending_writes))) {
 	if (qw->free_func)
 	    qw->free_func(qw->buf);
 	memPoolFree(aufs_qwrite_pool, qw);
     }
-    while ((qr = linklistShift(&aiostate->pending_reads))) {
+    while ((qr = dlinkRemoveHead(&aiostate->pending_reads))) {
 	cbdataUnlock(qr->callback_data);
 	memPoolFree(aufs_qread_pool, qr);
     }

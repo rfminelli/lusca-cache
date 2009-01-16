@@ -346,7 +346,7 @@ snmp_prfSysFn(variable_list * Var, snint * ErrP)
 	break;
     case PERF_SYS_NUMOBJCNT:
 	Answer = snmp_var_new_integer(Var->name, Var->name_length,
-	    (snint) memInUse(MEM_STOREENTRY),
+	    (snint) memPoolInUseCount(pool_storeentry),
 	    SMI_GAUGE32);
 	break;
     default:

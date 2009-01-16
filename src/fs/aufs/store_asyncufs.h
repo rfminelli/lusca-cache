@@ -9,9 +9,9 @@
 
 /* Which operations to run async */
 #define ASYNC_OPEN 1
-#define ASYNC_CLOSE 0
+#define ASYNC_CLOSE 1
 #define ASYNC_CREATE 1
-#define ASYNC_WRITE 0
+#define ASYNC_WRITE 1
 #define ASYNC_READ 1
 
 struct _squidaioinfo_t {
@@ -35,8 +35,8 @@ struct _squidaiostate_t {
 	unsigned int inreaddone:1;
     } flags;
     char *read_buf;
-    link_list *pending_writes;
-    link_list *pending_reads;
+    dlink_list pending_writes;
+    dlink_list pending_reads;
 };
 
 struct _queued_write {
@@ -44,6 +44,7 @@ struct _queued_write {
     size_t size;
     off_t offset;
     FREE *free_func;
+    dlink_node n;
 };
 
 struct _queued_read {
@@ -52,6 +53,7 @@ struct _queued_read {
     off_t offset;
     STRCB *callback;
     void *callback_data;
+    dlink_node n;
 };
 
 typedef struct _squidaioinfo_t squidaioinfo_t;

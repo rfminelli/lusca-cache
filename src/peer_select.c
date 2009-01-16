@@ -139,7 +139,8 @@ peerSelect(request_t * request,
     if (entry)
 	debug(44, 3) ("peerSelect: %s\n", storeUrl(entry));
     else
-	debug(44, 3) ("peerSelect: %s\n", request->method->string);
+	debug(44, 3) ("peerSelect: %s\n", RequestMethods[request->method].str);
+    CBDATA_INIT_TYPE(ps_state);
     psstate = cbdataAlloc(ps_state);
     psstate->request = requestLink(request);
     psstate->entry = entry;
@@ -238,7 +239,8 @@ peerSelectFoo(ps_state * ps)
 {
     StoreEntry *entry = ps->entry;
     request_t *request = ps->request;
-    debug(44, 3) ("peerSelectFoo: '%s %s'\n", request->method->string,
+    debug(44, 3) ("peerSelectFoo: '%s %s'\n",
+	RequestMethods[request->method].str,
 	request->host);
     if (ps->direct == DIRECT_UNKNOWN) {
 	if (ps->always_direct == 0 && Config.accessList.AlwaysDirect) {
@@ -422,10 +424,10 @@ peerGetSomeNeighborReplies(ps_state * ps)
 	code = SOURCE_FASTEST;
     } else
 #endif
-    if (ps->closest_parent_miss.sin_addr.s_addr != any_addr.s_addr) {
+    if (! IsAnyAddr(&ps->closest_parent_miss.sin_addr)) {
 	p = whichPeer(&ps->closest_parent_miss);
 	code = CLOSEST_PARENT_MISS;
-    } else if (ps->first_parent_miss.sin_addr.s_addr != any_addr.s_addr) {
+    } else if (! IsAnyAddr(&ps->first_parent_miss.sin_addr)) {
 	p = whichPeer(&ps->first_parent_miss);
 	code = FIRST_PARENT_MISS;
     }
@@ -458,7 +460,8 @@ peerGetSomeParent(ps_state * ps)
     peer *p;
     request_t *request = ps->request;
     hier_code code = HIER_NONE;
-    debug(44, 3) ("peerGetSomeParent: %s %s\n", request->method->string,
+    debug(44, 3) ("peerGetSomeParent: %s %s\n",
+	RequestMethods[request->method].str,
 	request->host);
     if (ps->direct == DIRECT_YES)
 	return;
@@ -559,10 +562,10 @@ peerIcpParentMiss(peer * p, icp_common_t * header, ps_state * ps)
     if (p->options.closest_only)
 	return;
     /* set FIRST_MISS if there is no CLOSEST parent */
-    if (ps->closest_parent_miss.sin_addr.s_addr != any_addr.s_addr)
+    if (! IsAnyAddr(&ps->closest_parent_miss.sin_addr))
 	return;
     rtt = tvSubMsec(ps->ping.start, current_time) / p->weight;
-    if (ps->first_parent_miss.sin_addr.s_addr == any_addr.s_addr ||
+    if (IsAnyAddr(&ps->first_parent_miss.sin_addr) ||
 	rtt < ps->ping.w_rtt) {
 	ps->first_parent_miss = p->in_addr;
 	ps->ping.w_rtt = rtt;
@@ -647,10 +650,10 @@ peerHtcpParentMiss(peer * p, htcpReplyData * htcp, ps_state * ps)
     if (p->options.closest_only)
 	return;
     /* set FIRST_MISS if there is no CLOSEST parent */
-    if (ps->closest_parent_miss.sin_addr.s_addr != any_addr.s_addr)
+    if (! IsAnyAddr(&ps->closest_parent_miss.sin_addr))
 	return;
     rtt = tvSubMsec(ps->ping.start, current_time) / p->weight;
-    if (ps->first_parent_miss.sin_addr.s_addr == any_addr.s_addr ||
+    if (IsAnyAddr(&ps->first_parent_miss.sin_addr) ||
 	rtt < ps->ping.w_rtt) {
 	ps->first_parent_miss = p->in_addr;
 	ps->ping.w_rtt = rtt;
@@ -685,7 +688,7 @@ peerAddFwdServer(FwdServer ** FS, peer * p, hier_code code)
 	}
 	FS = &(*FS)->next;
     }
-    fs = memAllocate(MEM_FWD_SERVER);
+    fs = memPoolAlloc(pool_fwd_server);
     fs->peer = p;
     fs->code = code;
     cbdataLock(fs->peer);

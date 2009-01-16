@@ -94,6 +94,8 @@ static EVH storeLateRelease;
  * local variables
  */
 static Stack LateReleaseStack;
+MemPool * pool_memobject = NULL;
+MemPool * pool_storeentry = NULL;
 
 #if URL_CHECKSUM_DEBUG
 unsigned int
@@ -113,7 +115,7 @@ url_checksum(const char *url)
 static MemObject *
 new_MemObject(const char *url)
 {
-    MemObject *mem = memAllocate(MEM_MEMOBJECT);
+    MemObject *mem = memPoolAlloc(pool_memobject);
     mem->reply = httpReplyCreate();
     mem->url = xstrdup(url);
 #if URL_CHECKSUM_DEBUG
@@ -142,7 +144,7 @@ StoreEntry *
 new_StoreEntry(int mem_obj_flag, const char *url)
 {
     StoreEntry *e = NULL;
-    e = memAllocate(MEM_STOREENTRY);
+    e = memPoolAlloc(pool_storeentry);
     if (mem_obj_flag)
 	e->mem_obj = new_MemObject(url);
     debug(20, 3) ("new_StoreEntry: returning %p\n", e);
@@ -172,7 +174,6 @@ destroy_MemObject(StoreEntry * e)
     assert(mem->chksum == url_checksum(mem->url));
 #endif
     e->mem_obj = NULL;
-    urlMethodFree(mem->method);
     if (!shutting_down)
 	assert(mem->swapout.sio == NULL);
     stmemFree(&mem->data_hdr);
@@ -199,7 +200,7 @@ destroy_MemObject(StoreEntry * e)
     safe_free(mem->url);
     safe_free(mem->vary_headers);
     safe_free(mem->vary_encoding);
-    memFree(mem, MEM_MEMOBJECT);
+    memPoolFree(pool_memobject, mem);
 }
 
 static void
@@ -212,7 +213,7 @@ destroy_StoreEntry(void *data)
 	destroy_MemObject(e);
     storeHashDelete(e);
     assert(e->hash.key == NULL);
-    memFree(e, MEM_STOREENTRY);
+    memPoolFree(pool_storeentry, e);
 }
 
 /* ----- INTERFACE BETWEEN STORAGE MANAGER AND HASH TABLE FUNCTIONS --------- */
@@ -348,31 +349,18 @@ storeUnlockObjectDebug(StoreEntry * e, const char *file, const int line)
 StoreEntry *
 storeGet(const cache_key * key)
 {
-    StoreEntry *e = (StoreEntry *) hash_lookup(store_table, key);
-    debug(20, 3) ("storeGet: %s -> %p\n", storeKeyText(key), e);
-    return e;
+    debug(20, 3) ("storeGet: looking up %s\n", storeKeyText(key));
+    return (StoreEntry *) hash_lookup(store_table, key);
 }
 
 StoreEntry *
-storeGetPublic(const char *uri, const method_t * method)
+storeGetPublic(const char *uri, const method_t method)
 {
     return storeGet(storeKeyPublic(uri, method));
 }
 
 StoreEntry *
-storeGetPublicByCode(const char *uri, const method_code_t code)
-{
-    method_t *method;
-
-    method = urlMethodGetKnownByCode(code);
-    if (method == NULL) {
-	return (NULL);
-    }
-    return storeGetPublic(uri, method);
-}
-
-StoreEntry *
-storeGetPublicByRequestMethod(request_t * req, const method_t * method)
+storeGetPublicByRequestMethod(request_t * req, const method_t method)
 {
     if (req->vary) {
 	/* Varying objects... */
@@ -385,71 +373,13 @@ storeGetPublicByRequestMethod(request_t * req, const method_t * method)
 }
 
 StoreEntry *
-storeGetPublicByRequestMethodCode(request_t * req, const method_code_t code)
-{
-    method_t *method;
-
-    method = urlMethodGetKnownByCode(code);
-    if (method == NULL) {
-	return (NULL);
-    }
-    return storeGetPublicByRequestMethod(req, method);
-}
-
-StoreEntry *
 storeGetPublicByRequest(request_t * req)
 {
     StoreEntry *e = storeGetPublicByRequestMethod(req, req->method);
-    if (e == NULL && req->method->code == METHOD_HEAD)
+    if (e == NULL && req->method == METHOD_HEAD)
 	/* We can generate a HEAD reply from a cached GET object */
-	e = storeGetPublicByRequestMethodCode(req, METHOD_GET);
+	e = storeGetPublicByRequestMethod(req, METHOD_GET);
     return e;
-}
-
-void
-storePurgeEntriesByUrl(request_t * req, const char *url)
-{
-    int m, get_or_head_sent;
-    method_t *method;
-    StoreEntry *e;
-
-    debug(20, 5) ("storePurgeEntriesByUrl: purging %s\n", url);
-    get_or_head_sent = 0;
-
-    for (m = METHOD_NONE; m < METHOD_OTHER; m++) {
-	method = urlMethodGetKnownByCode(m);
-	if (!method->flags.cachable) {
-	    continue;
-	}
-	if ((m == METHOD_HEAD || m == METHOD_GET) && get_or_head_sent) {
-	    continue;
-	}
-	e = storeGetPublic(url, method);
-	if (e == NULL) {
-#if USE_HTCP
-	    if (m == METHOD_HEAD) {
-		method = urlMethodGetKnownByCode(METHOD_GET);
-	    }
-	    neighborsHtcpClear(NULL, url, req, method, HTCP_CLR_INVALIDATION);
-	    if (m == METHOD_GET || m == METHOD_HEAD) {
-		get_or_head_sent = 1;
-	    }
-#endif
-	    continue;
-	}
-	debug(20, 5) ("storePurgeEntriesByUrl: purging %s %s\n",
-	    method->string, url);
-#if USE_HTCP
-	if (m == METHOD_HEAD) {
-	    method = urlMethodGetKnownByCode(METHOD_GET);
-	}
-	neighborsHtcpClear(e, url, req, method, HTCP_CLR_INVALIDATION);
-	if (m == METHOD_GET || m == METHOD_HEAD) {
-	    get_or_head_sent = 1;
-	}
-#endif
-	storeRelease(e);
-    }
 }
 
 static int
@@ -477,7 +407,7 @@ storeSetPrivateKey(StoreEntry * e)
 	mem->id = getKeyCounter();
 	newkey = storeKeyPrivate(mem->url, mem->method, mem->id);
     } else {
-	newkey = storeKeyPrivate("JUNK", NULL, getKeyCounter());
+	newkey = storeKeyPrivate("JUNK", METHOD_NONE, getKeyCounter());
     }
     assert(hash_lookup(store_table, newkey) == NULL);
     EBIT_SET(e->flags, KEY_PRIVATE);
@@ -658,7 +588,7 @@ storeAddVaryReadOld(void *data, mem_node_ref nr, ssize_t size)
 	int hdr_sz;
 	if (!state->oe->mem_obj->reply)
 	    goto invalid_marker_obj;
-	if (!strLen(state->oe->mem_obj->reply->content_type))
+	if (!strLen2(state->oe->mem_obj->reply->content_type))
 	    goto invalid_marker_obj;
 	if (strCmp(state->oe->mem_obj->reply->content_type, "x-squid-internal/vary") != 0) {
 	  invalid_marker_obj:
@@ -792,7 +722,7 @@ storeAddVaryReadOld(void *data, mem_node_ref nr, ssize_t size)
  * At leas one of key or etag must be specified, preferably both.
  */
 void
-storeAddVary(const char *url, method_t * method, const cache_key * key, const char *etag, const char *vary, const char *vary_headers, const char *accept_encoding)
+storeAddVary(const char *url, const method_t method, const cache_key * key, const char *etag, const char *vary, const char *vary_headers, const char *accept_encoding)
 {
     AddVaryState *state;
     request_flags flags = null_request_flags;
@@ -1045,8 +975,8 @@ storeLocateVary(StoreEntry * e, int offset, const char *vary_data, String accept
 	VaryData_pool = memPoolCreate("VaryData", sizeof(VaryData));
     state = cbdataAlloc(LocateVaryState);
     state->vary_data = xstrdup(vary_data);
-    if (strBuf(accept_encoding))
-	state->accept_encoding = xstrdup(strBuf(accept_encoding));
+    if (strIsNotNull(accept_encoding))
+	state->accept_encoding = stringDupToC(&accept_encoding);
     state->data = memPoolAlloc(VaryData_pool);
     state->e = e;
     storeLockObject(state->e);
@@ -1056,7 +986,7 @@ storeLocateVary(StoreEntry * e, int offset, const char *vary_data, String accept
     state->buf = memAllocBuf(4096, &state->buf_size);
     state->sc = storeClientRegister(state->e, state);
     state->seen_offset = offset;
-    if (!strLen(e->mem_obj->reply->content_type) || strCmp(e->mem_obj->reply->content_type, "x-squid-internal/vary") != 0) {
+    if (!strLen2(e->mem_obj->reply->content_type) || strCmp(e->mem_obj->reply->content_type, "x-squid-internal/vary") != 0) {
 	/* This is not our Vary marker object. Bail out. */
 	debug(33, 1) ("storeLocateVary: Not our vary marker object, %s = '%s', '%s'/'%s'\n",
 	    storeKeyText(e->hash.key), e->mem_obj->url, vary_data, strBuf(accept_encoding) ? strBuf(accept_encoding) : "-");
@@ -1132,14 +1062,14 @@ storeSetPublicKey(StoreEntry * e)
 	    String vary = StringNull;
 	    String varyhdr;
 	    varyhdr = httpHeaderGetList(&mem->reply->header, HDR_VARY);
-	    if (strBuf(varyhdr))
-		strListAdd(&vary, strBuf(varyhdr), ',');
+	    if (strIsNotNull(varyhdr))
+		strListAddStr(&vary, strBuf2(varyhdr), strLen2(varyhdr), ',');
 	    stringClean(&varyhdr);
 #if X_ACCELERATOR_VARY
 	    /* This needs to match the order in http.c:httpMakeVaryMark */
 	    varyhdr = httpHeaderGetList(&mem->reply->header, HDR_X_ACCELERATOR_VARY);
-	    if (strBuf(varyhdr))
-		strListAdd(&vary, strBuf(varyhdr), ',');
+	    if (strIsNotNull(varyhdr))
+		strListAddStr(&vary, strBuf2(varyhdr), strLen2(varyhdr), ',');
 	    stringClean(&varyhdr);
 #endif
 	    storeAddVary(mem->url, mem->method, newkey, httpHeaderGetStr(&mem->reply->header, HDR_ETAG), strBuf(vary), mem->vary_headers, mem->vary_encoding);
@@ -1166,7 +1096,7 @@ storeSetPublicKey(StoreEntry * e)
 }
 
 StoreEntry *
-storeCreateEntry(const char *url, request_flags flags, method_t * method)
+storeCreateEntry(const char *url, request_flags flags, method_t method)
 {
     StoreEntry *e = NULL;
     MemObject *mem = NULL;
@@ -1175,7 +1105,7 @@ storeCreateEntry(const char *url, request_flags flags, method_t * method)
     e = new_StoreEntry(STORE_ENTRY_WITH_MEMOBJ, url);
     e->lock_count = 1;		/* Note lock here w/o calling storeLock() */
     mem = e->mem_obj;
-    mem->method = urlMethodDup(method);
+    mem->method = method;
     if (neighbors_do_private_keys || !flags.hierarchical)
 	storeSetPrivateKey(e);
     else
@@ -1514,7 +1444,7 @@ storeGetMemSpace(int size)
 	return;
     last_check = squid_curtime;
     pages_needed = (size / SM_PAGE_SIZE) + 1;
-    if (memInUse(MEM_MEM_NODE) + pages_needed < store_pages_max)
+    if (memPoolInUseCount(pool_mem_node) + pages_needed < store_pages_max)
 	return;
     debug(20, 3) ("storeGetMemSpace: Starting, need %d pages\n", pages_needed);
     /* XXX what to set as max_scan here? */
@@ -1523,7 +1453,7 @@ storeGetMemSpace(int size)
 	debug(20, 3) ("storeGetMemSpace: purging %p\n", e);
 	storePurgeMem(e);
 	released++;
-	if (memInUse(MEM_MEM_NODE) + pages_needed < store_pages_max) {
+	if (memPoolInUseCount(pool_mem_node) + pages_needed < store_pages_max) {
 	    debug(20, 3) ("storeGetMemSpace: we finally have enough free memory!\n");
 	    break;
 	}
@@ -1715,12 +1645,18 @@ storeInitHashValues(void)
 }
 
 void
+storeInitMem(void)
+{
+    pool_storeentry = memPoolCreate("StoreEntry", sizeof(StoreEntry));
+    pool_memobject = memPoolCreate("MemObject", sizeof(MemObject));
+}
+
+void
 storeInit(void)
 {
     storeKeyInit();
     storeInitHashValues();
-    store_table = hash_create(storeKeyHashCmp,
-	store_hash_buckets, storeKeyHashHash);
+    store_table = hash_create(storeKeyHashCmp, store_hash_buckets, storeKeyHashHash);
     mem_policy = createRemovalPolicy(Config.memPolicy);
     storeDigestInit();
     storeLogOpen();
@@ -1765,12 +1701,10 @@ storeNegativeCache(StoreEntry * e)
 {
     StoreEntry *oe = e->mem_obj->old_entry;
     time_t expires = e->expires;
-    http_status status = e->mem_obj->reply->sline.status;
     refresh_cc cc = refreshCC(e, e->mem_obj->request);
     if (expires == -1)
 	expires = squid_curtime + cc.negative_ttl;
-    if (status && oe && !EBIT_TEST(oe->flags, KEY_PRIVATE) && !EBIT_TEST(oe->flags, ENTRY_REVALIDATE) &&
-	500 <= status && status <= 504) {
+    if (oe && !EBIT_TEST(oe->flags, KEY_PRIVATE) && !EBIT_TEST(oe->flags, ENTRY_REVALIDATE)) {
 	HttpHdrCc *oldcc = oe->mem_obj->reply->cache_control;
 	if (oldcc && EBIT_TEST(oldcc->mask, CC_STALE_IF_ERROR) && oldcc->stale_if_error >= 0)
 	    cc.max_stale = oldcc->stale_if_error;
@@ -1832,7 +1766,7 @@ storeEntryValidToSend(StoreEntry * e)
 	return 0;
     /* Entries which seem to have got stuck is not valid to send to new clients */
     if (e->store_status == STORE_PENDING) {
-	if (!e->mem_obj || e->mem_obj->refresh_timestamp + Config.collapsed_forwarding_timeout < squid_curtime)
+	if (!e->mem_obj || e->mem_obj->refresh_timestamp + 30 < squid_curtime)
 	    return 0;
 	else
 	    return -1;

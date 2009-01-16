@@ -249,7 +249,8 @@ statStoreEntry(MemBuf * mb, StoreEntry * e)
     memBufPrintf(mb, "KEY %s\n", storeKeyText(e->hash.key));
     /* XXX should this url be escaped? */
     if (mem)
-	memBufPrintf(mb, "\t%s %s\n", mem->method->string, mem->url);
+	memBufPrintf(mb, "\t%s %s\n",
+	    RequestMethods[mem->method].str, mem->url);
     if (mem && mem->store_url)
 	memBufPrintf(mb, "\tStore lookup URL: %s\n", mem->store_url);
     memBufPrintf(mb, "\t%s\n", describeStatuses(e));
@@ -419,16 +420,16 @@ info_get_mallstat(int size, int number, int oldnum, void *data)
 static const char *
 fdRemoteAddr(const fde * f)
 {
-    LOCAL_ARRAY(char, buf, 32);
+    LOCAL_ARRAY(char, buf, SQUIDHOSTNAMELEN);
     if (f->type != FD_SOCKET)
 	return null_string;
-    if (*f->ipaddr)
-	snprintf(buf, 32, "%s.%d", f->ipaddr, (int) f->remote_port);
+    if (*f->ipaddrstr)
+	snprintf(buf, SQUIDHOSTNAMELEN, "%s.%d", f->ipaddrstr, (int) f->remote_port);
     else {
-	if (f->local_addr.s_addr != any_addr.s_addr) {
-	    snprintf(buf, 32, "%s.%d", inet_ntoa(f->local_addr), (int) f->local_port);
+	if (sqinet_is_anyaddr(&f->local_address)) {
+	    snprintf(buf, SQUIDHOSTNAMELEN, "%s.%d", inet_ntoa(sqinet_get_v4_inaddr(&f->local_address, SQADDR_ASSERT_IS_V4)), (int) f->local_port);
 	} else {
-	    snprintf(buf, 32, "*.%d", (int) f->local_port);
+	    snprintf(buf, SQUIDHOSTNAMELEN, "*.%d", (int) f->local_port);
 	}
     }
     return buf;
@@ -537,8 +538,9 @@ info_get(StoreEntry * sentry)
 	statCounter.client_http.requests / (runtime / 60.0));
     storeAppendPrintf(sentry, "\tAverage ICP messages per minute since start:\t%.1f\n",
 	(statCounter.icp.pkts_sent + statCounter.icp.pkts_recv) / (runtime / 60.0));
+
     storeAppendPrintf(sentry, "\tSelect loop called: %d times, %0.3f ms avg\n",
-	statCounter.select_loops, 1000.0 * runtime / statCounter.select_loops);
+	CommStats.select_loops, 1000.0 * runtime / CommStats.select_loops);
 
     storeAppendPrintf(sentry, "Cache information for %s:\n",
 	appname);
@@ -675,13 +677,13 @@ info_get(StoreEntry * sentry)
 	RESERVED_FD);
     storeAppendPrintf(sentry, "\tStore Disk files open:                %4d\n",
 	store_open_disk_fd);
-    comm_select_status(sentry);
+    storeAppendPrintf(sentry, "\tIO loop method:                     %s\n", comm_select_status());
 
     storeAppendPrintf(sentry, "Internal Data Structures:\n");
     storeAppendPrintf(sentry, "\t%6d StoreEntries\n",
-	memInUse(MEM_STOREENTRY));
+	memPoolInUseCount(pool_storeentry));
     storeAppendPrintf(sentry, "\t%6d StoreEntries with MemObjects\n",
-	memInUse(MEM_MEMOBJECT));
+	memPoolInUseCount(pool_memobject));
     storeAppendPrintf(sentry, "\t%6d Hot Object Cache Items\n",
 	hot_obj_count);
     storeAppendPrintf(sentry, "\t%6d on-disk objects\n",
@@ -845,6 +847,7 @@ statAvgDump(StoreEntry * sentry, int minutes, int hours)
 	XAVG(unlink.requests));
     storeAppendPrintf(sentry, "page_faults = %f/sec\n",
 	XAVG(page_faults));
+#if 0
     storeAppendPrintf(sentry, "select_loops = %f/sec\n",
 	XAVG(select_loops));
     storeAppendPrintf(sentry, "select_fds = %f/sec\n",
@@ -853,8 +856,7 @@ statAvgDump(StoreEntry * sentry, int minutes, int hours)
 	f->select_fds > l->select_fds ?
 	(f->select_time - l->select_time) / (f->select_fds - l->select_fds)
 	: 0.0);
-    x = statHistDeltaMedian(&l->select_fds_hist, &f->select_fds_hist);
-    storeAppendPrintf(sentry, "median_select_fds = %f\n", x);
+#endif
     storeAppendPrintf(sentry, "swap.outs = %f/sec\n",
 	XAVG(swap.outs));
     storeAppendPrintf(sentry, "swap.ins = %f/sec\n",
@@ -864,6 +866,7 @@ statAvgDump(StoreEntry * sentry, int minutes, int hours)
     storeAppendPrintf(sentry, "aborted_requests = %f/sec\n",
 	XAVG(aborted_requests));
 
+#if 0
     if (statCounter.syscalls.polls)
 	storeAppendPrintf(sentry, "syscalls.polls = %f/sec\n", XAVG(syscalls.polls));
     if (statCounter.syscalls.selects)
@@ -883,6 +886,7 @@ statAvgDump(StoreEntry * sentry, int minutes, int hours)
     storeAppendPrintf(sentry, "syscalls.sock.writes = %f/sec\n", XAVG(syscalls.sock.writes));
     storeAppendPrintf(sentry, "syscalls.sock.recvfroms = %f/sec\n", XAVG(syscalls.sock.recvfroms));
     storeAppendPrintf(sentry, "syscalls.sock.sendtos = %f/sec\n", XAVG(syscalls.sock.sendtos));
+#endif
 
     storeAppendPrintf(sentry, "cpu_time = %f seconds\n", ct);
     storeAppendPrintf(sentry, "wall_time = %f seconds\n", dt);
@@ -957,6 +961,7 @@ statInit(void)
     cachemgrRegister("active_requests",
 	"Client-side Active Requests",
 	statClientRequests, 0, 1);
+    cachemgrRegister("iapp_stats", "libiapp statistics", statIappStats, 0, 1);
 }
 
 static void
@@ -1054,7 +1059,6 @@ statCountersInitSpecial(StatCounters * C)
     statHistEnumInit(&C->comm_icp_incoming, INCOMING_ICP_MAX);
     statHistEnumInit(&C->comm_dns_incoming, INCOMING_DNS_MAX);
     statHistEnumInit(&C->comm_http_incoming, INCOMING_HTTP_MAX);
-    statHistIntInit(&C->select_fds_hist, 256);	/* was SQUID_MAXFD, but it is way too much. It is OK to crop this statistics */
 }
 
 /* add special cases here as they arrive */
@@ -1074,7 +1078,6 @@ statCountersClean(StatCounters * C)
     statHistClean(&C->comm_icp_incoming);
     statHistClean(&C->comm_dns_incoming);
     statHistClean(&C->comm_http_incoming);
-    statHistClean(&C->select_fds_hist);
 }
 
 /* add special cases here as they arrive */
@@ -1099,7 +1102,6 @@ statCountersCopy(StatCounters * dest, const StatCounters * orig)
     statHistCopy(&dest->cd.on_xition_count, &orig->cd.on_xition_count);
     statHistCopy(&dest->comm_icp_incoming, &orig->comm_icp_incoming);
     statHistCopy(&dest->comm_http_incoming, &orig->comm_http_incoming);
-    statHistCopy(&dest->select_fds_hist, &orig->select_fds_hist);
 }
 
 static void
@@ -1122,8 +1124,6 @@ statCountersHistograms(StoreEntry * sentry)
     statHistDump(&f->icp.reply_svc_time, sentry, NULL);
     storeAppendPrintf(sentry, "dns.svc_time histogram:\n");
     statHistDump(&f->dns.svc_time, sentry, NULL);
-    storeAppendPrintf(sentry, "select_fds_hist histogram:\n");
-    statHistDump(&f->select_fds_hist, sentry, NULL);
 }
 
 static void
@@ -1240,8 +1240,10 @@ statCountersDump(StoreEntry * sentry)
 	f->unlink.requests);
     storeAppendPrintf(sentry, "page_faults = %d\n",
 	f->page_faults);
+#if 0
     storeAppendPrintf(sentry, "select_loops = %d\n",
 	f->select_loops);
+#endif
     storeAppendPrintf(sentry, "cpu_time = %f\n",
 	f->cputime);
     storeAppendPrintf(sentry, "wall_time = %f\n",
@@ -1523,13 +1525,12 @@ statClientRequests(StoreEntry * s)
 #if DELAY_POOLS
 	if (http->sc) {
 	    int pool = (http->sc->delay_id >> 16);
-	    storeAppendPrintf(s, "active delay_pool %d (id %d)\n", pool, http->sc->delay_id);
+	    storeAppendPrintf(s, "active delay_pool %d\n", pool);
 	    if (http->delayMaxBodySize > 0)
 		storeAppendPrintf(s, "delayed delay_pool %d; transfer threshold %" PRINTF_OFF_T " bytes\n",
 		    http->delayAssignedPool,
 		    http->delayMaxBodySize);
 	}
-	storeAppendPrintf(s, "active write-side delay pool %d (delay id %d)\n", http->delayid >> 16, http->delayid);
 #endif
 	storeAppendPrintf(s, "\n");
     }

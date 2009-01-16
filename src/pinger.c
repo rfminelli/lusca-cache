@@ -214,7 +214,7 @@ pingerOpen(void)
     atexit(Win32SockCleanup);
 
     getCurrentTime();
-    _db_init(NULL, "ALL,1");
+    _db_init("ALL,1");
     setmode(0, O_BINARY);
     setmode(1, O_BINARY);
     x = read(0, buf, sizeof(wpi));
@@ -459,9 +459,11 @@ pingerReadRequest(void)
     int n;
     int guess_size;
     memset(&pecho, '\0', sizeof(pecho));
-    n = recv(socket_from_squid, (char *) &pecho, sizeof(pecho), 0);
-    if (n < 0)
+    n = read(socket_from_squid, (char *) &pecho, sizeof(pecho));
+    if (n < 0) {
+        debug(42, 0) ("pingerReadRequest: socket %d: read() failed; errno %d\n", socket_from_squid, errno);
 	return n;
+    }
     if (0 == n) {
 	/* EOF indicator */
 	fprintf(stderr, "EOF encountered\n");
@@ -493,18 +495,6 @@ pingerSendtoSquid(pingerReplyData * preply)
     }
 }
 
-time_t
-getCurrentTime(void)
-{
-#if GETTIMEOFDAY_NO_TZP
-    gettimeofday(&current_time);
-#else
-    gettimeofday(&current_time, NULL);
-#endif
-    return squid_curtime = current_time.tv_sec;
-}
-
-
 int
 main(int argc, char *argv[])
 {
@@ -519,14 +509,15 @@ main(int argc, char *argv[])
  * cevans - do this first. It grabs a raw socket. After this we can
  * drop privs
  */
-    pingerOpen();
-    setgid(getgid());
-    setuid(getuid());
-
     if ((t = getenv("SQUID_DEBUG")))
 	debug_args = xstrdup(t);
     getCurrentTime();
-    _db_init(NULL, debug_args);
+    _db_init(debug_args);
+    _db_set_stderr_debug(1);
+
+    pingerOpen();
+    setgid(getgid());
+    setuid(getuid());
 
     for (;;) {
 	tv.tv_sec = PINGER_TIMEOUT;
@@ -536,6 +527,8 @@ main(int argc, char *argv[])
 	FD_SET(icmp_sock, &R);
 	x = select(icmp_sock + 1, &R, NULL, NULL, &tv);
 	getCurrentTime();
+	if (x < 0 && errno == EINTR)
+		continue;
 	if (x < 0) {
 	    pingerClose();
 	    exit(1);
@@ -549,13 +542,13 @@ main(int argc, char *argv[])
 	if (FD_ISSET(icmp_sock, &R))
 	    pingerRecv();
 	if (PINGER_TIMEOUT + last_check_time < squid_curtime) {
-	    debug(42, 5) ("pinger: timeout occured\n");
+	    debug(42, 2) ("pinger: timeout occured\n");
 	    if (send(socket_to_squid, (char *) &tv, 0, 0) < 0) {
-		debug(42, 5) ("Pinger: send socket_to_squid failed\n");
+		debug(42, 0) ("Pinger: send socket_to_squid failed\n");
 		pingerClose();
 		exit(1);
 	    } else {
-		debug(42, 5) ("Pinger: send socket_to_squid OK\n");
+		debug(42, 2) ("Pinger: send socket_to_squid OK\n");
 	    }
 	    last_check_time = squid_curtime;
 	}

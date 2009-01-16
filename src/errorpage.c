@@ -90,7 +90,7 @@ static const char *errorFindHardText(err_type type);
 static ErrorDynamicPageInfo *errorDynamicPageInfoCreate(int id, const char *page_name);
 static void errorDynamicPageInfoDestroy(ErrorDynamicPageInfo * info);
 static MemBuf errorBuildContent(ErrorState * err);
-static const char *errorConvert(char token, ErrorState * err);
+const char *errorConvert(char token, ErrorState * err);
 static CWCB errorSendComplete;
 
 /*
@@ -255,6 +255,7 @@ errorPageName(int pageId)
     return "ERR_UNKNOWN";	/* should not happen */
 }
 
+CBDATA_TYPE(ErrorState);
 /*
  * Function:  errorCon
  *
@@ -264,6 +265,7 @@ ErrorState *
 errorCon(err_type type, http_status status, request_t * request)
 {
     ErrorState *err;
+    CBDATA_INIT_TYPE(ErrorState);
     err = cbdataAlloc(ErrorState);
     err->page_id = type;	/* has to be reset manually if needed */
     err->type = type;
@@ -445,7 +447,7 @@ errorStateFree(ErrorState * err)
  * z - dns server error message                 x
  */
 
-static const char *
+const char *
 errorConvert(char token, ErrorState * err)
 {
     request_t *r = err->request;
@@ -526,7 +528,7 @@ errorConvert(char token, ErrorState * err)
 	p = authenticateAuthUserRequestMessage(err->auth_user_request) ? authenticateAuthUserRequestMessage(err->auth_user_request) : "[not available]";
 	break;
     case 'M':
-	p = r ? r->method->string : "[unknown method]";
+	p = r ? RequestMethods[r->method].str : "[unknown method]";
 	break;
     case 'o':
 	p = external_acl_message;
@@ -546,9 +548,10 @@ errorConvert(char token, ErrorState * err)
     case 'R':
 	if (NULL != r) {
 	    Packer p;
-	    memBufPrintf(&mb, "%s %s HTTP/%d.%d\n",
-		r->method->string,
-		strLen(r->urlpath) ? strBuf(r->urlpath) : "/",
+	    memBufPrintf(&mb, "%s %.*s HTTP/%d.%d\n",
+		RequestMethods[r->method].str,
+		strLen2(r->urlpath) ? strLen2(r->urlpath) : 1,
+		strLen2(r->urlpath) ? strBuf2(r->urlpath) : "/",
 		r->http_ver.major, r->http_ver.minor);
 	    packerToMemInit(&p, &mb);
 	    httpHeaderPackInto(&r->header, &p);
@@ -628,7 +631,7 @@ errorBuildReply(ErrorState * err)
     /* no LMT for error pages; error pages expire immediately */
     if (strchr(name, ':')) {
 	/* Redirection */
-	httpReplySetHeaders(rep, HTTP_MOVED_TEMPORARILY, NULL, "text/html", 0, -1, -1);
+	httpReplySetHeaders(rep, HTTP_MOVED_TEMPORARILY, NULL, "text/html", 0, -1, squid_curtime);
 	if (err->request) {
 	    char *quoted_url = rfc1738_escape_part(urlCanonical(err->request));
 	    httpHeaderPutStrf(&rep->header, HDR_LOCATION, name, quoted_url);
@@ -636,7 +639,7 @@ errorBuildReply(ErrorState * err)
 	httpHeaderPutStrf(&rep->header, HDR_X_SQUID_ERROR, "%d %s", err->http_status, "Access Denied");
     } else {
 	MemBuf content = errorBuildContent(err);
-	httpReplySetHeaders(rep, err->http_status, NULL, "text/html", content.size, -1, -1);
+	httpReplySetHeaders(rep, err->http_status, NULL, "text/html", content.size, -1, squid_curtime);
 	/*
 	 * include some information for downstream caches. Implicit
 	 * replaceable content. This isn't quite sufficient. xerrno is not

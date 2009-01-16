@@ -402,6 +402,7 @@ snmpConnectionOpen(void)
 	    Config.Addrs.snmp_incoming,
 	    port,
 	    COMM_NONBLOCKING,
+	    COMM_TOS_DEFAULT,
 	    "SNMP Port");
 	leave_suid();
 	if (theInSnmpConnection < 0)
@@ -409,13 +410,14 @@ snmpConnectionOpen(void)
 	commSetSelect(theInSnmpConnection, COMM_SELECT_READ, snmpHandleUdp, NULL, 0);
 	debug(1, 1) ("Accepting SNMP messages on port %d, FD %d.\n",
 	    (int) port, theInSnmpConnection);
-	if (Config.Addrs.snmp_outgoing.s_addr != no_addr.s_addr) {
+	if (! IsNoAddr(&Config.Addrs.snmp_outgoing)) {
 	    enter_suid();
 	    theOutSnmpConnection = comm_open(SOCK_DGRAM,
 		IPPROTO_UDP,
 		Config.Addrs.snmp_outgoing,
 		port,
 		COMM_NONBLOCKING,
+	        COMM_TOS_DEFAULT,
 		"SNMP Port");
 	    leave_suid();
 	    if (theOutSnmpConnection < 0)
@@ -502,7 +504,7 @@ snmpHandleUdp(int sock, void *not_used)
     memset(&from, '\0', from_len);
     memset(buf, '\0', SNMP_REQUEST_SIZE);
 
-    statCounter.syscalls.sock.recvfroms++;
+    CommStats.syscalls.sock.recvfroms++;
 
     len = recvfrom(sock,
 	buf,
@@ -1103,7 +1105,7 @@ snmpDebugOid(int lvl, oid * Name, snint Len)
 	strCat(objid, mbuf);
     }
 
-    debug(49, lvl) ("   oid = %s\n", strBuf(objid));
+    debug(49, lvl) ("   oid = %.*s\n", strLen2(objid), strBuf2(objid));
     stringClean(&objid);
 }
 

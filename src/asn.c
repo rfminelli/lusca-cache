@@ -116,9 +116,9 @@ asnMatchIp(void *data, struct in_addr addr)
 
     if (AS_tree_head == NULL)
 	return 0;
-    if (addr.s_addr == no_addr.s_addr)
+    if (IsNoAddr(&addr))
 	return 0;
-    if (addr.s_addr == any_addr.s_addr)
+    if (IsAnyAddr(&addr))
 	return 0;
     store_m_int(lh, m_addr);
     rn = squid_rn_match(m_addr, AS_tree_head);
@@ -195,17 +195,15 @@ asnCacheStart(int as)
     StoreEntry *e;
     request_t *req;
     ASState *asState;
-    method_t *method_get;
-    method_get = urlMethodGetKnownByCode(METHOD_GET);
     asState = cbdataAlloc(ASState);
     debug(53, 3) ("asnCacheStart: AS %d\n", as);
     snprintf(asres, 4096, "whois://%s/!gAS%d", Config.as_whois_server, as);
     asState->as_number = as;
-    req = urlParse(method_get, asres);
+    req = urlParse(METHOD_GET, asres);
     assert(NULL != req);
     asState->request = requestLink(req);
-    if ((e = storeGetPublic(asres, method_get)) == NULL) {
-	e = storeCreateEntry(asres, null_request_flags, method_get);
+    if ((e = storeGetPublic(asres, METHOD_GET)) == NULL) {
+	e = storeCreateEntry(asres, null_request_flags, METHOD_GET);
 	asState->sc = storeClientRegister(e, asState);
 	fwdStart(-1, e, asState->request);
     } else {

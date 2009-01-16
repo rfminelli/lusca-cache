@@ -65,7 +65,7 @@ storeLog(int tag, const StoreEntry * e)
 	 * the existing log format.
 	 */
 	logfileLineStart(storelog);
-	logfilePrintf(storelog, "%9ld.%03d %-7s %02d %08X %s %4d %9ld %9ld %9ld %s %" PRINTF_OFF_T "/%" PRINTF_OFF_T " %s %s\n",
+	logfilePrintf(storelog, "%9ld.%03d %-7s %02d %08X %s %4d %9ld %9ld %9ld %.*s %" PRINTF_OFF_T "/%" PRINTF_OFF_T " %s %s\n",
 	    (long int) current_time.tv_sec,
 	    (int) current_time.tv_usec / 1000,
 	    storeLogTags[tag],
@@ -76,10 +76,11 @@ storeLog(int tag, const StoreEntry * e)
 	    (long int) reply->date,
 	    (long int) reply->last_modified,
 	    (long int) reply->expires,
-	    strLen(reply->content_type) ? strBuf(reply->content_type) : "unknown",
+	    strLen2(reply->content_type) ? strLen2(reply->content_type) : 7,
+	    strLen2(reply->content_type) ? strBuf2(reply->content_type) : "unknown",
 	    reply->content_length,
 	    mem->inmem_hi - mem->reply->hdr_sz,
-	    mem->method->string,
+	    RequestMethods[mem->method].str,
 	    rfc1738_escape_unescaped(mem->url));
 	logfileLineEnd(storelog);
     } else {

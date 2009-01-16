@@ -126,7 +126,7 @@ redirectStart(clientHttpRequest * http, RH * handler, void *data)
 #endif
     if (!r->client_ident)
 	r->client_ident = dash_str;
-    r->method_s = http->request->method->string;
+    r->method_s = RequestMethods[http->request->method].str;
     r->handler = handler;
     r->data = data;
     cbdataLock(r->data);
@@ -421,7 +421,7 @@ internalRedirectProcessURL(clientHttpRequest * req, rewritetoken * head)
 	    str = req->request->extacl_user;
 	    break;
 	case RFT_METHOD:
-	    str = req->request->method->string;
+	    str = RequestMethods[req->request->method].str;
 	    break;
 	case RFT_PROTOCOL:
 	    str = ProtocolStr[req->request->protocol];
@@ -430,7 +430,7 @@ internalRedirectProcessURL(clientHttpRequest * req, rewritetoken * head)
 	    str = req->uri;
 	    break;
 	case RFT_URLPATH:
-	    str = req->request->urlpath.buf;
+	    str = strBuf(req->request->urlpath);
 	    break;
 	case RFT_URLHOST:
 	    str = req->request->host;
@@ -439,7 +439,7 @@ internalRedirectProcessURL(clientHttpRequest * req, rewritetoken * head)
 	    str = httpHeaderGetStr(&req->request->header, HDR_HOST);
 	    break;
 	case RFT_EXTERNALACL_LOGSTR:
-	    str = req->request->extacl_log.buf;
+	    str = strBuf(req->request->extacl_log);
 	    break;
 	default:
 	    assert(0 && "Invalid rewrite token type");

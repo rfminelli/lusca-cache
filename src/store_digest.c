@@ -338,10 +338,8 @@ storeDigestRewriteStart(void *datanotused)
     request_flags flags;
     char *url;
     StoreEntry *e;
-    method_t *method_get;
 
     assert(store_digest);
-    method_get = urlMethodGetKnownByCode(METHOD_GET);
     /* prevent overlapping if rewrite schedule is too tight */
     if (sd_state.rewrite_lock) {
 	debug(71, 1) ("storeDigestRewriteStart: overlap detected, consider increasing rewrite period\n");
@@ -352,12 +350,13 @@ storeDigestRewriteStart(void *datanotused)
     url = internalStoreUri("/squid-internal-periodic/", StoreDigestFileName);
     flags = null_request_flags;
     flags.cachable = 1;
-    e = storeCreateEntry(url, flags, method_get);
+    e = storeCreateEntry(url, flags, METHOD_GET);
     assert(e);
+    CBDATA_INIT_TYPE(generic_cbdata);
     sd_state.rewrite_lock = cbdataAlloc(generic_cbdata);
     sd_state.rewrite_lock->data = e;
     debug(71, 3) ("storeDigestRewriteStart: url: %s key: %s\n", url, storeKeyText(e->hash.key));
-    e->mem_obj->request = requestLink(urlParse(method_get, url));
+    e->mem_obj->request = requestLink(urlParse(METHOD_GET, url));
     /* wait for rebuild (if any) to finish */
     if (sd_state.rebuild_lock) {
 	debug(71, 2) ("storeDigestRewriteStart: waiting for rebuild to finish.\n");
@@ -465,7 +464,7 @@ storeDigestCalcCap(void)
      */
     const int hi_cap = Config.Swap.maxSize / Config.Store.avgObjectSize;
     const int lo_cap = 1 + store_swap_size / Config.Store.avgObjectSize;
-    const int e_count = memInUse(MEM_STOREENTRY);
+    const int e_count = memPoolInUseCount(pool_storeentry);
     int cap = e_count ? e_count : hi_cap;
     debug(71, 2) ("storeDigestCalcCap: have: %d, want %d entries; limits: [%d, %d]\n",
 	e_count, cap, lo_cap, hi_cap);

@@ -66,7 +66,6 @@ and report the trace back to squid-bugs@squid-cache.org.\n\
 Thanks!\n"
 
 static void fatal_common(const char *);
-static void fatalvf(const char *fmt, va_list args);
 static void mail_warranty(void);
 #if MEM_GEN_TRACE
 extern void log_trace_done();
@@ -335,14 +334,16 @@ sigusr2_handle(int sig)
     /* no debug() here; bad things happen if the signal is delivered during _db_print() */
     if (state == 0) {
 #ifndef MEM_GEN_TRACE
-	_db_init(Config.Log.log, "ALL,10");
+	_db_init("ALL,10");
+	_db_init_log(Config.Log.log);
 #else
 	log_trace_done();
 #endif
 	state = 1;
     } else {
 #ifndef MEM_GEN_TRACE
-	_db_init(Config.Log.log, Config.debugOptions);
+	_db_init(Config.debugOptions);
+	_db_init_log(Config.Log.log);
 #else
 	log_trace_init("/tmp/squid.alloc");
 #endif
@@ -396,7 +397,6 @@ fatal_common(const char *message)
 void
 fatal(const char *message)
 {
-    leave_suid();
     releaseServerSockets();
     /* check for store_dirs_rebuilding because fatal() is often
      * used in early initialization phases, long before we ever
@@ -433,7 +433,7 @@ fatalf(va_alist)
 
 
 /* used by fatalf */
-static void
+void
 fatalvf(const char *fmt, va_list args)
 {
     static char fatal_str[BUFSIZ];
@@ -445,7 +445,6 @@ fatalvf(const char *fmt, va_list args)
 void
 fatal_dump(const char *message)
 {
-    leave_suid();
     failure_notify = NULL;
     releaseServerSockets();
     if (message)
@@ -502,18 +501,18 @@ getMyHostname(void)
     if (present)
 	return host;
     host[0] = '\0';
-    memcpy(&sa, &any_addr, sizeof(sa));
-    if (Config.Sockaddr.http && sa.s_addr == any_addr.s_addr)
+    SetAnyAddr(&sa);
+    if (Config.Sockaddr.http && IsAnyAddr(&sa))
 	memcpy(&sa, &Config.Sockaddr.http->s.sin_addr, sizeof(sa));
 #if USE_SSL
-    if (Config.Sockaddr.https && sa.s_addr == any_addr.s_addr)
+    if (Config.Sockaddr.https && IsAnyAddr(&sa))
 	memcpy(&sa, &Config.Sockaddr.https->http.s.sin_addr, sizeof(sa));
 #endif
     /*
      * If the first http_port address has a specific address, try a
      * reverse DNS lookup on it.
      */
-    if (sa.s_addr != any_addr.s_addr) {
+    if (! IsAnyAddr(&sa)) {
 	h = gethostbyaddr((char *) &sa,
 	    sizeof(sa), AF_INET);
 	if (h != NULL) {
@@ -565,7 +564,7 @@ uniqueHostname(void)
 void
 safeunlink(const char *s, int quiet)
 {
-    statCounter.syscalls.disk.unlinks++;
+    CommStats.syscalls.disk.unlinks++;
     if (unlink(s) < 0 && !quiet)
 	debug(50, 1) ("safeunlink: Couldn't delete %s: %s\n", s, xstrerror());
 }
@@ -824,19 +823,6 @@ setSystemLimits(void)
 #endif /* RLIMIT_VMEM */
 }
 
-time_t
-getCurrentTime(void)
-{
-#if GETTIMEOFDAY_NO_TZP
-    gettimeofday(&current_time);
-#else
-    gettimeofday(&current_time, NULL);
-#endif
-    current_dtime = (double) current_time.tv_sec +
-	(double) current_time.tv_usec / 1000000.0;
-    return squid_curtime = current_time.tv_sec;
-}
-
 int
 percent(int a, int b)
 {
@@ -849,78 +835,12 @@ dpercent(double a, double b)
     return b ? (100.0 * a / b) : 0.0;
 }
 
-void
-squid_signal(int sig, SIGHDLR * func, int flags)
-{
-#if HAVE_SIGACTION
-    struct sigaction sa;
-    sa.sa_handler = func;
-    sa.sa_flags = flags;
-    sigemptyset(&sa.sa_mask);
-    if (sigaction(sig, &sa, NULL) < 0)
-	debug(50, 0) ("sigaction: sig=%d func=%p: %s\n", sig, func, xstrerror());
-#else
-#ifdef _SQUID_MSWIN_
-/*
- * On Windows, only SIGINT, SIGILL, SIGFPE, SIGTERM, SIGBREAK, SIGABRT and SIGSEGV
- * signals are supported, so we must care of don't call signal() for other value.
- * The SIGILL, SIGSEGV, and SIGTERM signals are not generated under Windows. They
- * are defined only for ANSI compatibility, so both SIGSEGV and SIGBUS are emulated
- * with an Exception Handler.
- */
-    switch (sig) {
-    case SIGINT:
-    case SIGILL:
-    case SIGFPE:
-    case SIGTERM:
-    case SIGBREAK:
-    case SIGABRT:
-	break;
-    case SIGSEGV:
-	WIN32_ExceptionHandlerInit();
-	break;
-    case SIGBUS:
-	WIN32_ExceptionHandlerInit();
-	return;
-	break;			/* Not reached */
-    default:
-	return;
-	break;			/* Not reached */
-    }
-#endif /* _SQUID_MSWIN_ */
-    signal(sig, func);
-#endif
-}
-
 struct in_addr
 inaddrFromHostent(const struct hostent *hp)
 {
     struct in_addr s;
     xmemcpy(&s.s_addr, hp->h_addr, sizeof(s.s_addr));
     return s;
-}
-
-double
-doubleAverage(double cur, double new, int N, int max)
-{
-    if (N > max)
-	N = max;
-    return (cur * (N - 1.0) + new) / N;
-}
-
-int
-intAverage(int cur, int new, int n, int max)
-{
-    if (n > max)
-	n = max;
-    return (cur * (n - 1) + new) / n;
-}
-
-void
-logsFlush(void)
-{
-    if (debug_log)
-	fflush(debug_log);
 }
 
 const char *
@@ -948,103 +868,6 @@ dlinkNodeDelete(dlink_node * m)
 }
 
 void
-dlinkAdd(void *data, dlink_node * m, dlink_list * list)
-{
-    m->data = data;
-    m->prev = NULL;
-    m->next = list->head;
-    if (list->head)
-	list->head->prev = m;
-    list->head = m;
-    if (list->tail == NULL)
-	list->tail = m;
-}
-
-void
-dlinkAddTail(void *data, dlink_node * m, dlink_list * list)
-{
-    m->data = data;
-    m->next = NULL;
-    m->prev = list->tail;
-    if (list->tail)
-	list->tail->next = m;
-    list->tail = m;
-    if (list->head == NULL)
-	list->head = m;
-}
-
-void
-dlinkDelete(dlink_node * m, dlink_list * list)
-{
-    if (m->next)
-	m->next->prev = m->prev;
-    if (m->prev)
-	m->prev->next = m->next;
-    if (m == list->head)
-	list->head = m->next;
-    if (m == list->tail)
-	list->tail = m->prev;
-    m->next = m->prev = NULL;
-}
-
-void
-kb_incr(kb_t * k, squid_off_t v)
-{
-    k->bytes += v;
-    k->kb += (k->bytes >> 10);
-    k->bytes &= 0x3FF;
-    if (k->kb < 0) {
-	/*
-	 * If kb overflows and becomes negative then add powers of
-	 * 2 until it becomes positive again.
-	 */
-	kb_t x;
-	x.kb = 1L << 31;
-	while (x.kb && ((k->kb + x.kb) < 0)) {
-	    x.kb <<= 1;
-	}
-	k->kb += x.kb;
-    }
-}
-
-void
-gb_flush(gb_t * g)
-{
-    g->gb += (g->bytes >> 30);
-    g->bytes &= (1 << 30) - 1;
-}
-
-double
-gb_to_double(const gb_t * g)
-{
-    return ((double) g->gb) * ((double) (1 << 30)) + ((double) g->bytes);
-}
-
-const char *
-gb_to_str(const gb_t * g)
-{
-    /*
-     * it is often convenient to call gb_to_str several times for _one_ printf
-     */
-#define max_cc_calls 5
-    typedef char GbBuf[32];
-    static GbBuf bufs[max_cc_calls];
-    static int call_id = 0;
-    double value = gb_to_double(g);
-    char *buf = bufs[call_id++];
-    if (call_id >= max_cc_calls)
-	call_id = 0;
-    /* select format */
-    if (value < 1e9)
-	snprintf(buf, sizeof(GbBuf), "%.2f MB", value / 1e6);
-    else if (value < 1e12)
-	snprintf(buf, sizeof(GbBuf), "%.2f GB", value / 1e9);
-    else
-	snprintf(buf, sizeof(GbBuf), "%.2f TB", value / 1e12);
-    return buf;
-}
-
-void
 debugObj(int section, int level, const char *label, void *obj, ObjPackMethod pm)
 {
     MemBuf mb;
@@ -1056,37 +879,6 @@ debugObj(int section, int level, const char *label, void *obj, ObjPackMethod pm)
     debug(section, level) ("%s%s", label, mb.buf);
     packerClean(&p);
     memBufClean(&mb);
-}
-
-int
-stringHasWhitespace(const char *s)
-{
-    return strpbrk(s, w_space) != NULL;
-}
-
-void
-linklistPush(link_list ** L, void *p)
-{
-    link_list *l = memAllocate(MEM_LINK_LIST);
-    l->next = NULL;
-    l->ptr = p;
-    while (*L)
-	L = &(*L)->next;
-    *L = l;
-}
-
-void *
-linklistShift(link_list ** L)
-{
-    void *p;
-    link_list *l;
-    if (NULL == *L)
-	return NULL;
-    l = *L;
-    p = l->ptr;
-    *L = (*L)->next;
-    memFree(l, MEM_LINK_LIST);
-    return p;
 }
 
 /*
@@ -1328,88 +1120,16 @@ setUmask(mode_t mask)
     umask(mask | orig_umask);
 }
 
-/*
- * xusleep, as usleep but accepts longer pauses
- */
-int
-xusleep(unsigned int usec)
-{
-    /* XXX emulation of usleep() */
-    struct timeval sl;
-    sl.tv_sec = usec / 1000000;
-    sl.tv_usec = usec % 1000000;
-    return select(0, NULL, NULL, NULL, &sl);
-}
-
 void
 keepCapabilities(void)
 {
-#if HAVE_PRCTL && defined(PR_SET_KEEPCAPS) && HAVE_SYS_CAPABILITY_H
-    if (prctl(PR_SET_KEEPCAPS, 1, 0, 0, 0)) {
-	/* Silent failure unless TPROXY is required. Maybe not started as root */
-#if LINUX_TPROXY
-	if (need_linux_tproxy)
-	    debug(1, 1) ("Error - tproxy support requires capability setting which has failed.  Continuing without tproxy support\n");
-	need_linux_tproxy = 0;
-#endif
-    }
-#endif
+    comm_ips_keepCapabilities();
 }
 
 static void
 restoreCapabilities(int keep)
 {
-#if defined(_SQUID_LINUX_) && HAVE_SYS_CAPABILITY_H
-#ifndef _LINUX_CAPABILITY_VERSION_1
-#define _LINUX_CAPABILITY_VERSION_1 _LINUX_CAPABILITY_VERSION
-#endif
-    cap_user_header_t head = xcalloc(1, sizeof(*head));
-    cap_user_data_t cap = xcalloc(1, sizeof(*cap));
-
-    head->version = _LINUX_CAPABILITY_VERSION_1;
-    if (capget(head, cap) != 0) {
-	debug(50, 1) ("Can't get current capabilities\n");
-	goto nocap;
-    }
-    if (head->version != _LINUX_CAPABILITY_VERSION_1) {
-	debug(50, 1) ("Invalid capability version %d (expected %d)\n", head->version, _LINUX_CAPABILITY_VERSION);
-	goto nocap;
-    }
-    head->pid = 0;
-
-    cap->inheritable = 0;
-    cap->effective = (1 << CAP_NET_BIND_SERVICE);
-#if LINUX_TPROXY
-    if (need_linux_tproxy)
-	cap->effective |= (1 << CAP_NET_ADMIN) | (1 << CAP_NET_BROADCAST);
-#endif
-    if (!keep)
-	cap->permitted &= cap->effective;
-    if (capset(head, cap) != 0) {
-	/* Silent failure unless TPROXY is required */
-#if LINUX_TPROXY
-	if (need_linux_tproxy)
-	    debug(50, 1) ("Error enabling needed capabilities. Will continue without tproxy support\n");
-	need_linux_tproxy = 0;
-#endif
-    }
-  nocap:
-    xfree(head);
-    xfree(cap);
-#else
-#if LINUX_TPROXY
-    if (need_linux_tproxy)
-	debug(50, 1) ("Missing needed capability support. Will continue without tproxy support\n");
-    need_linux_tproxy = 0;
-#endif
-#endif
-}
-
-/* XXX this is ipv4-only aware atm */
-const char *
-xinet_ntoa(const struct in_addr addr)
-{
-    return inet_ntoa(addr);
+    comm_ips_restoreCapabilities();
 }
 
 /**
@@ -1441,7 +1161,7 @@ parse_sockaddr(char *s, struct sockaddr_in *addr)
     }
     addr->sin_port = htons(port);
     if (NULL == host)
-	addr->sin_addr = any_addr;
+	SetAnyAddr(&addr->sin_addr);
     else if (1 == safe_inet_addr(host, &addr->sin_addr))
 	(void) 0;
     else if ((hp = gethostbyname(host)))	/* dont use ipcache */

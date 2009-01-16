@@ -577,7 +577,7 @@ gopherToHTML(GopherStateData * gopherState, char *inbuf, int len)
     }				/* while loop */
 
     if (strLen(outbuf) > 0) {
-	storeAppend(entry, strBuf(outbuf), strLen(outbuf));
+	storeAppend(entry, strBuf2(outbuf), strLen2(outbuf));
 	/* now let start sending stuff to client */
 	storeBufferFlush(entry);
     }
@@ -622,7 +622,7 @@ gopherReadReply(int fd, void *data)
     delay_id = delayMostBytesAllowed(entry->mem_obj, &read_sz);
 #endif
     /* leave one space for \0 in gopherToHTML */
-    statCounter.syscalls.sock.reads++;
+    CommStats.syscalls.sock.reads++;
     len = FD_READ_METHOD(fd, buf, read_sz);
     if (len > 0) {
 	fd_bytes(fd, len, FD_READ);
