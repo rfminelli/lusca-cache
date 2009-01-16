@@ -6,10 +6,14 @@
 #include "../include/config.h"
 #include "../include/util.h"
 
-/* #include "../include/Stack.h" */
+#include "../include/Stack.h"
 #include "../libcore/varargs.h"
 #include "../libcore/debug.h"
 #include "../libcore/tools.h"
+#include "../libcore/gb.h"
+#include "../libcore/kb.h"
+#include "../libcore/dlink.h"
+
 #include "../libmem/MemPool.h"
 
 #include "buf.h"
