@@ -8,13 +8,5 @@ libcore_a_SOURCES = \
 	fifo.c \
 	kb.c
 
-libcore_a_LIBADD = \
-	dlink.o \
-	syslog_ntoa.o \
-	gb.o \
-	tools.o \
-	fifo.o \
-	kb.o
-
 noinst_LIBRARIES = \
 	libcore.a
