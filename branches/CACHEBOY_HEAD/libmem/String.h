@@ -34,10 +34,11 @@ extern char * stringDupSubstrToC(String *s, int len);
 extern int strChr(String *s, char c);
 extern int strRChr(String *s, char c);
 
-/* These functions need to be re-evaluated and -absolutely- reimplemented or removed */
-
-/* These is okish */
-#define strCut(s,pos) (((s).len = pos) , ((s).buf[pos] = '\0'))
+/*
+ * These is okish, but the use case probably should be replaced with a strStr() later
+ * on which maps to a zero-copy region reference.
+ */
+extern void strCut(String *s, int pos);
 
 /*
  * These two functions return whether the string is set to some value, even if

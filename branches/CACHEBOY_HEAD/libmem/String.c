@@ -190,3 +190,12 @@ strRChr(String *s, char ch)
 	}
 	return -1;
 }
+
+extern void
+strCut(String *s, int offset)
+{
+	assert(offset < strLen(*s));
+	s->buf[offset] = '\0';
+	s->len = offset;
+}
+

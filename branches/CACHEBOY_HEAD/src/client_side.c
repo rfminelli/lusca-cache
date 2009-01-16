@@ -288,7 +288,7 @@ clientFollowXForwardedForDone(int answer, void *data)
 	/* skip trailing space and commas */
 	while (l > 0 && (p[l - 1] == ',' || xisspace(p[l - 1])))
 	    l--;
-	strCut(request->x_forwarded_for_iterator, l);
+	strCut(&request->x_forwarded_for_iterator, l);
 	/* look for start of last item in list */
 	while (l > 0 && !(p[l - 1] == ',' || xisspace(p[l - 1])))
 	    l--;
@@ -303,7 +303,7 @@ clientFollowXForwardedForDone(int answer, void *data)
 	    inet_ntoa(request->indirect_client_addr),
 	    asciiaddr);
 	request->indirect_client_addr = addr;
-	strCut(request->x_forwarded_for_iterator, l);
+	strCut(&request->x_forwarded_for_iterator, l);
 	if (!Config.onoff.acl_uses_indirect_client) {
 	    /*
 	     * If acl_uses_indirect_client is off, then it's impossible

@@ -1040,7 +1040,7 @@ ftpCheckUrlpath(FtpStateData * ftpState)
     if (t != NULL) {
 	if (strncasecmp(t + 1, "type=", 5) == 0) {
 	    ftpState->typecode = (char) xtoupper(*(t + 6));
-	    strCut(request->urlpath, i);
+	    strCut(&request->urlpath, i);
 	}
     }
     l = strLen(request->urlpath);
