@@ -221,10 +221,12 @@ The initial import included all patchsets up to 12036.
   * 12328 - HEAD - Bug #2406: access.log logs rewritten URL and strip_query_terms ineffective - *committed - 13066*
   * 12330 - HEAD - Properly terminate aborted objects. Got broken again by the change to loosen ENTRY_ABORTED semantics. - *committed - 13067*
 
-== Stuff merged into trunk but not yet into CACHEBOY_HEAD ==
-
   * 12337 - HEAD - Increase buffer in authenticateNegotiateStart - *committed - 13603*
   * 12338 - HEAD - Help output with squid_ldap_group - *committed - 13604*
+
+== Stuff merged into trunk but not yet into CACHEBOY_HEAD ==
+
+
   * 12339 - HEAD - Adrian's write-side delay pool code - *committed - 13605*
   * 12341 - HEAD - Prepare for 2.7.STABLE4 - *committed - 13606*
   * 12346 - HEAD - conditional compile delay pools code - *committed - 13607*
