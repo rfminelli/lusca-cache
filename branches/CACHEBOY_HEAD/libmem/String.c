@@ -149,3 +149,44 @@ stringDupToC(String *s)
 {
 	return stringDupToCOffset(s, 0);
 }
+
+char *
+stringDupSubstrToC(String *s, int len)
+{
+	char *d;
+	int l = XMIN(len, s->len);
+	assert(s->buf);
+	assert(len <= s->len);
+	d = xmalloc(l + 1);
+	memcpy(d, s->buf, l + 1);
+	d[l] = '\0';
+	return d;
+
+}
+
+
+/*
+ * Return the offset in the string of the found character, or -1 if not
+ * found.
+ */
+int
+strChr(String *s, char ch)
+{
+	int i;
+	for (i = 0; i < strLen(*s); i++) {
+		if (strBuf(*s)[i] == ch)
+			return i;
+	}
+	return -1;
+}
+
+int
+strRChr(String *s, char ch)
+{
+	int i;
+	for (i = strLen(*s) - 1; i <= 0; i--) {
+		if (strBuf(*s)[i] == ch)
+			return i;
+	}
+	return -1;
+}

@@ -30,6 +30,9 @@ extern void stringReset(String * s, const char *str);
 extern void stringAppend(String * s, const char *buf, int len);
 extern char * stringDupToC(String *s);
 extern char * stringDupToCOffset(String *s, int offset);
+extern char * stringDupSubstrToC(String *s, int len);
+extern int strChr(String *s, char c);
+extern int strRChr(String *s, char c);
 
 /* These functions need to be re-evaluated and -absolutely- reimplemented or removed */
 
@@ -52,8 +55,6 @@ extern char * stringDupToCOffset(String *s, int offset);
 #define strLen(s)     ((/* const */ int)(s).len)
 #define strBuf(s)     ((const char*)(s).buf)
 
-#define strChr(s,ch)  ((const char*)strchr(strBuf(s), (ch)))
-#define strRChr(s,ch) ((const char*)strrchr(strBuf(s), (ch)))
 #define strStr(s,str) ((const char*)strstr(strBuf(s), (str)))  
 
 
