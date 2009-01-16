@@ -1,12 +1,16 @@
 #ifndef	__BUF_H__
 #define	__BUF_H__
 
+#define	BUF_TRACK_BUFS		0
+
 struct _buf {
 	char *b;
 	int len;
 	int size;
 	int sofs;	/* how much of the buffer can't be changed */
+#if	BUF_TRACK_BUFS
 	dlink_node node;
+#endif
 	struct {
 		char isactive:1;
 		char isfinal:1;
@@ -75,6 +79,8 @@ buf_put_chr(buf_t *buf, int offset, char val)
 static inline int
 buf_isfull(buf_t *b) { return (b->size == b->len); }
 
+#if	BUF_TRACK_BUFS
 extern dlink_list buf_active_list;
+#endif
 
 #endif
