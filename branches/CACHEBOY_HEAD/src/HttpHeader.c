@@ -199,7 +199,7 @@ httpHeaderFieldStatDumper(StoreEntry * sentry, int idx, double val, double size,
 {
     const int id = (int) val;
     const int valid_id = id >= 0 && id < HDR_ENUM_END;
-    const int name_len = valid_id ? strLen(Headers[id].name) : 7;
+    const int name_len = valid_id ? strLen2(Headers[id].name) : 7;
     const char *name = valid_id ? strBuf2(Headers[id].name) : "INVALID";
     int visible = count > 0;
     /* for entries with zero count, list only those that belong to current type of message */
@@ -269,7 +269,7 @@ httpHeaderStoreReport(StoreEntry * e)
     for (ht = 0; ht < HDR_ENUM_END; ht++) {
 	HttpHeaderFieldInfo *f = Headers + ht;
 	storeAppendPrintf(e, "%2d\t %-20.*s\t %5d\t %6.3f\t %6.3f\n",
-	    f->id, strLen(f->name), strBuf2(f->name), f->stat.aliveCount,
+	    f->id, strLen2(f->name), strBuf2(f->name), f->stat.aliveCount,
 	    xpercent(f->stat.errCount, f->stat.parsCount),
 	    xpercent(f->stat.repCount, f->stat.seenCount));
     }
