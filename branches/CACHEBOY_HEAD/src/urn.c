@@ -112,7 +112,7 @@ urnStart(request_t * r, StoreEntry * e)
     urnState->entry = e;
     urnState->request = requestLink(r);
     storeLockObject(urnState->entry);
-    if (strncasecmp(strBuf(r->urlpath), "menu.", 5) == 0) {
+    if (strNCaseCmp(r->urlpath, "menu.", 5) == 0) {
 	char *new_path = stringDupToCOffset(&r->urlpath, 5);
 	urnState->flags.force_menu = 1;
 	stringReset(&r->urlpath, new_path);

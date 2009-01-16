@@ -1072,7 +1072,7 @@ ftpBuildTitleUrl(FtpStateData * ftpState)
 	strCat(ftpState->title_url, ":");
 	strCat(ftpState->title_url, xitoa(request->port));
     }
-    strCat(ftpState->title_url, strBuf(request->urlpath));
+    strCatStr(ftpState->title_url, request->urlpath);
 
     stringReset(&ftpState->base_href, "ftp://");
     if (strcmp(ftpState->user, "anonymous")) {
@@ -1088,7 +1088,7 @@ ftpBuildTitleUrl(FtpStateData * ftpState)
 	strCat(ftpState->base_href, ":");
 	strCat(ftpState->base_href, xitoa(request->port));
     }
-    strCat(ftpState->base_href, strBuf(request->urlpath));
+    strCatStr(ftpState->base_href, request->urlpath);
     strCat(ftpState->base_href, "/");
 }
 
