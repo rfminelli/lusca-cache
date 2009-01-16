@@ -119,7 +119,7 @@ urnStart(request_t * r, StoreEntry * e)
 	xfree(new_path);
     }
     if ((t = strChr(r->urlpath, ':')) != NULL) {
-	strSet(r->urlpath, t, '\0');
+	strCutPtr(r->urlpath, t);
 	host = stringDupToC(&r->urlpath);
 	strSet(r->urlpath, t, ':');
     } else {
