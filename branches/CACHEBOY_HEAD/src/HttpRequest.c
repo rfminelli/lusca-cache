@@ -94,7 +94,7 @@ requestDestroy(request_t * req)
 	cbdataUnlock(req->pinned_connection);
     req->pinned_connection = NULL;
     urlMethodFree(req->method);
-    memFree(req, MEM_REQUEST_T);
+    memPoolFree(pool_request_t, req);
 }
 
 request_t *
