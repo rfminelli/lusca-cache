@@ -231,20 +231,11 @@ The initial import included all patchsets up to 12036.
   * 12355 - HEAD - Make purge behaviour more RFC compliant - *committed - 13613*
   * 12356 - HEAD - UTF-8 in config file where it shouldn't be - *committed - 13614*
   * 12357 - HEAD - Fix digest code w/ method changes - *committed - 13615*
- 
-== Stuff merged into trunk but not yet into CACHEBOY_HEAD ==
-
-  * 12339 - HEAD - Adrian's write-side delay pool code - *committed - 13605*
-  * 12346 - HEAD - conditional compile delay pools code - *committed - 13607*
-  * 12347 - HEAD - Documentation update for 2.7.STABLE4 - *committed - 13608*
-  * 12351 - HEAD - Namespace cleanup after the delay_access fix - *committed - 13609*
-
   * 12358 - HEAD - GCC warnings (*NOTE*: this is potentially dangerous code?) - *committed - 13616*
   * 12359 - HEAD - MIME type ACL clarification - *committed - 13617*
   * 12360 - HEAD - convert upgrade_http0.9 to ACL; add header - *committed - 13618*
   * 12361 - HEAD - Generate squid.conf.clean - *committed - 13619*
   * 12362 - HEAD - Update http0.9 default docs - *committed - 13620*
-  * 12363 - HEAD - Shutdown store_url helpers on reconfigure - *committed - 13621*
   * 12364 - HEAD - Fix GCC related breakage - *committed - 13622*
   * 12365 - HEAD - bootstrapped - *committed - 13623*
   * 12366 - HEAD - HTTP CLR enhancements - *committed - 13624*
@@ -270,6 +261,15 @@ The initial import included all patchsets up to 12036.
   * 12410 - HEAD - Fix tproxy url - *committed - 13644*
   * 12411 - HEAD - Bootstrapped - *committed - 13645*
   * 12416 - HEAD - 2.6.STABLE22 ChangeLog - *committed - 13646*
+ 
+== Stuff merged into trunk but not yet into CACHEBOY_HEAD ==
+
+  * 12339 - HEAD - Adrian's write-side delay pool code - *committed - 13605*
+  * 12346 - HEAD - conditional compile delay pools code - *committed - 13607*
+  * 12347 - HEAD - Documentation update for 2.7.STABLE4 - *committed - 13608*
+  * 12351 - HEAD - Namespace cleanup after the delay_access fix - *committed - 13609*
+  * 12363 - HEAD - Shutdown store_url helpers on reconfigure - *committed - 13621*
+ 
   * 12417 - HEAD - Correct Latency measurements - *committed - 13647*
   * 12418 - HEAD - Fix kqueue typo in above patch - *committed - 13648*
   * 12419 - HEAD - collapsed_forwarding_timeout directive - *committed - 13649*
