@@ -223,18 +223,19 @@ The initial import included all patchsets up to 12036.
 
   * 12337 - HEAD - Increase buffer in authenticateNegotiateStart - *committed - 13603*
   * 12338 - HEAD - Help output with squid_ldap_group - *committed - 13604*
-
+  
+  * 12341 - HEAD - Prepare for 2.7.STABLE4 - *committed - 13606*
+  * 12352 - HEAD - upgrade_http0.9 option - *committed - 13610*
+ 
 == Stuff merged into trunk but not yet into CACHEBOY_HEAD ==
 
-
   * 12339 - HEAD - Adrian's write-side delay pool code - *committed - 13605*
-  * 12341 - HEAD - Prepare for 2.7.STABLE4 - *committed - 13606*
   * 12346 - HEAD - conditional compile delay pools code - *committed - 13607*
   * 12347 - HEAD - Documentation update for 2.7.STABLE4 - *committed - 13608*
   * 12351 - HEAD - Namespace cleanup after the delay_access fix - *committed - 13609*
-  * 12352 - HEAD - upgrade_http0.9 option - *committed - 13610*
-  * 12353 - HEAD - Benno's work on supporting arbitrary unknown methods - *committed - 13611*
-  * 12354 - HEAD - Trim trailing whitespace - *committed - 13612*
+
+  * 12353 - HEAD - Benno's work on supporting arbitrary unknown methods - *committed - 13611* - *BROKEN*
+  * 12354 - HEAD - Trim trailing whitespace - *committed - 13612* - *BROKEN*
   * 12355 - HEAD - Make purge behaviour more RFC compliant - *committed - 13613*
   * 12356 - HEAD - UTF-8 in config file where it shouldn't be - *committed - 13614*
   * 12357 - HEAD - Fix digest code w/ method changes - *committed - 13615*
