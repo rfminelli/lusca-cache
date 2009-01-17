@@ -679,7 +679,6 @@ struct _SquidConfig {
 	int update_headers;
 	int ignore_expect_100;
 	int WIN32_IpAddrChangeMonitor;
-	int upgrade_http09;
     } onoff;
     acl *aclList;
     struct {
@@ -715,6 +714,7 @@ struct _SquidConfig {
 #endif
 	acl_access *vary_encoding;
 	acl_access *auth_ip_shortcircuit;
+	acl_access *upgrade_http09;
     } accessList;
     acl_deny_info_list *denyInfoList;
     struct _authConfig {
@@ -935,7 +935,7 @@ struct _HierarchyLogEntry {
 
 struct _method_t {
     method_code_t code;
-    char *string;
+    const char *string;
     struct {
 	unsigned int cachable:1;
 	unsigned int purges_all:1;
