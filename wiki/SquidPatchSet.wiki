@@ -226,6 +226,11 @@ The initial import included all patchsets up to 12036.
   
   * 12341 - HEAD - Prepare for 2.7.STABLE4 - *committed - 13606*
   * 12352 - HEAD - upgrade_http0.9 option - *committed - 13610*
+  * 12353 - HEAD - Benno's work on supporting arbitrary unknown methods - *committed - 13611*
+  * 12354 - HEAD - Trim trailing whitespace - *committed - 13612*
+  * 12355 - HEAD - Make purge behaviour more RFC compliant - *committed - 13613*
+  * 12356 - HEAD - UTF-8 in config file where it shouldn't be - *committed - 13614*
+  * 12357 - HEAD - Fix digest code w/ method changes - *committed - 13615*
  
 == Stuff merged into trunk but not yet into CACHEBOY_HEAD ==
 
@@ -234,11 +239,6 @@ The initial import included all patchsets up to 12036.
   * 12347 - HEAD - Documentation update for 2.7.STABLE4 - *committed - 13608*
   * 12351 - HEAD - Namespace cleanup after the delay_access fix - *committed - 13609*
 
-  * 12353 - HEAD - Benno's work on supporting arbitrary unknown methods - *committed - 13611* - *BROKEN*
-  * 12354 - HEAD - Trim trailing whitespace - *committed - 13612* - *BROKEN*
-  * 12355 - HEAD - Make purge behaviour more RFC compliant - *committed - 13613*
-  * 12356 - HEAD - UTF-8 in config file where it shouldn't be - *committed - 13614*
-  * 12357 - HEAD - Fix digest code w/ method changes - *committed - 13615*
   * 12358 - HEAD - GCC warnings (*NOTE*: this is potentially dangerous code?) - *committed - 13616*
   * 12359 - HEAD - MIME type ACL clarification - *committed - 13617*
   * 12360 - HEAD - convert upgrade_http0.9 to ACL; add header - *committed - 13618*
