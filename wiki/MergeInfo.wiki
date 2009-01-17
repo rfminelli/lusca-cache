@@ -23,3 +23,4 @@ Subversion merging is annoying.
   * 17/Jan/2009: r13695: CACHEBOY_HEAD: rev 13605:13606 from trunk
   * 17/Jan/2009: r13696: CACHEBOY_HEAD: rev 13609:13610 from trunk
   * 17/Jan/2009: r13698: CACHEBOY_HEAD: rev 13610:13612 from trunk
+  * 17/Jan/2009: r13700: CACHEBOY_HEAD: rev 13612:13613 from trunk
