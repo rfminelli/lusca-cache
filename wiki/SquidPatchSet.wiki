@@ -261,15 +261,6 @@ The initial import included all patchsets up to 12036.
   * 12410 - HEAD - Fix tproxy url - *committed - 13644*
   * 12411 - HEAD - Bootstrapped - *committed - 13645*
   * 12416 - HEAD - 2.6.STABLE22 ChangeLog - *committed - 13646*
- 
-== Stuff merged into trunk but not yet into CACHEBOY_HEAD ==
-
-  * 12339 - HEAD - Adrian's write-side delay pool code - *committed - 13605*
-  * 12346 - HEAD - conditional compile delay pools code - *committed - 13607*
-  * 12347 - HEAD - Documentation update for 2.7.STABLE4 - *committed - 13608*
-  * 12351 - HEAD - Namespace cleanup after the delay_access fix - *committed - 13609*
-  * 12363 - HEAD - Shutdown store_url helpers on reconfigure - *committed - 13621*
- 
   * 12417 - HEAD - Correct Latency measurements - *committed - 13647*
   * 12418 - HEAD - Fix kqueue typo in above patch - *committed - 13648*
   * 12419 - HEAD - collapsed_forwarding_timeout directive - *committed - 13649*
@@ -277,3 +268,15 @@ The initial import included all patchsets up to 12036.
   * 12421 - HEAD - Bootstrapped - *committed - 13651*
   * 12423 - HEAD - Cross-reference authenticate_ip_shortcircuit_access and authenticate_ip_shortcircuit_ttl - *committed - 13652*
   * 12424 - HEAD - Fix Visual Studio errors - *committed - 13653*
+ 
+== Stuff merged into trunk but not yet into CACHEBOY_HEAD ==
+
+  * 12339 - HEAD - Adrian's write-side delay pool code - *committed - 13605*
+  * 12346 - HEAD - conditional compile delay pools code - *committed - 13607*
+  * 12347 - HEAD - Documentation update for 2.7.STABLE4 - *committed - 13608*
+  * 12351 - HEAD - Namespace cleanup after the delay_access fix - *committed - 13609*
+
+== Stuff merged into trunk but not into CACHEBOY_HEAD because something else already exists implementing that patch ==
+
+  * 12363 - HEAD - Shutdown store_url helpers on reconfigure - *committed - 13621*
+ 
