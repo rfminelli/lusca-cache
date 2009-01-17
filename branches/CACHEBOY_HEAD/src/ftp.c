@@ -1127,7 +1127,7 @@ ftpStart(FwdState * fwd)
     ftpState->flags.rest_supported = 1;
     ftpState->fwd = fwd;
     comm_add_close_handler(fd, ftpStateFree, ftpState);
-    if (ftpState->request->method == METHOD_PUT)
+    if (ftpState->request->method->code == METHOD_PUT)
 	ftpState->flags.put = 1;
     if (!ftpCheckAuth(ftpState, &request->header)) {
 	/* This request is not fully authenticated */
@@ -1732,7 +1732,7 @@ ftpSendPasv(FtpStateData * ftpState)
     int fd;
     struct sockaddr_in addr;
     socklen_t addr_len;
-    if (ftpState->request->method == METHOD_HEAD && (ftpState->flags.isdir || ftpState->size != -1)) {
+    if (ftpState->request->method->code == METHOD_HEAD && (ftpState->flags.isdir || ftpState->size != -1)) {
 	/* Terminate here for HEAD requests */
 	ftpAppendSuccessHeader(ftpState);
 	storeTimestampsSet(ftpState->entry);
