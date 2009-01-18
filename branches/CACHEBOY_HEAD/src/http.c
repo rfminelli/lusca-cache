@@ -564,7 +564,13 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
     /* Parse headers into reply structure */
     /* what happens if we fail to parse here? */
     httpReplyParse(reply, httpState->reply_hdr.buf, hdr_size);
+
+    /*
+     * how many bytes are left over? The caller will then use those
+     * bytes as part of the reply body, not status+headers
+     */
     done = hdr_size - old_size;
+
     /* Skip 1xx messages for now. Advertised in Via as an internal 1.0 hop */
     if (reply->sline.status >= 100 && reply->sline.status < 200) {
 	memBufClean(&httpState->reply_hdr);
@@ -576,7 +582,22 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	else
 	    return done;
     }
+
+    /* Append the reply status and header, unparsed, to the store object */
     storeAppend(entry, httpState->reply_hdr.buf, hdr_size);
+
+    /*
+     * After this point - "done" is set indicating how much data from the passed in buffer
+     * has been used as reply status+headers (and thus how much is left for the reply body);
+     * the reply has been parsed (but not error checked at all for some silly reason? :);
+     * HTTP/0.9 replies have been dealt with; 1xx status code messages have been skipped in
+     * the HTTP reply flow; the request status + headers have been appended to the store object.
+     */
+
+    /*
+     * So the below code is purely fiddling around with setting up the actual reply state
+     * based on stuff in the reply.
+     */
     if (reply->sline.status >= HTTP_INVALID_HEADER) {
 	debug(11, 3) ("httpProcessReplyHeader: Non-HTTP-compliant header: '%s'\n", httpState->reply_hdr.buf);
 	memBufClean(&httpState->reply_hdr);
