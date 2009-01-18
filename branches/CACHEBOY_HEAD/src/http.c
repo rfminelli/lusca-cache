@@ -474,6 +474,14 @@ httpSetHttp09Header(HttpStateData *httpState, HttpReply *reply)
 	safe_free(t);
 }
 
+static void
+httpAppendReplyHeader(HttpState *httpState, const char *buf, int size)
+{
+    if (memBufIsNull(&httpState->reply_hdr))
+	memBufDefInit(&httpState->reply_hdr);
+    memBufAppend(&httpState->reply_hdr, buf, size);
+}
+
 /* rewrite this later using new interfaces @?@ */
 static size_t
 httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
@@ -490,22 +498,35 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
     if (memBufIsNull(&httpState->reply_hdr))
 	memBufDefInit(&httpState->reply_hdr);
     assert(httpState->reply_hdr_state == 0);
+
+    /* Append the given data to the reply buffer */
     old_size = httpState->reply_hdr.size;
     memBufAppend(&httpState->reply_hdr, buf, size);
     hdr_len = httpState->reply_hdr.size;
+
+    /* Handle non-parsable responses as HTTP/0.9 responses - ie, no headers, just verbatim body */
     if (hdr_len > 4 && strncmp(httpState->reply_hdr.buf, "HTTP/", 5)) {
+	/* This function sets a reply header to the first line of the reply */
         httpSetHttp09Header(httpState, reply);
+	/* Set state to parsed */
 	httpState->reply_hdr_state += 2;
+	/* No chunk size - terminated via EOF */
 	httpState->chunk_size = -1;	/* Terminated by EOF */
+	/* Reply header size is whatever it was -before- this data came in - which is what, exactly? */
+	/* Any data appended in this call will be converted into the reply body later on */
 	httpState->reply_hdr.size = old_size;
 	httpBuildVersion(&reply->sline.version, 0, 9);
 	reply->sline.status = HTTP_INVALID_HEADER;
 	ctx_exit(ctx);
 	return 0;
     }
+
+    /* Try to delineate the entire reply status + header set */
     hdr_size = headersEnd(httpState->reply_hdr.buf, hdr_len);
     if (hdr_size)
 	hdr_len = hdr_size;
+
+    /* Is the reply buffer size (whether a full reply is contained or not) > max? */
     if (hdr_len > Config.maxReplyHeaderSize) {
 	debug(11, 1) ("httpProcessReplyHeader: Too large reply header\n");
 	storeAppend(entry, httpState->reply_hdr.buf, httpState->reply_hdr.size);
@@ -515,6 +536,8 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	ctx_exit(ctx);
 	return size;
     }
+
+    /* Only return "headers not complete" if EOF hasn't yet been read on the socket ? */
     /* headers can be incomplete only if object still arriving */
     if (!hdr_size) {
 	if (httpState->eof)
@@ -524,8 +547,10 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	    return size;	/* headers not complete */
 	}
     }
+    /* Free any existing variant information before we add our own */
     safe_free(entry->mem_obj->vary_headers);
     safe_free(entry->mem_obj->vary_encoding);
+
     /* Cut away any excess body data (only needed for debug?) */
     memBufAppend(&httpState->reply_hdr, "\0", 1);
     httpState->reply_hdr.buf[hdr_size] = '\0';
