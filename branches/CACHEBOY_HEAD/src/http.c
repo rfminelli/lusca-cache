@@ -457,6 +457,23 @@ httpMakeVaryMark(request_t * request, HttpReply * reply)
     return request->vary_headers;
 }
 
+static void
+httpSetHttp09Header(HttpStateData *httpState, HttpReply *reply)
+{
+	char *t, *t2;
+
+	debug(11, 3) ("httpProcessReplyHeader: Non-HTTP-compliant header: '%s'\n", httpState->reply_hdr.buf);
+	t = xstrdup(httpState->reply_hdr.buf);
+	t2 = strchr(t, '\n');
+	if (t2)
+	    *t2 = '\0';
+	t2 = strchr(t, '\r');
+	if (t2)
+	    *t2 = '\0';
+	httpHeaderPutStr(&reply->header, HDR_X_HTTP09_FIRST_LINE, t);
+	safe_free(t);
+}
+
 /* rewrite this later using new interfaces @?@ */
 static size_t
 httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
@@ -477,19 +494,7 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
     memBufAppend(&httpState->reply_hdr, buf, size);
     hdr_len = httpState->reply_hdr.size;
     if (hdr_len > 4 && strncmp(httpState->reply_hdr.buf, "HTTP/", 5)) {
-	debug(11, 3) ("httpProcessReplyHeader: Non-HTTP-compliant header: '%s'\n", httpState->reply_hdr.buf);
-	{
-	    char *t, *t2;
-	    t = xstrdup(httpState->reply_hdr.buf);
-	    t2 = strchr(t, '\n');
-	    if (t2)
-		*t2 = '\0';
-	    t2 = strchr(t, '\r');
-	    if (t2)
-		*t2 = '\0';
-	    httpHeaderPutStr(&reply->header, HDR_X_HTTP09_FIRST_LINE, t);
-	    safe_free(t);
-	}
+        httpSetHttp09Header(httpState, reply);
 	httpState->reply_hdr_state += 2;
 	httpState->chunk_size = -1;	/* Terminated by EOF */
 	httpState->reply_hdr.size = old_size;
@@ -1476,6 +1481,7 @@ httpBuildRequestPrefix(request_t * request,
     memBufAppend(mb, crlf, 2);
     return mb->size - offset;
 }
+
 /* This will be called when connect completes. Write request. */
 static void
 httpSendRequest(HttpStateData * httpState)
