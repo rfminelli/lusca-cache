@@ -1,7 +1,7 @@
 #include "squid.h"
 
 int
-buf_fill(buf_t *b, int fd, int grow_size)
+buf_read(buf_t *b, int fd, int grow_size)
 {
 	int ret;
 
