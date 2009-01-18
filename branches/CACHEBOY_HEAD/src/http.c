@@ -482,6 +482,119 @@ httpAppendReplyHeader(HttpStateData * httpState, const char *buf, int size)
     memBufAppend(&httpState->reply_hdr, buf, size);
 }
 
+/*
+ * Handle a (mostly!) valid response; setup internal header structures
+ * in preparation for handling the reply.
+ *
+ * This function is a mash of both transfer related information (TE,
+ * keepalive, etc) and caching related information. Ideally they'd be
+ * completely seperate so a non-caching HTTP client could be implemented
+ * and used elsewhere; that should happen later on and stuffed into
+ * a top-level library separate from the cache codebase.
+ */
+static int
+httpReplySetupStuff(HttpStateData *httpState)
+{
+    StoreEntry *entry = httpState->entry;
+    HttpReply *reply = entry->mem_obj->reply;
+
+    if (!peer_supports_connection_pinning(httpState))
+	httpState->orig_request->flags.no_connection_auth = 1;
+    storeTimestampsSet(entry);
+    /* Check if object is cacheable or not based on reply code */
+    debug(11, 3) ("httpProcessReplyHeader: HTTP CODE: %d\n", reply->sline.status);
+    if (httpHeaderHas(&reply->header, HDR_TRANSFER_ENCODING)) {
+	String tr = httpHeaderGetList(&reply->header, HDR_TRANSFER_ENCODING);
+	const char *pos = NULL;
+	const char *item = NULL;
+	int ilen = 0;
+	if (strListGetItem(&tr, ',', &item, &ilen, &pos)) {
+	    if (ilen == 7 && strncasecmp(item, "chunked", ilen) == 0) {
+		httpState->flags.chunked = 1;
+		if (!strListGetItem(&tr, ',', &item, &ilen, &pos))
+		    item = NULL;
+	    }
+	    if (item) {
+		/* Can't handle other transfer-encodings */
+		debug(11, 1) ("Unexpected transfer encoding '%.*s'\n", strLen2(tr), strBuf2(tr));
+		reply->sline.status = HTTP_INVALID_HEADER;
+		return -1;
+	    }
+	}
+	stringClean(&tr);
+	if (httpState->flags.chunked && reply->content_length >= 0) {
+	    /* Can't have a content-length in chunked encoding */
+	    reply->content_length = -1;
+	    httpHeaderDelById(&reply->header, HDR_CONTENT_LENGTH);
+	}
+    }
+    if (!httpState->flags.chunked) {
+	/* non-chunked. Handle as one single big chunk (-1 if terminated by EOF) */
+	httpState->chunk_size = httpReplyBodySize(httpState->orig_request->method, reply);
+    }
+    if (httpHeaderHas(&reply->header, HDR_VARY)
+#if X_ACCELERATOR_VARY
+	|| httpHeaderHas(&reply->header, HDR_X_ACCELERATOR_VARY)
+#endif
+	) {
+	const char *vary = NULL;
+	if (Config.onoff.cache_vary)
+	    vary = httpMakeVaryMark(httpState->orig_request, reply);
+	if (!vary) {
+	    httpMakePrivate(entry);
+	    goto no_cache;	/* XXX Would be better if this was used by the swicht statement below */
+	}
+	entry->mem_obj->vary_headers = xstrdup(vary);
+	if (strIsNotNull(httpState->orig_request->vary_encoding))
+	    entry->mem_obj->vary_encoding = stringDupToC(&httpState->orig_request->vary_encoding);
+    }
+    if (entry->mem_obj->old_entry)
+	EBIT_CLR(entry->mem_obj->old_entry->flags, REFRESH_FAILURE);
+    switch (httpCachableReply(httpState)) {
+    case 1:
+	httpMakePublic(entry);
+	break;
+    case 0:
+	httpMakePrivate(entry);
+	break;
+    case -1:
+	httpCacheNegatively(entry);
+	break;
+    default:
+	assert(0);
+	break;
+    }
+  no_cache:
+    if (reply->cache_control) {
+	if (EBIT_TEST(reply->cache_control->mask, CC_PROXY_REVALIDATE))
+	    EBIT_SET(entry->flags, ENTRY_REVALIDATE);
+	else if (EBIT_TEST(reply->cache_control->mask, CC_MUST_REVALIDATE))
+	    EBIT_SET(entry->flags, ENTRY_REVALIDATE);
+    }
+    if (neighbors_do_private_keys && !Config.onoff.collapsed_forwarding)
+	httpMaybeRemovePublic(entry, reply);
+    if (httpState->flags.keepalive)
+	if (httpState->peer)
+	    httpState->peer->stats.n_keepalives_sent++;
+    if (reply->keep_alive) {
+	if (httpState->peer)
+	    httpState->peer->stats.n_keepalives_recv++;
+	if (Config.onoff.detect_broken_server_pconns && httpReplyBodySize(httpState->request->method, reply) == -1) {
+	    debug(11, 1) ("httpProcessReplyHeader: Impossible keep-alive header from '%s'\n", storeUrl(entry));
+	    debug(11, 2) ("GOT HTTP REPLY HDR:\n---------\n%s\n----------\n",
+		httpState->reply_hdr.buf);
+	    httpState->flags.keepalive_broken = 1;
+	}
+    }
+    if (reply->date > -1 && !httpState->peer) {
+	int skew = abs(reply->date - squid_curtime);
+	if (skew > 86400)
+	    debug(11, 3) ("%s's clock is skewed by %d seconds!\n",
+		httpState->request->host, skew);
+    }
+    return 0;
+}
+
 /* rewrite this later using new interfaces @?@ */
 static size_t
 httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
@@ -613,101 +726,8 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
      * So the below code is purely fiddling around with setting up the actual reply state
      * based on stuff in the reply.
      */
+    (void) httpReplySetupStuff(httpState);
 
-    if (!peer_supports_connection_pinning(httpState))
-	httpState->orig_request->flags.no_connection_auth = 1;
-    storeTimestampsSet(entry);
-    /* Check if object is cacheable or not based on reply code */
-    debug(11, 3) ("httpProcessReplyHeader: HTTP CODE: %d\n", reply->sline.status);
-    if (httpHeaderHas(&reply->header, HDR_TRANSFER_ENCODING)) {
-	String tr = httpHeaderGetList(&reply->header, HDR_TRANSFER_ENCODING);
-	const char *pos = NULL;
-	const char *item = NULL;
-	int ilen = 0;
-	if (strListGetItem(&tr, ',', &item, &ilen, &pos)) {
-	    if (ilen == 7 && strncasecmp(item, "chunked", ilen) == 0) {
-		httpState->flags.chunked = 1;
-		if (!strListGetItem(&tr, ',', &item, &ilen, &pos))
-		    item = NULL;
-	    }
-	    if (item) {
-		/* Can't handle other transfer-encodings */
-		debug(11, 1) ("Unexpected transfer encoding '%.*s'\n", strLen2(tr), strBuf2(tr));
-		reply->sline.status = HTTP_INVALID_HEADER;
-		return done;
-	    }
-	}
-	stringClean(&tr);
-	if (httpState->flags.chunked && reply->content_length >= 0) {
-	    /* Can't have a content-length in chunked encoding */
-	    reply->content_length = -1;
-	    httpHeaderDelById(&reply->header, HDR_CONTENT_LENGTH);
-	}
-    }
-    if (!httpState->flags.chunked) {
-	/* non-chunked. Handle as one single big chunk (-1 if terminated by EOF) */
-	httpState->chunk_size = httpReplyBodySize(httpState->orig_request->method, reply);
-    }
-    if (httpHeaderHas(&reply->header, HDR_VARY)
-#if X_ACCELERATOR_VARY
-	|| httpHeaderHas(&reply->header, HDR_X_ACCELERATOR_VARY)
-#endif
-	) {
-	const char *vary = NULL;
-	if (Config.onoff.cache_vary)
-	    vary = httpMakeVaryMark(httpState->orig_request, reply);
-	if (!vary) {
-	    httpMakePrivate(entry);
-	    goto no_cache;	/* XXX Would be better if this was used by the swicht statement below */
-	}
-	entry->mem_obj->vary_headers = xstrdup(vary);
-	if (strIsNotNull(httpState->orig_request->vary_encoding))
-	    entry->mem_obj->vary_encoding = stringDupToC(&httpState->orig_request->vary_encoding);
-    }
-    if (entry->mem_obj->old_entry)
-	EBIT_CLR(entry->mem_obj->old_entry->flags, REFRESH_FAILURE);
-    switch (httpCachableReply(httpState)) {
-    case 1:
-	httpMakePublic(entry);
-	break;
-    case 0:
-	httpMakePrivate(entry);
-	break;
-    case -1:
-	httpCacheNegatively(entry);
-	break;
-    default:
-	assert(0);
-	break;
-    }
-  no_cache:
-    if (reply->cache_control) {
-	if (EBIT_TEST(reply->cache_control->mask, CC_PROXY_REVALIDATE))
-	    EBIT_SET(entry->flags, ENTRY_REVALIDATE);
-	else if (EBIT_TEST(reply->cache_control->mask, CC_MUST_REVALIDATE))
-	    EBIT_SET(entry->flags, ENTRY_REVALIDATE);
-    }
-    if (neighbors_do_private_keys && !Config.onoff.collapsed_forwarding)
-	httpMaybeRemovePublic(entry, reply);
-    if (httpState->flags.keepalive)
-	if (httpState->peer)
-	    httpState->peer->stats.n_keepalives_sent++;
-    if (reply->keep_alive) {
-	if (httpState->peer)
-	    httpState->peer->stats.n_keepalives_recv++;
-	if (Config.onoff.detect_broken_server_pconns && httpReplyBodySize(httpState->request->method, reply) == -1) {
-	    debug(11, 1) ("httpProcessReplyHeader: Impossible keep-alive header from '%s'\n", storeUrl(entry));
-	    debug(11, 2) ("GOT HTTP REPLY HDR:\n---------\n%s\n----------\n",
-		httpState->reply_hdr.buf);
-	    httpState->flags.keepalive_broken = 1;
-	}
-    }
-    if (reply->date > -1 && !httpState->peer) {
-	int skew = abs(reply->date - squid_curtime);
-	if (skew > 86400)
-	    debug(11, 3) ("%s's clock is skewed by %d seconds!\n",
-		httpState->request->host, skew);
-    }
     ctx_exit(ctx);
 #if HEADERS_LOG
     headersLog(1, 0, httpState->request->method, reply);
