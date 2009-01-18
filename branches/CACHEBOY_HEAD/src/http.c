@@ -462,7 +462,7 @@ httpSetHttp09Header(HttpStateData *httpState, HttpReply *reply)
 {
 	char *t, *t2;
 
-	debug(11, 3) ("httpProcessReplyHeader: Non-HTTP-compliant header: '%s'\n", httpState->reply_hdr.buf);
+	debug(11, 3) ("httpSetHttp09Header: Non-HTTP-compliant header: '%s'\n", httpState->reply_hdr.buf);
 	t = xstrdup(httpState->reply_hdr.buf);
 	t2 = strchr(t, '\n');
 	if (t2)
@@ -475,7 +475,7 @@ httpSetHttp09Header(HttpStateData *httpState, HttpReply *reply)
 }
 
 static void
-httpAppendReplyHeader(HttpState *httpState, const char *buf, int size)
+httpAppendReplyHeader(HttpStateData * httpState, const char *buf, int size)
 {
     if (memBufIsNull(&httpState->reply_hdr))
 	memBufDefInit(&httpState->reply_hdr);
@@ -1056,6 +1056,8 @@ httpReadReply(int fd, void *data)
 		    comm_close(fd);
 		    return;
 		} else if (s == HTTP_INVALID_HEADER) {
+		    /* This bit handles the HTTP/0.9 reply magic */
+		    /* The question is, what happens to the data thats ignored in the call to httpProcessReplyHeader() during the HTTP/0.9 "reply.size = old_size" call? :) */
 		    MemBuf mb;
 		    HttpReply *reply = entry->mem_obj->reply;
 		    httpBuildVersion(&reply->sline.version, 0, 9);
@@ -1084,6 +1086,7 @@ httpReadReply(int fd, void *data)
 		return;
 	    }
 	}
+        /* Append whatever part of the reply data wasn't "consumed" by a call to httpProcessReplyHeader() */
 	httpAppendBody(httpState, buf + done, len - done, buffer_filled);
 	return;
     }
