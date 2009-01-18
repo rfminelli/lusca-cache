@@ -592,6 +592,8 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
      * the reply has been parsed (but not error checked at all for some silly reason? :);
      * HTTP/0.9 replies have been dealt with; 1xx status code messages have been skipped in
      * the HTTP reply flow; the request status + headers have been appended to the store object.
+     * The reply -may- still be invalidated, but "done" doesn't change, nor is any other
+     * value returned.
      */
 
     /*
