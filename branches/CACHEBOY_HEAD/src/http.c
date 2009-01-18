@@ -518,6 +518,8 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	httpBuildVersion(&reply->sline.version, 0, 9);
 	reply->sline.status = HTTP_INVALID_HEADER;
 	ctx_exit(ctx);
+	/* The "return 0" means "none of the given data was used in the reply headers; you can use it yourself */
+	/* So the calling code should storeAppend() it as the reply body */
 	return 0;
     }
 
@@ -1064,10 +1066,13 @@ httpReadReply(int fd, void *data)
 		    reply->sline.status = HTTP_OK;
 		    httpHeaderPutTime(&reply->header, HDR_DATE, squid_curtime);
 		    mb = httpReplyPack(reply);
+		    /* Append the packed "faked" reply status+headers */
 		    storeAppend(entry, mb.buf, mb.size);
+		    /* Append the reply buffer - that is now just "body" */
 		    storeAppend(entry, httpState->reply_hdr.buf, httpState->reply_hdr.size);
 		    memBufClean(&httpState->reply_hdr);
 		    httpReplyReset(reply);
+		    /* Parse the "faked" headers as the actual reply status+headers as the actual reply */
 		    httpReplyParse(reply, mb.buf, mb.size);
 		    memBufClean(&mb);
 		}
