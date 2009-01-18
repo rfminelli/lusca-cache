@@ -596,6 +596,25 @@ httpReplySetupStuff(HttpStateData *httpState)
 }
 
 /* rewrite this later using new interfaces @?@ */
+/*
+ * append the given data to the reply header buffer; handle the reply;
+ * return how many bytes were consumed as part of the reply headers.
+ *
+ * This function is a bit of a mess of a whole lot of different bits.
+ * The return value is the number of bytes consumed out of {buf,len}.
+ * Actual error handling is done by looking at the status line code,
+ * rather than the return value of this function.
+ *
+ * It should probably be split into a couple of chunks:
+ * + a function which appends some data into the reply buffer;
+ * + a function which attempts to parse the response and determine
+ *   how many bytes in the reply are actually from the reply itself;
+ * + a function which sets up all of the internal stuff for process
+ *   the reply.
+ *
+ * The current big issue is the recursive handling of the 100 support
+ * inside this function. It probably shouldn't be done in here.
+ */
 static size_t
 httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 {
@@ -666,14 +685,17 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
     safe_free(entry->mem_obj->vary_headers);
     safe_free(entry->mem_obj->vary_encoding);
 
+#if 0
     /* Cut away any excess body data (only needed for debug?) */
     memBufAppend(&httpState->reply_hdr, "\0", 1);
     httpState->reply_hdr.buf[hdr_size] = '\0';
+#endif
+
     httpState->reply_hdr_state++;
     assert(httpState->reply_hdr_state == 1);
     httpState->reply_hdr_state++;
-    debug(11, 9) ("GOT HTTP REPLY HDR:\n---------\n%s\n----------\n",
-	httpState->reply_hdr.buf);
+    debug(11, 9) ("GOT HTTP REPLY HDR:\n---------\n%.*s\n----------\n", httpState->reply_hdr.buf, hdr_size);
+
     /* Parse headers into reply structure */
     /* what happens if we fail to parse here? */
     httpReplyParse(reply, httpState->reply_hdr.buf, hdr_size);
