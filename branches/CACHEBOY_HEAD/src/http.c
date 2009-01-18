@@ -587,6 +587,19 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
     storeAppend(entry, httpState->reply_hdr.buf, hdr_size);
 
     /*
+     * If the reply was invalid, and it didn't pass HTTP/0.9 muster, clean the reply header data
+     * entirely and return how much of the data was consumed. Hopefully this means the data
+     * will simply be discarded by the caller and whatever is left is for the next reply?
+     * (But we don't currently support pipelining!)
+     */
+    if (reply->sline.status >= HTTP_INVALID_HEADER) {
+	debug(11, 3) ("httpProcessReplyHeader: Non-HTTP-compliant header: '%s'\n", httpState->reply_hdr.buf);
+	memBufClean(&httpState->reply_hdr);
+	ctx_exit(ctx);
+	return done;
+    }
+
+    /*
      * After this point - "done" is set indicating how much data from the passed in buffer
      * has been used as reply status+headers (and thus how much is left for the reply body);
      * the reply has been parsed (but not error checked at all for some silly reason? :);
@@ -600,12 +613,7 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
      * So the below code is purely fiddling around with setting up the actual reply state
      * based on stuff in the reply.
      */
-    if (reply->sline.status >= HTTP_INVALID_HEADER) {
-	debug(11, 3) ("httpProcessReplyHeader: Non-HTTP-compliant header: '%s'\n", httpState->reply_hdr.buf);
-	memBufClean(&httpState->reply_hdr);
-	ctx_exit(ctx);
-	return done;
-    }
+
     if (!peer_supports_connection_pinning(httpState))
 	httpState->orig_request->flags.no_connection_auth = 1;
     storeTimestampsSet(entry);
