@@ -1047,7 +1047,7 @@ httpReadReply(int fd, void *data)
     CommStats.syscalls.sock.reads++;
 
     if (memBufIsNull(&httpState->reply_hdr))
-	memBufDefInit(&httpState->reply_hdr);
+	memBufInit(&httpState->reply_hdr, SQUID_TCP_SO_RCVBUF, SQUID_TCP_SO_RCVBUF * 16);
 
     len = memBufFill(&httpState->reply_hdr, fd, XMIN(read_sz, SQUID_TCP_SO_RCVBUF));
     buffer_filled = len == XMIN(read_sz, SQUID_TCP_SO_RCVBUF);
