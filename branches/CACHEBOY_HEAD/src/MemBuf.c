@@ -24,3 +24,19 @@ buf_read(buf_t *b, int fd, int grow_size)
 	/* return size */
 	return ret;
 }
+
+int
+memBufFill(MemBuf *mb, int fd, int grow_size)
+{
+	int ret;
+
+	memBufGrow(mb, grow_size);
+
+	ret = FD_READ_METHOD(fd,  mb->buf + mb->size, mb->capacity - mb->size - 1);
+	if (ret <= 0)
+		return ret;
+	mb->size += ret;
+	assert(mb->size <= mb->capacity);
+	mb->buf[mb->size] = '\0';
+	return ret;
+}

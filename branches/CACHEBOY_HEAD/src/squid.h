@@ -540,6 +540,6 @@ CBDATA_GLOBAL_TYPE(ps_state);
 
 /* src/MemBuf.c */
 extern int buf_read(buf_t *b, int fd, int grow_size);
-
+extern int memBufFill(MemBuf *mb, int fd, int grow_size);
 
 #endif /* SQUID_H */
