@@ -707,9 +707,9 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
      */
     /* If we're called with a 0 byte body, then treat this as "new httpReadReply()" related logic */
     if (size == 0)
-        done = hdr_size - old_size;
-    else
         done = hdr_size;
+    else
+        done = hdr_size - old_size;
 
     /* XXX this should be done elsewhere! By whatever calls this function! */
     /* Skip 1xx messages for now. Advertised in Via as an internal 1.0 hop */
@@ -1015,7 +1015,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 
 /* THIS IS THE NEW ONE - completely untested, not used by default -adrian */
 static void
-httpReadReplyNew(int fd, void *data)
+httpReadReply(int fd, void *data)
 {
     HttpStateData *httpState = data;
     LOCAL_ARRAY(char, buf, SQUID_TCP_SO_RCVBUF + 1);
@@ -1045,8 +1045,12 @@ httpReadReplyNew(int fd, void *data)
 
     errno = 0;
     CommStats.syscalls.sock.reads++;
-    len = FD_READ_METHOD(fd, buf, read_sz);
-    buffer_filled = len == read_sz;
+
+    if (memBufIsNull(&httpState->reply_hdr))
+	memBufDefInit(&httpState->reply_hdr);
+
+    len = memBufFill(&httpState->reply_hdr, fd, XMIN(read_sz, SQUID_TCP_SO_RCVBUF));
+    buffer_filled = len == XMIN(read_sz, SQUID_TCP_SO_RCVBUF);
     debug(11, 5) ("httpReadReply: FD %d: len %d.\n", fd, (int) len);
 
     /* Len > 0? Account for data; here's where data would be appended to the reply buffer */
@@ -1102,6 +1106,8 @@ httpReadReplyNew(int fd, void *data)
 	return;
     }
 
+    /* This will be replaced with some logic to only append and parse a data + offset */
+#if 0
     /* Trim whitespace from the incoming buffer */
     if (!httpState->reply_hdr.size && len > 0 && fd_table[fd].uses > 1) {
 	/* Skip whitespace */
@@ -1114,10 +1120,7 @@ httpReadReplyNew(int fd, void *data)
 	    return;
 	}
     }
-
-    /* For now, append the reply data here */
-    /* Later on it'll be directly read into the buffer, saving that ugly copy */
-    httpAppendReplyHeader(httpState, buf, len);
+#endif
 
     /*
      * At this point; len > 0; there's no error; and we've put the data into the incoming
@@ -1203,9 +1206,10 @@ httpReadReplyNew(int fd, void *data)
 
     /* Ok. Its been parsed if it needs to be, all other error conditions handled. */
     assert(httpState->reply_hdr_state == 2);
-    httpAppendBody(httpState, buf + done, len - done, buffer_filled);
+    httpAppendBody(httpState, httpState->reply_hdr.buf + done, httpState->reply_hdr.size - done, buffer_filled);
 
     /* Reset the buffer; if we got here then we either parsed or have previously parsed a reply; no need to append now */
+    memBufReset(&httpState->reply_hdr);
 
     /* httpAppendBody() reschedules for IO if required */
     return;
@@ -1215,7 +1219,7 @@ httpReadReplyNew(int fd, void *data)
  * error or connection closed. */
 /* XXX this function is too long! */
 static void
-httpReadReply(int fd, void *data)
+httpReadReplyOld(int fd, void *data)
 {
     HttpStateData *httpState = data;
     LOCAL_ARRAY(char, buf, SQUID_TCP_SO_RCVBUF + 1);
