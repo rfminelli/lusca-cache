@@ -30,7 +30,8 @@ memBufFill(MemBuf *mb, int fd, int grow_size)
 {
 	int ret;
 
-	memBufGrow(mb, grow_size);
+	if (mb->capacity - mb->size < grow_size)
+		memBufGrow(mb, grow_size);
 
 	ret = FD_READ_METHOD(fd,  mb->buf + mb->size, mb->capacity - mb->size - 1);
 	if (ret <= 0)
