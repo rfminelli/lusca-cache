@@ -188,7 +188,10 @@ memBufReset(MemBuf * mb)
     } else {
 	assert(!mb->stolen);	/* not frozen */
 	/* reset */
+#if 0
 	memset(mb->buf, 0, mb->capacity);
+#endif
+	mb->buf[0] = '\0';
 	mb->size = 0;
     }
 }
