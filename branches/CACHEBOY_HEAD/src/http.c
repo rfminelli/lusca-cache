@@ -477,8 +477,7 @@ httpSetHttp09Header(HttpStateData *httpState, HttpReply *reply)
 static void
 httpAppendReplyHeader(HttpStateData * httpState, const char *buf, int size)
 {
-    if (memBufIsNull(&httpState->reply_hdr))
-	memBufDefInit(&httpState->reply_hdr);
+    assert(! memBufIsNull(&httpState->reply_hdr));
     memBufAppend(&httpState->reply_hdr, buf, size);
 }
 
@@ -627,8 +626,7 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
     Ctx ctx = ctx_enter(entry->mem_obj->url);
     debug(11, 3) ("httpProcessReplyHeader: key '%s'\n",
 	storeKeyText(entry->hash.key));
-    if (memBufIsNull(&httpState->reply_hdr))
-	memBufDefInit(&httpState->reply_hdr);
+    assert(! memBufIsNull(&httpState->reply_hdr));
     assert(httpState->reply_hdr_state == 0);
 
     /* Append the given data to the reply buffer */
@@ -1206,10 +1204,13 @@ httpReadReply(int fd, void *data)
 
     /* Ok. Its been parsed if it needs to be, all other error conditions handled. */
     assert(httpState->reply_hdr_state == 2);
+    /* lock the httpState; it may be freed by a call to httpAppendBody */
+    cbdataLock(httpState);
     httpAppendBody(httpState, httpState->reply_hdr.buf + done, httpState->reply_hdr.size - done, buffer_filled);
-
-    /* Reset the buffer; if we got here then we either parsed or have previously parsed a reply; no need to append now */
-    memBufReset(&httpState->reply_hdr);
+    if (cbdataValid(httpState))
+	memBufReset(&httpState->reply_hdr);
+    cbdataUnlock(httpState);
+    /* httpState may be cleared here */
 
     /* httpAppendBody() reschedules for IO if required */
     return;
