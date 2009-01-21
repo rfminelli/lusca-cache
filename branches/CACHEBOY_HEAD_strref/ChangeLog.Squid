@@ -5,6 +5,8 @@
 	  copying of data.
 	- Use the client's DNS lookup if our DNS lookup fails on
 	  transparent requests.
+	- Foreground rebuilding now finishes the entire rebuild before it
+	  starts accepting requests.
 
 Changes to squid-2.7.STABLE1 (not yet released)
 

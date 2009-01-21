@@ -386,6 +386,8 @@ DEFAULT: 0 seconds
 DOC_START
 	Cache authentication credentials per client IP address for this
 	long. Default is 0 seconds (disabled).
+
+	See also authenticate_ip_shortcircuit_access directive.
 DOC_END
 
 COMMENT_START
@@ -934,6 +936,8 @@ DOC_START
 	based on source IP cached credentials is acceptable. Use this to deny
 	using the ip auth cache on requests from child proxies or other source
 	ip's having multiple users.
+
+	See also authenticate_ip_shortcircuit_ttl directive
 DOC_END
 
 COMMENT_START
@@ -1513,6 +1517,10 @@ DOC_START
 		     max-conn=n
 		     htcp
 		     htcp-oldsquid
+		     htcp-no-clr
+		     htcp-no-purge-clr
+		     htcp-only-clr
+		     htcp-forward-clr
 		     originserver
 		     userhash
 		     sourcehash
@@ -1655,7 +1663,21 @@ DOC_START
 		     use 'htcp-oldsquid' to send HTCP to old Squid versions
 		     You must also allow this Squid htcp_access and
 		     http_access in the peer Squid configuration.
-
+		
+		     use 'htcp-no-clr' to send HTCP to the neighbor but without
+		     sending any CLR requests.  This cannot be used with
+		     htcp-only-clr.
+		
+		     use 'htcp-no-purge-clr' to send HTCP to the neighbor
+		     including CLRs but only when they do not result from
+		     PURGE requests.
+		
+		     use 'htcp-only-clr' to send HTCP to the neighbor but ONLY
+		     CLR requests.  This cannot be used with htcp-no-clr.
+		
+		     use 'htcp-forward-clr' to forward any HTCP CLR requests
+		     this proxy receives to the peer.
+		
 		     'originserver' causes this parent peer to be contacted as
 		     a origin server. Meant to be used in accelerator setups.
 
@@ -3329,6 +3351,41 @@ DOC_START
 	no limit imposed.
 DOC_END
 
+NAME: request_body_delay_forward_size
+COMMENT: bytes allow|deny acl acl ..
+TYPE: body_size_t
+DEFAULT: none
+DEFAULT_IF_NONE: 0 allow all
+LOC: Config.RequestBodyDelayForwardSize
+DOC_START
+	By default, Squid will begin forwarding a request immediately, before
+	any request body data is available. Some application servers may have
+	a high per-open-connection cost and thus holding open a connection
+	whilst waiting for the request body data may cause the application
+	server to behave poorly.
+
+	This option delays forwarding the request until a certain amount
+	of request body data is available.
+
+	The default is to immediately forward the request without waiting for
+	any request body to be received. This is the old default.
+
+	To use this feature, configure an ACL to match on the request (so
+	URL, request headers, etc - not the reply headers, they're not available
+	here) and an amount of data to "hold onto" before forwarding occurs.
+
+	If the whole request body is read in before the specified limit is reached,
+	the request will be forwarded.
+
+	Make sure that you configure a default "allow all" rule if you set any rules
+	to delay forwarding so request forwarding will still happen if no rules are
+	matched.
+
+	ie,
+
+	request_body_delay_forward_size 0 allow all
+DOC_END
+
 NAME: broken_posts
 TYPE: acl_access
 DEFAULT: none
@@ -3350,6 +3407,29 @@ DOC_START
 Example:
  acl buggy_server url_regex ^http://....
  broken_posts allow buggy_server
+DOC_END
+
+NAME: upgrade_http0.9
+TYPE: acl_access
+DEFAULT: none
+LOC: Config.accessList.upgrade_http09
+DOC_START
+	This access list controls when HTTP/0.9 responses is upgraded
+	to our current HTTP version. The default is to always upgrade.
+
+	Some applications expect to be able to respond with non-HTTP
+	responses and clients gets confused if the response is upgraded.
+	For example SHOUTcast servers used for mp3 streaming.
+
+	To enable some flexibility in detection of such applications
+	the first line of the response is available in the internal header
+	X-HTTP09-First-Line for use in the rep_header acl.
+
+NOCOMMENT_START
+# Don't upgrade ShoutCast responses to HTTP
+acl shoutcast rep_header X-HTTP09-First-Line ^ICY.[0-9]
+upgrade_http0.9 deny shoutcast
+NOCOMMENT_END
 DOC_END
 
 NAME: via
@@ -3404,6 +3484,18 @@ DOC_START
 	and reliable and returns mostly cacheable information.
 DOC_END
 
+NAME: collapsed_forwarding_timeout
+COMMENT: (seconds)
+TYPE: int
+LOC: Config.collapsed_forwarding_timeout
+DEFAULT: 30
+DOC_START
+    When collapsed_forwarding is enabled, subsequent requests for a
+    given URI will queued after the first one, subject to a timeout.
+    If the first request does not return before this timeout, the 
+    subsequent requests will be released and go forward.
+DOC_END
+
 NAME: refresh_stale_hit
 COMMENT: (time)
 TYPE: time_t
@@ -3455,15 +3547,6 @@ DOC_START
 	HTTP/1.1 is fully implemented.
 	WARNING: This may eventually cause some varying
 	objects not intended for caching to get cached.
-DOC_END
-
-NAME: extension_methods
-TYPE: extension_method
-LOC: RequestMethods
-DEFAULT: none
-DOC_START
-	Squid only knows about standardized HTTP request methods.
-	You can add up to 20 additional "extension" methods here.
 DOC_END
 
 NAME: request_entities
@@ -3637,7 +3720,7 @@ DOC_START
 
 	When using the concurrency option, the protocol is changed by introducing
 	a query channel tag infront of the request/response. The query channel
-	tag is a number between 0 and concurrency−1.
+	tag is a number between 0 and concurrency-1.
 
 	FORMAT specifications:
 
@@ -3669,7 +3752,7 @@ DOC_START
 			present, the supplied value completely replaces
 			the cached value.
 
-	In the event of a helper−related error (e.g., overload), Squid
+	In the event of a helper-related error (e.g., overload), Squid
 	will always default to STALE.
 DOC_END
 
@@ -4958,15 +5041,18 @@ TYPE: string
 LOC: Config.errorDirectory
 DEFAULT: @DEFAULT_ERROR_DIR@
 DOC_START
-	If you wish to create your own versions of the default
-	(English) error files, either to customize them to suit your
-	language or company copy the template English files to another
-	directory and point this tag at them.
+	If you wish to create your own versions of the default files, to
+	customize them to suit your company copy the template files to
+	another directory and point this tag at them.
+
+	Current Language updates can be downloaded from:
+		http://www.squid-cache.org/Versions/langpack/
 
 	The squid developers are interested in making squid available in
 	a wide variety of languages. If you are making translations for a
 	langauge that Squid does not currently provide please consider
 	contributing your translation back to the project.
+	see http://wiki.squid-cache.org/Translations
 DOC_END
 
 NAME: error_map

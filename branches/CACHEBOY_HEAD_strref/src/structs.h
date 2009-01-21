@@ -453,6 +453,7 @@ struct _SquidConfig {
     squid_off_t maxRequestHeaderSize;
     squid_off_t maxReplyHeaderSize;
     dlink_list RequestBodySize;
+    dlink_list RequestBodyDelayForwardSize;
     dlink_list ReplyBodySize;
     dlink_list DelayBodySize;
     struct {
@@ -680,6 +681,7 @@ struct _SquidConfig {
 	int ignore_expect_100;
 	int WIN32_IpAddrChangeMonitor;
     } onoff;
+    int collapsed_forwarding_timeout;
     acl *aclList;
     struct {
 	acl_access *http;
@@ -714,6 +716,7 @@ struct _SquidConfig {
 #endif
 	acl_access *vary_encoding;
 	acl_access *auth_ip_shortcircuit;
+	acl_access *upgrade_http09;
     } accessList;
     acl_deny_info_list *denyInfoList;
     struct _authConfig {
@@ -932,10 +935,19 @@ struct _HierarchyLogEntry {
     struct timeval store_complete_stop;
 };
 
+struct _method_t {
+    method_code_t code;
+    const char *string;
+    struct {
+	unsigned int cachable:1;
+	unsigned int purges_all:1;
+    } flags;
+};
+
 struct _AccessLogEntry {
     const char *url;
     struct {
-	method_t method;
+	method_t *method;
 	int code;
 	const char *content_type;
 	http_version_t version;
@@ -1015,6 +1027,7 @@ struct _clientHttpRequest {
     } redirect;
     dlink_node active;
     squid_off_t maxRequestBodySize;
+    squid_off_t maxRequestBodyDelayForwardSize;
     squid_off_t maxBodySize;
     squid_off_t delayMaxBodySize;
     ushort delayAssignedPool;
@@ -1030,8 +1043,10 @@ struct _ConnStateData {
 	size_t size;
     } in;
     struct {
+	int delayed;		/* are we delaying forwarding this? */
 	squid_off_t size_left;	/* How much body left to process */
 	request_t *request;	/* Parameters passed to clientReadBody */
+	clientHttpRequest *delay_http;	/* http request to kickstart on delay */
 	char *buf;
 	size_t bufsize;
 	CBCB *callback;
@@ -1211,6 +1226,10 @@ struct _peer {
 #if USE_HTCP
 	unsigned int htcp:1;
 	unsigned int htcp_oldsquid:1;
+	unsigned int htcp_no_clr:1;
+	unsigned int htcp_no_purge_clr:1;
+	unsigned int htcp_only_clr:1;
+	unsigned int htcp_forward_clr:1;
 #endif
 	unsigned int no_netdb_exchange:1;
 #if DELAY_POOLS
@@ -1457,7 +1476,7 @@ struct _RemovalPurgeWalker {
 
 /* This structure can be freed while object is purged out from memory */
 struct _MemObject {
-    method_t method;
+    method_t *method;
     char *url;
     const char *store_url;
     mem_hdr data_hdr;
@@ -1611,6 +1630,7 @@ struct _request_flags {
     unsigned int cache_validation:1;	/* This request is an internal cache validation */
     unsigned int no_direct:1;	/* Deny direct forwarding unless overriden by always_direct. Used in accelerator mode */
     unsigned int chunked_response:1;	/* Send the response using chunked encoding */
+    unsigned int delayed:1;	/* Delay initial request forwarding */
 };
 
 struct _link_list {
@@ -1640,7 +1660,7 @@ struct _storeIOState {
 };
 
 struct _request_t {
-    method_t method;
+    method_t *method;
     protocol_t protocol;
     char login[MAX_LOGIN_SZ];
     char host[SQUIDHOSTNAMELEN + 1];
@@ -2114,12 +2134,6 @@ struct _VaryData {
     char *key;
     char *etag;
     Array etags;
-};
-
-/* request method str stuff; should probably be a String type.. */
-struct rms {
-    char *str;
-    int len;
 };
 
 struct _rewritetoken {
