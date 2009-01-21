@@ -33,3 +33,5 @@ Subversion merging is annoying.
   * r13712: CACHEBOY_HEAD: rev 13631:13640 from trunk
   * r13713: CACHEBOY_HEAD: rev 13640:13646 from trunk
   * r13717: CACHEBOY_HEAD: rev 13646:13653 from trunk
+
+  * r13740 : CACHEBOY_HEAD_strref: rev 13687:13739 from CACHEBOY_HEAD
