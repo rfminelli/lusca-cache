@@ -135,9 +135,6 @@
 
 const MemBuf MemBufNull = MemBufNULL;
 
-/* local routines */
-static void memBufGrow(MemBuf * mb, mb_size_t min_cap);
-
 
 /* init with defaults */
 void
@@ -191,7 +188,10 @@ memBufReset(MemBuf * mb)
     } else {
 	assert(!mb->stolen);	/* not frozen */
 	/* reset */
+#if 0
 	memset(mb->buf, 0, mb->capacity);
+#endif
+	mb->buf[0] = '\0';
 	mb->size = 0;
     }
 }
@@ -317,7 +317,7 @@ memBufFreeFunc(MemBuf * mb)
 }
 
 /* grows (doubles) internal buffer to satisfy required minimal capacity */
-static void
+void
 memBufGrow(MemBuf * mb, mb_size_t min_cap)
 {
     size_t new_cap;

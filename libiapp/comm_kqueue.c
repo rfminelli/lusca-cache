@@ -182,7 +182,7 @@ static int
 do_comm_select(int msec)
 {
     int i;
-    int num;
+    int num, saved_errno;
     struct timespec timeout;
 
     timeout.tv_sec = msec / 1000;
@@ -190,10 +190,12 @@ do_comm_select(int msec)
 
     CommStats.syscalls.polls++;
     num = kevent(kq, kqlst, kqoff, ke, kqmax, &timeout);
+    saved_errno = errno;
+    getCurrentTime();
+    debug(5, 5) ("do_comm_select: %d fds ready\n", num);
     kqoff = 0;
     if (num < 0) {
-	getCurrentTime();
-	if (ignoreErrno(errno))
+	if (ignoreErrno(saved_errno))
 	    return COMM_OK;
 
 	debug(5, 1) ("comm_select: kevent failure: %s\n", xstrerror());

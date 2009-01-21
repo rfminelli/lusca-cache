@@ -46,7 +46,7 @@ comm_ips_bind(int fd, sqaddr_t *a)
 
 	struct in_tproxy itp;
 
-        itp.v.addr.faddr.s_addr = sqinet_get_v4_addr(a);
+        itp.v.addr.faddr.s_addr = sqinet_get_v4_inaddr(a);
 	/* XXX the "port" is 0 here - so tproxy2 selects an outbound port rather than also spoofing the port */
         itp.v.addr.fport = 0;
         
@@ -86,7 +86,7 @@ comm_ips_keepCapabilities(void)
 #endif
 }
 
-static void
+void
 comm_ips_restoreCapabilities(int keep)
 {
 #if defined(_SQUID_LINUX_) && HAVE_SYS_CAPABILITY_H

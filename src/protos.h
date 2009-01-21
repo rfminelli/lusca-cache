@@ -48,7 +48,7 @@ extern void fvdbCountVia(const char *key);
 extern void fvdbCountForw(const char *key);
 #endif
 #if HEADERS_LOG
-extern void headersLog(int cs, int pq, method_t m, void *data);
+extern void headersLog(int cs, int pq, method_t * m, void *data);
 #endif
 char *log_quote(const char *header);
 
@@ -173,7 +173,7 @@ extern int gopherCachable(const request_t *);
 extern void whoisStart(FwdState *);
 
 /* http.c */
-extern int httpCachable(method_t);
+extern int httpCachable(method_t *);
 extern void httpStart(FwdState *);
 extern int httpBuildRequestPrefix(request_t * request,
     request_t * orig_request,
@@ -256,13 +256,13 @@ extern const char *httpReplyContentType(const HttpReply * rep);
 extern time_t httpReplyExpires(const HttpReply * rep);
 extern int httpReplyHasCc(const HttpReply * rep, http_hdr_cc_type type);
 extern void httpRedirectReply(HttpReply *, http_status, const char *);
-extern squid_off_t httpReplyBodySize(method_t, const HttpReply *);
-extern squid_off_t httpDelayBodySize(method_t, const HttpReply *);
+extern squid_off_t httpReplyBodySize(method_t *, const HttpReply *);
+extern squid_off_t httpDelayBodySize(method_t *, const HttpReply *);
 extern HttpReply *httpReplyClone(HttpReply * src);
 
 /* Http Request */
 extern void requestInitMem(void);
-extern request_t *requestCreate(method_t, protocol_t, const char *urlpath);
+extern request_t *requestCreate(method_t *, protocol_t, const char *urlpath);
 extern void requestDestroy(request_t *);
 extern request_t *requestLink(request_t *);
 extern void requestUnlink(request_t *);
@@ -376,6 +376,9 @@ extern void neighborAddAcl(const char *, const char *);
 extern void neighborsUdpAck(const cache_key *, icp_common_t *, const struct sockaddr_in *);
 extern void neighborAdd(const char *, const char *, int, int, int, int, int);
 extern void neighbors_init(void);
+#if USE_HTCP
+extern void neighborsHtcpClear(StoreEntry *, const char *, request_t *, method_t *, htcp_clr_reason);
+#endif
 extern peer *peerFindByName(const char *);
 extern peer *peerFindByNameAndPort(const char *, unsigned short);
 extern peer *getDefaultParent(request_t * request);
@@ -568,10 +571,12 @@ extern void memReport(StoreEntry * e);
 extern StoreEntry *new_StoreEntry(int, const char *);
 extern void storeEntrySetStoreUrl(StoreEntry * e, const char *store_url);
 extern StoreEntry *storeGet(const cache_key *);
-extern StoreEntry *storeGetPublic(const char *uri, const method_t method);
+extern StoreEntry *storeGetPublic(const char *uri, const method_t * method);
+extern StoreEntry *storeGetPublicByCode(const char *uri, const method_code_t code);
 extern StoreEntry *storeGetPublicByRequest(request_t * request);
-extern StoreEntry *storeGetPublicByRequestMethod(request_t * request, const method_t method);
-extern StoreEntry *storeCreateEntry(const char *, request_flags, method_t);
+extern StoreEntry *storeGetPublicByRequestMethod(request_t * request, const method_t * method);
+extern StoreEntry *storeGetPublicByRequestMethodCode(request_t * request, const method_code_t code);
+extern StoreEntry *storeCreateEntry(const char *, request_flags, method_t *);
 extern void storeSetPublicKey(StoreEntry *);
 extern void storeComplete(StoreEntry *);
 extern void storeInitMem(void);
@@ -582,6 +587,7 @@ extern void storeAbort(StoreEntry *);
 extern void storeAppend(StoreEntry *, const char *, int);
 extern void storeLockObjectDebug(StoreEntry *, const char *file, const int line);
 extern void storeRelease(StoreEntry *);
+extern void storePurgeEntriesByUrl(request_t * req, const char *url);
 extern int storeUnlockObjectDebug(StoreEntry *, const char *file, const int line);
 extern const char *storeLookupUrl(const StoreEntry * e);
 #define	storeLockObject(a) storeLockObjectDebug(a, __FILE__, __LINE__);
@@ -666,10 +672,10 @@ extern cache_key *storeKeyCopy(cache_key *, const cache_key *);
 extern void storeKeyFree(const cache_key *);
 extern const cache_key *storeKeyScan(const char *);
 extern const char *storeKeyText(const cache_key *);
-extern const cache_key *storeKeyPublic(const char *, const method_t);
+extern const cache_key *storeKeyPublic(const char *, const method_t *);
 extern const cache_key *storeKeyPublicByRequest(request_t *);
-extern const cache_key *storeKeyPublicByRequestMethod(request_t *, const method_t);
-extern const cache_key *storeKeyPrivate(const char *, method_t, int);
+extern const cache_key *storeKeyPublicByRequestMethod(request_t *, const method_t *);
+extern const cache_key *storeKeyPrivate(const char *, method_t *, int);
 extern int storeKeyHashBuckets(int);
 extern int storeKeyNull(const cache_key *);
 extern void storeKeyInit(void);
@@ -807,10 +813,16 @@ extern void unlinkdUnlink(const char *);
 extern char *url_convert_hex(char *org_url, int allocate);
 extern char *url_escape(const char *url);
 extern protocol_t urlParseProtocol(const char *);
-extern method_t urlParseMethod(const char *, int len);
+extern method_t *urlMethodGet(const char *, int len);
+extern method_t *urlMethodGetKnown(const char *, int len);
+extern method_t *urlMethodGetKnownByCode(method_code_t);
+extern method_t *urlMethodDup(method_t *);
+extern void urlMethodFree(method_t *);
 extern void urlInitialize(void);
-extern request_t *urlParse(method_t, char *);
+extern request_t *urlParse(method_t *, char *);
 extern const char *urlCanonical(request_t *);
+extern int urlIsRelative(const char *);
+extern char *urlMakeAbsolute(request_t *, const char *);
 extern char *urlRInternal(const char *host, u_short port, const char *dir, const char *name);
 extern char *urlInternal(const char *dir, const char *name);
 extern int matchDomainName(const char *host, const char *domain);
@@ -818,9 +830,6 @@ extern int urlCheckRequest(const request_t *);
 extern int urlDefaultPort(protocol_t p);
 extern char *urlCanonicalClean(const request_t *);
 extern char *urlHostname(const char *url);
-extern void parse_extension_method(rms_t(*foo)[]);
-extern void free_extension_method(rms_t(*foo)[]);
-extern void dump_extension_method(StoreEntry * entry, const char *name, rms_t * methods);
 
 extern void useragentOpenLog(void);
 extern void useragentRotateLog(void);
@@ -871,6 +880,7 @@ void keepCapabilities(void);
 #if USE_HTCP
 extern void htcpInit(void);
 extern void htcpQuery(StoreEntry * e, request_t * req, peer * p);
+extern void htcpClear(StoreEntry * e, const char *uri, request_t * req, method_t *, peer * p, htcp_clr_reason reason);
 extern void htcpSocketShutdown(void);
 extern void htcpSocketClose(void);
 #endif
@@ -1050,7 +1060,7 @@ extern int errorMapStart(const errormap * map, request_t * req, HttpReply * repl
 /* ETag support */
 void storeLocateVaryDone(VaryData * data);
 void storeLocateVary(StoreEntry * e, int offset, const char *vary_data, String accept_encoding, STLVCB * callback, void *cbdata);
-void storeAddVary(const char *url, const method_t method, const cache_key * key, const char *etag, const char *vary, const char *vary_headers, const char *accept_encoding);
+void storeAddVary(const char *url, method_t * method, const cache_key * key, const char *etag, const char *vary, const char *vary_headers, const char *accept_encoding);
 
 rewritetoken *rewriteURLCompile(const char *urlfmt);
 char *internalRedirectProcessURL(clientHttpRequest * req, rewritetoken * head);

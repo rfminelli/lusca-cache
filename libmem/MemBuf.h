@@ -49,5 +49,6 @@ extern void memBufVPrintf(MemBuf * mb, const char *fmt, va_list ap);
 extern FREE *memBufFreeFunc(MemBuf * mb);
 /* puts report on MemBuf _module_ usage into mb */
 extern void memBufReport(MemBuf * mb);
+extern void memBufGrow(MemBuf * mb, mb_size_t min_cap);
 
 #endif

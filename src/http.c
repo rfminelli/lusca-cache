@@ -53,8 +53,32 @@ static void httpCacheNegatively(StoreEntry *);
 static void httpMakePrivate(StoreEntry *);
 static void httpMakePublic(StoreEntry *);
 static int httpCachableReply(HttpStateData *);
-static void httpMaybeRemovePublic(StoreEntry *, http_status);
+static void httpMaybeRemovePublic(StoreEntry *, HttpReply *);
 static int peer_supports_connection_pinning(HttpStateData * httpState);
+
+static int
+httpUrlHostsMatch(const char *url1, const char *url2)
+{
+    const char *host1 = strchr(url1, ':');
+    const char *host2 = strchr(url2, ':');
+
+    if (host1 && host2) {
+	do {
+	    ++host1;
+	    ++host2;
+	} while (*host1 == '/' && *host2 == '/');
+
+	if (!*host1) {
+	    return (0);
+	}
+	while (*host1 && *host1 != '/' && *host1 == *host2) {
+	    ++host1;
+	    ++host2;
+	}
+	return (*host1 == *host2);
+    }
+    return (0);
+}
 
 static void
 httpStateFree(int fd, void *data)
@@ -85,13 +109,10 @@ httpStateFree(int fd, void *data)
 }
 
 int
-httpCachable(method_t method)
+httpCachable(method_t * method)
 {
-    /* GET and HEAD are cachable. Others are not. */
-    if (method != METHOD_GET && method != METHOD_HEAD)
-	return 0;
-    /* else cachable */
-    return 1;
+
+    return (method->flags.cachable);
 }
 
 static void
@@ -136,11 +157,47 @@ httpCacheNegatively(StoreEntry * entry)
 }
 
 static void
-httpMaybeRemovePublic(StoreEntry * e, http_status status)
+httpRemovePublicByHeader(request_t * req, HttpReply * reply, http_hdr_type header)
 {
+    const char *hdrUrl;
+    char *absUrl;
+
+    absUrl = NULL;
+    hdrUrl = httpHeaderGetStr(&reply->header, header);
+    if (hdrUrl == NULL) {
+	return;
+    }
+    /*
+     * If the URL is relative, make it absolute so we can find it.
+     * If it's absolute, make sure the host parts match to avoid DOS attacks
+     * as per RFC 2616 13.10.
+     */
+    if (urlIsRelative(hdrUrl)) {
+	absUrl = urlMakeAbsolute(req, hdrUrl);
+	if (absUrl != NULL) {
+	    hdrUrl = absUrl;
+	}
+    } else if (!httpUrlHostsMatch(hdrUrl, urlCanonical(req))) {
+	return;
+    }
+    storePurgeEntriesByUrl(req, hdrUrl);
+
+    if (absUrl != NULL) {
+	safe_free(absUrl);
+    }
+}
+
+static void
+httpMaybeRemovePublic(StoreEntry * e, HttpReply * reply)
+{
+    int status;
     int remove = 0;
     int forbidden = 0;
     StoreEntry *pe;
+    request_t *req;
+    const char *reqUrl;
+
+    status = reply->sline.status;
     switch (status) {
     case HTTP_OK:
     case HTTP_NON_AUTHORITATIVE_INFORMATION:
@@ -188,35 +245,24 @@ httpMaybeRemovePublic(StoreEntry * e, http_status status)
      * changed.
      */
     if (e->mem_obj->request)
-	pe = storeGetPublicByRequestMethod(e->mem_obj->request, METHOD_HEAD);
+	pe = storeGetPublicByRequestMethodCode(e->mem_obj->request, METHOD_HEAD);
     else
-	pe = storeGetPublic(e->mem_obj->url, METHOD_HEAD);
+	pe = storeGetPublicByCode(e->mem_obj->url, METHOD_HEAD);
     if (pe != NULL && e != pe) {
+#if USE_HTCP
+	neighborsHtcpClear(e, NULL, e->mem_obj->request, urlMethodGetKnownByCode(METHOD_HEAD), HTCP_CLR_INVALIDATION);
+#endif
 	storeRelease(pe);
     }
     if (forbidden)
 	return;
-    switch (e->mem_obj->method) {
-    case METHOD_PUT:
-    case METHOD_DELETE:
-    case METHOD_PROPPATCH:
-    case METHOD_MKCOL:
-    case METHOD_MOVE:
-    case METHOD_BMOVE:
-    case METHOD_BDELETE:
-	/*
-	 * Remove any cached GET object if it is beleived that the
-	 * object may have changed as a result of other methods
-	 */
-	if (e->mem_obj->request)
-	    pe = storeGetPublicByRequestMethod(e->mem_obj->request, METHOD_GET);
-	else
-	    pe = storeGetPublic(e->mem_obj->url, METHOD_GET);
-	if (pe != NULL) {
-	    assert(e != pe);
-	    storeRelease(pe);
-	}
-	break;
+    if (e->mem_obj->method->flags.purges_all && status < 400) {
+	req = e->mem_obj->request;
+	reqUrl = urlCanonical(req);
+	debug(88, 5) ("httpMaybeRemovePublic: purging due to %s %s\n", req->method->string, reqUrl);
+	storePurgeEntriesByUrl(req, reqUrl);
+	httpRemovePublicByHeader(req, reply, HDR_LOCATION);
+	httpRemovePublicByHeader(req, reply, HDR_CONTENT_LOCATION);
     }
 }
 
@@ -229,7 +275,7 @@ httpCachableReply(HttpStateData * httpState)
     const char *v;
 #if HTTP_VIOLATIONS
     const refresh_t *R = NULL;
-    /* This strange looking define first looks up the frefresh pattern
+    /* This strange looking define first looks up the refresh pattern
      * and then checks if the specified flag is set. The main purpose
      * of this is to simplify the refresh pattern lookup
      */
@@ -411,88 +457,46 @@ httpMakeVaryMark(request_t * request, HttpReply * reply)
     return request->vary_headers;
 }
 
-/* rewrite this later using new interfaces @?@ */
-static size_t
-httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
+static void
+httpSetHttp09Header(HttpStateData *httpState, HttpReply *reply)
+{
+	char *t, *t2;
+
+	debug(11, 3) ("httpSetHttp09Header: Non-HTTP-compliant header: '%s'\n", httpState->reply_hdr.buf);
+	t = xstrdup(httpState->reply_hdr.buf);
+	t2 = strchr(t, '\n');
+	if (t2)
+	    *t2 = '\0';
+	t2 = strchr(t, '\r');
+	if (t2)
+	    *t2 = '\0';
+	httpHeaderPutStr(&reply->header, HDR_X_HTTP09_FIRST_LINE, t);
+	safe_free(t);
+}
+
+static void
+httpAppendReplyHeader(HttpStateData * httpState, const char *buf, int size)
+{
+    assert(! memBufIsNull(&httpState->reply_hdr));
+    memBufAppend(&httpState->reply_hdr, buf, size);
+}
+
+/*
+ * Handle a (mostly!) valid response; setup internal header structures
+ * in preparation for handling the reply.
+ *
+ * This function is a mash of both transfer related information (TE,
+ * keepalive, etc) and caching related information. Ideally they'd be
+ * completely seperate so a non-caching HTTP client could be implemented
+ * and used elsewhere; that should happen later on and stuffed into
+ * a top-level library separate from the cache codebase.
+ */
+static int
+httpReplySetupStuff(HttpStateData *httpState)
 {
     StoreEntry *entry = httpState->entry;
-    size_t hdr_len;
-    size_t hdr_size;
-    size_t old_size;
-    size_t done;
     HttpReply *reply = entry->mem_obj->reply;
-    Ctx ctx = ctx_enter(entry->mem_obj->url);
-    debug(11, 3) ("httpProcessReplyHeader: key '%s'\n",
-	storeKeyText(entry->hash.key));
-    if (memBufIsNull(&httpState->reply_hdr))
-	memBufDefInit(&httpState->reply_hdr);
-    assert(httpState->reply_hdr_state == 0);
-    old_size = httpState->reply_hdr.size;
-    memBufAppend(&httpState->reply_hdr, buf, size);
-    hdr_len = httpState->reply_hdr.size;
-    if (hdr_len > 4 && strncmp(httpState->reply_hdr.buf, "HTTP/", 5)) {
-	debug(11, 3) ("httpProcessReplyHeader: Non-HTTP-compliant header: '%s'\n", httpState->reply_hdr.buf);
-	httpState->reply_hdr_state += 2;
-	httpState->chunk_size = -1;	/* Terminated by EOF */
-	httpState->reply_hdr.size = old_size;
-	httpBuildVersion(&reply->sline.version, 0, 9);
-	reply->sline.status = HTTP_INVALID_HEADER;
-	ctx_exit(ctx);
-	return 0;
-    }
-    hdr_size = headersEnd(httpState->reply_hdr.buf, hdr_len);
-    if (hdr_size)
-	hdr_len = hdr_size;
-    if (hdr_len > Config.maxReplyHeaderSize) {
-	debug(11, 1) ("httpProcessReplyHeader: Too large reply header\n");
-	storeAppend(entry, httpState->reply_hdr.buf, httpState->reply_hdr.size);
-	memBufClean(&httpState->reply_hdr);
-	reply->sline.status = HTTP_HEADER_TOO_LARGE;
-	httpState->reply_hdr_state += 2;
-	ctx_exit(ctx);
-	return size;
-    }
-    /* headers can be incomplete only if object still arriving */
-    if (!hdr_size) {
-	if (httpState->eof)
-	    hdr_size = hdr_len;
-	else {
-	    ctx_exit(ctx);
-	    return size;	/* headers not complete */
-	}
-    }
-    safe_free(entry->mem_obj->vary_headers);
-    safe_free(entry->mem_obj->vary_encoding);
-    /* Cut away any excess body data (only needed for debug?) */
-    memBufAppend(&httpState->reply_hdr, "\0", 1);
-    httpState->reply_hdr.buf[hdr_size] = '\0';
-    httpState->reply_hdr_state++;
-    assert(httpState->reply_hdr_state == 1);
-    httpState->reply_hdr_state++;
-    debug(11, 9) ("GOT HTTP REPLY HDR:\n---------\n%s\n----------\n",
-	httpState->reply_hdr.buf);
-    /* Parse headers into reply structure */
-    /* what happens if we fail to parse here? */
-    httpReplyParse(reply, httpState->reply_hdr.buf, hdr_size);
-    done = hdr_size - old_size;
-    /* Skip 1xx messages for now. Advertised in Via as an internal 1.0 hop */
-    if (reply->sline.status >= 100 && reply->sline.status < 200) {
-	memBufClean(&httpState->reply_hdr);
-	httpReplyReset(reply);
-	httpState->reply_hdr_state = 0;
-	ctx_exit(ctx);
-	if (done < size)
-	    return done + httpProcessReplyHeader(httpState, buf + done, size - done);
-	else
-	    return done;
-    }
-    storeAppend(entry, httpState->reply_hdr.buf, hdr_size);
-    if (reply->sline.status >= HTTP_INVALID_HEADER) {
-	debug(11, 3) ("httpProcessReplyHeader: Non-HTTP-compliant header: '%s'\n", httpState->reply_hdr.buf);
-	memBufClean(&httpState->reply_hdr);
-	ctx_exit(ctx);
-	return done;
-    }
+
     if (!peer_supports_connection_pinning(httpState))
 	httpState->orig_request->flags.no_connection_auth = 1;
     storeTimestampsSet(entry);
@@ -513,7 +517,7 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 		/* Can't handle other transfer-encodings */
 		debug(11, 1) ("Unexpected transfer encoding '%.*s'\n", strLen2(tr), strBuf2(tr));
 		reply->sline.status = HTTP_INVALID_HEADER;
-		return done;
+		return -1;
 	    }
 	}
 	stringClean(&tr);
@@ -567,7 +571,7 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	    EBIT_SET(entry->flags, ENTRY_REVALIDATE);
     }
     if (neighbors_do_private_keys && !Config.onoff.collapsed_forwarding)
-	httpMaybeRemovePublic(entry, reply->sline.status);
+	httpMaybeRemovePublic(entry, reply);
     if (httpState->flags.keepalive)
 	if (httpState->peer)
 	    httpState->peer->stats.n_keepalives_sent++;
@@ -587,6 +591,170 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	    debug(11, 3) ("%s's clock is skewed by %d seconds!\n",
 		httpState->request->host, skew);
     }
+    return 0;
+}
+
+/* rewrite this later using new interfaces @?@ */
+/*
+ * append the given data to the reply header buffer; handle the reply;
+ * return how many bytes were consumed as part of the reply headers.
+ *
+ * This function is a bit of a mess of a whole lot of different bits.
+ * The return value is the number of bytes consumed out of {buf,len}.
+ * Actual error handling is done by looking at the status line code,
+ * rather than the return value of this function.
+ *
+ * It should probably be split into a couple of chunks:
+ * + a function which appends some data into the reply buffer;
+ * + a function which attempts to parse the response and determine
+ *   how many bytes in the reply are actually from the reply itself;
+ * + a function which sets up all of the internal stuff for process
+ *   the reply.
+ *
+ * The current big issue is the recursive handling of the 100 support
+ * inside this function. It probably shouldn't be done in here.
+ */
+static size_t
+httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
+{
+    StoreEntry *entry = httpState->entry;
+    size_t hdr_len;
+    size_t hdr_size;
+    size_t old_size;
+    size_t done;
+    HttpReply *reply = entry->mem_obj->reply;
+    Ctx ctx = ctx_enter(entry->mem_obj->url);
+    debug(11, 3) ("httpProcessReplyHeader: key '%s'\n",
+	storeKeyText(entry->hash.key));
+    assert(! memBufIsNull(&httpState->reply_hdr));
+    assert(httpState->reply_hdr_state == 0);
+
+    /* Append the given data to the reply buffer */
+    old_size = httpState->reply_hdr.size;
+    if (size)
+        memBufAppend(&httpState->reply_hdr, buf, size);
+    hdr_len = httpState->reply_hdr.size;
+
+    /* Handle non-parsable responses as HTTP/0.9 responses - ie, no headers, just verbatim body */
+    if (hdr_len > 4 && strncmp(httpState->reply_hdr.buf, "HTTP/", 5)) {
+	/* This function sets a reply header to the first line of the reply */
+        httpSetHttp09Header(httpState, reply);
+	/* Set state to parsed */
+	httpState->reply_hdr_state += 2;
+	/* No chunk size - terminated via EOF */
+	httpState->chunk_size = -1;	/* Terminated by EOF */
+	/* Reply header size is whatever it was -before- this data came in - which is what, exactly? */
+	/* Any data appended in this call will be converted into the reply body later on */
+	httpState->reply_hdr.size = old_size;
+	httpBuildVersion(&reply->sline.version, 0, 9);
+	reply->sline.status = HTTP_INVALID_HEADER;
+	ctx_exit(ctx);
+	/* The "return 0" means "none of the given data was used in the reply headers; you can use it yourself */
+	/* So the calling code should storeAppend() it as the reply body */
+	return 0;
+    }
+
+    /* Try to delineate the entire reply status + header set */
+    hdr_size = headersEnd(httpState->reply_hdr.buf, hdr_len);
+    if (hdr_size)
+	hdr_len = hdr_size;
+
+    /* Is the reply buffer size (whether a full reply is contained or not) > max? */
+    if (hdr_len > Config.maxReplyHeaderSize) {
+	debug(11, 1) ("httpProcessReplyHeader: Too large reply header\n");
+	storeAppend(entry, httpState->reply_hdr.buf, httpState->reply_hdr.size);
+	memBufClean(&httpState->reply_hdr);
+	reply->sline.status = HTTP_HEADER_TOO_LARGE;
+	httpState->reply_hdr_state += 2;
+	ctx_exit(ctx);
+	return size;
+    }
+
+    /* Only return "headers not complete" if EOF hasn't yet been read on the socket ? */
+    /* headers can be incomplete only if object still arriving */
+    if (!hdr_size) {
+	if (httpState->eof)
+	    hdr_size = hdr_len;
+	else {
+	    ctx_exit(ctx);
+	    return size;	/* headers not complete */
+	}
+    }
+    /* Free any existing variant information before we add our own */
+    safe_free(entry->mem_obj->vary_headers);
+    safe_free(entry->mem_obj->vary_encoding);
+
+#if 0
+    /* Cut away any excess body data (only needed for debug?) */
+    memBufAppend(&httpState->reply_hdr, "\0", 1);
+    httpState->reply_hdr.buf[hdr_size] = '\0';
+#endif
+
+    httpState->reply_hdr_state++;
+    assert(httpState->reply_hdr_state == 1);
+    httpState->reply_hdr_state++;
+    debug(11, 9) ("GOT HTTP REPLY HDR:\n---------\n%.*s\n----------\n", hdr_size, httpState->reply_hdr.buf);
+
+    /* Parse headers into reply structure */
+    /* what happens if we fail to parse here? */
+    httpReplyParse(reply, httpState->reply_hdr.buf, hdr_size);
+
+    /*
+     * how many bytes are left over? The caller will then use those
+     * bytes as part of the reply body, not status+headers
+     */
+    /* If we're called with a 0 byte body, then treat this as "new httpReadReply()" related logic */
+    if (size == 0)
+        done = hdr_size;
+    else
+        done = hdr_size - old_size;
+
+    /* XXX this should be done elsewhere! By whatever calls this function! */
+    /* Skip 1xx messages for now. Advertised in Via as an internal 1.0 hop */
+    /* XXX size == 0 is the same as above; only the "new" httpReadReply() will pass it in */
+    if (size != 0 && reply->sline.status >= 100 && reply->sline.status < 200) {
+	memBufClean(&httpState->reply_hdr);
+	httpReplyReset(reply);
+	httpState->reply_hdr_state = 0;
+	ctx_exit(ctx);
+	if (done < size)
+	    return done + httpProcessReplyHeader(httpState, buf + done, size - done);
+	else
+	    return done;
+    }
+
+    /* Append the reply status and header, unparsed, to the store object */
+    storeAppend(entry, httpState->reply_hdr.buf, hdr_size);
+
+    /*
+     * If the reply was invalid, and it didn't pass HTTP/0.9 muster, clean the reply header data
+     * entirely and return how much of the data was consumed. Hopefully this means the data
+     * will simply be discarded by the caller and whatever is left is for the next reply?
+     * (But we don't currently support pipelining!)
+     */
+    if (reply->sline.status >= HTTP_INVALID_HEADER) {
+	debug(11, 3) ("httpProcessReplyHeader: Non-HTTP-compliant header: '%s'\n", httpState->reply_hdr.buf);
+	memBufClean(&httpState->reply_hdr);
+	ctx_exit(ctx);
+	return done;
+    }
+
+    /*
+     * After this point - "done" is set indicating how much data from the passed in buffer
+     * has been used as reply status+headers (and thus how much is left for the reply body);
+     * the reply has been parsed (but not error checked at all for some silly reason? :);
+     * HTTP/0.9 replies have been dealt with; 1xx status code messages have been skipped in
+     * the HTTP reply flow; the request status + headers have been appended to the store object.
+     * The reply -may- still be invalidated, but "done" doesn't change, nor is any other
+     * value returned.
+     */
+
+    /*
+     * So the below code is purely fiddling around with setting up the actual reply state
+     * based on stuff in the reply.
+     */
+    (void) httpReplySetupStuff(httpState);
+
     ctx_exit(ctx);
 #if HEADERS_LOG
     headersLog(1, 0, httpState->request->method, reply);
@@ -772,7 +940,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
     if (len > 0) {
 	debug(11, Config.onoff.relaxed_header_parser <= 0 || keep_alive ? 1 : 2)
 	    ("httpReadReply: Excess data from \"%s %s\"\n",
-	    RequestMethods[orig_request->method].str,
+	    orig_request->method->string,
 	    storeUrl(entry));
 	comm_close(fd);
 	return;
@@ -793,7 +961,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
      */
     if (!httpState->flags.request_sent) {
 	debug(11, 1) ("httpAppendBody: Request not yet fully sent \"%s %s\"\n",
-	    RequestMethods[orig_request->method].str,
+	    orig_request->method->string,
 	    storeUrl(entry));
 	keep_alive = 0;
     }
@@ -842,9 +1010,217 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 
 /* This will be called when data is ready to be read from fd.  Read until
  * error or connection closed. */
-/* XXX this function is too long! */
+
+/* THIS IS THE NEW ONE - completely untested, not used by default -adrian */
 static void
 httpReadReply(int fd, void *data)
+{
+    HttpStateData *httpState = data;
+    LOCAL_ARRAY(char, buf, SQUID_TCP_SO_RCVBUF + 1);
+    StoreEntry *entry = httpState->entry;
+    ssize_t len;
+    int bin;
+    int clen;
+    int done = 0;
+    int already_parsed = 0;
+    size_t read_sz = SQUID_TCP_SO_RCVBUF;
+#if DELAY_POOLS
+    delay_id delay_id;
+#endif
+    int buffer_filled;
+
+    if (EBIT_TEST(entry->flags, ENTRY_ABORTED)) {
+	comm_close(fd);
+	return;
+    }
+#if DELAY_POOLS
+    /* special "if" only for http (for nodelay proxy conns) */
+    if (delayIsNoDelay(fd))
+	delay_id = 0;
+    else
+	delay_id = delayMostBytesAllowed(entry->mem_obj, &read_sz);
+#endif
+
+    errno = 0;
+    CommStats.syscalls.sock.reads++;
+
+    if (memBufIsNull(&httpState->reply_hdr))
+	memBufInit(&httpState->reply_hdr, SQUID_TCP_SO_RCVBUF, SQUID_TCP_SO_RCVBUF * 16);
+
+    len = memBufFill(&httpState->reply_hdr, fd, XMIN(read_sz, SQUID_TCP_SO_RCVBUF));
+    buffer_filled = len == XMIN(read_sz, SQUID_TCP_SO_RCVBUF);
+    debug(11, 5) ("httpReadReply: FD %d: len %d.\n", fd, (int) len);
+
+    /* Len > 0? Account for data; here's where data would be appended to the reply buffer */
+    if (len > 0) {
+	fd_bytes(fd, len, FD_READ);
+#if DELAY_POOLS
+	delayBytesIn(delay_id, len);
+#endif
+	kb_incr(&statCounter.server.all.kbytes_in, len);
+	kb_incr(&statCounter.server.http.kbytes_in, len);
+	IOStats.Http.reads++;
+	for (clen = len - 1, bin = 0; clen; bin++)
+	    clen >>= 1;
+	IOStats.Http.read_hist[bin]++;
+	buf[len] = '\0';
+    }
+
+    /* Read size is 0 (EOF); we've not seen any data from the object; its a zero sized reply */
+    if (len == 0 && entry->mem_obj->inmem_hi == 0 && !httpState->reply_hdr.size) {
+	fwdFail(httpState->fwd, errorCon(ERR_ZERO_SIZE_OBJECT, HTTP_BAD_GATEWAY, httpState->fwd->request));
+	httpState->eof = 1;
+	comm_close(fd);
+    }
+    /* Read size is 0 (EOF); we've not seen any data from the object; its a zero sized reply */
+    else if (len == 0) {
+	/* Connection closed; retrieval done. */
+	httpState->eof = 1;
+	if (httpState->reply_hdr_state < 2) {
+	    /*
+	     * Yes Henrik, there is a point to doing this.  When we
+	     * called httpProcessReplyHeader() before, we didn't find
+	     * the end of headers, but now we are definately at EOF, so
+	     * we want to process the reply headers.
+	     */
+	    /* Fake an "end-of-headers" to work around such broken servers */
+	    httpAppendReplyHeader(httpState, "\r\n", 2);
+	}
+    }
+
+    /* Len < 0? Error */
+    if (len < 0) {
+	debug(11, 2) ("httpReadReply: FD %d: read failure: %s.\n",
+	    fd, xstrerror());
+	if (ignoreErrno(errno)) {
+	    commSetSelect(fd, COMM_SELECT_READ, httpReadReply, httpState, 0);
+	} else {
+	    ErrorState *err;
+	    err = errorCon(ERR_READ_ERROR, HTTP_BAD_GATEWAY, httpState->fwd->request);
+	    err->xerrno = errno;
+	    fwdFail(httpState->fwd, err);
+	    comm_close(fd);
+	}
+	return;
+    }
+
+    /* This will be replaced with some logic to only append and parse a data + offset */
+#if 0
+    /* Trim whitespace from the incoming buffer */
+    if (!httpState->reply_hdr.size && len > 0 && fd_table[fd].uses > 1) {
+	/* Skip whitespace */
+	while (len > 0 && xisspace(*buf))
+	    xmemmove(buf, buf + 1, len--);
+	if (len == 0) {
+	    /* Continue to read... */
+	    /* Timeout NOT increased. This whitespace was from previous reply */
+	    commSetSelect(fd, COMM_SELECT_READ, httpReadReply, httpState, 0);
+	    return;
+	}
+    }
+#endif
+
+    /*
+     * At this point; len > 0; there's no error; and we've put the data into the incoming
+     * buffer. Lets now try parsing the reply buffer as it stands.
+     */
+
+    /* Has the response been parsed? If not, buffer the StoreEntry and then try parsing it */
+    /* XXX Looping over the parsing until we run out of data or we've finished parsing the 1xx status messages */
+    if (httpState->reply_hdr_state < 2) {
+	storeBuffer(entry);
+        done = httpProcessReplyHeader(httpState, NULL, 0);
+    } else {
+	already_parsed = 1;	/* ie, we've already parsed this reply, no need to repeat stuff */
+    }
+
+    /* Is the header too large? Error out */
+    if (httpState->reply_hdr_state == 2 && entry->mem_obj->reply->sline.status == HTTP_HEADER_TOO_LARGE) {
+	    storeEntryReset(entry);
+	    fwdFail(httpState->fwd, errorCon(ERR_TOO_BIG, HTTP_BAD_GATEWAY, httpState->fwd->request));
+	    httpState->fwd->flags.dont_retry = 1;
+	    comm_close(fd);
+	    return;
+    }
+
+    /* Waiting for more data? Re-register for read and finish */
+    if (httpState->reply_hdr_state < 2) {
+	commSetTimeout(fd, Config.Timeout.read, NULL, NULL);
+	commSetSelect(fd, COMM_SELECT_READ, httpReadReply, httpState, 0);
+	return;
+    }
+
+    /* Invalid header, not HTTP/0.9? Error out */
+    if (httpState->reply_hdr_state == 2 && entry->mem_obj->reply->sline.status == HTTP_INVALID_HEADER &&
+	!(entry->mem_obj->reply->sline.version.major == 0 && entry->mem_obj->reply->sline.version.minor == 9)) {
+	    storeEntryReset(entry);
+	    fwdFail(httpState->fwd, errorCon(ERR_INVALID_RESP, HTTP_BAD_GATEWAY, httpState->fwd->request));
+            httpState->fwd->flags.dont_retry = 1;
+	    comm_close(fd);
+	    return;
+    }
+
+    /* Is it a HTTP/0.9 reply? Handle it */
+    if (! already_parsed && httpState->reply_hdr_state == 2 && entry->mem_obj->reply->sline.status == HTTP_INVALID_HEADER
+	&& (entry->mem_obj->reply->sline.version.major == 0 && entry->mem_obj->reply->sline.version.minor == 9)) {
+        /* This bit handles the HTTP/0.9 reply magic */
+	    /* The question is, what happens to the data thats ignored in the call to httpProcessReplyHeader()
+	     * during the HTTP/0.9 "reply.size = old_size" call? :) */
+	    MemBuf mb;
+	    HttpReply *reply = entry->mem_obj->reply;
+	    httpBuildVersion(&reply->sline.version, 0, 9);
+	    reply->sline.status = HTTP_OK;
+	    httpHeaderPutTime(&reply->header, HDR_DATE, squid_curtime);
+	    mb = httpReplyPack(reply);
+	    /* Append the packed "faked" reply status+headers */
+	    storeAppend(entry, mb.buf, mb.size);
+	    /* Append the reply buffer - that is now just "body" */
+	    storeAppend(entry, httpState->reply_hdr.buf, httpState->reply_hdr.size);
+	    memBufClean(&httpState->reply_hdr);
+	    httpReplyReset(reply);
+	    /* Parse the "faked" headers as the actual reply status+headers as the actual reply */
+	    httpReplyParse(reply, mb.buf, mb.size);
+	    memBufClean(&mb);
+    }
+
+    /* Is it just a straight EOF? Append the EOF.
+     * XXX Does the socket need to be closed here? Good question. What did the old code do? */
+    if (! already_parsed && httpState->reply_hdr_state == 2 && httpState->eof == 1) {
+	httpAppendBody(httpState, NULL, 0, -1);	/* EOF */
+	return;
+    }
+
+    if (already_parsed && httpState->reply_hdr_state == 2) {
+#if WIP_FWD_LOG
+	fwdStatus(httpState->fwd, s);
+#endif
+	/*
+	 * If its not a reply that we will re-forward, then
+	 * allow the client to get it.
+	 */
+	if (!fwdReforwardableStatus(entry->mem_obj->reply->sline.status))
+	    EBIT_CLR(entry->flags, ENTRY_FWD_HDR_WAIT);
+    }
+
+    /* Ok. Its been parsed if it needs to be, all other error conditions handled. */
+    assert(httpState->reply_hdr_state == 2);
+    /* lock the httpState; it may be freed by a call to httpAppendBody */
+    cbdataLock(httpState);
+    httpAppendBody(httpState, httpState->reply_hdr.buf + done, httpState->reply_hdr.size - done, buffer_filled);
+    if (cbdataValid(httpState))
+	memBufReset(&httpState->reply_hdr);
+    cbdataUnlock(httpState);
+    /* httpState may be cleared here */
+
+    /* httpAppendBody() reschedules for IO if required */
+    return;
+}
+
+/* This will be called when data is ready to be read from fd.  Read until
+ * error or connection closed. */
+/* XXX this function is too long! */
+static void
+httpReadReplyOld(int fd, void *data)
 {
     HttpStateData *httpState = data;
     LOCAL_ARRAY(char, buf, SQUID_TCP_SO_RCVBUF + 1);
@@ -968,17 +1344,21 @@ httpReadReply(int fd, void *data)
 		    comm_close(fd);
 		    return;
 		} else if (s == HTTP_INVALID_HEADER) {
+		    /* This bit handles the HTTP/0.9 reply magic */
+		    /* The question is, what happens to the data thats ignored in the call to httpProcessReplyHeader() during the HTTP/0.9 "reply.size = old_size" call? :) */
 		    MemBuf mb;
 		    HttpReply *reply = entry->mem_obj->reply;
-		    httpReplyReset(reply);
 		    httpBuildVersion(&reply->sline.version, 0, 9);
 		    reply->sline.status = HTTP_OK;
 		    httpHeaderPutTime(&reply->header, HDR_DATE, squid_curtime);
 		    mb = httpReplyPack(reply);
+		    /* Append the packed "faked" reply status+headers */
 		    storeAppend(entry, mb.buf, mb.size);
+		    /* Append the reply buffer - that is now just "body" */
 		    storeAppend(entry, httpState->reply_hdr.buf, httpState->reply_hdr.size);
 		    memBufClean(&httpState->reply_hdr);
 		    httpReplyReset(reply);
+		    /* Parse the "faked" headers as the actual reply status+headers as the actual reply */
 		    httpReplyParse(reply, mb.buf, mb.size);
 		    memBufClean(&mb);
 		}
@@ -997,6 +1377,7 @@ httpReadReply(int fd, void *data)
 		return;
 	    }
 	}
+        /* Append whatever part of the reply data wasn't "consumed" by a call to httpProcessReplyHeader() */
 	httpAppendBody(httpState, buf + done, len - done, buffer_filled);
 	return;
     }
@@ -1178,7 +1559,7 @@ httpBuildRequestHeader(request_t * request,
 		    httpHeaderAddClone(hdr_out, e);
 	    break;
 	case HDR_MAX_FORWARDS:
-	    if (orig_request->method == METHOD_TRACE) {
+	    if (orig_request->method->code == METHOD_TRACE) {
 		/* sacrificing efficiency over clarity, etc. */
 		const int hops = httpHeaderGetInt(hdr_in, HDR_MAX_FORWARDS);
 		if (hops > 0)
@@ -1396,9 +1777,8 @@ httpBuildRequestPrefix(request_t * request,
     http_state_flags flags)
 {
     const int offset = mb->size;
-    memBufPrintf(mb, "%.*s %.*s HTTP/1.%d\r\n",
-	RequestMethods[request->method].len,
-	RequestMethods[request->method].str,
+    memBufPrintf(mb, "%s %.*s HTTP/1.%d\r\n",
+        request->method->string,
 	strLen2(request->urlpath) ? strLen2(request->urlpath) : 1,
 	strLen2(request->urlpath) ? strBuf2(request->urlpath) : "/",
 	flags.http11);
@@ -1420,6 +1800,7 @@ httpBuildRequestPrefix(request_t * request,
     memBufAppend(mb, crlf, 2);
     return mb->size - offset;
 }
+
 /* This will be called when connect completes. Write request. */
 static void
 httpSendRequest(HttpStateData * httpState)
@@ -1493,8 +1874,7 @@ httpStart(FwdState * fwd)
     HttpStateData *httpState;
     request_t *proxy_req;
     request_t *orig_req = fwd->request;
-    debug(11, 3) ("httpStart: \"%s %s\"\n",
-	RequestMethods[orig_req->method].str,
+    debug(11, 3) ("httpStart: \"%s %s\"\n", orig_req->method->string,
 	storeUrl(fwd->entry));
     CBDATA_INIT_TYPE(HttpStateData);
     httpState = cbdataAlloc(HttpStateData);

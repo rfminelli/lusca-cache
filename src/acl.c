@@ -42,7 +42,6 @@ static void aclParseIpList(void *curlist);
 static void aclParseIntlist(void *curlist);
 static void aclParseWordList(void *curlist);
 static void aclParseProtoList(void *curlist);
-static void aclParseMethodList(void *curlist);
 static void aclParseTimeSpec(void *curlist);
 static void aclParsePortRange(void *curlist);
 static void aclDestroyTimeList(acl_time_data * data);
@@ -82,7 +81,6 @@ static wordlist *aclDumpRegexList(relist * data);
 static wordlist *aclDumpIntlistList(intlist * data);
 static wordlist *aclDumpIntRangeList(intrange * data);
 static wordlist *aclDumpProtoList(intlist * data);
-static wordlist *aclDumpMethodList(intlist * data);
 static SPLAYCMP aclIpAddrNetworkCompare;
 static SPLAYCMP aclIpNetworkCompare;
 static SPLAYCMP aclHostDomainCompare;
@@ -406,24 +404,6 @@ aclParseProtoList(void *curlist)
     while ((t = strtokFile())) {
 	protocol = urlParseProtocol(t);
         Tail = intlistAddTail(Tail, (int) protocol);
-        if (*Head == NULL)
-            *Head = Tail;
-    }
-}
-
-static void
-aclParseMethodList(void *curlist)
-{
-    intlist *Tail, **Head = curlist;
-    char *t = NULL;
-    int i;
-
-    for (Tail = *Head; Tail; Tail = Tail->next);
-    while ((t = strtokFile())) {
-	i = (int) urlParseMethod(t, strlen(t));
-	if (i == METHOD_NONE)
-	    self_destruct();
-        Tail = intlistAddTail(Tail, i);
         if (*Head == NULL)
             *Head = Tail;
     }
@@ -1090,7 +1070,7 @@ aclParseAclLine(acl ** head)
 	aclParseProtoList(&A->data);
 	break;
     case ACL_METHOD:
-	aclParseMethodList(&A->data);
+	aclParseWordList(&A->data);
 	break;
     case ACL_PROXY_AUTH:
 	if (authenticateSchemeCount() == 0) {
@@ -1729,6 +1709,19 @@ aclMatchWordList(wordlist * w, const char *word)
 }
 
 static int
+aclMatchWordListInsensitive(wordlist * w, const char *word)
+{
+    debug(28, 3) ("aclMatchWordListInsensitive: looking for '%s'\n", word);
+    while (w != NULL) {
+	debug(28, 3) ("aclMatchWordListInsensitive: checking '%s'\n", w->key);
+	if (!strcasecmp(w->key, word))
+	    return 1;
+	w = w->next;
+    }
+    return 0;
+}
+
+static int
 aclMatchType(acl_request_type * type, request_t * request)
 {
     if (type->accelerated && request->flags.accelerated)
@@ -1809,9 +1802,7 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
     case ACL_PROTO:
     case ACL_PROXY_AUTH:
     case ACL_PROXY_AUTH_REGEX:
-    case ACL_REP_MIME_TYPE:
     case ACL_REQ_MIME_TYPE:
-    case ACL_REP_HEADER:
     case ACL_REQ_HEADER:
     case ACL_URLPATH_REGEX:
     case ACL_URL_PORT:
@@ -1977,7 +1968,7 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	return aclMatchInteger(ae->data, r->protocol);
 	/* NOTREACHED */
     case ACL_METHOD:
-	return aclMatchInteger(ae->data, r->method);
+	return aclMatchWordListInsensitive(ae->data, r->method->string);
 	/* NOTREACHED */
     case ACL_BROWSER:
 	browser = httpHeaderGetStr(&checklist->request->header, HDR_USER_AGENT);
@@ -2569,11 +2560,6 @@ aclDestroyAcls(acl ** head)
 	case ACL_SRC_DOMAIN:
 	    splay_destroy(a->data, xfree);
 	    break;
-#if SQUID_SNMP
-	case ACL_SNMP_COMMUNITY:
-	    wordlistDestroy((wordlist **) (void *) &a->data);
-	    break;
-#endif
 #if USE_IDENT
 	case ACL_IDENT:
 	    aclFreeUserData(a->data);
@@ -2610,7 +2596,6 @@ aclDestroyAcls(acl ** head)
 	    aclDestroyHeader(a->data);
 	    break;
 	case ACL_PROTO:
-	case ACL_METHOD:
 	case ACL_SRC_ASN:
 	case ACL_DST_ASN:
 #if SRC_RTT_NOT_YET_FINISHED
@@ -2626,15 +2611,17 @@ aclDestroyAcls(acl ** head)
 	case ACL_MY_PORT:
 	    aclDestroyIntRange(a->data);
 	    break;
+#if SQUID_SNMP
+	case ACL_SNMP_COMMUNITY:
+#endif
+	case ACL_METHOD:
 	case ACL_MY_PORT_NAME:
+	case ACL_URLGROUP:
+	case ACL_HIER_CODE:
 	    wordlistDestroy((wordlist **) (void *) &a->data);
 	    break;
 	case ACL_EXTERNAL:
 	    aclDestroyExternal(&a->data);
-	    break;
-	case ACL_URLGROUP:
-	case ACL_HIER_CODE:
-	    wordlistDestroy((wordlist **) (void *) &a->data);
 	    break;
 #if USE_SSL
 	case ACL_USER_CERT:
@@ -2990,17 +2977,6 @@ aclDumpProtoList(intlist * data)
 }
 
 static wordlist *
-aclDumpMethodList(intlist * data)
-{
-    wordlist *W = NULL;
-    while (data != NULL) {
-	wordlistAdd(&W, RequestMethods[data->i].str);
-	data = data->next;
-    }
-    return W;
-}
-
-static wordlist *
 aclDumpType(acl_request_type * type)
 {
     wordlist *W = NULL;
@@ -3069,7 +3045,7 @@ aclDumpGeneric(const acl * a)
     case ACL_PROTO:
 	return aclDumpProtoList(a->data);
     case ACL_METHOD:
-	return aclDumpMethodList(a->data);
+	return wordlistDup(a->data);
 #if USE_ARP_ACL
     case ACL_SRC_ARP:
 	return aclDumpArpList(a->data);
@@ -3110,7 +3086,7 @@ aclPurgeMethodInUse(acl_access * a)
 	for (b = a->acl_list; b; b = b->next) {
 	    if (ACL_METHOD != b->acl->type)
 		continue;
-	    if (aclMatchInteger(b->acl->data, METHOD_PURGE))
+	    if (aclMatchWordList(b->acl->data, "PURGE"))
 		return 1;
 	}
     }
