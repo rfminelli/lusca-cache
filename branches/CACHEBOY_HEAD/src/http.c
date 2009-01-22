@@ -1003,7 +1003,6 @@ static void
 httpReadReply(int fd, void *data)
 {
     HttpStateData *httpState = data;
-    LOCAL_ARRAY(char, buf, SQUID_TCP_SO_RCVBUF + 1);
     StoreEntry *entry = httpState->entry;
     ssize_t len;
     int bin;
@@ -1011,6 +1010,7 @@ httpReadReply(int fd, void *data)
     int done = 0;
     int already_parsed = 0;
     size_t read_sz = SQUID_TCP_SO_RCVBUF;
+    int po = 0;
 #if DELAY_POOLS
     delay_id delay_id;
 #endif
@@ -1050,7 +1050,6 @@ httpReadReply(int fd, void *data)
 	for (clen = len - 1, bin = 0; clen; bin++)
 	    clen >>= 1;
 	IOStats.Http.read_hist[bin]++;
-	buf[len] = '\0';
     }
 
     /* Read size is 0 (EOF); we've not seen any data from the object; its a zero sized reply */
@@ -1092,20 +1091,19 @@ httpReadReply(int fd, void *data)
     }
 
     /* This will be replaced with some logic to only append and parse a data + offset */
-#if 0
     /* Trim whitespace from the incoming buffer */
     if (!httpState->reply_hdr.size && len > 0 && fd_table[fd].uses > 1) {
 	/* Skip whitespace */
-	while (len > 0 && xisspace(*buf))
-	    xmemmove(buf, buf + 1, len--);
-	if (len == 0) {
+	while (po < httpState->reply_hdr.size && xisspace(httpState->reply_hdr.buf[po])) {
+	    po++;
+	}
+	if (po == httpState->reply_hdr.size) {
 	    /* Continue to read... */
 	    /* Timeout NOT increased. This whitespace was from previous reply */
 	    commSetSelect(fd, COMM_SELECT_READ, httpReadReply, httpState, 0);
 	    return;
 	}
     }
-#endif
 
     /*
      * At this point; len > 0; there's no error; and we've put the data into the incoming
@@ -1116,7 +1114,7 @@ httpReadReply(int fd, void *data)
     /* XXX Looping over the parsing until we run out of data or we've finished parsing the 1xx status messages */
     if (httpState->reply_hdr_state < 2) {
 	storeBuffer(entry);
-        done = httpProcessReplyHeader(httpState, 0);
+        done = httpProcessReplyHeader(httpState, po);
     } else {
 	already_parsed = 1;	/* ie, we've already parsed this reply, no need to repeat stuff */
     }
@@ -1162,7 +1160,7 @@ httpReadReply(int fd, void *data)
 	    /* Append the packed "faked" reply status+headers */
 	    storeAppend(entry, mb.buf, mb.size);
 	    /* Append the reply buffer - that is now just "body" */
-	    storeAppend(entry, httpState->reply_hdr.buf, httpState->reply_hdr.size);
+	    storeAppend(entry, httpState->reply_hdr.buf + po, httpState->reply_hdr.size - po);
 	    memBufClean(&httpState->reply_hdr);
 	    httpReplyReset(reply);
 	    /* Parse the "faked" headers as the actual reply status+headers as the actual reply */
@@ -1193,7 +1191,7 @@ httpReadReply(int fd, void *data)
     assert(httpState->reply_hdr_state == 2);
     /* lock the httpState; it may be freed by a call to httpAppendBody */
     cbdataLock(httpState);
-    httpAppendBody(httpState, httpState->reply_hdr.buf + done, httpState->reply_hdr.size - done, buffer_filled);
+    httpAppendBody(httpState, httpState->reply_hdr.buf + po + done, httpState->reply_hdr.size - po - done, buffer_filled);
     if (cbdataValid(httpState))
 	memBufReset(&httpState->reply_hdr);
     cbdataUnlock(httpState);
