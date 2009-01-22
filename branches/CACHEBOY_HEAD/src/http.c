@@ -615,12 +615,11 @@ httpReplySetupStuff(HttpStateData *httpState)
  * inside this function. It probably shouldn't be done in here.
  */
 static size_t
-httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
+httpProcessReplyHeader(HttpStateData * httpState)
 {
     StoreEntry *entry = httpState->entry;
     size_t hdr_len;
     size_t hdr_size;
-    size_t old_size;
     size_t done;
     HttpReply *reply = entry->mem_obj->reply;
     Ctx ctx = ctx_enter(entry->mem_obj->url);
@@ -629,10 +628,6 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
     assert(! memBufIsNull(&httpState->reply_hdr));
     assert(httpState->reply_hdr_state == 0);
 
-    /* Append the given data to the reply buffer */
-    old_size = httpState->reply_hdr.size;
-    if (size)
-        memBufAppend(&httpState->reply_hdr, buf, size);
     hdr_len = httpState->reply_hdr.size;
 
     /* Handle non-parsable responses as HTTP/0.9 responses - ie, no headers, just verbatim body */
@@ -644,12 +639,10 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	/* No chunk size - terminated via EOF */
 	httpState->chunk_size = -1;	/* Terminated by EOF */
 	/* Reply header size is whatever it was -before- this data came in - which is what, exactly? */
-	/* Any data appended in this call will be converted into the reply body later on */
-	httpState->reply_hdr.size = old_size;
 	httpBuildVersion(&reply->sline.version, 0, 9);
 	reply->sline.status = HTTP_INVALID_HEADER;
 	ctx_exit(ctx);
-	/* The "return 0" means "none of the given data was used in the reply headers; you can use it yourself */
+	/* The "return 0" means "none of the data in the reply buffer is used as header; treat it all as body */
 	/* So the calling code should storeAppend() it as the reply body */
 	return 0;
     }
@@ -667,7 +660,7 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	reply->sline.status = HTTP_HEADER_TOO_LARGE;
 	httpState->reply_hdr_state += 2;
 	ctx_exit(ctx);
-	return size;
+	return hdr_len;
     }
 
     /* Only return "headers not complete" if EOF hasn't yet been read on the socket ? */
@@ -677,7 +670,7 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	    hdr_size = hdr_len;
 	else {
 	    ctx_exit(ctx);
-	    return size;	/* headers not complete */
+	    return hdr_len;	/* headers not complete */
 	}
     }
     /* Free any existing variant information before we add our own */
@@ -700,18 +693,15 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
     httpReplyParse(reply, httpState->reply_hdr.buf, hdr_size);
 
     /*
-     * how many bytes are left over? The caller will then use those
+     * how many bytes in the reply buffer are left over? The caller will then use those
      * bytes as part of the reply body, not status+headers
      */
-    /* If we're called with a 0 byte body, then treat this as "new httpReadReply()" related logic */
-    if (size == 0)
-        done = hdr_size;
-    else
-        done = hdr_size - old_size;
+    done = hdr_size;
 
     /* XXX this should be done elsewhere! By whatever calls this function! */
     /* Skip 1xx messages for now. Advertised in Via as an internal 1.0 hop */
     /* XXX size == 0 is the same as above; only the "new" httpReadReply() will pass it in */
+#if 0
     if (size != 0 && reply->sline.status >= 100 && reply->sline.status < 200) {
 	memBufClean(&httpState->reply_hdr);
 	httpReplyReset(reply);
@@ -722,6 +712,7 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	else
 	    return done;
     }
+#endif
 
     /* Append the reply status and header, unparsed, to the store object */
     storeAppend(entry, httpState->reply_hdr.buf, hdr_size);
@@ -1129,7 +1120,7 @@ httpReadReply(int fd, void *data)
     /* XXX Looping over the parsing until we run out of data or we've finished parsing the 1xx status messages */
     if (httpState->reply_hdr_state < 2) {
 	storeBuffer(entry);
-        done = httpProcessReplyHeader(httpState, NULL, 0);
+        done = httpProcessReplyHeader(httpState);
     } else {
 	already_parsed = 1;	/* ie, we've already parsed this reply, no need to repeat stuff */
     }
