@@ -1127,6 +1127,31 @@ httpReadReply(int fd, void *data)
 	    comm_close(fd);
 	    return;
     }
+    /* Also explicitly handle "reply is too large" here. */
+    /*
+     * This is important to prevent a DoS because in the old way, data would be moved around
+     * and the incoming buffer(s) wouldn't grow in case of whitespace and skipped 1xx replies.
+     * Since this isn't the case (in preparation for reference counted buffers), we need
+     * to be extra careful the other end isn't sending us too much.
+     */
+
+    /*
+     * XXX this may end up generating errors for previously working sites, if they somehow
+     * XXX send large enough whitespace and/or 1xx responses to tickle maxReplyHeaderSize.
+     * XXX this should really be dealt with somewhere else!
+     */
+
+    /*
+     * We should've handled parsing a reply by this point - if we haven't, and the incoming
+     * buffer is still too large, then error out.
+     */
+    if (httpState->reply_hdr_state < 2 && httpState->reply_hdr.size > Config.maxReplyHeaderSize) {
+	    storeEntryReset(entry);
+	    fwdFail(httpState->fwd, errorCon(ERR_TOO_BIG, HTTP_BAD_GATEWAY, httpState->fwd->request));
+	    httpState->fwd->flags.dont_retry = 1;
+	    comm_close(fd);
+	    return;
+    }
 
     /* Waiting for more data? Re-register for read and finish */
     if (httpState->reply_hdr_state < 2) {
