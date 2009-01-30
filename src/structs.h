@@ -580,6 +580,7 @@ struct _SquidConfig {
     int appendDomainLen;
     char *debugOptions;
     char *pidFilename;
+    char *netdbFilename;
     char *mimeTablePathname;
     char *etcHostsPath;
     char *visibleHostname;
@@ -2192,7 +2193,7 @@ struct _storeSwapLogData {
     squid_file_sz swap_file_sz;
     u_short refcount;
     u_short flags;
-    unsigned char key[MD5_DIGEST_CHARS];
+    unsigned char key[SQUID_MD5_DIGEST_LENGTH];
 };
 
 struct _storeSwapLogHeader {
@@ -2212,7 +2213,7 @@ struct _storeSwapLogDataOld {
     size_t swap_file_sz;
     u_short refcount;
     u_short flags;
-    unsigned char key[MD5_DIGEST_CHARS];
+    unsigned char key[SQUID_MD5_DIGEST_LENGTH];
 };
 
 #endif
