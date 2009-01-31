@@ -747,15 +747,25 @@ static void
 storeClientCopyHeadersCB(void *data, mem_node_ref nr, ssize_t size)
 {
     store_client *sc = data;
-    assert(sc->header_cbdata);
-    assert(sc->header_callback);
+    STHCB *cb = sc->header_callback;
+    void *cbdata = sc->header_cbdata;
+
+    assert(cb);
+    assert(cbdata);
+
+    /* Leave these in for now, just for debugging */
+#if 0
+    sc->header_callback = NULL;
+    sc->header_cbdata = NULL;
+#endif
+
     stmemNodeUnref(&nr);
     /* XXX should cbdata lock/unlock the cbdata? */
     if (size < 0 || !memHaveHeaders(sc->entry->mem_obj)) {
-	sc->header_callback(sc->header_cbdata, NULL);
+	cb(cbdata, NULL);
 	return;
     }
-    sc->header_callback(sc->header_cbdata, sc->entry->mem_obj->reply);
+    cb(cbdata, sc->entry->mem_obj->reply);
 }
 
 /*
