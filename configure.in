@@ -1,11 +1,11 @@
 dnl
-dnl  Configuration input file for Squid
+dnl  Configuration input file for Lusca
 dnl
 dnl  $Id: configure.in 12542 2008-04-13 13:27:23Z adrian.chadd $
 dnl
 dnl
 dnl
-AC_INIT(Cacheboy/Squid Web Proxy, CACHEBOY_1.6, http://www.cacheboy.net/, Cacheboy)
+AC_INIT(Lusca Web Proxy, LUSCA_1.0, http://www.lusca.org/, Lusca)
 AC_PREREQ(2.52)
 AM_CONFIG_HEADER(include/autoconf.h)
 AC_CONFIG_AUX_DIR(cfgaux)
