@@ -1034,8 +1034,8 @@ httpReadReply(int fd, void *data)
     if (memBufIsNull(&httpState->reply_hdr))
 	memBufInit(&httpState->reply_hdr, SQUID_TCP_SO_RCVBUF, SQUID_TCP_SO_RCVBUF * 16);
 
-    len = memBufFill(&httpState->reply_hdr, fd, XMIN(read_sz, SQUID_TCP_SO_RCVBUF));
-    buffer_filled = len == XMIN(read_sz, SQUID_TCP_SO_RCVBUF);
+    len = memBufFill(&httpState->reply_hdr, fd, read_sz);
+    buffer_filled = len == read_sz;
     debug(11, 5) ("httpReadReply: FD %d: len %d.\n", fd, (int) len);
 
     /* Len > 0? Account for data; here's where data would be appended to the reply buffer */
