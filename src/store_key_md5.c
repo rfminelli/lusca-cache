@@ -36,6 +36,7 @@
 #include "squid.h"
 
 static cache_key null_key[SQUID_MD5_DIGEST_LENGTH];
+static MemPool * pool_md5_key = NULL;
 
 const char *
 storeKeyText(const unsigned char *key)
@@ -92,36 +93,27 @@ storeKeyHashHash(const void *key, unsigned int n)
 }
 
 const cache_key *
-storeKeyPrivate(const char *url, method_t * method, int id)
+storeKeyPrivate(const char *url, method_t method, int id)
 {
     static cache_key digest[SQUID_MD5_DIGEST_LENGTH];
-    int zero = 0;
     SQUID_MD5_CTX M;
     assert(id > 0);
-    debug(20, 3) ("storeKeyPrivate: %s %s\n", method->string, url);
+    debug(20, 3) ("storeKeyPrivate: %s %s\n",
+	RequestMethods[method].str, url);
     SQUID_MD5Init(&M);
     SQUID_MD5Update(&M, (unsigned char *) &id, sizeof(id));
-    if (method == NULL) {
-	SQUID_MD5Update(&M, (unsigned char *) &zero, sizeof(int));
-    } else {
-	SQUID_MD5Update(&M, (unsigned char *) &method->code, sizeof(method->code));
-    }
+    SQUID_MD5Update(&M, (unsigned char *) &method, sizeof(method));
     SQUID_MD5Update(&M, (unsigned char *) url, strlen(url));
     SQUID_MD5Final(digest, &M);
     return digest;
 }
 
 const cache_key *
-storeKeyPublic(const char *url, const method_t * method)
+storeKeyPublic(const char *url, const method_t method)
 {
     static cache_key digest[SQUID_MD5_DIGEST_LENGTH];
-    unsigned char m;
+    unsigned char m = (unsigned char) method;
     SQUID_MD5_CTX M;
-    if (method == NULL) {
-	m = 0;
-    } else {
-	m = (unsigned char) method->code;
-    }
     SQUID_MD5Init(&M);
     SQUID_MD5Update(&M, &m, sizeof(m));
     SQUID_MD5Update(&M, (unsigned char *) url, strlen(url));
@@ -136,18 +128,12 @@ storeKeyPublicByRequest(request_t * request)
 }
 
 const cache_key *
-storeKeyPublicByRequestMethod(request_t * request, const method_t * method)
+storeKeyPublicByRequestMethod(request_t * request, const method_t method)
 {
     static cache_key digest[SQUID_MD5_DIGEST_LENGTH];
-    unsigned char m;
+    unsigned char m = (unsigned char) method;
     const char *url;
     SQUID_MD5_CTX M;
-
-    if (method == NULL) {
-	m = 0;
-    } else {
-	m = (unsigned char) method->code;
-    }
 
     if (request->store_url) {
 	url = request->store_url;
@@ -161,9 +147,9 @@ storeKeyPublicByRequestMethod(request_t * request, const method_t * method)
     if (request->vary_headers) {
 	SQUID_MD5Update(&M, (unsigned char *) "\0V", 2);
 	SQUID_MD5Update(&M, (unsigned char *) request->vary_headers, strlen(request->vary_headers));
-	if (strBuf(request->vary_encoding)) {
+	if (strIsNotNull(request->vary_encoding)) {
 	    SQUID_MD5Update(&M, (unsigned char *) "\0E", 2);
-	    SQUID_MD5Update(&M, (unsigned char *) strBuf(request->vary_encoding), strLen(request->vary_encoding));
+	    SQUID_MD5Update(&M, (unsigned char *) strBuf2(request->vary_encoding), strLen2(request->vary_encoding));
 	}
     }
     if (request->urlgroup) {
@@ -177,7 +163,7 @@ storeKeyPublicByRequestMethod(request_t * request, const method_t * method)
 cache_key *
 storeKeyDup(const cache_key * key)
 {
-    cache_key *dup = memAllocate(MEM_MD5_DIGEST);
+    cache_key *dup = memPoolAlloc(pool_md5_key);
     xmemcpy(dup, key, SQUID_MD5_DIGEST_LENGTH);
     return dup;
 }
@@ -192,7 +178,7 @@ storeKeyCopy(cache_key * dst, const cache_key * src)
 void
 storeKeyFree(const cache_key * key)
 {
-    memFree((void *) key, MEM_MD5_DIGEST);
+    memPoolFree(pool_md5_key, (void *) key);
 }
 
 int
@@ -216,5 +202,6 @@ storeKeyNull(const cache_key * key)
 void
 storeKeyInit(void)
 {
+    pool_md5_key = memPoolCreate("MD5 digest", SQUID_MD5_DIGEST_LENGTH);
     memset(null_key, '\0', SQUID_MD5_DIGEST_LENGTH);
 }

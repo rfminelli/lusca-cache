@@ -138,6 +138,9 @@ peerSourceHashSelectParent(request_t * request)
     double high_score = 0;
     const char *key = NULL;
 
+    if (n_sourcehash_peers == 0)
+	return NULL;
+
     key = inet_ntoa(request->client_addr);
 
     /* calculate hash key */

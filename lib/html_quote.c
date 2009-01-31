@@ -42,7 +42,6 @@
 #endif
 
 #include "util.h"
-#include "snprintf.h"
 
 /*  
  *  HTML defines these characters as special entities that should be quoted.

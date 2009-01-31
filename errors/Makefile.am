@@ -10,7 +10,7 @@ errordir = $(datadir)/errors
 
 DEFAULT_ERROR_DIR	= $(errordir)
 
-INSTALL_LANGUAGES	= templates @ERR_LANGUAGES@
+INSTALL_LANGUAGES	= @ERR_LANGUAGES@
 LANGUAGES	= \
 		Armenian \
 		Azerbaijani \
@@ -31,6 +31,7 @@ LANGUAGES	= \
 		Japanese \
 		Korean \
 		Lithuanian \
+		NewEnglish \
 		Polish \
 		Portuguese \
 		Romanian \
@@ -85,7 +86,7 @@ addlang: all
 	fi
 
 dist-hook:
-	@ for lang in $(LANGUAGES) templates; do \
+	@ for lang in $(LANGUAGES); do \
 	  if test "$$lang" = .; then :; else \
 	    test -d $(distdir)/$$lang \
 	    || mkdir $(distdir)/$$lang \

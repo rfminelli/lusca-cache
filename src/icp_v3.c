@@ -47,9 +47,7 @@ icpHandleIcpV3(int fd, struct sockaddr_in from, char *buf, int len)
     request_t *icp_request = NULL;
     int allow = 0;
     aclCheck_t checklist;
-    method_t *method_get;
     xmemcpy(&header, buf, sizeof(icp_common_t));
-    method_get = urlMethodGetKnownByCode(METHOD_GET);
     /*
      * Only these fields need to be converted
      */
@@ -74,14 +72,14 @@ icpHandleIcpV3(int fd, struct sockaddr_in from, char *buf, int len)
 	    icpUdpSend(fd, &from, reply, LOG_UDP_INVALID, 0);
 	    break;
 	}
-	if ((icp_request = urlParse(method_get, url)) == NULL) {
+	if ((icp_request = urlParse(METHOD_GET, url)) == NULL) {
 	    reply = icpCreateMessage(ICP_ERR, 0, url, header.reqnum, 0);
 	    icpUdpSend(fd, &from, reply, LOG_UDP_INVALID, 0);
 	    break;
 	}
 	memset(&checklist, '\0', sizeof(checklist));
 	checklist.src_addr = from.sin_addr;
-	checklist.my_addr = no_addr;
+	SetNoAddr(&checklist.my_addr);
 	checklist.request = icp_request;
 	allow = aclCheckFast(Config.accessList.icp, &checklist);
 	if (!allow) {
@@ -100,7 +98,7 @@ icpHandleIcpV3(int fd, struct sockaddr_in from, char *buf, int len)
 	    break;
 	}
 	/* The peer is allowed to use this cache */
-	entry = storeGetPublic(url, method_get);
+	entry = storeGetPublic(url, METHOD_GET);
 	debug(12, 5) ("icpHandleIcpV3: OPCODE %s\n",
 	    icp_opcode_str[header.opcode]);
 	if (icpCheckUdpHit(entry, icp_request)) {

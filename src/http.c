@@ -53,32 +53,8 @@ static void httpCacheNegatively(StoreEntry *);
 static void httpMakePrivate(StoreEntry *);
 static void httpMakePublic(StoreEntry *);
 static int httpCachableReply(HttpStateData *);
-static void httpMaybeRemovePublic(StoreEntry *, HttpReply *);
+static void httpMaybeRemovePublic(StoreEntry *, http_status);
 static int peer_supports_connection_pinning(HttpStateData * httpState);
-
-static int
-httpUrlHostsMatch(const char *url1, const char *url2)
-{
-    const char *host1 = strchr(url1, ':');
-    const char *host2 = strchr(url2, ':');
-
-    if (host1 && host2) {
-	do {
-	    ++host1;
-	    ++host2;
-	} while (*host1 == '/' && *host2 == '/');
-
-	if (!*host1) {
-	    return (0);
-	}
-	while (*host1 && *host1 != '/' && *host1 == *host2) {
-	    ++host1;
-	    ++host2;
-	}
-	return (*host1 == *host2);
-    }
-    return (0);
-}
 
 static void
 httpStateFree(int fd, void *data)
@@ -109,10 +85,13 @@ httpStateFree(int fd, void *data)
 }
 
 int
-httpCachable(method_t * method)
+httpCachable(method_t method)
 {
-
-    return (method->flags.cachable);
+    /* GET and HEAD are cachable. Others are not. */
+    if (method != METHOD_GET && method != METHOD_HEAD)
+	return 0;
+    /* else cachable */
+    return 1;
 }
 
 static void
@@ -157,47 +136,11 @@ httpCacheNegatively(StoreEntry * entry)
 }
 
 static void
-httpRemovePublicByHeader(request_t * req, HttpReply * reply, http_hdr_type header)
+httpMaybeRemovePublic(StoreEntry * e, http_status status)
 {
-    const char *hdrUrl;
-    char *absUrl;
-
-    absUrl = NULL;
-    hdrUrl = httpHeaderGetStr(&reply->header, header);
-    if (hdrUrl == NULL) {
-	return;
-    }
-    /*
-     * If the URL is relative, make it absolute so we can find it.
-     * If it's absolute, make sure the host parts match to avoid DOS attacks
-     * as per RFC 2616 13.10.
-     */
-    if (urlIsRelative(hdrUrl)) {
-	absUrl = urlMakeAbsolute(req, hdrUrl);
-	if (absUrl != NULL) {
-	    hdrUrl = absUrl;
-	}
-    } else if (!httpUrlHostsMatch(hdrUrl, urlCanonical(req))) {
-	return;
-    }
-    storePurgeEntriesByUrl(req, hdrUrl);
-
-    if (absUrl != NULL) {
-	safe_free(absUrl);
-    }
-}
-
-static void
-httpMaybeRemovePublic(StoreEntry * e, HttpReply * reply)
-{
-    int status;
     int remove = 0;
     int forbidden = 0;
     StoreEntry *pe;
-    request_t *req;
-    const char *reqUrl;
-
-    status = reply->sline.status;
     switch (status) {
     case HTTP_OK:
     case HTTP_NON_AUTHORITATIVE_INFORMATION:
@@ -245,24 +188,35 @@ httpMaybeRemovePublic(StoreEntry * e, HttpReply * reply)
      * changed.
      */
     if (e->mem_obj->request)
-	pe = storeGetPublicByRequestMethodCode(e->mem_obj->request, METHOD_HEAD);
+	pe = storeGetPublicByRequestMethod(e->mem_obj->request, METHOD_HEAD);
     else
-	pe = storeGetPublicByCode(e->mem_obj->url, METHOD_HEAD);
+	pe = storeGetPublic(e->mem_obj->url, METHOD_HEAD);
     if (pe != NULL && e != pe) {
-#if USE_HTCP
-	neighborsHtcpClear(e, NULL, e->mem_obj->request, urlMethodGetKnownByCode(METHOD_HEAD), HTCP_CLR_INVALIDATION);
-#endif
 	storeRelease(pe);
     }
     if (forbidden)
 	return;
-    if (e->mem_obj->method->flags.purges_all && status < 400) {
-	req = e->mem_obj->request;
-	reqUrl = urlCanonical(req);
-	debug(88, 5) ("httpMaybeRemovePublic: purging due to %s %s\n", req->method->string, reqUrl);
-	storePurgeEntriesByUrl(req, reqUrl);
-	httpRemovePublicByHeader(req, reply, HDR_LOCATION);
-	httpRemovePublicByHeader(req, reply, HDR_CONTENT_LOCATION);
+    switch (e->mem_obj->method) {
+    case METHOD_PUT:
+    case METHOD_DELETE:
+    case METHOD_PROPPATCH:
+    case METHOD_MKCOL:
+    case METHOD_MOVE:
+    case METHOD_BMOVE:
+    case METHOD_BDELETE:
+	/*
+	 * Remove any cached GET object if it is beleived that the
+	 * object may have changed as a result of other methods
+	 */
+	if (e->mem_obj->request)
+	    pe = storeGetPublicByRequestMethod(e->mem_obj->request, METHOD_GET);
+	else
+	    pe = storeGetPublic(e->mem_obj->url, METHOD_GET);
+	if (pe != NULL) {
+	    assert(e != pe);
+	    storeRelease(pe);
+	}
+	break;
     }
 }
 
@@ -275,7 +229,7 @@ httpCachableReply(HttpStateData * httpState)
     const char *v;
 #if HTTP_VIOLATIONS
     const refresh_t *R = NULL;
-    /* This strange looking define first looks up the refresh pattern
+    /* This strange looking define first looks up the frefresh pattern
      * and then checks if the specified flag is set. The main purpose
      * of this is to simplify the refresh pattern lookup
      */
@@ -402,13 +356,13 @@ httpMakeVaryMark(request_t * request, HttpReply * reply)
 
     stringClean(&vstr);
     hdr = httpHeaderGetList(&reply->header, HDR_VARY);
-    if (strBuf(hdr))
-	strListAdd(&vary, strBuf(hdr), ',');
+    if (strIsNotNull(hdr))
+	strListAddStr(&vary, strBuf2(hdr), strLen2(hdr), ',');
     stringClean(&hdr);
 #if X_ACCELERATOR_VARY
     hdr = httpHeaderGetList(&reply->header, HDR_X_ACCELERATOR_VARY);
-    if (strBuf(hdr))
-	strListAdd(&vary, strBuf(hdr), ',');
+    if (strIsNotNull(hdr))
+	strListAddStr(&vary, strBuf2(hdr), strLen2(hdr), ',');
     stringClean(&hdr);
 #endif
     while (strListGetItem(&vary, ',', &item, &ilen, &pos)) {
@@ -447,11 +401,11 @@ httpMakeVaryMark(request_t * request, HttpReply * reply)
     }
     safe_free(request->vary_hdr);
     safe_free(request->vary_headers);
-    if (strBuf(vary) && strBuf(vstr)) {
-	request->vary_hdr = xstrdup(strBuf(vary));
-	request->vary_headers = xstrdup(strBuf(vstr));
+    if (strIsNotNull(vary) && strIsNotNull(vstr)) {
+	request->vary_hdr = stringDupToC(&vary);
+	request->vary_headers = stringDupToC(&vstr);
     }
-    debug(11, 3) ("httpMakeVaryMark: %s\n", strBuf(vstr));
+    debug(11, 3) ("httpMakeVaryMark: %.*s\n", strLen2(vstr), strBuf2(vstr));
     stringClean(&vary);
     stringClean(&vstr);
     return request->vary_headers;
@@ -478,18 +432,6 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
     hdr_len = httpState->reply_hdr.size;
     if (hdr_len > 4 && strncmp(httpState->reply_hdr.buf, "HTTP/", 5)) {
 	debug(11, 3) ("httpProcessReplyHeader: Non-HTTP-compliant header: '%s'\n", httpState->reply_hdr.buf);
-	{
-	    char *t, *t2;
-	    t = xstrdup(httpState->reply_hdr.buf);
-	    t2 = strchr(t, '\n');
-	    if (t2)
-		*t2 = '\0';
-	    t2 = strchr(t, '\r');
-	    if (t2)
-		*t2 = '\0';
-	    httpHeaderPutStr(&reply->header, HDR_X_HTTP09_FIRST_LINE, t);
-	    safe_free(t);
-	}
 	httpState->reply_hdr_state += 2;
 	httpState->chunk_size = -1;	/* Terminated by EOF */
 	httpState->reply_hdr.size = old_size;
@@ -569,7 +511,7 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	    }
 	    if (item) {
 		/* Can't handle other transfer-encodings */
-		debug(11, 1) ("Unexpected transfer encoding '%s'\n", strBuf(tr));
+		debug(11, 1) ("Unexpected transfer encoding '%.*s'\n", strLen2(tr), strBuf2(tr));
 		reply->sline.status = HTTP_INVALID_HEADER;
 		return done;
 	    }
@@ -598,8 +540,8 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	    goto no_cache;	/* XXX Would be better if this was used by the swicht statement below */
 	}
 	entry->mem_obj->vary_headers = xstrdup(vary);
-	if (strBuf(httpState->orig_request->vary_encoding))
-	    entry->mem_obj->vary_encoding = xstrdup(strBuf(httpState->orig_request->vary_encoding));
+	if (strIsNotNull(httpState->orig_request->vary_encoding))
+	    entry->mem_obj->vary_encoding = stringDupToC(&httpState->orig_request->vary_encoding);
     }
     if (entry->mem_obj->old_entry)
 	EBIT_CLR(entry->mem_obj->old_entry->flags, REFRESH_FAILURE);
@@ -625,7 +567,7 @@ httpProcessReplyHeader(HttpStateData * httpState, const char *buf, int size)
 	    EBIT_SET(entry->flags, ENTRY_REVALIDATE);
     }
     if (neighbors_do_private_keys && !Config.onoff.collapsed_forwarding)
-	httpMaybeRemovePublic(entry, reply);
+	httpMaybeRemovePublic(entry, reply->sline.status);
     if (httpState->flags.keepalive)
 	if (httpState->peer)
 	    httpState->peer->stats.n_keepalives_sent++;
@@ -742,7 +684,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 		    char *end = NULL;
 		    int badchunk = 0;
 		    int emptychunk = 0;
-		    debug(11, 3) ("Chunk header '%s'\n", strBuf(httpState->chunkhdr));
+		    debug(11, 3) ("Chunk header '%.*s'\n", strLen2(httpState->chunkhdr), strBuf2(httpState->chunkhdr));
 		    errno = 0;
 		    httpState->chunk_size = strto_off_t(strBuf(httpState->chunkhdr), &end, 16);
 		    if (errno)
@@ -752,7 +694,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 		    while (end && (*end == '\r' || *end == ' ' || *end == '\t'))
 			end++;
 		    if (httpState->chunk_size < 0 || badchunk || !end || (*end != '\n' && *end != ';')) {
-			debug(11, 1) ("Invalid chunk header '%s'\n", strBuf(httpState->chunkhdr));
+			debug(11, 1) ("Invalid chunk header '%.*s'\n", strLen2(httpState->chunkhdr), strBuf2(httpState->chunkhdr));
 			fwdFail(httpState->fwd, errorCon(ERR_INVALID_RESP, HTTP_BAD_GATEWAY, httpState->fwd->request));
 			comm_close(fd);
 			return;
@@ -821,7 +763,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
      */
     if (len == 0 && buffer_filled >= 0) {
 	char buf2[4];
-	statCounter.syscalls.sock.reads++;
+	CommStats.syscalls.sock.reads++;
 	len = FD_READ_METHOD(fd, buf2, sizeof(buf2));
 	if ((len < 0 && !ignoreErrno(errno)) || len == 0) {
 	    keep_alive = 0;
@@ -830,7 +772,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
     if (len > 0) {
 	debug(11, Config.onoff.relaxed_header_parser <= 0 || keep_alive ? 1 : 2)
 	    ("httpReadReply: Excess data from \"%s %s\"\n",
-	    orig_request->method->string,
+	    RequestMethods[orig_request->method].str,
 	    storeUrl(entry));
 	comm_close(fd);
 	return;
@@ -851,7 +793,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
      */
     if (!httpState->flags.request_sent) {
 	debug(11, 1) ("httpAppendBody: Request not yet fully sent \"%s %s\"\n",
-	    orig_request->method->string,
+	    RequestMethods[orig_request->method].str,
 	    storeUrl(entry));
 	keep_alive = 0;
     }
@@ -862,11 +804,9 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 	keep_alive = 0;
     if (keep_alive) {
 	int pinned = 0;
-#if LINUX_TPROXY
 	if (orig_request->flags.tproxy) {
 	    client_addr = &httpState->request->client_addr;
 	}
-#endif
 	/* yes we have to clear all these! */
 	commSetDefer(fd, NULL, NULL);
 	commSetTimeout(fd, -1, NULL, NULL);
@@ -932,7 +872,7 @@ httpReadReply(int fd, void *data)
 #endif
 
     errno = 0;
-    statCounter.syscalls.sock.reads++;
+    CommStats.syscalls.sock.reads++;
     len = FD_READ_METHOD(fd, buf, read_sz);
     buffer_filled = len == read_sz;
     debug(11, 5) ("httpReadReply: FD %d: len %d.\n", fd, (int) len);
@@ -1030,6 +970,7 @@ httpReadReply(int fd, void *data)
 		} else if (s == HTTP_INVALID_HEADER) {
 		    MemBuf mb;
 		    HttpReply *reply = entry->mem_obj->reply;
+		    httpReplyReset(reply);
 		    httpBuildVersion(&reply->sline.version, 0, 9);
 		    reply->sline.status = HTTP_OK;
 		    httpHeaderPutTime(&reply->header, HDR_DATE, squid_curtime);
@@ -1139,7 +1080,7 @@ httpBuildRequestHeader(request_t * request,
 	    strListAddUnique(&etags, request->etags->items[i], ',');
     }
     if (strLen(etags))
-	httpHeaderPutStr(hdr_out, HDR_IF_NONE_MATCH, strBuf(etags));
+	httpHeaderPutString(hdr_out, HDR_IF_NONE_MATCH, &etags);
     stringClean(&etags);
     /* decide if we want to do Ranges ourselves 
      * (and fetch the whole object now)
@@ -1166,11 +1107,11 @@ httpBuildRequestHeader(request_t * request,
 
     strConnection = httpHeaderGetList(hdr_in, HDR_CONNECTION);
     while ((e = httpHeaderGetEntry(hdr_in, &pos))) {
-	debug(11, 5) ("httpBuildRequestHeader: %s: %s\n",
-	    strBuf(e->name), strBuf(e->value));
+	debug(11, 5) ("httpBuildRequestHeader: %.*s: %.*s\n",
+	    strLen2(e->name), strBuf2(e->name), strLen2(e->value), strBuf2(e->value));
 	if (!httpRequestHdrAllowed(e, &strConnection)) {
-	    debug(11, 2) ("'%s' header is a hop-by-hop connections header\n",
-		strBuf(e->name));
+	    debug(11, 2) ("'%.*s' header is a hop-by-hop connections header\n",
+		strLen2(e->name), strBuf2(e->name));
 	    continue;
 	}
 	switch (e->id) {
@@ -1237,7 +1178,7 @@ httpBuildRequestHeader(request_t * request,
 		    httpHeaderAddClone(hdr_out, e);
 	    break;
 	case HDR_MAX_FORWARDS:
-	    if (orig_request->method->code == METHOD_TRACE) {
+	    if (orig_request->method == METHOD_TRACE) {
 		/* sacrificing efficiency over clarity, etc. */
 		const int hops = httpHeaderGetInt(hdr_in, HDR_MAX_FORWARDS);
 		if (hops > 0)
@@ -1292,7 +1233,7 @@ httpBuildRequestHeader(request_t * request,
 	strListAdd(&strVia, bbuf, ',');
 	if (flags.http11)
 	    strListAdd(&strVia, "1.0 internal", ',');
-	httpHeaderPutStr(hdr_out, HDR_VIA, strBuf(strVia));
+	httpHeaderPutString(hdr_out, HDR_VIA, &strVia);
 	stringClean(&strVia);
     }
     /* append X-Forwarded-For */
@@ -1313,7 +1254,7 @@ httpBuildRequestHeader(request_t * request,
 	break;
     }
     if (strLen(strFwd)) {
-	httpHeaderPutStr(hdr_out, HDR_X_FORWARDED_FOR, strBuf(strFwd));
+	httpHeaderPutString(hdr_out, HDR_X_FORWARDED_FOR, &strFwd);
 	stringClean(&strFwd);
     }
     /* append Host if not there already */
@@ -1455,8 +1396,11 @@ httpBuildRequestPrefix(request_t * request,
     http_state_flags flags)
 {
     const int offset = mb->size;
-    memBufPrintf(mb, "%s %s HTTP/1.%d\r\n", request->method->string,
-	strLen(request->urlpath) ? strBuf(request->urlpath) : "/",
+    memBufPrintf(mb, "%.*s %.*s HTTP/1.%d\r\n",
+	RequestMethods[request->method].len,
+	RequestMethods[request->method].str,
+	strLen2(request->urlpath) ? strLen2(request->urlpath) : 1,
+	strLen2(request->urlpath) ? strBuf2(request->urlpath) : "/",
 	flags.http11);
     /* build and pack headers */
     {
@@ -1540,6 +1484,8 @@ httpSendRequest(HttpStateData * httpState)
     comm_write_mbuf(fd, mb, sendHeaderDone, httpState);
 }
 
+CBDATA_TYPE(HttpStateData);
+
 void
 httpStart(FwdState * fwd)
 {
@@ -1547,8 +1493,10 @@ httpStart(FwdState * fwd)
     HttpStateData *httpState;
     request_t *proxy_req;
     request_t *orig_req = fwd->request;
-    debug(11, 3) ("httpStart: \"%s %s\"\n", orig_req->method->string,
+    debug(11, 3) ("httpStart: \"%s %s\"\n",
+	RequestMethods[orig_req->method].str,
 	storeUrl(fwd->entry));
+    CBDATA_INIT_TYPE(HttpStateData);
     httpState = cbdataAlloc(HttpStateData);
     storeLockObject(fwd->entry);
     httpState->fwd = fwd;

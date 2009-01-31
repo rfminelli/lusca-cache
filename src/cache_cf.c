@@ -151,91 +151,19 @@ self_destruct(void)
 	cfg_filename, config_lineno, config_input_line);
 }
 
-void
-wordlistDestroy(wordlist ** list)
-{
-    wordlist *w = NULL;
-    while ((w = *list) != NULL) {
-	*list = w->next;
-	safe_free(w->key);
-	memFree(w, MEM_WORDLIST);
-    }
-    *list = NULL;
-}
-
-const char *
-wordlistAdd(wordlist ** list, const char *key)
-{
-    while (*list)
-	list = &(*list)->next;
-    *list = memAllocate(MEM_WORDLIST);
-    (*list)->key = xstrdup(key);
-    (*list)->next = NULL;
-    return (*list)->key;
-}
-
-void
-wordlistJoin(wordlist ** list, wordlist ** wl)
-{
-    while (*list)
-	list = &(*list)->next;
-    *list = *wl;
-    *wl = NULL;
-}
-
-void
-wordlistAddWl(wordlist ** list, wordlist * wl)
-{
-    while (*list)
-	list = &(*list)->next;
-    for (; wl; wl = wl->next, list = &(*list)->next) {
-	*list = memAllocate(MEM_WORDLIST);
-	(*list)->key = xstrdup(wl->key);
-	(*list)->next = NULL;
-    }
-}
-
+/*
+ * This has to stay here until memBuf's have been moved out of src/
+ * and into libmem.
+ */
 void
 wordlistCat(const wordlist * w, MemBuf * mb)
 {
     while (NULL != w) {
-	memBufPrintf(mb, "%s\n", w->key);
-	w = w->next;
+        memBufPrintf(mb, "%s\n", w->key);
+        w = w->next;
     }
 }
 
-wordlist *
-wordlistDup(const wordlist * w)
-{
-    wordlist *D = NULL;
-    while (NULL != w) {
-	wordlistAdd(&D, w->key);
-	w = w->next;
-    }
-    return D;
-}
-
-void
-intlistDestroy(intlist ** list)
-{
-    intlist *w = NULL;
-    intlist *n = NULL;
-    for (w = *list; w; w = n) {
-	n = w->next;
-	memFree(w, MEM_INTLIST);
-    }
-    *list = NULL;
-}
-
-int
-intlistFind(intlist * list, int i)
-{
-    intlist *w = NULL;
-    for (w = list; w; w = w->next)
-	if (w->i == i)
-	    return 1;
-    return 0;
-}
 
 /*
  * These functions is the same as atoi/l/f, except that they check for errors
@@ -464,7 +392,7 @@ configDoConfigure(void)
 {
     memset(&Config2, '\0', sizeof(SquidConfig2));
     /* init memory as early as possible */
-    memConfigure();
+    memConfigure(Config.onoff.mem_pools, Config.MemPools.limit, Config.onoff.zero_buffers);
     /* Sanity checks */
     if (Config.cacheSwap.swapDirs == NULL)
 	fatal("No cache_dir's specified in config file");
@@ -832,6 +760,61 @@ free_acl_access(acl_access ** head)
 }
 
 static void
+dump_address46(StoreEntry *entry, const char *name, sqaddr_t addr)
+{
+	LOCAL_ARRAY(char, sbuf, 256);
+	(void) sqinet_ntoa(&addr, sbuf, sizeof(sbuf), SQADDR_NONE);
+	storeAppendPrintf(entry, "%s %s\n", name, sbuf);
+}
+
+static void
+parse_address46(sqaddr_t *addr)
+{
+	char *token = strtok(NULL, w_space);
+	sqinet_init(addr);
+	if (token == NULL)
+		self_destruct();
+
+	/* XXX for now only support numeric addresses, not hostnames */
+	if (sqinet_aton(addr, token, SQATON_PASSIVE) == 0)
+		self_destruct();
+}
+
+static void
+free_address46(sqaddr_t *addr)
+{
+	sqinet_done(addr);
+}
+
+static void
+dump_address6(StoreEntry *entry, const char *name, sqaddr_t addr)
+{
+	LOCAL_ARRAY(char, sbuf, 256);
+	(void) sqinet_ntoa(&addr, sbuf, sizeof(sbuf), SQADDR_NONE);
+	storeAppendPrintf(entry, "%s %s\n", name, sbuf);
+}
+
+static void
+parse_address6(sqaddr_t *addr)
+{
+	char *token = strtok(NULL, w_space);
+	sqinet_init(addr);
+	if (token == NULL)
+		self_destruct();
+
+	/* XXX for now only support numeric addresses, not hostnames */
+	/* XXX and this should enforce IPv6 only! */
+	if (sqinet_aton(addr, token, SQATON_FAMILY_IPv6 | SQATON_PASSIVE) == 0)
+		self_destruct();
+}
+
+static void
+free_address6(sqaddr_t *addr)
+{
+	sqinet_done(addr);
+}
+
+static void
 dump_address(StoreEntry * entry, const char *name, struct in_addr addr)
 {
     storeAppendPrintf(entry, "%s %s\n", name, inet_ntoa(addr));
@@ -969,8 +952,10 @@ free_acl_tos(acl_tos ** head)
  * this is why delay_pool_count isn't just marked TYPE: ushort
  */
 #define free_delay_pool_class(X)
+#define free_delay_pool_access(X)
 #define free_delay_pool_rates(X)
 #define dump_delay_pool_class(X, Y, Z)
+#define dump_delay_pool_access(X, Y, Z)
 #define dump_delay_pool_rates(X, Y, Z)
 
 static void
@@ -985,19 +970,20 @@ free_delay_pool_count(delayConfig * cfg)
 	    delayFreeDelayPool(i);
 	    safe_free(cfg->rates[i]);
 	}
+	aclDestroyAccessList(&cfg->access[i]);
     }
     delayFreeDelayData(cfg->pools);
-    cfg->pools = cfg->initial = 0;
     xfree(cfg->class);
-    cfg->class = NULL;
     xfree(cfg->rates);
-    cfg->rates = NULL;
+    xfree(cfg->access);
+    memset(cfg, 0, sizeof(*cfg));
 }
 
 static void
 dump_delay_pool_count(StoreEntry * entry, const char *name, delayConfig cfg)
 {
     int i;
+    LOCAL_ARRAY(char, nom, 32);
 
     if (!cfg.pools) {
 	storeAppendPrintf(entry, "%s 0\n", name);
@@ -1006,43 +992,22 @@ dump_delay_pool_count(StoreEntry * entry, const char *name, delayConfig cfg)
     storeAppendPrintf(entry, "%s %d\n", name, cfg.pools);
     for (i = 0; i < cfg.pools; i++) {
 	storeAppendPrintf(entry, "delay_class %d %d\n", i + 1, cfg.class[i]);
-	switch (cfg.class[i]) {
-	case 1:
+	snprintf(nom, 32, "delay_access %d", i + 1);
+	dump_acl_access(entry, nom, cfg.access[i]);
+	if (cfg.class[i] >= 1)
 	    storeAppendPrintf(entry, "delay_parameters %d %d/%d", i + 1,
 		cfg.rates[i]->aggregate.restore_bps,
 		cfg.rates[i]->aggregate.max_bytes);
-	    break;
-	case 2:
-	    storeAppendPrintf(entry, "delay_parameters %d %d/%d", i + 1,
-		cfg.rates[i]->aggregate.restore_bps,
-		cfg.rates[i]->aggregate.max_bytes);
-	    storeAppendPrintf(entry, " %d/%d",
-		cfg.rates[i]->individual.restore_bps,
-		cfg.rates[i]->individual.max_bytes);
-	    break;
-	case 3:
-	    storeAppendPrintf(entry, "delay_parameters %d %d/%d", i + 1,
-		cfg.rates[i]->aggregate.restore_bps,
-		cfg.rates[i]->aggregate.max_bytes);
+	if (cfg.class[i] >= 3)
 	    storeAppendPrintf(entry, " %d/%d",
 		cfg.rates[i]->network.restore_bps,
 		cfg.rates[i]->network.max_bytes);
+	if (cfg.class[i] >= 2)
 	    storeAppendPrintf(entry, " %d/%d",
 		cfg.rates[i]->individual.restore_bps,
 		cfg.rates[i]->individual.max_bytes);
-	    break;
-	case 6:
-	    storeAppendPrintf(entry, "delay_parameters %d %d/%d", i + 1,
-		cfg.rates[i]->aggregate.restore_bps,
-		cfg.rates[i]->aggregate.max_bytes);
-	    storeAppendPrintf(entry, " %d/%d",
-		cfg.rates[i]->individual.restore_bps,
-		cfg.rates[i]->individual.max_bytes);
-	    break;
-	default:
-	    assert(0);
-	}
-	storeAppendPrintf(entry, "\n");
+	if (cfg.class[i] >= 1)
+	    storeAppendPrintf(entry, "\n");
     }
 }
 
@@ -1059,8 +1024,6 @@ parse_delay_pool_count(delayConfig * cfg)
 	cfg->class = xcalloc(cfg->pools, sizeof(u_char));
 	cfg->rates = xcalloc(cfg->pools, sizeof(delaySpecSet *));
 	cfg->access = xcalloc(cfg->pools, sizeof(acl_access *));
-	cfg->accessClientRequest = xcalloc(cfg->pools, sizeof(acl_access *));
-	cfg->accessClientReply = xcalloc(cfg->pools, sizeof(acl_access *));
     }
 }
 
@@ -1075,13 +1038,8 @@ parse_delay_pool_class(delayConfig * cfg)
 	return;
     }
     parse_ushort(&class);
-    if (class < 1 || class > 6) {
-	debug(3, 0) ("parse_delay_pool_class: Ignoring pool %d class %d not in 1 .. 6\n", pool, class);
-	return;
-    }
-    /* class 4, 5 is per-user/per-extacl, which Squid-3 currently only does */
-    if (class == 4 || class == 5) {
-	debug(3, 0) ("parse_delay_pool_class: Ignoring pool %d class %d currently unsupported!\n", pool, class);
+    if (class < 1 || class > 3) {
+	debug(3, 0) ("parse_delay_pool_class: Ignoring pool %d class %d not in 1 .. 3\n", pool, class);
 	return;
     }
     pool--;
@@ -1093,24 +1051,10 @@ parse_delay_pool_class(delayConfig * cfg)
     cfg->rates[pool] = xmalloc(class * sizeof(delaySpec));
     cfg->class[pool] = class;
     cfg->rates[pool]->aggregate.restore_bps = cfg->rates[pool]->aggregate.max_bytes = -1;
-
-    switch (class) {
-    case 1:
-	break;
-    case 2:
-	cfg->rates[pool]->individual.restore_bps = cfg->rates[pool]->individual.max_bytes = -1;
-	break;
-    case 3:
-	cfg->rates[pool]->individual.restore_bps = cfg->rates[pool]->individual.max_bytes = -1;
+    if (cfg->class[pool] >= 3)
 	cfg->rates[pool]->network.restore_bps = cfg->rates[pool]->network.max_bytes = -1;
-	break;
-    case 6:
+    if (cfg->class[pool] >= 2)
 	cfg->rates[pool]->individual.restore_bps = cfg->rates[pool]->individual.max_bytes = -1;
-	break;
-    default:
-	assert(0);
-
-    }
     delayCreateDelayPool(pool, class);
 }
 
@@ -1121,9 +1065,6 @@ parse_delay_pool_rates(delayConfig * cfg)
     int i;
     delaySpec *ptr;
     char *token;
-    int er[] =
-    {-1, 1, 2, 3, -1, -1, 2};
-    int c;
 
     parse_ushort(&pool);
     if (pool < 1 || pool > cfg->pools) {
@@ -1138,9 +1079,7 @@ parse_delay_pool_rates(delayConfig * cfg)
     }
     ptr = (delaySpec *) cfg->rates[pool];
     /* read in "class" sets of restore,max pairs */
-    c = er[class];
-    assert(c > 0);
-    while (c--) {
+    while (class--) {
 	token = strtok(NULL, "/");
 	if (token == NULL)
 	    self_destruct();
@@ -1165,45 +1104,17 @@ parse_delay_pool_rates(delayConfig * cfg)
 }
 
 static void
-parse_delay_pool_access(acl_access *** aa)
+parse_delay_pool_access(delayConfig * cfg)
 {
     ushort pool;
-    acl_access **a = *aa;
 
     parse_ushort(&pool);
-    if (pool < 1 || pool > Config.Delay.pools) {
-	debug(3, 0) ("parse_delay_pool_access: Ignoring pool %d not in 1 .. %d\n", pool, Config.Delay.pools);
+    if (pool < 1 || pool > cfg->pools) {
+	debug(3, 0) ("parse_delay_pool_access: Ignoring pool %d not in 1 .. %d\n", pool, cfg->pools);
 	return;
     }
-    aclParseAccessLine(&(a[pool - 1]));
+    aclParseAccessLine(&cfg->access[pool - 1]);
 }
-
-static void
-dump_delay_pool_access(StoreEntry * entry, const char *name, acl_access ** a)
-{
-    LOCAL_ARRAY(char, nom, 32);
-    int i;
-    for (i = 0; i < Config.Delay.pools; i++) {
-	snprintf(nom, 32, "%s %d", name, i + 1);
-	dump_acl_access(entry, nom, a[i]);
-    }
-}
-
-static void
-free_delay_pool_access(acl_access *** aa)
-{
-    int i = 0;
-    acl_access **a = *aa;
-    if (!a)
-	return;
-
-    while (a[i] != NULL) {
-	aclDestroyAccessList(&a[i]);
-	i++;
-    }
-    xfree(a);
-}
-
 #endif
 
 #ifdef HTTP_VIOLATIONS
@@ -1787,11 +1698,16 @@ GetUdpService(void)
     return GetService("udp");
 }
 
+CBDATA_TYPE(peer);
+
 static void
 parse_peer(peer ** head)
 {
     char *token = NULL;
+    void *arg = NULL;		/* throwaway arg to make eventAdd happy */
     peer *p;
+    CBDATA_INIT_TYPE(peer);
+    CBDATA_INIT_TYPE_FREECB(peer, peerDestroy);
     p = cbdataAlloc(peer);
     p->http_port = CACHE_HTTP_PORT;
     p->icp.port = CACHE_ICP_PORT;
@@ -1853,22 +1769,6 @@ parse_peer(peer ** head)
 	} else if (!strcasecmp(token, "htcp-oldsquid")) {
 	    p->options.htcp = 1;
 	    p->options.htcp_oldsquid = 1;
-	} else if (!strcasecmp(token, "htcp-no-clr")) {
-	    if (p->options.htcp_only_clr)
-		fatalf("parse_peer: can't set htcp-no-clr and htcp-only-clr simultaneously");
-	    p->options.htcp = 1;
-	    p->options.htcp_no_clr = 1;
-	} else if (!strcasecmp(token, "htcp-no-purge-clr")) {
-	    p->options.htcp = 1;
-	    p->options.htcp_no_purge_clr = 1;
-	} else if (!strcasecmp(token, "htcp-only-clr")) {
-	    if (p->options.htcp_no_clr)
-		fatalf("parse_peer: can't set htcp-no-clr and htcp-only-clr simultaneously");
-	    p->options.htcp = 1;
-	    p->options.htcp_only_clr = 1;
-	} else if (!strcasecmp(token, "htcp-forward-clr")) {
-	    p->options.htcp = 1;
-	    p->options.htcp_forward_clr = 1;
 #endif
 	} else if (!strcasecmp(token, "no-netdb-exchange")) {
 	    p->options.no_netdb_exchange = 1;
@@ -2009,7 +1909,9 @@ parse_peer(peer ** head)
 	head = &(*head)->next;
     *head = p;
     Config.npeers++;
-    peerClearRRStart();
+    if (!reconfiguring && Config.npeers == 1) {
+	peerClearRRLoop(arg);
+    }
 }
 
 static void
@@ -2124,11 +2026,11 @@ free_denyinfo(acl_deny_info_list ** list)
     for (a = *list; a; a = a_next) {
 	for (l = a->acl_list; l; l = l_next) {
 	    l_next = l->next;
-	    memFree(l, MEM_ACL_NAME_LIST);
+	    memPoolFree(acl_name_list_pool, l);
 	    l = NULL;
 	}
 	a_next = a->next;
-	memFree(a, MEM_ACL_DENY_INFO_LIST);
+	memPoolFree(acl_deny_pool, a);
 	a = NULL;
     }
     *list = NULL;
@@ -3053,7 +2955,7 @@ parse_http_port_specification(http_port_list * s, char *token)
 	self_destruct();
     s->s.sin_port = htons(port);
     if (NULL == host)
-	s->s.sin_addr = any_addr;
+	SetAnyAddr(&s->s.sin_addr);
     else if (1 == safe_inet_addr(host, &s->s.sin_addr))
 	(void) 0;
     else if ((hp = gethostbyname(host))) {
@@ -3093,11 +2995,9 @@ parse_http_port_option(http_port_list * s, char *token)
 	s->urlgroup = xstrdup(token + 9);
     } else if (strncmp(token, "protocol=", 9) == 0) {
 	s->protocol = xstrdup(token + 9);
-#if LINUX_TPROXY
     } else if (strcmp(token, "tproxy") == 0) {
 	s->tproxy = 1;
 	need_linux_tproxy = 1;
-#endif
     } else if (strcmp(token, "act-as-origin") == 0) {
 	s->act_as_origin = 1;
 	s->accel = 1;
@@ -3199,10 +3099,8 @@ dump_generic_http_port(StoreEntry * e, const char *n, const http_port_list * s)
 	storeAppendPrintf(e, " protocol=%s", s->protocol);
     if (s->no_connection_auth)
 	storeAppendPrintf(e, " no-connection-auth");
-#if LINUX_TPROXY
     if (s->tproxy)
 	storeAppendPrintf(e, " tproxy");
-#endif
     if (s->http11)
 	storeAppendPrintf(e, " http11");
     if (s->tcp_keepalive.enabled) {

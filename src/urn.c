@@ -56,12 +56,12 @@ typedef struct {
 } url_entry;
 
 static STNCB urnHandleReply;
-static url_entry *urnParseReply(const char *inbuf, method_t *);
+static url_entry *urnParseReply(const char *inbuf, method_t);
 static const char *const crlf = "\r\n";
 static QS url_entry_sort;
 
 static url_entry *
-urnFindMinRtt(url_entry * urls, method_t * m, int *rtt_ret)
+urnFindMinRtt(url_entry * urls, method_t m, int *rtt_ret)
 {
     int min_rtt = 0;
     url_entry *u = NULL;
@@ -106,30 +106,28 @@ urnStart(request_t * r, StoreEntry * e)
     UrnState *urnState;
     StoreEntry *urlres_e;
     ErrorState *err;
-    method_t *method_get;
     debug(52, 3) ("urnStart: '%s'\n", storeUrl(e));
     CBDATA_INIT_TYPE(UrnState);
-    method_get = urlMethodGetKnownByCode(METHOD_GET);
     urnState = cbdataAlloc(UrnState);
     urnState->entry = e;
     urnState->request = requestLink(r);
     storeLockObject(urnState->entry);
     if (strncasecmp(strBuf(r->urlpath), "menu.", 5) == 0) {
-	char *new_path = xstrdup(strBuf(r->urlpath) + 5);
+	char *new_path = stringDupToCOffset(&r->urlpath, 5);
 	urnState->flags.force_menu = 1;
 	stringReset(&r->urlpath, new_path);
 	xfree(new_path);
     }
     if ((t = strChr(r->urlpath, ':')) != NULL) {
 	strSet(r->urlpath, t, '\0');
-	host = xstrdup(strBuf(r->urlpath));
+	host = stringDupToC(&r->urlpath);
 	strSet(r->urlpath, t, ':');
     } else {
-	host = xstrdup(strBuf(r->urlpath));
+	host = stringDupToC(&r->urlpath);
     }
-    snprintf(urlres, 4096, "http://%s/uri-res/N2L?urn:%s", host, strBuf(r->urlpath));
+    snprintf(urlres, 4096, "http://%s/uri-res/N2L?urn:%.*s", host, strLen2(r->urlpath), strBuf2(r->urlpath));
     safe_free(host);
-    urlres_r = urlParse(method_get, urlres);
+    urlres_r = urlParse(METHOD_GET, urlres);
     if (urlres_r == NULL) {
 	debug(52, 3) ("urnStart: Bad uri-res URL %s\n", urlres);
 	err = errorCon(ERR_URN_RESOLVE, HTTP_NOT_FOUND, r);
@@ -138,8 +136,8 @@ urnStart(request_t * r, StoreEntry * e)
 	return;
     }
     httpHeaderPutStr(&urlres_r->header, HDR_ACCEPT, "text/plain");
-    if ((urlres_e = storeGetPublic(urlres, method_get)) == NULL) {
-	urlres_e = storeCreateEntry(urlres, null_request_flags, method_get);
+    if ((urlres_e = storeGetPublic(urlres, METHOD_GET)) == NULL) {
+	urlres_e = storeCreateEntry(urlres, null_request_flags, METHOD_GET);
 	urnState->sc = storeClientRegister(urlres_e, urnState);
 	fwdStart(-1, urlres_e, urlres_r);
     } else {
@@ -305,7 +303,7 @@ urnHandleReply(void *data, mem_node_ref nr, ssize_t size)
 }
 
 static url_entry *
-urnParseReply(const char *inbuf, method_t * m)
+urnParseReply(const char *inbuf, method_t m)
 {
     char *buf = xstrdup(inbuf);
     char *token;

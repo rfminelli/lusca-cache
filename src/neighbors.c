@@ -281,20 +281,11 @@ getRoundRobinParent(request_t * request)
 }
 
 /* This gets called every 5 minutes to clear the round-robin counter. */
-static void
+void
 peerClearRRLoop(void *data)
 {
     peerClearRR();
     eventAdd("peerClearRR", peerClearRRLoop, data, 5 * 60.0, 0);
-}
-
-void
-peerClearRRStart(void)
-{
-    static int event_added = 0;
-    if (!event_added) {
-	peerClearRRLoop(NULL);
-    }
 }
 
 /* Actually clear the round-robin counter. */
@@ -478,7 +469,7 @@ neighborsUdpPing(request_t * request,
 	debug(15, 3) ("neighborsUdpPing: reqnum = %d\n", reqnum);
 
 #if USE_HTCP
-	if (p->options.htcp && !p->options.htcp_only_clr) {
+	if (p->options.htcp) {
 	    debug(15, 3) ("neighborsUdpPing: sending HTCP query\n");
 	    htcpQuery(entry, request, p);
 	} else
@@ -1157,7 +1148,7 @@ peerProbeConnect(peer * p)
     if (squid_curtime - p->stats.last_connect_probe == 0)
 	return ret;		/* don't probe to often */
     fd = comm_open(SOCK_STREAM, IPPROTO_TCP, getOutgoingAddr(NULL),
-	0, COMM_NONBLOCKING, p->name);
+	0, COMM_NONBLOCKING, COMM_TOS_DEFAULT, p->name);
     if (fd < 0)
 	return ret;
     commSetTimeout(fd, ctimeout, peerProbeConnectTimeout, p);
@@ -1207,15 +1198,14 @@ peerCountMcastPeersStart(void *data)
     MemObject *mem;
     icp_common_t *query;
     int reqnum;
-    method_t *method_get;
     LOCAL_ARRAY(char, url, MAX_URL);
     assert(p->type == PEER_MULTICAST);
-    method_get = urlMethodGetKnownByCode(METHOD_GET);
     p->mcast.flags.count_event_pending = 0;
     snprintf(url, MAX_URL, "http://%s/", inet_ntoa(p->in_addr.sin_addr));
-    fake = storeCreateEntry(url, null_request_flags, method_get);
+    fake = storeCreateEntry(url, null_request_flags, METHOD_GET);
+    CBDATA_INIT_TYPE(ps_state);
     psstate = cbdataAlloc(ps_state);
-    psstate->request = requestLink(urlParse(method_get, url));
+    psstate->request = requestLink(urlParse(METHOD_GET, url));
     psstate->entry = fake;
     psstate->callback = NULL;
     psstate->callback_data = p;
@@ -1327,18 +1317,8 @@ dump_peer_options(StoreEntry * sentry, peer * p)
     if (p->options.sourcehash)
 	storeAppendPrintf(sentry, " sourcehash");
 #if USE_HTCP
-    if (p->options.htcp) {
+    if (p->options.htcp)
 	storeAppendPrintf(sentry, " htcp");
-
-	if (p->options.htcp_oldsquid)
-	    storeAppendPrintf(sentry, " htcp-oldsquid");
-	if (p->options.htcp_no_clr)
-	    storeAppendPrintf(sentry, " htcp-no-clr");
-	if (p->options.htcp_no_purge_clr)
-	    storeAppendPrintf(sentry, " htcp-no-purge-clr");
-	if (p->options.htcp_only_clr)
-	    storeAppendPrintf(sentry, " htcp-only-clr");
-    }
 #endif
     if (p->options.no_netdb_exchange)
 	storeAppendPrintf(sentry, " no-netdb-exchange");
@@ -1523,27 +1503,4 @@ neighborsHtcpReply(const cache_key * key, htcpReplyData * htcp, const struct soc
     debug(15, 3) ("neighborsHtcpReply: e = %p\n", e);
     mem->ping_reply_callback(p, ntype, PROTO_HTCP, htcp, mem->ircb_data);
 }
-
-void
-neighborsHtcpClear(StoreEntry * e, const char *uri, request_t * req, method_t * method, htcp_clr_reason reason)
-{
-    peer *p;
-    int i;
-
-    debug(15, 1) ("neighborsHtcpClear: clear reason: %d\n", reason);
-    for (i = 0, p = Config.peers; i++ < Config.npeers; p = p->next) {
-	if (!p->options.htcp) {
-	    continue;
-	}
-	if (p->options.htcp_no_clr) {
-	    continue;
-	}
-	if (p->options.htcp_no_purge_clr && reason == HTCP_CLR_PURGE) {
-	    continue;
-	}
-	debug(15, 1) ("neighborsHtcpClear: sending CLR to %s:%d\n", inet_ntoa(p->in_addr.sin_addr), ntohs(p->in_addr.sin_port));
-	htcpClear(e, uri, req, method, p, reason);
-    }
-}
-
 #endif

@@ -114,41 +114,6 @@ mime_get_header_field(const char *mime, const char *name, const char *prefix)
     return NULL;
 }
 
-size_t
-headersEnd(const char *mime, size_t l)
-{
-    size_t e = 0;
-    int state = 1;
-    while (e < l && state < 3) {
-	switch (state) {
-	case 0:
-	    if ('\n' == mime[e])
-		state = 1;
-	    break;
-	case 1:
-	    if ('\r' == mime[e])
-		state = 2;
-	    else if ('\n' == mime[e])
-		state = 3;
-	    else
-		state = 0;
-	    break;
-	case 2:
-	    if ('\n' == mime[e])
-		state = 3;
-	    else
-		state = 0;
-	    break;
-	default:
-	    break;
-	}
-	e++;
-    }
-    if (3 == state)
-	return e;
-    return 0;
-}
-
 const char *
 mime_get_auth(const char *hdr, const char *auth_scheme, const char **auth_field)
 {
@@ -407,13 +372,11 @@ mimeLoadIconFile(const char *icon)
     const char *type = mimeGetContentType(icon);
     HttpReply *reply;
     request_t *r;
-    method_t *method_get;
     if (type == NULL)
 	fatal("Unknown icon format while reading mime.conf\n");
-    method_get = urlMethodGetKnownByCode(METHOD_GET);
     buf = internalStoreUri("/squid-internal-static/icons/", icon);
     xstrncpy(url, buf, MAX_URL);
-    if (storeGetPublic(url, method_get))
+    if (storeGetPublic(url, METHOD_GET))
 	return;
     snprintf(path, MAXPATHLEN, "%s/%s", Config.icons.directory, icon);
     fd = file_open(path, O_RDONLY | O_BINARY);
@@ -428,12 +391,12 @@ mimeLoadIconFile(const char *icon)
     }
     flags = null_request_flags;
     flags.cachable = 1;
-    e = storeCreateEntry(url, flags, method_get);
+    e = storeCreateEntry(url, flags, METHOD_GET);
     assert(e != NULL);
     EBIT_SET(e->flags, ENTRY_SPECIAL);
     storeSetPublicKey(e);
     storeBuffer(e);
-    r = urlParse(method_get, url);
+    r = urlParse(METHOD_GET, url);
     if (NULL == r)
 	fatal("mimeLoadIcon: cannot parse internal URL");
     e->mem_obj->request = requestLink(r);

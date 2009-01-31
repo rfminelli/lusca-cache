@@ -41,9 +41,6 @@
 #include "squid.h"
 #include "auth_negotiate.h"
 
-// Maximum length (buffer size) for token strings.
-#define MAX_AUTHTOKEN_LEN   32768
-
 extern AUTHSSETUP authSchemeSetup_negotiate;
 
 static void
@@ -576,7 +573,7 @@ static void
 authenticateNegotiateStart(auth_user_request_t * auth_user_request, RH * handler, void *data)
 {
     authenticateStateData *r = NULL;
-    char buf[MAX_AUTHTOKEN_LEN];
+    char buf[8192];
     char *sent_string = NULL;
     negotiate_user_t *negotiate_user;
     negotiate_request_t *negotiate_request;
@@ -609,9 +606,9 @@ authenticateNegotiateStart(auth_user_request_t * auth_user_request, RH * handler
     r->auth_user_request = auth_user_request;
     authenticateAuthUserRequestLock(r->auth_user_request);
     if (negotiate_request->auth_state == AUTHENTICATE_STATE_INITIAL) {
-	snprintf(buf, MAX_AUTHTOKEN_LEN, "YR %s\n", sent_string);
+	snprintf(buf, 8192, "YR %s\n", sent_string);
     } else {
-	snprintf(buf, MAX_AUTHTOKEN_LEN, "KK %s\n", sent_string);
+	snprintf(buf, 8192, "KK %s\n", sent_string);
     }
     negotiate_request->waiting = 1;
     safe_free(negotiate_request->client_blob);
