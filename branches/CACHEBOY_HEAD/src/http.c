@@ -692,22 +692,6 @@ httpProcessReplyHeader(HttpStateData * httpState, int s)
      */
     done = hdr_size;
 
-    /* XXX this should be done elsewhere! By whatever calls this function! */
-    /* Skip 1xx messages for now. Advertised in Via as an internal 1.0 hop */
-    /* XXX size == 0 is the same as above; only the "new" httpReadReply() will pass it in */
-#if 0
-    if (size != 0 && reply->sline.status >= 100 && reply->sline.status < 200) {
-	memBufClean(&httpState->reply_hdr);
-	httpReplyReset(reply);
-	httpState->reply_hdr_state = 0;
-	ctx_exit(ctx);
-	if (done < size)
-	    return done + httpProcessReplyHeader(httpState, buf + done, size - done);
-	else
-	    return done;
-    }
-#endif
-
     /* Append the reply status and header, unparsed, to the store object */
     storeAppend(entry, httpState->reply_hdr.buf + s, hdr_size);
 
@@ -1112,12 +1096,34 @@ httpReadReply(int fd, void *data)
      */
 
     /* Has the response been parsed? If not, buffer the StoreEntry and then try parsing it */
-    /* XXX Looping over the parsing until we run out of data or we've finished parsing the 1xx status messages */
-    if (httpState->reply_hdr_state < 2) {
+
+    if (httpState->reply_hdr_state == 2)
+	already_parsed = 1;	/* ie, we've already parsed this reply, no need to repeat stuff */
+    
+    /* XXX Handle 1xx response skipping here - ugly! */
+    /*
+     * XXX its unfortunate that we'll be parsing all 1xx responses in the buffer each read()
+     * XXX until we see the first non-1xx response; will have to put up with that for now!
+     */
+    while (httpState->reply_hdr_state < 2 && po < httpState->reply_hdr.size) {
+        HttpReply *reply = NULL;
+
+	/* Try parsing */
 	storeBuffer(entry);
         done = httpProcessReplyHeader(httpState, po);
-    } else {
-	already_parsed = 1;	/* ie, we've already parsed this reply, no need to repeat stuff */
+        reply = entry->mem_obj->reply;
+
+	/* Did we get a successful parse but 1xx? Try again */
+        if (reply->sline.status >= 100 && reply->sline.status < 200) {
+		debug(1, 1) ("httpReadReply: FD %d: skipping 1xx response!\n", fd);
+		httpReplyReset(reply);
+		httpState->reply_hdr_state = 0;
+		po += done;		/* Skip the reply in the incoming buffer */
+		done = 0;		/* So we don't double-account */
+	} else {
+		/* Fail or not in parsing - we only do this loop once; and handle errors later */
+		break;
+	}
     }
 
     /* Is the header too large? Error out */
