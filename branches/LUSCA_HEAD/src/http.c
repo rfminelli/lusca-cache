@@ -680,7 +680,7 @@ httpProcessReplyHeader(HttpStateData * httpState, int s)
     httpState->reply_hdr_state++;
     assert(httpState->reply_hdr_state == 1);
     httpState->reply_hdr_state++;
-    debug(11, 9) ("GOT HTTP REPLY HDR:\n---------\n%.*s\n----------\n", hdr_size, hdr_buf);
+    debug(11, 9) ("GOT HTTP REPLY HDR:\n---------\n%.*s\n----------\n", (int) hdr_size, hdr_buf);
 
     /* Parse headers into reply structure */
     /* what happens if we fail to parse here? */
