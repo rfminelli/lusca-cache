@@ -702,7 +702,7 @@ httpProcessReplyHeader(HttpStateData * httpState, int s)
      * (But we don't currently support pipelining!)
      */
     if (reply->sline.status >= HTTP_INVALID_HEADER) {
-	debug(11, 3) ("httpProcessReplyHeader: Non-HTTP-compliant header: '%.*s'\n", hdr_size, hdr_buf);
+	debug(11, 3) ("httpProcessReplyHeader: Non-HTTP-compliant header: '%.*s'\n", (int) hdr_size, hdr_buf);
 	memBufClean(&httpState->reply_hdr);
 	ctx_exit(ctx);
         /* XXX why return hdr_len here when the memBuf used has been cleaned? */
