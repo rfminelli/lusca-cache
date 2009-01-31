@@ -71,7 +71,6 @@
 #endif
 
 #include "rfc1035.h"
-#include "snprintf.h"
 
 #define RFC1035_MAXLABELSZ 63
 #define rfc1035_unpack_error 15

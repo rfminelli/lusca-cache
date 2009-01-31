@@ -94,6 +94,8 @@ static EVH storeLateRelease;
  * local variables
  */
 static Stack LateReleaseStack;
+MemPool * pool_memobject = NULL;
+MemPool * pool_storeentry = NULL;
 
 #if URL_CHECKSUM_DEBUG
 unsigned int
@@ -113,7 +115,7 @@ url_checksum(const char *url)
 static MemObject *
 new_MemObject(const char *url)
 {
-    MemObject *mem = memAllocate(MEM_MEMOBJECT);
+    MemObject *mem = memPoolAlloc(pool_memobject);
     mem->reply = httpReplyCreate();
     mem->url = xstrdup(url);
 #if URL_CHECKSUM_DEBUG
@@ -142,7 +144,7 @@ StoreEntry *
 new_StoreEntry(int mem_obj_flag, const char *url)
 {
     StoreEntry *e = NULL;
-    e = memAllocate(MEM_STOREENTRY);
+    e = memPoolAlloc(pool_storeentry);
     if (mem_obj_flag)
 	e->mem_obj = new_MemObject(url);
     debug(20, 3) ("new_StoreEntry: returning %p\n", e);
@@ -199,7 +201,7 @@ destroy_MemObject(StoreEntry * e)
     safe_free(mem->url);
     safe_free(mem->vary_headers);
     safe_free(mem->vary_encoding);
-    memFree(mem, MEM_MEMOBJECT);
+    memPoolFree(pool_memobject, mem);
 }
 
 static void
@@ -212,7 +214,7 @@ destroy_StoreEntry(void *data)
 	destroy_MemObject(e);
     storeHashDelete(e);
     assert(e->hash.key == NULL);
-    memFree(e, MEM_STOREENTRY);
+    memPoolFree(pool_storeentry, e);
 }
 
 /* ----- INTERFACE BETWEEN STORAGE MANAGER AND HASH TABLE FUNCTIONS --------- */
@@ -658,7 +660,7 @@ storeAddVaryReadOld(void *data, mem_node_ref nr, ssize_t size)
 	int hdr_sz;
 	if (!state->oe->mem_obj->reply)
 	    goto invalid_marker_obj;
-	if (!strLen(state->oe->mem_obj->reply->content_type))
+	if (!strLen2(state->oe->mem_obj->reply->content_type))
 	    goto invalid_marker_obj;
 	if (strCmp(state->oe->mem_obj->reply->content_type, "x-squid-internal/vary") != 0) {
 	  invalid_marker_obj:
@@ -1045,8 +1047,8 @@ storeLocateVary(StoreEntry * e, int offset, const char *vary_data, String accept
 	VaryData_pool = memPoolCreate("VaryData", sizeof(VaryData));
     state = cbdataAlloc(LocateVaryState);
     state->vary_data = xstrdup(vary_data);
-    if (strBuf(accept_encoding))
-	state->accept_encoding = xstrdup(strBuf(accept_encoding));
+    if (strIsNotNull(accept_encoding))
+	state->accept_encoding = stringDupToC(&accept_encoding);
     state->data = memPoolAlloc(VaryData_pool);
     state->e = e;
     storeLockObject(state->e);
@@ -1056,7 +1058,7 @@ storeLocateVary(StoreEntry * e, int offset, const char *vary_data, String accept
     state->buf = memAllocBuf(4096, &state->buf_size);
     state->sc = storeClientRegister(state->e, state);
     state->seen_offset = offset;
-    if (!strLen(e->mem_obj->reply->content_type) || strCmp(e->mem_obj->reply->content_type, "x-squid-internal/vary") != 0) {
+    if (!strLen2(e->mem_obj->reply->content_type) || strCmp(e->mem_obj->reply->content_type, "x-squid-internal/vary") != 0) {
 	/* This is not our Vary marker object. Bail out. */
 	debug(33, 1) ("storeLocateVary: Not our vary marker object, %s = '%s', '%s'/'%s'\n",
 	    storeKeyText(e->hash.key), e->mem_obj->url, vary_data, strBuf(accept_encoding) ? strBuf(accept_encoding) : "-");
@@ -1132,14 +1134,14 @@ storeSetPublicKey(StoreEntry * e)
 	    String vary = StringNull;
 	    String varyhdr;
 	    varyhdr = httpHeaderGetList(&mem->reply->header, HDR_VARY);
-	    if (strBuf(varyhdr))
-		strListAdd(&vary, strBuf(varyhdr), ',');
+	    if (strIsNotNull(varyhdr))
+		strListAddStr(&vary, strBuf2(varyhdr), strLen2(varyhdr), ',');
 	    stringClean(&varyhdr);
 #if X_ACCELERATOR_VARY
 	    /* This needs to match the order in http.c:httpMakeVaryMark */
 	    varyhdr = httpHeaderGetList(&mem->reply->header, HDR_X_ACCELERATOR_VARY);
-	    if (strBuf(varyhdr))
-		strListAdd(&vary, strBuf(varyhdr), ',');
+	    if (strIsNotNull(varyhdr))
+		strListAddStr(&vary, strBuf2(varyhdr), strLen2(varyhdr), ',');
 	    stringClean(&varyhdr);
 #endif
 	    storeAddVary(mem->url, mem->method, newkey, httpHeaderGetStr(&mem->reply->header, HDR_ETAG), strBuf(vary), mem->vary_headers, mem->vary_encoding);
@@ -1514,7 +1516,7 @@ storeGetMemSpace(int size)
 	return;
     last_check = squid_curtime;
     pages_needed = (size / SM_PAGE_SIZE) + 1;
-    if (memInUse(MEM_MEM_NODE) + pages_needed < store_pages_max)
+    if (memPoolInUseCount(pool_mem_node) + pages_needed < store_pages_max)
 	return;
     debug(20, 3) ("storeGetMemSpace: Starting, need %d pages\n", pages_needed);
     /* XXX what to set as max_scan here? */
@@ -1523,7 +1525,7 @@ storeGetMemSpace(int size)
 	debug(20, 3) ("storeGetMemSpace: purging %p\n", e);
 	storePurgeMem(e);
 	released++;
-	if (memInUse(MEM_MEM_NODE) + pages_needed < store_pages_max) {
+	if (memPoolInUseCount(pool_mem_node) + pages_needed < store_pages_max) {
 	    debug(20, 3) ("storeGetMemSpace: we finally have enough free memory!\n");
 	    break;
 	}
@@ -1715,12 +1717,18 @@ storeInitHashValues(void)
 }
 
 void
+storeInitMem(void)
+{
+    pool_storeentry = memPoolCreate("StoreEntry", sizeof(StoreEntry));
+    pool_memobject = memPoolCreate("MemObject", sizeof(MemObject));
+}
+
+void
 storeInit(void)
 {
     storeKeyInit();
     storeInitHashValues();
-    store_table = hash_create(storeKeyHashCmp,
-	store_hash_buckets, storeKeyHashHash);
+    store_table = hash_create(storeKeyHashCmp, store_hash_buckets, storeKeyHashHash);
     mem_policy = createRemovalPolicy(Config.memPolicy);
     storeDigestInit();
     storeLogOpen();

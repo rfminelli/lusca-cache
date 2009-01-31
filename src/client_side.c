@@ -222,9 +222,10 @@ clientFollowXForwardedForStart(void *data)
     request_t *request = http->request;
     request->x_forwarded_for_iterator = httpHeaderGetList(
 	&request->header, HDR_X_FORWARDED_FOR);
-    debug(33, 5) ("clientFollowXForwardedForStart: indirect_client_addr=%s XFF='%s'\n",
+    debug(33, 5) ("clientFollowXForwardedForStart: indirect_client_addr=%s XFF='%.*s'\n",
 	inet_ntoa(request->indirect_client_addr),
-	strBuf(request->x_forwarded_for_iterator));
+	strLen2(request->x_forwarded_for_iterator),
+	strBuf2(request->x_forwarded_for_iterator));
     clientFollowXForwardedForNext(http);
 }
 
@@ -233,9 +234,10 @@ clientFollowXForwardedForNext(void *data)
 {
     clientHttpRequest *http = data;
     request_t *request = http->request;
-    debug(33, 5) ("clientFollowXForwardedForNext: indirect_client_addr=%s XFF='%s'\n",
+    debug(33, 5) ("clientFollowXForwardedForNext: indirect_client_addr=%s XFF='%.*s'\n",
 	inet_ntoa(request->indirect_client_addr),
-	strBuf(request->x_forwarded_for_iterator));
+	strLen2(request->x_forwarded_for_iterator),
+	strBuf2(request->x_forwarded_for_iterator));
     if (strLen(request->x_forwarded_for_iterator) != 0) {
 	/* check the acl to see whether to believe the X-Forwarded-For header */
 	http->acl_checklist = clientAclChecklistCreate(
@@ -287,7 +289,7 @@ clientFollowXForwardedForDone(int answer, void *data)
 	/* skip trailing space and commas */
 	while (l > 0 && (p[l - 1] == ',' || xisspace(p[l - 1])))
 	    l--;
-	strCut(request->x_forwarded_for_iterator, l);
+	strCut(&request->x_forwarded_for_iterator, l);
 	/* look for start of last item in list */
 	while (l > 0 && !(p[l - 1] == ',' || xisspace(p[l - 1])))
 	    l--;
@@ -302,7 +304,7 @@ clientFollowXForwardedForDone(int answer, void *data)
 	    inet_ntoa(request->indirect_client_addr),
 	    asciiaddr);
 	request->indirect_client_addr = addr;
-	strCut(request->x_forwarded_for_iterator, l);
+	strCut(&request->x_forwarded_for_iterator, l);
 	if (!Config.onoff.acl_uses_indirect_client) {
 	    /*
 	     * If acl_uses_indirect_client is off, then it's impossible
@@ -401,7 +403,7 @@ clientCreateStoreEntry(clientHttpRequest * h, method_t * m, request_flags flags)
     h->sc = storeClientRegister(e, h);
 #if DELAY_POOLS
     if (h->log_type != LOG_TCP_DENIED)
-	delaySetStoreClient(h->sc, delayClientRequest(h, Config.Delay.access));
+	delaySetStoreClient(h->sc, delayClient(h));
 #endif
     storeClientCopyHeaders(h->sc, e, clientSendHeaders, h);
     return e;
@@ -651,7 +653,7 @@ clientProcessETag(clientHttpRequest * http)
     http->sc = storeClientRegister(entry, http);
 #if DELAY_POOLS
     /* delay_id is already set on original store client */
-    delaySetStoreClient(http->sc, delayClientRequest(http, Config.Delay.access));
+    delaySetStoreClient(http->sc, delayClient(http));
 #endif
     http->entry = entry;
     http->out.offset = 0;
@@ -745,7 +747,7 @@ clientProcessExpired(clientHttpRequest * http)
     http->sc = storeClientRegister(entry, http);
 #if DELAY_POOLS
     /* delay_id is already set on original store client */
-    delaySetStoreClient(http->sc, delayClientRequest(http, Config.Delay.access));
+    delaySetStoreClient(http->sc, delayClient(http));
 #endif
     if (can_revalidate && http->old_entry->lastmod > 0) {
 	http->request->lastmod = http->old_entry->lastmod;
@@ -931,7 +933,7 @@ clientHandleIMSReply(void *data, HttpReply * rep)
     if (EBIT_TEST(entry->flags, ENTRY_ABORTED)) {
 	/* Old object got aborted, not good */
 	clientProcessMiss(http);
-	return;
+        return;
     }
     if (recopy) {
 	storeClientCopyHeaders(http->sc, entry,
@@ -1414,12 +1416,11 @@ clientInterpretRequestHeaders(clientHttpRequest * http)
 	int may_pin = 0;
 	while ((e = httpHeaderGetEntry(req_hdr, &pos))) {
 	    if (e->id == HDR_AUTHORIZATION || e->id == HDR_PROXY_AUTHORIZATION) {
-		const char *value = strBuf(e->value);
-		if (strncasecmp(value, "NTLM ", 5) == 0
+		if (strNCaseCmp(e->value, "NTLM ", 5) == 0
 		    ||
-		    strncasecmp(value, "Negotiate ", 10) == 0
+		    strNCaseCmp(e->value, "Negotiate ", 10) == 0
 		    ||
-		    strncasecmp(value, "Kerberos ", 9) == 0) {
+		    strNCaseCmp(e->value, "Kerberos ", 9) == 0) {
 		    if (e->id == HDR_AUTHORIZATION) {
 			request->flags.connection_auth = 1;
 			may_pin = 1;
@@ -1939,7 +1940,7 @@ clientBuildReplyHeader(clientHttpRequest * http, HttpReply * rep)
 	    rep->sline.version.minor, ThisCache);
 	strListAdd(&strVia, bbuf, ',');
 	httpHeaderDelById(hdr, HDR_VIA);
-	httpHeaderPutStr(hdr, HDR_VIA, strBuf(strVia));
+	httpHeaderPutString(hdr, HDR_VIA, &strVia);
 	stringClean(&strVia);
     }
     /* Signal keep-alive if needed */
@@ -2182,7 +2183,7 @@ clientAsyncRefresh(clientHttpRequest * http)
     }
 #if DELAY_POOLS
     /* delay_id is already set on original store client */
-    delaySetStoreClient(async->sc, delayClientRequest(http, Config.Delay.access));
+    delaySetStoreClient(async->sc, delayClient(http));
 #endif
     fwdStart(-1, async->entry, async->request);
     storeClientRef(async->sc, async->entry,
@@ -2496,7 +2497,7 @@ clientProcessHit(clientHttpRequest * http)
 static void
 clientPackTermBound(String boundary, MemBuf * mb)
 {
-    memBufPrintf(mb, "\r\n--%s--\r\n", strBuf(boundary));
+    memBufPrintf(mb, "\r\n--%.*s--\r\n", strLen2(boundary), strBuf2(boundary));
     debug(33, 6) ("clientPackTermBound: buf offset: %ld\n", (long int) mb->size);
 }
 
@@ -2510,9 +2511,9 @@ clientPackRangeHdr(const HttpReply * rep, const HttpHdrRangeSpec * spec, String 
     assert(spec);
 
     /* put boundary */
-    debug(33, 5) ("clientPackRangeHdr: appending boundary: %s\n", strBuf(boundary));
+    debug(33, 5) ("clientPackRangeHdr: appending boundary: %.*s\n", strLen2(boundary), strBuf2(boundary));
     /* rfc2046 requires to _prepend_ boundary with <crlf>! */
-    memBufPrintf(mb, "\r\n--%s\r\n", strBuf(boundary));
+    memBufPrintf(mb, "\r\n--%.*s\r\n", strLen2(boundary), strBuf2(boundary));
 
     /* stuff the header with required entries and pack it */
     httpHeaderInit(&hdr, hoReply);
@@ -2859,9 +2860,6 @@ static void
 clientSendHeaders(void *data, HttpReply * rep)
 {
     //const char *buf = ref.node->data + ref.offset;
-#if DELAY_POOLS
-    delay_id delayid;
-#endif
     clientHttpRequest *http = data;
     StoreEntry *entry = http->entry;
     ConnStateData *conn = http->conn;
@@ -2931,19 +2929,6 @@ clientSendHeaders(void *data, HttpReply * rep)
 #if DELAY_POOLS
     clientDelayMaxBodySize(http->request, http, rep);
 #endif
-
-#if DELAY_POOLS
-    /* Write-side Delay Pools */
-
-    /* -request- ACL matching */
-    http->delayid = delayClientRequest(http, Config.Delay.accessClientRequest);
-
-    /* -reply- ACL matching */
-    delayid = delayClientReply(http, Config.Delay.accessClientReply);
-    if (delayid)
-	http->delayid = delayid;
-#endif
-
     if (http->log_type != LOG_TCP_DENIED && clientReplyBodyTooLarge(http, rep->content_length)) {
 	ErrorState *err = errorCon(ERR_TOO_BIG, HTTP_FORBIDDEN, http->orig_request);
 	storeClientUnregister(http->sc, http->entry, http);
@@ -3192,11 +3177,6 @@ clientCheckHeaderDone(clientHttpRequest * http)
     /* write headers and initial body */
     if (mb.size > 0) {
 	comm_write_mbuf(http->conn->fd, mb, clientWriteComplete, http);
-#if 0
-	/* XXX no need to delay the headers? Maybe; maybe not -adrian */
-	if (http->delayid)
-	    comm_write_set_delaypool(http->conn->fd, http->delayid);
-#endif
     } else {
 	storeClientRef(http->sc, http->entry,
 	    http->out.offset,
@@ -3254,10 +3234,6 @@ clientSendMoreData(void *data, mem_node_ref ref, ssize_t size)
 	/* XXX eww - these refcounting semantics should be better adrian! fix it! */
 	http->nr = ref;
 	comm_write(fd, buf, size, clientWriteBodyComplete, http, NULL);
-#if DELAY_POOLS
-	if (http->delayid)
-	    comm_write_set_delaypool(fd, http->delayid);
-#endif
 	/* NULL because clientWriteBodyComplete frees it */
 	return;
     }
@@ -3300,15 +3276,11 @@ clientSendMoreData(void *data, mem_node_ref ref, ssize_t size)
     } else {
 	comm_write_mbuf(fd, mb, clientWriteComplete, http);
     }
-#if DELAY_POOLS
-    if (http->delayid)
-	comm_write_set_delaypool(fd, http->delayid);
-#endif
     stmemNodeUnref(&ref);
 }
 
 /*
- * clientWriteBodyComplete is called for MEM_STORE_CLIENT_BUF's
+ * clientWriteBodyComplete is called for buffers
  * written directly to the client socket, versus copying to a MemBuf
  * and going through comm_write_mbuf.  Most non-range responses after
  * the headers probably go through here.
@@ -3432,11 +3404,6 @@ clientWriteComplete(int fd, char *bufnotused, size_t size, int errflag, void *da
 	    /* Finish chunked transfer encoding */
 	    http->request->flags.chunked_response = 0;	/* no longer chunking */
 	    comm_write(http->conn->fd, "0\r\n\r\n", 5, clientWriteComplete, http, NULL);
-#if 0
-	    /* XXX No need to really "delay" the end chunk? -adrian */
-	    if (http->delayid)
-		comm_write_set_delaypool(fd, http->delayid);
-#endif
 	} else if (http->request->body_reader == clientReadBody) {
 	    debug(33, 5) ("clientWriteComplete: closing, but first we need to read the rest of the request\n");
 	    /* XXX We assumes the reply does fit in the TCP transmit window.
@@ -3463,7 +3430,7 @@ clientWriteComplete(int fd, char *bufnotused, size_t size, int errflag, void *da
 		http->sc->delay_id);
 	    delayUnregisterDelayIdPtr(&http->sc->delay_id);
 	    delaySetStoreClient(http->sc, delayPoolClient(http->delayAssignedPool,
-		    http->conn->fd, (in_addr_t) http->conn->peer.sin_addr.s_addr));
+		    (in_addr_t) http->conn->peer.sin_addr.s_addr));
 	}
 #endif
 	/* More data will be coming from primary server; register with 
@@ -3706,7 +3673,7 @@ clientProcessRequest(clientHttpRequest * http)
 	http->entry->mem_obj->method = r->method;
 	http->sc = storeClientRegister(http->entry, http);
 #if DELAY_POOLS
-	delaySetStoreClient(http->sc, delayClientRequest(http, Config.Delay.access));
+	delaySetStoreClient(http->sc, delayClient(http));
 #endif
 	storeClientCopyHeaders(http->sc, http->entry,
 	    clientCacheHit,
@@ -3847,8 +3814,8 @@ clientProcessMiss(clientHttpRequest * http)
 	if (r->vary_headers)
 	    http->entry->mem_obj->vary_headers = xstrdup(r->vary_headers);
 	safe_free(http->entry->mem_obj->vary_encoding);
-	if (strBuf(r->vary_encoding))
-	    http->entry->mem_obj->vary_encoding = xstrdup(strBuf(r->vary_encoding));
+	if (strIsNotNull(r->vary_encoding))
+	    http->entry->mem_obj->vary_encoding = stringDupToC(&r->vary_encoding);
 	http->entry->mem_obj->request = requestLink(r);
 	EBIT_SET(http->entry->flags, KEY_EARLY_PUBLIC);
 	storeSetPublicKey(http->entry);
@@ -3868,10 +3835,13 @@ clientProcessMiss(clientHttpRequest * http)
     clientBeginForwarding(http);
 }
 
+CBDATA_TYPE(clientHttpRequest);
+
 static clientHttpRequest *
 parseHttpRequestAbort(ConnStateData * conn, const char *uri)
 {
     clientHttpRequest *http;
+    CBDATA_INIT_TYPE(clientHttpRequest);
     http = cbdataAlloc(clientHttpRequest);
     http->conn = conn;
     http->start = current_time;
@@ -3972,6 +3942,7 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, 
     assert(prefix_sz <= conn->in.offset);
 
     /* Ok, all headers are received */
+    CBDATA_INIT_TYPE(clientHttpRequest);
     http = cbdataAlloc(clientHttpRequest);
     http->http_ver = http_ver;
     http->conn = conn;
@@ -4192,7 +4163,7 @@ clientTryParseRequest(ConnStateData * conn)
 	conn->nrequests++;
 	commSetTimeout(fd, Config.Timeout.lifetime, clientLifetimeTimeout, http);
 	if (parser_return_code < 0) {
-	    debug(33, 1) ("clientTryParseRequest: FD %d (%s:%d) Invalid Request\n", fd, fd_table[fd].ipaddr, fd_table[fd].remote_port);
+	    debug(33, 1) ("clientTryParseRequest: FD %d (%s:%d) Invalid Request\n", fd, fd_table[fd].ipaddrstr, fd_table[fd].remote_port);
 	    err = errorCon(ERR_INVALID_REQ, HTTP_BAD_REQUEST, NULL);
 	    err->src_addr = conn->peer.sin_addr;
 	    err->request_hdrs = xstrdup(conn->in.buf);
@@ -4249,9 +4220,7 @@ clientTryParseRequest(ConnStateData * conn)
 	}
 	if (conn->port->urlgroup)
 	    request->urlgroup = xstrdup(conn->port->urlgroup);
-#if LINUX_TPROXY
 	request->flags.tproxy = conn->port->tproxy && need_linux_tproxy;
-#endif
 	request->flags.accelerated = http->flags.accel;
 	request->flags.no_direct = request->flags.accelerated ? !conn->port->allow_direct : 0;
 	request->flags.transparent = http->flags.transparent;
@@ -4374,7 +4343,7 @@ clientReadRequest(int fd, void *data)
 	    (long) conn->in.offset, (long) conn->in.size);
 	len = conn->in.size - conn->in.offset - 1;
     }
-    statCounter.syscalls.sock.reads++;
+    CommStats.syscalls.sock.reads++;
     size = FD_READ_METHOD(fd, conn->in.buf + conn->in.offset, len);
     debug(33, 4) ("clientReadRequest: FD %d: read %d bytes\n", fd, size);
     if (size > 0) {
@@ -4828,6 +4797,8 @@ clientNatLookup(ConnStateData * conn)
 }
 #endif
 
+CBDATA_TYPE(ConnStateData);
+
 /* Handle a new connection on HTTP socket. */
 void
 httpAccept(int sock, void *data)
@@ -4836,53 +4807,66 @@ httpAccept(int sock, void *data)
     int fd = -1;
     fde *F;
     ConnStateData *connState = NULL;
-    struct sockaddr_in peer;
-    struct sockaddr_in me;
+    sqaddr_t peer;
+    sqaddr_t me;
     int max = INCOMING_HTTP_MAX;
 #if USE_IDENT
     static aclCheck_t identChecklist;
 #endif
     commSetSelect(sock, COMM_SELECT_READ, httpAccept, data, 0);
     while (max-- && !httpAcceptDefer(sock, NULL)) {
-	memset(&peer, '\0', sizeof(struct sockaddr_in));
-	memset(&me, '\0', sizeof(struct sockaddr_in));
+        sqinet_init(&peer);
+        sqinet_init(&me);
 	if ((fd = comm_accept(sock, &peer, &me)) < 0) {
 	    if (!ignoreErrno(errno))
 		debug(50, 1) ("httpAccept: FD %d: accept failure: %s\n",
 		    sock, xstrerror());
-	    break;
+            sqinet_done(&peer);
+            sqinet_done(&me);
+            break;
 	}
+        if (sqinet_get_family(&peer) != AF_INET) {
+            debug(1, 1) ("httpAccept: FD %d: (%s:%d) is not an IPv4 socket!\n", fd, fd_table[fd].ipaddrstr, fd_table[fd].local_port);
+            comm_close(fd);
+            sqinet_done(&peer);
+            sqinet_done(&me);
+            break;
+       }
+
 	F = &fd_table[fd];
-	debug(33, 4) ("httpAccept: FD %d: accepted port %d client %s:%d\n", fd, F->local_port, F->ipaddr, F->remote_port);
+	debug(33, 4) ("httpAccept: FD %d: accepted port %d client %s:%d\n", fd, F->local_port, F->ipaddrstr, F->remote_port);
 	fd_note_static(fd, "client http connect");
+        CBDATA_INIT_TYPE(ConnStateData);
 	connState = cbdataAlloc(ConnStateData);
 	connState->port = s;
 	cbdataLock(connState->port);
-	connState->peer = peer;
-	connState->log_addr = peer.sin_addr;
+	sqinet_get_v4_sockaddr_ptr(&peer, &connState->peer, SQADDR_ASSERT_IS_V4);
+	connState->log_addr = connState->peer.sin_addr;
 	connState->log_addr.s_addr &= Config.Addrs.client_netmask.s_addr;
-	connState->me = me;
+	sqinet_get_v4_sockaddr_ptr(&me, &connState->me, SQADDR_ASSERT_IS_V4);
 	connState->fd = fd;
 	connState->pinning.fd = -1;
 	connState->in.buf = memAllocBuf(CLIENT_REQ_BUF_SZ, &connState->in.size);
 	comm_add_close_handler(fd, connStateFree, connState);
 	if (Config.onoff.log_fqdn)
-	    fqdncache_gethostbyaddr(peer.sin_addr, FQDN_LOOKUP_IF_MISS);
+	    fqdncache_gethostbyaddr(sqinet_get_v4_inaddr(&peer, SQADDR_ASSERT_IS_V4), FQDN_LOOKUP_IF_MISS);
 	commSetTimeout(fd, Config.Timeout.request, requestTimeout, connState);
 #if USE_IDENT
-	identChecklist.src_addr = peer.sin_addr;
-	identChecklist.my_addr = me.sin_addr;
-	identChecklist.my_port = ntohs(me.sin_port);
+	identChecklist.src_addr = sqinet_get_v4_inaddr(&peer, SQADDR_ASSERT_IS_V4);
+	identChecklist.my_addr = sqinet_get_v4_inaddr(&me, SQADDR_ASSERT_IS_V4);
+	identChecklist.my_port = sqinet_get_port(&me);
 	if (aclCheckFast(Config.accessList.identLookup, &identChecklist))
-	    identStart(&me, &peer, clientIdentDone, connState);
+	    identStart4(&connState->me, &connState->peer, clientIdentDone, connState);
 #endif
 	commSetSelect(fd, COMM_SELECT_READ, clientReadRequest, connState, 0);
 	commSetDefer(fd, clientReadDefer, connState);
 	if (s->tcp_keepalive.enabled) {
 	    commSetTcpKeepalive(fd, s->tcp_keepalive.idle, s->tcp_keepalive.interval, s->tcp_keepalive.timeout);
 	}
-	clientdbEstablished(peer.sin_addr, 1);
+	clientdbEstablished(sqinet_get_v4_inaddr(&peer, SQADDR_ASSERT_IS_V4), 1);
 	incoming_sockets_accepted++;
+        sqinet_done(&peer);
+        sqinet_done(&me);
     }
 }
 
@@ -4934,7 +4918,7 @@ clientNegotiateSSL(int fd, void *data)
     }
     fd_table[fd].read_pending = COMM_PENDING_NOW;
     if (SSL_session_reused(ssl)) {
-	debug(83, 2) ("clientNegotiateSSL: Session %p reused on FD %d (%s:%d)\n", SSL_get_session(ssl), fd, fd_table[fd].ipaddr, (int) fd_table[fd].remote_port);
+	debug(83, 2) ("clientNegotiateSSL: Session %p reused on FD %d (%s:%d)\n", SSL_get_session(ssl), fd, fd_table[fd].ipaddrstr, (int) fd_table[fd].remote_port);
     } else {
 	if (do_debug(83, 4)) {
 	    /* Write out the SSL session details.. actually the call below, but
@@ -4947,7 +4931,7 @@ clientNegotiateSSL(int fd, void *data)
 #endif
 	    /* Note: This does not automatically fflush the log file.. */
 	}
-	debug(83, 2) ("clientNegotiateSSL: New session %p on FD %d (%s:%d)\n", SSL_get_session(ssl), fd, fd_table[fd].ipaddr, (int) fd_table[fd].remote_port);
+	debug(83, 2) ("clientNegotiateSSL: New session %p on FD %d (%s:%d)\n", SSL_get_session(ssl), fd, fd_table[fd].ipaddrstr, (int) fd_table[fd].remote_port);
     }
     debug(83, 3) ("clientNegotiateSSL: FD %d negotiated cipher %s\n", fd,
 	SSL_get_cipher(ssl));
@@ -4999,8 +4983,8 @@ httpsAccept(int sock, void *data)
     https_port_list *s = data;
     int fd = -1;
     ConnStateData *connState = NULL;
-    struct sockaddr_in peer;
-    struct sockaddr_in me;
+    sqaddr_t peer;
+    sqaddr_t me;
     int max = INCOMING_HTTP_MAX;
 #if USE_IDENT
     static aclCheck_t identChecklist;
@@ -5008,43 +4992,55 @@ httpsAccept(int sock, void *data)
     commSetSelect(sock, COMM_SELECT_READ, httpsAccept, s, 0);
     while (max-- && !httpAcceptDefer(sock, NULL)) {
 	fde *F;
-	memset(&peer, '\0', sizeof(struct sockaddr_in));
-	memset(&me, '\0', sizeof(struct sockaddr_in));
+	sqinet_init(&peer);
+	sqinet_init(&me);
 	if ((fd = comm_accept(sock, &peer, &me)) < 0) {
 	    if (!ignoreErrno(errno))
 		debug(50, 1) ("httpsAccept: FD %d: accept failure: %s\n",
 		    sock, xstrerror());
+            sqinet_done(&peer);
+            sqinet_done(&me);
 	    break;
 	}
+        if (sqinet_get_family(&peer) != AF_INET) {
+            debug(1, 1) ("httpsAccept: FD %d: (%s:%d) is not an IPv4 socket!\n", fd, fd_table[fd].ipaddrstr, fd_table[fd].local_port);
+            comm_close(fd);
+            sqinet_done(&peer);
+            sqinet_done(&me);
+            break;
+       }
+
 	F = &fd_table[fd];
-	debug(33, 4) ("httpsAccept: FD %d: accepted port %d client %s:%d\n", fd, F->local_port, F->ipaddr, F->remote_port);
+	debug(33, 4) ("httpsAccept: FD %d: accepted port %d client %s:%d\n", fd, F->local_port, F->ipaddrstr, F->remote_port);
 	connState = cbdataAlloc(ConnStateData);
 	connState->port = (http_port_list *) s;
 	cbdataLock(connState->port);
-	connState->peer = peer;
-	connState->log_addr = peer.sin_addr;
+	sqinet_get_v4_sockaddr_ptr(&peer, &connState->peer, SQADDR_ASSERT_IS_V4);
+	connState->log_addr = connState->peer.sin_addr;
 	connState->log_addr.s_addr &= Config.Addrs.client_netmask.s_addr;
-	connState->me = me;
+	sqinet_get_v4_sockaddr_ptr(&me, &connState->me, SQADDR_ASSERT_IS_V4);
 	connState->fd = fd;
 	connState->pinning.fd = -1;
 	connState->in.buf = memAllocBuf(CLIENT_REQ_BUF_SZ, &connState->in.size);
 	comm_add_close_handler(fd, connStateFree, connState);
 	if (Config.onoff.log_fqdn)
-	    fqdncache_gethostbyaddr(peer.sin_addr, FQDN_LOOKUP_IF_MISS);
+	    fqdncache_gethostbyaddr(connState->peer.sin_addr, FQDN_LOOKUP_IF_MISS);
 	commSetTimeout(fd, Config.Timeout.request, requestTimeout, connState);
 #if USE_IDENT
-	identChecklist.src_addr = peer.sin_addr;
-	identChecklist.my_addr = me.sin_addr;
-	identChecklist.my_port = ntohs(me.sin_port);
+	identChecklist.src_addr = sqinet_get_v4_inaddr(&peer, SQADDR_ASSERT_IS_V4);
+	identChecklist.my_addr = sqinet_get_v4_inaddr(&me, SQADDR_ASSERT_IS_V4);
+	identChecklist.my_port = sqinet_get_port(&me);
 	if (aclCheckFast(Config.accessList.identLookup, &identChecklist))
-	    identStart(&me, &peer, clientIdentDone, connState);
+	    identStart4(&connState->me, &connState->peer, clientIdentDone, connState);
 #endif
 	if (s->http.tcp_keepalive.enabled) {
 	    commSetTcpKeepalive(fd, s->http.tcp_keepalive.idle, s->http.tcp_keepalive.interval, s->http.tcp_keepalive.timeout);
 	}
-	clientdbEstablished(peer.sin_addr, 1);
+	clientdbEstablished(sqinet_get_v4_inaddr(&peer, SQADDR_ASSERT_IS_V4), 1);
 	incoming_sockets_accepted++;
 	httpsAcceptSSL(connState, s->sslContext);
+        sqinet_done(&peer);
+        sqinet_done(&me);
     }
 }
 
@@ -5198,6 +5194,7 @@ clientHttpConnectionsOpen(void)
 		no_addr,
 		ntohs(s->s.sin_port),
 		COMM_NONBLOCKING,
+		COMM_TOS_DEFAULT,
 		"HTTP Socket");
 	} else {
 	    enter_suid();
@@ -5206,6 +5203,7 @@ clientHttpConnectionsOpen(void)
 		s->s.sin_addr,
 		ntohs(s->s.sin_port),
 		COMM_NONBLOCKING,
+		COMM_TOS_DEFAULT,
 		"HTTP Socket");
 	    leave_suid();
 	}
@@ -5249,6 +5247,7 @@ clientHttpsConnectionsOpen(void)
 	    s->http.s.sin_addr,
 	    ntohs(s->http.s.sin_port),
 	    COMM_NONBLOCKING,
+	    COMM_TOS_DEFAULT,
 	    "HTTPS Socket");
 	leave_suid();
 	if (fd < 0)
@@ -5381,7 +5380,7 @@ clientPinConnection(ConnStateData * conn, int fd, const request_t * request, pee
     conn->pinning.auth = auth;
     f = &fd_table[conn->fd];
     snprintf(desc, FD_DESC_SZ, "%s pinned connection for %s:%d (%d)",
-	(auth || !peer) ? host : peer->name, f->ipaddr, (int) f->remote_port, conn->fd);
+	(auth || !peer) ? host : peer->name, f->ipaddrstr, (int) f->remote_port, conn->fd);
     fd_note(fd, desc);
     comm_add_close_handler(fd, clientPinnedConnectionClosed, conn);
 }
@@ -5439,7 +5438,7 @@ clientReassignDelaypools(void)
 	clientHttpRequest *http = i->data;
 	assert(http);
 	if (http->sc && http->log_type != LOG_TCP_DENIED && http->log_type != LOG_TAG_NONE)
-	    delaySetStoreClient(http->sc, delayClientRequest(http, Config.Delay.access));
+	    delaySetStoreClient(http->sc, delayClient(http));
 	if (http->reply)
 	    http->delayMaxBodySize = 0;
 	http->delayAssignedPool = 0;

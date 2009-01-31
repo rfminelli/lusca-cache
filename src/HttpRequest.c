@@ -35,18 +35,29 @@
 
 #include "squid.h"
 
+static MemPool * pool_request_t = NULL;
+
+void
+requestInitMem(void)
+{
+    pool_request_t = memPoolCreate("request_t", sizeof(request_t));
+}
+
 request_t *
 requestCreate(method_t * method, protocol_t protocol, const char *urlpath)
 {
-    request_t *req = memAllocate(MEM_REQUEST_T);
-    req->method = method;
+    request_t *req = memPoolAlloc(pool_request_t);
+    if (method)
+        req->method = method;
+    else
+        req->method = urlMethodGetKnownByCode(METHOD_NONE);
     req->protocol = protocol;
     if (urlpath)
 	stringReset(&req->urlpath, urlpath);
     req->max_forwards = -1;
     req->lastmod = -1;
-    req->client_addr = no_addr;
-    req->my_addr = no_addr;
+    SetNoAddr(&req->client_addr);
+    SetNoAddr(&req->my_addr);
     httpHeaderInit(&req->header, hoRequest);
     return req;
 }
@@ -86,7 +97,7 @@ requestDestroy(request_t * req)
 	cbdataUnlock(req->pinned_connection);
     req->pinned_connection = NULL;
     urlMethodFree(req->method);
-    memFree(req, MEM_REQUEST_T);
+    memPoolFree(pool_request_t, req);
 }
 
 request_t *
@@ -114,8 +125,8 @@ httpRequestPack(const request_t * req, Packer * p)
 {
     assert(req && p);
     /* pack request-line */
-    packerPrintf(p, "%s %s HTTP/%d.%d\r\n",
-	req->method->string, strBuf(req->urlpath), req->http_ver.major, req->http_ver.minor);
+    packerPrintf(p, "%s %.*s HTTP/%d.%d\r\n",
+	req->method->string, strLen2(req->urlpath), strBuf2(req->urlpath), req->http_ver.major, req->http_ver.minor);
     /* headers */
     httpHeaderPackInto(&req->header, p);
     /* trailer */

@@ -64,7 +64,6 @@
 #include "assert.h"
 
 #include "util.h"
-#include "snprintf.h"
 
 #define RFC850_STRFTIME "%A, %d-%b-%y %H:%M:%S GMT"
 #define RFC1123_STRFTIME "%a, %d %b %Y %H:%M:%S GMT"

@@ -35,10 +35,21 @@
 
 #include "squid.h"
 
+MemPool * pool_swap_tlv = NULL;
+MemPool * pool_swap_log_data = NULL;
+
+void
+storeSwapTLVInitMem(void)
+{
+    pool_swap_tlv = memPoolCreate("storeSwapTLV", sizeof(tlv));
+    /* XXX This doesn't strictly belong here! */
+    pool_swap_log_data = memPoolCreate("storeSwapLogData", sizeof(storeSwapLogData));
+}
+
 static tlv **
 storeSwapTLVAdd(int type, const void *ptr, size_t len, tlv ** tail)
 {
-    tlv *t = memAllocate(MEM_TLV);
+    tlv *t = memPoolAlloc(pool_swap_tlv);
     t->type = (char) type;
     t->length = (int) len;
     t->value = xmalloc(len);
@@ -54,7 +65,7 @@ storeSwapTLVFree(tlv * n)
     while ((t = n) != NULL) {
 	n = t->next;
 	xfree(t->value);
-	memFree(t, MEM_TLV);
+	memPoolFree(pool_swap_tlv, t);
     }
 }
 
@@ -89,6 +100,85 @@ storeSwapMetaBuild(StoreEntry * e)
     if (e->mem_obj->store_url)
 	T = storeSwapTLVAdd(STORE_META_STOREURL, e->mem_obj->store_url, strlen(e->mem_obj->store_url) + 1, T);
     return TLV;
+}
+
+static inline char *
+storeSwapMetaAssemblePart(char *buf, char t, const void *b, int l)
+{
+	*buf = (char) t;
+	buf++;
+
+	xmemcpy(buf, &l, sizeof(int));
+	buf += sizeof(int);
+
+	xmemcpy(buf, b, l);
+	buf += l;
+	return buf;
+}
+
+/*
+ * Combined function - take a StoreEntry, return a TLV built for you
+ */
+char *
+storeSwapMetaAssemble(StoreEntry *e, int *length)
+{
+	char *b, *buf;
+	int buflen;
+	const squid_off_t objsize = objectLen(e);
+	const char *vary, *url, *storeurl;
+	int v_len = 0, u_len = 0, s_len = 0;
+
+	/* calculate length of entire buffer */
+	vary = e->mem_obj->vary_headers;
+	if (vary)
+		v_len = strlen(vary);
+	url = storeUrl(e);
+	u_len = strlen(url);
+	storeurl = e->mem_obj->store_url;
+	if (storeurl)
+		s_len = strlen(storeurl);
+		
+	/* header byte + length */
+	buflen = sizeof(int) + sizeof(char);
+	/* add in data - '3' is the extra bytes from the strings! */
+	buflen += SQUID_MD5_DIGEST_LENGTH + STORE_HDR_METASIZE + u_len + sizeof(objsize) + v_len + s_len + 3;
+	/* add in the type + length for the above */
+	buflen += (sizeof(char) + sizeof(int)) * 6;
+	b = buf = xmalloc(buflen);
+
+	/* First - SWAP_META_OK */
+	b = storeSwapMetaAssemblePart(b, STORE_META_OK, &buflen, sizeof(int));
+
+	/* Meta key */
+	b = storeSwapMetaAssemblePart(b, STORE_META_KEY, e->hash.key, SQUID_MD5_DIGEST_LENGTH);
+
+	/* timestamp */
+#if SIZEOF_SQUID_FILE_SZ == SIZEOF_SIZE_T
+	b = storeSwapMetaAssemblePart(b, STORE_META_STD, &e->timestamp, STORE_HDR_METASIZE);
+#else
+	b = storeSwapMetaAssemblePart(b, STORE_META_STD_LFS, &e->timestamp, STORE_HDR_METASIZE);
+#endif
+
+	/* url */
+	b = storeSwapMetaAssemblePart(b, STORE_META_URL, url, u_len + 1);
+
+	/* object size */
+	if (objsize > -1) {
+		b = storeSwapMetaAssemblePart(b, STORE_META_OBJSIZE, &objsize, sizeof(objsize));
+	}
+
+	/* vary headers */
+	if (vary)
+		b = storeSwapMetaAssemblePart(b, STORE_META_VARY_HEADERS, vary, v_len + 1);
+
+	/* store url */
+	if (storeurl)
+		b = storeSwapMetaAssemblePart(b, STORE_META_STOREURL, storeurl, s_len + 1);
+
+	/* Finish; return what we did */
+	*length = b - buf;
+	assert(*length < buflen);
+	return buf;
 }
 
 char *

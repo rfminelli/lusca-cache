@@ -170,8 +170,8 @@ storeUpdate(StoreEntry * entry, request_t * request)
 	vary = httpMakeVaryMark(request, state->newentry->mem_obj->reply);
 	if (vary) {
 	    state->newentry->mem_obj->vary_headers = xstrdup(vary);
-	    if (strBuf(request->vary_encoding))
-		state->newentry->mem_obj->vary_encoding = xstrdup(strBuf(request->vary_encoding));
+	    if (strIsNotNull(request->vary_encoding))
+		state->newentry->mem_obj->vary_encoding = stringDupToC(&request->vary_encoding);
 	}
     } else {
 	if (entry->mem_obj->vary_headers)

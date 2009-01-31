@@ -430,7 +430,7 @@ internalRedirectProcessURL(clientHttpRequest * req, rewritetoken * head)
 	    str = req->uri;
 	    break;
 	case RFT_URLPATH:
-	    str = req->request->urlpath.buf;
+	    str = strBuf(req->request->urlpath);
 	    break;
 	case RFT_URLHOST:
 	    str = req->request->host;
@@ -439,7 +439,7 @@ internalRedirectProcessURL(clientHttpRequest * req, rewritetoken * head)
 	    str = httpHeaderGetStr(&req->request->header, HDR_HOST);
 	    break;
 	case RFT_EXTERNALACL_LOGSTR:
-	    str = req->request->extacl_log.buf;
+	    str = strBuf(req->request->extacl_log);
 	    break;
 	default:
 	    assert(0 && "Invalid rewrite token type");

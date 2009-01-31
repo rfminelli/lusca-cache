@@ -71,7 +71,7 @@ httpReplyInitModule(void)
 HttpReply *
 httpReplyCreate(void)
 {
-    HttpReply *rep = memAllocate(MEM_HTTP_REPLY);
+    HttpReply *rep = memPoolAlloc(pool_http_reply);
 
     debug(58, 7) ("creating rep: %p\n", rep);
     httpReplyInit(rep);
@@ -314,7 +314,7 @@ httpReplyUpdateOnNotModified(HttpReply * rep, HttpReply * freshRep)
 static void
 httpReplyDoDestroy(HttpReply * rep)
 {
-    memFree(rep, MEM_HTTP_REPLY);
+    memPoolFree(pool_http_reply, rep);
 }
 
 static time_t

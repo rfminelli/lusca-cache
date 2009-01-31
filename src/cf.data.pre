@@ -1889,8 +1889,9 @@ DOC_START
 	list this option multiple times. Note: never_direct overrides
 	this option.
 NOCOMMENT_START
-#We recommend you to use at least the following line.
-hierarchy_stoplist cgi-bin ?
+# We used to recommend you to use at least the following line;
+# this is now done using refresh_pattern entries.
+# hierarchy_stoplist cgi-bin ?
 NOCOMMENT_END
 DOC_END
 
@@ -4149,15 +4150,6 @@ Example:
 				"individual" bucket chosen from bits 17 through
 				32 of the IP address.
 
-		class 4		Not yet implemented in Squid-2 - a per-user pool
-
-		class 5		Not yet implemented in Squid-2 - a per-extacl tag pool
-
-		class 6		Squid-2 specific: Everything is limited by a single
-				aggregate bucket as well as an "individual" bucket
-				per-_CLIENT_-connection (whether used on client or
-				server delay pools.)
-
 	NOTE: If an IP address is a.b.c.d
 		-> bits 25 through 32 are "d"
 		-> bits 17 through 24 are "c"
@@ -4168,7 +4160,7 @@ NAME: delay_access
 TYPE: delay_pool_access
 DEFAULT: none
 IFDEF: DELAY_POOLS
-LOC: Config.Delay.access
+LOC: Config.Delay
 DOC_START
 	This is used to determine which delay pool a request falls into.
 	It operates on the HTTP request and not the HTTP reply.
@@ -4187,38 +4179,6 @@ Example:
  delay_access 2 allow lotsa_little_clients
  delay_access 2 deny all
 DOC_END
-
-NAME: delay_client_request_access
-TYPE: delay_pool_access
-DEFAULT: none
-IFDEF: DELAY_POOLS
-LOC: Config.Delay.accessClientRequest
-DOC_START
-	This is used to determine which delay pool a client-side connection
-	falls into, based on the -request- information. The delay is introduced 
-	on the data being sent to the client regardless of whether the data
-	is coming from the cache or from an upstream.
-
-	The default is to not client-delay any replies.
-DOC_END
-
-NAME: delay_client_reply_access
-TYPE: delay_pool_access
-DEFAULT: none
-IFDEF: DELAY_POOLS
-LOC: Config.Delay.accessClientReply
-DOC_START
-	This is used to determine which delay pool a client-side connection
-	falls into, based on the -reply- information. The delay is introduced 
-	on the data being sent to the client regardless of whether the data
-	is coming from the cache or from an upstream.
-
-	This is evaluated after delay_client_request_access and may override
-	the decision in delay_client_request_access. Be careful!
-
-	The default is to not client-delay any replies.
-DOC_END
-
 
 NAME: delay_parameters
 TYPE: delay_pool_rates
@@ -4239,10 +4199,6 @@ delay_parameters pool aggregate individual
 	For a class 3 delay pool:
 
 delay_parameters pool aggregate network individual
-
-	For a class 6 delay pool:
-
-delay_parameters pool aggregate individual
 
 	The variables here are:
 
@@ -4786,6 +4742,29 @@ DOC_START
 
 	NOTE, udp_incoming_address and udp_outgoing_address can not
 	have the same value since they both use the same port.
+DOC_END
+
+NAME: udp_outgoing_address6
+TYPE: address6
+LOC: Config.Addrs.udp_outgoing6
+DEFAULT: ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+DOC_START
+	udp_outgoing_address6	is used for UDP IPv6 packets sent out to
+				other caches.
+
+	See: udp_outgoing_address for a description of this option.
+
+DOC_END
+
+NAME: udp_incoming_address6
+TYPE: address6
+LOC: Config.Addrs.udp_incoming6
+DEFAULT: ::0
+DOC_START
+	udp_incoming_address6	is used for UDP IPv6 packets received from
+				other caches.
+
+	See: udp_incoming_address for a description of this option.
 DOC_END
 
 NAME: icp_hit_stale
@@ -5932,5 +5911,14 @@ DOC_START
 	Note: after changing this, Squid service must be restarted.
 DOC_END
 
+NAME: n_aiops_threads
+COMMENT: (number of threads)
+TYPE: int
+LOC: Config.aiops.n_aiops_threads
+DEFAULT: -1
+DOC_START
+	Override the compile-time/run-time number of total aio threads.
+	The default value (-1) means "use the legacy compile-time calculation."
+DOC_END
 
 EOF

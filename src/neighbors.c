@@ -281,20 +281,11 @@ getRoundRobinParent(request_t * request)
 }
 
 /* This gets called every 5 minutes to clear the round-robin counter. */
-static void
+void
 peerClearRRLoop(void *data)
 {
     peerClearRR();
     eventAdd("peerClearRR", peerClearRRLoop, data, 5 * 60.0, 0);
-}
-
-void
-peerClearRRStart(void)
-{
-    static int event_added = 0;
-    if (!event_added) {
-	peerClearRRLoop(NULL);
-    }
 }
 
 /* Actually clear the round-robin counter. */
@@ -1157,7 +1148,7 @@ peerProbeConnect(peer * p)
     if (squid_curtime - p->stats.last_connect_probe == 0)
 	return ret;		/* don't probe to often */
     fd = comm_open(SOCK_STREAM, IPPROTO_TCP, getOutgoingAddr(NULL),
-	0, COMM_NONBLOCKING, p->name);
+	0, COMM_NONBLOCKING, COMM_TOS_DEFAULT, p->name);
     if (fd < 0)
 	return ret;
     commSetTimeout(fd, ctimeout, peerProbeConnectTimeout, p);
@@ -1214,6 +1205,7 @@ peerCountMcastPeersStart(void *data)
     p->mcast.flags.count_event_pending = 0;
     snprintf(url, MAX_URL, "http://%s/", inet_ntoa(p->in_addr.sin_addr));
     fake = storeCreateEntry(url, null_request_flags, method_get);
+    CBDATA_INIT_TYPE(ps_state);
     psstate = cbdataAlloc(ps_state);
     psstate->request = requestLink(urlParse(method_get, url));
     psstate->entry = fake;

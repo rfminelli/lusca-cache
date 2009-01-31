@@ -243,25 +243,7 @@
 #include <sys/mount.h>
 #endif
 
-#if defined(HAVE_STDARG_H)
-#include <stdarg.h>
-#define HAVE_STDARGS		/* let's hope that works everywhere (mj) */
-#define VA_LOCAL_DECL va_list ap;
-#define VA_START(f) va_start(ap, f)
-#define VA_SHIFT(v,t) ;		/* no-op for ANSI */
-#define VA_END va_end(ap)
-#else
-#if defined(HAVE_VARARGS_H)
-#include <varargs.h>
-#undef HAVE_STDARGS
-#define VA_LOCAL_DECL va_list ap;
-#define VA_START(f) va_start(ap)	/* f is ignored! */
-#define VA_SHIFT(v,t) v = va_arg(ap,t)
-#define VA_END va_end(ap)
-#else
-#error XX **NO VARARGS ** XX
-#endif
-#endif
+#include "../libcore/varargs.h"
 
 /* Make sure syslog goes after stdarg/varargs */
 #ifdef HAVE_SYSLOG_H
@@ -272,16 +254,13 @@
 #include <syslog.h>
 #endif
 
+#include "../libcore/syslog_ntoa.h"
+
 #if HAVE_MATH_H
 #include <math.h>
 #endif
 
 #define SQUIDHOSTNAMELEN 256
-
-#define SQUID_MAXPATHLEN 256
-#ifndef MAXPATHLEN
-#define MAXPATHLEN SQUID_MAXPATHLEN
-#endif
 
 #if !HAVE_GETRUSAGE
 #if defined(_SQUID_HPUX_)
@@ -330,21 +309,6 @@ struct rusage {
 #define SA_RESETHAND SA_ONESHOT
 #endif
 
-#if LEAK_CHECK_MODE
-#define LOCAL_ARRAY(type,name,size) \
-        static type *local_##name=NULL; \
-        type *name = local_##name ? local_##name : \
-                ( local_##name = (type *)xcalloc(size, sizeof(type)) )
-#else
-#define LOCAL_ARRAY(type,name,size) static type name[size]
-#endif
-
-#if CBDATA_DEBUG
-#define cbdataAlloc(a,b)	cbdataAllocDbg(a,b,__FILE__,__LINE__)
-#define cbdataLock(a)		cbdataLockDbg(a,__FILE__,__LINE__)
-#define cbdataUnlock(a)		cbdataUnlockDbg(a,__FILE__,__LINE__)
-#endif
-
 #if USE_LEAKFINDER
 #define leakAdd(p) leakAddFL(p,__FILE__,__LINE__)
 #define leakTouch(p) leakTouchFL(p,__FILE__,__LINE__)
@@ -359,31 +323,6 @@ struct rusage {
 #define S_ISDIR(mode) (((mode) & (_S_IFMT)) == (_S_IFDIR))
 #endif
 
-/* 
- * ISO C99 Standard printf() macros for 64 bit integers
- * On some 64 bit platform, HP Tru64 is one, for printf must be used
- * "%lx" instead of "%llx" 
- */
-#ifndef PRId64
-#ifdef _SQUID_MSWIN_		/* Windows native port using MSVCRT */
-#define PRId64 "I64d"
-#elif SIZEOF_INT64_T > SIZEOF_LONG
-#define PRId64 "lld"
-#else
-#define PRId64 "ld"
-#endif
-#endif
-
-#ifndef PRIu64
-#ifdef _SQUID_MSWIN_		/* Windows native port using MSVCRT */
-#define PRIu64 "I64u"
-#elif SIZEOF_INT64_T > SIZEOF_LONG
-#define PRIu64 "llu"
-#else
-#define PRIu64 "lu"
-#endif
-#endif
-
 #ifdef USE_GNUREGEX
 #include "GNUregex.h"
 #elif HAVE_REGEX_H
@@ -392,11 +331,8 @@ struct rusage {
 
 #include "squid_md5.h"
 
-#if USE_SSL
-#include "ssl_support.h"
-#endif
-
 #include "Stack.h"
+#include "../include/Vector.h"
 
 /* Needed for poll() on Linux at least */
 #if USE_POLL
@@ -415,6 +351,95 @@ struct rusage {
 #include "hash.h"
 #include "rfc1035.h"
 
+#include "../libcore/dlink.h"
+#include "../libcore/fifo.h"
+#include "../libcore/tools.h"
+#include "../libcore/kb.h"
+#include "../libcore/gb.h"
+
+#include "../libsqdebug/ctx.h"
+#include "../libsqdebug/debug.h"
+#include "../libsqdebug/debug_syslog.h"
+#include "../libsqdebug/debug_file.h"
+
+#include "../libmem/MemPool.h"
+#include "../libmem/MemStr.h"
+#include "../libmem/buf.h"
+#include "../libmem/String.h"
+#include "../libmem/StrList.h"
+#include "../libmem/wordlist.h"
+#include "../libmem/intlist.h"
+#include "../libmem/MemBufs.h"
+#include "../libmem/MemBuf.h"
+
+#include "../libcb/cbdata.h"
+
+#include "../libstat/StatHist.h"
+
+#include "../libsqinet/inet_legacy.h"
+#include "../libsqinet/sqinet.h"
+#include "../libsqinet/inet_legacy.h"
+
+#include "../libsqident/ident.h"
+
+#include "../libmime/MimeHdrs.h"
+
+#include "../libhttp/HttpVersion.h"
+#include "../libhttp/HttpStatusLine.h"
+#include "../libhttp/HttpHeaderType.h"
+#include "../libhttp/HttpHeaderFieldStat.h"
+#include "../libhttp/HttpHeaderFieldInfo.h"
+#include "../libhttp/HttpHeaderEntry.h"
+#include "../libhttp/HttpHeader.h"
+#include "../libhttp/HttpHeaderStats.h"
+#include "../libhttp/HttpHeaderVars.h"
+#include "../libhttp/HttpHeaderTools.h"
+#include "../libhttp/HttpHeaderMask.h"
+#include "../libhttp/HttpHeaderList.h"
+#include "../libhttp/HttpHeaderParse.h"
+#include "../libhttp/HttpHeaderGet.h"
+#include "../libhttp/HttpHeaderPut.h"
+#include "../libhttp/HttpHdrCc.h"
+#include "../libhttp/HttpMsg.h"
+#include "../libhttp/HttpHdrRange.h"
+#include "../libhttp/HttpHdrContRange.h"
+#include "../libhttp/HttpBody.h"
+#include "../libhttp/HttpReply.h"
+
+#include "../libiapp/event.h"
+#include "../libiapp/iapp_ssl.h"
+#include "../libiapp/signals.h"
+#include "../libiapp/iapp_ssl.h"
+#include "../libiapp/ssl_support.h"
+#include "../libiapp/fd_types.h"
+#include "../libiapp/comm_types.h"
+#include "../libiapp/comm.h"
+#include "../libiapp/disk.h"
+#include "../libiapp/comm_ips.h"
+#include "../libiapp/globals.h"
+#include "../libiapp/pconn_hist.h"
+#include "../libiapp/mainloop.h"
+
+#include "../libhelper/ipc.h"
+#include "../libhelper/helper.h"
+
+#include "../libsqident/ident.h"
+
+#include "../libsqdns/dns.h"
+
+#include "../libsqname/namecfg.h"
+#include "../libsqname/ipcache.h"
+#include "../libsqname/fqdncache.h"
+
+
+#if USE_DNSSERVERS
+#include "../libsqdns/dns_external.h"
+#else
+#include "../libsqdns/dns_internal.h"
+#endif
+
+#include "../libstmem/stmem.h"
+
 #include "defines.h"
 #include "enums.h"
 #include "typedefs.h"
@@ -428,20 +453,9 @@ struct rusage {
 #include "tempnam.h"
 #endif
 
-#if !HAVE_SNPRINTF
-#include "snprintf.h"
-#endif
-
-#if !HAVE_STRSEP
-#include "strsep.h"
-#endif
-
 #if !HAVE_INITGROUPS
 #include "initgroups.h"
 #endif
-
-#define XMIN(x,y) ((x)<(y)? (x) : (y))
-#define XMAX(a,b) ((a)>(b)? (a) : (b))
 
 /*
  * Squid source files should not call these functions directly.
@@ -465,37 +479,9 @@ struct rusage {
 #endif
 
 /*
- * Hey dummy, don't be tempted to move this to lib/config.h.in
- * again.  O_NONBLOCK will not be defined there because you didn't
- * #include <fcntl.h> yet.
- */
-#if defined(_SQUID_SUNOS_)
-/*
- * We assume O_NONBLOCK is broken, or does not exist, on SunOS.
- */
-#define SQUID_NONBLOCK O_NDELAY
-#elif defined(O_NONBLOCK)
-/*
- * We used to assume O_NONBLOCK was broken on Solaris, but evidence
- * now indicates that its fine on Solaris 8, and in fact required for
- * properly detecting EOF on FIFOs.  So now we assume that if 
- * its defined, it works correctly on all operating systems.
- */
-#define SQUID_NONBLOCK O_NONBLOCK
-/*
- * O_NDELAY is our fallback.
- */
-#else
-#define SQUID_NONBLOCK O_NDELAY
-#endif
-
-/*
  * I'm sick of having to keep doing this ..
  */
 #define INDEXSD(i)   (&Config.cacheSwap.swapDirs[(i)])
-
-#define FD_READ_METHOD(fd, buf, len) (*fd_table[fd].read_method)(fd, buf, len)
-#define FD_WRITE_METHOD(fd, buf, len) (*fd_table[fd].write_method)(fd, buf, len)
 
 #ifndef IPPROTO_UDP
 #define IPPROTO_UDP 0
@@ -527,24 +513,33 @@ extern size_t getpagesize(void);
 /*
  * valgrind debug support
  */
-#if WITH_VALGRIND
-#include <valgrind/memcheck.h>
-#ifndef VALGRIND_MAKE_MEM_NOACCESS
-/* A little glue for older valgrind version prior to 3.2.0 */
-#define VALGRIND_MAKE_MEM_NOACCESS VALGRIND_MAKE_NOACCESS
-#define VALGRIND_MAME_MEM_UNDEFINED VALGRIND_MAME_WRITABLE
-#define VALGRIND_MAKE_MEM_DEFINED VALGRIND_MAKE_READABLE
-#define VALGRIND_CHECK_MEM_IS_ADDRESSABLE VALGRIND_CHECK_WRITABLE
+#include "../libcore/valgrind.h"
+
+/* For now - these need to move! [ahc] */
+extern MemPool *acl_name_list_pool;
+extern MemPool *acl_deny_pool;
+#if USE_CACHE_DIGESTS
+extern MemPool *pool_cache_digest;
 #endif
-#else
-#define VALGRIND_MAKE_MEM_NOACCESS(a,b) (0)
-#define VALGRIND_MAKE_MEM_UNDEFINED(a,b) (0)
-#define VALGRIND_MAKE_MEM_DEFINED(a,b) (0)
-#define VALGRIND_CHECK_MEM_IS_ADDRESSABLE(a,b) (0)
-#define VALGRIND_CHECK_MEM_IS_DEFINED(a,b) (0)
-#define VALGRIND_MALLOCLIKE_BLOCK(a,b,c,d)
-#define VALGRIND_FREELIKE_BLOCK(a,b)
-#define RUNNING_ON_VALGRIND 0
-#endif /* WITH_VALGRIND */
+extern MemPool *pool_fwd_server;
+extern MemPool * pool_http_reply;
+extern MemPool * pool_http_header_entry;
+extern MemPool * pool_http_hdr_range_spec;
+extern MemPool * pool_http_hdr_range;
+extern MemPool * pool_http_hdr_cont_range;
+extern MemPool * pool_mem_node;
+extern MemPool * pool_storeentry;
+extern MemPool * pool_memobject;
+extern MemPool * pool_swap_tlv;
+extern MemPool * pool_swap_log_data;
+   
+CBDATA_GLOBAL_TYPE(RemovalPolicy);
+CBDATA_GLOBAL_TYPE(RemovalPolicyWalker);
+CBDATA_GLOBAL_TYPE(RemovalPurgeWalker);
+CBDATA_GLOBAL_TYPE(ps_state);
+
+/* src/MemBuf.c */
+extern int buf_read(buf_t *b, int fd, int grow_size);
+extern int memBufFill(MemBuf *mb, int fd, int grow_size);
 
 #endif /* SQUID_H */

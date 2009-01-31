@@ -101,7 +101,7 @@ urnStart(request_t * r, StoreEntry * e)
 {
     LOCAL_ARRAY(char, urlres, 4096);
     request_t *urlres_r = NULL;
-    const char *t;
+    int i;
     char *host;
     UrnState *urnState;
     StoreEntry *urlres_e;
@@ -114,20 +114,19 @@ urnStart(request_t * r, StoreEntry * e)
     urnState->entry = e;
     urnState->request = requestLink(r);
     storeLockObject(urnState->entry);
-    if (strncasecmp(strBuf(r->urlpath), "menu.", 5) == 0) {
-	char *new_path = xstrdup(strBuf(r->urlpath) + 5);
+    if (strNCaseCmp(r->urlpath, "menu.", 5) == 0) {
+	char *new_path = stringDupToCOffset(&r->urlpath, 5);
 	urnState->flags.force_menu = 1;
 	stringReset(&r->urlpath, new_path);
 	xfree(new_path);
     }
-    if ((t = strChr(r->urlpath, ':')) != NULL) {
-	strSet(r->urlpath, t, '\0');
-	host = xstrdup(strBuf(r->urlpath));
-	strSet(r->urlpath, t, ':');
+    i = strChr(&r->urlpath, ':');
+    if (i != -1) {
+        host = stringDupSubstrToC(&r->urlpath, i);
     } else {
-	host = xstrdup(strBuf(r->urlpath));
+	host = stringDupToC(&r->urlpath);
     }
-    snprintf(urlres, 4096, "http://%s/uri-res/N2L?urn:%s", host, strBuf(r->urlpath));
+    snprintf(urlres, 4096, "http://%s/uri-res/N2L?urn:%.*s", host, strLen2(r->urlpath), strBuf2(r->urlpath));
     safe_free(host);
     urlres_r = urlParse(method_get, urlres);
     if (urlres_r == NULL) {

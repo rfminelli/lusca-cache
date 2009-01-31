@@ -90,7 +90,7 @@ static const char *errorFindHardText(err_type type);
 static ErrorDynamicPageInfo *errorDynamicPageInfoCreate(int id, const char *page_name);
 static void errorDynamicPageInfoDestroy(ErrorDynamicPageInfo * info);
 static MemBuf errorBuildContent(ErrorState * err);
-static const char *errorConvert(char token, ErrorState * err);
+const char *errorConvert(char token, ErrorState * err);
 static CWCB errorSendComplete;
 
 /*
@@ -255,6 +255,7 @@ errorPageName(int pageId)
     return "ERR_UNKNOWN";	/* should not happen */
 }
 
+CBDATA_TYPE(ErrorState);
 /*
  * Function:  errorCon
  *
@@ -264,6 +265,7 @@ ErrorState *
 errorCon(err_type type, http_status status, request_t * request)
 {
     ErrorState *err;
+    CBDATA_INIT_TYPE(ErrorState);
     err = cbdataAlloc(ErrorState);
     err->page_id = type;	/* has to be reset manually if needed */
     err->type = type;
@@ -445,7 +447,7 @@ errorStateFree(ErrorState * err)
  * z - dns server error message                 x
  */
 
-static const char *
+const char *
 errorConvert(char token, ErrorState * err)
 {
     request_t *r = err->request;
@@ -546,9 +548,10 @@ errorConvert(char token, ErrorState * err)
     case 'R':
 	if (NULL != r) {
 	    Packer p;
-	    memBufPrintf(&mb, "%s %s HTTP/%d.%d\n",
+	    memBufPrintf(&mb, "%s %.*s HTTP/%d.%d\n",
 		r->method->string,
-		strLen(r->urlpath) ? strBuf(r->urlpath) : "/",
+		strLen2(r->urlpath) ? strLen2(r->urlpath) : 1,
+		strLen2(r->urlpath) ? strBuf2(r->urlpath) : "/",
 		r->http_ver.major, r->http_ver.minor);
 	    packerToMemInit(&p, &mb);
 	    httpHeaderPackInto(&r->header, &p);
