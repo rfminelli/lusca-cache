@@ -1057,6 +1057,7 @@ httpReadReply(int fd, void *data)
 	fwdFail(httpState->fwd, errorCon(ERR_ZERO_SIZE_OBJECT, HTTP_BAD_GATEWAY, httpState->fwd->request));
 	httpState->eof = 1;
 	comm_close(fd);
+	return;
     }
     /* Read size is 0 (EOF); we've not seen any data from the object; its a zero sized reply */
     else if (len == 0) {
