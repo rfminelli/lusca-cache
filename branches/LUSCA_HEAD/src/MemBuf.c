@@ -6,7 +6,8 @@ buf_read(buf_t *b, int fd, int grow_size)
 	int ret;
 
 	/* extend buffer to have enough space */
-	buf_grow_to_min_free(b, grow_size);
+	/* XXX for now, just make it grow 4k bytes at a time */
+	buf_grow_to_min_free(b, 4096);
 
 	/* read into empty space */
 	ret = FD_READ_METHOD(fd, buf_buf(b) + buf_len(b), buf_capacity(b) - buf_len(b));
