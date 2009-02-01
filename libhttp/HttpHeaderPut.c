@@ -195,7 +195,7 @@ void
 httpHeaderPutExt(HttpHeader * hdr, const char *name, const char *value, int value_len)
 {
     assert(name && value);
-    debug(55, 8) ("%p adds ext entry '%s: %s'\n", hdr, name, value_len, value);
+    debug(55, 8) ("%p adds ext entry '%s: %.*s'\n", hdr, name, value_len, value);
     httpHeaderAddEntryStr2(hdr, HDR_OTHER, name, -1, value, value_len);
 }
 
