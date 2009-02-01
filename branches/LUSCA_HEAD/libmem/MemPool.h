@@ -13,7 +13,6 @@ typedef struct _MemMeter MemMeter;
 struct _MemPoolMeter {
     MemMeter alloc;
     MemMeter inuse;
-    MemMeter idle;
     gb_t saved;
     gb_t total;
 };
@@ -38,7 +37,6 @@ struct _MemPool {
     struct {
         int dozero:1;
     } flags;
-    Stack pstack;               /* stack for free pointers */
     MemPoolMeter meter;
 #if DEBUG_MEMPOOL
     MemPoolMeter diff_meter;
