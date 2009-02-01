@@ -1743,8 +1743,9 @@ clientBuildRangeHeader(clientHttpRequest * http, HttpReply * rep)
 	    /* delete old Content-Type, add ours */
 	    httpHeaderDelById(hdr, HDR_CONTENT_TYPE);
 	    httpHeaderPutStrf(hdr, HDR_CONTENT_TYPE,
-		"multipart/byteranges; boundary=\"%s\"",
-		strBuf(http->range_iter.boundary));
+		"multipart/byteranges; boundary=\"%.*s\"",
+		strLen2(http->range_iter.boundary),
+		strBuf2(http->range_iter.boundary));
 	    /* Content-Length is not required in multipart responses
 	     * but it is always nice to have one */
 	    actual_clen = clientMRangeCLen(http);
