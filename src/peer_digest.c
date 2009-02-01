@@ -158,8 +158,7 @@ peerDigestNeeded(PeerDigest * pd)
 static void
 peerDigestDisable(PeerDigest * pd)
 {
-    debug(72, 2) ("peerDigestDisable: peer %s disabled for good\n",
-	strBuf(pd->host));
+    debug(72, 2) ("peerDigestDisable: peer %.*s disabled for good\n", strLen2(pd->host), strBuf2(pd->host));
     pd->times.disabled = squid_curtime;
     pd->times.next_check = -1;	/* never */
     pd->flags.usable = 0;
@@ -199,8 +198,7 @@ peerDigestSetCheck(PeerDigest * pd, time_t delay)
 {
     eventAdd("peerDigestCheck", peerDigestCheck, pd, (double) delay, 1);
     pd->times.next_check = squid_curtime + delay;
-    debug(72, 3) ("peerDigestSetCheck: will check peer %s in %d secs\n",
-	strBuf(pd->host), (int) delay);
+    debug(72, 3) ("peerDigestSetCheck: will check peer %.*s in %d secs\n", strLen2(pd->host), strBuf2(pd->host), (int) delay);
 }
 
 /*
@@ -210,12 +208,10 @@ void
 peerDigestNotePeerGone(PeerDigest * pd)
 {
     if (pd->flags.requested) {
-	debug(72, 2) ("peerDigestNotePeerGone: peer %s gone, will destroy after fetch.\n",
-	    strBuf(pd->host));
+	debug(72, 2) ("peerDigestNotePeerGone: peer %.*s gone, will destroy after fetch.\n", strLen2(pd->host), strBuf2(pd->host));
 	/* do nothing now, the fetching chain will notice and take action */
     } else {
-	debug(72, 2) ("peerDigestNotePeerGone: peer %s is gone, destroying now.\n",
-	    strBuf(pd->host));
+	debug(72, 2) ("peerDigestNotePeerGone: peer %.*s is gone, destroying now.\n", strLen2(pd->host), strBuf2(pd->host));
 	peerDigestDestroy(pd);
     }
 }
@@ -251,15 +247,15 @@ peerDigestCheck(void *data)
 
     /* per-peer limit */
     if (req_time - pd->times.received < PeerDigestReqMinGap) {
-	debug(72, 2) ("peerDigestCheck: %s, avoiding close peer requests (%d < %d secs).\n",
-	    strBuf(pd->host), (int) (req_time - pd->times.received),
+	debug(72, 2) ("peerDigestCheck: %.*s, avoiding close peer requests (%d < %d secs).\n",
+	    strLen2(pd->host), strBuf2(pd->host), (int) (req_time - pd->times.received),
 	    (int) PeerDigestReqMinGap);
 	req_time = pd->times.received + PeerDigestReqMinGap;
     }
     /* global limit */
     if (req_time - pd_last_req_time < GlobDigestReqMinGap) {
-	debug(72, 2) ("peerDigestCheck: %s, avoiding close requests (%d < %d secs).\n",
-	    strBuf(pd->host), (int) (req_time - pd_last_req_time),
+	debug(72, 2) ("peerDigestCheck: %.*s, avoiding close requests (%d < %d secs).\n",
+	    strLen2(pd->host), strBuf2(pd->host), (int) (req_time - pd_last_req_time),
 	    (int) GlobDigestReqMinGap);
 	req_time = pd_last_req_time + GlobDigestReqMinGap;
     }
@@ -362,8 +358,8 @@ peerDigestFetchReply(void *data, mem_node_ref nr, ssize_t size)
     reply = fetch->entry->mem_obj->reply;
     assert(reply);
     status = reply->sline.status;
-    debug(72, 3) ("peerDigestFetchReply: %s status: %d, expires: %ld (%+d)\n",
-	strBuf(pd->host), status,
+    debug(72, 3) ("peerDigestFetchReply: %.*s status: %d, expires: %ld (%+d)\n",
+	strLen2(pd->host), strBuf2(pd->host), status,
 	(long int) reply->expires, (int) (reply->expires - squid_curtime));
 
     /* this "if" is based on clientHandleIMSReply() */
@@ -426,8 +422,8 @@ peerDigestSwapInHeaders(void *data, mem_node_ref nr, ssize_t size)
     assert(!fetch->offset);
     assert(fetch->entry->mem_obj->reply);
     if (fetch->entry->mem_obj->reply->sline.status != HTTP_OK) {
-	debug(72, 1) ("peerDigestSwapInHeaders: %s status %d got cached!\n",
-	    strBuf(fetch->pd->host), fetch->entry->mem_obj->reply->sline.status);
+	debug(72, 1) ("peerDigestSwapInHeaders: %.*s status %d got cached!\n",
+	    strLen2(fetch->pd->host), strBuf2(fetch->pd->host), fetch->entry->mem_obj->reply->sline.status);
 	peerDigestFetchAbort(fetch, "internal status error");
 	goto finish;
     }
@@ -600,8 +596,8 @@ static void
 peerDigestFetchStop(DigestFetchState * fetch, const char *reason)
 {
     assert(reason);
-    debug(72, 2) ("peerDigestFetchStop: peer %s, reason: %s\n",
-	strBuf(fetch->pd->host), reason);
+    debug(72, 2) ("peerDigestFetchStop: peer %.*s, reason: %s\n",
+	strLen2(fetch->pd->host), strBuf2(fetch->pd->host), reason);
     peerDigestReqFinish(fetch, 1, 1, 1, reason, 0);
 }
 
@@ -610,8 +606,8 @@ static void
 peerDigestFetchAbort(DigestFetchState * fetch, const char *reason)
 {
     assert(reason);
-    debug(72, 2) ("peerDigestFetchAbort: peer %s, reason: %s\n",
-	strBuf(fetch->pd->host), reason);
+    debug(72, 2) ("peerDigestFetchAbort: peer %.*s, reason: %s\n",
+	strLen2(fetch->pd->host), strBuf2(fetch->pd->host), reason);
     peerDigestReqFinish(fetch, 1, 1, 1, reason, 1);
 }
 
@@ -834,8 +830,8 @@ peerDigestUseful(const PeerDigest * pd)
     /* TODO: we should calculate the prob of a false hit instead of bit util */
     const int bit_util = cacheDigestBitUtil(pd->cd);
     if (bit_util > 65) {
-	debug(72, 0) ("Warning: %s peer digest has too many bits on (%d%%).\n",
-	    strBuf(pd->host), bit_util);
+	debug(72, 0) ("Warning: %.*s peer digest has too many bits on (%d%%).\n",
+	    strLen2(pd->host), strBuf2(pd->host), bit_util);
 	return 0;
     }
     return 1;
