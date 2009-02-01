@@ -708,7 +708,7 @@ htcpTstReply(htcpDataHeader * dhdr, StoreEntry * e, htcpSpecifier * spec, struct
 	    if (rtt || hops) {
 		snprintf(cto_buf, 128, "%s %d %f %d",
 		    host, samp, 0.001 * rtt, hops);
-		httpHeaderPutExt(&hdr, "Cache-to-Origin", cto_buf);
+		httpHeaderPutExt(&hdr, "Cache-to-Origin", cto_buf, -1);
 	    }
 	}
 	httpHeaderPackInto(&hdr, &p);

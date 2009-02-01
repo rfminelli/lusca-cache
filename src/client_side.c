@@ -1836,18 +1836,18 @@ clientBuildReplyHeader(clientHttpRequest * http, HttpReply * rep)
 	    } else if (http->conn->port->act_as_origin) {
 		HttpHeaderEntry *h = httpHeaderFindEntry(hdr, HDR_DATE);
 		if (h)
-		    httpHeaderPutExt(hdr, "X-Origin-Date", strBuf(h->value));
+		    httpHeaderPutExt(hdr, "X-Origin-Date", strBuf2(h->value), strLen2(h->value));
 		httpHeaderDelById(hdr, HDR_DATE);
 		httpHeaderInsertTime(hdr, 0, HDR_DATE, squid_curtime);
 		h = httpHeaderFindEntry(hdr, HDR_EXPIRES);
 		if (h && http->entry->expires >= 0) {
-		    httpHeaderPutExt(hdr, "X-Origin-Expires", strBuf(h->value));
+		    httpHeaderPutExt(hdr, "X-Origin-Expires", strBuf2(h->value), strLen2(h->value));
 		    httpHeaderDelById(hdr, HDR_EXPIRES);
 		    httpHeaderInsertTime(hdr, 1, HDR_EXPIRES, squid_curtime + http->entry->expires - http->entry->timestamp);
 		} {
 		    char age[64];
 		    snprintf(age, sizeof(age), "%ld", (long int) squid_curtime - http->entry->timestamp);
-		    httpHeaderPutExt(hdr, "X-Cache-Age", age);
+		    httpHeaderPutExt(hdr, "X-Cache-Age", age, -1);
 		}
 	    } else if (http->entry->timestamp < squid_curtime) {
 		httpHeaderPutInt(hdr, HDR_AGE,
