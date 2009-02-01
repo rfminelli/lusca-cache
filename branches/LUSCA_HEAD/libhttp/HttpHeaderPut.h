@@ -15,6 +15,6 @@ extern void httpHeaderPutSize(HttpHeader * hdr, http_hdr_type id, squid_off_t nu
 extern void httpHeaderPutTime(HttpHeader * hdr, http_hdr_type id, time_t htime);
 extern void httpHeaderInsertTime(HttpHeader * hdr, int pos, http_hdr_type id, time_t htime);
 extern void httpHeaderPutAuth(HttpHeader * hdr, const char *auth_scheme, const char *realm);
-extern void httpHeaderPutExt(HttpHeader * hdr, const char *name, const char *value);
+extern void httpHeaderPutExt(HttpHeader * hdr, const char *name, const char *value, int value_len);
 
 #endif
