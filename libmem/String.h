@@ -16,6 +16,7 @@ typedef struct _String String;
 #define strBuf2(s)     ((const char*)(s).buf)
 #define strCat(s,str)		stringAppend(&(s), (str), strlen(str))
 #define	strCatStr(ds, ss)	stringAppend(&(ds), strBuf2(ss), strLen(ss))
+static inline char stringGetCh(const String *s, int pos) { return strBuf2(*s)[pos]; }
 
 #define strCmp(s,str)		strcmp(strBuf(s), (str))
 #define strNCmp(s,str,n)	strncmp(strBuf(s), (str), (n))
@@ -33,6 +34,7 @@ extern char * stringDupToCOffset(const String *s, int offset);
 extern char * stringDupSubstrToC(const String *s, int len);
 extern int strChr(String *s, char c);
 extern int strRChr(String *s, char c);
+
 
 /*
  * These is okish, but the use case probably should be replaced with a strStr() later
