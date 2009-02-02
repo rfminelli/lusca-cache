@@ -609,8 +609,8 @@ char *
 urlMakeAbsolute(request_t * req, const char *relUrl)
 {
     char *urlbuf;
-    const char *path, *last_slash;
     size_t urllen, pathlen;
+    const char *path, *last_slash;
 
     if (req->method->code == METHOD_CONNECT) {
 	return (NULL);
@@ -641,7 +641,7 @@ urlMakeAbsolute(request_t * req, const char *relUrl)
     if (relUrl[0] == '/') {
 	strncpy(&urlbuf[urllen], relUrl, MAX_URL - urllen - 1);
     } else {
-	path = strBuf(req->urlpath);
+	path = stringDupToC(&req->urlpath);
 	last_slash = strrchr(path, '/');
 	if (last_slash == NULL) {
 	    urlbuf[urllen++] = '/';
@@ -658,6 +658,7 @@ urlMakeAbsolute(request_t * req, const char *relUrl)
 		strncpy(&urlbuf[urllen], relUrl, MAX_URL - urllen - 1);
 	    }
 	}
+	safe_free(path);
     }
 
     return (urlbuf);
