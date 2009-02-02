@@ -73,8 +73,9 @@ httpHdrCcStatDumper(StoreEntry * sentry, int idx, double val, double size, int c
     extern const HttpHeaderStat *dump_stat;	/* argh! */
     const int id = (int) val;
     const int valid_id = id >= 0 && id < CC_ENUM_END;
-    const char *name = valid_id ? strBuf(CcFieldsInfo[id].name) : "INVALID";
+    const char *name = valid_id ? strBuf2(CcFieldsInfo[id].name) : "INVALID";
+    int name_len = valid_id ? strLen2(CcFieldsInfo[id].name) : 7;
     if (count || valid_id)
-	storeAppendPrintf(sentry, "%2d\t %-20s\t %5d\t %6.2f\n",
-	    id, name, count, xdiv(count, dump_stat->ccParsedCount));
+	storeAppendPrintf(sentry, "%2d\t %-20.*s\t %5d\t %6.2f\n",
+	    id, name_len, name, count, xdiv(count, dump_stat->ccParsedCount));
 }
