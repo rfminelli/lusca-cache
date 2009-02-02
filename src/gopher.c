@@ -178,25 +178,33 @@ gopherMimeCreate(GopherStateData * gopherState)
 }
 
 /* Parse a gopher request into components.  By Anawat. */
+/*
+ * XXX ugly; it should really created substrings of a String and throw
+ * XXX that around!
+ */
 static void
 gopher_request_parse(const request_t * req, char *type_id, char *request)
 {
-    const char *path = strBuf(req->urlpath);
+    const char *path_str = strBuf2(req->urlpath);
+    int path_len = strLen2(req->urlpath);
 
     if (request)
 	request[0] = '\0';
 
-    if (path && (*path == '/'))
-	path++;
+    if (path_str && (*path_str == '/')) {
+	path_str++;
+	path_len--;
+    }
 
-    if (!path || !*path) {
+    if (!path_str || !*path_str) {
 	*type_id = GOPHER_DIRECTORY;
 	return;
     }
-    *type_id = path[0];
+    *type_id = path_str[0];
 
     if (request) {
-	xstrncpy(request, path + 1, MAX_URL);
+	xstrncpy(request, path_str + 1, XMIN(MAX_URL - 1, path_len - 1));
+	request[XMIN(MAX_URL - 1, path_len - 1)] = '\0';
 	/* convert %xx to char */
 	url_convert_hex(request, 0);
     }
