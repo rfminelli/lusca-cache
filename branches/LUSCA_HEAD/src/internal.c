@@ -43,12 +43,12 @@ void
 internalStart(request_t * request, StoreEntry * entry)
 {
     ErrorState *err;
-    const char *upath = strBuf(request->urlpath);
-    debug(76, 3) ("internalStart: %s requesting '%s'\n",
-	inet_ntoa(request->client_addr), upath);
-    if (0 == strcmp(upath, "/squid-internal-dynamic/netdb")) {
+
+    debug(76, 3) ("internalStart: %s requesting '%.*s'\n",
+	inet_ntoa(request->client_addr), strLen2(request->urlpath), strBuf2(request->urlpath));
+    if (strCmp(request->urlpath, "/squid-internal-dynamic/netdb") == 0) {
 	netdbBinaryExchange(entry);
-    } else if (0 == strcmp(upath, "/squid-internal-periodic/store_digest")) {
+    } else if (strCmp(request->urlpath, "/squid-internal-periodic/store_digest") == 0) {
 #if USE_CACHE_DIGESTS
 	const char *msgbuf = "This cache is currently building its digest.\n";
 #else
