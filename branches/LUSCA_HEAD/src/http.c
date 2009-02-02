@@ -435,12 +435,13 @@ httpMakeVaryMark(request_t * request, HttpReply * reply)
 	strListAdd(&vstr, name, ',');
 	hdr = httpHeaderGetByName(&request->header, name);
 	safe_free(name);
-	value = strBuf(hdr);
-	if (value) {
-	    value = rfc1738_escape_part(value);
+	if (strIsNotNull(hdr)) {
+	    const char *str = stringDupToC(&hdr);
+	    value = rfc1738_escape_part(str);
 	    stringAppend(&vstr, "=\"", 2);
 	    stringAppend(&vstr, value, strlen(value));
 	    stringAppend(&vstr, "\"", 1);
+	    safe_free(str);
 	}
 	stringClean(&hdr);
     }
