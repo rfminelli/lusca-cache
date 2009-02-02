@@ -325,11 +325,11 @@ httpMsgParseRequestLine(HttpMsgBuf * hmsg)
 
 	    /* next should be 1 or more digits */
 	    maj = 0;
-	    for (; i < hmsg->req_end && (xisdigit(hmsg->buf[i])); i++) {
+	    for (; i < hmsg->req_end && (xisdigit(hmsg->buf[i])) && maj < 65536; i++) {
 		maj = maj * 10;
 		maj = maj + (hmsg->buf[i]) - '0';
 	    }
-	    if (i >= hmsg->req_end) {
+	    if (i >= hmsg->req_end || maj >= 65536) {
 		retcode = -1;
 		goto finish;
 	    }
@@ -345,9 +345,13 @@ httpMsgParseRequestLine(HttpMsgBuf * hmsg)
 	    /* next should be one or more digits */
 	    i++;
 	    min = 0;
-	    for (; i < hmsg->req_end && (xisdigit(hmsg->buf[i])); i++) {
+	    for (; i < hmsg->req_end && (xisdigit(hmsg->buf[i])) && min < 65536; i++) {
 		min = min * 10;
 		min = min + (hmsg->buf[i]) - '0';
+	    }
+	    if (min >= 65536) {
+                retcode = -1;
+	        goto finish;
 	    }
 
 	    /* Find whitespace, end of version */
