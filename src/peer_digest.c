@@ -528,7 +528,7 @@ static int
 peerDigestFetchedEnough(DigestFetchState * fetch, ssize_t size, const char *step_name)
 {
     PeerDigest *pd = NULL;
-    const char *host = "<unknown>";	/* peer host */
+    const char *host_str = NULL;	/* peer host */
     const char *reason = NULL;	/* reason for completion */
     const char *no_bug = NULL;	/* successful completion if set */
     const int fcb_valid = cbdataValid(fetch);
@@ -548,10 +548,10 @@ peerDigestFetchedEnough(DigestFetchState * fetch, ssize_t size, const char *step
 	    reason = "invalidated peer digest?!";
 #endif
 	else
-	    host = strBuf(pd->host);
+	    host_str = stringDupToC(&pd->host);
     }
     debug(72, 6) ("%s: peer %s, offset: %" PRINTF_OFF_T " size: %d.\n",
-	step_name, host, fcb_valid ? fetch->offset : (squid_off_t) - 1, (int) size);
+	step_name, host_str ? host_str : "<unknown>", fcb_valid ? fetch->offset : (squid_off_t) - 1, (int) size);
 
     /* continue checking (with pd and host known and valid) */
     if (!reason) {
@@ -581,12 +581,13 @@ peerDigestFetchedEnough(DigestFetchState * fetch, ssize_t size, const char *step
     if (reason) {
 	const int level = strstr(reason, "?!") ? 1 : 3;
 	debug(72, level) ("%s: peer %s, exiting after '%s'\n",
-	    step_name, host, reason);
+	    step_name, host_str ? host_str : "<unknown>", reason);
 	peerDigestReqFinish(fetch, fcb_valid, pdcb_valid, pcb_valid, reason, !no_bug);
     } else {
 	/* paranoid check */
 	assert(fcb_valid && pdcb_valid && pcb_valid);
     }
+    safe_free(host_str);
     return reason != NULL;
 }
 
@@ -651,7 +652,6 @@ static void
 peerDigestPDFinish(DigestFetchState * fetch, int pcb_valid, int err)
 {
     PeerDigest *pd = fetch->pd;
-    const char *host = strBuf(pd->host);
 
     pd->times.received = squid_curtime;
     pd->times.req_delay = fetch->resp_time;
@@ -661,9 +661,9 @@ peerDigestPDFinish(DigestFetchState * fetch, int pcb_valid, int err)
     pd->stats.recv.msgs += fetch->recv.msg;
 
     if (err) {
-	debug(72, 1) ("%sdisabling (%s) digest from %s\n",
+	debug(72, 1) ("%sdisabling (%s) digest from %.*s\n",
 	    pcb_valid ? "temporary " : "",
-	    pd->req_result, host);
+	    pd->req_result, strLen2(pd->host), strBuf2(pd->host));
 
 	if (pd->cd) {
 	    cacheDigestDestroy(pd->cd);
@@ -680,9 +680,9 @@ peerDigestPDFinish(DigestFetchState * fetch, int pcb_valid, int err)
 
 	/* XXX: ugly condition, but how? */
 	if (fetch->entry->store_status == STORE_OK)
-	    debug(72, 2) ("re-used old digest from %s\n", host);
+	    debug(72, 2) ("re-used old digest from %.*s\n", strLen2(pd->host), strBuf2(pd->host));
 	else
-	    debug(72, 2) ("received valid digest from %s\n", host);
+	    debug(72, 2) ("received valid digest from %.*s\n", strLen2(pd->host), strBuf2(pd->host));
     }
     fetch->pd = NULL;
     cbdataUnlock(pd);
@@ -754,7 +754,10 @@ peerDigestSetCBlock(PeerDigest * pd, const char *buf)
 {
     StoreDigestCBlock cblock;
     int freed_size = 0;
-    const char *host = strBuf(pd->host);
+    int rval = 0;
+    const char *host;
+
+    host = stringDupToC(&pd->host);
 
     xmemcpy(&cblock, buf, sizeof(cblock));
     /* network -> host conversions */
@@ -773,31 +776,36 @@ peerDigestSetCBlock(PeerDigest * pd, const char *buf)
     if (cblock.ver.required > CacheDigestVer.current) {
 	debug(72, 1) ("%s digest requires version %d; have: %d\n",
 	    host, cblock.ver.required, CacheDigestVer.current);
-	return 0;
+	rval = 0;
+        goto finish;
     }
     if (cblock.ver.current < CacheDigestVer.required) {
 	debug(72, 1) ("%s digest is version %d; we require: %d\n",
 	    host, cblock.ver.current, CacheDigestVer.required);
-	return 0;
+ 	rval = 0;
+	goto finish;
     }
     /* check consistency */
     if (cblock.ver.required > cblock.ver.current ||
 	cblock.mask_size <= 0 || cblock.capacity <= 0 ||
 	cblock.bits_per_entry <= 0 || cblock.hash_func_count <= 0) {
 	debug(72, 0) ("%s digest cblock is corrupted.\n", host);
-	return 0;
+	rval = 0;
+	goto finish;
     }
     /* check consistency further */
     if (cblock.mask_size != cacheDigestCalcMaskSize(cblock.capacity, cblock.bits_per_entry)) {
 	debug(72, 0) ("%s digest cblock is corrupted (mask size mismatch: %d ? %d).\n",
 	    host, cblock.mask_size, (int) cacheDigestCalcMaskSize(cblock.capacity, cblock.bits_per_entry));
-	return 0;
+	rval = 0;
+	goto finish;
     }
     /* there are some things we cannot do yet */
     if (cblock.hash_func_count != CacheDigestHashFuncCount) {
 	debug(72, 0) ("%s digest: unsupported #hash functions: %d ? %d.\n",
 	    host, cblock.hash_func_count, CacheDigestHashFuncCount);
-	return 0;
+	rval = 0;
+	goto finish;
     }
     /*
      * no cblock bugs below this point
@@ -821,7 +829,10 @@ peerDigestSetCBlock(PeerDigest * pd, const char *buf)
     /* these assignments leave us in an inconsistent state until we finish reading the digest */
     pd->cd->count = cblock.count;
     pd->cd->del_count = cblock.del_count;
-    return 1;
+    rval = 1;
+finish:
+    safe_free(host);
+    return rval;
 }
 
 static int
@@ -846,14 +857,17 @@ saneDiff(time_t diff)
 void
 peerDigestStatsReport(const PeerDigest * pd, StoreEntry * e)
 {
+    char *host = NULL;
+
 #define f2s(flag) (pd->flags.flag ? "yes" : "no")
 #define appendTime(tm) storeAppendPrintf(e, "%s\t %10ld\t %+d\t %+d\n", \
     ""#tm, (long int)pd->times.tm, \
     saneDiff(pd->times.tm - squid_curtime), \
     saneDiff(pd->times.tm - pd->times.initialized))
 
-    const char *host = pd ? strBuf(pd->host) : NULL;
     assert(pd);
+
+    host = stringDupToC(&pd->host);
 
     storeAppendPrintf(e, "\npeer digest from %s\n", host);
 
@@ -887,6 +901,8 @@ peerDigestStatsReport(const PeerDigest * pd, StoreEntry * e)
 	cacheDigestReport(pd->cd, host, e);
     else
 	storeAppendPrintf(e, "\tno in-memory copy\n");
+
+    safe_free(host);
 }
 
 #endif
