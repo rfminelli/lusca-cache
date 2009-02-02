@@ -359,8 +359,10 @@ internalRedirectProcessURL(clientHttpRequest * req, rewritetoken * head)
     debug(85, 5) ("internalRedirectProcessURL: start\n");
     for (; head != NULL; head = head->next) {
 	const char *str = NULL;	/* string to append */
+        const char *str2 = NULL;
 	size_t str_len = 0;
 	int do_ulong = 0;
+	int do_free = 0;
 	unsigned long ulong = 0;
 	const char *ulong_fmt = "%lu";
 	debug(85, 5) ("internalRedirectProcessURL: token=%s str=%s urlEncode=%s\n",
@@ -430,7 +432,8 @@ internalRedirectProcessURL(clientHttpRequest * req, rewritetoken * head)
 	    str = req->uri;
 	    break;
 	case RFT_URLPATH:
-	    str = strBuf(req->request->urlpath);
+	    str = stringDupToC(&req->request->urlpath);
+	    do_free = 1;
 	    break;
 	case RFT_URLHOST:
 	    str = req->request->host;
@@ -439,12 +442,15 @@ internalRedirectProcessURL(clientHttpRequest * req, rewritetoken * head)
 	    str = httpHeaderGetStr(&req->request->header, HDR_HOST);
 	    break;
 	case RFT_EXTERNALACL_LOGSTR:
-	    str = strBuf(req->request->extacl_log);
+	    str = stringDupToC(&req->request->extacl_log);
+	    do_free = 1;
 	    break;
 	default:
 	    assert(0 && "Invalid rewrite token type");
 	    break;
 	}
+
+	str2 = str;
 
 	if (do_ulong) {
 	    char tmpstr[12];
@@ -464,6 +470,8 @@ internalRedirectProcessURL(clientHttpRequest * req, rewritetoken * head)
 	    }
 	    dev = xreacat(dev, &len, str, str_len);
 	}
+	if (do_free)
+		safe_free(str2);
     }
     debug(85, 5) ("internalRedirectProcessURL: done: %s\n", dev);
     return dev;
