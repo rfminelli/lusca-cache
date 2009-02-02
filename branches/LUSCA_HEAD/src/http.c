@@ -97,7 +97,8 @@ httpStateFree(int fd, void *data)
 	}
     }
     storeUnlockObject(httpState->entry);
-    (void) buf_deref(httpState->read_buf);
+    if (httpState->read_buf)
+        (void) buf_deref(httpState->read_buf);
     requestUnlink(httpState->request);
     requestUnlink(httpState->orig_request);
     httpState->request = NULL;
