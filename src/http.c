@@ -97,9 +97,7 @@ httpStateFree(int fd, void *data)
 	}
     }
     storeUnlockObject(httpState->entry);
-    if (!memBufIsNull(&httpState->reply_hdr)) {
-	memBufClean(&httpState->reply_hdr);
-    }
+    (void) buf_deref(httpState->read_buf);
     requestUnlink(httpState->request);
     requestUnlink(httpState->orig_request);
     httpState->request = NULL;
@@ -462,8 +460,8 @@ httpSetHttp09Header(HttpStateData *httpState, HttpReply *reply)
 {
 	char *t, *t2;
 
-	debug(11, 3) ("httpSetHttp09Header: Non-HTTP-compliant header: '%s'\n", httpState->reply_hdr.buf);
-	t = xstrdup(httpState->reply_hdr.buf);
+	debug(11, 3) ("httpSetHttp09Header: Non-HTTP-compliant header: '%.*s'\n", buf_len(httpState->read_buf), buf_buf(httpState->read_buf));
+	t = buf_dup_cbuf(httpState->read_buf);
 	t2 = strchr(t, '\n');
 	if (t2)
 	    *t2 = '\0';
@@ -477,8 +475,7 @@ httpSetHttp09Header(HttpStateData *httpState, HttpReply *reply)
 static void
 httpAppendReplyHeader(HttpStateData * httpState, const char *buf, int size)
 {
-    assert(! memBufIsNull(&httpState->reply_hdr));
-    memBufAppend(&httpState->reply_hdr, buf, size);
+    buf_append(httpState->read_buf, buf, size, BF_NONE);
 }
 
 /*
@@ -581,7 +578,7 @@ httpReplySetupStuff(HttpStateData *httpState)
 	if (Config.onoff.detect_broken_server_pconns && httpReplyBodySize(httpState->request->method, reply) == -1) {
 	    debug(11, 2) ("httpProcessReplyHeader: Impossible keep-alive header from '%s'\n", storeUrl(entry));
 	    debug(11, 2) ("GOT HTTP REPLY HDR:\n---------\n%.*s\n----------\n",
-		httpState->reply_hdr.size, httpState->reply_hdr.buf);
+		buf_len(httpState->read_buf), buf_buf(httpState->read_buf));
 	    httpState->flags.keepalive_broken = 1;
 	}
     }
@@ -617,14 +614,13 @@ httpProcessReplyHeader(HttpStateData * httpState, int s)
     StoreEntry *entry = httpState->entry;
     size_t done;
     HttpReply *reply = entry->mem_obj->reply;
-    const char *hdr_buf = httpState->reply_hdr.buf + s;		/* buffer to parse from */
-    size_t hdr_len = httpState->reply_hdr.size - s;		/* length of buffer to parse from */
+    const char *hdr_buf = buf_buf(httpState->read_buf) + s;		/* buffer to parse from */
+    size_t hdr_len = buf_len(httpState->read_buf) - s;		/* length of buffer to parse from */
     size_t hdr_size;						/* actual size of reply status + headers in hdr_buf */
 
     Ctx ctx = ctx_enter(entry->mem_obj->url);
     debug(11, 3) ("httpProcessReplyHeader: key '%s'\n",
 	storeKeyText(entry->hash.key));
-    assert(! memBufIsNull(&httpState->reply_hdr));
     assert(httpState->reply_hdr_state == 0);
 
     /* Handle non-parsable responses as HTTP/0.9 responses - ie, no headers, just verbatim body */
@@ -653,7 +649,7 @@ httpProcessReplyHeader(HttpStateData * httpState, int s)
     if (hdr_len > Config.maxReplyHeaderSize) {
 	debug(11, 1) ("httpProcessReplyHeader: Too large reply header\n");
 	storeAppend(entry, hdr_buf, hdr_len);
-	memBufClean(&httpState->reply_hdr);	/* XXX hdr_buf / hdr_len are invalid now */
+        httpState->read_buf = buf_deref(httpState->read_buf); /* XXX hdr_buf / hdr_len are invalid now */
 	reply->sline.status = HTTP_HEADER_TOO_LARGE;
 	httpState->reply_hdr_state += 2;
 	ctx_exit(ctx);
@@ -693,7 +689,7 @@ httpProcessReplyHeader(HttpStateData * httpState, int s)
     done = hdr_size;
 
     /* Append the reply status and header, unparsed, to the store object */
-    storeAppend(entry, httpState->reply_hdr.buf + s, hdr_size);
+    storeAppend(entry, hdr_buf, hdr_size);
 
     /*
      * If the reply was invalid, and it didn't pass HTTP/0.9 muster, clean the reply header data
@@ -703,7 +699,7 @@ httpProcessReplyHeader(HttpStateData * httpState, int s)
      */
     if (reply->sline.status >= HTTP_INVALID_HEADER) {
 	debug(11, 3) ("httpProcessReplyHeader: Non-HTTP-compliant header: '%.*s'\n", (int) hdr_size, hdr_buf);
-	memBufClean(&httpState->reply_hdr);
+        httpState->read_buf = buf_deref(httpState->read_buf);
 	ctx_exit(ctx);
         /* XXX why return hdr_len here when the memBuf used has been cleaned? */
 	//return done;
@@ -1015,11 +1011,11 @@ httpReadReply(int fd, void *data)
     errno = 0;
     CommStats.syscalls.sock.reads++;
 
-    if (memBufIsNull(&httpState->reply_hdr))
-	memBufInit(&httpState->reply_hdr, SQUID_TCP_SO_RCVBUF, SQUID_TCP_SO_RCVBUF * 16);
+    if (! httpState->read_buf)
+        httpState->read_buf = buf_create_size(SQUID_TCP_SO_RCVBUF);
 
     /* XXX buffer_filled is all busted right now, unfortunately! */
-    len = memBufFill(&httpState->reply_hdr, fd, read_sz);
+    len = buf_read(httpState->read_buf, fd, read_sz);
     buffer_filled = len == read_sz;
     debug(11, 5) ("httpReadReply: FD %d: len %d.\n", fd, (int) len);
 
@@ -1038,7 +1034,7 @@ httpReadReply(int fd, void *data)
     }
 
     /* Read size is 0 (EOF); we've not seen any data from the object; its a zero sized reply */
-    if (len == 0 && entry->mem_obj->inmem_hi == 0 && !httpState->reply_hdr.size) {
+    if (len == 0 && entry->mem_obj->inmem_hi == 0 && buf_len(httpState->read_buf) == 0) {
 	fwdFail(httpState->fwd, errorCon(ERR_ZERO_SIZE_OBJECT, HTTP_BAD_GATEWAY, httpState->fwd->request));
 	httpState->eof = 1;
 	comm_close(fd);
@@ -1078,12 +1074,13 @@ httpReadReply(int fd, void *data)
 
     /* This will be replaced with some logic to only append and parse a data + offset */
     /* Trim whitespace from the incoming buffer */
-    if (!httpState->reply_hdr.size && len > 0 && fd_table[fd].uses > 1) {
+    if (buf_len(httpState->read_buf) == 0 && len > 0 && fd_table[fd].uses > 1) {
 	/* Skip whitespace */
-	while (po < httpState->reply_hdr.size && xisspace(httpState->reply_hdr.buf[po])) {
+	/* XXX dirty direct buffer access, but its what the existing code basically did! */
+	while (po < buf_len(httpState->read_buf) && xisspace(buf_buf(httpState->read_buf)[po])) {
 	    po++;
 	}
-	if (po == httpState->reply_hdr.size) {
+	if (po == buf_len(httpState->read_buf)) {
 	    /* Continue to read... */
 	    /* Timeout NOT increased. This whitespace was from previous reply */
 	    commSetSelect(fd, COMM_SELECT_READ, httpReadReply, httpState, 0);
@@ -1106,7 +1103,7 @@ httpReadReply(int fd, void *data)
      * XXX its unfortunate that we'll be parsing all 1xx responses in the buffer each read()
      * XXX until we see the first non-1xx response; will have to put up with that for now!
      */
-    while (httpState->reply_hdr_state < 2 && po < httpState->reply_hdr.size) {
+    while (httpState->reply_hdr_state < 2 && po < buf_len(httpState->read_buf)) {
         HttpReply *reply = NULL;
 
 	/* Try parsing */
@@ -1153,7 +1150,7 @@ httpReadReply(int fd, void *data)
      * We should've handled parsing a reply by this point - if we haven't, and the incoming
      * buffer is still too large, then error out.
      */
-    if (httpState->reply_hdr_state < 2 && httpState->reply_hdr.size > Config.maxReplyHeaderSize) {
+    if (httpState->reply_hdr_state < 2 && buf_len(httpState->read_buf) > Config.maxReplyHeaderSize) {
 	    storeEntryReset(entry);
 	    fwdFail(httpState->fwd, errorCon(ERR_TOO_BIG, HTTP_BAD_GATEWAY, httpState->fwd->request));
 	    httpState->fwd->flags.dont_retry = 1;
@@ -1193,8 +1190,8 @@ httpReadReply(int fd, void *data)
 	    /* Append the packed "faked" reply status+headers */
 	    storeAppend(entry, mb.buf, mb.size);
 	    /* Append the reply buffer - that is now just "body" */
-	    storeAppend(entry, httpState->reply_hdr.buf + po, httpState->reply_hdr.size - po);
-	    memBufClean(&httpState->reply_hdr);
+	    storeAppend(entry, buf_buf(httpState->read_buf) + po, buf_len(httpState->read_buf) - po);
+	    httpState->read_buf = buf_deref(httpState->read_buf);
 	    httpReplyReset(reply);
 	    /* Parse the "faked" headers as the actual reply status+headers as the actual reply */
 	    httpReplyParse(reply, mb.buf, mb.size);
@@ -1224,9 +1221,10 @@ httpReadReply(int fd, void *data)
     assert(httpState->reply_hdr_state == 2);
     /* lock the httpState; it may be freed by a call to httpAppendBody */
     cbdataLock(httpState);
-    httpAppendBody(httpState, httpState->reply_hdr.buf + po + done, httpState->reply_hdr.size - po - done, buffer_filled);
+    httpAppendBody(httpState, buf_buf(httpState->read_buf) + po + done,
+      buf_len(httpState->read_buf) - po - done, buffer_filled);
     if (cbdataValid(httpState))
-	memBufReset(&httpState->reply_hdr);
+	httpState->read_buf = buf_deref(httpState->read_buf);
     cbdataUnlock(httpState);
     /* httpState may be cleared here */
 

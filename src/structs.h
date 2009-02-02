@@ -885,7 +885,7 @@ struct _http_state_flags {
 struct _HttpStateData {
     StoreEntry *entry;
     request_t *request;
-    MemBuf reply_hdr;
+    buf_t *read_buf;
     int reply_hdr_state;
     peer *peer;			/* peer request made to */
     int eof;			/* reached end-of-object? */
