@@ -1018,6 +1018,7 @@ httpReadReply(int fd, void *data)
     if (memBufIsNull(&httpState->reply_hdr))
 	memBufInit(&httpState->reply_hdr, SQUID_TCP_SO_RCVBUF, SQUID_TCP_SO_RCVBUF * 16);
 
+    /* XXX buffer_filled is all busted right now, unfortunately! */
     len = memBufFill(&httpState->reply_hdr, fd, read_sz);
     buffer_filled = len == read_sz;
     debug(11, 5) ("httpReadReply: FD %d: len %d.\n", fd, (int) len);
