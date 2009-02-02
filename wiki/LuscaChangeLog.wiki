@@ -13,3 +13,4 @@
   * COSS now does not write out swap log files which it doesn't use - improving performance during normal operation and logfile rotation.
   * The server-side code (src/http.c) has been restructured to remove extra data copying and in preparation for further improvements performance and memory utilisation.
   * The memory caching layer ("MemPools") has been turned into purely statistics - this is in preparation for fully threading the core libraries.
+  * The majority of code which uses String has been adapted (and rewritten in some places) in preparation for reference counted string management.
