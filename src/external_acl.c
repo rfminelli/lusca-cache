@@ -626,9 +626,11 @@ makeExternalAclKey(aclCheck_t * ch, external_acl_data * acl_data)
     request_t *request = ch->request;
     String sb = StringNull;
     int data_used = 0;
+    int do_free = 0;
     memBufReset(&mb);
     for (format = acl_data->def->format; format; format = format->next) {
 	const char *str = NULL;
+	const char *str2 = NULL;
 	switch (format->type) {
 	case EXT_ACL_LOGIN:
 	    str = authenticateUserRequestUsername(request->auth_user_request);
@@ -670,26 +672,31 @@ makeExternalAclKey(aclCheck_t * ch, external_acl_data * acl_data)
 	    str = buf;
 	    break;
 	case EXT_ACL_PATH:
-	    str = strBuf(request->urlpath);
+	    str = stringDupToC(&request->urlpath);
+	    do_free = 1;
 	    break;
 	case EXT_ACL_METHOD:
 	    str = request->method->string;
 	    break;
 	case EXT_ACL_HEADER:
 	    sb = httpHeaderGetByName(&request->header, format->header);
-	    str = strBuf(sb);
+	    str = stringDupToC(&sb);
+	    do_free = 1;
 	    break;
 	case EXT_ACL_HEADER_ID:
 	    sb = httpHeaderGetStrOrList(&request->header, format->header_id);
-	    str = strBuf(sb);
+	    str = stringDupToC(&sb);
+	    do_free = 1;
 	    break;
 	case EXT_ACL_HEADER_MEMBER:
 	    sb = httpHeaderGetByNameListMember(&request->header, format->header, format->member, format->separator);
-	    str = strBuf(sb);
+	    str = stringDupToC(&sb);
+	    do_free = 1;
 	    break;
 	case EXT_ACL_HEADER_ID_MEMBER:
 	    sb = httpHeaderGetListMember(&request->header, format->header_id, format->member, format->separator);
-	    str = strBuf(sb);
+	    str = stringDupToC(&sb);
+	    do_free = 1;
 	    break;
 #if USE_SSL
 	case EXT_ACL_USER_CERT_RAW:
@@ -740,7 +747,8 @@ makeExternalAclKey(aclCheck_t * ch, external_acl_data * acl_data)
 		}
 		first = 0;
 	    }
-	    str = strBuf(sb);
+	    str = stringDupToC(&sb);
+	    do_free = 1;
 	    break;
 
 	case EXT_ACL_ACL:
@@ -752,11 +760,19 @@ makeExternalAclKey(aclCheck_t * ch, external_acl_data * acl_data)
 	    fatal("unknown external_acl format error");
 	    break;
 	}
+
+	/* Save the original string pointer, in case it needs to be freed */
+	str2 = str;
+
+	/* If the string has 0 length, set it to NULL */
 	if (str)
 	    if (!*str)
 		str = NULL;
+
+	/* If the string is NULL (and, from above, 0 length), set it to "-" */
 	if (!str)
 	    str = "-";
+
 	if (!first)
 	    memBufAppend(&mb, " ", 1);
 	if (acl_data->def->quote == QUOTE_METHOD_URL) {
@@ -767,6 +783,10 @@ makeExternalAclKey(aclCheck_t * ch, external_acl_data * acl_data)
 	}
 	stringClean(&sb);
 	first = 0;
+
+	/* Free str2 if required */
+	if (do_free)
+		safe_free(str2);
     }
     if (!data_used) {
 	for (arg = acl_data->arguments; arg; arg = arg->next) {
