@@ -133,7 +133,7 @@ stringAppend(String * s, const char *str, int len)
  * This routine REQUIRES the string to be something and not NULL
  */
 char *
-stringDupToCOffset(String *s, int offset)
+stringDupToCOffset(const String *s, int offset)
 {
 	char *d;
 	assert(s->buf);
@@ -145,13 +145,13 @@ stringDupToCOffset(String *s, int offset)
 }
 
 char *
-stringDupToC(String *s)
+stringDupToC(const String *s)
 {
 	return stringDupToCOffset(s, 0);
 }
 
 char *
-stringDupSubstrToC(String *s, int len)
+stringDupSubstrToC(const String *s, int len)
 {
 	char *d;
 	int l = XMIN(len, s->len);
