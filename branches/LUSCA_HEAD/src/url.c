@@ -675,7 +675,7 @@ urlCanonicalClean(const request_t * request)
     LOCAL_ARRAY(char, portbuf, 32);
     LOCAL_ARRAY(char, loginbuf, MAX_LOGIN_SZ + 1);
     char *t;
-    int i;
+    int i, j;
     const char *s;
     static const char ts[] = "://";
 
@@ -721,9 +721,8 @@ urlCanonicalClean(const request_t * request)
 	    for (; i < MAX_URL && *s != '\0'; i++, s++) {
 		buf[i] = *s;
 	    }
-	    s = strBuf(request->urlpath);
-	    for (; i < MAX_URL && *s != '\0'; i++, s++) {
-		buf[i] = *s;
+	    for (j = 0; i < MAX_URL && j < strLen2(request->urlpath); i++, j++) {
+		buf[i] = stringGetCh(&request->urlpath, j);
 	    }
 	    if (i >= (MAX_URL - 1)) {
 		buf[MAX_URL - 1] = '\0';
