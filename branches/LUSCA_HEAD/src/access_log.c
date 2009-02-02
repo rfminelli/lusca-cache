@@ -544,28 +544,32 @@ accessLogCustom(AccessLogEntry * al, customlog * log)
 	case LFT_REQUEST_HEADER:
 	    if (al->request)
 		sb = httpHeaderGetByName(&al->request->header, fmt->data.header.header);
-	    out = strBuf(sb);
+	    out = stringDupToC(&sb);
+	    dofree = 1;
 	    quote = 1;
 	    break;
 
 	case LFT_REPLY_HEADER:
 	    if (al->reply)
 		sb = httpHeaderGetByName(&al->reply->header, fmt->data.header.header);
-	    out = strBuf(sb);
+	    out = stringDupToC(&sb);
+	    dofree = 1;
 	    quote = 1;
 	    break;
 
 	case LFT_REQUEST_HEADER_ELEM:
 	    if (al->request)
 		sb = httpHeaderGetByNameListMember(&al->request->header, fmt->data.header.header, fmt->data.header.element, fmt->data.header.separator);
-	    out = strBuf(sb);
+	    out = stringDupToC(&sb);
+	    dofree = 1;
 	    quote = 1;
 	    break;
 
 	case LFT_REPLY_HEADER_ELEM:
 	    if (al->reply)
 		sb = httpHeaderGetByNameListMember(&al->reply->header, fmt->data.header.header, fmt->data.header.element, fmt->data.header.separator);
-	    out = strBuf(sb);
+	    out = stringDupToC(&sb);
+	    dofree = 1;
 	    quote = 1;
 	    break;
 
@@ -611,8 +615,10 @@ accessLogCustom(AccessLogEntry * al, customlog * log)
 #endif
 
 	case LFT_USER_EXT:
-	    if (al->request)
-		out = strBuf(al->request->extacl_log);
+	    if (al->request) {
+		out = stringDupToC(&al->request->extacl_log);
+	        dofree = 1;
+	    }
 	    quote = 1;
 	    break;
 
@@ -660,7 +666,8 @@ accessLogCustom(AccessLogEntry * al, customlog * log)
 
 	case LFT_REQUEST_URLPATH:
 	    if (al->request) {
-		out = strBuf(al->request->urlpath);
+		out = stringDupToC(&al->request->urlpath);
+	        dofree = 1;
 		quote = 1;
 	    }
 	    break;
@@ -695,8 +702,10 @@ accessLogCustom(AccessLogEntry * al, customlog * log)
 	    break;
 
 	case LFT_EXT_LOG:
-	    if (al->request)
-		out = strBuf(al->request->extacl_log);
+	    if (al->request) {
+		out = stringDupToC(&al->request->extacl_log);
+	        dofree = 1;
+	    }
 
 	    quote = 1;
 	    break;
