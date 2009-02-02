@@ -131,6 +131,7 @@ stringAppend(String * s, const char *str, int len)
 
 /*
  * This routine REQUIRES the string to be something and not NULL
+ * This copies -from- offset to the end of the string.
  */
 char *
 stringDupToCOffset(const String *s, int offset)
@@ -139,7 +140,7 @@ stringDupToCOffset(const String *s, int offset)
 	assert(s->buf);
 	assert(offset <= s->len);
 	d = xmalloc(s->len + 1 - offset);
-	memcpy(d, s->buf, s->len - offset);
+	memcpy(d, s->buf + offset, s->len - offset);
 	d[s->len - offset] = '\0';
 	return d;
 }
