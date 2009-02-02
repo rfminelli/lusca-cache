@@ -241,3 +241,15 @@ buf_truncate(buf_t *b, int newlen, buf_flags_t flags)
 		b->b[b->len] = '\0';
 	return 1;
 }
+
+char *
+buf_dup_cbuf(buf_t *b)
+{
+	char *c;
+
+	c = malloc(buf_len(b) + 1);
+	memcpy(c, buf_buf(b), buf_len(b));
+	c[buf_len(b)] = '\0';
+	return c;
+}
+

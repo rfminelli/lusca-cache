@@ -43,6 +43,7 @@ extern		int buf_append(buf_t *buf, const void *src, size_t len, buf_flags_t flag
 extern		int buf_grow_to_min_free(buf_t *b, int minfree);
 extern		int buf_changesize(buf_t *buf, int newsize);
 extern		int buf_truncate(buf_t *buf, int len, buf_flags_t flags);
+extern		char * buf_dup_cbuf(buf_t *buf);
 
 
 static inline int buf_len(const buf_t *buf) { return buf->len; }
