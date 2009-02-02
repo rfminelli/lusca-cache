@@ -28,9 +28,9 @@ extern String stringDup(const String * s);
 extern void stringClean(String * s);
 extern void stringReset(String * s, const char *str);
 extern void stringAppend(String * s, const char *buf, int len);
-extern char * stringDupToC(String *s);
-extern char * stringDupToCOffset(String *s, int offset);
-extern char * stringDupSubstrToC(String *s, int len);
+extern char * stringDupToC(const String *s);
+extern char * stringDupToCOffset(const String *s, int offset);
+extern char * stringDupSubstrToC(const String *s, int len);
 extern int strChr(String *s, char c);
 extern int strRChr(String *s, char c);
 
