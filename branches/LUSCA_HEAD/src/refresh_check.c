@@ -286,6 +286,8 @@ makeRefreshCheckRequest(StoreEntry * entry, refresh_check_format * format)
     for (; format; format = format->next) {
 	char buf[256];
 	const char *str = NULL;
+	const char *str2 = NULL;
+	int do_free = 0;
 	const char *quoted;
 	switch (format->type) {
 	case REFRESH_CHECK_URI:
@@ -297,19 +299,23 @@ makeRefreshCheckRequest(StoreEntry * entry, refresh_check_format * format)
 	    break;
 	case REFRESH_CHECK_RESP_HEADER:
 	    sb = httpHeaderGetByName(&reply->header, format->header);
-	    str = strBuf(sb);
+	    str = stringDupToC(&sb);
+	    do_free = 1;
 	    break;
 	case REFRESH_CHECK_RESP_HEADER_ID:
 	    sb = httpHeaderGetStrOrList(&reply->header, format->header_id);
-	    str = strBuf(sb);
+	    str = stringDupToC(&sb);
+	    do_free = 1;
 	    break;
 	case REFRESH_CHECK_RESP_HEADER_MEMBER:
 	    sb = httpHeaderGetByNameListMember(&reply->header, format->header, format->member, format->separator);
-	    str = strBuf(sb);
+	    str = stringDupToC(&sb);
+	    do_free = 1;
 	    break;
 	case REFRESH_CHECK_RESP_HEADER_ID_MEMBER:
 	    sb = httpHeaderGetListMember(&reply->header, format->header_id, format->member, format->separator);
-	    str = strBuf(sb);
+	    str = stringDupToC(&sb);
+	    do_free = 1;
 	    break;
 
 	case REFRESH_CHECK_UNKNOWN:
@@ -317,6 +323,8 @@ makeRefreshCheckRequest(StoreEntry * entry, refresh_check_format * format)
 	    fatal("unknown refresh_check_program format error");
 	    break;
 	}
+	str2 = str;
+
 	if (!str || !*str)
 	    str = "-";
 	if (!first)
@@ -324,6 +332,8 @@ makeRefreshCheckRequest(StoreEntry * entry, refresh_check_format * format)
 	quoted = rfc1738_escape(str);
 	memBufAppend(&mb, quoted, strlen(quoted));
 	stringClean(&sb);
+	if (do_free)
+		safe_free(str2);
 	first = 0;
     }
     return mb.buf;
