@@ -736,10 +736,16 @@ aclParseHeader(void *data)
     *hd = q;
 }
 
+/*
+ * XXX the temporary string copy is because of the regex engines'
+ * XXX requirement for NUL terminated strings. Migrating to PCRE
+ * XXX would fix this.
+ */
 static int
 aclMatchHeader(acl_hdr_data * hdrs, const HttpHeader * hdr)
 {
     acl_hdr_data *hd;
+    const char *s;
     for (hd = hdrs; hd; hd = hd->next) {
 	int ret;
 	String header;
@@ -749,7 +755,9 @@ aclMatchHeader(acl_hdr_data * hdrs, const HttpHeader * hdr)
 	    header = httpHeaderGetByName(hdr, hd->hdr_name);
 	if (strIsNull(header))
 	    continue;
-	ret = aclMatchRegex(hd->reglist, strBuf(header));
+        s = stringDupToC(&header);
+	ret = aclMatchRegex(hd->reglist, s);
+	safe_free(s);
 	stringClean(&header);
 	if (ret)
 	    return 1;
