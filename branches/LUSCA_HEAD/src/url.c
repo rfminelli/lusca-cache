@@ -618,7 +618,7 @@ urlMakeAbsolute(request_t * req, const char *relUrl)
     urlbuf = (char *) xmalloc(MAX_URL * sizeof(char));
 
     if (req->protocol == PROTO_URN) {
-	snprintf(urlbuf, MAX_URL, "urn:%s", strBuf(req->urlpath));
+	snprintf(urlbuf, MAX_URL, "urn:%.*s", strLen2(req->urlpath), strBuf2(req->urlpath));
 	return (urlbuf);
     }
     if (req->port != urlDefaultPort(req->protocol)) {
