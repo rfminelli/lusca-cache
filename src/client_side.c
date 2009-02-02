@@ -268,13 +268,13 @@ clientFollowXForwardedForDone(int answer, void *data)
 	 * it to to replace indirect_client_addr, then repeat the cycle.
 	 */
 	const char *p;
-	const char *asciiaddr;
+	char *asciiaddr;
 	int l;
 	struct in_addr addr;
 	debug(33, 5) ("clientFollowXForwardedForDone: indirect_client_addr=%s is trusted\n",
 	    inet_ntoa(request->indirect_client_addr));
-	p = strBuf(request->x_forwarded_for_iterator);
-	l = strLen(request->x_forwarded_for_iterator);
+	p = strBuf2(request->x_forwarded_for_iterator);
+	l = strLen2(request->x_forwarded_for_iterator);
 
 	/*
 	 * XXX x_forwarded_for_iterator should really be a list of
@@ -293,16 +293,20 @@ clientFollowXForwardedForDone(int answer, void *data)
 	/* look for start of last item in list */
 	while (l > 0 && !(p[l - 1] == ',' || xisspace(p[l - 1])))
 	    l--;
-	asciiaddr = p + l;
+
+	/* Take a temporary copy of the buffer so inet_aton() can run on it */
+        asciiaddr = stringDupToCOffset(&request->x_forwarded_for_iterator, l);
 	if (inet_aton(asciiaddr, &addr) == 0) {
 	    /* the address is not well formed; do not use it */
 	    debug(33, 3) ("clientFollowXForwardedForDone: malformed address '%s'\n",
 		asciiaddr);
+	    safe_free(asciiaddr);
 	    goto done;
 	}
 	debug(33, 3) ("clientFollowXForwardedForDone: changing indirect_client_addr from %s to '%s'\n",
 	    inet_ntoa(request->indirect_client_addr),
 	    asciiaddr);
+	safe_free(asciiaddr);
 	request->indirect_client_addr = addr;
 	strCut(&request->x_forwarded_for_iterator, l);
 	if (!Config.onoff.acl_uses_indirect_client) {
