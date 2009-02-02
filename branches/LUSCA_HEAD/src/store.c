@@ -878,7 +878,7 @@ typedef struct {
     size_t buf_size;
     size_t buf_offset;
     char *vary_data;
-    char *accept_encoding;
+    String accept_encoding;
     squid_off_t seen_offset;
     struct {
 	int ignore;
@@ -909,7 +909,7 @@ storeLocateVaryCallback(LocateVaryState * state)
     }
     state->current.etag = NULL;	/* shared by data->entries[x] */
     safe_free(state->vary_data);
-    safe_free(state->accept_encoding);
+    stringClean(&state->accept_encoding);
     safe_free(state->current.key);
     if (state->sc) {
 	storeClientUnregister(state->sc, state->e, state);
@@ -957,7 +957,7 @@ storeLocateVaryRead(void *data, mem_node_ref nr, ssize_t size)
 	    safe_free(state->current.key);
 	    state->current.etag = NULL;		/* saved in data.etags[] */
 	    state->current.ignore = 0;
-	    state->current.encoding_ok = !state->accept_encoding;
+	    state->current.encoding_ok = strIsNotNull(state->accept_encoding);
 	    state->current.key = xmalloc(l2 + 1);
 	    memcpy(state->current.key, p2, l2);
 	    state->current.key[l2] = '\0';
@@ -999,7 +999,15 @@ storeLocateVaryRead(void *data, mem_node_ref nr, ssize_t size)
 	} else if (strmatchbeg(p, "Accept-Encoding: ", l) == 0) {
 	    p2 = p + 17;
 	    l2 = e - p2;
+	    /*
+	     * This used to use strncmpnull(). It returned 0 on both string equality -and-
+	     * both strings being null. Hm! What does this mean if state->accept_encoding String is NULL?
+	     * Could p2 ever be NULL? No; it'll be pointing to -something-.
+	     */
+#if 0
 	    if (strncmpnull(state->accept_encoding, p2, l2) == 0 && state->accept_encoding[l2] == '\0') {
+#endif
+	    if (strNCmp(state->accept_encoding, p2, l2) == 0 && strLen2(state->accept_encoding) == l2) {
 		state->current.encoding_ok = 1;
 	    }
 	}
@@ -1048,7 +1056,7 @@ storeLocateVary(StoreEntry * e, int offset, const char *vary_data, String accept
     state = cbdataAlloc(LocateVaryState);
     state->vary_data = xstrdup(vary_data);
     if (strIsNotNull(accept_encoding))
-	state->accept_encoding = stringDupToC(&accept_encoding);
+	state->accept_encoding = stringDup(&accept_encoding);
     state->data = memPoolAlloc(VaryData_pool);
     state->e = e;
     storeLockObject(state->e);
