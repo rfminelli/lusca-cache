@@ -1089,6 +1089,7 @@ storeSetPublicKey(StoreEntry * e)
     StoreEntry *e2 = NULL;
     const cache_key *newkey;
     MemObject *mem = e->mem_obj;
+    const char *str = NULL;
     if (e->hash.key && !EBIT_TEST(e->flags, KEY_PRIVATE)) {
 	if (EBIT_TEST(e->flags, KEY_EARLY_PUBLIC)) {
 	    EBIT_CLR(e->flags, KEY_EARLY_PUBLIC);
@@ -1154,7 +1155,9 @@ storeSetPublicKey(StoreEntry * e)
 		strListAddStr(&vary, strBuf2(varyhdr), strLen2(varyhdr), ',');
 	    stringClean(&varyhdr);
 #endif
-	    storeAddVary(mem->url, mem->method, newkey, httpHeaderGetStr(&mem->reply->header, HDR_ETAG), strBuf(vary), mem->vary_headers, mem->vary_encoding);
+	    str = stringDupToC(&vary);
+	    storeAddVary(mem->url, mem->method, newkey, httpHeaderGetStr(&mem->reply->header, HDR_ETAG), str, mem->vary_headers, mem->vary_encoding);
+	    safe_free(str);
 	    stringClean(&vary);
 	}
     } else {
