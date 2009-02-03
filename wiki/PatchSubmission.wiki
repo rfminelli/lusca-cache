@@ -1,0 +1,21 @@
+#summary The process to submit patches to Lusca
+
+= Overview =
+
+This process is really aimed at people wishing to submit small patches to Lusca - bugfixes, small function changes, etc. Larger projects should be discussed first on the lusca-dev list.
+
+= Process =
+
+  * Create an issue - [http://code.google.com/p/lusca-cache/issue/list]
+  * Include the version/revision it is against (branches/LUSCA_HEAD? branches/LUSCA_1.0? Which revision?)
+  * Include a brief explanation of what it does
+  * Describe how to use the new feature / reproduce the bug / etc
+  * Include the diff :)
+
+The developers will then review the patch, provide feedback to the submitter (ie, you) and eventually commit the patch to Lusca.
+
+= Development Procedure =
+
+Development -should- occur in LUSCA_HEAD before it is ported to a stable branch. This is of course not possible in all environments. If a feature is submitted for a stable branch and it works in the stable branch, the developers will discuss porting it to LUSCA_HEAD with the patch submitter.
+
+LUSCA_HEAD has the aim of (mostly) staying stable and production ready, except in well-announced instances where potentially risky development may occur. If you are developing a patch to Lusca which may be quite large, please talk to the developers first and ask their opinions on how to move forward in a way that will benefit both you and the project. Remember, one of the project goals is to make it easy for development to occur - but this will only work if both the developers -and- external contributors talk and work together! Don't be a stranger!
