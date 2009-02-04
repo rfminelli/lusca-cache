@@ -1013,12 +1013,19 @@ httpReadReply(int fd, void *data)
     errno = 0;
     CommStats.syscalls.sock.reads++;
 
+    /*
+     * SQUID_TCP_SO_RCVBUF / 4 here is a ghetto way of trying to avoid
+     * growing the buffer too often. The -eventual- solution will be
+     * to create a second buffer to read the overflow data into;
+     * and growing the buffer only if its part of the reply status + headers
+     * (as strings atm need to be contiguous) ..
+     */
     if (! httpState->read_buf)
-        httpState->read_buf = buf_create_size(SQUID_TCP_SO_RCVBUF);
+        httpState->read_buf = buf_create_size(SQUID_TCP_SO_RCVBUF / 4);
 
     /* XXX buffer_filled is all busted right now, unfortunately! */
     len = buf_read(httpState->read_buf, fd, read_sz);
-    buffer_filled = len == read_sz;
+    buffer_filled = (len == read_sz);
     debug(11, 5) ("httpReadReply: FD %d: len %d.\n", fd, (int) len);
 
     /* Len > 0? Account for data; here's where data would be appended to the reply buffer */
