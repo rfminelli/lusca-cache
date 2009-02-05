@@ -991,7 +991,7 @@ httpReadReply(int fd, void *data)
     int clen;
     int done = 0;
     int already_parsed = 0;
-    size_t read_sz = SQUID_TCP_SO_RCVBUF;
+    size_t read_sz = 8192;
     int po = 0;
 #if DELAY_POOLS
     delay_id delay_id;
@@ -1021,7 +1021,7 @@ httpReadReply(int fd, void *data)
      * (as strings atm need to be contiguous) ..
      */
     if (! httpState->read_buf)
-        httpState->read_buf = buf_create_size(SQUID_TCP_SO_RCVBUF / 4);
+        httpState->read_buf = buf_create_size(32768);
 
     /* XXX buffer_filled is all busted right now, unfortunately! */
     len = buf_read(httpState->read_buf, fd, read_sz);
