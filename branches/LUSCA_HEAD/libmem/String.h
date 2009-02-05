@@ -23,6 +23,7 @@ static inline char stringGetCh(const String *s, int pos) { return strBuf2(*s)[po
 #define strCaseCmp(s,str)	strcasecmp(strBuf(s), (str))
 #define strNCaseCmp(s,str,n)	strncasecmp(strBuf(s), (str), (n))
 
+extern int strNCmpNull(const String *s, const char *s2, int n);
 extern void stringInit(String * s, const char *str);
 extern void stringLimitInit(String * s, const char *str, int len);
 extern String stringDup(const String * s);

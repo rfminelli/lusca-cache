@@ -200,3 +200,15 @@ strCut(String *s, int offset)
 	s->len = offset;
 }
 
+
+int
+strNCmpNull(const String *a, const char *b, int n)
+{
+    if (strIsNotNull(*a) && b) {
+        return strncmp(strBuf2(*a), b, XMIN(strLen2(*a), n)); 
+    } else if (strIsNotNull(*a))
+        return 1;
+    else if (b)
+        return -1;
+    return 0;
+}

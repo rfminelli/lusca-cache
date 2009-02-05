@@ -1007,7 +1007,7 @@ storeLocateVaryRead(void *data, mem_node_ref nr, ssize_t size)
 #if 0
 	    if (strncmpnull(state->accept_encoding, p2, l2) == 0 && state->accept_encoding[l2] == '\0') {
 #endif
-	    if (strNCmp(state->accept_encoding, p2, l2) == 0 && strLen2(state->accept_encoding) == l2) {
+	    if (strNCmpNull(&state->accept_encoding, p2, l2) == 0 && strLen2(state->accept_encoding) == l2) {
 		state->current.encoding_ok = 1;
 	    }
 	}
