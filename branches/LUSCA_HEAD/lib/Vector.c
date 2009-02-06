@@ -13,7 +13,7 @@ vector_grow(vector_t *v, int new_count)
 	void *t;
 
 	if (new_count < v->alloc_count)
-		return;
+		return 0;
 
 	t = xrealloc(v->data, (v->obj_size * new_count));
 	if (t == NULL)
@@ -77,7 +77,6 @@ vector_append(vector_t *v)
 void *
 vector_insert(vector_t *v, int offset)
 {
-	void *t;
 	int position = offset;
 
 	if (position >= v->alloc_count)
