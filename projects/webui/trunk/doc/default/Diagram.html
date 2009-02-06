@@ -1,0 +1,1793 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+	<title>Docs For Class Diagram</title>
+	<link rel="stylesheet" type="text/css" id="layout" href="../media/layout.css" media="screen">
+	<link rel="stylesheet" type="text/css" href="../media/style.css" media="all">
+	<link rel="stylesheet" type="text/css" href="../media/print.css" media="print">
+</head>
+
+<body>
+<div id="header">
+	<div id="navLinks">
+        
+                                    
+                            	        [ <a href="../classtrees_default.html">Class Tree: default</a> ]
+            [ <a href="../elementindex_default.html">Index: default</a> ]
+        		[ <a href="../elementindex.html">All elements</a> ]		
+	</div>
+	<div id="packagePosition">
+		<div id="packageTitle2">default</div>
+		<div id="packageTitle">default</div>
+		<div id="elementPath"> &middot; </div>
+	</div>
+</div>
+
+<div id="nav" class="small">
+	<div id="packages">
+		Packages:
+					<p><a href="../li_default.html">default</a></p>
+			</div>
+
+				<div id="index">
+			<div id="files">
+								Files:<br>
+								<a href="../default/_phprd---ajax---ajax.php.html">		ajax.php
+		</a><br>
+			<a href="../default/_diagram---area_object.php.html">		area_object.php
+		</a><br>
+			<a href="../default/_diagram---arrow_object.php.html">		arrow_object.php
+		</a><br>
+			<a href="../default/_diagram---bar_object.php.html">		bar_object.php
+		</a><br>
+			<a href="../default/_diagram---box_object.php.html">		box_object.php
+		</a><br>
+			<a href="../default/_phprd---cache---cache.php.html">		cache.php
+		</a><br>
+			<a href="../default/_config.php.html">		config.php
+		</a><br>
+			<a href="../default/_core_init.php.html">		core_init.php
+		</a><br>
+			<a href="../default/_diagram---diagram.php.html">		diagram.php
+		</a><br>
+			<a href="../default/_diagram---diagram_object.php.html">		diagram_object.php
+		</a><br>
+			<a href="../default/_diagram---dot_object.php.html">		dot_object.php
+		</a><br>
+			<a href="../default/_diagram---dynamic_example.php.html">		dynamic_example.php
+		</a><br>
+			<a href="../default/_phprd---error-log---error.php.html">		error.php
+		</a><br>
+			<a href="../default/_diagram---function.php.html">		function.php
+		</a><br>
+			<a href="../default/_graphs.php.html">		graphs.php
+		</a><br>
+			<a href="../default/_index.php.html">		index.php
+		</a><br>
+			<a href="../default/_phprd---utils---install.php.html">		install.php
+		</a><br>
+			<a href="../default/_interface.php.html">		interface.php
+		</a><br>
+			<a href="../default/_diagram---line_object.php.html">		line_object.php
+		</a><br>
+			<a href="../default/_phprd---error-log---log.php.html">		log.php
+		</a><br>
+			<a href="../default/_diagram---logarithmic_scale.php.html">		logarithmic_scale.php
+		</a><br>
+			<a href="../default/_menus.php.html">		menus.php
+		</a><br>
+			<a href="../default/_diagram---pie_object.php.html">		pie_object.php
+		</a><br>
+			<a href="../default/_diagram---pixel_object.php.html">		pixel_object.php
+		</a><br>
+			<a href="../default/_poller.php.html">		poller.php
+		</a><br>
+			<a href="../default/_poller_config.php.html">		poller_config.php
+		</a><br>
+			<a href="../default/_phprd---sql---sql.php.html">		sql.php
+		</a><br>
+			<a href="../default/_squidconfig.php.html">		squidconfig.php
+		</a><br>
+			<a href="../default/_diagram---static_example.php.html">		static_example.php
+		</a><br>
+			<a href="../default/_phprd---utils---string.php.html">		string.php
+		</a><br>
+			<a href="../default/_phprd---template---template.php.html">		template.php
+		</a><br>
+			<a href="../default/_phprd---users---users.php.html">		users.php
+		</a><br>
+			<a href="../default/_phprd---utils---utils.php.html">		utils.php
+		</a><br>
+			<a href="../default/_web_functions.php.html">		web_functions.php
+		</a><br>
+				</div>
+			<div id="interfaces">
+							</div>
+			<div id="classes">
+				Classes:<br>
+								<a href="../default/ajax.html">		ajax
+		</a><br>
+			<a href="../default/bench.html">		bench
+		</a><br>
+			<a href="../default/Diagram.html">		Diagram
+		</a><br>
+			<a href="../default/ErrorHandler.html">		ErrorHandler
+		</a><br>
+			<a href="../default/graphs.html">		graphs
+		</a><br>
+			<a href="../default/installation.html">		installation
+		</a><br>
+			<a href="../default/Logging.html">		Logging
+		</a><br>
+			<a href="../default/mssql.html">		mssql
+		</a><br>
+			<a href="../default/mysql.html">		mysql
+		</a><br>
+			<a href="../default/postgre.html">		postgre
+		</a><br>
+			<a href="../default/sql.html">		sql
+		</a><br>
+			<a href="../default/SQLCache.html">		SQLCache
+		</a><br>
+			<a href="../default/squid_interface.html">		squid_interface
+		</a><br>
+			<a href="../default/string_manipulation.html">		string_manipulation
+		</a><br>
+			<a href="../default/template.html">		template
+		</a><br>
+			<a href="../default/user_sessions.html">		user_sessions
+		</a><br>
+			<a href="../default/WEBCache.html">		WEBCache
+		</a><br>
+			<a href="../default/webfunc.html">		webfunc
+		</a><br>
+				</div>
+		</div>
+	</div>
+
+<div id="body">
+	    		<h1>Class: Diagram</h1>
+	<p style="margin: 0px;">Source Location: /diagram/diagram.php</p>
+	
+
+<div class="leftcol">
+	<h3><a href="#class_details">Class Overview</a> <span class="smalllinenumber">[line 11]</span></h3>
+	<div id="classTree"><pre></pre>
+</div>
+	<div class="small">
+	<p></p>
+		<h4>Author(s):</h4>
+	<ul>
+			</ul>
+	<h4>Version:</h4>
+	<ul>
+			</ul>
+
+	<h4>Copyright:</h4>
+	<ul>
+			</li>
+	</div>
+</div>
+
+<div class="middlecol">
+	<h3><a href="#class_vars">Variables</a></h3>
+	<ul class="small">
+				<li><a href="../default/Diagram.html#var$BFont">$BFont</a></li>
+				<li><a href="../default/Diagram.html#var$bottom">$bottom</a></li>
+				<li><a href="../default/Diagram.html#var$Font">$Font</a></li>
+				<li><a href="../default/Diagram.html#var$Img">$Img</a></li>
+				<li><a href="../default/Diagram.html#var$ImgMapData">$ImgMapData</a></li>
+				<li><a href="../default/Diagram.html#var$LastColor">$LastColor</a></li>
+				<li><a href="../default/Diagram.html#var$LastImgColorIndex">$LastImgColorIndex</a></li>
+				<li><a href="../default/Diagram.html#var$left">$left</a></li>
+				<li><a href="../default/Diagram.html#var$logsub">$logsub</a></li>
+				<li><a href="../default/Diagram.html#var$MaxGrids">$MaxGrids</a></li>
+				<li><a href="../default/Diagram.html#var$right">$right</a></li>
+				<li><a href="../default/Diagram.html#var$SubGrids">$SubGrids</a></li>
+				<li><a href="../default/Diagram.html#var$title">$title</a></li>
+				<li><a href="../default/Diagram.html#var$top">$top</a></li>
+				<li><a href="../default/Diagram.html#var$XGrid">$XGrid</a></li>
+				<li><a href="../default/Diagram.html#var$XGridColor">$XGridColor</a></li>
+				<li><a href="../default/Diagram.html#var$XGridDelta">$XGridDelta</a></li>
+				<li><a href="../default/Diagram.html#var$xmax">$xmax</a></li>
+				<li><a href="../default/Diagram.html#var$xmin">$xmin</a></li>
+				<li><a href="../default/Diagram.html#var$XScale">$XScale</a></li>
+				<li><a href="../default/Diagram.html#var$XScalePosition">$XScalePosition</a></li>
+				<li><a href="../default/Diagram.html#var$XSubGridColor">$XSubGridColor</a></li>
+				<li><a href="../default/Diagram.html#var$XSubGrids">$XSubGrids</a></li>
+				<li><a href="../default/Diagram.html#var$xtext">$xtext</a></li>
+				<li><a href="../default/Diagram.html#var$YGrid">$YGrid</a></li>
+				<li><a href="../default/Diagram.html#var$YGridColor">$YGridColor</a></li>
+				<li><a href="../default/Diagram.html#var$YGridDelta">$YGridDelta</a></li>
+				<li><a href="../default/Diagram.html#var$ymax">$ymax</a></li>
+				<li><a href="../default/Diagram.html#var$ymin">$ymin</a></li>
+				<li><a href="../default/Diagram.html#var$YScale">$YScale</a></li>
+				<li><a href="../default/Diagram.html#var$YScalePosition">$YScalePosition</a></li>
+				<li><a href="../default/Diagram.html#var$YSubGridColor">$YSubGridColor</a></li>
+				<li><a href="../default/Diagram.html#var$YSubGrids">$YSubGrids</a></li>
+				<li><a href="../default/Diagram.html#var$ytext">$ytext</a></li>
+			</ul>
+	<h3><a href="#class_consts">Constants</a></h3>
+	<ul class="small">
+			</ul>
+</div>
+<div class="rightcol">
+	<h3><a href="#class_methods">Methods</a></h3>
+	<ul class="small">
+				<li><a href="../default/Diagram.html#methodArea">Area</a></li>
+				<li><a href="../default/Diagram.html#methodArrow">Arrow</a></li>
+				<li><a href="../default/Diagram.html#methodBar">Bar</a></li>
+				<li><a href="../default/Diagram.html#methodBox">Box</a></li>
+				<li><a href="../default/Diagram.html#methodDateFormat">DateFormat</a></li>
+				<li><a href="../default/Diagram.html#methodDateInterval">DateInterval</a></li>
+				<li><a href="../default/Diagram.html#methodDot">Dot</a></li>
+				<li><a href="../default/Diagram.html#methodDraw">Draw</a></li>
+				<li><a href="../default/Diagram.html#methodGetImgColorIndex">GetImgColorIndex</a></li>
+				<li><a href="../default/Diagram.html#methodGetRGB">GetRGB</a></li>
+				<li><a href="../default/Diagram.html#methodGetXGrid">GetXGrid</a></li>
+				<li><a href="../default/Diagram.html#methodGetYGrid">GetYGrid</a></li>
+				<li><a href="../default/Diagram.html#methodLine">Line</a></li>
+				<li><a href="../default/Diagram.html#methodPie">Pie</a></li>
+				<li><a href="../default/Diagram.html#methodPixel">Pixel</a></li>
+				<li><a href="../default/Diagram.html#methodRealX">RealX</a></li>
+				<li><a href="../default/Diagram.html#methodRealY">RealY</a></li>
+				<li><a href="../default/Diagram.html#methodScreenX">ScreenX</a></li>
+				<li><a href="../default/Diagram.html#methodScreenY">ScreenY</a></li>
+				<li><a href="../default/Diagram.html#methodSetBorder">SetBorder</a></li>
+				<li><a href="../default/Diagram.html#methodSetFrame">SetFrame</a></li>
+				<li><a href="../default/Diagram.html#methodSetGridColor">SetGridColor</a></li>
+				<li><a href="../default/Diagram.html#methodSetText">SetText</a></li>
+				<li><a href="../default/Diagram.html#methodSetXGridColor">SetXGridColor</a></li>
+				<li><a href="../default/Diagram.html#methodSetYGridColor">SetYGridColor</a></li>
+				<li><a href="../default/Diagram.html#methodsign">sign</a></li>
+				<li><a href="../default/Diagram.html#methodUTC">UTC</a></li>
+			</ul>
+</div>
+
+<div id="content">
+<hr>
+	<div class="contents">
+	</div>
+
+	<div class="leftCol">
+    	<h2>Inherited Variables</h2>
+		<h2>Inherited Constants</h2>
+		</div>
+
+	<div class="rightCol">
+	<h2>Inherited Methods</h2>
+		</div>
+	<br clear="all">
+	<hr>
+
+	<a name="class_details"></a>
+	<h2>Class Details</h2>
+		<p class="small" style="color: #334B66;">[ <a href="#top">Top</a> ]</p>
+
+	<hr>
+	<a name="class_vars"></a>
+	<h2>Class Variables</h2>
+		<a name="var$BFont"></a>
+	<p></p>
+	<h4>$BFont = <span class="value">5</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 34]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$bottom"></a>
+	<p></p>
+	<h4>$bottom</h4>
+	<div class="indent">
+		<p class="linenumber">[line 12]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$Font"></a>
+	<p></p>
+	<h4>$Font = <span class="value">4</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 33]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$Img"></a>
+	<p></p>
+	<h4>$Img</h4>
+	<div class="indent">
+		<p class="linenumber">[line 39]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$ImgMapData"></a>
+	<p></p>
+	<h4>$ImgMapData = <span class="value">&quot;&quot;</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 38]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$LastColor"></a>
+	<p></p>
+	<h4>$LastColor = <span class="value">&quot;&quot;</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 36]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$LastImgColorIndex"></a>
+	<p></p>
+	<h4>$LastImgColorIndex = <span class="value">0</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 37]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$left"></a>
+	<p></p>
+	<h4>$left</h4>
+	<div class="indent">
+		<p class="linenumber">[line 12]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$logsub"></a>
+	<p></p>
+	<h4>$logsub = <span class="value">array(0.301,&nbsp;0.477,&nbsp;0.602,&nbsp;0.699,&nbsp;0.778,&nbsp;0.845,&nbsp;0.903,&nbsp;0.954)</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 21]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$MaxGrids"></a>
+	<p></p>
+	<h4>$MaxGrids</h4>
+	<div class="indent">
+		<p class="linenumber">[line 35]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$right"></a>
+	<p></p>
+	<h4>$right</h4>
+	<div class="indent">
+		<p class="linenumber">[line 12]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$SubGrids"></a>
+	<p></p>
+	<h4>$SubGrids = <span class="value">0</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 28]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$title"></a>
+	<p></p>
+	<h4>$title = <span class="value">&quot;&quot;</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 16]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$top"></a>
+	<p></p>
+	<h4>$top</h4>
+	<div class="indent">
+		<p class="linenumber">[line 12]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$XGrid"></a>
+	<p></p>
+	<h4>$XGrid = <span class="value">array(0,0,0)</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 22]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$XGridColor"></a>
+	<p></p>
+	<h4>$XGridColor = <span class="value">&quot;&quot;</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 29]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$XGridDelta"></a>
+	<p></p>
+	<h4>$XGridDelta = <span class="value">0</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 24]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$xmax"></a>
+	<p></p>
+	<h4>$xmax</h4>
+	<div class="indent">
+		<p class="linenumber">[line 13]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$xmin"></a>
+	<p></p>
+	<h4>$xmin</h4>
+	<div class="indent">
+		<p class="linenumber">[line 13]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$XScale"></a>
+	<p></p>
+	<h4>$XScale = <span class="value">1</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 17]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$XScalePosition"></a>
+	<p></p>
+	<h4>$XScalePosition = <span class="value">&quot;bottom&quot;</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 19]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$XSubGridColor"></a>
+	<p></p>
+	<h4>$XSubGridColor = <span class="value">&quot;&quot;</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 31]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$XSubGrids"></a>
+	<p></p>
+	<h4>$XSubGrids = <span class="value">0</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 26]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$xtext"></a>
+	<p></p>
+	<h4>$xtext = <span class="value">&quot;&quot;</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 14]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$YGrid"></a>
+	<p></p>
+	<h4>$YGrid = <span class="value">array(0,0,0)</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 23]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$YGridColor"></a>
+	<p></p>
+	<h4>$YGridColor = <span class="value">&quot;&quot;</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 30]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$YGridDelta"></a>
+	<p></p>
+	<h4>$YGridDelta = <span class="value">0</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 25]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$ymax"></a>
+	<p></p>
+	<h4>$ymax</h4>
+	<div class="indent">
+		<p class="linenumber">[line 13]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$ymin"></a>
+	<p></p>
+	<h4>$ymin</h4>
+	<div class="indent">
+		<p class="linenumber">[line 13]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$YScale"></a>
+	<p></p>
+	<h4>$YScale = <span class="value">1</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 18]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$YScalePosition"></a>
+	<p></p>
+	<h4>$YScalePosition = <span class="value">&quot;left&quot;</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 20]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$YSubGridColor"></a>
+	<p></p>
+	<h4>$YSubGridColor = <span class="value">&quot;&quot;</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 32]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$YSubGrids"></a>
+	<p></p>
+	<h4>$YSubGrids = <span class="value">0</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 27]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="var$ytext"></a>
+	<p></p>
+	<h4>$ytext = <span class="value">&quot;&quot;</span></h4>
+	<div class="indent">
+		<p class="linenumber">[line 15]</p>
+				<p><b>Type:</b> mixed</p>
+		<p><b>Overrides:</b> </p>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+
+	<hr>
+	<a name="class_methods"></a>
+	<h2>Class Methods</h2>
+	
+	<a name="methodArea"></a>
+	<p></p>
+	<h3>Area</h3>
+	<div class="indent">
+		<p>
+		<code>void Area(
+
+$theX0, 
+$theY0, 
+$theX1, 
+$theY1, 
+$theColor, [
+$theBase = 0], [
+$theTooltipText = &quot;&quot;], [
+$theOnClickAction = &quot;&quot;], [
+$theOnMouseoverAction = &quot;&quot;], [
+$theOnMouseoutAction = &quot;&quot;])</code>
+		</p>
+	
+		<p class="linenumber">[line 804]</p>
+				
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$theX0</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theY0</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theX1</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theY1</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theColor</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theBase</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theTooltipText</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnClickAction</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnMouseoverAction</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnMouseoutAction</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodArrow"></a>
+	<p></p>
+	<h3>Arrow</h3>
+	<div class="indent">
+		<p>
+		<code>void Arrow(
+
+$theX0, 
+$theY0, 
+$theX1, 
+$theY1, 
+$theColor, [
+$theSize = 1], [
+$theTooltipText = &quot;&quot;], [
+$theOnClickAction = &quot;&quot;], [
+$theOnMouseoverAction = &quot;&quot;], [
+$theOnMouseoutAction = &quot;&quot;])</code>
+		</p>
+	
+		<p class="linenumber">[line 819]</p>
+				
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$theX0</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theY0</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theX1</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theY1</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theColor</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theSize</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theTooltipText</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnClickAction</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnMouseoverAction</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnMouseoutAction</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodBar"></a>
+	<p></p>
+	<h3>Bar</h3>
+	<div class="indent">
+		<p>
+		<code>void Bar(
+
+$theLeft, 
+$theTop, 
+$theRight, 
+$theBottom, 
+$theDrawColor, [
+$theText = &quot;&quot;], [
+$theTextColor = &quot;000000&quot;], [
+$theTooltipText = &quot;&quot;], [
+$theOnClickAction = &quot;&quot;], [
+$theOnMouseoverAction = &quot;&quot;], [
+$theOnMouseoutAction = &quot;&quot;])</code>
+		</p>
+	
+		<p class="linenumber">[line 618]</p>
+				
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$theLeft</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theTop</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theRight</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theBottom</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theDrawColor</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theText</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theTextColor</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theTooltipText</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnClickAction</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnMouseoverAction</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnMouseoutAction</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodBox"></a>
+	<p></p>
+	<h3>Box</h3>
+	<div class="indent">
+		<p>
+		<code>void Box(
+
+$theLeft, 
+$theTop, 
+$theRight, 
+$theBottom, 
+$theDrawColor, [
+$theText = &quot;&quot;], [
+$theTextColor = &quot;000000&quot;], [
+$theBorderWidth = 1], [
+$theBorderColor = &quot;000000&quot;], [
+$theTooltipText = &quot;&quot;], [
+$theOnClickAction = &quot;&quot;], [
+$theOnMouseoverAction = &quot;&quot;], [
+$theOnMouseoutAction = &quot;&quot;])</code>
+		</p>
+	
+		<p class="linenumber">[line 669]</p>
+				
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$theLeft</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theTop</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theRight</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theBottom</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theDrawColor</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theText</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theTextColor</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theBorderWidth</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theBorderColor</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theTooltipText</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnClickAction</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnMouseoverAction</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnMouseoutAction</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodDateFormat"></a>
+	<p></p>
+	<h3>DateFormat</h3>
+	<div class="indent">
+		<p>
+		<code>void DateFormat(
+
+$vv, 
+$ii, 
+$ttype)</code>
+		</p>
+	
+		<p class="linenumber">[line 58]</p>
+		<h4>Tags:</h4>
+<ul>
+	<li><b>access</b> - public</li>
+</ul>
+		
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$vv</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$ii</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$ttype</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodDateInterval"></a>
+	<p></p>
+	<h3>DateInterval</h3>
+	<div class="indent">
+		<p>
+		<code>void DateInterval(
+
+$vv)</code>
+		</p>
+	
+		<p class="linenumber">[line 181]</p>
+				
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$vv</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodDot"></a>
+	<p></p>
+	<h3>Dot</h3>
+	<div class="indent">
+		<p>
+		<code>void Dot(
+
+$theX, 
+$theY, 
+$theSize, 
+$theType, 
+$theColor, [
+$theTooltipText = &quot;&quot;], [
+$theOnClickAction = &quot;&quot;], [
+$theOnMouseoverAction = &quot;&quot;], [
+$theOnMouseoutAction = &quot;&quot;])</code>
+		</p>
+	
+		<p class="linenumber">[line 723]</p>
+				
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$theX</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theY</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theSize</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theType</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theColor</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theTooltipText</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnClickAction</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnMouseoverAction</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnMouseoutAction</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodDraw"></a>
+	<p></p>
+	<h3>Draw</h3>
+	<div class="indent">
+		<p>
+		<code>void Draw(
+[
+$theDrawColor = &quot;&quot;], [
+$theTextColor = &quot;000000&quot;], [
+$isScaleText = false], [
+$theTooltipText = &quot;&quot;], [
+$theOnClickAction = &quot;&quot;], [
+$theOnMouseoverAction = &quot;&quot;], [
+$theOnMouseoutAction = &quot;&quot;])</code>
+		</p>
+	
+		<p class="linenumber">[line 323]</p>
+				
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$theDrawColor</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theTextColor</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$isScaleText</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theTooltipText</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnClickAction</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnMouseoverAction</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnMouseoutAction</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodGetImgColorIndex"></a>
+	<p></p>
+	<h3>GetImgColorIndex</h3>
+	<div class="indent">
+		<p>
+		<code>void GetImgColorIndex(
+
+$theColor)</code>
+		</p>
+	
+		<p class="linenumber">[line 115]</p>
+				
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$theColor</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodGetRGB"></a>
+	<p></p>
+	<h3>GetRGB</h3>
+	<div class="indent">
+		<p>
+		<code>void GetRGB(
+
+$ss, 
+&$rr, 
+&$gg, 
+&$bb)</code>
+		</p>
+	
+		<p class="linenumber">[line 45]</p>
+		<h4>Tags:</h4>
+<ul>
+	<li><b>access</b> - public</li>
+</ul>
+		
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$ss</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>&$rr</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>&$gg</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>&$bb</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodGetXGrid"></a>
+	<p></p>
+	<h3>GetXGrid</h3>
+	<div class="indent">
+		<p>
+		<code>void GetXGrid(
+)</code>
+		</p>
+	
+		<p class="linenumber">[line 253]</p>
+				
+	
+	<h4>Parameters:</h4>
+	<ul>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodGetYGrid"></a>
+	<p></p>
+	<h3>GetYGrid</h3>
+	<div class="indent">
+		<p>
+		<code>void GetYGrid(
+)</code>
+		</p>
+	
+		<p class="linenumber">[line 288]</p>
+				
+	
+	<h4>Parameters:</h4>
+	<ul>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodLine"></a>
+	<p></p>
+	<h3>Line</h3>
+	<div class="indent">
+		<p>
+		<code>void Line(
+
+$theX0, 
+$theY0, 
+$theX1, 
+$theY1, 
+$theColor, [
+$theSize = 1], [
+$theTooltipText = &quot;&quot;], [
+$theOnClickAction = &quot;&quot;], [
+$theOnMouseoverAction = &quot;&quot;], [
+$theOnMouseoutAction = &quot;&quot;])</code>
+		</p>
+	
+		<p class="linenumber">[line 784]</p>
+				
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$theX0</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theY0</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theX1</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theY1</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theColor</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theSize</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theTooltipText</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnClickAction</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnMouseoverAction</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnMouseoutAction</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodPie"></a>
+	<p></p>
+	<h3>Pie</h3>
+	<div class="indent">
+		<p>
+		<code>void Pie(
+
+$theXCenter, 
+$theYCenter, 
+$theOffset, 
+$theRadius, 
+$theAngle0, 
+$theAngle1, 
+$theColor, [
+$theTooltipText = &quot;&quot;], [
+$theOnClickAction = &quot;&quot;], [
+$theOnMouseoverAction = &quot;&quot;], [
+$theOnMouseoutAction = &quot;&quot;])</code>
+		</p>
+	
+		<p class="linenumber">[line 846]</p>
+				
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$theXCenter</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theYCenter</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOffset</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theRadius</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theAngle0</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theAngle1</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theColor</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theTooltipText</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnClickAction</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnMouseoverAction</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theOnMouseoutAction</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodPixel"></a>
+	<p></p>
+	<h3>Pixel</h3>
+	<div class="indent">
+		<p>
+		<code>void Pixel(
+
+$theX, 
+$theY, 
+$theColor)</code>
+		</p>
+	
+		<p class="linenumber">[line 779]</p>
+				
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$theX</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theY</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theColor</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodRealX"></a>
+	<p></p>
+	<h3>RealX</h3>
+	<div class="indent">
+		<p>
+		<code>void RealX(
+
+$theScreenX)</code>
+		</p>
+	
+		<p class="linenumber">[line 173]</p>
+				
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$theScreenX</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodRealY"></a>
+	<p></p>
+	<h3>RealY</h3>
+	<div class="indent">
+		<p>
+		<code>void RealY(
+
+$theScreenY)</code>
+		</p>
+	
+		<p class="linenumber">[line 177]</p>
+				
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$theScreenY</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodScreenX"></a>
+	<p></p>
+	<h3>ScreenX</h3>
+	<div class="indent">
+		<p>
+		<code>void ScreenX(
+
+$theRealX)</code>
+		</p>
+	
+		<p class="linenumber">[line 165]</p>
+				
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$theRealX</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodScreenY"></a>
+	<p></p>
+	<h3>ScreenY</h3>
+	<div class="indent">
+		<p>
+		<code>void ScreenY(
+
+$theRealY)</code>
+		</p>
+	
+		<p class="linenumber">[line 169]</p>
+				
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$theRealY</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodSetBorder"></a>
+	<p></p>
+	<h3>SetBorder</h3>
+	<div class="indent">
+		<p>
+		<code>void SetBorder(
+
+$theLeftX, 
+$theRightX, 
+$theBottomY, 
+$theTopY)</code>
+		</p>
+	
+		<p class="linenumber">[line 133]</p>
+				
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$theLeftX</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theRightX</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theBottomY</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theTopY</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodSetFrame"></a>
+	<p></p>
+	<h3>SetFrame</h3>
+	<div class="indent">
+		<p>
+		<code>void SetFrame(
+
+$theLeft, 
+$theTop, 
+$theRight, 
+$theBottom)</code>
+		</p>
+	
+		<p class="linenumber">[line 126]</p>
+				
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$theLeft</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theTop</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theRight</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theBottom</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodSetGridColor"></a>
+	<p></p>
+	<h3>SetGridColor</h3>
+	<div class="indent">
+		<p>
+		<code>void SetGridColor(
+
+$theGridColor, [
+$theSubGridColor = &quot;undefined&quot;])</code>
+		</p>
+	
+		<p class="linenumber">[line 146]</p>
+				
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$theGridColor</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theSubGridColor</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodSetText"></a>
+	<p></p>
+	<h3>SetText</h3>
+	<div class="indent">
+		<p>
+		<code>void SetText(
+
+$theScaleX, 
+$theScaleY, 
+$theTitle)</code>
+		</p>
+	
+		<p class="linenumber">[line 140]</p>
+				
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$theScaleX</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theScaleY</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theTitle</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodSetXGridColor"></a>
+	<p></p>
+	<h3>SetXGridColor</h3>
+	<div class="indent">
+		<p>
+		<code>void SetXGridColor(
+
+$theGridColor, [
+$theSubGridColor = &quot;undefined&quot;])</code>
+		</p>
+	
+		<p class="linenumber">[line 155]</p>
+				
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$theGridColor</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theSubGridColor</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodSetYGridColor"></a>
+	<p></p>
+	<h3>SetYGridColor</h3>
+	<div class="indent">
+		<p>
+		<code>void SetYGridColor(
+
+$theGridColor, [
+$theSubGridColor = &quot;undefined&quot;])</code>
+		</p>
+	
+		<p class="linenumber">[line 160]</p>
+				
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$theGridColor</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$theSubGridColor</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodsign"></a>
+	<p></p>
+	<h3>sign</h3>
+	<div class="indent">
+		<p>
+		<code>void sign(
+
+$rr)</code>
+		</p>
+	
+		<p class="linenumber">[line 54]</p>
+		<h4>Tags:</h4>
+<ul>
+	<li><b>access</b> - public</li>
+</ul>
+		
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$rr</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+	<a name="methodUTC"></a>
+	<p></p>
+	<h3>UTC</h3>
+	<div class="indent">
+		<p>
+		<code>void UTC(
+
+$yy, 
+$mm, 
+$dd, 
+$hh, 
+$nn, 
+$ss)</code>
+		</p>
+	
+		<p class="linenumber">[line 41]</p>
+		<h4>Tags:</h4>
+<ul>
+	<li><b>access</b> - public</li>
+</ul>
+		
+	
+	<h4>Parameters:</h4>
+	<ul>
+			<li>
+		<span class="type"></span>
+		<b>$yy</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$mm</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$dd</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$hh</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$nn</b> 
+		- 
+		</li>
+			<li>
+		<span class="type"></span>
+		<b>$ss</b> 
+		- 
+		</li>
+		</ul>
+	</div>
+	<p class="top">[ <a href="#top">Top</a> ]</p>
+
+	<hr>
+	<a name="class_consts"></a>
+	<h2>Class Constants</h2>
+	</div>
+	<div id="credit">
+		<hr>
+		Documentation generated on Fri, 10 Oct 2008 20:27:40 +0200 by <a href="http://www.phpdoc.org">phpDocumentor 1.4.1</a>
+	</div>
+</div>
+</body>
+</html>
