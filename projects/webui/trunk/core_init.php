@@ -14,6 +14,9 @@ $bench=new bench; $bench->start();	//Bench first
 require "config.php";
 require_once "menus.php";
 
+// what to report?
+error_reporting($php_report);
+
 // phprd
 require "phprd/template/template.php";
 require_once "phprd/users/users.php";
@@ -31,7 +34,7 @@ require_once "interface.php";
 $templ=new template;
 $templ->set_template_path($template_path);
 $ajax=new ajax;
-$users=new user_sessions;
+//$users=new user_sessions;
 $webfunc=new webfunc;
 $squid_interface=new squid_interface;
 $user_config=$squid_interface->get_local_config();

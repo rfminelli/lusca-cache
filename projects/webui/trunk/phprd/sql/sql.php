@@ -14,6 +14,7 @@ class sql {
 	protected $sqlcaching=false;
 	protected $sqlcaching_ttl=60;
 	public $lasterror;
+	public $lastsql;
 	protected $sql_queries_counter=0;
 	protected $method="mysql";
 	public $rows_affected=0;
@@ -24,7 +25,7 @@ class sql {
  * @path - path for cache files, default "cache/" 
  */
 	public function __construct ($path="cache/") {
-		$this->sqlcache=new SQLCache;	
+		$this->sqlcache=new SQLCache;
 		$this->sqlcache->set_path($path);
 		}
 
@@ -82,15 +83,16 @@ class mysql extends sql {
  * @returns true if succeed, if not, returns false and lasterror var is the error       
  *   
  */
-public function connect ($hostname='localhost',$username='root',$password='',$db="test",$caching=false,$method="mysqli",$extras="") {
-		if ($method=="mysqli") $this->method="mysqli"; else $this->method="mysql"; 
+public function connect ($hostname='localhost',$username='root',$password='',$db="test",$caching=false,$method="mysql",$extras="") {
+		if ($method=="mysqli") $this->method="mysqli"; else $this->method="mysql";
 		if ($this->method=="mysqli")
 			$this->dbhandle=@mysqli_connect($hostname,$username,$password); else
-			$this->dbhandle=@mysql_connect($hostname,$username,$password);
+			$this->dbhandle=@mysql_connect($hostname,$username,$password,true);
 		if (!$this->dbhandle) { $this->lasterror="Cannot connect to DB!"; return false; }
-		if ($this->method=="mysqli") {
+		if ($this->method=="mysqli")
 			if (!@mysqli_select_db($this->dbhandle,$db)) { $this->lasterror="Cannot select DB!"; return false; }
-			} elseif (!@mysql_select_db($db,$this->dbhandle)) { $this->lasterror="Cannot select DB!"; return false; }
+		if ($this->method=="mysql")
+				if (!@mysql_select_db($db,$this->dbhandle)) { $this->lasterror="Cannot select DB!"; return false; }
 		$this->sqlcaching=$caching;
 		return true;
 	}
@@ -144,6 +146,7 @@ public function connect ($hostname='localhost',$username='root',$password='',$db
 		foreach ($definitions as $var=>$def) $sql.="$var $def,";
 		$sql=substr($sql,0,strlen($sql)-1);
 		$sql.=") engine=$engine, row_format=$row_format";
+		$this->lastsql=$sql;
 		if ($this->method=="mysqli") $res=@mysqli_query($this->dbhandle,$sql);
 			else $res=@mysql_query($sql,$this->dbhandle);
 		$this->sql_queries_counter++;
@@ -172,8 +175,29 @@ public function connect ($hostname='localhost',$username='root',$password='',$db
 
 	public function delete_table ($tablename) {
 		if (!empty($tablename)) {
-			if ($this->method=="mysqli") $res=@mysqli_query("DROP TABLE $tablename",$this->dbhandle);
-				else $res=@mysql_query("DROP TABLE $tablename",$this->dbhandle);
+			$sql="DROP TABLE $tablename";
+			$this->lastsql=$sql;
+			if ($this->method=="mysqli") $res=@mysqli_query($sql,$this->dbhandle);
+				else $res=@mysql_query($sql,$this->dbhandle);
+			$this->sql_queries_counter++;
+			return true;
+		} else return false;
+	}
+
+/**
+ * Clear table
+ * 
+ * @tablename - table name
+ * @returns true if succeed, if not, returns false and lasterror var is the error       
+ *   
+ */
+
+	public function clear_table ($tablename) {
+		if (!empty($tablename)) {
+			$sql="TRUNCATE TABLE $tablename";
+			$this->lastsql=$sql;
+			if ($this->method=="mysqli") $res=@mysqli_query($sql,$this->dbhandle);
+				else $res=@mysql_query($sql,$this->dbhandle);
 			$this->sql_queries_counter++;
 			return true;
 		} else return false;
@@ -203,9 +227,10 @@ public function connect ($hostname='localhost',$username='root',$password='',$db
 			}
 			$sql=substr($sql,0,strlen($sql)-4);	//cut last AND
 		}
+		$sql.=" ".$extra;
 		$sql.=" LIMIT 1";
 		if ($this->sqlcaching && $cache=$this->sqlcache->get_cached_query($sql,$this->sqlcaching_ttl)) return $cache;
-		$sql.=" ".$extra;
+		$this->lastsql=$sql;
 		if ($this->method=="mysqli") $res=@mysqli_query($sql,$this->dbhandle);
 			else $res=@mysql_query($sql,$this->dbhandle);
 		if (!$res) { $this->lasterror='Query returned null'; return false; }
@@ -243,13 +268,13 @@ public function connect ($hostname='localhost',$username='root',$password='',$db
 		}
 		$sql.=" ".$extra;
 		if ($this->sqlcaching && $cache=$this->sqlcache->get_cached_query($sql,$this->sqlcaching_ttl)) return $cache;
+		$this->lastsql=$sql;
 		if ($this->method=="mysqli") $res=@mysqli_query($sql,$this->dbhandle);
 			else $res=@mysql_query($sql,$this->dbhandle);
 		if (!$res) { $this->lasterror='Query returned null'; return false; }
 		$rows=array();
-		while ($row=@mysql_fetch_assoc($res)) {
+		while ($row=@mysql_fetch_assoc($res))
 			$rows[]=$row;
-		}
 		$this->sql_queries_counter++;
 		if ($this->sqlcaching) $this->sqlcache->cache_query($sql,$rows,$this->sqlcaching_ttl);
 		return $rows;
@@ -260,11 +285,12 @@ public function connect ($hostname='localhost',$username='root',$password='',$db
  * 
  * @table - table name
  * @like - array of the rows to find
+ * @extra - extra query 
  * @returns array of row if succeed, if not returns false       
  *   
  */
 
-	public function get_likerows($table,$like=array()) {
+	public function get_likerows($table,$like=array(),$extra="") {
 		$sql="SELECT * from $table";
 		if (empty($like)) return false;
 			$sql.=" WHERE ";
@@ -273,11 +299,13 @@ public function connect ($hostname='localhost',$username='root',$password='',$db
 			if (empty($var)) {
 				$this->lasterror='find array misformed';
 				return false;
-				} 
+				}
 			$sql.="`$var` LIKE '$value' AND";
 			}
 			$sql=substr($sql,0,strlen($sql)-4);	//cut last AND
+			if (!empty($extra)) $sql.=" ".$extra;
 		if ($this->sqlcaching && $cache=$this->sqlcache->get_cached_query($sql,$this->sqlcaching_ttl)) return $cache;
+		$this->lastsql=$sql;
 		if ($this->method=="mysqli") $res=@mysqli_query($sql,$this->dbhandle);
 			else $res=@mysql_query($sql,$this->dbhandle);
 		if (!$res) { $this->lasterror='Query returned null'; return false; }
@@ -294,15 +322,16 @@ public function connect ($hostname='localhost',$username='root',$password='',$db
  * Simple sql query call
  * 
  * @query - table name
-  * @returns array of row if succeed, if not returns false       
- *   
+ * @returns array of row if succeed, if not returns false       
+ * 
  */
 
 	public function sql($query) {
 		if (empty($query)) return false;
 		if ($this->sqlcaching && $cache=$this->sqlcache->get_cached_query($sql,$this->sqlcaching_ttl)) return $cache;
-		if ($this->method=="mysqli") $res=@mysqli_query($query,$this->dbhandle);
-			else $res=@mysql_query($query,$this->dbhandle);
+		$this->lastsql=$query;
+		if ($this->method=="mysqli") $res=mysqli_query($query,$this->dbhandle);
+			else $res=mysql_query($query,$this->dbhandle);
 		if (!$res) return array();
 		$rows=array();
 		while ($row=@mysql_fetch_assoc($res)) {
@@ -340,6 +369,7 @@ public function connect ($hostname='localhost',$username='root',$password='',$db
 		}
 		$sql.=" LIMIT 1";
 		$sql.=" ".$extra;
+		$this->lastsql=$sql;
 		if ($this->method=="mysqli") $res=@mysqli_query($sql,$this->dbhandle);
 			else $res=@mysql_query($sql,$this->dbhandle);
 		$this->sql_queries_counter++;
@@ -372,6 +402,7 @@ public function connect ($hostname='localhost',$username='root',$password='',$db
 			$sql=substr($sql,0,strlen($sql)-4);	//cut last AND
 		}
 		$sql.=" ".$extra;
+		$this->lastsql=$sql;
 		if ($this->method=="mysqli") $res=@mysqli_query($sql,$this->dbhandle);
 			else $res=@mysql_query($sql,$this->dbhandle);
 		$this->sql_queries_counter++;
@@ -409,6 +440,7 @@ public function connect ($hostname='localhost',$username='root',$password='',$db
 			$sql=substr($sql,0,strlen($sql)-4);	//cut last AND
 		}
 		$sql.=" ".$extra;
+		$this->lastsql=$sql;
 		if ($this->method=="mysqli") $res=@mysqli_query($sql,$this->dbhandle);
 			else $res=@mysql_query($sql,$this->dbhandle);
 		$this->sql_queries_counter++;
@@ -430,17 +462,23 @@ public function connect ($hostname='localhost',$username='root',$password='',$db
 		$vars=''; $values='';
 		foreach ($row as $var=>$value) {
 			$vars.="`$var`,";
+			if (strstr($value,"()"))
+			$values.="$value,"; else			
 			$values.="'$value',";
 		}
 		$vars=substr($vars,0,strlen($vars)-1);
 		$values=substr($values,0,strlen($values)-1);
 		$sql="insert into `$table` ($vars) values ($values)";
 		$sql.=" ".$extra;
-		if ($this->method=="mysqli") $res=@mysqli_query($sql,$this->dbhandle);
+		$this->lastsql=$sql;
+		if ($this->method=="mysqli") $res=@mysqli_query($this->dbhandle,$sql,$this->dbhandle);
 			else $res=@mysql_query($sql,$this->dbhandle);
+		$this->lastsql=$sql;
 		$this->sql_queries_counter++;
 		$this->rows_affected=@mysql_affected_rows($this->dbhandle);
-		return true;
+		if (!$res)
+			$this->lasterror="insert query failed, {$this->rows_affected} rows affected";
+		return $res;
 	}
 
 /**
@@ -453,25 +491,49 @@ public function connect ($hostname='localhost',$username='root',$password='',$db
  *   
  */
 
-	public function insert_rows($table,array $vars,array $rows) {
-		if (empty($table) || empty($values) || empty($rows)) return false;
+	public function insert_rows($table,array $vars, array $values) {
+		if (empty($table) || empty($values) || empty($vars)) return false;
 		$insert="insert into `$table`(";
 		foreach ($vars as $var) $insert.="`$var`,";
 		$insert=substr($insert,0,strlen($insert)-1);
 		$insert.=") values ";
-		foreach ($rows as $row) {
+		foreach ($values as $values_packed) {
 			 $insert.="(";
-			 foreach($row as $values) $insert.="\"$values\",";
+			 foreach($values_packed as $value) $insert.="\"$value\",";
 			 $insert=substr($insert,0,strlen($insert)-1);
 			 $insert.="),";
 			}
 		$insert=substr($insert,0,strlen($insert)-1);
 		$insert.=" ".$extra;
-		if ($this->method=="mysqli") $res=@mysqli_query($insert,$this->dbhandle);
+		if ($this->method=="mysqli") $res=@mysqli_query($this->dbhandle,$insert,$this->dbhandle);
 			else $res=@mysql_query($insert,$this->dbhandle);
+		$this->lastsql=$insert;
 		$this->sql_queries_counter++;
 		$this->rows_affected=@mysql_affected_rows($this->dbhandle);
-		return true;
+		if (!$res)
+			$this->lasterror="insert query failed, {$this->rows_affected} rows affected";
+		return $res;
+	}
+
+/**
+ * Available tables informations
+ * 
+ * @returns Tables with their info       
+ *   
+ */
+
+	public function get_tables() {
+		$sql="show table status";
+		if ($this->method=="mysqli") $res=@mysqli_query($this->dbhandle,$sql,$this->dbhandle);
+			else $res=@mysql_query($sql,$this->dbhandle);
+		$this->lastsql=$sql;
+		$this->sql_queries_counter++;
+		$rows=array();
+		while ($row=@mysql_fetch_assoc($res))
+			$rows[]=$row;
+		$this->sql_queries_counter++;
+		if ($this->sqlcaching) $this->sqlcache->cache_query($sql,$rows,$this->sqlcaching_ttl);
+		return $rows;
 	}
 
 }

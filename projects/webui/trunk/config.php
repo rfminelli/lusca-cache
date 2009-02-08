@@ -35,5 +35,7 @@ $poller_interval=10;
 $poller_history=50;
 // browser refresh interval
 $browser_refresh=30;
+// reports
+$php_report=E_ERROR | E_WARNING | E_PARSE;
 
 ?>

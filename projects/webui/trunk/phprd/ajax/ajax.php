@@ -42,6 +42,16 @@ class ajax {
 	}
 
 /**
+ * Register custom javascript code
+ * 
+ * @custom - custom js code
+ * 
+ */	
+	public function register_custom($custom) {
+		return "javascript:$custom";
+	}
+
+/**
  * Register callback on the click
  * 
  * @id callback id
@@ -184,6 +194,20 @@ class ajax {
 		var http = create_object();
 		var request_id='';
 
+		function trim(str, chars) {
+		    return ltrim(rtrim(str, chars), chars);
+		}
+
+		function ltrim(str, chars) {
+		    chars = chars || "\\s";
+		    return str.replace(new RegExp("^[" + chars + "]+", "g"), "");
+		}
+
+		function rtrim(str, chars) {
+		    chars = chars || "\\s";
+    		return str.replace(new RegExp("[" + chars + "]+$", "g"), "");
+		}
+
 		function create_object()
 		{
   			var http;
@@ -246,6 +270,7 @@ class ajax {
 			if (!response) return;
 			if (!document.getElementById(request_id)) return;
 			//alert(request_id);alert(response);
+			response=ltrim(response," ");
 			if (document.getElementById(request_id).innerHTML) document.getElementById(request_id).innerHTML=response;
 			else document.getElementById(request_id).value = response;
 		}
