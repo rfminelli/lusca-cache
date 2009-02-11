@@ -1230,10 +1230,12 @@ httpReadReply(int fd, void *data)
     assert(httpState->reply_hdr_state == 2);
     /* lock the httpState; it may be freed by a call to httpAppendBody */
     cbdataLock(httpState);
-    httpAppendBody(httpState, buf_buf(httpState->read_buf) + po + done,
-      buf_len(httpState->read_buf) - po - done, buffer_filled);
-    if (cbdataValid(httpState))
-	httpState->read_buf = buf_deref(httpState->read_buf);
+    if (httpState->read_buf) {
+        httpAppendBody(httpState, buf_buf(httpState->read_buf) + po + done,
+          buf_len(httpState->read_buf) - po - done, buffer_filled);
+        if (cbdataValid(httpState))
+            httpState->read_buf = buf_deref(httpState->read_buf);
+    }
     cbdataUnlock(httpState);
     /* httpState may be cleared here */
 
