@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include <linux/netfilter_ipv4.h>
 #include <linux/netfilter_ipv4/ip_tproxy.h>
@@ -37,16 +38,18 @@ typedef uint32_t __u32;
 #include <sys/prctl.h>
 #endif
 
+#include "../include/util.h"
+
+
 int
 comm_ips_bind(int fd, sqaddr_t *a)
 {
 	if (sqinet_get_family(a) != AF_INET)
 		return COMM_ERROR;
-	u_short port = sqinet_get_port(a);
 
 	struct in_tproxy itp;
 
-        itp.v.addr.faddr.s_addr = sqinet_get_v4_inaddr(a);
+        itp.v.addr.faddr = sqinet_get_v4_inaddr(a,SQADDR_ASSERT_IS_V4);
 	/* XXX the "port" is 0 here - so tproxy2 selects an outbound port rather than also spoofing the port */
         itp.v.addr.fport = 0;
         
