@@ -15,6 +15,7 @@
 #include "include/Array.h"
 #include "include/Stack.h"
 #include "include/util.h"
+#include "include/radix.h"
 #include "libcore/valgrind.h"
 #include "libcore/varargs.h"
 #include "libcore/debug.h"
@@ -39,9 +40,9 @@
 #include "libiapp/signals.h"
 #include "libiapp/mainloop.h"
 
-#include "libsqbgp/bgp_core.h"
 #include "libsqbgp/bgp_packet.h"
 #include "libsqbgp/bgp_rib.h"
+#include "libsqbgp/bgp_core.h"
 
 sqaddr_t dest;
 
@@ -65,8 +66,8 @@ main(int argc, const char *argv[])
 
 	_db_init("ALL,1 85,99");
 	_db_set_stderr_debug(99);
-
  
+	squid_rn_init();
  
         bzero(&sa, sizeof(sa));
         inet_aton("216.12.163.51", &sa.sin_addr);
@@ -85,7 +86,7 @@ main(int argc, const char *argv[])
         	fd = socket(AF_INET, SOCK_STREAM, 0);
         	assert(fd != -1);
         	r = connect(fd, (struct sockaddr *) &sa, sizeof(sa));
-        	r = bgp_send_hello(fd, 65535, 120, bgp_id);
+        	r = bgp_send_hello(&bi, fd, 65535, 120, bgp_id);
 		if (r > 0)
 			while (r > 0)
 				r = bgp_read(&bi, fd);

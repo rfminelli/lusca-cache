@@ -16,8 +16,8 @@
 
 #include "../libsqinet/sqinet.h"
 
-#include "bgp_packet.h"
 #include "bgp_rib.h"
+#include "bgp_packet.h"
 #include "bgp_core.h"
 
 void
@@ -34,7 +34,7 @@ bgp_destroy_instance(bgp_instance_t *bi)
 	/* Free RIB entries and RIB tree */
 	/* Ensure AS path entries are gone, complain for leftovers! */
 	/* Free AS path hash */
-	bgp_rib_destroy(bi->rn);
+	bgp_rib_destroy(&bi->rn);
 	bzero(bi, sizeof(*bi));
 }
 
@@ -96,7 +96,7 @@ bgp_read(bgp_instance_t *bi, int fd)
 			debug(85, 1) ("main: incomplete packet\n");
 			break;
 		}
-		r = bgp_decode_message(fd, bi->recv.buf + i, bi->recv.bufofs - i);
+		r = bgp_decode_message(bi, fd, bi->recv.buf + i, bi->recv.bufofs - i);
 		assert(r > 0);
 		i += r;
 		debug(85, 1) ("main: pkt was %d bytes, i is now %d\n", r, i);
@@ -116,7 +116,7 @@ bgp_close(bgp_instance_t *bi)
 {
 	bi->state = BGP_IDLE;
 	/* free prefixes */
-	bgp_rib_clean(bi->rn);
+	bgp_rib_clean(&bi->rn);
 	/* ensure no as path entries exist in the hash! */
 }
 

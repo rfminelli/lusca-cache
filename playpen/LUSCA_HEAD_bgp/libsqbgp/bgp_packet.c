@@ -72,7 +72,7 @@ bgp_msg_complete(const char *buf, int len)
  * XXX absolutely hacky!
  */
 int
-bgp_send_hello(int fd, unsigned short asnum, short hold_time, struct in_addr bgp_id)
+bgp_send_hello(bgp_instance_t *bi, int fd, unsigned short asnum, short hold_time, struct in_addr bgp_id)
 {
 	char send_buf[128];
 	char *p = send_buf;
@@ -127,7 +127,7 @@ bgp_send_hello(int fd, unsigned short asnum, short hold_time, struct in_addr bgp
 }
 
 int
-bgp_send_keepalive(int fd)
+bgp_send_keepalive(bgp_instance_t *bi, int fd)
 {
 	char send_buf[128];
 	char *p = send_buf;
@@ -159,7 +159,7 @@ bgp_send_keepalive(int fd)
 }
 
 int
-bgp_handle_notification(int fd, const char *buf, int len)
+bgp_handle_notification(bgp_instance_t *bi, int fd, const char *buf, int len)
 {
 	u_int8_t err_code;
 	u_int8_t err_subcode;
@@ -173,7 +173,7 @@ bgp_handle_notification(int fd, const char *buf, int len)
 }
 
 int
-bgp_handle_open(int fd, const char *buf, int len)
+bgp_handle_open(bgp_instance_t *bi, int fd, const char *buf, int len)
 {
 	u_int8_t version;
 	u_int16_t bgp_as;
@@ -194,13 +194,13 @@ bgp_handle_open(int fd, const char *buf, int len)
 	debug(85, 2) ("bgp_handle_open: got version %d, AS %d, timer %d, parm_len %d\n", version, bgp_as, hold_timer, parm_len);
 
 	/* Queue a keepalive message */
-	bgp_send_keepalive(fd);
+	bgp_send_keepalive(bi, fd);
 
 	return 1;
 }
 
 int
-bgp_handle_update_withdraw(const char *buf, int len)
+bgp_handle_update_withdraw(bgp_instance_t *bi, const char *buf, int len)
 {
 	struct in_addr pf;
 	u_int8_t pl, netmask;
@@ -223,6 +223,7 @@ bgp_handle_update_withdraw(const char *buf, int len)
 		/* XXX bounds check? */
 		memcpy(&pf, buf + i, pl);
 		debug(85, 2) ("  bgp_handle_update_withdraw: prefix %s/%d\n", inet_ntoa(pf), netmask);
+		bgp_rib_del_net(&bi->rn, pf, netmask);
 		i += pl;
 	}
 	return 1;
@@ -309,7 +310,7 @@ bgp_handle_update_pathattrib(const char *buf, int len)
 }
 
 int
-bgp_handle_update_nlri(const char *buf, int len)
+bgp_handle_update_nlri(bgp_instance_t *bi, const char *buf, int len)
 {
 	struct in_addr pf;
 	u_int8_t pl, netmask;
@@ -332,13 +333,14 @@ bgp_handle_update_nlri(const char *buf, int len)
 		/* XXX bounds check? */
 		memcpy(&pf, buf + i, pl);
 		debug(85, 2) ("  bgp_handle_update_nlri: prefix %s/%d\n", inet_ntoa(pf), netmask);
+		bgp_rib_add_net(&bi->rn, pf, netmask);
 		i += pl;
 	}
 	return 1;
 }
 
 int
-bgp_handle_update(int fd, const char *buf, int len)
+bgp_handle_update(bgp_instance_t *bi, int fd, const char *buf, int len)
 {
 	u_int16_t withdraw_route_len;
 	u_int16_t path_attrib_len;
@@ -349,12 +351,12 @@ bgp_handle_update(int fd, const char *buf, int len)
 	debug(85, 2) ("bgp_handle_update: UPDATE pktlen %d: withdraw_route_len %d; path attrib len %d\n",
 	   len, withdraw_route_len, path_attrib_len);
 
-	if (! bgp_handle_update_withdraw(buf + 2, withdraw_route_len))
+	if (! bgp_handle_update_withdraw(bi, buf + 2, withdraw_route_len))
 		return 0;
 	if (! bgp_handle_update_pathattrib(buf + 2 + withdraw_route_len + 2, path_attrib_len))
 		return 0;
 	/* XXX need to calculate the length and offset correctly! */
-	if (! bgp_handle_update_nlri(buf + 2 + withdraw_route_len + 2 + path_attrib_len, len - (2 + withdraw_route_len + 2 + path_attrib_len)))
+	if (! bgp_handle_update_nlri(bi, buf + 2 + withdraw_route_len + 2 + path_attrib_len, len - (2 + withdraw_route_len + 2 + path_attrib_len)))
 		return 0;
 
 	return 1;
@@ -368,7 +370,7 @@ bgp_handle_keepalive(int fd, const char *buf, int len)
 }
 
 int
-bgp_decode_message(int fd, const const char *buf, int len)
+bgp_decode_message(bgp_instance_t *bi, int fd, const const char *buf, int len)
 {
 	int r;
 
@@ -382,13 +384,13 @@ bgp_decode_message(int fd, const const char *buf, int len)
 	debug(85, 2) ("bgp_decode_message: type %d; len %d\n", type, pkt_len);
 	switch 	(type) {
 		case 1:		/* OPEN */
-			r = bgp_handle_open(fd, buf + 19, pkt_len - 19);
+			r = bgp_handle_open(bi, fd, buf + 19, pkt_len - 19);
 			break;
 		case 2:		/* UPDATE */
-			r = bgp_handle_update(fd, buf + 19, pkt_len - 19);
+			r = bgp_handle_update(bi, fd, buf + 19, pkt_len - 19);
 			break;
 		case 3:		/* NOTIFICATION */
-			r = bgp_handle_notification(fd, buf + 19, pkt_len - 19);
+			r = bgp_handle_notification(bi, fd, buf + 19, pkt_len - 19);
 			break;
 		case 4:		/* KEEPALIVE */
 			r = bgp_handle_keepalive(fd, buf + 19, pkt_len - 19);

@@ -37,7 +37,7 @@ struct _bgp_instance {
 	/* The AS path table */
 
 	/* The RIB */
-	struct squid_radix_node_head *rn;
+	bgp_rib_head_t rn;
 };
 
 typedef struct _bgp_instance bgp_instance_t;
