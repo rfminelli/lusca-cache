@@ -63,7 +63,19 @@ bgp_set_rem(bgp_instance_t *bi, u_short asn)
 void
 bgp_active(bgp_instance_t *bi)
 {
+	bi->state = BGP_ACTIVE;
+}
 
+void
+bgp_open(bgp_instance_t *bi)
+{
+	bi->state = BGP_OPEN;
+}
+
+void
+bgp_openconfirm(bgp_instance_t *bi)
+{
+	bi->state = BGP_OPENCONFIRM;
 }
 
 /*

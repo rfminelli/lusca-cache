@@ -8,6 +8,7 @@ typedef enum {
 	BGP_IDLE,
 	BGP_CONNECT,
 	BGP_ACTIVE,
+	BGP_OPEN,		/* Connection just opened; waiting for first attempt to write OPEN msg */
 	BGP_OPENSENT,
 	BGP_OPENCONFIRM,
 	BGP_ESTABLISHED,
@@ -51,6 +52,8 @@ void bgp_set_lcl(bgp_instance_t *bi, struct in_addr bgp_id, u_short asn, u_short
 void bgp_set_rem(bgp_instance_t *bi, u_short asn);
 
 void bgp_active(bgp_instance_t *bi);
+void bgp_open(bgp_instance_t *bi);
+void bgp_openconfirm(bgp_instance_t *bi);
 int bgp_read(bgp_instance_t *bi, int fd);
 void bgp_close(bgp_instance_t *bi);
 
