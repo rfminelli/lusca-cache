@@ -21,65 +21,100 @@
 #include "bgp_core.h"
 
 
-#if 0
-int
-main(int argc, const char *argv[])
+void
+bgp_create_instance(bgp_instance_t *bi)
 {
-	int fd, r;
-	struct sockaddr_in sa;
-	struct in_addr bgp_id;
-	char buf[4096];
-	int bufofs = 0;
-	int i, len;
-
-	fd = socket(AF_INET, SOCK_STREAM, 0);
-	assert(fd != -1);
-
-	/* connect to bgp thing */
-	bzero(&sa, sizeof(sa));
-	inet_aton("216.12.163.51", &sa.sin_addr);
-	inet_aton("216.12.163.53", &bgp_id);
-	sa.sin_port = htons(179);
-	sa.sin_len = sizeof(struct sockaddr_in);
-	sa.sin_family = AF_INET;
-	r = connect(fd, (struct sockaddr *) &sa, sizeof(sa));
-	assert(r > -1);
-
-	/* Now, loop over and read messages */
-	/* We'll eventually have to uhm, speak BGP.. */
-	r = bgp_send_hello(fd, 65535, 120, bgp_id);
-
-	printf("ready to read stuff\n");
-
-	while (1) {
-		bzero(buf + bufofs, sizeof(buf) - bufofs);
-		/* XXX should check there's space in the buffer first! */
-		printf("main: space in buf is %d bytes\n", (int) sizeof(buf) - bufofs);
-		len = read(fd, buf + bufofs, sizeof(buf) - bufofs);
-		assert(len > 0);
-		bufofs += len;
-		printf("read: %d bytes; bufsize is now %d\n", len, bufofs);
-		i = 0;
-
-		/* loop over; try to handle partial messages */
-		while (i < len) {
-			printf("looping..\n");
-			/* Is there enough data here? */
-			if (! bgp_msg_complete(buf + i, bufofs - i)) {
-				printf("main: incomplete packet\n");
-				break;
-			}
-			r = bgp_decode_message(fd, buf + i, bufofs - i);
-			assert(r > 0);
-			i += r;
-			printf("main: pkt was %d bytes, i is now %d\n", r, i);
-		}
-		/* "consume" the rest of the buffer */
-		memmove(buf, buf + i, sizeof(buf) - i);
-		bufofs -= i;
-		printf("consumed %d bytes; bufsize is now %d\n", i, bufofs);
-	}
-
-	exit(0);
+	bzero(bi, sizeof(*bi));
+	bi->state = BGP_IDLE;
 }
-#endif
+
+void
+bgp_destroy_instance(bgp_instance_t *bi)
+{
+	/* Free RIB entries and RIB tree */
+	/* Ensure AS path entries are gone, complain for leftovers! */
+	/* Free AS path hash */
+	bzero(bi, sizeof(*bi));
+}
+
+void
+bgp_set_lcl(bgp_instance_t *bi, struct in_addr bgp_id, u_short asn, u_short hold_time)
+{
+	memcpy(&bi->lcl.bgp_id, &bgp_id, sizeof(bgp_id));
+	bi->lcl.asn = asn;
+	bi->lcl.hold_time = hold_time;
+}
+
+void
+bgp_set_rem(bgp_instance_t *bi, u_short asn)
+{
+	bi->rem.asn = asn;
+	bi->rem.hold_time = -1;
+}
+
+/*
+ * Move to ACTIVE phase. In this phase, BGP is trying to actively
+ * establish a connection.
+ *
+ * This code doesn't do the networking stuff - instead, the owner of this BGP
+ * connection state will do the networking stuff and call bgp_close() or
+ * bgp_open().
+ */
+void
+bgp_active(bgp_instance_t *bi)
+{
+
+}
+
+/*
+ * Read some data from the given file descriptor (using the read() syscall for now!)
+ * and update the BGP state machine. The caller should check for retval <= 0 and reset
+ * the socket and FSM as appropriate.
+ */
+int
+bgp_read(bgp_instance_t *bi, int fd)
+{
+	int len, i, r;
+
+	/* Append data to buffer */
+	bzero(bi->recv.buf + bi->recv.bufofs, BGP_RECV_BUF - bi->recv.bufofs);
+	debug(85, 1) ("main: space in buf is %d bytes\n", (int) BGP_RECV_BUF - bi->recv.bufofs);
+
+	len = read(fd, bi->recv.buf + bi->recv.bufofs, BGP_RECV_BUF - bi->recv.bufofs);
+	if (len <= 0)
+		return len;
+
+	bi->recv.bufofs += len;
+	debug(85, 2) ("read: %d bytes; bufsize is now %d\n", len, bi->recv.bufofs);
+	i = 0;
+	/* loop over; try to handle partial messages */
+	while (i < len) {
+		debug(85, 1) ("looping..\n");
+		/* Is there enough data here? */
+		if (! bgp_msg_complete(bi->recv.buf + i, bi->recv.bufofs - i)) {
+			debug(85, 1) ("main: incomplete packet\n");
+			break;
+		}
+		r = bgp_decode_message(fd, bi->recv.buf + i, bi->recv.bufofs - i);
+		assert(r > 0);
+		i += r;
+		debug(85, 1) ("main: pkt was %d bytes, i is now %d\n", r, i);
+	}
+	/* "consume" the rest of the buffer */
+	memmove(bi->recv.buf, bi->recv.buf + i, BGP_RECV_BUF - i);
+	bi->recv.bufofs -= i;
+	debug(85, 1) ("consumed %d bytes; bufsize is now %d\n", i, bi->recv.bufofs);
+	return len;
+}
+
+/*
+ * Move connection to IDLE state. Destroy any AS path / prefix entries.
+ */
+void
+bgp_close(bgp_instance_t *bi)
+{
+	bi->state = BGP_IDLE;
+	/* free prefixes */
+	/* ensure no as path entries exist in the hash! */
+}
+

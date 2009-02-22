@@ -51,9 +51,7 @@ main(int argc, const char *argv[])
         int fd, r;
         struct sockaddr_in sa;
         struct in_addr bgp_id;
-        char buf[4096];
-        int bufofs = 0;
-        int i, len;
+	bgp_instance_t bi;
 
 #if 0
 	if (argc < 4) {
@@ -67,53 +65,34 @@ main(int argc, const char *argv[])
 
 	_db_init("ALL,1 85,99");
 	_db_set_stderr_debug(99);
+
  
-        fd = socket(AF_INET, SOCK_STREAM, 0);
-        assert(fd != -1);
  
-        /* connect to bgp thing */
         bzero(&sa, sizeof(sa));
         inet_aton("216.12.163.51", &sa.sin_addr);
         inet_aton("216.12.163.53", &bgp_id);
         sa.sin_port = htons(179);
         sa.sin_len = sizeof(struct sockaddr_in);
         sa.sin_family = AF_INET;
-        r = connect(fd, (struct sockaddr *) &sa, sizeof(sa));
-        assert(r > -1);
- 
-        /* Now, loop over and read messages */
-        /* We'll eventually have to uhm, speak BGP.. */
-        r = bgp_send_hello(fd, 65535, 120, bgp_id);
- 
-        printf("ready to read stuff\n");
+
+	bgp_create_instance(&bi);
+	bgp_set_lcl(&bi, bgp_id, 65535, 120);
+	bgp_set_rem(&bi, 38620);
+
+        /* connect to bgp thing */
  
         while (1) {
-                bzero(buf + bufofs, sizeof(buf) - bufofs);
-                /* XXX should check there's space in the buffer first! */
-                debug(85, 1) ("main: space in buf is %d bytes\n", (int) sizeof(buf) - bufofs);
-                len = read(fd, buf + bufofs, sizeof(buf) - bufofs);
-                assert(len > 0);
-                bufofs += len;
-                printf("read: %d bytes; bufsize is now %d\n", len, bufofs);
-                i = 0;
-
-                /* loop over; try to handle partial messages */
-                while (i < len) {
-                        debug(85, 1) ("looping..\n");
-                        /* Is there enough data here? */
-                        if (! bgp_msg_complete(buf + i, bufofs - i)) {
-                                debug(85, 1) ("main: incomplete packet\n");
-                                break;
-                        }
-                        r = bgp_decode_message(fd, buf + i, bufofs - i);
-                        assert(r > 0);
-                        i += r;
-                        debug(85, 1) ("main: pkt was %d bytes, i is now %d\n", r, i);
-                }
-                /* "consume" the rest of the buffer */
-                memmove(buf, buf + i, sizeof(buf) - i);
-                bufofs -= i;
-                debug(85, 1) ("consumed %d bytes; bufsize is now %d\n", i, bufofs);
+        	fd = socket(AF_INET, SOCK_STREAM, 0);
+        	assert(fd != -1);
+        	r = connect(fd, (struct sockaddr *) &sa, sizeof(sa));
+        	r = bgp_send_hello(fd, 65535, 120, bgp_id);
+		if (r > 0)
+			while (r > 0)
+				r = bgp_read(&bi, fd);
+		bgp_close(&bi);
+		close(fd);
+		debug(85, 1) ("sleeping for 15 seconds..\n");
+		sleep(15);
         }
 
 #if 0
