@@ -10,22 +10,22 @@
 #include <arpa/inet.h>
 
 #include "../include/util.h"
+#include "../include/radix.h"
 #include "../libcore/tools.h"
 #include "../libsqdebug/debug.h"
 
 #include "../libsqinet/sqinet.h"
 
-
 #include "bgp_packet.h"
 #include "bgp_rib.h"
 #include "bgp_core.h"
-
 
 void
 bgp_create_instance(bgp_instance_t *bi)
 {
 	bzero(bi, sizeof(*bi));
 	bi->state = BGP_IDLE;
+	bgp_rib_init(&bi->rn);
 }
 
 void
@@ -34,6 +34,7 @@ bgp_destroy_instance(bgp_instance_t *bi)
 	/* Free RIB entries and RIB tree */
 	/* Ensure AS path entries are gone, complain for leftovers! */
 	/* Free AS path hash */
+	bgp_rib_destroy(bi->rn);
 	bzero(bi, sizeof(*bi));
 }
 

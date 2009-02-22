@@ -10,6 +10,7 @@
 #include <arpa/inet.h>
 
 #include "../include/util.h"
+#include "../include/radix.h"
 #include "../libcore/tools.h"
 #include "../libsqdebug/debug.h"
 

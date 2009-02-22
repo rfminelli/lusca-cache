@@ -33,15 +33,6 @@ typedef u_char m_int[1 + sizeof(unsigned int)];
 
 /* END of definitions for radix tree entries */
 
-/* Head for ip to asn radix tree */
-/* Silly union construct to get rid of GCC-3.3 warning */
-union {
-    struct squid_radix_node_head *rn;
-    void *ptr;
-} AS_tree_head_u;
-
-#define AS_tree_head AS_tree_head_u.rn
-
 /*
  * Structure for as number information. it could be simply 
  * an intlist but it's coded as a structure for future
@@ -64,17 +55,13 @@ struct _rtentry {
 
 typedef struct _rtentry rtentry;
 
-static int asnAddNet(char *, int);
-static void asnCacheStart(int as);
 static int destroyRadixNode(struct squid_radix_node *rn, void *w);
-static int printRadixNode(struct squid_radix_node *rn, void *w);
-static void asStateFree(void *data);
 static void destroyRadixNodeInfo(as_info *);
 
 /* PUBLIC */
 
 int
-asnMatchIp(void *data, struct in_addr addr)
+bgp_rib_match_ip(struct squid_radix_node_head *head, void *data, struct in_addr addr)
 {
     unsigned long lh;
     struct squid_radix_node *rn;
@@ -85,14 +72,14 @@ asnMatchIp(void *data, struct in_addr addr)
     lh = ntohl(addr.s_addr);
     debug(53, 3) ("asnMatchIp: Called for %s.\n", inet_ntoa(addr));
 
-    if (AS_tree_head == NULL)
+    if (head == NULL)
 	return 0;
     if (IsNoAddr(&addr))
 	return 0;
     if (IsAnyAddr(&addr))
 	return 0;
     store_m_int(lh, m_addr);
-    rn = squid_rn_match(m_addr, AS_tree_head);
+    rn = squid_rn_match(m_addr, head);
     if (rn == NULL) {
 	debug(53, 3) ("asnMatchIp: Address not in as db.\n");
 	return 0;
@@ -115,20 +102,23 @@ asnMatchIp(void *data, struct in_addr addr)
 extern int squid_max_keylen;	/* yuck.. this is in lib/radix.c */
 
 void
-asnInit(void)
+bgp_rib_init(struct squid_radix_node_head **head)
 {
-    static int inited = 0;
     squid_max_keylen = 40;
-    if (0 == inited++)
-	squid_rn_init();
-    squid_rn_inithead(&AS_tree_head_u.ptr, 8);
+    squid_rn_inithead((void **) head, 8);
 }
 
 void
-asnFreeMemory(void)
+bgp_rib_destroy(struct squid_radix_node_head *head)
 {
-    squid_rn_walktree(AS_tree_head, destroyRadixNode, AS_tree_head);
-    destroyRadixNode((struct squid_radix_node *) 0, (void *) AS_tree_head);
+    squid_rn_walktree(head, destroyRadixNode, head);
+    destroyRadixNode((struct squid_radix_node *) 0, (void *) head);
+}
+
+void
+bgp_rib_clean(struct squid_radix_node_head *head)
+{
+    squid_rn_walktree(head, destroyRadixNode, head);
 }
 
 /* PRIVATE */
@@ -136,8 +126,8 @@ asnFreeMemory(void)
 /* add a network (addr, mask) to the radix tree, with matching AS
  * number */
 
-static int
-asnAddNet(char *as_string, int as_number)
+int
+bgp_rib_add_net(struct squid_radix_node_head *head, char *as_string, int as_number)
 {
     rtentry *e;
     struct squid_radix_node *rn;
@@ -175,7 +165,7 @@ asnAddNet(char *as_string, int as_number)
     memset(e, '\0', sizeof(rtentry));
     store_m_int(addr, e->e_addr);
     store_m_int(mask, e->e_mask);
-    rn = squid_rn_lookup(e->e_addr, e->e_mask, AS_tree_head);
+    rn = squid_rn_lookup(e->e_addr, e->e_mask, head);
     if (rn != NULL) {
 	asinfo = ((rtentry *) rn)->e_info;
 	if (intlistFind(asinfo->as_number, as_number)) {
@@ -194,8 +184,8 @@ asnAddNet(char *as_string, int as_number)
 	q->i = as_number;
 	asinfo = xmalloc(sizeof(asinfo));
 	asinfo->as_number = q;
-	rn = squid_rn_addroute(e->e_addr, e->e_mask, AS_tree_head, e->e_nodes);
-	rn = squid_rn_match(e->e_addr, AS_tree_head);
+	rn = squid_rn_addroute(e->e_addr, e->e_mask, head, e->e_nodes);
+	rn = squid_rn_match(e->e_addr, head);
 	assert(rn != NULL);
 	e->e_info = asinfo;
 	if (rn == 0) {		/* assert might expand to nothing */
