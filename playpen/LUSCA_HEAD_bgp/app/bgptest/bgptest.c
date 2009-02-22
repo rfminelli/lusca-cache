@@ -67,8 +67,6 @@ main(int argc, const char *argv[])
 	_db_init("ALL,1 85,99");
 	_db_set_stderr_debug(99);
  
-	squid_rn_init();
- 
         bzero(&sa, sizeof(sa));
         inet_aton("216.12.163.51", &sa.sin_addr);
         inet_aton("216.12.163.53", &bgp_id);
