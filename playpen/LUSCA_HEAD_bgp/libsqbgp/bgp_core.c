@@ -116,6 +116,7 @@ bgp_close(bgp_instance_t *bi)
 {
 	bi->state = BGP_IDLE;
 	/* free prefixes */
+	bgp_rib_clean(bi->rn);
 	/* ensure no as path entries exist in the hash! */
 }
 
