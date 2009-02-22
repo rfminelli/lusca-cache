@@ -39,21 +39,156 @@
 #include "libiapp/pconn_hist.h"
 #include "libiapp/signals.h"
 #include "libiapp/mainloop.h"
+#include "libiapp/event.h"
 
 #include "libsqbgp/bgp_packet.h"
 #include "libsqbgp/bgp_rib.h"
 #include "libsqbgp/bgp_core.h"
 
-sqaddr_t dest;
+struct _bgp_conn {
+	bgp_instance_t bi;
+	struct in_addr rem_ip;
+	u_short rem_port;
+	int fd;
+};
+typedef struct _bgp_conn bgp_conn_t;
+
+void bgp_conn_begin_connect(bgp_conn_t *bc);
+
+CBDATA_TYPE(bgp_conn_t);
+bgp_conn_t *
+bgp_conn_create(void)
+{
+	bgp_conn_t *bc;
+
+	CBDATA_INIT_TYPE(bgp_conn_t);
+	bc = cbdataAlloc(bgp_conn_t);
+	bc->fd = -1;
+	bgp_create_instance(&bc->bi);
+	return bc;
+}
+
+void
+bgp_conn_connect_wakeup(void *data)
+{
+	bgp_conn_t *bc = data;
+	bgp_conn_begin_connect(bc);
+}
+
+void
+bgp_conn_connect_sleep(bgp_conn_t *bc)
+{
+	eventAdd("bgp retry", bgp_conn_connect_wakeup, bc, 10.0, 1);
+}
+
+void
+bgp_conn_destroy(bgp_conn_t *bc)
+{
+	eventDelete(bgp_conn_connect_wakeup, bc);
+	if (bc->fd > -1) {
+		comm_close(bc->fd);
+		bc->fd = -1;
+	}
+	bgp_close(&bc->bi);
+	cbdataFree(bc);
+}
+
+
+void
+bgp_conn_close_and_restart(bgp_conn_t *bc)
+{
+	if (bc->fd > -1) {
+		comm_close(bc->fd);
+		bc->fd = -1;
+	}
+	bgp_close(&bc->bi);
+	bgp_conn_connect_sleep(bc);
+}
+
+void
+bgp_conn_handle_read(int fd, void *data)
+{
+	bgp_conn_t *bc = data;
+	int r;
+
+	debug(85, 2) ("bgp_conn_handle_read: %p: FD %d: state %d: READY\n", bc, fd, bc->bi.state);
+	r = bgp_read(&bc->bi, fd);
+	if (r <= 0) {
+		bgp_conn_close_and_restart(bc);
+		return;
+	}
+	commSetSelect(fd, COMM_SELECT_READ, bgp_conn_handle_read, data, 0);
+}
+
+void
+bgp_conn_handle_write(int fd, void *data)
+{
+	bgp_conn_t *bc = data;
+	int r;
+
+	debug(85, 2) ("bgp_conn_handle_write: %p: FD %d: state %d: READY\n", bc, fd, bc->bi.state);
+	switch(bc->bi.state) {
+		case BGP_OPEN:
+			/* Send OPEN; set state to OPEN_CONFIRM */
+        		r = bgp_send_hello(&bc->bi, fd, bc->bi.lcl.asn, bc->bi.lcl.hold_timer, bc->bi.lcl.bgp_id);
+			if (r <= 0) {
+				bgp_conn_close_and_restart(bc);
+				return;
+			}
+			bgp_openconfirm(&bc->bi);
+			commSetSelect(fd, COMM_SELECT_READ, bgp_conn_handle_read, data, 0);
+			break;
+		default:
+			assert(1==0);
+	}
+}
+
+void
+bgp_conn_connect_done(int fd, int status, void *data)
+{
+	bgp_conn_t *bc = data;
+
+	if (status != COMM_OK) {
+		bgp_conn_close_and_restart(bc);
+		return;
+	}
+	/* XXX set timeout? */
+
+	/* XXX set bgp instance state to open; get ready to send OPEN message */
+	bgp_open(&bc->bi);
+
+	/* Register for write readiness - send OPEN */
+	commSetSelect(fd, COMM_SELECT_WRITE, bgp_conn_handle_write, data, 0);
+}
+
+void
+bgp_conn_begin_connect(bgp_conn_t *bc)
+{
+	sqaddr_t peer;
+
+	if (bc->fd > -1) {
+		comm_close(bc->fd);
+		bgp_close(&bc->bi);
+		bc->fd = -1;
+	}
+
+	debug(85, 2) ("bgp_conn_begin_connect: %p: beginning connect to %s:%d\n", bc, inet_ntoa(bc->rem_ip), bc->rem_port);
+	bc->fd = comm_open(SOCK_STREAM, IPPROTO_TCP, bc->bi.lcl.bgp_id, 0,
+	    COMM_NONBLOCKING, COMM_TOS_DEFAULT, "BGP connection");
+	assert(bc->fd > 0);
+	sqinet_init(&peer);
+	sqinet_set_v4_inaddr(&peer, &bc->rem_ip);
+	sqinet_set_v4_port(&peer, bc->rem_port, SQADDR_ASSERT_IS_V4);
+
+	comm_connect_begin(bc->fd, &peer, bgp_conn_connect_done, bc);
+	sqinet_done(&peer);
+}
 
 int
 main(int argc, const char *argv[])
 {
-        int fd, r;
-        struct sockaddr_in sa;
         struct in_addr bgp_id;
-	bgp_instance_t bi;
-
+	bgp_conn_t *bc;
 #if 0
 	if (argc < 4) {
 		printf("Usage: %s <host> <port> <asnum> <hold-time>\n", argv[0]);
@@ -67,19 +202,17 @@ main(int argc, const char *argv[])
 	_db_init("ALL,1 85,99");
 	_db_set_stderr_debug(99);
  
-        bzero(&sa, sizeof(sa));
-        inet_aton("216.12.163.51", &sa.sin_addr);
-        inet_aton("216.12.163.53", &bgp_id);
-        sa.sin_port = htons(179);
-        sa.sin_len = sizeof(struct sockaddr_in);
-        sa.sin_family = AF_INET;
-
-	bgp_create_instance(&bi);
-	bgp_set_lcl(&bi, bgp_id, 65535, 120);
-	bgp_set_rem(&bi, 38620);
+	bc = bgp_conn_create();
+	inet_aton("216.12.163.53", &bgp_id);
+	bgp_set_lcl(&bc->bi, bgp_id, 65535, 120);
+	bgp_set_rem(&bc->bi, 38620);
+        inet_aton("216.12.163.51", &bc->rem_ip);
+	bc->rem_port = 179;
 
         /* connect to bgp thing */
- 
+	bgp_conn_begin_connect(bc);
+
+#if 0
         while (1) {
         	fd = socket(AF_INET, SOCK_STREAM, 0);
         	assert(fd != -1);
@@ -93,12 +226,11 @@ main(int argc, const char *argv[])
 		debug(85, 1) ("sleeping for 15 seconds..\n");
 		sleep(15);
         }
+#endif
 
-#if 0
 	while (1) {
 		iapp_runonce(60000);
 	}
-#endif
 
 	exit(0);
 }
