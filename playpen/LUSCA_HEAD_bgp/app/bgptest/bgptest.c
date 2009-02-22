@@ -65,9 +65,8 @@ main(int argc, const char *argv[])
 	iapp_init();
 	squid_signal(SIGPIPE, SIG_IGN, SA_RESTART);
 
-	_db_init("ALL,1");
-	_db_set_stderr_debug(1);
-
+	_db_init("ALL,1 85,99");
+	_db_set_stderr_debug(99);
  
         fd = socket(AF_INET, SOCK_STREAM, 0);
         assert(fd != -1);
@@ -91,7 +90,7 @@ main(int argc, const char *argv[])
         while (1) {
                 bzero(buf + bufofs, sizeof(buf) - bufofs);
                 /* XXX should check there's space in the buffer first! */
-                printf("main: space in buf is %d bytes\n", (int) sizeof(buf) - bufofs);
+                debug(85, 1) ("main: space in buf is %d bytes\n", (int) sizeof(buf) - bufofs);
                 len = read(fd, buf + bufofs, sizeof(buf) - bufofs);
                 assert(len > 0);
                 bufofs += len;
@@ -100,21 +99,21 @@ main(int argc, const char *argv[])
 
                 /* loop over; try to handle partial messages */
                 while (i < len) {
-                        printf("looping..\n");
+                        debug(85, 1) ("looping..\n");
                         /* Is there enough data here? */
                         if (! bgp_msg_complete(buf + i, bufofs - i)) {
-                                printf("main: incomplete packet\n");
+                                debug(85, 1) ("main: incomplete packet\n");
                                 break;
                         }
                         r = bgp_decode_message(fd, buf + i, bufofs - i);
                         assert(r > 0);
                         i += r;
-                        printf("main: pkt was %d bytes, i is now %d\n", r, i);
+                        debug(85, 1) ("main: pkt was %d bytes, i is now %d\n", r, i);
                 }
                 /* "consume" the rest of the buffer */
                 memmove(buf, buf + i, sizeof(buf) - i);
                 bufofs -= i;
-                printf("consumed %d bytes; bufsize is now %d\n", i, bufofs);
+                debug(85, 1) ("consumed %d bytes; bufsize is now %d\n", i, bufofs);
         }
 
 #if 0

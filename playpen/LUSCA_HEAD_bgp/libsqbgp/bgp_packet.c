@@ -58,7 +58,7 @@ bgp_msg_complete(const char *buf, int len)
 
 	type = bgp_msg_type(buf, len);
 	msg_len = bgp_msg_len(buf, len);
-	//printf("bgp_msg_complete: type %d, pktlen %d, msglen %d\n", type, len, msg_len);
+	debug(85, 2) ("bgp_msg_complete: type %d, pktlen %d, msglen %d\n", type, len, msg_len);
 
 	if (type < 0)
 		return 0;
@@ -117,7 +117,7 @@ bgp_send_hello(int fd, unsigned short asnum, short hold_time, struct in_addr bgp
 	p += 1;
 
 	pkt_len = p - send_buf;
-	printf("OPEN: len: %d\n", pkt_len);
+	debug(85, 2) ("OPEN: len: %d\n", pkt_len);
 	len = htons(p - send_buf);
 	p = send_buf + 16;
 	memcpy(p, &len, sizeof(len));
@@ -147,7 +147,7 @@ bgp_send_keepalive(int fd)
 	p += 1;
 
 	pkt_len = p - send_buf;
-	//printf("bgp_send_keepalive: KEEPALIVE: len: %d\n", pkt_len);
+	debug(85, 2) ("bgp_send_keepalive: KEEPALIVE: len: %d\n", pkt_len);
 	len = htons(p - send_buf);
 	p = send_buf + 16;
 	memcpy(p, &len, sizeof(len));
@@ -167,7 +167,7 @@ bgp_handle_notification(int fd, const char *buf, int len)
 	err_code = * (u_int8_t *) buf;
 	err_subcode = * (u_int8_t *) (buf + 2);
 	err_data = ntohs(* (u_int8_t *) (buf + 4));
-	printf("bgp_handle_notification: err %d, subcode %d, data %d\n", err_code, err_subcode, err_data);
+	debug(85, 2) ("bgp_handle_notification: err %d, subcode %d, data %d\n", err_code, err_subcode, err_data);
 	return 1;
 }
 
@@ -190,7 +190,7 @@ bgp_handle_open(int fd, const char *buf, int len)
 	parm_len = * (u_int8_t *) (buf + 9);
 	/* XXX don't bother decoding the OPEN parameters for now! */
 
-	//printf("bgp_handle_open: got version %d, AS %d, timer %d, parm_len %d\n", version, bgp_as, hold_timer, parm_len);
+	debug(85, 2) ("bgp_handle_open: got version %d, AS %d, timer %d, parm_len %d\n", version, bgp_as, hold_timer, parm_len);
 
 	/* Queue a keepalive message */
 	bgp_send_keepalive(fd);
@@ -208,7 +208,7 @@ bgp_handle_update_withdraw(const char *buf, int len)
 	if (len == 0)
 		return 1;
 
-	printf("  bgp_handle_update_withdraw: len %d\n", len);
+	debug(85, 2) ("  bgp_handle_update_withdraw: len %d\n", len);
 	while (i < len) {
 		bzero(&pf, sizeof(pf));
 		/* The "length" is the number of bits which are "valid" .. */
@@ -218,10 +218,10 @@ bgp_handle_update_withdraw(const char *buf, int len)
 		else
 			pl = ((netmask - 1) / 8) + 1;
 		i++;
-		printf("  bgp_handle_update_withdraw: netmask %d; len %d\n", netmask, pl);
+		debug(85, 2) ("  bgp_handle_update_withdraw: netmask %d; len %d\n", netmask, pl);
 		/* XXX bounds check? */
 		memcpy(&pf, buf + i, pl);
-		printf("  bgp_handle_update_withdraw: prefix %s/%d\n", inet_ntoa(pf), netmask);
+		debug(85, 2) ("  bgp_handle_update_withdraw: prefix %s/%d\n", inet_ntoa(pf), netmask);
 		i += pl;
 	}
 	return 1;
@@ -234,7 +234,7 @@ bgp_handle_update_pathattrib_origin(const char *buf, int len)
 	if (len < 1)
 		return 0;
 	origin = * (u_int8_t *) buf;
-	printf("  bgp_handle_update_pathattrib_origin: origin id %d\n", origin);
+	debug(85, 2) ("  bgp_handle_update_pathattrib_origin: origin id %d\n", origin);
 	return 1;
 }
 
@@ -253,12 +253,12 @@ bgp_handle_update_pathattrib_aspath(const char *buf, int len)
 
 	/* XXX well, the length should be verified / used / bounds checked? */
 
-	printf("  bgp_handle_update_pathattrib_aspath:");
+	debug(85, 2) ("  bgp_handle_update_pathattrib_aspath:");
 	for (i = 2; i < len; i += 2) {
 		aspath_entry = ntohs(* (u_int16_t *) (buf + i));
-		printf(" %d", aspath_entry);
+		debug(85, 2) (" %d", aspath_entry);
 	}
-	printf("\n");
+	debug(85, 2) ("\n");
 
 	return 1;
 }
@@ -272,7 +272,7 @@ bgp_handle_update_pathattrib(const char *buf, int len)
 
 	/* Iterate over the buffer, pulling out <type, length, value> fields */
 	/* XXX should bounds check some more! */
-	//printf("bgp_handle_update_pathattrib: BEGIN\n");
+	debug(85, 2) ("bgp_handle_update_pathattrib: BEGIN\n");
 	while (i < len) {
 		a_flags = * (u_int8_t *) (buf + i);
 		a_type = * (u_int8_t *) (buf + i + 1);
@@ -285,7 +285,7 @@ bgp_handle_update_pathattrib(const char *buf, int len)
 			a_len =  * (u_int8_t *) (buf + i);
 			i += 1;
 		}
-		//printf("  bgp_handle_update_pathattrib: flags %x, type %x, len %d\n", a_flags, a_type, a_len);
+		debug(85, 2) ("  bgp_handle_update_pathattrib: flags %x, type %x, len %d\n", a_flags, a_type, a_len);
 
 		switch (a_type) {
 			case 1:	/* origin */
@@ -297,13 +297,13 @@ bgp_handle_update_pathattrib(const char *buf, int len)
 					return 0;
 				break;
 			default:
-				//printf("  bgp_handle_path_attrib: don't know type %d\n", a_type);
+				debug(85, 2) ("  bgp_handle_path_attrib: don't know type %d\n", a_type);
 				break;
 		}
 
 		i += a_len;
 	}
-	//printf("bgp_handle_update_pathattrib: DONE\n");
+	debug(85, 2) ("bgp_handle_update_pathattrib: DONE\n");
 	return 1;
 }
 
@@ -317,7 +317,7 @@ bgp_handle_update_nlri(const char *buf, int len)
 	if (len == 0)
 		return 1;
 
-	printf("  bgp_handle_update_nlri: len %d\n", len);
+	debug(85, 2) ("  bgp_handle_update_nlri: len %d\n", len);
 	while (i < len) {
 		bzero(&pf, sizeof(pf));
 		/* The "length" is the number of bits which are "valid" .. */
@@ -327,10 +327,10 @@ bgp_handle_update_nlri(const char *buf, int len)
 		else
 			pl = ((netmask - 1) / 8) + 1;
 		i++;
-		printf("  bgp_handle_update_nlri: netmask %d; len %d\n", netmask, pl);
+		debug(85, 2) ("  bgp_handle_update_nlri: netmask %d; len %d\n", netmask, pl);
 		/* XXX bounds check? */
 		memcpy(&pf, buf + i, pl);
-		printf("  bgp_handle_update_nlri: prefix %s/%d\n", inet_ntoa(pf), netmask);
+		debug(85, 2) ("  bgp_handle_update_nlri: prefix %s/%d\n", inet_ntoa(pf), netmask);
 		i += pl;
 	}
 	return 1;
@@ -345,7 +345,7 @@ bgp_handle_update(int fd, const char *buf, int len)
 	withdraw_route_len = ntohs(* (u_int16_t *) buf);
 	path_attrib_len = ntohs(* (u_int16_t *) (buf + withdraw_route_len + 2));
 
-	printf("bgp_handle_update: UPDATE pktlen %d: withdraw_route_len %d; path attrib len %d\n",
+	debug(85, 2) ("bgp_handle_update: UPDATE pktlen %d: withdraw_route_len %d; path attrib len %d\n",
 	   len, withdraw_route_len, path_attrib_len);
 
 	if (! bgp_handle_update_withdraw(buf + 2, withdraw_route_len))
@@ -362,7 +362,7 @@ bgp_handle_update(int fd, const char *buf, int len)
 int
 bgp_handle_keepalive(int fd, const char *buf, int len)
 {
-	//printf("bgp_handle_keepalive: KEEPALIVE RECEIVED\n");
+	debug(85, 2) ("bgp_handle_keepalive: KEEPALIVE RECEIVED\n");
 	return 1;
 }
 
@@ -378,7 +378,7 @@ bgp_decode_message(int fd, const const char *buf, int len)
 
 	pkt_len = ntohs(* (u_int16_t *) (buf + 16));
 	type = * (u_int8_t *) (buf + 18);
-	//printf("bgp_decode_message: type %d; len %d\n", type, pkt_len);
+	debug(85, 2) ("bgp_decode_message: type %d; len %d\n", type, pkt_len);
 	switch 	(type) {
 		case 1:		/* OPEN */
 			r = bgp_handle_open(fd, buf + 19, pkt_len - 19);
@@ -393,7 +393,7 @@ bgp_decode_message(int fd, const const char *buf, int len)
 			r = bgp_handle_keepalive(fd, buf + 19, pkt_len - 19);
 			break;
 		default:
-			printf("bgp_decode_message: unknown message type: %d\n", type);
+			debug(85, 2) ("bgp_decode_message: unknown message type: %d\n", type);
 			exit(1);
 	}
 
