@@ -26,13 +26,13 @@ struct _bgp_instance {
 
 	struct {
 		u_short asn;
-		u_short hold_timer;
+		short hold_timer;
 		struct in_addr bgp_id;
 	} lcl;
 
 	struct {
 		u_short asn;
-		u_short hold_timer;
+		short hold_timer;
 		struct in_addr bgp_id;
 		u_int8_t version;
 	} rem;

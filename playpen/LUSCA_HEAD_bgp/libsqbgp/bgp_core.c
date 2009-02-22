@@ -25,6 +25,7 @@ bgp_create_instance(bgp_instance_t *bi)
 {
 	bzero(bi, sizeof(*bi));
 	bi->state = BGP_IDLE;
+	bi->lcl.hold_timer = bi->rem.hold_timer = -1;
 	bgp_rib_init(&bi->rn);
 }
 
@@ -126,6 +127,7 @@ void
 bgp_close(bgp_instance_t *bi)
 {
 	bi->state = BGP_IDLE;
+	bi->lcl.hold_timer = bi->rem.hold_timer = -1;
 	/* free prefixes */
 	bgp_rib_clean(&bi->rn);
 	/* ensure no as path entries exist in the hash! */
