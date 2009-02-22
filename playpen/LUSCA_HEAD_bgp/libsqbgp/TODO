@@ -1,0 +1,4 @@
+* the code is a bit tangly. Specifically, I'm updating the bgp FSM
+  in various places where it should just be driven in bgp_core.c !
+  Untangle this mess.
+
