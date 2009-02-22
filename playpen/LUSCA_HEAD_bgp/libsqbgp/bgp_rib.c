@@ -39,8 +39,6 @@ typedef u_char m_int[1 + sizeof(unsigned int)];
  * enhancements (e.g. expires)
  */
 struct _as_info {
-    intlist *as_number;
-    time_t expires;		/* NOTUSED */
 };
 
 typedef struct _as_info as_info;
@@ -67,8 +65,6 @@ bgp_rib_match_ip(struct squid_radix_node_head *head, void *data, struct in_addr 
     struct squid_radix_node *rn;
     as_info *e;
     m_int m_addr;
-    intlist *a = NULL;
-    intlist *b = NULL;
     lh = ntohl(addr.s_addr);
     debug(53, 3) ("asnMatchIp: Called for %s.\n", inet_ntoa(addr));
 
@@ -87,14 +83,7 @@ bgp_rib_match_ip(struct squid_radix_node_head *head, void *data, struct in_addr 
     debug(53, 3) ("asnMatchIp: Found in db!\n");
     e = ((rtentry *) rn)->e_info;
     assert(e);
-    for (a = (intlist *) data; a; a = a->next)
-	for (b = e->as_number; b; b = b->next)
-	    if (a->i == b->i) {
-		debug(53, 5) ("asnMatchIp: Found a match!\n");
-		return 1;
-	    }
-    debug(53, 5) ("asnMatchIp: AS not in as db.\n");
-    return 0;
+    return 1;
 }
 
 /* initialize the radix tree structure */
@@ -132,8 +121,6 @@ bgp_rib_add_net(struct squid_radix_node_head *head, char *as_string, int as_numb
     rtentry *e;
     struct squid_radix_node *rn;
     char dbg1[32], dbg2[32];
-    intlist **Tail = NULL;
-    intlist *q = NULL;
     as_info *asinfo = NULL;
     struct in_addr in_a, in_m;
     long mask, addr;
@@ -166,35 +153,20 @@ bgp_rib_add_net(struct squid_radix_node_head *head, char *as_string, int as_numb
     store_m_int(addr, e->e_addr);
     store_m_int(mask, e->e_mask);
     rn = squid_rn_lookup(e->e_addr, e->e_mask, head);
-    if (rn != NULL) {
-	asinfo = ((rtentry *) rn)->e_info;
-	if (intlistFind(asinfo->as_number, as_number)) {
-	    debug(53, 3) ("asnAddNet: Ignoring repeated network '%s/%d' for AS %d\n",
-		dbg1, bitl, as_number);
-	} else {
-	    debug(53, 3) ("asnAddNet: Warning: Found a network with multiple AS numbers!\n");
-	    for (Tail = &asinfo->as_number; *Tail; Tail = &(*Tail)->next);
-	    q = xcalloc(1, sizeof(intlist));
-	    q->i = as_number;
-	    *(Tail) = q;
-	    e->e_info = asinfo;
-	}
-    } else {
-	q = xcalloc(1, sizeof(intlist));
-	q->i = as_number;
+    if (rn == NULL) {
 	asinfo = xmalloc(sizeof(asinfo));
-	asinfo->as_number = q;
 	rn = squid_rn_addroute(e->e_addr, e->e_mask, head, e->e_nodes);
 	rn = squid_rn_match(e->e_addr, head);
 	assert(rn != NULL);
 	e->e_info = asinfo;
 	if (rn == 0) {		/* assert might expand to nothing */
 	    xfree(asinfo);
-	    xfree(q);
 	    xfree(e);
 	    debug(53, 3) ("asnAddNet: Could not add entry.\n");
 	    return 0;
 	}
+    } else {
+	debug(85, 1) ("bgp_rib_add_net: duplicate network!?\n");
     }
     e->e_info = asinfo;
     return 1;
@@ -219,14 +191,6 @@ destroyRadixNode(struct squid_radix_node *rn, void *w)
 static void
 destroyRadixNodeInfo(as_info * e_info)
 {
-    intlist *prev = NULL;
-    intlist *data = e_info->as_number;
-    while (data) {
-	prev = data;
-	data = data->next;
-	xfree(prev);
-    }
-    xfree(data);
 }
 
 static int
