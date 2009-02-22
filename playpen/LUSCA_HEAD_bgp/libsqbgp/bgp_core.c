@@ -43,14 +43,13 @@ bgp_set_lcl(bgp_instance_t *bi, struct in_addr bgp_id, u_short asn, u_short hold
 {
 	memcpy(&bi->lcl.bgp_id, &bgp_id, sizeof(bgp_id));
 	bi->lcl.asn = asn;
-	bi->lcl.hold_time = hold_time;
+	bi->lcl.hold_timer = hold_time;
 }
 
 void
 bgp_set_rem(bgp_instance_t *bi, u_short asn)
 {
 	bi->rem.asn = asn;
-	bi->rem.hold_time = -1;
 }
 
 /*

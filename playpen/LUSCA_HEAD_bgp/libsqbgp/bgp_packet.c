@@ -175,23 +175,20 @@ bgp_handle_notification(bgp_instance_t *bi, int fd, const char *buf, int len)
 int
 bgp_handle_open(bgp_instance_t *bi, int fd, const char *buf, int len)
 {
-	u_int8_t version;
-	u_int16_t bgp_as;
-	u_int16_t hold_timer;
-	struct in_addr bgp_id;
 	int parm_len;
 
 	/* XXX should ensure we have enough space! */
+	/* XXX should check version!? */
 
-	version = * (u_int8_t *) buf;
-	bgp_as = ntohs(* (u_int16_t *) (buf + 1));
-	hold_timer = ntohs(* (u_int16_t *) (buf + 3));
-	memcpy(&bgp_id, buf + 5, 4);
+	bi->rem.version = * (u_int8_t *) buf;
+	bi->rem.asn = ntohs(* (u_int16_t *) (buf + 1));
+	bi->rem.hold_timer = ntohs(* (u_int16_t *) (buf + 3));
+	memcpy(&bi->rem.bgp_id, buf + 5, 4);
 
 	parm_len = * (u_int8_t *) (buf + 9);
 	/* XXX don't bother decoding the OPEN parameters for now! */
 
-	debug(85, 2) ("bgp_handle_open: got version %d, AS %d, timer %d, parm_len %d\n", version, bgp_as, hold_timer, parm_len);
+	debug(85, 2) ("bgp_handle_open: got version %d, AS %d, timer %d, parm_len %d\n", bi->rem.version, bi->rem.asn, bi->rem.hold_timer, parm_len);
 
 	/* Queue a keepalive message */
 	bgp_send_keepalive(bi, fd);
