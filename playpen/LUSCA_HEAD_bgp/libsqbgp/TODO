@@ -19,3 +19,6 @@
   fine. For logging, ACLs, etc, immediate del may not be. Instead, tag the prefix
   as "deleted" so subsequent lookups can determine whether to use the stale
   result or not.
+
+* 0/0 acceptance should be configurable. It may not be desired here as the "default"
+  AS would end up catching all traffic, whether it was destined there or not.
