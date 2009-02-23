@@ -86,7 +86,7 @@ bgp_rib_add_net(bgp_rib_head_t *head, struct in_addr addr, int masklen, u_short 
 	radix_node_t *n;
 	bgp_rib_aspath_t *a;
 
-	debug(85, 1) ("bgp_rib_add_net: %s/%d\n", inet_ntoa(addr), masklen);
+	debug(85, 1) ("bgp_rib_add_net: %s/%d; AS %d\n", inet_ntoa(addr), masklen, origin_as);
 	p = New_Prefix(AF_INET, &addr, masklen, NULL);
 	n = radix_search_exact(head->rh, p);
 	if (n != NULL) {
