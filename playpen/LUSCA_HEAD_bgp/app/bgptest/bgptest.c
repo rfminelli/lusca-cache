@@ -45,8 +45,7 @@
 #include "libsqbgp/bgp_packet.h"
 #include "libsqbgp/bgp_rib.h"
 #include "libsqbgp/bgp_core.h"
-
-#include "bgpconn.h"
+#include "libsqbgp/bgp_conn.h"
 
 int
 main(int argc, const char *argv[])
@@ -63,8 +62,8 @@ main(int argc, const char *argv[])
 	iapp_init();
 	squid_signal(SIGPIPE, SIG_IGN, SA_RESTART);
 
-	_db_init("ALL,1 85,1");
-	_db_set_stderr_debug(1);
+	_db_init("ALL,1 85,99");
+	_db_set_stderr_debug(99);
  
 	bc = bgp_conn_create();
 	inet_aton("216.12.163.53", &bgp_id);
