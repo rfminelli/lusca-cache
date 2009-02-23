@@ -3,6 +3,7 @@
 
 struct _bgp_rib_head {
 	radix_tree_t	*rh;
+	int num_prefixes;
 };
 typedef struct _bgp_rib_head bgp_rib_head_t;
 

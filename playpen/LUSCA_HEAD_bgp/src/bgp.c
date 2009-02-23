@@ -8,12 +8,25 @@
 
 static bgp_conn_t *bc = NULL;
 
+static void
+bgpStats(StoreEntry *e)
+{
+	storeAppendPrintf(e, "Table size: %d entries\n", bc->bi.rn.num_prefixes);
+}
+
 void
 bgpStart(void)
 {
+	static int initialised = 0;
+
 	/* Is it configured? If not, don't bother. */
 	if (! Config.bgp.enable)
 		return;
+
+	if (! initialised) {
+		initialised = 1;
+		cachemgrRegister("bgp_stats", "BGP statistics", bgpStats, 0, 1);
+	}
 
 	/* Do we have a BGP instance? If not, create one */
 	if (bc == NULL) {

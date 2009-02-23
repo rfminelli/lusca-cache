@@ -70,12 +70,14 @@ void
 bgp_rib_destroy(bgp_rib_head_t *head)
 {
 	Destroy_Radix(head->rh, bgp_rib_asn_free, NULL);
+	head->num_prefixes = 0;
 }
 
 void
 bgp_rib_clean(bgp_rib_head_t *head)
 {
 	Clear_Radix(head->rh, bgp_rib_asn_free, NULL);
+	head->num_prefixes = 0;
 }
 
 
@@ -102,6 +104,7 @@ bgp_rib_add_net(bgp_rib_head_t *head, struct in_addr addr, int masklen, u_short 
 	a = xcalloc(1, sizeof(bgp_rib_aspath_t));
 	a->origin_as = origin_as;
 	n->data = a;
+	head->num_prefixes++;
 	return 1;
 }
 
@@ -125,8 +128,6 @@ bgp_rib_del_net(bgp_rib_head_t *head, struct in_addr addr, int masklen)
 	bgp_rib_asn_free(n, NULL);	
 	radix_remove(head->rh, n);
 	Deref_Prefix(p);
+	head->num_prefixes--;
 	return 1;
-
-
-
 }
