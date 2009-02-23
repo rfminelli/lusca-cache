@@ -15,3 +15,7 @@
   needed for now. One would also have to implement AS path hashing/referencing
   to keep that somewhat efficient.
 
+* Add a config flag which overrides the del bit - for RIB calc, immediate del is
+  fine. For logging, ACLs, etc, immediate del may not be. Instead, tag the prefix
+  as "deleted" so subsequent lookups can determine whether to use the stale
+  result or not.
