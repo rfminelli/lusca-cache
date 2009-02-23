@@ -16,7 +16,7 @@
 
 #include "../libsqinet/sqinet.h"
 
-
+#include "radix.h"
 #include "bgp_packet.h"
 #include "bgp_rib.h"
 #include "bgp_core.h"

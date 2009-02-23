@@ -2,7 +2,7 @@
 #define	__LIBSQBGP_BGP_RIB_H__
 
 struct _bgp_rib_head {
-
+	radix_tree_t	*rh;
 };
 typedef struct _bgp_rib_head bgp_rib_head_t;
 

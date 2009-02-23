@@ -16,6 +16,7 @@
 
 #include "../libsqinet/sqinet.h"
 
+#include "radix.h"
 #include "bgp_rib.h"
 #include "bgp_packet.h"
 #include "bgp_core.h"
@@ -91,32 +92,32 @@ bgp_read(bgp_instance_t *bi, int fd)
 
 	/* Append data to buffer */
 	bzero(bi->recv.buf + bi->recv.bufofs, BGP_RECV_BUF - bi->recv.bufofs);
-	debug(85, 1) ("main: space in buf is %d bytes\n", (int) BGP_RECV_BUF - bi->recv.bufofs);
+	debug(85, 5) ("main: space in buf is %d bytes\n", (int) BGP_RECV_BUF - bi->recv.bufofs);
 
 	len = read(fd, bi->recv.buf + bi->recv.bufofs, BGP_RECV_BUF - bi->recv.bufofs);
 	if (len <= 0)
 		return len;
 
 	bi->recv.bufofs += len;
-	debug(85, 2) ("read: %d bytes; bufsize is now %d\n", len, bi->recv.bufofs);
+	debug(85, 5) ("read: %d bytes; bufsize is now %d\n", len, bi->recv.bufofs);
 	i = 0;
 	/* loop over; try to handle partial messages */
 	while (i < len) {
-		debug(85, 1) ("looping..\n");
+		debug(85, 5) ("looping..\n");
 		/* Is there enough data here? */
 		if (! bgp_msg_complete(bi->recv.buf + i, bi->recv.bufofs - i)) {
-			debug(85, 1) ("main: incomplete packet\n");
+			debug(85, 5) ("main: incomplete packet\n");
 			break;
 		}
 		r = bgp_decode_message(bi, fd, bi->recv.buf + i, bi->recv.bufofs - i);
 		assert(r > 0);
 		i += r;
-		debug(85, 1) ("main: pkt was %d bytes, i is now %d\n", r, i);
+		debug(85, 5) ("main: pkt was %d bytes, i is now %d\n", r, i);
 	}
 	/* "consume" the rest of the buffer */
 	memmove(bi->recv.buf, bi->recv.buf + i, BGP_RECV_BUF - i);
 	bi->recv.bufofs -= i;
-	debug(85, 1) ("consumed %d bytes; bufsize is now %d\n", i, bi->recv.bufofs);
+	debug(85, 5) ("consumed %d bytes; bufsize is now %d\n", i, bi->recv.bufofs);
 	return len;
 }
 
