@@ -50,10 +50,12 @@ struct _bgp_conn {
 	struct in_addr rem_ip;
 	u_short rem_port;
 	int fd;
+	int keepalive_event;
 };
 typedef struct _bgp_conn bgp_conn_t;
 
 void bgp_conn_begin_connect(bgp_conn_t *bc);
+void bgp_conn_close_and_restart(bgp_conn_t *bc);
 
 CBDATA_TYPE(bgp_conn_t);
 bgp_conn_t *
@@ -82,6 +84,31 @@ bgp_conn_connect_sleep(bgp_conn_t *bc)
 }
 
 void
+bgp_conn_send_keepalive(void *data)
+{
+	bgp_conn_t *bc = data;
+	int r;
+	int hold_timer;
+
+	/* Do we have valid hold timers for both sides of the connection? If so, schedule the recurring keepalive msg */
+	/* XXX should really check the state here! */
+
+	/* Hold timer of 0 means "don't ever send a keepalive" (RFC4271, 4.4.) */
+	hold_timer = bgp_get_holdtimer(&bc->bi);
+	if (hold_timer <= 0)
+		return;
+
+	r = bgp_send_keepalive(&bc->bi, bc->fd);
+	if (r <= 0) {
+		bgp_conn_close_and_restart(bc);
+		return;
+	}
+	//eventAdd("bgp keepalive", bgp_conn_send_keepalive, bc, (hold_timer + 4) / 2, 0);
+	eventAdd("bgp keepalive", bgp_conn_send_keepalive, bc, 5.0, 0);
+
+}
+
+void
 bgp_conn_destroy(bgp_conn_t *bc)
 {
 	eventDelete(bgp_conn_connect_wakeup, bc);
@@ -93,7 +120,6 @@ bgp_conn_destroy(bgp_conn_t *bc)
 	cbdataFree(bc);
 }
 
-
 void
 bgp_conn_close_and_restart(bgp_conn_t *bc)
 {
@@ -102,6 +128,10 @@ bgp_conn_close_and_restart(bgp_conn_t *bc)
 		bc->fd = -1;
 	}
 	bgp_close(&bc->bi);
+	if (eventFind(bgp_conn_connect_wakeup, bc))
+		eventDelete(bgp_conn_connect_wakeup, bc);
+	if (eventFind(bgp_conn_send_keepalive, bc))
+	eventDelete(bgp_conn_send_keepalive, bc);
 	bgp_conn_connect_sleep(bc);
 }
 
@@ -118,6 +148,11 @@ bgp_conn_handle_read(int fd, void *data)
 		return;
 	}
 	commSetSelect(fd, COMM_SELECT_READ, bgp_conn_handle_read, data, 0);
+	/* Have we tried sending a keepalive yet? Then try */
+	if (! bc->keepalive_event) {
+		bc->keepalive_event = 1;
+		bgp_conn_send_keepalive(bc);
+	}
 }
 
 void

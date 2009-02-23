@@ -56,5 +56,6 @@ void bgp_open(bgp_instance_t *bi);
 void bgp_openconfirm(bgp_instance_t *bi);
 int bgp_read(bgp_instance_t *bi, int fd);
 void bgp_close(bgp_instance_t *bi);
+int bgp_get_holdtimer(bgp_instance_t *bi);
 
 #endif

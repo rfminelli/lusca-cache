@@ -133,3 +133,18 @@ bgp_close(bgp_instance_t *bi)
 	/* ensure no as path entries exist in the hash! */
 }
 
+
+int
+bgp_get_holdtimer(bgp_instance_t *bi)
+{
+	if (bi->lcl.hold_timer == -1 || bi->rem.hold_timer == -1)
+		return -1;
+	if (bi->lcl.hold_timer == 0)
+		return bi->rem.hold_timer;
+	if (bi->rem.hold_timer == 0)
+		return bi->lcl.hold_timer;
+
+	if (bi->rem.hold_timer < bi->lcl.hold_timer)
+		return bi->rem.hold_timer;
+	return bi->lcl.hold_timer;
+}
