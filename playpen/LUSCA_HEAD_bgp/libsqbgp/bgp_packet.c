@@ -21,6 +21,17 @@
 #include "bgp_rib.h"
 #include "bgp_core.h"
 
+struct _bgp_update_state {
+	u_int8_t aspath_type;
+	u_int8_t aspath_len;
+	u_short *aspaths;
+	int origin;
+	struct in_addr *nlri;
+	struct in_addr *nexthop;
+	struct in_addr *withdraw;
+};
+typedef struct _bgp_update_state bgp_update_state_t;
+
 int
 bgp_msg_len(const char *buf, int len)
 {
@@ -197,18 +208,20 @@ bgp_handle_open(bgp_instance_t *bi, int fd, const char *buf, int len)
 }
 
 int
-bgp_handle_update_withdraw(bgp_instance_t *bi, const char *buf, int len)
+bgp_handle_update_withdraw(bgp_instance_t *bi, bgp_update_state_t *us, const char *buf, int len)
 {
-	struct in_addr pf;
 	u_int8_t pl, netmask;
-	int i = 0;
+	int i = 0, j = 0;
 
 	if (len == 0)
 		return 1;
 
+	/* Pre-calculate the maximum number of possible entries in this! */
+	assert(us->withdraw == NULL);
+	us->withdraw = xcalloc(len, sizeof(struct in_addr));
+
 	debug(85, 2) ("  bgp_handle_update_withdraw: len %d\n", len);
 	while (i < len) {
-		bzero(&pf, sizeof(pf));
 		/* The "length" is the number of bits which are "valid" .. */
 		netmask = (* (u_int8_t *) (buf + i));
 		if (netmask == 0)
@@ -218,44 +231,44 @@ bgp_handle_update_withdraw(bgp_instance_t *bi, const char *buf, int len)
 		i++;
 		debug(85, 2) ("  bgp_handle_update_withdraw: netmask %d; len %d\n", netmask, pl);
 		/* XXX bounds check? */
-		memcpy(&pf, buf + i, pl);
-		debug(85, 2) ("  bgp_handle_update_withdraw: prefix %s/%d\n", inet_ntoa(pf), netmask);
-		bgp_rib_del_net(&bi->rn, pf, netmask);
+		memcpy(&us->withdraw[j], buf + i, pl);
+		debug(85, 2) ("  bgp_handle_update_withdraw: prefix %s/%d\n", inet_ntoa(us->withdraw[j]), netmask);
 		i += pl;
+		j++;
 	}
 	return 1;
 }
 
 int
-bgp_handle_update_pathattrib_origin(const char *buf, int len)
+bgp_handle_update_pathattrib_origin(bgp_instance_t *bi, bgp_update_state_t *us, const char *buf, int len)
 {
-	u_int8_t origin;
 	if (len < 1)
 		return 0;
-	origin = * (u_int8_t *) buf;
-	debug(85, 2) ("  bgp_handle_update_pathattrib_origin: origin id %d\n", origin);
+	us->origin = * (u_int8_t *) buf;
+	debug(85, 2) ("  bgp_handle_update_pathattrib_origin: origin id %d\n", us->origin);
 	return 1;
 }
 
 int
-bgp_handle_update_pathattrib_aspath(const char *buf, int len)
+bgp_handle_update_pathattrib_aspath(bgp_instance_t *bi, bgp_update_state_t *us, const char *buf, int len)
 {
-	int i;
-	u_int16_t aspath_entry;
-	u_int8_t aspath_type, aspath_len;
+	int i, j = 0;
 
 	if (len < 2)
 		return 0;
 
-	aspath_type = * (u_int8_t *) (buf);
-	aspath_len = * (u_int8_t *) (buf + 1);
+	assert(us->aspaths == NULL);
+	us->aspath_type = * (u_int8_t *) (buf);
+	us->aspath_len = * (u_int8_t *) (buf + 1);
+	us->aspaths = xcalloc(len / 2, sizeof(int));
 
 	/* XXX well, the length should be verified / used / bounds checked? */
 
 	debug(85, 2) ("  bgp_handle_update_pathattrib_aspath:");
 	for (i = 2; i < len; i += 2) {
-		aspath_entry = ntohs(* (u_int16_t *) (buf + i));
-		debug(85, 2) (" %d", aspath_entry);
+		us->aspaths[j] = ntohs(* (u_int16_t *) (buf + i));
+		debug(85, 2) (" %d", us->aspaths[j]);
+		j++;
 	}
 	debug(85, 2) ("\n");
 
@@ -263,7 +276,7 @@ bgp_handle_update_pathattrib_aspath(const char *buf, int len)
 }
 
 int
-bgp_handle_update_pathattrib(const char *buf, int len)
+bgp_handle_update_pathattrib(bgp_instance_t *bi, bgp_update_state_t *us, const char *buf, int len)
 {
 	int i = 0;
 	u_int8_t a_flags, a_type;
@@ -288,11 +301,11 @@ bgp_handle_update_pathattrib(const char *buf, int len)
 
 		switch (a_type) {
 			case 1:	/* origin */
-				if (bgp_handle_update_pathattrib_origin(buf + i, a_len) < 0)
+				if (bgp_handle_update_pathattrib_origin(bi, us, buf + i, a_len) < 0)
 					return 0;
 				break;
 			case 2: /* as path */
-				if (bgp_handle_update_pathattrib_aspath(buf + i, a_len) < 0)
+				if (bgp_handle_update_pathattrib_aspath(bi, us, buf + i, a_len) < 0)
 					return 0;
 				break;
 			default:
@@ -307,7 +320,7 @@ bgp_handle_update_pathattrib(const char *buf, int len)
 }
 
 int
-bgp_handle_update_nlri(bgp_instance_t *bi, const char *buf, int len)
+bgp_handle_update_nlri(bgp_instance_t *bi, bgp_update_state_t *us, const char *buf, int len)
 {
 	struct in_addr pf;
 	u_int8_t pl, netmask;
@@ -339,8 +352,12 @@ bgp_handle_update_nlri(bgp_instance_t *bi, const char *buf, int len)
 int
 bgp_handle_update(bgp_instance_t *bi, int fd, const char *buf, int len)
 {
+	int rc = 0;
 	u_int16_t withdraw_route_len;
 	u_int16_t path_attrib_len;
+	bgp_update_state_t us;
+
+	bzero(&us, sizeof(us));
 
 	withdraw_route_len = ntohs(* (u_int16_t *) buf);
 	path_attrib_len = ntohs(* (u_int16_t *) (buf + withdraw_route_len + 2));
@@ -348,15 +365,26 @@ bgp_handle_update(bgp_instance_t *bi, int fd, const char *buf, int len)
 	debug(85, 2) ("bgp_handle_update: UPDATE pktlen %d: withdraw_route_len %d; path attrib len %d\n",
 	   len, withdraw_route_len, path_attrib_len);
 
-	if (! bgp_handle_update_withdraw(bi, buf + 2, withdraw_route_len))
-		return 0;
-	if (! bgp_handle_update_pathattrib(buf + 2 + withdraw_route_len + 2, path_attrib_len))
-		return 0;
-	/* XXX need to calculate the length and offset correctly! */
-	if (! bgp_handle_update_nlri(bi, buf + 2 + withdraw_route_len + 2 + path_attrib_len, len - (2 + withdraw_route_len + 2 + path_attrib_len)))
-		return 0;
+	if (! bgp_handle_update_withdraw(bi, &us, buf + 2, withdraw_route_len)) {
+		rc = 0; goto finish;
+	}
+	if (! bgp_handle_update_pathattrib(bi, &us, buf + 2 + withdraw_route_len + 2, path_attrib_len)) {
+		rc = 0; goto finish;
+	}
+	if (! bgp_handle_update_nlri(bi, &us, buf + 2 + withdraw_route_len + 2 + path_attrib_len, len - (2 + withdraw_route_len + 2 + path_attrib_len))) {
+		rc = 0; goto finish;
+	}
 
-	return 1;
+	/* Now, we need to poke the RIB with our saved info */
+
+	rc = 1;
+finish:
+	/* free said saved info */
+	safe_free(us.withdraw);
+	safe_free(us.nlri);
+	safe_free(us.aspaths);
+
+	return rc;
 }
 
 int
