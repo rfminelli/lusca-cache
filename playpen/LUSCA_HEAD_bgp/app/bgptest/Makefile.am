@@ -18,7 +18,7 @@ SUBDIRS		=
 
 noinst_PROGRAMS = bgptest
 
-bgptest_SOURCES = bgptest.c
+bgptest_SOURCES = bgptest.c bgpconn.c
 
 LDADD = -L../../lib -L../../libsqdebug -L../../libcore -L../../libmem -L../../libcb -L../../libiapp -L../../libsqinet -L../../libhttp -L../../libstat -L../../libsqbgp -liapp -lmem -lcb -lsqdebug -lcore -lstat -lsqbgp -lm -lsqinet -lmiscutil @SSLLIB@
 
