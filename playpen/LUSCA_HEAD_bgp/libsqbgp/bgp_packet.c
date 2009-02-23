@@ -27,7 +27,7 @@ struct _bgp_update_state {
 	u_short *aspaths;
 	int origin;
 	struct in_addr *nlri;
-	struct in_addr *nexthop;
+	struct in_addr nexthop;
 	struct in_addr *withdraw;
 };
 typedef struct _bgp_update_state bgp_update_state_t;
@@ -70,7 +70,7 @@ bgp_msg_complete(const char *buf, int len)
 
 	type = bgp_msg_type(buf, len);
 	msg_len = bgp_msg_len(buf, len);
-	debug(85, 2) ("bgp_msg_complete: type %d, pktlen %d, msglen %d\n", type, len, msg_len);
+	debug(85, 3) ("bgp_msg_complete: type %d, pktlen %d, msglen %d\n", type, len, msg_len);
 
 	if (type < 0)
 		return 0;
@@ -220,7 +220,7 @@ bgp_handle_update_withdraw(bgp_instance_t *bi, bgp_update_state_t *us, const cha
 	assert(us->withdraw == NULL);
 	us->withdraw = xcalloc(len, sizeof(struct in_addr));
 
-	debug(85, 2) ("  bgp_handle_update_withdraw: len %d\n", len);
+	debug(85, 4) ("  bgp_handle_update_withdraw: len %d\n", len);
 	while (i < len) {
 		/* The "length" is the number of bits which are "valid" .. */
 		netmask = (* (u_int8_t *) (buf + i));
@@ -229,7 +229,7 @@ bgp_handle_update_withdraw(bgp_instance_t *bi, bgp_update_state_t *us, const cha
 		else
 			pl = ((netmask - 1) / 8) + 1;
 		i++;
-		debug(85, 2) ("  bgp_handle_update_withdraw: netmask %d; len %d\n", netmask, pl);
+		debug(85, 4) ("  bgp_handle_update_withdraw: netmask %d; len %d\n", netmask, pl);
 		/* XXX bounds check? */
 		memcpy(&us->withdraw[j], buf + i, pl);
 		debug(85, 2) ("  bgp_handle_update_withdraw: prefix %s/%d\n", inet_ntoa(us->withdraw[j]), netmask);
@@ -264,14 +264,23 @@ bgp_handle_update_pathattrib_aspath(bgp_instance_t *bi, bgp_update_state_t *us, 
 
 	/* XXX well, the length should be verified / used / bounds checked? */
 
-	debug(85, 2) ("  bgp_handle_update_pathattrib_aspath:");
+	debug(85, 3) ("  bgp_handle_update_pathattrib_aspath:\n");
 	for (i = 2; i < len; i += 2) {
 		us->aspaths[j] = ntohs(* (u_int16_t *) (buf + i));
-		debug(85, 2) (" %d", us->aspaths[j]);
+		debug(85, 3) (" - %d\n", us->aspaths[j]);
 		j++;
 	}
-	debug(85, 2) ("\n");
+	return 1;
+}
 
+int
+bgp_handle_update_pathattrib_nexthop(bgp_instance_t *bi, bgp_update_state_t *us, const char *buf, int len)
+{
+	if (len < 4)
+		return 0;
+
+	memcpy(&us->nexthop, buf, 4);
+	debug(85, 2) ("  nexthop: %s\n", inet_ntoa(us->nexthop));
 	return 1;
 }
 
@@ -297,7 +306,7 @@ bgp_handle_update_pathattrib(bgp_instance_t *bi, bgp_update_state_t *us, const c
 			a_len =  * (u_int8_t *) (buf + i);
 			i += 1;
 		}
-		debug(85, 2) ("  bgp_handle_update_pathattrib: flags %x, type %x, len %d\n", a_flags, a_type, a_len);
+		debug(85, 5) ("  bgp_handle_update_pathattrib: flags %x, type %x, len %d\n", a_flags, a_type, a_len);
 
 		switch (a_type) {
 			case 1:	/* origin */
@@ -306,6 +315,10 @@ bgp_handle_update_pathattrib(bgp_instance_t *bi, bgp_update_state_t *us, const c
 				break;
 			case 2: /* as path */
 				if (bgp_handle_update_pathattrib_aspath(bi, us, buf + i, a_len) < 0)
+					return 0;
+				break;
+			case 3: /* next hop*/
+				if (bgp_handle_update_pathattrib_nexthop(bi, us, buf + i, a_len) < 0)
 					return 0;
 				break;
 			default:
@@ -329,7 +342,7 @@ bgp_handle_update_nlri(bgp_instance_t *bi, bgp_update_state_t *us, const char *b
 	if (len == 0)
 		return 1;
 
-	debug(85, 2) ("  bgp_handle_update_nlri: len %d\n", len);
+	debug(85, 5) ("  bgp_handle_update_nlri: len %d\n", len);
 	while (i < len) {
 		bzero(&pf, sizeof(pf));
 		/* The "length" is the number of bits which are "valid" .. */
@@ -339,10 +352,10 @@ bgp_handle_update_nlri(bgp_instance_t *bi, bgp_update_state_t *us, const char *b
 		else
 			pl = ((netmask - 1) / 8) + 1;
 		i++;
-		debug(85, 2) ("  bgp_handle_update_nlri: netmask %d; len %d\n", netmask, pl);
+		debug(85, 5) ("  bgp_handle_update_nlri: netmask %d; len %d\n", netmask, pl);
 		/* XXX bounds check? */
 		memcpy(&pf, buf + i, pl);
-		debug(85, 2) ("  bgp_handle_update_nlri: prefix %s/%d\n", inet_ntoa(pf), netmask);
+		debug(85, 3) ("  bgp_handle_update_nlri: prefix %s/%d\n", inet_ntoa(pf), netmask);
 		bgp_rib_add_net(&bi->rn, pf, netmask);
 		i += pl;
 	}
