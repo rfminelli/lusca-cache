@@ -80,6 +80,13 @@ bgp_rib_clean(bgp_rib_head_t *head)
 	head->num_prefixes = 0;
 }
 
+static void
+bgp_rib_clear_node(bgp_rib_head_t *head, radix_node_t *n)
+{
+	bgp_rib_asn_free(n, NULL);	
+	radix_remove(head->rh, n);
+	head->num_prefixes--;
+}
 
 int
 bgp_rib_add_net(bgp_rib_head_t *head, struct in_addr addr, int masklen, u_short origin_as)
@@ -92,9 +99,8 @@ bgp_rib_add_net(bgp_rib_head_t *head, struct in_addr addr, int masklen, u_short 
 	p = New_Prefix(AF_INET, &addr, masklen, NULL);
 	n = radix_search_exact(head->rh, p);
 	if (n != NULL) {
-		debug(85, 1) ("bgp_rib_add_net: %s/%d: FOUND?!\n", inet_ntoa(addr), masklen);
-		Deref_Prefix(p);
-		return 0;
+		debug(85, 1) ("bgp_rib_add_net: %s/%d: removing before re-adding\n", inet_ntoa(addr), masklen);
+		bgp_rib_clear_node(head, n);
 	}
 
 	n = radix_lookup(head->rh, p);
@@ -124,10 +130,7 @@ bgp_rib_del_net(bgp_rib_head_t *head, struct in_addr addr, int masklen)
 		Deref_Prefix(p);
 		return 0;
 	}
-	/* XXX clear data associated with this prefix! */
-	bgp_rib_asn_free(n, NULL);	
-	radix_remove(head->rh, n);
+	bgp_rib_clear_node(head, n);
 	Deref_Prefix(p);
-	head->num_prefixes--;
 	return 1;
 }
