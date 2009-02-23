@@ -408,7 +408,7 @@ bgp_handle_update(bgp_instance_t *bi, int fd, const char *buf, int len)
 		bgp_rib_del_net(&bi->rn, us.withdraw[i], us.withdraw_mask[i]);
 	}
 	for (i = 0; i < us.nlri_cnt; i++) {
-		bgp_rib_add_net(&bi->rn, us.nlri[i], us.nlri_mask[i]);
+		bgp_rib_add_net(&bi->rn, us.nlri[i], us.nlri_mask[i], us.aspaths[us.aspath_len - 1]);
 	}
 
 	rc = 1;
