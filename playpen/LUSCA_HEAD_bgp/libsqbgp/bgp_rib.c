@@ -32,9 +32,11 @@ bgp_rib_match_net(bgp_rib_head_t *head, struct in_addr addr, int masklen)
 
 	n = radix_search_best(head->rh, p);
 	if (n == NULL) {
+		debug(85, 1) ("bgp_rib_match_net: %s/%d: no match\n", inet_ntoa(addr), masklen);
 		Deref_Prefix(p);
 		return 0;
 	}
+	debug(85, 1) ("bgp_rib_match_net: %s/%d: match\n", inet_ntoa(addr), masklen);
 	Deref_Prefix(p);
 	return 1;
 }
@@ -68,7 +70,15 @@ bgp_rib_add_net(bgp_rib_head_t *head, struct in_addr addr, int masklen)
 	prefix_t * p;
 	radix_node_t *n;
 
+	debug(85, 1) ("bgp_rib_add_net: %s/%d\n", inet_ntoa(addr), masklen);
 	p = New_Prefix(AF_INET, &addr, masklen, NULL);
+	n = radix_search_exact(head->rh, p);
+	if (n != NULL) {
+		debug(85, 1) ("bgp_rib_add_net: %s/%d: FOUND?!\n", inet_ntoa(addr), masklen);
+		Deref_Prefix(p);
+		return 0;
+	}
+
 	n = radix_lookup(head->rh, p);
 	/* XXX should verify? */
 	/* XXX should add some path data, etc? */
@@ -82,10 +92,13 @@ bgp_rib_del_net(bgp_rib_head_t *head, struct in_addr addr, int masklen)
 	prefix_t * p;
 	radix_node_t *n;
 
+	debug(85, 1) ("bgp_rib_del_net: %s/%d\n", inet_ntoa(addr), masklen);
+
 	p = New_Prefix(AF_INET, &addr, masklen, NULL);
 
 	n = radix_search_exact(head->rh, p);
 	if (n == NULL) {
+		debug(85, 1) ("bgp_rib_del_net: %s/%d: NOT FOUND?!\n", inet_ntoa(addr), masklen);
 		Deref_Prefix(p);
 		return 0;
 	}
