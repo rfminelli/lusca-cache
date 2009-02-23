@@ -101,6 +101,7 @@ bgp_conn_send_keepalive(void *data)
 void
 bgp_conn_destroy(bgp_conn_t *bc)
 {
+	debug(85, 1) ("bgp_conn_destroy: %p: shutting down BGP session\n", bc);
 	eventDelete(bgp_conn_connect_wakeup, bc);
 	if (bc->fd > -1) {
 		comm_close(bc->fd);
@@ -197,7 +198,7 @@ bgp_conn_begin_connect(bgp_conn_t *bc)
 		bc->fd = -1;
 	}
 
-	debug(85, 2) ("bgp_conn_begin_connect: %p: beginning connect to %s:%d\n", bc, inet_ntoa(bc->rem_ip), bc->rem_port);
+	debug(85, 1) ("bgp_conn_begin_connect: %p: beginning connect to %s:%d\n", bc, inet_ntoa(bc->rem_ip), bc->rem_port);
 	bc->fd = comm_open(SOCK_STREAM, IPPROTO_TCP, bc->bi.lcl.bgp_id, 0,
 	    COMM_NONBLOCKING, COMM_TOS_DEFAULT, "BGP connection");
 	assert(bc->fd > 0);

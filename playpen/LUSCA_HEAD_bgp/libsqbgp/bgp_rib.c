@@ -36,6 +36,28 @@ bgp_rib_asn_free(radix_node_t *ptr, void *cbdata)
 }
 
 int
+bgp_rib_match_host(bgp_rib_head_t *head, struct in_addr addr)
+{
+	prefix_t * p;
+	radix_node_t *n;
+	bgp_rib_aspath_t *a;
+
+	p = New_Prefix(AF_INET, &addr, 32, NULL);
+
+	n = radix_search_best(head->rh, p);
+	if (n == NULL) {
+		debug(85, 3) ("bgp_rib_match_host: %s: no match\n", inet_ntoa(addr));
+		Deref_Prefix(p);
+		return -1;
+	}
+	debug(85, 3) ("bgp_rib_match_host: %s: match; AS %d\n", inet_ntoa(addr), bgp_rib_getasn(n->data));
+	Deref_Prefix(p);
+	a = n->data;
+	return a->origin_as;
+}
+
+
+int
 bgp_rib_match_net(bgp_rib_head_t *head, struct in_addr addr, int masklen)
 {
 	prefix_t * p;
@@ -46,11 +68,11 @@ bgp_rib_match_net(bgp_rib_head_t *head, struct in_addr addr, int masklen)
 
 	n = radix_search_best(head->rh, p);
 	if (n == NULL) {
-		debug(85, 1) ("bgp_rib_match_net: %s/%d: no match\n", inet_ntoa(addr), masklen);
+		debug(85, 3) ("bgp_rib_match_net: %s/%d: no match\n", inet_ntoa(addr), masklen);
 		Deref_Prefix(p);
 		return -1;
 	}
-	debug(85, 1) ("bgp_rib_match_net: %s/%d: match; AS %d\n", inet_ntoa(addr), masklen, bgp_rib_getasn(n->data));
+	debug(85, 3) ("bgp_rib_match_net: %s/%d: match; AS %d\n", inet_ntoa(addr), masklen, bgp_rib_getasn(n->data));
 	Deref_Prefix(p);
 	a = n->data;
 	return a->origin_as;
@@ -95,11 +117,11 @@ bgp_rib_add_net(bgp_rib_head_t *head, struct in_addr addr, int masklen, u_short 
 	radix_node_t *n;
 	bgp_rib_aspath_t *a;
 
-	debug(85, 1) ("bgp_rib_add_net: %s/%d; AS %d\n", inet_ntoa(addr), masklen, origin_as);
+	debug(85, 3) ("bgp_rib_add_net: %s/%d; AS %d\n", inet_ntoa(addr), masklen, origin_as);
 	p = New_Prefix(AF_INET, &addr, masklen, NULL);
 	n = radix_search_exact(head->rh, p);
 	if (n != NULL) {
-		debug(85, 1) ("bgp_rib_add_net: %s/%d: removing before re-adding\n", inet_ntoa(addr), masklen);
+		debug(85, 3) ("bgp_rib_add_net: %s/%d: removing before re-adding\n", inet_ntoa(addr), masklen);
 		bgp_rib_clear_node(head, n);
 	}
 
@@ -120,13 +142,13 @@ bgp_rib_del_net(bgp_rib_head_t *head, struct in_addr addr, int masklen)
 	prefix_t * p;
 	radix_node_t *n;
 
-	debug(85, 1) ("bgp_rib_del_net: %s/%d\n", inet_ntoa(addr), masklen);
+	debug(85, 3) ("bgp_rib_del_net: %s/%d\n", inet_ntoa(addr), masklen);
 
 	p = New_Prefix(AF_INET, &addr, masklen, NULL);
 
 	n = radix_search_exact(head->rh, p);
 	if (n == NULL) {
-		debug(85, 1) ("bgp_rib_del_net: %s/%d: NOT FOUND?!\n", inet_ntoa(addr), masklen);
+		debug(85, 3) ("bgp_rib_del_net: %s/%d: NOT FOUND?!\n", inet_ntoa(addr), masklen);
 		Deref_Prefix(p);
 		return 0;
 	}

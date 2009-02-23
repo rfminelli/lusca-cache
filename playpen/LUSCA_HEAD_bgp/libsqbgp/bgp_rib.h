@@ -12,6 +12,7 @@ struct _bgp_rib_aspath {
 };
 typedef struct _bgp_rib_aspath bgp_rib_aspath_t;
 
+extern int bgp_rib_match_host(bgp_rib_head_t *head, struct in_addr addr);
 extern int bgp_rib_match_net(bgp_rib_head_t *head, struct in_addr addr, int masklen);
 extern int bgp_rib_add_net(bgp_rib_head_t *head, struct in_addr addr, int masklen, u_short origin_as);
 extern int bgp_rib_del_net(bgp_rib_head_t *head, struct in_addr addr, int masklen);
