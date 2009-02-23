@@ -26,9 +26,13 @@ struct _bgp_update_state {
 	u_int8_t aspath_len;
 	u_short *aspaths;
 	int origin;
+	int nlri_cnt;
 	struct in_addr *nlri;
-	struct in_addr nexthop;
+	u_int8_t *nlri_mask;
+	int withdraw_cnt;
 	struct in_addr *withdraw;
+	u_int8_t *withdraw_mask;
+	struct in_addr nexthop;
 };
 typedef struct _bgp_update_state bgp_update_state_t;
 
@@ -218,7 +222,9 @@ bgp_handle_update_withdraw(bgp_instance_t *bi, bgp_update_state_t *us, const cha
 
 	/* Pre-calculate the maximum number of possible entries in this! */
 	assert(us->withdraw == NULL);
+	assert(us->withdraw_mask == NULL);
 	us->withdraw = xcalloc(len, sizeof(struct in_addr));
+	us->withdraw_mask = xcalloc(len, sizeof(u_int8_t));
 
 	debug(85, 4) ("  bgp_handle_update_withdraw: len %d\n", len);
 	while (i < len) {
@@ -232,10 +238,12 @@ bgp_handle_update_withdraw(bgp_instance_t *bi, bgp_update_state_t *us, const cha
 		debug(85, 4) ("  bgp_handle_update_withdraw: netmask %d; len %d\n", netmask, pl);
 		/* XXX bounds check? */
 		memcpy(&us->withdraw[j], buf + i, pl);
+		us->withdraw_mask[j] = netmask;
 		debug(85, 2) ("  bgp_handle_update_withdraw: prefix %s/%d\n", inet_ntoa(us->withdraw[j]), netmask);
 		i += pl;
 		j++;
 	}
+	us->withdraw_cnt = j;
 	return 1;
 }
 
@@ -335,16 +343,20 @@ bgp_handle_update_pathattrib(bgp_instance_t *bi, bgp_update_state_t *us, const c
 int
 bgp_handle_update_nlri(bgp_instance_t *bi, bgp_update_state_t *us, const char *buf, int len)
 {
-	struct in_addr pf;
 	u_int8_t pl, netmask;
-	int i = 0;
+	int i = 0, j = 0;
 
 	if (len == 0)
 		return 1;
 
 	debug(85, 5) ("  bgp_handle_update_nlri: len %d\n", len);
+	/* Pre-calculate the maximum number of possible entries in this! */
+	assert(us->nlri == NULL);
+	assert(us->nlri_mask == NULL);
+	us->nlri = xcalloc(len, sizeof(struct in_addr));
+	us->nlri_mask = xcalloc(len, sizeof(u_int8_t));
+
 	while (i < len) {
-		bzero(&pf, sizeof(pf));
 		/* The "length" is the number of bits which are "valid" .. */
 		netmask = (* (u_int8_t *) (buf + i));
 		if (netmask == 0)
@@ -354,11 +366,13 @@ bgp_handle_update_nlri(bgp_instance_t *bi, bgp_update_state_t *us, const char *b
 		i++;
 		debug(85, 5) ("  bgp_handle_update_nlri: netmask %d; len %d\n", netmask, pl);
 		/* XXX bounds check? */
-		memcpy(&pf, buf + i, pl);
-		debug(85, 3) ("  bgp_handle_update_nlri: prefix %s/%d\n", inet_ntoa(pf), netmask);
-		bgp_rib_add_net(&bi->rn, pf, netmask);
+		memcpy(&us->nlri[j], buf + i, pl);
+		us->nlri_mask[j] = netmask;
+		debug(85, 3) ("  bgp_handle_update_nlri: prefix %s/%d\n", inet_ntoa(us->nlri[j]), netmask);
 		i += pl;
+		j++;
 	}
+	us->nlri_cnt = j;
 	return 1;
 }
 
@@ -369,6 +383,7 @@ bgp_handle_update(bgp_instance_t *bi, int fd, const char *buf, int len)
 	u_int16_t withdraw_route_len;
 	u_int16_t path_attrib_len;
 	bgp_update_state_t us;
+	int i;
 
 	bzero(&us, sizeof(us));
 
@@ -389,12 +404,20 @@ bgp_handle_update(bgp_instance_t *bi, int fd, const char *buf, int len)
 	}
 
 	/* Now, we need to poke the RIB with our saved info */
+	for (i = 0; i < us.withdraw_cnt; i++) {
+		bgp_rib_del_net(&bi->rn, us.withdraw[i], us.withdraw_mask[i]);
+	}
+	for (i = 0; i < us.nlri_cnt; i++) {
+		bgp_rib_add_net(&bi->rn, us.nlri[i], us.nlri_mask[i]);
+	}
 
 	rc = 1;
 finish:
 	/* free said saved info */
 	safe_free(us.withdraw);
+	safe_free(us.withdraw_mask);
 	safe_free(us.nlri);
+	safe_free(us.nlri_mask);
 	safe_free(us.aspaths);
 
 	return rc;
