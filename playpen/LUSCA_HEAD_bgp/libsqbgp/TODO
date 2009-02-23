@@ -9,4 +9,9 @@
   can happen in the bgpconn code, leaving bgp_core for FSM, and bgp_packet
   for building/parsing BGP stuff.
 
+* This implementation stores only the last ASN for now, rather than the whole
+  path. Yes, the whole path would be much nicer, esp. to be able to build
+  rules which say "if X is from a source which transits AS y", but its not
+  needed for now. One would also have to implement AS path hashing/referencing
+  to keep that somewhat efficient.
 
