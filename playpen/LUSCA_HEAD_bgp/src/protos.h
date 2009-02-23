@@ -1093,5 +1093,10 @@ extern void statIappStats(StoreEntry *sentry);
 /* comm.c */
 extern void commConnectStart(int fd, const char *, u_short, CNCB *, void *, struct in_addr *addr);
 
+/* bgp.c */
+extern void bgpStart(void);
+extern void bgpShutdown(void);
+extern void bgpReconfigure(void);
+
 
 #endif /* SQUID_PROTOS_H */

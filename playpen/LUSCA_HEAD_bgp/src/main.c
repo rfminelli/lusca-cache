@@ -345,6 +345,7 @@ serverConnectionsOpen(void)
     icmpOpen();
     netdbInit();
     asnInit();
+    bgpStart();
     peerSelectInit();
     carpInit();
     peerSourceHashInit();
@@ -372,6 +373,10 @@ serverConnectionsClose(void)
     wccp2ConnectionClose();
 #endif
     asnFreeMemory();
+    if (shutting_down)
+    	bgpShutdown();
+    if (reconfiguring)
+        bgpReconfigure();
 }
 
 static void
@@ -1229,6 +1234,7 @@ SquidShutdown(void *unused)
     ipcacheFreeMemory();
     fqdncacheFreeMemory();
     asnFreeMemory();
+    bgpShutdown();
     clientdbFreeMemory();
     httpHeaderCleanModule();
     statFreeMemory();

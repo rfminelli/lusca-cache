@@ -5921,4 +5921,50 @@ DOC_START
 	The default value (-1) means "use the legacy compile-time calculation."
 DOC_END
 
+NAME: bgp_enable
+COMMENT: whether to run BGP or not
+TYPE: onoff
+LOC: Config.bgp.enable
+DEFAULT: off
+DOC_START
+
+DOC_END
+
+NAME: bgp_local_as
+COMMENT: local ASN
+TYPE: int
+LOC: Config.bgp.local_as
+DEFAULT: -1
+DOC_START
+
+DOC_END
+
+NAME: bgp_remote_as
+COMMENT: remote ASN
+TYPE: int
+LOC: Config.bgp.remote_as
+DEFAULT: -1
+DOC_START
+
+DOC_END
+
+NAME: bgp_local_ip
+COMMENT: local IP; BGP router identifier
+TYPE: address
+LOC: Config.bgp.local_ip
+DEFAULT: 0.0.0.0
+DOC_START
+
+DOC_END
+
+NAME: bgp_remote_ip
+COMMENT: remote IP; BGP router identifier
+TYPE: address
+LOC: Config.bgp.remote_ip
+DEFAULT: 0.0.0.0
+DOC_START
+
+DOC_END
+
+
 EOF

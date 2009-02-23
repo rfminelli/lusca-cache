@@ -827,6 +827,11 @@ struct _SquidConfig {
     	int n_aiops_threads;
     } aiops;
 #endif
+    struct {
+	struct in_addr local_ip, remote_ip;
+	int local_as, remote_as;
+	int enable;
+    } bgp;
 };
 
 struct _SquidConfig2 {

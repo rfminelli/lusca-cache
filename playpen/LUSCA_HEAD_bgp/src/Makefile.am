@@ -118,6 +118,7 @@ squid_SOURCES = \
 	acl.c \
 	asn.c \
 	authenticate.c \
+	bgp.c \
 	cache_cf.c \
 	CacheDigest.c \
 	cache_manager.c \
