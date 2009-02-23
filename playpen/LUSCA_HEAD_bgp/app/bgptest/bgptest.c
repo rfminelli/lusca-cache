@@ -41,6 +41,7 @@
 #include "libiapp/mainloop.h"
 #include "libiapp/event.h"
 
+#include "libsqbgp/radix.h"
 #include "libsqbgp/bgp_packet.h"
 #include "libsqbgp/bgp_rib.h"
 #include "libsqbgp/bgp_core.h"
@@ -62,8 +63,8 @@ main(int argc, const char *argv[])
 	iapp_init();
 	squid_signal(SIGPIPE, SIG_IGN, SA_RESTART);
 
-	_db_init("ALL,1 85,3");
-	_db_set_stderr_debug(3);
+	_db_init("ALL,1 85,1");
+	_db_set_stderr_debug(1);
  
 	bc = bgp_conn_create();
 	inet_aton("216.12.163.53", &bgp_id);
@@ -74,22 +75,6 @@ main(int argc, const char *argv[])
 
         /* connect to bgp thing */
 	bgp_conn_begin_connect(bc);
-
-#if 0
-        while (1) {
-        	fd = socket(AF_INET, SOCK_STREAM, 0);
-        	assert(fd != -1);
-        	r = connect(fd, (struct sockaddr *) &sa, sizeof(sa));
-        	r = bgp_send_hello(&bi, fd, 65535, 30, bgp_id);
-		if (r > 0)
-			while (r > 0)
-				r = bgp_read(&bi, fd);
-		bgp_close(&bi);
-		close(fd);
-		debug(85, 1) ("sleeping for 15 seconds..\n");
-		sleep(15);
-        }
-#endif
 
 	while (1) {
 		iapp_runonce(60000);

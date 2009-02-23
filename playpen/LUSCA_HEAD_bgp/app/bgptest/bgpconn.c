@@ -41,6 +41,7 @@
 #include "libiapp/mainloop.h"
 #include "libiapp/event.h"
 
+#include "libsqbgp/radix.h"
 #include "libsqbgp/bgp_packet.h"
 #include "libsqbgp/bgp_rib.h"
 #include "libsqbgp/bgp_core.h"
