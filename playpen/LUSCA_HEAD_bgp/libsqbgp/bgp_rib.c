@@ -85,20 +85,25 @@ extern int squid_max_keylen;	/* yuck.. this is in lib/radix.c */
 void
 bgp_rib_init(bgp_rib_head_t *head)
 {
+	debug(85, 1) ("bgp_rib_init: %p: called\n", head);
 	head->rh = New_Radix();
 }
 
 void
 bgp_rib_destroy(bgp_rib_head_t *head)
 {
-	Destroy_Radix(head->rh, bgp_rib_asn_free, NULL);
-	head->num_prefixes = 0;
+	debug(85, 1) ("bgp_rib_destroy: %p: called\n", head);
+	bzero(head, sizeof(*head));
+	
 }
 
 void
 bgp_rib_clean(bgp_rib_head_t *head)
 {
-	Clear_Radix(head->rh, bgp_rib_asn_free, NULL);
+	debug(85, 1) ("bgp_rib_clean: %p: called\n", head);
+	//Clear_Radix(head->rh, bgp_rib_asn_free, NULL);
+	Destroy_Radix(head->rh, bgp_rib_asn_free, NULL);
+	head->rh = New_Radix();
 	head->num_prefixes = 0;
 }
 
