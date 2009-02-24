@@ -116,7 +116,10 @@ bgp_handle_message(bgp_instance_t *bi, int fd, const const char *buf, int len)
 			if (r) {
 				/* Now, we need to poke the RIB with our saved info */
         			for (i = 0; i < us.withdraw_cnt; i++) {
-                			bgp_rib_del_net(&bi->rn, us.withdraw[i], us.withdraw_mask[i]);
+					if (bi->cfg.clear_rib_on_withdraw)
+                				bgp_rib_del_net(&bi->rn, us.withdraw[i], us.withdraw_mask[i]);
+					else
+                				(void) bgp_rib_mark_historical(&bi->rn, us.withdraw[i], us.withdraw_mask[i]);
         			}
         			for (i = 0; i < us.nlri_cnt; i++) {
                 			bgp_rib_add_net(&bi->rn, us.nlri[i], us.nlri_mask[i], us.aspaths[us.aspath_len - 1]);
@@ -189,8 +192,10 @@ bgp_close(bgp_instance_t *bi)
 	bi->state = BGP_IDLE;
 	bi->lcl.hold_timer = bi->rem.hold_timer = -1;
 	/* free prefixes */
-	bgp_rib_clean(&bi->rn);
-	/* ensure no as path entries exist in the hash! */
+	if (bi->cfg.clear_rib_on_shutdown)
+		bgp_rib_clean(&bi->rn);
+	else
+		bgp_rib_bump_genid(&bi->rn);
 }
 
 
