@@ -21,21 +21,6 @@
 #include "bgp_rib.h"
 #include "bgp_core.h"
 
-struct _bgp_update_state {
-	u_int8_t aspath_type;
-	u_int8_t aspath_len;
-	u_short *aspaths;
-	int origin;
-	int nlri_cnt;
-	struct in_addr *nlri;
-	u_int8_t *nlri_mask;
-	int withdraw_cnt;
-	struct in_addr *withdraw;
-	u_int8_t *withdraw_mask;
-	struct in_addr nexthop;
-};
-typedef struct _bgp_update_state bgp_update_state_t;
-
 int
 bgp_msg_len(const char *buf, int len)
 {
@@ -212,7 +197,7 @@ bgp_handle_open(bgp_instance_t *bi, int fd, const char *buf, int len)
 }
 
 int
-bgp_handle_update_withdraw(bgp_instance_t *bi, bgp_update_state_t *us, const char *buf, int len)
+bgp_handle_update_withdraw(bgp_update_state_t *us, const char *buf, int len)
 {
 	u_int8_t pl, netmask;
 	int i = 0, j = 0;
@@ -248,7 +233,7 @@ bgp_handle_update_withdraw(bgp_instance_t *bi, bgp_update_state_t *us, const cha
 }
 
 int
-bgp_handle_update_pathattrib_origin(bgp_instance_t *bi, bgp_update_state_t *us, const char *buf, int len)
+bgp_handle_update_pathattrib_origin(bgp_update_state_t *us, const char *buf, int len)
 {
 	if (len < 1)
 		return 0;
@@ -258,7 +243,7 @@ bgp_handle_update_pathattrib_origin(bgp_instance_t *bi, bgp_update_state_t *us, 
 }
 
 int
-bgp_handle_update_pathattrib_aspath(bgp_instance_t *bi, bgp_update_state_t *us, const char *buf, int len)
+bgp_handle_update_pathattrib_aspath(bgp_update_state_t *us, const char *buf, int len)
 {
 	int i, j = 0;
 
@@ -282,7 +267,7 @@ bgp_handle_update_pathattrib_aspath(bgp_instance_t *bi, bgp_update_state_t *us, 
 }
 
 int
-bgp_handle_update_pathattrib_nexthop(bgp_instance_t *bi, bgp_update_state_t *us, const char *buf, int len)
+bgp_handle_update_pathattrib_nexthop(bgp_update_state_t *us, const char *buf, int len)
 {
 	if (len < 4)
 		return 0;
@@ -293,7 +278,7 @@ bgp_handle_update_pathattrib_nexthop(bgp_instance_t *bi, bgp_update_state_t *us,
 }
 
 int
-bgp_handle_update_pathattrib(bgp_instance_t *bi, bgp_update_state_t *us, const char *buf, int len)
+bgp_handle_update_pathattrib(bgp_update_state_t *us, const char *buf, int len)
 {
 	int i = 0;
 	u_int8_t a_flags, a_type;
@@ -318,15 +303,15 @@ bgp_handle_update_pathattrib(bgp_instance_t *bi, bgp_update_state_t *us, const c
 
 		switch (a_type) {
 			case 1:	/* origin */
-				if (bgp_handle_update_pathattrib_origin(bi, us, buf + i, a_len) < 0)
+				if (bgp_handle_update_pathattrib_origin(us, buf + i, a_len) < 0)
 					return 0;
 				break;
 			case 2: /* as path */
-				if (bgp_handle_update_pathattrib_aspath(bi, us, buf + i, a_len) < 0)
+				if (bgp_handle_update_pathattrib_aspath(us, buf + i, a_len) < 0)
 					return 0;
 				break;
 			case 3: /* next hop*/
-				if (bgp_handle_update_pathattrib_nexthop(bi, us, buf + i, a_len) < 0)
+				if (bgp_handle_update_pathattrib_nexthop(us, buf + i, a_len) < 0)
 					return 0;
 				break;
 			default:
@@ -341,7 +326,7 @@ bgp_handle_update_pathattrib(bgp_instance_t *bi, bgp_update_state_t *us, const c
 }
 
 int
-bgp_handle_update_nlri(bgp_instance_t *bi, bgp_update_state_t *us, const char *buf, int len)
+bgp_handle_update_nlri(bgp_update_state_t *us, const char *buf, int len)
 {
 	u_int8_t pl, netmask;
 	int i = 0, j = 0;
@@ -377,7 +362,7 @@ bgp_handle_update_nlri(bgp_instance_t *bi, bgp_update_state_t *us, const char *b
 }
 
 void
-bgp_free_update(bgp_instance_t *bi, bgp_update_state_t *us)
+bgp_free_update(bgp_update_state_t *us)
 {
 	safe_free(us->withdraw);
 	safe_free(us->withdraw_mask);
@@ -387,15 +372,12 @@ bgp_free_update(bgp_instance_t *bi, bgp_update_state_t *us)
 }
 
 int
-bgp_handle_update(bgp_instance_t *bi, int fd, const char *buf, int len)
+bgp_handle_update(const char *buf, int len, bgp_update_state_t *us)
 {
-	int rc = 0;
 	u_int16_t withdraw_route_len;
 	u_int16_t path_attrib_len;
-	bgp_update_state_t us;
-	int i;
 
-	bzero(&us, sizeof(us));
+	bzero(us, sizeof(*us));
 
 	withdraw_route_len = ntohs(* (u_int16_t *) buf);
 	path_attrib_len = ntohs(* (u_int16_t *) (buf + withdraw_route_len + 2));
@@ -403,30 +385,17 @@ bgp_handle_update(bgp_instance_t *bi, int fd, const char *buf, int len)
 	debug(85, 2) ("bgp_handle_update: UPDATE pktlen %d: withdraw_route_len %d; path attrib len %d\n",
 	   len, withdraw_route_len, path_attrib_len);
 
-	if (! bgp_handle_update_withdraw(bi, &us, buf + 2, withdraw_route_len)) {
-		rc = 0; goto finish;
+	if (! bgp_handle_update_withdraw(us, buf + 2, withdraw_route_len)) {
+		return 0;
 	}
-	if (! bgp_handle_update_pathattrib(bi, &us, buf + 2 + withdraw_route_len + 2, path_attrib_len)) {
-		rc = 0; goto finish;
+	if (! bgp_handle_update_pathattrib(us, buf + 2 + withdraw_route_len + 2, path_attrib_len)) {
+		return 0;
 	}
-	if (! bgp_handle_update_nlri(bi, &us, buf + 2 + withdraw_route_len + 2 + path_attrib_len, len - (2 + withdraw_route_len + 2 + path_attrib_len))) {
-		rc = 0; goto finish;
-	}
-
-	/* Now, we need to poke the RIB with our saved info */
-	for (i = 0; i < us.withdraw_cnt; i++) {
-		bgp_rib_del_net(&bi->rn, us.withdraw[i], us.withdraw_mask[i]);
-	}
-	for (i = 0; i < us.nlri_cnt; i++) {
-		bgp_rib_add_net(&bi->rn, us.nlri[i], us.nlri_mask[i], us.aspaths[us.aspath_len - 1]);
+	if (! bgp_handle_update_nlri(us, buf + 2 + withdraw_route_len + 2 + path_attrib_len, len - (2 + withdraw_route_len + 2 + path_attrib_len))) {
+		return 0;
 	}
 
-	rc = 1;
-finish:
-	/* free said saved info */
-	bgp_free_update(bi, &us);
-
-	return rc;
+	return 1;
 }
 
 int

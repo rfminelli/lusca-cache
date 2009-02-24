@@ -87,6 +87,9 @@ bgp_handle_message(bgp_instance_t *bi, int fd, const const char *buf, int len)
         
         u_int8_t type;
         u_int16_t pkt_len;
+	bgp_update_state_t us;
+	int i;
+
         /* XXX should check the marker is 16 bytes */
         /* XXX should make sure there's enough bytes in the msg! */
         
@@ -98,7 +101,18 @@ bgp_handle_message(bgp_instance_t *bi, int fd, const const char *buf, int len)
                         r = bgp_handle_open(bi, fd, buf + 19, pkt_len - 19);
                         break;
                 case 2:         /* UPDATE */
-                        r = bgp_handle_update(bi, fd, buf + 19, pkt_len - 19);
+                        r = bgp_handle_update(buf + 19, pkt_len - 19, &us);
+			/* Handle route add/withdraw */
+			if (r) {
+				/* Now, we need to poke the RIB with our saved info */
+        			for (i = 0; i < us.withdraw_cnt; i++) {
+                			bgp_rib_del_net(&bi->rn, us.withdraw[i], us.withdraw_mask[i]);
+        			}
+        			for (i = 0; i < us.nlri_cnt; i++) {
+                			bgp_rib_add_net(&bi->rn, us.nlri[i], us.nlri_mask[i], us.aspaths[us.aspath_len - 1]);
+        			}
+			}
+			bgp_free_update(&us);
                         break;
                 case 3:         /* NOTIFICATION */
                         r = bgp_handle_notification(bi, fd, buf + 19, pkt_len - 19);
