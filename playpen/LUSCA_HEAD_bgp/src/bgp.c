@@ -35,6 +35,9 @@ bgpStart(void)
 		bgp_set_rem(&bc->bi, Config.bgp.remote_as);
 		memcpy(&bc->rem_ip, &Config.bgp.remote_ip, sizeof(bc->rem_ip));
 		bc->rem_port = 179;
+		/* We don't need the routes to be withdrawn on shutdown or withdraw; this is not IP forwarding.. */
+		bgp_clear_rib_on_shutdown(&bc->bi, 0);
+		bgp_clear_rib_on_withdraw(&bc->bi, 0);
 		/* Kick it alive */
 		bgp_conn_begin_connect(bc);
 	}
@@ -58,4 +61,13 @@ bgpShutdown(void)
 
 	bgp_conn_destroy(bc);
 	bc = NULL;
+}
+
+int
+bgpLookupAsNum(struct in_addr ipaddr)
+{
+	if ( ! Config.bgp.enable || ! bc)
+		return -1;
+
+	return bgp_rib_match_host(&bc->bi.rn, ipaddr);
 }
