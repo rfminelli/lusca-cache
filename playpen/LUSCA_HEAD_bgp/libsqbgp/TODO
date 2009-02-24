@@ -2,12 +2,7 @@
   in various places where it should just be driven in bgp_core.c !
   Untangle this mess.
 
-* break out the bgp_read() code and the message dispatch stuff.
-  The caller (bgpconn) should be able to just do bgp_read() to put some
-  data in the buffer, then bgp_get_message() over and over again.
-  It can then drive the FSM how it wants; the RIB addition/deletion
-  can happen in the bgpconn code, leaving bgp_core for FSM, and bgp_packet
-  for building/parsing BGP stuff.
+* Actually implement a BGP FSM now!
 
 * This implementation stores only the last ASN for now, rather than the whole
   path. Yes, the whole path would be much nicer, esp. to be able to build
