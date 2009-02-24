@@ -79,6 +79,28 @@ bgp_rib_match_net(bgp_rib_head_t *head, struct in_addr addr, int masklen)
 	return a->origin_as;
 }
 
+int
+bgp_rib_mark_historical(bgp_rib_head_t *head, struct in_addr addr, int masklen)
+{
+	prefix_t * p;
+	radix_node_t *n;
+	bgp_rib_aspath_t *a;
+
+	p = New_Prefix(AF_INET, &addr, masklen, NULL);
+
+	n = radix_search_best(head->rh, p);
+	if (n == NULL) {
+		debug(85, 3) ("bgp_rib_mark_historical: %s/%d: no match\n", inet_ntoa(addr), masklen);
+		Deref_Prefix(p);
+		return -1;
+	}
+	debug(85, 3) ("bgp_rib_mark_historical: %s/%d: match; AS %d\n", inet_ntoa(addr), masklen, bgp_rib_getasn(n->data));
+	Deref_Prefix(p);
+	a = n->data;
+	a->flags.hist = 1;
+	return 1;
+}
+
 /* initialize the radix tree structure */
 
 extern int squid_max_keylen;	/* yuck.. this is in lib/radix.c */
