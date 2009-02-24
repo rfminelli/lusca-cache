@@ -323,6 +323,8 @@ typedef enum {
 
     LFT_EXT_FRESHNESS,
 
+    LFT_CLIENT_AS,
+
     LFT_PERCENT			/* special string cases for escaped chars */
 
 } logformat_bcode_t;
@@ -435,6 +437,8 @@ struct logformat_token_table_entry logformat_token_table[] =
     {"ea", LFT_EXT_LOG},
 
     {"ef", LFT_EXT_FRESHNESS},
+
+    {"cas", LFT_CLIENT_AS },
 
     {"%", LFT_PERCENT},
 
@@ -720,6 +724,15 @@ accessLogCustom(AccessLogEntry * al, customlog * log)
 
 	    quote = 1;
 	    break;
+
+	case LFT_CLIENT_AS:
+		outint = bgpLookupAsNum(al->cache.caddr);
+		if (outint > 0) {
+			snprintf(tmp, sizeof(tmp), "AS%d", (int) outint);
+			out = tmp;
+		} else
+			out = "-";
+		break;
 
 	case LFT_PERCENT:
 	    out = "%";
