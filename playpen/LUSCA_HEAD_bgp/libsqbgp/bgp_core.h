@@ -42,8 +42,6 @@ struct _bgp_instance {
 		int clear_rib_on_withdraw;
 	} cfg;
 
-	int rib_genid;			/* A sequence number which is incremented each time a new BGP connection is established */
-
 	/* The AS path table */
 
 	/* The RIB */

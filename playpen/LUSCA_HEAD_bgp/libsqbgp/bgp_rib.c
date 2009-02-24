@@ -52,6 +52,7 @@ bgp_rib_match_host(bgp_rib_head_t *head, struct in_addr addr)
 	}
 	debug(85, 3) ("bgp_rib_match_host: %s: match; AS %d\n", inet_ntoa(addr), bgp_rib_getasn(n->data));
 	Deref_Prefix(p);
+	/* XXX this is where we'd do a "fresh or stale" return check */
 	a = n->data;
 	return a->origin_as;
 }
@@ -94,7 +95,6 @@ bgp_rib_destroy(bgp_rib_head_t *head)
 {
 	debug(85, 1) ("bgp_rib_destroy: %p: called\n", head);
 	bzero(head, sizeof(*head));
-	
 }
 
 void
@@ -105,7 +105,15 @@ bgp_rib_clean(bgp_rib_head_t *head)
 	Destroy_Radix(head->rh, bgp_rib_asn_free, NULL);
 	head->rh = New_Radix();
 	head->num_prefixes = 0;
+	bgp_rib_bump_genid(head);
 }
+
+void
+bgp_rib_bump_genid(bgp_rib_head_t *head)
+{
+	head->rib_genid++;
+}
+
 
 static void
 bgp_rib_clear_node(bgp_rib_head_t *head, radix_node_t *n)
@@ -136,6 +144,7 @@ bgp_rib_add_net(bgp_rib_head_t *head, struct in_addr addr, int masklen, u_short 
 	Deref_Prefix(p);
 	a = xcalloc(1, sizeof(bgp_rib_aspath_t));
 	a->origin_as = origin_as;
+	a->rib_genid = head->rib_genid;
 	n->data = a;
 	head->num_prefixes++;
 	return 1;
