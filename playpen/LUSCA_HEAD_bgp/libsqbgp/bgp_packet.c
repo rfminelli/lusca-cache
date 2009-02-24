@@ -376,6 +376,16 @@ bgp_handle_update_nlri(bgp_instance_t *bi, bgp_update_state_t *us, const char *b
 	return 1;
 }
 
+void
+bgp_free_update(bgp_instance_t *bi, bgp_update_state_t *us)
+{
+	safe_free(us->withdraw);
+	safe_free(us->withdraw_mask);
+	safe_free(us->nlri);
+	safe_free(us->nlri_mask);
+	safe_free(us->aspaths);
+}
+
 int
 bgp_handle_update(bgp_instance_t *bi, int fd, const char *buf, int len)
 {
@@ -414,11 +424,7 @@ bgp_handle_update(bgp_instance_t *bi, int fd, const char *buf, int len)
 	rc = 1;
 finish:
 	/* free said saved info */
-	safe_free(us.withdraw);
-	safe_free(us.withdraw_mask);
-	safe_free(us.nlri);
-	safe_free(us.nlri_mask);
-	safe_free(us.aspaths);
+	bgp_free_update(bi, &us);
 
 	return rc;
 }
@@ -428,38 +434,4 @@ bgp_handle_keepalive(int fd, const char *buf, int len)
 {
 	debug(85, 2) ("bgp_handle_keepalive: KEEPALIVE RECEIVED\n");
 	return 1;
-}
-
-int
-bgp_decode_message(bgp_instance_t *bi, int fd, const const char *buf, int len)
-{
-	int r;
-
-	u_int8_t type;
-	u_int16_t pkt_len;
-	/* XXX should check the marker is 16 bytes */
-	/* XXX should make sure there's enough bytes in the msg! */
-
-	pkt_len = ntohs(* (u_int16_t *) (buf + 16));
-	type = * (u_int8_t *) (buf + 18);
-	debug(85, 2) ("bgp_decode_message: type %d; len %d\n", type, pkt_len);
-	switch 	(type) {
-		case 1:		/* OPEN */
-			r = bgp_handle_open(bi, fd, buf + 19, pkt_len - 19);
-			break;
-		case 2:		/* UPDATE */
-			r = bgp_handle_update(bi, fd, buf + 19, pkt_len - 19);
-			break;
-		case 3:		/* NOTIFICATION */
-			r = bgp_handle_notification(bi, fd, buf + 19, pkt_len - 19);
-			break;
-		case 4:		/* KEEPALIVE */
-			r = bgp_handle_keepalive(fd, buf + 19, pkt_len - 19);
-			break;
-		default:
-			debug(85, 2) ("bgp_decode_message: unknown message type: %d\n", type);
-			exit(1);
-	}
-
-	return pkt_len;
 }

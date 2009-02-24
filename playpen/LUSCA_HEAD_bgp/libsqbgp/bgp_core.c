@@ -80,6 +80,41 @@ bgp_openconfirm(bgp_instance_t *bi)
 	bi->state = BGP_OPENCONFIRM;
 }
 
+static int
+bgp_handle_message(bgp_instance_t *bi, int fd, const const char *buf, int len)
+{
+        int r;
+        
+        u_int8_t type;
+        u_int16_t pkt_len;
+        /* XXX should check the marker is 16 bytes */
+        /* XXX should make sure there's enough bytes in the msg! */
+        
+        pkt_len = ntohs(* (u_int16_t *) (buf + 16));
+        type = * (u_int8_t *) (buf + 18);
+        debug(85, 2) ("bgp_decode_message: type %d; len %d\n", type, pkt_len);
+        switch  (type) {
+                case 1:         /* OPEN */
+                        r = bgp_handle_open(bi, fd, buf + 19, pkt_len - 19);
+                        break;
+                case 2:         /* UPDATE */
+                        r = bgp_handle_update(bi, fd, buf + 19, pkt_len - 19);
+                        break;
+                case 3:         /* NOTIFICATION */
+                        r = bgp_handle_notification(bi, fd, buf + 19, pkt_len - 19);
+                        break;
+                case 4:         /* KEEPALIVE */
+                        r = bgp_handle_keepalive(fd, buf + 19, pkt_len - 19);
+                        break;
+                default:
+                        debug(85, 2) ("bgp_decode_message: unknown message type: %d\n", type);
+                        exit(1);
+        }
+
+        return pkt_len;
+}
+
+
 /*
  * Read some data from the given file descriptor (using the read() syscall for now!)
  * and update the BGP state machine. The caller should check for retval <= 0 and reset
@@ -109,7 +144,7 @@ bgp_read(bgp_instance_t *bi, int fd)
 			debug(85, 5) ("main: incomplete packet\n");
 			break;
 		}
-		r = bgp_decode_message(bi, fd, bi->recv.buf + i, bi->recv.bufofs - i);
+		r = bgp_handle_message(bi, fd, bi->recv.buf + i, bi->recv.bufofs - i);
 		assert(r > 0);
 		i += r;
 		debug(85, 5) ("main: pkt was %d bytes, i is now %d\n", r, i);
