@@ -208,3 +208,15 @@ bgp_get_holdtimer(bgp_instance_t *bi)
 		return bi->rem.hold_timer;
 	return bi->lcl.hold_timer;
 }
+
+void
+bgp_clear_rib_on_shutdown(bgp_instance_t *bi, int flag)
+{
+	bi->cfg.clear_rib_on_shutdown = flag;	
+}
+
+void
+bgp_clear_rib_on_withdraw(bgp_instance_t *bi, int flag)
+{
+	bi->cfg.clear_rib_on_withdraw = flag;	
+}
