@@ -2285,6 +2285,7 @@ DOC_START
 		>a	Client source IP address
 		>A	Client FQDN
 		>p	Client source port
+		cas	Client AS number (requires BGP has been configured; NOT the older ASN database)
 		<A	Server IP address or peer name
 		la	Local IP address (http_port)
 		lp	Local port number (http_port)
@@ -5927,7 +5928,13 @@ TYPE: onoff
 LOC: Config.bgp.enable
 DEFAULT: off
 DOC_START
+	This enables the BGP functionality. Currently, only one BGP peer is supported.
+	(If you wish >1 BGP feed to influence forwarding decisions then peer this
+	cache with a route server or router with all the BGP feeds.)
 
+	This BGP support is active-only; ie it will not listen on port 179 for incoming
+	BGP connections. It also does not support TCP MD5 authentication (which at this
+	time requires kernel support as well.)
 DOC_END
 
 NAME: bgp_local_as
@@ -5936,7 +5943,7 @@ TYPE: int
 LOC: Config.bgp.local_as
 DEFAULT: -1
 DOC_START
-
+	The local AS number. Must be between 1 and 65535.
 DOC_END
 
 NAME: bgp_remote_as
@@ -5945,7 +5952,7 @@ TYPE: int
 LOC: Config.bgp.remote_as
 DEFAULT: -1
 DOC_START
-
+	The remote AS number. Must be between 1 and 65535.
 DOC_END
 
 NAME: bgp_local_ip
@@ -5954,7 +5961,8 @@ TYPE: address
 LOC: Config.bgp.local_ip
 DEFAULT: 0.0.0.0
 DOC_START
-
+	The BGP local identifier and local IP address to use for the outbound
+	connection to the BGP peer.
 DOC_END
 
 NAME: bgp_remote_ip
@@ -5963,8 +5971,7 @@ TYPE: address
 LOC: Config.bgp.remote_ip
 DEFAULT: 0.0.0.0
 DOC_START
-
+	The IP address of the remote BGP speaker.
 DOC_END
-
 
 EOF
