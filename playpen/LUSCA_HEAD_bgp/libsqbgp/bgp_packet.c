@@ -72,7 +72,7 @@ bgp_msg_complete(const char *buf, int len)
  * XXX absolutely hacky!
  */
 int
-bgp_send_hello(bgp_instance_t *bi, int fd, unsigned short asnum, short hold_time, struct in_addr bgp_id)
+bgp_send_hello(int fd, unsigned short asnum, short hold_time, struct in_addr bgp_id)
 {
 	char send_buf[128];
 	char *p = send_buf;
@@ -127,7 +127,7 @@ bgp_send_hello(bgp_instance_t *bi, int fd, unsigned short asnum, short hold_time
 }
 
 int
-bgp_send_keepalive(bgp_instance_t *bi, int fd)
+bgp_send_keepalive(int fd)
 {
 	char send_buf[128];
 	char *p = send_buf;
@@ -159,7 +159,7 @@ bgp_send_keepalive(bgp_instance_t *bi, int fd)
 }
 
 int
-bgp_handle_notification(bgp_instance_t *bi, int fd, const char *buf, int len)
+bgp_handle_notification(int fd, const char *buf, int len)
 {
 	u_int8_t err_code;
 	u_int8_t err_subcode;
@@ -173,27 +173,28 @@ bgp_handle_notification(bgp_instance_t *bi, int fd, const char *buf, int len)
 }
 
 int
-bgp_handle_open(bgp_instance_t *bi, int fd, const char *buf, int len)
+bgp_handle_open(const char *buf, int len, bgp_open_state_t *os)
 {
-	int parm_len;
-
 	/* XXX should ensure we have enough space! */
 	/* XXX should check version!? */
 
-	bi->rem.version = * (u_int8_t *) buf;
-	bi->rem.asn = ntohs(* (u_int16_t *) (buf + 1));
-	bi->rem.hold_timer = ntohs(* (u_int16_t *) (buf + 3));
-	memcpy(&bi->rem.bgp_id, buf + 5, 4);
+	os->version = * (u_int8_t *) buf;
+	os->asn = ntohs(* (u_int16_t *) (buf + 1));
+	os->hold_timer = ntohs(* (u_int16_t *) (buf + 3));
+	memcpy(&os->bgp_id, buf + 5, 4);
 
-	parm_len = * (u_int8_t *) (buf + 9);
+	os->parm_len = * (u_int8_t *) (buf + 9);
 	/* XXX don't bother decoding the OPEN parameters for now! */
 
-	debug(85, 2) ("bgp_handle_open: got version %d, AS %d, timer %d, parm_len %d\n", bi->rem.version, bi->rem.asn, bi->rem.hold_timer, parm_len);
-
-	/* Queue a keepalive message */
-	bgp_send_keepalive(bi, fd);
+	debug(85, 2) ("bgp_handle_open: got version %d, AS %d, timer %d, parm_len %d\n", os->version, os->asn, os->hold_timer, os->parm_len);
 
 	return 1;
+}
+
+void
+bgp_free_open(bgp_open_state_t *os)
+{
+
 }
 
 int

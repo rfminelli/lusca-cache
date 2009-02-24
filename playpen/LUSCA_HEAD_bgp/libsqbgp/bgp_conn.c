@@ -88,7 +88,7 @@ bgp_conn_send_keepalive(void *data)
 	if (hold_timer <= 0)
 		return;
 
-	r = bgp_send_keepalive(&bc->bi, bc->fd);
+	r = bgp_send_keepalive(bc->fd);
 	if (r <= 0) {
 		bgp_conn_close_and_restart(bc);
 		return;
@@ -156,7 +156,7 @@ bgp_conn_handle_write(int fd, void *data)
 	switch(bc->bi.state) {
 		case BGP_OPEN:
 			/* Send OPEN; set state to OPEN_CONFIRM */
-        		r = bgp_send_hello(&bc->bi, fd, bc->bi.lcl.asn, bc->bi.lcl.hold_timer, bc->bi.lcl.bgp_id);
+        		r = bgp_send_hello(fd, bc->bi.lcl.asn, bc->bi.lcl.hold_timer, bc->bi.lcl.bgp_id);
 			if (r <= 0) {
 				bgp_conn_close_and_restart(bc);
 				return;

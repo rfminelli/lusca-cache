@@ -88,6 +88,7 @@ bgp_handle_message(bgp_instance_t *bi, int fd, const const char *buf, int len)
         u_int8_t type;
         u_int16_t pkt_len;
 	bgp_update_state_t us;
+	bgp_open_state_t os;
 	int i;
 
         /* XXX should check the marker is 16 bytes */
@@ -98,7 +99,16 @@ bgp_handle_message(bgp_instance_t *bi, int fd, const const char *buf, int len)
         debug(85, 2) ("bgp_decode_message: type %d; len %d\n", type, pkt_len);
         switch  (type) {
                 case 1:         /* OPEN */
-                        r = bgp_handle_open(bi, fd, buf + 19, pkt_len - 19);
+                        r = bgp_handle_open(buf + 19, pkt_len - 19, &os);
+			/* handle error? */
+			bi->rem.asn = os.asn;
+			bi->rem.hold_timer = os.hold_timer;
+			bi->rem.version = os.version;
+			memcpy(&bi->rem.bgp_id, &os.bgp_id, sizeof(struct in_addr));
+			bgp_free_open(&os);
+
+			/* Queue a keepalive message */
+        		bgp_send_keepalive(fd);
                         break;
                 case 2:         /* UPDATE */
                         r = bgp_handle_update(buf + 19, pkt_len - 19, &us);
@@ -115,7 +125,7 @@ bgp_handle_message(bgp_instance_t *bi, int fd, const const char *buf, int len)
 			bgp_free_update(&us);
                         break;
                 case 3:         /* NOTIFICATION */
-                        r = bgp_handle_notification(bi, fd, buf + 19, pkt_len - 19);
+                        r = bgp_handle_notification(fd, buf + 19, pkt_len - 19);
                         break;
                 case 4:         /* KEEPALIVE */
                         r = bgp_handle_keepalive(fd, buf + 19, pkt_len - 19);
