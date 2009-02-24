@@ -1097,6 +1097,6 @@ extern void commConnectStart(int fd, const char *, u_short, CNCB *, void *, stru
 extern void bgpStart(void);
 extern void bgpShutdown(void);
 extern void bgpReconfigure(void);
-
+extern int bgpLookupAsNum(struct in_addr ipaddr);
 
 #endif /* SQUID_PROTOS_H */
