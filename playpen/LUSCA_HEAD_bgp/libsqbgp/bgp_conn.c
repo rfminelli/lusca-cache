@@ -114,6 +114,7 @@ bgp_conn_destroy(bgp_conn_t *bc)
 void
 bgp_conn_close_and_restart(bgp_conn_t *bc)
 {
+	debug(85, 1) ("bgp_conn_close_and_restart: %p: restart\n", bc);
 	if (bc->fd > -1) {
 		comm_close(bc->fd);
 		bc->fd = -1;
@@ -135,6 +136,7 @@ bgp_conn_handle_read(int fd, void *data)
 	debug(85, 2) ("bgp_conn_handle_read: %p: FD %d: state %d: READY\n", bc, fd, bc->bi.state);
 	r = bgp_read(&bc->bi, fd);
 	if (r <= 0) {
+		debug(85, 1) ("bgp_conn_handle_read: %p: retval %d; errno %d (%s)\n", bc, r, errno, strerror(errno));
 		bgp_conn_close_and_restart(bc);
 		return;
 	}
@@ -174,6 +176,7 @@ bgp_conn_connect_done(int fd, int status, void *data)
 {
 	bgp_conn_t *bc = data;
 
+	debug(85, 1) ("bgp_conn_connect_done: %p: connection completed, status %d\n", bc, status);
 	if (status != COMM_OK) {
 		bgp_conn_close_and_restart(bc);
 		return;
