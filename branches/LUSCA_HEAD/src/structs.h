@@ -827,6 +827,8 @@ struct _SquidConfig {
     	int n_aiops_threads;
     } aiops;
 #endif
+    /* XXX I'm not sure where these should live .. */
+    int client_socksize;
 };
 
 struct _SquidConfig2 {

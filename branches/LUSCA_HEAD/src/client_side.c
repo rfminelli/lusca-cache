@@ -4868,6 +4868,8 @@ httpAccept(int sock, void *data)
 #endif
 	commSetSelect(fd, COMM_SELECT_READ, clientReadRequest, connState, 0);
 	commSetDefer(fd, clientReadDefer, connState);
+	if (Config.client_socksize > -1)
+	    commSetTcpBufferSize(fd, Config.client_socksize);
 	if (s->tcp_keepalive.enabled) {
 	    commSetTcpKeepalive(fd, s->tcp_keepalive.idle, s->tcp_keepalive.interval, s->tcp_keepalive.timeout);
 	}
@@ -5044,6 +5046,8 @@ httpsAccept(int sock, void *data)
 	if (s->http.tcp_keepalive.enabled) {
 	    commSetTcpKeepalive(fd, s->http.tcp_keepalive.idle, s->http.tcp_keepalive.interval, s->http.tcp_keepalive.timeout);
 	}
+	if (Config.client_socksize > -1)
+	    commSetTcpBufferSize(fd, Config.client_socksize);
 	clientdbEstablished(sqinet_get_v4_inaddr(&peer, SQADDR_ASSERT_IS_V4), 1);
 	incoming_sockets_accepted++;
 	httpsAcceptSSL(connState, s->sslContext);
