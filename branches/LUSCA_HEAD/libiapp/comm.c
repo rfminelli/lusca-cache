@@ -1056,6 +1056,23 @@ commSetTcpNoDelay(int fd)
     fd_table[fd].flags.nodelay = 1;
 }
 
+int
+commSetTcpBufferSize(int fd, int size)
+{
+	int r, err = 1;
+	int s = size;
+
+	r = setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (char *) &s, sizeof(s));
+	if (r < 0)
+		err = 0;
+
+	s = size;
+	r = setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (char *) &s, sizeof(s));
+	if (r < 0)
+		err = 0;
+	return err;
+}
+
 void
 commSetTcpKeepalive(int fd, int idle, int interval, int timeout)
 {

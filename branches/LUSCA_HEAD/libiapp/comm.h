@@ -232,6 +232,7 @@ extern void fdAdjustReserved(void);
 extern int commSetNonBlocking(int fd);
 extern int commUnsetNonBlocking(int fd);
 extern void commSetCloseOnExec(int fd);
+extern int commSetTcpBufferSize(int fd, int buffer_size);
 extern void commSetTcpKeepalive(int fd, int idle, int interval, int timeout);
 extern int commSetTos(int fd, int tos);
 extern int commSetSocketPriority(int fd, int prio);
