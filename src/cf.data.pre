@@ -5921,4 +5921,18 @@ DOC_START
 	The default value (-1) means "use the legacy compile-time calculation."
 DOC_END
 
+NAME: client_socksize
+COMMENT: send/receive buffer socket size for client-side
+TYPE: int
+LOC: Config.client_socksize
+DEFAULT: -1
+DOC_START
+	Define the TCP send/receive socket buffer size used by the client side code.
+	The default, -1, means "use the system default".
+
+	Note, this is not the same as the SQUID_TCP_SO_{SEND,RECV}BUF configuration
+	variables which somewhat dictate the buffer sizes used inside the proxy code
+	for handling socket data.
+DOC_END
+
 EOF
