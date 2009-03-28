@@ -56,6 +56,8 @@ static int httpCachableReply(HttpStateData *);
 static void httpMaybeRemovePublic(StoreEntry *, HttpReply *);
 static int peer_supports_connection_pinning(HttpStateData * httpState);
 
+static int http_num_conns = 0;
+
 static int
 httpUrlHostsMatch(const char *url1, const char *url2)
 {
@@ -105,6 +107,7 @@ httpStateFree(int fd, void *data)
     httpState->orig_request = NULL;
     stringClean(&httpState->chunkhdr);
     cbdataFree(httpState);
+    http_num_conns--;
 }
 
 int
@@ -1738,6 +1741,7 @@ httpStart(FwdState * fwd)
 	storeUrl(fwd->entry));
     CBDATA_INIT_TYPE(HttpStateData);
     httpState = cbdataAlloc(HttpStateData);
+    http_num_conns++;
     storeLockObject(fwd->entry);
     httpState->fwd = fwd;
     httpState->entry = fwd->entry;
@@ -1886,4 +1890,10 @@ httpBuildVersion(http_version_t * version, unsigned int major, unsigned int mino
 {
     version->major = major;
     version->minor = minor;
+}
+
+int
+httpGetCount(void)
+{
+	return http_num_conns;
 }

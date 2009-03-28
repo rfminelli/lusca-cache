@@ -185,6 +185,7 @@ extern int httpAnonHdrAllowed(http_hdr_type hdr_id);
 extern int httpAnonHdrDenied(http_hdr_type hdr_id);
 extern void httpBuildRequestHeader(request_t *, request_t *, StoreEntry *, HttpHeader *, http_state_flags);
 extern const char *httpMakeVaryMark(request_t * request, HttpReply * reply);
+extern int httpGetCount(void);
 
 /* HttpStatusLine.c */
 extern void httpStatusLinePackInto(const HttpStatusLine * sline, Packer * p);
@@ -1077,7 +1078,7 @@ extern aclCheck_t *clientAclChecklistCreate(const acl_access * acl, const client
 extern void clientInterpretRequestHeaders(clientHttpRequest * http);
 extern void clientAccessCheck2(void *data);
 extern void clientFinishRewriteStuff(clientHttpRequest * http);
-
+extern int connStateGetCount(void);
 
 /* client_side_redirect.c */
 extern void clientRedirectStart(clientHttpRequest * http);
