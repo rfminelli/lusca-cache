@@ -73,6 +73,7 @@ static OBJH statAvg60min;
 static OBJH statUtilization;
 static OBJH statCountersHistograms;
 static OBJH statClientRequests;
+static OBJH statCurrentStuff;
 
 #ifdef XMALLOC_STATISTICS
 static void info_get_mallstat(int, int, int, void *);
@@ -958,6 +959,7 @@ statInit(void)
 	"Client-side Active Requests",
 	statClientRequests, 0, 1);
     cachemgrRegister("iapp_stats", "libiapp statistics", statIappStats, 0, 1);
+    cachemgrRegister("curcounters", "current high level counters", statCurrentStuff, 0, 1);
 }
 
 static void
@@ -1309,6 +1311,13 @@ statDigestBlob(StoreEntry * sentry)
     statPeerSelect(sentry);
     storeAppendPrintf(sentry, "\nLocal Digest:\n");
     storeDigestReport(sentry);
+}
+
+static void
+statCurrentStuff(StoreEntry *e)
+{
+	storeAppendPrintf(e, "curstats.client_side.conn_count=%d\n", connStateGetCount());
+	storeAppendPrintf(e, "curstats.http.conn_count=%d\n", httpGetCount());
 }
 
 static void
