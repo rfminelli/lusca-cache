@@ -185,6 +185,13 @@ cbdataInit(void)
     cbdata_types = CBDATA_FIRST_CUSTOM_TYPE + 1;
 }
 
+
+int
+cbdataInUseCount(cbdata_type type)
+{
+	return memPoolInUseCount(cbdata_index[type].pool);
+}
+
 void *
 #if CBDATA_DEBUG
 cbdataInternalAllocDbg(cbdata_type type, const char *file, int line)
