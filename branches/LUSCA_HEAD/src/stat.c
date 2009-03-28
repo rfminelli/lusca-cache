@@ -1339,6 +1339,11 @@ statCurrentStuff(StoreEntry *e)
 
 	storeAppendPrintf(e, "info.store.disk.sizekb=%d\n", store_swap_size);
 	storeAppendPrintf(e, "info.store.mem.sizekb=%d\n", (int) (store_mem_size >> 10));
+
+	storeAppendPrintf(e, "info.fd.max_count=%d\n", Squid_MaxFD);
+	storeAppendPrintf(e, "info.fd.largest_count=%d\n", Biggest_FD);
+	storeAppendPrintf(e, "info.fd.current_count=%d\n", Number_FD);
+
 }
 
 static void
