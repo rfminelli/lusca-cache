@@ -39,11 +39,7 @@
 #endif
 
 
-#if USE_AUFSOPS
 #include "../../libasyncio/async_io.h"
-#else
-#include "async_io.h"
-#endif
 #include "store_coss.h"
 
 #define STORE_META_BUFSZ 4096
@@ -143,14 +139,10 @@ storeCossDirInit(SwapDir * sd)
     if (sizeof(off_t) < 8) {
 	fatalf("COSS will not function without large file support (off_t is %d bytes long. Please reconsider recompiling squid with --with-large-files\n", (int) sizeof(off_t));
     }
-#if USE_AUFSOPS
     aioInit();
     if (Config.aiops.n_aiops_threads > -1)
         squidaio_nthreads = Config.aiops.n_aiops_threads;
     squidaio_init();
-#else
-    a_file_setupqueue(&cs->aq);
-#endif
     cs->fd = file_open(stripePath(sd), O_RDWR | O_CREAT | O_BINARY);
     if (cs->fd < 0) {
 	debug(79, 1) ("%s: %s\n", stripePath(sd), xstrerror());
@@ -298,9 +290,7 @@ storeCossDirShutdown(SwapDir * SD)
     debug(47, 1) ("COSS: %s: syncing\n", stripePath(SD));
 
     storeCossSync(SD);		/* This'll call a_file_syncqueue() or a aioSync() */
-#if !USE_AUFSOPS
-    a_file_closequeue(&cs->aq);
-#endif
+    /* XXX how should one close the pending ops on a given asyncio fd? */
     file_close(cs->fd);
     cs->fd = -1;
     xfree((void *) cs->stripe_path);
@@ -341,15 +331,12 @@ int
 storeCossDirCheckLoadAv(SwapDir * SD, store_op_t op)
 {
     CossInfo *cs = (CossInfo *) SD->fsdata;
-#if USE_AUFSOPS
     float disk_size_weight, current_write_weight;
     int cur_load_interval = (squid_curtime / cs->load_interval) % 2;
     int ql = 0;
-#endif
     int loadav;
 
     /* Return load, cs->aq.aq_numpending out of MAX_ASYNCOP */
-#if USE_AUFSOPS
     ql = aioQueueSize();
     if (ql == 0)
 	loadav = COSS_LOAD_BASE;
@@ -381,10 +368,6 @@ storeCossDirCheckLoadAv(SwapDir * SD, store_op_t op)
 
     debug(47, 9) ("storeAufsDirCheckObj: load=%d\n", loadav);
     return loadav;
-#else
-    loadav = cs->aq.aq_numpending * MAX_LOAD_VALUE / MAX_ASYNCOP;
-    return loadav;
-#endif
 }
 
 
@@ -396,12 +379,8 @@ storeCossDirCallback(SwapDir * SD)
 {
     CossInfo *cs = (CossInfo *) SD->fsdata;
     storeCossFreeDeadMemBufs(cs);
-#if USE_AUFSOPS
     /* There's no need to call aioCheckCallbacks() - this will happen through the aio notification pipe */
     return 0;
-#else
-    return a_file_callback(&cs->aq);
-#endif
 }
 
 /* ========== LOCAL FUNCTIONS ABOVE, GLOBAL FUNCTIONS BELOW ========== */
@@ -423,9 +402,6 @@ storeCossDirStats(SwapDir * SD, StoreEntry * sentry)
     storeAppendPrintf(sentry, "Filemap bits in use: %d of %d (%d%%)\n",
 	SD->map->n_files_in_map, SD->map->max_n_files,
 	percent(SD->map->n_files_in_map, SD->map->max_n_files));
-#endif
-#if !USE_AUFSOPS
-    storeAppendPrintf(sentry, "Pending operations: %d out of %d\n", cs->aq.aq_numpending, MAX_ASYNCOP);
 #endif
     storeAppendPrintf(sentry, "Flags:");
     if (SD->flags.selected)
@@ -822,18 +798,12 @@ static void storeDirCoss_ReadStripe(RebuildState * rb);
 static void storeDirCoss_ParseStripeBuffer(RebuildState * rb);
 static void storeCoss_ConsiderStoreEntry(RebuildState * rb, const cache_key * key, StoreEntry * e);
 
-#if USE_AUFSOPS
 static void
 storeDirCoss_ReadStripeComplete(int fd, void *my_data, const char *buf, int aio_return, int aio_errno)
-#else
-static void
-storeDirCoss_ReadStripeComplete(int fd, const char *buf, int r_len, int r_errflag, void *my_data)
-#endif
 {
     RebuildState *rb = my_data;
     SwapDir *SD = rb->sd;
     CossInfo *cs = SD->fsdata;
-#if USE_AUFSOPS
     int r_errflag;
     int r_len;
     r_len = aio_return;
@@ -842,7 +812,6 @@ storeDirCoss_ReadStripeComplete(int fd, const char *buf, int r_len, int r_errfla
     else
 	r_errflag = DISK_OK;
     xmemcpy(cs->rebuild.buf, buf, r_len);
-#endif
 
     debug(47, 2) ("COSS: %s: stripe %d, read %d bytes, status %d\n", stripePath(SD), cs->rebuild.curstripe, r_len, r_errflag);
     cs->rebuild.reading = 0;
@@ -888,12 +857,8 @@ storeDirCoss_ReadStripe(RebuildState * rb)
 	    cs->rebuild.curstripe * 100 / cs->numstripes, cs->rebuild.curstripe, cs->numstripes);
 	rb->report_current += rb->report_interval;
     }
-#if USE_AUFSOPS
     /* XXX this should be a prime candidate to use a modified aioRead which doesn't malloc a damned buffer */
     aioRead(cs->fd, (off_t) cs->rebuild.curstripe * COSS_MEMBUF_SZ, COSS_MEMBUF_SZ, storeDirCoss_ReadStripeComplete, rb);
-#else
-    a_file_read(&cs->aq, cs->fd, cs->rebuild.buf, COSS_MEMBUF_SZ, (off_t) cs->rebuild.curstripe * COSS_MEMBUF_SZ, storeDirCoss_ReadStripeComplete, rb);
-#endif
 }
 
 static void
