@@ -35,7 +35,7 @@
 
 #include "squid.h"
 
-#include "async_io.h"
+#include "../../libasyncio/async_io.h"
 #include "store_asyncufs.h"
 
 #define DefaultLevelOneDirs     16
@@ -117,6 +117,7 @@ static int storeAufsCleanupDoubleCheck(SwapDir *, StoreEntry *);
 static void storeAufsDirStats(SwapDir *, StoreEntry *);
 static void storeAufsDirInitBitmap(SwapDir *);
 static int storeAufsDirValidFileno(SwapDir *, sfileno, int);
+static void storeAufsSync(SwapDir *);
 
 /* The MAIN externally visible function */
 STSETUP storeFsSetup_aufs;
@@ -1845,6 +1846,12 @@ storeAufsCleanupDoubleCheck(SwapDir * sd, StoreEntry * e)
     return 0;
 }
 
+static void
+storeAufsSync(SwapDir * sd)
+{
+	aioSync();
+}
+
 /*
  * storeAufsDirParse *
  * Called when a *new* fs is being setup.
@@ -1897,7 +1904,7 @@ storeAufsDirParse(SwapDir * sd, int index, char *path)
     sd->refobj = storeAufsDirRefObj;
     sd->unrefobj = storeAufsDirUnrefObj;
     sd->callback = NULL;
-    sd->sync = aioSync;
+    sd->sync = storeAufsSync;
     sd->obj.create = storeAufsCreate;
     sd->obj.open = storeAufsOpen;
     sd->obj.close = storeAufsClose;
