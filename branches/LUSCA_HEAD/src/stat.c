@@ -1316,8 +1316,29 @@ statDigestBlob(StoreEntry * sentry)
 static void
 statCurrentStuff(StoreEntry *e)
 {
-	storeAppendPrintf(e, "curstats.client_side.conn_count=%d\n", connStateGetCount());
-	storeAppendPrintf(e, "curstats.http.conn_count=%d\n", httpGetCount());
+	storeAppendPrintf(e, "info.client_side.conn_count=%d\n", connStateGetCount());
+	storeAppendPrintf(e, "info.http.conn_count=%d\n", httpGetCount());
+	storeAppendPrintf(e, "info.clientdb.num_clients=%u\n", statCounter.client_http.clients);
+	storeAppendPrintf(e, "info.client_side.num_http_requests=%u\n", statCounter.client_http.requests);
+	storeAppendPrintf(e, "info.icp.num_icp_received=%u\n", statCounter.icp.pkts_recv);
+	storeAppendPrintf(e, "info.icp.num_icp_sent=%u\n", statCounter.icp.pkts_sent);
+	storeAppendPrintf(e, "info.icp.num_icp_replies=%u\n", statCounter.icp.replies_queued);
+	storeAppendPrintf(e, "info.client_side.request_failure_ratio=%5.2f\n", request_failure_ratio);
+
+	storeAppendPrintf(e, "info.client_side.req.hit_ratio.5min=%3.1f\n", statRequestHitRatio(5));
+	storeAppendPrintf(e, "info.client_side.req.hit_ratio.60min=%3.1f\n", statRequestHitRatio(60));
+
+	storeAppendPrintf(e, "info.client_side.byte.hit_ratio.5min=%3.1f\n", statByteHitRatio(5));
+	storeAppendPrintf(e, "info.client_side.byte.hit_ratio.60min=%3.1f\n", statByteHitRatio(60));
+
+	storeAppendPrintf(e, "info.client_side.mem.hit_ratio.5min=%3.1f\n", statRequestHitMemoryRatio(5));
+	storeAppendPrintf(e, "info.client_side.mem.hit_ratio.60min=%3.1f\n", statRequestHitMemoryRatio(60));
+
+	storeAppendPrintf(e, "info.client_side.disk.hit_ratio.5min=%3.1f\n", statRequestHitDiskRatio(5));
+	storeAppendPrintf(e, "info.client_side.disk.hit_ratio.60min=%3.1f\n", statRequestHitDiskRatio(60));
+
+	storeAppendPrintf(e, "info.store.all.sizekb=%d\n", store_swap_size);
+	storeAppendPrintf(e, "info.store.mem.sizekb=%d\n", (int) (store_mem_size >> 10));
 }
 
 static void
