@@ -38,7 +38,7 @@
 #include <aio.h>
 #endif
 #if USE_AUFSOPS
-#include "../aufs/async_io.h"
+#include "../../libasyncio/async_io.h"
 #else
 #include "async_io.h"
 #endif
@@ -677,7 +677,7 @@ storeCossSync(SwapDir * SD)
 
     /* First, flush pending IO ops */
 #if USE_AUFSOPS
-    aioSync(SD);
+    aioSync();
 #else
     a_file_syncqueue(&cs->aq);
 #endif
