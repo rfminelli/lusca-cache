@@ -1484,7 +1484,7 @@ httpBuildRequestHeader(request_t * request,
     case FORWARDED_FOR_OFF:
 	strFwd = httpHeaderGetList(hdr_in, HDR_X_FORWARDED_FOR);
     case FORWARDED_FOR_TRUNCATE:
-	strListAdd(&strFwd, (((orig_request->client_addr.s_addr != no_addr.s_addr) && opt_forwarded_for != FORWARDED_FOR_OFF) ?
+	strListAdd(&strFwd, (((! IsNoAddr(&orig_request->client_addr)) && opt_forwarded_for != FORWARDED_FOR_OFF) ?
 		inet_ntoa(orig_request->client_addr) : "unknown"), ',');
 	break;
     case FORWARDED_FOR_TRANSPARENT:
