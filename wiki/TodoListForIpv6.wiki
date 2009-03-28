@@ -1,0 +1,7 @@
+#summary What stuff needs to happen for IPv6 support
+
+This isn't an exhaustive list!
+
+  * Grab the SNMP changes in Squid-3 which support IPv6 related lookup keys, throw it in
+  * Convert the client db code over to support IPv4/IPv6 addresses
+   * .. which requires porting the SNMP client db code too
