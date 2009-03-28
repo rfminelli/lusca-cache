@@ -34,21 +34,11 @@
  */
 
 #include "squid.h"
-#if HAVE_AIO_H
-#include <aio.h>
-#endif
-#if USE_AUFSOPS
+
 #include "../../libasyncio/async_io.h"
-#else
-#include "async_io.h"
-#endif
 #include "store_coss.h"
 
-#if USE_AUFSOPS
 static AIOCB storeCossWriteMemBufDone;
-#else
-static DWCB storeCossWriteMemBufDone;
-#endif
 static void storeCossIOCallback(storeIOState * sio, int errflag);
 static char *storeCossMemPointerFromDiskOffset(CossInfo * cs, off_t offset, CossMemBuf ** mb);
 static void storeCossMemBufLock(SwapDir * SD, storeIOState * e);
@@ -68,11 +58,7 @@ static void membuf_describe(CossMemBuf * t, int level, int line);
 /* Handle relocates - temporary routines until readops have been fleshed out */
 void storeCossNewPendingRelocate(CossInfo * cs, storeIOState * sio, sfileno original_filen, sfileno new_filen);
 CossPendingReloc *storeCossGetPendingReloc(CossInfo * cs, sfileno new_filen);
-#if USE_AUFSOPS
 AIOCB storeCossCompletePendingReloc;
-#else
-DRCB storeCossCompletePendingReloc;
-#endif
 
 /* Read operation code */
 CossReadOp *storeCossCreateReadOp(CossInfo * cs, storeIOState * sio);
@@ -676,11 +662,7 @@ storeCossSync(SwapDir * SD)
     off_t end;
 
     /* First, flush pending IO ops */
-#if USE_AUFSOPS
     aioSync();
-#else
-    a_file_syncqueue(&cs->aq);
-#endif
 
     /* Then, flush any in-memory partial membufs */
     if (!cs->membufs.head)
@@ -731,16 +713,11 @@ storeCossWriteMemBuf(SwapDir * SD, CossMemBuf * t)
 	 * attached itself somehow. This is why there's a distinction between "written"
 	 * and "writing". Read the rest of the code for more details.
 	 */
-#if USE_AUFSOPS
 	/* XXX The last stripe, for now, ain't the coss stripe size for some reason */
 	/* XXX This may cause problems later on; worry about figuring it out later on */
 	//assert(t->diskend - t->diskstart == COSS_MEMBUF_SZ);
 	debug(79, 3) ("aioWrite: FD %d: disk start: %" PRIu64 ", size %" PRIu64 "\n", cs->fd, (uint64_t) t->diskstart, (uint64_t) t->diskend - t->diskstart);
 	aioWrite(cs->fd, t->diskstart, &(t->buffer[0]), COSS_MEMBUF_SZ, storeCossWriteMemBufDone, t, NULL);
-#else
-	a_file_write(&cs->aq, cs->fd, t->diskstart, &t->buffer,
-	    COSS_MEMBUF_SZ, storeCossWriteMemBufDone, t, NULL);
-#endif
     } else {
 	/* No need to write, just mark as written and free */
 	t->flags.written = 1;
@@ -806,28 +783,18 @@ storeCossFreeDeadMemBufs(CossInfo * cs)
  * locked for read between the initial membuf write and the completion of the disk
  * write.
  */
-#if USE_AUFSOPS
 static void
 storeCossWriteMemBufDone(int fd, void *my_data, const char *buf, int aio_return, int aio_errno)
-#else
-static void
-storeCossWriteMemBufDone(int fd, int r_errflag, size_t r_len, void *my_data)
-#endif
 {
     CossMemBuf *t = my_data;
     CossInfo *cs = (CossInfo *) t->SD->fsdata;
     int errflag;
     int len;
-#if USE_AUFSOPS
     len = aio_return;
     if (aio_errno)
 	errflag = aio_errno == ENOSPC ? DISK_NO_SPACE_LEFT : DISK_ERROR;
     else
 	errflag = DISK_OK;
-#else
-    len = r_len;
-    errflag = r_errflag;
-#endif
 
     debug(79, 3) ("storeCossWriteMemBufDone: stripe %d, buf %p, len %ld\n", t->stripe, t, (long int) len);
     if (errflag) {
@@ -1081,18 +1048,9 @@ storeCossNewPendingRelocate(CossInfo * cs, storeIOState * sio, sfileno original_
 
     disk_offset = storeCossFilenoToDiskOffset(original_filen, cs);
     debug(79, 3) ("COSS Pending Relocate: size %" PRINTF_OFF_T ", disk_offset %" PRIu64 "\n", (squid_off_t) sio->e->swap_file_sz, (int64_t) disk_offset);
-#if USE_AUFSOPS
     /* NOTE: the damned buffer isn't passed into aioRead! */
     debug(79, 3) ("COSS: aioRead: FD %d, from %d -> %d, offset %" PRIu64 ", len: %ld\n", cs->fd, pr->original_filen, pr->new_filen, (int64_t) disk_offset, (long int) pr->len);
     aioRead(cs->fd, (off_t) disk_offset, pr->len, storeCossCompletePendingReloc, pr);
-#else
-    a_file_read(&cs->aq, cs->fd,
-	p,
-	pr->len,
-	disk_offset,
-	storeCossCompletePendingReloc,
-	pr);
-#endif
 }
 
 CossPendingReloc *
@@ -1111,33 +1069,21 @@ storeCossGetPendingReloc(CossInfo * cs, sfileno new_filen)
     }
     return NULL;
 }
-#if USE_AUFSOPS
 void
 storeCossCompletePendingReloc(int fd, void *my_data, const char *buf, int aio_return, int aio_errno)
-#else
-void
-storeCossCompletePendingReloc(int fd, const char *buf, int r_len, int r_errflag, void *my_data)
-#endif
 {
     CossPendingReloc *pr = my_data;
     CossReadOp *op;
     CossInfo *cs = pr->cs;
     int stripe;
     int errflag, len;
-#if USE_AUFSOPS
     char *p;
-#endif
 
-#if USE_AUFSOPS
     len = aio_return;
     if (aio_errno)
 	errflag = aio_errno == ENOSPC ? DISK_NO_SPACE_LEFT : DISK_ERROR;
     else
 	errflag = DISK_OK;
-#else
-    errflag = r_errflag;
-    len = r_len;
-#endif
 
     debug(79, 3) ("storeCossCompletePendingReloc: %p\n", pr);
     assert(cbdataValid(pr));
@@ -1154,12 +1100,10 @@ storeCossCompletePendingReloc(int fd, const char *buf, int r_len, int r_errflag,
 	coss_stats.read.success++;
     }
     /* aufs aioRead() doesn't take a buffer, it reads into its own. Grr */
-#if USE_AUFSOPS
     p = storeCossMemPointerFromDiskOffset(cs, storeCossFilenoToDiskOffset(pr->new_filen, cs), NULL);
     assert(p != NULL);
     assert(p == pr->p);
     xmemcpy(p, buf, len);
-#endif
 
     /* Nope, we're not a pending relocate anymore! */
     dlinkDelete(&pr->node, &cs->pending_relocs);
