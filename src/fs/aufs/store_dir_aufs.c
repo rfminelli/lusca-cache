@@ -35,6 +35,7 @@
 
 #include "squid.h"
 
+#include "../../libasyncio/aiops.h"
 #include "../../libasyncio/async_io.h"
 #include "store_asyncufs.h"
 

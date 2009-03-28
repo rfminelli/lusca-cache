@@ -23,34 +23,7 @@ extern int squidaio_magic2;
 #define MAGIC2_FACTOR 20
 #define MAGIC2 squidaio_magic2
 
-struct _squidaio_result_t {
-    int aio_return;
-    int aio_errno;
-    void *_data;		/* Internal housekeeping */
-    void *data;			/* Available to the caller */
-};
-
-typedef struct _squidaio_result_t squidaio_result_t;
-
 typedef void AIOCB(int fd, void *cbdata, const char *buf, int aio_return, int aio_errno);
-
-void squidaio_init(void);
-void squidaio_shutdown(void);
-int squidaio_cancel(squidaio_result_t *);
-int squidaio_open(const char *, int, mode_t, squidaio_result_t *);
-int squidaio_read(int, char *, int, off_t, int, squidaio_result_t *);
-int squidaio_write(int, char *, int, off_t, int, squidaio_result_t *);
-int squidaio_close(int, squidaio_result_t *);
-int squidaio_stat(const char *, struct stat *, squidaio_result_t *);
-int squidaio_unlink(const char *, squidaio_result_t *);
-int squidaio_truncate(const char *, off_t length, squidaio_result_t *);
-int squidaio_opendir(const char *, squidaio_result_t *);
-squidaio_result_t *squidaio_poll_done(void);
-int squidaio_operations_pending(void);
-int squidaio_sync(void);
-int squidaio_get_queue_len(void);
-void *squidaio_xmalloc(int size);
-void squidaio_xfree(void *p, int size);
 
 void aioInit(void);
 void aioDone(void);

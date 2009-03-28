@@ -85,7 +85,7 @@
 #include "../libiapp/comm.h"
 #include "../libiapp/disk.h"
 
-
+#include "aiops.h"
 #include "async_io.h"
 
 #define _AIO_OPEN	0
