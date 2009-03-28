@@ -169,6 +169,8 @@ static StoreEntry *clientCreateStoreEntry(clientHttpRequest *, method_t *, reque
 static inline int clientNatLookup(ConnStateData * conn);
 static int clientCheckBeginForwarding(clientHttpRequest * http);
 
+static int clientside_num_conns = 0;
+
 #if USE_IDENT
 static void
 clientIdentDone(const char *ident, void *data)
@@ -1321,6 +1323,7 @@ connStateFree(int fd, void *data)
     if (connState->pinning.fd >= 0)
 	comm_close(connState->pinning.fd);
     cbdataFree(connState);
+    clientside_num_conns--;
 #ifdef _SQUID_LINUX_
     /* prevent those nasty RST packets */
     {
@@ -4846,6 +4849,7 @@ httpAccept(int sock, void *data)
 	fd_note_static(fd, "client http connect");
         CBDATA_INIT_TYPE(ConnStateData);
 	connState = cbdataAlloc(ConnStateData);
+	clientside_num_conns++;
 	connState->port = s;
 	cbdataLock(connState->port);
 	sqinet_get_v4_sockaddr_ptr(&peer, &connState->peer, SQADDR_ASSERT_IS_V4);
@@ -5023,6 +5027,7 @@ httpsAccept(int sock, void *data)
 	F = &fd_table[fd];
 	debug(33, 4) ("httpsAccept: FD %d: accepted port %d client %s:%d\n", fd, F->local_port, F->ipaddrstr, F->remote_port);
 	connState = cbdataAlloc(ConnStateData);
+	clientside_num_conns ++;
 	connState->port = (http_port_list *) s;
 	cbdataLock(connState->port);
 	sqinet_get_v4_sockaddr_ptr(&peer, &connState->peer, SQADDR_ASSERT_IS_V4);
@@ -5458,3 +5463,9 @@ clientReassignDelaypools(void)
     }
 }
 #endif
+
+int
+connStateGetCount(void)
+{
+	return clientside_num_conns;
+}
