@@ -42,6 +42,7 @@ extern int cbdataValid(const void *p);
 extern void cbdataInitType(cbdata_type type, const char *label, int size, FREE * free_func);
 extern cbdata_type cbdataAddType(cbdata_type type, const char *label, int size, FREE * free_func);
 extern int cbdataLocked(const void *p);
+extern int cbdataInUseCount(cbdata_type type);
 
 extern int cbdataCount;
 
