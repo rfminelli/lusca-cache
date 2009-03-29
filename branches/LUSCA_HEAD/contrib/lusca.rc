@@ -1,6 +1,6 @@
 #!/bin/sh
 
-LUSCA_BIN="/usr/local/lusca/sbin/lusca"
+LUSCA_BIN="/usr/local/lusca/sbin/squid"
 LUSCA_COREDIR="/usr/local/lusca/var/logs"
 LUSCA_START_FLAGS="-ND"
 
