@@ -36,6 +36,8 @@
 #error "_REENTRANT MUST be defined to build squid async io support."
 #endif
 
+#include "../include/config.h"
+
 #include	<pthread.h>
 #include	<stdio.h>
 #include	<sys/types.h>
@@ -59,6 +61,7 @@
 #include "../include/Array.h"
 #include "../include/Stack.h"
 
+#include "../libcore/varargs.h"
 #include "../libcore/tools.h"
 #include "../libcore/gb.h"
 #include "../libcore/kb.h"
