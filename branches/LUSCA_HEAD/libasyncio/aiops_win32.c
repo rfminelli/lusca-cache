@@ -138,18 +138,6 @@ static void squidaio_poll_queues(void);
 static squidaio_thread_t *threads = NULL;
 static int squidaio_initialised = 0;
 
-#define AIO_LARGE_BUFS  16384
-#define AIO_MEDIUM_BUFS	AIO_LARGE_BUFS >> 1
-#define AIO_SMALL_BUFS	AIO_LARGE_BUFS >> 2
-#define AIO_TINY_BUFS	AIO_LARGE_BUFS >> 3
-#define AIO_MICRO_BUFS	128
-
-static MemPool *squidaio_large_bufs = NULL;	/* 16K */
-static MemPool *squidaio_medium_bufs = NULL;	/* 8K */
-static MemPool *squidaio_small_bufs = NULL;	/* 4K */
-static MemPool *squidaio_tiny_bufs = NULL;	/* 2K */
-static MemPool *squidaio_micro_bufs = NULL;	/* 128K */
-
 static int request_queue_len = 0;
 static MemPool *squidaio_request_pool = NULL;
 static MemPool *squidaio_thread_pool = NULL;
@@ -171,75 +159,6 @@ static int done_fd = 0;
 static int done_fd_read = 0;
 static int done_signalled = 0;
 static HANDLE main_thread;
-
-static MemPool *
-squidaio_get_pool(int size)
-{
-    MemPool *p;
-    if (size <= AIO_LARGE_BUFS) {
-	if (size <= AIO_MICRO_BUFS)
-	    p = squidaio_micro_bufs;
-	else if (size <= AIO_TINY_BUFS)
-	    p = squidaio_tiny_bufs;
-	else if (size <= AIO_SMALL_BUFS)
-	    p = squidaio_small_bufs;
-	else if (size <= AIO_MEDIUM_BUFS)
-	    p = squidaio_medium_bufs;
-	else
-	    p = squidaio_large_bufs;
-    } else
-	p = NULL;
-    return p;
-}
-
-void *
-squidaio_xmalloc(int size)
-{
-    void *p;
-    MemPool *pool;
-
-    if ((pool = squidaio_get_pool(size)) != NULL) {
-	p = memPoolAlloc(pool);
-    } else
-	p = xmalloc(size);
-
-    return p;
-}
-
-static char *
-squidaio_xstrdup(const char *str)
-{
-    char *p;
-    int len = strlen(str) + 1;
-
-    p = squidaio_xmalloc(len);
-    strncpy(p, str, len);
-
-    return p;
-}
-
-void
-squidaio_xfree(void *p, int size)
-{
-    MemPool *pool;
-
-    if ((pool = squidaio_get_pool(size)) != NULL) {
-	memPoolFree(pool, p);
-    } else
-	xfree(p);
-}
-
-static void
-squidaio_xstrfree(char *str)
-{
-    MemPool *pool;
-    int len = strlen(str) + 1;
-
-    if ((pool = squidaio_get_pool(len)) != NULL) {
-	memPoolFree(pool, str);
-    } else
-	xfree(str);
-}
 
 static void
 squidaio_fdhandler(int fd, void *data)
@@ -365,12 +284,6 @@ squidaio_init(void)
 
     /* Create request pool */
     squidaio_request_pool = memPoolCreate("aio_request", sizeof(squidaio_request_t));
-    squidaio_large_bufs = memPoolCreate("squidaio_large_bufs", AIO_LARGE_BUFS);
-    squidaio_medium_bufs = memPoolCreate("squidaio_medium_bufs", AIO_MEDIUM_BUFS);
-    squidaio_small_bufs = memPoolCreate("squidaio_small_bufs", AIO_SMALL_BUFS);
-    squidaio_tiny_bufs = memPoolCreate("squidaio_tiny_bufs", AIO_TINY_BUFS);
-    squidaio_micro_bufs = memPoolCreate("squidaio_micro_bufs", AIO_MICRO_BUFS);
-
     squidaio_initialised = 1;
 }
 
@@ -834,7 +747,7 @@ squidaio_stat(const char *path, struct stat *sb, squidaio_result_t * resultp)
     requestp = memPoolAlloc(squidaio_request_pool);
     requestp->path = (char *) squidaio_xstrdup(path);
     requestp->statp = sb;
-    requestp->tmpstatp = (struct stat *) squidaio_xmalloc(sizeof(struct stat));
+    requestp->tmpstatp = (struct stat *) xcalloc(1, sizeof(struct stat));
     requestp->resultp = resultp;
     requestp->request_type = _AIO_OP_STAT;
     requestp->cancelled = 0;
