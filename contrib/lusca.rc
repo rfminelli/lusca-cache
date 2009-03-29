@@ -2,7 +2,7 @@
 
 LUSCA_BIN="/usr/local/lusca/sbin/squid"
 LUSCA_COREDIR="/usr/local/lusca/var/logs"
-LUSCA_START_FLAGS="-ND"
+LUSCA_START_FLAGS="-D"
 
 ulimit -n 65535
 
