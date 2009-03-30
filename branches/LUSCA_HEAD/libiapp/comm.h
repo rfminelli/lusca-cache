@@ -2,20 +2,6 @@
 #define	__LIBIAPP_COMM_H__
 
 /*
- * Macro to find file access mode
- */
-#ifdef O_ACCMODE
-#define FILE_MODE(x) ((x)&O_ACCMODE)
-#else
-#define FILE_MODE(x) ((x)&(O_RDONLY|O_WRONLY|O_RDWR))
-#endif
-
-#define DISK_OK                   (0)
-#define DISK_ERROR               (-1)
-#define DISK_EOF                 (-2)
-#define DISK_NO_SPACE_LEFT       (-6)
-
-/*
  * Hey dummy, don't be tempted to move this to lib/config.h.in
  * again.  O_NONBLOCK will not be defined there because you didn't
  * #include <fcntl.h> yet.
@@ -45,9 +31,6 @@
 
 typedef struct _close_handler close_handler;
 
-typedef struct _dread_ctrl dread_ctrl;
-typedef struct _dwrite_q dwrite_q;
-
 typedef void PF(int, void *);
 typedef void CWCB(int fd, char *, size_t size, int flag, void *data);
 typedef void CRCB(int fd, int size, int flag, int xerrno, void *data);
@@ -57,38 +40,10 @@ typedef int READ_HANDLER(int, char *, int);
 typedef int WRITE_HANDLER(int, const char *, int);
 typedef void CBCB(char *buf, ssize_t size, void *data);
 
-/* disk.c / diskd.c callback typedefs */
-typedef void DRCB(int, const char *buf, int size, int errflag, void *data);
-                                                        /* Disk read CB */
-typedef void DWCB(int, int, size_t, void *);    /* disk write CB */
-typedef void DOCB(int, int errflag, void *data);        /* disk open CB */
-typedef void DCCB(int, int errflag, void *data);        /* disk close CB */
-typedef void DUCB(int errflag, void *data);     /* disk unlink CB */
-typedef void DTCB(int errflag, void *data);     /* disk trunc CB */
-
 struct _close_handler {
     PF *handler;
     void *data;
     close_handler *next;
-};
-
-struct _dread_ctrl {
-    int fd;
-    off_t file_offset;
-    size_t req_len;
-    char *buf;
-    int end_of_file;
-    DRCB *handler;
-    void *client_data;
-};
-
-struct _dwrite_q {
-    off_t file_offset;
-    char *buf;
-    size_t len;
-    size_t buf_offset;
-    dwrite_q *next;
-    FREE *free_func;
 };
 
 struct _CommWriteStateData {
@@ -134,13 +89,6 @@ struct _fde {
     squid_off_t bytes_read;
     squid_off_t bytes_written;
     int uses;                   /* ie # req's over persistent conn */
-    struct _fde_disk {
-        DWCB *wrt_handle;
-        void *wrt_handle_data;
-        dwrite_q *write_q;
-        dwrite_q *write_q_tail;
-        off_t offset;
-    } disk;
     struct {
     	struct {
 		char *buf;

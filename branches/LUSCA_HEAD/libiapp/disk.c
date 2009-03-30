@@ -63,7 +63,11 @@
 
 #include "../libsqinet/sqinet.h"
 
-/* XXX at some point, comm.h should be split to disk, fd and comm includes */
+/*
+ * XXX this stuff should be properly decoupled from the comm code; but
+ * XXX unfortunately right now a whole lot of stuff still lives
+ * XXX in the comm routines rather than the disk routines.
+ */
 #include "iapp_ssl.h"
 #include "fd_types.h"
 #include "comm_types.h"
@@ -75,6 +79,8 @@ static PF diskHandleWrite;
 
 static MemPool * pool_dread_ctrl;
 static MemPool * pool_dwrite_q;
+
+struct _fde_disk *fde_disk = NULL;
 
 #if defined(_SQUID_WIN32_) || defined(_SQUID_OS2_)
 static int
@@ -94,7 +100,7 @@ disk_init_mem(void)
 void
 disk_init(void)
 {
-    (void) 0;
+	fde_disk = xcalloc(Squid_MaxFD, sizeof(struct _fde_disk));
 }
 
 /*
@@ -220,7 +226,7 @@ diskHandleWrite(int fd, void *notused)
 {
     int len = 0;
     fde *F = &fd_table[fd];
-    struct _fde_disk *fdd = &F->disk;
+    struct _fde_disk *fdd = &fde_disk[fd];
     dwrite_q *q = fdd->write_q;
     int status = DISK_OK;
     int do_callback;
@@ -351,6 +357,7 @@ file_write(int fd,
 {
     dwrite_q *wq = NULL;
     fde *F = &fd_table[fd];
+    struct _fde_disk *fdd = &fde_disk[fd];
     assert(fd >= 0);
     assert(F->flags.open);
     /* if we got here. Caller is eligible to write. */
@@ -361,18 +368,18 @@ file_write(int fd,
     wq->buf_offset = 0;
     wq->next = NULL;
     wq->free_func = free_func;
-    F->disk.wrt_handle = handle;
-    F->disk.wrt_handle_data = handle_data;
+    fdd->wrt_handle = handle;
+    fdd->wrt_handle_data = handle_data;
     /* add to queue */
-    if (F->disk.write_q == NULL) {
+    if (fdd->write_q == NULL) {
 	/* empty queue */
-	F->disk.write_q = F->disk.write_q_tail = wq;
+	fdd->write_q = fdd->write_q_tail = wq;
     } else {
-	F->disk.write_q_tail->next = wq;
-	F->disk.write_q_tail = wq;
+	fdd->write_q_tail->next = wq;
+	fdd->write_q_tail = wq;
     }
-    if (!F->flags.write_daemon) {
-	cbdataLock(F->disk.wrt_handle_data);
+    if (!fdd->flags.write_daemon) {
+	cbdataLock(fdd->wrt_handle_data);
 	diskHandleWrite(fd, NULL);
     }
 }
@@ -392,7 +399,7 @@ static void
 diskHandleRead(int fd, void *data)
 {
     dread_ctrl *ctrl_dat = data;
-    fde *F = &fd_table[fd];
+    struct _fde_disk *fdd = &fde_disk[fd];
     int len;
     int rc = DISK_OK;
     /*
@@ -403,17 +410,17 @@ diskHandleRead(int fd, void *data)
 	memPoolFree(pool_dread_ctrl, ctrl_dat);
 	return;
     }
-    if (F->disk.offset != ctrl_dat->file_offset) {
+    if (fdd->offset != ctrl_dat->file_offset) {
 	debug(6, 3) ("diskHandleRead: FD %d seeking to offset %d\n",
 	    fd, (int) ctrl_dat->file_offset);
 	lseek(fd, ctrl_dat->file_offset, SEEK_SET);	/* XXX ignore return? */
 	CommStats.syscalls.disk.seeks++;
-	F->disk.offset = ctrl_dat->file_offset;
+	fdd->offset = ctrl_dat->file_offset;
     }
     errno = 0;
     len = FD_READ_METHOD(fd, ctrl_dat->buf, ctrl_dat->req_len);
     if (len > 0)
-	F->disk.offset += len;
+	fdd->offset += len;
     CommStats.syscalls.disk.reads++;
     fd_bytes(fd, len, FD_READ);
     if (len < 0) {
