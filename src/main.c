@@ -856,6 +856,7 @@ main(int argc, char **argv)
 
 #if TEST_ACCESS
     comm_init();
+    disk_init();
     comm_select_init();
     mainInitialize();
     test_access();

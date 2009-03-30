@@ -50,6 +50,7 @@ iapp_init(void)
 	cbdataInit();
 	eventInit();
 	comm_init();
+	disk_init();
 	comm_select_init();
 }
 
