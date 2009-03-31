@@ -103,9 +103,23 @@ disk_init(void)
 	fde_disk = xcalloc(Squid_MaxFD, sizeof(struct _fde_disk));
 }
 
-/*
- * opens a disk file specified by 'path'.  This function always
- * blocks!  There is no callback.
+/*!
+ * @function
+ *	file_open
+ *
+ * @abstract
+ *	Open the given file for file-based IO.
+ *
+ * @discussion
+ *	These calls were initially non-blocking but at some point in the
+ *	past they were converted to "blocking" only with no completion
+ *	callback available.
+ *
+ *	Any file opened in this manner will be closed on a fork/exec pair.
+ *
+ * @param	path		path to file toopen
+ * @param	mode		O_RDONLY, O_WRONLY, O_RDWR, O_APPEND, etc
+ * @return	-1 on error, file descriptor of new file on success.
  */
 int
 file_open(const char *path, int mode)
@@ -130,6 +144,15 @@ file_open(const char *path, int mode)
 
 
 /* close a disk file. */
+/*!
+ * @function
+ *	file_close
+ *
+ * @abstract
+ *	Flush queued data and close the file filedescriptor
+ *
+ * @param	fd	Filedescriptor to close; must be open.
+ */
 void
 file_close(int fd)
 {
