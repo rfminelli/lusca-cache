@@ -346,6 +346,52 @@ diskHandleWrite(int fd, void *notused)
 /* write block to a file */
 /* write back queue. Only one writer at a time. */
 /* call a handle when writing is complete. */
+
+/*!
+ * @function
+ *	file_write
+ * @abstract
+ *	Queue a block to write to the given file descriptor and attempt
+ *	to write as required.
+ *
+ * @discussion
+ *	The original comment said "only one writer at a time". This isn't
+ *	strictly true anymore. There's code above to coalesce writes
+ *	into a single buffer before writing them out (rather than using
+ *	writev()...) specifically to support writing out logfile entries.
+ *
+ *	Like file_read(), this function only locks the callback data
+ *	and not the write buffer. This puts the requirement on the caller
+ *	to allocate a temporary write buffer, copy data into it and pass
+ *	it in with free_func set. If the callback data becomes invalid
+ *	here, file_write() will simply call free_func(ptr_to_buf) and no harm
+ *	is done. If one wishes to avoid the copy, then the referenced buffer
+ *	is most likely going to be free()'ed when its owner is free()d (ie,
+ *	by whatever calls cdataFree() on the callback_data object) and so
+ *	garbage may be written out by the time this call is scheduled.
+ *
+ *	Again, like file_read(), this code is synchronous and so the above
+ *	race condition won't happen. It does mean that it can't be naively
+ *	converted into an asynchronous API because said race condition may
+ *	occur.
+ *
+ *	The "correct" method for resolving this is most likely to change
+ *	the calling semantics to assert the cbdata check and force the caller
+ *	to stay around until the call is completed or cancelled.
+ *
+ *	The "most likely" method for resolving this given the Squid codebase
+ *	is to turn the buffer+len+freefunc into a buffer container object
+ *	so it can be refcounted and manipulated as required, separately from
+ *	the callback data.
+ *
+ * @param	fd		file descriptor to write to
+ * @param	file_offset	file offset to write at (-1 means "append"?)
+ * @param	ptr_to_buf	buffer to write out
+ * @param	len		length of buffer to write out
+ * @param	handle		completion callback
+ * @param	handle_data	completion callback handler
+ * @param	free_func	If not NULL, function to free ptr_to_buf
+ */
 void
 file_write(int fd,
     off_t file_offset,
@@ -440,11 +486,30 @@ diskHandleRead(int fd, void *data)
     memPoolFree(pool_dread_ctrl, ctrl_dat);
 }
 
-
-/* start read operation */
-/* buffer must be allocated from the caller. 
- * It must have at least req_len space in there. 
- * call handler when a reading is complete. */
+/*!
+ * @function
+ *	file_read
+ * @abstract
+ *	Begin a file read operation into {buf,req_len}. Call {handler,client_data} when complete.
+ * @discussion
+ *	There is no locking performed on the supplied buffer/req_len; only the client_data buffer
+ *	is actually locked. This means that if the caller cbdata becomes invalid for some reason
+ *	(ie, is cbdataFree()'ed, but the references haven't yet gone away) then the underlying
+ *	read buffer may have also been prematurely free()ed as well.
+ *
+ *	This needs to be kept in mind when using this API. It doesn't matter because of the
+ *	way the underlying code is written (ie, the read() is done straight away after the
+ *	read scheduling is done) so there is no chance of the underlying buffer being free()d.
+ *	This also unfortunately means this code, as it stands, can't be made "pluggable" with
+ *	an async disk IO implementation as said race conditions may occur.
+ *
+ * @param	fd		file descriptor to read from
+ * @param	buf		buffer to read into
+ * @param	req_len		size of buffer; maximum size to read
+ * @param	file_offset	-1 for "use system filepos; >-1 to explicitly set filepos first
+ * @param	handler		callback for completion
+ * @param	client_data	callback data for completion
+ */
 void
 file_read(int fd, char *buf, size_t req_len, off_t file_offset, DRCB * handler, void *client_data)
 {
