@@ -433,9 +433,14 @@ comm_connect_try(int fd, void *data)
  *	This function has no way of cancelling pending connect()s; it'll just not call the
  *	callback on an invalid cbdata pointer.
  *
+ *	PREVIOUS COMMENT:
  *	The callback will currently never be called if comm_close() is called before
  *	the connect() has had time to complete (successfully or not.) This is in line with
  *	other comm_ related callbacks but may not be such a good idea moving forward.
+ *
+ *	CURRENT COMMENT:
+ *	comm_close() is calling the connect completion callback if it hasn't yet finished..?
+ *	That needs to be sorted out!
  *
  *	Like commConnectStart(), the connect() -may- succeed after the first call and
  *	the callback -may- be immediately called. Too much existing code (well, all 8 uses)
@@ -731,6 +736,28 @@ comm_close_ssl_timeout(int fd, void *unused)
 
 #endif
 
+/*!
+ * @function
+ *	comm_close
+ * @abstract
+ *	Begin the process of closing down a socket / comm filedescriptor.
+ * @discussion
+ *	A bunch of things happen:
+ *	+ Quit if the FD is a file, or is closing, or Squid is shutting down
+ *	+ If the FD was connecting to a remote host, call the connect
+ *	  completion callback with COMM_ERR_CLOSING
+ *	+ call the close handlers
+ *	+ Update the pconn counters
+ *	+ If SSL; mark as closing down, and begin closing.. ?
+ *	+ Finish the closing down process (ie, fd_close(), etc.)
+ *
+ *	TODO:
+ *	    Unlike file_close(), I'm not sure whether this calls the
+ *	    completion callback(s) anywhere on closing. This should
+ *	    be documented and implemented!
+ *
+ * @param	fd		File descriptor to close
+ */
 void
 comm_close(int fd)
 {
@@ -886,6 +913,23 @@ commUpdateWriteHandler(int fd, PF * handler, void *data)
     commUpdateEvents(fd);
 }
 
+
+/*!
+ * @function
+ *	commSetSelect
+ * @abstract
+ *	Register the given file descriptor for a comm notification
+ * @dicussion
+ *	The completion callback will not be called on comm_close();
+ *	so the owner needs to register a close handler if it wants
+ *	to be told.
+ *
+ * @param	fd		comm file descriptor (disk.c does this too?)
+ * @param	type		A union of COMM_SELECT_READ, COMM_SELECT_WRITE
+ * @param	handler		Notification callback
+ * @param	client_data	Notification callback data
+ * @param	timeout		If > 0, set the FD timeout - which triggers the timeout handler
+ */
 void
 commSetSelect(int fd, unsigned int type, PF * handler, void *client_data, time_t timeout)
 {
