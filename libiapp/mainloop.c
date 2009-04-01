@@ -30,8 +30,8 @@
 #include "fd_types.h"
 #include "comm_types.h"
 #include "comm.h"
+#include "disk.h"
 #include "mainloop.h"
-
 
 /*
  * Configure the libraries required to bootstrap iapp.

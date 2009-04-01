@@ -71,7 +71,6 @@ struct _fde {
     struct {
         unsigned int open:1;
         unsigned int close_request:1;
-        unsigned int write_daemon:1;
         unsigned int closing:1;
         unsigned int socket_eof:1;
         unsigned int nolinger:1;

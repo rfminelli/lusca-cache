@@ -86,7 +86,7 @@ struct _fde_disk *fde_disk = NULL;
 static int
 diskWriteIsComplete(int fd)
 {
-    return fd_table[fd].disk.write_q ? 0 : 1;
+    return fde_disk[fd].disk.write_q ? 0 : 1;
 }
 #endif
 
@@ -151,12 +151,20 @@ file_open(const char *path, int mode)
  * @abstract
  *	Flush queued data and close the file filedescriptor
  *
+ * @discussion
+ *	If there is a comm read handler registered on this file
+ *	descriptor, the callback is called with FD set to -1.
+ *
+ *	TODO: Does any code check the FD == -1 and treat errors?
+ *	    It should be investigated, documented, and resolved..
+ *
  * @param	fd	Filedescriptor to close; must be open.
  */
 void
 file_close(int fd)
 {
     fde *F = &fd_table[fd];
+    struct _fde_disk *fdd = &fde_disk[fd];
     PF *read_callback;
     assert(fd >= 0);
     assert(F->flags.open);
@@ -164,7 +172,7 @@ file_close(int fd)
 	F->read_handler = NULL;
 	read_callback(-1, F->read_data);
     }
-    if (F->flags.write_daemon) {
+    if (fdd->flags.write_daemon) {
 #if defined(_SQUID_WIN32_) || defined(_SQUID_OS2_)
 	/*
 	 * on some operating systems, you can not delete or rename
@@ -257,7 +265,7 @@ diskHandleWrite(int fd, void *notused)
     if (NULL == q)
 	return;
     debug(6, 3) ("diskHandleWrite: FD %d\n", fd);
-    F->flags.write_daemon = 0;
+    fdd->flags.write_daemon = 0;
     assert(fdd->write_q != NULL);
     assert(fdd->write_q->len > fdd->write_q->buf_offset);
     debug(6, 3) ("diskHandleWrite: FD %d writing %d bytes\n",
@@ -340,7 +348,7 @@ diskHandleWrite(int fd, void *notused)
 	diskCombineWrites(fdd);
 	cbdataLock(fdd->wrt_handle_data);
 	commSetSelect(fd, COMM_SELECT_WRITE, diskHandleWrite, NULL, 0);
-	F->flags.write_daemon = 1;
+	fdd->flags.write_daemon = 1;
     }
     do_close = F->flags.close_request;
     if (fdd->wrt_handle) {
