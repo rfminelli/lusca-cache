@@ -15,7 +15,7 @@ extern size_t toKB(size_t size);
 #endif
 
 /* How big is the region of memory between two char pointers? */
-static inline size_t charBufferSize(const char *start, const char *end) { return (end - start + 1); }
+static inline int charBufferSize(const char *start, const char *end) { return (end - start + 1); }
 
 #define XMIN(x,y) ((x)<(y)? (x) : (y))
 #define XMAX(x,y) ((x)>(y)? (x) : (y))
