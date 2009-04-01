@@ -190,6 +190,10 @@ icmpOpen(void)
     const char *args[2];
     int rfd;
     int wfd;
+    if (strcmp("none", Config.Program.pinger) == 0) {
+	debug(37, 1) ("Pinger not started - disabled in configuration file.\n");
+	return;
+    }
     args[0] = "(pinger)";
     args[1] = NULL;
     pid = ipcCreate(IPC_DGRAM,
