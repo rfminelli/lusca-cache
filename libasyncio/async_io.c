@@ -55,10 +55,6 @@
 #endif
 #include        <string.h>   
 
-/* this is for sqinet.h, which shouldn't be needed in here */
-#include        <netinet/in.h>
-#include        <sys/socket.h>
-
 #include "../include/util.h"
 #include "../include/Array.h"
 #include "../include/Stack.h"
@@ -76,34 +72,25 @@
 #include "../libmem/MemBuf.h"
 
 #include "../libcb/cbdata.h"
-  
-/*
- * This is for comm.h, which includes stuff that should be in the filedescriptor
- * related code. Sigh. That should be fixed.
- */
-#include "../libsqinet/sqinet.h"
- 
-#include "../libiapp/fd_types.h"
-#include "../libiapp/comm_types.h"
-#include "../libiapp/comm.h"
-#include "../libiapp/disk.h"
 
 #include "aiops.h"
 #include "async_io.h"
 
-#define _AIO_OPEN	0
-#define _AIO_READ	1
-#define _AIO_WRITE	2
-#define _AIO_CLOSE	3
-#define _AIO_UNLINK	4
-#define _AIO_TRUNCATE	4
-#define _AIO_OPENDIR	5
-#define _AIO_STAT	6
+typedef enum {
+	_AIO_OPEN = 0,
+	_AIO_READ = 1,
+	_AIO_WRITE = 2,
+	_AIO_CLOSE = 3,
+	_AIO_UNLINK = 4,
+	_AIO_TRUNCATE = 5,
+	_AIO_OPENDIR = 6,
+	_AIO_STAT = 7
+} squidaio_op_t;
 
 typedef struct squidaio_ctrl_t {
     struct squidaio_ctrl_t *next;
     int fd;
-    int operation;
+    squidaio_op_t operation;
     AIOCB *done_handler;
     void *done_handler_data;
     squidaio_result_t result;
@@ -161,6 +148,26 @@ aioDone(void)
     initialised = 0;
 }
 
+/*!
+ * @function
+ *	aioOpen
+ * @abstract
+ *	schedule an async filedescriptor open
+ * @discussion
+ *	The open() will complete unless the operation is cancelled in time.
+ *	If the callback_data is invalidated -before- the open completes or
+ *	is cancelled then the open filedescriptor will (may?) leak.
+ *	This should be kept in mind!
+ *
+ *	If FD_CLOEXEC is defined during compilation then an aioOpen()'ed
+ *	filedescriptor will be marked as close-on-exec().
+ *
+ * @param
+ * 	path		File to open
+ *	mode		mode to pass to open()
+ *	callback	callback to call on completion
+ *	cbdata		callback data
+ */
 void
 aioOpen(const char *path, int oflag, mode_t mode, AIOCB * callback, void *callback_data)
 {
@@ -180,6 +187,17 @@ aioOpen(const char *path, int oflag, mode_t mode, AIOCB * callback, void *callba
     return;
 }
 
+/*!
+ * @function
+ *	aioClose
+ * @abstract
+ *	Schedule an async close() of the filedescriptor
+ * @discussion
+ *	The close will happen some time in the future with no notification
+ *	of completion.
+ *
+ * @param	fd	Filedescriptor to close
+ */
 void
 aioClose(int fd)
 {
@@ -199,6 +217,21 @@ aioClose(int fd)
     return;
 }
 
+/*!
+ * @function
+ *	aioCancel
+ * @abstract
+ *	Attempt to cancel all pending operations on the given filedescriptor
+ * @discussion
+ *	If there is one, the callback completion handler for a given queued
+ *	request is called with an error / errno of -2.
+ *
+ *	TODO: Evaluate whether both requests and queued replies are cancelled!
+ *
+ *	TODO #2: it's possible that events may slip by and not be cancelled?
+ *
+ * @param	fd	File descriptor
+ */
 void
 aioCancel(int fd)
 {
@@ -237,7 +270,30 @@ aioCancel(int fd)
     }
 }
 
-
+/*!
+ * @function
+ *	aioWrite
+ * @abstract
+ *	Schedule an async write to occur.
+ *
+ * @discussion
+ *	The write is scheduled and will run regardless of whether the
+ *	callback_data is valid or not. The validity of callback_data
+ *	only effects whether the callback is made. This means that
+ *	the buffer being written must stay valid for the lifespan of
+ *	the async write.
+ *
+ *	The free_func is called once the operation is complete, regardless
+ *	of whether the callback data is valid or not.
+ *
+ * @param	fd		Filedescriptor to write to
+ * @param	offset		Offset to write to, or -1 to append at the end of the file
+ * @param	bufp		Buffer to write from
+ * @param	len		Length of bufp
+ * @param	callback	Completion callback
+ * @param	callback_data	Completion callback data
+ * @param	free_func	If not NULL, this will be called to free the given buffer
+ */
 void
 aioWrite(int fd, off_t offset, char *bufp, int len, AIOCB * callback, void *callback_data, FREE * free_func)
 {
@@ -294,6 +350,27 @@ aioRead(int fd, off_t offset, int len, AIOCB * callback, void *callback_data)
     return;
 }				/* aioRead */
 
+/*!
+ * @function
+ *	aioStat
+ * @abstract
+ *	Schedule a sync() call on the given path; write to the given
+ *	stat.
+ * @discussion
+ *	sb is not written in to via the stat() syscall; instead it is
+ *	copied in via squidaio_cleanup_request(), via squidaio_pool().
+ *
+ * 	TODO: check whether an invalid callback_data means stat() isn't
+ *	    called, or whether it is still written into!
+ *
+ *	Currently, nothing in COSS/AUFS uses this call so it is possible
+ *	the broken-ness is not being exposed..
+ *
+ * @param	path		File to stat()
+ * @param	sb		stat struct to write result to
+ * @param	callback	Completion callback
+ * @param	callback_data	Completion callback data
+ */
 void
 aioStat(char *path, struct stat *sb, AIOCB * callback, void *callback_data)
 {
@@ -313,6 +390,18 @@ aioStat(char *path, struct stat *sb, AIOCB * callback, void *callback_data)
     return;
 }				/* aioStat */
 
+/*!
+ * @function
+ *	aioUnlink
+ * @abstract
+ *	Schedule an unlink() on the given path.
+ * @discussion
+ *	The callback is called, if still valid, with the results of the unlink().
+ *
+ * @param	path		File to unlink()
+ * @param	callback	Completion callback
+ * @param	callback_data	Completion callback data
+ */
 void
 aioUnlink(const char *path, AIOCB * callback, void *callback_data)
 {
@@ -331,6 +420,18 @@ aioUnlink(const char *path, AIOCB * callback, void *callback_data)
 }				/* aioUnlink */
 
 #if USE_TRUNCATE
+/*!
+ * @function
+ *	aioTruncate
+ * @abstract
+ *	Schedule a truncate() on the given path.
+ * @discussion
+ *	The callback is called, if still valid, with the results of the truncate().
+ *
+ * @param	path		File to unlink()
+ * @param	callback	Completion callback
+ * @param	callback_data	Completion callback data
+ */
 void
 aioTruncate(const char *path, off_t length, AIOCB * callback, void *callback_data)
 {
@@ -347,7 +448,6 @@ aioTruncate(const char *path, off_t length, AIOCB * callback, void *callback_dat
     squidaio_truncate(path, length, &ctrlp->result);
     dlinkAdd(ctrlp, &ctrlp->node, &used_list);
 }				/* aioTruncate */
-
 #endif
 
 int
@@ -416,7 +516,17 @@ aioStats(StoreEntry * sentry)
 }
 #endif
 
-/* Flush all pending I/O */
+/*!
+ * @function
+ *	aioSync
+ * @abstract
+ *	Sync all pending IO operations
+ * @discussion
+ *	This will sync -and- call all pending callbacks; which may be quite
+ *	dangerous as it may cause re-entry into a module (eg, aufs calls
+ *	aioSync() which calls aufs completion callbacks, which calls a variety
+ *	of callbacks which schedule even further aufs IO operations..)
+ */
 void
 aioSync(void)
 {
