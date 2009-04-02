@@ -1927,6 +1927,7 @@ storeAufsDirParse(SwapDir * sd, int index, char *path)
 
     asyncufs_dir_index = realloc(asyncufs_dir_index, (n_asyncufs_dirs + 1) * sizeof(*asyncufs_dir_index));
     asyncufs_dir_index[n_asyncufs_dirs++] = index;
+    aiops_default_ndirs ++;
 }
 
 /*

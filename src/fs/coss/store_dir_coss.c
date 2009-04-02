@@ -147,6 +147,7 @@ storeCossDirInit(SwapDir * sd)
     }
     storeCossDirRebuild(sd);
     n_coss_dirs++;
+    aiops_default_ndirs ++;
     /*
      * fs.blksize is normally determined by calling statvfs() etc,
      * but we just set it here.  It is used in accounting the
