@@ -42,6 +42,7 @@
         
 #include "../libcore/varargs.h"
 #include "../libcore/tools.h"
+#include "../libcore/syslog_ntoa.h"
 
 #include "debug.h"
 #include "debug_syslog.h"
