@@ -69,6 +69,8 @@ struct squidaio_thread_t {
     unsigned long requests;
 };
 
+extern int aiops_default_ndirs;
+
 void squidaio_init(void);
 void squidaio_shutdown(void);
 int squidaio_cancel(squidaio_result_t *);

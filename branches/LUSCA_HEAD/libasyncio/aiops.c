@@ -88,6 +88,8 @@
 
 #define RIDICULOUS_LENGTH	4096
 
+int aiops_default_ndirs = 0;
+
 #ifdef AUFS_IO_THREADS
 int squidaio_nthreads = AUFS_IO_THREADS;
 #else
@@ -217,23 +219,16 @@ squidaio_init(void)
 
     /* Create threads and get them to sit in their wait loop */
     squidaio_thread_pool = memPoolCreate("aio_thread", sizeof(squidaio_thread_t));
+
+    /* Default to basing the thread count on THREAD_FACTOR and aiops_default_ndirs */
     if (squidaio_nthreads == 0) {
 	int j = THREAD_FACTOR;
-	for (i = 0; i < n_asyncufs_dirs; i++) {
+	for (i = 0; i < aiops_default_ndirs; i++) {
 	    squidaio_nthreads += j;
 	    j = j * 2 / 3;
 	    if (j < 4)
 		j = 4;
 	}
-#if 0
-#if USE_AUFSOPS
-	j = 6;
-	for (i = 0; i < n_coss_dirs; i++) {
-	    squidaio_nthreads += j;
-	    j = 3;
-	}
-#endif
-#endif
     }
     if (squidaio_nthreads == 0)
 	squidaio_nthreads = THREAD_FACTOR;
