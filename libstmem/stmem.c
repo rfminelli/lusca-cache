@@ -159,7 +159,7 @@ stmemFreeDataUpto(mem_hdr * mem, squid_off_t target_offset)
 
 /* Append incoming data. */
 /*!
- * @funtion
+ * @function
  *	stmemAppend
  * @abstract
  *	Append some data to the stmem list.
