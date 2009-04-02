@@ -80,6 +80,7 @@
 
 #include "../libiapp/fd_types.h"
 #include "../libiapp/comm_types.h"
+#include "../libiapp/iapp_ssl.h"
 #include "../libiapp/comm.h"
 #include "../libiapp/disk.h"
 
