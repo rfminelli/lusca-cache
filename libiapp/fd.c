@@ -134,12 +134,7 @@ fd_close(int fd)
 	assert(F->write_handler == NULL);
     }
     debug(51, 3) ("fd_close FD %d %s\n", fd, F->desc);
-    commClose(fd);
     F->flags.open = 0;
-#if DELAY_POOLS
-    if (F->slow_id)
-	commRemoveSlow(fd);
-#endif
     fdUpdateBiggest(fd, 0);
     Number_FD--;
     memset(F, '\0', sizeof(fde));
