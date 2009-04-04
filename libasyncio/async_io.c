@@ -419,7 +419,6 @@ aioUnlink(const char *path, AIOCB * callback, void *callback_data)
     dlinkAdd(ctrlp, &ctrlp->node, &used_list);
 }				/* aioUnlink */
 
-#if USE_TRUNCATE
 /*!
  * @function
  *	aioTruncate
@@ -448,7 +447,6 @@ aioTruncate(const char *path, off_t length, AIOCB * callback, void *callback_dat
     squidaio_truncate(path, length, &ctrlp->result);
     dlinkAdd(ctrlp, &ctrlp->node, &used_list);
 }				/* aioTruncate */
-#endif
 
 int
 aioCheckCallbacks(void)
