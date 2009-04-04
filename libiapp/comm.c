@@ -700,11 +700,6 @@ static inline void
 comm_close_finish(int fd)
 {
     sqinet_done(&fd_table[fd].local_address);
-    commClose(fd);
-#if DELAY_POOLS
-    if (fd_table[fd].slow_id)
-        commRemoveSlow(fd);
-#endif
     fd_close(fd);		/* update fdstat */
     close(fd);
     CommStats.syscalls.sock.closes++;
