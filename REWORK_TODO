@@ -30,6 +30,8 @@
 * Migrate the damned client_db over to use a splay tree or something; using
   a hash table of textual IP addresses is just plain stupid.
 
+* The disk related code (libiapp/disk.c and libasyncio) API should be unified
+  somewhat but doing this -properly- will need some sanity brought to the
+  read and write API. Ie, somehow we need to enforce that the supplied buffer
+  is still valid upon the execution of the underlying IO. Hm.
 
-* Migrate the damned client_db over to use a splay tree or something; using
-  a hash table of textual IP addresses is just plain stupid.
