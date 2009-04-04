@@ -32,6 +32,9 @@ CRYPTLIB=''
 REGEXLIB=''	# -lregex
 LIBREGEX=''	# libregex.a
 
+# We now default to always compiling with pthreads/async IO support
+with_pthreads="yes"
+
 dnl Check for pkg-config
 AC_PATH_PROG(PKGCONFIG, pkg-config, false)
 
