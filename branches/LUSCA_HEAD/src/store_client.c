@@ -118,6 +118,20 @@ storeClientListSearch(const MemObject * mem, void *data)
 }
 #endif
 
+/*@!
+ * @function
+ *	storeClientType
+ * @abstract
+ *	Determine what kind of store client should be for a given StoreEntry.
+ * @discussion
+ *	The logic is mostly straightforward. If the object is on disk
+ *	then it may be a store disk client. If the object isn't yet
+ *	on disk then it can't be made a disk client (as the data may
+ *	not yet be on disk, and creation of the swap file may fail.
+ *
+ * @param	e	StoreEntry to use when making the client type decision
+ * @return	one of STORE_DISK_CLIENT, STORE_MEM_CLIENT
+ */
 static store_client_t
 storeClientType(StoreEntry * e)
 {
@@ -169,6 +183,10 @@ CBDATA_TYPE(store_client);
  *	The caller must make the judgement call whether to create a
  *	new StoreClient for the given StoreEntry, or to register the
  *	StoreEntry with an existing StoreClient.
+ *
+ *	The store client type is determined at this point and will
+ *	remain constant for the lifetime of the store client.
+ *
  * @param
  *	e		StoreEntry to reigster
  *	owner		The "owner" (TODO: used for debugging, but how/when?)
@@ -202,6 +220,23 @@ storeClientRegister(StoreEntry * e, void *owner)
     return sc;
 }
 
+/*!
+ * @function
+ *	storeClientCallback
+ * @abstract
+ *	Schedule a callback with the given size to the registered client callback
+ * @discussion
+ *	Since the called code may initiate another callback, the current callback
+ *	details are first NULLed out before hand.
+ *
+ *	Call the callback with minimum based on size and copysize, just in case
+ *	the calling code doesn't handle being given a larger buffer.
+ *
+ *	This routine unlocks the callback data supplied in storeClientRef().
+ *
+ * @param	sc		store client to notify
+ * @param	sz		size to return, -1 on error, 0 on EOF? or?
+ */
 static void
 storeClientCallback(store_client * sc, ssize_t sz)
 {
