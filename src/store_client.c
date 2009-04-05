@@ -86,6 +86,11 @@
  *	also pass data back to the store client which queued it. Generally, the same
  *	processes which call InvokeHandlers() on a data append will also call
  *	storeSwapOut().
+ *
+ *	Finally, storeResumeRead() is called in storeClientCopy3() to resume the
+ *	server-side read if said read has been suspended. This forms part of the
+ *	"flow control" used to start/stop server-side reading for event based
+ *	comm stuff (kqueue, epoll, devpoll, etc.)
  */
 
 /*
@@ -235,7 +240,7 @@ storeClientRegister(StoreEntry * e, void *owner)
  *	This routine unlocks the callback data supplied in storeClientRef().
  *
  * @param	sc		store client to notify
- * @param	sz		size to return, -1 on error, 0 on EOF? or?
+ * @param	sz		size to return, -1 on error, 0 on EOF
  */
 static void
 storeClientCallback(store_client * sc, ssize_t sz)
@@ -269,8 +274,6 @@ storeClientCopyEvent(void *data)
 	return;
     storeClientCopy2(sc->entry, sc);
 }
-
-/* copy bytes requested by the client */
 
 /*!
  * @function
@@ -356,6 +359,30 @@ storeClientNoMoreToSend(StoreEntry * e, store_client * sc)
     return 1;
 }
 
+/*!
+ * @function
+ *	storeClientCopy2
+ *
+ * @abstract
+ *	Check whether the copy should occur, and attempt it if so. Schedule
+ *	a later attempt at copying if one is in progress.
+ *
+ * @discussion
+ *	This routine primarily exists to prevent re-entry into the store client
+ *	copy routine(s). The copy only takes place if another copy on this store
+ *	client is not. It will be re-attempted later after the next call to
+ *	InvokeHandlers().
+ *
+ *	If a copy event is already occuring (as in, higher up in the call stack)
+ *	then an event is registered to immediately call the next time through the
+ *	event loop. This is a slightly hacky use of the event code which isn't
+ *	really intended for this to happen at any large amounts.
+ *
+ *	It is called from storeClientRef(), storeClientCopyEvent(), InvokeHandlers().
+ *
+ * @param	e	StoreEntry the client belongs to
+ * @param	sc	store client to check whether data is available for
+ */
 static void
 storeClientCopy2(StoreEntry * e, store_client * sc)
 {
@@ -387,6 +414,19 @@ storeClientCopy2(StoreEntry * e, store_client * sc)
     cbdataUnlock(sc);		/* ick, allow sc to be freed */
 }
 
+/*!
+ * @function
+ *	storeClientCopy3
+ *
+ * @abstract
+ *	Attempt a copy, schedule a read or copy event where needed.
+ *
+ * @discussion
+ *	XXX - TODO!
+ *
+ * @param	e	StoreEntry to copy from
+ * @param	sc	Store Client to copy to
+ */
 static void
 storeClientCopy3(StoreEntry * e, store_client * sc)
 {
