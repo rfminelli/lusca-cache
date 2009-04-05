@@ -264,6 +264,25 @@ storeClientCallback(store_client * sc, ssize_t sz)
     cbdataUnlock(cbdata);
 }
 
+/*!
+ * @function
+ *	storeClientCopyEvent
+ *
+ * @abstract
+ *	A timed event callback handler; re-attempt the next client copy
+ *
+ * @discussion
+ *	I'm not sure why sc->new_callback would be NULL here; I guess this
+ *	function is attempting to handle the situation where the store client
+ *	has subsequently had the callback occur for whatever reason and
+ *	this event hasn't been removed.
+ *
+ *	The event isn't actually explicitly ever removed - if the store client
+ *	is closed (via a call to storeClientUnregister()) then the store client
+ *	pointer will become invalid and the event won't be called.
+ *	
+ * @param	data	generic pointer containing the store client to check
+ */
 static void
 storeClientCopyEvent(void *data)
 {
