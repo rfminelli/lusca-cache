@@ -87,6 +87,10 @@
  *	processes which call InvokeHandlers() on a data append will also call
  *	storeSwapOut().
  *
+ *	The disk read path also handles reading in and parsing the swap metadata,
+ *	populating the MemObject with the relevant data from the metadata, and
+ *	then parsing the HTTP reply and populating the MemObject->reply with that.
+ *
  *	Finally, storeResumeRead() is called in storeClientCopy3() to resume the
  *	server-side read if said read has been suspended. This forms part of the
  *	"flow control" used to start/stop server-side reading for event based
