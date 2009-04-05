@@ -35,6 +35,59 @@
 
 #include "squid.h"
 
+/*!
+ * @class store_client
+ *
+ * @abstract
+ *	The Store Client module is the data pump between a data provider
+ *	(say, a http server/peer connection, or the storage layer) and
+ *	one or more clients requesting said data.
+ *
+ * @discussion
+ *	This module takes care of a variety of functions - it interfaces
+ *	to the disk and memory store for data retrieval; it handles
+ *	reading and verifying the disk store metadata (which will fill out
+ *	various fields in the MemObject structure) and it allows for
+ *	multiplexing data from one source to many clients.
+ *
+ *	All objects are considered "in the store" whether cachable or not.
+ *	Un-cachable objects are simply marked private and have a private
+ *	hash key which will never be found by a subsequent request.
+ *
+ *	Requests are either "memory" or "disk" clients. A "memory" client
+ *	is one which can be satisfied by data already in the MemObject
+ *	stmem list. A "disk" client is one which requires a read from
+ *	the disk store (via storeRead()) to retrieve the requested data.
+ *	Note that one object may have both memory and disk clients, depending
+ *	upon how much of an object is in the MemObject stmem list.
+ *	Another important note here is that memory clients may become disk
+ *	clients, but (TODO Check!) disk clients never "become" memory clients.
+ *
+ *	The lifecycle of a store client goes something like this:
+ *	+ the client-side (at the moment) creates a StoreEntry for a forward
+ *	  connection to throw data into for a given request, or finds an existing
+ *	  StoreEntry to begin fetching data from.
+ *	+ the client-side then registers a store client on said StoreEntry's MemObject
+ *	+ The client-side code then calls storeClientRef() / storeClientCopyHeaders()
+ *	  to start copying in data
+ *	+ if the object is in memory, the data will be returned
+ *	+ if the object is on disk, the data will be scheduled for read via storeRead()
+ *	  when enough data is actually on the disk to be read back via.
+ *	+ if the data is not in memory or on disk, the store client will wait for
+ *	  data to be appended (or the object to be aborted/closed) before notifying
+ *	  the caller about the available data.
+ *	+ when finished, the client-side will destroy the store client via
+ *	  storeClientUnregister(), which will (hopefully) abort any pending disk read.
+ *
+ *	The server-side code has a StoreEntry to feed data into. Each append of data
+ *	via a routine or two in store.c (storeAppend(), storeAppendPrintf(), etc)
+ *	can lead to InvokeHandlers() being called, which will check all the clients
+ *	registered to this store client. The completion of a storeRead() call will
+ *	also pass data back to the store client which queued it. Generally, the same
+ *	processes which call InvokeHandlers() on a data append will also call
+ *	storeSwapOut().
+ */
+
 /*
  * NOTE: 'Header' refers to the swapfile metadata header.
  *       'Body' refers to the swapfile body, which is the full
@@ -107,6 +160,20 @@ storeClientType(StoreEntry * e)
 CBDATA_TYPE(store_client);
 
 /* add client with fd to client list */
+/*!
+ * @function
+ *	storeClientRegister
+ * @abstract
+ *	Create a StoreClient for the given StoreEntry and owner
+ * @discussion
+ *	The caller must make the judgement call whether to create a
+ *	new StoreClient for the given StoreEntry, or to register the
+ *	StoreEntry with an existing StoreClient.
+ * @param
+ *	e		StoreEntry to reigster
+ *	owner		The "owner" (TODO: used for debugging, but how/when?)
+ * @return		a newly created store_client
+ */
 store_client *
 storeClientRegister(StoreEntry * e, void *owner)
 {
@@ -170,6 +237,31 @@ storeClientCopyEvent(void *data)
 
 /* copy bytes requested by the client */
 
+/*!
+ * @function
+ *	storeClientRef
+ * @abstract
+ *	Request some data from a backing object
+ * @discussion
+ *	Object data is returned when the object has data available past "seen_offset"
+ *	but is returned from "copy_offset". This is to faciliate handling requests
+ *	with response HTTP headers that span the given "size".
+ *
+ *	This routine started life as "storeClientCopy()" and would copy the data
+ *	into a given buffer. Today, it returns a reference to an stmem page, including
+ *	the starting offset (to satisfy copy_offset) and a length. The returned length
+ *	MAY be longer than "size" so calling code should be prepared for that.
+ *
+ *	The callback is only performed if "data" is still valid (via cbdataValid()).
+ *
+ * @param	store_client		The store client to request data from
+ * @param	e			The StoreEntry to request data from
+ * @param	seen_offset		How much data has already been "seen" by the client
+ * @param	copy_offset		Where to begin returning data from
+ * @param	size			The maximum(!) amount of data requested
+ * @param	callback		Callback to invoke on completion of this request
+ * @param	data			Callback data; must be a "cbdata" type
+ */
 void
 storeClientRef(store_client * sc,
     StoreEntry * e,
@@ -573,9 +665,22 @@ storeClientCopyPending(store_client * sc, StoreEntry * e, void *data)
     return 1;
 }
 
-/*
- * This routine hasn't been optimised to take advantage of the
- * passed sc. Yet.
+/*!
+ * @function
+ *	storeClientUnregister
+ * @abstract
+ *	Free the given store_client
+ * @discussion
+ *	This routine is quite messy. If sc is NULL, it returns immediately.
+ *	If the MemObject attached to e (e->mem_obj) has no registered clients
+ *	then it returns immediately. These two conditions should be assert()'ions
+ *	and calling code should be fixed to only unregister where appropriate.
+ *
+ *	TODO: fully explore and document what can actually happen here!
+ *
+ * @param	sc	store_client to unregister
+ * @param	e	StoreEntry to unregister
+ * @param	owner	Original owner of store_client; used for debugging
  */
 int
 storeClientUnregister(store_client * sc, StoreEntry * e, void *owner)
