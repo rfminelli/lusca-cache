@@ -239,6 +239,11 @@ extern int commBind(int s, sqaddr_t *addr);
 extern void commSetTcpNoDelay(int);
 extern void commSetTcpRcvbuf(int, int);
 
+extern int comm_create_fifopair(int *prfd, int *pwfd, int *crfd, int *cwfd);
+extern int comm_create_unix_stream_pair(int *prfd, int *pwfd, int *crfd, int *cwfd, int buflen);
+extern int comm_create_unix_dgram_pair(int *prfd, int *pwfd, int *crfd, int *cwfd);
+
+
 /*
  * comm_select.c
  */
