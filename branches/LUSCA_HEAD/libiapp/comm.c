@@ -1502,3 +1502,70 @@ commCloseAllSockets(void)
 	}
     }
 }
+
+int
+comm_create_fifopair(int *prfd, int *pwfd, int *crfd, int *cwfd)
+{
+        int p2c[2];
+        int c2p[2];
+
+        if (pipe(p2c) < 0) {
+            debug(54, 0) ("comm_create_fifopair: pipe: %s\n", xstrerror());
+            return -1;
+        }
+
+        if (pipe(c2p) < 0) {
+            debug(54, 0) ("comm_create_fifopair: pipe: %s\n", xstrerror());
+	    close(p2c[0]);
+	    close(p2c[1]);
+            return -1;
+        }
+
+        fd_open(*prfd = p2c[0], FD_PIPE, "IPC FIFO Parent Read");
+        fd_open(*cwfd = p2c[1], FD_PIPE, "IPC FIFO Child Write");
+        fd_open(*crfd = c2p[0], FD_PIPE, "IPC FIFO Child Read");
+        fd_open(*pwfd = c2p[1], FD_PIPE, "IPC FIFO Parent Write");
+        sqinet_init(&fd_table[*prfd].local_address);
+        sqinet_init(&fd_table[*cwfd].local_address);
+        sqinet_init(&fd_table[*crfd].local_address);
+        sqinet_init(&fd_table[*pwfd].local_address);
+
+	return 1;
+}
+
+int
+comm_create_unix_stream_pair(int *prfd, int *pwfd, int *crfd, int *cwfd, int buflen)
+{
+        int fds[2];
+
+        if (socketpair(AF_UNIX, SOCK_STREAM, 0, fds) < 0) {
+            debug(54, 0) ("comm_create_unix_stream_pair: socketpair: %s\n", xstrerror());
+            return -1;
+        }
+        setsockopt(fds[0], SOL_SOCKET, SO_SNDBUF, (void *) &buflen, sizeof(buflen));
+        setsockopt(fds[0], SOL_SOCKET, SO_RCVBUF, (void *) &buflen, sizeof(buflen));
+        setsockopt(fds[1], SOL_SOCKET, SO_SNDBUF, (void *) &buflen, sizeof(buflen));
+        setsockopt(fds[1], SOL_SOCKET, SO_RCVBUF, (void *) &buflen, sizeof(buflen));
+        fd_open(*prfd = *pwfd = fds[0], FD_PIPE, "IPC UNIX STREAM Parent");
+        fd_open(*crfd = *cwfd = fds[1], FD_PIPE, "IPC UNIX STREAM Parent");
+        sqinet_init(&fd_table[*prfd].local_address);
+        sqinet_init(&fd_table[*crfd].local_address);
+
+	return 1;
+}
+
+int
+comm_create_unix_dgram_pair(int *prfd, int *pwfd, int *crfd, int *cwfd)
+{
+        int fds[2];
+        if (socketpair(AF_UNIX, SOCK_DGRAM, 0, fds) < 0) {
+            debug(54, 0) ("comm_create_unix_dgram_pair: socketpair: %s\n", xstrerror());
+            return -1;
+        }
+        fd_open(*prfd = *pwfd = fds[0], FD_PIPE, "IPC UNIX DGRAM Parent");
+	fd_open(*crfd = *cwfd = fds[1], FD_PIPE, "IPC UNIX DGRAM Parent");
+        sqinet_init(&fd_table[*prfd].local_address);
+        sqinet_init(&fd_table[*crfd].local_address);
+
+	return 1;
+}
