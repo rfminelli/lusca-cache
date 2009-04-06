@@ -919,7 +919,7 @@ commUpdateWriteHandler(int fd, PF * handler, void *data)
  *	commSetSelect
  * @abstract
  *	Register the given file descriptor for a comm notification
- * @dicussion
+ * @discussion
  *	The completion callback will not be called on comm_close();
  *	so the owner needs to register a close handler if it wants
  *	to be told.

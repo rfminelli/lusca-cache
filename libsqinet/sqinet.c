@@ -3,7 +3,7 @@
  *
  * These functions provide an IPv4/IPv6 aware end-point identifier type.
  *
- * @copyright Adrian Chadd <adrian@squid-cache.org>
+ * @copyright Adrian Chadd <adrian@@squid-cache.org>
  */
 
 #include <stdio.h>

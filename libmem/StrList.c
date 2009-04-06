@@ -3,8 +3,6 @@
  *
  * These functions implement manipulation of a HTTP-like string list of
  * items.
- *
- * @copyright Alex Rousskov <rousskov@measurement-factory.com> and others
  */
 
 /*
