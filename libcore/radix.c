@@ -60,10 +60,14 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "mem.h"
 #include "radix.h"
 
-#define	PyMem_Malloc	malloc
-#define PyMem_Free	free
+/*
+ * This shows the source of this file - via the python radix tree code!
+ */
+#define	PyMem_Malloc	xxmalloc
+#define PyMem_Free	xxfree
 
 /* $Id: radix.c,v 1.17 2007/10/24 06:04:31 djm Exp $ */
 
