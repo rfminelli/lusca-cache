@@ -25,7 +25,7 @@ xxcalloc(size_t count, size_t sz)
 }
 
 static inline void *
-xxrealloc(void *ptr, size_t *sz)
+xxrealloc(void *ptr, size_t sz)
 {
 	return realloc(ptr, sz);
 }
