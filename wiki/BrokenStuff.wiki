@@ -1,0 +1,8 @@
+#summary Stuff that has been disabled in Lusca pending some further code reorganisation
+
+
+== DNS statistics ==
+
+The core histogram code is in a library but updating the histograms still occurs in code found in src/.  The DNS statistics stuff has been disabled to avoid code in libsqname/ relying on stuff in src/.
+
+The "true" fix would be to allow code modules to register histogram structs with a histogram management instance that would handle the updating and reporting.
