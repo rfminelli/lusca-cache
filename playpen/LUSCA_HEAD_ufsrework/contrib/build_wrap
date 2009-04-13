@@ -1,3 +1,0 @@
-#!/bin/sh
-gcc -Wall -fPIC -shared -Wl,-soname,libwrap_printf.so.1.0 -ldl -o libwrap_printf.so.1.0  wrap_printf.c
-
