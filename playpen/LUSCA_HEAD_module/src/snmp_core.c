@@ -61,6 +61,7 @@ static oid *snmpCreateOid(int length,...);
 static mib_tree_entry *snmpAddNode();
 static oid *snmpCreateOid();
 #endif
+void snmpAddNodeChild(mib_tree_entry *entry, mib_tree_entry *child);
 extern void (*snmplib_debug_hook) (int, char *);
 static oid *static_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn);
 static oid *time_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn);
@@ -91,12 +92,19 @@ static void snmpSnmplibDebug(int lvl, char *buf);
 void
 snmpInit(void)
 {
+    mib_tree_entry * n;
+
     debug(49, 5) ("snmpInit: Called.\n");
 
     debug(49, 5) ("snmpInit: Building SNMP mib tree structure\n");
 
     snmplib_debug_hook = snmpSnmplibDebug;
 
+    /* 
+     * This following bit of evil is to get the final node in the "squid" mib
+     * without having a "search" function. A search function should be written
+     * to make this and the other code much less evil.
+     */
     mib_tree_head = snmpAddNode(snmpCreateOid(1, 1),
 	1, NULL, NULL, 1,
 	snmpAddNode(snmpCreateOid(2, 1, 3),
@@ -111,8 +119,10 @@ snmpInit(void)
 			    6, NULL, NULL, 1,
 			    snmpAddNode(snmpCreateOid(7, 1, 3, 6, 1, 4, 1, 3495),
 				7, NULL, NULL, 1,
-				snmpAddNode(snmpCreateOid(LEN_SQUIDMIB, SQUIDMIB),
-				    8, NULL, NULL, 5,
+				n = snmpAddNode(snmpCreateOid(LEN_SQUIDMIB, SQUIDMIB),
+				    8, NULL, NULL, 0))))))));
+
+	snmpAddNodeChild(n,
 				    snmpAddNode(snmpCreateOid(LEN_SQ_SYS, SQ_SYS),
 					LEN_SQ_SYS, NULL, NULL, 3,
 					snmpAddNode(snmpCreateOid(LEN_SYS, SQ_SYS, SYSVMSIZ),
@@ -120,7 +130,8 @@ snmpInit(void)
 					snmpAddNode(snmpCreateOid(LEN_SYS, SQ_SYS, SYSSTOR),
 					    LEN_SYS, snmp_sysFn, static_Inst, 0),
 					snmpAddNode(snmpCreateOid(LEN_SYS, SQ_SYS, SYS_UPTIME),
-					    LEN_SYS, snmp_sysFn, static_Inst, 0)),
+					    LEN_SYS, snmp_sysFn, static_Inst, 0)));
+	snmpAddNodeChild(n,
 				    snmpAddNode(snmpCreateOid(LEN_SQ_CONF, SQ_CONF),
 					LEN_SQ_CONF, NULL, NULL, 6,
 					snmpAddNode(snmpCreateOid(LEN_SYS, SQ_CONF, CONF_ADMIN),
@@ -142,7 +153,8 @@ snmpInit(void)
 					    snmpAddNode(snmpCreateOid(LEN_CONF_ST, SQ_CONF, CONF_STORAGE, CONF_ST_SWLOWM),
 						LEN_CONF_ST, snmp_confFn, static_Inst, 0)),
 					snmpAddNode(snmpCreateOid(LEN_SYS, SQ_CONF, CONF_UNIQNAME),
-					    LEN_SYS, snmp_confFn, static_Inst, 0)),
+					    LEN_SYS, snmp_confFn, static_Inst, 0)));
+	snmpAddNodeChild(n,
 				    snmpAddNode(snmpCreateOid(LEN_SQ_PRF, SQ_PRF),
 					LEN_SQ_PRF, NULL, NULL, 2,
 					snmpAddNode(snmpCreateOid(LEN_SQ_PRF + 1, SQ_PRF, PERF_SYS),
@@ -232,7 +244,9 @@ snmpInit(void)
 						    snmpAddNode(snmpCreateOid(LEN_SQ_PRF + 4, SQ_PRF, PERF_PROTO, 2, 1, 10),
 							LEN_SQ_PRF + 4, snmp_prfProtoFn, time_Inst, 0),
 						    snmpAddNode(snmpCreateOid(LEN_SQ_PRF + 4, SQ_PRF, PERF_PROTO, 2, 1, 11),
-							LEN_SQ_PRF + 4, snmp_prfProtoFn, time_Inst, 0))))),
+							LEN_SQ_PRF + 4, snmp_prfProtoFn, time_Inst, 0))))));
+
+	snmpAddNodeChild(n,
 				    snmpAddNode(snmpCreateOid(LEN_SQ_NET, SQ_NET),
 					LEN_SQ_NET, NULL, NULL, 3,
 					snmpAddNode(snmpCreateOid(LEN_SQ_NET + 1, SQ_NET, NET_IP_CACHE),
@@ -284,8 +298,10 @@ snmpInit(void)
 					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_DNS_CACHE, DNS_REP),
 						LEN_SQ_NET + 2, snmp_netIdnsFn, static_Inst, 0),
 					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_DNS_CACHE, DNS_SERVERS),
-						LEN_SQ_NET + 2, snmp_netIdnsFn, static_Inst, 0))),
+						LEN_SQ_NET + 2, snmp_netIdnsFn, static_Inst, 0))));
 #endif
+
+	snmpAddNodeChild(n,
 				    snmpAddNode(snmpCreateOid(LEN_SQ_MESH, SQ_MESH),
 					LEN_SQ_MESH, NULL, NULL, 2,
 					snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 1, SQ_MESH, 1),
@@ -373,16 +389,7 @@ snmpInit(void)
 						snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 3, SQ_MESH, 2, 1, 8),
 						    LEN_SQ_MESH + 3, snmp_meshCtblFn, client_Inst, 0),
 						(mib_tree_last = snmpAddNode(snmpCreateOid(LEN_SQ_MESH + 3, SQ_MESH, 2, 1, 9),
-							LEN_SQ_MESH + 3, snmp_meshCtblFn, client_Inst, 0)))))
-				)
-			    )
-			)
-		    )
-		)
-	    )
-	)
-	);
-
+							LEN_SQ_MESH + 3, snmp_meshCtblFn, client_Inst, 0))))));
     debug(49, 9) ("snmpInit: Completed SNMP mib tree structure\n");
 }
 
@@ -990,6 +997,21 @@ snmpTreeEntry(oid entry, snint len, mib_tree_entry * current)
     return (next);
 }
 
+void
+snmpAddNodeChild(mib_tree_entry *entry, mib_tree_entry *child)
+{
+        entry->leaves = xrealloc(entry->leaves, sizeof(mib_tree_entry *) * (entry->children + 1));
+	entry->leaves[entry->children] = child;
+	entry->leaves[entry->children]->parent = entry;
+	entry->children++;
+}
+
+int
+snmpAddNodeChildStr(const char *oid, mib_tree_entry *child)
+{
+	return -1;
+}
+
 /*
  * Adds a node to the MIB tree structure and adds the appropriate children
  */
@@ -1030,15 +1052,13 @@ snmpAddNode(va_alist)
     entry->len = len;
     entry->parsefunction = parsefunction;
     entry->instancefunction = instancefunction;
-    entry->children = children;
+    entry->leaves = NULL;
+    entry->children = 0;
 
-    if (children > 0) {
-	entry->leaves = xmalloc(sizeof(mib_tree_entry *) * children);
-	for (loop = 0; loop < children; loop++) {
-	    entry->leaves[loop] = va_arg(args, mib_tree_entry *);
-	    entry->leaves[loop]->parent = entry;
-	}
+    for (loop = 0; loop < children; loop++) {
+	snmpAddNodeChild(entry, va_arg(args, mib_tree_entry *));
     }
+
     return (entry);
 }
 /* End of tree utility functions */
