@@ -62,6 +62,8 @@ static mib_tree_entry *snmpAddNode();
 static oid *snmpCreateOid();
 #endif
 void snmpAddNodeChild(mib_tree_entry *entry, mib_tree_entry *child);
+mib_tree_entry * snmpLookupNodeStr(mib_tree_entry *entry, const char *str);
+int snmpCreateOidFromStr(const char *str, oid **name, int *nl);
 extern void (*snmplib_debug_hook) (int, char *);
 static oid *static_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn);
 static oid *time_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn);
@@ -1006,10 +1008,60 @@ snmpAddNodeChild(mib_tree_entry *entry, mib_tree_entry *child)
 	entry->children++;
 }
 
-int
-snmpAddNodeChildStr(const char *oid, mib_tree_entry *child)
+mib_tree_entry *
+snmpLookupNodeStr(mib_tree_entry *root, const char *str)
 {
-	return -1;
+	oid *name;
+	int namelen;
+	int r, i;
+	mib_tree_entry *e = root;
+
+	if (! snmpCreateOidFromStr(str, &name, &namelen))
+		return NULL;
+
+	/* I wish there were some kind of sensible existing tree traversal
+	 * routine to use. I'll worry about that later */
+	if (r < 1)
+		return root;	/* XXX it should only be this? */
+
+	r = 1;
+	while(r <= namelen) {
+		/* Find the child node which matches this */
+		for (i = 0; i < e->children && e->leaves[i]->name[r] == name[r]; i++)
+			;
+		/* Are we pointing to that node? */
+		if (i >= e->children)
+			break;
+
+		/* Skip to that node! */
+		e = e->leaves[i];
+		r++;
+	}
+
+	return e;
+}
+
+
+int
+snmpCreateOidFromStr(const char *str, oid **name, int *nl)
+{
+	char *delim = ".";
+	char *s;
+	char *p;
+
+	*name = NULL;
+	*nl = 0;
+	s = xstrdup(str);
+
+	/* Parse the OID string into oid bits */
+	while ( (p = strsep(&s, delim)) != NULL) {
+		*name = xrealloc(*name, sizeof(oid) * ((*nl) + 1));
+		*name[*nl] = atoi(p);
+		(*nl)++;
+	}
+
+	xfree(s);
+	return 1;
 }
 
 /*
