@@ -121,8 +121,10 @@ snmpInit(void)
 			    6, NULL, NULL, 1,
 			    snmpAddNode(snmpCreateOid(7, 1, 3, 6, 1, 4, 1, 3495),
 				7, NULL, NULL, 1,
-				n = snmpAddNode(snmpCreateOid(LEN_SQUIDMIB, SQUIDMIB),
+				snmpAddNode(snmpCreateOid(LEN_SQUIDMIB, SQUIDMIB),
 				    8, NULL, NULL, 0))))))));
+
+	n = snmpLookupNodeStr(NULL, "1.3.6.1.4.1.3495.1");
 
 	snmpAddNodeChild(n,
 				    snmpAddNode(snmpCreateOid(LEN_SQ_SYS, SQ_SYS),
@@ -1014,24 +1016,30 @@ snmpLookupNodeStr(mib_tree_entry *root, const char *str)
 	oid *name;
 	int namelen;
 	int r, i;
-	mib_tree_entry *e = root;
+	mib_tree_entry *e;
+
+	if (root)
+		e = root;
+	else
+		e = mib_tree_head;
 
 	if (! snmpCreateOidFromStr(str, &name, &namelen))
 		return NULL;
 
 	/* I wish there were some kind of sensible existing tree traversal
 	 * routine to use. I'll worry about that later */
-	if (r < 1)
-		return root;	/* XXX it should only be this? */
+	if (namelen <= 1)
+		return e;	/* XXX it should only be this? */
 
 	r = 1;
 	while(r <= namelen) {
 		/* Find the child node which matches this */
-		for (i = 0; i < e->children && e->leaves[i]->name[r] == name[r]; i++)
+		for (i = 0; i < e->children && e->leaves[i]->name[r] != name[r]; i++)
 			;
 		/* Are we pointing to that node? */
 		if (i >= e->children)
 			break;
+		assert(e->leaves[i]->name[r] == name[r]);
 
 		/* Skip to that node! */
 		e = e->leaves[i];
@@ -1056,7 +1064,7 @@ snmpCreateOidFromStr(const char *str, oid **name, int *nl)
 	/* Parse the OID string into oid bits */
 	while ( (p = strsep(&s, delim)) != NULL) {
 		*name = xrealloc(*name, sizeof(oid) * ((*nl) + 1));
-		*name[*nl] = atoi(p);
+		(*name)[*nl] = atoi(p);
 		(*nl)++;
 	}
 
