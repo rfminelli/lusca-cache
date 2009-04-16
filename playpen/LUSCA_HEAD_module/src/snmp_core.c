@@ -54,6 +54,7 @@ struct _mib_tree_entry {
 mib_tree_entry *mib_tree_head;
 mib_tree_entry *mib_tree_last;
 
+static mib_tree_entry * snmpAddNodeStr(const char *base_str, int o, oid_ParseFn * parsefunction, instance_Fn * instancefunction);
 #if STDC_HEADERS
 static mib_tree_entry *snmpAddNode(oid * name, int len, oid_ParseFn * parsefunction, instance_Fn * instancefunction, int children,...);
 static oid *snmpCreateOid(int length,...);
@@ -94,7 +95,7 @@ static void snmpSnmplibDebug(int lvl, char *buf);
 void
 snmpInit(void)
 {
-    mib_tree_entry * n, *m;
+    mib_tree_entry * n, *m, *m2;
 
     debug(49, 5) ("snmpInit: Called.\n");
 
@@ -102,58 +103,47 @@ snmpInit(void)
 
     snmplib_debug_hook = snmpSnmplibDebug;
 
-    /* 
-     * This following bit of evil is to get the final node in the "squid" mib
-     * without having a "search" function. A search function should be written
-     * to make this and the other code much less evil.
-     */
-    mib_tree_head = snmpAddNode(snmpCreateOid(1, 1),
-	1, NULL, NULL, 1,
-	snmpAddNode(snmpCreateOid(2, 1, 3),
-	    2, NULL, NULL, 1,
-	    snmpAddNode(snmpCreateOid(3, 1, 3, 6),
-		3, NULL, NULL, 1,
-		snmpAddNode(snmpCreateOid(4, 1, 3, 6, 1),
-		    4, NULL, NULL, 1,
-		    snmpAddNode(snmpCreateOid(5, 1, 3, 6, 1, 4),
-			5, NULL, NULL, 1,
-			snmpAddNode(snmpCreateOid(6, 1, 3, 6, 1, 4, 1),
-			    6, NULL, NULL, 1,
-			    snmpAddNode(snmpCreateOid(7, 1, 3, 6, 1, 4, 1, 3495),
-				7, NULL, NULL, 1,
-				snmpAddNode(snmpCreateOid(LEN_SQUIDMIB, SQUIDMIB),
-				    8, NULL, NULL, 0))))))));
+	/* 
+	 * This following bit of evil is to get the final node in the "squid" mib
+	 * without having a "search" function. A search function should be written
+	 * to make this and the other code much less evil.
+	 */
+	mib_tree_head = snmpAddNode(snmpCreateOid(1, 1), 1, NULL, NULL, 0);
+	assert(mib_tree_head);
+	debug(49, 5) ("snmpInit: root is %p\n", mib_tree_head);
+	snmpAddNodeStr("1", 3, NULL, NULL);
+
+	snmpAddNodeStr("1.3", 6, NULL, NULL);
+	snmpAddNodeStr("1.3.6", 1, NULL, NULL);
+	snmpAddNodeStr("1.3.6.1", 4, NULL, NULL);
+	snmpAddNodeStr("1.3.6.1.4", 1, NULL, NULL);
+	snmpAddNodeStr("1.3.6.1.4.1", 3495, NULL, NULL);
+	m2 = snmpAddNodeStr("1.3.6.1.4.1.3495", 1, NULL, NULL);
 
 	n = snmpLookupNodeStr(NULL, "1.3.6.1.4.1.3495.1");
+	assert(m2 == n);
 
 	/* SQ_SYS - 1.3.6.1.4.1.3495.1.1 */
-	snmpAddNodeChild(n, snmpAddNode(snmpCreateOid(LEN_SQ_SYS, SQ_SYS), LEN_SQ_SYS, NULL, NULL, 0));
-	m = snmpLookupNodeStr(NULL, "1.3.6.1.4.1.3495.1.1");
-	snmpAddNodeChild(m, snmpAddNode(snmpCreateOid(LEN_SYS, SQ_SYS, SYSVMSIZ), LEN_SYS, snmp_sysFn, static_Inst, 0));
-	snmpAddNodeChild(m, snmpAddNode(snmpCreateOid(LEN_SYS, SQ_SYS, SYSSTOR), LEN_SYS, snmp_sysFn, static_Inst, 0));
-	snmpAddNodeChild(m, snmpAddNode(snmpCreateOid(LEN_SYS, SQ_SYS, SYS_UPTIME), LEN_SYS, snmp_sysFn, static_Inst, 0));
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1", 1, NULL, NULL);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.1", 1, snmp_sysFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.1", 2, snmp_sysFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.1", 3, snmp_sysFn, static_Inst);
 
 	/* SQ_CONF - 1.3.6.1.4.1.3495.1.2 */
-	snmpAddNodeChild(n, snmpAddNode(snmpCreateOid(LEN_SQ_CONF, SQ_CONF), LEN_SQ_CONF, NULL, NULL, 0));
-	m = snmpLookupNodeStr(NULL, "1.3.6.1.4.1.3495.1.2");
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1", 2, NULL, NULL);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2", 1, snmp_confFn, static_Inst);	/* CONF_ADMIN */
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2", 2, snmp_confFn, static_Inst);	/* CONF_VERSION */
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2", 3, snmp_confFn, static_Inst);	/* CONF_VERSIONID */
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2", 4, snmp_confFn, static_Inst);	/* CONF_LOG_FAC */
 
-	snmpAddNodeChild(m, snmpAddNode(snmpCreateOid(LEN_SYS, SQ_CONF, CONF_ADMIN), LEN_SYS, snmp_confFn, static_Inst, 0));
-	snmpAddNodeChild(m, snmpAddNode(snmpCreateOid(LEN_SYS, SQ_CONF, CONF_VERSION), LEN_SYS, snmp_confFn, static_Inst, 0));
-	snmpAddNodeChild(m, snmpAddNode(snmpCreateOid(LEN_SYS, SQ_CONF, CONF_VERSION_ID), LEN_SYS, snmp_confFn, static_Inst, 0));
-	snmpAddNodeChild(m, snmpAddNode(snmpCreateOid(LEN_SYS, SQ_CONF, CONF_LOG_FAC), LEN_SYS, snmp_confFn, static_Inst, 0));
-	snmpAddNodeChild(m, 
-					snmpAddNode(snmpCreateOid(LEN_SYS, SQ_CONF, CONF_STORAGE),
-					    LEN_SYS, NULL, NULL, 4,
-					    snmpAddNode(snmpCreateOid(LEN_CONF_ST, SQ_CONF, CONF_STORAGE, CONF_ST_MMAXSZ),
-						LEN_CONF_ST, snmp_confFn, static_Inst, 0),
-					    snmpAddNode(snmpCreateOid(LEN_CONF_ST, SQ_CONF, CONF_STORAGE, CONF_ST_SWMAXSZ),
-						LEN_CONF_ST, snmp_confFn, static_Inst, 0),
-					    snmpAddNode(snmpCreateOid(LEN_CONF_ST, SQ_CONF, CONF_STORAGE, CONF_ST_SWHIWM),
-						LEN_CONF_ST, snmp_confFn, static_Inst, 0),
-					    snmpAddNode(snmpCreateOid(LEN_CONF_ST, SQ_CONF, CONF_STORAGE, CONF_ST_SWLOWM),
-						LEN_CONF_ST, snmp_confFn, static_Inst, 0)));
+	/* SQ_CONF + CONF_STORAGE - 1.3.6.1.4.1.3495.1.5 */
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2", 5, NULL, NULL);			/* CONF_STORAGE */
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2.5", 1, snmp_confFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2.5", 2, snmp_confFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2.5", 3, snmp_confFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2.5", 4, snmp_confFn, static_Inst);
 
-	snmpAddNodeChild(m, snmpAddNode(snmpCreateOid(LEN_SYS, SQ_CONF, CONF_UNIQNAME), LEN_SYS, snmp_confFn, static_Inst, 0));
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2", 6, snmp_confFn, static_Inst);	/* CONF_UNIQNAME */
 
 	/* SQ_PRF - 1.3.6.1.4.1.3495.1.3 */
 	snmpAddNodeChild(n,
@@ -1009,6 +999,7 @@ snmpTreeEntry(oid entry, snint len, mib_tree_entry * current)
 void
 snmpAddNodeChild(mib_tree_entry *entry, mib_tree_entry *child)
 {
+	debug (49, 5) ("snmpAddNodeChild: assigning %p to parent %p\n", child, entry);
         entry->leaves = xrealloc(entry->leaves, sizeof(mib_tree_entry *) * (entry->children + 1));
 	entry->leaves[entry->children] = child;
 	entry->leaves[entry->children]->parent = entry;
@@ -1033,8 +1024,10 @@ snmpLookupNodeStr(mib_tree_entry *root, const char *str)
 
 	/* I wish there were some kind of sensible existing tree traversal
 	 * routine to use. I'll worry about that later */
-	if (namelen <= 1)
+	if (namelen <= 1) {
+		xfree(name);
 		return e;	/* XXX it should only be this? */
+	}
 
 	r = 1;
 	while(r <= namelen) {
@@ -1051,6 +1044,7 @@ snmpLookupNodeStr(mib_tree_entry *root, const char *str)
 		r++;
 	}
 
+	xfree(name);
 	return e;
 }
 
@@ -1075,6 +1069,40 @@ snmpCreateOidFromStr(const char *str, oid **name, int *nl)
 
 	xfree(s);
 	return 1;
+}
+
+/*
+ * Create an entry. Return a pointer to the newly created node, or NULL
+ * on failure.
+ */
+static mib_tree_entry *
+snmpAddNodeStr(const char *base_str, int o, oid_ParseFn * parsefunction, instance_Fn * instancefunction)
+{
+	mib_tree_entry *m, *b;
+	oid *n;
+	int nl;
+	int r;
+	char s[1024];
+
+	/* Find base node */
+	b = snmpLookupNodeStr(mib_tree_head, base_str);
+	if (! b)
+		return NULL;
+	debug(49, 5) ("snmpAddNodeStr: %s: -> %p\n", base_str, b);
+
+	/* Create OID string for new entry */
+	snprintf(s, 1024, "%s.%d", base_str, o);
+	if (! snmpCreateOidFromStr(s, &n, &nl))
+		return NULL;
+
+	/* Create a node */
+	m = snmpAddNode(n, nl, parsefunction, instancefunction, 0);
+
+	/* Link it into the existing tree */
+	snmpAddNodeChild(b, m);
+
+	/* Return the node */
+	return m;
 }
 
 /*
