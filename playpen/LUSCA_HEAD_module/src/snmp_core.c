@@ -202,61 +202,36 @@ snmpInit(void)
 	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2.1", PERF_MEDIAN_HTTP_NH, snmp_prfProtoFn, time_Inst); 
 
 	/* SQ_NET - 1.3.6.1.4.1.3495.1.4 */
-	snmpAddNodeChild(n,
-				    snmpAddNode(snmpCreateOid(LEN_SQ_NET, SQ_NET),
-					LEN_SQ_NET, NULL, NULL, 3,
-					snmpAddNode(snmpCreateOid(LEN_SQ_NET + 1, SQ_NET, NET_IP_CACHE),
-					    LEN_SQ_NET + 1, NULL, NULL, 8,
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_IP_CACHE, IP_ENT),
-						LEN_SQ_NET + 2, snmp_netIpFn, static_Inst, 0),
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_IP_CACHE, IP_REQ),
-						LEN_SQ_NET + 2, snmp_netIpFn, static_Inst, 0),
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_IP_CACHE, IP_HITS),
-						LEN_SQ_NET + 2, snmp_netIpFn, static_Inst, 0),
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_IP_CACHE, IP_PENDHIT),
-						LEN_SQ_NET + 2, snmp_netIpFn, static_Inst, 0),
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_IP_CACHE, IP_NEGHIT),
-						LEN_SQ_NET + 2, snmp_netIpFn, static_Inst, 0),
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_IP_CACHE, IP_MISS),
-						LEN_SQ_NET + 2, snmp_netIpFn, static_Inst, 0),
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_IP_CACHE, IP_GHBN),
-						LEN_SQ_NET + 2, snmp_netIpFn, static_Inst, 0),
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_IP_CACHE, IP_LOC),
-						LEN_SQ_NET + 2, snmp_netIpFn, static_Inst, 0)),
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.", 4, NULL, NULL);
 
-					snmpAddNode(snmpCreateOid(LEN_SQ_NET + 1, SQ_NET, NET_FQDN_CACHE),
-					    LEN_SQ_NET + 1, NULL, NULL, 7,
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_FQDN_CACHE, FQDN_ENT),
-						LEN_SQ_NET + 2, snmp_netFqdnFn, static_Inst, 0),
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_FQDN_CACHE, FQDN_REQ),
-						LEN_SQ_NET + 2, snmp_netFqdnFn, static_Inst, 0),
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_FQDN_CACHE, FQDN_HITS),
-						LEN_SQ_NET + 2, snmp_netFqdnFn, static_Inst, 0),
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_FQDN_CACHE, FQDN_PENDHIT),
-						LEN_SQ_NET + 2, snmp_netFqdnFn, static_Inst, 0),
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_FQDN_CACHE, FQDN_NEGHIT),
-						LEN_SQ_NET + 2, snmp_netFqdnFn, static_Inst, 0),
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_FQDN_CACHE, FQDN_MISS),
-						LEN_SQ_NET + 2, snmp_netFqdnFn, static_Inst, 0),
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_FQDN_CACHE, FQDN_GHBN),
-						LEN_SQ_NET + 2, snmp_netFqdnFn, static_Inst, 0)),
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4", NET_IP_CACHE, NULL, NULL);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_ENT, snmp_netIpFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_REQ, snmp_netIpFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_HITS, snmp_netIpFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_PENDHIT, snmp_netIpFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_NEGHIT, snmp_netIpFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_MISS, snmp_netIpFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_GHBN, snmp_netIpFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_LOC, snmp_netIpFn, static_Inst);
 
-					snmpAddNode(snmpCreateOid(LEN_SQ_NET + 1, SQ_NET, NET_DNS_CACHE),
-					    LEN_SQ_NET + 1, NULL, NULL, 3,
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4", NET_FQDN_CACHE, NULL, NULL);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.2", FQDN_ENT, snmp_netFqdnFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.2", FQDN_REQ, snmp_netFqdnFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.2", FQDN_HITS, snmp_netFqdnFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.2", FQDN_PENDHIT, snmp_netFqdnFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.2", FQDN_NEGHIT, snmp_netFqdnFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.2", FQDN_MISS, snmp_netFqdnFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.2", FQDN_GHBN, snmp_netFqdnFn, static_Inst);
+
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4", NET_DNS_CACHE, NULL, NULL);
 #if USE_DNSSERVERS
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_DNS_CACHE, DNS_REQ),
-						LEN_SQ_NET + 2, snmp_netDnsFn, static_Inst, 0),
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_DNS_CACHE, DNS_REP),
-						LEN_SQ_NET + 2, snmp_netDnsFn, static_Inst, 0),
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_DNS_CACHE, DNS_SERVERS),
-						LEN_SQ_NET + 2, snmp_netDnsFn, static_Inst, 0))),
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.3", DNS_REQ, snmp_netDnsFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.3", DNS_REP, snmp_netDnsFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.3", DNS_SERVERS, snmp_netDnsFn, static_Inst);
 #else
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_DNS_CACHE, DNS_REQ),
-						LEN_SQ_NET + 2, snmp_netIdnsFn, static_Inst, 0),
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_DNS_CACHE, DNS_REP),
-						LEN_SQ_NET + 2, snmp_netIdnsFn, static_Inst, 0),
-					    snmpAddNode(snmpCreateOid(LEN_SQ_NET + 2, SQ_NET, NET_DNS_CACHE, DNS_SERVERS),
-						LEN_SQ_NET + 2, snmp_netIdnsFn, static_Inst, 0))));
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.3", DNS_REQ, snmp_netIdnsFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.3", DNS_REP, snmp_netIdnsFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.3", DNS_SERVERS, snmp_netIdnsFn, static_Inst);
 #endif
 
 	/* SQ_MESH - 1.3.6.1.4.1.3495.1.5 */
