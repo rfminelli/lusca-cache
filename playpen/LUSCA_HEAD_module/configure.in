@@ -3322,6 +3322,7 @@ AC_OUTPUT([\
 	app/Makefile \
 	app/tcptest/Makefile \
 	libmime/Makefile \
+	libsqmod/Makefile \
 	libasyncio/Makefile \
 	libsqdns/Makefile \
 	libsqident/Makefile \
