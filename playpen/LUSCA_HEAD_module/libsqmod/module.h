@@ -28,4 +28,7 @@ struct _module {
 	module_state_t state;
 };
 
+extern int module_init(void);
+extern module_t * module_register(const char *path);
+
 #endif
