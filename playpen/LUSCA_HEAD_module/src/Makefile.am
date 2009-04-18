@@ -253,6 +253,7 @@ squid_LDADD = \
 	-L../libsqinet \
 	-L../libsqname \
 	-L../libasyncio \
+	-L../libsqmod \
 	@XTRA_OBJS@ \
 	@REPL_OBJS@ \
 	@STORE_OBJS@ \
@@ -263,6 +264,7 @@ squid_LDADD = \
 	@LIB_MALLOC@ \
 	@SSLLIB@ \
 	@LIB_EPOLL@ \
+	-lsqmod \
 	-lasyncio \
 	-lstmem \
 	-lsqdns \
@@ -315,7 +317,7 @@ sysconf_DATA = \
 data_DATA = \
 	mib.txt
 
-LDADD = -L../lib -L../libcore -L../libsqdebug -L../libmem -L../libsqname -L../libcb -L../libhelper -L../libmime -L../libstmem -L../libiapp -L../libhttp -L../libstat -L../libsqdns -L../libsqident -L../libsqinet -L../libasyncio -lasyncio -lsqinet -lsqdns -lsqdebug -lcore -lmem -lsqname -lcb -lsqident -lhelper -lmime -lstmem -liapp -lhttp -lstat -lmiscutil @XTRA_LIBS@
+LDADD = -L../lib -L../libcore -L../libsqdebug -L../libmem -L../libsqname -L../libcb -L../libhelper -L../libmime -L../libstmem -L../libiapp -L../libhttp -L../libstat -L../libsqdns -L../libsqident -L../libsqinet -L../libsqmod -L../libasyncio -lsqmod -lasyncio -lsqinet -lsqdns -lsqdebug -lcore -lmem -lsqname -lcb -lsqident -lhelper -lmime -lstmem -liapp -lhttp -lstat -lmiscutil @XTRA_LIBS@
 
 EXTRA_DIST = \
 	cf_gen_defines \

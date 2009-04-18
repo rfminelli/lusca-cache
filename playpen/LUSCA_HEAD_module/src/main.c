@@ -84,6 +84,8 @@ static const char *squid_start_script = "squid_start";
 #include "test_access.c"
 #endif
 
+#include "../libsqmod/module.h"
+
 static void
 usage(void)
 {
@@ -823,10 +825,14 @@ main(int argc, char **argv)
 	eventLocalInit();
 	storeFsInit();		/* required for config parsing */
 	authenticateSchemeInit();	/* required for config parsing */
+	module_init();
 	parse_err = parseConfigFile(ConfigFile);
 
 	if (opt_parse_cfg_only)
 	    return parse_err;
+
+	/* Initialise the registered modules at this point */
+	module_setup();
 
         /* XXX hacks for now to setup config options in libiapp; rethink this! -adrian */
         iapp_tcpRcvBufSz = Config.tcpRcvBufsz;

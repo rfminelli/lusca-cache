@@ -30,5 +30,6 @@ struct _module {
 
 extern int module_init(void);
 extern module_t * module_register(const char *path);
+extern void module_setup(void);
 
 #endif
