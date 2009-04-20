@@ -1,6 +1,10 @@
 #include "squid.h"
 #include "ufs_utils.h"
 
+
+/*
+ * ufs_swaplog routines
+ */
 static int
 ufs_swaplog_grow(ufs_swaplog_t *el, int newsize)
 {
