@@ -20,6 +20,13 @@ struct _squidaioinfo_t {
     int l2;
     fileMap *map;
     int suggest;
+    struct {
+	int async_open:1;
+	int async_close:1;
+	int async_create:1;
+	int async_read:1;
+	int async_write:1;
+    } flags;
 };
 
 struct _squidaiostate_t {

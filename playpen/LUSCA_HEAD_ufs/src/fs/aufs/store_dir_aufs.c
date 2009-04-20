@@ -1883,6 +1883,12 @@ storeAufsDirParse(SwapDir * sd, int index, char *path)
     if (aioinfo == NULL)
 	fatal("storeAufsDirParse: couldn't xmalloc() squidaioinfo_t!\n");
 
+    aioinfo->flags.async_open = ASYNC_OPEN;
+    aioinfo->flags.async_close = ASYNC_CLOSE;
+    aioinfo->flags.async_create = ASYNC_CREATE;
+    aioinfo->flags.async_write = ASYNC_WRITE;
+    aioinfo->flags.async_read = ASYNC_READ;
+
     sd->index = index;
     sd->path = xstrdup(path);
     sd->max_size = size;
