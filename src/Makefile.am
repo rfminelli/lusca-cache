@@ -219,6 +219,7 @@ squid_SOURCES = \
 	structs.h \
 	tools.c \
 	typedefs.h \
+	ufs_utils.c \
 	$(UNLINKDSOURCE) \
 	url.c \
 	urn.c \
