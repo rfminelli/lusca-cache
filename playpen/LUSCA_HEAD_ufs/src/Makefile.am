@@ -222,6 +222,7 @@ squid_SOURCES = \
 	$(UNLINKDSOURCE) \
 	url.c \
 	urn.c \
+	ufs_utils.c \
 	useragent.c \
 	wccp.c \
 	wccp2.c \
