@@ -25,10 +25,14 @@
 #include <fcntl.h>
 #endif
 
+#include "../libcore/kb.h"
+#include "../libsqstore/store_mgr.h"
+
 #include "../src/defines.h"
 /* XXX Needed for stuff in enums.h; remove later! -adrian */
 #include "../libhttp/HttpHeaderType.h"
 #include "../src/enums.h"
+
 
 struct _tlv;
 typedef struct _tlv tlv;
@@ -60,12 +64,10 @@ struct _tlv {
 #endif
 
 #if SIZEOF_INT64_T > SIZEOF_LONG && HAVE_STRTOLL
-typedef int64_t squid_off_t;
 #define SIZEOF_SQUID_OFF_T SIZEOF_INT64_T
 #define PRINTF_OFF_T PRId64
 #define strto_off_t (int64_t)strtoll
 #else
-typedef long squid_off_t;
 #define SIZEOF_SQUID_OFF_T SIZEOF_LONG
 #define PRINTF_OFF_T "ld"
 #define strto_off_t strtol
