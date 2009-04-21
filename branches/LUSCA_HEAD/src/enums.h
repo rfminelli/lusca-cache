@@ -402,14 +402,6 @@ enum {
     STORE_LOG_SWAPOUTFAIL
 };
 
-typedef enum {
-    SWAP_LOG_NOP,
-    SWAP_LOG_ADD,
-    SWAP_LOG_DEL,
-    SWAP_LOG_VERSION,
-    SWAP_LOG_MAX
-} swap_log_op;
-
 enum {
     MEDIAN_HTTP,
     MEDIAN_ICP_QUERY,
