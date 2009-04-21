@@ -72,7 +72,7 @@ parse_header(char *buf, int len)
 	    switch (t->type) {
 	    case STORE_META_URL:
 		/* XXX Is this OK? Is the URL guaranteed to be \0 terminated? */
-		printf("    URL: %s\n", (char *) t->value);
+		printf("	URL: %s\n", (char *) t->value);
 		break;
 	    case STORE_META_KEY_MD5:
 		printf("	MD5 key: %s\n", storeKeyText( (unsigned char *) t->value ) );
@@ -86,8 +86,7 @@ parse_header(char *buf, int len)
 	    }
 	}
 	if (l == NULL) {
-	    printf("  STRIPE: Completed, got an object with no size\n");
-	    return;
+	    //printf("  STRIPE: Completed, got an object with no size\n");
 	}
 	tlv_free(tlv_list);
 }
