@@ -30,6 +30,7 @@
 #include "../libsqtlv/tlv.h"
 
 #include "../libsqstore/store_mgr.h"
+#include "../libsqstore/store_meta.h"
 
 #define	BUFSIZE		4096
 
@@ -52,6 +53,15 @@ storeKeyText(const unsigned char *key)
 	return buf;
 }
 
+void
+storeMetaNew(char *buf, int len)
+{
+	storeMetaIndexNew *sn;
+
+	sn = (storeMetaIndexNew *) buf;
+	printf("	SWAP_META_STD_LFS: mlen %d, size %d, timestamp %ld, lastref %ld, expires %ld, lastmod %ld, file size %ld, refcount %d, flags %d\n", len, sizeof(storeMetaIndexNew), sn->timestamp, sn->lastref, sn->expires, sn->lastmod, sn->swap_file_sz, sn->refcount, sn->flags);
+}
+
 static void
 parse_header(char *buf, int len)
 {
@@ -72,14 +82,17 @@ parse_header(char *buf, int len)
 	    switch (t->type) {
 	    case STORE_META_URL:
 		/* XXX Is this OK? Is the URL guaranteed to be \0 terminated? */
-		printf("	URL: %s\n", (char *) t->value);
+		printf("	STORE_META_URL: %s\n", (char *) t->value);
 		break;
 	    case STORE_META_KEY_MD5:
-		printf("	MD5 key: %s\n", storeKeyText( (unsigned char *) t->value ) );
+		printf("	STORE_META_KEY_MD5: %s\n", storeKeyText( (unsigned char *) t->value ) );
+		break;
+	    case STORE_META_STD_LFS:
+		storeMetaNew( (char *) t->value, t->length);
 		break;
 	    case STORE_META_OBJSIZE:
 			l = t->value;
-			printf("\tSize: %" PRINTF_OFF_T " (len %d)\n", *l, t->length);
+			printf("\tSTORE_META_OBJSIZE: %" PRINTF_OFF_T " (len %d)\n", *l, t->length);
 			break;
 	    default:
 		printf("\tType: %d; Length %d\n", t->type, (int) t->length);
@@ -89,6 +102,7 @@ parse_header(char *buf, int len)
 	    //printf("  STRIPE: Completed, got an object with no size\n");
 	}
 	tlv_free(tlv_list);
+	printf("\n");
 }
 
 int
