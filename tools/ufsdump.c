@@ -36,6 +36,22 @@
 /* normally in libiapp .. */
 int shutting_down = 0;
 
+const char *
+storeKeyText(const unsigned char *key)
+{
+	static char buf[64];
+	char b2[4];
+
+	buf[0] = '\0';
+
+	int i;
+	for (i = 0; i < 16; i++) {
+		sprintf(b2, "%02X", *(key + i));
+		strcat(buf, b2);
+	}
+	return buf;
+}
+
 static void
 parse_header(char *buf, int len)
 {
@@ -58,10 +74,15 @@ parse_header(char *buf, int len)
 		/* XXX Is this OK? Is the URL guaranteed to be \0 terminated? */
 		printf("    URL: %s\n", (char *) t->value);
 		break;
-	    case STORE_META_OBJSIZE:
-		l = t->value;
-		printf("Size: %" PRINTF_OFF_T " (len %d)\n", *l, t->length);
+	    case STORE_META_KEY_MD5:
+		printf("	MD5 key: %s\n", storeKeyText( (unsigned char *) t->value ) );
 		break;
+	    case STORE_META_OBJSIZE:
+			l = t->value;
+			printf("\tSize: %" PRINTF_OFF_T " (len %d)\n", *l, t->length);
+			break;
+	    default:
+		printf("\tType: %d; Length %d\n", t->type, (int) t->length);
 	    }
 	}
 	if (l == NULL) {
