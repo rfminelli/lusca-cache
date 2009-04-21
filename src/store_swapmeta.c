@@ -35,40 +35,6 @@
 
 #include "squid.h"
 
-MemPool * pool_swap_tlv = NULL;
-MemPool * pool_swap_log_data = NULL;
-
-void
-storeSwapTLVInitMem(void)
-{
-    pool_swap_tlv = memPoolCreate("storeSwapTLV", sizeof(tlv));
-    /* XXX This doesn't strictly belong here! */
-    pool_swap_log_data = memPoolCreate("storeSwapLogData", sizeof(storeSwapLogData));
-}
-
-static tlv **
-storeSwapTLVAdd(int type, const void *ptr, size_t len, tlv ** tail)
-{
-    tlv *t = memPoolAlloc(pool_swap_tlv);
-    t->type = (char) type;
-    t->length = (int) len;
-    t->value = xmalloc(len);
-    xmemcpy(t->value, ptr, len);
-    *tail = t;
-    return &t->next;		/* return new tail pointer */
-}
-
-void
-storeSwapTLVFree(tlv * n)
-{
-    tlv *t;
-    while ((t = n) != NULL) {
-	n = t->next;
-	xfree(t->value);
-	memPoolFree(pool_swap_tlv, t);
-    }
-}
-
 /*
  * Build a TLV list for a StoreEntry
  */
@@ -84,21 +50,21 @@ storeSwapMetaBuild(StoreEntry * e)
     assert(e->swap_status == SWAPOUT_WRITING);
     url = storeUrl(e);
     debug(20, 3) ("storeSwapMetaBuild: %s\n", url);
-    T = storeSwapTLVAdd(STORE_META_KEY, e->hash.key, SQUID_MD5_DIGEST_LENGTH, T);
+    T = tlv_add(STORE_META_KEY, e->hash.key, SQUID_MD5_DIGEST_LENGTH, T);
 #if SIZEOF_SQUID_FILE_SZ == SIZEOF_SIZE_T
-    T = storeSwapTLVAdd(STORE_META_STD, &e->timestamp, STORE_HDR_METASIZE, T);
+    T = tlv_add(STORE_META_STD, &e->timestamp, STORE_HDR_METASIZE, T);
 #else
-    T = storeSwapTLVAdd(STORE_META_STD_LFS, &e->timestamp, STORE_HDR_METASIZE, T);
+    T = tlv_add(STORE_META_STD_LFS, &e->timestamp, STORE_HDR_METASIZE, T);
 #endif
-    T = storeSwapTLVAdd(STORE_META_URL, url, strlen(url) + 1, T);
+    T = tlv_add(STORE_META_URL, url, strlen(url) + 1, T);
     if (objsize > -1) {
-	T = storeSwapTLVAdd(STORE_META_OBJSIZE, &objsize, sizeof(objsize), T);
+	T = tlv_add(STORE_META_OBJSIZE, &objsize, sizeof(objsize), T);
     }
     vary = e->mem_obj->vary_headers;
     if (vary)
-	T = storeSwapTLVAdd(STORE_META_VARY_HEADERS, vary, strlen(vary) + 1, T);
+	T = tlv_add(STORE_META_VARY_HEADERS, vary, strlen(vary) + 1, T);
     if (e->mem_obj->store_url)
-	T = storeSwapTLVAdd(STORE_META_STOREURL, e->mem_obj->store_url, strlen(e->mem_obj->store_url) + 1, T);
+	T = tlv_add(STORE_META_STOREURL, e->mem_obj->store_url, strlen(e->mem_obj->store_url) + 1, T);
     return TLV;
 }
 
@@ -249,7 +215,7 @@ storeSwapMetaUnpack(const char *buf, int *hdr_len)
 		type, length, buflen, (int) j);
 	    break;
 	}
-	T = storeSwapTLVAdd(type, &buf[j], (size_t) length, T);
+	T = tlv_add(type, &buf[j], (size_t) length, T);
 	j += length;
     }
     *hdr_len = buflen;

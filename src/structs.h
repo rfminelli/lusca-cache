@@ -1897,13 +1897,6 @@ struct _StatCounters {
     } swap;
 };
 
-struct _tlv {
-    char type;
-    int length;
-    void *value;
-    tlv *next;
-};
-
 /*
  * Do we need to have the dirn in here? I don't think so, since we already
  * know the dirn .. 

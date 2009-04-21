@@ -440,6 +440,8 @@ struct rusage {
 
 #include "../libstmem/stmem.h"
 
+#include "../libsqtlv/tlv.h"
+
 #include "../libsqstore/store_key.h"
 #include "../libsqstore/store_mgr.h"
 
