@@ -55,8 +55,6 @@ parse_stripe(int stripeid, char *buf, int len, int blocksize)
 	    printf("  Object: NULL\n");
 	    return;
 	}
-	/* XXX need to make sure the first entry in the list is type STORE_META_OK ? (an "int" type) */
-
 	printf("  Object: (filen %d) hdr size %d\n", j / blocksize + (stripeid * STRIPESIZE / blocksize), bl);
 	for (t = tlv_list; t; t = t->next) {
 	    switch (t->type) {
