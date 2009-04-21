@@ -60,8 +60,12 @@ tlv_unpack(const char *buf, int *hdr_len, int max_metaid)
     assert(buf != NULL);
     assert(hdr_len != NULL);
 
+#define	STORE_META_OK	0x03
+    if (buf[j++] != (char) STORE_META_OK)
+        return NULL;
     xmemcpy(&buflen, &buf[j], sizeof(int));
     j += sizeof(int);
+
     /*
      * sanity check on 'buflen' value.  It should be at least big
      * enough to hold one type and one length.
