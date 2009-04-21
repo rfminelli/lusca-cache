@@ -95,7 +95,6 @@ extern time_t hit_only_mode_until;	/* 0 */
 extern StatCounters statCounter;
 extern const char *err_type_str[];
 extern const char *icp_opcode_str[];
-extern const char *swap_log_op_str[];
 extern const char *lookup_t_str[];
 extern double request_failure_ratio;	/* 0.0 */
 extern int store_hash_buckets;	/* 0 */
