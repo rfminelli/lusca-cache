@@ -5,6 +5,9 @@
 
 #include "../include/util.h"
 
+#include "../libcore/varargs.h"
+#include "../libsqdebug/debug.h"
+
 #include "tlv.h"
 
 #if 0
@@ -42,4 +45,51 @@ tlv_free(tlv * n)
 /*        memPoolFree(pool_swap_tlv, t); */
         xfree(t);
     }
+}
+
+tlv *
+tlv_unpack(const char *buf, int *hdr_len, int max_metaid)
+{
+    tlv *TLV = NULL;            /* we'll return this */
+    tlv **T = &TLV;
+    char type;
+    int length;
+    int buflen;
+    int j = 0;
+
+    assert(buf != NULL);
+    assert(hdr_len != NULL);
+
+    xmemcpy(&buflen, &buf[j], sizeof(int));
+    j += sizeof(int);
+    /*
+     * sanity check on 'buflen' value.  It should be at least big
+     * enough to hold one type and one length.
+     */
+    if (buflen <= (sizeof(char) + sizeof(int)))
+            return NULL;
+    while (buflen - j >= (sizeof(char) + sizeof(int))) {
+        type = buf[j++];
+        /* 0 is reserved, but allow some slack for new types.. */
+        if (type <= 0 || type > max_metaid) {
+            debug(20, 0) ("tlv_unpack: bad type (%d)!\n", type);
+            break;
+        }
+        xmemcpy(&length, &buf[j], sizeof(int));
+        if (length < 0 || length > (1 << 16)) {
+            debug(20, 0) ("tlv_unpack: insane length (%d)!\n", length);
+            break;
+        }
+        j += sizeof(int);
+        if (j + length > buflen) {
+            debug(20, 0) ("tlv_unpack: overflow!\n");
+            debug(20, 0) ("\ttype=%d, length=%d, buflen=%d, offset=%d\n",
+                type, length, buflen, (int) j);
+            break;
+        }
+        T = tlv_add(type, &buf[j], (size_t) length, T);
+        j += length;
+    }
+    *hdr_len = buflen;
+    return TLV;
 }
