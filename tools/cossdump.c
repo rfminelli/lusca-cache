@@ -31,35 +31,9 @@
 
 #include "../libsqstore/store_mgr.h"
 
-#include "../src/defines.h"
-/* XXX Needed for stuff in enums.h; remove later! -adrian */
-#include "../libhttp/HttpHeaderType.h"
-#include "../src/enums.h"
-
-#ifndef PRId64
-#ifdef _SQUID_MSWIN_		/* Windows native port using MSVCRT */
-#define PRId64 "I64d"
-#elif SIZEOF_INT64_T > SIZEOF_LONG
-#define PRId64 "lld"
-#else
-#define PRId64 "ld"
-#endif
-#endif
-
-#if SIZEOF_INT64_T > SIZEOF_LONG && HAVE_STRTOLL
-#define SIZEOF_SQUID_OFF_T SIZEOF_INT64_T
-#define PRINTF_OFF_T PRId64
-#define strto_off_t (int64_t)strtoll
-#else
-#define SIZEOF_SQUID_OFF_T SIZEOF_LONG
-#define PRINTF_OFF_T "ld"
-#define strto_off_t strtol
-#endif
-
 #define	STRIPESIZE 1048576
 #define	BLOCKSIZE 1024
 #define BLKBITS 10
-
 
 /* normally in libiapp .. */
 int shutting_down = 0;
