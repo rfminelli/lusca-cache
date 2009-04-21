@@ -141,10 +141,6 @@
 #define VIEWEXCLUDED    2
 #endif
 
-#define STORE_META_OK     0x03
-#define STORE_META_DIRTY  0x04
-#define STORE_META_BAD    0x05
-
 #define STORE_META_KEY STORE_META_KEY_MD5
 
 #define STORE_META_TLD_START sizeof(int)+sizeof(char)
