@@ -116,7 +116,6 @@ typedef struct _refresh_t refresh_t;
 typedef struct _refresh_cc refresh_cc;
 typedef struct _ErrorState ErrorState;
 typedef struct _StatCounters StatCounters;
-typedef struct _tlv tlv;
 typedef struct _storeSwapLogData storeSwapLogData;
 typedef struct _storeSwapLogDataOld storeSwapLogDataOld;
 typedef struct _storeSwapLogHeader storeSwapLogHeader;

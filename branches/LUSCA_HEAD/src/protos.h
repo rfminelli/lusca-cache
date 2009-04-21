@@ -728,11 +728,9 @@ extern int storeDirGetUFSStats(const char *, int *, int *, int *, int *);
 /*
  * store_swapmeta.c
  */
-extern void storeSwapTLVInitMem(void);
 extern char *storeSwapMetaPack(tlv * tlv_list, int *length);
 extern tlv *storeSwapMetaBuild(StoreEntry * e);
 extern tlv *storeSwapMetaUnpack(const char *buf, int *hdrlen);
-extern void storeSwapTLVFree(tlv * n);
 extern char * storeSwapMetaAssemble(StoreEntry *e, int *length);
 
 /*

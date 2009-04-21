@@ -41,6 +41,8 @@
 
 /* local routines */
 
+MemPool * pool_swap_log_data = NULL;
+
 static void
 memStringStats(StoreEntry * sentry)
 {
@@ -126,7 +128,9 @@ memInit(void)
     requestInitMem();
     helperInitMem();
     clientdbInitMem();
-    storeSwapTLVInitMem();
+    /* XXX this belongs in main.c nowdays */
+    tlv_init();
+    pool_swap_log_data = memPoolCreate("storeSwapLogData", sizeof(storeSwapLogData));
     /* Those below require conversion */
     cachemgrRegister("mem",
 	"Memory Utilization",

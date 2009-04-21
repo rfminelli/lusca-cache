@@ -58,7 +58,7 @@ storeSwapOutStart(StoreEntry * e)
     e->swap_status = SWAPOUT_WRITING;
     tlv_list = storeSwapMetaBuild(e);
     buf = storeSwapMetaPack(tlv_list, &swap_hdr_sz);
-    storeSwapTLVFree(tlv_list);
+    tlv_free(tlv_list);
 #if 0
     /* Disabled for now - buggy?! */
     buf = storeSwapMetaAssemble(e, &swap_hdr_sz);

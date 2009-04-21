@@ -239,4 +239,6 @@
 
 #define	LOGFILE_SEQNO(n)	( (n)->sequence_number )
 
+#define	storeSwapTLVFree	tlv_free
+
 #endif /* SQUID_DEFINES_H */

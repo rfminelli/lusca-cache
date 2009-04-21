@@ -708,7 +708,7 @@ storeClientReadHeader(void *data, const char *buf_unused, ssize_t len)
 	}
     } while (0);
 
-    storeSwapTLVFree(tlv_list);
+    tlv_free(tlv_list);
     xfree(new_url);
     /* don't free new_store_url if its owned by the mem object now */
     if (mem->store_url != new_store_url)
