@@ -10,16 +10,9 @@
 
 #include "tlv.h"
 
-#if 0
-MemPool * pool_swap_tlv = NULL;
-#endif
-
 void
 tlv_init(void)
 {
-#if 0
-    pool_swap_tlv = memPoolCreate("storeSwapTLV", sizeof(tlv));
-#endif
 }
 
 tlv **
@@ -42,7 +35,6 @@ tlv_free(tlv * n)
     while ((t = n) != NULL) {
         n = t->next;
         xfree(t->value);
-/*        memPoolFree(pool_swap_tlv, t); */
         xfree(t);
     }
 }
