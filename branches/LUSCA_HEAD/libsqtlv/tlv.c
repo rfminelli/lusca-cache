@@ -23,6 +23,7 @@ tlv_add(int type, const void *ptr, size_t len, tlv ** tail)
     t->type = (char) type;
     t->length = (int) len;
     t->value = xmalloc(len);
+    t->next = NULL;
     xmemcpy(t->value, ptr, len);
     *tail = t;
     return &t->next;            /* return new tail pointer */
