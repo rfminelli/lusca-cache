@@ -30,6 +30,7 @@
 #include "../libsqtlv/tlv.h"
 
 #include "../libsqstore/store_mgr.h"
+#include "../libsqstore/store_meta.h"
 
 #define	STRIPESIZE 1048576
 #define	BLOCKSIZE 1024
