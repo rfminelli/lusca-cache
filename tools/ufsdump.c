@@ -105,13 +105,26 @@ parse_header(char *buf, int len)
 	printf("\n");
 }
 
+void
+read_file(const char *path)
+{
+	int fd;
+	char buf[BUFSIZE];
+	int len;
+
+	fd = open(path, O_RDONLY);
+ 	if (fd < 0) {
+		perror("open");
+		return;
+	}
+	len = read(fd, buf, BUFSIZE);
+	parse_header(buf, len);
+	close(fd);
+}
+
 int
 main(int argc, char *argv[])
 {
-    int fd;
-    char buf[BUFSIZE];
-    int len;
-
     /* Setup the debugging library */
     _db_init("ALL,1");
     _db_set_stderr_debug(1);
@@ -120,13 +133,8 @@ main(int argc, char *argv[])
 	printf("Usage: %s <path to swapfile>\n", argv[0]);
 	exit(1);
     }
-    fd = open(argv[1], O_RDONLY);
-    if (fd < 0) {
-	perror("open");
-	exit(1);
-    }
 
-    len = read(fd, buf, BUFSIZE);
-    parse_header(buf, len);
+    read_file(argv[1]);
+
     return 0;
 }
