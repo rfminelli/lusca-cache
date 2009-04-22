@@ -22,6 +22,8 @@
 #include <fcntl.h>
 #endif
 
+#include <dirent.h>
+
 #include "../libcore/kb.h"
 #include "../libcore/varargs.h"
 
@@ -36,6 +38,8 @@
 
 /* normally in libiapp .. */
 int shutting_down = 0;
+
+int output = 0;
 
 const char *
 storeKeyText(const unsigned char *key)
@@ -59,7 +63,7 @@ storeMetaNew(char *buf, int len)
 	storeMetaIndexNew *sn;
 
 	sn = (storeMetaIndexNew *) buf;
-	printf("	SWAP_META_STD_LFS: mlen %d, size %d, timestamp %ld, lastref %ld, expires %ld, lastmod %ld, file size %ld, refcount %d, flags %d\n", len, sizeof(storeMetaIndexNew), sn->timestamp, sn->lastref, sn->expires, sn->lastmod, sn->swap_file_sz, sn->refcount, sn->flags);
+	if (output) printf("	SWAP_META_STD_LFS: mlen %d, size %d, timestamp %ld, lastref %ld, expires %ld, lastmod %ld, file size %ld, refcount %d, flags %d\n", len, sizeof(storeMetaIndexNew), sn->timestamp, sn->lastref, sn->expires, sn->lastmod, sn->swap_file_sz, sn->refcount, sn->flags);
 }
 
 static void
@@ -71,38 +75,39 @@ parse_header(char *buf, int len)
 
 	tlv_list = tlv_unpack(buf, &bl, STORE_META_END + 10);
 	if (tlv_list == NULL) {
-		printf("  Object: NULL\n");
+		if (output) printf("  Object: NULL\n");
 		return;
 	}
 
 	/* XXX need to make sure the first entry in the list is type STORE_META_OK ? (an "int" type) */
 
-	printf("  Object: hdr size %d\n", bl);
+	if (output) printf("  Object: hdr size %d\n", bl);
 	for (t = tlv_list; t; t = t->next) {
 	    switch (t->type) {
 	    case STORE_META_URL:
 		/* XXX Is this OK? Is the URL guaranteed to be \0 terminated? */
-		printf("	STORE_META_URL: %s\n", (char *) t->value);
+		if (output) printf("	STORE_META_URL: %s\n", (char *) t->value);
 		break;
 	    case STORE_META_KEY_MD5:
-		printf("	STORE_META_KEY_MD5: %s\n", storeKeyText( (unsigned char *) t->value ) );
+		if (output) printf("	STORE_META_KEY_MD5: %s\n", storeKeyText( (unsigned char *) t->value ) );
 		break;
 	    case STORE_META_STD_LFS:
 		storeMetaNew( (char *) t->value, t->length);
 		break;
 	    case STORE_META_OBJSIZE:
 			l = t->value;
-			printf("\tSTORE_META_OBJSIZE: %" PRINTF_OFF_T " (len %d)\n", *l, t->length);
+			if (output) printf("\tSTORE_META_OBJSIZE: %" PRINTF_OFF_T " (len %d)\n", *l, t->length);
 			break;
 	    default:
-		printf("\tType: %d; Length %d\n", t->type, (int) t->length);
+		if (output) printf("\tType: %d; Length %d\n", t->type, (int) t->length);
 	    }
 	}
 	if (l == NULL) {
 	    //printf("  STRIPE: Completed, got an object with no size\n");
 	}
+	assert(tlv_list != NULL);
 	tlv_free(tlv_list);
-	printf("\n");
+	if (output) printf("\n");
 }
 
 void
@@ -118,8 +123,31 @@ read_file(const char *path)
 		return;
 	}
 	len = read(fd, buf, BUFSIZE);
+	printf("FILE: %s\n", path);
 	parse_header(buf, len);
 	close(fd);
+}
+
+void
+read_dir(const char *dirpath)
+{
+	DIR *d;
+	struct dirent *de;
+	char path[256];
+
+	d = opendir(dirpath);
+	if (! d) {
+		perror("opendir");
+		return;
+	}
+
+	while ( (de = readdir(d)) != NULL) {
+		if (de->d_name[0] == '.')
+			continue;
+
+		snprintf(path, sizeof(path) - 1, "%s/%s", dirpath, de->d_name);
+		read_file(path);
+	}
 }
 
 int
@@ -129,12 +157,17 @@ main(int argc, char *argv[])
     _db_init("ALL,1");
     _db_set_stderr_debug(1);
 
-    if (argc < 2) {
-	printf("Usage: %s <path to swapfile>\n", argv[0]);
+    if (argc < 3) {
+	printf("Usage: %s -f <path to swapfile>\n", argv[0]);
+	printf("Usage: %s -d <directory of files to check>\n", argv[0]);
 	exit(1);
     }
 
-    read_file(argv[1]);
+    if (strcmp(argv[1], "-f") == 0){
+    	read_file(argv[2]);
+    } else {
+    	read_dir(argv[2]);
+    }
 
     return 0;
 }
