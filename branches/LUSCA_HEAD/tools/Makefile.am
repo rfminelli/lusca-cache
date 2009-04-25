@@ -25,6 +25,7 @@ endif
 bin_PROGRAMS = \
 	squidclient \
 	ufsdump \
+	ufs_log_dump \
 	$(COSSDUMP)
 
 libexec_PROGRAMS = \
@@ -33,6 +34,7 @@ libexec_PROGRAMS = \
 squidclient_SOURCES = squidclient.c
 cossdump_SOURCES = cossdump.c
 ufsdump_SOURCES = ufsdump.c
+ufs_log_dump_SOURCES = ufs_log_dump.c
 cachemgr__CGIEXT__SOURCES = cachemgr.c
 cachemgr__CGIEXT__CFLAGS = -DDEFAULT_CACHEMGR_CONFIG=\"$(DEFAULT_CACHEMGR_CONFIG)\" $(AM_CFLAGS)
 
