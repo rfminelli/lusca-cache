@@ -25,12 +25,14 @@ struct _storeSwapLogData {
     u_short flags;
     unsigned char key[SQUID_MD5_DIGEST_LENGTH];
 };
+typedef struct _storeSwapLogData storeSwapLogData;
 
 struct _storeSwapLogHeader {
     char op;
     int version;
     int record_size;
 };
+typedef struct _storeSwapLogHeader storeSwapLogHeader;
 
 #if SIZEOF_SQUID_FILE_SZ != SIZEOF_SIZE_T
 struct _storeSwapLogDataOld {
@@ -45,6 +47,7 @@ struct _storeSwapLogDataOld {
     u_short flags;
     unsigned char key[SQUID_MD5_DIGEST_LENGTH];
 };
+typedef struct _storeSwapLogDataOld storeSwapLogDataOld;
 #endif
 
 extern const char * swap_log_op_str[];
