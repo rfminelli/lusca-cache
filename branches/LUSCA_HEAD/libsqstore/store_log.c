@@ -40,3 +40,11 @@ store_ufs_createPath(const char *prefix, int filn, int L1, int L2, char *buf)
         filn);
     return 1;
 }   
+
+int
+store_ufs_createDir(const char *prefix, int L1, int L2, char *buf)
+{
+    buf[0] = '\0';
+    snprintf(buf, SQUID_MAXPATHLEN, "%s/%02X/%02X", prefix, L1, L2);
+    return 1;
+}
