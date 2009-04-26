@@ -40,6 +40,7 @@
 #include "../libsqstore/store_mgr.h"
 #include "../libsqstore/store_meta.h"
 #include "../libsqstore/store_log.h"
+#include "../libsqstore/store_file_ufs.h"
 
 #define	BUFSIZE		4096
 
@@ -152,6 +153,7 @@ read_file(const char *path)
 	rebuild_entry_t re;
 	storeSwapLogData sd;
 
+	fprintf(stderr, "read_file: %s\n", path);
 	fd = open(path, O_RDONLY);
  	if (fd < 0) {
 		perror("open");
@@ -178,24 +180,40 @@ read_file(const char *path)
 }
 
 void
-read_dir(const char *dirpath)
+read_dir(const char *dirpath, int l1, int l2)
 {
 	DIR *d;
 	struct dirent *de;
-	char path[256];
+	char path[SQUID_MAXPATHLEN];
+	char dir[SQUID_MAXPATHLEN];
+	int i, j;
 
-	d = opendir(dirpath);
-	if (! d) {
-		perror("opendir");
-		return;
+	for (i = 0; i < l1; i++) {
+		for (j = 0; j < l2; j++) {
+			(void) store_ufs_createDir(dirpath, i, j, dir);
+			fprintf(stderr, "opening dir %s\n", dir);
+			d = opendir(dir);
+			if (! d) {
+				perror("opendir");
+				continue;
+			}
+
+			/* The store dir stuff really should verify that the given file
+			 * exists where it is supposed to exist. It is also plausible that
+			 * this could attempt to shuffle files around in case users
+			 * wish to change L1/L2 configuration.. :)
+			 */
+			while ( (de = readdir(d)) != NULL) {
+				if (de->d_name[0] == '.')
+					continue;
+				snprintf(path, sizeof(path) - 1, "%s/%s", dir, de->d_name);
+				fprintf(stderr, "opening %s\n", path);
+				read_file(path);
+			}
+			closedir(d);
+		}
 	}
 
-	while ( (de = readdir(d)) != NULL) {
-		if (de->d_name[0] == '.')
-			continue;
-		snprintf(path, sizeof(path) - 1, "%s/%s", dirpath, de->d_name);
-		read_file(path);
-	}
 }
 
 int
@@ -209,9 +227,8 @@ main(int argc, char *argv[])
 
     bzero(buf, sizeof(buf));
 
-    if (argc < 3) {
-	printf("Usage: %s -f <path to swapfile>\n", argv[0]);
-	printf("Usage: %s -d <directory of files to check>\n", argv[0]);
+    if (argc < 4) {
+	printf("Usage: %s <store path> <l1> <l2>\n", argv[0]);
 	exit(1);
     }
 
@@ -222,11 +239,7 @@ main(int argc, char *argv[])
 
     write(1, sh, sizeof(storeSwapLogData));
 
-    if (strcmp(argv[1], "-f") == 0){
-    	read_file(argv[2]);
-    } else {
-    	read_dir(argv[2]);
-    }
+    read_dir(argv[1], atoi(argv[2]), atoi(argv[3]));
 
     return 0;
 }
