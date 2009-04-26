@@ -24,22 +24,50 @@
 
 #include <dirent.h>
 
+#include "../include/util.h"
+
 #include "../libcore/kb.h"
 #include "../libcore/varargs.h"
+#include "../libcore/mem.h"
+#include "../libcore/tools.h"
 
 #include "../libsqdebug/debug.h"
 
 #include "../libsqtlv/tlv.h"
 
+#define	SQUID_MD5_DIGEST_LENGTH	16
+
 #include "../libsqstore/store_mgr.h"
 #include "../libsqstore/store_meta.h"
+#include "../libsqstore/store_log.h"
 
 #define	BUFSIZE		4096
 
 /* normally in libiapp .. */
 int shutting_down = 0;
 
-int output = 0;
+struct _rebuild_entry {
+	storeMetaIndexNew mi;
+	char *md5_key;
+	char *url;
+	char *storeurl;
+	squid_file_sz file_size;
+};
+typedef struct _rebuild_entry rebuild_entry_t;
+
+void
+rebuild_entry_done(rebuild_entry_t *re)
+{
+	safe_free(re->md5_key);
+	safe_free(re->url);
+	safe_free(re->storeurl);
+}
+
+void
+rebuild_entry_init(rebuild_entry_t *re)
+{
+	bzero(re, sizeof(*re));
+}
 
 const char *
 storeKeyText(const unsigned char *key)
@@ -63,51 +91,56 @@ storeMetaNew(char *buf, int len)
 	storeMetaIndexNew *sn;
 
 	sn = (storeMetaIndexNew *) buf;
-	if (output) printf("	SWAP_META_STD_LFS: mlen %d, size %d, timestamp %ld, lastref %ld, expires %ld, lastmod %ld, file size %ld, refcount %d, flags %d\n", len, sizeof(storeMetaIndexNew), sn->timestamp, sn->lastref, sn->expires, sn->lastmod, sn->swap_file_sz, sn->refcount, sn->flags);
+	//if (output) printf("	SWAP_META_STD_LFS: mlen %d, size %d, timestamp %ld, lastref %ld, expires %ld, lastmod %ld, file size %ld, refcount %d, flags %d\n", len, sizeof(storeMetaIndexNew), sn->timestamp, sn->lastref, sn->expires, sn->lastmod, sn->swap_file_sz, sn->refcount, sn->flags);
 }
 
-static void
-parse_header(char *buf, int len)
+static int
+parse_header(char *buf, int len, rebuild_entry_t *re)
 {
 	tlv *t, *tlv_list;
 	int64_t *l = NULL;
 	int bl = len;
+	int parsed = 0;
 
 	tlv_list = tlv_unpack(buf, &bl, STORE_META_END + 10);
 	if (tlv_list == NULL) {
-		if (output) printf("  Object: NULL\n");
-		return;
+		return -1;
 	}
 
-	/* XXX need to make sure the first entry in the list is type STORE_META_OK ? (an "int" type) */
-
-	if (output) printf("  Object: hdr size %d\n", bl);
 	for (t = tlv_list; t; t = t->next) {
 	    switch (t->type) {
 	    case STORE_META_URL:
+		fprintf(stderr, "  STORE_META_URL\n");
 		/* XXX Is this OK? Is the URL guaranteed to be \0 terminated? */
-		if (output) printf("	STORE_META_URL: %s\n", (char *) t->value);
+		re->url = xstrdup( (char *) t->value );
+		parsed++;
 		break;
 	    case STORE_META_KEY_MD5:
-		if (output) printf("	STORE_META_KEY_MD5: %s\n", storeKeyText( (unsigned char *) t->value ) );
+		fprintf(stderr, "  STORE_META_KEY_MD5\n");
+		/* XXX should double-check key length? */
+		re->md5_key = xmalloc(SQUID_MD5_DIGEST_LENGTH);
+		memcpy(re->md5_key, t->value, SQUID_MD5_DIGEST_LENGTH);
+		parsed++;
 		break;
 	    case STORE_META_STD_LFS:
-		storeMetaNew( (char *) t->value, t->length);
+		fprintf(stderr, "  STORE_META_STD_LFS\n");
+		/* XXX should double-check lengths match? */
+		memcpy(&re->mi, t->value, sizeof(re->mi));
+		parsed++;
 		break;
 	    case STORE_META_OBJSIZE:
-			l = t->value;
-			if (output) printf("\tSTORE_META_OBJSIZE: %" PRINTF_OFF_T " (len %d)\n", *l, t->length);
-			break;
+		fprintf(stderr, "  STORE_META_OBJSIZE\n");
+		/* XXX is this typecast'ed to the right "size" on all platforms ? */
+		//re->file_size = * ((int64_t *) l);
+		parsed++;
+		break;
 	    default:
-		if (output) printf("\tType: %d; Length %d\n", t->type, (int) t->length);
+		break;
 	    }
-	}
-	if (l == NULL) {
-	    //printf("  STRIPE: Completed, got an object with no size\n");
 	}
 	assert(tlv_list != NULL);
 	tlv_free(tlv_list);
-	if (output) printf("\n");
+	return (parsed > 1);
 }
 
 void
@@ -116,6 +149,8 @@ read_file(const char *path)
 	int fd;
 	char buf[BUFSIZE];
 	int len;
+	rebuild_entry_t re;
+	storeSwapLogData sd;
 
 	fd = open(path, O_RDONLY);
  	if (fd < 0) {
@@ -123,8 +158,22 @@ read_file(const char *path)
 		return;
 	}
 	len = read(fd, buf, BUFSIZE);
-	printf("FILE: %s\n", path);
-	parse_header(buf, len);
+	fprintf(stderr, "FILE: %s\n", path);
+	rebuild_entry_init(&re);
+	if (parse_header(buf, len, &re)) {
+		sd.op = SWAP_LOG_ADD;
+		sd.swap_filen = 0x12345678;		/* XXX this should be based on the filename */
+		sd.timestamp = re.mi.timestamp;
+		sd.lastref = re.mi.lastref;
+		sd.expires = re.mi.expires;
+		sd.lastmod = re.mi.lastmod;
+		sd.swap_file_sz = -1;			/* XXX for now? Need to stat the file to check */
+		sd.refcount = re.mi.refcount;
+		sd.flags = re.mi.flags;
+		memcpy(&sd.key, re.md5_key, sizeof(sd.key));
+		write(1, &sd, sizeof(sd));
+	}
+	rebuild_entry_done(&re);
 	close(fd);
 }
 
@@ -144,7 +193,6 @@ read_dir(const char *dirpath)
 	while ( (de = readdir(d)) != NULL) {
 		if (de->d_name[0] == '.')
 			continue;
-
 		snprintf(path, sizeof(path) - 1, "%s/%s", dirpath, de->d_name);
 		read_file(path);
 	}
@@ -156,12 +204,23 @@ main(int argc, char *argv[])
     /* Setup the debugging library */
     _db_init("ALL,1");
     _db_set_stderr_debug(1);
+    char buf[sizeof(storeSwapLogData)];
+    storeSwapLogHeader *sh = (storeSwapLogHeader *) buf;
+
+    bzero(buf, sizeof(buf));
 
     if (argc < 3) {
 	printf("Usage: %s -f <path to swapfile>\n", argv[0]);
 	printf("Usage: %s -d <directory of files to check>\n", argv[0]);
 	exit(1);
     }
+
+    /* Output swap header */
+    sh->op = SWAP_LOG_VERSION;
+    sh->version = 1;
+    sh->record_size = sizeof(storeSwapLogData);
+
+    write(1, sh, sizeof(storeSwapLogData));
 
     if (strcmp(argv[1], "-f") == 0){
     	read_file(argv[2]);
