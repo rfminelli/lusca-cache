@@ -6,6 +6,7 @@
 #include "../include/config.h"
 #include "../include/squid_md5.h"
 
+#include "../libcore/varargs.h"
 #include "../libcore/kb.h"
 #include "../libcore/tools.h"	/* for SQUID_MAXPATHLEN */
 
