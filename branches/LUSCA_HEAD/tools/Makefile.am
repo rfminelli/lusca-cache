@@ -38,7 +38,7 @@ ufs_log_dump_SOURCES = ufs_log_dump.c
 cachemgr__CGIEXT__SOURCES = cachemgr.c
 cachemgr__CGIEXT__CFLAGS = -DDEFAULT_CACHEMGR_CONFIG=\"$(DEFAULT_CACHEMGR_CONFIG)\" $(AM_CFLAGS)
 
-LDADD = -L../lib -L../libsqdebug -L../libsqtlv -L../libcore -lsqdebug -lsqtlv -lcore -lmiscutil $(XTRA_LIBS)
+LDADD = -L../lib -L../libsqdebug -L../libsqtlv -L../libsqstore -L../libcore -lsqstore -lsqdebug -lsqtlv -lcore -lmiscutil $(XTRA_LIBS)
 
 EXTRA_DIST = \
 	cachemgr.conf
