@@ -61,6 +61,28 @@ storeKeyText(const unsigned char *key)
         return buf;
 }
 
+static const char *
+storeMetaText(storeSwapLogData *d)
+{
+	static char buf[1024];
+	char *ks = storeKeyText(d->key);
+
+	buf[0] = '\0';
+
+	snprintf(buf, 1024, "op %s; fileno %X; timestamp %ld; lastref %ld; expires %ld; lastmod %ld; filesize %ld; refcount %d; flags %d; key %s",
+	    swap_log_op_str[d->op],
+	    (int) d->swap_filen,
+	    (long int) d->timestamp,
+	    (long int) d->lastref,
+	    (long int) d->expires,
+	    (long int) d->lastmod,
+	    (long int) d->swap_file_sz,
+	    (int) d->refcount,
+	    (int) d->flags,
+	    ks);
+	return buf;
+}
+
 
 void
 read_file(const char *path)
@@ -107,7 +129,7 @@ read_file(const char *path)
 	/* Start reading entries */
 	while ((len = read(fd, buf, sizeof(storeSwapLogData))) > 0) {
 		se = (storeSwapLogData *) buf;
-		printf("op: %d; read len %d, key %s\n", se->op, len, storeKeyText(se->key));
+		printf(  "Entry: %s\n", storeMetaText(se));
 	}
 
 	close(fd);
