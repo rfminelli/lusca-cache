@@ -54,6 +54,7 @@ struct _RebuildState {
     struct {
 	unsigned int clean:1;
 	unsigned int init:1;
+	unsigned int old_swaplog_entry_size:1;
     } flags;
     int done;
     int in_dir;
@@ -574,19 +575,35 @@ storeAufsDirRebuildFromSwapLog(void *data)
     RebuildState *rb = data;
     SwapDir *SD = rb->sd;
     StoreEntry *e = NULL;
+    char buf[256];
     storeSwapLogData s;
-    size_t ss = sizeof(storeSwapLogData);
+    size_t ss = -1;
     int count;
     int used;			/* is swapfile already in use? */
     int disk_entry_newer;	/* is the log entry newer than current entry? */
     double x;
     assert(rb != NULL);
+    if (rb->flags.old_swaplog_entry_size)
+	ss = sizeof(storeSwapLogDataOld);
+    else
+	ss = sizeof(storeSwapLogData);
+    assert(ss < sizeof(buf));
+
     /* load a number of objects per invocation */
     for (count = 0; count < rb->speed; count++) {
-	if (fread(&s, ss, 1, rb->log) != 1) {
+	/* Read the swaplog entry, new or old */
+	if (fread(buf, ss, 1, rb->log) != 1) {
 	    storeAufsDirRebuildComplete(rb);
 	    return;
 	}
+
+	/* Is it an old-style entry? convert it if needed */
+	if (rb->flags.old_swaplog_entry_size) {
+		(void) storeSwapLogUpgradeEntry(&s, (storeSwapLogDataOld *) buf);
+	} else {
+		memcpy(&s, buf, sizeof(s));
+	}
+
 	rb->n_read++;
 	/*
 	 * BC: during 2.4 development, we changed the way swap file
@@ -714,156 +731,6 @@ storeAufsDirRebuildFromSwapLog(void *data)
     eventAdd("storeRebuild", storeAufsDirRebuildFromSwapLog, rb, 0.0, 1);
 }
 
-#if SIZEOF_SQUID_FILE_SZ != SIZEOF_SIZE_T
-/* This is an exact copy of the above, but using storeSwapLogDataOld entry type */
-static void
-storeAufsDirRebuildFromSwapLogOld(void *data)
-{
-    RebuildState *rb = data;
-    SwapDir *SD = rb->sd;
-    StoreEntry *e = NULL;
-    storeSwapLogDataOld s;
-    size_t ss = sizeof(storeSwapLogDataOld);
-    int count;
-    int used;			/* is swapfile already in use? */
-    int disk_entry_newer;	/* is the log entry newer than current entry? */
-    double x;
-    assert(rb != NULL);
-    /* load a number of objects per invocation */
-    for (count = 0; count < rb->speed; count++) {
-	if (fread(&s, ss, 1, rb->log) != 1) {
-	    storeAufsDirRebuildComplete(rb);
-	    return;
-	}
-	rb->n_read++;
-	/*
-	 * BC: during 2.4 development, we changed the way swap file
-	 * numbers are assigned and stored.  The high 16 bits used
-	 * to encode the SD index number.  There used to be a call
-	 * to storeDirProperFileno here that re-assigned the index 
-	 * bits.  Now, for backwards compatibility, we just need
-	 * to mask it off.
-	 */
-	s.swap_filen &= 0x00FFFFFF;
-	debug(47, 3) ("storeAufsDirRebuildFromSwapLog: %s %s %08X\n",
-	    swap_log_op_str[(int) s.op],
-	    storeKeyText(s.key),
-	    s.swap_filen);
-	if (s.op == SWAP_LOG_ADD) {
-	    (void) 0;
-	} else if (s.op == SWAP_LOG_DEL) {
-	    /* Delete unless we already have a newer copy */
-	    if ((e = storeGet(s.key)) != NULL && s.lastref >= e->lastref) {
-		/*
-		 * Make sure we don't unlink the file, it might be
-		 * in use by a subsequent entry.  Also note that
-		 * we don't have to subtract from store_swap_size
-		 * because adding to store_swap_size happens in
-		 * the cleanup procedure.
-		 */
-		storeRecycle(e);
-		rb->counts.cancelcount++;
-	    }
-	    continue;
-	} else {
-	    x = log(++rb->counts.bad_log_op) / log(10.0);
-	    if (0.0 == x - (double) (int) x)
-		debug(47, 1) ("WARNING: %d invalid swap log entries found\n",
-		    rb->counts.bad_log_op);
-	    rb->counts.invalid++;
-	    continue;
-	}
-	if ((++rb->counts.scancount & 0xFFF) == 0) {
-	    struct stat sb;
-	    if (0 == fstat(fileno(rb->log), &sb))
-		storeRebuildProgress(SD->index,
-		    (int) sb.st_size / ss, rb->n_read);
-	}
-	if (!storeAufsDirValidFileno(SD, s.swap_filen, 0)) {
-	    rb->counts.invalid++;
-	    continue;
-	}
-	if (EBIT_TEST(s.flags, KEY_PRIVATE)) {
-	    rb->counts.badflags++;
-	    continue;
-	}
-	e = storeGet(s.key);
-	used = storeAufsDirMapBitTest(SD, s.swap_filen);
-	/* If this URL already exists in the cache, does the swap log
-	 * appear to have a newer entry?  Compare 'lastref' from the
-	 * swap log to e->lastref. */
-	disk_entry_newer = e ? (s.lastref > e->lastref ? 1 : 0) : 0;
-	if (used && !disk_entry_newer) {
-	    /* log entry is old, ignore it */
-	    rb->counts.clashcount++;
-	    continue;
-	} else if (used && e && e->swap_filen == s.swap_filen && e->swap_dirn == SD->index) {
-	    /* swapfile taken, same URL, newer, update meta */
-	    if (e->store_status == STORE_OK) {
-		e->lastref = s.timestamp;
-		e->timestamp = s.timestamp;
-		e->expires = s.expires;
-		e->lastmod = s.lastmod;
-		e->flags = s.flags;
-		e->refcount += s.refcount;
-		storeAufsDirUnrefObj(SD, e);
-	    } else {
-		debug_trap("storeAufsDirRebuildFromSwapLog: bad condition");
-		debug(47, 1) ("\tSee %s:%d\n", __FILE__, __LINE__);
-	    }
-	    continue;
-	} else if (used) {
-	    /* swapfile in use, not by this URL, log entry is newer */
-	    /* This is sorta bad: the log entry should NOT be newer at this
-	     * point.  If the log is dirty, the filesize check should have
-	     * caught this.  If the log is clean, there should never be a
-	     * newer entry. */
-	    debug(47, 1) ("WARNING: newer swaplog entry for dirno %d, fileno %08X\n",
-		SD->index, s.swap_filen);
-	    /* I'm tempted to remove the swapfile here just to be safe,
-	     * but there is a bad race condition in the NOVM version if
-	     * the swapfile has recently been opened for writing, but
-	     * not yet opened for reading.  Because we can't map
-	     * swapfiles back to StoreEntrys, we don't know the state
-	     * of the entry using that file.  */
-	    /* We'll assume the existing entry is valid, probably because
-	     * the swap file number got taken while we rebuld */
-	    rb->counts.clashcount++;
-	    continue;
-	} else if (e && !disk_entry_newer) {
-	    /* key already exists, current entry is newer */
-	    /* keep old, ignore new */
-	    rb->counts.dupcount++;
-	    continue;
-	} else if (e) {
-	    /* key already exists, this swapfile not being used */
-	    /* junk old, load new */
-	    storeRecycle(e);
-	    rb->counts.dupcount++;
-	} else {
-	    /* URL doesnt exist, swapfile not in use */
-	    /* load new */
-	    (void) 0;
-	}
-	/* update store_swap_size */
-	rb->counts.objcount++;
-	e = storeAufsDirAddDiskRestore(SD, s.key,
-	    s.swap_filen,
-	    s.swap_file_sz,
-	    s.expires,
-	    s.timestamp,
-	    s.lastref,
-	    s.lastmod,
-	    s.refcount,
-	    s.flags,
-	    (int) rb->flags.clean);
-	storeDirSwapLog(e, SWAP_LOG_ADD);
-    }
-    eventAdd("storeRebuild", storeAufsDirRebuildFromSwapLogOld, rb, 0.0, 1);
-}
-
-#endif
-
 static void
 storeAufsDirRebuildFromSwapLogCheckVersion(void *data)
 {
@@ -880,13 +747,15 @@ storeAufsDirRebuildFromSwapLogCheckVersion(void *data)
 	    return;
 	}
 	if (hdr.version == 1 && hdr.record_size == sizeof(storeSwapLogData)) {
+	    rb->flags.old_swaplog_entry_size = 0;
 	    eventAdd("storeRebuild", storeAufsDirRebuildFromSwapLog, rb, 0.0, 1);
 	    return;
 	}
 #if SIZEOF_SQUID_FILE_SZ != SIZEOF_SIZE_T
 	if (hdr.version == 1 && hdr.record_size == sizeof(storeSwapLogDataOld)) {
 	    debug(47, 1) ("storeAufsDirRebuildFromSwapLog: Found current version but without large file support. Upgrading\n");
-	    eventAdd("storeRebuild", storeAufsDirRebuildFromSwapLogOld, rb, 0.0, 1);
+	    rb->flags.old_swaplog_entry_size = 1;
+	    eventAdd("storeRebuild", storeAufsDirRebuildFromSwapLog, rb, 0.0, 1);
 	    return;
 	}
 #endif
@@ -898,9 +767,11 @@ storeAufsDirRebuildFromSwapLogCheckVersion(void *data)
     rewind(rb->log);
     debug(47, 1) ("storeAufsDirRebuildFromSwapLog: Old version detected. Upgrading\n");
 #if SIZEOF_SQUID_FILE_SZ == SIZEOF_SIZE_T
+    rb->flags.old_swaplog_entry_size = 0;
     eventAdd("storeRebuild", storeAufsDirRebuildFromSwapLog, rb, 0.0, 1);
 #else
-    eventAdd("storeRebuild", storeAufsDirRebuildFromSwapLogOld, rb, 0.0, 1);
+    rb->flags.old_swaplog_entry_size = 1;
+    eventAdd("storeRebuild", storeAufsDirRebuildFromSwapLog, rb, 0.0, 1);
 #endif
 }
 
