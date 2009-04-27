@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <string.h>
 
 #include "../include/config.h"
 #include "../include/squid_md5.h"
@@ -19,3 +20,20 @@ const char * swap_log_op_str[] = {
     "SWAP_LOG_VERSION",
     "SWAP_LOG_MAX"
 };
+
+int
+storeSwapLogUpgradeEntry(storeSwapLogData *dst, storeSwapLogDataOld *src)
+{
+    dst->op = src->op;
+    dst->swap_filen = src->swap_filen;
+    dst->timestamp = src->timestamp;
+    dst->lastref = src->lastref;
+    dst->expires = src->expires;
+    dst->lastmod = src->lastmod;
+    dst->swap_file_sz = src->swap_file_sz;			/* This is the entry whose size has changed */
+    dst->refcount = src->refcount;
+    dst->flags = src->flags;
+    memcpy(dst->key, src->key, SQUID_MD5_DIGEST_LENGTH);
+
+    return 1;
+}
