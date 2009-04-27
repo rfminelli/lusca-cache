@@ -52,4 +52,6 @@ typedef struct _storeSwapLogDataOld storeSwapLogDataOld;
 
 extern const char * swap_log_op_str[];
 
+extern int storeSwapLogUpgradeEntry(storeSwapLogData *dst, storeSwapLogDataOld *src);
+
 #endif
