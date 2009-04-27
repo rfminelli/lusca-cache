@@ -446,6 +446,7 @@ struct rusage {
 #include "../libsqstore/store_mgr.h"
 #include "../libsqstore/store_meta.h"
 #include "../libsqstore/store_log.h"
+#include "../libsqstore/store_file_ufs.h"
 
 #include "defines.h"
 #include "enums.h"
