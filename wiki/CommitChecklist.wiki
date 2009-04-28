@@ -1,0 +1,9 @@
+#summary Committing code to Lusca- what you should do
+
+= Overview =
+
+Each commit should be a single atomic change to a small area - don't commit two patches to different "things" (eg storage and http code) at the same time. It makes backing out an incorrect patch more difficult (eg, if you needed to -just- back out the storage change but not the http change.)
+
+If a commit references an issue, you should reference the issue in the commit message. The google code web ui will automatically match a few potential issue strings and hyperlink the issue for you. I suggest using the format "Issue #XX" where XX is the issue number. See r13929 for an example of this.
+
+Similarly, make sure you update the issue to point to the committed revision by mentioning the revision by number in the format rXXXXX. So revision 12345 should be mentioned as "r12345". The google code web ui will automatically identify that it references a commit revision and helpfully hyperlink it for you.
