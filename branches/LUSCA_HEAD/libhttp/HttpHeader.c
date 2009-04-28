@@ -329,7 +329,7 @@ void
 httpHeaderAddEntryString(HttpHeader *hdr, http_hdr_type id, const String *a, const String *v)
 {
 	HttpHeaderEntry *e = memPoolAlloc(pool_http_header_entry);
-	httpHeaderEntryCreate2(e, id, a, v);
+	httpHeaderEntryCreateStr(e, id, a, v);
 	httpHeaderAddEntry(hdr, e);
 }
 
