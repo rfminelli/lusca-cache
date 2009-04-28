@@ -194,7 +194,7 @@ write_swaplog_entry(rebuild_entry_t *re)
 }
 
 void
-read_dir(const char *dirpath, int l1, int l2)
+read_dir(store_ufs_dir_t *sd)
 {
 	DIR *d;
 	struct dirent *de;
@@ -204,9 +204,9 @@ read_dir(const char *dirpath, int l1, int l2)
 	int fn;
 	int i, j;
 
-	for (i = 0; i < l1; i++) {
-		for (j = 0; j < l2; j++) {
-			(void) store_ufs_createDir(dirpath, i, j, dir);
+	for (i = 0; i < store_ufs_l1(sd); i++) {
+		for (j = 0; j < store_ufs_l2(sd); j++) {
+			(void) store_ufs_createDir(sd, i, j, dir);
 			debug(47, 1) ("read_dir: opening dir %s\n", dir);
 			d = opendir(dir);
 			if (! d) {
@@ -228,7 +228,7 @@ read_dir(const char *dirpath, int l1, int l2)
 					debug(47, 1) ("read_dir: invalid %s\n", de->d_name);
 						continue;
 				}
-				if (! store_ufs_filenum_correct_dir(fn, i, j, l1, l2)) {
+				if (! store_ufs_filenum_correct_dir(sd, fn, i, j)) {
 					debug(47, 1) ("read_dir: %s does not belong in %d/%d\n", de->d_name, i, j);
 						continue;
 				}
@@ -245,7 +245,6 @@ read_dir(const char *dirpath, int l1, int l2)
 			closedir(d);
 		}
 	}
-
 }
 
 int
@@ -256,6 +255,7 @@ main(int argc, char *argv[])
     _db_set_stderr_debug(1);
     char buf[sizeof(storeSwapLogData)];
     storeSwapLogHeader *sh = (storeSwapLogHeader *) buf;
+    store_ufs_dir_t store_ufs_info;
 
     bzero(buf, sizeof(buf));
 
@@ -264,6 +264,8 @@ main(int argc, char *argv[])
 	exit(1);
     }
 
+    store_ufs_init(&store_ufs_info, argv[1], atoi(argv[2]), atoi(argv[3]));
+
     /* Output swap header */
     sh->op = SWAP_LOG_VERSION;
     sh->version = 1;
@@ -271,7 +273,8 @@ main(int argc, char *argv[])
 
     write(1, sh, sizeof(storeSwapLogData));
 
-    read_dir(argv[1], atoi(argv[2]), atoi(argv[3]));
+    read_dir(&store_ufs_info);
+    store_ufs_done(&store_ufs_info);
 
     return 0;
 }
