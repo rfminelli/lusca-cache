@@ -5,6 +5,7 @@
 
 #include "../include/config.h"
 #include "../include/squid_md5.h"
+#include "../include/util.h"
 
 #include "../libcore/varargs.h"
 #include "../libcore/kb.h"
@@ -14,6 +15,20 @@
 #include "store_log.h"
 
 #include "store_file_ufs.h"
+
+void
+store_ufs_init(store_ufs_dir_t *sd, const char *path, int l1, int l2)
+{
+	sd->path = xstrdup(path);
+	sd->l1 = l1;
+	sd->l2 = l2;
+}
+
+void
+store_ufs_done(store_ufs_dir_t *sd)
+{
+	safe_free(sd->path);
+}
 
 /*
  * Create a UFS path given the component bits.
@@ -64,4 +79,3 @@ store_ufs_filenum_correct_dir(int fn, int F1, int F2, int L1, int L2)
         return 0;
     return 1;
 }
-
