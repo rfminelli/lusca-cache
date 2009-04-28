@@ -74,31 +74,6 @@
  * HttpHeaderEntry
  */
 
-/* XXX new functions */
-void
-httpHeaderEntryInitString(HttpHeaderEntry *e, http_hdr_type id, String name, String value)
-{
-	assert(e->active == 0);
-
-	e->id = id;
-	if (id != HDR_OTHER)
-		e->name = Headers[id].name;
-	else
-		e->name = stringDup(&name);
-	e->value = stringDup(&value);
-	Headers[id].stat.aliveCount++;
-	e->active = 1;
-
-	debug(55, 9) ("httpHeaderEntryInitString: entry %p: '%s: %s'\n", e,
-	    strBuf(e->name), strBuf(e->value));
-}
-
-void
-httpHeaderEntryCopy(HttpHeaderEntry *dst, HttpHeaderEntry *src)
-{
-	httpHeaderEntryInitString(dst, src->id, src->name, src->value);
-}
-
 /* XXX old functions */
 
 /*
@@ -106,7 +81,6 @@ httpHeaderEntryCopy(HttpHeaderEntry *dst, HttpHeaderEntry *src)
  */
 void
 httpHeaderEntryCreate(HttpHeaderEntry *e, http_hdr_type id, const char *name, int al, const char *value, int vl)
-
 {
     assert_eid(id);
     assert(! e->active);
@@ -127,7 +101,7 @@ httpHeaderEntryCreate(HttpHeaderEntry *e, http_hdr_type id, const char *name, in
 }
 
 void
-httpHeaderEntryCreate2(HttpHeaderEntry *e, http_hdr_type id, const String *name, const String *value)
+httpHeaderEntryCreateStr(HttpHeaderEntry *e, http_hdr_type id, const String *name, const String *value)
 {
     assert_eid(id);
     assert(! e->active);
@@ -161,6 +135,6 @@ httpHeaderEntryDestroy(HttpHeaderEntry * e)
 void
 httpHeaderEntryClone(HttpHeaderEntry *new_e, const HttpHeaderEntry * e)
 {
-    httpHeaderEntryCreate2(new_e, e->id, &e->name, &e->value);
+    httpHeaderEntryCreateStr(new_e, e->id, &e->name, &e->value);
 }
 

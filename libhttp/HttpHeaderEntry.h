@@ -15,15 +15,12 @@ typedef struct _HttpHeaderEntry HttpHeaderEntry;
 static inline int httpHeaderEntryIsActive(HttpHeaderEntry *e) { return (e->active); };
 
 /* avoid using these low level routines */
-extern void httpHeaderEntryCreate(HttpHeaderEntry *e, http_hdr_type id, const char *name, int al, const char *value, int vl);
-extern void httpHeaderEntryCreate2(HttpHeaderEntry *e, http_hdr_type id, const String *name, const String *value);
-
-extern void httpHeaderEntryDestroy(HttpHeaderEntry * e);
-extern void httpHeaderEntryClone(HttpHeaderEntry *new_e, const HttpHeaderEntry * e);
 
 /* new low-level routines */
+extern void httpHeaderEntryCreateStr(HttpHeaderEntry *e, http_hdr_type id, const String *name, const String *value);
 extern void httpHeaderEntryInitString(HttpHeaderEntry *e, http_hdr_type id, String name, String value);
-extern void httpHeaderEntryCopy(HttpHeaderEntry *dst, HttpHeaderEntry *src);
-/* Destroy, Clone, Create/Create2 now belong here */
+extern void httpHeaderEntryClone(HttpHeaderEntry *new_e, const HttpHeaderEntry * e);
+extern void httpHeaderEntryCreate(HttpHeaderEntry *e, http_hdr_type id, const char *name, int al, const char *value, int vl);
+extern void httpHeaderEntryDestroy(HttpHeaderEntry * e);
 
 #endif
