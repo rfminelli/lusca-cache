@@ -1039,6 +1039,7 @@ snmpAddNode(va_alist)
     entry->parsefunction = parsefunction;
     entry->instancefunction = instancefunction;
     entry->children = children;
+    entry->leaves = NULL;
 
     if (children > 0) {
 	entry->leaves = xmalloc(sizeof(mib_tree_entry *) * children);
