@@ -21,4 +21,9 @@ extern void httpHeaderEntryCreate2(HttpHeaderEntry *e, http_hdr_type id, const S
 extern void httpHeaderEntryDestroy(HttpHeaderEntry * e);
 extern void httpHeaderEntryClone(HttpHeaderEntry *new_e, const HttpHeaderEntry * e);
 
+/* new low-level routines */
+extern void httpHeaderEntryInitString(HttpHeaderEntry *e, http_hdr_type id, String name, String value);
+extern void httpHeaderEntryCopy(HttpHeaderEntry *dst, HttpHeaderEntry *src);
+/* Destroy, Clone, Create/Create2 now belong here */
+
 #endif
