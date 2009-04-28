@@ -138,48 +138,59 @@ parse_header(char *buf, int len, rebuild_entry_t *re)
 	return (parsed > 1);
 }
 
-void
-read_file(const char *path)
+int
+read_file(const char *path, rebuild_entry_t *re)
 {
 	int fd;
 	char buf[BUFSIZE];
 	int len;
-	rebuild_entry_t re;
-	storeSwapLogData sd;
 	struct stat sb;
-
 
 	fprintf(stderr, "read_file: %s\n", path);
 	fd = open(path, O_RDONLY);
  	if (fd < 0) {
 		perror("open");
-		return;
+		return -1;
 	}
 
 	/* We need the entire file size */
 	if (fstat(fd, &sb) < 0) {
 		perror("fstat");
-		return;
+		return -1;
 	}
 
 	len = read(fd, buf, BUFSIZE);
 	fprintf(stderr, "FILE: %s\n", path);
-	rebuild_entry_init(&re);
-	if (parse_header(buf, len, &re)) {
-		sd.op = SWAP_LOG_ADD;
-		sd.swap_filen = 0x12345678;		/* XXX this should be based on the filename */
-		sd.timestamp = re.mi.timestamp;
-		sd.lastref = re.mi.lastref;
-		sd.expires = re.mi.expires;
-		sd.lastmod = re.mi.lastmod;
-		sd.swap_file_sz = sb.st_size;
-		sd.refcount = re.mi.refcount;
-		sd.flags = re.mi.flags;
-		memcpy(&sd.key, re.md5_key, sizeof(sd.key));
-		write(1, &sd, sizeof(sd));
+
+	if (! parse_header(buf, len, re)) {
+		close(fd);
+		return -1;
 	}
-	rebuild_entry_done(&re);
+	re->file_size = sb.st_size;
 	close(fd);
+	return 1;
+}
+
+int
+write_swaplog_entry(rebuild_entry_t *re)
+{
+	storeSwapLogData sd;
+
+	sd.op = SWAP_LOG_ADD;
+	sd.swap_filen = 0x12345678;		/* XXX this should be based on the filename */
+	sd.timestamp = re->mi.timestamp;
+	sd.lastref = re->mi.lastref;
+	sd.expires = re->mi.expires;
+	sd.lastmod = re->mi.lastmod;
+	sd.swap_file_sz = re->file_size;
+	sd.refcount = re->mi.refcount;
+	sd.flags = re->mi.flags;
+
+	memcpy(&sd.key, re->md5_key, sizeof(sd.key));
+	if (! write(1, &sd, sizeof(sd)))
+		return -1;
+
+	return 1;
 }
 
 void
@@ -189,6 +200,8 @@ read_dir(const char *dirpath, int l1, int l2)
 	struct dirent *de;
 	char path[SQUID_MAXPATHLEN];
 	char dir[SQUID_MAXPATHLEN];
+	rebuild_entry_t re;
+	int fn;
 	int i, j;
 
 	for (i = 0; i < l1; i++) {
@@ -209,9 +222,25 @@ read_dir(const char *dirpath, int l1, int l2)
 			while ( (de = readdir(d)) != NULL) {
 				if (de->d_name[0] == '.')
 					continue;
+
+				/* Verify that the given filename belongs in the given directory */
+				if (sscanf(de->d_name, "%x", &fn) != 1) {
+					debug(47, 1) ("read_dir: invalid %s\n", de->d_name);
+						continue;
+				}
+				if (! store_ufs_filenum_correct_dir(fn, i, j, l1, l2)) {
+					debug(47, 1) ("read_dir: %s does not belong in %d/%d\n", de->d_name, i, j);
+						continue;
+				}
+
 				snprintf(path, sizeof(path) - 1, "%s/%s", dir, de->d_name);
 				fprintf(stderr, "opening %s\n", path);
-				read_file(path);
+
+				rebuild_entry_init(&re);
+				(void) read_file(path, &re);
+				(void) write_swaplog_entry(&re);
+				rebuild_entry_done(&re);
+
 			}
 			closedir(d);
 		}
