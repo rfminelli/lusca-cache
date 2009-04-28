@@ -43,7 +43,7 @@
 #include "../libsqstore/store_log.h"
 #include "../libsqstore/store_file_ufs.h"
 
-#define	BUFSIZE		4096
+#define	BUFSIZE		1024
 
 /* normally in libiapp .. */
 int shutting_down = 0;
