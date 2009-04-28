@@ -36,11 +36,13 @@ store_ufs_done(store_ufs_dir_t *sd)
  * "buf" must be SQUID_MAXPATHLEN.
  */
 int
-store_ufs_createPath(const char *prefix, int filn, int L1, int L2, char *buf)
+store_ufs_createPath(store_ufs_dir_t *sd, int filn, char *buf)
 {   
+    int L1 = store_ufs_l1(sd);
+    int L2 = store_ufs_l2(sd);
     buf[0] = '\0';
     snprintf(buf, SQUID_MAXPATHLEN, "%s/%02X/%02X/%08X",
-        prefix,
+        store_ufs_path(sd),
         ((filn / L2) / L2) % L1,
         (filn / L2) % L2,
         filn);
@@ -51,10 +53,10 @@ store_ufs_createPath(const char *prefix, int filn, int L1, int L2, char *buf)
  * Create a UFS directory path given the component bits.
  */
 int
-store_ufs_createDir(const char *prefix, int L1, int L2, char *buf)
+store_ufs_createDir(store_ufs_dir_t *sd, char *buf)
 {
     buf[0] = '\0';
-    snprintf(buf, SQUID_MAXPATHLEN, "%s/%02X/%02X", prefix, L1, L2);
+    snprintf(buf, SQUID_MAXPATHLEN, "%s/%02X/%02X", store_ufs_path(sd), store_ufs_l1(sd), store_ufs_l2(sd));
     return 1;
 }
 
@@ -66,8 +68,9 @@ store_ufs_createDir(const char *prefix, int L1, int L2, char *buf)
  * returns whether "fn" belongs in the directory F1/F2 given the configured L1/L2
  */
 int
-store_ufs_filenum_correct_dir(int fn, int F1, int F2, int L1, int L2)
+store_ufs_filenum_correct_dir(store_ufs_dir_t *sd, int fn, int F1, int F2)
 {
+    int L1 = store_ufs_l1(sd), L2 = store_ufs_l2(sd);
     int D1, D2;
     int filn = fn;
 
