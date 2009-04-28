@@ -90,20 +90,10 @@ storeKeyText(const unsigned char *key)
 	return buf;
 }
 
-void
-storeMetaNew(char *buf, int len)
-{
-	storeMetaIndexNew *sn;
-
-	sn = (storeMetaIndexNew *) buf;
-	//if (output) printf("	SWAP_META_STD_LFS: mlen %d, size %d, timestamp %ld, lastref %ld, expires %ld, lastmod %ld, file size %ld, refcount %d, flags %d\n", len, sizeof(storeMetaIndexNew), sn->timestamp, sn->lastref, sn->expires, sn->lastmod, sn->swap_file_sz, sn->refcount, sn->flags);
-}
-
 static int
 parse_header(char *buf, int len, rebuild_entry_t *re)
 {
 	tlv *t, *tlv_list;
-	int64_t *l = NULL;
 	int bl = len;
 	int parsed = 0;
 
@@ -138,8 +128,6 @@ parse_header(char *buf, int len, rebuild_entry_t *re)
 	    case STORE_META_OBJSIZE:
 		fprintf(stderr, "  STORE_META_OBJSIZE\n");
 		/* XXX is this typecast'ed to the right "size" on all platforms ? */
-		//re->file_size = * ((int64_t *) l);
-		parsed++;
 		break;
 	    default:
 		break;
