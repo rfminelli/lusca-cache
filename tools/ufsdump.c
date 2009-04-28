@@ -22,6 +22,7 @@
 #include <fcntl.h>
 #endif
 
+#include <sys/stat.h>
 #include <dirent.h>
 
 #include "../include/util.h"
@@ -52,7 +53,8 @@ struct _rebuild_entry {
 	char *md5_key;
 	char *url;
 	char *storeurl;
-	squid_file_sz file_size;
+	squid_file_sz file_size;		/* swap file size - object size + metadata */
+	int hdr_size;				/* metadata size */
 };
 typedef struct _rebuild_entry rebuild_entry_t;
 
@@ -68,6 +70,8 @@ void
 rebuild_entry_init(rebuild_entry_t *re)
 {
 	bzero(re, sizeof(*re));
+	re->hdr_size = -1;
+	re->file_size = -1;
 }
 
 const char *
@@ -107,6 +111,8 @@ parse_header(char *buf, int len, rebuild_entry_t *re)
 	if (tlv_list == NULL) {
 		return -1;
 	}
+
+	re->hdr_size = bl;
 
 	for (t = tlv_list; t; t = t->next) {
 	    switch (t->type) {
@@ -152,6 +158,8 @@ read_file(const char *path)
 	int len;
 	rebuild_entry_t re;
 	storeSwapLogData sd;
+	struct stat sb;
+
 
 	fprintf(stderr, "read_file: %s\n", path);
 	fd = open(path, O_RDONLY);
@@ -159,6 +167,13 @@ read_file(const char *path)
 		perror("open");
 		return;
 	}
+
+	/* We need the entire file size */
+	if (fstat(fd, &sb) < 0) {
+		perror("fstat");
+		return;
+	}
+
 	len = read(fd, buf, BUFSIZE);
 	fprintf(stderr, "FILE: %s\n", path);
 	rebuild_entry_init(&re);
@@ -169,7 +184,7 @@ read_file(const char *path)
 		sd.lastref = re.mi.lastref;
 		sd.expires = re.mi.expires;
 		sd.lastmod = re.mi.lastmod;
-		sd.swap_file_sz = -1;			/* XXX for now? Need to stat the file to check */
+		sd.swap_file_sz = sb.st_size;
 		sd.refcount = re.mi.refcount;
 		sd.flags = re.mi.flags;
 		memcpy(&sd.key, re.md5_key, sizeof(sd.key));
