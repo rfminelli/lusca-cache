@@ -107,26 +107,26 @@ parse_header(char *buf, int len, rebuild_entry_t *re)
 	for (t = tlv_list; t; t = t->next) {
 	    switch (t->type) {
 	    case STORE_META_URL:
-		fprintf(stderr, "  STORE_META_URL\n");
+		debug(47, 5) ("  STORE_META_URL\n");
 		/* XXX Is this OK? Is the URL guaranteed to be \0 terminated? */
 		re->url = xstrdup( (char *) t->value );
 		parsed++;
 		break;
 	    case STORE_META_KEY_MD5:
-		fprintf(stderr, "  STORE_META_KEY_MD5\n");
+		debug(47, 5) ("  STORE_META_KEY_MD5\n");
 		/* XXX should double-check key length? */
 		re->md5_key = xmalloc(SQUID_MD5_DIGEST_LENGTH);
 		memcpy(re->md5_key, t->value, SQUID_MD5_DIGEST_LENGTH);
 		parsed++;
 		break;
 	    case STORE_META_STD_LFS:
-		fprintf(stderr, "  STORE_META_STD_LFS\n");
+		debug(47, 5) ("  STORE_META_STD_LFS\n");
 		/* XXX should double-check lengths match? */
 		memcpy(&re->mi, t->value, sizeof(re->mi));
 		parsed++;
 		break;
 	    case STORE_META_OBJSIZE:
-		fprintf(stderr, "  STORE_META_OBJSIZE\n");
+		debug(47, 5) ("  STORE_META_OBJSIZE\n");
 		/* XXX is this typecast'ed to the right "size" on all platforms ? */
 		break;
 	    default:
@@ -146,7 +146,7 @@ read_file(const char *path, rebuild_entry_t *re)
 	int len;
 	struct stat sb;
 
-	fprintf(stderr, "read_file: %s\n", path);
+	debug(47, 3) ("read_file: %s\n", path);
 	fd = open(path, O_RDONLY);
  	if (fd < 0) {
 		perror("open");
@@ -160,7 +160,7 @@ read_file(const char *path, rebuild_entry_t *re)
 	}
 
 	len = read(fd, buf, BUFSIZE);
-	fprintf(stderr, "FILE: %s\n", path);
+	debug(47, 3) ("read_file: FILE: %s\n", path);
 
 	if (! parse_header(buf, len, re)) {
 		close(fd);
@@ -207,7 +207,7 @@ read_dir(const char *dirpath, int l1, int l2)
 	for (i = 0; i < l1; i++) {
 		for (j = 0; j < l2; j++) {
 			(void) store_ufs_createDir(dirpath, i, j, dir);
-			fprintf(stderr, "opening dir %s\n", dir);
+			debug(47, 1) ("read_dir: opening dir %s\n", dir);
 			d = opendir(dir);
 			if (! d) {
 				perror("opendir");
@@ -234,7 +234,7 @@ read_dir(const char *dirpath, int l1, int l2)
 				}
 
 				snprintf(path, sizeof(path) - 1, "%s/%s", dir, de->d_name);
-				fprintf(stderr, "opening %s\n", path);
+				debug(47, 3) ("read_dir: opening %s\n", path);
 
 				rebuild_entry_init(&re);
 				(void) read_file(path, &re);
