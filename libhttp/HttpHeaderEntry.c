@@ -74,11 +74,39 @@
  * HttpHeaderEntry
  */
 
+/* XXX new functions */
+void
+httpHeaderEntryInitString(HttpHeaderEntry *e, http_hdr_type id, String name, String value)
+{
+	assert(e->active == 0);
+
+	e->id = id;
+	if (id != HDR_OTHER)
+		e->name = Headers[id].name;
+	else
+		e->name = stringDup(&name);
+	e->value = stringDup(&value);
+	Headers[id].stat.aliveCount++;
+	e->active = 1;
+
+	debug(55, 9) ("httpHeaderEntryInitString: entry %p: '%s: %s'\n", e,
+	    strBuf(e->name), strBuf(e->value));
+}
+
+void
+httpHeaderEntryCopy(HttpHeaderEntry *dst, HttpHeaderEntry *src)
+{
+	httpHeaderEntryInitString(dst, src->id, src->name, src->value);
+}
+
+/* XXX old functions */
+
 /*
  * A length of -1 means "unknown; call strlen()
  */
 void
 httpHeaderEntryCreate(HttpHeaderEntry *e, http_hdr_type id, const char *name, int al, const char *value, int vl)
+
 {
     assert_eid(id);
     assert(! e->active);
