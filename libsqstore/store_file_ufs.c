@@ -53,10 +53,10 @@ store_ufs_createPath(store_ufs_dir_t *sd, int filn, char *buf)
  * Create a UFS directory path given the component bits.
  */
 int
-store_ufs_createDir(store_ufs_dir_t *sd, char *buf)
+store_ufs_createDir(store_ufs_dir_t *sd, int i, int j, char *buf)
 {
     buf[0] = '\0';
-    snprintf(buf, SQUID_MAXPATHLEN, "%s/%02X/%02X", store_ufs_path(sd), store_ufs_l1(sd), store_ufs_l2(sd));
+    snprintf(buf, SQUID_MAXPATHLEN, "%s/%02X/%02X", store_ufs_path(sd), i, j);
     return 1;
 }
 
