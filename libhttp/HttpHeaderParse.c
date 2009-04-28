@@ -191,7 +191,7 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 	    }
 	    break;		/* terminating blank line */
 	}
-	e = httpHeaderEntryParseCreate(field_start, field_end);
+	e = httpHeaderEntryParseCreate(hdr, field_start, field_end);
 	if (NULL == e) {
 	    debug(55, 1) ("WARNING: unparseable HTTP header field {%.*s}\n",
 		charBufferSize(field_start, field_end), field_start);
@@ -222,7 +222,7 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 
 /* parses and inits header entry, returns new entry on success */
 HttpHeaderEntry *
-httpHeaderEntryParseCreate(const char *field_start, const char *field_end)
+httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char *field_end)
 {
     HttpHeaderEntry *e;
     int id;
@@ -250,6 +250,7 @@ httpHeaderEntryParseCreate(const char *field_start, const char *field_end)
 	if (!name_len)
 	    return NULL;
     }
+
     /* now we know we can parse it */
 
 
