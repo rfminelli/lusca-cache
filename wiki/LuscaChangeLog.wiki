@@ -17,4 +17,4 @@
 
   * The threaded IO code (via aufs) has been turned into a generic library for doing asynchronous IO. The change has removed (for now) some of the automatic thread creation logic - specifically, the number of threads being created does not currently base the choice on how many AUFS and COSS directories are configured. For now, use the "n_aiops_threads" configuration directive to set the number of threads to use. The original code would use 4 threads per AUFS storedir and 3 threads per COSS storedir by default.
 
-* The diskd and ufs storage types have been removed, leaving only aufs, coss and null. These types will return later on when the disk io layers have been tidied up and re-unified.
+  * The diskd and ufs storage types have been removed, leaving only aufs, coss and null. These types will return later on when the disk io layers have been tidied up and re-unified.
