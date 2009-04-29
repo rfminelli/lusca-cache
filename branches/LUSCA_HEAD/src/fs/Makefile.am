@@ -5,7 +5,7 @@
 
 AUTOMAKE_OPTIONS = subdir-objects
 
-EXTRA_LIBRARIES = libaufs.a libcoss.a libnull.a libufs.a
+EXTRA_LIBRARIES = libaufs.a libcoss.a libnull.a
 noinst_LIBRARIES = @STORE_LIBS@
 
 EXTRA_libaufs_a_SOURCES = aufs/aiops.c aufs/aiops_win32.c
@@ -13,7 +13,6 @@ EXTRA_libaufs_a_SOURCES = aufs/aiops.c aufs/aiops_win32.c
 libaufs_a_SOURCES = aufs/store_asyncufs.h aufs/store_dir_aufs.c aufs/store_io_aufs.c
 libcoss_a_SOURCES = coss/store_coss.h   coss/store_io_coss.c coss/store_dir_coss.c
 libnull_a_SOURCES = null/store_null.c
-libufs_a_SOURCES = ufs/store_dir_ufs.c ufs/store_io_ufs.c ufs/store_ufs.h
 
 LDADD = $(top_builddir)/lib/libmiscutil.a @XTRA_LIBS@
 
@@ -30,5 +29,3 @@ coss/all: libcoss.a
 coss/clean: clean
 null/all: libnull.a
 null/clean: clean
-ufs/all: libufs.a
-ufs/clean: clean
