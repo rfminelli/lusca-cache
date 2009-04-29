@@ -314,18 +314,18 @@ AC_ARG_ENABLE(async-io,
 [  --enable-async-io[=N_THREADS]
 			  Shorthand for
 			  --with-aufs-threads=N_THREADS
-			  --enable-storeio=ufs,aufs],
+			  --enable-storeio=aufs],
 [ case $enableval in
   yes)
 	with_pthreads="yes"
-	STORE_MODULES="ufs aufs"
+	STORE_MODULES="aufs"
     ;;
   no)
     ;;
   *)
 	aufs_io_threads=$enableval
 	with_pthreads="yes"
-	STORE_MODULES="ufs aufs"
+	STORE_MODULES="aufs"
     ;;
   esac
 ])
@@ -396,7 +396,7 @@ AC_ARG_ENABLE(storeio,
   esac
 ],
 [ if test -z "$STORE_MODULES"; then
-    STORE_MODULES="ufs"
+    STORE_MODULES="aufs coss null"
   fi
 ])
 echo "Store modules built: $STORE_MODULES"
