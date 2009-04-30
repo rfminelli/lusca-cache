@@ -575,14 +575,8 @@ storeAufsDirRebuildFromSwapLogObject(RebuildState *rb, storeSwapLogData s)
 	SwapDir *SD = rb->sd;
 	StoreEntry *e = NULL;
 	double x;
-	size_t ss = -1;
 	int used;			/* is swapfile already in use? */
 	int disk_entry_newer;	/* is the log entry newer than current entry? */
-
-	if (rb->flags.old_swaplog_entry_size)
-		ss = sizeof(storeSwapLogDataOld);
-	else
-		ss = sizeof(storeSwapLogData);
 
 	/*
 	 * BC: during 2.4 development, we changed the way swap file
@@ -620,12 +614,6 @@ storeAufsDirRebuildFromSwapLogObject(RebuildState *rb, storeSwapLogData s)
 		    rb->counts.bad_log_op);
 	    rb->counts.invalid++;
 	    return -1;
-	}
-	if ((++rb->counts.scancount & 0xFFF) == 0) {
-	    struct stat sb;
-	    if (0 == fstat(fileno(rb->log), &sb))
-		storeRebuildProgress(SD->index,
-		    (int) sb.st_size / ss, rb->n_read);
 	}
 	if (!storeAufsDirValidFileno(SD, s.swap_filen, 0)) {
 	    rb->counts.invalid++;
@@ -741,6 +729,12 @@ storeAufsDirRebuildFromSwapLog(void *data)
 		memcpy(&s, buf, sizeof(s));
 	}
  	storeAufsDirRebuildFromSwapLogObject(rb, s);
+
+	if ((++rb->counts.scancount & 0xFFF) == 0) {
+	    struct stat sb;
+	    if (0 == fstat(fileno(rb->log), &sb))
+		storeRebuildProgress(rb->sd->index, (int) sb.st_size / ss, rb->n_read);
+	}
     }
     eventAdd("storeRebuild", storeAufsDirRebuildFromSwapLog, rb, 0.0, 1);
 }
