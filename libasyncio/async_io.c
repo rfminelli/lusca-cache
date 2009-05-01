@@ -298,7 +298,6 @@ void
 aioWrite(int fd, off_t offset, char *bufp, int len, AIOCB * callback, void *callback_data, FREE * free_func)
 {
     squidaio_ctrl_t *ctrlp;
-    int seekmode;
 
     assert(initialised);
     squidaio_counts.write++;
@@ -309,15 +308,10 @@ aioWrite(int fd, off_t offset, char *bufp, int len, AIOCB * callback, void *call
     ctrlp->operation = _AIO_WRITE;
     ctrlp->bufp = bufp;
     ctrlp->free_func = free_func;
-    if (offset >= 0)
-	seekmode = SEEK_SET;
-    else {
-	seekmode = SEEK_END;
-	offset = 0;
-    }
+    assert(offset >= 0);
     cbdataLock(callback_data);
     ctrlp->result.data = ctrlp;
-    squidaio_write(fd, bufp, len, offset, seekmode, &ctrlp->result);
+    squidaio_write(fd, bufp, len, offset, &ctrlp->result);
     dlinkAdd(ctrlp, &ctrlp->node, &used_list);
 }				/* aioWrite */
 
@@ -326,7 +320,6 @@ void
 aioRead(int fd, off_t offset, int len, AIOCB * callback, void *callback_data)
 {
     squidaio_ctrl_t *ctrlp;
-    int seekmode;
 
     assert(initialised);
     squidaio_counts.read++;
@@ -337,15 +330,10 @@ aioRead(int fd, off_t offset, int len, AIOCB * callback, void *callback_data)
     ctrlp->operation = _AIO_READ;
     ctrlp->len = len;
     ctrlp->bufp = xmalloc(len);
-    if (offset >= 0)
-	seekmode = SEEK_SET;
-    else {
-	seekmode = SEEK_CUR;
-	offset = 0;
-    }
+    assert(offset >= 0);
     cbdataLock(callback_data);
     ctrlp->result.data = ctrlp;
-    squidaio_read(fd, ctrlp->bufp, len, offset, seekmode, &ctrlp->result);
+    squidaio_read(fd, ctrlp->bufp, len, offset, &ctrlp->result);
     dlinkAdd(ctrlp, &ctrlp->node, &used_list);
     return;
 }				/* aioRead */
