@@ -47,7 +47,7 @@ typedef struct _RebuildState RebuildState;
 struct _RebuildState {
     SwapDir *sd;
     int n_read;
-    FILE *log;
+    int log_fd;
     int speed;
     int curlvl1;
     int curlvl2;
@@ -94,7 +94,7 @@ static StoreEntry *storeAufsDirAddDiskRestore(SwapDir * SD, const cache_key * ke
     int clean);
 static void storeAufsDirRebuild(SwapDir * sd);
 static void storeAufsDirCloseTmpSwapLog(SwapDir * sd);
-static FILE *storeAufsDirOpenTmpSwapLog(SwapDir *, int *, int *);
+static int storeAufsDirOpenTmpSwapLog(SwapDir *, int *, int *);
 static STLOGOPEN storeAufsDirOpenSwapLog;
 static STINIT storeAufsDirInit;
 static STFREE storeAufsDirFree;
@@ -360,6 +360,19 @@ storeAufsCheckConfig(SwapDir * sd)
 }
 
 
+/*!
+ * @function
+ *	storeAufsDirInit
+ * @abstract
+ *	Initialise the given configured AUFS storedir
+ * @description
+ *	This function completes the initial storedir setup, opens the swaplog
+ *	file and begins the rebuild process.
+ *
+ *	It is quite possible that the swaplog will be appended to by incoming
+ *	requests _WHILST_ also being read from during the rebuild process.
+ *	This needs to be looked at and fixed.
+ */
 static void
 storeAufsDirInit(SwapDir * sd)
 {
@@ -389,11 +402,11 @@ storeAufsDirInit(SwapDir * sd)
 static void
 storeAufsDirRebuildComplete(RebuildState * rb)
 {
-    if (rb->log) {
+    if (rb->log_fd) {
 	debug(47, 1) ("Done reading %s swaplog (%d entries)\n",
 	    rb->sd->path, rb->n_read);
-	fclose(rb->log);
-	rb->log = NULL;
+	file_close(rb->log_fd);
+	rb->log_fd = -1;
     } else {
 	debug(47, 1) ("Done scanning %s (%d entries)\n",
 	    rb->sd->path, rb->counts.scancount);
@@ -716,7 +729,9 @@ storeAufsDirRebuildFromSwapLog(void *data)
     /* load a number of objects per invocation */
     for (count = 0; count < rb->speed; count++) {
 	/* Read the swaplog entry, new or old */
-	if (fread(buf, ss, 1, rb->log) != 1) {
+	/* XXX this will be slow - one read() per entry .. */
+	/* XXX so obviously it needs to be changed and quickly .. */
+	if (read(rb->log_fd, buf, ss) != ss) {
 	    storeAufsDirRebuildComplete(rb);
 	    return;
 	}
@@ -732,7 +747,7 @@ storeAufsDirRebuildFromSwapLog(void *data)
 
 	if ((++rb->counts.scancount & 0xFFF) == 0) {
 	    struct stat sb;
-	    if (0 == fstat(fileno(rb->log), &sb))
+	    if (0 == fstat(rb->log_fd, &sb))
 		storeRebuildProgress(rb->sd->index, (int) sb.st_size / ss, rb->n_read);
 	}
     }
@@ -745,12 +760,13 @@ storeAufsDirRebuildFromSwapLogCheckVersion(void *data)
     RebuildState *rb = data;
     storeSwapLogHeader hdr;
 
-    if (fread(&hdr, sizeof(hdr), 1, rb->log) != 1) {
+    /* XXX should be aioRead() with a callback.. */
+    if (read(rb->log_fd, &hdr, sizeof(hdr)) != sizeof(hdr)) {
 	storeAufsDirRebuildComplete(rb);
 	return;
     }
     if (hdr.op == SWAP_LOG_VERSION) {
-	if (fseek(rb->log, hdr.record_size, SEEK_SET) != 0) {
+	if (lseek(rb->log_fd, hdr.record_size, SEEK_SET) < 0) {
 	    storeAufsDirRebuildComplete(rb);
 	    return;
 	}
@@ -772,7 +788,7 @@ storeAufsDirRebuildFromSwapLogCheckVersion(void *data)
 	storeAufsDirRebuildComplete(rb);
 	return;
     }
-    rewind(rb->log);
+    lseek(rb->log_fd, SEEK_SET, 0);
     debug(47, 1) ("storeAufsDirRebuildFromSwapLog: Old version detected. Upgrading\n");
 #if SIZEOF_SQUID_FILE_SZ == SIZEOF_SIZE_T
     rb->flags.old_swaplog_entry_size = 0;
@@ -921,7 +937,7 @@ storeAufsDirRebuild(SwapDir * sd)
     RebuildState *rb;
     int clean = 0;
     int zero = 0;
-    FILE *fp;
+    int log_fd;
     EVH *func = NULL;
     CBDATA_INIT_TYPE(RebuildState);
     rb = cbdataAlloc(RebuildState);
@@ -933,18 +949,17 @@ storeAufsDirRebuild(SwapDir * sd)
      * use storeAufsDirRebuildFromDirectory() to open up each file
      * and suck in the meta data.
      */
-    fp = storeAufsDirOpenTmpSwapLog(sd, &clean, &zero);
-    if (fp == NULL || zero) {
-	if (fp != NULL)
-	    fclose(fp);
+    log_fd = storeAufsDirOpenTmpSwapLog(sd, &clean, &zero);
+    if (! log_fd || zero) {
+	if (log_fd)
+	    file_close(log_fd);
 	func = storeAufsDirRebuildFromDirectory;
     } else {
 	func = storeAufsDirRebuildFromSwapLogCheckVersion;
-	rb->log = fp;
+	rb->log_fd = log_fd;
 	rb->flags.clean = (unsigned int) clean;
     }
-    debug(47, 1) ("Rebuilding storage in %s (%s)\n",
-	sd->path, clean ? "CLEAN" : "DIRTY");
+    debug(47, 1) ("Rebuilding storage in %s (%s)\n", sd->path, clean ? "CLEAN" : "DIRTY");
     store_dirs_rebuilding++;
     eventAdd("storeRebuild", func, rb, 0.0, 1);
 }
@@ -996,7 +1011,7 @@ storeAufsWriteSwapLogheader(int fd)
 	(FREE *) storeSwapLogDataFree);
 }
 
-static FILE *
+static int
 storeAufsDirOpenTmpSwapLog(SwapDir * sd, int *clean_flag, int *zero_flag)
 {
     squidaioinfo_t *aioinfo = (squidaioinfo_t *) sd->fsdata;
@@ -1005,14 +1020,14 @@ storeAufsDirOpenTmpSwapLog(SwapDir * sd, int *clean_flag, int *zero_flag)
     char *new_path = xstrdup(storeAufsDirSwapLogFile(sd, ".new"));
     struct stat log_sb;
     struct stat clean_sb;
-    FILE *fp;
     int fd;
+
     if (stat(swaplog_path, &log_sb) < 0) {
 	debug(47, 1) ("Cache Dir #%d: No log file\n", sd->index);
 	safe_free(swaplog_path);
 	safe_free(clean_path);
 	safe_free(new_path);
-	return NULL;
+	return -1;
     }
     *zero_flag = log_sb.st_size == 0 ? 1 : 0;
     /* close the existing write-only FD */
@@ -1027,8 +1042,9 @@ storeAufsDirOpenTmpSwapLog(SwapDir * sd, int *clean_flag, int *zero_flag)
     aioinfo->swaplog_fd = fd;
     storeAufsWriteSwapLogheader(fd);
     /* open a read-only stream of the old log */
-    fp = fopen(swaplog_path, "rb");
-    if (fp == NULL) {
+
+    fd = file_open(swaplog_path, O_RDONLY | O_BINARY);
+    if (fd < 0) {
 	debug(50, 0) ("%s: %s\n", swaplog_path, xstrerror());
 	fatal("Failed to open swap log for reading");
     }
@@ -1043,7 +1059,7 @@ storeAufsDirOpenTmpSwapLog(SwapDir * sd, int *clean_flag, int *zero_flag)
     safe_free(swaplog_path);
     safe_free(clean_path);
     safe_free(new_path);
-    return fp;
+    return fd;
 }
 
 struct _clean_state {
