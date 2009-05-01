@@ -560,6 +560,23 @@ squidaio_do_open(squidaio_request_t * requestp)
 }
 
 
+/*!
+ * @function
+ *	squidaio_read
+ * @abstract
+ *	schedule an async read event
+ * @discussion
+ *	'offset' and 'whence' made much more sense in the past with the separate
+ *	calls to lseek() and read(). Their meaning now is slightly different and
+ *	highly confusing.
+ * @param	fd	filedescriptor to queue read on
+ * @param	bufp	buffer to read into
+ * @param	bufs	bufp length
+ * @param	offset	offset to read from
+ * @param	whence	SEEK_SET or SEEK_CUR
+ * @param	resultp	result structure to record completion in
+ * @return	0 on success, -1 on failure.
+ */
 int
 squidaio_read(int fd, char *bufp, int bufs, off_t offset, int whence, squidaio_result_t * resultp)
 {
@@ -579,7 +596,12 @@ squidaio_read(int fd, char *bufp, int bufs, off_t offset, int whence, squidaio_r
     return 0;
 }
 
-
+/*
+ * Discussion - the whence/offset stuff worked great with the previous call to lseek()
+ * but it fails now with the pread()/pwrite() calls. The current AIO users always
+ * use an explicit offset in both read and write calls; but this may not always be
+ * the case.
+ */
 static void
 squidaio_do_read(squidaio_request_t * requestp)
 {
@@ -607,7 +629,12 @@ squidaio_write(int fd, char *bufp, int bufs, off_t offset, int whence, squidaio_
     return 0;
 }
 
-
+/*
+ * Discussion - the whence/offset stuff worked great with the previous call to lseek()
+ * but it fails now with the pread()/pwrite() calls. The current AIO users always
+ * use an explicit offset in both read and write calls; but this may not always be
+ * the case.
+ */
 static void
 squidaio_do_write(squidaio_request_t * requestp)
 {
