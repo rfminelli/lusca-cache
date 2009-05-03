@@ -1,3 +1,13 @@
+
+/*
+ * This program provides the "rebuild" logic for a UFS spool.
+ *
+ * It will scan a UFS style directory for valid looking swap files
+ * and spit out a new style swap log to STDOUT.
+ *
+ * Adrian Chadd <adrian@creative.net.au>
+ */
+
 #include "config.h"
 
 #if HAVE_INTTYPES_H
@@ -74,22 +84,6 @@ rebuild_entry_init(rebuild_entry_t *re)
 	re->hdr_size = -1;
 	re->file_size = -1;
 	re->swap_filen = -1;
-}
-
-const char *
-storeKeyText(const unsigned char *key)
-{
-	static char buf[64];
-	char b2[4];
-
-	buf[0] = '\0';
-
-	int i;
-	for (i = 0; i < 16; i++) {
-		sprintf(b2, "%02X", *(key + i));
-		strcat(buf, b2);
-	}
-	return buf;
 }
 
 static int
