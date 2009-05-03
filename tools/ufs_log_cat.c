@@ -52,6 +52,7 @@ read_entry(FILE *fp, int version)
 {
 	int r;
 	char buf[128];
+	storeSwapLogData sd;
 	size_t s = -1;
 
 	if (version == 1) {
@@ -68,8 +69,20 @@ read_entry(FILE *fp, int version)
 	num_objects++;
 
 	/* Decode the entry */
+	if (version == 1) {
+		memcpy(&sd, buf, sizeof(sd));
+	} else {
+		(void) storeSwapLogUpgradeEntry(&sd, (storeSwapLogDataOld *) buf);
+	}
 
-	/* Good? Echo it */
+	/* is it an ADD/DEL? Good. If not - count error and continue */
+	if (sd.op == SWAP_LOG_ADD || sd.op == SWAP_LOG_DEL) {
+		num_valid_objects++;
+		write(1, &sd, sizeof(sd));
+	} else {
+		debug(1, 5) ("error! Got swaplog entry op %d?!\n", sd.op);
+		num_invalid_objects++;
+	}
 
 	return 1;
 }
@@ -125,6 +138,9 @@ read_file(const char *swapfile)
 		version = 0;
 #endif
 	}
+
+	/* begin echo'ing the log info */
+	storeSwapLogPrintHeader(1);	/* to stdout */
 
 	/* Now - loop over until eof or error */
 	while (! feof(fp)) {
