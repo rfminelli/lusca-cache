@@ -2688,6 +2688,16 @@ COMMENT_START
  -----------------------------------------------------------------------------
 COMMENT_END
 
+NAME: ufs_log_build_program
+TYPE: string
+DEFAULT: @DEFAULT_UFS_LOG_BUILD@
+LOC: Config.Program.ufs_log_build
+DOC_START
+	Specify the location of the UFS directory rebuild program.
+	This program runs as a helper to build a UFS swap log from
+	the directory contents.
+DOC_END
+
 NAME: diskd_program
 TYPE: string
 DEFAULT: @DEFAULT_DISKD@
