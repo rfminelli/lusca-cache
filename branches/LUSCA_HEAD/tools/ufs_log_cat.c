@@ -43,6 +43,37 @@
 /* normally in libiapp .. */
 int shutting_down = 0;
 
+int num_objects = 0;
+int num_valid_objects = 0;
+int num_invalid_objects = 0;
+
+int
+read_entry(FILE *fp, int version)
+{
+	int r;
+	char buf[128];
+	size_t s = -1;
+
+	if (version == 1) {
+		s = sizeof(storeSwapLogData);
+	} else {
+		s = sizeof(storeSwapLogDataOld);
+	}
+
+	r = fread(buf, s, 1, fp);
+	if (r != 1) {
+		debug(1, 2) ("fread: returned %d (ferror %d)\n", r, ferror(fp));
+		return -1;
+	}
+	num_objects++;
+
+	/* Decode the entry */
+
+	/* Good? Echo it */
+
+	return 1;
+}
+
 void
 read_file(const char *swapfile)
 {
@@ -96,6 +127,11 @@ read_file(const char *swapfile)
 	}
 
 	/* Now - loop over until eof or error */
+	while (! feof(fp)) {
+		if (! read_entry(fp, version)) {
+			break;
+		}
+	}
 
 	fclose(fp);
 }
@@ -113,6 +149,8 @@ main(int argc, char *argv[])
     }
 
     read_file(argv[2]);
+
+    debug(1, 1) ("%s: Read %d objects\n", argv[2], num_objects);
 
     return 0;
 }
