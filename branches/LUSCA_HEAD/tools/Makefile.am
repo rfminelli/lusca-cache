@@ -24,11 +24,11 @@ endif
 
 bin_PROGRAMS = \
 	squidclient \
-	ufs_log_build \
 	ufs_log_dump \
 	$(COSSDUMP)
 
 libexec_PROGRAMS = \
+	ufs_log_build \
 	cachemgr$(CGIEXT)
 
 squidclient_SOURCES = squidclient.c
