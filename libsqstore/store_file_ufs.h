@@ -3,12 +3,13 @@
 
 struct _store_ufs_dir {
 	char *path;
+	char *swaplog_path;
 	int l1;
 	int l2;
 };
 typedef struct _store_ufs_dir store_ufs_dir_t;
 
-extern void store_ufs_init(store_ufs_dir_t *sd, const char *path, int l1, int l2);
+extern void store_ufs_init(store_ufs_dir_t *sd, const char *path, int l1, int l2, const char *swaplog_path);
 extern void store_ufs_done(store_ufs_dir_t *sd);
 
 extern int store_ufs_createPath(store_ufs_dir_t *sd, int swap_filen, char *buf);

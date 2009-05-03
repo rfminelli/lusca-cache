@@ -17,9 +17,10 @@
 #include "store_file_ufs.h"
 
 void
-store_ufs_init(store_ufs_dir_t *sd, const char *path, int l1, int l2)
+store_ufs_init(store_ufs_dir_t *sd, const char *path, int l1, int l2, const char * swaplog_path)
 {
 	sd->path = xstrdup(path);
+	sd->swaplog_path = xstrdup(swaplog_path);
 	sd->l1 = l1;
 	sd->l2 = l2;
 }
@@ -28,6 +29,7 @@ void
 store_ufs_done(store_ufs_dir_t *sd)
 {
 	safe_free(sd->path);
+	safe_free(sd->swaplog_path);
 }
 
 /*
