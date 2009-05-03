@@ -247,13 +247,12 @@ main(int argc, char *argv[])
     _db_set_stderr_debug(1);
     store_ufs_dir_t store_ufs_info;
 
-
-    if (argc < 4) {
-	printf("Usage: %s <store path> <l1> <l2>\n", argv[0]);
+    if (argc < 5) {
+	printf("Usage: %s <store path> <l1> <l2> <path to swapfile>\n", argv[0]);
 	exit(1);
     }
 
-    store_ufs_init(&store_ufs_info, argv[1], atoi(argv[2]), atoi(argv[3]));
+    store_ufs_init(&store_ufs_info, argv[1], atoi(argv[2]), atoi(argv[3]), argv[4]);
 
     /* Output swap header to stdout */
     (void) storeSwapLogPrintHeader(1);
