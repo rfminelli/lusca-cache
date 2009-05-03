@@ -38,6 +38,7 @@
 #include "../../libasyncio/aiops.h"
 #include "../../libasyncio/async_io.h"
 #include "store_asyncufs.h"
+#include "store_bitmap_aufs.h"
 #include "store_rebuild_aufs.h"
 
 #define DefaultLevelOneDirs     16
@@ -95,83 +96,11 @@ static EVH storeAufsDirCleanEvent;
 static int storeAufsFilenoBelongsHere(int fn, int F0, int F1, int F2);
 static int storeAufsCleanupDoubleCheck(SwapDir *, StoreEntry *);
 static void storeAufsDirStats(SwapDir *, StoreEntry *);
-static void storeAufsDirInitBitmap(SwapDir *);
 static int storeAufsDirValidFileno(SwapDir *, sfileno, int);
 static void storeAufsSync(SwapDir *);
 
 /* The MAIN externally visible function */
 STSETUP storeFsSetup_aufs;
-
-/*
- * These functions were ripped straight out of the heart of store_dir.c.
- * They assume that the given filenum is on a asyncufs partiton, which may or
- * may not be true.. 
- * XXX this evilness should be tidied up at a later date!
- */
-
-static int
-storeAufsDirMapBitTest(SwapDir * SD, sfileno filn)
-{
-    squidaioinfo_t *aioinfo;
-    aioinfo = (squidaioinfo_t *) SD->fsdata;
-    return file_map_bit_test(aioinfo->map, filn);
-}
-
-static void
-storeAufsDirMapBitSet(SwapDir * SD, sfileno filn)
-{
-    squidaioinfo_t *aioinfo;
-    aioinfo = (squidaioinfo_t *) SD->fsdata;
-    file_map_bit_set(aioinfo->map, filn);
-}
-
-void
-storeAufsDirMapBitReset(SwapDir * SD, sfileno filn)
-{
-    squidaioinfo_t *aioinfo;
-    aioinfo = (squidaioinfo_t *) SD->fsdata;
-    /*
-     * We have to test the bit before calling file_map_bit_reset.
-     * file_map_bit_reset doesn't do bounds checking.  It assumes
-     * filn is a valid file number, but it might not be because
-     * the map is dynamic in size.  Also clearing an already clear
-     * bit puts the map counter of-of-whack.
-     */
-    if (file_map_bit_test(aioinfo->map, filn))
-	file_map_bit_reset(aioinfo->map, filn);
-}
-
-int
-storeAufsDirMapBitAllocate(SwapDir * SD)
-{
-    squidaioinfo_t *aioinfo = (squidaioinfo_t *) SD->fsdata;
-    int fn;
-    fn = file_map_allocate(aioinfo->map, aioinfo->suggest);
-    file_map_bit_set(aioinfo->map, fn);
-    aioinfo->suggest = fn + 1;
-    return fn;
-}
-
-/*
- * Initialise the asyncufs bitmap
- *
- * If there already is a bitmap, and the numobjects is larger than currently
- * configured, we allocate a new bitmap and 'grow' the old one into it.
- */
-static void
-storeAufsDirInitBitmap(SwapDir * sd)
-{
-    squidaioinfo_t *aioinfo = (squidaioinfo_t *) sd->fsdata;
-
-    if (aioinfo->map == NULL) {
-	/* First time */
-	aioinfo->map = file_map_create();
-    } else if (aioinfo->map->max_n_files) {
-	/* it grew, need to expand */
-	/* XXX We don't need it anymore .. */
-    }
-    /* else it shrunk, and we leave the old one in place */
-}
 
 static char *
 storeAufsDirSwapSubDir(SwapDir * sd, int subdirn)
