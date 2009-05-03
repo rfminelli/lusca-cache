@@ -65,12 +65,12 @@ static const char *
 storeMetaText(storeSwapLogData *d)
 {
 	static char buf[1024];
-	char *ks = storeKeyText(d->key);
+	const char *ks = storeKeyText(d->key);
 
 	buf[0] = '\0';
 
 	snprintf(buf, 1024, "op %s; fileno %X; timestamp %ld; lastref %ld; expires %ld; lastmod %ld; filesize %ld; refcount %d; flags %d; key %s",
-	    swap_log_op_str[d->op],
+	    swap_log_op_str[(int) d->op],
 	    (int) d->swap_filen,
 	    (long int) d->timestamp,
 	    (long int) d->lastref,
@@ -82,7 +82,6 @@ storeMetaText(storeSwapLogData *d)
 	    ks);
 	return buf;
 }
-
 
 void
 read_file(const char *path)
@@ -100,15 +99,15 @@ read_file(const char *path)
 	}
 
 	/* read the header */
-	len = read(fd, buf, BUFSIZE);
+	len = read(fd, buf, sizeof(storeSwapLogData));
 	if (len < 0) {
 		perror("read");
 		close(fd);
 		return;
 	}
 
-	if (len < sizeof(*hdr)) {
-		perror("too small");
+	if (len != sizeof(storeSwapLogData)) {
+		perror("not enough data");
 		close(fd);
 		return;
 	}
@@ -116,15 +115,9 @@ read_file(const char *path)
 	hdr = (storeSwapLogHeader *) buf;
 
 	/* Which version is the swaplog? For now, we only support the -new- version */
+
 	printf("swaplog header version: %d; record size: %d\n", hdr->version, hdr->record_size);
 	printf("size of current swaplog entry: %d\n", sizeof(storeSwapLogData));
-
-	/* The "starting" point for this record is the -record- size, not the swaplog header size. */
-	if (lseek(fd, hdr->record_size, SEEK_SET) < 0) {
-		perror("lseek");
-		close(fd);
-		return;
-	}
 
 	/* Start reading entries */
 	while ((len = read(fd, buf, sizeof(storeSwapLogData))) > 0) {
