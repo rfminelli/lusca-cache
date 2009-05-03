@@ -216,11 +216,6 @@ read_dir(store_ufs_dir_t *sd)
 				continue;
 			}
 
-			/* The store dir stuff really should verify that the given file
-			 * exists where it is supposed to exist. It is also plausible that
-			 * this could attempt to shuffle files around in case users
-			 * wish to change L1/L2 configuration.. :)
-			 */
 			while ( (de = readdir(d)) != NULL) {
 				if (de->d_name[0] == '.')
 					continue;
