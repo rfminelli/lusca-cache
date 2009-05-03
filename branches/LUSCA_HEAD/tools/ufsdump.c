@@ -247,17 +247,27 @@ read_dir(store_ufs_dir_t *sd)
 	}
 }
 
+void
+print_header(store_ufs_dir_t *ud, int fd)
+{
+    char buf[sizeof(storeSwapLogData)];
+    storeSwapLogHeader *sh = (storeSwapLogHeader *) buf;
+
+    bzero(buf, sizeof(buf));
+    sh->op = SWAP_LOG_VERSION;
+    sh->version = 1;
+    sh->record_size = sizeof(storeSwapLogData);
+    write(1, sh, sizeof(storeSwapLogData));
+}
+
 int
 main(int argc, char *argv[])
 {
     /* Setup the debugging library */
     _db_init("ALL,1");
     _db_set_stderr_debug(1);
-    char buf[sizeof(storeSwapLogData)];
-    storeSwapLogHeader *sh = (storeSwapLogHeader *) buf;
     store_ufs_dir_t store_ufs_info;
 
-    bzero(buf, sizeof(buf));
 
     if (argc < 4) {
 	printf("Usage: %s <store path> <l1> <l2>\n", argv[0]);
@@ -267,11 +277,7 @@ main(int argc, char *argv[])
     store_ufs_init(&store_ufs_info, argv[1], atoi(argv[2]), atoi(argv[3]));
 
     /* Output swap header */
-    sh->op = SWAP_LOG_VERSION;
-    sh->version = 1;
-    sh->record_size = sizeof(storeSwapLogData);
-
-    write(1, sh, sizeof(storeSwapLogData));
+    print_header(&store_ufs_info, 1);
 
     read_dir(&store_ufs_info);
     store_ufs_done(&store_ufs_info);
