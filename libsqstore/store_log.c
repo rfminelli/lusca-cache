@@ -37,3 +37,17 @@ storeSwapLogUpgradeEntry(storeSwapLogData *dst, storeSwapLogDataOld *src)
 
     return 1;
 }
+
+int
+storeSwapLogPrintHeader(int fd)
+{
+    char buf[sizeof(storeSwapLogData)];
+    storeSwapLogHeader *sh = (storeSwapLogHeader *) buf;
+
+    bzero(buf, sizeof(buf));
+    sh->op = SWAP_LOG_VERSION;
+    sh->version = 1;
+    sh->record_size = sizeof(storeSwapLogData);
+    return write(1, sh, sizeof(storeSwapLogData));
+}
+
