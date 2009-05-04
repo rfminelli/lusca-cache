@@ -24,6 +24,6 @@ struct _RebuildState {
     struct _store_rebuild_data counts;
 };
 
-
+extern void storeAufsDirRebuild(SwapDir * sd);
 
 #endif
