@@ -267,6 +267,19 @@ storeAufsDirWriteCleanEntry(SwapDir * sd, const StoreEntry * e)
     }
 }
 
+/*!
+ * @function
+ *	storeAufsDirWriteCleanDone
+ * @abstract
+ *	Complete the "clean" log file process.
+ * @discussion
+ *	This function finalises the clean log file service done at
+ *	shutdown and rotation. The final buffered objects are
+ *	written; the file is closed; the store walker is finalised
+ *	and various buffers are freed, including the "clean_state".
+ *
+ * @param	sd	SwapDir
+ */
 void
 storeAufsDirWriteCleanDone(SwapDir * sd)
 {
@@ -321,6 +334,19 @@ storeAufsDirWriteCleanDone(SwapDir * sd)
     sd->log.clean.write = NULL;
 }
 
+/*!
+ * @function
+ *	storeAufsDirSwapLog
+ * @abstract
+ *	Write the given store entry + operation to the currently open swaplog
+ * @discussion
+ *	The file_write() sync disk API is used so write combining is done;
+ *	however the disk IO happens synchronously.
+ *
+ * @param	sd	SwapDir to write the log entry for
+ * @param	e	StoreEntry to write the swaplog entry for
+ * @param	op	Operation - ADD or DEL
+ */
 void
 storeAufsDirSwapLog(const SwapDir * sd, const StoreEntry * e, int op)
 {
