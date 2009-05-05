@@ -577,6 +577,18 @@ storeAufsDirRebuildFromSwapLogCheckVersion(void *data)
 
 CBDATA_TYPE(RebuildState);
 
+/*!
+ * @function
+ *	storeAufsDirRebuild
+ * @abstract
+ *	Begin the directory rebuild process for the given AUFS directory
+ * @discussion
+ *	This function initialises the required bits for the AUFS directory
+ *	rebuild, determines whether the rebuild should occur from the
+ *	logfile or directory; and begins said process.
+ *
+ * @param	sd		SwapDir to begin the rebuild process
+ */
 void
 storeAufsDirRebuild(SwapDir * sd)
 {
