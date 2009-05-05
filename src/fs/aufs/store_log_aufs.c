@@ -54,6 +54,40 @@ struct _clean_state {
     RemovalPolicyWalker *walker;
 };
 
+/*
+ * These functions implement the AUFS store swaplog reading and writing.
+ *
+ * The documentation is rather lacking for now; this primarily exists
+ * as a shortlist of things to remember during the reorganisation.
+ */
+
+/*
+ * There are three main swaplogs to worry about: the temporary swaplog,
+ * the clean swaplog and the current swaplog.
+ *
+ * The temprary swaplog is used by the rebuild logic to write out
+ * swaplog entries when rebuilding via the directory.
+ *
+ * The clean swaplog is written during logfile rotate and shutdown;
+ * it is a snapshot of the current contents of the storedir.
+ *
+ * The current swaplog is a transaction log (Adds and Deletes) of items
+ * entering and leaving the disk cache.
+ */
+
+/* (More to come..) */
+
+/*
+ * Gotchas to look out for:
+ *
+ * The "walker" logic for traversing the StoreEntry array does not attempt
+ * to lock the StoreEntry in any way as far as I can tell. The StoreEntry
+ * being pointed to may in fact disappear if any other code gets a chance
+ * at toying with StoreEntry's. This means it is infeasible to run the
+ * "clean" entry code in a series of callback events at the present time.
+ * Grr.
+ */
+
 char *
 storeAufsDirSwapLogFile(SwapDir * sd, const char *ext)
 {
