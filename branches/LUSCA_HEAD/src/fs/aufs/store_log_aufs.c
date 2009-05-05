@@ -44,6 +44,16 @@
 
 #define CLEAN_BUF_SZ 16384
 
+struct _clean_state {
+    char *cur;
+    char *new;
+    char *cln;
+    char *outbuf;
+    int outbuf_offset;
+    int fd;
+    RemovalPolicyWalker *walker;
+};
+
 char *
 storeAufsDirSwapLogFile(SwapDir * sd, const char *ext)
 {
@@ -203,16 +213,6 @@ storeAufsDirOpenTmpSwapLog(SwapDir * sd, int *clean_flag, int *zero_flag)
     safe_free(new_path);
     return fd;
 }
-
-struct _clean_state {
-    char *cur;
-    char *new;
-    char *cln;
-    char *outbuf;
-    int outbuf_offset;
-    int fd;
-    RemovalPolicyWalker *walker;
-};
 
 /*
  * Get the next entry that is a candidate for clean log writing
