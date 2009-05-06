@@ -1,7 +1,6 @@
 #include "squid.h"
 #include "ufs_utils.h"
 
-
 /*
  * ufs_swaplog routines
  */
@@ -83,4 +82,3 @@ ufs_swaplog_take_buffer(ufs_swaplog_t *el)
 	el->count = el->size = 0;
 	return b;
 }
-
