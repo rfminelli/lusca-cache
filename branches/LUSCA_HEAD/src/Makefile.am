@@ -130,7 +130,6 @@ squid_SOURCES = \
 	comm.c \
 	defines.h \
 	$(DELAY_POOL_SOURCE) \
-	disk.c \
 	$(DNSSOURCE) \
 	enums.h \
 	errorpage.c \
