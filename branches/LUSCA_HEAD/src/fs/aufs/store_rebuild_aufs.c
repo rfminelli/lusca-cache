@@ -44,6 +44,24 @@
 
 #define STORE_META_BUFSZ 4096
 
+/*
+ * The AUFS rebuild process can take one of two main paths - either by logfile
+ * or by directory.
+ *
+ * The logfile rebuild opens the swaplog and a clean swaplog, reads in
+ * entries and writes out sanitised entries to the clean swaplog.
+ * The clean swaplog is then moved into place over the original swaplog.
+ *
+ * The directory rebuild opens a "temporary" swaplog and writes out entries
+ * to the temporary swaplog as the directory is walked. The temporary
+ * swaplog is then moved into place over the original swaplog.
+ *
+ * Any objects which are to be removed for whatever reason (fresher objects
+ * are available, they've expired, etc) are expired via storeRelease().
+ * Their deletion will occur once all the stores have rebuilt rather than
+ * the deletion taking place during the rebuild.
+ */
+
 static void
 storeAufsDirRebuildComplete(RebuildState * rb)
 {
