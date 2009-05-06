@@ -148,7 +148,7 @@ memReport(StoreEntry * e)
     }
     overhd_size += sizeof(Pools) + Pools.capacity * sizeof(MemPool *);
     /* totals */
-    storeAppendPrintf(e, "%-20s\t\t ", "Total", "-");
+    storeAppendPrintf(e, "%-20s\t\t ", "Total");
     memPoolMeterReport(&TheMeter, 1, alloc_count, inuse_count, e);
     storeAppendPrintf(e, "Cumulative allocated volume: %s\n", gb_to_str(&mem_traffic_volume));
     /* overhead */
