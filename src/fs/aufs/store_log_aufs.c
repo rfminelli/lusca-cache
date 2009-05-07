@@ -197,6 +197,30 @@ storeAufsWriteSwapLogheader(int fd)
 	(FREE *) storeSwapLogDataFree);
 }
 
+/*!
+ * @function
+ *	storeAufsDirOpenTmpSwapLog
+ * @abstract
+ *	Check the current log file state; close the current swaplog and open a temporary swaplog
+ * @discussion
+ *	This function does a bunch of checks before it opens the temporary swaplog.
+ *
+ *	It closes the current swaplog before opening a temporary one.
+ *
+ *	It then opens a ".new" temporary swaplog and assigns that to the current swaplog;
+ *	so new items which enter the store are written out to that swaplog.
+ *
+ *	It then opens a read-only filedescriptor for the -normal- swaplog so items
+ *	can be read from that.
+ *
+ *	Finally, some logic is run through to see whether the last written swaplog
+ *	is "clean" (ie, is a snapshot of the last good state) or dirty.
+ *
+ * @param	sd		SwapDir to open the temporary swaplog for
+ * @param	clean_flag	return whether the last swaplog written out was "clean"
+ * @param	zero_flag	Return whether the current swaplog size is 0 bytes or not
+ * @return	-1 on error, fd on an opened swaplog for reading.
+ */
 int
 storeAufsDirOpenTmpSwapLog(SwapDir * sd, int *clean_flag, int *zero_flag)
 {
