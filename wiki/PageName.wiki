@@ -1,0 +1,17 @@
+#summary Store IO Load Handling
+
+= Introduction =
+
+Lusca inherited some logic for handling overloaded cache directories. This attempts to document the basic workings, the limitations/shortcomings and potential workarounds.
+
+= Overload during storeOpen =
+
+The store containing an object is checked via a call to the storedir "checkload()" function. If the storedir returns error or a load higher than 1000 it increments "store_io_stats.open.loadav_fail" and returns NULL.
+
+If the store layer returns NULL then the store client code returns an error via a store client callback. I have a feeling that this somehow turns into an object "delete" from cache - either explicitly somehow due to the error condition or a subsequent object fetch replaces the on-disk version. This should be further investigated.
+
+= Overload during storeCreate =
+
+= Overload during read / write IO =
+
+= Problems with the load handling =
