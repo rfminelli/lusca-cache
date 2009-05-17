@@ -12,6 +12,12 @@ If the store layer returns NULL then the store client code returns an error via 
 
 = Overload during storeCreate =
 
+The two selection algorithms, "round robin" and "least load", both check to make sure the storedir is OK (load < 1000 and > 0). Storedirs which are not OK for this object are skipped by the selection logic.
+
 = Overload during read / write IO =
 
+The storage logic does not currently handle temporary IO overloading - the IO must complete or error, aborting the swapin/swapout. The storage modules will generally call some "sync" function to complete some pending IO before completing the current IO.
+
 = Problems with the load handling =
+
+The load handling was written for a forward proxy load where it was OK to occasionally miss an object. Reverse proxy loads with highly popular objects can confuse the above logic. In particular, a frequently requested object (say, a large one with range requests) seems to be evicted from the cache following a transient high load spike and this overloads the backends with range requests.
