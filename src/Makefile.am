@@ -314,6 +314,7 @@ BUILT_SOURCES = \
 
 sysconf_DATA = \
 	squid.conf.default \
+	squid.conf.clean \
 	mime.conf.default
 
 data_DATA = \
