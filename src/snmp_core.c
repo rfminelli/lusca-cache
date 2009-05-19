@@ -69,7 +69,9 @@ static oid *static_Inst(oid * name, snint * len, mib_tree_entry * current, oid_P
 static oid *time_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn);
 static oid *peer_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn);
 static oid *peer_InstIndex(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn);
+#if 0
 static oid *client_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn);
+#endif
 static void snmpDecodePacket(snmp_request_t * rq);
 static void snmpConstructReponse(snmp_request_t * rq);
 static struct snmp_pdu *snmpAgentResponse(struct snmp_pdu *PDU);
@@ -269,8 +271,9 @@ snmpInit(void)
 	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 12, snmp_meshPtblFn, peer_InstIndex);
 	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 13, snmp_meshPtblFn, peer_InstIndex);
 	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 14, snmp_meshPtblFn, peer_InstIndex);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 15, snmp_meshPtblFn, peer_InstIndex);
+	mib_tree_last = snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 15, snmp_meshPtblFn, peer_InstIndex);
 
+#if 0
 	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5", 2, NULL, NULL);
 	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2", 1, NULL, NULL);
 	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2.1", 1, snmp_meshCtblFn, client_Inst);
@@ -282,6 +285,7 @@ snmpInit(void)
 	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2.1", 7, snmp_meshCtblFn, client_Inst);
 	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2.1", 8, snmp_meshCtblFn, client_Inst);
 	mib_tree_last = snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2.1", 9, snmp_meshCtblFn, client_Inst);
+#endif
 
     debug(49, 9) ("snmpInit: Completed SNMP mib tree structure\n");
 }
@@ -804,6 +808,7 @@ peer_InstIndex(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn **
     return (instance);
 }
 
+#if 0
 static oid *
 client_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn)
 {
@@ -839,6 +844,7 @@ client_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn
     *Fn = current->parsefunction;
     return (instance);
 }
+#endif
 
 
 /*

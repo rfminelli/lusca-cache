@@ -306,6 +306,13 @@ clientdbStartGC(void)
     clientdbGC(NULL);
 }
 
+/*
+ * XXX this has been disabled due to changes to the client db code.
+ * XXX The client db code used to use an IPv4 hash table; it will
+ * XXX use an IPv4/IPv6 radix tree. The SNMP code should be
+ * XXX modified to use the radix tree and be "IPv6 compatible"
+ * XXX in whatever way Squid-3's client database is.
+ */
 #if SQUID_SNMP
 struct in_addr *
 client_entry(struct in_addr *current)
