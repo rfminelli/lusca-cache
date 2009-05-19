@@ -159,7 +159,6 @@ squid_SOURCES = \
 	icmp.c \
 	icp_v2.c \
 	icp_v3.c \
-	ident.c \
 	internal.c \
 	$(IPC_SOURCE) \
 	ipcache.c \
