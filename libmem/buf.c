@@ -21,7 +21,10 @@
 static int buf_configured = 0;
 static MemPool *buf_pool = NULL;
 
+#if	BUF_TRACK_BUFS
 dlink_list buf_active_list;
+#endif
+
 int buf_active_num = 0;
 
 void
@@ -86,7 +89,9 @@ buf_create_int(const char *file, int line)
 	b = memPoolAlloc(buf_pool);
 	if (! b)
 		return NULL;
+#if BUF_TRACK_BUFS
 	dlinkAddTail(b, &b->node, &buf_active_list);
+#endif
 	buf_active_num++;
 	debug (85, 5) ("buf_create: %p\n", b);
 	buf_ref(b);
@@ -119,7 +124,9 @@ buf_create_const_int(const void *data, size_t len, const char *file, int line)
 	b = memPoolAlloc(buf_pool);
 	if (! b)
 		return NULL;
+#if BUF_TRACK_BUFS
 	dlinkAddTail(b, &b->node, &buf_active_list);
+#endif
 	buf_active_num++;
 	debug(85, 5) ("buf_create: %p\n", b);
 	b->b = (char *)data;
@@ -165,7 +172,9 @@ buf_deref(buf_t *b)
 		if (!b->flags.isconst) {
 		    free(b->b); b->b = NULL;
 		}
+#if BUF_TRACK_BUFS
                 dlinkDelete(&b->node, &buf_active_list);
+#endif
 		buf_active_num--;
 		memPoolFree(buf_pool, b);
 		return NULL;
