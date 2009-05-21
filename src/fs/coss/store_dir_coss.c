@@ -39,6 +39,7 @@
 #include "../../libasyncio/async_io.h"
 #include "store_coss.h"
 #include "store_rebuild_coss.h"
+#include "store_log_coss.h"
 
 #define STORE_META_BUFSZ 4096
 #define HITONLY_BUFS 2
@@ -406,9 +407,10 @@ storeCossDirParse(SwapDir * sd, int index, char *path)
     sd->obj.unlink = storeCossUnlink;
     sd->obj.recycle = storeCossRecycle;
 
-    sd->log.open = NULL;
-    sd->log.close = NULL;
-    sd->log.write = NULL;
+    sd->log.open = storeCossDirOpenSwapLog;
+    sd->log.close = storeCossDirCloseSwapLog;
+    sd->log.write = storeCossDirSwapLog;
+
     sd->log.clean.start = NULL;
     sd->log.clean.write = NULL;
     sd->log.clean.nextentry = NULL;
