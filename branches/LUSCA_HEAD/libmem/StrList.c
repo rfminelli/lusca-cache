@@ -196,9 +196,11 @@ strListGetItem(const String * str, char del, const char **item, int *ilen, const
     delim[2][1] = del;
     assert(str && item && pos);
     if (!*pos) {
-	*pos = strBuf(*str);
-	if (!*pos)
-	    return 0;
+         if (strIsNull(*str)) {
+	     *pos = NULL;		/* The previous code had this as a side effect.. */
+             return 0;
+	 }
+         *pos = strBuf(*str);		/* The rest of this routine still assumes C string semantics. */
     }
     /* skip leading whitespace and delimiters */
     *pos += strspn(*pos, delim[2]);
