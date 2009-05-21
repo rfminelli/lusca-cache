@@ -40,6 +40,22 @@
 #include "store_coss.h"
 #include "store_log_coss.h"
 
+/*
+ * The COSS swaplog writing process will be identical to the
+ * normal UFS swaplog writing process. The difference is in the
+ * swaplog rotation - the COSS swaplog will be rotated once
+ * the "active" stripe reaches the end of the disk and starts
+ * over; and only two swaplog versions are kept.
+ *
+ * Rebuilding the cache is then as simple as reading the older
+ * swaplog and then the newer swaplog.
+ */
+
+/*
+ * The trick is figuring out how to do this all asynchronously
+ * (ie, non blocking) so that swaplog operations don't slow down
+ * the cache.
+ */
 void
 storeCossDirOpenSwapLog(SwapDir * sd)
 {
