@@ -1,4 +1,3 @@
 #summary Ongoing development projects
 
-* /playpen/LUSCA_HEAD_ufs - UFS code unification and tidyup
-* /playpen/LUSCA_HEAD_module - code modularisation work (shared object support)
+  * /playpen/LUSCA_HEAD_module - code modularisation work (shared object support)
