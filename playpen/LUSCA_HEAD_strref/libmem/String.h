@@ -3,17 +3,20 @@
 
 struct _String {
     /* never reference these directly! */
-    unsigned short int size;    /* buffer size; 64K limit */
-    unsigned short int len;     /* current length  */
-    char *buf;
+    buf_t *b;
 };
 
 typedef struct _String String;
 
 /* Code using these define's don't treat the buffer as a NUL-terminated C string */
 /* XXX note - the -uses- of these calls don't assume C-string; the String code may not yet! */
-#define strLen2(s)     ((/* const */ int)(s).len)
-#define strBuf2(s)     ((const char*)(s).buf)
+
+#define strLen2(s)     ( (s).b ? buf_len((s).b) : 0 )
+static inline const char * strBuf2(String s) { if (s.b == NULL) return NULL; return buf_buf(s.b); }
+
+/* this replaces String->size */
+#define	strCapacity(s)	( (s).b ? buf_capacity((s).b : 0 )
+
 #define strCat(s,str)		stringAppend(&(s), (str), strlen(str))
 #define	strCatStr(ds, ss)	stringAppend(&(ds), strBuf2(ss), strLen(ss))
 static inline char stringGetCh(const String *s, int pos) { return strBuf2(*s)[pos]; }
@@ -35,6 +38,7 @@ extern char * stringDupToCOffset(const String *s, int offset);
 extern char * stringDupSubstrToC(const String *s, int len);
 extern int strChr(String *s, char c);
 extern int strRChr(String *s, char c);
+extern void strMakePrivate(String *s);
 
 
 /*
@@ -48,12 +52,12 @@ extern void strCut(String *s, int pos);
  * its an empty string. A few Squid functions do if (strBuf(str)) to see if
  * something has set the string to a value; these functions replace them.
  */
-#define	strIsNull(s)	( (s).buf == NULL )
-#define	strIsNotNull(s)	( (s).buf != NULL )
+#define	strIsNull(s)	( (s).b == NULL )
+#define	strIsNotNull(s)	( (s).b != NULL )
 
 /* These are legacy routines which may or may not expect NUL-termination or not */
-#define strLen(s)     ((/* const */ int)(s).len)
-#define strBuf(s)     ((const char*)(s).buf)
+#define strLen(s)	( strLen2(s) )
+#define strBuf(s)	( strBuf2(s) )
 
 #define strStr(s,str) ((const char*)strstr(strBuf(s), (str)))  
 
@@ -61,6 +65,6 @@ extern void strCut(String *s, int pos);
 /* extern void stringAppendf(String *s, const char *fmt, ...) PRINTF_FORMAT_ARG2; */
 
 
-extern const String StringNull; /* { 0, 0, NULL } */
+extern const String StringNull; /* { NULL } */
 
 #endif
