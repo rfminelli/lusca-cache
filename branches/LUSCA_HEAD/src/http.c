@@ -1219,7 +1219,7 @@ httpReadReply(int fd, void *data)
 
     if (already_parsed && httpState->reply_hdr_state == 2) {
 #if WIP_FWD_LOG
-	fwdStatus(httpState->fwd, s);
+	fwdStatus(httpState->fwd, entry->mem_obj->reply->sline.status);
 #endif
 	/*
 	 * If its not a reply that we will re-forward, then
