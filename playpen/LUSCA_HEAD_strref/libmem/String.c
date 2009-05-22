@@ -51,8 +51,8 @@
 
 #include "MemPool.h"
 #include "MemStr.h"
-#include "String.h"
 #include "buf.h"
+#include "String.h"
 
 const String StringNull = { NULL };
 

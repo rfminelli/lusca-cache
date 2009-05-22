@@ -57,6 +57,7 @@
   
 #include "MemPool.h"
 #include "MemStr.h"
+#include "buf.h"
 #include "String.h"
 
 #include "StrList.h"
