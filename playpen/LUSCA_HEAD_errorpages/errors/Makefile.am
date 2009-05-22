@@ -11,6 +11,9 @@ errordir = $(datadir)/errors
 DEFAULT_ERROR_DIR	= $(errordir)
 
 INSTALL_LANGUAGES	= templates @ERR_LANGUAGES@
+
+TEMPLATE_LANGUAGES = English
+
 LANGUAGES	= \
 		Armenian \
 		Azerbaijani \
@@ -49,6 +52,8 @@ LANGUAGES	= \
 		Ukrainian-utf8
 
 install-data-local:
+        # XXX this shouldn't be here..
+        @for l in $(TEMPLATE_LANGUAGES); do ./build.pl src/$$l $$l; done
 	@for l in $(INSTALL_LANGUAGES); do \
 		$(mkinstalldirs) $(DESTDIR)$(DEFAULT_ERROR_DIR)/$$l && \
 		for f in $(srcdir)/$$l/ERR_*; do \
@@ -99,4 +104,3 @@ dist-hook:
 	    fi; \
 	  fi; \
 	done
-
