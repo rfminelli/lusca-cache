@@ -84,24 +84,24 @@ int HeaderEntryParsedCount = 0;
  * 1: valid header, add
  */
 static int
-httpHeaderParseCheckEntry(HttpHeader *hdr, HttpHeaderEntry *e)
+httpHeaderParseCheckEntry(HttpHeader *hdr, int id, String *name, String *value)
 {
-	if (e->id == HDR_CONTENT_LENGTH) {
+	if (id == HDR_CONTENT_LENGTH) {
 	    squid_off_t l1;
 	    HttpHeaderEntry *e2;
-	    if (!httpHeaderParseSize(strBuf(e->value), &l1)) {
-		debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n", strLen2(e->value), strBuf2(e->value));
+	    if (!httpHeaderParseSize(strBuf(*value), &l1)) {
+		debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n", strLen2(*value), strBuf2(*value));
 		return -1;
 	    }
-	    e2 = httpHeaderFindEntry(hdr, e->id);
-	    if (e2 && strCmp(e->value, strBuf(e2->value)) != 0) {
+	    e2 = httpHeaderFindEntry(hdr, id);
+	    if (e2 && strCmp(*value, strBuf(e2->value)) != 0) {
 		squid_off_t l2;
 		debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2) ("WARNING: found two conflicting content-length headers\n");
 		if (!httpConfig_relaxed_parser) {
 		    return -1;
 		}
 		if (!httpHeaderParseSize(strBuf(e2->value), &l2)) {
-		    debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n", strLen2(e->value), strBuf2(e->value));
+		    debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n", strLen2(*value), strBuf2(*value));
 		    return -1;
 		}
 		if (l1 > l2) {
@@ -119,9 +119,9 @@ httpHeaderParseCheckEntry(HttpHeader *hdr, HttpHeaderEntry *e)
 		}
 	    }
 	}
-	if (e->id == HDR_OTHER && stringHasWhitespace(strBuf(e->name))) {
+	if (id == HDR_OTHER && stringHasWhitespace(strBuf(*name))) {
 	    debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
-		("WARNING: found whitespace in HTTP header name {%.*s}\n", strLen2(e->name), strBuf2(e->name));
+		("WARNING: found whitespace in HTTP header name {%.*s}\n", strLen2(*name), strBuf2(*name));
 	    if (!httpConfig_relaxed_parser) {
 		return -1;
 	    }
@@ -202,7 +202,7 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 	    else
 		return httpHeaderReset(hdr);
 	}
-	r = httpHeaderParseCheckEntry(hdr, e);
+	r = httpHeaderParseCheckEntry(hdr, e->id, &e->name, &e->value);
 	if (r <= 0) {
 		httpHeaderEntryDestroy(e);
                 memPoolFree(pool_http_header_entry, e);
