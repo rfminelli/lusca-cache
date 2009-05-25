@@ -8,6 +8,7 @@ struct _vector_t {
 	void *data;
 };
 typedef struct _vector_t vector_t;
+typedef struct _vector_t Vector;
 
 void vector_init(vector_t *v, int obj_size, int obj_count);
 void vector_done(vector_t *v);
