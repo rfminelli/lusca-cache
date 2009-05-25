@@ -47,6 +47,7 @@
 #include "../include/Array.h"
 #include "../include/Stack.h"
 #include "../include/util.h"
+#include "../include/Vector.h"
 #include "../libcore/valgrind.h"
 #include "../libcore/varargs.h"
 #include "../libcore/debug.h"
@@ -166,7 +167,7 @@ httpHeaderInit(HttpHeader * hdr, http_hdr_owner_type owner)
     debug(55, 7) ("init-ing hdr: %p owner: %d\n", hdr, owner);
     memset(hdr, 0, sizeof(*hdr));
     hdr->owner = owner;
-    arrayInit(&hdr->entries);
+    vector_init(&hdr->entries, sizeof(HttpHeaderEntry), 16);
 }
 
 /*!
@@ -208,10 +209,10 @@ httpHeaderClean(HttpHeader * hdr)
      * has been used.  As a hack, just never count zero-sized header
      * arrays.
      */
-    if (0 != hdr->entries.count)
-        statHistCount(&HttpHeaderStats[hdr->owner].hdrUCountDistr, hdr->entries.count);
+    if (vector_numentries(&hdr->entries))
+        statHistCount(&HttpHeaderStats[hdr->owner].hdrUCountDistr, vector_numentries(&hdr->entries));
     HttpHeaderStats[hdr->owner].destroyedCount++;
-    HttpHeaderStats[hdr->owner].busyDestroyedCount += hdr->entries.count > 0;
+    HttpHeaderStats[hdr->owner].busyDestroyedCount += vector_numentries(&hdr->entries) > 0;
     while ((e = httpHeaderGetEntry(hdr, &pos))) {
         /* tmp hack to try to avoid coredumps */
         if (e->id >= HDR_ENUM_END) {
@@ -221,10 +222,9 @@ httpHeaderClean(HttpHeader * hdr)
             statHistCount(&HttpHeaderStats[hdr->owner].fieldTypeDistr, e->id);
             /* yes, this destroy() leaves us in an inconsistent state */
             httpHeaderEntryDestroy(e);
-	    memPoolFree(pool_http_header_entry, e);
         }
     }
-    arrayClean(&hdr->entries);
+    vector_done(&hdr->entries);
 }
 
 /* just handy in parsing: resets and returns false */
@@ -275,15 +275,24 @@ httpHeaderAddInfo(HttpHeader *hdr, HttpHeaderEntry *e)
     hdr->len += strLen(e->name) + 2 + strLen(e->value) + 2;
 }
 
-/* appends an entry;
- * does not call httpHeaderEntryClone() so one should not reuse "*e"
- */
-void
-httpHeaderAddEntry(HttpHeader * hdr, HttpHeaderEntry * e)
+HttpHeaderEntry *
+httpHeaderAllocNewEntry(HttpHeader *hdr)
 {
-    debug(55, 7) ("%p adding entry: %d at %d\n", hdr, e->id, hdr->entries.count);
-    httpHeaderAddInfo(hdr, e);
-    arrayAppend(&hdr->entries, e);
+	HttpHeaderEntry *e;
+
+	e = vector_append(&hdr->entries);
+	e->active = 0;
+	return e;
+}
+
+HttpHeaderEntry *
+httpHeaderAllocInsertEntry(HttpHeader *hdr, int pos)
+{
+	HttpHeaderEntry *e;
+
+	e = vector_insert(&hdr->entries, pos);
+	e->active = 0;
+	return e;
 }
 
 /*!
@@ -319,18 +328,18 @@ httpHeaderAddEntryStr(HttpHeader *hdr, http_hdr_type id, const char *attrib, con
 HttpHeaderEntry *
 httpHeaderAddEntryStr2(HttpHeader *hdr, http_hdr_type id, const char *a, int al, const char *v, int vl)
 {
-	HttpHeaderEntry *e = memPoolAlloc(pool_http_header_entry);
+	HttpHeaderEntry *e = httpHeaderAllocNewEntry(hdr);
 	httpHeaderEntryCreate(e, id, a, al, v, vl);
-	httpHeaderAddEntry(hdr, e);
+	httpHeaderAddInfo(hdr, e);
 	return e;
 }
 
 void
 httpHeaderAddEntryString(HttpHeader *hdr, http_hdr_type id, const String *a, const String *v)
 {
-	HttpHeaderEntry *e = memPoolAlloc(pool_http_header_entry);
+	HttpHeaderEntry *e = httpHeaderAllocNewEntry(hdr);
 	httpHeaderEntryCreateStr(e, id, a, v);
-	httpHeaderAddEntry(hdr, e);
+	httpHeaderAddInfo(hdr, e);
 }
 
 /*!
@@ -358,31 +367,23 @@ httpHeaderAddEntryString(HttpHeader *hdr, http_hdr_type id, const String *a, con
 void
 httpHeaderInsertEntryStr(HttpHeader *hdr, int pos, http_hdr_type id, const char *attrib, const char *value)
 {
-	HttpHeaderEntry *e = memPoolAlloc(pool_http_header_entry);
+	HttpHeaderEntry *e = httpHeaderAllocInsertEntry(hdr, pos);
 	httpHeaderEntryCreate(e, id, attrib, -1, value, -1);
-	httpHeaderInsertEntry(hdr, e, pos);
+	httpHeaderAddInfo(hdr, e);
 }
 
-/* inserts an entry at the given position;
- * does not call httpHeaderEntryClone() so one should not reuse "*e"
- */
-void
-httpHeaderInsertEntry(HttpHeader * hdr, HttpHeaderEntry * e, int pos)
-{
-    debug(55, 7) ("%p adding entry: %d at %d\n", hdr, e->id, hdr->entries.count);
-    httpHeaderAddInfo(hdr, e);
-    arrayInsert(&hdr->entries, e, pos);
-}
 
 /* returns next valid entry */
 HttpHeaderEntry *
 httpHeaderGetEntry(const HttpHeader * hdr, HttpHeaderPos * pos)
 {
+    HttpHeaderEntry *e;
     assert(hdr && pos);
-    assert(*pos >= HttpHeaderInitPos && *pos < hdr->entries.count);
-    for ((*pos)++; *pos < hdr->entries.count; (*pos)++) {
-        if (hdr->entries.items[*pos])
-            return hdr->entries.items[*pos];
+    assert(*pos >= HttpHeaderInitPos && *pos < vector_numentries(&hdr->entries));
+    for ((*pos)++; *pos < vector_numentries(&hdr->entries); (*pos)++) {
+	e = vector_get(&hdr->entries, *pos);
+	if (e->active)
+		return e;
     }
     return NULL;
 }
@@ -390,9 +391,9 @@ httpHeaderGetEntry(const HttpHeader * hdr, HttpHeaderPos * pos)
 void
 httpHeaderAddClone(HttpHeader * hdr, const HttpHeaderEntry * e)
 {
-    HttpHeaderEntry *ne = memPoolAlloc(pool_http_header_entry);
+    HttpHeaderEntry *ne = httpHeaderAllocNewEntry(hdr);
     httpHeaderEntryClone(ne, e);
-    httpHeaderAddEntry(hdr, ne);
+    httpHeaderAddInfo(hdr, ne);
 }
 
 /*!
@@ -478,14 +479,11 @@ void
 httpHeaderDelAt(HttpHeader * hdr, HttpHeaderPos pos)
 {
     HttpHeaderEntry *e;
-    assert(pos >= HttpHeaderInitPos && pos < hdr->entries.count);
-    e = hdr->entries.items[pos];
-    hdr->entries.items[pos] = NULL;
-    /* decrement header length, allow for ": " and crlf */
+    assert(pos >= HttpHeaderInitPos && pos < vector_numentries(&hdr->entries));
+    e = vector_get(&hdr->entries, pos);
     hdr->len -= strLen(e->name) + 2 + strLen(e->value) + 2;
     assert(hdr->len >= 0);
     httpHeaderEntryDestroy(e);
-    memPoolFree(pool_http_header_entry, e);
 }
 
 int
@@ -629,7 +627,8 @@ httpHeaderRepack(HttpHeader * hdr)
     /* XXX breaks layering for now! ie, getting grubby fingers in without httpHeaderEntryGet() */
     dp = 0;
     pos = 0;
-    while (dp < hdr->entries.count) {
+#if 0		/* XXX disabled for now; will have to think of the -right- way to do this */
+    while (dp < vector_numentries(&hdr->entries)) {
         for (; dp < hdr->entries.count && hdr->entries.items[dp] == NULL; dp++);
         if (dp >= hdr->entries.count)
             break;
@@ -640,6 +639,7 @@ httpHeaderRepack(HttpHeader * hdr)
         dp++;
     }   
     arrayShrink(&hdr->entries, pos);
+#endif
 }   
 
 /* use fresh entries to replace old ones */

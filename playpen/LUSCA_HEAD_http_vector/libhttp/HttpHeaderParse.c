@@ -47,6 +47,7 @@
 
 #include "../include/Array.h"
 #include "../include/Stack.h"
+#include "../include/Vector.h"
 #include "../include/util.h"
 #include "../libcore/valgrind.h"
 #include "../libcore/varargs.h"
@@ -197,11 +198,14 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 		charBufferSize(field_start, field_end), field_start);
 	    debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
 		(" in {%.*s}\n", charBufferSize(header_start, header_end), header_start);
+#if 0	/* XXX just for now; is horrible */
 	    if (httpConfig_relaxed_parser)
 		continue;
 	    else
+#endif
 		return httpHeaderReset(hdr);
 	}
+#if 0
 	r = httpHeaderParseCheckEntry(hdr, e->id, &e->name, &e->value);
 	if (r <= 0) {
 		httpHeaderEntryDestroy(e);
@@ -212,6 +216,7 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 		return httpHeaderReset(hdr);
 	if (e)
 		httpHeaderAddEntry(hdr, e);
+#endif
     }
     return 1;			/* even if no fields where found, it is a valid header */
 }
@@ -273,20 +278,8 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
 	return NULL;
     }
 
-    e = memPoolAlloc(pool_http_header_entry);
-    debug(55, 9) ("creating entry %p: near '%.*s'\n", e, charBufferSize(field_start, field_end), field_start);
-    e->id = id;
-    /* set field name */
-    if (id == HDR_OTHER)
-	stringLimitInit(&e->name, field_start, name_len);
-    else
-	e->name = Headers[id].name;
-    /* set field value */
-    stringLimitInit(&e->value, value_start, field_end - value_start);
-    e->active = 1;
-    Headers[id].stat.seenCount++;
-    Headers[id].stat.aliveCount++;
-    debug(55, 9) ("created entry %p: '%.*s: %.*s'\n", e, strLen2(e->name), strBuf2(e->name), strLen2(e->value), strBuf2(e->value));
+    e = httpHeaderAddEntryStr2(hdr, id, field_start, name_len, value_start, field_end - value_start);
+    debug(55, 9) ("httpHeaderParseEntry: created entry %p: '%.*s: %.*s'\n", e, strLen2(e->name), strBuf2(e->name), strLen2(e->value), strBuf2(e->value));
     return e;
 }
 
