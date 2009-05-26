@@ -623,23 +623,24 @@ httpHeaderRepack(HttpHeader * hdr)
 {
     HttpHeaderPos dp = HttpHeaderInitPos;
     HttpHeaderPos pos = HttpHeaderInitPos;
+    HttpHeaderEntry *e;
     
     /* XXX breaks layering for now! ie, getting grubby fingers in without httpHeaderEntryGet() */
     dp = 0;
     pos = 0;
-#if 0		/* XXX disabled for now; will have to think of the -right- way to do this */
     while (dp < vector_numentries(&hdr->entries)) {
-        for (; dp < hdr->entries.count && hdr->entries.items[dp] == NULL; dp++);
-        if (dp >= hdr->entries.count)
+        for (; dp < vector_numentries(&hdr->entries) && ((HttpHeaderEntry *) vector_get(&hdr->entries, dp))->active == 0; dp++);
+        if (dp >= vector_numentries(&hdr->entries))
             break;
-        hdr->entries.items[pos] = hdr->entries.items[dp];
-        if (dp != pos)
-            hdr->entries.items[dp] = NULL;
+        if (dp != pos) {
+		(void) vector_copy_item(&hdr->entries, pos, dp);
+		e = vector_get(&hdr->entries, dp);
+		e->active = 0;
+	}
         pos++;
         dp++;
     }   
-    arrayShrink(&hdr->entries, pos);
-#endif
+    vector_shrink(&hdr->entries, pos);
 }   
 
 /* use fresh entries to replace old ones */
