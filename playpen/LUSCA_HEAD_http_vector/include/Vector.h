@@ -17,6 +17,7 @@ static inline void * vector_get(const vector_t *v, int offset) { return ((char *
 void * vector_append(vector_t *v);
 void * vector_insert(vector_t *v, int position);
 int vector_copy_item(vector_t *v, int dst, int src);
+void vector_shrink(vector_t *v, int new_size);
 
 #define	vector_numentries(v)	( (v)->used_count )
 #define	vector_size(v)		( (v)->alloc_count )

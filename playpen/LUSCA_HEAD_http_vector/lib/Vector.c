@@ -106,3 +106,9 @@ vector_copy_item(vector_t *v, int dst, int src)
 		v->obj_size );
 	return 1;
 }
+
+void
+vector_shrink(vector_t *v, int new_size)
+{
+	v->used_count = new_size;
+}
