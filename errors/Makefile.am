@@ -34,7 +34,6 @@ LANGUAGES	= \
 		Japanese \
 		Korean \
 		Lithuanian \
-		NewEnglish \
 		Polish \
 		Portuguese \
 		Romanian \
