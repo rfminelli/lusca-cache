@@ -334,12 +334,13 @@ httpHeaderAddEntryStr2(HttpHeader *hdr, http_hdr_type id, const char *a, int al,
 	return e;
 }
 
-void
+HttpHeaderEntry *
 httpHeaderAddEntryString(HttpHeader *hdr, http_hdr_type id, const String *a, const String *v)
 {
 	HttpHeaderEntry *e = httpHeaderAllocNewEntry(hdr);
 	httpHeaderEntryCreateStr(e, id, a, v);
 	httpHeaderAddInfo(hdr, e);
+	return e;
 }
 
 /*!
