@@ -1,0 +1,15 @@
+Error Page generation notes
+
+Some (well, "English" at the time of commit) of the error pages are now
+beginning to be template generated.
+
+For example, English/ is now empty. Its populated by having the source directory
+(src/English/) passed through "build.pl" and written into "English". "make install"
+then works normally.
+
+The only template entry at the moment is @STYLE@. This expands to the in-line
+style CSS file (defaulting to "error.css".) The resultant combination is written
+out into the error directory during "make install".
+
+TODO: at least document what the stylesheet entries are so others have
+a chance of writing customised error page layouts.
