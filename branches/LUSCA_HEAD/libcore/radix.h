@@ -95,6 +95,8 @@ typedef struct _prefix_t {
 } prefix_t;
 
 void Deref_Prefix(prefix_t *prefix);
+extern int Init_Prefix(prefix_t *prefix, u_int af_family, void *dest, u_int bitlen);
+extern prefix_t *New_Prefix(int family, void *dest, int bitlen, prefix_t *prefix);
 
 /*
  * Originally from MRT include/radix.h
