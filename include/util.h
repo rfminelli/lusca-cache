@@ -56,6 +56,10 @@
 #define	MIN(a, b)	((a) < (b) ? (a) : (b))
 #endif
 
+/* This is for "compile-time checking, but code subsequently handles the condition gracefully */
+#define	L_CASSERT(a)	assert((a))
+
+
 extern const char *getfullhostname(void);
 extern const char *mkhttpdlogtime(const time_t *);
 extern const char *mkrfc1123(time_t);
