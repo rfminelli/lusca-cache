@@ -5952,7 +5952,19 @@ TYPE: onoff
 LOC: Config.onoff.load_check_stopen
 DEFAULT: on
 DOC_START
+	The default behaviour of storeOpen() (ie, disk object fetches) is to not
+	the object from disk if the load of that store directory is too high.
+	This may not be suitable in all situations. One thing to keep in mind
+	is that the subsequent "MISS" may end up storing a fresh copy of the
+	object in the disk store, possibly in another cache_dir (one which isn't
+	overloaded.)
 
+	Please note that individual store dir modules will implement their own
+	load checking and may decide to not return the object. This will have
+	the same effect as having storeOpen() itself fail.
+
+	Set this to "off" to always allow storeOpen() to go to the store_dir
+	layer.
 DOC_END
 
 NAME: load_check_stcreate
@@ -5961,7 +5973,7 @@ TYPE: onoff
 LOC: Config.onoff.load_check_stcreate
 DEFAULT: on
 DOC_START
-
+	This option currently does nothing.
 DOC_END
 
 
