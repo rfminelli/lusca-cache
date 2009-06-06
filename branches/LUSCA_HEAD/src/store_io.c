@@ -73,7 +73,7 @@ storeOpen(StoreEntry * e, STFNCB * file_callback, STIOCB * callback,
     SwapDir *SD = &Config.cacheSwap.swapDirs[e->swap_dirn];
     store_io_stats.open.calls++;
     load = SD->checkload(SD, ST_OP_OPEN);
-    if (load < 0 || load > 1000) {
+    if (load < 0 || (Config.onoff.load_check_stopen && load > 1000) {
 	store_io_stats.open.loadav_fail++;
 	return NULL;
     }
