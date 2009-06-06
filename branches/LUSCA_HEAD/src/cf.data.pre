@@ -5946,4 +5946,24 @@ DOC_START
 	for handling socket data.
 DOC_END
 
+NAME: load_check_stopen
+COMMENT: whether to pay attention to overloaded stores for storeOpen()
+TYPE: onoff
+LOC: Config.onoff.load_check_stopen
+DEFAULT: on
+DOC_START
+
+DOC_END
+
+NAME: load_check_stcreate
+COMMENT: whether to pay attention to overloaded stores for storeCreate()
+TYPE: onoff
+LOC: Config.onoff.load_check_stcreate
+DEFAULT: on
+DOC_START
+
+DOC_END
+
+
+
 EOF
