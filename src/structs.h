@@ -683,6 +683,7 @@ struct _SquidConfig {
 	int WIN32_IpAddrChangeMonitor;
 	int load_check_stopen;
 	int load_check_stcreate;
+	int download_fastest_client_speed;
     } onoff;
     int collapsed_forwarding_timeout;
     acl *aclList;
