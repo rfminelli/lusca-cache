@@ -5976,6 +5976,22 @@ DOC_START
 	This option currently does nothing.
 DOC_END
 
+NAME: download_fastest_client_speed
+COMMENT: whether to download the object at the rate of the slowest or fastest client
+TYPE: onoff
+LOC: Config.onoff.download_fastest_client_speed
+DEFAULT: off
+DOC_START
+	The default behaviour of the read-ahead code is to limit the read speed
+	to that of the slowest client. In many situations this may be desirable
+	but in some situations the opposite may be more desirable. If this
+	is turned on then Lusca will pace the store read at the speed of the
+	fastest disk client. It also has the side-effect of disabling the
+	read-ahead gap logic if all clients are disk clients.
+
+	If a client is a memory client (ie, data is being buffered in memory
+	for them) then the read-ahead gap logic still applies.
+DOC_END
 
 
 EOF
