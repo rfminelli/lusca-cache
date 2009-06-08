@@ -1,0 +1,44 @@
+#summary An overview of the Lusca Web Proxy/Cache Architecture
+
+= Introduction =
+
+Lusca is a single process application which processes network traffic in a (now) traditional callback-based event notification style framework.
+
+It uses POSIX threads for disk IO and external processes for a variety of tasks (logfile writing, ACL helpers, authentication helpers, URL rewriting, etc.)
+
+This architecture overview t is not designed to be completely thorough; it is meant to introduce the general structure and data flow of Lusca.
+
+= Sections =
+
+== Core framework ==
+
+  * [LuscaArchitectureEventOverview] - the event-driven callback framework overview
+  * [LuscaArchitectureNetwork] - the network framework
+  * [LuscaArchitectureCallbackData] - the callback data registry and reference counting
+  * [LuscaArchitectureMemoryManagement] - basic memory management
+  * [LuscaArchitectureDiskIO] - the legacy disk IO mechanism
+  * [LuscaArchitectureAsyncDiskIO] - the thread-based async disk IO mechanism
+  * [LuscaArchitectureHelpers] - using external helper processes
+  * [LuscaArchitectureDebugging] - the debugging framework
+
+== Storage framework ==
+
+  * [LuscaArchitectureStorageLayer] - the store layer
+  * [LuscaArchitectureStoreVary] - supporting Vary objects
+  * [LuscaArchitectureStoreIndex] - maintaining the store index
+  * [LuscaArchitectureStoreClientLayer] - client-side storage interface
+  * [LuscaArchitectureStoreServerLayer] - the server-side storage interface
+  * [LuscaArchitectureStoreMemory] - the store memory layer, and how it is used as a "hot object cache"
+  * [LuscaArchitectureStoreDisk] - the store disk layer
+
+  * [LuscaArchitectureStoreShortcomings] - shortcomings in the current storage layer
+
+
+== HTTP processing framework ==
+
+  * [LuscaArchitectureClientSide] - the client-side path, handling client requests
+  * [LuscaArchitectureForwarding] - request forwarding
+  * [LuscaArchitecturePeerSelection] - various peer selection methods
+  * [LuscaArchitectureHttpServerSide] - the HTTP server-side path, communicating to peers and servers
+  * [LuscaArchitectureFtpServerSide] - the FTP server-side path, communicating to FTP servers
+  
