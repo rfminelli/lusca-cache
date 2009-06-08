@@ -10,6 +10,7 @@
 
 #include "include/Array.h"
 #include "include/Stack.h"
+#include "include/Vector.h"
 #include "include/util.h"
 #include "libcore/valgrind.h"
 #include "libcore/varargs.h"
