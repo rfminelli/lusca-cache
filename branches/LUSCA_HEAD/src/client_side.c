@@ -5193,7 +5193,11 @@ clientHttpConnectionsOpen(void)
 {
     http_port_list *s;
     int fd;
+    int comm_flags;
     for (s = Config.Sockaddr.http; s; s = s->next) {
+	comm_flags = COMM_NONBLOCKING;
+	if (s->tproxy)
+		comm_flags |= COMM_TPROXY_LCL;
 	if (MAXHTTPPORTS == NHttpSockets) {
 	    debug(1, 1) ("WARNING: You have too many 'http_port' lines.\n");
 	    debug(1, 1) ("         The limit is %d\n", MAXHTTPPORTS);
@@ -5210,7 +5214,7 @@ clientHttpConnectionsOpen(void)
 		SOCK_STREAM,
 		no_addr,
 		ntohs(s->s.sin_port),
-		COMM_NONBLOCKING,
+		comm_flags,
 		COMM_TOS_DEFAULT,
 		"HTTP Socket");
 	} else {
@@ -5219,7 +5223,7 @@ clientHttpConnectionsOpen(void)
 		IPPROTO_TCP,
 		s->s.sin_addr,
 		ntohs(s->s.sin_port),
-		COMM_NONBLOCKING,
+		comm_flags,
 		COMM_TOS_DEFAULT,
 		"HTTP Socket");
 	    leave_suid();
@@ -5233,10 +5237,11 @@ clientHttpConnectionsOpen(void)
 	 * peg the CPU with select() when we hit the FD limit.
 	 */
 	commSetDefer(fd, httpAcceptDefer, NULL);
-	debug(1, 1) ("Accepting %s HTTP connections at %s, port %d, FD %d.\n",
+	debug(1, 1) ("Accepting %s %sHTTP connections at %s, port %d, FD %d.\n",
 	    s->transparent ? "transparently proxied" :
 	    s->accel ? "accelerated" :
 	    "proxy",
+	    s->tproxy ? "and tproxy'ied " : "",
 	    inet_ntoa(s->s.sin_addr),
 	    (int) ntohs(s->s.sin_port),
 	    fd);
