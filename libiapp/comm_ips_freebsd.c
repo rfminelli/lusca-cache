@@ -19,8 +19,21 @@
 #include "comm_types.h"
 #include "globals.h"
 
+/*
+ * FreeBSD non-local bind listen() sockets bind to the relevant address and use
+ * getsockname() to determine the original destination (local address being spoofed)
+ * of the new connection.
+ */
 int
-comm_ips_bind(int fd, sqaddr_t *a)
+comm_ips_bind_lcl(int fd, sqaddr_t *a)
+{
+	if (bind(fd, sqinet_get_entry(a), sqinet_get_length(a)) != 0)
+		return COMM_ERROR;
+	return COMM_OK;
+}
+
+int
+comm_ips_bind_rem(int fd, sqaddr_t *a)
 {
     int on = 1;
 

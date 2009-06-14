@@ -40,9 +40,19 @@ typedef uint32_t __u32;
 
 #include "../include/util.h"
 
+/*
+ * TPROXY2 listen() sockets just bind() to the specified address and receive connections that way.
+ */
+int
+comm_ips_bind_lcl(int fd, sqaddr_t *a)
+{
+    if (bind(fd, sqinet_get_entry(a), sqinet_get_length(a)) != 0)
+        return COMM_ERROR;
+    return COMM_OK;
+}
 
 int
-comm_ips_bind(int fd, sqaddr_t *a)
+comm_ips_bind_rem(int fd, sqaddr_t *a)
 {
 	if (sqinet_get_family(a) != AF_INET)
 		return COMM_ERROR;
