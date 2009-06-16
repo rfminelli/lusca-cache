@@ -3896,7 +3896,7 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, 
     /* Parse the request line */
     ret = httpMsgParseRequestLine(hmsg);
     if (ret == -1)
-	return parseHttpRequestAbort(conn, &method_p, "error:invalid-request");
+	return parseHttpRequestAbort(conn, method_p, "error:invalid-request");
     if (ret == 0) {
 	debug(33, 5) ("Incomplete request, waiting for end of request line\n");
 	*status = 0;
@@ -3919,7 +3919,7 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, 
     /* Enforce max_request_size */
     if (req_sz >= Config.maxRequestHeaderSize) {
 	debug(33, 5) ("parseHttpRequest: Too large request\n");
-	return parseHttpRequestAbort(conn, &method_p, "error:request-too-large");
+	return parseHttpRequestAbort(conn, method_p, "error:request-too-large");
     }
     /* Wrap the request method */
     method = urlMethodGet(hmsg->buf + hmsg->m_start, hmsg->m_len);
@@ -3933,7 +3933,7 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, 
     /* Make sure URL fits inside MAX_URL */
     if (hmsg->u_len >= MAX_URL) {
 	debug(33, 1) ("parseHttpRequest: URL too big (%d) chars: %s\n", hmsg->u_len, hmsg->buf + hmsg->u_start);
-	return parseHttpRequestAbort(conn, &method_p, "error:request-too-large");
+	return parseHttpRequestAbort(conn, method_p, "error:request-too-large");
     }
     xmemcpy(urlbuf, hmsg->buf + hmsg->u_start, hmsg->u_len);
     /* XXX off-by-one termination error? */
@@ -4094,7 +4094,7 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, 
     dlinkDelete(&http->active, &ClientActiveRequests);
     safe_free(http->uri);
     cbdataFree(http);
-    return parseHttpRequestAbort(conn, &method_p, "error:invalid-request");
+    return parseHttpRequestAbort(conn, method_p, "error:invalid-request");
 }
 
 static int
