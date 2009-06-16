@@ -3858,6 +3858,7 @@ parseHttpRequestAbort(ConnStateData * conn, const char *uri)
     http->start = current_time;
     http->req_sz = conn->in.offset;
     http->uri = xstrdup(uri);
+    http->log_uri = xstrdup(uri);
     http->range_iter.boundary = StringNull;
     httpBuildVersion(&http->http_ver, 1, 0);
     dlinkAdd(http, &http->active, &ClientActiveRequests);
