@@ -6,7 +6,7 @@ Lusca is a single process application which processes network traffic in a (now)
 
 It uses POSIX threads for disk IO and external processes for a variety of tasks (logfile writing, ACL helpers, authentication helpers, URL rewriting, etc.)
 
-This architecture overview t is not designed to be completely thorough; it is meant to introduce the general structure and data flow of Lusca.
+This architecture overview is not designed to be completely thorough; it is meant to introduce the general structure and data flow of Lusca. The aim is to document the various APIs using HeaderDoc in the source code itself; this documentation just acts as a higher level introduction to what goes where.
 
 = Sections =
 
@@ -32,6 +32,13 @@ This architecture overview t is not designed to be completely thorough; it is me
   * [LuscaArchitectureStoreDisk] - the store disk layer
 
   * [LuscaArchitectureStoreShortcomings] - shortcomings in the current storage layer
+
+== Network framework ==
+
+  * [LuscaArchitectureNetworkIntroduction] - the basic network and communication overview
+  * [LuscaArchitectureNetworkTransparentInterception] - transparent interception related changes
+  * [LuscaArchitectureNetworkReadingWriting] - reading and writing network data
+  * [LuscaArchitectureNetworkCloseHandlers] - the processing which occurs on socket and filedescriptor close
 
 
 == HTTP processing framework ==
