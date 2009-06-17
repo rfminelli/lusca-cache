@@ -12,11 +12,41 @@ The idea is being developed out in Lusca to provide transparent interception sup
 
 = Components =
 
+There are two main components. The first is intercepting connections from clients - ie, spoofing the server-side address. The second is originating outbound connections to upstream origin servers and intermedaries but using the original IP address of the client.
+
 == Client connection interception ==
+
+The client-side interception is currently performed in src/client_side.c. The clientNatLookup() function is defined based on the compile-time interception mode selected. If none are selected, this falls back to imply calling getsockname() on the socket to determine the local IP address of the socket connection.
 
 == Client-side address spoofing ==
 
+This was introduced in TPROXY2 and TPROXY4. This API allows a separate, non-local IP address to be used when creating an outbound socket address. Again, this is compile-time dependent.
+
+The original TPROXY2 support inserted specific code in src/forward.c to map a newly-created outbound socket to a different source address (using TPROXY2 specific options) before connecting it to a remote host.
+
+The TPROXY4 support removed this special code and instead created a socket with a special comm option (COMM_TRANSPARENT) which signaled to the comm layer to attempt the "source spoofing" ioctl(), which then allows the non-local IP address to be set via a subsequent call to bind().
+
+Further changes to the Lusca codebase are aimed at creating a clear API for defining inbound and outbound transparently intercepted connections.
+
+= Network topology implications =
+
+Full transparency requires the proxy server to see both sides of the traffic flow. It will then redirect relevant packets making up the intercepted client and server connections through the correct sockets.
+
+(TODO: flesh this out some more.)
+
+= Using this in code =
+
+== Accepting transparently intercepted connections from clients ==
+
+== Determining the original destination server IP address ==
+
+== Using a non-local IP address on an outbound connection ==
+
 = Implementation notes =
+
+== Server-side interception modules ==
+
+== Client-side spoofing modules ==
 
 == Linux TPROXY2 ==
 
@@ -33,3 +63,5 @@ The idea is being developed out in Lusca to provide transparent interception sup
 == Proxy bypass ==
 
 == Non-HTTP protocols ==
+
+== IPv6 support ==
