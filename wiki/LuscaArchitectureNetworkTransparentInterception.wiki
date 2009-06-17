@@ -1,0 +1,35 @@
+#summary The hooks into network transparency.
+
+= Introduction =
+
+Lusca supports client-side and server-side IPv4 address spoofing for a variety of platforms.
+
+= Background =
+
+Squid has supported client-side interception for a number of years. The support includes a variety of possible code paths for each operating system and firewall type (IPFilter, IPFW, Netfilter, PF.) Recently, support for the Balabit TPROXY2 and TPROXY4 interception frameworks allow Squid to intercept both client and server facing traffic, presenting a (mostly!) seamless transparency to both sides of the connection.
+
+The idea is being developed out in Lusca to provide transparent interception support to any application written which uses the Lusca network core.
+
+= Components =
+
+== Client connection interception ==
+
+== Client-side address spoofing ==
+
+= Implementation notes =
+
+== Linux TPROXY2 ==
+
+== Linux TPROXY4 ==
+
+== FreeBSD-current BIND_ANY ==
+
+== NetBSD/OpenBSD BIND_ANY ==
+
+= Future work =
+
+== WCCPv2 integration ==
+
+== Proxy bypass ==
+
+== Non-HTTP protocols ==
