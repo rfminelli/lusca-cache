@@ -38,7 +38,22 @@ Full transparency requires the proxy server to see both sides of the traffic flo
 
 == Accepting transparently intercepted connections from clients ==
 
+From a socket level, the interception code from Squid-2 doesn't really treat intercepted connections any differently. A normal IPv4 socket is created, bind(), listen(), and accept() happen just like a non-interception method.
+
+The majority of the differences lie in how the connection is treated. An intercepted connection requires Lusca/Squid to treat the request as if it were the origin server. This has subtle changes in the request URI and Host header requirements.
+
+There are specific hacks which try to determine the original destination address. This is used when no specific Host: header is given.
+
+Linux TPROXY4 changes this slightly. Since TPROXY4 specific rules are involved in the interception, a specific socket option is required (IP_TRANSPARENT) before the bind() and listen() syscalls are called.
+
 == Determining the original destination server IP address ==
+
+This is very system specific:
+
+  * ipfw (FreeBSD/NetBSD/OpenBSD?): the ipfw code overrides the socket local endpoint address with the original destination; getsockname() thus returns the original destination
+  * Linux Netfilter: An IP socket option (SO_ORIGINAL_DST) is called to determine the original destination
+  * PF - an ioctl is performed on an open filedescriptor to /dev/pf - DIOCNATLOOK
+  * IPFilter - simiarly to PF, an ioctl is performed on an open filedescriptor to an ipfilter device.
 
 == Using a non-local IP address on an outbound connection ==
 
