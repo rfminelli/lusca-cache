@@ -162,14 +162,19 @@ comm_local_port(int fd)
 int
 commBind(int s, sqaddr_t *addr)
 {
+    int r;
+
     LOCAL_ARRAY(char, ip_buf, MAX_IPSTRLEN);
-    LOCAL_ARRAY(char, srv_buf, MAX_IPSTRLEN);
     CommStats.syscalls.sock.binds++;
     if (bind(s, sqinet_get_entry(addr), sqinet_get_length(addr)) == 0)
 	return COMM_OK;
-    getnameinfo(sqinet_get_entry(addr), sqinet_get_family(addr),
-      ip_buf, MAX_IPSTRLEN, srv_buf, MAX_IPSTRLEN, NI_NUMERICHOST|NI_NUMERICSERV);
-    debug(5, 0) ("commBind: Cannot bind socket FD %d to %s port %s: %s\n", s, ip_buf, srv_buf, xstrerror());
+    r = sqinet_ntoa(addr, ip_buf, MAX_IPSTRLEN, 0);
+    if (r)
+        debug(5, 0) ("commBind: Cannot bind socket FD %d family %d to %s port %d: %s\n",
+          s, sqinet_get_family(addr), ip_buf, sqinet_get_port(addr), xstrerror());
+    else
+        debug(5, 0) ("commBind: Cannot bind socket FD %d family %d: %s\n",
+          s, sqinet_get_family(addr), xstrerror());
     return COMM_ERROR;
 }
 
