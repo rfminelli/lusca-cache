@@ -38,3 +38,8 @@ Content-Length: 98
 == Issue ==
 
 A 204 reply must not have a reply body. Lusca correctly handles this. Issue 35 attempts to clearly log this particular condition separate from "there is more data in the reply body than the Content-Length said."
+
+== Status ==
+
+  * Working on clarifying the logging in Lusca - Issue 35
+  * Yahoo! contacted about this
