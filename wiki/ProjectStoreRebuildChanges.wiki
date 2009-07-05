@@ -28,8 +28,9 @@ Modify the AUFS swaplog reading code to use an external helper. External helper 
 = Time Estimates =
 
   * Initial planning - mostly done, about a week's worth
-  * Development - two weeks
-  * Testing - two weeks
+  * Development - AUFS - two weeks
+  * Development - COSS - one week
+  * (Thorough!) Testing - two weeks
   * Documentation - one week
   * Live deployment - depends entirely on how many users deploy it and provide feedback!
 
