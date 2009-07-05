@@ -2234,7 +2234,7 @@ NAME: update_headers
 IFDEF: HTTP_VIOLATIONS
 COMMENT: on|off
 TYPE: onoff
-DEFAULT: on
+DEFAULT: off
 LOC: Config.onoff.update_headers
 DOC_START
 	By default Squid updates stored HTTP headers when receiving
