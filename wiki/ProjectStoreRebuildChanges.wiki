@@ -16,6 +16,7 @@ The eventual goal is to dramatically improve the startup, shutdown, rotate and g
 
 In the AUFS case, parallelising the rebuilds and using async IO for reading large swaplogs will make the restart process take seconds or minutes instead of potentially hours/days on a large cache. Rebuilding from disk will occur completely transparently in the background without affecting the main process - lusca can then start immediately returning "HITs" where possible.
 
+In the COSS case, keeping a cyclic-type swaplog will make it much, much easier to do a rebuild. Instead of reading the entire disk looking for objects, the swaplog can be used to rebuild the index. Future work should investigate an alternative COSS disk layout which doesn't require reading the entire disk to recover objects.
 
 = Specific Bits =
 
