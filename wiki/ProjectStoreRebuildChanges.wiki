@@ -12,6 +12,11 @@ As nice as it would be to break this out into multiple threads doing "stuff", th
   * Make the logfile writing and reading be async (ie, non blocking) rather than the current blocking IO methods used.
   * Think about how to possibly "fix" COSS rebuilding by combining both this new async logfile writing and a "rebuild helper" which can (ab)use written out logs for rebuild instead of the current highly dirty method.
 
+The eventual goal is to dramatically improve the startup, shutdown, rotate and general runtime performance of the store logging code.
+
+In the AUFS case, parallelising the rebuilds and using async IO for reading large swaplogs will make the restart process take seconds or minutes instead of potentially hours/days on a large cache. Rebuilding from disk will occur completely transparently in the background without affecting the main process - lusca can then start immediately returning "HITs" where possible.
+
+
 = Specific Bits =
 
 Implement a reliable and asynchronous clean "swaplog" writing method; even if that is a separate command. This way "rotate" can occur once an hour, but "write clean logs" can occur daily.
@@ -19,3 +24,7 @@ Implement a reliable and asynchronous clean "swaplog" writing method; even if th
 Modify the AUFS swaplog writing code to use asynchronous IO somehow. This can either be using the existing aiops code, or a "writer helper" (akin to the logfile daemon code at the moment), or maybe a helper thread if there's sufficient motivation.
 
 Modify the AUFS swaplog reading code to use an external helper. External helper programs already exist which implement "cat swaplog" and "generate a swaplog from the directory contents".
+
+= Future work =
+
+One idea I've had is to change the "rebuild from disk" logic into two parts - one to populate the file number bitmap, and then one to rebuild the item indexes. This way the proxy can immediately start serving hits -and- storing new items without overwriting existing items in the cache.
