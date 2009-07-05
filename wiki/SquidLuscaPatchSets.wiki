@@ -1,0 +1,13 @@
+#summary Which Squid-2.HEAD patches have been merged in?
+
+= Overview =
+
+The original patch set file is in the Cacheboy project - [http://code.google.com/p/cacheboy/wiki/SquidPatchSet] . This file documents the patches merged in after the project was renamed to Lusca.
+
+Most patches through to Squid changeset 12424 have been merged into CACHEBOY_PRE/LUSCA_HEAD
+
+= Squid-2.HEAD patches to merge =
+
+  * [http://www.squid-cache.org/Versions/v2/HEAD/changesets/12445.patch 12445] - fix chunked encoding parsing
+
+= Squid-2.HEAD patches which have been merged =
