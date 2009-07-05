@@ -6,6 +6,8 @@
   * /playpen/LUSCA_HEAD_strref - reference counted NUL terminated C strings (cheap string dup())
   * /playpen/LUSCA_HEAD_http_vector - vectorize the HttpHeaderEntry allocation to dramatically reduce malloc/free calls
   * /playpen/LUSCA_HEAD_errorpages - pretty error page template generation framework stuff
+  * /playpen/LUSCA_HEAD_storework - store IO layer related work
+
 
 = Stale Development =
 
