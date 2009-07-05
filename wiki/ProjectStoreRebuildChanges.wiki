@@ -1,0 +1,21 @@
+#summary Notes about the current rebuild logic and what needs to change
+
+= Introduction =
+
+The Squid store rebuild and store logging code doesn't scale. It uses sync disk IO calls to read and write swaplogs; it makes explicit assumptions about the state of the system when writing out the clean swaplog (ie, that the clean swaplog event is the only task running.) All of these problems make it scale poorly under load and with a lot of disk storage.
+
+= Project Aims =
+
+As nice as it would be to break this out into multiple threads doing "stuff", the codebase is still not really ready for any further worker thread code just yet. One of the aims is to have this work leave the codebase in a sufficiently nice(r) state to make migrating to a worker thread model easier in the future.
+
+  * Make "rotate" be quick and simple. Don't have it write out clean swaplogs.
+  * Make the logfile writing and reading be async (ie, non blocking) rather than the current blocking IO methods used.
+  * Think about how to possibly "fix" COSS rebuilding by combining both this new async logfile writing and a "rebuild helper" which can (ab)use written out logs for rebuild instead of the current highly dirty method.
+
+= Specific Bits =
+
+Implement a reliable and asynchronous clean "swaplog" writing method; even if that is a separate command. This way "rotate" can occur once an hour, but "write clean logs" can occur daily.
+
+Modify the AUFS swaplog writing code to use asynchronous IO somehow. This can either be using the existing aiops code, or a "writer helper" (akin to the logfile daemon code at the moment), or maybe a helper thread if there's sufficient motivation.
+
+Modify the AUFS swaplog reading code to use an external helper. External helper programs already exist which implement "cat swaplog" and "generate a swaplog from the directory contents".
