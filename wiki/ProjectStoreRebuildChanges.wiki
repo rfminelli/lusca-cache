@@ -25,6 +25,14 @@ Modify the AUFS swaplog writing code to use asynchronous IO somehow. This can ei
 
 Modify the AUFS swaplog reading code to use an external helper. External helper programs already exist which implement "cat swaplog" and "generate a swaplog from the directory contents".
 
+= Time Estimates =
+
+  * Initial planning - mostly done, about a week's worth
+  * Development - two weeks
+  * Testing - two weeks
+  * Documentation - one week
+  * Live deployment - depends entirely on how many users deploy it and provide feedback!
+
 = Future work =
 
 One idea I've had is to change the "rebuild from disk" logic into two parts - one to populate the file number bitmap, and then one to rebuild the item indexes. This way the proxy can immediately start serving hits -and- storing new items without overwriting existing items in the cache.
