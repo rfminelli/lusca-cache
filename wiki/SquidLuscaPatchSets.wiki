@@ -14,3 +14,4 @@ Most patches through to Squid changeset 12424 have been merged into CACHEBOY_PRE
 
   * [http://www.squid-cache.org/Versions/v2/HEAD/changesets/12462.patch 12462] - fix chunked encoding parsing - merged in r14123.
   * [http://www.squid-cache.org/Versions/v2/HEAD/changesets/12465.patch 12465] - Fix Solaris /dev/poll support - merged in r14125.
+  * [http://www.squid-cache.org/Versions/v2/HEAD/changesets/12465.patch 12479] - Memory leak with store url - merged in r14127.
