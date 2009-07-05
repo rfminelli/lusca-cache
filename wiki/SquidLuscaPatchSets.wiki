@@ -8,6 +8,6 @@ Most patches through to Squid changeset 12424 have been merged into CACHEBOY_PRE
 
 = Squid-2.HEAD patches to merge =
 
-  * [http://www.squid-cache.org/Versions/v2/HEAD/changesets/12445.patch 12445] - fix chunked encoding parsing
+  * [http://www.squid-cache.org/Versions/v2/HEAD/changesets/12462.patch 12462] - fix chunked encoding parsing
 
 = Squid-2.HEAD patches which have been merged =
