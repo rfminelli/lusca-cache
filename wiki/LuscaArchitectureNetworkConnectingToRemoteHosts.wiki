@@ -6,7 +6,20 @@ There is a set of routines designed to simplify connecting a TCP socket to a rem
 
 = Details =
 
+The caller begins by creating a socket with comm_open() / comm_open6(). That takes care of the socket creation, setting flags and setting up the local address.
+
+A call to commConnectStart() begins the connect process.
+
+{{{
+void
+commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *data, struct in_addr *addr)
+}}}
+
+  * "host" is a DNS name to resolve, or NULL if "addr" is to be used to specify the remote host
+  * "port" is the remote port to connect to
+  * "callback" and "data" form the callback to be performed on completion or error. Note the callback data must be allocated via the cbdata framework.
+  * "addr" is the remote host address to connect to (overriding "host"), or NULL
+
 = Shortcomings =
 
   * Handling the retry is noble. Handling the retry when the opaque structure being passed in as the "state" anchor is a fildescriptor - not noble. A whole lot of crap goes on in commResetFD() to create a new filedescriptor and "dup" the socket state from the previous file descriptor onto it. This includes the original local IP and port; and -must- therefore retry the TPROXY related stuff.
-
