@@ -1,0 +1,12 @@
+#summary How the Squid codebase connects to remote hosts
+
+= Introduction =
+
+There is a set of routines designed to simplify connecting a TCP socket to a remote host. The API handles the asynchronous socket trickery needed to complete the connection; checking whether the callback is still valid before calling it, and handles retrying failed connections.
+
+= Details =
+
+= Shortcomings =
+
+  * Handling the retry is noble. Handling the retry when the opaque structure being passed in as the "state" anchor is a fildescriptor - not noble. A whole lot of crap goes on in commResetFD() to create a new filedescriptor and "dup" the socket state from the previous file descriptor onto it. This includes the original local IP and port; and -must- therefore retry the TPROXY related stuff.
+
