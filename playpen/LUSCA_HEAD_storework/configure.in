@@ -3311,6 +3311,8 @@ dnl done
 AC_OUTPUT([\
 	Makefile \
 	app/Makefile \
+	app/ufs_rebuild/Makefile \
+	app/ufs_newfs/Makefile \
 	app/tcptest/Makefile \
 	libsqstore/Makefile \
 	libsqtlv/Makefile \
