@@ -8,6 +8,8 @@ There is a set of routines designed to simplify connecting a TCP socket to a rem
 
 The caller begins by creating a socket with comm_open() / comm_open6(). That takes care of the socket creation, setting flags and setting up the local address.
 
+== Beginning the process ==
+
 A call to commConnectStart() begins the connect process.
 
 {{{
@@ -19,6 +21,17 @@ commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *
   * "port" is the remote port to connect to
   * "callback" and "data" form the callback to be performed on completion or error. Note the callback data must be allocated via the cbdata framework.
   * "addr" is the remote host address to connect to (overriding "host"), or NULL
+
+== Aborting ==
+
+There is no explicit connection cancellation - the code registers a close handler which tidies up as needed. A call to comm_close(fd) will abort the pending connection attempt and tidy up the relevant resources.
+
+== Notification ==
+
+== DNS Lookup ==
+
+== Handling retries ==
+
 
 = Shortcomings =
 
