@@ -39,6 +39,7 @@ This architecture overview is not designed to be completely thorough; it is mean
   * [LuscaArchitectureNetworkTransparentInterception] - transparent interception related changes
   * [LuscaArchitectureNetworkReadingWriting] - reading and writing network data
   * [LuscaArchitectureNetworkCloseHandlers] - the processing which occurs on socket and filedescriptor close
+  * [LuscaArchitectureNetworkConnectingToRemoteHosts] - the "Squid way" of asynchronously connecting to a remote host
 
 
 == HTTP processing framework ==
