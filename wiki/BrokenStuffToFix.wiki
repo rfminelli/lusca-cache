@@ -1,0 +1,15 @@
+#summary Broken and stupid code which needs fixing
+
+= Introduction =
+
+There's plenty of gremlins in the original Squid code. This is a non-exhaustive list of things which need to be looked at and fixed.
+
+= socket connect / reset path =
+
+See Issue 34.
+
+(TODO)
+
+= storeIOState allocation and free =
+
+(TODO)
