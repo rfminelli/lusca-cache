@@ -26,6 +26,10 @@ Modify the AUFS swaplog writing code to use asynchronous IO somehow. This can ei
 
 Modify the AUFS swaplog reading code to use an external helper. External helper programs already exist which implement "cat swaplog" and "generate a swaplog from the directory contents".
 
+= Completed tasks =
+
+* The helper process has been completed - it generates a stream of swaplog entries from either a logfile or the directory itself.
+
 = Time Estimates =
 
   * Initial planning - mostly done, about a week's worth
