@@ -2,8 +2,14 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "include/config.h"
+#include "include/squid_md5.h"
+
 #include "libcore/varargs.h"
+#include "libcore/kb.h"
 #include "libsqdebug/debug.h"
+#include "libsqstore/store_mgr.h"
+#include "libsqstore/store_log.h"
 #include "libsqstore/store_file_ufs.h"
 
 int shutting_down = 0;
