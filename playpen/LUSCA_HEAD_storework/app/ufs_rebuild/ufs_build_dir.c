@@ -35,21 +35,21 @@
 #include <sys/stat.h>
 #include <dirent.h>
 
-#include "../include/util.h"
+#include "include/util.h"
 
-#include "../libcore/kb.h"
-#include "../libcore/varargs.h"
-#include "../libcore/mem.h"
-#include "../libcore/tools.h"
+#include "libcore/kb.h"
+#include "libcore/varargs.h"
+#include "libcore/mem.h"
+#include "libcore/tools.h"
 
-#include "../libsqdebug/debug.h"
+#include "libsqdebug/debug.h"
 
 #define	SQUID_MD5_DIGEST_LENGTH	16
 
-#include "../libsqstore/store_mgr.h"
-#include "../libsqstore/store_meta.h"
-#include "../libsqstore/store_log.h"
-#include "../libsqstore/store_file_ufs.h"
+#include "libsqstore/store_mgr.h"
+#include "libsqstore/store_meta.h"
+#include "libsqstore/store_log.h"
+#include "libsqstore/store_file_ufs.h"
 
 #include "rebuild_entry.h"
 
