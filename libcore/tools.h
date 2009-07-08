@@ -96,6 +96,6 @@ extern void doBacktrace(void);
 
 extern int percent(int, int);
 extern double dpercent(double, double);
-extern uint64_t uint64_percent(uint64_t, uint64_t);
+extern double uint64_percent(uint64_t, uint64_t);
 
 #endif
