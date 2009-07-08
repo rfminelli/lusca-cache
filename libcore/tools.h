@@ -94,4 +94,8 @@ extern void doBacktrace(void);
 #define MAXPATHLEN SQUID_MAXPATHLEN
 #endif
 
+extern int percent(int, int);
+extern double dpercent(double, double);
+extern uint64_t uint64_percent(uint64_t, uint64_t);
+
 #endif

@@ -825,18 +825,6 @@ setSystemLimits(void)
 #endif /* RLIMIT_VMEM */
 }
 
-int
-percent(int a, int b)
-{
-    return b ? ((int) (100.0 * a / b + 0.5)) : 0;
-}
-
-double
-dpercent(double a, double b)
-{
-    return b ? (100.0 * a / b) : 0.0;
-}
-
 struct in_addr
 inaddrFromHostent(const struct hostent *hp)
 {
