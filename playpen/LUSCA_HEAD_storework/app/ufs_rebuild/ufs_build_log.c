@@ -38,6 +38,7 @@
 
 #include "libsqstore/store_mgr.h"
 #include "libsqstore/store_log.h"
+#include "libsqstore/store_file_ufs.h"
 
 int num_objects = 0;
 int num_valid_objects = 0;
@@ -84,14 +85,14 @@ read_entry(FILE *fp, int version)
 }
 
 void
-rebuild_from_log(const char *swapfile)
+rebuild_from_log(store_ufs_dir_t *ufs)
 {
 	FILE *fp;
 	storeSwapLogHeader hdr;
 	int r;
 	int version = -1;		/* -1 = not set, 0 = old, 1 = new */
 
-	fp = fopen(swapfile, "r");
+	fp = fopen(ufs->swaplog_path, "r");
 	if (! fp) {
 		perror("fopen");
 		return;
