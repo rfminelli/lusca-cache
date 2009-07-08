@@ -51,3 +51,13 @@ storeSwapLogPrintHeader(int fd)
     return write(1, sh, sizeof(storeSwapLogData));
 }
 
+int
+storeSwapLogPrintCompleted(int fd)
+{
+    char buf[sizeof(storeSwapLogData)];
+    storeSwapLogCompleted *sh = (storeSwapLogCompleted *) buf;
+
+    bzero(buf, sizeof(buf));
+    sh->op = SWAP_LOG_COMPLETED;
+    return write(1, sh, sizeof(storeSwapLogData));
+}
