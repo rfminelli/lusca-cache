@@ -18,6 +18,9 @@ const char * swap_log_op_str[] = {
     "SWAP_LOG_ADD",
     "SWAP_LOG_DEL",
     "SWAP_LOG_VERSION",
+    "SWAP_LOG_PROGRESS",
+    "SWAP_LOG_COMPLETED",
+    "SWAP_LOG_ERROR",
     "SWAP_LOG_MAX"
 };
 
