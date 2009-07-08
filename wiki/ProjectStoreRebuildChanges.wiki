@@ -28,7 +28,7 @@ Modify the AUFS swaplog reading code to use an external helper. External helper 
 
 = Completed tasks =
 
-* The helper process has been completed - it generates a stream of swaplog entries from either a logfile or the directory itself.
+  * The helper process has been completed - it generates a stream of swaplog entries from either a logfile or the directory itself.
 
 = Time Estimates =
 
