@@ -36,6 +36,7 @@
 #include <dirent.h>
 
 #include "include/util.h"
+#include "include/squid_md5.h"
 
 #include "libcore/kb.h"
 #include "libcore/varargs.h"
@@ -43,8 +44,6 @@
 #include "libcore/tools.h"
 
 #include "libsqdebug/debug.h"
-
-#define	SQUID_MD5_DIGEST_LENGTH	16
 
 #include "libsqstore/store_mgr.h"
 #include "libsqstore/store_meta.h"
