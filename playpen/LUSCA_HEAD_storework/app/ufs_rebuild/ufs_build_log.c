@@ -40,9 +40,6 @@
 #include "../libsqstore/store_mgr.h"
 #include "../libsqstore/store_log.h"
 
-/* normally in libiapp .. */
-int shutting_down = 0;
-
 int num_objects = 0;
 int num_valid_objects = 0;
 int num_invalid_objects = 0;
@@ -88,7 +85,7 @@ read_entry(FILE *fp, int version)
 }
 
 void
-read_file(const char *swapfile)
+read_log_file(const char *swapfile)
 {
 	FILE *fp;
 	storeSwapLogHeader hdr;
@@ -152,6 +149,7 @@ read_file(const char *swapfile)
 	fclose(fp);
 }
 
+#if 0
 int
 main(int argc, char *argv[])
 {
@@ -164,9 +162,10 @@ main(int argc, char *argv[])
 	exit(1);
     }
 
-    read_file(argv[2]);
+    read_log_file(argv[2]);
 
     debug(1, 1) ("%s: Read %d objects\n", argv[2], num_objects);
 
     return 0;
 }
+#endif

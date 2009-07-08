@@ -20,7 +20,7 @@ libexec_PROGRAMS = ufs_rebuild
 
 ufs_rebuild_SOURCES = ufs_rebuild.c ufs_build_log.c ufs_build_dir.c
 
-LDADD = -L../../lib -L../../libsqdebug -L../../libcore -L../../libmem -L../../libsqstore -lcb -lsqdebug -lcore -lm -lsqstore -lmiscutil
+LDADD = -L../../lib -L../../libsqdebug -L../../libcore -L../../libmem -L../../libsqstore -L../../libsqtlv -lsqtlv -lsqdebug -lcore -lm -lsqstore -lmiscutil
 
 $(OBJS): $(top_srcdir)/include/version.h ../include/autoconf.h
 

@@ -55,9 +55,6 @@
 
 #define	BUFSIZE		1024
 
-/* normally in libiapp .. */
-int shutting_down = 0;
-
 struct _rebuild_entry {
 	storeMetaIndexNew mi;
 	char *md5_key;
@@ -242,6 +239,7 @@ read_dir(store_ufs_dir_t *sd)
 	}
 }
 
+#if 0
 int
 main(int argc, char *argv[])
 {
@@ -265,3 +263,4 @@ main(int argc, char *argv[])
 
     return 0;
 }
+#endif
