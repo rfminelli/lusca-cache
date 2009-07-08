@@ -110,7 +110,7 @@ write_swaplog_entry(rebuild_entry_t *re)
 }
 
 void
-read_dir(store_ufs_dir_t *sd)
+rebuild_from_dir(store_ufs_dir_t *sd)
 {
 	DIR *d;
 	struct dirent *de;

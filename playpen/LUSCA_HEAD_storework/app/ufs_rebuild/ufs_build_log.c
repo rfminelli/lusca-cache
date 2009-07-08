@@ -84,7 +84,7 @@ read_entry(FILE *fp, int version)
 }
 
 void
-read_log_file(const char *swapfile)
+rebuild_from_log(const char *swapfile)
 {
 	FILE *fp;
 	storeSwapLogHeader hdr;
