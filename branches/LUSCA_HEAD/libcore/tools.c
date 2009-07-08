@@ -137,3 +137,20 @@ doBacktrace(void)
 #endif /* _SQUID_SOLARIS_ */
 }
 
+int     
+percent(int a, int b)
+{       
+    return b ? ((int) (100.0 * a / b + 0.5)) : 0;
+}   
+    
+double 
+dpercent(double a, double b)
+{   
+    return b ? (100.0 * a / b) : 0.0;
+}   
+
+uint64_t
+uint64_percent(uint64_t a, uint64_t b)
+{
+    return b ? ((uint64_t) (100.0 * a / b + 0.5)) : 0;
+}
