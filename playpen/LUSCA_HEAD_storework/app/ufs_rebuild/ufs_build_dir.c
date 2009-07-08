@@ -44,8 +44,6 @@
 
 #include "../libsqdebug/debug.h"
 
-#include "../libsqtlv/tlv.h"
-
 #define	SQUID_MD5_DIGEST_LENGTH	16
 
 #include "../libsqstore/store_mgr.h"
@@ -53,83 +51,9 @@
 #include "../libsqstore/store_log.h"
 #include "../libsqstore/store_file_ufs.h"
 
+#include "rebuild_entry.h"
+
 #define	BUFSIZE		1024
-
-struct _rebuild_entry {
-	storeMetaIndexNew mi;
-	char *md5_key;
-	char *url;
-	char *storeurl;
-	squid_file_sz file_size;		/* swap file size - object size + metadata */
-	int hdr_size;				/* metadata size */
-	int swap_filen;
-};
-typedef struct _rebuild_entry rebuild_entry_t;
-
-void
-rebuild_entry_done(rebuild_entry_t *re)
-{
-	safe_free(re->md5_key);
-	safe_free(re->url);
-	safe_free(re->storeurl);
-}
-
-void
-rebuild_entry_init(rebuild_entry_t *re)
-{
-	bzero(re, sizeof(*re));
-	re->hdr_size = -1;
-	re->file_size = -1;
-	re->swap_filen = -1;
-}
-
-static int
-parse_header(char *buf, int len, rebuild_entry_t *re)
-{
-	tlv *t, *tlv_list;
-	int bl = len;
-	int parsed = 0;
-
-	tlv_list = tlv_unpack(buf, &bl, STORE_META_END + 10);
-	if (tlv_list == NULL) {
-		return -1;
-	}
-
-	re->hdr_size = bl;
-
-	for (t = tlv_list; t; t = t->next) {
-	    switch (t->type) {
-	    case STORE_META_URL:
-		debug(47, 5) ("  STORE_META_URL\n");
-		/* XXX Is this OK? Is the URL guaranteed to be \0 terminated? */
-		re->url = xstrdup( (char *) t->value );
-		parsed++;
-		break;
-	    case STORE_META_KEY_MD5:
-		debug(47, 5) ("  STORE_META_KEY_MD5\n");
-		/* XXX should double-check key length? */
-		re->md5_key = xmalloc(SQUID_MD5_DIGEST_LENGTH);
-		memcpy(re->md5_key, t->value, SQUID_MD5_DIGEST_LENGTH);
-		parsed++;
-		break;
-	    case STORE_META_STD_LFS:
-		debug(47, 5) ("  STORE_META_STD_LFS\n");
-		/* XXX should double-check lengths match? */
-		memcpy(&re->mi, t->value, sizeof(re->mi));
-		parsed++;
-		break;
-	    case STORE_META_OBJSIZE:
-		debug(47, 5) ("  STORE_META_OBJSIZE\n");
-		/* XXX is this typecast'ed to the right "size" on all platforms ? */
-		break;
-	    default:
-		break;
-	    }
-	}
-	assert(tlv_list != NULL);
-	tlv_free(tlv_list);
-	return (parsed > 1);
-}
 
 int
 read_file(const char *path, rebuild_entry_t *re)

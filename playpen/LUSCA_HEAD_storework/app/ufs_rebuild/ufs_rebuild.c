@@ -6,6 +6,8 @@
 #include "libsqdebug/debug.h"
 #include "libsqstore/store_file_ufs.h"
 
+int shutting_down = 0;
+
 int
 main(int argc, char *argv[])
 {

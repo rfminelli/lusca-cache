@@ -18,7 +18,7 @@ SUBDIRS		=
 
 libexec_PROGRAMS = ufs_rebuild
 
-ufs_rebuild_SOURCES = ufs_rebuild.c ufs_build_log.c ufs_build_dir.c
+ufs_rebuild_SOURCES = ufs_rebuild.c ufs_build_log.c ufs_build_dir.c rebuild_entry.c
 
 LDADD = -L../../lib -L../../libsqdebug -L../../libcore -L../../libmem -L../../libsqstore -L../../libsqtlv -lsqtlv -lsqdebug -lcore -lm -lsqstore -lmiscutil
 
