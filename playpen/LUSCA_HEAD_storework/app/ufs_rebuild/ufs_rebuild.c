@@ -79,6 +79,7 @@ main(int argc, char *argv[])
 		rebuild_from_log(&store_ufs_info);
 
 	store_ufs_done(&store_ufs_info);
+	(void) storeSwapLogPrintCompleted(1);
 
 	return 0;
 }
