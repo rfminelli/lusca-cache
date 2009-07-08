@@ -6,6 +6,9 @@ typedef enum {
     SWAP_LOG_ADD,
     SWAP_LOG_DEL,
     SWAP_LOG_VERSION,
+    SWAP_LOG_PROGRESS,		/* XXX to be later defined */
+    SWAP_LOG_COMPLETED,		/* XXX to be later defined */
+    SWAP_LOG_ERROR,		/* XXX to be later defined */
     SWAP_LOG_MAX
 } swap_log_op;
 
@@ -33,6 +36,11 @@ struct _storeSwapLogHeader {
     int record_size;
 };
 typedef struct _storeSwapLogHeader storeSwapLogHeader;
+
+struct _storeSwapLogCompleted {
+	char op;
+};
+typedef struct _storeSwapLogCompleted storeSwapLogCompleted;
 
 struct _storeSwapLogDataOld {
     char op;
