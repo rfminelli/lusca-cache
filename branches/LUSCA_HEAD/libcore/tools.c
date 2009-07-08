@@ -149,8 +149,8 @@ dpercent(double a, double b)
     return b ? (100.0 * a / b) : 0.0;
 }   
 
-uint64_t
+double
 uint64_percent(uint64_t a, uint64_t b)
 {
-    return b ? ((uint64_t) (100.0 * a / b + 0.5)) : 0;
+    return (double) b ? ((double) (100.0 * (double) a / (double) b + 0.5)) : 0.0;
 }
