@@ -2899,12 +2899,12 @@ clientSendHeaders(void *data, HttpReply * rep)
 
 	if (!isTcpHit(http->log_type))
 	    tos = 0;
-	else if (Config.zph_local)
-	    tos = Config.zph_local;
 	else if (Config.zph_sibling && http->request->hier.code == SIBLING_HIT)		/* sibling hit */
 	    tos = Config.zph_sibling;
 	else if (Config.zph_parent && http->request->hier.code == PARENT_HIT)	/* parent hit */
 	    tos = Config.zph_parent;
+	else if (Config.zph_local)
+	    tos = Config.zph_local;
 	if (conn->tos_priority != tos) {
 	    conn->tos_priority = tos;
 	    switch (Config.zph_mode) {
