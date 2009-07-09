@@ -16,3 +16,4 @@
   * The majority of code which uses String has been adapted (and rewritten in some places) in preparation for reference counted string management.
   * The threaded IO code (via aufs) has been turned into a generic library for doing asynchronous IO. A new option exists for tweaking the number of IO threads to use - "n_aiops_threads" The default is to use 4 threads per AUFS storedir and 3 threads per COSS storedir.
   * The diskd and ufs storage types have been removed, leaving only aufs, coss and null. These types will return later on when the disk io layers have been tidied up and re-unified.
+  * The ZPH code has been slightly reworked (in r14164 / issue 40) to make the evaluation order both clearer (it now is documented in the configuration file!) and hopefully more useful in production.
