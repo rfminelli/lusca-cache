@@ -1421,7 +1421,18 @@ DOC_START
 	    option	Embed the mark in an IP option field. See also
 	    		zph_option.
 
-	See also tcp_outgoing_tos for details/requirements about TOS usage.
+	* See also tcp_outgoing_tos for details/requirements about TOS usage.
+
+	The ZPH tos values can be uniquely defined dependant on the type of HIT
+	registered by the cache.
+
+	If a HIT is registered from a sibling or parent and the respective zph_sibling
+	or zph_parent marks are set those tos/priority marks will be used. If those
+	marks are NOT set the marking for zph_local will be used.
+
+	Using this approach ZPH can be used for simply marking ANY hit with a fixed
+	TOS/Priority (using only zph_local) or marking with a TOS/Priority based on
+	the type of hit.
 DOC_END
 
 NAME: zph_local
