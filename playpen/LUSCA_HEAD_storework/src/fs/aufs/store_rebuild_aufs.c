@@ -273,8 +273,6 @@ storeAufsRebuildHelperRead(int fd, void *data)
 	if (r <= 0) {
 		/* Error or EOF */
 		debug(47, 1) ("storeAufsRebuildHelperRead: %s: read returned %d; error/eof?\n", sd->path, r);
-		ipcClose(rb->helper.pid, rb->helper.r_fd, rb->helper.w_fd);
-		rb->helper.pid = rb->helper.r_fd = rb->helper.w_fd = -1;
 		storeAufsDirRebuildComplete(rb);
 		return;
 	}
@@ -285,10 +283,16 @@ storeAufsRebuildHelperRead(int fd, void *data)
 	while (i + sizeof(storeSwapLogData) < rb->rbuf.used) {
 		memcpy(&s, rb->rbuf.buf + i, sizeof(storeSwapLogData));
 		switch (s.op) {
+			case SWAP_LOG_VERSION:
+				break;
 			case SWAP_LOG_PROGRESS:
 				storeRebuildProgress(rb->sd->index,
 				    ((storeSwapLogProgress *)(&s))->total, ((storeSwapLogProgress *)(&s))->progress);
 				break;
+			case SWAP_LOG_COMPLETED:
+				debug(47, 1) ("  %s: completed rebuild\n", sd->path);
+				storeAufsDirRebuildComplete(rb);
+				return;
 			default:
 				rb->n_read++;
 				storeAufsDirRebuildFromSwapLogObject(rb, s);
