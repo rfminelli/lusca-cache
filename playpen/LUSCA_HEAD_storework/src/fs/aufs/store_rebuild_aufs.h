@@ -22,6 +22,16 @@ struct _RebuildState {
     char fullpath[SQUID_MAXPATHLEN];
     char fullfilename[SQUID_MAXPATHLEN];
     struct _store_rebuild_data counts;
+
+    struct {
+	int r_fd, w_fd;
+	pid_t pid;
+    } helper;
+    struct {
+	char *buf;
+	int size;
+	int used;
+   } rbuf;
 };
 
 extern void storeAufsDirRebuild(SwapDir * sd);
