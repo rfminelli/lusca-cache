@@ -97,7 +97,7 @@ write_swaplog_progress_entry(store_ufs_dir_t *sd, int curl1, int curl2)
 	bzero(buf, sizeof(buf));
 	sp->op = SWAP_LOG_PROGRESS;
 	sp->total = (sd->l1 * sd->l2);
-	sp->progress = (sd->l1 * curl1) + curl2;
+	sp->progress = (sd->l2 * curl1) + curl2;
 
 	/* storeSwapLogData is the record size */
 	if (write(1, buf, sizeof(storeSwapLogData)) <= 0)
