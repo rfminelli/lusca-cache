@@ -29,6 +29,11 @@ Modify the AUFS swaplog reading code to use an external helper. External helper 
 = Completed tasks =
 
   * The helper process has been completed - it generates a stream of swaplog entries from either a logfile or the directory itself.
+  * The AUFS rebuild process now uses the helper to rebuild the storedir from either the log or the directory
+
+= Weirdnesses to address =
+
+  * If the ipcCreate() calls fails the storedir is not rebuilt and Lusca continues with a blank storedir. The trouble is it writes out a single-entry swap.state file which destroys the valid logfile which may be there. This should be twiddled as soon as possible. (Possibly make sure ipcCreate() succeeds before calling the tmp swap log open and close functions?)
 
 = Time Estimates =
 
