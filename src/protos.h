@@ -789,8 +789,6 @@ extern void writePidFile(void);
 extern void setSocketShutdownLifetimes(int);
 extern void setMaxFD(void);
 extern void setSystemLimits(void);
-extern int percent(int, int);
-extern double dpercent(double, double);
 extern pid_t readPidFile(void);
 extern struct in_addr inaddrFromHostent(const struct hostent *hp);
 extern void debug_trap(const char *);
