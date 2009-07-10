@@ -630,13 +630,20 @@ storeAufsRebuildHelperRead(int fd, void *data)
 	/* We have some data; process what we can */
 	i = 0;
 	while (i + sizeof(storeSwapLogData) < rb->rbuf.used) {
-		rb->n_read++;
-		rb->counts.scancount++;
 		memcpy(&s, rb->rbuf.buf + i, sizeof(storeSwapLogData));
-		storeAufsDirRebuildFromSwapLogObject(rb, s);
+		switch (s.op) {
+			case SWAP_LOG_PROGRESS:
+				storeRebuildProgress(rb->sd->index,
+				    ((storeSwapLogProgress *)(&s))->total, ((storeSwapLogProgress *)(&s))->progress);
+				break;
+			default:
+				rb->n_read++;
+				storeAufsDirRebuildFromSwapLogObject(rb, s);
+				rb->counts.scancount++;
+		}
 		i += sizeof(storeSwapLogData);
 	}
-	debug(47, 5) ("storeAufsRebuildHelperRead: %s: read %d objects\n", sd->path, i / sizeof(storeSwapLogData));
+	debug(47, 5) ("storeAufsRebuildHelperRead: %s: read %d entries\n", sd->path, i / sizeof(storeSwapLogData));
 
 	/* Shuffle what is left to the beginning of the buffer */
 	if (i < rb->rbuf.used) {

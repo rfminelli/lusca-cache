@@ -44,7 +44,8 @@ typedef struct _storeSwapLogCompleted storeSwapLogCompleted;
 
 struct _storeSwapLogProgress {
 	char op;
-	u_int32_t progress;		/* This is percent * 100; so from 0 -> 100,000 */
+	u_int32_t progress;
+	u_int32_t total;
 };
 typedef struct _storeSwapLogProgress storeSwapLogProgress;
 
