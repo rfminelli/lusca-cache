@@ -67,6 +67,7 @@ extern const char * swap_log_op_str[];
 
 extern int storeSwapLogUpgradeEntry(storeSwapLogData *dst, storeSwapLogDataOld *src);
 extern int storeSwapLogPrintHeader(int fd);
+extern int storeSwapLogPrintProgress(int fd, u_int32_t progress, u_int32_t total);
 extern int storeSwapLogPrintCompleted(int fd);
 
 #endif

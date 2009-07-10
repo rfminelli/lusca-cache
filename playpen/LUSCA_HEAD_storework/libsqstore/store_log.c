@@ -64,3 +64,21 @@ storeSwapLogPrintCompleted(int fd)
     sh->op = SWAP_LOG_COMPLETED;
     return write(1, sh, sizeof(storeSwapLogData));
 }
+
+int
+storeSwapLogPrintProgress(int fd, u_int32_t progress, u_int32_t total)
+{
+        char buf[128];
+        storeSwapLogProgress *sp = (storeSwapLogProgress *) buf;
+
+        bzero(buf, sizeof(buf));
+        sp->op = SWAP_LOG_PROGRESS;
+        sp->total = total;
+        sp->progress = progress;
+
+        /* storeSwapLogData is the record size */
+        if (write(1, buf, sizeof(storeSwapLogData)) <= 0)
+                return 0;
+        return 1;
+}
+
