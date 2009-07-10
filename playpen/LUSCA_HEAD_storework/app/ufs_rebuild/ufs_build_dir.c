@@ -126,7 +126,7 @@ rebuild_from_dir(store_ufs_dir_t *sd)
 		for (j = 0; j < store_ufs_l2(sd); j++) {
 			(void) store_ufs_createDir(sd, i, j, dir);
 			getCurrentTime();
-			debug(47, 1) ("read_dir: opening dir %s\n", dir);
+			debug(47, 2) ("read_dir: opening dir %s\n", dir);
 			d = opendir(dir);
 			if (! d) {
 				perror("opendir");
