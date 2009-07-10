@@ -104,7 +104,7 @@ write_swaplog_entry(rebuild_entry_t *re)
 	sd.flags = re->mi.flags;
 
 	memcpy(&sd.key, re->md5_key, sizeof(sd.key));
-	if (! write(1, &sd, sizeof(sd)))
+	if (write(1, &sd, sizeof(sd)) <= 0)
 		return 0;
 
 	return 1;

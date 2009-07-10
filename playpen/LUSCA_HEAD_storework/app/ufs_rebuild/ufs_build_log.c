@@ -75,7 +75,7 @@ read_entry(FILE *fp, int version)
 	/* is it an ADD/DEL? Good. If not - count error and continue */
 	if (sd.op == SWAP_LOG_ADD || sd.op == SWAP_LOG_DEL) {
 		num_valid_objects++;
-		if (write(1, &sd, sizeof(sd)) < 0) {
+		if (write(1, &sd, sizeof(sd)) <= 0) {
 			debug(47, 1) ("write failed: (%d) %s\n", errno, xstrerror());
 			return 0;
 		}
