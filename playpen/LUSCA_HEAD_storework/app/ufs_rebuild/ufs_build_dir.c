@@ -89,6 +89,23 @@ read_file(const char *path, rebuild_entry_t *re)
 }
 
 int
+write_swaplog_progress_entry(store_ufs_dir_t *sd, int curl1, int curl2)
+{
+	char buf[128];
+	storeSwapLogProgress *sp = (storeSwapLogProgress *) buf;
+
+	bzero(buf, sizeof(buf));
+	sp->op = SWAP_LOG_PROGRESS;
+	sp->total = (sd->l1 * sd->l2);
+	sp->progress = (sd->l1 * curl1) + curl2;
+
+	/* storeSwapLogData is the record size */
+	if (write(1, buf, sizeof(storeSwapLogData)) <= 0)
+		return 0;
+	return 1;
+}
+
+int
 write_swaplog_entry(rebuild_entry_t *re)
 {
 	storeSwapLogData sd;
@@ -125,6 +142,10 @@ rebuild_from_dir(store_ufs_dir_t *sd)
 	for (i = 0; i < store_ufs_l1(sd); i++) {
 		for (j = 0; j < store_ufs_l2(sd); j++) {
 			(void) store_ufs_createDir(sd, i, j, dir);
+			if (! write_swaplog_progress_entry(sd, i, j))
+				return;
+
+
 			getCurrentTime();
 			debug(47, 2) ("read_dir: opening dir %s\n", dir);
 			d = opendir(dir);
@@ -132,7 +153,6 @@ rebuild_from_dir(store_ufs_dir_t *sd)
 				perror("opendir");
 				continue;
 			}
-
 			while ( (de = readdir(d)) != NULL) {
 				if (de->d_name[0] == '.')
 					continue;
