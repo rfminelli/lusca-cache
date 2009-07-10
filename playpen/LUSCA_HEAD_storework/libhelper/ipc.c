@@ -42,6 +42,7 @@
 #include <math.h>
 #include <fcntl.h>
 #include <ctype.h>
+#include <signal.h>
 #include <sys/errno.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -380,4 +381,16 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
     debug(54, 0) ("ipcCreate: %s: %s\n", prog, xstrerror());
     _exit(1);
     return 0;
+}
+
+void
+ipcClose(pid_t pid, int rfd, int wfd)
+{
+	if (rfd == wfd)
+		comm_close(rfd);
+	else {
+		comm_close(rfd);
+		comm_close(wfd);
+	}
+	kill(pid, SIGTERM);
 }

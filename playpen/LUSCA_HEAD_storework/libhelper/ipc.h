@@ -27,5 +27,6 @@
 
 extern pid_t ipcCreate(int type, const char *prog, const char *const args[], const char *name,
     int sleep_after_fork, int *rfd, int *wfd, void **hIpc);
+extern void ipcClose(pid_t pid, int rfd, int wfd);
 
 #endif
