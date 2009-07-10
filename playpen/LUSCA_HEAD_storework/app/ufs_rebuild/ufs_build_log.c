@@ -23,6 +23,7 @@
 #endif
 
 #include <errno.h>
+#include <sys/stat.h>
 
 #include "include/util.h"
 #include "include/squid_md5.h"
@@ -64,6 +65,14 @@ read_entry(FILE *fp, int version)
 		return 0;
 	}
 	num_objects++;
+
+	if (num_objects & 0xffff) {
+		struct stat sb;
+		if (0 == fstat(fileno(fp), &sb)) {
+			if (! storeSwapLogPrintProgress(1, num_objects, (int) sb.st_size / s))
+				return 0;
+		}
+	}
 
 	/* Decode the entry */
 	if (version == 1) {

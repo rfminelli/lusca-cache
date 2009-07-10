@@ -142,9 +142,8 @@ rebuild_from_dir(store_ufs_dir_t *sd)
 	for (i = 0; i < store_ufs_l1(sd); i++) {
 		for (j = 0; j < store_ufs_l2(sd); j++) {
 			(void) store_ufs_createDir(sd, i, j, dir);
-			if (! write_swaplog_progress_entry(sd, i, j))
+			if (! storeSwapLogPrintProgress(1, (sd->l2 * i) + j, (sd->l1 * sd->l2)))
 				return;
-
 
 			getCurrentTime();
 			debug(47, 2) ("read_dir: opening dir %s\n", dir);
