@@ -22,7 +22,7 @@
 #include <fcntl.h>
 #endif
 
-#include <dirent.h>
+#include <errno.h>
 
 #include "include/util.h"
 #include "include/squid_md5.h"
@@ -61,7 +61,7 @@ read_entry(FILE *fp, int version)
 	r = fread(buf, s, 1, fp);
 	if (r != 1) {
 		debug(1, 2) ("fread: returned %d (ferror %d)\n", r, ferror(fp));
-		return -1;
+		return 0;
 	}
 	num_objects++;
 
@@ -75,7 +75,10 @@ read_entry(FILE *fp, int version)
 	/* is it an ADD/DEL? Good. If not - count error and continue */
 	if (sd.op == SWAP_LOG_ADD || sd.op == SWAP_LOG_DEL) {
 		num_valid_objects++;
-		write(1, &sd, sizeof(sd));
+		if (write(1, &sd, sizeof(sd)) < 0) {
+			debug(47, 1) ("write failed: (%d) %s\n", errno, xstrerror());
+			return 0;
+		}
 	} else {
 		debug(1, 5) ("error! Got swaplog entry op %d?!\n", sd.op);
 		num_invalid_objects++;

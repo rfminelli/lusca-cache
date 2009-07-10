@@ -33,6 +33,7 @@
 #endif
 
 #include <sys/stat.h>
+#include <sys/errno.h>
 #include <dirent.h>
 
 #include "include/util.h"
@@ -66,13 +67,13 @@ read_file(const char *path, rebuild_entry_t *re)
 	fd = open(path, O_RDONLY);
  	if (fd < 0) {
 		perror("open");
-		return -1;
+		return 0;
 	}
 
 	/* We need the entire file size */
 	if (fstat(fd, &sb) < 0) {
 		perror("fstat");
-		return -1;
+		return 0;
 	}
 
 	len = read(fd, buf, BUFSIZE);
@@ -80,7 +81,7 @@ read_file(const char *path, rebuild_entry_t *re)
 
 	if (! parse_header(buf, len, re)) {
 		close(fd);
-		return -1;
+		return 0;
 	}
 	re->file_size = sb.st_size;
 	close(fd);
@@ -104,7 +105,7 @@ write_swaplog_entry(rebuild_entry_t *re)
 
 	memcpy(&sd.key, re->md5_key, sizeof(sd.key));
 	if (! write(1, &sd, sizeof(sd)))
-		return -1;
+		return 0;
 
 	return 1;
 }
@@ -153,7 +154,11 @@ rebuild_from_dir(store_ufs_dir_t *sd)
 				rebuild_entry_init(&re);
 				(void) read_file(path, &re);
 				re.swap_filen = fn;
-				(void) write_swaplog_entry(&re);
+				if (! write_swaplog_entry(&re)) {
+					debug(47, 1) ("read_dir: write() failed: (%d) %s\n", errno, xstrerror());
+					rebuild_entry_done(&re);
+					return;
+				}
 				rebuild_entry_done(&re);
 
 			}
