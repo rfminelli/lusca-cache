@@ -89,23 +89,6 @@ read_file(const char *path, rebuild_entry_t *re)
 }
 
 int
-write_swaplog_progress_entry(store_ufs_dir_t *sd, int curl1, int curl2)
-{
-	char buf[128];
-	storeSwapLogProgress *sp = (storeSwapLogProgress *) buf;
-
-	bzero(buf, sizeof(buf));
-	sp->op = SWAP_LOG_PROGRESS;
-	sp->total = (sd->l1 * sd->l2);
-	sp->progress = (sd->l2 * curl1) + curl2;
-
-	/* storeSwapLogData is the record size */
-	if (write(1, buf, sizeof(storeSwapLogData)) <= 0)
-		return 0;
-	return 1;
-}
-
-int
 write_swaplog_entry(rebuild_entry_t *re)
 {
 	storeSwapLogData sd;
