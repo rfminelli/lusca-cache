@@ -42,6 +42,12 @@ struct _storeSwapLogCompleted {
 };
 typedef struct _storeSwapLogCompleted storeSwapLogCompleted;
 
+struct _storeSwapLogProgress {
+	char op;
+	u_int32_t progress;		/* This is percent * 100; so from 0 -> 100,000 */
+};
+typedef struct _storeSwapLogProgress storeSwapLogProgress;
+
 struct _storeSwapLogDataOld {
     char op;
     sfileno swap_filen;
