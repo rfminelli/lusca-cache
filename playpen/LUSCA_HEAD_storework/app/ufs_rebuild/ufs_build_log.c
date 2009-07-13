@@ -66,7 +66,7 @@ read_entry(FILE *fp, int version)
 	}
 	num_objects++;
 
-	if (num_objects & 0xffff) {
+	if ((num_objects & 0xffff) == 0) {
 		struct stat sb;
 		if (0 == fstat(fileno(fp), &sb)) {
 			if (! storeSwapLogPrintProgress(1, num_objects, (int) sb.st_size / s))
