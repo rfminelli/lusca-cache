@@ -45,21 +45,33 @@ int num_objects = 0;
 int num_valid_objects = 0;
 int num_invalid_objects = 0;
 
+static int
+rebuild_log_progress(FILE *fp, size_t s, int num_objects)
+{
+	struct stat sb;
+	if (0 == fstat(fileno(fp), &sb)) {
+		if (! storeSwapLogPrintProgress(1, num_objects, (int) sb.st_size / s))
+			return 0;
+	}
+	return 1;
+}
+
+static size_t
+rebuild_entry_size(int version)
+{
+	if (version == 1)
+		return sizeof(storeSwapLogData);
+	return sizeof(storeSwapLogDataOld);
+}
+
 int
 read_entry(FILE *fp, int version)
 {
 	int r;
 	char buf[128];
 	storeSwapLogData sd;
-	size_t s = -1;
 
-	if (version == 1) {
-		s = sizeof(storeSwapLogData);
-	} else {
-		s = sizeof(storeSwapLogDataOld);
-	}
-
-	r = fread(buf, s, 1, fp);
+	r = fread(buf, rebuild_entry_size(version), 1, fp);
 	if (r != 1) {
 		debug(1, 2) ("fread: returned %d (ferror %d)\n", r, ferror(fp));
 		return 0;
@@ -67,11 +79,8 @@ read_entry(FILE *fp, int version)
 	num_objects++;
 
 	if ((num_objects & 0xffff) == 0) {
-		struct stat sb;
-		if (0 == fstat(fileno(fp), &sb)) {
-			if (! storeSwapLogPrintProgress(1, num_objects, (int) sb.st_size / s))
-				return 0;
-		}
+		if (! rebuild_log_progress(fp, rebuild_entry_size(version), num_objects))
+			return 0;
 	}
 
 	/* Decode the entry */
@@ -157,6 +166,10 @@ rebuild_from_log(store_ufs_dir_t *ufs)
 			break;
 		}
 	}
+
+	/* Queue a final progress update */
+	if (! rebuild_log_progress(fp, rebuild_entry_size(version), num_objects))
+		return;
 
 	fclose(fp);
 }
