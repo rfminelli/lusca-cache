@@ -280,7 +280,7 @@ storeAufsRebuildHelperRead(int fd, void *data)
 
 	/* We have some data; process what we can */
 	i = 0;
-	while (i + sizeof(storeSwapLogData) < rb->rbuf.used) {
+	while (i + sizeof(storeSwapLogData) <= rb->rbuf.used) {
 		memcpy(&s, rb->rbuf.buf + i, sizeof(storeSwapLogData));
 		switch (s.op) {
 			case SWAP_LOG_VERSION:
