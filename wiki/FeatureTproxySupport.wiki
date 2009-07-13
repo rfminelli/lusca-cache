@@ -1,0 +1,44 @@
+#summary TPROXY - fully transparent client and server proxying support
+
+= Introduction =
+
+TPROXY allows the proxy to spoof both the client and server side IPs, allowing for (mostly) fully transparent operation.
+
+The TPROXY support in Lusca is inherited partly from Squid-2 and partly from Squid-3.
+
+NOTE: this documentation is still under development.
+
+= Details =
+
+= Platform specifics =
+
+== Linux TPROXY2 ==
+
+== Linux TPROXY4 ==
+
+The TPROXY4 support is in the latest Linux-2.6 kernel (from version?)
+
+== FreeBSD ==
+
+The basic support is in FreeBSD-current. There's FreeBSD-7 patches available at http://tproxy.no-ip.org/.
+
+= Differences between Squid-2, Squid-3 and Lusca =
+
+Squid-2 only supports TPROXY2. There are patches available from Visolve which implement TPROXY4 support in Squid-2.7.
+
+Squid-3 supports TPROXY4. I'm not certain whether they support TPROXY2 at all anymore.
+
+Lusca supports all of the above.
+
+In Squid-3, the "interception/NAT" code which figures out the original destination IP address actually tries all of the possible compiled in options before failing. Lusca only tries the compiled in option. This means that Squid-3 can be compiled with --enable-linux-netfilter -and- TPROXY4 with no ill effect.
+
+Lusca can only be compiled with one - it will get very confused on TPROXY4 connections as it will try the netfilter-specific code on a TPROXY4 connection, get an error, and not correctly complete the request.
+
+
+
+
+= Known issues =
+
+There may be an issue with at least FreeBSD to do with overlapping client IP selected ports and the spoofed client IP/port space on the proxy. I need to investigate that further and ensure things "work right". (No issue.)
+
+There's a known security issue with transparent interception to do with differing DNS and original destination IP. Fixing this via the 'simple' method (ie, including the original destination host IP as part of the cache key) will both negatively impact on cache hit rates and include large amounts of duplicate content into the cache.
