@@ -343,7 +343,7 @@ storeAufsDirRebuild(SwapDir * sd)
     /* Open the rebuild helper */
     snprintf(l1, sizeof(l1)-1, "%d", aioinfo->l1);
     snprintf(l2, sizeof(l2)-1, "%d", aioinfo->l2);
-    args[0] = "(ufs rebuilding)";
+    args[0] = Config.Program.ufs_log_build;
     args[1] = "rebuild";
     args[2] = sd->path;
     args[3] = l1;
@@ -351,7 +351,7 @@ storeAufsDirRebuild(SwapDir * sd)
     args[5] = xstrdup(storeAufsDirSwapLogFile(sd, NULL));
     args[6] = NULL;
 
-    rb->helper.pid = ipcCreate(IPC_STREAM, Config.Program.ufs_log_build, args, "ufs rebuilding",
+    rb->helper.pid = ipcCreate(IPC_STREAM, Config.Program.ufs_log_build, args, "ufs_rebuild helper",
       0, &rb->helper.r_fd, &rb->helper.w_fd, NULL);
     assert(rb->helper.pid != -1);
     safe_free(args[5]);
