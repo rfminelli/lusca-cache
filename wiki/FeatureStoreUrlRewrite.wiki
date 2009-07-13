@@ -1,0 +1,19 @@
+#summary Store URL rewriting - re-writing URLs to different cache keys to unify cache content
+
+= Introduction =
+
+The Store URL rewriting feature is inherited from Squid-2.HEAD. It allows the administrator to map >1 URL to a single URL used for cache key storage and retrieval.
+
+For example, URLs which differ only on the hostname can be collapsed to one host. Subsequent lookups for URLs which match a rule will map to the same hostname regardless of which host was used to store the content with.
+
+Another use is to normalise dynamically generated content (eg, via GET parameters) so the existance and/or order of the parameters can be normalised.
+
+= Issues =
+
+There is currently no clear, documented way to PURGE an item which has been stored using a rewritten key. This needs to be investigated, fixed and documented (no issue yet.)
+
+Inter-cache communication using rewritten URLs is also not documented or tested. This includes cache digests (no issue yet), ICP (Issue 43) and HTCP (Issue 44.)
+
+Vary-aware content with rewritten store keys is not tested or documented. Please be wary of enabling the store URL rewriter which match on Vary'ing entities. (Issue 28.)
+
+There's apparently some weird stuff going on with redirected content and rewritten store URLs. (Issue 27.)
