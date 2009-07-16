@@ -50,8 +50,7 @@
 #include "libsqstore/store_meta.h"
 #include "libsqstore/store_log.h"
 #include "libsqstore/store_file_ufs.h"
-
-#include "rebuild_entry.h"
+#include "libsqstore/rebuild_entry.h"
 
 #define	BUFSIZE		1024
 

@@ -18,9 +18,9 @@ SUBDIRS		=
 
 libexec_PROGRAMS = ufs_rebuild
 
-ufs_rebuild_SOURCES = ufs_rebuild.c ufs_build_log.c ufs_build_dir.c rebuild_entry.c
+ufs_rebuild_SOURCES = ufs_rebuild.c ufs_build_log.c ufs_build_dir.c
 
-LDADD = -L../../lib -L../../libsqdebug -L../../libcore -L../../libmem -L../../libsqstore -L../../libsqtlv -lsqtlv -lsqdebug -lcore -lm -lsqstore -lmiscutil
+LDADD = -L../../lib -L../../libsqdebug -L../../libcore -L../../libmem -L../../libsqstore -L../../libsqtlv  -lsqdebug -lcore -lm -lsqstore -lsqtlv -lmiscutil
 
 $(OBJS): $(top_srcdir)/include/version.h ../include/autoconf.h
 
