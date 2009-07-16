@@ -29,14 +29,6 @@
  * All in all this is quite a horrible method for rebuilding..
  */
 
-#define	DEFAULT_BLOCKSIZE	1024
-#define	DEFAULT_BLOCKBITS	10
-#define	DEFAULT_STRIPESIZE	1048576
-
-size_t	stripe_size = 0;	/* XXX needs to be changed, obviously */
-int	stripe_blksize = 1024;
-
-
 static void
 parse_stripe(int stripeid, char *buf, int len, int blocksize, size_t stripesize)
 {   
