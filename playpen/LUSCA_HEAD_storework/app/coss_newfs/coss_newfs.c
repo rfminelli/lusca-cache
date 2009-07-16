@@ -16,9 +16,7 @@
 int shutting_down = 0;	/* needed for debug routines for now */
 
 /*
- * Args: /path/to/cossdir <size> <stripesize>
- *
- * All arguments are in megabytes for now.
+ * Args: /path/to/cossdir <number of stripes> <stripesize>
  */
 int
 main(int argc, const char *argv[])
@@ -28,12 +26,16 @@ main(int argc, const char *argv[])
 	size_t i;
 	int fd;
 	char buf[256];
-	int r;
+	off_t r;
+
+        /* Setup the debugging library */
+        _db_init("ALL,1");
+        _db_set_stderr_debug(1);
+
 
 	path = argv[1];
-
-	sz = atoi(argv[2]) * 1024;
-	stripe_sz = atoi(argv[3]) * 1024;
+	sz = atoi(argv[2]);
+	stripe_sz = atoi(argv[3]);
 
 	/*
 	 * For now, just write 256 bytes of NUL's into the beginning of
@@ -42,22 +44,24 @@ main(int argc, const char *argv[])
 	 * -should- be enough to trick the rebuild process into treating
 	 * the rest of that stripe as empty.
 	 */
-	fd = open(path, O_WRONLY | O_CREAT);
+	fd = open(path, O_WRONLY | O_CREAT, 0644);
 	if (fd < 0) {
 		perror("open");
 		exit(127);
 	}
 	bzero(buf, sizeof(buf));
 
-	for (i = 0; i < sz; i += stripe_sz) {
-		r = lseek(fd, i, SEEK_SET);
+	for (i = 0; i < sz; i += 1) {
+		getCurrentTime();
+		debug(85, 5) ("seeking to stripe %d\n", i);
+		r = lseek(fd, (off_t) i * (off_t) stripe_sz, SEEK_SET);
 		if (r < 0) {
 			perror("lseek");
 			exit(127);
 		}
 		r = write(fd, buf, sizeof(buf));
 		if (r < 0) {
-			perror("lseek");
+			perror("write");
 			exit(127);
 		}
 	}
