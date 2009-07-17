@@ -31,7 +31,7 @@
  * All in all this is quite a horrible method for rebuilding..
  */
 
-static void
+static int
 parse_stripe(int stripeid, char *buf, int len, int blocksize, size_t stripesize)
 {   
 	int j = 0;
@@ -43,7 +43,7 @@ parse_stripe(int stripeid, char *buf, int len, int blocksize, size_t stripesize)
 		if (! parse_header(&buf[j], len - j, &re)) {
 			rebuild_entry_done(&re);
 			debug(85, 5) ("parse_stripe: id %d: no more data or invalid header\n", stripeid);
-			return;
+			return 0;
 		}
 
 		debug(85, 5) ("  Object: (filen %d)\n", j / blocksize + (stripeid * stripesize / blocksize));
@@ -59,7 +59,15 @@ parse_stripe(int stripeid, char *buf, int len, int blocksize, size_t stripesize)
 		if (re.hdr_size == -1 || re.file_size == -1) {
 			rebuild_entry_done(&re);
 			debug(85, 5) ("parse_stripe: id %d: not enough information in this object; end of stripe?\n", stripeid);
-			return;
+			return 0;
+		}
+
+		re.swap_filen = (off_t) j / (off_t) blocksize + (off_t) ((off_t) stripeid * (off_t) stripesize / (off_t) blocksize);
+
+
+		if (! write_swaplog_entry(1, &re)) {
+			rebuild_entry_done(&re);
+			return -1;
 		}
 
 		j = j + re.file_size + re.hdr_size;
@@ -69,6 +77,7 @@ parse_stripe(int stripeid, char *buf, int len, int blocksize, size_t stripesize)
 		j = tmp;
 		rebuild_entry_done(&re);
 	}
+	return 1;
 }
 
 int
@@ -91,6 +100,8 @@ coss_rebuild_dir(const char *file, size_t stripesize, int blocksize, int numstri
 		return 0;
 	}
 
+	storeSwapLogPrintHeader(1);	
+
 	for(blksize_bits = 0;((blocksize >> blksize_bits) > 0);blksize_bits++) {
 		if( ((blocksize >> blksize_bits) > 0) &&
 		  (((blocksize >> blksize_bits) << blksize_bits) != blocksize)) {
@@ -102,12 +113,14 @@ coss_rebuild_dir(const char *file, size_t stripesize, int blocksize, int numstri
 
 	while ((len = read(fd, buf, stripesize)) > 0) {
 		debug(85, 5) ("STRIPE: %d (len %d)\n", i, len);
-		parse_stripe(i, buf, len, blocksize, stripesize);
+		if (parse_stripe(i, buf, len, blocksize, stripesize) < 0)
+			break;
 		i++;
 		if((numstripes > 0) && (i >= numstripes))
 			break;
 	}
 	close(fd);
+	storeSwapLogPrintCompleted(1);	
 
 	safe_free(buf);
 	return 1;
