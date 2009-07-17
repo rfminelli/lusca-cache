@@ -111,8 +111,10 @@ coss_rebuild_dir(const char *file, size_t stripesize, int blocksize, int numstri
 		}
 	}
 
+	/* XXX this should loop over numstripes and try seek+read; doing it this way means we -could- read too much.. */
 	while ((len = read(fd, buf, stripesize)) > 0) {
 		debug(85, 5) ("STRIPE: %d (len %d)\n", i, len);
+		storeSwapLogPrintProgress(1, i, numstripes);
 		if (parse_stripe(i, buf, len, blocksize, stripesize) < 0)
 			break;
 		i++;
