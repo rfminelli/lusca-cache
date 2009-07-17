@@ -12,10 +12,12 @@
 #include "libcore/kb.h"
 #include "libcore/varargs.h"
 #include "libsqdebug/debug.h"
+#include "libsqtlv/tlv.h"
 #include "libsqstore/store_mgr.h"
 #include "libsqstore/store_log.h"
 #include "libsqstore/store_meta.h"
-#include "libsqtlv/tlv.h"
+#include "libsqstore/rebuild_entry.h"
+
 
 /*
  * Rebuilding from the COSS filesystem itself is currently very, very
@@ -33,43 +35,39 @@ static void
 parse_stripe(int stripeid, char *buf, int len, int blocksize, size_t stripesize)
 {   
 	int j = 0;
-	int bl = 0;
-	tlv *t, *tlv_list;
-	int64_t *l;
 	int tmp;
+	rebuild_entry_t re;
 
 	while (j < len) {
-		l = NULL;
-		bl = 0;
-		tlv_list = tlv_unpack(&buf[j], &bl, STORE_META_END + 10);
-		if (tlv_list == NULL) {
-			printf("  Object: NULL\n");
+		rebuild_entry_init(&re);
+		if (! parse_header(&buf[j], len - j, &re)) {
+			rebuild_entry_done(&re);
+			debug(85, 5) ("parse_stripe: id %d: no more data or invalid header\n", stripeid);
 			return;
 		}
-		printf("  Object: (filen %d) hdr size %d\n", j / blocksize + (stripeid * stripesize / blocksize), bl);
-		for (t = tlv_list; t; t = t->next) {
-			switch (t->type) {
-			case STORE_META_URL:
-				/* XXX Is this OK? Is the URL guaranteed to be \0 terminated? */
-				printf("	URL: %s\n", (char *) t->value);
-				break;
-			case STORE_META_OBJSIZE:
-				l = t->value;
-				printf("Size: %" PRINTF_OFF_T " (len %d)\n", *l, t->length);
-				break;
-			}
-		}
-		if (l == NULL) {
-			printf("  STRIPE: Completed, got an object with no size\n");
+
+		debug(85, 5) ("  Object: (filen %d)\n", j / blocksize + (stripeid * stripesize / blocksize));
+		debug(85, 5) ("  URL: %s\n", re.url);
+		debug(85, 5) ("  hdr_size: %d\n", (int) re.hdr_size);
+		debug(85, 5) ("  file_size: %d\n", (int) re.file_size);
+
+		/*
+		 * We require at least the size to continue. If we don't get a valid size to read the next
+		 * object for, we can't generate a swaplog entry. Leave checking consistency up to the
+		 * caller.
+		 */
+		if (re.hdr_size == -1 || re.file_size == -1) {
+			rebuild_entry_done(&re);
+			debug(85, 5) ("parse_stripe: id %d: not enough information in this object; end of stripe?\n", stripeid);
 			return;
 		}
-		j = j + *l + bl;
+
+		j = j + re.file_size + re.hdr_size;
 		/* And now, the blocksize! */
 		tmp = j / blocksize;
 		tmp = (tmp + 1) * blocksize;
 		j = tmp;
-
-		tlv_free(tlv_list);
+		rebuild_entry_done(&re);
 	}
 }
 
