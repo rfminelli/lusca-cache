@@ -109,3 +109,24 @@ parse_header(char *buf, int len, rebuild_entry_t *re)
 	tlv_free(tlv_list);
 	return (parsed > 1);
 }
+
+int
+write_swaplog_entry(int fd, rebuild_entry_t *re)
+{
+	storeSwapLogData sd;
+
+	sd.op = SWAP_LOG_ADD;
+	sd.swap_filen = re->swap_filen;
+	sd.timestamp = re->mi.timestamp;
+	sd.lastref = re->mi.lastref;
+	sd.expires = re->mi.expires;
+	sd.lastmod = re->mi.lastmod;
+	sd.swap_file_sz = re->file_size;
+	sd.refcount = re->mi.refcount;
+	sd.flags = re->mi.flags;
+
+	memcpy(&sd.key, re->md5_key, sizeof(sd.key));
+	if (write(fd, &sd, sizeof(sd)) <= 0)
+		return 0;
+	return 1;
+}
