@@ -87,28 +87,6 @@ read_file(const char *path, rebuild_entry_t *re)
 	return 1;
 }
 
-int
-write_swaplog_entry(rebuild_entry_t *re)
-{
-	storeSwapLogData sd;
-
-	sd.op = SWAP_LOG_ADD;
-	sd.swap_filen = re->swap_filen;
-	sd.timestamp = re->mi.timestamp;
-	sd.lastref = re->mi.lastref;
-	sd.expires = re->mi.expires;
-	sd.lastmod = re->mi.lastmod;
-	sd.swap_file_sz = re->file_size;
-	sd.refcount = re->mi.refcount;
-	sd.flags = re->mi.flags;
-
-	memcpy(&sd.key, re->md5_key, sizeof(sd.key));
-	if (write(1, &sd, sizeof(sd)) <= 0)
-		return 0;
-
-	return 1;
-}
-
 void
 rebuild_from_dir(store_ufs_dir_t *sd)
 {
@@ -155,7 +133,7 @@ rebuild_from_dir(store_ufs_dir_t *sd)
 				rebuild_entry_init(&re);
 				(void) read_file(path, &re);
 				re.swap_filen = fn;
-				if (! write_swaplog_entry(&re)) {
+				if (! write_swaplog_entry(1, &re)) {
 					debug(47, 1) ("read_dir: write() failed: (%d) %s\n", errno, xstrerror());
 					rebuild_entry_done(&re);
 					return;
