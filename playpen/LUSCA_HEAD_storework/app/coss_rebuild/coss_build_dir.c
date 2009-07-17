@@ -81,7 +81,7 @@ coss_rebuild_dir(const char *file, size_t stripesize, int blocksize, int numstri
 
 	buf = malloc(stripesize);
 	if (! buf) {
-		debug(1, 1) ("%s: couldn't allocated %d bytes for rebuild buffer: (%d) %s\n", file, stripesize, errno, xstrerror());
+		debug(85, 1) ("%s: couldn't allocated %d bytes for rebuild buffer: (%d) %s\n", file, stripesize, errno, xstrerror());
 		return 0;
 	}
 
@@ -94,14 +94,14 @@ coss_rebuild_dir(const char *file, size_t stripesize, int blocksize, int numstri
 	for(blksize_bits = 0;((blocksize >> blksize_bits) > 0);blksize_bits++) {
 		if( ((blocksize >> blksize_bits) > 0) &&
 		  (((blocksize >> blksize_bits) << blksize_bits) != blocksize)) {
-			debug(1, 1) ("%s: Blocksize bits (%d) must be a power of 2\n", file, blksize_bits);
+			debug(85, 1) ("%s: Blocksize bits (%d) must be a power of 2\n", file, blksize_bits);
 			safe_free(buf);
 			return(0);
 		}
 	}
 
 	while ((len = read(fd, buf, stripesize)) > 0) {
-		printf("STRIPE: %d (len %d)\n", i, len);
+		debug(85, 5) ("STRIPE: %d (len %d)\n", i, len);
 		parse_stripe(i, buf, len, blocksize, stripesize);
 		i++;
 		if((numstripes > 0) && (i >= numstripes))
