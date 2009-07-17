@@ -20,9 +20,9 @@ main(int argc, const char *argv[])
 	size_t stripe_size;
 	int num_stripes;
 
-        /* Setup the debugging library */
-        _db_init("ALL,1");
-        _db_set_stderr_debug(1);
+	/* Setup the debugging library */
+	_db_init("ALL,1");
+	_db_set_stderr_debug(1);
 
 	cmd = argv[1];
 	path = argv[2];
