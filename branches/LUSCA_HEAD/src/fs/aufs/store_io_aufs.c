@@ -53,8 +53,6 @@ static int storeAufsNeedCompletetion(storeIOState *);
 static int storeAufsKickWriteQueue(storeIOState * sio);
 static CBDUNL storeAufsIOFreeEntry;
 
-CBDATA_TYPE(storeIOState);
-
 /* === PUBLIC =========================================================== */
 
 /* open for reading */
@@ -84,8 +82,7 @@ storeAufsOpen(SwapDir * SD, StoreEntry * e, STFNCB * file_callback,
 	return NULL;
     }
 #endif
-    CBDATA_INIT_TYPE_FREECB(storeIOState, storeAufsIOFreeEntry);
-    sio = cbdataAlloc(storeIOState);
+    sio = storeIOAllocate(storeAufsIOFreeEntry);
     sio->fsstate = memPoolAlloc(squidaio_state_pool);
     ((squidaiostate_t *) (sio->fsstate))->fd = -1;
     ((squidaiostate_t *) (sio->fsstate))->flags.opening = 1;
@@ -139,8 +136,7 @@ storeAufsCreate(SwapDir * SD, StoreEntry * e, STFNCB * file_callback, STIOCB * c
 	return NULL;
     }
 #endif
-    CBDATA_INIT_TYPE_FREECB(storeIOState, storeAufsIOFreeEntry);
-    sio = cbdataAlloc(storeIOState);
+    sio = storeIOAllocate(storeAufsIOFreeEntry);
     sio->fsstate = memPoolAlloc(squidaio_state_pool);
     ((squidaiostate_t *) (sio->fsstate))->fd = -1;
     ((squidaiostate_t *) (sio->fsstate))->flags.opening = 1;
@@ -532,6 +528,7 @@ storeAufsIOFreeEntry(void *siop)
     squidaiostate_t *aiostate = (squidaiostate_t *) sio->fsstate;
     struct _queued_write *qw;
     struct _queued_read *qr;
+    assert(aiostate);
     while ((qw = dlinkRemoveHead(&aiostate->pending_writes))) {
 	if (qw->free_func)
 	    qw->free_func(qw->buf);
@@ -546,4 +543,5 @@ storeAufsIOFreeEntry(void *siop)
     if (sio->callback_data)
 	cbdataUnlock(sio->callback_data);
     memPoolFree(squidaio_state_pool, aiostate);
+    sio->fsstate = NULL;
 }
