@@ -545,6 +545,7 @@ CBDATA_GLOBAL_TYPE(RemovalPolicy);
 CBDATA_GLOBAL_TYPE(RemovalPolicyWalker);
 CBDATA_GLOBAL_TYPE(RemovalPurgeWalker);
 CBDATA_GLOBAL_TYPE(ps_state);
+CBDATA_GLOBAL_TYPE(storeIOState);
 
 /* src/MemBuf.c */
 extern int buf_read(buf_t *b, int fd, int grow_size);

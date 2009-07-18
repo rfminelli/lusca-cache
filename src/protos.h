@@ -647,6 +647,7 @@ extern void storeFsSetup(void);
 extern void storeReplSetup(void);
 
 /* store_io.c */
+extern storeIOState * storeIOAllocate(FREE *state_free);
 extern storeIOState *storeCreate(StoreEntry *, STFNCB *, STIOCB *, void *);
 extern storeIOState *storeOpen(StoreEntry *, STFNCB *, STIOCB *, void *);
 extern void storeClose(storeIOState *);

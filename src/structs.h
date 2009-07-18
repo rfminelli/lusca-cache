@@ -1663,6 +1663,7 @@ struct _storeIOState {
 	unsigned int closing:1;	/* debugging aid */
     } flags;
     void *fsstate;
+    FREE *free_state;
 };
 
 struct _request_t {
