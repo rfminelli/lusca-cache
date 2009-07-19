@@ -20,6 +20,13 @@ main(int argc, const char *argv[])
 	size_t stripe_size;
 	int num_stripes;
 
+	if (argc < 5) {
+		printf("Usage: %s <command> <path> <block size> <stripe size> <number of stripes>\n", argv[0]);
+		printf("  where the block and stripe sizes are in bytes\n");
+		printf("  and <command> is, for now, 'rebuild'\n");
+		exit(127);
+	}
+
 	/* Setup the debugging library */
 	_db_init("ALL,1");
 	_db_set_stderr_debug(1);
