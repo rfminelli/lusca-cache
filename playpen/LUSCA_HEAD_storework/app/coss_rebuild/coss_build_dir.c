@@ -85,8 +85,13 @@ coss_rebuild_dir(const char *file, size_t stripesize, int blocksize, int numstri
 {
 	int fd;
 	char *buf;
-	int i = 0, len;
+	ssize_t len;
 	int blksize_bits;
+	int cur_stripe;
+	int report_interval;
+	off_t rl, o;
+
+	report_interval = numstripes / 20;	/* every 5% */
 
 	buf = malloc(stripesize);
 	if (! buf) {
@@ -112,13 +117,25 @@ coss_rebuild_dir(const char *file, size_t stripesize, int blocksize, int numstri
 	}
 
 	/* XXX this should loop over numstripes and try seek+read; doing it this way means we -could- read too much.. */
-	while ((len = read(fd, buf, stripesize)) > 0) {
-		debug(85, 5) ("STRIPE: %d (len %d)\n", i, len);
-		storeSwapLogPrintProgress(1, i, numstripes);
-		if (parse_stripe(i, buf, len, blocksize, stripesize) < 0)
-			break;
-		i++;
-		if((numstripes > 0) && (i >= numstripes))
+	for (cur_stripe = 0; cur_stripe < numstripes; cur_stripe++) {
+		getCurrentTime();
+		debug(85, 5) ("COSS: %s: STRIPE: %d\n", file, cur_stripe);
+		storeSwapLogPrintProgress(1, cur_stripe, numstripes);
+		if (cur_stripe % report_interval == 0) {
+			debug(85, 1) ("COSS: %s: Rebuilding %.2f complete (%d out of %d stripes)\n",
+			    file, (float) cur_stripe / (float) numstripes * 100.0, cur_stripe, numstripes);
+		}
+
+		o = ((off_t) cur_stripe) * ((off_t) stripesize);
+		rl = lseek(fd, o, SEEK_SET);
+		if (rl < 0)
+			continue;
+		
+		len = read(fd, buf, stripesize);
+		if (len < 0)
+			continue;
+
+		if (parse_stripe(cur_stripe, buf, len, blocksize, stripesize) < 0)
 			break;
 	}
 	close(fd);
