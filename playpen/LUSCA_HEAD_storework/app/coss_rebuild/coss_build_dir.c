@@ -90,7 +90,9 @@ coss_rebuild_dir(const char *file, size_t stripesize, int blocksize, int numstri
 	int cur_stripe;
 	int report_interval;
 	off_t rl, o;
+	pid_t pid;
 
+	pid = getpid();
 	report_interval = numstripes / 20;	/* every 5% */
 
 	buf = malloc(stripesize);
@@ -110,7 +112,7 @@ coss_rebuild_dir(const char *file, size_t stripesize, int blocksize, int numstri
 	for(blksize_bits = 0;((blocksize >> blksize_bits) > 0);blksize_bits++) {
 		if( ((blocksize >> blksize_bits) > 0) &&
 		  (((blocksize >> blksize_bits) << blksize_bits) != blocksize)) {
-			debug(85, 1) ("%s: Blocksize bits (%d) must be a power of 2\n", file, blksize_bits);
+			debug(85, 1) ("COSS[%d]: %s: Blocksize bits (%d) must be a power of 2\n", pid, file, blksize_bits);
 			safe_free(buf);
 			return(0);
 		}
@@ -122,8 +124,8 @@ coss_rebuild_dir(const char *file, size_t stripesize, int blocksize, int numstri
 		debug(85, 5) ("COSS: %s: STRIPE: %d\n", file, cur_stripe);
 		storeSwapLogPrintProgress(1, cur_stripe, numstripes);
 		if (cur_stripe % report_interval == 0) {
-			debug(85, 1) ("COSS: %s: Rebuilding %.2f complete (%d out of %d stripes)\n",
-			    file, (float) cur_stripe / (float) numstripes * 100.0, cur_stripe, numstripes);
+			debug(85, 1) ("COSS[%d]: %s: Rebuilding %.2f%% complete (%d out of %d stripes)\n",
+			    pid, file, (float) cur_stripe / (float) numstripes * 100.0, cur_stripe, numstripes);
 		}
 
 		o = ((off_t) cur_stripe) * ((off_t) stripesize);
