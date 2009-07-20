@@ -117,7 +117,15 @@ storeCoss_DeleteStoreEntry(RebuildState * rb, const cache_key * key, StoreEntry 
 static void
 storeCoss_ConsiderStoreEntry(RebuildState * rb, const cache_key * key, storeSwapLogData * d)
 {
+    SwapDir *sd = rb->sd;
     StoreEntry *oe;
+
+    /* Is it Private? Don't bother */
+    if (EBIT_TEST(d->flags, KEY_PRIVATE)) {
+        debug(47, 3) ("COSS: %s: filen %x private key flag set, ignoring.\n", stripePath(sd), d->swap_filen);
+        rb->counts.badflags++;
+        return;
+    }
 
     /* Check for clashes */
     oe = storeGet(key);
