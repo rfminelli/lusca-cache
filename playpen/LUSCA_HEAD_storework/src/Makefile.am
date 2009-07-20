@@ -350,6 +350,7 @@ DEFAULT_UNLINKD		= $(libexecdir)/`echo unlinkd | sed '$(transform);s/$$/$(EXEEXT
 DEFAULT_DISKD		= $(libexecdir)/`echo diskd-daemon | sed '$(transform);s/$$/$(EXEEXT)/'`
 DEFAULT_LOGFILED	= $(libexecdir)/`echo logfile-daemon | sed '$(transform);s/$$/$(EXEEXT)/'`
 DEFAULT_UFS_LOG_BUILD	= $(libexecdir)/`echo ufs_rebuild | sed '$(transform);s/$$/$(EXEEXT)/'`
+DEFAULT_COSS_LOG_BUILD	= $(libexecdir)/`echo coss_rebuild | sed '$(transform);s/$$/$(EXEEXT)/'`
 DEFAULT_ICON_DIR	= $(datadir)/icons
 DEFAULT_ERROR_DIR	= $(datadir)/errors/@ERR_DEFAULT_LANGUAGE@
 DEFAULT_MIB_PATH	= $(datadir)/mib.txt
@@ -399,6 +400,7 @@ cf.data: cf.data.pre Makefile
 	s%@DEFAULT_PINGER@%$(DEFAULT_PINGER)%g;\
 	s%@DEFAULT_DISKD@%$(DEFAULT_DISKD)%g;\
 	s%@DEFAULT_UFS_LOG_BUILD@%$(DEFAULT_UFS_LOG_BUILD)%g;\
+	s%@DEFAULT_COSS_LOG_BUILD@%$(DEFAULT_COSS_LOG_BUILD)%g;\
 	s%@DEFAULT_LOGFILED@%$(DEFAULT_LOGFILED)%g;\
 	s%@DEFAULT_CACHE_LOG@%$(DEFAULT_CACHE_LOG)%g;\
 	s%@DEFAULT_ACCESS_LOG@%$(DEFAULT_ACCESS_LOG)%g;\

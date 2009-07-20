@@ -2698,6 +2698,17 @@ DOC_START
 	the directory contents.
 DOC_END
 
+NAME: coss_log_build_program
+TYPE: string
+DEFAULT: @DEFAULT_COSS_LOG_BUILD@
+LOC: Config.Program.coss_log_build
+DOC_START
+	Specify the location of the COSS directory rebuild program.
+	This program runs as a helper to build a COSS swap log from
+	the directory contents.
+DOC_END
+
+
 NAME: diskd_program
 TYPE: string
 DEFAULT: @DEFAULT_DISKD@
