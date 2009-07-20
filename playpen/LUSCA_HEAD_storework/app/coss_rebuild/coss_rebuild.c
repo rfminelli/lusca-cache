@@ -11,6 +11,8 @@
 
 int shutting_down = 0;	/* needed for libiapp */
 
+#define	WRITE_BUFFER_LEN	65536
+
 int
 main(int argc, const char *argv[])
 {
@@ -19,12 +21,19 @@ main(int argc, const char *argv[])
 	int block_size;
 	size_t stripe_size;
 	int num_stripes;
+	char * wbuf = NULL;
+
 
 	if (argc < 5) {
 		printf("Usage: %s <command> <path> <block size> <stripe size> <number of stripes>\n", argv[0]);
 		printf("  where the block and stripe sizes are in bytes\n");
 		printf("  and <command> is, for now, 'rebuild'\n");
 		exit(127);
+	}
+
+	wbuf = malloc(WRITE_BUFFER_LEN);
+	if (wbuf) {  
+		setbuffer(stdout, wbuf, WRITE_BUFFER_LEN);
 	}
 
 	/* Setup the debugging library */

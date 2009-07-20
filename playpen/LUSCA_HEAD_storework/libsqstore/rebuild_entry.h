@@ -16,6 +16,6 @@ typedef struct _rebuild_entry rebuild_entry_t;
 extern void rebuild_entry_done(rebuild_entry_t *re);
 extern void rebuild_entry_init(rebuild_entry_t *re);
 extern int parse_header(char *buf, int len, rebuild_entry_t *re);
-extern int write_swaplog_entry(int fd, rebuild_entry_t *re);
+extern int write_swaplog_entry(FILE *fp, rebuild_entry_t *re);
 
 #endif

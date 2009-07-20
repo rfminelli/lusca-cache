@@ -64,8 +64,7 @@ parse_stripe(int stripeid, char *buf, int len, int blocksize, size_t stripesize)
 
 		re.swap_filen = (off_t) j / (off_t) blocksize + (off_t) ((off_t) stripeid * (off_t) stripesize / (off_t) blocksize);
 
-
-		if (! write_swaplog_entry(1, &re)) {
+		if (! write_swaplog_entry(stdout, &re)) {
 			rebuild_entry_done(&re);
 			return -1;
 		}
@@ -107,7 +106,7 @@ coss_rebuild_dir(const char *file, size_t stripesize, int blocksize, int numstri
 		return 0;
 	}
 
-	storeSwapLogPrintHeader(1);	
+	storeSwapLogPrintHeader(stdout);	
 
 	for(blksize_bits = 0;((blocksize >> blksize_bits) > 0);blksize_bits++) {
 		if( ((blocksize >> blksize_bits) > 0) &&
@@ -122,7 +121,7 @@ coss_rebuild_dir(const char *file, size_t stripesize, int blocksize, int numstri
 	for (cur_stripe = 0; cur_stripe < numstripes; cur_stripe++) {
 		getCurrentTime();
 		debug(85, 5) ("COSS: %s: STRIPE: %d\n", file, cur_stripe);
-		storeSwapLogPrintProgress(1, cur_stripe, numstripes);
+		storeSwapLogPrintProgress(stdout, cur_stripe, numstripes);
 		if (cur_stripe % report_interval == 0) {
 			debug(85, 1) ("COSS[%d]: %s: Rebuilding %.2f%% complete (%d out of %d stripes)\n",
 			    pid, file, (float) cur_stripe / (float) numstripes * 100.0, cur_stripe, numstripes);
@@ -141,7 +140,8 @@ coss_rebuild_dir(const char *file, size_t stripesize, int blocksize, int numstri
 			break;
 	}
 	close(fd);
-	storeSwapLogPrintCompleted(1);	
+	storeSwapLogPrintCompleted(stdout);	
+	fflush(stdout);
 
 	safe_free(buf);
 	return 1;

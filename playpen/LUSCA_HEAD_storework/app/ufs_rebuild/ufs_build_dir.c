@@ -102,7 +102,7 @@ rebuild_from_dir(store_ufs_dir_t *sd)
 	for (i = 0; i < store_ufs_l1(sd); i++) {
 		for (j = 0; j < store_ufs_l2(sd); j++) {
 			(void) store_ufs_createDir(sd, i, j, dir);
-			if (! storeSwapLogPrintProgress(1, (sd->l2 * i) + j, (sd->l1 * sd->l2)))
+			if (! storeSwapLogPrintProgress(stdout, (sd->l2 * i) + j, (sd->l1 * sd->l2)))
 				return;
 
 			getCurrentTime();
@@ -133,7 +133,7 @@ rebuild_from_dir(store_ufs_dir_t *sd)
 				rebuild_entry_init(&re);
 				(void) read_file(path, &re);
 				re.swap_filen = fn;
-				if (! write_swaplog_entry(1, &re)) {
+				if (! write_swaplog_entry(stdout, &re)) {
 					debug(47, 1) ("read_dir: write() failed: (%d) %s\n", errno, xstrerror());
 					rebuild_entry_done(&re);
 					return;

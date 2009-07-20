@@ -16,6 +16,8 @@
 #include "ufs_build_dir.h"
 #include "ufs_build_log.h"
 
+#define	WRITE_BUFFER_LEN	65536
+
 int shutting_down = 0;
 
 typedef enum {
@@ -46,16 +48,23 @@ main(int argc, char *argv[])
 	const char *cmd;
 	store_ufs_dir_t store_ufs_info;
 	rebuild_type_t rebuild_type;
-
-	/* Setup the debugging library */
-	_db_init("ALL,1");
-	_db_set_stderr_debug(1);
+	char *wbuf = NULL;
 
 	if (argc < 5) {
 		usage(argv[0]);
 		exit(1);
 	}
 	cmd = argv[1];
+
+	wbuf = malloc(WRITE_BUFFER_LEN);
+	if (wbuf) {
+		setbuffer(stdout, wbuf, WRITE_BUFFER_LEN);
+	}
+
+	/* Setup the debugging library */
+	_db_init("ALL,1");
+	_db_set_stderr_debug(1);
+
 
 	store_ufs_init(&store_ufs_info, argv[2], atoi(argv[3]), atoi(argv[4]), argv[5]);
 
@@ -71,7 +80,7 @@ main(int argc, char *argv[])
 	}
 
 	/* Output swap header to stdout */
-	(void) storeSwapLogPrintHeader(1);
+	(void) storeSwapLogPrintHeader(stdout);
 
 	if (rebuild_type == REBUILD_DISK)
 		rebuild_from_dir(&store_ufs_info);
@@ -79,7 +88,8 @@ main(int argc, char *argv[])
 		rebuild_from_log(&store_ufs_info);
 
 	store_ufs_done(&store_ufs_info);
-	(void) storeSwapLogPrintCompleted(1);
+	(void) storeSwapLogPrintCompleted(stdout);
+	fflush(stdout);
 
 	return 0;
 }

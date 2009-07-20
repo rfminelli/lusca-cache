@@ -113,7 +113,7 @@ parse_header(char *buf, int len, rebuild_entry_t *re)
 }
 
 int
-write_swaplog_entry(int fd, rebuild_entry_t *re)
+write_swaplog_entry(FILE *fp, rebuild_entry_t *re)
 {
 	storeSwapLogData sd;
 
@@ -128,7 +128,7 @@ write_swaplog_entry(int fd, rebuild_entry_t *re)
 	sd.flags = re->mi.flags;
 
 	memcpy(&sd.key, re->md5_key, sizeof(sd.key));
-	if (write(fd, &sd, sizeof(sd)) <= 0)
+	if (fwrite(&sd, sizeof(sd), 1, fp) < 1)
 		return 0;
 	return 1;
 }

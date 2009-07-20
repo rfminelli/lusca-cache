@@ -50,7 +50,7 @@ rebuild_log_progress(FILE *fp, size_t s, int num_objects)
 {
 	struct stat sb;
 	if (0 == fstat(fileno(fp), &sb)) {
-		if (! storeSwapLogPrintProgress(1, num_objects, (int) sb.st_size / s))
+		if (! storeSwapLogPrintProgress(stdout, num_objects, (int) sb.st_size / s))
 			return 0;
 	}
 	return 1;
@@ -158,7 +158,7 @@ rebuild_from_log(store_ufs_dir_t *ufs)
 	}
 
 	/* begin echo'ing the log info */
-	storeSwapLogPrintHeader(1);	/* to stdout */
+	storeSwapLogPrintHeader(stdout);
 
 	/* Now - loop over until eof or error */
 	while (! feof(fp)) {
