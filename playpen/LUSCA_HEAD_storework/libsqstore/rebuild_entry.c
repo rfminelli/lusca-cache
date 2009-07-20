@@ -100,6 +100,8 @@ parse_header(char *buf, int len, rebuild_entry_t *re)
 	    case STORE_META_OBJSIZE:
 		debug(47, 5) ("  STORE_META_OBJSIZE\n");
 		/* XXX is this typecast'ed to the right "size" on all platforms ? */
+		re->file_size = *((squid_off_t *) t->value);
+		parsed++;
 		break;
 	    default:
 		break;
