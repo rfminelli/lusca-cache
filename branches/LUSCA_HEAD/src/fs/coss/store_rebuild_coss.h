@@ -6,8 +6,6 @@ struct _RebuildState {
     SwapDir *sd;
     int n_read;
     FILE *log;
-    int report_interval;
-    int report_current;
     struct {
         unsigned int clean:1;
     } flags;
@@ -18,6 +16,15 @@ struct _RebuildState {
         int fresher;
         int unknown;
     } cosscounts;
+    struct {
+	int r_fd, w_fd;
+	pid_t pid;
+    } helper;
+    struct {
+        char *buf;
+        int size;
+        int used;
+   } rbuf;
 };
 
 extern void storeCossDirRebuild(SwapDir * sd);

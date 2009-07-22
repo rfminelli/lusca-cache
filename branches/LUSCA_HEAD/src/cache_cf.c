@@ -475,6 +475,8 @@ configDoConfigure(void)
 	requirePathnameExists("location_rewrite_program", Config.Program.location_rewrite.command->key);
     requirePathnameExists("Icon Directory", Config.icons.directory);
     requirePathnameExists("Error Directory", Config.errorDirectory);
+    requirePathnameExists("UFS rebuild helper", Config.Program.ufs_log_build);
+    requirePathnameExists("COSS rebuild helper", Config.Program.coss_log_build);
     authenticateConfigure(&Config.authConfig);
     externalAclConfigure();
     refreshCheckConfigure();

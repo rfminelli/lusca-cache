@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/errno.h>
 
 #include "../include/config.h"
 #include "../include/squid_md5.h"
@@ -10,6 +12,8 @@
 #include "../libcore/varargs.h"
 #include "../libcore/kb.h"
 #include "../libcore/tools.h"	/* for SQUID_MAXPATHLEN */
+
+#include "../libsqdebug/debug.h"
 
 #include "store_mgr.h"
 #include "store_log.h"
@@ -83,4 +87,36 @@ store_ufs_filenum_correct_dir(store_ufs_dir_t *sd, int fn, int F1, int F2)
     if (F2 != D2)
         return 0;
     return 1;
+}
+
+/*
+ * Check whether the given UFS storedir has a valid logfile to rebuild from
+ *
+ * This is mostly ripped from what was inferred from src/fs/aufs/store_dir_aufs.c
+ *
+ * In summary:
+ * + If there is no logfile, return false
+ * + Is the logfile 0 bytes long? return false
+ *
+ * Note that this isn't at all atomic - the file isn't opened here at all.
+ * It is possible that the log will change status between this check and
+ * a subsequent attempt at using it. Code should thus not assume that
+ * "true" from this guarantees the logfile will be correct.
+ */
+int
+store_ufs_has_valid_rebuild_log(store_ufs_dir_t *sd)
+{
+	struct stat sb;
+	int x;
+
+	x = stat(sd->swaplog_path, &sb);
+	if (x < 0) {
+		debug(47, 1) ("store_ufs_has_valid_rebuild_log: %s: no valid swaplog found: (%d) %s\n", sd->swaplog_path, errno, xstrerror());
+		return 0;
+	}
+
+	if (sb.st_size == 0)
+		return 0;
+
+	return 1;
 }

@@ -18,6 +18,9 @@ const char * swap_log_op_str[] = {
     "SWAP_LOG_ADD",
     "SWAP_LOG_DEL",
     "SWAP_LOG_VERSION",
+    "SWAP_LOG_PROGRESS",
+    "SWAP_LOG_COMPLETED",
+    "SWAP_LOG_ERROR",
     "SWAP_LOG_MAX"
 };
 
@@ -39,7 +42,7 @@ storeSwapLogUpgradeEntry(storeSwapLogData *dst, storeSwapLogDataOld *src)
 }
 
 int
-storeSwapLogPrintHeader(int fd)
+storeSwapLogPrintHeader(FILE *fp)
 {
     char buf[sizeof(storeSwapLogData)];
     storeSwapLogHeader *sh = (storeSwapLogHeader *) buf;
@@ -48,6 +51,38 @@ storeSwapLogPrintHeader(int fd)
     sh->op = SWAP_LOG_VERSION;
     sh->version = 1;
     sh->record_size = sizeof(storeSwapLogData);
-    return write(1, sh, sizeof(storeSwapLogData));
+    if (fwrite(buf, sizeof(storeSwapLogData), 1, fp) < 1)
+        return 0;
+    return 1;
+}
+
+int
+storeSwapLogPrintCompleted(FILE *fp)
+{
+    char buf[sizeof(storeSwapLogData)];
+    storeSwapLogCompleted *sh = (storeSwapLogCompleted *) buf;
+
+    bzero(buf, sizeof(buf));
+    sh->op = SWAP_LOG_COMPLETED;
+    if (fwrite(buf, sizeof(storeSwapLogData), 1, fp) < 1)
+        return 0;
+    return 1;
+}
+
+int
+storeSwapLogPrintProgress(FILE *fp, u_int32_t progress, u_int32_t total)
+{
+        char buf[128];
+        storeSwapLogProgress *sp = (storeSwapLogProgress *) buf;
+
+        bzero(buf, sizeof(buf));
+        sp->op = SWAP_LOG_PROGRESS;
+        sp->total = total;
+        sp->progress = progress;
+
+        /* storeSwapLogData is the record size */
+        if (fwrite(buf, sizeof(storeSwapLogData), 1, fp) < 1)
+                return 0;
+        return 1;
 }
 
