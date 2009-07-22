@@ -117,7 +117,6 @@ coss_rebuild_dir(const char *file, size_t stripesize, int blocksize, int numstri
 		}
 	}
 
-	/* XXX this should loop over numstripes and try seek+read; doing it this way means we -could- read too much.. */
 	for (cur_stripe = 0; cur_stripe < numstripes; cur_stripe++) {
 		getCurrentTime();
 		debug(85, 5) ("COSS: %s: STRIPE: %d\n", file, cur_stripe);
