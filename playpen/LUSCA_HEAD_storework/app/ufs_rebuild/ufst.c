@@ -1,9 +1,8 @@
 
 /*
- * This program provides the "rebuild" logic for a UFS spool.
  *
- * It will scan a UFS style directory for valid looking swap files
- * and spit out a new style swap log to STDOUT.
+ * This is a bit of a hack to evaluate how quickly one could rebuild the UFS bitmap
+ * before slowly rebuilding the index.
  *
  * Adrian Chadd <adrian@creative.net.au>
  */
