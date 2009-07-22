@@ -156,10 +156,6 @@ struct _cossinfo {
     int curstripe;
     struct {
 	char rebuilding;
-	char reading;
-	int curstripe;
-	char *buf;
-	int buflen;
     } rebuild;
     int max_disk_nf;
 

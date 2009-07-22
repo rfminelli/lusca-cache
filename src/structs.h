@@ -548,6 +548,7 @@ struct _SquidConfig {
 #endif
 	char *diskd;
 	char *ufs_log_build;
+	char *coss_log_build;
 #if USE_SSL
 	char *ssl_password;
 #endif

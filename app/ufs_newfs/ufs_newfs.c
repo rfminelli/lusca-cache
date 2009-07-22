@@ -4,6 +4,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include "include/config.h"
+#include "include/util.h"
+
 #include "libcore/tools.h"
 #include "libcore/varargs.h"
 #include "libsqdebug/debug.h"
