@@ -22,6 +22,16 @@ The cache is then ready to serve and store content once validation and cleanup i
 
 This needs to be better documented. How the proxy stores or doesn't store content during rebuild, whether temporary disk files are still used anywhere, etc.
 
+= Swap metadata =
+
+Each swap file has a small binary TLV-encoded metadata header which contains information about the object - including size, URL, store key, refresh/expiry information and such.
+
+= Swap log entries =
+
+A swap log contains one header entry and zero or more swap log entries. The swap log header and support code attempts to support "small" (32-bit) and "large" (64-bit) swap log formats where the default system "off_t" is 32 bits. This needs to be documented better (ie, the --enable-large-cache-files stuff.)
+
+The first entry is type SWAP_LOG_VERSION. This contains a version and record_size. The record size is compared against the size of the 32-bit and 64-bit versions of the structure. It chooses the correct one and uses that for subsequent records.
+
 = Squid Rebuild Information =
 
 == AUFS ==
