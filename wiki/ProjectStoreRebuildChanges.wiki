@@ -26,6 +26,12 @@ Modify the AUFS swaplog writing code to use asynchronous IO somehow. This can ei
 
 Modify the AUFS swaplog reading code to use an external helper. External helper programs already exist which implement "cat swaplog" and "generate a swaplog from the directory contents".
 
+= Code Projects =
+
+  * /playpen/LUSCA_HEAD_storework - implement the store rebuild helper framework; migrate AUFS/COSS to use it - *done*
+  * /playpen/LUSCA_HEAD_store_clean_log_work - look at the method used to write out the clean swap logs (for squid -k rotate, squid -k shutdown, etc) and document/tidy it up in preparation for asynchronous swaplog writing
+
+
 = Completed tasks =
 
   * The helper process has been completed - it generates a stream of swaplog entries from either a logfile or the directory itself.
