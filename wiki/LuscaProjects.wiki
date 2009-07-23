@@ -5,8 +5,7 @@
   * /playpen/LUSCA_HEAD_module - code modularisation work (shared object support)
   * /playpen/LUSCA_HEAD_strref - reference counted NUL terminated C strings (cheap string dup())
   * /playpen/LUSCA_HEAD_http_vector - vectorize the HttpHeaderEntry allocation to dramatically reduce malloc/free calls
-  * /playpen/LUSCA_HEAD_storework - [ProjectStoreRebuildChanges] - store IO layer related work
-
+  * /playpen/LUSCA_HEAD_store_clean_log_work - [ProjectStoreRebuildChanges] - work on the clean store log writing process
 
 = Stale Development =
 
@@ -14,4 +13,5 @@
 
 = Completed Development =
 
-  * /playpen/LUSCA_HEAD_errorpages - pretty error page template generation framework stuff
+  * /playpen/LUSCA_HEAD_errorpages - pretty error page template generation framework stuff  
+  * /playpen/LUSCA_HEAD_storework - [ProjectStoreRebuildChanges] - introduce store rebuild helpers; tidy up rebuild logic
