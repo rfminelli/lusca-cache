@@ -7,8 +7,8 @@
 #include "include/config.h"
 #include "include/util.h"
 
-#include "libcore/tools.h"
 #include "libcore/varargs.h"
+#include "libcore/tools.h"
 #include "libsqdebug/debug.h"
 #include "libsqstore/store_file_ufs.h"
 
