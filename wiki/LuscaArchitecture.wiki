@@ -32,7 +32,7 @@ This architecture overview is not designed to be completely thorough; it is mean
   * [LuscaArchitectureStoreDisk] - the store disk layer
 
   * [LuscaArchitectureStoreShortcomings] - shortcomings in the current storage layer
-  * [LuscaArchitectureStoreRebuildProcess] - how Lusca rebuilds the store index at startup
+  * [LuscaArchitectureStoreRebuilding] - how Lusca rebuilds the store index at startup
 
 == Network framework ==
 
