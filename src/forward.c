@@ -524,7 +524,6 @@ fwdConnectCreateSocket(FwdState *fwdState, FwdServer *fs)
     debug(17, 3) ("fwdConnectStart: got addr %s, tos %d\n", inet_ntoa(outgoing), tos);
 
     /* If tproxy then try with the tproxy details. If this fails then retry w/ non-tproxy */
-    /* XXX at the moment the local port is still 0; should this change to support FreeBSD's tproxy derivative? -adrian */
     if (fwdState->request->flags.tproxy) {
         fd = comm_open(SOCK_STREAM, IPPROTO_TCP, fwdState->src.sin_addr, 0,
           COMM_NONBLOCKING | COMM_TPROXY_REM, tos, url);
