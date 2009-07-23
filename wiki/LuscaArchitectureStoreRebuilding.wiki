@@ -53,3 +53,11 @@ This process is IO and CPU intensive. The large, linear reads performed to read 
 This process however does happen asynchronously.
 
 = Lusca Rebuild Process =
+
+Lusca has modified the rebuild process to use external helpers to implement the rebuild decision and logic.
+
+The rebuild helpers pipe swap log entries to the main process. The main process thus does not need to know how the cache is being rebuilt; only the resultant cache entries.
+
+The swap log format has been extended to include a SWAP_LOG_PROGRESS entry to report the rebuild process, and SWAP_LOG_COMPLETED to properly delineate the end of the rebuild process.
+
+More information can be gleaned from the source - src/app/coss_rebuild/ and src/app/ufs_rebuild/ for the rebuild applications.
