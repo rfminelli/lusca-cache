@@ -1,0 +1,25 @@
+#summary How Lusca rebuilds the store index at startup
+
+= Introduction =
+
+Squid and Lusca load in the entire object index into memory upon startup. This process has changed significantly in Lusca from around r14221. This page will document both methods.
+
+= Overview =
+
+Squid and Lusca both begin the process of rebuilding the storage indexes at process startup. Each store dir begins the process of rebuilding itself via the storedir "init" function.
+
+At startup, "store_dirs_rebuild" is set to 1 and storeRebuildStart() is called to setup the rebuild progress structures.
+
+The storedir rebuild code is responsible for loading in objects, comparing newly loaded in objects with the contents of the cache to see whether an object is "fresher" than an existing copy.
+
+The storedir rebuild code periodically calls storeRebuildProcess() to log how far the rebuild process has progressed.
+
+A storedir calls "storeRebuildComplete()" when the rebuild process has completed. This schedules "storeCleanup()" to begin periodically running to remove invalid and expired entries.
+
+The cache is then ready to serve and store content once validation and cleanup is complete.
+
+= Running during rebuilding =
+
+This needs to be better documented. How the proxy stores or doesn't store content during rebuild, whether temporary disk files are still used anywhere, etc.
+
+= Squid Rebuild Information =
