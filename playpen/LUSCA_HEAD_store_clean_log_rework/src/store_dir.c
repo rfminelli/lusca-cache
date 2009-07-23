@@ -399,6 +399,24 @@ storeDirCloseSwapLogs(void)
     }
 }
 
+static int
+storeDirObjectIsCleanWrite(const StoreEntry *e)
+{
+    if (e->swap_filen < 0)
+	return 0;
+    if (e->swap_status != SWAPOUT_DONE)
+	return 0;
+    if (e->swap_file_sz <= 0)
+	return 0;
+    if (EBIT_TEST(e->flags, RELEASE_REQUEST))
+	return 0;
+    if (EBIT_TEST(e->flags, KEY_PRIVATE))
+	return 0;
+    if (EBIT_TEST(e->flags, ENTRY_SPECIAL))
+	return 0;
+    return 1;
+}
+
 /*
  *  storeDirWriteCleanLogs
  * 
@@ -445,18 +463,9 @@ storeDirWriteCleanLogs(int reopen)
 	    if (!e)
 		continue;
 	    notdone = 1;
-	    if (e->swap_filen < 0)
+	    if (! storeDirObjectIsCleanWrite(e))
 		continue;
-	    if (e->swap_status != SWAPOUT_DONE)
-		continue;
-	    if (e->swap_file_sz <= 0)
-		continue;
-	    if (EBIT_TEST(e->flags, RELEASE_REQUEST))
-		continue;
-	    if (EBIT_TEST(e->flags, KEY_PRIVATE))
-		continue;
-	    if (EBIT_TEST(e->flags, ENTRY_SPECIAL))
-		continue;
+
 	    (sd->log.clean.write) (sd, e);
 	    if ((++n & 0xFFFF) == 0) {
 		getCurrentTime();
