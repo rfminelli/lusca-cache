@@ -23,3 +23,23 @@ The cache is then ready to serve and store content once validation and cleanup i
 This needs to be better documented. How the proxy stores or doesn't store content during rebuild, whether temporary disk files are still used anywhere, etc.
 
 = Squid Rebuild Information =
+
+== AUFS ==
+
+The AUFS rebuild process starts via a call to storeAufsDirRebuild(). This attempts to determine whether a valid swap log is available and chooses whether to rebuild by log or by directory.
+
+If the storedir is being rebuilt via swaplog, a periodic event is scheduled which reads in a fixed number of entries from the swaplog file, adds them to the cache as appropriate, and re-schedules a subsequent read to occur at a later time.
+
+If the storedir is being rebuild via directory, a periodic event is scheduled which walks the storedir and reads in the metadata from a fixed number of swap files. It then re-schedules a subsequent event to occur at a later time to repeat the process until all directories have been checked.
+
+Both of these processes use blocking POSIX IO and as such do not parallelise well. In some very limited cases (eg when the operating system is doing read-ahead) the rebuild-by-log process can parallelise but it requires the read-ahead to keep ahead of how much data is being read at any given time. The process will block on disk IO if more data is requested.
+
+== COSS ==
+
+The COSS rebuild process simply schedules an async read (via aioRead()) to read in a stripe at a time. It then looks through the stripe for valid swap objects and adds them to the cache as appropriate.
+
+This process is IO and CPU intensive. The large, linear reads performed to read the entire stripe contents may easily saturate available bus resources on a large cache.
+
+This process however does happen asynchronously.
+
+= Lusca Rebuild Process =
