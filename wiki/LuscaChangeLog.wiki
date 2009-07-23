@@ -1,5 +1,12 @@
 #summary Changes between Lusca Versions
 
+= Changes between Lusca-1.0 and Lusca-HEAD-r14228 =
+
+  * The store dir rebuild logic has been re-implemented using external processes to improve performance and code clarity.
+  * The client and server side socket buffer sizes are now separately tunable.
+  * The async IO thread count is now configurable at run-time rather than compile time.
+  * The async IO code has been moved into a separate library and tweaked to perform slightly better under load.
+
 = Changes between Squid-2.HEAD and Lusca-1.0 =
 
   * Squid-2 defaults to use async disk operations for disk read() / open() ; Lusca uses the async disk operations for -all- operations. This improves performance on FreeBSD/Solaris, where write() / close() may block more often than not.
