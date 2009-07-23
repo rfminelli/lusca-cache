@@ -105,6 +105,9 @@ read_entry(FILE *fp, int version)
 	return 1;
 }
 
+
+#define READ_BUFFER_LEN        65536
+
 void
 rebuild_from_log(store_ufs_dir_t *ufs)
 {
@@ -112,12 +115,17 @@ rebuild_from_log(store_ufs_dir_t *ufs)
 	storeSwapLogHeader hdr;
 	int r;
 	int version = -1;		/* -1 = not set, 0 = old, 1 = new */
+	char *rbuf;
 
 	fp = fopen(ufs->swaplog_path, "r");
 	if (! fp) {
 		perror("fopen");
 		return;
 	}
+
+	rbuf = malloc(READ_BUFFER_LEN);
+	if (rbuf)
+		setbuffer(fp, rbuf, READ_BUFFER_LEN);
 
 	/* Read an entry - see if its a swap header! */
 	r = fread(&hdr, sizeof(hdr), 1, fp);
