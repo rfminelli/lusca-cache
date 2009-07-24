@@ -435,7 +435,8 @@ storeDirWriteCleanLogs(int reopen)
     double dt;
     SwapDir *sd;
     int dirn;
-    int notdone = 1;
+    hash_link *walker = NULL;
+
     if (store_dirs_rebuilding) {
 	debug(20, 1) ("Not currently OK to rewrite swap log.\n");
 	debug(20, 1) ("storeDirWriteCleanLogs: Operation aborted.\n");
@@ -444,6 +445,8 @@ storeDirWriteCleanLogs(int reopen)
     debug(20, 1) ("storeDirWriteCleanLogs: Starting...\n");
     getCurrentTime();
     start = current_time;
+
+
     for (dirn = 0; dirn < Config.cacheSwap.n_configured; dirn++) {
 	sd = &Config.cacheSwap.swapDirs[dirn];
 	if (sd->log.clean.start == NULL)
@@ -453,6 +456,25 @@ storeDirWriteCleanLogs(int reopen)
 	    continue;
 	}
     }
+
+    hash_first(store_table);
+    while ((walker = hash_next(store_table))) {
+        e = (StoreEntry *) walker;	/* This works because hash table items have the hash struct as their first member */
+	assert(e);
+	if (e->swap_dirn == -1)
+	    continue;
+	if (! storeDirObjectIsCleanWrite(e))
+	    continue;
+	sd = &Config.cacheSwap.swapDirs[e->swap_dirn];
+	(sd->log.clean.write) (sd, e);
+	if ((++n & 0xFFFF) == 0) {
+	    getCurrentTime();
+	    debug(20, 1) ("  %7d entries written so far.\n", n);
+	}
+    }
+    hash_last(store_table);
+
+#if 0
     while (notdone) {
 	notdone = 0;
 	for (dirn = 0; dirn < Config.cacheSwap.n_configured; dirn++) {
@@ -466,13 +488,9 @@ storeDirWriteCleanLogs(int reopen)
 	    if (! storeDirObjectIsCleanWrite(e))
 		continue;
 
-	    (sd->log.clean.write) (sd, e);
-	    if ((++n & 0xFFFF) == 0) {
-		getCurrentTime();
-		debug(20, 1) ("  %7d entries written so far.\n", n);
-	    }
 	}
     }
+#endif
     /* Flush */
     for (dirn = 0; dirn < Config.cacheSwap.n_configured; dirn++) {
 	sd = &Config.cacheSwap.swapDirs[dirn];
