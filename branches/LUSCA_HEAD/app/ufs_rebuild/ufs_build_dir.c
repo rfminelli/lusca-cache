@@ -82,7 +82,13 @@ read_file(const char *path, rebuild_entry_t *re)
 		close(fd);
 		return 0;
 	}
-	re->file_size = sb.st_size;
+	if (re->hdr_size < 0) {
+		close(fd);
+		return 0;
+	}
+	/* The total UFS file size is inclusive of swap metadata, reply status+headers and body */
+	/* re->file_size is exclusive of swap metadata. Make sure that is set correctly */
+	re->file_size = sb.st_size - re->hdr_size;
 	close(fd);
 	return 1;
 }

@@ -97,6 +97,10 @@ parse_header(char *buf, int len, rebuild_entry_t *re)
 		memcpy(&re->mi, t->value, sizeof(re->mi));
 		parsed++;
 		break;
+
+	    /* Undocumented mess! */
+	    /* STORE_META_OBJSIZE is the objectLen(). It includes the reply headers but not the swap metadata */
+	    /* swap_file_sz in the rebuild entry data is the objectLen() + swap_hdr_size */
 	    case STORE_META_OBJSIZE:
 		debug(47, 5) ("  STORE_META_OBJSIZE\n");
 		/* XXX is this typecast'ed to the right "size" on all platforms ? */
@@ -123,7 +127,15 @@ write_swaplog_entry(FILE *fp, rebuild_entry_t *re)
 	sd.lastref = re->mi.lastref;
 	sd.expires = re->mi.expires;
 	sd.lastmod = re->mi.lastmod;
-	sd.swap_file_sz = re->file_size;
+	/*
+	 * If we get here - either file_size must be set by the parser above
+	 * or by some other method (eg UFS dir rebuild will use stat()
+	 * and then substract the swap header length.
+	 */
+	if (re->file_size < 0 || re->hdr_size < 0)
+		return -1;
+
+	sd.swap_file_sz = re->hdr_size + re->file_size;
 	sd.refcount = re->mi.refcount;
 	sd.flags = re->mi.flags;
 
