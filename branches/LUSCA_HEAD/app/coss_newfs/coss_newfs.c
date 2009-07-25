@@ -9,8 +9,8 @@
 #include "include/config.h"
 #include "include/util.h"
 
-#include "libcore/tools.h"
 #include "libcore/varargs.h"
+#include "libcore/tools.h"
 #include "libsqdebug/debug.h"
 
 int shutting_down = 0;	/* needed for debug routines for now */
