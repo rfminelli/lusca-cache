@@ -86,18 +86,19 @@ storeMetaText(storeSwapLogData *d)
 void
 read_file(const char *path)
 {
-	int fd;
-	char buf[BUFSIZE];
-	int len;
+	FILE *fp;
+#if 0
 	storeSwapLogHeader *hdr;
-	storeSwapLogData *se;
+#endif
+	storeSwapLogData se;
 
-	fd = open(path, O_RDONLY);
- 	if (fd < 0) {
-		perror("open");
+	fp = fopen(path, "rb");
+	if (! fp) {
+		perror("fopen");
 		return;
 	}
 
+#if 0
 	/* read the header */
 	len = read(fd, buf, sizeof(storeSwapLogData));
 	if (len < 0) {
@@ -118,14 +119,14 @@ read_file(const char *path)
 
 	printf("swaplog header version: %d; record size: %d\n", hdr->version, hdr->record_size);
 	printf("size of current swaplog entry: %d\n", sizeof(storeSwapLogData));
+#endif
 
 	/* Start reading entries */
-	while ((len = read(fd, buf, sizeof(storeSwapLogData))) > 0) {
-		se = (storeSwapLogData *) buf;
-		printf(  "Entry: %s\n", storeMetaText(se));
+	while (fread(&se, sizeof(se), 1, fp) == 1) {
+		printf(  "Entry: %s\n", storeMetaText(&se));
 	}
 
-	close(fd);
+	fclose(fp);
 }
 
 int
