@@ -509,6 +509,14 @@ getOutgoingTOS(request_t * request)
     return aclMapTOS(Config.accessList.outgoing_tos, &ch);
 }
 
+/*
+ * Create the outbound socket to the given forward server.
+ *
+ * This function handles the socket creation side of the forwarding process.
+ * It will look up the current TOS and outbound IP address to use.
+ * If the tproxy flag is set then TPROXY is attempted; the per-peer no-tproxy
+ * override is checked here.
+ */
 static int
 fwdConnectCreateSocket(FwdState *fwdState, FwdServer *fs)
 {
@@ -516,15 +524,19 @@ fwdConnectCreateSocket(FwdState *fwdState, FwdServer *fs)
     struct in_addr outgoing;
     unsigned short tos;
     const char *url = storeUrl(fwdState->entry);
+    int do_tproxy = 1;
 
     outgoing = getOutgoingAddr(fwdState->request);
     tos = getOutgoingTOS(fwdState->request);
     fwdState->request->out_ip = outgoing;
 
+    if (fwdState->servers && fwdState->servers->peer && fwdState->servers->peer->options.no_tproxy)
+        do_tproxy = 0;
+
     debug(17, 3) ("fwdConnectStart: got addr %s, tos %d\n", inet_ntoa(outgoing), tos);
 
     /* If tproxy then try with the tproxy details. If this fails then retry w/ non-tproxy */
-    if (fwdState->request->flags.tproxy) {
+    if (fwdState->request->flags.tproxy && do_tproxy) {
         fd = comm_open(SOCK_STREAM, IPPROTO_TCP, fwdState->src.sin_addr, 0,
           COMM_NONBLOCKING | COMM_TPROXY_REM, tos, url);
     }
@@ -552,6 +564,7 @@ fwdConnectStart(void *data)
     struct in_addr outgoing;
     unsigned short tos;
     int idle = -1;
+    int do_tproxy = 1;
 
     assert(fs);
     assert(fwdState->server_fd == -1);
@@ -601,7 +614,15 @@ fwdConnectStart(void *data)
 	fwdRestart(fwdState);
 	return;
     }
-    if (fd == -1 && fwdState->request->flags.tproxy)
+
+    /*
+     * Check whether an idle pconn exists for this given host.
+     * If the current forward server is a peer then make sure the peer
+     * allows tproxy or we don't bother doing the tproxy-based lookup.
+     */
+    if (fs->peer && fs->peer->options.no_tproxy)
+	do_tproxy = 0;
+    if (fd == -1 && fwdState->request->flags.tproxy && do_tproxy)
 	fd = pconnPop(name, port, domain, &fwdState->request->client_addr, 0, NULL);
     if (fd == -1) {
 	fd = pconnPop(name, port, domain, NULL, 0, &idle);

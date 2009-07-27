@@ -1898,6 +1898,8 @@ parse_peer(peer ** head)
 	    p->idle = xatoi(token + 5);
 	} else if (strcmp(token, "http11") == 0) {
 	    p->options.http11 = 1;
+	} else if (strcmp(token, "no-tproxy") == 0) {
+	    p->options.no_tproxy = 1;
 	} else {
 	    debug(3, 0) ("parse_peer: token='%s'\n", token);
 	    self_destruct();

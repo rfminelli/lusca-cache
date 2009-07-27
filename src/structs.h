@@ -1248,6 +1248,7 @@ struct _peer {
 	unsigned int sourcehash:1;
 	unsigned int carp:1;
 	unsigned int http11:1;	/* HTTP/1.1 support */
+	unsigned int no_tproxy:1;
     } options;
     int weight;
     struct {

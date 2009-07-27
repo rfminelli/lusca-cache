@@ -1363,6 +1363,9 @@ dump_peer_options(StoreEntry * sentry, peer * p)
 	else
 	    storeAppendPrintf(sentry, " monitorsize=%d", p->monitor.min);
     }
+    if (p->options.no_tproxy)
+	storeAppendPrintf(sentry, " no-tproxy");
+
     if (p->domain)
 	storeAppendPrintf(sentry, " forceddomain=%s", p->domain);
     if (p->connect_fail_limit != PEER_TCP_MAGIC_COUNT)

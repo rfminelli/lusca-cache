@@ -1551,6 +1551,7 @@ DOC_START
 		     connection-auth[=on|off|auto]
 		     idle=n
 		     http11
+		     no-tproxy
 
 		     use 'proxy-only' to specify objects fetched
 		     from this cache should not be saved locally.
@@ -1798,6 +1799,10 @@ DOC_START
 		     Note: The HTTP/1.1 support is still incomplete, with an
 		     internal HTTP/1.0 hop. As result 1xx responses will not
 		     be forwarded.
+
+		     Use 'no-tproxy' to not use the client-spoof TPROXY support
+		     when forwarding requests; instead simply use the normal
+		     source selection method (eg tcp_outgoing_addr.)
 DOC_END
 
 NAME: cache_peer_domain cache_host_domain
