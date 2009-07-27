@@ -357,6 +357,7 @@ storeCossDirStats(SwapDir * SD, StoreEntry * sentry)
 	storeAppendPrintf(sentry, " READ-ONLY");
     storeAppendPrintf(sentry, "\n");
     storeAppendPrintf(sentry, "Pending Relocations: %d\n", cs->pending_reloc_count);
+    storeAppendPrintf(sentry, "Current Stripe: %d\n", cs->curstripe);
     membufsDump(cs, sentry);
 }
 
@@ -416,7 +417,7 @@ storeCossDirParse(SwapDir * sd, int index, char *path)
     sd->log.clean.nextentry = NULL;
     sd->log.clean.done = NULL;
 
-    cs->current_offset = 0;
+    cs->current_offset = -1;
     cs->fd = -1;
     cs->swaplog_fd = -1;
     cs->numcollisions = 0;

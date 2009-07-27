@@ -48,7 +48,6 @@ storeCossRebuildComplete(void *data)
     RebuildState *rb = data;
     SwapDir *SD = rb->sd;
     CossInfo *cs = SD->fsdata;
-    storeCossStartMembuf(SD);
     store_dirs_rebuilding--;
     storeRebuildComplete(&rb->counts);
     debug(47, 1) ("COSS: %s: Rebuild Completed\n", stripePath(SD));
@@ -58,7 +57,21 @@ storeCossRebuildComplete(void *data)
     safe_free(rb->rbuf.buf);
     debug(47, 1) ("  %d objects scanned, %d objects relocated, %d objects fresher, %d objects ignored\n",
         rb->counts.scancount, rb->cosscounts.reloc, rb->cosscounts.fresher, rb->cosscounts.unknown);
+    if (rb->recent.timestamp > -1 && rb->recent.swap_filen > -1) {
+	cs->curstripe = storeCossFilenoToStripe(cs, rb->recent.swap_filen);
+        debug(47, 1) ("  Current stripe set to %d\n", cs->curstripe);
+    }
+    storeCossStartMembuf(SD);
     cbdataFree(rb);
+}
+
+static void
+storeCoss_updateRecent(RebuildState *rb, storeSwapLogData *d)
+{
+	if (d->timestamp < rb->recent.timestamp)
+		return;
+	rb->recent.timestamp = d->timestamp;
+	rb->recent.swap_filen = d->swap_filen;
 }
 
 static void
@@ -133,6 +146,7 @@ storeCoss_ConsiderStoreEntry(RebuildState * rb, const cache_key * key, storeSwap
 	rb->cosscounts.new++;
 	debug(47, 3) ("COSS: Adding filen %d\n", d->swap_filen);
 	/* no clash! woo, can add and forget */
+	storeCoss_updateRecent(rb, d);
 	storeCoss_AddStoreEntry(rb, key, d);
 	return;
     }
@@ -148,6 +162,7 @@ storeCoss_ConsiderStoreEntry(RebuildState * rb, const cache_key * key, storeSwap
 	rb->cosscounts.fresher++;
 	storeCoss_DeleteStoreEntry(rb, key, oe);
 	oe = NULL;
+	storeCoss_updateRecent(rb, d);
 	storeCoss_AddStoreEntry(rb, key, d);
 	return;
     }
@@ -160,6 +175,7 @@ storeCoss_ConsiderStoreEntry(RebuildState * rb, const cache_key * key, storeSwap
 	rb->cosscounts.reloc++;
 	storeCoss_DeleteStoreEntry(rb, key, oe);
 	oe = NULL;
+	storeCoss_updateRecent(rb, d);
 	storeCoss_AddStoreEntry(rb, key, d);
 	return;
     }
@@ -284,6 +300,8 @@ storeCossDirRebuild(SwapDir * sd)
     rb = cbdataAlloc(RebuildState);
     rb->sd = sd;
     rb->flags.clean = (unsigned int) clean;
+    rb->recent.swap_filen = -1;
+    rb->recent.timestamp = -1;
     debug(20, 1) ("Rebuilding COSS storage in %s (DIRTY)\n", stripePath(sd));
     store_dirs_rebuilding++;
     storeDirCoss_StartDiskRebuild(rb);

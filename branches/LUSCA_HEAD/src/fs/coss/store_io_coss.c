@@ -134,6 +134,10 @@ storeCossAllocate(SwapDir * SD, const StoreEntry * e, int which)
     sfileno f;
     sfileno checkf;
 
+    /* This needs to be explicitly set to something after rebuilding has finished */
+    if (cs->current_offset < 0)
+        return -1;
+
     /* Make sure we chcek collisions if reallocating */
     if (which == COSS_ALLOC_REALLOC) {
 	checkf = e->swap_filen;
@@ -946,9 +950,10 @@ storeCossStartMembuf(SwapDir * sd)
      * The rebuild logic doesn't 'know' to pad out the current
      * offset to make it a multiple of COSS_MEMBUF_SZ.
      */
-    newmb = storeCossCreateMemBuf(sd, 0, -1, NULL);
+    newmb = storeCossCreateMemBuf(sd, cs->curstripe, -1, NULL);
     assert(!cs->current_membuf);
     cs->current_membuf = newmb;
+    cs->current_offset = cs->current_membuf->diskstart;
 
     newmb = storeCossCreateMemOnlyBuf(sd);
     assert(!cs->current_memonly_membuf);
