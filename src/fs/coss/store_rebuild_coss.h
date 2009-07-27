@@ -11,6 +11,10 @@ struct _RebuildState {
     } flags;
     struct _store_rebuild_data counts;
     struct {
+	sfileno swap_filen;
+	time_t timestamp;
+    } recent;
+    struct {
         int new;
         int reloc;
         int fresher;
