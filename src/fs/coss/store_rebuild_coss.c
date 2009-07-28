@@ -261,7 +261,7 @@ storeDirCoss_StartDiskRebuild(RebuildState * rb)
 
     args[0] = Config.Program.coss_log_build;
     args[1] = "rebuild";
-    args[2] = SD->path;
+    args[2] = stripePath(SD);
     args[3] = block_size;
     args[4] = stripe_size;
     args[5] = num_stripes;
