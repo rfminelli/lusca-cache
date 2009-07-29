@@ -6,6 +6,7 @@
   * The client and server side socket buffer sizes are now separately tunable.
   * The async IO thread count is now configurable at run-time rather than compile time.
   * The async IO code has been moved into a separate library and tweaked to perform slightly better under load.
+  * TPROXY2, TPROXY4 and FreeBSD TPROXY support has been added and is in production in a variety of sites. This all needs to be better documented though!
   * The AUFS and COSS storage rebuild logic has been overhauled. Rebuilding is now done by using external helper processes which run the rebuild code completely in parallel, freeing up Lusca to handle requests as fast as possible.
   * COSS will now start writing from the last known written stripe, rather than starting from the beginning of the disk.
   * A new cache_peer option has been added - "no-tproxy" - which forces the cache peer to ignore client-spoofing for connections to it and instead use the normal source address selection mechanism via tcp_outgoing_address.
