@@ -192,9 +192,23 @@ strRChr(String *s, char ch)
 	return -1;
 }
 
+/*
+ * Cut the given string at the given offset.
+ * "offset" -should- be less than the length of the string but
+ * at least the client_side X-Forwarded-For code currently (ab)uses
+ * the API and passes in an out of bounds iterator. In this case,
+ * don't cut the string.
+ */
 extern void
 strCut(String *s, int offset)
 {
+	/*
+	 * XXX this should eventually be removed and all code
+	 * XXX which triggers it should be fixed!
+	 */
+	if (offset >= strLen(*s))
+		return;
+
 	assert(offset < strLen(*s));
 	s->buf[offset] = '\0';
 	s->len = offset;
