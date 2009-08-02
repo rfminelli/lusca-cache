@@ -71,6 +71,7 @@ read_file(const char *path, rebuild_entry_t *re)
 
 	/* We need the entire file size */
 	if (fstat(fd, &sb) < 0) {
+		close(fd);
 		perror("fstat");
 		return 0;
 	}
