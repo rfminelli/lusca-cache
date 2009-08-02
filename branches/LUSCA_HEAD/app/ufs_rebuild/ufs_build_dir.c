@@ -144,12 +144,14 @@ rebuild_from_dir(store_ufs_dir_t *sd)
 				debug(47, 3) ("read_dir: opening %s\n", path);
 
 				rebuild_entry_init(&re);
-				(void) read_file(path, &re);
-				re.swap_filen = fn;
-				if (! write_swaplog_entry(stdout, &re)) {
-					debug(47, 1) ("read_dir: write() failed: (%d) %s\n", errno, xstrerror());
-					rebuild_entry_done(&re);
-					return;
+				/* Only write out the swap entry if the file metadata was correctly read */
+				if (read_file(path, &re)) {
+					re.swap_filen = fn;
+					if (! write_swaplog_entry(stdout, &re)) {
+						debug(47, 1) ("read_dir: write() failed: (%d) %s\n", errno, xstrerror());
+						rebuild_entry_done(&re);
+						return;
+					}
 				}
 				rebuild_entry_done(&re);
 
