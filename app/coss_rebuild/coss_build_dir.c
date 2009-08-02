@@ -46,7 +46,7 @@ parse_stripe(int stripeid, char *buf, int len, int blocksize, size_t stripesize)
 			return 0;
 		}
 
-		debug(85, 5) ("  Object: (filen %d)\n", j / blocksize + (stripeid * stripesize / blocksize));
+		debug(85, 5) ("  Object: (filen %ld)\n", (long int) (j / blocksize + (stripeid * stripesize / blocksize)));
 		debug(85, 5) ("  URL: %s\n", re.url);
 		debug(85, 5) ("  hdr_size: %d\n", (int) re.hdr_size);
 		debug(85, 5) ("  file_size: %d\n", (int) re.file_size);
