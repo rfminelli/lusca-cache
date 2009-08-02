@@ -76,6 +76,12 @@ read_file(const char *path, rebuild_entry_t *re)
 		return 0;
 	}
 
+	/* If the file is zero length - may have been truncated instead of deleted */
+	if (sb.st_size == 0) {
+		close(fd);
+		return 0;
+	}
+
 	len = read(fd, buf, BUFSIZE);
 	debug(47, 3) ("read_file: FILE: %s\n", path);
 
