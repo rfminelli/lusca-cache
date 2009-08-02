@@ -96,7 +96,7 @@ coss_rebuild_dir(const char *file, size_t stripesize, int blocksize, int numstri
 
 	buf = malloc(stripesize);
 	if (! buf) {
-		debug(85, 1) ("%s: couldn't allocated %d bytes for rebuild buffer: (%d) %s\n", file, stripesize, errno, xstrerror());
+		debug(85, 1) ("%s: couldn't allocated %ld bytes for rebuild buffer: (%d) %s\n", file, (long int) stripesize, errno, xstrerror());
 		return 0;
 	}
 
