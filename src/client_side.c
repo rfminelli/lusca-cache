@@ -2854,11 +2854,6 @@ clientAlwaysAllowResponse(http_status sline)
     }
 }
 
-static void clientHttpLocationRewriteCheck(clientHttpRequest * http);
-static void clientHttpLocationRewriteCheckDone(int answer, void *data);
-static void clientHttpLocationRewrite(clientHttpRequest * http);
-static void clientHttpLocationRewriteDone(void *data, char *reply);
-static void clientHttpReplyAccessCheck(clientHttpRequest * http);
 static void clientHttpReplyAccessCheckDone(int answer, void *data);
 static void clientCheckErrorMap(clientHttpRequest * http);
 static void clientCheckHeaderDone(clientHttpRequest * http);
@@ -2966,69 +2961,7 @@ clientSendHeaders(void *data, HttpReply * rep)
     clientHttpLocationRewriteCheck(http);
 }
 
-static void
-clientHttpLocationRewriteCheck(clientHttpRequest * http)
-{
-    HttpReply *rep = http->reply;
-    aclCheck_t *ch;
-    if (!Config.Program.location_rewrite.command || !httpHeaderHas(&rep->header, HDR_LOCATION)) {
-	clientHttpLocationRewriteDone(http, NULL);
-	return;
-    }
-    if (Config.accessList.location_rewrite) {
-	ch = clientAclChecklistCreate(Config.accessList.location_rewrite, http);
-	ch->reply = http->reply;
-	aclNBCheck(ch, clientHttpLocationRewriteCheckDone, http);
-    } else {
-	clientHttpLocationRewriteCheckDone(ACCESS_ALLOWED, http);
-    }
-}
-
-static void
-clientHttpLocationRewriteCheckDone(int answer, void *data)
-{
-    clientHttpRequest *http = data;
-    if (answer == ACCESS_ALLOWED) {
-	clientHttpLocationRewrite(http);
-    } else {
-	clientHttpLocationRewriteDone(http, NULL);
-    }
-}
-
-static void
-clientHttpLocationRewrite(clientHttpRequest * http)
-{
-    HttpReply *rep = http->reply;
-    if (!httpHeaderHas(&rep->header, HDR_LOCATION))
-	clientHttpLocationRewriteDone(http, NULL);
-    else
-	locationRewriteStart(rep, http, clientHttpLocationRewriteDone, http);
-}
-
-static void
-clientHttpLocationRewriteDone(void *data, char *reply)
-{
-    clientHttpRequest *http = data;
-    HttpReply *rep = http->reply;
-    ConnStateData *conn = http->conn;
-    if (reply && *reply) {
-	httpHeaderDelById(&rep->header, HDR_LOCATION);
-	if (*reply == '/') {
-	    /* We have to restore the URL as sent by the client */
-	    request_t *req = http->orig_request;
-	    const char *proto = conn->port->protocol;
-	    const char *host = httpHeaderGetStr(&req->header, HDR_HOST);
-	    if (!host)
-		host = req->host;
-	    httpHeaderPutStrf(&rep->header, HDR_LOCATION, "%s://%s%s", proto, host, reply);
-	} else {
-	    httpHeaderPutStr(&rep->header, HDR_LOCATION, reply);
-	}
-    }
-    clientHttpReplyAccessCheck(http);
-}
-
-static void
+void
 clientHttpReplyAccessCheck(clientHttpRequest * http)
 {
     aclCheck_t *ch;
