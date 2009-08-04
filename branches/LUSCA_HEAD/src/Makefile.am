@@ -127,6 +127,7 @@ squid_SOURCES = \
 	client_side.c \
 	client_side_rewrite.c \
 	client_side_storeurl_rewrite.c \
+	client_side_location_rewrite.c \
 	comm.c \
 	defines.h \
 	$(DELAY_POOL_SOURCE) \

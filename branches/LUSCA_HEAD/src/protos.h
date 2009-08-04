@@ -1071,6 +1071,7 @@ extern int httpMsgParseRequestHeader(request_t * req, HttpMsgBuf * hmsg);
 extern int httpMsgFindHeadersEnd(HttpMsgBuf * hmsg);
 
 /* client_side.c */
+extern void clientHttpReplyAccessCheck(clientHttpRequest * http);	/* entry back into client_side.c from the location rewrite code */
 extern aclCheck_t *clientAclChecklistCreate(const acl_access * acl, const clientHttpRequest * http);
 extern void clientInterpretRequestHeaders(clientHttpRequest * http);
 extern void clientAccessCheck2(void *data);
@@ -1091,5 +1092,7 @@ extern void statIappStats(StoreEntry *sentry);
 /* comm.c */
 extern void commConnectStart(int fd, const char *, u_short, CNCB *, void *, struct in_addr *addr);
 
+/* client_side_location_rewrite.c */
+extern void clientHttpLocationRewriteCheck(clientHttpRequest * http);
 
 #endif /* SQUID_PROTOS_H */
