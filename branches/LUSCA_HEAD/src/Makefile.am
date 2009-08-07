@@ -58,14 +58,6 @@ else
 WIN32SOURCE = 
 endif
 
-if ENABLE_MINGW32SPECIFIC
-MINGWEXLIB = -lmingwex
-IPC_SOURCE = ipc_win32.c
-else
-MINGWEXLIB =
-IPC_SOURCE = ipc.c
-endif
-
 SUBDIRS		= fs repl auth
 
 INCLUDES        = -I. -I$(srcdir) -I$(top_builddir)/include -I$(top_srcdir)/include
@@ -109,8 +101,6 @@ EXTRA_squid_SOURCES = \
 	comm_kqueue.c \
 	comm_devpoll.c \
 	comm_generic.c \
-	ipc.c \
-	ipc_win32.c \
 	win32.c
 
 squid_SOURCES = \
@@ -161,7 +151,6 @@ squid_SOURCES = \
 	icp_v2.c \
 	icp_v3.c \
 	internal.c \
-	$(IPC_SOURCE) \
 	ipcache.c \
 	$(LEAKFINDERSOURCE) \
 	locrewrite.c \
