@@ -22,6 +22,12 @@ The client-side code then parses the headers from the store and determines wheth
 
 == Handling range replies from the store ==
 
+== Aborting transfers (and not caching) ==
+
+One of the current side-effects with the range request handling is that a forwarded request is aborted once the last active client has been satisfied. This turns potentially cachable replies into aborted, uncachable replies.
+
+For now, the only way to work around is to twiddle quick_abort_min to never abort an in-progress, cachable request.
+
 = Issues and Limitations =
 
 == Non-range replies to range requests ==
