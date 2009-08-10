@@ -1,4 +1,5 @@
 #summary An example of a too-large reply body
+#labels Weird-HTTP-Example
 
 URL example: http://sugg.search.yahoo.net/sg/?output=fxjsonp&nresults=10&command=scrim
 
