@@ -1,4 +1,5 @@
 #summary An overview of the Lusca Web Proxy/Cache Architecture
+#labels Architecture
 
 = Introduction =
 
@@ -42,7 +43,6 @@ This architecture overview is not designed to be completely thorough; it is mean
   * [LuscaArchitectureNetworkCloseHandlers] - the processing which occurs on socket and filedescriptor close
   * [LuscaArchitectureNetworkConnectingToRemoteHosts] - the "Squid way" of asynchronously connecting to a remote host
 
-
 == HTTP processing framework ==
 
   * [LuscaArchitectureClientSide] - the client-side path, handling client requests
@@ -50,4 +50,8 @@ This architecture overview is not designed to be completely thorough; it is mean
   * [LuscaArchitecturePeerSelection] - various peer selection methods
   * [LuscaArchitectureHttpServerSide] - the HTTP server-side path, communicating to peers and servers
   * [LuscaArchitectureFtpServerSide] - the FTP server-side path, communicating to FTP servers
+
+== Unsorted Entries =
+
+  * [LuscaArchitectureRangeRequests] - how Range requests and responses are handled, processed and cached
   
