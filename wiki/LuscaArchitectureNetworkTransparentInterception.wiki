@@ -1,4 +1,5 @@
 #summary The hooks into network transparency.
+#labels Architecture
 
 = Introduction =
 
