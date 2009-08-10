@@ -1,4 +1,5 @@
 #summary How Range Requests are handled inside Lusca
+#labels Architecture
 
 = Introduction =
 
