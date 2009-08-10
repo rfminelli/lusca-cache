@@ -30,6 +30,12 @@ For now, the only way to work around is to twiddle quick_abort_min to never abor
 
 = Issues and Limitations =
 
+== Aborting transfers on cachable range request replies ==
+
+TODO: flesh this out and think about how a "slightly better" hack would look
+
+== Inability to cache actual range replies! ==
+
 == Non-range replies to range requests ==
 
 TODO: I'm not certain what will happen if an upstream/origin returns a partial reply that contains more than the requested ranges. I -believe- it will just be returned verbatim. This hasn't yet been an issue in the wild?
