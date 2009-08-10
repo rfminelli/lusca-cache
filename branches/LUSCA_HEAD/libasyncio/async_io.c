@@ -100,16 +100,7 @@ typedef struct squidaio_ctrl_t {
     dlink_node node;
 } squidaio_ctrl_t;
 
-static struct {
-    int open;
-    int close;
-    int cancel;
-    int write;
-    int read;
-    int stat;
-    int unlink;
-    int check_callback;
-} squidaio_counts;
+struct squidaio_stat squidaio_counts;
 
 typedef struct squidaio_unlinkq_t {
     char *path;
@@ -131,10 +122,6 @@ aioInit(void)
     if (initialised)
 	return;
     squidaio_ctrl_pool = memPoolCreate("aio_ctrl", sizeof(squidaio_ctrl_t));
-#if 0
-    cachemgrRegister("squidaio_counts", "Async IO Function Counters",
-	aioStats, 0, 1);
-#endif
     initialised = 1;
 }
 
@@ -482,25 +469,6 @@ aioCheckCallbacks(void)
     }
     return retval;
 }
-
-#if 0
-void
-aioStats(StoreEntry * sentry)
-{
-    storeAppendPrintf(sentry, "ASYNC IO Counters:\n");
-    storeAppendPrintf(sentry, "Operation\t# Requests\n");
-    storeAppendPrintf(sentry, "open\t%d\n", squidaio_counts.open);
-    storeAppendPrintf(sentry, "close\t%d\n", squidaio_counts.close);
-    storeAppendPrintf(sentry, "cancel\t%d\n", squidaio_counts.cancel);
-    storeAppendPrintf(sentry, "write\t%d\n", squidaio_counts.write);
-    storeAppendPrintf(sentry, "read\t%d\n", squidaio_counts.read);
-    storeAppendPrintf(sentry, "stat\t%d\n", squidaio_counts.stat);
-    storeAppendPrintf(sentry, "unlink\t%d\n", squidaio_counts.unlink);
-    storeAppendPrintf(sentry, "check_callback\t%d\n", squidaio_counts.check_callback);
-    storeAppendPrintf(sentry, "queue\t%d\n", squidaio_get_queue_len());
-    squidaio_stats(sentry);
-}
-#endif
 
 /*!
  * @function

@@ -85,5 +85,7 @@ squidaio_result_t *squidaio_poll_done(void);
 int squidaio_operations_pending(void);
 int squidaio_sync(void);
 int squidaio_get_queue_len(void);
+squidaio_thread_t * squidaio_get_thread_head(void);
+
 
 #endif
