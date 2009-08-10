@@ -1078,6 +1078,9 @@ extern void clientAccessCheck2(void *data);
 extern void clientFinishRewriteStuff(clientHttpRequest * http);
 extern int connStateGetCount(void);
 
+/* client_side_nat.c */
+extern int clientNatLookup(ConnStateData * conn);
+
 /* client_side_redirect.c */
 extern void clientRedirectStart(clientHttpRequest * http);
 
