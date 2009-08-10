@@ -12,6 +12,19 @@ extern int squidaio_nthreads;
 extern int squidaio_magic1;
 extern int squidaio_magic2;
 
+struct squidaio_stat {
+    int open;
+    int close;
+    int cancel;
+    int write;
+    int read;
+    int stat;
+    int unlink;
+    int check_callback;
+};
+
+extern struct squidaio_stat squidaio_counts;
+
 /* Base number of threads if not specified to configure.
  * Weighted by number of directories (see aiops.c) */
 #define THREAD_FACTOR 16

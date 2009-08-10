@@ -877,3 +877,13 @@ squidaio_debug(squidaio_request_t * request)
 	break;
     }
 }
+
+/*
+ * This is purely to get the thread list for stats in src/stat.c .
+ * Please don't use it for anything else.
+ */
+squidaio_thread_t *
+squidaio_get_thread_head(void)
+{
+	return threads;
+}
