@@ -1,4 +1,5 @@
 #summary A HTTP reply body where one shouldn't be
+#labels Weird-HTTP-Example
 
 = Packet capture =
 
