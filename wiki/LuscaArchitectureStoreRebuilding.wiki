@@ -1,4 +1,5 @@
 #summary How Lusca rebuilds the store index at startup
+#labels Architecture
 
 = Introduction =
 
