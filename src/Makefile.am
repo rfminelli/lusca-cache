@@ -115,6 +115,7 @@ squid_SOURCES = \
 	cbdata.c \
 	client_db.c \
 	client_side.c \
+	client_side_nat.c \
 	client_side_rewrite.c \
 	client_side_storeurl_rewrite.c \
 	client_side_location_rewrite.c \
