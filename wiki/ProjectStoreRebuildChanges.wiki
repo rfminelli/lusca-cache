@@ -1,4 +1,5 @@
 #summary Notes about the current rebuild logic and what needs to change
+#labels Project
 
 = Introduction =
 
