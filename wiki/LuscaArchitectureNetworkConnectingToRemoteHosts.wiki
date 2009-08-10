@@ -1,4 +1,5 @@
 #summary How the Squid codebase connects to remote hosts
+#labels Architecture
 
 = Introduction =
 
