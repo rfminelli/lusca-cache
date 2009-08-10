@@ -1,4 +1,5 @@
 #summary Ongoing development projects
+#labels Project
 
 = Ongoing Development =
 
