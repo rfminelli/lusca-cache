@@ -1,4 +1,5 @@
 #summary TPROXY - fully transparent client and server proxying support
+#labels Feature
 
 = Introduction =
 
