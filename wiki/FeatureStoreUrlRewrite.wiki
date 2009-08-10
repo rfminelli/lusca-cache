@@ -1,4 +1,5 @@
 #summary Store URL rewriting - re-writing URLs to different cache keys to unify cache content
+#labels Feature
 
 = Introduction =
 
