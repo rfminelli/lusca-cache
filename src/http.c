@@ -1359,6 +1359,8 @@ httpBuildRequestHeader(request_t * request,
 	we_do_ranges = 0;
     else if (orig_request->flags.auth)
 	we_do_ranges = 0;
+    else if (Config.rangeOffsetLimit < 0)
+        we_do_ranges = 1;
     else if (httpHdrRangeOffsetLimit(orig_request->range))
 	we_do_ranges = 0;
     else
