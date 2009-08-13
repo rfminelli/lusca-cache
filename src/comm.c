@@ -204,9 +204,9 @@ commResetFD(ConnectStateData * cs)
      */
     assert(F->local_port == sqinet_get_port(&F->local_address));
     if (F->flags.tproxy_rem) {
-        debug(1, 1) ("commResetFD: FD %d: re-starting a tproxy'ed upstream connection\n", cs->fd);
+        debug(5, 3) ("commResetFD: FD %d: re-starting a tproxy'ed upstream connection\n", cs->fd);
         if (comm_ips_bind_rem(cs->fd, &F->local_address) != COMM_OK) {
-            debug(1, 1) ("commResetFD: FD %d: TPROXY comm_ips_bind_rem() failed? Why?\n", cs->fd);
+            debug(5, 1) ("commResetFD: FD %d: TPROXY comm_ips_bind_rem() failed? Why?\n", cs->fd);
             return 0;
         }
     } else if (commBind(cs->fd, &F->local_address) != COMM_OK) {
