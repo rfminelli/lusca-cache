@@ -1689,7 +1689,7 @@ aioStats(StoreEntry * sentry)
 
     threadp = squidaio_get_thread_head();
     for (i = 0; i < squidaio_nthreads; i++) {
-        storeAppendPrintf(sentry, "%i\t0x%lx\t%ld\n", i + 1, threadp->thread, threadp->requests);
+        storeAppendPrintf(sentry, "%i\t0x%lx\t%ld\n", i + 1, (long int) threadp->thread, threadp->requests);
         threadp = threadp->next;
     }
 }
