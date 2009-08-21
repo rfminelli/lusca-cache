@@ -7,12 +7,12 @@ This is from my local lab. It should work in production.
 
 = Overview =
 
-* Debian unstable - includes a tproxy4 enabled kernel
-* Lusca-head
-* Cisco 3750 running advanced IP services
-* clients on Vlan10 - IP 192.168.10.0/24
-* internet on vlan11- IP 192.168.11.0/24
-* lusca/proxy on vlan9 - IP 192.168.9.0/24
+  * Debian unstable - includes a tproxy4 enabled kernel
+  * Lusca-head
+  * Cisco 3750 running advanced IP services
+  * clients on Vlan10 - IP 192.168.10.0/24
+  * internet on vlan11- IP 192.168.11.0/24
+  * lusca/proxy on vlan9 - IP 192.168.9.0/24
 
 The Cisco 3750 has limited WCCPv2 support. It only supports "in" redirection on an interface, not "out". It also does not support "deny" in the redirect lists in hardware. The redirect lists are ALLOW only with an implicit "deny any" at the end.
 
@@ -50,6 +50,12 @@ ip access-list extended IP_WCCP_REDIRECT_INT
 
 == Linux Config ==
 
+
+=== Extra packages ===
+
+   * libcap2
+   * libcap-dev
+
 === /root/tproxy.sh ===
 {{{
 #!/bin/sh
@@ -69,5 +75,16 @@ sysctl net.ipv4.ip_nonlocal_bind=1
 sysctl net.ipv4.ip_forward=1
 }}}
 
-
 == Lusca Config ==
+
+=== Compile Options ===
+
+{{{
+  configure options: '--prefix="/home/adrian/work/lusca/run' '--enable-storeio=aufs null' '--with-large-files' '--enable-large-cache-files' '--enable-snmp' '--enable-linux-tproxy4'
+}}
+
+=== Configuration ===
+
+visible_hostname 192.168.9.13
+http_port 0.0.0.0:3129 transparent tproxy
+http_port localhost:3128
