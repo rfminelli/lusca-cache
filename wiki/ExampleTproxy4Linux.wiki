@@ -81,10 +81,26 @@ sysctl net.ipv4.ip_forward=1
 
 {{{
   configure options: '--prefix="/home/adrian/work/lusca/run' '--enable-storeio=aufs null' '--with-large-files' '--enable-large-cache-files' '--enable-snmp' '--enable-linux-tproxy4'
-}}
+}}}
 
 === Configuration ===
 
+{{{
 visible_hostname 192.168.9.13
 http_port 0.0.0.0:3129 transparent tproxy
 http_port localhost:3128
+
+wccp2_router 192.168.9.1
+
+wccp2_service dynamic 80
+wccp2_service_info 80 protocol=tcp flags=src_ip_hash priority=240 ports=80
+
+wccp2_service_dynamic 90
+wccp2_service_info 90 protocol=tcp flags=dst_ip_hash,ports_source priority=240 ports=80
+
+# L2 forwarding
+wccp2_forwarding_method 2
+# L2 return
+wccp2_return_method 2
+# Mask assignment method
+wccp2_assignment_method 2
