@@ -95,7 +95,7 @@ wccp2_router 192.168.9.1
 wccp2_service dynamic 80
 wccp2_service_info 80 protocol=tcp flags=src_ip_hash priority=240 ports=80
 
-wccp2_service_dynamic 90
+wccp2_service dynamic 90
 wccp2_service_info 90 protocol=tcp flags=dst_ip_hash,ports_source priority=240 ports=80
 
 # L2 forwarding
