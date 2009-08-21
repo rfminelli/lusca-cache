@@ -1,0 +1,49 @@
+#summary A basic WCCPv2, TPROXY-4, Linux example setup
+
+= Introduction =
+
+This is from my local lab. It should work in production.
+
+= Overview =
+
+* Debian unstable - includes a tproxy4 enabled kernel
+* Lusca-head
+* Cisco 3750 running advanced IP services
+* clients on Vlan10 - IP 192.168.10.0/24
+* internet on vlan11- IP 192.168.11.0/24
+* lusca/proxy on vlan9 - IP 192.168.9.0/24
+
+The Cisco 3750 has limited WCCPv2 support. It only supports "in" redirection on an interface, not "out". It also does not support "deny" in the redirect lists in hardware. The redirect lists are ALLOW only with an implicit "deny any" at the end.
+
+The redirect lists used here are to redirect traffic to/from the client ranges to the proxy whilst leaving other traffic untouched.
+
+Note that the proxy servers live on a separate VLAN to the clients and internet - this way the Cisco can redirect traffic as appropriate to and from the proxy.
+
+= Details =
+
+== Cisco Config ==
+
+ip wccp 80 redirect-list IP_WCCP_REDIRECT_INT
+ip wccp 90 redirect-list IP_WCCP_REDIRECT_EXT
+!
+interface vlan10
+  description Cache Clients
+  ip address 192.168.10.1 255.255.255.0
+  ip wccp 80 redirect in
+!
+interface vlan11
+  description Cache Servers/Internet
+  ip address 192.168.11.1 255.255.255.0
+  ip wccp 90 redirect in
+!
+ip access-list extended IP_WCCP_REDIRECT_EXT
+  permit ip any 192.168.10.0 0.0.0.255
+!
+ip access-list extended IP_WCCP_REDIRECT_INT
+  permit ip 192.168.10.0 0.0.0.255 any
+!
+
+== Linux Config ==
+
+
+== Lusca Config ==
