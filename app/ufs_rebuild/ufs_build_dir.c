@@ -178,7 +178,7 @@ main(int argc, char *argv[])
     store_ufs_init(&store_ufs_info, argv[1], atoi(argv[2]), atoi(argv[3]), argv[4]);
 
     /* Output swap header to stdout */
-    (void) storeSwapLogPrintHeader(1);
+    (void) storeSwapLogPrintHeader(stdout);
 
     read_dir(&store_ufs_info);
     store_ufs_done(&store_ufs_info);
