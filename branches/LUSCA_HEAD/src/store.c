@@ -480,7 +480,7 @@ storeSetPrivateKey(StoreEntry * e)
 	mem->id = getKeyCounter();
 	newkey = storeKeyPrivate(mem->url, mem->method, mem->id);
     } else {
-	newkey = storeKeyPrivate("JUNK", NULL, getKeyCounter());
+	newkey = storeKeyPrivate("JUNK", urlMethodGetKnown("NONE", 4), getKeyCounter());
     }
     assert(hash_lookup(store_table, newkey) == NULL);
     EBIT_SET(e->flags, KEY_PRIVATE);
