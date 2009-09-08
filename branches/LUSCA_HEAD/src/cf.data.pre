@@ -3101,6 +3101,7 @@ DOC_START
 		 reload-into-ims
 		 ignore-reload
 		 ignore-no-cache
+		 ignore-no-store
 		 ignore-private
 		 ignore-auth
 		 stale-while-revalidate=NN
