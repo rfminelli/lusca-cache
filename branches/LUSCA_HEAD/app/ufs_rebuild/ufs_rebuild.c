@@ -68,7 +68,7 @@ main(int argc, char *argv[])
 	if ((t = getenv("SQUID_DEBUG")))
 		debug_args = xstrdup(t);
 	_db_init(debug_args);
-	_db_set_stderr_debug(1);
+	_db_set_stderr_debug(99);
 
 	store_ufs_init(&store_ufs_info, argv[2], atoi(argv[3]), atoi(argv[4]), argv[5]);
 
