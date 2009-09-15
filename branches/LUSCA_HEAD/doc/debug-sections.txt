@@ -89,3 +89,4 @@ section 82    External ACL
 section 83    SSL accelerator support
 section 84    Helper process maintenance
 section 85    COSS external helpers
+section 86    UFS rebuild helper
