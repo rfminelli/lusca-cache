@@ -9,6 +9,7 @@
 
 #include "libcore/varargs.h"
 #include "libcore/kb.h"
+#include "libcore/tools.h"
 #include "libsqdebug/debug.h"
 #include "libsqstore/store_mgr.h"
 #include "libsqstore/store_log.h"
@@ -69,6 +70,9 @@ main(int argc, char *argv[])
 		debug_args = xstrdup(t);
 	_db_init(debug_args);
 	_db_set_stderr_debug(99);
+	getCurrentTime();
+
+	debug(86, 2) ("ufs_rebuild: cmd=%s, dir=%s, l1=%d, l2=%d, swaplog=%s\n", argv[1], argv[2], atoi(argv[3]), atoi(argv[4]), argv[5]);
 
 	store_ufs_init(&store_ufs_info, argv[2], atoi(argv[3]), atoi(argv[4]), argv[5]);
 

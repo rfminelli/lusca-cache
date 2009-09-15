@@ -62,7 +62,7 @@ read_file(const char *path, rebuild_entry_t *re)
 	int len;
 	struct stat sb;
 
-	debug(47, 3) ("read_file: %s\n", path);
+	debug(86, 3) ("read_file: %s\n", path);
 	fd = open(path, O_RDONLY);
  	if (fd < 0) {
 		perror("open");
@@ -83,7 +83,7 @@ read_file(const char *path, rebuild_entry_t *re)
 	}
 
 	len = read(fd, buf, BUFSIZE);
-	debug(47, 3) ("read_file: FILE: %s\n", path);
+	debug(86, 3) ("read_file: FILE: %s\n", path);
 
 	if (! parse_header(buf, len, re)) {
 		close(fd);
@@ -119,7 +119,7 @@ rebuild_from_dir(store_ufs_dir_t *sd)
 				return;
 
 			getCurrentTime();
-			debug(47, 2) ("read_dir: opening dir %s\n", dir);
+			debug(86, 2) ("read_dir: opening dir %s\n", dir);
 			d = opendir(dir);
 			if (! d) {
 				perror("opendir");
@@ -132,23 +132,23 @@ rebuild_from_dir(store_ufs_dir_t *sd)
 
 				/* Verify that the given filename belongs in the given directory */
 				if (sscanf(de->d_name, "%x", &fn) != 1) {
-					debug(47, 1) ("read_dir: invalid %s\n", de->d_name);
+					debug(86, 1) ("read_dir: invalid %s\n", de->d_name);
 						continue;
 				}
 				if (! store_ufs_filenum_correct_dir(sd, fn, i, j)) {
-					debug(47, 1) ("read_dir: %s does not belong in %d/%d\n", de->d_name, i, j);
+					debug(86, 1) ("read_dir: %s does not belong in %d/%d\n", de->d_name, i, j);
 						continue;
 				}
 
 				snprintf(path, sizeof(path) - 1, "%s/%s", dir, de->d_name);
-				debug(47, 3) ("read_dir: opening %s\n", path);
+				debug(86, 3) ("read_dir: opening %s\n", path);
 
 				rebuild_entry_init(&re);
 				/* Only write out the swap entry if the file metadata was correctly read */
 				if (read_file(path, &re)) {
 					re.swap_filen = fn;
 					if (! write_swaplog_entry(stdout, &re)) {
-						debug(47, 1) ("read_dir: write() failed: (%d) %s\n", errno, xstrerror());
+						debug(86, 1) ("read_dir: write() failed: (%d) %s\n", errno, xstrerror());
 						rebuild_entry_done(&re);
 						return;
 					}
