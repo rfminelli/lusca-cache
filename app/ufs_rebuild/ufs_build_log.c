@@ -71,9 +71,12 @@ read_entry(FILE *fp, int version)
 	char buf[128];
 	storeSwapLogData sd;
 
+
 	r = fread(buf, rebuild_entry_size(version), 1, fp);
 	if (r != 1) {
-		debug(1, 2) ("fread: returned %d (ferror %d)\n", r, ferror(fp));
+		if (feof(fp))
+			return 0;
+		debug(86, 2) ("fread: returned %d (ferror %d)\n", r, ferror(fp));
 		return 0;
 	}
 	num_objects++;
@@ -94,11 +97,11 @@ read_entry(FILE *fp, int version)
 	if (sd.op == SWAP_LOG_ADD || sd.op == SWAP_LOG_DEL) {
 		num_valid_objects++;
 		if (fwrite(&sd, sizeof(sd), 1, stdout) != 1) {
-			debug(47, 1) ("write failed: (%d) %s\n", errno, xstrerror());
+			debug(86, 1) ("write failed: (%d) %s\n", errno, xstrerror());
 			return 0;
 		}
 	} else {
-		debug(1, 5) ("error! Got swaplog entry op %d?!\n", sd.op);
+		debug(86, 5) ("error! Got swaplog entry op %d?!\n", sd.op);
 		num_invalid_objects++;
 	}
 
@@ -151,7 +154,7 @@ rebuild_from_log(store_ufs_dir_t *ufs)
 		} else if (hdr.version == 1 && hdr.record_size == sizeof(storeSwapLogDataOld)) {
 			version = 0;
 		} else {
-			debug(1, 1) ("Unsupported swap.state version %d size %d\n", hdr.version, hdr.record_size);
+			debug(86, 1) ("Unsupported swap.state version %d size %d\n", hdr.version, hdr.record_size);
 			fclose(fp);
 			return;
 		}
@@ -197,7 +200,7 @@ main(int argc, char *argv[])
 
     read_log_file(argv[2]);
 
-    debug(1, 1) ("%s: Read %d objects\n", argv[2], num_objects);
+    debug(86, 1) ("%s: Read %d objects\n", argv[2], num_objects);
 
     return 0;
 }
