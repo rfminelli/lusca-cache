@@ -5,6 +5,7 @@
 
 #include "include/config.h"
 #include "include/squid_md5.h"
+#include "include/util.h"
 
 #include "libcore/varargs.h"
 #include "libcore/kb.h"
@@ -48,7 +49,9 @@ main(int argc, char *argv[])
 	const char *cmd;
 	store_ufs_dir_t store_ufs_info;
 	rebuild_type_t rebuild_type;
+	char *t;
 	char *wbuf = NULL;
+	char *debug_args = "ALL,1";
 
 	if (argc < 5) {
 		usage(argv[0]);
@@ -62,9 +65,10 @@ main(int argc, char *argv[])
 	}
 
 	/* Setup the debugging library */
-	_db_init("ALL,1");
+	if ((t = getenv("SQUID_DEBUG")))
+		debug_args = xstrdup(t);
+	_db_init(debug_args);
 	_db_set_stderr_debug(1);
-
 
 	store_ufs_init(&store_ufs_info, argv[2], atoi(argv[3]), atoi(argv[4]), argv[5]);
 
