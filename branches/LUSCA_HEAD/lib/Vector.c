@@ -93,3 +93,22 @@ vector_insert(vector_t *v, int offset)
 	v->used_count++;
 	return ((char *) v->data + (v->obj_size * position));
 }
+
+int
+vector_copy_item(vector_t *v, int dst, int src)
+{
+	if (dst >= v->used_count)
+		return -1;
+	if (src >= v->used_count)
+		return -1;
+	memcpy( (char *) v->data + (dst) * v->obj_size, 
+		(char *) v->data + (src) * v->obj_size, 
+		v->obj_size );
+	return 1;
+}
+
+void
+vector_shrink(vector_t *v, int new_size)
+{
+	v->used_count = new_size;
+}
