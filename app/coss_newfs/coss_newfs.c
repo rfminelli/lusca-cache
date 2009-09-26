@@ -27,10 +27,15 @@ main(int argc, const char *argv[])
 	int fd;
 	char *buf;
 	off_t r;
+	char *t = NULL;
+	char *debug_args = "ALL,1";
 
         /* Setup the debugging library */
-        _db_init("ALL,1");
-        _db_set_stderr_debug(1);
+        if ((t = getenv("SQUID_DEBUG")))
+                debug_args = xstrdup(t);
+        _db_init(debug_args);
+        _db_set_stderr_debug(99);
+        getCurrentTime();
 
 	if (argc < 3) {
 		printf("Usage: %s <path> <stripe count> <stripe size>\n", argv[0]);
@@ -54,6 +59,7 @@ main(int argc, const char *argv[])
 		exit(127);
 	}
 	buf = xcalloc(stripe_sz, sizeof(char));
+	debug(85, 1) ("coss_newfs: %s: initialising stripe\n", path);
 
 	for (i = 0; i < sz; i += 1) {
 		getCurrentTime();
@@ -70,6 +76,7 @@ main(int argc, const char *argv[])
 		}
 	}
 	safe_free(buf);
+	debug(85, 1) ("coss_newfs: %s: finished\n", path);
 	close(fd);
 	exit(0);
 }
