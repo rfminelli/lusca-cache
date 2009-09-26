@@ -25,7 +25,7 @@ main(int argc, const char *argv[])
 	const char *path;
 	size_t i;
 	int fd;
-	char buf[256];
+	char *buf;
 	off_t r;
 
         /* Setup the debugging library */
@@ -53,7 +53,7 @@ main(int argc, const char *argv[])
 		perror("open");
 		exit(127);
 	}
-	bzero(buf, sizeof(buf));
+	buf = xcalloc(stripe_sz, sizeof(char));
 
 	for (i = 0; i < sz; i += 1) {
 		getCurrentTime();
@@ -63,14 +63,13 @@ main(int argc, const char *argv[])
 			perror("lseek");
 			exit(127);
 		}
-		r = write(fd, buf, sizeof(buf));
+		r = write(fd, buf, stripe_sz);
 		if (r < 0) {
 			perror("write");
 			exit(127);
 		}
 	}
-
+	safe_free(buf);
 	close(fd);
-
 	exit(0);
 }
