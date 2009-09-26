@@ -64,10 +64,26 @@ int
 main(int argc, const char *argv[])
 {
 	store_ufs_dir_t sd;
+        char *t = NULL;
+        char *debug_args = "ALL,1";
 
+        /* Setup the debugging library */
+        if ((t = getenv("SQUID_DEBUG")))
+                debug_args = xstrdup(t);
+        _db_init(debug_args);
+        _db_set_stderr_debug(99);
+        getCurrentTime();
+
+	if (argc < 3) {
+		printf("Usage: %s <path> <l1> <l2>\n", argv[0]);
+		exit(127);
+	}
+
+	debug(85, 1) ("ufs_newfs: %s: starting newfs\n", argv[1]);
 	store_ufs_init(&sd, argv[1], atoi(argv[2]), atoi(argv[3]), "/tmp/f");
 	storeAufsDirCreateSwapSubDirs(&sd);
 	store_ufs_done(&sd);
+	debug(85, 1) ("ufs_newfs: %s: finished newfs\n", argv[1]);
 
 	exit(0);
 }
