@@ -32,6 +32,10 @@ main(int argc, const char *argv[])
         _db_init("ALL,1");
         _db_set_stderr_debug(1);
 
+	if (argc < 3) {
+		printf("Usage: %s <path> <stripe count> <stripe size>\n", argv[0]);
+		exit(1);
+	}
 
 	path = argv[1];
 	sz = atoi(argv[2]);
