@@ -182,6 +182,7 @@ extern int commUnsetNonBlocking(int fd);
 extern void commSetCloseOnExec(int fd);
 extern int commSetTcpBufferSize(int fd, int buffer_size);
 extern void commSetTcpKeepalive(int fd, int idle, int interval, int timeout);
+extern int commGetSocketTos(int fd);
 extern int commSetTos(int fd, int tos);
 extern int commSetSocketPriority(int fd, int prio);
 extern int commSetIPOption(int fd, uint8_t option, void *value, size_t size);

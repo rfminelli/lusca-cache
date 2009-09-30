@@ -1175,6 +1175,24 @@ commSetTcpKeepalive(int fd, int idle, int interval, int timeout)
 }
 
 int
+commGetSocketTos(int fd)
+{
+	int res;
+	int tos;
+	socklen_t len;
+
+	len = sizeof(tos);
+
+#ifdef IP_TOS
+	res = getsockopt(fd, IPPROTO_IP, IP_TOS, &tos, &len);
+#else
+	errno = ENOSYS;
+	tos = -1;
+#endif
+	return tos;
+}
+
+int
 commSetTos(int fd, int tos)
 {
     int res;
