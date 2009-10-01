@@ -833,7 +833,7 @@ struct _SquidConfig {
     } aiops;
 #endif
     /* XXX I'm not sure where these should live .. */
-    int client_socksize;
+    squid_off_t client_socksize;
 };
 
 struct _SquidConfig2 {

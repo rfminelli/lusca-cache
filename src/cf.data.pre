@@ -5962,7 +5962,7 @@ DOC_END
 
 NAME: client_socksize
 COMMENT: send/receive buffer socket size for client-side
-TYPE: int
+TYPE: b_size_t
 LOC: Config.client_socksize
 DEFAULT: -1
 DOC_START
