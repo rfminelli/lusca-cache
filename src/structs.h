@@ -827,11 +827,9 @@ struct _SquidConfig {
     int max_filedescriptors;
     char *accept_filter;
     int incoming_rate;
-#if USE_AUFSOPS
     struct {
     	int n_aiops_threads;
     } aiops;
-#endif
     /* XXX I'm not sure where these should live .. */
     squid_off_t client_socksize;
 };
