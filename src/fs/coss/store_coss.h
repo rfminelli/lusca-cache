@@ -24,24 +24,6 @@ typedef struct _cossstripe CossStripe;
 
 #define SWAPDIR_COSS "coss"
 
-#if 0 &&  USE_AUFSOPS
-/* XXX a hack; the async ops should be broken out! */
-typedef void AIOCB(int fd, void *cbdata, const char *buf,
-    int aio_return, int aio_errno);
-void aioWrite(int, off_t offset, char *, int size, AIOCB *, void *, FREE *);
-void aioRead(int, off_t offset, int size, AIOCB *, void *);
-void aioInit(void);
-int aioCheckCallbacks(SwapDir *);
-void aioSync(SwapDir *);
-void squidaio_init(void);
-void squidaio_shutdown(void);
-extern int squidaio_magic1;
-int aioQueueSize(void);
-extern int squidaio_magic1;
-#define MAGIC1 squidaio_magic1
-#endif
-
-
 struct _coss_stats {
     int stripes;
     int dead_stripes;
@@ -137,9 +119,6 @@ struct _cossinfo {
     dlink_list pending_ops;
     int pending_reloc_count;
     int count;
-#if !USE_AUFSOPS
-    async_queue_t aq;
-#endif
     dlink_node *walk_current;
     unsigned int blksz_bits;
     unsigned int blksz_mask;	/* just 1<<blksz_bits - 1 */
