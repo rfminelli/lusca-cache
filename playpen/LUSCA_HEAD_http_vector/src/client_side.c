@@ -119,7 +119,7 @@ static void checkFailureRatio(err_type, hier_code);
 static void clientProcessMiss(clientHttpRequest *);
 static void clientProcessHit(clientHttpRequest * http);
 static void clientBuildReplyHeader(clientHttpRequest * http, HttpReply * rep);
-static clientHttpRequest *parseHttpRequestAbort(ConnStateData * conn, const char *uri);
+static clientHttpRequest *parseHttpRequestAbort(ConnStateData * conn, method_t ** method_p, const char *uri);
 static clientHttpRequest *parseHttpRequest(ConnStateData *, HttpMsgBuf *, method_t **, int *);
 
 static void clientCheckNoCache(clientHttpRequest *);
@@ -166,7 +166,6 @@ static void httpsAcceptSSL(ConnStateData * connState, SSL_CTX * sslContext);
 static int varyEvaluateMatch(StoreEntry * entry, request_t * request);
 static int modifiedSince(StoreEntry *, request_t *);
 static StoreEntry *clientCreateStoreEntry(clientHttpRequest *, method_t *, request_flags);
-static inline int clientNatLookup(ConnStateData * conn);
 static int clientCheckBeginForwarding(clientHttpRequest * http);
 
 static int clientside_num_conns = 0;
@@ -2854,11 +2853,6 @@ clientAlwaysAllowResponse(http_status sline)
     }
 }
 
-static void clientHttpLocationRewriteCheck(clientHttpRequest * http);
-static void clientHttpLocationRewriteCheckDone(int answer, void *data);
-static void clientHttpLocationRewrite(clientHttpRequest * http);
-static void clientHttpLocationRewriteDone(void *data, char *reply);
-static void clientHttpReplyAccessCheck(clientHttpRequest * http);
 static void clientHttpReplyAccessCheckDone(int answer, void *data);
 static void clientCheckErrorMap(clientHttpRequest * http);
 static void clientCheckHeaderDone(clientHttpRequest * http);
@@ -2899,12 +2893,12 @@ clientSendHeaders(void *data, HttpReply * rep)
 
 	if (!isTcpHit(http->log_type))
 	    tos = 0;
-	else if (Config.zph_local)
-	    tos = Config.zph_local;
 	else if (Config.zph_sibling && http->request->hier.code == SIBLING_HIT)		/* sibling hit */
 	    tos = Config.zph_sibling;
 	else if (Config.zph_parent && http->request->hier.code == PARENT_HIT)	/* parent hit */
 	    tos = Config.zph_parent;
+	else if (Config.zph_local)
+	    tos = Config.zph_local;
 	if (conn->tos_priority != tos) {
 	    conn->tos_priority = tos;
 	    switch (Config.zph_mode) {
@@ -2966,69 +2960,7 @@ clientSendHeaders(void *data, HttpReply * rep)
     clientHttpLocationRewriteCheck(http);
 }
 
-static void
-clientHttpLocationRewriteCheck(clientHttpRequest * http)
-{
-    HttpReply *rep = http->reply;
-    aclCheck_t *ch;
-    if (!Config.Program.location_rewrite.command || !httpHeaderHas(&rep->header, HDR_LOCATION)) {
-	clientHttpLocationRewriteDone(http, NULL);
-	return;
-    }
-    if (Config.accessList.location_rewrite) {
-	ch = clientAclChecklistCreate(Config.accessList.location_rewrite, http);
-	ch->reply = http->reply;
-	aclNBCheck(ch, clientHttpLocationRewriteCheckDone, http);
-    } else {
-	clientHttpLocationRewriteCheckDone(ACCESS_ALLOWED, http);
-    }
-}
-
-static void
-clientHttpLocationRewriteCheckDone(int answer, void *data)
-{
-    clientHttpRequest *http = data;
-    if (answer == ACCESS_ALLOWED) {
-	clientHttpLocationRewrite(http);
-    } else {
-	clientHttpLocationRewriteDone(http, NULL);
-    }
-}
-
-static void
-clientHttpLocationRewrite(clientHttpRequest * http)
-{
-    HttpReply *rep = http->reply;
-    if (!httpHeaderHas(&rep->header, HDR_LOCATION))
-	clientHttpLocationRewriteDone(http, NULL);
-    else
-	locationRewriteStart(rep, http, clientHttpLocationRewriteDone, http);
-}
-
-static void
-clientHttpLocationRewriteDone(void *data, char *reply)
-{
-    clientHttpRequest *http = data;
-    HttpReply *rep = http->reply;
-    ConnStateData *conn = http->conn;
-    if (reply && *reply) {
-	httpHeaderDelById(&rep->header, HDR_LOCATION);
-	if (*reply == '/') {
-	    /* We have to restore the URL as sent by the client */
-	    request_t *req = http->orig_request;
-	    const char *proto = conn->port->protocol;
-	    const char *host = httpHeaderGetStr(&req->header, HDR_HOST);
-	    if (!host)
-		host = req->host;
-	    httpHeaderPutStrf(&rep->header, HDR_LOCATION, "%s://%s%s", proto, host, reply);
-	} else {
-	    httpHeaderPutStr(&rep->header, HDR_LOCATION, reply);
-	}
-    }
-    clientHttpReplyAccessCheck(http);
-}
-
-static void
+void
 clientHttpReplyAccessCheck(clientHttpRequest * http)
 {
     aclCheck_t *ch;
@@ -3849,7 +3781,7 @@ clientProcessMiss(clientHttpRequest * http)
 CBDATA_TYPE(clientHttpRequest);
 
 static clientHttpRequest *
-parseHttpRequestAbort(ConnStateData * conn, const char *uri)
+parseHttpRequestAbort(ConnStateData * conn, method_t ** method_p, const char *uri)
 {
     clientHttpRequest *http;
     CBDATA_INIT_TYPE(clientHttpRequest);
@@ -3858,9 +3790,12 @@ parseHttpRequestAbort(ConnStateData * conn, const char *uri)
     http->start = current_time;
     http->req_sz = conn->in.offset;
     http->uri = xstrdup(uri);
+    http->log_uri = xstrdup(uri);
     http->range_iter.boundary = StringNull;
     httpBuildVersion(&http->http_ver, 1, 0);
     dlinkAdd(http, &http->active, &ClientActiveRequests);
+    if (method_p && !*method_p)
+        *method_p = urlMethodGetKnownByCode(METHOD_NONE);
     return http;
 }
 
@@ -3887,13 +3822,13 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, 
     int ret;
 
     /* pre-set these values to make aborting simpler */
-    *method_p = NULL;
+    *method_p = urlMethodGetKnownByCode(METHOD_NONE);
     *status = -1;
 
     /* Parse the request line */
     ret = httpMsgParseRequestLine(hmsg);
     if (ret == -1)
-	return parseHttpRequestAbort(conn, "error:invalid-request");
+	return parseHttpRequestAbort(conn, method_p, "error:invalid-request");
     if (ret == 0) {
 	debug(33, 5) ("Incomplete request, waiting for end of request line\n");
 	*status = 0;
@@ -3916,7 +3851,7 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, 
     /* Enforce max_request_size */
     if (req_sz >= Config.maxRequestHeaderSize) {
 	debug(33, 5) ("parseHttpRequest: Too large request\n");
-	return parseHttpRequestAbort(conn, "error:request-too-large");
+	return parseHttpRequestAbort(conn, method_p, "error:request-too-large");
     }
     /* Wrap the request method */
     method = urlMethodGet(hmsg->buf + hmsg->m_start, hmsg->m_len);
@@ -3930,7 +3865,7 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, 
     /* Make sure URL fits inside MAX_URL */
     if (hmsg->u_len >= MAX_URL) {
 	debug(33, 1) ("parseHttpRequest: URL too big (%d) chars: %s\n", hmsg->u_len, hmsg->buf + hmsg->u_start);
-	return parseHttpRequestAbort(conn, "error:request-too-large");
+	return parseHttpRequestAbort(conn, method_p, "error:request-too-large");
     }
     xmemcpy(urlbuf, hmsg->buf + hmsg->u_start, hmsg->u_len);
     /* XXX off-by-one termination error? */
@@ -4091,7 +4026,7 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, 
     dlinkDelete(&http->active, &ClientActiveRequests);
     safe_free(http->uri);
     cbdataFree(http);
-    return parseHttpRequestAbort(conn, "error:invalid-request");
+    return parseHttpRequestAbort(conn, method_p, "error:invalid-request");
 }
 
 static int
@@ -4313,11 +4248,11 @@ clientTryParseRequest(ConnStateData * conn)
 		(long int) Config.maxRequestHeaderSize);
 	    err = errorCon(ERR_TOO_BIG, HTTP_REQUEST_URI_TOO_LONG, NULL);
 	    err->src_addr = conn->peer.sin_addr;
-	    http = parseHttpRequestAbort(conn, "error:request-too-large");
+	    http = parseHttpRequestAbort(conn, &method, "error:request-too-large");
 	    /* add to the client request queue */
 	    dlinkAddTail(http, &http->node, &conn->reqs);
 	    http->log_type = LOG_TCP_DENIED;
-	    http->entry = clientCreateStoreEntry(http, NULL, null_request_flags);
+	    http->entry = clientCreateStoreEntry(http, method, null_request_flags);
 	    errorAppendEntry(http->entry, err);
 	    return -1;
 	}
@@ -4642,171 +4577,6 @@ httpAcceptDefer(int fd, void *dataunused)
     commDeferFD(fd);
     return 1;
 }
-
-#if IPF_TRANSPARENT
-static int
-clientNatLookup(ConnStateData * conn)
-{
-    struct natlookup natLookup;
-    static int natfd = -1;
-    int x;
-#if defined(IPFILTER_VERSION) && (IPFILTER_VERSION >= 4000027)
-    struct ipfobj obj;
-#else
-    static int siocgnatl_cmd = SIOCGNATL & 0xff;
-#endif
-    static time_t last_reported = 0;
-
-#if defined(IPFILTER_VERSION) && (IPFILTER_VERSION >= 4000027)
-    obj.ipfo_rev = IPFILTER_VERSION;
-    obj.ipfo_size = sizeof(natLookup);
-    obj.ipfo_ptr = &natLookup;
-    obj.ipfo_type = IPFOBJ_NATLOOKUP;
-    obj.ipfo_offset = 0;
-#endif
-
-    natLookup.nl_inport = conn->me.sin_port;
-    natLookup.nl_outport = conn->peer.sin_port;
-    natLookup.nl_inip = conn->me.sin_addr;
-    natLookup.nl_outip = conn->peer.sin_addr;
-    natLookup.nl_flags = IPN_TCP;
-    if (natfd < 0) {
-	int save_errno;
-	enter_suid();
-#ifdef IPNAT_NAME
-	natfd = open(IPNAT_NAME, O_RDONLY, 0);
-#else
-	natfd = open(IPL_NAT, O_RDONLY, 0);
-#endif
-	save_errno = errno;
-	leave_suid();
-	if (natfd >= 0)
-	    commSetCloseOnExec(natfd);
-	errno = save_errno;
-    }
-    if (natfd < 0) {
-	if (squid_curtime - last_reported > 60) {
-	    debug(50, 1) ("clientNatLookup: NAT open failed: %s\n",
-		xstrerror());
-	    last_reported = squid_curtime;
-	}
-	return -1;
-    }
-#if defined(IPFILTER_VERSION) && (IPFILTER_VERSION >= 4000027)
-    x = ioctl(natfd, SIOCGNATL, &obj);
-#else
-    /*
-     * IP-Filter changed the type for SIOCGNATL between
-     * 3.3 and 3.4.  It also changed the cmd value for
-     * SIOCGNATL, so at least we can detect it.  We could
-     * put something in configure and use ifdefs here, but
-     * this seems simpler.
-     */
-    if (63 == siocgnatl_cmd) {
-	struct natlookup *nlp = &natLookup;
-	x = ioctl(natfd, SIOCGNATL, &nlp);
-    } else {
-	x = ioctl(natfd, SIOCGNATL, &natLookup);
-    }
-#endif
-    if (x < 0) {
-	if (errno != ESRCH) {
-	    if (squid_curtime - last_reported > 60) {
-		debug(50, 1) ("clientNatLookup: NAT lookup failed: ioctl(SIOCGNATL)\n");
-		last_reported = squid_curtime;
-	    }
-	    close(natfd);
-	    natfd = -1;
-	}
-	return -1;
-    } else {
-	int natted = conn->me.sin_addr.s_addr != natLookup.nl_realip.s_addr;
-	conn->me.sin_port = natLookup.nl_realport;
-	conn->me.sin_addr = natLookup.nl_realip;
-	if (natted)
-	    return 0;
-	else
-	    return -1;
-    }
-}
-#elif LINUX_NETFILTER
-static int
-clientNatLookup(ConnStateData * conn)
-{
-    socklen_t sock_sz = sizeof(conn->me);
-    struct in_addr orig_addr = conn->me.sin_addr;
-    static time_t last_reported = 0;
-    /* If the call fails the address structure will be unchanged */
-    if (getsockopt(conn->fd, SOL_IP, SO_ORIGINAL_DST, &conn->me, &sock_sz) != 0) {
-	if (squid_curtime - last_reported > 60) {
-	    debug(50, 1) ("clientNatLookup: NF getsockopt(SO_ORIGINAL_DST) failed: %s\n", xstrerror());
-	    last_reported = squid_curtime;
-	}
-	return -1;
-    }
-    debug(33, 5) ("clientNatLookup: addr = %s", inet_ntoa(conn->me.sin_addr));
-    if (orig_addr.s_addr != conn->me.sin_addr.s_addr)
-	return 0;
-    else
-	return -1;
-}
-#elif PF_TRANSPARENT
-static int
-clientNatLookup(ConnStateData * conn)
-{
-    struct pfioc_natlook nl;
-    static int pffd = -1;
-    static time_t last_reported = 0;
-    if (pffd < 0) {
-	pffd = open("/dev/pf", O_RDONLY);
-	if (pffd >= 0)
-	    commSetCloseOnExec(pffd);
-    }
-    if (pffd < 0) {
-	debug(50, 1) ("clientNatLookup: PF open failed: %s\n",
-	    xstrerror());
-	return -1;
-    }
-    memset(&nl, 0, sizeof(struct pfioc_natlook));
-    nl.saddr.v4.s_addr = conn->peer.sin_addr.s_addr;
-    nl.sport = conn->peer.sin_port;
-    nl.daddr.v4.s_addr = conn->me.sin_addr.s_addr;
-    nl.dport = conn->me.sin_port;
-    nl.af = AF_INET;
-    nl.proto = IPPROTO_TCP;
-    nl.direction = PF_OUT;
-    if (ioctl(pffd, DIOCNATLOOK, &nl)) {
-	if (errno != ENOENT) {
-	    if (squid_curtime - last_reported > 60) {
-		debug(50, 1) ("clientNatLookup: PF lookup failed: ioctl(DIOCNATLOOK)\n");
-		last_reported = squid_curtime;
-	    }
-	    close(pffd);
-	    pffd = -1;
-	}
-	return -1;
-    } else {
-	int natted = conn->me.sin_addr.s_addr != nl.rdaddr.v4.s_addr;
-	conn->me.sin_port = nl.rdport;
-	conn->me.sin_addr = nl.rdaddr.v4;
-	if (natted)
-	    return 0;
-	else
-	    return -1;
-    }
-}
-#else
-static int
-clientNatLookup(ConnStateData * conn)
-{
-    static int reported = 0;
-    if (!reported) {
-	debug(33, 1) ("NOTICE: no explicit transparent proxy support enabled. Assuming getsockname() works on intercepted connections\n");
-	reported = 1;
-    }
-    return 0;
-}
-#endif
 
 CBDATA_TYPE(ConnStateData);
 
@@ -5193,7 +4963,11 @@ clientHttpConnectionsOpen(void)
 {
     http_port_list *s;
     int fd;
+    int comm_flags;
     for (s = Config.Sockaddr.http; s; s = s->next) {
+	comm_flags = COMM_NONBLOCKING;
+	if (s->tproxy)
+		comm_flags |= COMM_TPROXY_LCL;
 	if (MAXHTTPPORTS == NHttpSockets) {
 	    debug(1, 1) ("WARNING: You have too many 'http_port' lines.\n");
 	    debug(1, 1) ("         The limit is %d\n", MAXHTTPPORTS);
@@ -5210,7 +4984,7 @@ clientHttpConnectionsOpen(void)
 		SOCK_STREAM,
 		no_addr,
 		ntohs(s->s.sin_port),
-		COMM_NONBLOCKING,
+		comm_flags,
 		COMM_TOS_DEFAULT,
 		"HTTP Socket");
 	} else {
@@ -5219,7 +4993,7 @@ clientHttpConnectionsOpen(void)
 		IPPROTO_TCP,
 		s->s.sin_addr,
 		ntohs(s->s.sin_port),
-		COMM_NONBLOCKING,
+		comm_flags,
 		COMM_TOS_DEFAULT,
 		"HTTP Socket");
 	    leave_suid();
@@ -5233,10 +5007,11 @@ clientHttpConnectionsOpen(void)
 	 * peg the CPU with select() when we hit the FD limit.
 	 */
 	commSetDefer(fd, httpAcceptDefer, NULL);
-	debug(1, 1) ("Accepting %s HTTP connections at %s, port %d, FD %d.\n",
+	debug(1, 1) ("Accepting %s %sHTTP connections at %s, port %d, FD %d.\n",
 	    s->transparent ? "transparently proxied" :
 	    s->accel ? "accelerated" :
 	    "proxy",
+	    s->tproxy ? "and tproxy'ied " : "",
 	    inet_ntoa(s->s.sin_addr),
 	    (int) ntohs(s->s.sin_port),
 	    fd);

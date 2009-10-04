@@ -17,6 +17,26 @@ static struct {
 
 OBJH storeIOStats;
 
+static void
+storeIOFreeCB(void *data)
+{
+	storeIOState *sio = data;
+
+	assert(sio->fsstate);
+	sio->free_state(sio);
+}
+
+storeIOState *
+storeIOAllocate(FREE *state_free)
+{
+	storeIOState *sio;
+
+	CBDATA_INIT_TYPE_FREECB(storeIOState, storeIOFreeCB);
+	sio = cbdataAlloc(storeIOState);
+	sio->free_state = state_free;
+	return sio;
+}
+
 /*
  * submit a request to create a cache object for writing.
  * The StoreEntry structure is sent as a hint to the filesystem
@@ -73,7 +93,7 @@ storeOpen(StoreEntry * e, STFNCB * file_callback, STIOCB * callback,
     SwapDir *SD = &Config.cacheSwap.swapDirs[e->swap_dirn];
     store_io_stats.open.calls++;
     load = SD->checkload(SD, ST_OP_OPEN);
-    if (load < 0 || load > 1000) {
+    if (load < 0 || (Config.onoff.load_check_stopen && load > 1000)) {
 	store_io_stats.open.loadav_fail++;
 	return NULL;
     }

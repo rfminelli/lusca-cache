@@ -647,6 +647,7 @@ extern void storeFsSetup(void);
 extern void storeReplSetup(void);
 
 /* store_io.c */
+extern storeIOState * storeIOAllocate(FREE *state_free);
 extern storeIOState *storeCreate(StoreEntry *, STFNCB *, STIOCB *, void *);
 extern storeIOState *storeOpen(StoreEntry *, STFNCB *, STIOCB *, void *);
 extern void storeClose(storeIOState *);
@@ -789,8 +790,6 @@ extern void writePidFile(void);
 extern void setSocketShutdownLifetimes(int);
 extern void setMaxFD(void);
 extern void setSystemLimits(void);
-extern int percent(int, int);
-extern double dpercent(double, double);
 extern pid_t readPidFile(void);
 extern struct in_addr inaddrFromHostent(const struct hostent *hp);
 extern void debug_trap(const char *);
@@ -1072,11 +1071,15 @@ extern int httpMsgParseRequestHeader(request_t * req, HttpMsgBuf * hmsg);
 extern int httpMsgFindHeadersEnd(HttpMsgBuf * hmsg);
 
 /* client_side.c */
+extern void clientHttpReplyAccessCheck(clientHttpRequest * http);	/* entry back into client_side.c from the location rewrite code */
 extern aclCheck_t *clientAclChecklistCreate(const acl_access * acl, const clientHttpRequest * http);
 extern void clientInterpretRequestHeaders(clientHttpRequest * http);
 extern void clientAccessCheck2(void *data);
 extern void clientFinishRewriteStuff(clientHttpRequest * http);
 extern int connStateGetCount(void);
+
+/* client_side_nat.c */
+extern int clientNatLookup(ConnStateData * conn);
 
 /* client_side_redirect.c */
 extern void clientRedirectStart(clientHttpRequest * http);
@@ -1092,5 +1095,7 @@ extern void statIappStats(StoreEntry *sentry);
 /* comm.c */
 extern void commConnectStart(int fd, const char *, u_short, CNCB *, void *, struct in_addr *addr);
 
+/* client_side_location_rewrite.c */
+extern void clientHttpLocationRewriteCheck(clientHttpRequest * http);
 
 #endif /* SQUID_PROTOS_H */

@@ -81,7 +81,8 @@ struct _fde {
         unsigned int close_on_exec:1;
         unsigned int backoff:1; /* keep track of whether the fd is backed off */
         unsigned int dnsfailed:1;       /* did the dns lookup fail */
-	unsigned int tproxy:1;		/* should the source address of this FD be spoofed via comm_ips_bind()? */
+	unsigned int tproxy_lcl:1;		/* should this listen socket have its listen details spoofed via comm_ips_lcl_bind()? */
+	unsigned int tproxy_rem:1;		/* should the source address of this FD be spoofed via comm_ips_rem_bind()? */
     } flags;
     comm_pending read_pending;
     comm_pending write_pending;
@@ -181,6 +182,7 @@ extern int commUnsetNonBlocking(int fd);
 extern void commSetCloseOnExec(int fd);
 extern int commSetTcpBufferSize(int fd, int buffer_size);
 extern void commSetTcpKeepalive(int fd, int idle, int interval, int timeout);
+extern int commGetSocketTos(int fd);
 extern int commSetTos(int fd, int tos);
 extern int commSetSocketPriority(int fd, int prio);
 extern int commSetIPOption(int fd, uint8_t option, void *value, size_t size);

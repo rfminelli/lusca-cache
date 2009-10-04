@@ -102,8 +102,27 @@ comp_with_mask(u_char *addr, u_char *dest, u_int mask)
 	return (0);
 }
 
-static prefix_t 
-*New_Prefix2(int family, void *dest, int bitlen, prefix_t *prefix)
+int
+Init_Prefix(prefix_t *pfx, u_int family, void *dest, u_int bitlen)
+{
+	if (family == AF_INET6) {
+		memcpy(&pfx->add.sin6, dest, 16);
+		pfx->bitlen = (bitlen >= 0) ? bitlen : 128;
+		pfx->family = AF_INET6;
+		pfx->ref_count = 0;
+		return 1;
+	} else if (family == AF_INET) {
+		memcpy(&pfx->add.sin, dest, 4);
+		pfx->bitlen = (bitlen >= 0) ? bitlen : 32;
+		pfx->family = AF_INET;
+		pfx->ref_count = 0;
+		return 1;
+	} else
+		return 0;
+}
+
+prefix_t 
+*New_Prefix(int family, void *dest, int bitlen, prefix_t *prefix)
 {
 	int dynamic_allocated = 0;
 	int default_bitlen = 32;
@@ -144,7 +163,7 @@ static prefix_t
 		return (NULL);
 	if (prefix->ref_count == 0) {
 		/* make a copy in case of a static prefix */
-		return (New_Prefix2(prefix->family, &prefix->add,
+		return (New_Prefix(prefix->family, &prefix->add,
 		    prefix->bitlen, NULL));
 	}
 	prefix->ref_count++;
@@ -626,7 +645,7 @@ prefix_t
 		goto out;
 	}
 
-	ret = New_Prefix2(ai->ai_addr->sa_family, addr, len, NULL);
+	ret = New_Prefix(ai->ai_addr->sa_family, addr, len, NULL);
 	if (ret == NULL)
 		*errmsg = "New_Prefix2 failed";
 out:
@@ -658,7 +677,7 @@ prefix_t
 		prefixlen = maxprefix;
 	if (prefixlen < 0 || prefixlen > maxprefix)
 		return NULL;
-	return (New_Prefix2(family, blob, prefixlen, NULL));
+	return (New_Prefix(family, blob, prefixlen, NULL));
 }
 
 const char *

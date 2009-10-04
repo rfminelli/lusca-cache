@@ -199,6 +199,7 @@ destroy_MemObject(StoreEntry * e)
     mem->request = NULL;
     ctx_exit(ctx);		/* must exit before we free mem->url */
     safe_free(mem->url);
+    safe_free(mem->store_url);
     safe_free(mem->vary_headers);
     safe_free(mem->vary_encoding);
     memPoolFree(pool_memobject, mem);
@@ -479,7 +480,7 @@ storeSetPrivateKey(StoreEntry * e)
 	mem->id = getKeyCounter();
 	newkey = storeKeyPrivate(mem->url, mem->method, mem->id);
     } else {
-	newkey = storeKeyPrivate("JUNK", NULL, getKeyCounter());
+	newkey = storeKeyPrivate("JUNK", urlMethodGetKnown("NONE", 4), getKeyCounter());
     }
     assert(hash_lookup(store_table, newkey) == NULL);
     EBIT_SET(e->flags, KEY_PRIVATE);

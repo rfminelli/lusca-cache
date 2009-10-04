@@ -1421,7 +1421,18 @@ DOC_START
 	    option	Embed the mark in an IP option field. See also
 	    		zph_option.
 
-	See also tcp_outgoing_tos for details/requirements about TOS usage.
+	* See also tcp_outgoing_tos for details/requirements about TOS usage.
+
+	The ZPH tos values can be uniquely defined dependant on the type of HIT
+	registered by the cache.
+
+	If a HIT is registered from a sibling or parent and the respective zph_sibling
+	or zph_parent marks are set those tos/priority marks will be used. If those
+	marks are NOT set the marking for zph_local will be used.
+
+	Using this approach ZPH can be used for simply marking ANY hit with a fixed
+	TOS/Priority (using only zph_local) or marking with a TOS/Priority based on
+	the type of hit.
 DOC_END
 
 NAME: zph_local
@@ -1540,6 +1551,7 @@ DOC_START
 		     connection-auth[=on|off|auto]
 		     idle=n
 		     http11
+		     no-tproxy
 
 		     use 'proxy-only' to specify objects fetched
 		     from this cache should not be saved locally.
@@ -1787,6 +1799,10 @@ DOC_START
 		     Note: The HTTP/1.1 support is still incomplete, with an
 		     internal HTTP/1.0 hop. As result 1xx responses will not
 		     be forwarded.
+
+		     Use 'no-tproxy' to not use the client-spoof TPROXY support
+		     when forwarding requests; instead simply use the normal
+		     source selection method (eg tcp_outgoing_addr.)
 DOC_END
 
 NAME: cache_peer_domain cache_host_domain
@@ -2234,7 +2250,7 @@ NAME: update_headers
 IFDEF: HTTP_VIOLATIONS
 COMMENT: on|off
 TYPE: onoff
-DEFAULT: on
+DEFAULT: off
 LOC: Config.onoff.update_headers
 DOC_START
 	By default Squid updates stored HTTP headers when receiving
@@ -2698,6 +2714,17 @@ DOC_START
 	the directory contents.
 DOC_END
 
+NAME: coss_log_build_program
+TYPE: string
+DEFAULT: @DEFAULT_COSS_LOG_BUILD@
+LOC: Config.Program.coss_log_build
+DOC_START
+	Specify the location of the COSS directory rebuild program.
+	This program runs as a helper to build a COSS swap log from
+	the directory contents.
+DOC_END
+
+
 NAME: diskd_program
 TYPE: string
 DEFAULT: @DEFAULT_DISKD@
@@ -3074,6 +3101,7 @@ DOC_START
 		 reload-into-ims
 		 ignore-reload
 		 ignore-no-cache
+		 ignore-no-store
 		 ignore-private
 		 ignore-auth
 		 stale-while-revalidate=NN
@@ -5934,7 +5962,7 @@ DOC_END
 
 NAME: client_socksize
 COMMENT: send/receive buffer socket size for client-side
-TYPE: int
+TYPE: b_size_t
 LOC: Config.client_socksize
 DEFAULT: -1
 DOC_START
@@ -5945,5 +5973,53 @@ DOC_START
 	variables which somewhat dictate the buffer sizes used inside the proxy code
 	for handling socket data.
 DOC_END
+
+NAME: load_check_stopen
+COMMENT: whether to pay attention to overloaded stores for storeOpen()
+TYPE: onoff
+LOC: Config.onoff.load_check_stopen
+DEFAULT: on
+DOC_START
+	The default behaviour of storeOpen() (ie, disk object fetches) is to not
+	the object from disk if the load of that store directory is too high.
+	This may not be suitable in all situations. One thing to keep in mind
+	is that the subsequent "MISS" may end up storing a fresh copy of the
+	object in the disk store, possibly in another cache_dir (one which isn't
+	overloaded.)
+
+	Please note that individual store dir modules will implement their own
+	load checking and may decide to not return the object. This will have
+	the same effect as having storeOpen() itself fail.
+
+	Set this to "off" to always allow storeOpen() to go to the store_dir
+	layer.
+DOC_END
+
+NAME: load_check_stcreate
+COMMENT: whether to pay attention to overloaded stores for storeCreate()
+TYPE: onoff
+LOC: Config.onoff.load_check_stcreate
+DEFAULT: on
+DOC_START
+	This option currently does nothing.
+DOC_END
+
+NAME: download_fastest_client_speed
+COMMENT: whether to download the object at the rate of the slowest or fastest client
+TYPE: onoff
+LOC: Config.onoff.download_fastest_client_speed
+DEFAULT: off
+DOC_START
+	The default behaviour of the read-ahead code is to limit the read speed
+	to that of the slowest client. In many situations this may be desirable
+	but in some situations the opposite may be more desirable. If this
+	is turned on then Lusca will pace the store read at the speed of the
+	fastest disk client. It also has the side-effect of disabling the
+	read-ahead gap logic if all clients are disk clients.
+
+	If a client is a memory client (ie, data is being buffered in memory
+	for them) then the read-ahead gap logic still applies.
+DOC_END
+
 
 EOF

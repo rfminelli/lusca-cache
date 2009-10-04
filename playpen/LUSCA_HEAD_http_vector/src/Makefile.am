@@ -58,14 +58,6 @@ else
 WIN32SOURCE = 
 endif
 
-if ENABLE_MINGW32SPECIFIC
-MINGWEXLIB = -lmingwex
-IPC_SOURCE = ipc_win32.c
-else
-MINGWEXLIB =
-IPC_SOURCE = ipc.c
-endif
-
 SUBDIRS		= fs repl auth
 
 INCLUDES        = -I. -I$(srcdir) -I$(top_builddir)/include -I$(top_srcdir)/include
@@ -109,8 +101,6 @@ EXTRA_squid_SOURCES = \
 	comm_kqueue.c \
 	comm_devpoll.c \
 	comm_generic.c \
-	ipc.c \
-	ipc_win32.c \
 	win32.c
 
 squid_SOURCES = \
@@ -125,8 +115,10 @@ squid_SOURCES = \
 	cbdata.c \
 	client_db.c \
 	client_side.c \
+	client_side_nat.c \
 	client_side_rewrite.c \
 	client_side_storeurl_rewrite.c \
+	client_side_location_rewrite.c \
 	comm.c \
 	defines.h \
 	$(DELAY_POOL_SOURCE) \
@@ -160,7 +152,6 @@ squid_SOURCES = \
 	icp_v2.c \
 	icp_v3.c \
 	internal.c \
-	$(IPC_SOURCE) \
 	ipcache.c \
 	$(LEAKFINDERSOURCE) \
 	locrewrite.c \
@@ -217,7 +208,6 @@ squid_SOURCES = \
 	structs.h \
 	tools.c \
 	typedefs.h \
-	ufs_utils.c \
 	$(UNLINKDSOURCE) \
 	url.c \
 	urn.c \
@@ -350,7 +340,8 @@ DEFAULT_PINGER		= $(libexecdir)/`echo pinger | sed '$(transform);s/$$/$(EXEEXT)/
 DEFAULT_UNLINKD		= $(libexecdir)/`echo unlinkd | sed '$(transform);s/$$/$(EXEEXT)/'`
 DEFAULT_DISKD		= $(libexecdir)/`echo diskd-daemon | sed '$(transform);s/$$/$(EXEEXT)/'`
 DEFAULT_LOGFILED	= $(libexecdir)/`echo logfile-daemon | sed '$(transform);s/$$/$(EXEEXT)/'`
-DEFAULT_UFS_LOG_BUILD	= $(libexecdir)/`echo ufs_log_build | sed '$(transform);s/$$/$(EXEEXT)/'`
+DEFAULT_UFS_LOG_BUILD	= $(libexecdir)/`echo ufs_rebuild | sed '$(transform);s/$$/$(EXEEXT)/'`
+DEFAULT_COSS_LOG_BUILD	= $(libexecdir)/`echo coss_rebuild | sed '$(transform);s/$$/$(EXEEXT)/'`
 DEFAULT_ICON_DIR	= $(datadir)/icons
 DEFAULT_ERROR_DIR	= $(datadir)/errors/@ERR_DEFAULT_LANGUAGE@
 DEFAULT_MIB_PATH	= $(datadir)/mib.txt
@@ -400,6 +391,7 @@ cf.data: cf.data.pre Makefile
 	s%@DEFAULT_PINGER@%$(DEFAULT_PINGER)%g;\
 	s%@DEFAULT_DISKD@%$(DEFAULT_DISKD)%g;\
 	s%@DEFAULT_UFS_LOG_BUILD@%$(DEFAULT_UFS_LOG_BUILD)%g;\
+	s%@DEFAULT_COSS_LOG_BUILD@%$(DEFAULT_COSS_LOG_BUILD)%g;\
 	s%@DEFAULT_LOGFILED@%$(DEFAULT_LOGFILED)%g;\
 	s%@DEFAULT_CACHE_LOG@%$(DEFAULT_CACHE_LOG)%g;\
 	s%@DEFAULT_ACCESS_LOG@%$(DEFAULT_ACCESS_LOG)%g;\

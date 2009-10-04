@@ -36,6 +36,9 @@
 
 #include "squid.h"
 
+#include "../libasyncio/async_io.h"	/* For stats */
+#include "../libasyncio/aiops.h"	/* For stats */
+
 typedef int STOBJFLT(const StoreEntry *);
 typedef struct {
     StoreEntry *sentry;
@@ -74,6 +77,7 @@ static OBJH statUtilization;
 static OBJH statCountersHistograms;
 static OBJH statClientRequests;
 static OBJH statCurrentStuff;
+static OBJH aioStats;
 
 #ifdef XMALLOC_STATISTICS
 static void info_get_mallstat(int, int, int, void *);
@@ -960,6 +964,7 @@ statInit(void)
 	statClientRequests, 0, 1);
     cachemgrRegister("iapp_stats", "libiapp statistics", statIappStats, 0, 1);
     cachemgrRegister("curcounters", "current high level counters", statCurrentStuff, 0, 1);
+    cachemgrRegister("squidaio_counts", "Async IO Function Counters", aioStats, 0, 1);
 }
 
 static void
@@ -1655,4 +1660,36 @@ size_t
 statMemoryAccounted(void)
 {
     return memTotalAllocated();
+}
+
+/*
+ * Only if asyncio is compiled in
+ */
+void
+aioStats(StoreEntry * sentry)
+{
+    squidaio_thread_t *threadp;
+    int i;
+
+    storeAppendPrintf(sentry, "ASYNC IO Counters:\n");
+    storeAppendPrintf(sentry, "Operation\t# Requests\n");
+    storeAppendPrintf(sentry, "open\t%d\n", squidaio_counts.open);
+    storeAppendPrintf(sentry, "close\t%d\n", squidaio_counts.close);
+    storeAppendPrintf(sentry, "cancel\t%d\n", squidaio_counts.cancel);
+    storeAppendPrintf(sentry, "write\t%d\n", squidaio_counts.write);
+    storeAppendPrintf(sentry, "read\t%d\n", squidaio_counts.read);
+    storeAppendPrintf(sentry, "stat\t%d\n", squidaio_counts.stat);
+    storeAppendPrintf(sentry, "unlink\t%d\n", squidaio_counts.unlink);
+    storeAppendPrintf(sentry, "check_callback\t%d\n", squidaio_counts.check_callback);
+    storeAppendPrintf(sentry, "queue\t%d\n", squidaio_get_queue_len());
+
+
+    storeAppendPrintf(sentry, "\n\nThreads Status:\n");
+    storeAppendPrintf(sentry, "#\tID\t# Requests\n");
+
+    threadp = squidaio_get_thread_head();
+    for (i = 0; i < squidaio_nthreads; i++) {
+        storeAppendPrintf(sentry, "%i\t0x%lx\t%ld\n", i + 1, (long int) threadp->thread, threadp->requests);
+        threadp = threadp->next;
+    }
 }

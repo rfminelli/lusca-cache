@@ -187,12 +187,29 @@ commResetFD(ConnectStateData * cs)
     close(fd2);
     F = &fd_table[cs->fd];
     fd_table[cs->fd].flags.called_connect = 0;
+
+    /*
+     * The original code assumed the current local port equals the previous local port
+     * Assume this for now and bite whatever occasional failure will happen because commResetFD()
+     * results in some re-attempt to use a now-allocated local port.
+     *
+     * This should later on be modified to re-use the -original- socket address (with or without
+     * an explicitly set port) rather than F->local_address and F->local_port, which may have been
+     * updated after the initial local bind() and subsequent getsockname().
+     */
+
     /*
      * yuck, this has assumptions about comm_open() arguments for
      * the original socket
      */
     assert(F->local_port == sqinet_get_port(&F->local_address));
-    if (commBind(cs->fd, &F->local_address) != COMM_OK) {
+    if (F->flags.tproxy_rem) {
+        debug(5, 3) ("commResetFD: FD %d: re-starting a tproxy'ed upstream connection\n", cs->fd);
+        if (comm_ips_bind_rem(cs->fd, &F->local_address) != COMM_OK) {
+            debug(5, 1) ("commResetFD: FD %d: TPROXY comm_ips_bind_rem() failed? Why?\n", cs->fd);
+            return 0;
+        }
+    } else if (commBind(cs->fd, &F->local_address) != COMM_OK) {
 	debug(5, 0) ("commResetFD: bind: %s\n", xstrerror());
 	return 0;
     }

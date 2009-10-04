@@ -6,6 +6,9 @@ typedef enum {
     SWAP_LOG_ADD,
     SWAP_LOG_DEL,
     SWAP_LOG_VERSION,
+    SWAP_LOG_PROGRESS,		/* XXX to be later defined */
+    SWAP_LOG_COMPLETED,		/* XXX to be later defined */
+    SWAP_LOG_ERROR,		/* XXX to be later defined */
     SWAP_LOG_MAX
 } swap_log_op;
 
@@ -34,6 +37,18 @@ struct _storeSwapLogHeader {
 };
 typedef struct _storeSwapLogHeader storeSwapLogHeader;
 
+struct _storeSwapLogCompleted {
+	char op;
+};
+typedef struct _storeSwapLogCompleted storeSwapLogCompleted;
+
+struct _storeSwapLogProgress {
+	char op;
+	u_int32_t progress;
+	u_int32_t total;
+};
+typedef struct _storeSwapLogProgress storeSwapLogProgress;
+
 struct _storeSwapLogDataOld {
     char op;
     sfileno swap_filen;
@@ -51,6 +66,8 @@ typedef struct _storeSwapLogDataOld storeSwapLogDataOld;
 extern const char * swap_log_op_str[];
 
 extern int storeSwapLogUpgradeEntry(storeSwapLogData *dst, storeSwapLogDataOld *src);
-extern int storeSwapLogPrintHeader(int fd);
+extern int storeSwapLogPrintHeader(FILE *fp);
+extern int storeSwapLogPrintProgress(FILE *fp, u_int32_t progress, u_int32_t total);
+extern int storeSwapLogPrintCompleted(FILE *fp);
 
 #endif

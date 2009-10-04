@@ -162,14 +162,19 @@ comm_local_port(int fd)
 int
 commBind(int s, sqaddr_t *addr)
 {
+    int r;
+
     LOCAL_ARRAY(char, ip_buf, MAX_IPSTRLEN);
-    LOCAL_ARRAY(char, srv_buf, MAX_IPSTRLEN);
     CommStats.syscalls.sock.binds++;
     if (bind(s, sqinet_get_entry(addr), sqinet_get_length(addr)) == 0)
 	return COMM_OK;
-    getnameinfo(sqinet_get_entry(addr), sqinet_get_family(addr),
-      ip_buf, MAX_IPSTRLEN, srv_buf, MAX_IPSTRLEN, NI_NUMERICHOST|NI_NUMERICSERV);
-    debug(5, 0) ("commBind: Cannot bind socket FD %d to %s port %s: %s\n", s, ip_buf, srv_buf, xstrerror());
+    r = sqinet_ntoa(addr, ip_buf, MAX_IPSTRLEN, 0);
+    if (r)
+        debug(5, 0) ("commBind: Cannot bind socket FD %d family %d to %s port %d: %s\n",
+          s, sqinet_get_family(addr), ip_buf, sqinet_get_port(addr), xstrerror());
+    else
+        debug(5, 0) ("commBind: Cannot bind socket FD %d family %d: %s\n",
+          s, sqinet_get_family(addr), xstrerror());
     return COMM_ERROR;
 }
 
@@ -269,8 +274,10 @@ comm_fdopen6(int new_socket,
 	commSetCloseOnExec(new_socket);
     if ((flags & COMM_REUSEADDR))
 	commSetReuseAddr(new_socket);
-    if ((flags & COMM_TPROXY))
-      F->flags.tproxy = 1;
+    if ((flags & COMM_TPROXY_LCL))
+      F->flags.tproxy_lcl = 1;
+    if ((flags & COMM_TPROXY_REM))
+      F->flags.tproxy_rem = 1;
     if (sqinet_get_port(a) > 0) {
 #ifdef _SQUID_MSWIN_
 	if (sock_type != SOCK_DGRAM)
@@ -280,9 +287,32 @@ comm_fdopen6(int new_socket,
 	    commSetReuseAddr(new_socket);
     }
 
-    if (F->flags.tproxy) {
-        if (comm_ips_bind(new_socket, &F->local_address) != COMM_OK) {
-            debug(1, 1) ("comm_fdopen6: FD %d: TPROXY comm_ips_bind failed? Why?\n", new_socket);
+    /*
+     * The local endpoint bind() stuff is a bit of a mess.
+     *
+     * There's three kinds of "bind" going on.
+     *    
+     * The default bind(), for a normal socket. This is used both for setting the listen address for
+     * an incoming socket and the local address of a remote connection socket.
+     *
+     * The "spoof connection" bind, which is a bind() to a non-local address, for a remote connection
+     * socket. Ie, spoofing the client IP when connecting to an upstream.
+     *
+     * Finally, the "non-local listen" bind, which is a bind() for the purposes of intercepting
+     * connections which aren't targetted at a local IP.
+     *
+     * These are all treated differently by the various interception techniques on various operating
+     * systems; this is why things are broken out.
+     */
+    if (F->flags.tproxy_lcl) {
+        if (comm_ips_bind_lcl(new_socket, &F->local_address) != COMM_OK) {
+            debug(1, 1) ("comm_fdopen6: FD %d: TPROXY comm_ips_bind_lcl() failed? Why?\n", new_socket);
+            comm_close(new_socket);
+            return -1;
+        }
+    } else if (F->flags.tproxy_rem) {
+        if (comm_ips_bind_rem(new_socket, &F->local_address) != COMM_OK) {
+            debug(1, 1) ("comm_fdopen6: FD %d: TPROXY comm_ips_bind_rem() failed? Why?\n", new_socket);
             comm_close(new_socket);
             return -1;
         }
@@ -1142,6 +1172,24 @@ commSetTcpKeepalive(int fd, int idle, int interval, int timeout)
 #endif
     if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (char *) &on, sizeof(on)) < 0)
 	debug(5, 1) ("commSetTcpKeepalive: FD %d: %s\n", fd, xstrerror());
+}
+
+int
+commGetSocketTos(int fd)
+{
+	int res;
+	int tos;
+	socklen_t len;
+
+	len = sizeof(tos);
+
+#ifdef IP_TOS
+	res = getsockopt(fd, IPPROTO_IP, IP_TOS, &tos, &len);
+#else
+	errno = ENOSYS;
+	tos = -1;
+#endif
+	return tos;
 }
 
 int

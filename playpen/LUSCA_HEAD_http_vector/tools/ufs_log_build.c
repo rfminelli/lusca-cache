@@ -200,9 +200,11 @@ read_dir(store_ufs_dir_t *sd)
 	int fn;
 	int i, j;
 
+	getCurrentTime();
 	for (i = 0; i < store_ufs_l1(sd); i++) {
 		for (j = 0; j < store_ufs_l2(sd); j++) {
 			(void) store_ufs_createDir(sd, i, j, dir);
+			getCurrentTime();
 			debug(47, 1) ("read_dir: opening dir %s\n", dir);
 			d = opendir(dir);
 			if (! d) {
@@ -213,6 +215,7 @@ read_dir(store_ufs_dir_t *sd)
 			while ( (de = readdir(d)) != NULL) {
 				if (de->d_name[0] == '.')
 					continue;
+				getCurrentTime();
 
 				/* Verify that the given filename belongs in the given directory */
 				if (sscanf(de->d_name, "%x", &fn) != 1) {
@@ -255,7 +258,7 @@ main(int argc, char *argv[])
     store_ufs_init(&store_ufs_info, argv[1], atoi(argv[2]), atoi(argv[3]), argv[4]);
 
     /* Output swap header to stdout */
-    (void) storeSwapLogPrintHeader(1);
+    (void) storeSwapLogPrintHeader(stdout);
 
     read_dir(&store_ufs_info);
     store_ufs_done(&store_ufs_info);

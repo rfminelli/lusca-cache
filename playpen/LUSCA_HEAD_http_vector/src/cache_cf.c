@@ -475,6 +475,8 @@ configDoConfigure(void)
 	requirePathnameExists("location_rewrite_program", Config.Program.location_rewrite.command->key);
     requirePathnameExists("Icon Directory", Config.icons.directory);
     requirePathnameExists("Error Directory", Config.errorDirectory);
+    requirePathnameExists("UFS rebuild helper", Config.Program.ufs_log_build);
+    requirePathnameExists("COSS rebuild helper", Config.Program.coss_log_build);
     authenticateConfigure(&Config.authConfig);
     externalAclConfigure();
     refreshCheckConfigure();
@@ -1896,6 +1898,8 @@ parse_peer(peer ** head)
 	    p->idle = xatoi(token + 5);
 	} else if (strcmp(token, "http11") == 0) {
 	    p->options.http11 = 1;
+	} else if (strcmp(token, "no-tproxy") == 0) {
+	    p->options.no_tproxy = 1;
 	} else {
 	    debug(3, 0) ("parse_peer: token='%s'\n", token);
 	    self_destruct();
@@ -2258,6 +2262,8 @@ dump_refreshpattern(StoreEntry * entry, const char *name, refresh_t * head)
 	    storeAppendPrintf(entry, " ignore-reload");
 	if (head->flags.ignore_no_cache)
 	    storeAppendPrintf(entry, " ignore-no-cache");
+	if (head->flags.ignore_no_store)
+	    storeAppendPrintf(entry, " ignore-no-store");
 	if (head->flags.ignore_private)
 	    storeAppendPrintf(entry, " ignore-private");
 	if (head->flags.ignore_auth)
@@ -2290,6 +2296,7 @@ parse_refreshpattern(refresh_t ** head)
     int reload_into_ims = 0;
     int ignore_reload = 0;
     int ignore_no_cache = 0;
+    int ignore_no_store = 0;
     int ignore_private = 0;
     int ignore_auth = 0;
 #endif
@@ -2329,6 +2336,8 @@ parse_refreshpattern(refresh_t ** head)
 	    override_lastmod = 1;
 	else if (!strcmp(token, "ignore-no-cache"))
 	    ignore_no_cache = 1;
+	else if (!strcmp(token, "ignore-no-store"))
+	    ignore_no_store = 1;
 	else if (!strcmp(token, "ignore-private"))
 	    ignore_private = 1;
 	else if (!strcmp(token, "ignore-auth"))
@@ -2386,6 +2395,8 @@ parse_refreshpattern(refresh_t ** head)
 	t->flags.ignore_reload = 1;
     if (ignore_no_cache)
 	t->flags.ignore_no_cache = 1;
+    if (ignore_no_store)
+	t->flags.ignore_no_store = 1;
     if (ignore_private)
 	t->flags.ignore_private = 1;
     if (ignore_auth)

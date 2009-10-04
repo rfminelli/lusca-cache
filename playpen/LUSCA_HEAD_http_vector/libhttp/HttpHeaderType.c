@@ -45,6 +45,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
+#include "../libcore/varargs.h"
 #include "../libcore/tools.h"
 
 #include "HttpHeaderType.h"

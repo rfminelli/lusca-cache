@@ -291,7 +291,7 @@ httpCachableReply(HttpStateData * httpState)
 	return 0;
     if (EBIT_TEST(cc_mask, CC_NO_CACHE) && !REFRESH_OVERRIDE(ignore_no_cache))
 	return 0;
-    if (EBIT_TEST(cc_mask, CC_NO_STORE))
+    if (EBIT_TEST(cc_mask, CC_NO_STORE) && !REFRESH_OVERRIDE(ignore_no_store))
 	return 0;
     if (httpState->request->flags.auth_sent) {
 	/*
@@ -827,14 +827,14 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 		    debug(11, 3) ("Chunk header '%.*s'\n", strLen2(httpState->chunkhdr), strBuf2(httpState->chunkhdr));
 		    errno = 0;
 		    httpState->chunk_size = strto_off_t(strBuf(httpState->chunkhdr), &end, 16);
-		    if (errno)
-			badchunk = 1;
-		    else if (end == strBuf(httpState->chunkhdr))
+		    if (end == strBuf(httpState->chunkhdr))
 			emptychunk = 1;
+		    else if (errno)
+			badchunk = 1;
 		    while (end && (*end == '\r' || *end == ' ' || *end == '\t'))
 			end++;
 		    if (httpState->chunk_size < 0 || badchunk || !end || (*end != '\n' && *end != ';')) {
-			debug(11, 1) ("Invalid chunk header '%.*s'\n", strLen2(httpState->chunkhdr), strBuf2(httpState->chunkhdr));
+			debug(11, 1) ("Invalid chunk header: URL %s: header '%.*s'\n", storeUrl(entry), strLen2(httpState->chunkhdr), strBuf2(httpState->chunkhdr));
 			fwdFail(httpState->fwd, errorCon(ERR_INVALID_RESP, HTTP_BAD_GATEWAY, httpState->fwd->request));
 			comm_close(fd);
 			return;
@@ -908,6 +908,23 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 	if ((len < 0 && !ignoreErrno(errno)) || len == 0) {
 	    keep_alive = 0;
 	}
+    }
+
+    /*
+     * The following bits of code attempt to describe two separate "excess data" instances.
+     * One is "We have reply body data for a reply which shouldn't have a reply body".
+     * The other is "We have more data for a reply than we should have."
+     *
+     * This almost certainly doesn't correctly log all of the cases correctly. It simply is
+     * a horrible attempt to make issues clearer in the logs. It should be revisited whenever
+     * someone gets the time/motivation to rewrite the HTTP server-side code.
+     */
+    if (len > 0 && httpState->chunk_size == 0) {
+	debug(11, 1) ("httpReadReply: Unexpected reply body data from \"%s %s\"\n",
+	    orig_request->method->string,
+	    storeUrl(entry));
+	comm_close(fd);
+	return;
     }
     if (len > 0) {
 	debug(11, Config.onoff.relaxed_header_parser <= 0 || keep_alive ? 1 : 2)
@@ -1219,7 +1236,7 @@ httpReadReply(int fd, void *data)
 
     if (already_parsed && httpState->reply_hdr_state == 2) {
 #if WIP_FWD_LOG
-	fwdStatus(httpState->fwd, s);
+	fwdStatus(httpState->fwd, entry->mem_obj->reply->sline.status);
 #endif
 	/*
 	 * If its not a reply that we will re-forward, then
@@ -1342,6 +1359,8 @@ httpBuildRequestHeader(request_t * request,
 	we_do_ranges = 0;
     else if (orig_request->flags.auth)
 	we_do_ranges = 0;
+    else if (Config.rangeOffsetLimit < 0)
+        we_do_ranges = 1;
     else if (httpHdrRangeOffsetLimit(orig_request->range))
 	we_do_ranges = 0;
     else

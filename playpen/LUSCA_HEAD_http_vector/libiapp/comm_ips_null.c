@@ -20,7 +20,13 @@
 #include "globals.h"
 
 int
-comm_ips_bind(int fd, sqaddr_t *a)
+comm_ips_bind_lcl(int fd, sqaddr_t *a)
+{
+    return COMM_ERROR;
+}
+
+int
+comm_ips_bind_rem(int fd, sqaddr_t *a)
 {
     return COMM_ERROR;
 }

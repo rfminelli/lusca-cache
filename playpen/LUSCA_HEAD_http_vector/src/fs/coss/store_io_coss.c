@@ -66,7 +66,6 @@ CossReadOp *storeCossCreateReadOp(CossInfo * cs, storeIOState * sio);
 void storeCossCompleteReadOp(CossInfo * cs, CossReadOp * op, int error);
 void storeCossKickReadOp(CossInfo * cs, CossReadOp * op);
 
-CBDATA_TYPE(storeIOState);
 CBDATA_TYPE(CossMemBuf);
 CBDATA_TYPE(CossPendingReloc);
 
@@ -134,6 +133,10 @@ storeCossAllocate(SwapDir * SD, const StoreEntry * e, int which)
     int coll = 0;
     sfileno f;
     sfileno checkf;
+
+    /* This needs to be explicitly set to something after rebuilding has finished */
+    if (cs->current_offset < 0)
+        return -1;
 
     /* Make sure we chcek collisions if reallocating */
     if (which == COSS_ALLOC_REALLOC) {
@@ -289,7 +292,7 @@ storeCossCreate(SwapDir * SD, StoreEntry * e, STFNCB * file_callback, STIOCB * c
 
     assert(cs->rebuild.rebuilding == 0);
     coss_stats.create.ops++;
-    sio = cbdataAlloc(storeIOState);
+    sio = storeIOAllocate(storeCossIOFreeEntry);
     cstate = memPoolAlloc(coss_state_pool);
     sio->fsstate = cstate;
     sio->offset = 0;
@@ -344,7 +347,7 @@ storeCossOpen(SwapDir * SD, StoreEntry * e, STFNCB * file_callback,
 
     assert(cs->rebuild.rebuilding == 0);
 
-    sio = cbdataAlloc(storeIOState);
+    sio = storeIOAllocate(storeCossIOFreeEntry);
     cstate = memPoolAlloc(coss_state_pool);
 
     debug(79, 3) ("storeCossOpen: %p: offset %d\n", sio, f);
@@ -940,18 +943,17 @@ storeCossStartMembuf(SwapDir * sd)
 {
     CossInfo *cs = (CossInfo *) sd->fsdata;
     CossMemBuf *newmb;
-    CBDATA_INIT_TYPE_FREECB(storeIOState, storeCossIOFreeEntry);
     CBDATA_INIT_TYPE_FREECB(CossMemBuf, NULL);
-    CBDATA_INIT_TYPE_FREECB(storeIOState, storeCossIOFreeEntry);
     CBDATA_INIT_TYPE_FREECB(CossPendingReloc, NULL);
     /*
      * XXX for now we start at the beginning of the disk;
      * The rebuild logic doesn't 'know' to pad out the current
      * offset to make it a multiple of COSS_MEMBUF_SZ.
      */
-    newmb = storeCossCreateMemBuf(sd, 0, -1, NULL);
+    newmb = storeCossCreateMemBuf(sd, cs->curstripe, -1, NULL);
     assert(!cs->current_membuf);
     cs->current_membuf = newmb;
+    cs->current_offset = cs->current_membuf->diskstart;
 
     newmb = storeCossCreateMemOnlyBuf(sd);
     assert(!cs->current_memonly_membuf);
@@ -964,9 +966,11 @@ storeCossStartMembuf(SwapDir * sd)
  * Clean up any references from the SIO before it get's released.
  */
 static void
-storeCossIOFreeEntry(void *sio)
+storeCossIOFreeEntry(void *data)
 {
-    memPoolFree(coss_state_pool, ((storeIOState *) sio)->fsstate);
+    storeIOState *sio = data;
+    memPoolFree(coss_state_pool, sio->fsstate);
+    sio->fsstate = NULL;
 }
 
 static off_t

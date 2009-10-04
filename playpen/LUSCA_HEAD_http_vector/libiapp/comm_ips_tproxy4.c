@@ -49,8 +49,8 @@ typedef uint32_t __u32;
 #include "comm_types.h"
 #include "globals.h"
 
-int
-comm_ips_bind(int fd, sqaddr_t *a)
+static int
+tproxy4_set_transparent(int fd, sqaddr_t *a)
 {
     int on = 1;
 
@@ -59,6 +59,22 @@ comm_ips_bind(int fd, sqaddr_t *a)
     if (bind(fd, sqinet_get_entry(a), sqinet_get_length(a)) != 0)
         return COMM_ERROR;
     return COMM_OK;
+}
+
+/*
+ * TPROXY4 requires the local socket be set IP_TRANSPARENT and then the bind() address
+ * will determine which TCP/UDP connections are hijacked.
+ */
+int
+comm_ips_bind_lcl(int fd, sqaddr_t *a)
+{
+	return tproxy4_set_transparent(fd, a);
+}
+
+int
+comm_ips_bind_rem(int fd, sqaddr_t *a)
+{
+	return tproxy4_set_transparent(fd, a);
 }
 
 void

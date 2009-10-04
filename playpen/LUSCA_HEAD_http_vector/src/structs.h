@@ -548,6 +548,7 @@ struct _SquidConfig {
 #endif
 	char *diskd;
 	char *ufs_log_build;
+	char *coss_log_build;
 #if USE_SSL
 	char *ssl_password;
 #endif
@@ -681,6 +682,9 @@ struct _SquidConfig {
 	int update_headers;
 	int ignore_expect_100;
 	int WIN32_IpAddrChangeMonitor;
+	int load_check_stopen;
+	int load_check_stcreate;
+	int download_fastest_client_speed;
     } onoff;
     int collapsed_forwarding_timeout;
     acl *aclList;
@@ -823,13 +827,11 @@ struct _SquidConfig {
     int max_filedescriptors;
     char *accept_filter;
     int incoming_rate;
-#if USE_AUFSOPS
     struct {
     	int n_aiops_threads;
     } aiops;
-#endif
     /* XXX I'm not sure where these should live .. */
-    int client_socksize;
+    squid_off_t client_socksize;
 };
 
 struct _SquidConfig2 {
@@ -1244,6 +1246,7 @@ struct _peer {
 	unsigned int sourcehash:1;
 	unsigned int carp:1;
 	unsigned int http11:1;	/* HTTP/1.1 support */
+	unsigned int no_tproxy:1;
     } options;
     int weight;
     struct {
@@ -1660,6 +1663,7 @@ struct _storeIOState {
 	unsigned int closing:1;	/* debugging aid */
     } flags;
     void *fsstate;
+    FREE *free_state;
 };
 
 struct _request_t {
@@ -1743,6 +1747,7 @@ struct _refresh_t {
 	unsigned int reload_into_ims:1;
 	unsigned int ignore_reload:1;
 	unsigned int ignore_no_cache:1;
+        unsigned int ignore_no_store:1;
 	unsigned int ignore_private:1;
 	unsigned int ignore_auth:1;
 #endif
@@ -1896,25 +1901,6 @@ struct _StatCounters {
 	int outs;
 	int ins;
     } swap;
-};
-
-struct _ClientInfo {
-    hash_link hash;		/* must be first */
-    struct in_addr addr;
-    struct {
-	int result_hist[LOG_TYPE_MAX];
-	int n_requests;
-	kb_t kbytes_in;
-	kb_t kbytes_out;
-	kb_t hit_kbytes_out;
-    } Http, Icp;
-    struct {
-	time_t time;
-	int n_req;
-	int n_denied;
-    } cutoff;
-    int n_established;		/* number of current established connections */
-    time_t last_seen;
 };
 
 struct _CacheDigest {

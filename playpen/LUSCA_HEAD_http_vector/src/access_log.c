@@ -1298,6 +1298,7 @@ accessLogInit(void)
 	    Config.Addrs.udp_incoming,
 	    Config.mcast_miss.port,
 	    COMM_NONBLOCKING,
+	    COMM_TOS_DEFAULT,
 	    "Multicast Miss Stream");
 	if (mcast_miss_fd < 0)
 	    fatal("Cannot open Multicast Miss Stream Socket");

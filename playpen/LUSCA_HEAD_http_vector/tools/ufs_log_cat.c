@@ -140,7 +140,7 @@ read_file(const char *swapfile)
 	}
 
 	/* begin echo'ing the log info */
-	storeSwapLogPrintHeader(1);	/* to stdout */
+	storeSwapLogPrintHeader(stdout);
 
 	/* Now - loop over until eof or error */
 	while (! feof(fp)) {

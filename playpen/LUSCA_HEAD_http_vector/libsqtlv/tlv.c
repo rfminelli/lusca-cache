@@ -59,6 +59,11 @@ tlv_unpack(const char *buf, int *hdr_len, int max_metaid)
     xmemcpy(&buflen, &buf[j], sizeof(int));
     j += sizeof(int);
 
+    if (buflen > (*hdr_len) - sizeof(char) - sizeof(int)) {
+        debug(20, 0) ("tlv_unpack: unable to unpack: passed buffer size %d bytes; TLV length %d bytes; header prefix size %d bytes\n", *hdr_len, buflen, (int) (sizeof(char) + sizeof(int)));
+        return NULL;
+    }
+
     /*
      * sanity check on 'buflen' value.  It should be at least big
      * enough to hold one type and one length.

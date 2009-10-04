@@ -118,7 +118,6 @@ typedef struct _ErrorState ErrorState;
 typedef struct _StatCounters StatCounters;
 typedef struct _authConfig authConfig;
 typedef struct _cacheSwap cacheSwap;
-typedef struct _ClientInfo ClientInfo;
 typedef struct _cd_guess_stats cd_guess_stats;
 typedef struct _CacheDigest CacheDigest;
 typedef struct _Version Version;
