@@ -39,7 +39,6 @@
  * #ifndef to exclude the internal DNS code from compile process when
  * using External DNS process.
  */
-#if !USE_DNSSERVERS
 
 #if HAVE_ARPA_NAMESER_H
 #include <arpa/nameser.h>
@@ -469,4 +468,3 @@ snmp_netIdnsFn(variable_list * Var, snint * ErrP)
     return Answer;
 }
 #endif /* SQUID_SNMP */
-#endif /* USE_DNSSERVERS */

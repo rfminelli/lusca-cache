@@ -78,9 +78,7 @@
 
 
 #include "../libsqdns/dns.h"
-#if !USE_DNSSERVERS
 #include "../libsqdns/dns_internal.h"
-#endif
 
 #include "namecfg.h"
 #include "fqdncache.h"
@@ -91,13 +89,8 @@ static dlink_list fqdncache_lru_list;
 
 MemPool * pool_fqdncache = NULL;
 
-#if USE_DNSSERVERS
-static HLPCB fqdncacheHandleReply;
-static fqdncache_entry *fqdncacheParse(fqdncache_entry *, const char *buf);
-#else
 static IDNSCB fqdncacheHandleReply;
 static fqdncache_entry *fqdncacheParse(fqdncache_entry *, rfc1035_rr *, int, const char *error_message);
-#endif
 static void fqdncacheRelease(fqdncache_entry *);
 static fqdncache_entry *fqdncacheCreateEntry(const char *name);
 static void fqdncacheCallback(fqdncache_entry *);
@@ -241,60 +234,6 @@ fqdncacheCallback(fqdncache_entry * f)
 }
 
 static fqdncache_entry *
-#if USE_DNSSERVERS
-fqdncacheParse(fqdncache_entry * f, const char *inbuf)
-{
-    LOCAL_ARRAY(char, buf, DNS_INBUF_SZ);
-    char *token;
-    int ttl;
-    const char *name = (const char *) f->hash.key;
-    f->expires = squid_curtime + namecache_dns_negative_ttl;
-    f->flags.negcached = 1;
-    if (inbuf == NULL) {
-	debug(35, 1) ("fqdncacheParse: Got <NULL> reply in response to '%s'\n", name);
-	f->error_message = xstrdup("Internal Error");
-	return f;
-    }
-    xstrncpy(buf, inbuf, DNS_INBUF_SZ);
-    debug(35, 5) ("fqdncacheParse: parsing: {%s}\n", buf);
-    token = strtok(buf, w_space);
-    if (NULL == token) {
-	debug(35, 1) ("fqdncacheParse: Got <NULL>, expecting '$name' in response to '%s'\n", name);
-	f->error_message = xstrdup("Internal Error");
-	return f;
-    }
-    if (0 == strcmp(token, "$fail")) {
-	token = strtok(NULL, "\n");
-	assert(NULL != token);
-	f->error_message = xstrdup(token);
-	return f;
-    }
-    if (0 != strcmp(token, "$name")) {
-	debug(35, 1) ("fqdncacheParse: Got '%s', expecting '$name' in response to '%s'\n", inbuf, name);
-	f->error_message = xstrdup("Internal Error");
-	return f;
-    }
-    token = strtok(NULL, w_space);
-    if (NULL == token) {
-	debug(35, 1) ("fqdncacheParse: Got '%s', expecting TTL in response to '%s'\n", inbuf, name);
-	f->error_message = xstrdup("Internal Error");
-	return f;
-    }
-    f->flags.negcached = 0;
-    ttl = atoi(token);
-    if (ttl == 0 || ttl > namecache_dns_positive_ttl)
-	ttl = namecache_dns_positive_ttl;
-    if (ttl < namecache_dns_negative_ttl)
-	ttl = namecache_dns_negative_ttl;
-    f->expires = squid_curtime + ttl;
-    token = strtok(NULL, w_space);
-    if (NULL != token) {
-	f->names[0] = xstrdup(token);
-	f->name_count = 1;
-    }
-    return f;
-}
-#else
 fqdncacheParse(fqdncache_entry * f, rfc1035_rr * answers, int nr, const char *error_message)
 {
     int k;
@@ -347,14 +286,9 @@ fqdncacheParse(fqdncache_entry * f, rfc1035_rr * answers, int nr, const char *er
     f->flags.negcached = 0;
     return f;
 }
-#endif
 
 static void
-#if USE_DNSSERVERS
-fqdncacheHandleReply(void *data, char *reply)
-#else
 fqdncacheHandleReply(void *data, rfc1035_rr * answers, int na, const char *error_message)
-#endif
 {
     int n;
     generic_cbdata *c = data;
@@ -366,11 +300,7 @@ fqdncacheHandleReply(void *data, rfc1035_rr * answers, int na, const char *error
     statHistCount(&statCounter.dns.svc_time,
 	tvSubMsec(f->request_time, current_time));
 #endif
-#if USE_DNSSERVERS
-    fqdncacheParse(f, reply);
-#else
     fqdncacheParse(f, answers, na, error_message);
-#endif
     fqdncacheAddEntry(f);
     fqdncacheCallback(f);
 }
@@ -422,11 +352,7 @@ fqdncache_nbgethostbyaddr(struct in_addr addr, FQDNH * handler, void *handlerDat
     CBDATA_INIT_TYPE(generic_cbdata);
     c = cbdataAlloc(generic_cbdata);
     c->data = f;
-#if USE_DNSSERVERS
-    dnsSubmit(hashKeyStr(&f->hash), fqdncacheHandleReply, c);
-#else
     idnsPTRLookup(addr, fqdncacheHandleReply, c);
-#endif
 }
 
 /* initialize the fqdncache */

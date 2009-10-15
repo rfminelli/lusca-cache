@@ -413,10 +413,6 @@ configDoConfigure(void)
 	visible_appname_string = (char *) appname_string;
     else
 	visible_appname_string = (char *) full_appname_string;
-#if USE_DNSSERVERS
-    if (Config.dnsChildren < 1)
-	fatal("No dnsservers allocated");
-#endif
     if (Config.Program.url_rewrite.command) {
 	if (Config.Program.url_rewrite.children < 1) {
 	    Config.Program.url_rewrite.children = 0;
@@ -462,9 +458,6 @@ configDoConfigure(void)
 	Config.retry.maxtries = 1;
     }
     requirePathnameExists("MIME Config Table", Config.mimeTablePathname);
-#if USE_DNSSERVERS
-    requirePathnameExists("cache_dns_program", Config.Program.dnsserver);
-#endif
 #if USE_UNLINKD
     requirePathnameExists("unlinkd_program", Config.Program.unlinkd);
 #endif

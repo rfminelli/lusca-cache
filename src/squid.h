@@ -431,12 +431,7 @@ struct rusage {
 #include "../libsqname/ipcache.h"
 #include "../libsqname/fqdncache.h"
 
-
-#if USE_DNSSERVERS
-#include "../libsqdns/dns_external.h"
-#else
 #include "../libsqdns/dns_internal.h"
-#endif
 
 #include "../libstmem/stmem.h"
 

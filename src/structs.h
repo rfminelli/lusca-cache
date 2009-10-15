@@ -445,10 +445,8 @@ struct _SquidConfig {
 #if USE_IDENT
 	time_t ident;
 #endif
-#if !USE_DNSSERVERS
 	time_t idns_retransmit;
 	time_t idns_query;
-#endif
     } Timeout;
     squid_off_t maxRequestHeaderSize;
     squid_off_t maxReplyHeaderSize;
@@ -521,9 +519,6 @@ struct _SquidConfig {
     char *visible_appname_string;
     char *effectiveGroup;
     struct {
-#if USE_DNSSERVERS
-	char *dnsserver;
-#endif
 	struct {
 	    wordlist *command;
 	    int children;
@@ -554,9 +549,6 @@ struct _SquidConfig {
 #endif
 	char *logfile_daemon;
     } Program;
-#if USE_DNSSERVERS
-    int dnsChildren;
-#endif
     time_t authenticateGCInterval;
     time_t authenticateTTL;
     time_t authenticateIpTTL;
@@ -712,6 +704,7 @@ struct _SquidConfig {
 	acl_access *reply;
 	acl_address *outgoing_address;
 	acl_tos *outgoing_tos;
+	acl_tos *incoming_tos;
 #if USE_HTCP
 	acl_access *htcp;
 	acl_access *htcp_clr;
