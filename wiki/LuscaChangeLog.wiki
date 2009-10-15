@@ -11,6 +11,7 @@
   * COSS will now start writing from the last known written stripe, rather than starting from the beginning of the disk.
   * A new cache_peer option has been added - "no-tproxy" - which forces the cache peer to ignore client-spoofing for connections to it and instead use the normal source address selection mechanism via tcp_outgoing_address.
   * A new refresh pattern option - "ignore-no-store" - allows the administrator to ignore "Cache-Control: no-store" from the origin/upstream server.
+  * The external DNS code has been removed. The only DNS support now is the internal DNS code.
 
 = Changes between Squid-2.HEAD and Lusca-1.0 =
 
