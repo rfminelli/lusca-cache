@@ -1193,32 +1193,6 @@ if test $USE_IDENT = 1; then
     AC_DEFINE(USE_IDENT, 1, [Compile in support for Ident (RFC 931) lookups?  Enabled by default.])
 fi
 
-AM_CONDITIONAL(USE_DNSSERVER, false)
-use_dnsserver=
-AC_ARG_ENABLE(internal-dns,
-[  --disable-internal-dns  This prevents Squid from directly sending and
-			  receiving DNS messages, and instead enables the
-			  old external 'dnsserver' processes.],
-[ if test "$enableval" = "no" ; then
-    echo "Disabling Internal DNS queries"
-    use_dnsserver="yes"
-  fi
-])
-if test "$use_dnsserver" = "yes"; then
-    AC_DEFINE(USE_DNSSERVERS, 1, [If --disable-internal-dns was given to configure, then we'll use
-	the dnsserver processes instead.])
-    AM_CONDITIONAL(USE_DNSSERVER, true)
-    dnl Some platforms need -lresolv when using --disable-internal-dns
-     case "$host" in
-	*-solaris*)
-        LIBS="$LIBS -lresolv"
-	    ;;
-	*-cygwin*)
-        LIBS="$LIBS -lresolv"
-        ;;
-    esac
-fi
-
 AC_ARG_ENABLE(truncate,
 [  --enable-truncate       This uses truncate() instead of unlink() when
 			  removing cache files.  Truncate gives a little

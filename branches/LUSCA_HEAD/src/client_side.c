@@ -3461,19 +3461,11 @@ clientProcessRequest2(clientHttpRequest * http)
 	e = http->entry = NULL;
     /* Release IP-cache entries on reload */
     if (r->flags.nocache) {
-#if USE_DNSSERVERS
-	ipcacheInvalidate(r->host);
-#else
 	ipcacheInvalidateNegative(r->host);
-#endif /* USE_DNSSERVERS */
     }
 #if HTTP_VIOLATIONS
     else if (r->flags.nocache_hack) {
-#if USE_DNSSERVERS
-	ipcacheInvalidate(r->host);
-#else
 	ipcacheInvalidateNegative(r->host);
-#endif /* USE_DNSSERVERS */
     }
 #endif /* HTTP_VIOLATIONS */
 #if USE_CACHE_DIGESTS
