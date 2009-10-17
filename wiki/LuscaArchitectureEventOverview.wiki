@@ -23,6 +23,8 @@ eventDelete() removes the given event.
 
 The event queue is checked at the beginning of each trip through the network communication loop. Events are fired before network IO events are checked.
 
+The event loop and network IO events are called in libiapp/mainloop.c:iapp_runonce().
+
 = Issues =
 
 The event insertion and removal time is O(n). It thus should not be used for scheduling anything other than periodic events. Some parts of the codebase use this framework for scheduling immediate callbacks for completing some processing (eg, the store client code), avoiding potential code re-entry issues. This is absolutely, positively not recommended.
