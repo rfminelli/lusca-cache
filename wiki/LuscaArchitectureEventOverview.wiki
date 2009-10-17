@@ -1,0 +1,30 @@
+#summary The Lusca Scheduled Event Framework
+#labels Architecture
+
+= Introduction =
+
+Lusca has a simple method of scheduling periodic events to occur at scheduled times.
+
+= Overview =
+
+The event framework allows events to be scheduled at some point in the future. Events can be scheduled and removed. Event callback data uses the "cbdata" reference counting to ensure the callback data is still valid before triggering the event.
+
+= Details =
+
+Events are added via eventAdd() and eventAddIsh(). Callback data is optional but it must be a "cbdata" allocated type if it is supplied.
+
+The time parameter should be interpreted as "no earlier than the supplied time". Event times are not exact so do not try to use it for highly repetitive, fine-grain timed events.
+
+eventAddIsh() adds a small, random time to the event time to reduce the risk of synchronisation between connections and events.
+
+eventDelete() removes the given event.
+
+= Implementation =
+
+The event queue is checked at the beginning of each trip through the network communication loop. Events are fired before network IO events are checked.
+
+= Issues =
+
+The event insertion and removal time is O(n). It thus should not be used for scheduling anything other than periodic events. Some parts of the codebase use this framework for scheduling immediate callbacks for completing some processing (eg, the store client code), avoiding potential code re-entry issues. This is absolutely, positively not recommended.
+
+The event callback data is checked before calling the event callback. The event itself is simply ignored and removed if the callback data is found to be invalid. New code should attempt to explicitly delete events before invalidating the callback data itself.
