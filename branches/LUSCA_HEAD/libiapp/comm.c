@@ -1174,6 +1174,14 @@ commSetTcpKeepalive(int fd, int idle, int interval, int timeout)
 	debug(5, 1) ("commSetTcpKeepalive: FD %d: %s\n", fd, xstrerror());
 }
 
+/*
+ * Get the current TOS from the socket.
+ *
+ * This returns the current TOS as set on the socket. It does not return
+ * the "tos" field from the comm struct.
+ *
+ * If the socket tos could not be read, -1 is returned.
+ */
 int
 commGetSocketTos(int fd)
 {
