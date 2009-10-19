@@ -12,12 +12,15 @@ typedef struct loghelper_buffer loghelper_buffer_t;
 
 struct _loghelper_instance {
 	int rfd, wfd;			/* read/write FDs to IPC helper */
-	char eol;			/* whether we are currently at the "end of packet" */
 	pid_t pid;			/* pid of helper */
 	int flush_pending;		/* whether a flush command is pending */
 	dlink_list bufs;		/* buffers to write */
 	int nbufs;			/* number of buffers to write */
 	int last_warned;
+	struct {
+		int closing:1;		/* whether we are closing - and further
+					   queued messages should be rejected */
+	} flags;
 };
 typedef struct _loghelper_instance loghelper_instance_t;
 
