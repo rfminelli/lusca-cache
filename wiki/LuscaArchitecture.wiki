@@ -19,7 +19,8 @@ This architecture overview is not designed to be completely thorough; it is mean
   * [LuscaArchitectureMemoryManagement] - basic memory management
   * [LuscaArchitectureDiskIO] - the legacy disk IO mechanism
   * [LuscaArchitectureAsyncDiskIO] - the thread-based async disk IO mechanism
-  * [LuscaArchitectureHelpers] - using external helper processes
+  * [LuscaArchitectureHelperIPC] - how external helper IPC is implemented
+  * [LuscaArchitectureHelpers] - the generic "helper" process framework
   * [LuscaArchitectureDebugging] - the debugging framework
 
 == Storage framework ==
