@@ -8,7 +8,7 @@ struct _loghelper_buffer {
 	int written_len;
 	dlink_node node;
 };
-typedef struct loghelper_buffer loghelper_buffer_t;
+typedef struct _loghelper_buffer loghelper_buffer_t;
 
 struct _loghelper_instance {
 	int rfd, wfd;			/* read/write FDs to IPC helper */
