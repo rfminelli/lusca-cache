@@ -35,6 +35,8 @@ The first entry is type SWAP_LOG_VERSION. This contains a version and record_siz
 
 = Squid Rebuild Information =
 
+This following section documents the legacy Squid method for rebuilding the in-memory index from the on-disk contents.
+
 == AUFS ==
 
 The AUFS rebuild process starts via a call to storeAufsDirRebuild(). This attempts to determine whether a valid swap log is available and chooses whether to rebuild by log or by directory.
