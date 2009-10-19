@@ -90,3 +90,4 @@ section 83    SSL accelerator support
 section 84    Helper process maintenance
 section 85    COSS external helpers
 section 86    UFS rebuild helper
+section 87    Logging Helper Library
