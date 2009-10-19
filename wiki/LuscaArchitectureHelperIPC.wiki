@@ -1,0 +1,28 @@
+#summary How Lusca implements generic IPC to helper processes
+#labels Architecture
+
+= Introduction =
+
+Lusca uses external processes for a variety of tasks. The IPC library implements a simple wrapper for running and communicating with external processes.
+
+= Overview =
+
+The IPC code is in libhelper/ipc.[ch]. This implements the basic function which executes an external helper (ipcCreate()) and creates the read and write sockets used for communication.
+
+The IPC code uses the libiapp/ library for socket communication events.
+
+= Different IPC types =
+
+There is a variety of IPC types implemented in the IPC layer.
+
+ * ICP_TCP_SOCKET
+ * IPC_UDP_SOCKET
+ * IPC_FIFO
+ * IPC_UNIX_STREAM
+ * IPC_UNIX_DGRAM
+
+It isn't immediately clear what the specific circumstances surrounding each of these IPC methods is for. By and large, one should use the stream tyeps (TCP, STREAM, FIFO) rather than the datagram types unless you are certain you know what you're doing.
+
+As far as the existing code is concerned - all the modules use IPC_STREAM (mapping to one of the TCP/FIFO/STREAM types) save for the ICMP code which uses IPC_DGRAM (mapping to one of the UDP/DGRAM types.)
+
+= Using the API =
