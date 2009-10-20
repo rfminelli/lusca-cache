@@ -20,6 +20,7 @@ struct _loghelper_instance {
 	struct {
 		int closing:1;		/* whether we are closing - and further
 					   queued messages should be rejected */
+		int writing:1;		/* whether we're writing anything */
 	} flags;
 };
 typedef struct _loghelper_instance loghelper_instance_t;
