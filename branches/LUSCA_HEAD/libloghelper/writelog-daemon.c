@@ -114,14 +114,15 @@ main(int argc, const char *argv[])
 		inbuf_read();
 
 		/* Do we have enough for the header? */
-		if (have_header == 0 && inbuf_curused() < 3) {
+		if (have_header == 0 && inbuf_curused() < 4) {
 			continue;		/* need more data */
 		}
 
 		/* If we don't have the header, snaffle it from the front */
 		if (have_header == 0) {
-			c_cmd = inbuf.buf[0];				/* command, byte */
-			c_len = inbuf.buf[1] * 256 + inbuf.buf[2];	/* length of entire packet, word, network byte order */
+									/* first byte is 0 for now */
+			c_cmd = inbuf.buf[1];				/* command, byte */
+			c_len = inbuf.buf[2] * 256 + inbuf.buf[3];	/* length of entire packet, word, network byte order */
 			have_header = 1;
 		}
 

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <netinet/in.h>
@@ -263,12 +264,17 @@ loghelper_queue_command(loghelper_instance_t *lh, loghelper_command_t cmd, short
 	/* Create a new buffer */
 	lb = loghelper_buffer_create();
 
-
 	/* Copy in the command */
+	lb->buf[0] = 0;
+	lb->buf[1] = u_cmd;
 
 	/* Copy in the packet length */
+	lb->buf[1] = (u_len & 0xff00) >> 8;	/* encode high byte */
+	lb->buf[2] = (u_len & 0xff);		/* .. and low byte, giving us network byte order */
 
 	/* Copy in the payload, if any */
+	if (payload_len > 0)
+		memcpy(lb->buf + 4, payload, payload_len);
 
 	/* Add it to the instance buffer list tail */
 	loghelper_append_buffer(lh, lb);
