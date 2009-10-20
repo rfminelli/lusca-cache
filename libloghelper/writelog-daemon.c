@@ -171,6 +171,11 @@ handle_command(u_int8_t cmd, u_int16_t len)
 			inbuf_consume(len);
 			ret = 1;
 			break;
+		case LH_CMD_CLOSE:
+			logfile_close();
+			inbuf_consume(len);
+			ret = 0;			/* EOF! */
+			break;
 		default:
 			fprintf(stderr, "read invalid command: %d: skipping!\n", cmd);
 			inbuf_consume(len);

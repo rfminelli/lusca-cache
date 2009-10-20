@@ -11,6 +11,7 @@ typedef enum {
 	LH_CMD_WRITE,
 	LH_CMD_ENABLE_BUFFERING,
 	LH_CMD_DISABLE_BUFFERING,
+	LH_CMD_CLOSE,
 	LH_CMD_LAST
 } loghelper_command_t;
 
