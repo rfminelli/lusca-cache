@@ -1,3 +1,5 @@
+#include "include/config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -13,6 +15,12 @@ struct {
 	int size;
 	int used;
 } inbuf;
+
+struct {
+	char *filename;
+	int rotate_count;
+	FILE *fp;
+} logfile;
 
 static int
 inbuf_curused(void)
@@ -30,7 +38,7 @@ inbuf_grow(int grow_by)
 	inbuf.size = new_size;
 }
 
-static void
+static int
 inbuf_read(void)
 {
 	int ret;
@@ -42,8 +50,9 @@ inbuf_read(void)
 	ret = read(STDIN_FILENO, inbuf.buf + inbuf.used, inbuf.size - inbuf.used);
 	if (ret <= 0) {
 		fprintf(stderr, "read returned %d: %d (%s)?\n", ret, errno, strerror(errno));
-		exit(127);
+		return ret;
 	}
+	return ret;
 }
 
 static void
@@ -62,6 +71,66 @@ inbuf_init(void)
 {
 	bzero(&inbuf, sizeof(inbuf));
 }
+
+/* Logfile stuff */
+
+
+static void
+logfile_init(void)
+{
+	bzero(&logfile, sizeof(logfile));
+}
+
+static void
+logfile_set_filename(const char *fn)
+{
+	logfile.filename = strdup(fn);
+}
+
+static void
+logfile_set_rotate_count(int rotate_count)
+{
+	logfile.rotate_count = rotate_count;
+}
+
+static void
+logfile_open(void)
+{
+	if (logfile.fp != NULL)
+		return;
+
+	logfile.fp = fopen(logfile.filename, "wb+");
+	/* XXX check error return? */
+}
+
+static void
+logfile_close(void)
+{
+	if (logfile.fp == NULL)
+		return;
+	fclose(logfile.fp);
+	logfile.fp = NULL;
+}
+
+static void
+logfile_reopen(void)
+{
+	logfile_close();
+	logfile_open();
+}
+
+/* XXX this needs to ABSOLUTELY BE REWRITTEN TO NOT BE SO HORRIBLE! */
+static void
+logfile_write(const char *buf, int len)
+{
+	int i;
+
+	fprintf(stderr, "logfile_write: writing %d bytes\n", len);
+	for (i = 0; i < len; i++)
+		(void) fputc(buf[i], logfile.fp);
+}
+
+/* Command stuff */
 
 static void
 cmd_rotate(void)
@@ -91,6 +160,17 @@ handle_command(u_int8_t cmd, u_int16_t len)
 			inbuf_consume(len);
 			ret = 1;
 			break;
+		case LH_CMD_REOPEN:
+			logfile_reopen();
+			inbuf_consume(len);
+			ret = 1;
+			break;
+		case LH_CMD_WRITE:
+			/* Dirty, dirty hack */
+			logfile_write(inbuf.buf + 4, len - 4);
+			inbuf_consume(len);
+			ret = 1;
+			break;
 		default:
 			fprintf(stderr, "read invalid command: %d: skipping!\n", cmd);
 			inbuf_consume(len);
@@ -108,10 +188,19 @@ main(int argc, const char *argv[])
 
 	int have_header = 0;
 
+	if (argc < 2) {
+		printf("error: usage: %s <logfile>\n", argv[0]);
+		exit(127);
+	}
+
 	inbuf_init();
+	logfile_init();
+	logfile_set_filename(argv[1]);
+	logfile_open();
 
 	do {
-		inbuf_read();
+		if (inbuf_read() <= 0)
+			break;
 
 		/* Do we have enough for the header? */
 		if (have_header == 0 && inbuf_curused() < 4) {
@@ -134,6 +223,8 @@ main(int argc, const char *argv[])
 			}
 		}
 	} while(1);
+
+	logfile_close();
 
 	exit(0);
 }
