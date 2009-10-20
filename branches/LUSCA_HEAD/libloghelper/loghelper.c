@@ -212,34 +212,6 @@ loghelper_create(const char *path, const char *progname, const char *args[])
 }
 
 /*
- * Close down a loghelper instance.
- *
- * This queues a close and quit message, then marks the loghelper as "going away."
- *
- * The loghelper is not freed here - it will wait for some response (or error) from
- * the loghelper process before finalising the current state.
- *
- * Any pending messages will be flushed and sent out before the close is queued.
- *
- * The "lh" pointer should be viewed as invalid after this call.
- */
-void
-loghelper_close(loghelper_instance_t *lh)
-{
-	/* Mark the connection as closing */
-	lh->flags.closing = 1;
-
-	/* Are there pending messages? If so, leave it for now and queue a write if needed */
-	if (loghelper_has_bufs(lh)) {
-		loghelper_kick_write(lh);
-		return;
-	}
-
-	/* No pending messages? Wrap up. */
-	loghelper_destroy(lh);
-}
-
-/*
  * Queue a command to be sent to the loghelper.
  *
  * The command will be queued to be sent straight away. Subsequently queued requests
@@ -284,3 +256,29 @@ loghelper_queue_command(loghelper_instance_t *lh, loghelper_command_t cmd, short
 
 	return 1;
 }
+
+/*
+ * Close down a loghelper instance.
+ *
+ * This queues a close and quit message, then marks the loghelper as "going away."
+ *
+ * The loghelper is not freed here - it will wait for some response (or error) from
+ * the loghelper process before finalising the current state.
+ *
+ * Any pending messages will be flushed and sent out before the close is queued.
+ *
+ * The "lh" pointer should be viewed as invalid after this call.
+ */
+void
+loghelper_close(loghelper_instance_t *lh)
+{
+	/* Mark the connection as closing */
+	lh->flags.closing = 1;
+
+	/* Queue close message */
+	(void) loghelper_queue_command(lh, LH_CMD_CLOSE, 4, NULL);
+
+	/* queue a write */
+	loghelper_kick_write(lh);
+}
+
