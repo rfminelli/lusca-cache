@@ -298,7 +298,11 @@ urlMethodDup(method_t * orig)
 const char *
 urlMethodGetConstStr(method_t *method)
 {
-	/* XXX this will later on handle the incorrect case where method->string is NULL */
+	/* XXX this should log a NULL method! */
+	if (! method)
+		return "(NULL Method)";
+	if (! method->string)
+		return "(NULL Method String)";
 	return method->string;
 }
 
