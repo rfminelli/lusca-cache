@@ -126,7 +126,7 @@ redirectStart(clientHttpRequest * http, RH * handler, void *data)
 #endif
     if (!r->client_ident)
 	r->client_ident = dash_str;
-    r->method_s = http->request->method->string;
+    r->method_s = urlMethodGetConstStr(http->request->method);
     r->handler = handler;
     r->data = data;
     cbdataLock(r->data);
@@ -423,7 +423,7 @@ internalRedirectProcessURL(clientHttpRequest * req, rewritetoken * head)
 	    str = req->request->extacl_user;
 	    break;
 	case RFT_METHOD:
-	    str = req->request->method->string;
+	    str = urlMethodGetConstStr(req->request->method);
 	    break;
 	case RFT_PROTOCOL:
 	    str = ProtocolStr[req->request->protocol];

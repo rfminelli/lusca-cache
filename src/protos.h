@@ -811,6 +811,7 @@ extern method_t *urlMethodGet(const char *, int len);
 extern method_t *urlMethodGetKnown(const char *, int len);
 extern method_t *urlMethodGetKnownByCode(method_code_t);
 extern method_t *urlMethodDup(method_t *);
+extern const char * urlMethodGetConstStr(method_t *method);
 extern void urlMethodFree(method_t *);
 extern void urlInitialize(void);
 extern request_t *urlParse(method_t *, char *);

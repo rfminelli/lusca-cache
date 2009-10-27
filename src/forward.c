@@ -764,7 +764,7 @@ fwdDispatch(FwdState * fwdState)
     int server_fd = fwdState->server_fd;
     FwdServer *fs = fwdState->servers;
     debug(17, 3) ("fwdDispatch: FD %d: Fetching '%s %s'\n",
-	fwdState->client_fd, request->method->string, storeUrl(entry));
+	fwdState->client_fd, urlMethodGetConstStr(request->method), storeUrl(entry));
     /*
      * Assert that server_fd is set.  This is to guarantee that fwdState
      * is attached to something and will be deallocated when server_fd
@@ -1257,7 +1257,7 @@ fwdLog(FwdState * fwdState)
     logfilePrintf(logfile, "%9d.%03d %03d %s %s\n",
 	(int) current_time.tv_sec,
 	(int) current_time.tv_usec / 1000,
-	fwdState->last_status, fwdState->request->method->string,
+	fwdState->last_status, urlMethodGetConstStr(fwdState->request->method),
 	fwdState->request->canonical);
 }
 

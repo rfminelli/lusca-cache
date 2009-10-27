@@ -516,7 +516,7 @@ sslStart(clientHttpRequest * http, squid_off_t * size_ptr, int *status_ptr)
 	    return;
 	}
     }
-    debug(26, 3) ("sslStart: '%s %s'\n", request->method->string, url);
+    debug(26, 3) ("sslStart: '%s %s'\n", urlMethodGetConstStr(request->method), url);
     statCounter.server.all.requests++;
     statCounter.server.other.requests++;
     outgoing = getOutgoingAddr(request);

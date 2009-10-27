@@ -139,7 +139,7 @@ peerSelect(request_t * request,
     if (entry)
 	debug(44, 3) ("peerSelect: %s\n", storeUrl(entry));
     else
-	debug(44, 3) ("peerSelect: %s\n", request->method->string);
+	debug(44, 3) ("peerSelect: %s\n", urlMethodGetConstStr(request->method));
     CBDATA_INIT_TYPE(ps_state);
     psstate = cbdataAlloc(ps_state);
     psstate->request = requestLink(request);
@@ -239,7 +239,7 @@ peerSelectFoo(ps_state * ps)
 {
     StoreEntry *entry = ps->entry;
     request_t *request = ps->request;
-    debug(44, 3) ("peerSelectFoo: '%s %s'\n", request->method->string,
+    debug(44, 3) ("peerSelectFoo: '%s %s'\n", urlMethodGetConstStr(request->method),
 	request->host);
     if (ps->direct == DIRECT_UNKNOWN) {
 	if (ps->always_direct == 0 && Config.accessList.AlwaysDirect) {
@@ -459,7 +459,7 @@ peerGetSomeParent(ps_state * ps)
     peer *p;
     request_t *request = ps->request;
     hier_code code = HIER_NONE;
-    debug(44, 3) ("peerGetSomeParent: %s %s\n", request->method->string,
+    debug(44, 3) ("peerGetSomeParent: %s %s\n", urlMethodGetConstStr(request->method),
 	request->host);
     if (ps->direct == DIRECT_YES)
 	return;

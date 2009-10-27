@@ -127,7 +127,9 @@ httpRequestPack(const request_t * req, Packer * p)
     assert(req && p);
     /* pack request-line */
     packerPrintf(p, "%s %.*s HTTP/%d.%d\r\n",
-	req->method->string, strLen2(req->urlpath), strBuf2(req->urlpath), req->http_ver.major, req->http_ver.minor);
+	urlMethodGetConstStr(req->method),
+	strLen2(req->urlpath), strBuf2(req->urlpath),
+	req->http_ver.major, req->http_ver.minor);
     /* headers */
     httpHeaderPackInto(&req->header, p);
     /* trailer */
@@ -147,7 +149,9 @@ httpRequestPackDebug(request_t * req, Packer * p)
     packerPrintf(p, "\n");
     /* pack request-line */
     packerPrintf(p, "%s %s HTTP/%d.%d\r\n",
-	req->method->string, urlCanonical(req), req->http_ver.major, req->http_ver.minor);
+	urlMethodGetConstStr(req->method),
+	urlCanonical(req),
+	req->http_ver.major, req->http_ver.minor);
     /* headers */
     httpHeaderPackInto(&req->header, p);
     /* trailer */
@@ -181,7 +185,7 @@ int
 httpRequestPrefixLen(const request_t * req)
 {
     assert(req);
-    return strlen(req->method->string) + 1 +
+    return strlen(urlMethodGetConstStr(req->method)) + 1 +
 	strLen(req->urlpath) + 1 +
 	4 + 1 + 3 + 2 +
 	req->header.len + 2;

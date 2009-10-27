@@ -1976,7 +1976,7 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	return aclMatchInteger(ae->data, r->protocol);
 	/* NOTREACHED */
     case ACL_METHOD:
-	return aclMatchWordListInsensitive(ae->data, r->method->string);
+	return aclMatchWordListInsensitive(ae->data, urlMethodGetConstStr(r->method));
 	/* NOTREACHED */
     case ACL_BROWSER:
 	browser = httpHeaderGetStr(&checklist->request->header, HDR_USER_AGENT);
