@@ -251,7 +251,7 @@ statStoreEntry(MemBuf * mb, StoreEntry * e)
     memBufPrintf(mb, "KEY %s\n", storeKeyText(e->hash.key));
     /* XXX should this url be escaped? */
     if (mem)
-	memBufPrintf(mb, "\t%s %s\n", mem->method->string, mem->url);
+	memBufPrintf(mb, "\t%s %s\n", urlMethodGetConstStr(mem->method), mem->url);
     if (mem && mem->store_url)
 	memBufPrintf(mb, "\tStore lookup URL: %s\n", mem->store_url);
     memBufPrintf(mb, "\t%s\n", describeStatuses(e));

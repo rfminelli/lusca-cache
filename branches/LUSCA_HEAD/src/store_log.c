@@ -80,7 +80,7 @@ storeLog(int tag, const StoreEntry * e)
 	    strLen2(reply->content_type) ? strBuf2(reply->content_type) : "unknown",
 	    reply->content_length,
 	    mem->inmem_hi - mem->reply->hdr_sz,
-	    mem->method->string,
+	    urlMethodGetConstStr(mem->method),
 	    rfc1738_escape_unescaped(mem->url));
 	logfileLineEnd(storelog);
     } else {

@@ -1221,7 +1221,7 @@ htcpQuery(StoreEntry * e, request_t * req, peer * p)
     stuff.f1 = 1;
     stuff.response = 0;
     stuff.msg_id = ++msg_id_counter;
-    stuff.S.method = (char *) req->method->string;
+    stuff.S.method = (char *) urlMethodGetConstStr(req->method);
     stuff.S.uri = (char *) storeUrl(e);
     stuff.S.version = vbuf;
     httpBuildRequestHeader(req, req, e, &hdr, flags);
@@ -1277,7 +1277,7 @@ htcpClear(StoreEntry * e, const char *uri, request_t * req, method_t * method, p
 	stuff.reason = 0;
 	break;
     }
-    stuff.S.method = (char *) method->string;
+    stuff.S.method = (char *) urlMethodGetConstStr(method);
     if (e == NULL || e->mem_obj == NULL) {
 	if (uri == NULL) {
 	    return;
