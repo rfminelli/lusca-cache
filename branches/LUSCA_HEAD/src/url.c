@@ -300,9 +300,9 @@ urlMethodGetConstStr(method_t *method)
 {
 	/* XXX this should log a NULL method! */
 	if (! method)
-		return "(NULL Method)";
+		return "NULL";
 	if (! method->string)
-		return "(NULL Method String)";
+		return "NULL";
 	return method->string;
 }
 
