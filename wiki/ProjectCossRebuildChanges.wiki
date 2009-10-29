@@ -13,6 +13,8 @@ The current store logfile writing code stems from the original "modio" project i
 
 The annoying thing is where these are called from. storeDirOpenSwapLogs() doesn't seem to be called early enough during the initialisation period to make logs immediately available to write to. storeDirSwapLog() is called when an object is created, released or becomes private.
 
+*solution* - AUFS opens the swaplog itself - the open/close callbacks are only used during reconfigure/rotate commands. COSS now calls the swaplog open function during init; it should probably call the close function itself during shutdown.
+
 This mostly works for AUFS but COSS also supports object relocation. This means that a delete and allocate must be written to the logfile. This currently does not happen.
 
 The storeio open and create routines have a "notify" callback which is called if/when the swap file number changes; this may be enough to abuse to generate delete/add swaplog entries. It may be worthwhile making COSS more self-contained; adding delete/add entries to these Notify functions may change the way AUFS operates.
