@@ -1,0 +1,26 @@
+#summary COSS rebuild notes
+#labels Project
+
+= Introduction =
+
+The COSS rebuild process currently reads the whole COSS partition in and extracts objects. This works fine but is very slow and IO inefficient.
+
+This project aims to research and document what will be required to build a COSS swap log and rebuild from it at startup.
+
+= Stuff to sort through =
+
+The current store logfile writing code stems from the original "modio" project in Squid circa 2000. Swaplogs are opened via storeDirOpenSwapLogs(). Swaplog entries are written via storeDirSwapLog().
+
+The annoying thing is where these are called from. storeDirOpenSwapLogs() doesn't seem to be called early enough during the initialisation period to make logs immediately available to write to. storeDirSwapLog() is called when an object is created, released or becomes private.
+
+This mostly works for AUFS but COSS also supports object relocation. This means that a delete and allocate must be written to the logfile. This currently does not happen.
+
+The storeio open and create routines have a "notify" callback which is called if/when the swap file number changes; this may be enough to abuse to generate delete/add swaplog entries. It may be worthwhile making COSS more self-contained; adding delete/add entries to these Notify functions may change the way AUFS operates.
+
+Objects are written to COSS the moment the COSS storedir has been rebuilt. This occurs whether or not the swaplogs themselves have been opened.
+
+= Proposal =
+
+  * Implement some replacement, private swaplog management routines
+  * Don't rely on the Squid/Lusca traditional method for opening and closing the swaplogs ; do it ourselves early on so the logfile can be made available when required
+  * Make sure that relocated objects are written to the swaplog. Ie, they are deleted and re-added.
