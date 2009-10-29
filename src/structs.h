@@ -1983,24 +1983,6 @@ struct _storerepl_entry {
     REMOVALPOLICYCREATE *create;
 };
 
-/*
- * Async disk IO - this defines a async disk io queue
- */
-
-struct _diskd_queue {
-    int smsgid;			/* send sysvmsg id */
-    int rmsgid;			/* recv sysvmsg id */
-    int wfd;			/* queue file descriptor ? */
-    int away;			/* number of requests away */
-    int sent_count;		/* number of messages sent */
-    int recv_count;		/* number of messages received */
-    struct {
-	char *buf;		/* shm buffer */
-	link_list *stack;
-	int id;			/* sysvshm id */
-    } shm;
-};
-
 struct _logfile_buffer {
     char *buf;
     int size;
