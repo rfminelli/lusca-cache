@@ -80,8 +80,8 @@ clientdbAdd(struct in_addr addr)
     c->addr = addr;
     hash_join(client_table, &c->hash);
     statCounter.client_http.clients++;
-    if ((statCounter.client_http.clients > max_clients) && !cleanup_running && cleanup_scheduled < 2) {
-	cleanup_scheduled++;
+    if ((statCounter.client_http.clients > max_clients) && !cleanup_running && !cleanup_scheduled) {
+	cleanup_scheduled = 1;
 	eventAdd("client_db garbage collector", clientdbScheduledGC, NULL, 90, 0);
     }
     return c;
@@ -310,7 +310,7 @@ clientdbGC(void *unused)
 	bucket = 0;
 	cleanup_running = 0;
 	max_clients = statCounter.client_http.clients * 3 / 2;
-	if (!cleanup_scheduled) {
+	if (! cleanup_scheduled) {
 	    cleanup_scheduled = 1;
 	    eventAdd("client_db garbage collector", clientdbScheduledGC, NULL, 3 * 3600, 0);
 	}

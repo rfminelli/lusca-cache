@@ -402,7 +402,7 @@ httpReplyClone(HttpReply * src)
      * when we've already -done- that, but I'll worry about doing it
      * faster later. Besides, there's too much other code to fix up.
      */
-#if 1
+#if 0
     httpReplyHdrCacheInit(dst);
 #else
     dst->content_length = src->content_length;
