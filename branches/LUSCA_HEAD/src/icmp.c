@@ -190,6 +190,16 @@ icmpOpen(void)
     const char *args[2];
     int rfd;
     int wfd;
+
+    /* 
+     * Some of the error handling just calls icmpClose() without re-opening things.
+     * icmpClose() actually calls icmpOpen() itself!
+     * Until that mess is fully tidied up, just ensure that only one pinger is
+     * opened at any one time.
+     */
+    if (icmp_sock != -1)
+        return;
+
     if (strcmp("none", Config.Program.pinger) == 0) {
 	debug(37, 1) ("Pinger not started - disabled in configuration file.\n");
 	return;
