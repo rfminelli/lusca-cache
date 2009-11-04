@@ -76,15 +76,13 @@ static ClientInfo *
 clientdbAdd(struct in_addr addr)
 {
     radix_node_t *rn;
-    prefix_t *p;
+    prefix_t p;
     ClientInfo *c;
 
-    /* XXX should make this static? */
-    p = New_Prefix(AF_INET, &addr, 32, NULL);
+    Init_Prefix(&p, AF_INET, &addr, 32);
     c = memPoolAlloc(pool_client_info);
     c->addr = addr;
-    rn = radix_lookup(client_tree, p);
-    Deref_Prefix(p);
+    rn = radix_lookup(client_tree, &p);
     rn->data = c;
     statCounter.client_http.clients++;
     if ((statCounter.client_http.clients > max_clients) && !cleanup_running && !cleanup_scheduled) {
@@ -114,15 +112,15 @@ void
 clientdbUpdate(struct in_addr addr, log_type ltype, protocol_t p, squid_off_t size)
 {
     radix_node_t *rn;
-    prefix_t *pr;
+    prefix_t pr;
     ClientInfo *c = NULL;
 
     if (!Config.onoff.client_db)
 	return;
 
-    pr = New_Prefix(AF_INET, &addr, 32, NULL);	/* XXX should be a static prefix_t! */
-    rn = radix_search_exact(client_tree, pr);
-    Deref_Prefix(pr);
+    Init_Prefix(&pr, AF_INET, &addr, 32);
+    rn = radix_search_exact(client_tree, &pr);
+
     if (rn)
         c = rn->data;
     if (c == NULL)
@@ -156,14 +154,13 @@ int
 clientdbEstablished(struct in_addr addr, int delta)
 {
     ClientInfo *c = NULL;
-    prefix_t *p;
+    prefix_t p;
     radix_node_t *rn;
 
     if (!Config.onoff.client_db)
 	return 0;
-    p = New_Prefix(AF_INET, &addr, 32, NULL);		/* XXX should be a static prefix_t! */
-    rn = radix_search_exact(client_tree, p);
-    Deref_Prefix(p);
+    Init_Prefix(&p, AF_INET, &addr, 32);
+    rn = radix_search_exact(client_tree, &p);
     if (rn)
         c = rn->data;
     if (c == NULL)
@@ -182,15 +179,14 @@ clientdbCutoffDenied(struct in_addr addr)
     int ND;
     double p;
     ClientInfo *c = NULL;
-    prefix_t *pr;
+    prefix_t pr;
     radix_node_t *rn;
 
     if (!Config.onoff.client_db)
 	return 0;
 
-    pr = New_Prefix(AF_INET, &addr, 32, NULL);	/* XXX should be a static prefix_t! */
-    rn = radix_search_exact(client_tree, pr);
-    Deref_Prefix(pr);
+    Init_Prefix(&pr, AF_INET, &addr, 32);
+    rn = radix_search_exact(client_tree, &pr);
     if (rn)
         c = rn->data;
 
