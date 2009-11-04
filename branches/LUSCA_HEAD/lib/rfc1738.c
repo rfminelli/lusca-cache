@@ -43,9 +43,50 @@
 
 #include "util.h"
 
+static char rfc1738_unsafe_char_map[] =
+{
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+	1, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 
+	1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+};
+
+static char rfc1738_reserved_char_map[] =
+{
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 
+	1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+};
+
+#if 0
 /*  
  *  RFC 1738 defines that these characters should be escaped, as well
- *  any non-US-ASCII character or anything between 0x00 - 0x1F.
+ *  any non-US-ASCII character and anything between 0x00 and 0x1F.
  */
 static char rfc1738_unsafe_chars[] =
 {
@@ -79,6 +120,7 @@ static char rfc1738_reserved_chars[] =
     (char) 0x3d,		/* = */
     (char) 0x26			/* & */
 };
+#endif
 
 /*
  *  rfc1738_escape - Returns a static buffer contains the RFC 1738 
@@ -91,7 +133,7 @@ rfc1738_do_escape(const char *url, int encode_reserved)
     static size_t bufsize = 0;
     const char *p;
     char *q;
-    unsigned int i, do_escape;
+    unsigned int do_escape;
 
     if (buf == NULL || strlen(url) * 3 > bufsize) {
 	xfree(buf);
@@ -101,35 +143,16 @@ rfc1738_do_escape(const char *url, int encode_reserved)
     for (p = url, q = buf; *p != '\0'; p++, q++) {
 	do_escape = 0;
 
-	/* RFC 1738 defines these chars as unsafe */
-	for (i = 0; i < sizeof(rfc1738_unsafe_chars); i++) {
-	    if (*p == rfc1738_unsafe_chars[i]) {
-		do_escape = 1;
-		break;
-	    }
-	}
+	if (rfc1738_unsafe_char_map[(int) *p] > 0)
+	    do_escape = 1;
+
 	/* Handle % separately */
 	if (encode_reserved >= 0 && *p == '%')
 	    do_escape = 1;
-	/* RFC 1738 defines these chars as reserved */
-	for (i = 0; i < sizeof(rfc1738_reserved_chars) && encode_reserved > 0; i++) {
-	    if (*p == rfc1738_reserved_chars[i]) {
+
+	if (encode_reserved > 0 && rfc1738_reserved_char_map[ (int) *p ] > 0)
 		do_escape = 1;
-		break;
-	    }
-	}
-	/* RFC 1738 says any control chars (0x00-0x1F) are encoded */
-	if ((unsigned char) *p <= (unsigned char) 0x1F) {
-	    do_escape = 1;
-	}
-	/* RFC 1738 says 0x7f is encoded */
-	if (*p == (char) 0x7F) {
-	    do_escape = 1;
-	}
-	/* RFC 1738 says any non-US-ASCII are encoded */
-	if (((unsigned char) *p >= (unsigned char) 0x80)) {
-	    do_escape = 1;
-	}
+
 	/* Do the triplet encoding, or just copy the char */
 	/* note: we do not need snprintf here as q is appropriately
 	 * allocated - KA */
