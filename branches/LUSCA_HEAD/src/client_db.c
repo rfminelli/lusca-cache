@@ -35,8 +35,11 @@
 
 #include "squid.h"
 
+#include "../libcore/radix.h"
+
+#define	CLIENT_DB_SCHEDULE_TIME	30
+
 struct _ClientInfo {
-    hash_link hash;             /* must be first */
     struct in_addr addr;
     struct {
         int result_hist[LOG_TYPE_MAX];
@@ -56,9 +59,9 @@ struct _ClientInfo {
 
 typedef struct _ClientInfo ClientInfo;
 
-static hash_table *client_table = NULL;
+static radix_tree_t *client_tree = NULL;
+
 static ClientInfo *clientdbAdd(struct in_addr addr);
-static FREE clientdbFreeItem;
 static void clientdbStartGC(void);
 static void clientdbScheduledGC(void *);
 
@@ -67,18 +70,22 @@ static int cleanup_running = 0;
 static int cleanup_scheduled = 0;
 static int cleanup_removed;
 
-#define CLIENT_DB_HASH_SIZE 467
-
 static MemPool * pool_client_info;
 
 static ClientInfo *
 clientdbAdd(struct in_addr addr)
 {
+    radix_node_t *rn;
+    prefix_t *p;
     ClientInfo *c;
+
+    /* XXX should make this static? */
+    p = New_Prefix(AF_INET, &addr, 32, NULL);
     c = memPoolAlloc(pool_client_info);
-    c->hash.key = xstrdup(xinet_ntoa(addr));
     c->addr = addr;
-    hash_join(client_table, &c->hash);
+    rn = radix_lookup(client_tree, p);
+    Deref_Prefix(p);
+    rn->data = c;
     statCounter.client_http.clients++;
     if ((statCounter.client_http.clients > max_clients) && !cleanup_running && !cleanup_scheduled) {
 	cleanup_scheduled = 1;
@@ -91,29 +98,33 @@ void
 clientdbInitMem(void)
 {
     pool_client_info = memPoolCreate("ClientInfo", sizeof(ClientInfo));
+    eventAdd("client_db garbage collector", clientdbScheduledGC, NULL, CLIENT_DB_SCHEDULE_TIME, 0);
 }
 
 void
 clientdbInit(void)
 {
-    if (client_table)
-	return;
-    client_table = hash_create((HASHCMP *) strcmp, CLIENT_DB_HASH_SIZE, hash_string);
-    cachemgrRegister("client_list",
-	"Cache Client List",
-	clientdbDump,
-	0, 1);
+    if (client_tree)
+        return;
+    client_tree = New_Radix();
+    cachemgrRegister("client_list", "Cache Client List", clientdbDump, 0, 1);
 }
 
 void
 clientdbUpdate(struct in_addr addr, log_type ltype, protocol_t p, squid_off_t size)
 {
-    const char *key;
-    ClientInfo *c;
+    radix_node_t *rn;
+    prefix_t *pr;
+    ClientInfo *c = NULL;
+
     if (!Config.onoff.client_db)
 	return;
-    key = xinet_ntoa(addr);
-    c = (ClientInfo *) hash_lookup(client_table, key);
+
+    pr = New_Prefix(AF_INET, &addr, 32, NULL);	/* XXX should be a static prefix_t! */
+    rn = radix_search_exact(client_tree, pr);
+    Deref_Prefix(pr);
+    if (rn)
+        c = rn->data;
     if (c == NULL)
 	c = clientdbAdd(addr);
     if (c == NULL)
@@ -144,12 +155,17 @@ clientdbUpdate(struct in_addr addr, log_type ltype, protocol_t p, squid_off_t si
 int
 clientdbEstablished(struct in_addr addr, int delta)
 {
-    const char *key;
-    ClientInfo *c;
+    ClientInfo *c = NULL;
+    prefix_t *p;
+    radix_node_t *rn;
+
     if (!Config.onoff.client_db)
 	return 0;
-    key = xinet_ntoa(addr);
-    c = (ClientInfo *) hash_lookup(client_table, key);
+    p = New_Prefix(AF_INET, &addr, 32, NULL);		/* XXX should be a static prefix_t! */
+    rn = radix_search_exact(client_tree, p);
+    Deref_Prefix(p);
+    if (rn)
+        c = rn->data;
     if (c == NULL)
 	c = clientdbAdd(addr);
     if (c == NULL)
@@ -162,15 +178,22 @@ clientdbEstablished(struct in_addr addr, int delta)
 int
 clientdbCutoffDenied(struct in_addr addr)
 {
-    const char *key;
     int NR;
     int ND;
     double p;
-    ClientInfo *c;
+    ClientInfo *c = NULL;
+    prefix_t *pr;
+    radix_node_t *rn;
+
     if (!Config.onoff.client_db)
 	return 0;
-    key = xinet_ntoa(addr);
-    c = (ClientInfo *) hash_lookup(client_table, key);
+
+    pr = New_Prefix(AF_INET, &addr, 32, NULL);	/* XXX should be a static prefix_t! */
+    rn = radix_search_exact(client_tree, pr);
+    Deref_Prefix(pr);
+    if (rn)
+        c = rn->data;
+
     if (c == NULL)
 	return 0;
     /*
@@ -189,7 +212,7 @@ clientdbCutoffDenied(struct in_addr addr)
     p = 100.0 * ND / NR;
     if (p < 95.0)
 	return 0;
-    debug(1, 0) ("WARNING: Probable misconfigured neighbor at %s\n", key);
+    debug(1, 0) ("WARNING: Probable misconfigured neighbor at %s\n", inet_ntoa(addr));
     debug(1, 0) ("WARNING: %d of the last %d ICP replies are DENIED\n", ND, NR);
     debug(1, 0) ("WARNING: No replies will be sent for the next %d seconds\n",
 	CUTOFF_SECONDS);
@@ -199,20 +222,20 @@ clientdbCutoffDenied(struct in_addr addr)
     return 1;
 }
 
+struct
+clientdb_iterate_stats {
+	int http_total;
+	int icp_total;
+	int http_hits;
+	int icp_hits;
+};
 
-void
-clientdbDump(StoreEntry * sentry)
+static void
+clientdbDumpEntry(StoreEntry *sentry, ClientInfo *c, struct clientdb_iterate_stats *ci)
 {
-    ClientInfo *c;
-    log_type l;
-    int icp_total = 0;
-    int icp_hits = 0;
-    int http_total = 0;
-    int http_hits = 0;
-    storeAppendPrintf(sentry, "Cache Clients:\n");
-    hash_first(client_table);
-    while ((c = (ClientInfo *) hash_next(client_table))) {
-	storeAppendPrintf(sentry, "Address: %s\n", hashKeyStr(&c->hash));
+        log_type l;
+
+	storeAppendPrintf(sentry, "Address: %s\n", xinet_ntoa(c->addr));
 	storeAppendPrintf(sentry, "Name: %s\n", fqdnFromAddr(c->addr));
 	storeAppendPrintf(sentry, "Currently established connections: %d\n",
 	    c->n_established);
@@ -221,9 +244,9 @@ clientdbDump(StoreEntry * sentry)
 	for (l = LOG_TAG_NONE; l < LOG_TYPE_MAX; l++) {
 	    if (c->Icp.result_hist[l] == 0)
 		continue;
-	    icp_total += c->Icp.result_hist[l];
+	    ci->icp_total += c->Icp.result_hist[l];
 	    if (LOG_UDP_HIT == l)
-		icp_hits += c->Icp.result_hist[l];
+		ci->icp_hits += c->Icp.result_hist[l];
 	    storeAppendPrintf(sentry,
 		"        %-20.20s %7d %3d%%\n",
 		log_tags[l],
@@ -235,9 +258,9 @@ clientdbDump(StoreEntry * sentry)
 	for (l = LOG_TAG_NONE; l < LOG_TYPE_MAX; l++) {
 	    if (c->Http.result_hist[l] == 0)
 		continue;
-	    http_total += c->Http.result_hist[l];
+	    ci->http_total += c->Http.result_hist[l];
 	    if (isTcpHit(l))
-		http_hits += c->Http.result_hist[l];
+		ci->http_hits += c->Http.result_hist[l];
 	    storeAppendPrintf(sentry,
 		"        %-20.20s %7d %3d%%\n",
 		log_tags[l],
@@ -245,28 +268,50 @@ clientdbDump(StoreEntry * sentry)
 		percent(c->Http.result_hist[l], c->Http.n_requests));
 	}
 	storeAppendPrintf(sentry, "\n");
-    }
+}
+
+void
+clientdbDump(StoreEntry * sentry)
+{
+    ClientInfo *c;
+    radix_node_t *rn;
+    struct clientdb_iterate_stats ci;
+
+    bzero(&ci, sizeof(ci));
+    storeAppendPrintf(sentry, "Cache Clients:\n");
+
+    RADIX_WALK(client_tree->head, rn) {
+      c = rn->data;
+      clientdbDumpEntry(sentry, c, &ci);
+    } RADIX_WALK_END;
+
     storeAppendPrintf(sentry, "TOTALS\n");
     storeAppendPrintf(sentry, "ICP : %d Queries, %d Hits (%3d%%)\n",
-	icp_total, icp_hits, percent(icp_hits, icp_total));
+	ci.icp_total, ci.icp_hits, percent(ci.icp_hits, ci.icp_total));
     storeAppendPrintf(sentry, "HTTP: %d Requests, %d Hits (%3d%%)\n",
-	http_total, http_hits, percent(http_hits, http_total));
+	ci.http_total, ci.http_hits, percent(ci.http_hits, ci.http_total));
 }
 
 static void
-clientdbFreeItem(void *data)
+clientdbFreeItem(ClientInfo *c)
 {
-    ClientInfo *c = data;
-    safe_free(c->hash.key);
     memPoolFree(pool_client_info, c);
+}
+
+static void
+clientdbFreeItemRadix(radix_node_t *rn, void *cbdata)
+{
+	ClientInfo *c = rn->data;
+
+	rn->data = NULL;
+	clientdbFreeItem(c);
 }
 
 void
 clientdbFreeMemory(void)
 {
-    hashFreeItems(client_table, clientdbFreeItem);
-    hashFreeMemory(client_table);
-    client_table = NULL;
+    Destroy_Radix(client_tree, clientdbFreeItemRadix, NULL);
+    client_tree = NULL;
 }
 
 static void
@@ -277,45 +322,51 @@ clientdbScheduledGC(void *unused)
 }
 
 static void
-clientdbGC(void *unused)
+clientdbGC(void *unused)   
 {
-    static int bucket = 0;
-    hash_link *link_next;
+    radix_node_t *rn;
+    Stack items;
 
-    link_next = hash_get_bucket(client_table, bucket++);
-    while (link_next != NULL) {
-	ClientInfo *c = (ClientInfo *) link_next;
-	int age = squid_curtime - c->last_seen;
-	link_next = link_next->next;
-	if (c->n_established)
-	    continue;
+    stackInit(&items);
 
-	if (age < 24 * 3600 && c->Http.n_requests > 100)
-	    continue;
-	if (age < 4 * 3600 && (c->Http.n_requests > 10 || c->Icp.n_requests > 10))
-	    continue;
-	if (age < 5 * 60 && (c->Http.n_requests > 1 || c->Icp.n_requests > 1))
-	    continue;
-	if (age < 60)
-	    continue;
-	hash_remove_link(client_table, &c->hash);
-	clientdbFreeItem(c);
-	statCounter.client_http.clients--;
-	cleanup_removed++;
+    RADIX_WALK(client_tree->head, rn) {
+      ClientInfo *c = rn->data;
+      int age = squid_curtime - c->last_seen;
+      if (c->n_established)
+          goto next;
+      if (age < 24 * 3600 && c->Http.n_requests > 100)
+          goto next;
+      if (age < 4 * 3600 && (c->Http.n_requests > 10 || c->Icp.n_requests > 10))
+          goto next;
+      if (age < 5 * 60 && (c->Http.n_requests > 1 || c->Icp.n_requests > 1))
+          goto next;
+      if (age < 60)
+          goto next;
+
+      /* remove the item from the tree */
+      /* XXX it may not be possible to delete an item from the tree whilst walking it! */
+      stackPush(&items, rn);
+      cleanup_removed++;
+next:
+      (void) 0;
+
+    } RADIX_WALK_END;
+
+    if (!cleanup_scheduled) {
+        cleanup_scheduled = 1;
+        eventAdd("client_db garbage collector", clientdbScheduledGC, NULL, CLIENT_DB_SCHEDULE_TIME, 0);
     }
 
-    if (bucket < CLIENT_DB_HASH_SIZE)
-	eventAdd("client_db garbage collector", clientdbGC, NULL, 0.15, 0);
-    else {
-	bucket = 0;
-	cleanup_running = 0;
-	max_clients = statCounter.client_http.clients * 3 / 2;
-	if (! cleanup_scheduled) {
-	    cleanup_scheduled = 1;
-	    eventAdd("client_db garbage collector", clientdbScheduledGC, NULL, 3 * 3600, 0);
-	}
-	debug(49, 2) ("clientdbGC: Removed %d entries\n", cleanup_removed);
+    while ( (rn = stackPop(&items)) != NULL) {
+      ClientInfo *c = rn->data;
+      rn->data = NULL;
+      radix_remove(client_tree, rn);
+      clientdbFreeItem(c);
+      statCounter.client_http.clients--;
+      cleanup_removed++;
     }
+    debug(49, 2) ("clientdbGC: Removed %d entries\n", cleanup_removed);
+    stackClean(&items);
 }
 
 static void
@@ -338,6 +389,7 @@ clientdbStartGC(void)
 struct in_addr *
 client_entry(struct in_addr *current)
 {
+#if 0
     ClientInfo *c = NULL;
     const char *key;
     if (current) {
@@ -356,6 +408,7 @@ client_entry(struct in_addr *current)
     if (c)
 	return (&c->addr);
     else
+#endif
 	return (NULL);
 
 }
@@ -364,11 +417,14 @@ variable_list *
 snmp_meshCtblFn(variable_list * Var, snint * ErrP)
 {
     variable_list *Answer = NULL;
+#if 0
     static char key[16];
     ClientInfo *c = NULL;
     int aggr = 0;
     log_type l;
+#endif
     *ErrP = SNMP_ERR_NOERROR;
+#if 0
     debug(49, 6) ("snmp_meshCtblFn: Current : \n");
     snmpDebugOid(6, Var->name, Var->name_length);
     snprintf(key, sizeof(key), "%d.%d.%d.%d", Var->name[LEN_SQ_NET + 3], Var->name[LEN_SQ_NET + 4],
@@ -437,6 +493,7 @@ snmp_meshCtblFn(variable_list * Var, snint * ErrP)
 	debug(49, 5) ("snmp_meshCtblFn: illegal column.\n");
 	break;
     }
+#endif
     return Answer;
 }
 
