@@ -35,18 +35,24 @@
 
 #include "squid.h"
 
-#include "../include/hex.h"
-
 static cache_key null_key[SQUID_MD5_DIGEST_LENGTH];
 static MemPool * pool_md5_key = NULL;
+
+/* XXX this should be uhm, a library function! [ahc] */
+static char tohex[] = { '0','1','2','3','4','5','6','7','8','9', 'A', 'B', 'C', 'D', 'E', 'F' };
 
 const char *
 storeKeyText(const unsigned char *key)
 {
     static char buf[SQUID_MD5_DIGEST_LENGTH*2+1];
+    char *b = buf;
+    int i;
 
-    hex_from_byte_array(buf, (char *) key, SQUID_MD5_DIGEST_LENGTH);
-    buf[SQUID_MD5_DIGEST_LENGTH*2] = '\0';
+    for (i = 0; i < SQUID_MD5_DIGEST_LENGTH; i++) {
+        *(b++) = tohex[(key[i] >> 4) & 0x0f];
+        *(b++) = tohex[key[i] & 0x0f];
+    }
+    *b = '\0';
 
     return buf;
 }
