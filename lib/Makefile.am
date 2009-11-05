@@ -40,6 +40,7 @@ libmiscutil_a_SOURCES = \
 	getfullhostname.c \
 	hash.c \
 	heap.c \
+	hex.c \
 	html_quote.c \
 	iso3307.c \
 	md5.c \
