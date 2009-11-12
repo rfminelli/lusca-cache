@@ -235,7 +235,7 @@ int
 stmemRef(const mem_hdr * mem, squid_off_t offset, mem_node_ref * r)
 {
     mem_node *p = mem->head;
-    volatile squid_off_t t_off = mem->origin_offset;
+    squid_off_t t_off = mem->origin_offset;
 
     debug(19, 3) ("stmemRef: offset %" PRINTF_OFF_T "; initial offset in memory %d\n", offset, (int) mem->origin_offset);
     if (p == NULL)
