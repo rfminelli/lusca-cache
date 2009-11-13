@@ -105,6 +105,7 @@ comp_with_mask(u_char *addr, u_char *dest, u_int mask)
 int
 Init_Prefix(prefix_t *pfx, u_int family, void *dest, u_int bitlen)
 {
+	bzero(pfx, sizeof(*pfx));
 	if (family == AF_INET6) {
 		memcpy(&pfx->add.sin6, dest, 16);
 		pfx->bitlen = (bitlen >= 0) ? bitlen : 128;
