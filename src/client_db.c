@@ -37,10 +37,12 @@
 
 #include "../libcore/radix.h"
 
-#define	CLIENT_DB_SCHEDULE_TIME	30
+#define	CLIENT_DB_SCHEDULE_BACKGROUND_TIME	5
+#define	CLIENT_DB_SCHEDULE_IMMEDIATE_TIME	5
 
 struct _ClientInfo {
     struct in_addr addr;
+    dlink_node node;
     struct {
         int result_hist[LOG_TYPE_MAX];
         int n_requests;
@@ -60,6 +62,7 @@ struct _ClientInfo {
 typedef struct _ClientInfo ClientInfo;
 
 static radix_tree_t *client_tree = NULL;
+dlink_list client_list;
 
 static ClientInfo *clientdbAdd(struct in_addr addr);
 static void clientdbStartGC(void);
@@ -84,10 +87,11 @@ clientdbAdd(struct in_addr addr)
     c->addr = addr;
     rn = radix_lookup(client_tree, &p);
     rn->data = c;
+    dlinkAddTail(c, &c->node, &client_list);
     statCounter.client_http.clients++;
     if ((statCounter.client_http.clients > max_clients) && !cleanup_running && !cleanup_scheduled) {
 	cleanup_scheduled = 1;
-	eventAdd("client_db garbage collector", clientdbScheduledGC, NULL, 90, 0);
+	eventAdd("client_db garbage collector", clientdbScheduledGC, NULL, CLIENT_DB_SCHEDULE_IMMEDIATE_TIME, 0);
     }
     return c;
 }
@@ -96,7 +100,7 @@ void
 clientdbInitMem(void)
 {
     pool_client_info = memPoolCreate("ClientInfo", sizeof(ClientInfo));
-    eventAdd("client_db garbage collector", clientdbScheduledGC, NULL, CLIENT_DB_SCHEDULE_TIME, 0);
+    eventAdd("client_db garbage collector", clientdbScheduledGC, NULL, CLIENT_DB_SCHEDULE_BACKGROUND_TIME, 0);
 }
 
 void
@@ -291,6 +295,7 @@ clientdbDump(StoreEntry * sentry)
 static void
 clientdbFreeItem(ClientInfo *c)
 {
+    dlinkDelete(&c->node, &client_list);
     memPoolFree(pool_client_info, c);
 }
 
@@ -321,48 +326,40 @@ static void
 clientdbGC(void *unused)   
 {
     radix_node_t *rn;
-    Stack items;
+    dlink_node *n = client_list.head;
+    prefix_t p;
 
-    stackInit(&items);
-
-    RADIX_WALK(client_tree->head, rn) {
-      ClientInfo *c = rn->data;
+    while (n != NULL) {
+      ClientInfo *c = n->data;
+      n = n->next;
       int age = squid_curtime - c->last_seen;
       if (c->n_established)
-          goto next;
+          continue;
       if (age < 24 * 3600 && c->Http.n_requests > 100)
-          goto next;
+          continue;
       if (age < 4 * 3600 && (c->Http.n_requests > 10 || c->Icp.n_requests > 10))
-          goto next;
+          continue;
       if (age < 5 * 60 && (c->Http.n_requests > 1 || c->Icp.n_requests > 1))
-          goto next;
+          continue;
       if (age < 60)
-          goto next;
+          continue;
 
-      /* remove the item from the tree */
-      /* XXX it may not be possible to delete an item from the tree whilst walking it! */
-      stackPush(&items, rn);
-      cleanup_removed++;
-next:
-      (void) 0;
-
-    } RADIX_WALK_END;
-
-    if (!cleanup_scheduled) {
-        cleanup_scheduled = 1;
-        eventAdd("client_db garbage collector", clientdbScheduledGC, NULL, CLIENT_DB_SCHEDULE_TIME, 0);
-    }
-
-    while ( (rn = stackPop(&items)) != NULL) {
-      ClientInfo *c = rn->data;
+      Init_Prefix(&p, AF_INET, &c->addr, 32);
+      rn = radix_search_exact(client_tree, &p);
       rn->data = NULL;
       radix_remove(client_tree, rn);
       clientdbFreeItem(c);
-      statCounter.client_http.clients--;
+
       cleanup_removed++;
+      statCounter.client_http.clients--;
     }
+
+    if (!cleanup_scheduled) {
+        cleanup_scheduled = 1;
+        eventAdd("client_db garbage collector", clientdbScheduledGC, NULL, CLIENT_DB_SCHEDULE_IMMEDIATE_TIME, 0);
+    }
+
     debug(49, 2) ("clientdbGC: Removed %d entries\n", cleanup_removed);
-    stackClean(&items);
 }
 
 static void
