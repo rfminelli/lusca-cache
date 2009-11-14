@@ -66,8 +66,14 @@
 /*
  * This shows the source of this file - via the python radix tree code!
  */
-#define	PyMem_Malloc	xxmalloc
-#define PyMem_Free	xxfree
+/*
+ * Note that at least one use of free in this code (radix_remove)
+ * uses the original pointer value in subsequent comparisons.
+ * This may be a perfectly fine and valid coding practice but
+ * it means NULL'ing free'd pointers will break things.
+ */
+#define	PyMem_Malloc	malloc
+#define PyMem_Free	free
 
 /* $Id: radix.c,v 1.17 2007/10/24 06:04:31 djm Exp $ */
 
