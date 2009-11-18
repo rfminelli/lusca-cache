@@ -50,8 +50,10 @@ LANGUAGES	= \
 		Ukrainian-koi8-u \
 		Ukrainian-utf8
 
-install-data-local:
+all-local:
 	@for l in $(TEMPLATE_LANGUAGES); do ./build.pl src/$$l $$l || exit 1; done
+
+install-data-local:
 	@for l in $(INSTALL_LANGUAGES); do \
 		$(mkinstalldirs) $(DESTDIR)$(DEFAULT_ERROR_DIR)/$$l && \
 		for f in $(srcdir)/$$l/ERR_*; do \
