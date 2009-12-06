@@ -312,7 +312,7 @@ comm_fdopen6(int new_socket,
         }
     } else if (F->flags.tproxy_rem) {
         if (comm_ips_bind_rem(new_socket, &F->local_address) != COMM_OK) {
-            debug(1, 1) ("comm_fdopen6: FD %d: TPROXY comm_ips_bind_rem() failed? Why?\n", new_socket);
+            debug(1, 1) ("comm_fdopen6: FD %d: TPROXY comm_ips_bind_rem() failed: errno %d (%s)\n", new_socket, errno, xstrerror());
             comm_close(new_socket);
             return -1;
         }
