@@ -23,6 +23,12 @@ The TPROXY4 support is in the latest Linux-2.6 kernel (from version?)
 
 The basic support is in FreeBSD-current. There's FreeBSD-7 patches available at http://tproxy.no-ip.org/.
 
+The FreeBSD-8 and FreeBSD-current support involves a few changes to the FreeBSD-7 patches:
+
+  * The process must run as root - there's currently no easy way to grant the required privilege to the Lusca process;
+  * There's no sysctl to enable/disable the non local bind option (it is on by default);
+  * The option itself has changed - Lusca should detect and use either the -current or -7+tproxy patch as needed.
+
 = Differences between Squid-2, Squid-3 and Lusca =
 
 Squid-2 only supports TPROXY2. There are patches available from Visolve which implement TPROXY4 support in Squid-2.7.
