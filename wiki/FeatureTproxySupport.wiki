@@ -25,9 +25,10 @@ The basic support is in FreeBSD-current. There's FreeBSD-7 patches available at 
 
 The FreeBSD-8 and FreeBSD-current support involves a few changes to the FreeBSD-7 patches:
 
-  * The process must run as root - there's currently no easy way to grant the required privilege to the Lusca process;
-  * There's no sysctl to enable/disable the non local bind option (it is on by default);
+  * There's no sysctl to enable/disable the non local bind option (it is on by default).
   * The option itself has changed - Lusca should detect and use either the -current or -7+tproxy patch as needed.
+  * The process must run as root - there's currently no easy way to grant the required privilege to the Lusca process; Lusca and Squid don't allow the proxy to run as root. I'll have to figure out some way around this somehow.
+
 
 = Differences between Squid-2, Squid-3 and Lusca =
 
