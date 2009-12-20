@@ -7,11 +7,6 @@
 
 #if FREEBSD_TPROXY
 
-/* IP_NONLOCALOK = old-patch; IP_BINDANY = -current and 8.x */
-#ifndef	IP_NONLOCALOK
-#define		IP_NONLOCALOK	IP_BINDANY
-#endif
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -23,6 +18,11 @@
 #include "fd_types.h"
 #include "comm_types.h"
 #include "globals.h"
+
+/* IP_NONLOCALOK = old-patch; IP_BINDANY = -current and 8.x */
+#ifndef	IP_NONLOCALOK
+#define		IP_NONLOCALOK	IP_BINDANY
+#endif
 
 /*
  * FreeBSD non-local bind listen() sockets bind to the relevant address and use
@@ -42,7 +42,7 @@ comm_ips_bind_rem(int fd, sqaddr_t *a)
 {
     int on = 1;
 
-    if (setsockopt(fd, IPPROTO_IP, IP_BINDANY, (char *)&on, sizeof(on)) != 0)
+    if (setsockopt(fd, IPPROTO_IP, IP_NONLOCALOK, (char *)&on, sizeof(on)) != 0)
         return COMM_ERROR;
     if (bind(fd, sqinet_get_entry(a), sqinet_get_length(a)) != 0)
         return COMM_ERROR;
