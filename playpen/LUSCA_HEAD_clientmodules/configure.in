@@ -5,7 +5,7 @@ dnl  $Id: configure.in 12542 2008-04-13 13:27:23Z adrian.chadd $
 dnl
 dnl
 dnl
-AC_INIT(Lusca Web Proxy, LUSCA_HEAD, http://www.lusca.org/, Lusca)
+AC_INIT(Lusca Web Proxy, LUSCA_HEAD_clientmodules, http://www.lusca.org/, Lusca)
 AC_PREREQ(2.52)
 AM_CONFIG_HEADER(include/autoconf.h)
 AC_CONFIG_AUX_DIR(cfgaux)
