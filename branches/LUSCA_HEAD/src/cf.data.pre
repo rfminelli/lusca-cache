@@ -2975,6 +2975,19 @@ DOC_START
 
 DOC_END
 
+NAME: storeurl_bypass
+TYPE: onoff
+LOC: Config.onoff.storeurl_bypass
+DEFAULT: off
+DOC_START
+	When this is 'on', a request will not go through the
+	storeurl if all storeurl rewriters are busy.  If this is 'off'
+	and the queue grows too large, Squid will exit
+	with a FATAL error and ask you to increase the number of
+	storeurl rewriters.  You should only enable this if the rewriters
+	are not critical to your caching system. 
+DOC_END
+
 NAME: redirector_bypass
 TYPE: onoff
 LOC: Config.onoff.redirector_bypass
