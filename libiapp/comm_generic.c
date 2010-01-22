@@ -357,10 +357,10 @@ comm_select(int msec)
     int rc;
     double start = current_dtime;
 
-    debug(5, 3) ("comm_select: timeout %d\n", msec);
-
     if (msec > MAX_POLL_TIME)
 	msec = MAX_POLL_TIME;
+
+    debug(5, 3) ("comm_select: timeout %d, max %d\n", msec, MAX_POLL_TIME);
 
 #if DELAY_POOLS
     /* We have delayed fds in queue? */
