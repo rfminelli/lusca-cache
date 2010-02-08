@@ -66,8 +66,14 @@
 /*
  * This shows the source of this file - via the python radix tree code!
  */
-#define	PyMem_Malloc	xxmalloc
-#define PyMem_Free	xxfree
+/*
+ * Note that at least one use of free in this code (radix_remove)
+ * uses the original pointer value in subsequent comparisons.
+ * This may be a perfectly fine and valid coding practice but
+ * it means NULL'ing free'd pointers will break things.
+ */
+#define	PyMem_Malloc	malloc
+#define PyMem_Free	free
 
 /* $Id: radix.c,v 1.17 2007/10/24 06:04:31 djm Exp $ */
 
@@ -105,6 +111,7 @@ comp_with_mask(u_char *addr, u_char *dest, u_int mask)
 int
 Init_Prefix(prefix_t *pfx, u_int family, void *dest, u_int bitlen)
 {
+	bzero(pfx, sizeof(*pfx));
 	if (family == AF_INET6) {
 		memcpy(&pfx->add.sin6, dest, 16);
 		pfx->bitlen = (bitlen >= 0) ? bitlen : 128;

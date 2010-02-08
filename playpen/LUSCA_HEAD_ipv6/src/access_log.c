@@ -1165,7 +1165,7 @@ accessLogLog(AccessLogEntry * al, aclCheck_t * checklist)
     if (al->icp.opcode)
 	al->private.method_str = icp_opcode_str[al->icp.opcode];
     else
-	al->private.method_str = al->http.method->string;
+	al->private.method_str = urlMethodGetConstStr(al->http.method);
     if (al->hier.host[0] == '\0')
 	xstrncpy(al->hier.host, dash_str, SQUIDHOSTNAMELEN);
 

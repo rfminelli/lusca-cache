@@ -261,7 +261,8 @@ httpMaybeRemovePublic(StoreEntry * e, HttpReply * reply)
     if (e->mem_obj->method->flags.purges_all && status < 400) {
 	req = e->mem_obj->request;
 	reqUrl = urlCanonical(req);
-	debug(88, 5) ("httpMaybeRemovePublic: purging due to %s %s\n", req->method->string, reqUrl);
+	debug(88, 5) ("httpMaybeRemovePublic: purging due to %s %s\n",
+	  urlMethodGetConstStr(req->method), reqUrl);
 	storePurgeEntriesByUrl(req, reqUrl);
 	httpRemovePublicByHeader(req, reply, HDR_LOCATION);
 	httpRemovePublicByHeader(req, reply, HDR_CONTENT_LOCATION);
@@ -921,7 +922,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
      */
     if (len > 0 && httpState->chunk_size == 0) {
 	debug(11, 1) ("httpReadReply: Unexpected reply body data from \"%s %s\"\n",
-	    orig_request->method->string,
+	    urlMethodGetConstStr(orig_request->method),
 	    storeUrl(entry));
 	comm_close(fd);
 	return;
@@ -929,7 +930,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
     if (len > 0) {
 	debug(11, Config.onoff.relaxed_header_parser <= 0 || keep_alive ? 1 : 2)
 	    ("httpReadReply: Excess data from \"%s %s\"\n",
-	    orig_request->method->string,
+	    urlMethodGetConstStr(orig_request->method),
 	    storeUrl(entry));
 	comm_close(fd);
 	return;
@@ -950,7 +951,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
      */
     if (!httpState->flags.request_sent) {
 	debug(11, 1) ("httpAppendBody: Request not yet fully sent \"%s %s\"\n",
-	    orig_request->method->string,
+	    urlMethodGetConstStr(orig_request->method),
 	    storeUrl(entry));
 	keep_alive = 0;
     }
@@ -1660,7 +1661,7 @@ httpBuildRequestPrefix(request_t * request,
 {
     const int offset = mb->size;
     memBufPrintf(mb, "%s %.*s HTTP/1.%d\r\n",
-        request->method->string,
+        urlMethodGetConstStr(request->method),
 	strLen2(request->urlpath) ? strLen2(request->urlpath) : 1,
 	strLen2(request->urlpath) ? strBuf2(request->urlpath) : "/",
 	flags.http11);
@@ -1756,7 +1757,7 @@ httpStart(FwdState * fwd)
     HttpStateData *httpState;
     request_t *proxy_req;
     request_t *orig_req = fwd->request;
-    debug(11, 3) ("httpStart: \"%s %s\"\n", orig_req->method->string,
+    debug(11, 3) ("httpStart: \"%s %s\"\n", urlMethodGetConstStr(orig_req->method),
 	storeUrl(fwd->entry));
     CBDATA_INIT_TYPE(HttpStateData);
     httpState = cbdataAlloc(HttpStateData);

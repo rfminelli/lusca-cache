@@ -440,7 +440,7 @@ clientAccessCheckDone(int answer, void *data)
     ErrorState *err = NULL;
     char *proxy_auth_msg = NULL;
     debug(33, 2) ("The request %s %s is %s, because it matched '%s'\n",
-	http->request->method->string, http->uri,
+	urlMethodGetConstStr(http->request->method), http->uri,
 	answer == ACCESS_ALLOWED ? "ALLOWED" : "DENIED",
 	AclMatchedName ? AclMatchedName : "NO ACL's");
     proxy_auth_msg = authenticateAuthUserRequestMessage(http->conn->auth_user_request ? http->conn->auth_user_request : http->request->auth_user_request);
@@ -505,7 +505,7 @@ clientAccessCheckDone2(int answer, void *data)
     ErrorState *err = NULL;
     char *proxy_auth_msg = NULL;
     debug(33, 2) ("The request %s %s is %s, because it matched '%s'\n",
-	http->request->method->string, http->uri,
+	urlMethodGetConstStr(http->request->method), http->uri,
 	answer == ACCESS_ALLOWED ? "ALLOWED" : "DENIED",
 	AclMatchedName ? AclMatchedName : "NO ACL's");
     proxy_auth_msg = authenticateAuthUserRequestMessage(http->conn->auth_user_request ? http->conn->auth_user_request : http->request->auth_user_request);
@@ -1510,7 +1510,7 @@ clientSetKeepaliveFlag(clientHttpRequest * http)
     debug(33, 3) ("clientSetKeepaliveFlag: http_ver = %d.%d\n",
 	request->http_ver.major, request->http_ver.minor);
     debug(33, 3) ("clientSetKeepaliveFlag: method = %s\n",
-	request->method->string);
+	urlMethodGetConstStr(request->method));
     {
 	http_version_t http_ver;
 	if (http->conn->port->http11)
@@ -2990,7 +2990,7 @@ clientHttpReplyAccessCheckDone(int answer, void *data)
 {
     clientHttpRequest *http = data;
     debug(33, 2) ("The reply for %s %s is %s, because it matched '%s'\n",
-	http->request->method->string, http->uri,
+	urlMethodGetConstStr(http->request->method), http->uri,
 	answer ? "ALLOWED" : "DENIED",
 	AclMatchedName ? AclMatchedName : "NO ACL's");
     if (answer != ACCESS_ALLOWED) {
@@ -3402,7 +3402,7 @@ clientProcessOnlyIfCachedMiss(clientHttpRequest * http)
     ErrorState *err = NULL;
     http->flags.hit = 0;
     debug(33, 4) ("clientProcessOnlyIfCachedMiss: '%s %s'\n",
-	r->method->string, url);
+	urlMethodGetConstStr(r->method), url);
     http->al.http.code = HTTP_GATEWAY_TIMEOUT;
     err = errorCon(ERR_ONLY_IF_CACHED_MISS, HTTP_GATEWAY_TIMEOUT, http->orig_request);
     if (http->entry) {
@@ -3461,19 +3461,11 @@ clientProcessRequest2(clientHttpRequest * http)
 	e = http->entry = NULL;
     /* Release IP-cache entries on reload */
     if (r->flags.nocache) {
-#if USE_DNSSERVERS
-	ipcacheInvalidate(r->host);
-#else
 	ipcacheInvalidateNegative(r->host);
-#endif /* USE_DNSSERVERS */
     }
 #if HTTP_VIOLATIONS
     else if (r->flags.nocache_hack) {
-#if USE_DNSSERVERS
-	ipcacheInvalidate(r->host);
-#else
 	ipcacheInvalidateNegative(r->host);
-#endif /* USE_DNSSERVERS */
     }
 #endif /* HTTP_VIOLATIONS */
 #if USE_CACHE_DIGESTS
@@ -3551,7 +3543,7 @@ clientProcessRequest(clientHttpRequest * http)
     char *url = http->uri;
     request_t *r = http->request;
     HttpReply *rep;
-    debug(33, 4) ("clientProcessRequest: %s '%s'\n", r->method->string, url);
+    debug(33, 4) ("clientProcessRequest: %s '%s'\n", urlMethodGetConstStr(r->method), url);
     r->flags.collapsed = 0;
     if (httpHeaderHas(&r->header, HDR_EXPECT)) {
 	int ignore = 0;
@@ -3692,7 +3684,7 @@ clientProcessMiss(clientHttpRequest * http)
     char *url = http->uri;
     request_t *r = http->request;
     ErrorState *err = NULL;
-    debug(33, 4) ("clientProcessMiss: '%s %s'\n", r->method->string, url);
+    debug(33, 4) ("clientProcessMiss: '%s %s'\n", urlMethodGetConstStr(r->method), url);
     http->flags.hit = 0;
     r->flags.collapsed = 0;
     /*
@@ -3856,7 +3848,7 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, 
     /* Wrap the request method */
     method = urlMethodGet(hmsg->buf + hmsg->m_start, hmsg->m_len);
 
-    debug(33, 5) ("parseHttpRequest: Method is '%s'\n", method->string);
+    debug(33, 5) ("parseHttpRequest: Method is '%s'\n", urlMethodGetConstStr(method));
     if (method->code == METHOD_OTHER) {
 	debug(33, 5) ("parseHttpRequest: Unknown method, continuing regardless");
     }

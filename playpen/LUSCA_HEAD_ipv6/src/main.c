@@ -377,9 +377,7 @@ serverConnectionsClose(void)
 static void
 mainReconfigure(void)
 {
-#if !USE_DNSSERVERS
 	sqaddr_t ai, ao;
-#endif
     debug(1, 1) ("Reconfiguring Squid Cache (version %s)...\n", version_string);
     reconfiguring = 1;
     /* Already called serverConnectionsClose and ipcacheShutdownServers() */
@@ -391,11 +389,7 @@ mainReconfigure(void)
 #ifdef SQUID_SNMP
     snmpConnectionClose();
 #endif
-#if USE_DNSSERVERS
-    dnsShutdown();
-#else
     idnsShutdown();
-#endif
     redirectShutdown();
     storeurlShutdown();
     locationRewriteShutdown();
@@ -447,10 +441,8 @@ mainReconfigure(void)
     storeLogOpen();
     useragentOpenLog();
     refererOpenLog();
-#if USE_DNSSERVERS
-    dnsInit(Config.Program.dnsserver, Config.dnsChildren, Config.dns_nameservers, Config.onoff.res_defnames);
-    dnsInternalInit();
-#else
+
+    /* Setup internal DNS */
     sqinet_init(&ai);
     sqinet_init(&ao);
     sqinet_set_v4_inaddr(&ai, &Config.Addrs.udp_incoming);
@@ -462,7 +454,7 @@ mainReconfigure(void)
     sqinet_done(&ao);
     idnsInit();
     idnsInternalInit();
-#endif
+
     redirectInit();
     storeurlInit();
     locationRewriteInit();
@@ -499,9 +491,6 @@ static void
 mainRotate(void)
 {
     icmpClose();
-#if USE_DNSSERVERS
-    dnsShutdown();
-#endif
     redirectShutdown();
     storeurlShutdown();
     locationRewriteShutdown();
@@ -519,10 +508,6 @@ mainRotate(void)
     fwdLogRotate();
 #endif
     icmpOpen();
-#if USE_DNSSERVERS
-    dnsInit(Config.Program.dnsserver, Config.dnsChildren, Config.dns_nameservers, Config.onoff.res_defnames);
-    dnsInternalInit();
-#endif
     redirectInit();
     storeurlInit();
     locationRewriteInit();
@@ -573,9 +558,7 @@ mainSetCwd(void)
 static void
 mainInitialize(void)
 {
-#if !USE_DNSSERVERS
 	sqaddr_t ai, ao;
-#endif
     /* chroot if configured to run inside chroot */
     if (Config.chroot_dir && (chroot(Config.chroot_dir) != 0 || chdir("/") != 0)) {
 	fatal("failed to chroot");
@@ -632,10 +615,8 @@ mainInitialize(void)
     fqdncache_init_local();
 
     parseEtcHosts();
-#if USE_DNSSERVERS
-    dnsInit(Config.Program.dnsserver, Config.dnsChildren, Config.dns_nameservers, Config.onoff.res_defnames);
-    dnsInternalInit();
-#else
+
+    /* Setup internal DNS */
     sqinet_init(&ai);
     sqinet_init(&ao);
     sqinet_set_v4_inaddr(&ai, &Config.Addrs.udp_incoming);
@@ -647,7 +628,7 @@ mainInitialize(void)
     sqinet_done(&ao);
     idnsInit();
     idnsInternalInit();
-#endif
+
     redirectInit();
     storeurlInit();
     locationRewriteInit();
@@ -1170,11 +1151,7 @@ SquidShutdown(void *unused)
     WIN32_svcstatusupdate(SERVICE_STOP_PENDING, 10000);
 #endif
     debug(1, 1) ("Shutting down...\n");
-#if USE_DNSSERVERS
-    dnsShutdown();
-#else
     idnsShutdown();
-#endif
     redirectShutdown();
     storeurlShutdown();
     externalAclShutdown();

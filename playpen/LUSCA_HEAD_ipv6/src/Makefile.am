@@ -6,14 +6,6 @@
 #  Uncomment and customize the following to suit your needs:
 #
 
-if USE_DNSSERVER
-DNSSOURCE = dns.c
-DNSSERVER = dnsserver
-else
-DNSSOURCE = dns_internal.c
-DNSSERVER =
-endif
-
 if USE_SNMP
 SNMPSOURCE = snmp_core.c snmp_agent.c
 else
@@ -122,7 +114,7 @@ squid_SOURCES = \
 	comm.c \
 	defines.h \
 	$(DELAY_POOL_SOURCE) \
-	$(DNSSOURCE) \
+	dns_internal.c \
 	enums.h \
 	errorpage.c \
 	event.c \

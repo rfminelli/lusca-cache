@@ -308,11 +308,7 @@ extern variable_list *snmp_prfProtoFn(variable_list *, snint *);
 extern variable_list *snmp_prfPeerFn(variable_list *, snint *);
 extern variable_list *snmp_netIpFn(variable_list *, snint *);
 extern variable_list *snmp_netFqdnFn(variable_list *, snint *);
-#if USE_DNSSERVERS
-extern variable_list *snmp_netDnsFn(variable_list *, snint *);
-#else
 extern variable_list *snmp_netIdnsFn(variable_list *, snint *);
-#endif
 extern variable_list *snmp_meshPtblFn(variable_list *, snint *);
 extern variable_list *snmp_meshCtblFn(variable_list *, snint *);
 #endif /* SQUID_SNMP */
@@ -815,6 +811,7 @@ extern method_t *urlMethodGet(const char *, int len);
 extern method_t *urlMethodGetKnown(const char *, int len);
 extern method_t *urlMethodGetKnownByCode(method_code_t);
 extern method_t *urlMethodDup(method_t *);
+extern const char * urlMethodGetConstStr(method_t *method);
 extern void urlMethodFree(method_t *);
 extern void urlInitialize(void);
 extern request_t *urlParse(method_t *, char *);

@@ -390,26 +390,10 @@ httpReplyClone(HttpReply * src)
 {
     HttpReply *dst = httpReplyCreate();
 
-    /*
-     * basic variables
-     */
     dst->hdr_sz = src->hdr_sz;
-
-    /*
-     * parser state
-     */
     dst->pstate = src->pstate;
-    /*
-     * status line
-     */
     dst->sline = src->sline;
-    /*
-     * header
-     */
     httpHeaderAppend(&dst->header, &src->header);
-    /*
-     * body, if applicable
-     */
     if (dst->body.mb.buf != NULL)
 	memBufAppend(&dst->body.mb, dst->body.mb.buf, dst->body.mb.size);
 
@@ -418,14 +402,21 @@ httpReplyClone(HttpReply * src)
      * when we've already -done- that, but I'll worry about doing it
      * faster later. Besides, there's too much other code to fix up.
      */
-    httpReplyHdrCacheInit(dst);
 #if 0
+    httpReplyHdrCacheInit(dst);
+#else
     dst->content_length = src->content_length;
     dst->date = src->date;
     dst->last_modified = src->last_modified;
+    if (strIsNull(src->content_type))
+        dst->content_type = StringNull;
+    else
+        dst->content_type = stringDup(&src->content_type);
     dst->expires = src->expires;
     dst->cache_control = httpHeaderGetCc(&dst->header);
     dst->content_range = httpHeaderGetContRange(&dst->header);
+    dst->keep_alive = src->keep_alive;
+    dst->expires = src->expires;
 #endif
 
     return dst;

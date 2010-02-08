@@ -676,7 +676,7 @@ makeExternalAclKey(aclCheck_t * ch, external_acl_data * acl_data)
 	    do_free = 1;
 	    break;
 	case EXT_ACL_METHOD:
-	    str = request->method->string;
+	    str = urlMethodGetConstStr(request->method);
 	    break;
 	case EXT_ACL_HEADER:
 	    sb = httpHeaderGetByName(&request->header, format->header);

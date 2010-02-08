@@ -130,14 +130,23 @@ stringAppend(String * s, const char *str, int len)
 }
 
 /*
- * This routine REQUIRES the string to be something and not NULL
+ * This routine SHOULD REQUIRE the string to be something and not NULL
+ * but plenty of code unfortunately doesn't check whether the string
+ * was empty in the first place.
+ *
+ * New code MUST NOT call this on an unset string.
+ *
  * This copies -from- offset to the end of the string.
  */
 char *
 stringDupToCOffset(const String *s, int offset)
 {
 	char *d;
-	assert(s->buf);
+
+	/* This is horribly temporary [ahc] */
+	if (s->buf == NULL)
+		return NULL;
+
 	assert(offset <= s->len);
 	d = xmalloc(s->len + 1 - offset);
 	memcpy(d, s->buf + offset, s->len - offset);
@@ -156,7 +165,11 @@ stringDupSubstrToC(const String *s, int len)
 {
 	char *d;
 	int l = XMIN(len, s->len);
-	assert(s->buf);
+
+	/* This is horribly temporary [ahc] */
+	if (s->buf == NULL)
+		return NULL;
+
 	assert(len <= s->len);
 	d = xmalloc(l + 1);
 	memcpy(d, s->buf, l + 1);

@@ -78,9 +78,7 @@
 
 
 #include "../libsqdns/dns.h"
-#if !USE_DNSSERVERS
 #include "../libsqdns/dns_internal.h"
-#endif
 
 #include "namecfg.h"
 #include "ipcache.h"
@@ -90,19 +88,11 @@ dlink_list ipcache_lru_list;
 MemPool * pool_ipcache = NULL;
 
 static FREE ipcacheFreeEntry;
-#if USE_DNSSERVERS
-static HLPCB ipcacheHandleReply;
-#else
 static IDNSCB ipcacheHandleReply;
-#endif
 static IPH dummy_handler;
 static int ipcacheExpiredEntry(ipcache_entry *);
 static int ipcache_testname(wordlist *hostlist);
-#if USE_DNSSERVERS
-static ipcache_entry *ipcacheParse(ipcache_entry *, const char *buf);
-#else
 static ipcache_entry *ipcacheParse(ipcache_entry *, rfc1035_rr *, int, const char *error);
-#endif
 static ipcache_entry *ipcache_get(const char *);
 static void ipcacheLockEntry(ipcache_entry *);
 static void ipcacheUnlockEntry(ipcache_entry *);
@@ -251,82 +241,6 @@ ipcacheCallback(ipcache_entry * i)
     ipcacheUnlockEntry(i);
 }
 
-#if USE_DNSSERVERS
-static ipcache_entry *
-ipcacheParse(ipcache_entry * i, const char *inbuf)
-{
-    LOCAL_ARRAY(char, buf, DNS_INBUF_SZ);
-    char *token;
-    int j = 0;
-    int k;
-    int ipcount = 0;
-    int ttl;
-    char A[32][16];
-    const char *name = (const char *) i->hash.key;
-    i->expires = squid_curtime + namecache_dns_negative_ttl;
-    i->flags.negcached = 1;
-    safe_free(i->addrs.in_addrs);
-    safe_free(i->addrs.bad_mask);
-    safe_free(i->error_message);
-    i->addrs.count = 0;
-    if (inbuf == NULL) {
-	debug(14, 1) ("ipcacheParse: Got <NULL> reply\n");
-	i->error_message = xstrdup("Internal Squid Error");
-	return i;
-    }
-    xstrncpy(buf, inbuf, DNS_INBUF_SZ);
-    debug(14, 5) ("ipcacheParse: parsing: {%s}\n", buf);
-    token = strtok(buf, w_space);
-    if (NULL == token) {
-	debug(14, 1) ("ipcacheParse: expecting result, got '%s'\n", inbuf);
-	i->error_message = xstrdup("Internal Squid Error");
-	return NULL;
-    }
-    if (0 == strcmp(token, "$fail")) {
-	token = strtok(NULL, "\n");
-	assert(NULL != token);
-	i->error_message = xstrdup(token);
-	return i;
-    }
-    if (0 != strcmp(token, "$addr")) {
-	debug(14, 1) ("ipcacheParse: expecting '$addr', got '%s' in response to '%s'\n", inbuf, name);
-	i->error_message = xstrdup("Internal Squid Error");
-	return NULL;
-    }
-    token = strtok(NULL, w_space);
-    if (NULL == token) {
-	debug(14, 1) ("ipcacheParse: expecting data, got '%s' in response to '%s'\n", inbuf, name);
-	i->error_message = xstrdup("Internal Squid Error");
-	return NULL;
-    }
-    i->flags.negcached = 0;
-    ttl = atoi(token);
-    while (NULL != (token = strtok(NULL, w_space))) {
-	xstrncpy(A[ipcount], token, 16);
-	if (++ipcount == 32)
-	    break;
-    }
-    if (ipcount <= 0) {
-	debug(14, 1) ("ipcacheParse: No addresses in response to '%s'\n", name);
-    } else {
-	i->addrs.in_addrs = xcalloc(ipcount, sizeof(struct in_addr));
-	i->addrs.bad_mask = xcalloc(ipcount, sizeof(unsigned char));
-	for (j = 0, k = 0; k < ipcount; k++) {
-	    if (safe_inet_addr(A[k], &i->addrs.in_addrs[j]))
-		j++;
-	    else
-		debug(14, 1) ("ipcacheParse: Invalid IP address '%s' in response to '%s'\n", A[k], name);
-	}
-    }
-    i->addrs.count = (unsigned char) j;
-    if (ttl == 0 || ttl > namecache_dns_positive_ttl)
-	ttl = namecache_dns_positive_ttl;
-    if (ttl < namecache_dns_negative_ttl)
-	ttl = namecache_dns_negative_ttl;
-    i->expires = squid_curtime + ttl;
-    return i;
-}
-#else
 static ipcache_entry *
 ipcacheParse(ipcache_entry * i, rfc1035_rr * answers, int nr, const char *error_message)
 {
@@ -399,14 +313,9 @@ ipcacheParse(ipcache_entry * i, rfc1035_rr * answers, int nr, const char *error_
     assert(j == na);
     return i;
 }
-#endif
 
 static void
-#if USE_DNSSERVERS
-ipcacheHandleReply(void *data, char *reply)
-#else
 ipcacheHandleReply(void *data, rfc1035_rr * answers, int na, const char *error_message)
-#endif
 {
     generic_cbdata *c = data;
     ipcache_entry *i = c->data;
@@ -417,11 +326,7 @@ ipcacheHandleReply(void *data, rfc1035_rr * answers, int na, const char *error_m
     statHistCount(&statCounter.dns.svc_time,
 	tvSubMsec(i->request_time, current_time));
 #endif
-#if USE_DNSSERVERS
-    ipcacheParse(i, reply);
-#else
     ipcacheParse(i, answers, na, error_message);
-#endif
     ipcacheAddEntry(i);
     ipcacheCallback(i);
 }
@@ -479,11 +384,7 @@ ipcache_nbgethostbyname(const char *name, IPH * handler, void *handlerData)
     CBDATA_INIT_TYPE(generic_cbdata);
     c = cbdataAlloc(generic_cbdata);
     c->data = i;
-#if USE_DNSSERVERS
-    dnsSubmit(hashKeyStr(&i->hash), ipcacheHandleReply, c);
-#else
     idnsALookup(hashKeyStr(&i->hash), ipcacheHandleReply, c);
-#endif
 }
 
 /* initialize the ipcache */

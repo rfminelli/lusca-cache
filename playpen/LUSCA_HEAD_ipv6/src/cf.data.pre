@@ -2024,7 +2024,7 @@ DOC_END
 NAME: cache_dir
 TYPE: cachedir
 DEFAULT: none
-DEFAULT_IF_NONE: ufs @DEFAULT_SWAP_DIR@ 100 16 256
+DEFAULT_IF_NONE: aufs @DEFAULT_SWAP_DIR@ 100 16 256
 LOC: Config.cacheSwap
 DOC_START
 	Usage:
@@ -2973,6 +2973,19 @@ DEFAULT: none
 LOC: Config.accessList.storeurl_rewrite
 DOC_START
 
+DOC_END
+
+NAME: storeurl_bypass
+TYPE: onoff
+LOC: Config.onoff.storeurl_bypass
+DEFAULT: off
+DOC_START
+	When this is 'on', a request will not go through the
+	storeurl if all storeurl rewriters are busy.  If this is 'off'
+	and the queue grows too large, Squid will exit
+	with a FATAL error and ask you to increase the number of
+	storeurl rewriters.  You should only enable this if the rewriters
+	are not critical to your caching system. 
 DOC_END
 
 NAME: redirector_bypass
@@ -5412,34 +5425,10 @@ DOC_START
 	This check is performed only when check_hostnames is set to on.
 DOC_END
 
-NAME: cache_dns_program
-TYPE: string
-IFDEF: USE_DNSSERVERS
-DEFAULT: @DEFAULT_DNSSERVER@
-LOC: Config.Program.dnsserver
-DOC_START
-	Specify the location of the executable for dnslookup process.
-DOC_END
-
-NAME: dns_children
-TYPE: int
-IFDEF: USE_DNSSERVERS
-DEFAULT: 5
-LOC: Config.dnsChildren
-DOC_START
-	The number of processes spawn to service DNS name lookups.
-	For heavily loaded caches on large servers, you should
-	probably increase this value to at least 10.  The maximum
-	is 32.  The default is 5.
-
-	You must have at least one dnsserver process.
-DOC_END
-
 NAME: dns_retransmit_interval
 TYPE: time_t
 DEFAULT: 5 seconds
 LOC: Config.Timeout.idns_retransmit
-IFDEF: !USE_DNSSERVERS
 DOC_START
 	Initial retransmit interval for DNS queries. The interval is
 	doubled each time all configured DNS servers have been tried.
@@ -5450,7 +5439,6 @@ NAME: dns_timeout
 TYPE: time_t
 DEFAULT: 2 minutes
 LOC: Config.Timeout.idns_query
-IFDEF: !USE_DNSSERVERS
 DOC_START
 	DNS Query timeout. If no response is received to a DNS query
 	within this time all DNS servers for the queried domain

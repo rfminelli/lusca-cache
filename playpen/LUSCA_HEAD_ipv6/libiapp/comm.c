@@ -312,7 +312,7 @@ comm_fdopen6(int new_socket,
         }
     } else if (F->flags.tproxy_rem) {
         if (comm_ips_bind_rem(new_socket, &F->local_address) != COMM_OK) {
-            debug(1, 1) ("comm_fdopen6: FD %d: TPROXY comm_ips_bind_rem() failed? Why?\n", new_socket);
+            debug(1, 1) ("comm_fdopen6: FD %d: TPROXY comm_ips_bind_rem() failed: errno %d (%s)\n", new_socket, errno, xstrerror());
             comm_close(new_socket);
             return -1;
         }
@@ -1174,6 +1174,14 @@ commSetTcpKeepalive(int fd, int idle, int interval, int timeout)
 	debug(5, 1) ("commSetTcpKeepalive: FD %d: %s\n", fd, xstrerror());
 }
 
+/*
+ * Get the current TOS from the socket.
+ *
+ * This returns the current TOS as set on the socket. It does not return
+ * the "tos" field from the comm struct.
+ *
+ * If the socket tos could not be read, -1 is returned.
+ */
 int
 commGetSocketTos(int fd)
 {

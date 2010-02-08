@@ -35,18 +35,20 @@
 
 #include "squid.h"
 
+#include "../include/hex.h"
+
 static cache_key null_key[SQUID_MD5_DIGEST_LENGTH];
 static MemPool * pool_md5_key = NULL;
 
 const char *
 storeKeyText(const unsigned char *key)
 {
-    static MemBuf mb = MemBufNULL;
-    int i;
-    memBufReset(&mb);
-    for (i = 0; i < SQUID_MD5_DIGEST_LENGTH; i++)
-	memBufPrintf(&mb, "%02X", *(key + i));
-    return mb.buf;
+    static char buf[SQUID_MD5_DIGEST_LENGTH*2+1];
+
+    hex_from_byte_array(buf, (char *) key, SQUID_MD5_DIGEST_LENGTH);
+    buf[SQUID_MD5_DIGEST_LENGTH*2] = '\0';
+
+    return buf;
 }
 
 const cache_key *
@@ -99,7 +101,7 @@ storeKeyPrivate(const char *url, method_t * method, int id)
     int zero = 0;
     SQUID_MD5_CTX M;
     assert(id > 0);
-    debug(20, 3) ("storeKeyPrivate: %s %s\n", method->string, url);
+    debug(20, 3) ("storeKeyPrivate: %s %s\n", urlMethodGetConstStr(method), url);
     SQUID_MD5Init(&M);
     SQUID_MD5Update(&M, (unsigned char *) &id, sizeof(id));
     if (method == NULL) {

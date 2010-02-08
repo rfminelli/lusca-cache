@@ -292,6 +292,20 @@ urlMethodDup(method_t * orig)
     return (method);
 }
 
+/*
+ * return the string for the method name
+ */
+const char *
+urlMethodGetConstStr(method_t *method)
+{
+	/* XXX this should log a NULL method! */
+	if (! method)
+		return "NULL";
+	if (! method->string)
+		return "NULL";
+	return method->string;
+}
+
 void
 urlMethodFree(method_t * method)
 {

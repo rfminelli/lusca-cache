@@ -441,7 +441,7 @@ storePurgeEntriesByUrl(request_t * req, const char *url)
 	    continue;
 	}
 	debug(20, 5) ("storePurgeEntriesByUrl: purging %s %s\n",
-	    method->string, url);
+	    urlMethodGetConstStr(method), url);
 #if USE_HTCP
 	if (m == METHOD_HEAD) {
 	    method = urlMethodGetKnownByCode(METHOD_GET);

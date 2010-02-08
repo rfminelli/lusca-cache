@@ -19,6 +19,11 @@
 #include "comm_types.h"
 #include "globals.h"
 
+/* IP_NONLOCALOK = old-patch; IP_BINDANY = -current and 8.x */
+#ifndef	IP_NONLOCALOK
+#define		IP_NONLOCALOK	IP_BINDANY
+#endif
+
 /*
  * FreeBSD non-local bind listen() sockets bind to the relevant address and use
  * getsockname() to determine the original destination (local address being spoofed)

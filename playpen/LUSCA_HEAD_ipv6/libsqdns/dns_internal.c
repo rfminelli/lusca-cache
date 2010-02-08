@@ -87,7 +87,6 @@
  * #ifndef to exclude the internal DNS code from compile process when
  * using External DNS process.
  */
-#if !USE_DNSSERVERS
 
 #if HAVE_ARPA_NAMESER_H
 #include <arpa/nameser.h>
@@ -895,5 +894,3 @@ idnsPTRLookup(const struct in_addr addr, IDNSCB * callback, void *data)
     idnsCacheQuery(q);
     idnsSendQuery(q);
 }
-
-#endif /* USE_DNSSERVERS */
