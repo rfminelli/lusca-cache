@@ -1074,6 +1074,7 @@ extern void clientInterpretRequestHeaders(clientHttpRequest * http);
 extern void clientAccessCheck2(void *data);
 extern void clientFinishRewriteStuff(clientHttpRequest * http);
 extern int connStateGetCount(void);
+extern StoreEntry *clientCreateStoreEntry(clientHttpRequest *, method_t *, request_flags);
 
 /* client_side_nat.c */
 extern int clientNatLookup(ConnStateData * conn);
