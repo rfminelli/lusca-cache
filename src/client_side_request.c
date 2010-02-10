@@ -8,6 +8,122 @@ static void clientFollowXForwardedForNext(void *data);
 static void clientFollowXForwardedForDone(int answer, void *data);   
 #endif /* FOLLOW_X_FORWARDED_FOR */
 
+/* no-cache */
+
+static void
+clientCheckNoCacheDone(int answer, void *data)
+{   
+    clientHttpRequest *http = data;
+    http->request->flags.cachable = answer;
+    http->acl_checklist = NULL;
+    clientProcessRequest(http);
+}
+
+static void
+clientCheckNoCache(clientHttpRequest * http)
+{   
+    if (Config.accessList.noCache && http->request->flags.cachable) {
+        http->acl_checklist = clientAclChecklistCreate(Config.accessList.noCache, http);
+        aclNBCheck(http->acl_checklist, clientCheckNoCacheDone, http);
+    } else {
+        clientCheckNoCacheDone(http->request->flags.cachable, http);
+    }
+}
+
+/* http_access2 */
+
+static void
+clientAccessCheckDone2(int answer, void *data)
+{
+    clientHttpRequest *http = data;
+    err_type page_id;
+    http_status status;
+    ErrorState *err = NULL;
+    char *proxy_auth_msg = NULL;
+    debug(33, 2) ("The request %s %s is %s, because it matched '%s'\n",
+	urlMethodGetConstStr(http->request->method), http->uri,
+	answer == ACCESS_ALLOWED ? "ALLOWED" : "DENIED",
+	AclMatchedName ? AclMatchedName : "NO ACL's");
+    proxy_auth_msg = authenticateAuthUserRequestMessage(http->conn->auth_user_request ? http->conn->auth_user_request : http->request->auth_user_request);
+    http->acl_checklist = NULL;
+    if (answer == ACCESS_ALLOWED) {
+	clientCheckNoCache(http);
+    } else {
+	int require_auth = (answer == ACCESS_REQ_PROXY_AUTH || aclIsProxyAuth(AclMatchedName));
+	debug(33, 5) ("Access Denied: %s\n", http->uri);
+	debug(33, 5) ("AclMatchedName = %s\n",
+	    AclMatchedName ? AclMatchedName : "<null>");
+	if (require_auth)
+	    debug(33, 5) ("Proxy Auth Message = %s\n",
+		proxy_auth_msg ? proxy_auth_msg : "<null>");
+	/*
+	 * NOTE: get page_id here, based on AclMatchedName because
+	 * if USE_DELAY_POOLS is enabled, then AclMatchedName gets
+	 * clobbered in the clientCreateStoreEntry() call
+	 * just below.  Pedro Ribeiro <pribeiro@isel.pt>
+	 */
+	page_id = aclGetDenyInfoPage(&Config.denyInfoList, AclMatchedName, answer != ACCESS_REQ_PROXY_AUTH);
+	http->log_type = LOG_TCP_DENIED;
+	http->entry = clientCreateStoreEntry(http, http->request->method,
+	    null_request_flags);
+	if (require_auth) {
+	    if (!http->flags.accel) {
+		/* Proxy authorisation needed */
+		status = HTTP_PROXY_AUTHENTICATION_REQUIRED;
+	    } else {
+		/* WWW authorisation needed */
+		status = HTTP_UNAUTHORIZED;
+	    }
+	    if (page_id == ERR_NONE)
+		page_id = ERR_CACHE_ACCESS_DENIED;
+	} else {
+	    status = HTTP_FORBIDDEN;
+	    if (page_id == ERR_NONE)
+		page_id = ERR_ACCESS_DENIED;
+	}
+	err = errorCon(page_id, status, http->orig_request);
+	if (http->conn->auth_user_request)
+	    err->auth_user_request = http->conn->auth_user_request;
+	else if (http->request->auth_user_request)
+	    err->auth_user_request = http->request->auth_user_request;
+	/* lock for the error state */
+	if (err->auth_user_request)
+	    authenticateAuthUserRequestLock(err->auth_user_request);
+	err->callback_data = NULL;
+	errorAppendEntry(http->entry, err);
+    }
+}
+
+void
+clientAccessCheck2(void *data)
+{
+    clientHttpRequest *http = data;
+    if (Config.accessList.http2 && !http->redirect.status) {
+        http->acl_checklist = clientAclChecklistCreate(Config.accessList.http2, http);
+        aclNBCheck(http->acl_checklist, clientAccessCheckDone2, http);
+    } else {
+        clientCheckNoCache(http);
+    }
+}
+
+/* Completion of URL / store URL rewriters */
+
+/*
+ * This is called by the last client request rewriter chain thing.
+ */
+void
+clientFinishRewriteStuff(clientHttpRequest * http)
+{
+    /* This is the final part of the rewrite chain - this should be broken out! */
+    clientInterpretRequestHeaders(http);
+    /* XXX This really should become a ref-counted string type pointer, not a copy! */
+    fd_note(http->conn->fd, http->uri);
+#if HEADERS_LOG
+    headersLog(0, 1, http->request->method, http->request);
+#endif
+    clientAccessCheck2(http);
+ 
+}
 
 /* http_access check */
 

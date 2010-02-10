@@ -124,8 +124,6 @@ static void clientBuildReplyHeader(clientHttpRequest * http, HttpReply * rep);
 static clientHttpRequest *parseHttpRequestAbort(ConnStateData * conn, method_t ** method_p, const char *uri);
 static clientHttpRequest *parseHttpRequest(ConnStateData *, HttpMsgBuf *, method_t **, int *);
 
-static void clientCheckNoCache(clientHttpRequest *);
-static void clientCheckNoCacheDone(int answer, void *data);
 static STHCB clientHandleIMSReply;
 static int clientGetsOldEntry(StoreEntry * new, StoreEntry * old, request_t * request);
 #if USE_IDENT
@@ -139,7 +137,6 @@ static STHCB clientCacheHit;
 static void clientSetKeepaliveFlag(clientHttpRequest *);
 static void clientPackRangeHdr(const HttpReply * rep, const HttpHdrRangeSpec * spec, String boundary, MemBuf * mb);
 static void clientPackTermBound(String boundary, MemBuf * mb);
-static void clientProcessRequest(clientHttpRequest *);
 static void clientProcessExpired(clientHttpRequest *);
 static void clientRefreshCheck(clientHttpRequest *);
 static REFRESHCHECK clientRefreshCheckDone;
@@ -153,7 +150,6 @@ static int clientReplyBodyTooLarge(clientHttpRequest *, squid_off_t clen);
 static int clientRequestBodyTooLarge(clientHttpRequest *, request_t *);
 static void clientProcessBody(ConnStateData * conn);
 static void clientEatRequestBody(clientHttpRequest *);
-static void clientAccessCheckDone2(int answer, void *data);
 static BODY_HANDLER clientReadBody;
 static void clientAbortBody(request_t * req);
 #if USE_SSL
@@ -195,18 +191,6 @@ clientAclChecklistCreate(const acl_access * acl, const clientHttpRequest * http)
     return ch;
 }
 
-void
-clientAccessCheck2(void *data)
-{
-    clientHttpRequest *http = data;
-    if (Config.accessList.http2 && !http->redirect.status) {
-	http->acl_checklist = clientAclChecklistCreate(Config.accessList.http2, http);
-	aclNBCheck(http->acl_checklist, clientAccessCheckDone2, http);
-    } else {
-	clientCheckNoCache(http);
-    }
-}
-
 /*
  * returns true if client specified that the object must come from the cache
  * without contacting origin server
@@ -240,105 +224,6 @@ clientCreateStoreEntry(clientHttpRequest * h, method_t * m, request_flags flags)
 #endif
     storeClientCopyHeaders(h->sc, e, clientSendHeaders, h);
     return e;
-}
-
-/*
- * This is called by the last client request rewriter chain thing.
- */
-void
-clientFinishRewriteStuff(clientHttpRequest * http)
-{
-    /* This is the final part of the rewrite chain - this should be broken out! */
-    clientInterpretRequestHeaders(http);
-    /* XXX This really should become a ref-counted string type pointer, not a copy! */
-    fd_note(http->conn->fd, http->uri);
-#if HEADERS_LOG
-    headersLog(0, 1, http->request->method, http->request);
-#endif
-    clientAccessCheck2(http);
-
-}
-
-static void
-clientAccessCheckDone2(int answer, void *data)
-{
-    clientHttpRequest *http = data;
-    err_type page_id;
-    http_status status;
-    ErrorState *err = NULL;
-    char *proxy_auth_msg = NULL;
-    debug(33, 2) ("The request %s %s is %s, because it matched '%s'\n",
-	urlMethodGetConstStr(http->request->method), http->uri,
-	answer == ACCESS_ALLOWED ? "ALLOWED" : "DENIED",
-	AclMatchedName ? AclMatchedName : "NO ACL's");
-    proxy_auth_msg = authenticateAuthUserRequestMessage(http->conn->auth_user_request ? http->conn->auth_user_request : http->request->auth_user_request);
-    http->acl_checklist = NULL;
-    if (answer == ACCESS_ALLOWED) {
-	clientCheckNoCache(http);
-    } else {
-	int require_auth = (answer == ACCESS_REQ_PROXY_AUTH || aclIsProxyAuth(AclMatchedName));
-	debug(33, 5) ("Access Denied: %s\n", http->uri);
-	debug(33, 5) ("AclMatchedName = %s\n",
-	    AclMatchedName ? AclMatchedName : "<null>");
-	if (require_auth)
-	    debug(33, 5) ("Proxy Auth Message = %s\n",
-		proxy_auth_msg ? proxy_auth_msg : "<null>");
-	/*
-	 * NOTE: get page_id here, based on AclMatchedName because
-	 * if USE_DELAY_POOLS is enabled, then AclMatchedName gets
-	 * clobbered in the clientCreateStoreEntry() call
-	 * just below.  Pedro Ribeiro <pribeiro@isel.pt>
-	 */
-	page_id = aclGetDenyInfoPage(&Config.denyInfoList, AclMatchedName, answer != ACCESS_REQ_PROXY_AUTH);
-	http->log_type = LOG_TCP_DENIED;
-	http->entry = clientCreateStoreEntry(http, http->request->method,
-	    null_request_flags);
-	if (require_auth) {
-	    if (!http->flags.accel) {
-		/* Proxy authorisation needed */
-		status = HTTP_PROXY_AUTHENTICATION_REQUIRED;
-	    } else {
-		/* WWW authorisation needed */
-		status = HTTP_UNAUTHORIZED;
-	    }
-	    if (page_id == ERR_NONE)
-		page_id = ERR_CACHE_ACCESS_DENIED;
-	} else {
-	    status = HTTP_FORBIDDEN;
-	    if (page_id == ERR_NONE)
-		page_id = ERR_ACCESS_DENIED;
-	}
-	err = errorCon(page_id, status, http->orig_request);
-	if (http->conn->auth_user_request)
-	    err->auth_user_request = http->conn->auth_user_request;
-	else if (http->request->auth_user_request)
-	    err->auth_user_request = http->request->auth_user_request;
-	/* lock for the error state */
-	if (err->auth_user_request)
-	    authenticateAuthUserRequestLock(err->auth_user_request);
-	err->callback_data = NULL;
-	errorAppendEntry(http->entry, err);
-    }
-}
-
-static void
-clientCheckNoCache(clientHttpRequest * http)
-{
-    if (Config.accessList.noCache && http->request->flags.cachable) {
-	http->acl_checklist = clientAclChecklistCreate(Config.accessList.noCache, http);
-	aclNBCheck(http->acl_checklist, clientCheckNoCacheDone, http);
-    } else {
-	clientCheckNoCacheDone(http->request->flags.cachable, http);
-    }
-}
-
-void
-clientCheckNoCacheDone(int answer, void *data)
-{
-    clientHttpRequest *http = data;
-    http->request->flags.cachable = answer;
-    http->acl_checklist = NULL;
-    clientProcessRequest(http);
 }
 
 static void
@@ -3300,7 +3185,7 @@ clientProcessRequest2(clientHttpRequest * http)
     return LOG_TCP_HIT;
 }
 
-static void
+void
 clientProcessRequest(clientHttpRequest * http)
 {
     char *url = http->uri;
