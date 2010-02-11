@@ -7,5 +7,6 @@ extern void clientPackRange(clientHttpRequest * http, HttpHdrRangeIter * i, cons
     MemBuf * mb);
 extern int clientCanPackMoreRanges(const clientHttpRequest * http, HttpHdrRangeIter * i, size_t size);
 extern int clientPackMoreRanges(clientHttpRequest * http, const char *buf, size_t size, MemBuf * mb);
+extern void clientBuildRangeHeader(clientHttpRequest * http, HttpReply * rep);
 
 #endif
