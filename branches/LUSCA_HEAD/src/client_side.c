@@ -35,67 +35,6 @@
 
 #include "squid.h"
 
-#if IPF_TRANSPARENT
-#if HAVE_SYS_IOCTL_H
-#include <sys/ioctl.h>
-#endif
-#include <netinet/tcp.h>
-#include <net/if.h>
-/* SG - 14 Aug 2005
- * Workaround needed to allow the build of both ipfilter and ARP acl
- * support on Solaris x86.
- * 
- * Some defines, like
- * #define free +
- * are used in squid.h to block misuse of standard malloc routines
- * where the Squid versions should be used. This pollutes the C/C++
- * token namespace crashing any structures or classes having members
- * of the same names.
- */
-#ifdef _SQUID_SOLARIS_
-#undef free
-#endif
-#ifdef HAVE_IPL_H
-#include <ipl.h>
-#elif HAVE_NETINET_IPL_H
-#include <netinet/ipl.h>
-#endif
-#if HAVE_IP_FIL_COMPAT_H
-#include <ip_fil_compat.h>
-#elif HAVE_NETINET_IP_FIL_COMPAT_H
-#include <netinet/ip_fil_compat.h>
-#elif HAVE_IP_COMPAT_H
-#include <ip_compat.h>
-#elif HAVE_NETINET_IP_COMPAT_H
-#include <netinet/ip_compat.h>
-#endif
-#if HAVE_IP_FIL_H
-#include <ip_fil.h>
-#elif HAVE_NETINET_IP_FIL_H
-#include <netinet/ip_fil.h>
-#endif
-#if HAVE_IP_NAT_H
-#include <ip_nat.h>
-#elif HAVE_NETINET_IP_NAT_H
-#include <netinet/ip_nat.h>
-#endif
-#endif
-
-#if PF_TRANSPARENT
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/ioctl.h>
-#include <sys/fcntl.h>
-#include <net/if.h>
-#include <netinet/in.h>
-#include <net/pfvar.h>
-#endif
-
-#if LINUX_NETFILTER
-#include <linux/types.h>
-#include <linux/netfilter_ipv4.h>
-#endif
-
 #include "client_side_conn.h"
 #include "client_side_request.h"
 #include "client_side_ranges.h"
