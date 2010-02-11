@@ -1180,6 +1180,10 @@ commSetTcpKeepalive(int fd, int idle, int interval, int timeout)
  * This returns the current TOS as set on the socket. It does not return
  * the "tos" field from the comm struct.
  *
+ * Note that at least Linux/FreeBSD only return IP_TOS values which have been
+ * previously set on the socket. There is currently no supported method for
+ * fetching the TOS bits set on an incoming packet stream.
+ *
  * If the socket tos could not be read, -1 is returned.
  */
 int
