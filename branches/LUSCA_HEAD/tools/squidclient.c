@@ -145,6 +145,7 @@ usage(const char *progname)
 	"Options:\n"
 	"    -P file      PUT request.\n"
 	"    -a           Do NOT include Accept: header.\n"
+	"    -c <tos>     Set ToS for client request.\n"
 	"    -r           Force cache to reload URL.\n"
 	"    -s           Silent.  Do not print data to stdout.\n"
 	"    -v           Verbose. Print outgoing message to stderr.\n"
@@ -195,6 +196,8 @@ main(int argc, char *argv[])
     const char *www_password = NULL;
     const char *host = NULL;
     const char *version = "1.1";
+    int client_tos = -1;
+    int res;
 
     /* set the defaults */
     hostname = "localhost";
@@ -214,10 +217,13 @@ main(int argc, char *argv[])
 	url[BUFSIZ - 1] = '\0';
 	if (url[0] == '-')
 	    usage(argv[0]);
-	while ((c = getopt(argc, argv, "ah:j:V:l:P:i:km:p:rsvt:g:p:I:H:T:u:U:w:W:?")) != -1)
+	while ((c = getopt(argc, argv, "ac:h:j:V:l:P:i:km:p:rsvt:g:p:I:H:T:u:U:w:W:?")) != -1)
 	    switch (c) {
 	    case 'a':
 		opt_noaccept = 1;
+		break;
+	    case 'c':
+		client_tos = atoi(optarg);
 		break;
 	    case 'h':		/* remote host */
 		hostname = optarg;
@@ -435,6 +441,12 @@ main(int argc, char *argv[])
 	if ((conn = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
 	    perror("client: socket");
 	    exit(1);
+	}
+	/* Set ToS */
+	if (client_tos != -1) {
+		res = setsockopt(conn, IPPROTO_IP, IP_TOS, &client_tos, sizeof(client_tos));
+		if (res < 0)
+			perror("WARNING: client TOS was not set");
 	}
 	if (localhost && client_comm_bind(conn, localhost) < 0) {
 	    perror("client: bind");
