@@ -101,6 +101,8 @@
 #include "client_side_ranges.h"
 #include "client_side_async_refresh.h"
 
+#include "client_side.h"
+
 #if LINGERING_CLOSE
 #define comm_close comm_lingering_close
 #endif
@@ -120,8 +122,6 @@ static PF clientLifetimeTimeout;
 static int clientCheckTransferDone(clientHttpRequest *);
 static int clientGotNotEnough(clientHttpRequest *);
 static void checkFailureRatio(err_type, hier_code);
-static void clientProcessMiss(clientHttpRequest *);
-static void clientProcessHit(clientHttpRequest * http);
 static void clientBuildReplyHeader(clientHttpRequest * http, HttpReply * rep);
 static clientHttpRequest *parseHttpRequestAbort(ConnStateData * conn, method_t ** method_p, const char *uri);
 static clientHttpRequest *parseHttpRequest(ConnStateData *, HttpMsgBuf *, method_t **, int *);
@@ -137,10 +137,6 @@ static STNCB clientSendMoreData;
 static STHCB clientSendHeaders;
 static STHCB clientCacheHit;
 static void clientSetKeepaliveFlag(clientHttpRequest *);
-static void clientProcessExpired(clientHttpRequest *);
-static void clientRefreshCheck(clientHttpRequest *);
-static REFRESHCHECK clientRefreshCheckDone;
-static void clientProcessOnlyIfCachedMiss(clientHttpRequest * http);
 static int clientCachable(clientHttpRequest * http);
 static int clientHierarchical(clientHttpRequest * http);
 static int clientCheckContentLength(request_t * r);
@@ -320,27 +316,7 @@ clientProcessETag(clientHttpRequest * http)
 	http);
 }
 
-static void
-clientRefreshCheck(clientHttpRequest * http)
-{
-    refreshCheckSubmit(http->entry, clientRefreshCheckDone, http);
-}
-
-static void
-clientRefreshCheckDone(void *data, int fresh, const char *log)
-{
-    clientHttpRequest *http = data;
-    if (log) {
-	safe_free(http->al.ext_refresh);
-	http->al.ext_refresh = xstrdup(log);
-    }
-    if (fresh)
-	clientProcessHit(http);
-    else
-	clientProcessExpired(http);
-}
-
-static void
+void
 clientProcessExpired(clientHttpRequest * http)
 {
     char *url = http->uri;
@@ -1917,7 +1893,7 @@ clientCacheHit(void *data, HttpReply * rep)
     clientProcessHit(http);
 }
 
-static void
+void
 clientProcessHit(clientHttpRequest * http)
 {
     int is_modified = http->is_modified;
@@ -2684,7 +2660,7 @@ clientWriteComplete(int fd, char *bufnotused, size_t size, int errflag, void *da
  *     contacting other servers;
  * respond with a 504 (Gateway Timeout) as suggested in [RFC 2068]
  */
-static void
+void
 clientProcessOnlyIfCachedMiss(clientHttpRequest * http)
 {
     char *url = http->uri;
@@ -2968,7 +2944,7 @@ clientCheckBeginForwarding(clientHttpRequest * http)
 /*
  * Prepare to fetch the object as it's a cache miss of some kind.
  */
-static void
+void
 clientProcessMiss(clientHttpRequest * http)
 {
     char *url = http->uri;
