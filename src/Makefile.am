@@ -112,6 +112,7 @@ squid_SOURCES = \
 	client_side_conn.c \
 	client_side_nat.c \
 	client_side_rewrite.c \
+	client_side_ranges.c \
 	client_side_storeurl_rewrite.c \
 	client_side_location_rewrite.c \
 	comm.c \
