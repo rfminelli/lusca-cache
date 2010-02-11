@@ -96,6 +96,7 @@
 #include <linux/netfilter_ipv4.h>
 #endif
 
+#include "client_side_conn.h"
 #include "client_side_request.h"
 #include "client_side_ranges.h"
 #include "client_side_async_refresh.h"
@@ -114,7 +115,6 @@ static const char *const crlf = "\r\n";
 static CWCB clientWriteComplete;
 static CWCB clientWriteBodyComplete;
 static PF clientReadRequest;
-static PF connStateFree;
 static PF requestTimeout;
 static PF clientLifetimeTimeout;
 static int clientCheckTransferDone(clientHttpRequest *);
@@ -158,8 +158,6 @@ static void httpsAcceptSSL(ConnStateData * connState, SSL_CTX * sslContext);
 static int varyEvaluateMatch(StoreEntry * entry, request_t * request);
 static int modifiedSince(StoreEntry *, request_t *);
 static int clientCheckBeginForwarding(clientHttpRequest * http);
-
-static int clientside_num_conns = 0;
 
 #if USE_IDENT
 static void
@@ -821,7 +819,7 @@ clientUpdateCounters(clientHttpRequest * http)
     }
 }
 
-static void
+void
 httpRequestFree(void *data)
 {
     clientHttpRequest *http = data;
@@ -942,42 +940,6 @@ httpRequestFree(void *data)
     dlinkDelete(&http->node, &http->conn->reqs);
     dlinkDelete(&http->active, &ClientActiveRequests);
     cbdataFree(http);
-}
-
-/* This is a handler normally called by comm_close() */
-static void
-connStateFree(int fd, void *data)
-{
-    ConnStateData *connState = data;
-    dlink_node *n;
-    clientHttpRequest *http;
-    debug(33, 3) ("connStateFree: FD %d\n", fd);
-    assert(connState != NULL);
-    clientdbEstablished(connState->peer.sin_addr, -1);	/* decrement */
-    n = connState->reqs.head;
-    while (n != NULL) {
-	http = n->data;
-	n = n->next;
-	assert(http->conn == connState);
-	httpRequestFree(http);
-    }
-    if (connState->auth_user_request)
-	authenticateAuthUserRequestUnlock(connState->auth_user_request);
-    connState->auth_user_request = NULL;
-    authenticateOnCloseConnection(connState);
-    memFreeBuf(connState->in.size, connState->in.buf);
-    pconnHistCount(0, connState->nrequests);
-    if (connState->pinning.fd >= 0)
-	comm_close(connState->pinning.fd);
-    cbdataFree(connState);
-    clientside_num_conns--;
-#ifdef _SQUID_LINUX_
-    /* prevent those nasty RST packets */
-    {
-	char buf[SQUID_TCP_SO_RCVBUF];
-	while (FD_READ_METHOD(fd, buf, SQUID_TCP_SO_RCVBUF) > 0);
-    }
-#endif
 }
 
 void
@@ -3898,8 +3860,6 @@ httpAcceptDefer(int fd, void *dataunused)
     return 1;
 }
 
-CBDATA_TYPE(ConnStateData);
-
 /* Handle a new connection on HTTP socket. */
 void
 httpAccept(int sock, void *data)
@@ -3937,19 +3897,9 @@ httpAccept(int sock, void *data)
 	F = &fd_table[fd];
 	debug(33, 4) ("httpAccept: FD %d: accepted port %d client %s:%d\n", fd, F->local_port, F->ipaddrstr, F->remote_port);
 	fd_note_static(fd, "client http connect");
-        CBDATA_INIT_TYPE(ConnStateData);
-	connState = cbdataAlloc(ConnStateData);
-	clientside_num_conns++;
-	connState->port = s;
-	cbdataLock(connState->port);
-	sqinet_get_v4_sockaddr_ptr(&peer, &connState->peer, SQADDR_ASSERT_IS_V4);
-	connState->log_addr = connState->peer.sin_addr;
-	connState->log_addr.s_addr &= Config.Addrs.client_netmask.s_addr;
-	sqinet_get_v4_sockaddr_ptr(&me, &connState->me, SQADDR_ASSERT_IS_V4);
-	connState->fd = fd;
-	connState->pinning.fd = -1;
-	connState->in.buf = memAllocBuf(CLIENT_REQ_BUF_SZ, &connState->in.size);
-	comm_add_close_handler(fd, connStateFree, connState);
+	connState = connStateCreate(fd, &peer, &me);
+        connState->port = s;
+        cbdataLock(connState->port);
 	if (Config.onoff.log_fqdn)
 	    fqdncache_gethostbyaddr(sqinet_get_v4_inaddr(&peer, SQADDR_ASSERT_IS_V4), FQDN_LOOKUP_IF_MISS);
 	commSetTimeout(fd, Config.Timeout.request, requestTimeout, connState);
@@ -4116,18 +4066,9 @@ httpsAccept(int sock, void *data)
 
 	F = &fd_table[fd];
 	debug(33, 4) ("httpsAccept: FD %d: accepted port %d client %s:%d\n", fd, F->local_port, F->ipaddrstr, F->remote_port);
-	connState = cbdataAlloc(ConnStateData);
-	clientside_num_conns ++;
+	connState = connStateCreate(fd, &peer, &me);
 	connState->port = (http_port_list *) s;
 	cbdataLock(connState->port);
-	sqinet_get_v4_sockaddr_ptr(&peer, &connState->peer, SQADDR_ASSERT_IS_V4);
-	connState->log_addr = connState->peer.sin_addr;
-	connState->log_addr.s_addr &= Config.Addrs.client_netmask.s_addr;
-	sqinet_get_v4_sockaddr_ptr(&me, &connState->me, SQADDR_ASSERT_IS_V4);
-	connState->fd = fd;
-	connState->pinning.fd = -1;
-	connState->in.buf = memAllocBuf(CLIENT_REQ_BUF_SZ, &connState->in.size);
-	comm_add_close_handler(fd, connStateFree, connState);
 	if (Config.onoff.log_fqdn)
 	    fqdncache_gethostbyaddr(connState->peer.sin_addr, FQDN_LOOKUP_IF_MISS);
 	commSetTimeout(fd, Config.Timeout.request, requestTimeout, connState);
@@ -4558,9 +4499,3 @@ clientReassignDelaypools(void)
     }
 }
 #endif
-
-int
-connStateGetCount(void)
-{
-	return clientside_num_conns;
-}
