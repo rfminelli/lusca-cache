@@ -107,6 +107,7 @@ squid_SOURCES = \
 	cbdata.c \
 	client_db.c \
 	client_side.c \
+	client_side_body.c \
 	client_side_request.c \
 	client_side_reply.c \
 	client_side_conn.c \
