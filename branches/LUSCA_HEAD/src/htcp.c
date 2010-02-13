@@ -1214,6 +1214,7 @@ htcpQuery(StoreEntry * e, request_t * req, peer * p)
 
     old_squid_format = p->options.htcp_oldsquid;
     memset(&flags, '\0', sizeof(flags));
+    memset(&stuff, '\0', sizeof(stuff));
     snprintf(vbuf, sizeof(vbuf), "%d/%d",
 	req->http_ver.major, req->http_ver.minor);
     stuff.op = HTCP_TST;
@@ -1262,6 +1263,7 @@ htcpClear(StoreEntry * e, const char *uri, request_t * req, method_t * method, p
 
     old_squid_format = p->options.htcp_oldsquid;
     memset(&flags, '\0', sizeof(flags));
+    memset(&stuff, '\0', sizeof(stuff));
     snprintf(vbuf, sizeof(vbuf), "%d/%d",
 	req->http_ver.major, req->http_ver.minor);
     stuff.op = HTCP_CLR;
