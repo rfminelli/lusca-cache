@@ -1052,11 +1052,6 @@ extern void peerMonitorNow(peer *);
 extern void errorMapInit(void);
 extern int errorMapStart(const errormap * map, request_t * req, HttpReply * reply, const char *aclname, ERRMAPCB * callback, void *data);
 
-/* ETag support */
-void storeLocateVaryDone(VaryData * data);
-void storeLocateVary(StoreEntry * e, int offset, const char *vary_data, String accept_encoding, STLVCB * callback, void *cbdata);
-void storeAddVary(const char *url, method_t * method, const cache_key * key, const char *etag, const char *vary, const char *vary_headers, const char *accept_encoding);
-
 rewritetoken *rewriteURLCompile(const char *urlfmt);
 char *internalRedirectProcessURL(clientHttpRequest * req, rewritetoken * head);
 

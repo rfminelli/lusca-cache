@@ -2,6 +2,7 @@
 
 #include "client_side_etag.h"
 #include "client_side.h"
+#include "store_vary.h"
 
 static void
 clientHandleETagMiss(clientHttpRequest * http)
