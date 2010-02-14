@@ -1,5 +1,6 @@
 #include "squid.h"
 #include "client_side_body.h"
+#include "client_side.h"
 
 static void
 clientEatRequestBodyHandler(char *buf, ssize_t size, void *data)
