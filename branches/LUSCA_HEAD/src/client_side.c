@@ -84,7 +84,6 @@ static DEFER httpAcceptDefer;
 static log_type clientProcessRequest2(clientHttpRequest * http);
 static int clientReplyBodyTooLarge(clientHttpRequest *, squid_off_t clen);
 static int clientRequestBodyTooLarge(clientHttpRequest *, request_t *);
-static void clientAbortBody(request_t * req);
 #if USE_SSL
 static void httpsAcceptSSL(ConnStateData * connState, SSL_CTX * sslContext);
 #endif
