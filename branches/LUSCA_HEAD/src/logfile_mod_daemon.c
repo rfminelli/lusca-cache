@@ -335,7 +335,7 @@ logfile_mod_daemon_lineend(Logfile * lf)
     /* Kick a write off if the head buffer is -full- */
     if (ll->bufs.head != NULL) {
 	b = ll->bufs.head->data;
-	if (b->node.next != NULL || !Config.onoff.buffered_logs)
+	if (b->node.next != NULL)
 	    logfileQueueWrite(lf);
     }
 }
