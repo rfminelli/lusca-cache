@@ -2594,6 +2594,31 @@ clientProcessRequest2(clientHttpRequest * http)
     return LOG_TCP_HIT;
 }
 
+/*!
+ * @function
+ * 	clientProcessRequest
+ * @abstract
+ *	Begin processing a fully validated request
+ * @description
+ *	This function begins the processing chain of a request and determines
+ *	whether to begin forwarding upstream or whether the object already
+ *	exists in some form.
+ *
+ *	It handles CONNECT, PURGE and TRACE itself. The rest of the methods
+ *	are punted to the forwarding/store layer for handling.
+ *
+ *	If there's no StoreEntry associated with the object, the request is
+ *	punted to clientProcessMiss() for further handling.
+ *
+ *	If there's a StoreEntry, then some previous processing has performed
+ *	the client lookup and successfully found an object to attach to.
+ *	In this case, a store client is created and registered and the first
+ *	copy of the object reply is queued, which will eventually result in
+ *	the request being made if required, and the reply being fed from
+ *	the store via either the forwarding or the cache layer.
+ *
+ * @param	http	clientHttpRequest to begin processing
+ */
 void
 clientProcessRequest(clientHttpRequest * http)
 {
