@@ -40,6 +40,7 @@
 #include "client_side_request.h"
 #include "client_side_ranges.h"
 #include "client_side_async_refresh.h"
+#include "client_side_refresh.h"
 #include "client_side_etag.h"
 
 #include "client_side.h"
