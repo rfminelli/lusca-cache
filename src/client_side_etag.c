@@ -1,6 +1,7 @@
 #include "squid.h"
 
 #include "client_side_etag.h"
+#include "client_side.h"
 
 static void
 clientHandleETagMiss(clientHttpRequest * http)
