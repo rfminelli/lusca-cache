@@ -15,5 +15,6 @@ extern void clientProcessExpired(clientHttpRequest *);
 extern void clientProcessOnlyIfCachedMiss(clientHttpRequest * http);
 extern void httpRequestFree(void *data);
 extern void clientKeepaliveNextRequest(clientHttpRequest * http);
+extern STHCB clientSendHeaders;
 
 #endif
