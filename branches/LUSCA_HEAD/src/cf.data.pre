@@ -3121,6 +3121,7 @@ DOC_START
 		 ignore-stale-while-revalidate
 		 max-stale=NN
 		 negative-ttl=NN
+		 store-stale
 
 		override-expire enforces min age even if the server
 		sent an explicit expiry time (e.g., with the
@@ -3175,6 +3176,12 @@ DOC_START
 
 		negative-ttl=NN overrides the global negative_ttl parameter
 		selectively for URLs matching this pattern (in seconds).
+		
+		store-stale stores responses even if they don't have explicit 
+		freshness or a validator (i.e., Last-Modified or an ETag) 
+		present, or if they're already stale. By default, Squid will 
+		not cache such responses because they usually can't be
+		reused. Note that such responses will be stale by default.
 
 	Basically a cached object is:
 
