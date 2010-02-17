@@ -1536,6 +1536,26 @@ clientCacheHit(void *data, HttpReply * rep)
 		is_modified = 0;
 	}
     }
+
+    /*
+     * There's the possibility that a cached redirect will refer to the same URL
+     * in some circumstances where the request URL is being rewritten (eg storeurl)
+     * where the redirect is not explicitly as uncachable. 
+     * Deny looping here and do not cache the response.
+     */
+
+    /*
+     * XXX strcmp() sucks but the strings are both C strings. Look at String'ifying it
+     * XXX soon!
+     */
+    if (mem->reply->sline.status >= 300 && mem->reply->sline.status < 400) {
+        if (!strcmp(http->uri, httpHeaderGetStr(&e->mem_obj->reply->header, HDR_LOCATION))) {
+	    debug(33, 1) ("clientCacheHit: Redirect Loop Detected: %s\n",http->uri);
+	    http->log_type = LOG_TCP_MISS;
+	    clientProcessMiss(http);
+	    return;
+        }
+    }
     stale = refreshCheckHTTPStale(e, r);
     debug(33, 2) ("clientCacheHit: refreshCheckHTTPStale returned %d\n", stale);
     if (stale == 0) {
