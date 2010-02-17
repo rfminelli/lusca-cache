@@ -2397,6 +2397,25 @@ clientProcessOnlyIfCachedMiss(clientHttpRequest * http)
     errorAppendEntry(http->entry, err);
 }
 
+/*
+ * clientProcessRequest2() encapsulates some of the final request caching
+ * logic.
+ *
+ * This is all very dirty and not at all documented; it's quite suprising
+ * it all holds together.
+ *
+ * + If the request is deemed to be cachable, it does a storeEntry lookup
+ * + If the request has no-cache set, it invalidates ipcache entries
+ * + If the object doesn't exist, it checks some etag processing logic
+ *   and then finishes processing
+ * + There's a "too complex ranges!" check there which forces a miss
+ *
+ * + If LOG_TCP_HIT is returned, it sets http->e to be the cache StoreEntry.
+ * + If LOG_TCP_MISS is returned, http->e is forcibly set to NULL.
+ *
+ * I am guessing that http->e is already NULL at this point as StoreEntry
+ * references may be refcounted.
+ */
 static log_type
 clientProcessRequest2(clientHttpRequest * http)
 {
