@@ -1,6 +1,7 @@
 #include "squid.h"
 
 #include "client_side_refresh.h"
+#include "client_side_ims.h"
 #include "client_side.h"
 
 static void
