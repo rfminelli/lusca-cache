@@ -11,10 +11,10 @@
 extern void clientProcessHit(clientHttpRequest * http);
 extern void clientProcessMiss(clientHttpRequest * http);
 extern void clientProcessRequest(clientHttpRequest *);
-extern void clientProcessExpired(clientHttpRequest *);
 extern void clientProcessOnlyIfCachedMiss(clientHttpRequest * http);
 extern void httpRequestFree(void *data);
 extern void clientKeepaliveNextRequest(clientHttpRequest * http);
 extern STHCB clientSendHeaders;
+extern int clientOnlyIfCached(clientHttpRequest * http);
 
 #endif

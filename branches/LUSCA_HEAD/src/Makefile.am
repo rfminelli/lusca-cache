@@ -116,6 +116,7 @@ squid_SOURCES = \
 	client_side_rewrite.c \
 	client_side_ranges.c \
 	client_side_refresh.c \
+	client_side_ims.c \
 	client_side_async_refresh.c \
 	client_side_storeurl_rewrite.c \
 	client_side_location_rewrite.c \
