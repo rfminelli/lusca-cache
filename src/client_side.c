@@ -1038,6 +1038,54 @@ clientProcessVary(VaryData * vary, void *data)
 }
 
 /*
+ * This particular logic is a bit hairy.
+ *
+ * + If we have a store URL then we need to make sure the mem store url OR the mem url
+ *   match the request store url.
+ * + If we have no store URL then we need to make sure the mem url match the request url
+ *   regardless of the store url (so objects which have store urls that match their urls
+ *   can still be HIT fine.)
+*/
+static int
+clientCheckUrlIsValid(clientHttpRequest *http)
+{
+	StoreEntry *e = http->entry;
+	MemObject *mem = e->mem_obj;
+	request_t *r = http->request;
+
+	if (r->store_url) {
+		if (mem->store_url == NULL && mem->url == NULL) {
+			debug(33, 1) ("clientCacheHit: request has store_url '%s'; mem has no url or store_url!\n",
+			    r->store_url);
+			return 0;
+		}
+		if (mem->store_url && strcmp(r->store_url, mem->store_url) != 0) {
+			debug(33, 1) ("clientCacheHit: request has store_url '%s'; mem object in hit has mis-matched store_url '%s'!\n",
+			    r->store_url, mem->store_url);
+		    return 0;
+		}
+		if (mem->store_url == NULL && mem->url && strcmp(r->store_url, mem->url) != 0) {
+			debug(33, 1) ("clientCacheHit: request has store_url '%s'; mem object in hit has mis-matched url '%s'!\n",
+			    r->store_url, mem->url);
+		    return 0;
+		}
+	} else {			/* no store URL in request */
+		if (mem->store_url == NULL && mem->url == NULL) {
+			debug(33, 1) ("clientCacheHit: request has url '%s'; mem has no url or store_url!\n",
+			    urlCanonical(r));
+			return 0;
+		}
+		/* We currently don't enforce that memObjects with storeurl's -require- a request with a storeurl */
+		if (strcmp(mem->url, urlCanonical(r)) != 0) {
+			debug(33, 1) ("clientCacheHit: (store url '%s'); URL mismatch '%s' != '%s'?\n",
+			    r->store_url, e->mem_obj->url, urlCanonical(r));
+			return 0;
+		}
+	}
+	return 1;
+}
+
+/*
  * clientCacheHit should only be called until the HTTP reply headers
  * have been parsed.  Normally this should be a single call, but
  * it might take more than one.  As soon as we have the headers,
@@ -1073,43 +1121,11 @@ clientCacheHit(void *data, HttpReply * rep)
     mem = e->mem_obj;
     debug(33, 3) ("clientCacheHit: %s = %d\n", http->uri, rep->sline.status);
 
-    /*
-     * This particular logic is a bit hairy.
-     *
-     * + If we have a store URL then we need to make sure the mem store url OR the mem url
-     *   match the request store url.
-     * + If we have no store URL then we need to make sure the mem url match the request url
-     *   regardless of the store url (so objects which have store urls that match their urls
-     *   can still be HIT fine.)
-     */
-    if (r->store_url) {
-	if (mem->store_url == NULL && mem->url == NULL) {
-	    debug(33, 1) ("clientCacheHit: request has store_url '%s'; mem has no url or store_url!\n", r->store_url);
-	    clientProcessMiss(http);
-	    return;
-	}
-	if (mem->store_url && strcmp(r->store_url, mem->store_url) != 0) {
-	    debug(33, 1) ("clientCacheHit: request has store_url '%s'; mem object in hit has mis-matched store_url '%s'!\n", r->store_url, mem->store_url);
-	    clientProcessMiss(http);
-	    return;
-	}
-	if (mem->store_url == NULL && mem->url && strcmp(r->store_url, mem->url) != 0) {
-	    debug(33, 1) ("clientCacheHit: request has store_url '%s'; mem object in hit has mis-matched url '%s'!\n", r->store_url, mem->url);
-	    clientProcessMiss(http);
-	    return;
-	}
-    } else {			/* no store URL in request */
-	if (mem->store_url == NULL && mem->url == NULL) {
-	    debug(33, 1) ("clientCacheHit: request has url '%s'; mem has no url or store_url!\n", urlCanonical(r));
-	    clientProcessMiss(http);
-	    return;
-	}
-	/* We currently don't enforce that memObjects with storeurl's -require- a request with a storeurl */
-	if (strcmp(mem->url, urlCanonical(r)) != 0) {
-	    debug(33, 1) ("clientCacheHit: (store url '%s'); URL mismatch '%s' != '%s'?\n", r->store_url, e->mem_obj->url, urlCanonical(r));
-	    clientProcessMiss(http);
-	    return;
-	}
+    /* Make sure the request URL matches the object URL. */
+    /* Take the store URL into account! */
+    if (! clientCheckUrlIsValid(http)) {
+        clientProcessMiss(http);
+        return;
     }
     if (r->flags.collapsed && EBIT_TEST(e->flags, RELEASE_REQUEST)) {
 	/* collapsed_forwarding, but the joined request is not good
