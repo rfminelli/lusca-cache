@@ -1428,6 +1428,7 @@ struct _store_client {
 	unsigned int disk_io_pending:1;
 	unsigned int store_copying:1;
 	unsigned int copy_event_pending:1;
+	unsigned int active:1;
     } flags;
 #if DELAY_POOLS
     delay_id delay_id;

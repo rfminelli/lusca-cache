@@ -761,7 +761,7 @@ extern int storeClientUnregister(store_client * sc, StoreEntry * e, void *data);
 extern squid_off_t storeLowestMemReaderOffset(const StoreEntry * entry);
 extern void InvokeHandlers(StoreEntry * e);
 extern int storePendingNClients(const StoreEntry * e);
-
+extern int storeClientComplete(store_client *sc);
 
 extern const char *getMyHostname(void);
 extern const char *uniqueHostname(void);

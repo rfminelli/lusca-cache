@@ -215,6 +215,7 @@ storeClientRegister(StoreEntry * e, void *owner)
     sc->seen_offset = 0;
     sc->copy_offset = 0;
     sc->flags.disk_io_pending = 0;
+    sc->flags.active = 1;
     sc->entry = e;
     storeLockObject(sc->entry);
     sc->type = storeClientType(e);
@@ -254,6 +255,7 @@ storeClientCallback(store_client * sc, ssize_t sz)
     mem_node_ref nr;
 
     assert(sc->new_callback);
+    assert(sc->flags.active);
     sc->new_callback = NULL;
     sc->callback_data = NULL;
     nr = sc->node_ref;		/* XXX this should be a reference; and we should dereference our copy! */
@@ -292,6 +294,17 @@ storeClientCopyEvent(void *data)
 {
     store_client *sc = data;
     debug(20, 3) ("storeClientCopyEvent: Running\n");
+
+    /* Don't run the event if its meant to be freed at this point */
+    if (storeClientComplete(sc)) {
+        return;
+    }
+    /* The event wasn't freed; don't run it if its not active */
+    if (! sc->flags.active) {
+        debug(1, 1) ("storeClientCopyEvent: %p: not active, skipping\n", sc);
+	return;
+    }
+
     sc->flags.copy_event_pending = 0;
     if (!sc->new_callback)
 	return;
@@ -345,6 +358,7 @@ storeClientRef(store_client * sc,
 #endif
     assert(sc->new_callback == NULL);
     assert(sc->entry == e);
+    assert(sc->flags.active);
     sc->seen_offset = seen_offset;
     sc->new_callback = callback;
     sc->callback_data = data;
@@ -411,6 +425,7 @@ storeClientCopy2(StoreEntry * e, store_client * sc)
 {
     if (sc->flags.copy_event_pending)
 	return;
+    assert(sc->flags.active);
     if (EBIT_TEST(e->flags, ENTRY_FWD_HDR_WAIT)) {
 	debug(20, 5) ("storeClientCopy2: returning because ENTRY_FWD_HDR_WAIT set\n");
 	return;
@@ -456,6 +471,7 @@ storeClientCopy3(StoreEntry * e, store_client * sc)
     MemObject *mem = e->mem_obj;
     ssize_t sz = -1;
 
+    assert(sc->flags.active);
     if (storeClientNoMoreToSend(e, sc)) {
 	/* There is no more to send! */
 	storeClientCallback(sc, 0);
@@ -535,6 +551,7 @@ storeClientFileRead(store_client * sc)
     MemObject *mem = sc->entry->mem_obj;
     assert(sc->new_callback);
     assert(!sc->flags.disk_io_pending);
+    assert(sc->flags.active);
     sc->flags.disk_io_pending = 1;
     assert(sc->node_ref.node == NULL);	/* We should never, ever have a node here; or we'd leak! */
     stmemNodeRefCreate(&sc->node_ref);	/* Creates an entry with reference count == 1 */
@@ -580,6 +597,17 @@ storeClientReadBody(void *data, const char *buf_unused, ssize_t len)
     sc->flags.disk_io_pending = 0;
     assert(sc->new_callback);
     assert(sc->node_ref.node);
+
+    /* Don't run the event if its meant to be freed at this point */
+    if (storeClientComplete(sc)) {
+        debug(1, 1) ("storeClientReadBody: %p: completed/freed, skipping\n", sc);
+        return;
+    }
+    if (! sc->flags.active) {
+        debug(1, 1) ("storeClientReadBody: %p: not active, skipping\n", sc);
+	return;
+    }
+
     cbuf = sc->node_ref.node->data;
     /* XXX update how much data in that mem page is active; argh this should be done in a storage layer */
     sc->node_ref.node->len = len;
@@ -608,6 +636,17 @@ storeClientReadHeader(void *data, const char *buf_unused, ssize_t len)
     sc->flags.disk_io_pending = 0;
     assert(sc->new_callback);
     assert(sc->node_ref.node);
+
+    /* Don't run the event if its meant to be freed at this point */
+    if (storeClientComplete(sc)) {
+        debug(1, 1) ("storeClientReadHeader: %p: completed/freed, skipping\n", sc);
+        return;
+    }
+    if (! sc->flags.active) {
+        debug(1, 1) ("storeClientReadHeader: %p: not active, skipping\n", sc);
+	return;
+    }
+
     cbuf = sc->node_ref.node->data;
     debug(20, 3) ("storeClientReadHeader: len %d\n", (int) len);
     /* XXX update how much data in that mem page is active; argh this should be done in a storage layer */
@@ -763,6 +802,31 @@ storeClientCopyPending(store_client * sc, StoreEntry * e, void *data)
     return 1;
 }
 
+/*
+ * Check whether the store client should be going away.
+ *
+ * This should be called by each function which is used as
+ * a callback return point.
+ *
+ * Return 1 if the store client has indeed been freed, and 0
+ * if is not yet finished doing what its supposed to be
+ * doing.
+ */
+int
+storeClientComplete(store_client *sc)
+{
+	if (sc->flags.active)
+		return 0;
+	if (sc->flags.disk_io_pending)
+		return 0;
+	if (sc->flags.copy_event_pending)
+		return 0;
+
+	stmemNodeUnref(&sc->node_ref);
+	cbdataFree(sc);
+	return 1;
+}
+
 /*!
  * @function
  *	storeClientUnregister
@@ -809,16 +873,26 @@ storeClientUnregister(store_client * sc, StoreEntry * e, void *owner)
 	    mem->url);
 	storeClientCallback(sc, -1);
     }
-    stmemNodeUnref(&sc->node_ref);
 #if DELAY_POOLS
     delayUnregisterDelayIdPtr(&sc->delay_id);
 #endif
     storeSwapOutMaintainMemObject(e);
+
+    /* This is in storeClientDeallocate() now */
+    /* stmemNodeUnref(&sc->node_ref); */
+
+    if (sc->flags.disk_io_pending)
+       debug(1, 1) ("storeClientUnregister: %p: unregistering client with pending disk read!\n", sc);
+    if (sc->flags.copy_event_pending)
+       debug(1, 1) ("storeClientUnregister: %p: unregistering client with pending copy event!\n", sc);
+
     if (mem->nclients == 0)
 	CheckQuickAbort(e);
     storeUnlockObject(sc->entry);
     sc->entry = NULL;
-    cbdataFree(sc);
+    sc->flags.active = 0;
+    storeClientComplete(sc);
+    /* sc may be invalid at this point */
     return 1;
 }
 
@@ -956,6 +1030,9 @@ storeClientCopyHeadersCB(void *data, mem_node_ref nr, ssize_t size)
     assert(cb);
     assert(cbdata);
 
+    /* The event should not be run with the active flag set */
+    assert(sc->flags.active);
+
     /* Leave these in for now, just for debugging */
 #if 0
     sc->header_callback = NULL;
@@ -979,6 +1056,9 @@ storeClientCopyHeaders(store_client * sc, StoreEntry * e, STHCB * callback, void
 {
     sc->header_callback = callback;
     sc->header_cbdata = callback_data;
+
+    /* The event should not be run with the active flag set */
+    assert(sc->flags.active);
 
     /* This kicks off either the memory read, waiting for the data to appear, or the disk read */
     storeClientRef(sc, e, 0, 0, SM_PAGE_SIZE, storeClientCopyHeadersCB, sc);

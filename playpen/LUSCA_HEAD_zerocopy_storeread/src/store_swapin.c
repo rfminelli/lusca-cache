@@ -43,6 +43,7 @@ storeSwapInStart(store_client * sc)
 {
     StoreEntry *e = sc->entry;
     assert(e->mem_status == NOT_IN_MEMORY);
+    assert(sc->flags.active);
     if (!EBIT_TEST(e->flags, ENTRY_VALIDATED)) {
 	/* We're still reloading and haven't validated this entry yet */
 	return;
@@ -73,6 +74,16 @@ storeSwapInFileClosed(void *data, int errflag, storeIOState * sio)
     store_client *sc = data;
     debug(20, 3) ("storeSwapInFileClosed: sio=%p, errflag=%d\n",
 	sio, errflag);
+
+    if (storeClientComplete(sc)) {
+        return;
+    }
+    /* The event wasn't freed; don't run it if its not active */
+    if (! sc->flags.active) {
+        debug(1, 1) ("storeSwapInFileClosed: %p: not active, skipping\n", sc);
+        return;
+    }
+
     cbdataUnlock(sio);
     sc->swapin_sio = NULL;
     if (errflag < 0)
@@ -100,6 +111,15 @@ storeSwapInFileNotify(void *data, int errflag, storeIOState * sio)
 {
     store_client *sc = data;
     StoreEntry *e = sc->entry;
+
+    if (storeClientComplete(sc)) {
+        return;
+    }
+    /* The event wasn't freed; don't run it if its not active */
+    if (! sc->flags.active) {
+        debug(1, 1) ("storeSwapInFileNotify: %p: not active, skipping\n", sc);
+        return;
+    }
 
     debug(1, 3) ("storeSwapInFileNotify: changing %d/%d to %d/%d\n", e->swap_filen, e->swap_dirn, sio->swap_filen, sio->swap_dirn);
 
