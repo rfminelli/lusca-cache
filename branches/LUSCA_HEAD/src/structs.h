@@ -288,6 +288,7 @@ struct _aclCheck_t {
     struct in_addr src_addr;
     struct in_addr dst_addr;
     struct in_addr my_addr;
+    struct in_addr fwdip_addr;
     unsigned short my_port;
     request_t *request;
     /* for acls that look at reply data */
