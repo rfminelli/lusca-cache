@@ -515,6 +515,7 @@ DOC_START
 	acl aclname src      addr1-addr2/netmask ... (range of addresses)
 	acl aclname dst      ip-address/netmask ... (URL host's IP address)
 	acl aclname myip     ip-address/netmask ... (local socket IP address)
+	acl aclname dstfwdip ip-address/netmask .. (IP of the forwarded host)
 
 	acl aclname arp      mac-address ... (xx:xx:xx:xx:xx:xx notation)
 	  # The arp ACL requires the special configure option --enable-arp-acl.
