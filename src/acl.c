@@ -2097,9 +2097,12 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	return aclMatchWordList(ae->data, hier_strings[checklist->request->hier.code]);
 	/* NOTREACHED */
     case ACL_DSTFWD_IP:
-	/* XXX make sure this checks that the dstfwdip is SET to something non-blank and
-	 * XXX error out in case. */
-	return 0;		/* XXX for now just always deny */
+	/* make sure this checks that the dstfwdip is SET to something non-blank and
+	 * error out in case. */
+	if (IsAnyAddr(&checklist->fwdip_addr))
+	    return -1;
+	return aclMatchIp(&ae->data, checklist->fwdip_addr);
+	/* NOTREACHED */
     case ACL_NONE:
     case ACL_ENUM_MAX:
 	break;
