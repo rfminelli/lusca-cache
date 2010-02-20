@@ -973,6 +973,11 @@ htcpHandleClr(htcpDataHeader * hdr, char *buf, int sz, struct sockaddr_in *from)
 	debug(31, 3) ("htcpHandleClr: htcpUnpackSpecifier failed\n");
 	return;
     }
+    if (!s->request) {
+	debug(31, 2) ("htcpHandleTstRequest: failed to parse request\n");
+	htcpFreeSpecifier(s);
+	return;
+    }
     if (!htcpAccessCheck(Config.accessList.htcp_clr, s, from)) {
 	debug(31, 2) ("htcpHandleClr: Access denied\n");
 	htcpFreeSpecifier(s);
@@ -1214,6 +1219,7 @@ htcpQuery(StoreEntry * e, request_t * req, peer * p)
 
     old_squid_format = p->options.htcp_oldsquid;
     memset(&flags, '\0', sizeof(flags));
+    memset(&stuff, '\0', sizeof(stuff));
     snprintf(vbuf, sizeof(vbuf), "%d/%d",
 	req->http_ver.major, req->http_ver.minor);
     stuff.op = HTCP_TST;
@@ -1262,6 +1268,7 @@ htcpClear(StoreEntry * e, const char *uri, request_t * req, method_t * method, p
 
     old_squid_format = p->options.htcp_oldsquid;
     memset(&flags, '\0', sizeof(flags));
+    memset(&stuff, '\0', sizeof(stuff));
     snprintf(vbuf, sizeof(vbuf), "%d/%d",
 	req->http_ver.major, req->http_ver.minor);
     stuff.op = HTCP_CLR;

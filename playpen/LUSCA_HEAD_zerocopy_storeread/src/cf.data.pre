@@ -2975,6 +2975,19 @@ DOC_START
 
 DOC_END
 
+NAME: storeurl_bypass
+TYPE: onoff
+LOC: Config.onoff.storeurl_bypass
+DEFAULT: off
+DOC_START
+	When this is 'on', a request will not go through the
+	storeurl if all storeurl rewriters are busy.  If this is 'off'
+	and the queue grows too large, Squid will exit
+	with a FATAL error and ask you to increase the number of
+	storeurl rewriters.  You should only enable this if the rewriters
+	are not critical to your caching system. 
+DOC_END
+
 NAME: redirector_bypass
 TYPE: onoff
 LOC: Config.onoff.redirector_bypass
@@ -3108,6 +3121,7 @@ DOC_START
 		 ignore-stale-while-revalidate
 		 max-stale=NN
 		 negative-ttl=NN
+		 store-stale
 
 		override-expire enforces min age even if the server
 		sent an explicit expiry time (e.g., with the
@@ -3130,6 +3144,12 @@ DOC_START
 
 		ignore-no-cache ignores any ``Pragma: no-cache'' and
 		``Cache-control: no-cache'' headers received from a server.
+		The HTTP RFC never allows the use of this (Pragma) header
+		from a server, only a client, though plenty of servers
+		send it anyway.
+
+		ignore-no-store ignores any ``Pragma: no-store'' and
+		``Cache-control: no-store'' headers received from a server.
 		The HTTP RFC never allows the use of this (Pragma) header
 		from a server, only a client, though plenty of servers
 		send it anyway.
@@ -3162,6 +3182,12 @@ DOC_START
 
 		negative-ttl=NN overrides the global negative_ttl parameter
 		selectively for URLs matching this pattern (in seconds).
+		
+		store-stale stores responses even if they don't have explicit 
+		freshness or a validator (i.e., Last-Modified or an ETag) 
+		present, or if they're already stale. By default, Squid will 
+		not cache such responses because they usually can't be
+		reused. Note that such responses will be stale by default.
 
 	Basically a cached object is:
 

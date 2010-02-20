@@ -35,67 +35,17 @@
 
 #include "squid.h"
 
-#if IPF_TRANSPARENT
-#if HAVE_SYS_IOCTL_H
-#include <sys/ioctl.h>
-#endif
-#include <netinet/tcp.h>
-#include <net/if.h>
-/* SG - 14 Aug 2005
- * Workaround needed to allow the build of both ipfilter and ARP acl
- * support on Solaris x86.
- * 
- * Some defines, like
- * #define free +
- * are used in squid.h to block misuse of standard malloc routines
- * where the Squid versions should be used. This pollutes the C/C++
- * token namespace crashing any structures or classes having members
- * of the same names.
- */
-#ifdef _SQUID_SOLARIS_
-#undef free
-#endif
-#ifdef HAVE_IPL_H
-#include <ipl.h>
-#elif HAVE_NETINET_IPL_H
-#include <netinet/ipl.h>
-#endif
-#if HAVE_IP_FIL_COMPAT_H
-#include <ip_fil_compat.h>
-#elif HAVE_NETINET_IP_FIL_COMPAT_H
-#include <netinet/ip_fil_compat.h>
-#elif HAVE_IP_COMPAT_H
-#include <ip_compat.h>
-#elif HAVE_NETINET_IP_COMPAT_H
-#include <netinet/ip_compat.h>
-#endif
-#if HAVE_IP_FIL_H
-#include <ip_fil.h>
-#elif HAVE_NETINET_IP_FIL_H
-#include <netinet/ip_fil.h>
-#endif
-#if HAVE_IP_NAT_H
-#include <ip_nat.h>
-#elif HAVE_NETINET_IP_NAT_H
-#include <netinet/ip_nat.h>
-#endif
-#endif
+#include "client_side_conn.h"
+#include "client_side_body.h"
+#include "client_side_request.h"
+#include "client_side_ranges.h"
+#include "client_side_async_refresh.h"
+#include "client_side_refresh.h"
+#include "client_side_etag.h"
 
-#if PF_TRANSPARENT
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/ioctl.h>
-#include <sys/fcntl.h>
-#include <net/if.h>
-#include <netinet/in.h>
-#include <net/pfvar.h>
-#endif
+#include "client_side.h"
 
-#if LINUX_NETFILTER
-#include <linux/types.h>
-#include <linux/netfilter_ipv4.h>
-#endif
-
+#include "store_vary.h"
 
 #if LINGERING_CLOSE
 #define comm_close comm_lingering_close
@@ -105,47 +55,31 @@ static const char *const crlf = "\r\n";
 
 #define FAILURE_MODE_TIME 300
 
+
 /* Local functions */
 
 static CWCB clientWriteComplete;
 static CWCB clientWriteBodyComplete;
 static PF clientReadRequest;
-static PF connStateFree;
 static PF requestTimeout;
 static PF clientLifetimeTimeout;
 static int clientCheckTransferDone(clientHttpRequest *);
 static int clientGotNotEnough(clientHttpRequest *);
 static void checkFailureRatio(err_type, hier_code);
-static void clientProcessMiss(clientHttpRequest *);
-static void clientProcessHit(clientHttpRequest * http);
 static void clientBuildReplyHeader(clientHttpRequest * http, HttpReply * rep);
 static clientHttpRequest *parseHttpRequestAbort(ConnStateData * conn, method_t ** method_p, const char *uri);
 static clientHttpRequest *parseHttpRequest(ConnStateData *, HttpMsgBuf *, method_t **, int *);
 
-static void clientCheckNoCache(clientHttpRequest *);
-static void clientCheckNoCacheDone(int answer, void *data);
 static STHCB clientHandleIMSReply;
 static int clientGetsOldEntry(StoreEntry * new, StoreEntry * old, request_t * request);
 #if USE_IDENT
 static IDCB clientIdentDone;
 #endif
-#if FOLLOW_X_FORWARDED_FOR
-static void clientFollowXForwardedForStart(void *data);
-static void clientFollowXForwardedForNext(void *data);
-static void clientFollowXForwardedForDone(int answer, void *data);
-#endif /* FOLLOW_X_FORWARDED_FOR */
+
 static int clientOnlyIfCached(clientHttpRequest * http);
 static STNCB clientSendMoreData;
-static STHCB clientSendHeaders;
 static STHCB clientCacheHit;
 static void clientSetKeepaliveFlag(clientHttpRequest *);
-static void clientPackRangeHdr(const HttpReply * rep, const HttpHdrRangeSpec * spec, String boundary, MemBuf * mb);
-static void clientPackTermBound(String boundary, MemBuf * mb);
-static void clientProcessRequest(clientHttpRequest *);
-static void clientProcessExpired(clientHttpRequest *);
-static void clientRefreshCheck(clientHttpRequest *);
-static REFRESHCHECK clientRefreshCheckDone;
-static void clientProcessOnlyIfCachedMiss(clientHttpRequest * http);
 static int clientCachable(clientHttpRequest * http);
 static int clientHierarchical(clientHttpRequest * http);
 static int clientCheckContentLength(request_t * r);
@@ -153,22 +87,12 @@ static DEFER httpAcceptDefer;
 static log_type clientProcessRequest2(clientHttpRequest * http);
 static int clientReplyBodyTooLarge(clientHttpRequest *, squid_off_t clen);
 static int clientRequestBodyTooLarge(clientHttpRequest *, request_t *);
-static void clientProcessBody(ConnStateData * conn);
-static void clientEatRequestBody(clientHttpRequest *);
-static void clientAccessCheck(void *data);
-static void clientAccessCheckDone(int answer, void *data);
-static void clientAccessCheckDone2(int answer, void *data);
-static BODY_HANDLER clientReadBody;
-static void clientAbortBody(request_t * req);
 #if USE_SSL
 static void httpsAcceptSSL(ConnStateData * connState, SSL_CTX * sslContext);
 #endif
 static int varyEvaluateMatch(StoreEntry * entry, request_t * request);
 static int modifiedSince(StoreEntry *, request_t *);
-static StoreEntry *clientCreateStoreEntry(clientHttpRequest *, method_t *, request_flags);
 static int clientCheckBeginForwarding(clientHttpRequest * http);
-
-static int clientside_num_conns = 0;
 
 #if USE_IDENT
 static void
@@ -200,185 +124,6 @@ clientAclChecklistCreate(const acl_access * acl, const clientHttpRequest * http)
     return ch;
 }
 
-#if FOLLOW_X_FORWARDED_FOR
-/*
- * clientFollowXForwardedForStart() copies the X-Forwarded-For
- * header into x_forwarded_for_iterator and passes control to
- * clientFollowXForwardedForNext().
- *
- * clientFollowXForwardedForNext() checks the indirect_client_addr
- * against the followXFF ACL and passes the result to
- * clientFollowXForwardedForDone().
- *
- * clientFollowXForwardedForDone() either grabs the next address
- * from the tail of x_forwarded_for_iterator and loops back to
- * clientFollowXForwardedForNext(), or cleans up and passes control to
- * clientAccessCheck().
- */
-
-static void
-clientFollowXForwardedForStart(void *data)
-{
-    clientHttpRequest *http = data;
-    request_t *request = http->request;
-    request->x_forwarded_for_iterator = httpHeaderGetList(
-	&request->header, HDR_X_FORWARDED_FOR);
-    debug(33, 5) ("clientFollowXForwardedForStart: indirect_client_addr=%s XFF='%.*s'\n",
-	inet_ntoa(request->indirect_client_addr),
-	strLen2(request->x_forwarded_for_iterator),
-	strBuf2(request->x_forwarded_for_iterator));
-    clientFollowXForwardedForNext(http);
-}
-
-static void
-clientFollowXForwardedForNext(void *data)
-{
-    clientHttpRequest *http = data;
-    request_t *request = http->request;
-    debug(33, 5) ("clientFollowXForwardedForNext: indirect_client_addr=%s XFF='%.*s'\n",
-	inet_ntoa(request->indirect_client_addr),
-	strLen2(request->x_forwarded_for_iterator),
-	strBuf2(request->x_forwarded_for_iterator));
-    if (strLen(request->x_forwarded_for_iterator) != 0) {
-	/* check the acl to see whether to believe the X-Forwarded-For header */
-	http->acl_checklist = clientAclChecklistCreate(
-	    Config.accessList.followXFF, http);
-	aclNBCheck(http->acl_checklist, clientFollowXForwardedForDone, http);
-    } else {
-	/* nothing left to follow */
-	debug(33, 5) ("clientFollowXForwardedForNext: nothing more to do\n");
-	clientFollowXForwardedForDone(-1, http);
-    }
-}
-
-static void
-clientFollowXForwardedForDone(int answer, void *data)
-{
-    clientHttpRequest *http = data;
-    request_t *request = http->request;
-    /*
-     * answer should be be ACCESS_ALLOWED or ACCESS_DENIED if we are
-     * called as a result of ACL checks, or -1 if we are called when
-     * there's nothing left to do.
-     */
-    if (answer == ACCESS_ALLOWED) {
-	/*
-	 * The IP address currently in request->indirect_client_addr
-	 * is trusted to use X-Forwarded-For.  Remove the last
-	 * comma-delimited element from x_forwarded_for_iterator and use
-	 * it to to replace indirect_client_addr, then repeat the cycle.
-	 */
-	const char *p;
-	char *asciiaddr;
-	int l;
-	struct in_addr addr;
-	debug(33, 5) ("clientFollowXForwardedForDone: indirect_client_addr=%s is trusted\n",
-	    inet_ntoa(request->indirect_client_addr));
-	p = strBuf2(request->x_forwarded_for_iterator);
-	l = strLen2(request->x_forwarded_for_iterator);
-
-	/*
-	 * XXX x_forwarded_for_iterator should really be a list of
-	 * IP addresses, but it's a String instead.  We have to
-	 * walk backwards through the String, biting off the last
-	 * comma-delimited part each time.  As long as the data is in
-	 * a String, we should probably implement and use a variant of
-	 * strListGetItem() that walks backwards instead of forwards
-	 * through a comma-separated list.  But we don't even do that;
-	 * we just do the work in-line here.
-	 */
-	/* skip trailing space and commas */
-	while (l > 0 && (p[l - 1] == ',' || xisspace(p[l - 1])))
-	    l--;
-	strCut(&request->x_forwarded_for_iterator, l);
-	/* look for start of last item in list */
-	while (l > 0 && !(p[l - 1] == ',' || xisspace(p[l - 1])))
-	    l--;
-
-	/* Take a temporary copy of the buffer so inet_aton() can run on it */
-        asciiaddr = stringDupToCOffset(&request->x_forwarded_for_iterator, l);
-	if (inet_aton(asciiaddr, &addr) == 0) {
-	    /* the address is not well formed; do not use it */
-	    debug(33, 3) ("clientFollowXForwardedForDone: malformed address '%s'\n",
-		asciiaddr);
-	    safe_free(asciiaddr);
-	    goto done;
-	}
-	debug(33, 3) ("clientFollowXForwardedForDone: changing indirect_client_addr from %s to '%s'\n",
-	    inet_ntoa(request->indirect_client_addr),
-	    asciiaddr);
-	safe_free(asciiaddr);
-	request->indirect_client_addr = addr;
-	strCut(&request->x_forwarded_for_iterator, l);
-	if (!Config.onoff.acl_uses_indirect_client) {
-	    /*
-	     * If acl_uses_indirect_client is off, then it's impossible
-	     * to follow more than one level of X-Forwarded-For.
-	     */
-	    goto done;
-	}
-	clientFollowXForwardedForNext(http);
-	return;
-    } else if (answer == ACCESS_DENIED) {
-	debug(33, 5) ("clientFollowXForwardedForDone: indirect_client_addr=%s not trusted\n",
-	    inet_ntoa(request->indirect_client_addr));
-    } else {
-	debug(33, 5) ("clientFollowXForwardedForDone: indirect_client_addr=%s nothing more to do\n",
-	    inet_ntoa(request->indirect_client_addr));
-    }
-  done:
-    /* clean up, and pass control to clientAccessCheck */
-    debug(33, 6) ("clientFollowXForwardedForDone: cleanup\n");
-    if (Config.onoff.log_uses_indirect_client) {
-	/*
-	 * Ensure that the access log shows the indirect client
-	 * instead of the direct client.
-	 */
-	ConnStateData *conn = http->conn;
-	conn->log_addr = request->indirect_client_addr;
-	conn->log_addr.s_addr &= Config.Addrs.client_netmask.s_addr;
-	debug(33, 3) ("clientFollowXForwardedForDone: setting log_addr=%s\n",
-	    inet_ntoa(conn->log_addr));
-    }
-    stringClean(&request->x_forwarded_for_iterator);
-    http->acl_checklist = NULL;	/* XXX do we need to aclChecklistFree() ? */
-    clientAccessCheck(http);
-}
-#endif /* FOLLOW_X_FORWARDED_FOR */
-
-static void
-clientCheckFollowXForwardedFor(void *data)
-{
-    clientHttpRequest *http = data;
-#if FOLLOW_X_FORWARDED_FOR
-    if (Config.accessList.followXFF && httpHeaderHas(&http->request->header, HDR_X_FORWARDED_FOR)) {
-	clientFollowXForwardedForStart(http);
-	return;
-    }
-#endif
-    clientAccessCheck(http);
-}
-
-static void
-clientAccessCheck(void *data)
-{
-    clientHttpRequest *http = data;
-    http->acl_checklist = clientAclChecklistCreate(Config.accessList.http, http);
-    aclNBCheck(http->acl_checklist, clientAccessCheckDone, http);
-}
-
-void
-clientAccessCheck2(void *data)
-{
-    clientHttpRequest *http = data;
-    if (Config.accessList.http2 && !http->redirect.status) {
-	http->acl_checklist = clientAclChecklistCreate(Config.accessList.http2, http);
-	aclNBCheck(http->acl_checklist, clientAccessCheckDone2, http);
-    } else {
-	clientCheckNoCache(http);
-    }
-}
-
 /*
  * returns true if client specified that the object must come from the cache
  * without contacting origin server
@@ -392,7 +137,7 @@ clientOnlyIfCached(clientHttpRequest * http)
 	EBIT_TEST(r->cache_control->mask, CC_ONLY_IF_CACHED);
 }
 
-static StoreEntry *
+StoreEntry *
 clientCreateStoreEntry(clientHttpRequest * h, method_t * m, request_flags flags)
 {
     StoreEntry *e;
@@ -414,287 +159,7 @@ clientCreateStoreEntry(clientHttpRequest * h, method_t * m, request_flags flags)
     return e;
 }
 
-/*
- * This is called by the last client request rewriter chain thing.
- */
 void
-clientFinishRewriteStuff(clientHttpRequest * http)
-{
-    /* This is the final part of the rewrite chain - this should be broken out! */
-    clientInterpretRequestHeaders(http);
-    /* XXX This really should become a ref-counted string type pointer, not a copy! */
-    fd_note(http->conn->fd, http->uri);
-#if HEADERS_LOG
-    headersLog(0, 1, http->request->method, http->request);
-#endif
-    clientAccessCheck2(http);
-
-}
-
-static void
-clientAccessCheckDone(int answer, void *data)
-{
-    clientHttpRequest *http = data;
-    err_type page_id;
-    http_status status;
-    ErrorState *err = NULL;
-    char *proxy_auth_msg = NULL;
-    debug(33, 2) ("The request %s %s is %s, because it matched '%s'\n",
-	urlMethodGetConstStr(http->request->method), http->uri,
-	answer == ACCESS_ALLOWED ? "ALLOWED" : "DENIED",
-	AclMatchedName ? AclMatchedName : "NO ACL's");
-    proxy_auth_msg = authenticateAuthUserRequestMessage(http->conn->auth_user_request ? http->conn->auth_user_request : http->request->auth_user_request);
-    http->acl_checklist = NULL;
-    if (answer == ACCESS_ALLOWED) {
-	safe_free(http->uri);
-	http->uri = xstrdup(urlCanonical(http->request));
-	assert(http->redirect_state == REDIRECT_NONE);
-	http->redirect_state = REDIRECT_PENDING;
-	clientRedirectStart(http);
-    } else {
-	int require_auth = (answer == ACCESS_REQ_PROXY_AUTH || aclIsProxyAuth(AclMatchedName)) && !http->request->flags.transparent;
-	debug(33, 5) ("Access Denied: %s\n", http->uri);
-	debug(33, 5) ("AclMatchedName = %s\n",
-	    AclMatchedName ? AclMatchedName : "<null>");
-	debug(33, 5) ("Proxy Auth Message = %s\n",
-	    proxy_auth_msg ? proxy_auth_msg : "<null>");
-	/*
-	 * NOTE: get page_id here, based on AclMatchedName because
-	 * if USE_DELAY_POOLS is enabled, then AclMatchedName gets
-	 * clobbered in the clientCreateStoreEntry() call
-	 * just below.  Pedro Ribeiro <pribeiro@isel.pt>
-	 */
-	page_id = aclGetDenyInfoPage(&Config.denyInfoList, AclMatchedName, answer != ACCESS_REQ_PROXY_AUTH);
-	http->log_type = LOG_TCP_DENIED;
-	http->entry = clientCreateStoreEntry(http, http->request->method,
-	    null_request_flags);
-	if (require_auth) {
-	    if (!http->flags.accel) {
-		/* Proxy authorisation needed */
-		status = HTTP_PROXY_AUTHENTICATION_REQUIRED;
-	    } else {
-		/* WWW authorisation needed */
-		status = HTTP_UNAUTHORIZED;
-	    }
-	    if (page_id == ERR_NONE)
-		page_id = ERR_CACHE_ACCESS_DENIED;
-	} else {
-	    status = HTTP_FORBIDDEN;
-	    if (page_id == ERR_NONE)
-		page_id = ERR_ACCESS_DENIED;
-	}
-	err = errorCon(page_id, status, http->orig_request);
-	if (http->conn->auth_user_request)
-	    err->auth_user_request = http->conn->auth_user_request;
-	else if (http->request->auth_user_request)
-	    err->auth_user_request = http->request->auth_user_request;
-	/* lock for the error state */
-	if (err->auth_user_request)
-	    authenticateAuthUserRequestLock(err->auth_user_request);
-	err->callback_data = NULL;
-	errorAppendEntry(http->entry, err);
-    }
-}
-
-static void
-clientAccessCheckDone2(int answer, void *data)
-{
-    clientHttpRequest *http = data;
-    err_type page_id;
-    http_status status;
-    ErrorState *err = NULL;
-    char *proxy_auth_msg = NULL;
-    debug(33, 2) ("The request %s %s is %s, because it matched '%s'\n",
-	urlMethodGetConstStr(http->request->method), http->uri,
-	answer == ACCESS_ALLOWED ? "ALLOWED" : "DENIED",
-	AclMatchedName ? AclMatchedName : "NO ACL's");
-    proxy_auth_msg = authenticateAuthUserRequestMessage(http->conn->auth_user_request ? http->conn->auth_user_request : http->request->auth_user_request);
-    http->acl_checklist = NULL;
-    if (answer == ACCESS_ALLOWED) {
-	clientCheckNoCache(http);
-    } else {
-	int require_auth = (answer == ACCESS_REQ_PROXY_AUTH || aclIsProxyAuth(AclMatchedName));
-	debug(33, 5) ("Access Denied: %s\n", http->uri);
-	debug(33, 5) ("AclMatchedName = %s\n",
-	    AclMatchedName ? AclMatchedName : "<null>");
-	if (require_auth)
-	    debug(33, 5) ("Proxy Auth Message = %s\n",
-		proxy_auth_msg ? proxy_auth_msg : "<null>");
-	/*
-	 * NOTE: get page_id here, based on AclMatchedName because
-	 * if USE_DELAY_POOLS is enabled, then AclMatchedName gets
-	 * clobbered in the clientCreateStoreEntry() call
-	 * just below.  Pedro Ribeiro <pribeiro@isel.pt>
-	 */
-	page_id = aclGetDenyInfoPage(&Config.denyInfoList, AclMatchedName, answer != ACCESS_REQ_PROXY_AUTH);
-	http->log_type = LOG_TCP_DENIED;
-	http->entry = clientCreateStoreEntry(http, http->request->method,
-	    null_request_flags);
-	if (require_auth) {
-	    if (!http->flags.accel) {
-		/* Proxy authorisation needed */
-		status = HTTP_PROXY_AUTHENTICATION_REQUIRED;
-	    } else {
-		/* WWW authorisation needed */
-		status = HTTP_UNAUTHORIZED;
-	    }
-	    if (page_id == ERR_NONE)
-		page_id = ERR_CACHE_ACCESS_DENIED;
-	} else {
-	    status = HTTP_FORBIDDEN;
-	    if (page_id == ERR_NONE)
-		page_id = ERR_ACCESS_DENIED;
-	}
-	err = errorCon(page_id, status, http->orig_request);
-	if (http->conn->auth_user_request)
-	    err->auth_user_request = http->conn->auth_user_request;
-	else if (http->request->auth_user_request)
-	    err->auth_user_request = http->request->auth_user_request;
-	/* lock for the error state */
-	if (err->auth_user_request)
-	    authenticateAuthUserRequestLock(err->auth_user_request);
-	err->callback_data = NULL;
-	errorAppendEntry(http->entry, err);
-    }
-}
-
-static void
-clientCheckNoCache(clientHttpRequest * http)
-{
-    if (Config.accessList.noCache && http->request->flags.cachable) {
-	http->acl_checklist = clientAclChecklistCreate(Config.accessList.noCache, http);
-	aclNBCheck(http->acl_checklist, clientCheckNoCacheDone, http);
-    } else {
-	clientCheckNoCacheDone(http->request->flags.cachable, http);
-    }
-}
-
-void
-clientCheckNoCacheDone(int answer, void *data)
-{
-    clientHttpRequest *http = data;
-    http->request->flags.cachable = answer;
-    http->acl_checklist = NULL;
-    clientProcessRequest(http);
-}
-
-static void
-clientHandleETagMiss(clientHttpRequest * http)
-{
-    StoreEntry *entry = http->entry;
-    request_t *request = http->request;
-
-    request->done_etag = 1;
-    if (request->vary) {
-	storeLocateVaryDone(request->vary);
-	request->vary = NULL;
-	request->etags = NULL;	/* pointed into request->vary */
-    }
-    safe_free(request->etag);
-    safe_free(request->vary_headers);
-    safe_free(request->vary_hdr);
-    storeClientUnregister(http->sc, entry, http);
-    storeUnlockObject(entry);
-    http->entry = NULL;
-    clientProcessRequest(http);
-}
-
-static void
-clientHandleETagReply(void *data, HttpReply * rep)
-{
-    //const char *buf = ref.node->data + ref.offset;
-    clientHttpRequest *http = data;
-    StoreEntry *entry = http->entry;
-    const char *url = storeLookupUrl(entry);
-    if (entry == NULL) {
-	/* client aborted */
-	return;
-    }
-    if (!rep) {
-	debug(33, 3) ("clientHandleETagReply: FAILED '%s'\n", url);
-	clientHandleETagMiss(http);
-	return;
-    }
-    if (EBIT_TEST(entry->flags, ENTRY_ABORTED)) {
-	debug(33, 3) ("clientHandleETagReply: ABORTED '%s'\n", url);
-	clientHandleETagMiss(http);
-	return;
-    }
-    debug(33, 3) ("clientHandleETagReply: %s = %d\n", url, (int) rep->sline.status);
-    if (HTTP_NOT_MODIFIED == rep->sline.status) {
-	/* Remember the ETag and restart */
-	if (rep) {
-	    request_t *request = http->request;
-	    const char *etag = httpHeaderGetStr(&rep->header, HDR_ETAG);
-	    const char *vary = request->vary_headers;
-	    int has_vary = httpHeaderHas(&rep->header, HDR_VARY);
-#if X_ACCELERATOR_VARY
-	    has_vary |= httpHeaderHas(&rep->header, HDR_X_ACCELERATOR_VARY);
-#endif
-	    if (has_vary)
-		vary = httpMakeVaryMark(request, rep);
-
-	    if (etag && vary) {
-		char *str;
-		str = stringDupToC(&request->vary_encoding);
-		storeAddVary(url, entry->mem_obj->method, NULL, httpHeaderGetStr(&rep->header, HDR_ETAG), request->vary_hdr, request->vary_headers, str);
-		safe_free(str);
-	    }
-	}
-	clientHandleETagMiss(http);
-	return;
-    }
-    /* Send the new object to the client */
-    clientSendHeaders(data, rep);
-    return;
-}
-
-static void
-clientProcessETag(clientHttpRequest * http)
-{
-    char *url = http->uri;
-    StoreEntry *entry = NULL;
-    debug(33, 3) ("clientProcessETag: '%s'\n", http->uri);
-    entry = storeCreateEntry(url, http->request->flags, http->request->method);
-    if (http->request->store_url)
-	storeEntrySetStoreUrl(entry, http->request->store_url);
-    http->sc = storeClientRegister(entry, http);
-#if DELAY_POOLS
-    /* delay_id is already set on original store client */
-    delaySetStoreClient(http->sc, delayClient(http));
-#endif
-    http->entry = entry;
-    http->out.offset = 0;
-    fwdStart(http->conn->fd, http->entry, http->request);
-    /* Register with storage manager to receive updates when data comes in. */
-    if (EBIT_TEST(entry->flags, ENTRY_ABORTED))
-	debug(33, 0) ("clientProcessETag: found ENTRY_ABORTED object\n");
-    storeClientCopyHeaders(http->sc, entry,
-	clientHandleETagReply,
-	http);
-}
-
-static void
-clientRefreshCheck(clientHttpRequest * http)
-{
-    refreshCheckSubmit(http->entry, clientRefreshCheckDone, http);
-}
-
-static void
-clientRefreshCheckDone(void *data, int fresh, const char *log)
-{
-    clientHttpRequest *http = data;
-    if (log) {
-	safe_free(http->al.ext_refresh);
-	http->al.ext_refresh = xstrdup(log);
-    }
-    if (fresh)
-	clientProcessHit(http);
-    else
-	clientProcessExpired(http);
-}
-
-static void
 clientProcessExpired(clientHttpRequest * http)
 {
     char *url = http->uri;
@@ -1173,7 +638,7 @@ clientUpdateCounters(clientHttpRequest * http)
     }
 }
 
-static void
+void
 httpRequestFree(void *data)
 {
     clientHttpRequest *http = data;
@@ -1294,42 +759,6 @@ httpRequestFree(void *data)
     dlinkDelete(&http->node, &http->conn->reqs);
     dlinkDelete(&http->active, &ClientActiveRequests);
     cbdataFree(http);
-}
-
-/* This is a handler normally called by comm_close() */
-static void
-connStateFree(int fd, void *data)
-{
-    ConnStateData *connState = data;
-    dlink_node *n;
-    clientHttpRequest *http;
-    debug(33, 3) ("connStateFree: FD %d\n", fd);
-    assert(connState != NULL);
-    clientdbEstablished(connState->peer.sin_addr, -1);	/* decrement */
-    n = connState->reqs.head;
-    while (n != NULL) {
-	http = n->data;
-	n = n->next;
-	assert(http->conn == connState);
-	httpRequestFree(http);
-    }
-    if (connState->auth_user_request)
-	authenticateAuthUserRequestUnlock(connState->auth_user_request);
-    connState->auth_user_request = NULL;
-    authenticateOnCloseConnection(connState);
-    memFreeBuf(connState->in.size, connState->in.buf);
-    pconnHistCount(0, connState->nrequests);
-    if (connState->pinning.fd >= 0)
-	comm_close(connState->pinning.fd);
-    cbdataFree(connState);
-    clientside_num_conns--;
-#ifdef _SQUID_LINUX_
-    /* prevent those nasty RST packets */
-    {
-	char buf[SQUID_TCP_SO_RCVBUF];
-	while (FD_READ_METHOD(fd, buf, SQUID_TCP_SO_RCVBUF) > 0);
-    }
-#endif
 }
 
 void
@@ -1624,152 +1053,6 @@ isTcpHit(log_type code)
 }
 
 /*
- * returns true if If-Range specs match reply, false otherwise
- */
-static int
-clientIfRangeMatch(clientHttpRequest * http, HttpReply * rep)
-{
-    const TimeOrTag spec = httpHeaderGetTimeOrTag(&http->request->header, HDR_IF_RANGE);
-    /* check for parsing falure */
-    if (!spec.valid)
-	return 0;
-    /* got an ETag? */
-    if (spec.tag) {
-	const char *rep_tag = httpHeaderGetStr(&rep->header, HDR_ETAG);
-	debug(33, 3) ("clientIfRangeMatch: ETags: %s and %s\n",
-	    spec.tag, rep_tag ? rep_tag : "<none>");
-	if (!rep_tag)
-	    return 0;		/* entity has no etag to compare with! */
-	if (spec.tag[0] == 'W' || rep_tag[0] == 'W') {
-	    debug(33, 1) ("clientIfRangeMatch: Weak ETags are not allowed in If-Range: %s ? %s\n",
-		spec.tag, rep_tag);
-	    return 0;		/* must use strong validator for sub-range requests */
-	}
-	return strcmp(rep_tag, spec.tag) == 0;
-    }
-    /* got modification time? */
-    else if (spec.time >= 0) {
-	return http->entry->lastmod == spec.time;
-    }
-    assert(0);			/* should not happen */
-    return 0;
-}
-
-/* returns expected content length for multi-range replies
- * note: assumes that httpHdrRangeCanonize has already been called
- * warning: assumes that HTTP headers for individual ranges at the
- *          time of the actuall assembly will be exactly the same as
- *          the headers when clientMRangeCLen() is called */
-static squid_off_t
-clientMRangeCLen(clientHttpRequest * http)
-{
-    squid_off_t clen = 0;
-    HttpHdrRangePos pos = HttpHdrRangeInitPos;
-    const HttpHdrRangeSpec *spec;
-    MemBuf mb;
-
-    assert(http->entry->mem_obj);
-
-    memBufDefInit(&mb);
-    while ((spec = httpHdrRangeGetSpec(http->request->range, &pos))) {
-
-	/* account for headers for this range */
-	memBufReset(&mb);
-	clientPackRangeHdr(http->entry->mem_obj->reply,
-	    spec, http->range_iter.boundary, &mb);
-	clen += mb.size;
-
-	/* account for range content */
-	clen += spec->length;
-
-	debug(33, 6) ("clientMRangeCLen: (clen += %ld + %" PRINTF_OFF_T ") == %" PRINTF_OFF_T "\n",
-	    (long int) mb.size, spec->length, clen);
-    }
-    /* account for the terminating boundary */
-    memBufReset(&mb);
-    clientPackTermBound(http->range_iter.boundary, &mb);
-    clen += mb.size;
-
-    memBufClean(&mb);
-    return clen;
-}
-
-/* adds appropriate Range headers if needed */
-static void
-clientBuildRangeHeader(clientHttpRequest * http, HttpReply * rep)
-{
-    HttpHeader *hdr = rep ? &rep->header : 0;
-    const char *range_err = NULL;
-    request_t *request = http->request;
-    assert(request->range);
-    /* check if we still want to do ranges */
-    if (!rep)
-	range_err = "no [parse-able] reply";
-    else if (rep->sline.status != HTTP_OK)
-	range_err = "wrong status code";
-    else if (httpHeaderHas(hdr, HDR_CONTENT_RANGE))
-	range_err = "origin server does ranges";
-    else if (rep->content_length < 0)
-	range_err = "unknown length";
-    else if (rep->content_length != http->entry->mem_obj->reply->content_length)
-	range_err = "INCONSISTENT length";	/* a bug? */
-    else if (httpHeaderHas(&http->request->header, HDR_IF_RANGE) && !clientIfRangeMatch(http, rep))
-	range_err = "If-Range match failed";
-    else if (!httpHdrRangeCanonize(http->request->range, rep->content_length))
-	range_err = "canonization failed";
-    else if (httpHdrRangeIsComplex(http->request->range))
-	range_err = "too complex range header";
-    else if (!request->flags.cachable)	/* from we_do_ranges in http.c */
-	range_err = "non-cachable request";
-    else if (!http->flags.hit && httpHdrRangeOffsetLimit(http->request->range))
-	range_err = "range outside range_offset_limit";
-    /* get rid of our range specs on error */
-    if (range_err) {
-	debug(33, 3) ("clientBuildRangeHeader: will not do ranges: %s.\n", range_err);
-	httpHdrRangeDestroy(http->request->range);
-	http->request->range = NULL;
-    } else {
-	const int spec_count = http->request->range->specs.count;
-	squid_off_t actual_clen = -1;
-
-	debug(33, 3) ("clientBuildRangeHeader: range spec count: %d virgin clen: %" PRINTF_OFF_T "\n",
-	    spec_count, rep->content_length);
-	assert(spec_count > 0);
-	/* append appropriate header(s) */
-	if (spec_count == 1) {
-	    HttpHdrRangePos pos = HttpHdrRangeInitPos;
-	    const HttpHdrRangeSpec *spec = httpHdrRangeGetSpec(http->request->range, &pos);
-	    assert(spec);
-	    /* append Content-Range */
-	    httpHeaderAddContRange(hdr, *spec, rep->content_length);
-	    /* set new Content-Length to the actual number of bytes
-	     * transmitted in the message-body */
-	    actual_clen = spec->length;
-	} else {
-	    /* multipart! */
-	    /* generate boundary string */
-	    http->range_iter.boundary = httpHdrRangeBoundaryStr(http);
-	    /* delete old Content-Type, add ours */
-	    httpHeaderDelById(hdr, HDR_CONTENT_TYPE);
-	    httpHeaderPutStrf(hdr, HDR_CONTENT_TYPE,
-		"multipart/byteranges; boundary=\"%.*s\"",
-		strLen2(http->range_iter.boundary),
-		strBuf2(http->range_iter.boundary));
-	    /* Content-Length is not required in multipart responses
-	     * but it is always nice to have one */
-	    actual_clen = clientMRangeCLen(http);
-	}
-
-	/* replace Content-Length header */
-	assert(actual_clen >= 0);
-	httpHeaderDelById(hdr, HDR_CONTENT_LENGTH);
-	httpHeaderPutSize(hdr, HDR_CONTENT_LENGTH, actual_clen);
-	rep->content_length = actual_clen;
-	debug(33, 3) ("clientBuildRangeHeader: actual content length: %" PRINTF_OFF_T "\n", actual_clen);
-    }
-}
-
-/*
  * filters out unwanted entries from original reply header
  * adds extra entries if we have more info than origin server
  * adds Squid specific entries
@@ -2048,163 +1331,6 @@ clientProcessVary(VaryData * vary, void *data)
 }
 
 /*
- * Perform an async refresh of an object
- */
-typedef struct _clientAsyncRefreshRequest {
-    request_t *request;
-    StoreEntry *entry;
-    StoreEntry *old_entry;
-    store_client *sc;
-    squid_off_t offset;
-    size_t buf_in_use;
-    struct timeval start;
-} clientAsyncRefreshRequest;
-
-CBDATA_TYPE(clientAsyncRefreshRequest);
-
-static void
-clientAsyncDone(clientAsyncRefreshRequest * async)
-{
-    AccessLogEntry al;
-    static aclCheck_t *ch;
-    MemObject *mem = async->entry->mem_obj;
-    request_t *request = async->request;
-    memset(&al, 0, sizeof(al));
-    al.icp.opcode = ICP_INVALID;
-    al.url = mem->url;
-    debug(33, 9) ("clientAsyncDone: url='%s'\n", al.url);
-    al.http.code = mem->reply->sline.status;
-    al.http.content_type = strBuf(mem->reply->content_type);
-    al.cache.size = async->offset;
-    if (async->old_entry->mem_obj)
-	async->old_entry->mem_obj->refresh_timestamp = 0;
-    if (mem->reply->sline.status == 304) {
-	/* Don't memcpy() the whole reply structure here.  For example,
-	 * www.thegist.com (Netscape/1.13) returns a content-length for
-	 * 304's which seems to be the length of the 304 HEADERS!!! and
-	 * not the body they refer to.  */
-	httpReplyUpdateOnNotModified(async->old_entry->mem_obj->reply, async->entry->mem_obj->reply);
-	storeTimestampsSet(async->old_entry);
-	storeUpdate(async->old_entry, async->request);
-	al.cache.code = LOG_TCP_ASYNC_HIT;
-    } else
-	al.cache.code = LOG_TCP_ASYNC_MISS;
-    al.cache.msec = tvSubMsec(async->start, current_time);
-    if (Config.onoff.log_mime_hdrs) {
-	Packer p;
-	MemBuf mb;
-	memBufDefInit(&mb);
-	packerToMemInit(&p, &mb);
-	httpHeaderPackInto(&request->header, &p);
-	al.headers.request = xstrdup(mb.buf);
-	packerClean(&p);
-	memBufClean(&mb);
-    }
-    al.http.method = request->method;
-    al.http.version = request->http_ver;
-    al.hier = request->hier;
-    if (request->auth_user_request) {
-	if (authenticateUserRequestUsername(request->auth_user_request))
-	    al.cache.authuser = xstrdup(authenticateUserRequestUsername(request->auth_user_request));
-	authenticateAuthUserRequestUnlock(request->auth_user_request);
-	request->auth_user_request = NULL;
-    } else if (request->extacl_user) {
-	al.cache.authuser = xstrdup(request->extacl_user);
-    }
-    al.request = request;
-    al.reply = mem->reply;
-    ch = aclChecklistCreate(Config.accessList.http, request, NULL);
-    ch->reply = mem->reply;
-    if (!Config.accessList.log || aclCheckFast(Config.accessList.log, ch))
-	accessLogLog(&al, ch);
-    aclChecklistFree(ch);
-    storeClientUnregister(async->sc, async->entry, async);
-    storeUnlockObject(async->entry);
-    storeUnlockObject(async->old_entry);
-    requestUnlink(async->request);
-    safe_free(al.headers.request);
-    safe_free(al.headers.reply);
-    safe_free(al.cache.authuser);
-    cbdataFree(async);
-}
-
-static void
-clientHandleAsyncReply(void *data, mem_node_ref nr, ssize_t size)
-{
-    clientAsyncRefreshRequest *async = data;
-    StoreEntry *e = async->entry;
-    stmemNodeUnref(&nr);
-    if (EBIT_TEST(e->flags, ENTRY_ABORTED)) {
-	clientAsyncDone(async);
-	return;
-    }
-    if (size <= 0) {
-	clientAsyncDone(async);
-	return;
-    }
-    async->offset += size;
-    if (e->mem_obj->reply->sline.status == 304) {
-	clientAsyncDone(async);
-	return;
-    }
-    storeClientRef(async->sc, async->entry,
-	async->offset,
-	async->offset,
-	SM_PAGE_SIZE,
-	clientHandleAsyncReply,
-	async);
-}
-
-static void
-clientAsyncRefresh(clientHttpRequest * http)
-{
-    char *url = http->uri;
-    clientAsyncRefreshRequest *async;
-    request_t *request = http->request;
-    debug(33, 3) ("clientAsyncRefresh: '%s'\n", http->uri);
-    CBDATA_INIT_TYPE(clientAsyncRefreshRequest);
-    http->entry->mem_obj->refresh_timestamp = squid_curtime;
-    async = cbdataAlloc(clientAsyncRefreshRequest);
-    async->start = current_time;
-    async->request = requestLink(request);
-    async->old_entry = http->entry;
-    storeLockObject(async->old_entry);
-    async->entry = storeCreateEntry(url,
-	request->flags,
-	request->method);
-    async->entry->mem_obj->old_entry = async->old_entry;
-    storeLockObject(async->entry->mem_obj->old_entry);
-    async->sc = storeClientRegister(async->entry, async);
-    request->etags = NULL;	/* Should always be null as this was a cache hit, but just in case.. */
-    httpHeaderDelById(&request->header, HDR_RANGE);
-    httpHeaderDelById(&request->header, HDR_IF_RANGE);
-    httpHeaderDelById(&request->header, HDR_IF_NONE_MATCH);
-    httpHeaderDelById(&request->header, HDR_IF_MATCH);
-    if (async->old_entry->lastmod > 0)
-	request->lastmod = async->old_entry->lastmod;
-    else if (async->old_entry->mem_obj && async->old_entry->mem_obj->reply)
-	request->lastmod = async->old_entry->mem_obj->reply->date;
-    else
-	request->lastmod = -1;
-    if (!request->etag) {
-	const char *etag = httpHeaderGetStr(&async->old_entry->mem_obj->reply->header, HDR_ETAG);
-	if (etag)
-	    async->request->etag = xstrdup(etag);
-    }
-#if DELAY_POOLS
-    /* delay_id is already set on original store client */
-    delaySetStoreClient(async->sc, delayClient(http));
-#endif
-    fwdStart(-1, async->entry, async->request);
-    storeClientRef(async->sc, async->entry,
-	async->offset,
-	async->offset,
-	SM_PAGE_SIZE,
-	clientHandleAsyncReply,
-	async);
-}
-
-/*
  * clientCacheHit should only be called until the HTTP reply headers
  * have been parsed.  Normally this should be a single call, but
  * it might take more than one.  As soon as we have the headers,
@@ -2410,6 +1536,26 @@ clientCacheHit(void *data, HttpReply * rep)
 		is_modified = 0;
 	}
     }
+
+    /*
+     * There's the possibility that a cached redirect will refer to the same URL
+     * in some circumstances where the request URL is being rewritten (eg storeurl)
+     * where the redirect is not explicitly as uncachable. 
+     * Deny looping here and do not cache the response.
+     */
+
+    /*
+     * XXX strcmp() sucks but the strings are both C strings. Look at String'ifying it
+     * XXX soon!
+     */
+    if (mem->reply->sline.status >= 300 && mem->reply->sline.status < 400) {
+        if (!strcmp(http->uri, httpHeaderGetStr(&e->mem_obj->reply->header, HDR_LOCATION))) {
+	    debug(33, 1) ("clientCacheHit: Redirect Loop Detected: %s\n",http->uri);
+	    http->log_type = LOG_TCP_MISS;
+	    clientProcessMiss(http);
+	    return;
+        }
+    }
     stale = refreshCheckHTTPStale(e, r);
     debug(33, 2) ("clientCacheHit: refreshCheckHTTPStale returned %d\n", stale);
     if (stale == 0) {
@@ -2464,7 +1610,7 @@ clientCacheHit(void *data, HttpReply * rep)
     clientProcessHit(http);
 }
 
-static void
+void
 clientProcessHit(clientHttpRequest * http)
 {
     int is_modified = http->is_modified;
@@ -2501,169 +1647,6 @@ clientProcessHit(clientHttpRequest * http)
     else if (http->log_type == LOG_TCP_HIT && e->mem_status == IN_MEMORY)
 	http->log_type = LOG_TCP_MEM_HIT;
     clientSendHeaders(http, e->mem_obj->reply);
-}
-
-/* put terminating boundary for multiparts */
-static void
-clientPackTermBound(String boundary, MemBuf * mb)
-{
-    memBufPrintf(mb, "\r\n--%.*s--\r\n", strLen2(boundary), strBuf2(boundary));
-    debug(33, 6) ("clientPackTermBound: buf offset: %ld\n", (long int) mb->size);
-}
-
-/* appends a "part" HTTP header (as in a multi-part/range reply) to the buffer */
-static void
-clientPackRangeHdr(const HttpReply * rep, const HttpHdrRangeSpec * spec, String boundary, MemBuf * mb)
-{
-    HttpHeader hdr;
-    Packer p;
-    assert(rep);
-    assert(spec);
-
-    /* put boundary */
-    debug(33, 5) ("clientPackRangeHdr: appending boundary: %.*s\n", strLen2(boundary), strBuf2(boundary));
-    /* rfc2046 requires to _prepend_ boundary with <crlf>! */
-    memBufPrintf(mb, "\r\n--%.*s\r\n", strLen2(boundary), strBuf2(boundary));
-
-    /* stuff the header with required entries and pack it */
-    httpHeaderInit(&hdr, hoReply);
-    if (httpHeaderHas(&rep->header, HDR_CONTENT_TYPE))
-	httpHeaderPutStr(&hdr, HDR_CONTENT_TYPE, httpHeaderGetStr(&rep->header, HDR_CONTENT_TYPE));
-    httpHeaderAddContRange(&hdr, *spec, rep->content_length);
-    packerToMemInit(&p, mb);
-    httpHeaderPackInto(&hdr, &p);
-    packerClean(&p);
-    httpHeaderClean(&hdr);
-
-    /* append <crlf> (we packed a header, not a reply) */
-    memBufPrintf(mb, crlf);
-}
-
-/*
- * extracts a "range" from *buf and appends them to mb, updating
- * all offsets and such.
- */
-static void
-clientPackRange(clientHttpRequest * http,
-    HttpHdrRangeIter * i,
-    const char **buf,
-    size_t * size,
-    MemBuf * mb)
-{
-    const size_t copy_sz = i->debt_size <= *size ? i->debt_size : *size;
-    squid_off_t body_off = http->out.offset - i->prefix_size;
-    assert(*size > 0);
-    assert(i->spec);
-    /*
-     * intersection of "have" and "need" ranges must not be empty
-     */
-    assert(body_off < i->spec->offset + i->spec->length);
-    assert(body_off + *size > i->spec->offset);
-    /*
-     * put boundary and headers at the beginning of a range in a
-     * multi-range
-     */
-    if (http->request->range->specs.count > 1 && i->debt_size == i->spec->length) {
-	assert(http->entry->mem_obj);
-	clientPackRangeHdr(
-	    http->entry->mem_obj->reply,	/* original reply */
-	    i->spec,		/* current range */
-	    i->boundary,	/* boundary, the same for all */
-	    mb
-	    );
-    }
-    /*
-     * append content
-     */
-    debug(33, 3) ("clientPackRange: appending %ld bytes\n", (long int) copy_sz);
-    memBufAppend(mb, *buf, copy_sz);
-    /*
-     * update offsets
-     */
-    *size -= copy_sz;
-    i->debt_size -= copy_sz;
-    body_off += copy_sz;
-    *buf += copy_sz;
-    http->out.offset = body_off + i->prefix_size;	/* sync */
-    /*
-     * paranoid check
-     */
-    assert(i->debt_size >= 0);
-}
-
-/* returns true if there is still data available to pack more ranges
- * increments iterator "i"
- * used by clientPackMoreRanges */
-static int
-clientCanPackMoreRanges(const clientHttpRequest * http, HttpHdrRangeIter * i, size_t size)
-{
-    /* first update "i" if needed */
-    if (!i->debt_size) {
-	if ((i->spec = httpHdrRangeGetSpec(http->request->range, &i->pos)))
-	    i->debt_size = i->spec->length;
-    }
-    assert(!i->debt_size == !i->spec);	/* paranoid sync condition */
-    /* continue condition: need_more_data && have_more_data */
-    return i->spec && size > 0;
-}
-
-/* extracts "ranges" from buf and appends them to mb, updating all offsets and such */
-/* returns true if we need more data */
-static int
-clientPackMoreRanges(clientHttpRequest * http, const char *buf, size_t size, MemBuf * mb)
-{
-    HttpHdrRangeIter *i = &http->range_iter;
-    /* offset in range specs does not count the prefix of an http msg */
-    squid_off_t body_off = http->out.offset - i->prefix_size;
-
-    /* check: reply was parsed and range iterator was initialized */
-    assert(i->prefix_size > 0);
-    /* filter out data according to range specs */
-    while (clientCanPackMoreRanges(http, i, size)) {
-	squid_off_t start;	/* offset of still missing data */
-	assert(i->spec);
-	start = i->spec->offset + i->spec->length - i->debt_size;
-	debug(33, 3) ("clientPackMoreRanges: in:  offset: %ld size: %ld\n",
-	    (long int) body_off, (long int) size);
-	debug(33, 3) ("clientPackMoreRanges: out: start: %ld spec[%ld]: [%ld, %ld), len: %ld debt: %ld\n",
-	    (long int) start, (long int) i->pos, (long int) i->spec->offset, (long int) (i->spec->offset + i->spec->length), (long int) i->spec->length, (long int) i->debt_size);
-	assert(body_off <= start);	/* we did not miss it */
-	/* skip up to start */
-	if (body_off + size > start) {
-	    const size_t skip_size = start - body_off;
-	    body_off = start;
-	    size -= skip_size;
-	    buf += skip_size;
-	} else {
-	    /* has not reached start yet */
-	    body_off += size;
-	    size = 0;
-	    buf = NULL;
-	}
-	/* put next chunk if any */
-	if (size) {
-	    http->out.offset = body_off + i->prefix_size;	/* sync */
-	    clientPackRange(http, i, &buf, &size, mb);
-	    body_off = http->out.offset - i->prefix_size;	/* sync */
-	}
-    }
-    assert(!i->debt_size == !i->spec);	/* paranoid sync condition */
-    debug(33, 3) ("clientPackMoreRanges: buf exhausted: in:  offset: %ld size: %ld need_more: %ld\n",
-	(long int) body_off, (long int) size, (long int) i->debt_size);
-    if (i->debt_size) {
-	debug(33, 3) ("clientPackMoreRanges: need more: spec[%ld]: [%ld, %ld), len: %ld\n",
-	    (long int) i->pos, (long int) i->spec->offset, (long int) (i->spec->offset + i->spec->length), (long int) i->spec->length);
-	/* skip the data we do not need if possible */
-	if (i->debt_size == i->spec->length)	/* at the start of the cur. spec */
-	    body_off = i->spec->offset;
-	else
-	    assert(body_off == i->spec->offset + i->spec->length - i->debt_size);
-    } else if (http->request->range->specs.count > 1) {
-	/* put terminating boundary for multiparts */
-	clientPackTermBound(i->boundary, mb);
-    }
-    http->out.offset = body_off + i->prefix_size;	/* sync */
-    return i->debt_size > 0;
 }
 
 /*
@@ -2861,7 +1844,7 @@ static void clientCheckHeaderDone(clientHttpRequest * http);
  * accepts chunk of a http message in buf, parses prefix, filters headers and
  * such, writes processed message to the client's socket
  */
-static void
+void
 clientSendHeaders(void *data, HttpReply * rep)
 {
     //const char *buf = ref.node->data + ref.offset;
@@ -3240,7 +2223,7 @@ clientWriteBodyComplete(int fd, char *buf, size_t size, int errflag, void *data)
     clientWriteComplete(fd, NULL, size, errflag, data);
 }
 
-static void
+void
 clientKeepaliveNextRequest(clientHttpRequest * http)
 {
     ConnStateData *conn = http->conn;
@@ -3394,7 +2377,7 @@ clientWriteComplete(int fd, char *bufnotused, size_t size, int errflag, void *da
  *     contacting other servers;
  * respond with a 504 (Gateway Timeout) as suggested in [RFC 2068]
  */
-static void
+void
 clientProcessOnlyIfCachedMiss(clientHttpRequest * http)
 {
     char *url = http->uri;
@@ -3537,7 +2520,32 @@ clientProcessRequest2(clientHttpRequest * http)
     return LOG_TCP_HIT;
 }
 
-static void
+/*!
+ * @function
+ * 	clientProcessRequest
+ * @abstract
+ *	Begin processing a fully validated request
+ * @description
+ *	This function begins the processing chain of a request and determines
+ *	whether to begin forwarding upstream or whether the object already
+ *	exists in some form.
+ *
+ *	It handles CONNECT, PURGE and TRACE itself. The rest of the methods
+ *	are punted to the forwarding/store layer for handling.
+ *
+ *	If there's no StoreEntry associated with the object, the request is
+ *	punted to clientProcessMiss() for further handling.
+ *
+ *	If there's a StoreEntry, then some previous processing has performed
+ *	the client lookup and successfully found an object to attach to.
+ *	In this case, a store client is created and registered and the first
+ *	copy of the object reply is queued, which will eventually result in
+ *	the request being made if required, and the reply being fed from
+ *	the store via either the forwarding or the cache layer.
+ *
+ * @param	http	clientHttpRequest to begin processing
+ */
+void
 clientProcessRequest(clientHttpRequest * http)
 {
     char *url = http->uri;
@@ -3678,7 +2686,7 @@ clientCheckBeginForwarding(clientHttpRequest * http)
 /*
  * Prepare to fetch the object as it's a cache miss of some kind.
  */
-static void
+void
 clientProcessMiss(clientHttpRequest * http)
 {
     char *url = http->uri;
@@ -4373,162 +3381,6 @@ clientReadRequest(int fd, void *data)
     }
 }
 
-/* file_read like function, for reading body content */
-static void
-clientReadBody(request_t * request, char *buf, size_t size, CBCB * callback, void *cbdata)
-{
-    ConnStateData *conn = request->body_reader_data;
-    if (!callback) {
-	clientAbortBody(request);
-	return;
-    }
-    if (!conn) {
-	debug(33, 5) ("clientReadBody: no body to read, request=%p\n", request);
-	callback(buf, 0, cbdata);	/* Signal end of body */
-	return;
-    }
-    assert(cbdataValid(conn));
-    debug(33, 2) ("clientReadBody: start fd=%d body_size=%lu in.offset=%ld cb=%p req=%p\n", conn->fd, (unsigned long int) conn->body.size_left, (long int) conn->in.offset, callback, request);
-    conn->body.callback = callback;
-    conn->body.cbdata = cbdata;
-    cbdataLock(conn->body.cbdata);
-    conn->body.buf = buf;
-    conn->body.bufsize = size;
-    conn->body.request = requestLink(request);
-    clientProcessBody(conn);
-}
-
-static void
-clientEatRequestBodyHandler(char *buf, ssize_t size, void *data)
-{
-    clientHttpRequest *http = data;
-    ConnStateData *conn = http->conn;
-    if (buf && size < 0) {
-	return;			/* Aborted, don't care */
-    }
-    if (conn->body.size_left > 0) {
-	conn->body.callback = clientEatRequestBodyHandler;
-	conn->body.cbdata = http;
-	cbdataLock(conn->body.cbdata);
-	conn->body.buf = NULL;
-	conn->body.bufsize = SQUID_TCP_SO_RCVBUF;
-	clientProcessBody(conn);
-    } else {
-	if (http->request->flags.proxy_keepalive) {
-	    debug(33, 5) ("clientEatRequestBodyHandler: FD %d Keeping Alive\n", conn->fd);
-	    clientKeepaliveNextRequest(http);
-	} else {
-	    comm_close(conn->fd);
-	}
-    }
-}
-
-static void
-clientEatRequestBody(clientHttpRequest * http)
-{
-    ConnStateData *conn = http->conn;
-    cbdataLock(conn);
-    if (conn->body.request)
-	requestAbortBody(conn->body.request);
-    if (cbdataValid(conn))
-	clientEatRequestBodyHandler(NULL, -1, http);
-    cbdataUnlock(conn);
-}
-
-/* Called by clientReadRequest to process body content */
-static void
-clientProcessBody(ConnStateData * conn)
-{
-    int size;
-    char *buf = conn->body.buf;
-    void *cbdata = conn->body.cbdata;
-    CBCB *callback = conn->body.callback;
-    request_t *request = conn->body.request;
-    /* Note: request is null while eating "aborted" transfers */
-    debug(33, 2) ("clientProcessBody: start fd=%d body_size=%lu in.offset=%ld cb=%p req=%p\n", conn->fd, (unsigned long int) conn->body.size_left, (long int) conn->in.offset, callback, request);
-    if (conn->in.offset) {
-	int valid = cbdataValid(conn->body.cbdata);
-	if (!valid) {
-	    comm_close(conn->fd);
-	    return;
-	}
-	/* Some sanity checks... */
-	assert(conn->body.size_left > 0);
-	assert(conn->in.offset > 0);
-	assert(callback != NULL);
-	/* How much do we have to process? */
-	size = conn->in.offset;
-	if (size > conn->body.size_left)	/* only process the body part */
-	    size = conn->body.size_left;
-	if (size > conn->body.bufsize)	/* don't copy more than requested */
-	    size = conn->body.bufsize;
-	if (valid && buf)
-	    xmemcpy(buf, conn->in.buf, size);
-	conn->body.size_left -= size;
-	/* Move any remaining data */
-	conn->in.offset -= size;
-	/* Resume the fd if necessary */
-	if (conn->in.offset < conn->in.size - 1)
-	    commResumeFD(conn->fd);
-	if (conn->in.offset > 0)
-	    xmemmove(conn->in.buf, conn->in.buf + size, conn->in.offset);
-	/* Remove request link if this is the last part of the body, as
-	 * clientReadRequest automatically continues to process next request */
-	if (conn->body.size_left <= 0 && request != NULL) {
-	    request->body_reader = NULL;
-	    if (request->body_reader_data)
-		cbdataUnlock(request->body_reader_data);
-	    request->body_reader_data = NULL;
-	}
-	/* Remove clientReadBody arguments (the call is completed) */
-	conn->body.request = NULL;
-	conn->body.callback = NULL;
-	cbdataUnlock(conn->body.cbdata);
-	conn->body.cbdata = NULL;
-	conn->body.buf = NULL;
-	conn->body.bufsize = 0;
-	/* Remember that we have touched the body, not restartable */
-	if (request != NULL)
-	    request->flags.body_sent = 1;
-	/* Invoke callback function */
-	if (valid)
-	    callback(buf, size, cbdata);
-	if (request != NULL)
-	    requestUnlink(request);	/* Linked in clientReadBody */
-	debug(33, 2) ("clientProcessBody: end fd=%d size=%d body_size=%lu in.offset=%ld cb=%p req=%p\n", conn->fd, size, (unsigned long int) conn->body.size_left, (long int) conn->in.offset, callback, request);
-    }
-}
-
-/* Abort a body request */
-static void
-clientAbortBody(request_t * request)
-{
-    ConnStateData *conn = request->body_reader_data;
-    char *buf;
-    CBCB *callback;
-    void *cbdata;
-    int valid;
-    if (!conn || !cbdataValid(conn))
-	return;
-    if (!conn->body.callback || conn->body.request != request)
-	return;
-    buf = conn->body.buf;
-    callback = conn->body.callback;
-    cbdata = conn->body.cbdata;
-    valid = cbdataValid(cbdata);
-    assert(request == conn->body.request);
-    conn->body.buf = NULL;
-    conn->body.callback = NULL;
-    cbdataUnlock(conn->body.cbdata);
-    conn->body.cbdata = NULL;
-    conn->body.request = NULL;
-    if (valid)
-	callback(buf, -1, cbdata);	/* Signal abort to clientReadBody caller to allow them to clean up */
-    else
-	debug(33, 1) ("NOTICE: A request body was aborted with cancelled callback: %p, possible memory leak\n", callback);
-    requestUnlink(request);	/* Linked in clientReadBody */
-}
-
 /* general lifetime handler for HTTP requests */
 static void
 requestTimeout(int fd, void *data)
@@ -4570,8 +3422,6 @@ httpAcceptDefer(int fd, void *dataunused)
     return 1;
 }
 
-CBDATA_TYPE(ConnStateData);
-
 /* Handle a new connection on HTTP socket. */
 void
 httpAccept(int sock, void *data)
@@ -4609,19 +3459,9 @@ httpAccept(int sock, void *data)
 	F = &fd_table[fd];
 	debug(33, 4) ("httpAccept: FD %d: accepted port %d client %s:%d\n", fd, F->local_port, F->ipaddrstr, F->remote_port);
 	fd_note_static(fd, "client http connect");
-        CBDATA_INIT_TYPE(ConnStateData);
-	connState = cbdataAlloc(ConnStateData);
-	clientside_num_conns++;
-	connState->port = s;
-	cbdataLock(connState->port);
-	sqinet_get_v4_sockaddr_ptr(&peer, &connState->peer, SQADDR_ASSERT_IS_V4);
-	connState->log_addr = connState->peer.sin_addr;
-	connState->log_addr.s_addr &= Config.Addrs.client_netmask.s_addr;
-	sqinet_get_v4_sockaddr_ptr(&me, &connState->me, SQADDR_ASSERT_IS_V4);
-	connState->fd = fd;
-	connState->pinning.fd = -1;
-	connState->in.buf = memAllocBuf(CLIENT_REQ_BUF_SZ, &connState->in.size);
-	comm_add_close_handler(fd, connStateFree, connState);
+	connState = connStateCreate(fd, &peer, &me);
+        connState->port = s;
+        cbdataLock(connState->port);
 	if (Config.onoff.log_fqdn)
 	    fqdncache_gethostbyaddr(sqinet_get_v4_inaddr(&peer, SQADDR_ASSERT_IS_V4), FQDN_LOOKUP_IF_MISS);
 	commSetTimeout(fd, Config.Timeout.request, requestTimeout, connState);
@@ -4788,18 +3628,9 @@ httpsAccept(int sock, void *data)
 
 	F = &fd_table[fd];
 	debug(33, 4) ("httpsAccept: FD %d: accepted port %d client %s:%d\n", fd, F->local_port, F->ipaddrstr, F->remote_port);
-	connState = cbdataAlloc(ConnStateData);
-	clientside_num_conns ++;
+	connState = connStateCreate(fd, &peer, &me);
 	connState->port = (http_port_list *) s;
 	cbdataLock(connState->port);
-	sqinet_get_v4_sockaddr_ptr(&peer, &connState->peer, SQADDR_ASSERT_IS_V4);
-	connState->log_addr = connState->peer.sin_addr;
-	connState->log_addr.s_addr &= Config.Addrs.client_netmask.s_addr;
-	sqinet_get_v4_sockaddr_ptr(&me, &connState->me, SQADDR_ASSERT_IS_V4);
-	connState->fd = fd;
-	connState->pinning.fd = -1;
-	connState->in.buf = memAllocBuf(CLIENT_REQ_BUF_SZ, &connState->in.size);
-	comm_add_close_handler(fd, connStateFree, connState);
 	if (Config.onoff.log_fqdn)
 	    fqdncache_gethostbyaddr(connState->peer.sin_addr, FQDN_LOOKUP_IF_MISS);
 	commSetTimeout(fd, Config.Timeout.request, requestTimeout, connState);
@@ -5230,9 +4061,3 @@ clientReassignDelaypools(void)
     }
 }
 #endif
-
-int
-connStateGetCount(void)
-{
-	return clientside_num_conns;
-}

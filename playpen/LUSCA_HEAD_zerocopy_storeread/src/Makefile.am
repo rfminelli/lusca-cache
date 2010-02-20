@@ -107,8 +107,16 @@ squid_SOURCES = \
 	cbdata.c \
 	client_db.c \
 	client_side.c \
+	client_side_body.c \
+	client_side_etag.c \
+	client_side_request.c \
+	client_side_reply.c \
+	client_side_conn.c \
 	client_side_nat.c \
 	client_side_rewrite.c \
+	client_side_ranges.c \
+	client_side_refresh.c \
+	client_side_async_refresh.c \
 	client_side_storeurl_rewrite.c \
 	client_side_location_rewrite.c \
 	comm.c \
@@ -197,6 +205,7 @@ squid_SOURCES = \
 	store_swapmeta.c \
 	store_swapout.c \
 	store_update.c \
+	store_vary.c \
 	structs.h \
 	tools.c \
 	typedefs.h \
