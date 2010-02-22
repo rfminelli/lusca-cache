@@ -242,8 +242,8 @@ aioCancel(int fd)
 	    ctrlp->done_handler = NULL;
 	    ctrlp->done_handler_data = NULL;
 	    debug(32, 0) ("this be aioCancel. Danger ahead!\n");
-	    if (ctrlp->operation == _AIO_READ)
-	        assert(cbdataValid(their_data));
+	    if (ctrlp->operation == _AIO_READ && (! cbdataValid(their_data)))
+                debug(32, 0) ("aioCancel: cancelling AIO_READ with an invalid cbdata pointer; investigate!\n");
 	    if (cbdataValid(their_data))
 		done_handler(fd, their_data, NULL, -2, -2);
 	    cbdataUnlock(their_data);
@@ -447,8 +447,8 @@ aioCheckCallbacks(void)
 	    their_data = ctrlp->done_handler_data;
 	    ctrlp->done_handler = NULL;
 	    ctrlp->done_handler_data = NULL;
-	    if (ctrlp->operation == _AIO_READ)
-	        assert(cbdataValid(their_data));
+	    if (ctrlp->operation == _AIO_READ && (! cbdataValid(their_data)))
+                debug(32, 0) ("aioCheckCallbacks: completing AIO_READ with an invalid cbdata pointer; investigate!\n");
 	    if (cbdataValid(their_data)) {
 		retval = 1;	/* Return that we've actually done some work */
 		done_handler(ctrlp->fd, their_data, ctrlp->bufp,
