@@ -61,7 +61,7 @@ struct _ClientInfo {
 
 typedef struct _ClientInfo ClientInfo;
 
-static radix_tree_t *client_tree = NULL;
+static radix_tree_t *client_v4_tree = NULL;
 dlink_list client_list;
 
 static ClientInfo *clientdbAdd(struct in_addr addr);
@@ -85,7 +85,7 @@ clientdbAdd(struct in_addr addr)
     Init_Prefix(&p, AF_INET, &addr, 32);
     c = memPoolAlloc(pool_client_info);
     c->addr = addr;
-    rn = radix_lookup(client_tree, &p);
+    rn = radix_lookup(client_v4_tree, &p);
     rn->data = c;
     dlinkAddTail(c, &c->node, &client_list);
     statCounter.client_http.clients++;
@@ -106,9 +106,9 @@ clientdbInitMem(void)
 void
 clientdbInit(void)
 {
-    if (client_tree)
+    if (client_v4_tree)
         return;
-    client_tree = New_Radix();
+    client_v4_tree = New_Radix();
     cachemgrRegister("client_list", "Cache Client List", clientdbDump, 0, 1);
 }
 
@@ -123,7 +123,7 @@ clientdbUpdate(struct in_addr addr, log_type ltype, protocol_t p, squid_off_t si
 	return;
 
     Init_Prefix(&pr, AF_INET, &addr, 32);
-    rn = radix_search_exact(client_tree, &pr);
+    rn = radix_search_exact(client_v4_tree, &pr);
 
     if (rn)
         c = rn->data;
@@ -164,7 +164,7 @@ clientdbEstablished(struct in_addr addr, int delta)
     if (!Config.onoff.client_db)
 	return 0;
     Init_Prefix(&p, AF_INET, &addr, 32);
-    rn = radix_search_exact(client_tree, &p);
+    rn = radix_search_exact(client_v4_tree, &p);
     if (rn)
         c = rn->data;
     if (c == NULL)
@@ -190,7 +190,7 @@ clientdbCutoffDenied(struct in_addr addr)
 	return 0;
 
     Init_Prefix(&pr, AF_INET, &addr, 32);
-    rn = radix_search_exact(client_tree, &pr);
+    rn = radix_search_exact(client_v4_tree, &pr);
     if (rn)
         c = rn->data;
 
@@ -280,7 +280,7 @@ clientdbDump(StoreEntry * sentry)
     bzero(&ci, sizeof(ci));
     storeAppendPrintf(sentry, "Cache Clients:\n");
 
-    RADIX_WALK(client_tree->head, rn) {
+    RADIX_WALK(client_v4_tree->head, rn) {
       c = rn->data;
       clientdbDumpEntry(sentry, c, &ci);
     } RADIX_WALK_END;
@@ -311,8 +311,8 @@ clientdbFreeItemRadix(radix_node_t *rn, void *cbdata)
 void
 clientdbFreeMemory(void)
 {
-    Destroy_Radix(client_tree, clientdbFreeItemRadix, NULL);
-    client_tree = NULL;
+    Destroy_Radix(client_v4_tree, clientdbFreeItemRadix, NULL);
+    client_v4_tree = NULL;
 }
 
 static void
@@ -345,9 +345,9 @@ clientdbGC(void *unused)
           continue;
 
       Init_Prefix(&p, AF_INET, &c->addr, 32);
-      rn = radix_search_exact(client_tree, &p);
+      rn = radix_search_exact(client_v4_tree, &p);
       rn->data = NULL;
-      radix_remove(client_tree, rn);
+      radix_remove(client_v4_tree, rn);
       clientdbFreeItem(c);
 
       cleanup_removed++;

@@ -241,6 +241,8 @@ aclStrToType(const char *s)
 	return ACL_EXTUSER_REGEX;
     if (!strcmp(s, "hier_code"))
 	return ACL_HIER_CODE;
+    if (! strcmp(s, "dstfwdip"))
+	return ACL_DSTFWD_IP;
     return ACL_NONE;
 }
 
@@ -339,6 +341,8 @@ aclTypeToStr(squid_acl type)
 	return "ext_user_regex";
     if (type == ACL_HIER_CODE)
 	return "hier_code";
+    if (type == ACL_DSTFWD_IP)
+        return "dstfwdip";
     return "ERROR";
 }
 
@@ -1019,6 +1023,7 @@ aclParseAclLine(acl ** head)
     case ACL_SRC_IP:
     case ACL_DST_IP:
     case ACL_MY_IP:
+    case ACL_DSTFWD_IP:
 	aclParseIpList(&A->data);
 	break;
     case ACL_SRC_DOMAIN:
@@ -2091,6 +2096,13 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
     case ACL_HIER_CODE:
 	return aclMatchWordList(ae->data, hier_strings[checklist->request->hier.code]);
 	/* NOTREACHED */
+    case ACL_DSTFWD_IP:
+	/* make sure this checks that the dstfwdip is SET to something non-blank and
+	 * error out in case. */
+	if (IsAnyAddr(&checklist->fwdip_addr))
+	    return -1;
+	return aclMatchIp(&ae->data, checklist->fwdip_addr);
+	/* NOTREACHED */
     case ACL_NONE:
     case ACL_ENUM_MAX:
 	break;
@@ -2559,6 +2571,7 @@ aclDestroyAcls(acl ** head)
 	case ACL_SRC_IP:
 	case ACL_DST_IP:
 	case ACL_MY_IP:
+	case ACL_DSTFWD_IP:
 	    splay_destroy(a->data, aclFreeIpData);
 	    break;
 #if USE_ARP_ACL
@@ -3005,6 +3018,7 @@ aclDumpGeneric(const acl * a)
     case ACL_SRC_IP:
     case ACL_DST_IP:
     case ACL_MY_IP:
+    case ACL_DSTFWD_IP:
 	return aclDumpIpList(a->data);
     case ACL_SRC_DOMAIN:
     case ACL_DST_DOMAIN:

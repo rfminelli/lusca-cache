@@ -315,3 +315,39 @@ clientBuildRangeHeader(clientHttpRequest * http, HttpReply * rep)
     }
 }
 
+/*
+ * Return true if we should force a cache miss on this range request.
+ * entry must be non-NULL.
+ */
+int
+clientCheckRangeForceMiss(StoreEntry * entry, HttpHdrRange * range)
+{
+    /*
+     * If the range_offset_limit is NOT in effect, there
+     * is no reason to force a miss.
+     */
+    if (0 == httpHdrRangeOffsetLimit(range))
+        return 0;
+    /* 
+     * Here, we know it's possibly a hit.  If we already have the
+     * whole object cached, we won't force a miss.
+     */
+    if (STORE_OK == entry->store_status)
+        return 0;               /* we have the whole object */
+    /*
+     * Now we have a hit on a PENDING object.  We need to see
+     * if the part we want is already cached.  If so, we don't
+     * force a miss.
+     */
+    assert(NULL != entry->mem_obj);
+    if (httpHdrRangeFirstOffset(range) <= entry->mem_obj->inmem_hi)
+        return 0;
+    /*
+     * Even though we have a PENDING copy of the object, we
+     * don't want to wait to reach the first range offset,
+     * so we force a miss for a new range request to the
+     * origin.
+     */
+    return 1;
+}
+

@@ -267,6 +267,7 @@ comm_fdopen6(int new_socket,
     F = &fd_table[new_socket];
 
     sqinet_init(&(F->local_address));
+    sqinet_init(&(F->remote_address));
     sqinet_copy(&(F->local_address), a);
 
     F->tos = tos;
@@ -560,6 +561,7 @@ comm_connect_addr(int sock, const sqaddr_t *addr)
     else
 	return COMM_ERROR;
     sqinet_ntoa(addr, F->ipaddrstr, MAX_IPSTRLEN, 0);
+    sqinet_copy(&F->remote_address, addr);
     F->remote_port = sqinet_get_port(addr);
     if (status == COMM_OK) {
 	debug(5, 10) ("comm_connect_addr: FD %d connected to %s:%d\n",
@@ -614,6 +616,7 @@ comm_accept(int fd, sqaddr_t *pn, sqaddr_t *me)
     fd_note_static(sock, "HTTP Request");
     F = &fd_table[sock];
     sqinet_ntoa(&rem, F->ipaddrstr, MAX_IPSTRLEN, 0);
+    sqinet_copy(&F->remote_address, &rem);
     F->remote_port = sqinet_get_port(&rem);
     F->local_port = sqinet_get_port(&loc);
     commSetNonBlocking(sock);
@@ -730,6 +733,7 @@ static inline void
 comm_close_finish(int fd)
 {
     sqinet_done(&fd_table[fd].local_address);
+    sqinet_done(&fd_table[fd].remote_address);
     fd_close(fd);		/* update fdstat */
     close(fd);
     CommStats.syscalls.sock.closes++;
@@ -1589,6 +1593,10 @@ comm_create_fifopair(int *prfd, int *pwfd, int *crfd, int *cwfd)
         sqinet_init(&fd_table[*cwfd].local_address);
         sqinet_init(&fd_table[*crfd].local_address);
         sqinet_init(&fd_table[*pwfd].local_address);
+        sqinet_init(&fd_table[*prfd].remote_address);
+        sqinet_init(&fd_table[*cwfd].remote_address);
+        sqinet_init(&fd_table[*crfd].remote_address);
+        sqinet_init(&fd_table[*pwfd].remote_address);
 
 	return 1;
 }
@@ -1610,6 +1618,8 @@ comm_create_unix_stream_pair(int *prfd, int *pwfd, int *crfd, int *cwfd, int buf
         fd_open(*crfd = *cwfd = fds[1], FD_PIPE, "IPC UNIX STREAM Parent");
         sqinet_init(&fd_table[*prfd].local_address);
         sqinet_init(&fd_table[*crfd].local_address);
+        sqinet_init(&fd_table[*prfd].remote_address);
+        sqinet_init(&fd_table[*crfd].remote_address);
 
 	return 1;
 }
@@ -1626,6 +1636,8 @@ comm_create_unix_dgram_pair(int *prfd, int *pwfd, int *crfd, int *cwfd)
 	fd_open(*crfd = *cwfd = fds[1], FD_PIPE, "IPC UNIX DGRAM Parent");
         sqinet_init(&fd_table[*prfd].local_address);
         sqinet_init(&fd_table[*crfd].local_address);
+        sqinet_init(&fd_table[*prfd].remote_address);
+        sqinet_init(&fd_table[*crfd].remote_address);
 
 	return 1;
 }

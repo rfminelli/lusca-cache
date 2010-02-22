@@ -516,6 +516,16 @@ DOC_START
 	acl aclname dst      ip-address/netmask ... (URL host's IP address)
 	acl aclname myip     ip-address/netmask ... (local socket IP address)
 
+	acl aclname dstfwdip ip-address/netmask
+	  # This ACL matches on the IP address of the host being forwarded to.
+	  # This will be the IP of either the upstream origin server or the
+	  # parent/sibling peer.
+	  #
+	  # Since the IP address of the forwarding host may change depending
+	  # upon the current state of the forwarding process, this ACL is only
+	  # really useful for one specific directive (which will be coded up
+	  # shortly) and will always fail when used elsewhere.
+
 	acl aclname arp      mac-address ... (xx:xx:xx:xx:xx:xx notation)
 	  # The arp ACL requires the special configure option --enable-arp-acl.
 	  # Furthermore, the arp ACL code is not portable to all operating systems.
