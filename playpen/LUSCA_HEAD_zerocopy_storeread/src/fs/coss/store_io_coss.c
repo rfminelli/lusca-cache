@@ -1055,7 +1055,7 @@ storeCossNewPendingRelocate(CossInfo * cs, storeIOState * sio, sfileno original_
     debug(79, 3) ("COSS Pending Relocate: size %" PRINTF_OFF_T ", disk_offset %" PRIu64 "\n", (squid_off_t) sio->e->swap_file_sz, (int64_t) disk_offset);
     /* NOTE: the damned buffer isn't passed into aioRead! */
     debug(79, 3) ("COSS: aioRead: FD %d, from %d -> %d, offset %" PRIu64 ", len: %ld\n", cs->fd, pr->original_filen, pr->new_filen, (int64_t) disk_offset, (long int) pr->len);
-    aioRead(cs->fd, (off_t) disk_offset, pr->len, storeCossCompletePendingReloc, pr);
+    aioRead(cs->fd, (off_t) disk_offset, pr->p, pr->len, storeCossCompletePendingReloc, pr);
 }
 
 CossPendingReloc *
@@ -1090,6 +1090,9 @@ storeCossCompletePendingReloc(int fd, void *my_data, const char *buf, int aio_re
     else
 	errflag = DISK_OK;
 
+    /* Make sure this buffer is what we submitted! */
+    assert(pr->p == buf);
+
     debug(79, 3) ("storeCossCompletePendingReloc: %p\n", pr);
     assert(cbdataValid(pr));
     if (errflag != 0) {
@@ -1104,14 +1107,10 @@ storeCossCompletePendingReloc(int fd, void *my_data, const char *buf, int aio_re
 	debug(79, 3) ("COSS Pending Relocate: %d -> %d: completed\n", pr->original_filen, pr->new_filen);
 	coss_stats.read.success++;
     }
-    /* aufs aioRead() doesn't take a buffer, it reads into its own. Grr */
-    p = storeCossMemPointerFromDiskOffset(cs, storeCossFilenoToDiskOffset(pr->new_filen, cs), NULL);
-    assert(p != NULL);
-    assert(p == pr->p);
-    xmemcpy(p, buf, len);
 
     /* Nope, we're not a pending relocate anymore! */
     dlinkDelete(&pr->node, &cs->pending_relocs);
+
 
     /* Update the stripe count */
     stripe = storeCossFilenoToStripe(cs, pr->original_filen);

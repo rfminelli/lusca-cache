@@ -250,9 +250,6 @@ aioCancel(int fd)
 	    /* free data if requested to aioWrite() */
 	    if (ctrlp->free_func)
 		ctrlp->free_func(ctrlp->bufp);
-	    /* free temporary read buffer */
-	    if (ctrlp->operation == _AIO_READ)
-		xfree(ctrlp->bufp);
 	}
 	dlinkDelete(m, &used_list);
 	memPoolFree(squidaio_ctrl_pool, ctrlp);
@@ -306,7 +303,7 @@ aioWrite(int fd, off_t offset, char *bufp, int len, AIOCB * callback, void *call
 
 
 void
-aioRead(int fd, off_t offset, int len, AIOCB * callback, void *callback_data)
+aioRead(int fd, off_t offset, char *buf, int len, AIOCB * callback, void *callback_data)
 {
     squidaio_ctrl_t *ctrlp;
 
@@ -318,7 +315,7 @@ aioRead(int fd, off_t offset, int len, AIOCB * callback, void *callback_data)
     ctrlp->done_handler_data = callback_data;
     ctrlp->operation = _AIO_READ;
     ctrlp->len = len;
-    ctrlp->bufp = xmalloc(len);
+    ctrlp->bufp = buf;
     assert(offset >= 0);
     cbdataLock(callback_data);
     ctrlp->result.data = ctrlp;
@@ -466,9 +463,6 @@ aioCheckCallbacks(void)
 	/* free data if requested to aioWrite() */
 	if (ctrlp->free_func)
 	    ctrlp->free_func(ctrlp->bufp);
-	/* free temporary read buffer */
-	if (ctrlp->operation == _AIO_READ)
-	    xfree(ctrlp->bufp);
 	memPoolFree(squidaio_ctrl_pool, ctrlp);
     }
     return retval;

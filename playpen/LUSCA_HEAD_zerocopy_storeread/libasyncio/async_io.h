@@ -44,7 +44,7 @@ void aioCancel(int);
 void aioOpen(const char *, int, mode_t, AIOCB *, void *);
 void aioClose(int);
 void aioWrite(int, off_t offset, char *, int size, AIOCB *, void *, FREE *);
-void aioRead(int, off_t offset, int size, AIOCB *, void *);
+void aioRead(int, off_t offset, char *buf, int size, AIOCB *, void *);
 void aioStat(char *, struct stat *, AIOCB *, void *);
 void aioUnlink(const char *, AIOCB *, void *);
 void aioTruncate(const char *, off_t length, AIOCB *, void *);

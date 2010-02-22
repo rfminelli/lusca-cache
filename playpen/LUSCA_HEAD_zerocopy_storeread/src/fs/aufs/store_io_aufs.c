@@ -210,7 +210,7 @@ storeAufsRead(SwapDir * SD, storeIOState * sio, char *buf, size_t size, squid_of
     sio->offset = offset;
     aiostate->flags.reading = 1;
 #if ASYNC_READ
-    aioRead(aiostate->fd, (off_t) offset, size, storeAufsReadDone, sio);
+    aioRead(aiostate->fd, (off_t) offset, buf, size, storeAufsReadDone, sio);
     CommStats.syscalls.disk.reads++;
 #else
     file_read(aiostate->fd, buf, size, (off_t) offset, storeAufsReadDone, sio);
@@ -363,6 +363,7 @@ storeAufsReadDone(int fd, const char *buf, int len, int errflag, void *my_data)
     void *their_data = sio->read.callback_data;
     ssize_t rlen;
     int inreaddone = aiostate->flags.inreaddone;	/* Protect from callback loops */
+    assert(buf == aiostate->read_buf);
     debug(79, 3) ("storeAufsReadDone: dirno %d, fileno %08X, FD %d, len %d\n",
 	sio->swap_dirn, sio->swap_filen, fd, len);
     aiostate->flags.inreaddone = 1;
@@ -390,10 +391,6 @@ storeAufsReadDone(int fd, const char *buf, int len, int errflag, void *my_data)
     sio->read.callback = NULL;
     sio->read.callback_data = NULL;
     if (!aiostate->flags.close_request && cbdataValid(their_data)) {
-#if ASYNC_READ
-	if (rlen > 0)
-	    memcpy(aiostate->read_buf, buf, rlen);
-#endif
 	callback(their_data, aiostate->read_buf, rlen);
     }
     cbdataUnlock(their_data);
