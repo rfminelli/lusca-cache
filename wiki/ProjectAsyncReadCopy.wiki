@@ -33,6 +33,14 @@ The aioCancel() path needs further testing to fully .. well, fix. It still isn't
 
 A few of the callbacks will call storeClientComplete() to check whether they need to be freed, and then abort the function if the store client isn't active. I'm not entirely sure why a callback will be called on a in-progress but not-active callback and this requires further investigation. (In reality, I've forgotten why I wrote this in the past and need to fully map out what's going on - then comment things! - before I'm satisfied with it.)
 
+*note* ok, this is why:
+
+  * the store IO callback is called when a store io file is closed or there's an IO error (and thus an implicit close)
+  * in the past, the callback may not be called because the store client may have already been freed
+  * but now the sio isn't freed' until its inactive and all pending events are completed; they're jut marked !active
+  * but the store client now hangs around a bit longer; but the callback is still being freed
+  * and thus if it is, but it's now marked !active, the callback shouldn't finish being run and should be freed if possible
+
 Mapping out all of the possible interactions with store client and the storeIOState would be very, very helpful in this.
 
 storeClientComplete() shouldn't do the checks AND free things. They should be separated out for clarity.
