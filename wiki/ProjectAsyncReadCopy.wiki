@@ -1,0 +1,48 @@
+#summary Eliminating a memcpy() when reading data from disk
+
+= Introduction =
+
+Because of the architecture of Squid/Lusca, a temporary buffer is allocated and used to handle read requests from the disk. Data is then provided to the caller when the IO completes.
+
+This copy becomes a significant overhead for workloads which use the operating system disk cache quite heavily for high-hit workloads.
+
+This project attempts to eliminate the copy by, at the moment, enforcing that the callback will always remain valid until the IO is completed or cancelled.
+
+= Overview =
+
+The Squid/Lusca codebase makes extensive use of a reference-counted object type called "cbdata". This ensures that callbacks are only made with "valid" callback data. Unfortunately this is used as an early abort mechanism by a large pat of the codebase.
+
+Thus, if an asynchronous event is scheduled which uses a callback data pointer and/or any of the memory it points to (say, a memory buffer to read data into) there is no guarantee that the data buffer will remain valid for the duration of the event. In the case of disk IO reads, the kernel may be in the process of handling a read() call into the buffer in an IO thread whilst the main Squid/Lusca thread aborts the connection and free'ing / reusing the underlying memory buffer.
+
+= Current Method =
+
+The current approach mirrors various underlying operating system support. This aims to be a "springboard" to layer further abstractions on top of later on as needed but does not necessarily lock the codebase into a specific paradigm. It is also currently the riskiest!
+
+Another aim is to evaluate what is required to implement this change for other asynchronous events with a future goal of allowing cbdata to be properly shared between active threads. This would allow for further processing in other threads (eg, URL rewriting, content rewriting, etc) without requiring an intermediate copy step to ensure data remains valid for the duration of the asynchronous event.
+
+The caller must supply a callback+cbdata AND buffer which will remain valid for the duration of the read event. The store client, which is effectively the callback for the read IO mechanisms, must now remain valid until the IO completes or is explicitly cancelled.
+
+The store client now tracks whether it is active or not. storeClientUnregister() now doesn't free the store client; it marks it as inactive. Callbacks are then responsible for calling storeClientComplete() to check whether the store client is done - and if so, the callback is aborted.
+
+= Risks with the current method =
+
+The codebase is a very large maze of twisty passages, all alike. There's more involved in the read path than just straight reference counting - for example, the general store disk IO stuff involves both the store client and  storeIOState as part of the callback data for various events - and this will likely need similar separation and treatment.
+
+The aioCancel() path needs further testing to fully .. well, fix. It still isn't completely clear.
+
+A few of the callbacks will call storeClientComplete() to check whether they need to be freed, and then abort the function if the store client isn't active. I'm not entirely sure why a callback will be called on a in-progress but not-active callback and this requires further investigation. (In reality, I've forgotten why I wrote this in the past and need to fully map out what's going on - then comment things! - before I'm satisfied with it.)
+
+Mapping out all of the possible interactions with store client and the storeIOState would be very, very helpful in this.
+
+storeClientComplete() shouldn't do the checks AND free things. They should be separated out for clarity.
+
+= Alternative Approaches =
+
+One alternative is to refcount the IO buffer separately from the cbdata for the callback. The IO layer can then increase the buffer reference, read into it, and then release the reference once the IO completes. If the callback data has been freed then the callback will not be called but the IO buffer will still be valid for the duration of the IO.
+
+Another alternative is to request filled in pages from the IO layer - so instead of the caller supplying a destination buffer, the caller simply states what size the buffer should be, and is handed memory page(s) with the relevant data.
+
+= Development Links =
+
+* Branch: [http://code.google.com/p/lusca-cache/source/list?path=/playpen/LUSCA_HEAD_zerocopy_storeread]
+* Diff against LUSCA_HEAD (r14431):  [http://www.creative.net.au/diffs/LUSCA_HEAD_zerocopy_storeread.r14431.diff]
