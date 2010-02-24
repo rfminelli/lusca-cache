@@ -53,5 +53,5 @@ Another alternative is to request filled in pages from the IO layer - so instead
 
 = Development Links =
 
-* Branch: [http://code.google.com/p/lusca-cache/source/list?path=/playpen/LUSCA_HEAD_zerocopy_storeread]
-* Diff against LUSCA_HEAD (r14431):  [http://www.creative.net.au/diffs/LUSCA_HEAD_zerocopy_storeread.r14431.diff]
+  * Branch: [http://code.google.com/p/lusca-cache/source/list?path=/playpen/LUSCA_HEAD_zerocopy_storeread]
+  * Diff against LUSCA_HEAD (r14431):  [http://www.creative.net.au/diffs/LUSCA_HEAD_zerocopy_storeread.r14431.diff]
