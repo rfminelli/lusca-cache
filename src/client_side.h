@@ -17,4 +17,10 @@ extern void clientKeepaliveNextRequest(clientHttpRequest * http);
 extern STHCB clientSendHeaders;
 extern int clientOnlyIfCached(clientHttpRequest * http);
 
+/*
+ * XXX this is JUST for clientPurgeRequest() and JUST for now.
+ * XXX do NOT use this anywhere else!
+ */
+extern void clientCacheHit(void *data, HttpReply * rep);
+
 #endif
