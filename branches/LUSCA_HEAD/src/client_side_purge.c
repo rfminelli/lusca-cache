@@ -21,6 +21,13 @@
  * to be removed; there's some Vary magic going on and then a response
  * is returned to indicate whether the object was PURGEd or not.
  */
+
+/*
+ * Importantly, there's some very basic processing in clientProcessMiss()
+ * and some Vary related processing in clientCacheHit(). This ends up
+ * forming part of the PURGE processing. All of that interaction is almost
+ * completely undocumented and likely poorly understood. So be careful.
+ */
 void
 clientPurgeRequest(clientHttpRequest * http)
 {
