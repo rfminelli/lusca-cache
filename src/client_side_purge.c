@@ -5,6 +5,22 @@
 #include "client_side_purge.h"
 
 
+/*
+ * The client-side purge path is a bit convoluted.
+ *
+ * The initial PURGE request will cause a call to clientPurgeRequest() via
+ * clientProcessRequest(). clientProcessRequest() will then schedule
+ * a lookup to swap the object in via clientCacheHit().
+ *
+ * clientCacheHit() will then parse the headers and then eventually kick
+ * the request either back here directly or in the case of a swap in
+ * failure, indirectly via clientProcessMiss().
+ *
+ * Once the headers have been swapped in the purge request completes
+ * normally. The GET/HEAD method objects are individually poked
+ * to be removed; there's some Vary magic going on and then a response
+ * is returned to indicate whether the object was PURGEd or not.
+ */
 void
 clientPurgeRequest(clientHttpRequest * http)
 {
