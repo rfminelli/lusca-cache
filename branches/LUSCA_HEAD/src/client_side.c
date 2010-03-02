@@ -1160,7 +1160,7 @@ clientCacheHit(void *data, HttpReply * rep)
      * where the redirect is not explicitly as uncachable. 
      * Deny looping here and do not cache the response.
      */
-
+#if 0
     /*
      * XXX strcmp() sucks but the strings are both C strings. Look at String'ifying it
      * XXX soon!
@@ -1173,6 +1173,7 @@ clientCacheHit(void *data, HttpReply * rep)
 	    return;
         }
     }
+#endif
     stale = refreshCheckHTTPStale(e, r);
     debug(33, 2) ("clientCacheHit: refreshCheckHTTPStale returned %d\n", stale);
     if (stale == 0) {
