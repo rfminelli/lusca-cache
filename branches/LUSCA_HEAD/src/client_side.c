@@ -2134,6 +2134,9 @@ clientProcessRequest2(clientHttpRequest * http)
  *	It handles CONNECT, PURGE and TRACE itself. The rest of the methods
  *	are punted to the forwarding/store layer for handling.
  *
+ *	The call to clientProcessRequest2() actually does the initial cache
+ *	lookup! The function call itself is rather misleading.
+ *
  *	If there's no StoreEntry associated with the object, the request is
  *	punted to clientProcessMiss() for further handling.
  *
