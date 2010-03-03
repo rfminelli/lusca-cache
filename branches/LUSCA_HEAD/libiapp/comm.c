@@ -1030,6 +1030,21 @@ commSetNoLinger(int fd)
     fd_table[fd].flags.nolinger = 1;
 }
 
+void
+commSetNoPmtuDiscover(int fd)
+{
+#if defined(IP_MTU_DISCOVER) && defined(IP_PMTUDISC_DONT)
+	int i = IP_PMTUDISC_DONT;
+	(void) setsockopt(fd, SOL_IP, IP_MTU_DISCOVER, &i, sizeof i);
+#else
+	static int reported = 0;
+	if (!reported) {
+		debug(33, 1) ("Notice: httpd_accel_no_pmtu_disc not supported on your platform\n");
+		reported = 1;
+	}
+#endif
+}
+
 static void
 commSetReuseAddr(int fd)
 {
