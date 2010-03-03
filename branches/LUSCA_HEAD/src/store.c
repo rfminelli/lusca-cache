@@ -34,7 +34,10 @@
  */
 
 #include "squid.h"
+#include "../libcore/strutil.h"
+
 #include "store_vary.h"
+
 
 #define REBUILD_TIMESTAMP_DELTA_MAX 2
 
@@ -486,24 +489,6 @@ storeSetPrivateKey(StoreEntry * e)
     assert(hash_lookup(store_table, newkey) == NULL);
     EBIT_SET(e->flags, KEY_PRIVATE);
     storeHashInsert(e, newkey);
-}
-
-static int inline
-strmatchbeg(const char *search, const char *match, int maxlen)
-{
-    int mlen = strlen(match);
-    if (maxlen < mlen)
-	return -1;
-    return strncmp(search, match, mlen);
-}
-
-static int inline
-strmatch(const char *search, const char *match, int maxlen)
-{
-    int mlen = strlen(match);
-    if (maxlen < mlen)
-	return -1;
-    return strncmp(search, match, maxlen);
 }
 
 void
