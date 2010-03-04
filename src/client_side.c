@@ -362,6 +362,14 @@ httpRequestFree(void *data)
     cbdataFree(http);
 }
 
+/*
+ * Interpret the request headers after the initial request has
+ * been read, parsed and modified appropriately.
+ *
+ * This sets various variables and flags in http->request based on
+ * the request headers. It also sets up the pinned connection
+ * link if needed!
+ */
 void
 clientInterpretRequestHeaders(clientHttpRequest * http)
 {
