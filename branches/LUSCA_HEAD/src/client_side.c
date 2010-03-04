@@ -2210,6 +2210,20 @@ clientProcessRequest(clientHttpRequest * http)
 	log_tags[http->log_type],
 	http->uri);
     http->out.offset = 0;
+
+    /*
+     * http->entry is set by a few places:
+     * + by clientProcessRequest2() if the object is in cache;
+     * + by a previous call through clientProcessRequest() which has some
+     *   existing response to start abusing? I'm not sure about this;
+     *
+     * If http->entry == NULL then there's no existing object to piggy back
+     * onto; so forwarding must begin.
+     *
+     * If http->entry != NULL then there's an existing object to piggy back
+     * onto; so the store client registration occurs and the object is
+     * copied in via storeClientCopyHeaders().
+     */
     if (NULL != http->entry) {
 	storeLockObject(http->entry);
 	if (http->entry->store_status == STORE_PENDING && http->entry->mem_obj) {
