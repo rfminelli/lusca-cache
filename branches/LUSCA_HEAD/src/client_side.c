@@ -2223,6 +2223,14 @@ clientProcessRequest(clientHttpRequest * http)
      * If http->entry != NULL then there's an existing object to piggy back
      * onto; so the store client registration occurs and the object is
      * copied in via storeClientCopyHeaders().
+     *
+     * .. TRACE handling isn't entirely clear either. For a non-terminal
+     * TRACE request, it should just bump it upstream or toss out a forwarding
+     * error. It doesn't bother trying a cache lookup; it just processes
+     * it as a MISS. But there's no explicit setting of http->entry to NULL;
+     * I believe it simply expects the only entry point to have it NULL (ie,
+     * it hasn't come in via a previously handled request that's being
+     * restarted for some reason.)
      */
     if (NULL != http->entry) {
 	storeLockObject(http->entry);
