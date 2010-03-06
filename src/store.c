@@ -35,13 +35,8 @@
 
 #include "squid.h"
 #include "../libcore/strutil.h"
-
+#include "store.h"
 #include "store_vary.h"
-
-
-#define REBUILD_TIMESTAMP_DELTA_MAX 2
-
-#define STORE_IN_MEM_BUCKETS		(229)
 
 const char *memStatusStr[] =
 {
@@ -68,12 +63,6 @@ const char *swapStatusStr[] =
     "SWAPOUT_WRITING",
     "SWAPOUT_DONE"
 };
-
-typedef struct lock_ctrl_t {
-    SIH *callback;
-    void *callback_data;
-    StoreEntry *e;
-} lock_ctrl_t;
 
 extern OBJH storeIOStats;
 
