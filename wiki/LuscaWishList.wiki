@@ -8,11 +8,11 @@ Lusca is based on old code from the former and still existing Squid Cache Projec
 
 Initially we treat the following sections, which are:
 
-* Debug message text should be easy understandable
-* Better debug level classification for less unecessary log spammimg
-* Config parser should generate better debug
-* -k reconfigure needs revision
-* Cache Peer Selection with better weight options
+  * Debug message text should be easy understandable
+  * Better debug level classification for less unecessary log spammimg
+  * Config parser should generate better debug
+  * -k reconfigure needs revision
+  * Cache Peer Selection with better weight options
 
 = How to do it =
 
