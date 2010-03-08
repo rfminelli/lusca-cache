@@ -1,8 +1,5 @@
 #summary A collection of things to be changed and things one would like to see
 
-= Introduction =
-
-Lusca is based on old code from the former and still existing Squid Cache Project and so has parts which eventually should be changed or new feature should be added. We intend to collect user's suggestions and classify them here. Eventually one or another makes it into the production version.
 
 = Overview =
 
@@ -14,13 +11,6 @@ Initially we treat the following sections, which are:
   * -k reconfigure needs revision
   * Cache Peer Selection with better weight options
 
-= How to do it =
-
-Post your ideas and suggestions as blog item and wait for response. Better you explain more response and higher the chances getting it listed and done.
-
-= Further Suggestions =
-
-Just do it
 
 = Change Suggestions =
 
