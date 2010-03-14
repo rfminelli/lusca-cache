@@ -248,6 +248,8 @@ clientUpdateCounters(clientHttpRequest * http)
  * I'll investigate what needs changing in a later commit
  * to be sure that the modifications in question don't
  * inadvertently break things.
+ *
+ * This function also updates the clientdb.
  */
 static void
 httpRequestLog(clientHttpRequest *http)
@@ -318,10 +320,6 @@ httpRequestLog(clientHttpRequest *http)
 	    clientdbUpdate(conn->peer.sin_addr, http->log_type, PROTO_HTTP, http->out.size);
 	}
     }
-    if (http->acl_checklist)
-	aclChecklistFree(http->acl_checklist);
-    if (request)
-	checkFailureRatio(request->err_type, http->al.hier.code);
     safe_free(http->al.headers.request);
     safe_free(http->al.headers.reply);
     safe_free(http->al.cache.authuser);
@@ -347,6 +345,12 @@ httpRequestFree(void *data)
 
     httpRequestLog(http);
 
+    /* XXX accesslog struct used here outside of httpRequestLog() ! */
+    if (request)
+	checkFailureRatio(request->err_type, http->al.hier.code);
+
+    if (http->acl_checklist)
+	aclChecklistFree(http->acl_checklist);
     safe_free(http->uri);
     safe_free(http->log_uri);
     safe_free(http->redirect.location);
