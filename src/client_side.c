@@ -239,23 +239,23 @@ clientUpdateCounters(clientHttpRequest * http)
     }
 }
 
-void
-httpRequestFree(void *data)
+/*
+ * The bulk of the client-side request/reply logging code.
+ *
+ * Note that some of this code handles non-logging cleanups - 
+ * mostly because it's firstly just a straight refactor from
+ * the original source code with minimal program flow changes.
+ * I'll investigate what needs changing in a later commit
+ * to be sure that the modifications in question don't
+ * inadvertently break things.
+ */
+static void
+httpRequestLog(clientHttpRequest *http)
 {
-    clientHttpRequest *http = data;
-    ConnStateData *conn = http->conn;
-    StoreEntry *e;
-    request_t *request = http->request;
     MemObject *mem = NULL;
-    debug(33, 3) ("httpRequestFree: %s\n", storeUrl(http->entry));
-    if (!clientCheckTransferDone(http)) {
-	requestAbortBody(request);	/* abort request body transter */
-	/* HN: This looks a bit odd.. why should client_side care about
-	 * the ICP selection status?
-	 */
-	if (http->entry && http->entry->ping_status == PING_WAITING)
-	    storeReleaseRequest(http->entry);
-    }
+    request_t *request = http->request;
+    ConnStateData *conn = http->conn;
+
     assert(http->log_type < LOG_TYPE_MAX);
     if (http->entry)
 	mem = http->entry->mem_obj;
@@ -322,12 +322,33 @@ httpRequestFree(void *data)
 	aclChecklistFree(http->acl_checklist);
     if (request)
 	checkFailureRatio(request->err_type, http->al.hier.code);
-    safe_free(http->uri);
-    safe_free(http->log_uri);
     safe_free(http->al.headers.request);
     safe_free(http->al.headers.reply);
     safe_free(http->al.cache.authuser);
     http->al.request = NULL;
+}
+
+void
+httpRequestFree(void *data)
+{
+    clientHttpRequest *http = data;
+    StoreEntry *e;
+    request_t *request = http->request;
+
+    debug(33, 3) ("httpRequestFree: %s\n", storeUrl(http->entry));
+    if (!clientCheckTransferDone(http)) {
+	requestAbortBody(request);	/* abort request body transter */
+	/* HN: This looks a bit odd.. why should client_side care about
+	 * the ICP selection status?
+	 */
+	if (http->entry && http->entry->ping_status == PING_WAITING)
+	    storeReleaseRequest(http->entry);
+    }
+
+    httpRequestLog(http);
+
+    safe_free(http->uri);
+    safe_free(http->log_uri);
     safe_free(http->redirect.location);
     stringClean(&http->range_iter.boundary);
     if (http->old_entry && http->old_entry->mem_obj && http->old_entry->mem_obj->ims_entry && http->old_entry->mem_obj->ims_entry == http->entry) {
