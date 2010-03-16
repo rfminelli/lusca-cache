@@ -2458,6 +2458,20 @@ parseHttpRequestAbort(ConnStateData * conn, method_t ** method_p, const char *ur
     return http;
 }
 
+static int
+parseHttpConnectRequest(ConnStateData *conn, clientHttpRequest *http)
+{
+	if (http->http_ver.major < 1) {
+	    debug(33, 1) ("parseHttpRequest: Invalid HTTP version\n");
+	    return 0;
+	}
+	if (conn->port->accel) {
+	    debug(33, 1) ("parseHttpRequest: CONNECT not valid in accelerator mode\n");
+	    return 0;
+	}
+	return 1;
+}
+
 /*
  *  parseHttpRequest()
  * 
@@ -2566,14 +2580,8 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, 
 
     /* handle "accelerated" objects (and internal) */
     if (method->code == METHOD_CONNECT) {
-	if (http_ver.major < 1) {
-	    debug(33, 1) ("parseHttpRequest: Invalid HTTP version\n");
-	    goto invalid_request;
-	}
-	if (conn->port->accel) {
-	    debug(33, 1) ("parseHttpRequest: CONNECT not valid in accelerator mode\n");
-	    goto invalid_request;
-	}
+        if (! parseHttpConnectRequest(conn, http))
+		goto invalid_request;
     } else if (*url == '/' && Config.onoff.global_internal_static && internalCheck(url)) {
       internal:
 	/* prepend our name & port */
