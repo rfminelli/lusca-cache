@@ -2481,6 +2481,46 @@ parseHttpInternalRequest(ConnStateData *conn, clientHttpRequest *http, const cha
 	debug(33, 5) ("INTERNAL REWRITE: '%s'\n", http->uri);
 	return 1;
 }
+static int
+parseHttpTransparentRequest(ConnStateData *conn, clientHttpRequest *http, const char *url, const char *req_hdr)
+{
+	int port = 0;
+	const char *host = mime_get_header(req_hdr, "Host");
+	char *portstr;
+
+	if (host && (portstr = strchr(host, ':')) != NULL) {
+	    *portstr++ = '\0';
+	    port = atoi(portstr);
+	}
+	http->flags.transparent = 1;
+
+	if (Config.onoff.accel_no_pmtu_disc)
+	    commSetNoPmtuDiscover(conn->fd);
+
+	if (conn->port->transparent && clientNatLookup(conn) == 0)
+	    conn->transparent = 1;
+	if (!host && conn->transparent) {
+	    port = ntohs(conn->me.sin_port);
+	    if (!host)
+		host = inet_ntoa(conn->me.sin_addr);
+	}
+	if (host) {
+	    size_t url_sz = 10 + strlen(host) + 6 + strlen(url) + 32 + Config.appendDomainLen;
+	    http->uri = xcalloc(url_sz, 1);
+	    if (port) {
+		snprintf(http->uri, url_sz, "%s://%s:%d%s",
+		    conn->port->protocol, host, port, url);
+	    } else {
+		snprintf(http->uri, url_sz, "%s://%s%s",
+		    conn->port->protocol, host, url);
+	    }
+	} else if (internalCheck(url)) {
+	    parseHttpInternalRequest(conn, http, url);
+	} else {
+	    return 0;
+	}
+	return 1;
+}
 
 /*
  *  parseHttpRequest()
@@ -2596,40 +2636,8 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, 
       internal:
         (void) parseHttpInternalRequest(conn, http, url);
     } else if (*url == '/' && conn->port->transparent) {
-	int port = 0;
-	const char *host = mime_get_header(req_hdr, "Host");
-	char *portstr;
-	if (host && (portstr = strchr(host, ':')) != NULL) {
-	    *portstr++ = '\0';
-	    port = atoi(portstr);
-	}
-	http->flags.transparent = 1;
-
-	if (Config.onoff.accel_no_pmtu_disc)
-	    commSetNoPmtuDiscover(conn->fd);
-
-	if (conn->port->transparent && clientNatLookup(conn) == 0)
-	    conn->transparent = 1;
-	if (!host && conn->transparent) {
-	    port = ntohs(conn->me.sin_port);
-	    if (!host)
-		host = inet_ntoa(conn->me.sin_addr);
-	}
-	if (host) {
-	    size_t url_sz = 10 + strlen(host) + 6 + strlen(url) + 32 + Config.appendDomainLen;
-	    http->uri = xcalloc(url_sz, 1);
-	    if (port) {
-		snprintf(http->uri, url_sz, "%s://%s:%d%s",
-		    conn->port->protocol, host, port, url);
-	    } else {
-		snprintf(http->uri, url_sz, "%s://%s%s",
-		    conn->port->protocol, host, url);
-	    }
-	} else if (internalCheck(url)) {
-	    goto internal;
-	} else {
-	    goto invalid_request;
-	}
+        if (! parseHttpTransparentRequest(conn, http, url, req_hdr))
+            goto invalid_request;
     } else if (*url == '/' || conn->port->accel) {
 	int vhost = conn->port->vhost;
 	int vport = conn->port->vport;
