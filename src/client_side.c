@@ -2522,6 +2522,57 @@ parseHttpTransparentRequest(ConnStateData *conn, clientHttpRequest *http, const 
 	return 1;
 }
 
+static int
+parseHttpAccelRequest(ConnStateData *conn, clientHttpRequest *http, const char *url, const char *req_hdr)
+{
+	int vhost = conn->port->vhost;
+	int vport = conn->port->vport;
+	const char *t = NULL;
+
+	http->flags.accel = 1;
+	if (*url != '/' && !vhost && strncasecmp(url, "cache_object://", 15) != 0) {
+	    url = strstr(url, "//");
+	    if (!url)
+		return 0;
+	    url = strchr(url + 2, '/');
+	    if (!url)
+		url = (char *) "/";
+	}
+	if (*url != '/') {
+	    /* Fully qualified URL. Nothing special to do */
+	} else if (conn->port->accel) {
+	    const char *host = NULL;
+	    int port;
+	    size_t url_sz;
+	    if (vport > 0)
+		port = vport;
+	    else
+		port = htons(http->conn->me.sin_port);
+	    if (vhost && (t = mime_get_header(req_hdr, "Host")))
+		host = t;
+	    else if (conn->port->defaultsite)
+		host = conn->port->defaultsite;
+	    else if (vport == -1)
+		host = inet_ntoa(http->conn->me.sin_addr);
+	    else
+		host = getMyHostname();
+	    url_sz = strlen(url) + 32 + Config.appendDomainLen + strlen(host);
+	    http->uri = xcalloc(url_sz, 1);
+	    if (strchr(host, ':'))
+		snprintf(http->uri, url_sz, "%s://%s%s",
+		    conn->port->protocol, host, url);
+	    else
+		snprintf(http->uri, url_sz, "%s://%s:%d%s",
+		    conn->port->protocol, host, port, url);
+	    debug(33, 5) ("VHOST REWRITE: '%s'\n", http->uri);
+	} else if (internalCheck(url)) {
+	    parseHttpInternalRequest(conn, http, url);
+	} else {
+	    return 0;
+	}
+    return 1;
+}
+
 /*
  *  parseHttpRequest()
  * 
@@ -2541,7 +2592,9 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, 
     size_t req_sz;
     method_t *method;
     clientHttpRequest *http = NULL;
+#if THIS_VIOLATES_HTTP_SPECS_ON_URL_TRANSFORMATION
     char *t;
+#endif
     int ret;
 
     /* pre-set these values to make aborting simpler */
@@ -2633,55 +2686,13 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, 
         if (! parseHttpConnectRequest(conn, http))
 		goto invalid_request;
     } else if (*url == '/' && Config.onoff.global_internal_static && internalCheck(url)) {
-      internal:
         (void) parseHttpInternalRequest(conn, http, url);
     } else if (*url == '/' && conn->port->transparent) {
         if (! parseHttpTransparentRequest(conn, http, url, req_hdr))
             goto invalid_request;
     } else if (*url == '/' || conn->port->accel) {
-	int vhost = conn->port->vhost;
-	int vport = conn->port->vport;
-	http->flags.accel = 1;
-	if (*url != '/' && !vhost && strncasecmp(url, "cache_object://", 15) != 0) {
-	    url = strstr(url, "//");
-	    if (!url)
-		goto invalid_request;
-	    url = strchr(url + 2, '/');
-	    if (!url)
-		url = (char *) "/";
-	}
-	if (*url != '/') {
-	    /* Fully qualified URL. Nothing special to do */
-	} else if (conn->port->accel) {
-	    const char *host = NULL;
-	    int port;
-	    size_t url_sz;
-	    if (vport > 0)
-		port = vport;
-	    else
-		port = htons(http->conn->me.sin_port);
-	    if (vhost && (t = mime_get_header(req_hdr, "Host")))
-		host = t;
-	    else if (conn->port->defaultsite)
-		host = conn->port->defaultsite;
-	    else if (vport == -1)
-		host = inet_ntoa(http->conn->me.sin_addr);
-	    else
-		host = getMyHostname();
-	    url_sz = strlen(url) + 32 + Config.appendDomainLen + strlen(host);
-	    http->uri = xcalloc(url_sz, 1);
-	    if (strchr(host, ':'))
-		snprintf(http->uri, url_sz, "%s://%s%s",
-		    conn->port->protocol, host, url);
-	    else
-		snprintf(http->uri, url_sz, "%s://%s:%d%s",
-		    conn->port->protocol, host, port, url);
-	    debug(33, 5) ("VHOST REWRITE: '%s'\n", http->uri);
-	} else if (internalCheck(url)) {
-	    goto internal;
-	} else {
-	    goto invalid_request;
-	}
+	if (! parseHttpAccelRequest(conn, http, url, req_hdr))
+            goto invalid_request;
     }
     if (!http->uri) {
 	/* No special rewrites have been applied above, use the
