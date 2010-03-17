@@ -2472,6 +2472,16 @@ parseHttpConnectRequest(ConnStateData *conn, clientHttpRequest *http)
 	return 1;
 }
 
+static int
+parseHttpInternalRequest(ConnStateData *conn, clientHttpRequest *http, const char *url)
+{
+	http->uri = xstrdup(internalStoreUri("", url));
+	http->flags.internal = 1;
+	http->flags.accel = 1;
+	debug(33, 5) ("INTERNAL REWRITE: '%s'\n", http->uri);
+	return 1;
+}
+
 /*
  *  parseHttpRequest()
  * 
@@ -2584,11 +2594,7 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, 
 		goto invalid_request;
     } else if (*url == '/' && Config.onoff.global_internal_static && internalCheck(url)) {
       internal:
-	/* prepend our name & port */
-	http->uri = xstrdup(internalStoreUri("", url));
-	http->flags.internal = 1;
-	http->flags.accel = 1;
-	debug(33, 5) ("INTERNAL REWRITE: '%s'\n", http->uri);
+        (void) parseHttpInternalRequest(conn, http, url);
     } else if (*url == '/' && conn->port->transparent) {
 	int port = 0;
 	const char *host = mime_get_header(req_hdr, "Host");
