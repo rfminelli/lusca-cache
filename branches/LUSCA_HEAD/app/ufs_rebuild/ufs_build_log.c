@@ -46,12 +46,13 @@ int num_valid_objects = 0;
 int num_invalid_objects = 0;
 
 static int
-rebuild_log_progress(FILE *fp, size_t s, int num_objects)
+rebuild_log_progress(store_ufs_dir_t *ufs, FILE *fp, size_t s, int num_objects)
 {
 	struct stat sb;
 	if (0 == fstat(fileno(fp), &sb)) {
 		if (! storeSwapLogPrintProgress(stdout, num_objects, (int) sb.st_size / s))
 			return 0;
+		debug(47, 1) ("ufs_rebuild: %s: %d of %d bytes read\n", ufs->path, (int) s, (int) sb.st_size);
 	}
 	return 1;
 }
@@ -65,7 +66,7 @@ rebuild_entry_size(int version)
 }
 
 int
-read_entry(FILE *fp, int version)
+read_entry(store_ufs_dir_t *ufs, FILE *fp, int version)
 {
 	int r;
 	char buf[128];
@@ -82,7 +83,7 @@ read_entry(FILE *fp, int version)
 	num_objects++;
 
 	if ((num_objects & 0xffff) == 0) {
-		if (! rebuild_log_progress(fp, rebuild_entry_size(version), num_objects))
+		if (! rebuild_log_progress(ufs, fp, rebuild_entry_size(version), num_objects))
 			return 0;
 	}
 
@@ -174,13 +175,13 @@ rebuild_from_log(store_ufs_dir_t *ufs)
 
 	/* Now - loop over until eof or error */
 	while (! feof(fp)) {
-		if (! read_entry(fp, version)) {
+		if (! read_entry(ufs, fp, version)) {
 			break;
 		}
 	}
 
 	/* Queue a final progress update */
-	if (! rebuild_log_progress(fp, rebuild_entry_size(version), num_objects))
+	if (! rebuild_log_progress(ufs, fp, rebuild_entry_size(version), num_objects))
 		return;
 
 	fclose(fp);
