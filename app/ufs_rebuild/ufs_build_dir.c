@@ -112,6 +112,7 @@ rebuild_from_dir(store_ufs_dir_t *sd)
 	int i, j;
 
 	getCurrentTime();
+	debug(47, 1) ("ufs_rebuild: %s: beginning rebuild from directory\n", sd->path);
 	for (i = 0; i < store_ufs_l1(sd); i++) {
 		for (j = 0; j < store_ufs_l2(sd); j++) {
 			(void) store_ufs_createDir(sd, i, j, dir);

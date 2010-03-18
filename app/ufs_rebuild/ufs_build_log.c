@@ -120,6 +120,7 @@ rebuild_from_log(store_ufs_dir_t *ufs)
 	int version = -1;		/* -1 = not set, 0 = old, 1 = new */
 	char *rbuf;
 
+	debug(47, 1) ("ufs_rebuild: %s: rebuild from swaplog\n", ufs->path);
 	fp = fopen(ufs->swaplog_path, "r");
 	if (! fp) {
 		perror("fopen");
