@@ -929,10 +929,9 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 	return;
     }
     if (len > 0) {
-	debug(11, Config.onoff.relaxed_header_parser <= 0 || keep_alive ? 1 : 2)
-	    ("httpReadReply: Excess data from \"%s %s\"\n",
-	    urlMethodGetConstStr(orig_request->method),
-	    storeUrl(entry));
+        if (Config.onoff.log_http_violations)
+	    debug(11, 1) ("httpReadReply: Excess data from \"%s %s\"\n",
+	      urlMethodGetConstStr(orig_request->method), storeUrl(entry));
 	comm_close(fd);
 	return;
     }
