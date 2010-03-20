@@ -280,6 +280,10 @@ GetOSVersion()
 		WIN32_OS_string = xstrdup("Windows Server 2008");
 	    return _WIN_OS_WINLON;
 	}
+        if ((osvi.dwMajorVersion == 6) && (osvi.dwMinorVersion == 1)) {
+            WIN32_OS_string = xstrdup("Windows 7");
+            return _WIN_OS_WIN7;
+        }
 	break;
     case VER_PLATFORM_WIN32_WINDOWS:
 	if ((osvi.dwMajorVersion == 4) && (osvi.dwMinorVersion == 0)) {
