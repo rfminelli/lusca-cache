@@ -3724,6 +3724,21 @@ DOC_START
 	By default, headers are removed if denied.
 DOC_END
 
+NAME: log_http_violations
+COMMENT: on|off
+TYPE: onoff
+LOC: Config.onoff.log_http_violations
+DEFAULT: off
+DOC_START
+	The earlier behaviour in Squid/Lusca was to log HTTP protocol
+	violations in cache.log. Although useful for debugging, these
+	messages are increasingly becoming more frequent as various
+	poor HTTP implementations make it out into the real world.
+
+	By default, these messages are now not logged.
+	Enable this to re-enable the verbose HTTP logging.
+DOC_END
+
 NAME: relaxed_header_parser
 COMMENT: on|off|warn
 TYPE: tristate

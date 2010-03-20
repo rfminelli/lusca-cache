@@ -678,6 +678,7 @@ struct _SquidConfig {
 	int load_check_stopen;
 	int load_check_stcreate;
 	int download_fastest_client_speed;
+	int log_http_violations;
     } onoff;
     int collapsed_forwarding_timeout;
     acl *aclList;
