@@ -8,9 +8,9 @@
 
 #include "include/squid_md5.h"
 #include "include/util.h"
+#include "libcore/varargs.h"
 #include "libcore/tools.h"
 #include "libcore/kb.h"
-#include "libcore/varargs.h"
 #include "libsqdebug/debug.h"
 #include "libsqtlv/tlv.h"
 #include "libsqstore/store_mgr.h"

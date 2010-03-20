@@ -117,6 +117,8 @@
 #elif defined(__CYGWIN32__)  || defined(__CYGWIN__)
 #define _SQUID_CYGWIN_
 #define _SQUID_WIN32_
+#include <io.h>		/* for setmode() */
+#include <sys/fcntl.h>
 
 #elif defined(WIN32) || defined(WINNT) || defined(__WIN32__) || defined(__WIN32)
 #define _SQUID_MSWIN_

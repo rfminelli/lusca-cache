@@ -61,6 +61,7 @@
 
 #include "../libcore/kb.h"
 #include "../libcore/gb.h"
+#include "../libcore/varargs.h"
 #include "../libcore/tools.h"
 
 #include "../libmem/MemPool.h"
