@@ -110,6 +110,7 @@ squid_SOURCES = \
 	client_side_body.c \
 	client_side_etag.c \
 	client_side_request.c \
+	client_side_request_parse.c \
 	client_side_reply.c \
 	client_side_conn.c \
 	client_side_nat.c \
