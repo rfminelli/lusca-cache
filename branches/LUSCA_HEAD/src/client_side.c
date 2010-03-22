@@ -261,7 +261,7 @@ httpRequestLog(clientHttpRequest *http)
 	http->al.url = http->log_uri;
 	if (!http->al.url)
 	    http->al.url = urlCanonicalClean(request);
-	debug(33, 9) ("httpRequestFree: al.url='%s'\n", http->al.url);
+	debug(33, 9) ("httpRequestLog: al.url='%s'\n", http->al.url);
 	http->al.cache.out_ip = request->out_ip;
 	if (http->reply && http->log_type != LOG_TCP_DENIED) {
 	    http->al.http.code = http->reply->sline.status;
