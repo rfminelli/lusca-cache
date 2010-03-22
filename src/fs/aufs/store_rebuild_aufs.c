@@ -262,6 +262,7 @@ storeAufsRebuildHelperRead(int fd, void *data)
 	/* squidaioinfo_t *aioinfo = (squidaioinfo_t *) sd->fsdata; */
 	int r, i;
 	storeSwapLogData s;
+	int t, p;
 
 	assert(fd == rb->helper.r_fd);
 	debug(47, 5) ("storeAufsRebuildHelperRead: %s: ready for helper read\n", sd->path);
@@ -286,8 +287,10 @@ storeAufsRebuildHelperRead(int fd, void *data)
 			case SWAP_LOG_VERSION:
 				break;
 			case SWAP_LOG_PROGRESS:
-				storeRebuildProgress(rb->sd->index,
-				    ((storeSwapLogProgress *)(&s))->total, ((storeSwapLogProgress *)(&s))->progress);
+				t = ((storeSwapLogProgress *)(&s))->total;
+				p =  ((storeSwapLogProgress *)(&s))->progress;
+				debug(47, 1) ("storeAufsRebuildHelperRead: %s: SWAP_LOG_PROGRESS: total %d objects, progress %d objects\n", sd->path, t, p);
+				storeRebuildProgress(rb->sd->index, t, p);
 				break;
 			case SWAP_LOG_COMPLETED:
 				debug(47, 1) ("  %s: completed rebuild\n", sd->path);
@@ -300,7 +303,7 @@ storeAufsRebuildHelperRead(int fd, void *data)
 		}
 		i += sizeof(storeSwapLogData);
 	}
-	debug(47, 5) ("storeAufsRebuildHelperRead: %s: read %d entries\n", sd->path, i / sizeof(storeSwapLogData));
+	debug(47, 5) ("storeAufsRebuildHelperRead: %s: read %d entries\n", sd->path, i / (int) sizeof(storeSwapLogData));
 
 	/* Shuffle what is left to the beginning of the buffer */
 	if (i < rb->rbuf.used) {
