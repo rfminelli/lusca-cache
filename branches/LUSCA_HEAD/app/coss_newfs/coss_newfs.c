@@ -23,7 +23,7 @@ main(int argc, const char *argv[])
 {
 	size_t sz, stripe_sz;
 	const char *path;
-	size_t i;
+	int i;
 	int fd;
 	char *buf;
 	off_t r;
