@@ -126,7 +126,7 @@ storeAufsDirOpenSwapLog(SwapDir * sd)
     int fd;
     path = storeAufsDirSwapLogFile(sd, NULL);
     if (aioinfo->swaplog_fd >= 0) {
-	debug(50, 1) ("storeAufsDirOpenSwapLog: %s already open\n", path);
+	debug(50, 1) ("AUFS: %s: storeAufsDirOpenSwapLog: a logfile is already open!\n", sd->path);
 	return;
     }
     fd = file_open(path, O_WRONLY | O_CREAT | O_BINARY);
@@ -134,7 +134,7 @@ storeAufsDirOpenSwapLog(SwapDir * sd)
 	debug(50, 1) ("%s: %s\n", path, xstrerror());
 	fatal("storeAufsDirOpenSwapLog: Failed to open swap log.");
     }
-    debug(50, 3) ("Cache Dir #%d log opened on FD %d\n", sd->index, fd);
+    debug(50, 1) ("AUFS: %s: log '%s' opened on FD %d\n", sd->path, path, fd);
     aioinfo->swaplog_fd = fd;
 }
 
@@ -145,8 +145,7 @@ storeAufsDirCloseSwapLog(SwapDir * sd)
     if (aioinfo->swaplog_fd < 0)	/* not open */
 	return;
     file_close(aioinfo->swaplog_fd);
-    debug(47, 3) ("Cache Dir #%d log closed on FD %d\n",
-	sd->index, aioinfo->swaplog_fd);
+    debug(47, 1) ("AUFS: %s: log closed on FD %d\n", sd->path, aioinfo->swaplog_fd);
     aioinfo->swaplog_fd = -1;
 }
 
@@ -157,6 +156,8 @@ storeAufsDirCloseTmpSwapLog(SwapDir * sd)
     char *swaplog_path = xstrdup(storeAufsDirSwapLogFile(sd, NULL));
     char *new_path = xstrdup(storeAufsDirSwapLogFile(sd, ".new"));
     int fd;
+    if (aioinfo->swaplog_fd > -1)
+        debug(47, 1) ("AUFS: %s: tmp log closed on FD %d\n", sd->path, aioinfo->swaplog_fd);
     file_close(aioinfo->swaplog_fd);
     if (xrename(new_path, swaplog_path) < 0) {
 	fatal("storeAufsDirCloseTmpSwapLog: rename failed");
@@ -166,6 +167,7 @@ storeAufsDirCloseTmpSwapLog(SwapDir * sd)
 	debug(50, 1) ("%s: %s\n", swaplog_path, xstrerror());
 	fatal("storeAufsDirCloseTmpSwapLog: Failed to open swap log.");
     }
+    debug(47, 1) ("AUFS: %s: post-rename; log %s, opened on FD %d\n", sd->path, swaplog_path, fd);
     safe_free(swaplog_path);
     safe_free(new_path);
     aioinfo->swaplog_fd = fd;
@@ -249,10 +251,11 @@ storeAufsDirOpenTmpSwapLog(SwapDir * sd, int *clean_flag, int *zero_flag)
 	debug(50, 1) ("%s: %s\n", new_path, xstrerror());
 	fatal("storeDirOpenTmpSwapLog: Failed to open swap log.");
     }
+    debug(50, 1) ("AUFS: %s: tmp log %s opened on FD %d\n", sd->path, new_path, fd);
     aioinfo->swaplog_fd = fd;
     storeAufsWriteSwapLogheader(fd);
-    /* open a read-only stream of the old log */
 
+    /* open a read-only stream of the old log */
     fd = file_open(swaplog_path, O_RDONLY | O_BINARY);
     if (fd < 0) {
 	debug(50, 0) ("%s: %s\n", swaplog_path, xstrerror());
