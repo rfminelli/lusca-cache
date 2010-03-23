@@ -52,7 +52,7 @@ rebuild_log_progress(store_ufs_dir_t *ufs, FILE *fp, size_t s, int num_objects)
 	if (0 == fstat(fileno(fp), &sb)) {
 		if (! storeSwapLogPrintProgress(stdout, num_objects, (int) sb.st_size / s))
 			return 0;
-		debug(47, 1) ("ufs_rebuild: %s: %d of %d bytes read\n", ufs->path, (int) s, (int) sb.st_size);
+		debug(47, 1) ("ufs_rebuild: %s: %d of %d objects read\n", ufs->path, (int) num_objects, (int) sb.st_size / (int) s);
 	}
 	return 1;
 }
