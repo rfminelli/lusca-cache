@@ -21,9 +21,12 @@
 #if HAVE_FCNTL_H
 #include <fcntl.h>
 #endif
-
+#if HAVE_ERRNO_H
 #include <errno.h>
+#endif
+#if HAVE_SYS_STAT_H
 #include <sys/stat.h>
+#endif
 
 #include "include/util.h"
 #include "include/squid_md5.h"
