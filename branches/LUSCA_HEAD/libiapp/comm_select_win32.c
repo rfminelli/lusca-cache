@@ -41,10 +41,18 @@
 #include <math.h>
 #include <fcntl.h>
 #include <err.h>
-#include <sys/errno.h>
+#if HAVE_ERRNO_H
+#include <errno.h>
+#endif
+#if HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
+#endif
+#if HAVE_NETINET_IN_H
 #include <netinet/in.h>
+#endif
+#if HAVE_ARPA_INET_H
 #include <arpa/inet.h>
+#endif
 
 #include "../include/Array.h"
 #include "../include/Stack.h"
@@ -63,6 +71,8 @@
 #include "../libstat/StatHist.h"
 
 #include "../libcb/cbdata.h"
+
+#include "../libsqinet/sqinet.h"
 
 #include "iapp_ssl.h"
 #include "globals.h"
@@ -156,7 +166,7 @@ do_comm_select(int msec)
     memcpy(&errfds, &global_writefds, sizeof(fd_set));
     tv.tv_sec = msec / 1000;
     tv.tv_usec = (msec % 1000) * 1000;
-    statCounter.syscalls.selects++;
+    CommStats.syscalls.selects++;
     num = select(Biggest_FD + 1, &readfds, &writefds, &errfds, &tv);
     saved_errno = errno;
     getCurrentTime();
@@ -168,7 +178,7 @@ do_comm_select(int msec)
 	debug(5, 1) ("comm_select: select failure: %s\n", xstrerror());
 	return COMM_ERROR;
     }
-    statHistCount(&statCounter.select_fds_hist, num);
+    CommStats.select_fds++;
 
     if (num == 0)
 	return COMM_TIMEOUT;
