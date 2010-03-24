@@ -237,7 +237,7 @@ storeCossRebuildHelperRead(int fd, void *data)
                 }
                 i += sizeof(storeSwapLogData);
         }
-        debug(47, 5) ("storeCossRebuildHelperRead: %s: read %d entries\n", sd->path, i / sizeof(storeSwapLogData));
+        debug(47, 5) ("storeCossRebuildHelperRead: %s: read %d entries\n", sd->path, (int) i / (int) sizeof(storeSwapLogData));
 
         /* Shuffle what is left to the beginning of the buffer */
         if (i < rb->rbuf.used) {
