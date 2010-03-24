@@ -34,6 +34,7 @@
  */
 
 #include "squid.h"
+#include "store_vary.h"
 
 static MemPool * pool_request_t = NULL;
 
