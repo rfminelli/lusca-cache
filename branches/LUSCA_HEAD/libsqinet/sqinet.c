@@ -583,7 +583,10 @@ sqinet_ntoa(const sqaddr_t *s, char *hoststr, int hostlen, sqaddr_flags flags)
 
 	retval = getnameinfo((struct sockaddr *) (&s->st), sqinet_get_length(s), hoststr, hostlen, NULL, 0, NI_NUMERICHOST|NI_NUMERICSERV);
 	if (! (flags & SQADDR_NO_BRACKET_V6) && s->st.ss_family == AF_INET6) {
-		hoststr[strlen(hoststr)] = ']';
+		size_t len = strlen(hoststr);
+		assert(len < hostlen - 2);	/* XXX need space for ]\0 */
+		hoststr[len] = ']';
+		hoststr[len+1] = '\0';
 	}
 	return (retval == 0);
 }
