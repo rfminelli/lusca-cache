@@ -396,7 +396,8 @@ mainReconfigure(void)
     authenticateShutdown();
     externalAclShutdown();
     refreshCheckShutdown();
-    storeDirCloseSwapLogs();
+    if (! store_dirs_rebuilding)
+        storeDirCloseSwapLogs();
     storeLogClose();
     accessLogClose();
     useragentLogClose();
@@ -472,7 +473,8 @@ mainReconfigure(void)
 #endif
     serverConnectionsOpen();
     neighbors_init();
-    storeDirOpenSwapLogs();
+    if (! store_dirs_rebuilding)
+        storeDirOpenSwapLogs();
     mimeInit(Config.mimeTablePathname);
     if (Config.onoff.announce) {
 	if (!eventFind(start_announce, NULL))
