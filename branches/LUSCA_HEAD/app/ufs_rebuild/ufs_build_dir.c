@@ -120,7 +120,7 @@ rebuild_from_dir(store_ufs_dir_t *sd)
 				return;
 
 			getCurrentTime();
-			debug(86, 1) ("ufs_rebuild: %s: read_dir: opening dir %s\n", sd->path, dir);
+			debug(86, 2) ("ufs_rebuild: %s: read_dir: opening dir %s\n", sd->path, dir);
 			d = opendir(dir);
 			if (! d) {
 				perror("opendir");
