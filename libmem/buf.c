@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include </usr/include/string.h>
+#include <string.h>
 
 #include "../include/config.h"
 #include "../include/util.h"
