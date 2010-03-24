@@ -6,16 +6,26 @@
  * @copyright Adrian Chadd <adrian@@squid-cache.org>
  */
 
+#include "../include/config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
+#if HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
+#endif
+#if HAVE_NETINET_IN_H
 #include <netinet/in.h>
+#endif
+#if HAVE_ARPA_INET_H
 #include <arpa/inet.h>
+#endif
 #include <assert.h>
 #include <unistd.h>
 #include <strings.h>
 #include <string.h>
+#if HAVE_NETDB_H
 #include <netdb.h>
+#endif
 
 #include "../include/util.h"		/* for memrcmp(); perhaps that should be broken out? */
 #include "../include/hash.h"		/* for hash4() */
