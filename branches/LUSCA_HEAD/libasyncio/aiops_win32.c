@@ -572,13 +572,13 @@ squidaio_cleanup_request(squidaio_request_t * requestp)
 	if (!cancelled && requestp->ret == 0)
 	    xmemcpy(requestp->statp, requestp->tmpstatp, sizeof(struct stat));
 	squidaio_xfree(requestp->tmpstatp, sizeof(struct stat));
-	squidaio_xstrfree(requestp->path);
+	xfree(requestp->path);
 	break;
     case _AIO_OP_OPEN:
 	if (cancelled && requestp->ret >= 0)
 	    /* The open() was cancelled but completed */
 	    close(requestp->ret);
-	squidaio_xstrfree(requestp->path);
+	xfree(requestp->path);
 	break;
     case _AIO_OP_CLOSE:
 	if (cancelled && requestp->ret < 0)
@@ -588,7 +588,7 @@ squidaio_cleanup_request(squidaio_request_t * requestp)
     case _AIO_OP_UNLINK:
     case _AIO_OP_TRUNCATE:
     case _AIO_OP_OPENDIR:
-	squidaio_xstrfree(requestp->path);
+	xfree(requestp->path);
 	break;
     case _AIO_OP_READ:
 	break;
@@ -628,7 +628,7 @@ squidaio_open(const char *path, int oflag, mode_t mode, squidaio_result_t * resu
     squidaio_request_t *requestp;
 
     requestp = memPoolAlloc(squidaio_request_pool);
-    requestp->path = (char *) squidaio_xstrdup(path);
+    requestp->path = (char *) xstrdup(path);
     requestp->oflag = oflag;
     requestp->mode = mode;
     requestp->resultp = resultp;
@@ -745,7 +745,7 @@ squidaio_stat(const char *path, struct stat *sb, squidaio_result_t * resultp)
     squidaio_request_t *requestp;
 
     requestp = memPoolAlloc(squidaio_request_pool);
-    requestp->path = (char *) squidaio_xstrdup(path);
+    requestp->path = (char *) xstrdup(path);
     requestp->statp = sb;
     requestp->tmpstatp = (struct stat *) xcalloc(1, sizeof(struct stat));
     requestp->resultp = resultp;
@@ -771,7 +771,7 @@ squidaio_unlink(const char *path, squidaio_result_t * resultp)
     squidaio_request_t *requestp;
 
     requestp = memPoolAlloc(squidaio_request_pool);
-    requestp->path = squidaio_xstrdup(path);
+    requestp->path = xstrdup(path);
     requestp->resultp = resultp;
     requestp->request_type = _AIO_OP_UNLINK;
     requestp->cancelled = 0;
@@ -796,7 +796,7 @@ squidaio_truncate(const char *path, off_t length, squidaio_result_t * resultp)
     squidaio_request_t *requestp;
 
     requestp = memPoolAlloc(squidaio_request_pool);
-    requestp->path = (char *) squidaio_xstrdup(path);
+    requestp->path = (char *) xstrdup(path);
     requestp->offset = length;
     requestp->resultp = resultp;
     requestp->request_type = _AIO_OP_TRUNCATE;
