@@ -4027,7 +4027,7 @@ DOC_END
 
 NAME: cache_effective_user
 TYPE: string
-DEFAULT: squid
+DEFAULT: nobody
 LOC: Config.effectiveUser
 DOC_START
 	If you start Squid as root, it will change its effective/real
