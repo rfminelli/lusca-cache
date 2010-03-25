@@ -41,9 +41,15 @@
 #include <string.h>
 #include <math.h>
 #include <fcntl.h>
-#include <sys/errno.h>
+#if HAVE_ERRNO_H
+#include <errno.h>
+#endif
+#if HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
+#endif
+#if HAVE_NETINET_IN_H
 #include <netinet/in.h>
+#endif
 
 #include "../include/Array.h"
 #include "../include/Stack.h"

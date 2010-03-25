@@ -40,8 +40,12 @@
 #include <unistd.h>
 #include <string.h>
 #include <math.h>
+#if HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
+#endif
+#if HAVE_NETINET_IN_H
 #include <netinet/in.h>
+#endif
 
 #include "../include/Array.h"
 #include "../include/Stack.h"
