@@ -36,13 +36,17 @@
 
 #include "squid.h"
 #include <windows.h>
+
+#include "aiops.h"
 #include "async_io.h"
 
 #include	<stdio.h>
 #include	<sys/types.h>
 #include	<sys/stat.h>
 #include	<fcntl.h>
+#if HAVE_ERRNO_H
 #include	<errno.h>
+#endif
 #include	<dirent.h>
 #include	<signal.h>
 
@@ -55,67 +59,6 @@ int squidaio_nthreads = 0;
 #endif
 int squidaio_magic1 = 1;	/* dummy initializer value */
 int squidaio_magic2 = 1;	/* real value set in aiops.c */
-
-enum _squidaio_thread_status {
-    _THREAD_STARTING = 0,
-    _THREAD_WAITING,
-    _THREAD_BUSY,
-    _THREAD_FAILED,
-    _THREAD_DONE
-};
-typedef enum _squidaio_thread_status squidaio_thread_status;
-
-enum _squidaio_request_type {
-    _AIO_OP_NONE = 0,
-    _AIO_OP_OPEN,
-    _AIO_OP_READ,
-    _AIO_OP_WRITE,
-    _AIO_OP_CLOSE,
-    _AIO_OP_UNLINK,
-    _AIO_OP_TRUNCATE,
-    _AIO_OP_OPENDIR,
-    _AIO_OP_STAT
-};
-typedef enum _squidaio_request_type squidaio_request_type;
-
-typedef struct squidaio_request_t {
-    struct squidaio_request_t *next;
-    squidaio_request_type request_type;
-    int cancelled;
-    char *path;
-    int oflag;
-    mode_t mode;
-    int fd;
-    char *bufferp;
-    int buflen;
-    off_t offset;
-    int whence;
-    int ret;
-    int err;
-    struct stat *tmpstatp;
-    struct stat *statp;
-    squidaio_result_t *resultp;
-} squidaio_request_t;
-
-typedef struct squidaio_request_queue_t {
-    HANDLE mutex;
-    HANDLE cond;		/* See Event objects */
-    squidaio_request_t *volatile head;
-    squidaio_request_t *volatile *volatile tailp;
-    unsigned long requests;
-    unsigned long blocked;	/* main failed to lock the queue */
-} squidaio_request_queue_t;
-
-typedef struct squidaio_thread_t squidaio_thread_t;
-struct squidaio_thread_t {
-    squidaio_thread_t *next;
-    HANDLE thread;
-    DWORD dwThreadId;		/* thread ID */
-    squidaio_thread_status status;
-    struct squidaio_request_t *current_req;
-    unsigned long requests;
-    int volatile exit;
-};
 
 static void squidaio_queue_request(squidaio_request_t *);
 static void squidaio_cleanup_request(squidaio_request_t *);
