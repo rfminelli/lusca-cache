@@ -1,15 +1,18 @@
+#include "../include/config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/time.h>
+#if HAVE_STRING_H
 #include <string.h>
+#endif
 
 #if HAVE_BACKTRACE_SYMBOLS_FD
 #include <execinfo.h>
 #endif
 
-#include "../include/config.h"
 #include "varargs.h"
 #include "tools.h"
 
