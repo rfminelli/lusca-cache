@@ -10,8 +10,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
+#if HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
+#endif
+#if HAVE_NETINET_IN_H
 #include <netinet/in.h>
+#endif
 
 #include "../libstat/StatHist.h"
 #include "../libsqinet/sqinet.h"
