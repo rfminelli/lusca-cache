@@ -38,14 +38,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#if HAVE_STRING_H
 #include <string.h>
-#include <math.h>
-#include <fcntl.h>
+#endif
 #include <ctype.h>
-#include <sys/errno.h>
+#if HAVE_ERRNO_H
+#include <errno.h>
+#endif
+#if HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
+#endif
+#if HAVE_NETINET_IN_H
 #include <netinet/in.h>
+#endif
+#if HAVE_ARPA_INET_H
 #include <arpa/inet.h>
+#endif
 
 #include "../include/Array.h"
 #include "../include/Stack.h"
