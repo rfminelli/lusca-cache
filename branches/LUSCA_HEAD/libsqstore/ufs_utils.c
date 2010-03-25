@@ -24,7 +24,7 @@ ufs_swaplog_grow(ufs_swaplog_t *el, int newsize)
 void
 ufs_swaplog_init(ufs_swaplog_t *el)
 {
-	bzero(el, sizeof(*el));
+	memset(el, 0, sizeof(*el));
 	(void) ufs_swaplog_grow(el, 128);
 }
 

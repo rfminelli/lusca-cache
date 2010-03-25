@@ -56,7 +56,7 @@ rebuild_entry_done(rebuild_entry_t *re)
 void
 rebuild_entry_init(rebuild_entry_t *re)
 {
-	bzero(re, sizeof(*re));
+	memset(re, 0, sizeof(*re));
 	re->hdr_size = -1;
 	re->file_size = -1;
 	re->swap_filen = -1;

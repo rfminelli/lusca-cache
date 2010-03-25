@@ -60,7 +60,7 @@
 void
 sqinet_init(sqaddr_t *s)
 {
-	bzero(s, sizeof(*s));
+	memset(s, 0, sizeof(*s));
 	s->init = 1;
 }
 
@@ -632,7 +632,7 @@ sqinet_aton(sqaddr_t *s, const char *hoststr, sqaton_flags flags)
 	int err;
 
 	assert(s->init);
-	bzero(&hints, sizeof(hints));
+	memset(&hints, 0, sizeof(hints));
 	if (flags & SQATON_FAMILY_IPv4)
 		hints.ai_family = AF_INET;
 	if (flags & SQATON_FAMILY_IPv6)

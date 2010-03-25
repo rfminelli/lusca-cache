@@ -277,7 +277,7 @@ clientdbDump(StoreEntry * sentry)
     radix_node_t *rn;
     struct clientdb_iterate_stats ci;
 
-    bzero(&ci, sizeof(ci));
+    memset(&ci, 0, sizeof(ci));
     storeAppendPrintf(sentry, "Cache Clients:\n");
 
     RADIX_WALK(client_v4_tree->head, rn) {
