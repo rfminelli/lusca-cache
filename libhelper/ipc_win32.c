@@ -66,7 +66,7 @@ static const char *err_string = "ERR\n";
 static const char *shutdown_string = "$shutdown\n";
 
 static const char *hello_string = "hi there\n";
-#define HELLO_BUF_SZ 32
+#define HELLO_BUF_SZ 11
 static char hello_buf[HELLO_BUF_SZ];
 
 static int
