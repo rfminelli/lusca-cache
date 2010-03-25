@@ -355,7 +355,7 @@ comm_listen(int sock)
     if (iapp_useAcceptFilter && strcmp(iapp_useAcceptFilter, "none") != 0) {
 #ifdef SO_ACCEPTFILTER
 	struct accept_filter_arg afa;
-	bzero(&afa, sizeof(afa));
+	memset(&afa, 0, sizeof(afa));
 	debug(5, 0) ("Installing accept filter '%s' on FD %d\n",
 	    iapp_useAcceptFilter, sock);
 	xstrncpy(afa.af_name, iapp_useAcceptFilter, sizeof(afa.af_name));

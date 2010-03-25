@@ -78,7 +78,7 @@ void
 _db_unregister_all(void)
 {
 	db_callbacks.count = 0;
-	bzero(&db_callbacks.cbs, sizeof (db_callbacks.cbs));
+	memset(&db_callbacks.cbs, 0, sizeof (db_callbacks.cbs));
 }
 
 static void
