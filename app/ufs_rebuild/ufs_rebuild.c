@@ -1,9 +1,10 @@
+#include "../include/config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 
-#include "include/config.h"
 #include "include/squid_md5.h"
 #include "include/util.h"
 

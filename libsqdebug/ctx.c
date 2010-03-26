@@ -1,9 +1,9 @@
+#include "../include/config.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "../include/config.h"
 #include "../libcore/varargs.h"
 #include "ctx.h"
 #include "debug.h"
