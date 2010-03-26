@@ -1,10 +1,11 @@
+#include "../include/config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <string.h>
 
-#include "../include/config.h"
 #include "../include/squid_md5.h"
 
 #include "../libcore/varargs.h"

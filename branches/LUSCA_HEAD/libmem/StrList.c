@@ -39,6 +39,8 @@
  *
  */
 
+#include "../include/config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -46,7 +48,6 @@
 #include <string.h>
 #include <ctype.h>
 
-#include "../include/config.h"
 #include "../include/util.h"
 #include "../include/Stack.h"
 #include "../libcore/valgrind.h"

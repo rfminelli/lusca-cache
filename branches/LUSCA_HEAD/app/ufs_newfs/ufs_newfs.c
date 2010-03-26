@@ -1,10 +1,11 @@
+#include "../include/config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include "include/config.h"
 #include "include/util.h"
 
 #include "libcore/varargs.h"

@@ -3,6 +3,8 @@
  * $Id: MemPool.c 12352 2008-01-07 13:53:55Z hno $
  */
 
+#include "../include/config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>

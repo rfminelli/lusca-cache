@@ -55,11 +55,14 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include "../include/config.h"
+
 #include <sys/types.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
+#include "util.h" /* for inet_ntop() */
 #include "mem.h"
 #include "radix.h"
 
