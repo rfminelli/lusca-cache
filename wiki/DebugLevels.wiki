@@ -1,4 +1,4 @@
-#summary One-sentence summary of this page.
+#Debug level reorganization proposal
 
 = Debug Level Reorganization =
 
