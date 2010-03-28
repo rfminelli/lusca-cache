@@ -27,6 +27,9 @@ bin_PROGRAMS = \
 	ufs_log_dump \
 	$(COSSDUMP)
 
+noinst_PROGRAMS = \
+	ufs_obj_cat
+
 libexec_PROGRAMS = \
 	ufs_log_build \
 	ufs_log_cat \
@@ -37,6 +40,7 @@ cossdump_SOURCES = cossdump.c
 ufs_log_build_SOURCES = ufs_log_build.c
 ufs_log_dump_SOURCES = ufs_log_dump.c
 ufs_log_cat_SOURCES = ufs_log_cat.c
+ufs_obj_cat_SOURCES = ufs_obj_cat.c
 cachemgr__CGIEXT__SOURCES = cachemgr.c
 cachemgr__CGIEXT__CFLAGS = -DDEFAULT_CACHEMGR_CONFIG=\"$(DEFAULT_CACHEMGR_CONFIG)\" $(AM_CFLAGS)
 
