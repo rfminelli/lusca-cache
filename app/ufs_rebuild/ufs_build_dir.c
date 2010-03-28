@@ -51,6 +51,8 @@
 
 #include "libsqdebug/debug.h"
 
+#include "libsqtlv/tlv.h"
+
 #include "libsqstore/store_mgr.h"
 #include "libsqstore/store_meta.h"
 #include "libsqstore/store_log.h"
