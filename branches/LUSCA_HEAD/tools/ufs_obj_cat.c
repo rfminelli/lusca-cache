@@ -65,6 +65,8 @@ main(int argc, const char *argv[])
 		exit(1);
 	}
 
+	getCurrentTime();
+
 	/* try parsing! */
 	tl = storeSwapMetaUnpack(buf, &r);
 
