@@ -72,17 +72,17 @@ main(int argc, const char *argv[])
 
 	/* is tl null? no metadata */
 	if (tl == NULL) {
-		printf("ERROR: no valid metadata found\n");
+		printf("%s: ERROR: no valid metadata found\n", path);
 		exit(1);
 	}
 
 	/* meta data size needs to be <= buffer size */
 	if (r > META_BUFSIZ) {
-		printf("ERROR: metadata size bigger than buffer?!\n");
+		printf("%s: ERROR: metadata size bigger than buffer?!\n", path);
 		exit(1);
 	}
 
-	printf("metadata header size: %d\n", r);
+	printf("%s: metadata header size: %d\n", path, r);
 
 	for (t = tl ; t; t = t->next) {
        		switch (t->type) {
