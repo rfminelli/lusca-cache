@@ -1,0 +1,23 @@
+#!/bin/sh
+
+WORKDIR=/tmp/lusca
+RELVER=$1
+
+mkdir -p ${WORKDIR} || exit 1
+
+svn export -r ${RELVER} https://lusca-cache.googlecode.com/svn/branches/LUSCA_HEAD ${WORKDIR}/LUSCA_HEAD-r${RELVER} || exit 1
+
+# rewrite the AC_INIT LUSCA_HEAD entry in configure.in
+cat ${WORKDIR}/LUSCA_HEAD-r${RELVER}/configure.in | sed "s@LUSCA_HEAD@LUSCA_HEAD-r${RELVER}@" > ${WORKDIR}/LUSCA_HEAD-r${RELVER}/configure.in.new || exit 1
+mv ${WORKDIR}/LUSCA_HEAD-r${RELVER}/configure.in.new ${WORKDIR}/LUSCA_HEAD-r${RELVER}/configure.in || exit 1
+
+# run autoconf/automake
+cd ${WORKDIR}/LUSCA_HEAD-r${RELVER} || exit 1
+sh bootstrap.sh || exit 1
+
+# generate tarball
+cd ${WORKDIR} || exit 1
+tar cvf LUSCA_HEAD-r${RELVER}.tar LUSCA_HEAD-r${RELVER} || exit 1
+gzip -9 LUSCA_HEAD-r${RELVER}.tar || exit 1
+
+# done!
