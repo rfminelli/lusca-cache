@@ -80,7 +80,7 @@ main(int argc, const char *argv[])
 
 	/* meta data size needs to be <= buffer size */
 	if (r > META_BUFSIZ) {
-		printf("%s: ERROR: metadata size bigger than buffer?!\n", path);
+		printf("%s: ERROR: metadata size (%d bytes) bigger than buffer (%d bytes) ?!\n", path, r, META_BUFSIZ);
 		exit(1);
 	}
 
