@@ -6,6 +6,8 @@
 #include <string.h>
 #include <fcntl.h>
 
+#include "../include/util.h"
+
 #include "../libcore/varargs.h"
 #include "../libcore/tools.h"
 #include "../libcore/kb.h"		/* for squid_off_t */
