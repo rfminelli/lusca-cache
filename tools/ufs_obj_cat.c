@@ -39,7 +39,7 @@ storeKeyText(const unsigned char *key)
         return buf;
 }
 
-#define	META_BUFSIZ		4096
+#define	META_BUFSIZ		1024
 
 int
 main(int argc, const char *argv[])
