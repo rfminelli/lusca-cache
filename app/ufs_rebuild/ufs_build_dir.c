@@ -59,7 +59,7 @@
 #include "libsqstore/store_file_ufs.h"
 #include "libsqstore/rebuild_entry.h"
 
-#define	BUFSIZE		1024
+#define	BUFSIZE		4096
 
 int
 read_file(const char *path, rebuild_entry_t *re)
