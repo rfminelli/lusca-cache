@@ -535,7 +535,7 @@ squidaio_cleanup_request(squidaio_request_t * requestp)
     case _AIO_OP_STAT:
 	if (!cancelled && requestp->ret == 0)
 	    xmemcpy(requestp->statp, requestp->tmpstatp, sizeof(struct stat));
-	squidaio_xfree(requestp->tmpstatp, sizeof(struct stat));
+	xfree(requestp->tmpstatp);
 	xfree(requestp->path);
 	break;
     case _AIO_OP_OPEN:
