@@ -613,7 +613,7 @@ squidaio_do_open(squidaio_request_t * requestp)
 
 
 int
-squidaio_read(int fd, char *bufp, int bufs, off_t offset, int whence, squidaio_result_t * resultp)
+squidaio_read(int fd, char *bufp, int bufs, off_t offset, squidaio_result_t * resultp)
 {
     squidaio_request_t *requestp;
 
@@ -622,7 +622,6 @@ squidaio_read(int fd, char *bufp, int bufs, off_t offset, int whence, squidaio_r
     requestp->bufferp = bufp;
     requestp->buflen = bufs;
     requestp->offset = offset;
-    requestp->whence = whence;
     requestp->resultp = resultp;
     requestp->request_type = _AIO_OP_READ;
     requestp->cancelled = 0;
@@ -635,7 +634,7 @@ squidaio_read(int fd, char *bufp, int bufs, off_t offset, int whence, squidaio_r
 static void
 squidaio_do_read(squidaio_request_t * requestp)
 {
-    lseek(requestp->fd, requestp->offset, requestp->whence);
+    lseek(requestp->fd, requestp->offset, SEEK_SET);
     if (!ReadFile((HANDLE) _get_osfhandle(requestp->fd), requestp->bufferp,
 	    requestp->buflen, (LPDWORD) & requestp->ret, NULL)) {
 	WIN32_maperror(GetLastError());
@@ -646,7 +645,7 @@ squidaio_do_read(squidaio_request_t * requestp)
 
 
 int
-squidaio_write(int fd, char *bufp, int bufs, off_t offset, int whence, squidaio_result_t * resultp)
+squidaio_write(int fd, char *bufp, int bufs, off_t offset, squidaio_result_t * resultp)
 {
     squidaio_request_t *requestp;
 
@@ -655,7 +654,6 @@ squidaio_write(int fd, char *bufp, int bufs, off_t offset, int whence, squidaio_
     requestp->bufferp = bufp;
     requestp->buflen = bufs;
     requestp->offset = offset;
-    requestp->whence = whence;
     requestp->resultp = resultp;
     requestp->request_type = _AIO_OP_WRITE;
     requestp->cancelled = 0;
@@ -669,6 +667,7 @@ static void
 squidaio_do_write(squidaio_request_t * requestp)
 {
     assert(requestp->offset >= 0);
+    lseek(requestp->fd, requestp->offset, SEEK_SET);
     if (!WriteFile((HANDLE) _get_osfhandle(requestp->fd), requestp->bufferp,
 	    requestp->buflen, (LPDWORD) & requestp->ret, NULL)) {
 	WIN32_maperror(GetLastError());
