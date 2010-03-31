@@ -129,21 +129,21 @@ squidaio_init(void)
 	    FALSE,		/* child process's don't inherit the handle */
 	    DUPLICATE_SAME_ACCESS)) {
 	/* spit errors */
-	fatal("couldn't get current thread handle\n");
+	libcore_fatalf("couldn't get current thread handle\n");
     }
     /* Initialize request queue */
     if ((request_queue.mutex = CreateMutex(NULL,	/* no inheritance */
 		FALSE,		/* start unowned (as per mutex_init) */
 		NULL)		/* no name */
 	) == NULL) {
-	fatal("failed to create mutex\n");
+	libcore_fatalf("failed to create mutex\n");
     }
     if ((request_queue.cond = CreateEvent(NULL,		/* no inheritance */
 		FALSE,		/* auto signal reset - which I think is pthreads like ? */
 		FALSE,		/* start non signaled */
 		NULL)		/* no name */
 	) == NULL) {
-	fatal("failed to create condition event variable.\n");
+	libcore_fatalf("failed to create condition event variable.\n");
     }
     request_queue.head = NULL;
     request_queue.tailp = &request_queue.head;
@@ -155,14 +155,14 @@ squidaio_init(void)
 		FALSE,		/* start unowned (as per mutex_init) */
 		NULL)		/* no name */
 	) == NULL) {
-	fatal("failed to create mutex\n");
+	libcore_fatalf("failed to create mutex\n");
     }
     if ((done_queue.cond = CreateEvent(NULL,	/* no inheritance */
 		TRUE,		/* manually signaled - which I think is pthreads like ? */
 		FALSE,		/* start non signaled */
 		NULL)		/* no name */
 	) == NULL) {
-	fatal("failed to create condition event variable.\n");
+	libcore_fatalf("failed to create condition event variable.\n");
     }
     done_queue.head = NULL;
     done_queue.tailp = &done_queue.head;
@@ -281,7 +281,7 @@ squidaio_thread_loop(LPVOID lpParam)
 
     /* lock the thread info */
     if (WAIT_FAILED == WaitForSingleObject(request_queue.mutex, INFINITE)) {
-	fatal("Can't get ownership of mutex\n");
+	libcore_fatalf("Can't get ownership of mutex\n");
     }
     /* duplicate the handle */
     if (!DuplicateHandle(GetCurrentProcess(),	/* pseudo handle, don't close */
@@ -291,10 +291,10 @@ squidaio_thread_loop(LPVOID lpParam)
 	    0,			/* required access */
 	    FALSE,		/* child process's don't inherit the handle */
 	    DUPLICATE_SAME_ACCESS))
-	fatal("Can't duplicate mutex handle\n");
+	libcore_fatalf("Can't duplicate mutex handle\n");
     if (!ReleaseMutex(request_queue.mutex)) {
 	CloseHandle(cond);
-	fatal("Can't release mutex\n");
+	libcore_fatalf("Can't release mutex\n");
     }
     while (1) {
 	DWORD rv;
@@ -429,10 +429,10 @@ squidaio_queue_request(squidaio_request_t * request)
 	    *request_queue.tailp = request;
 	    request_queue.tailp = &request->next;
 	    if (!SetEvent(request_queue.cond))
-		fatal("couldn't push queue\n");
+		libcore_fatalf("couldn't push queue\n");
 	    if (!ReleaseMutex(request_queue.mutex)) {
 		/* unexpected error */
-		fatal("couldn't push queue\n");
+		libcore_fatalf("couldn't push queue\n");
 	    }
 	} else {
 	    /* Oops, the request queue is blocked, use request_queue2 */
@@ -448,10 +448,10 @@ squidaio_queue_request(squidaio_request_t * request)
 	    *request_queue.tailp = request_queue2.head;
 	    request_queue.tailp = &request->next;
 	    if (!SetEvent(request_queue.cond))
-		fatal("couldn't push queue\n");
+		libcore_fatalf("couldn't push queue\n");
 	    if (!ReleaseMutex(request_queue.mutex)) {
 		/* unexpected error */
-		fatal("couldn't push queue\n");
+		libcore_fatalf("couldn't push queue\n");
 	    }
 	    request_queue2.head = NULL;
 	    request_queue2.tailp = &request_queue2.head;
@@ -790,10 +790,10 @@ squidaio_poll_queues(void)
 	*request_queue.tailp = request_queue2.head;
 	request_queue.tailp = request_queue2.tailp;
 	if (!SetEvent(request_queue.cond))
-	    fatal("couldn't push queue\n");
+	    libcore_fatalf("couldn't push queue\n");
 	if (!ReleaseMutex(request_queue.mutex)) {
 	    /* unexpected error */
-	    fatal("couldn't push queue\n");
+	    libcore_fatalf("couldn't push queue\n");
 	}
 	request_queue2.head = NULL;
 	request_queue2.tailp = &request_queue2.head;
@@ -809,7 +809,7 @@ squidaio_poll_queues(void)
 	done_queue.tailp = &done_queue.head;
 	if (!ReleaseMutex(done_queue.mutex)) {
 	    /* unexpected error */
-	    fatal("couldn't poll queue\n");
+	    libcore_fatalf("couldn't poll queue\n");
 	}
 	*done_requests.tailp = requests;
 	request_queue_len -= 1;
