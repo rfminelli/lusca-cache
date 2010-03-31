@@ -86,7 +86,7 @@ ipcCloseAllFD(int prfd, int pwfd, int crfd, int cwfd)
 }
 
 pid_t
-ipcCreate(int type, const char *prog, const char *const args[], const char *name, int *rfd, int *wfd, void **hIpc)
+ipcCreate(int type, const char *prog, const char *const args[], const char *name, int sleep_after_fork, int *rfd, int *wfd, void **hIpc)
 {
     unsigned long thread;
     struct ipc_params params;
@@ -102,6 +102,7 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
     int pwfd = -1;
     socklen_t len;
     int x;
+    sqaddr_t tmp;
 
     requirePathnameExists(name, prog);
 
@@ -123,12 +124,14 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	    local_addr,
 	    0,
 	    COMM_NOCLOEXEC,
+        0,
 	    name);
 	prfd = pwfd = comm_open(SOCK_STREAM,
 	    IPPROTO_TCP,	/* protocol */
 	    local_addr,
 	    0,			/* port */
 	    0,			/* blocking */
+        0,
 	    name);
     } else if (type == IPC_UDP_SOCKET) {
 	crfd = cwfd = comm_open(SOCK_DGRAM,
@@ -136,12 +139,14 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	    local_addr,
 	    0,
 	    COMM_NOCLOEXEC,
+        0,
 	    name);
 	prfd = pwfd = comm_open(SOCK_DGRAM,
 	    IPPROTO_UDP,
 	    local_addr,
 	    0,
 	    0,
+        0,
 	    name);
     } else if (type == IPC_FIFO) {
 	debug(54, 0)
@@ -209,7 +214,9 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	debug(54, 1) ("ipcCreate: _beginthread: %s\n", xstrerror());
 	return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
     }
-    if (comm_connect_addr(pwfd, &CS) == COMM_ERROR) {
+    sqinet_init(&tmp);
+    sqinet_set_v4_sockaddr(&tmp, &CS);
+    if (comm_connect_addr(pwfd, &tmp) == COMM_ERROR) {
 	CloseHandle((HANDLE) thread);
 	return ipcCloseAllFD(prfd, pwfd, -1, -1);
     }
@@ -330,6 +337,7 @@ ipc_thread_1(void *in_params)
     int cwfd = params->cwfd;
     char **args = params->args;
     struct sockaddr_in PS = params->PS;
+    sqaddr_t tmp;
 
 
     buf1 = xcalloc(1, 8192);
@@ -356,7 +364,9 @@ ipc_thread_1(void *in_params)
 	fd_table[fd].flags.ipc = 1;
 	cwfd = crfd = fd;
     } else if (type == IPC_UDP_SOCKET) {
-	if (comm_connect_addr(crfd, &PS) == COMM_ERROR)
+        sqinet_init(&tmp);
+        sqinet_set_v4_sockaddr(&tmp, &PS);
+    if (comm_connect_addr(crfd, &tmp) == COMM_ERROR)
 	    goto cleanup;
     }
     x = send(cwfd, hello_string, strlen(hello_string) + 1, 0);
@@ -385,19 +395,19 @@ ipc_thread_1(void *in_params)
 	goto cleanup;
     }
     /* assign file descriptors to child process */
-    if (_pipe(p2c, 1024, _O_BINARY | _O_NOINHERIT) < 0) {
+    if (_pipe(p2c, 1024, O_BINARY | O_NOINHERIT) < 0) {
 	debug(54, 0) ("ipcCreate: CHILD: pipe: %s\n", xstrerror());
 	ipcSend(cwfd, err_string, strlen(err_string));
 	goto cleanup;
     }
-    if (_pipe(c2p, 1024, _O_BINARY | _O_NOINHERIT) < 0) {
+    if (_pipe(c2p, 1024, O_BINARY | O_NOINHERIT) < 0) {
 	debug(54, 0) ("ipcCreate: CHILD: pipe: %s\n", xstrerror());
 	ipcSend(cwfd, err_string, strlen(err_string));
 	goto cleanup;
     }
     if (type == IPC_UDP_SOCKET) {
 	snprintf(buf1, 8192, "%s(%ld) <-> ipc CHILD socket", prog, -1L);
-	crfd_ipc = cwfd_ipc = comm_open(SOCK_DGRAM, IPPROTO_UDP, local_addr, 0, 0, buf1);
+	crfd_ipc = cwfd_ipc = comm_open(SOCK_DGRAM, IPPROTO_UDP, local_addr, 0, 0, 0, buf1);
 
 	if (crfd_ipc < 0) {
 	    debug(54, 0) ("ipcCreate: CHILD: Failed to create child FD for %s.\n",
@@ -406,7 +416,7 @@ ipc_thread_1(void *in_params)
 	    goto cleanup;
 	}
 	snprintf(buf1, 8192, "%s(%ld) <-> ipc PARENT socket", prog, -1L);
-	prfd_ipc = pwfd_ipc = comm_open(SOCK_DGRAM, IPPROTO_UDP, local_addr, 0, 0, buf1);
+	prfd_ipc = pwfd_ipc = comm_open(SOCK_DGRAM, IPPROTO_UDP, local_addr, 0, 0, 0, buf1);
 	if (pwfd_ipc < 0) {
 	    debug(54, 0) ("ipcCreate: CHILD: Failed to create server FD for %s.\n",
 		prog);
@@ -432,13 +442,16 @@ ipc_thread_1(void *in_params)
 	debug(54, 3) ("ipcCreate: FD %d sockaddr %s:%d\n",
 	    crfd_ipc, inet_ntoa(CS_ipc.sin_addr), ntohs(CS_ipc.sin_port));
 
-	if (comm_connect_addr(pwfd_ipc, &CS_ipc) == COMM_ERROR) {
+    sqinet_init(&tmp);
+    sqinet_set_v4_sockaddr(&tmp, &CS_ipc);
+    if (comm_connect_addr(pwfd_ipc, &tmp) == COMM_ERROR) {
 	    ipcSend(cwfd, err_string, strlen(err_string));
 	    goto cleanup;
 	}
 	fd = crfd;
 
-	if (comm_connect_addr(crfd_ipc, &PS_ipc) == COMM_ERROR) {
+    sqinet_set_v4_sockaddr(&tmp, &PS_ipc);
+    if (comm_connect_addr(crfd_ipc, &tmp) == COMM_ERROR) {
 	    ipcSend(cwfd, err_string, strlen(err_string));
 	    goto cleanup;
 	}
@@ -744,4 +757,17 @@ ipc_thread_2(void *in_params)
     xfree(prog);
     xfree(buf2);
     return 0;
+}
+
+/* XXX just copied from ipc.c */
+void
+ipcClose(pid_t pid, int rfd, int wfd)
+{
+	if (rfd == wfd)
+		comm_close(rfd);
+	else {
+		comm_close(rfd);
+		comm_close(wfd);
+	}
+	kill(pid, SIGTERM);
 }
