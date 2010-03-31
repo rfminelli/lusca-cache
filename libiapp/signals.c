@@ -1,9 +1,9 @@
+#include "../include/config.h"
 
 #include <stdio.h>
 #include <unistd.h>
 #include <signal.h>
 
-#include "../include/config.h"
 #include "../include/util.h"
 #include "../libcore/valgrind.h"
 #include "../libcore/varargs.h"
