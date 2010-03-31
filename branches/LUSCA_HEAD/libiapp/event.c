@@ -43,6 +43,10 @@
 
 #include "../include/Array.h"
 #include "../include/Stack.h"
+#if !HAVE_DRAND48
+#include "../util/drand48.h"
+#endif
+
 #include "../libcore/valgrind.h"
 #include "../libcore/varargs.h"
 #include "../libcore/debug.h"
