@@ -34,7 +34,30 @@
  *
  */
 
-#include "squid.h"
+#include "../include/config.h"
+
+#include "../include/util.h"
+#include "../include/Array.h"
+#include "../include/Stack.h"
+
+#include "../libcore/tools.h"
+#include "../libcore/gb.h"
+#include "../libcore/kb.h"
+
+#include "../libsqdebug/debug.h"
+#include "../libsqdebug/debug_file.h"
+
+#include "../libmem/MemPool.h"
+#include "../libmem/MemBufs.h"
+#include "../libmem/MemBuf.h"
+
+#include "../libsqinet/sqinet.h"
+#include "../libiapp/fd_types.h"
+#include "../libiapp/comm_types.h"
+#include "../libiapp/comm.h"
+#include "../libiapp/globals.h"
+
+#include "../libhelper/ipc.h"
 
 #ifndef _MSWSOCK_
 #include <mswsock.h>
