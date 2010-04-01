@@ -39,6 +39,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "../include/Array.h"
 #include "../include/Stack.h"
