@@ -935,15 +935,6 @@ struct _HierarchyLogEntry {
     struct timeval store_complete_stop;
 };
 
-struct _method_t {
-    method_code_t code;
-    const char *string;
-    struct {
-	unsigned int cachable:1;
-	unsigned int purges_all:1;
-    } flags;
-};
-
 struct _AccessLogEntry {
     const char *url;
     struct {

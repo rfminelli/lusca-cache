@@ -262,40 +262,6 @@ typedef enum {
 } store_client_t;
 
 typedef enum {
-    METHOD_NONE,		/* 000 */
-    METHOD_GET,			/* 001 */
-    METHOD_POST,		/* 010 */
-    METHOD_PUT,			/* 011 */
-    METHOD_HEAD,		/* 100 */
-    METHOD_CONNECT,		/* 101 */
-    METHOD_TRACE,		/* 110 */
-    METHOD_PURGE,		/* 111 */
-    METHOD_OPTIONS,
-    METHOD_DELETE,		/* RFC2616 section 9.7 */
-    METHOD_PROPFIND,
-    METHOD_PROPPATCH,
-    METHOD_MKCOL,
-    METHOD_COPY,
-    METHOD_MOVE,
-    METHOD_LOCK,
-    METHOD_UNLOCK,
-    METHOD_BMOVE,
-    METHOD_BDELETE,
-    METHOD_BPROPFIND,
-    METHOD_BPROPPATCH,
-    METHOD_BCOPY,
-    METHOD_SEARCH,
-    METHOD_SUBSCRIBE,
-    METHOD_UNSUBSCRIBE,
-    METHOD_POLL,
-    METHOD_REPORT,
-    METHOD_MKACTIVITY,
-    METHOD_CHECKOUT,
-    METHOD_MERGE,
-    METHOD_OTHER,
-} method_code_t;
-
-typedef enum {
     PROTO_NONE,
     PROTO_HTTP,
     PROTO_FTP,
