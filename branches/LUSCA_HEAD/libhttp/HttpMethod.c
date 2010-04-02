@@ -170,7 +170,7 @@ urlMethodAssign(method_t **dst, method_t *src)
 		    urlMethodGetConstStr((*dst)));
 	}
 
-	*dst = src;
+	(*dst) = src;
 }
 
 method_t *
