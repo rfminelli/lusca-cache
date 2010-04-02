@@ -69,7 +69,7 @@ clientPurgeRequest(clientHttpRequest * http)
 	    http->entry = entry;
 	    storeLockObject(http->entry);
 	    storeCreateMemObject(http->entry, http->uri);
-	    http->entry->mem_obj->method = http->request->method;
+	    urlMethodAssign(&http->entry->mem_obj->method, http->request->method);
 	    http->sc = storeClientRegister(http->entry, http);
 	    http->log_type = LOG_TCP_HIT;
 	    storeClientCopyHeaders(http->sc, http->entry,

@@ -55,7 +55,7 @@ clientAsyncDone(clientAsyncRefreshRequest * async)
 	packerClean(&p);
 	memBufClean(&mb);
     }
-    al.http.method = request->method;
+    urlMethodAssign(&al.http.method, request->method);
     al.http.version = request->http_ver;
     al.hier = request->hier;
     if (request->auth_user_request) {

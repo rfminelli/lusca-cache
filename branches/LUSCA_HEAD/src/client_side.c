@@ -287,7 +287,7 @@ httpRequestLog(clientHttpRequest *http)
 		packerClean(&p);
 		memBufClean(&mb);
 	    }
-	    http->al.http.method = request->method;
+	    urlMethodAssign(&http->al.http.method, request->method);
 	    http->al.http.version = request->http_ver;
 	    http->al.hier = request->hier;
 	    if (request->auth_user_request) {
@@ -2181,7 +2181,7 @@ clientProcessRequest(clientHttpRequest * http)
 		r->hier = http->entry->mem_obj->request->hier;
 	}
 	storeCreateMemObject(http->entry, http->uri);
-	http->entry->mem_obj->method = r->method;
+        urlMethodAssign(&http->entry->mem_obj->method, r->method);
 	http->sc = storeClientRegister(http->entry, http);
 #if DELAY_POOLS
 	delaySetStoreClient(http->sc, delayClient(http));

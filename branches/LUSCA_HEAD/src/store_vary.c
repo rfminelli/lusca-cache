@@ -355,7 +355,7 @@ storeAddVary(const char *url, method_t * method, const cache_key * key, const ch
 	/* Swap in the dummy Vary object */
 	if (!state->oe->mem_obj) {
 	    storeCreateMemObject(state->oe, state->url);
-	    state->oe->mem_obj->method = method;
+	    urlMethodAssign(&state->oe->mem_obj->method, method);
 	}
 	state->sc = storeClientRegister(state->oe, state);
 	state->buf = memAllocBuf(4096, &state->buf_size);
