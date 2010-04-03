@@ -8,7 +8,12 @@
  * Adrian Chadd <adrian@creative.net.au>
  */
 
-#include "config.h"
+#include "../../include/config.h"
+
+/* XXX macosx specific hack - need to generic-ify this! */
+#if !defined(O_BINARY)
+#define	O_BINARY		0x0
+#endif
 
 #if HAVE_INTTYPES_H
 #include <inttypes.h>
