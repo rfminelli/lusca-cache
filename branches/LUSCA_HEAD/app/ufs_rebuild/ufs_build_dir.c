@@ -70,7 +70,7 @@ read_file(const char *path, rebuild_entry_t *re)
 	struct stat sb;
 
 	debug(86, 3) ("read_file: %s\n", path);
-	fd = open(path, O_RDONLY);
+	fd = open(path, O_RDONLY | O_BINARY);
  	if (fd < 0) {
 		perror("open");
 		return 0;
