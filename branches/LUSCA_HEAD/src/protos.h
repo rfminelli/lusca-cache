@@ -989,8 +989,6 @@ extern void WIN32_Exit(void);
 extern void WIN32_SetServiceCommandLine(void);
 extern void WIN32_InstallService(void);
 extern void WIN32_RemoveService(void);
-extern int WIN32_pipe(int[2]);
-extern int WIN32_getrusage(int, struct rusage *);
 extern void WIN32_ExceptionHandlerInit(void);
 extern int SquidMain(int, char **);
 #ifdef _SQUID_MSWIN_
