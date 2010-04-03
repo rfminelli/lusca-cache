@@ -89,6 +89,9 @@ main(int argc, char *argv[])
 	}
 
 	/* Output swap header to stdout */
+#if _SQUID_CYGWIN_
+	setmode(fileno(stdout), O_BINARY);
+#endif
 	(void) storeSwapLogPrintHeader(stdout);
 
 	debug(86, 1) ("ufs_rebuild: %s: rebuild type: %s\n", store_ufs_info.path, rebuild_type == REBUILD_DISK ? "REBUILD_DISK" : "REBUILD_LOG");
