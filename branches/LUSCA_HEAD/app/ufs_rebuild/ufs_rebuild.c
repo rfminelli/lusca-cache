@@ -55,7 +55,7 @@ main(int argc, char *argv[])
 	char *wbuf = NULL;
 	char *debug_args = "ALL,1";
 
-	if (argc < 5) {
+	if (argc < 6) {
 		usage(argv[0]);
 		exit(1);
 	}
