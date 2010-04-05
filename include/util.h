@@ -163,7 +163,6 @@ extern int setegid(gid_t);
 extern const char *WIN32_strerror(int);
 extern void WIN32_maperror(unsigned long);
 extern int WIN32_Close_FD_Socket(int);
-extern int WIN32_pipe(int[2]);
 extern int WIN32_getrusage(int, struct rusage *);
 #endif
 
