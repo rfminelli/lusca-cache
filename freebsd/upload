@@ -1,0 +1,21 @@
+#!/bin/sh
+
+WORKDIR=/tmp/lusca
+RELVER=$1
+
+SRCFILE=${WORKDIR}/LUSCA_HEAD-r${RELVER}.tar.gz
+
+DATESTR="`date '+%B %d, %Y'`"
+VERSTR="Lusca Release - r${RELVER} (${DATESTR})"
+
+# Does the file exist?
+
+if [ ! -e ${SRCFILE} ]; then
+	echo "${SRCFILE} doesn't exist!"
+	exit 1
+fi
+
+# Upload!
+echo ${VERSTR}
+../scripts/googlecode-upload.py -s "${VERSTR}" -p lusca-cache -u adrian.chadd ${SRCFILE}
+
