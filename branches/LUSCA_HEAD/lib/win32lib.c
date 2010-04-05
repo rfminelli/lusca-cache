@@ -795,55 +795,6 @@ WIN32_maperror(unsigned long WIN32_oserrno)
 #if defined(_SQUID_MSWIN_)
 
 int
-WIN32_pipe(int handles[2])
-{
-    int new_socket;
-    fde *F = NULL;
-
-    struct sockaddr_in serv_addr;
-    int len = sizeof(serv_addr);
-    u_short handle1_port;
-
-    handles[0] = handles[1] = -1;
-
-    statCounter.syscalls.sock.sockets++;
-    if ((new_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
-	return -1;
-
-    memset((void *) &serv_addr, 0, sizeof(serv_addr));
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(0);
-    serv_addr.sin_addr = local_addr;
-
-    if (bind(new_socket, (SOCKADDR *) & serv_addr, len) < 0 ||
-	listen(new_socket, 1) < 0 || getsockname(new_socket, (SOCKADDR *) & serv_addr, &len) < 0 ||
-	(handles[1] = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
-	closesocket(new_socket);
-	return -1;
-    }
-    handle1_port = ntohs(serv_addr.sin_port);
-    if (connect(handles[1], (SOCKADDR *) & serv_addr, len) < 0 ||
-	(handles[0] = accept(new_socket, (SOCKADDR *) & serv_addr, &len)) < 0) {
-	closesocket(handles[1]);
-	handles[1] = -1;
-	closesocket(new_socket);
-	return -1;
-    }
-    closesocket(new_socket);
-
-    F = &fd_table[handles[0]];
-    F->local_addr = local_addr;
-    F->local_port = ntohs(serv_addr.sin_port);
-
-    F = &fd_table[handles[1]];
-    F->local_addr = local_addr;
-    xstrncpy(F->ipaddr, inet_ntoa(local_addr), 16);
-    F->remote_port = handle1_port;
-
-    return 0;
-}
-
-int
 WIN32_getrusage(int who, struct rusage *usage)
 {
 #if HAVE_WIN32_PSAPI

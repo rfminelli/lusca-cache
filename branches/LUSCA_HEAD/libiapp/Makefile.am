@@ -31,6 +31,12 @@ else
 SSLSOURCE =
 endif
 
+if ENABLE_WIN32SPECIFIC
+WIN32SOURCE = win32_pipe.c
+else
+WIN32SOURCE =
+endif
+
 libiapp_a_SOURCES = \
 	fd.c \
 	comm.c \
@@ -45,7 +51,8 @@ libiapp_a_SOURCES = \
 	comm_ips_tproxy4.c \
 	comm_ips_freebsd.c \
 	$(COMMLOOP_SOURCE) \
-	$(SSLSOURCE)
+	$(SSLSOURCE) \
+	$(WIN32SOURCE)
 
 noinst_LIBRARIES = \
 	libiapp.a
