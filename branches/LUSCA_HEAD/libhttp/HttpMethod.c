@@ -169,8 +169,10 @@ urlMethodAssign(method_t **dst, method_t *src)
 		debug(23, 1) ("urlMethodAssign: overwriting an existing method: '%s'\n",
 		    urlMethodGetConstStr((*dst)));
 	}
+	if (*dst)
+	    urlMethodFree(*dst);
 
-	(*dst) = src;
+	(*dst) = urlMethodDup(src);
 }
 
 method_t *
