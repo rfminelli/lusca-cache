@@ -129,6 +129,12 @@ clientOnlyIfCached(clientHttpRequest * http)
 	EBIT_TEST(r->cache_control->mask, CC_ONLY_IF_CACHED);
 }
 
+/*
+ * Create a store entry for the given request information.
+ *
+ * the method_t passed in is not "given" to the request; it is still
+ * the responsibility of the caller to free.
+ */
 StoreEntry *
 clientCreateStoreEntry(clientHttpRequest * h, method_t * m, request_flags flags)
 {

@@ -578,6 +578,7 @@ htcpUnpackSpecifier(char *buf, int sz)
 	method = urlMethodGetKnownByCode(METHOD_GET);
     }
     s->request = urlParse(method, s->uri);
+    urlMethodFree(method);
     return s;
 }
 

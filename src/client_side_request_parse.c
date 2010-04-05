@@ -140,6 +140,12 @@ clientRequestBodyTooLarge(clientHttpRequest * http, request_t * request)
     return 0;
 }
 
+/*
+ * Abort the current request during parsing.
+ *
+ * If the method pointer is set, leave it. Otherwise, set it to
+ * METHOD_NONE so it's set to -something-.
+ */
 static clientHttpRequest *
 parseHttpRequestAbort(ConnStateData * conn, method_t ** method_p, const char *uri)
 {
@@ -280,6 +286,8 @@ parseHttpAccelRequest(ConnStateData *conn, clientHttpRequest *http, const char *
  *  Returns
  *   NULL on error or incomplete request
  *    a clientHttpRequest structure on success
+ *    method_p may be set to a parsed method, or METHOD_NONE, or NULL.
+ *    It's the callers' responsibility to transfer or free the method.
  */
 static clientHttpRequest *
 parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, int *status)
@@ -429,12 +437,12 @@ clientTryParseRequest(ConnStateData * conn)
     int nrequests;
     dlink_node *n;
     clientHttpRequest *http = NULL;
-    method_t *method;
+    method_t *method = NULL;
     ErrorState *err = NULL;
     int parser_return_code = 0;
     request_t *request = NULL;
     HttpMsgBuf msg;
-
+    int ret = -1;
 
     /* Skip leading (and trailing) whitespace */
     while (conn->in.offset > 0 && xisspace(conn->in.buf[0])) {
@@ -442,8 +450,10 @@ clientTryParseRequest(ConnStateData * conn)
 	conn->in.offset--;
     }
     conn->in.buf[conn->in.offset] = '\0';	/* Terminate the string */
-    if (conn->in.offset == 0)
-	return 0;
+    if (conn->in.offset == 0) {
+	ret = 0;
+	goto finish;
+    }
 
     HttpMsgBufInit(&msg, conn->in.buf, conn->in.offset);	/* XXX for now there's no deallocation function needed but this may change */
     /* Limit the number of concurrent requests to 2 */
@@ -452,7 +462,8 @@ clientTryParseRequest(ConnStateData * conn)
 	debug(33, 3) ("clientTryParseRequest: FD %d max concurrent requests reached\n", fd);
 	debug(33, 5) ("clientTryParseRequest: FD %d defering new request until one is done\n", fd);
 	conn->defer.until = squid_curtime + 100;	/* Reset when a request is complete */
-	return 0;
+	ret = 0;
+	goto finish;
     }
     conn->in.buf[conn->in.offset] = '\0';	/* Terminate the string */
     if (nrequests == 0)
@@ -476,7 +487,8 @@ clientTryParseRequest(ConnStateData * conn)
 	    http->log_type = LOG_TCP_DENIED;
 	    http->entry = clientCreateStoreEntry(http, method, null_request_flags);
 	    errorAppendEntry(http->entry, err);
-	    return -1;
+	    ret = -1;
+	    goto finish;
 	}
 	if ((request = urlParse(method, http->uri)) == NULL) {
 	    debug(33, 5) ("Invalid URL: %s\n", http->uri);
@@ -487,7 +499,8 @@ clientTryParseRequest(ConnStateData * conn)
 	    http->log_type = LOG_TCP_DENIED;
 	    http->entry = clientCreateStoreEntry(http, method, null_request_flags);
 	    errorAppendEntry(http->entry, err);
-	    return -1;
+	    ret = -1;
+	    goto finish;
 	}
 	/* compile headers */
 	/* we should skip request line! */
@@ -500,7 +513,8 @@ clientTryParseRequest(ConnStateData * conn)
 	    http->log_type = LOG_TCP_DENIED;
 	    http->entry = clientCreateStoreEntry(http, method, null_request_flags);
 	    errorAppendEntry(http->entry, err);
-	    return -1;
+	    ret = -1;
+	    goto finish;
 	}
 	/*
 	 * If we read past the end of this request, move the remaining
@@ -551,7 +565,8 @@ clientTryParseRequest(ConnStateData * conn)
 	    http->log_type = LOG_TCP_DENIED;
 	    http->entry = clientCreateStoreEntry(http, request->method, null_request_flags);
 	    errorAppendEntry(http->entry, err);
-	    return -1;
+	    ret = -1;
+	    goto finish;
 	}
 	if (!clientCheckContentLength(request) || httpHeaderHas(&request->header, HDR_TRANSFER_ENCODING)) {
 	    err = errorCon(ERR_INVALID_REQ, HTTP_LENGTH_REQUIRED, request);
@@ -559,7 +574,8 @@ clientTryParseRequest(ConnStateData * conn)
 	    http->log_type = LOG_TCP_DENIED;
 	    http->entry = clientCreateStoreEntry(http, request->method, null_request_flags);
 	    errorAppendEntry(http->entry, err);
-	    return -1;
+	    ret = -1;
+	    goto finish;
 	}
 	http->request = requestLink(request);
 	http->orig_request = requestLink(request);
@@ -577,7 +593,8 @@ clientTryParseRequest(ConnStateData * conn)
 		http->log_type = LOG_TCP_DENIED;
 		http->entry = clientCreateStoreEntry(http, urlMethodGetKnownByCode(METHOD_NONE), null_request_flags);
 		errorAppendEntry(http->entry, err);
-		return -1;
+		ret = -1;
+		goto finish;
 	    }
 	}
 	if (request->method->code == METHOD_CONNECT) {
@@ -591,7 +608,8 @@ clientTryParseRequest(ConnStateData * conn)
 		    (ObjPackMethod) & httpRequestPackDebug);
 		debugObj(33, 1, "This request:\n", request, (ObjPackMethod) & httpRequestPackDebug);
 	    }
-	    return -2;
+	    ret = -2;
+	    goto finish;
 	} else {
 	    clientCheckFollowXForwardedFor(http);
 	}
@@ -614,12 +632,16 @@ clientTryParseRequest(ConnStateData * conn)
 	    http->log_type = LOG_TCP_DENIED;
 	    http->entry = clientCreateStoreEntry(http, method, null_request_flags);
 	    errorAppendEntry(http->entry, err);
-	    return -1;
+	    ret = -1;
+	    goto finish;
 	}
-	return 0;
+	ret = 0;
+	goto finish;
     }
-    if (!cbdataValid(conn))
-	return -1;
+    if (!cbdataValid(conn)) {
+    	ret = -1;
+	goto finish;
+    }
 
     /* 
      * For now we assume "here" means "we parsed a valid request. This might not be the case
@@ -629,7 +651,11 @@ clientTryParseRequest(ConnStateData * conn)
      */
     assert(http != NULL);
     assert(http->req_sz > 0);
+    ret = http->req_sz;
 
-    return http->req_sz;
+finish:
+    if (method)
+    	urlMethodFree(method);
+    return ret;
 }
 
