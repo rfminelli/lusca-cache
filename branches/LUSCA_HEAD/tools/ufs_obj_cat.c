@@ -101,7 +101,7 @@ main(int argc, const char *argv[])
 				    t->length, (const char *)t->value);
 				break;
 			case STORE_META_OBJSIZE:
-				printf("STORE_META_OBJSIZE: len %d: value %d\n", t->length,
+				printf("STORE_META_OBJSIZE: len %d: value %" PRINTF_OFF_T "\n", t->length,
 				    * ((squid_off_t *) t->value));
 				break;
 			case STORE_META_VARY_HEADERS:
@@ -111,7 +111,7 @@ main(int argc, const char *argv[])
 			case STORE_META_STD_LFS:
 				/* This is for when size_t != squid_file_sz */
 				/* XXX why is this size so .. stupidly big for the timestamp? */
-				printf("STORE_META_STD_LFS: len %d: value %d\n", t->length,
+				printf("STORE_META_STD_LFS: len %d: value %" PRINTF_OFF_T "\n", t->length,
 				    * ((squid_file_sz *) t->value));
 				break;
 			default:
