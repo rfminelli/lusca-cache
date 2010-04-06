@@ -14,6 +14,11 @@
 #include "libcore/tools.h"
 #include "libsqdebug/debug.h"
 
+/* XXX macosx specific hack - need to generic-ify this! */
+#if !defined(O_BINARY)
+#define O_BINARY                0x0
+#endif
+
 int shutting_down = 0;	/* needed for debug routines for now */
 
 /*
