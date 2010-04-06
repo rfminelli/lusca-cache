@@ -102,7 +102,7 @@ coss_rebuild_dir(const char *file, size_t stripesize, int blocksize, int numstri
 		return 0;
 	}
 
-	fd = open(file, O_RDONLY);
+	fd = open(file, O_RDONLY | O_BINARY);
 	if (fd < 0) {
 		perror("open");
 		return 0;
