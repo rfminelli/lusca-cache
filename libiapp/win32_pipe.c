@@ -141,3 +141,5 @@ WIN32_pipe(int handles[2])
 }
 
 #endif /* _SQUID_MSWIN_ */
+
+#endif
