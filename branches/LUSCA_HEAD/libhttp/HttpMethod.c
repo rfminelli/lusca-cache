@@ -38,6 +38,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#if HAVE_STRING_H
+#include <string.h>
+#endif
 
 #include "../include/util.h"
 
