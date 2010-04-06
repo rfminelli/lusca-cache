@@ -351,6 +351,11 @@ struct rusage {
 #include "hash.h"
 #include "rfc1035.h"
 
+/* Windows Port */
+#ifdef _SQUID_WIN32_ 
+#include "../include/win32_compat.h"
+#endif
+
 #include "../libcore/dlink.h"
 #include "../libcore/fifo.h"
 #include "../libcore/tools.h"
