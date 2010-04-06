@@ -63,12 +63,16 @@
 #include <mswsock.h>
 #endif
 #include <process.h>
+#include <signal.h>
+
+/* XXX shouldn't depend on this function */
+extern void requirePathnameExists(const char *name, const char *path);
 
 struct ipc_params {
     int type;
     int crfd;
     int cwfd;
-    struct sockaddr_in PS;
+    sqaddr_t PS;
     const char *prog;
     char **args;
 };
@@ -117,15 +121,15 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
     int optlen = sizeof(opt);
     DWORD ecode = 0;
     pid_t pid;
-    struct sockaddr_in CS;
-    struct sockaddr_in PS;
+    sqaddr_t CS;
+    sqaddr_t PS;
     int crfd = -1;
     int prfd = -1;
     int cwfd = -1;
     int pwfd = -1;
     socklen_t len;
     int x;
-    sqaddr_t tmp;
+    LOCAL_ARRAY(char, tmp, MAX_IPSTRLEN);
 
     requirePathnameExists(name, prog);
 
@@ -197,27 +201,35 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	debug(54, 0) ("ipcCreate: Failed to create server FD.\n");
 	return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
     }
+    sqinet_init(&PS);
+    sqinet_init(&CS);
     if (type == IPC_TCP_SOCKET || type == IPC_UDP_SOCKET) {
-	len = sizeof(PS);
-	memset(&PS, '\0', len);
-	if (getsockname(pwfd, (struct sockaddr *) &PS, &len) < 0) {
+	len = sqinet_get_maxlength(&PS);
+	if (getsockname(pwfd, sqinet_get_entry(&PS), &len) < 0) {
 	    debug(54, 0) ("ipcCreate: getsockname: %s\n", xstrerror());
+	    sqinet_done(&PS);
+	    sqinet_done(&CS);
 	    return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
 	}
+	sqinet_ntoa(&PS, tmp, MAX_IPSTRLEN, 0);
 	debug(54, 3) ("ipcCreate: FD %d sockaddr %s:%d\n",
-	    pwfd, inet_ntoa(PS.sin_addr), ntohs(PS.sin_port));
-	len = sizeof(CS);
-	memset(&CS, '\0', len);
-	if (getsockname(crfd, (struct sockaddr *) &CS, &len) < 0) {
+	    pwfd, tmp, sqinet_get_port(&PS));
+	len = sqinet_get_maxlength(&CS);
+	if (getsockname(crfd, sqinet_get_entry(&CS), &len) < 0) {
 	    debug(54, 0) ("ipcCreate: getsockname: %s\n", xstrerror());
+	    sqinet_done(&PS);
+	    sqinet_done(&CS);
 	    return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
 	}
+	sqinet_ntoa(&CS, tmp, MAX_IPSTRLEN, 0);
 	debug(54, 3) ("ipcCreate: FD %d sockaddr %s:%d\n",
-	    crfd, inet_ntoa(CS.sin_addr), ntohs(CS.sin_port));
+	    crfd, tmp, sqinet_get_port(&CS));
     }
     if (type == IPC_TCP_SOCKET) {
 	if (listen(crfd, 1) < 0) {
 	    debug(54, 1) ("ipcCreate: listen FD %d: %s\n", crfd, xstrerror());
+	    sqinet_done(&PS);
+	    sqinet_done(&CS);
 	    return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
 	}
 	debug(54, 3) ("ipcCreate: FD %d listening...\n", crfd);
@@ -237,10 +249,10 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	debug(54, 1) ("ipcCreate: _beginthread: %s\n", xstrerror());
 	return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
     }
-    sqinet_init(&tmp);
-    sqinet_set_v4_sockaddr(&tmp, &CS);
-    if (comm_connect_addr(pwfd, &tmp) == COMM_ERROR) {
+    if (comm_connect_addr(pwfd, &CS) == COMM_ERROR) {
 	CloseHandle((HANDLE) thread);
+        sqinet_done(&PS);
+        sqinet_done(&CS);
 	return ipcCloseAllFD(prfd, pwfd, -1, -1);
     }
     memset(hello_buf, '\0', HELLO_BUF_SZ);
@@ -250,12 +262,16 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	debug(54, 0) ("ipcCreate: PARENT: hello read test failed\n");
 	debug(54, 0) ("--> read: %s\n", xstrerror());
 	CloseHandle((HANDLE) thread);
+        sqinet_done(&PS);
+        sqinet_done(&CS);
 	return ipcCloseAllFD(prfd, pwfd, -1, -1);
     } else if (strcmp(hello_buf, hello_string)) {
 	debug(54, 0) ("ipcCreate: PARENT: hello read test failed\n");
 	debug(54, 0) ("--> read returned %d\n", x);
 	debug(54, 0) ("--> got '%s'\n", rfc1738_escape(hello_buf));
 	CloseHandle((HANDLE) thread);
+        sqinet_done(&PS);
+        sqinet_done(&CS);
 	return ipcCloseAllFD(prfd, pwfd, -1, -1);
     }
     x = send(pwfd, ok_string, strlen(ok_string), 0);
@@ -264,6 +280,8 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	debug(54, 0) ("ipcCreate: PARENT: OK write test failed\n");
 	debug(54, 0) ("--> read: %s\n", xstrerror());
 	CloseHandle((HANDLE) thread);
+        sqinet_done(&PS);
+        sqinet_done(&CS);
 	return ipcCloseAllFD(prfd, pwfd, -1, -1);
     }
     memset(hello_buf, '\0', HELLO_BUF_SZ);
@@ -273,14 +291,20 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	debug(54, 0) ("ipcCreate: PARENT: OK read test failed\n");
 	debug(54, 0) ("--> read: %s\n", xstrerror());
 	CloseHandle((HANDLE) thread);
+        sqinet_done(&PS);
+        sqinet_done(&CS);
 	return ipcCloseAllFD(prfd, pwfd, -1, -1);
     } else if (!strcmp(hello_buf, err_string)) {
 	debug(54, 0) ("ipcCreate: PARENT: OK read test failed\n");
 	debug(54, 0) ("--> read returned %d\n", x);
 	debug(54, 0) ("--> got '%s'\n", rfc1738_escape(hello_buf));
 	CloseHandle((HANDLE) thread);
+        sqinet_done(&PS);
+        sqinet_done(&CS);
 	return ipcCloseAllFD(prfd, pwfd, -1, -1);
     }
+    sqinet_done(&PS);
+    sqinet_done(&CS);
     hello_buf[x] = '\0';
     pid = atol(hello_buf);
     commSetTimeout(prfd, -1, NULL, NULL);
@@ -299,6 +323,7 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
     fd_table[crfd].flags.ipc = 1;
     fd_table[cwfd].flags.ipc = 1;
 
+#if 0 /* FIXME: We can't use Config here! */
     if (Config.sleep_after_fork) {
 	/* XXX emulation of usleep() */
 	DWORD sl;
@@ -307,6 +332,7 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	    sl = 1;
 	Sleep(sl);
     }
+#endif
     if (GetExitCodeThread((HANDLE) thread, &ecode) && ecode == STILL_ACTIVE) {
 	if (hIpc)
 	    *hIpc = (HANDLE) thread;
@@ -352,16 +378,14 @@ ipc_thread_1(void *in_params)
     long F;
     int prfd_ipc = -1, pwfd_ipc = -1, crfd_ipc = -1, cwfd_ipc = -1;
     char *prog = NULL, *buf1 = NULL;
-    struct sockaddr_in CS_ipc, PS_ipc;
+    sqaddr_t CS_ipc, PS_ipc;
 
     struct ipc_params *params = (struct ipc_params *) in_params;
     int type = params->type;
     int crfd = params->crfd;
     int cwfd = params->cwfd;
     char **args = params->args;
-    struct sockaddr_in PS = params->PS;
-    sqaddr_t tmp;
-
+    LOCAL_ARRAY(char, tmp, MAX_IPSTRLEN);
 
     buf1 = xcalloc(1, 8192);
     strcpy(buf1, params->prog);
@@ -373,6 +397,9 @@ ipc_thread_1(void *in_params)
 	prog = ++str;
 
     prog = xstrdup(prog);
+
+    sqinet_init(&PS_ipc);
+    sqinet_init(&CS_ipc);
 
     if (type == IPC_TCP_SOCKET) {
 	debug(54, 3) ("ipcCreate: calling accept on FD %d\n", crfd);
@@ -387,9 +414,7 @@ ipc_thread_1(void *in_params)
 	fd_table[fd].flags.ipc = 1;
 	cwfd = crfd = fd;
     } else if (type == IPC_UDP_SOCKET) {
-        sqinet_init(&tmp);
-        sqinet_set_v4_sockaddr(&tmp, &PS);
-    if (comm_connect_addr(crfd, &tmp) == COMM_ERROR)
+    if (comm_connect_addr(crfd, &params->PS) == COMM_ERROR)
 	    goto cleanup;
     }
     x = send(cwfd, hello_string, strlen(hello_string) + 1, 0);
@@ -400,9 +425,11 @@ ipc_thread_1(void *in_params)
 	goto cleanup;
     }
 #if HAVE_PUTENV
+#if 0 /* FIXME: We can't use Config here! */
     env_str = xcalloc((tmp_s = strlen(Config.debugOptions) + 32), 1);
     snprintf(env_str, tmp_s, "SQUID_DEBUG=%s", Config.debugOptions);
     putenv(env_str);
+#endif
 #endif
     memset(buf1, '\0', sizeof(buf1));
     x = recv(crfd, buf1, 8191, 0);
@@ -446,35 +473,32 @@ ipc_thread_1(void *in_params)
 	    ipcSend(cwfd, err_string, strlen(err_string));
 	    goto cleanup;
 	}
-	tmp_s = sizeof(PS_ipc);
-	memset(&PS_ipc, '\0', tmp_s);
-	if (getsockname(pwfd_ipc, (struct sockaddr *) &PS_ipc, &tmp_s) < 0) {
+	tmp_s = sqinet_get_maxlength(&PS_ipc);
+	if (getsockname(pwfd_ipc, sqinet_get_entry(&PS_ipc), &tmp_s) < 0) {
 	    debug(54, 0) ("ipcCreate: getsockname: %s\n", xstrerror());
 	    ipcSend(cwfd, err_string, strlen(err_string));
 	    goto cleanup;
 	}
+        sqinet_ntoa(&PS_ipc, tmp, MAX_IPSTRLEN, 0);
 	debug(54, 3) ("ipcCreate: FD %d sockaddr %s:%d\n",
-	    pwfd_ipc, inet_ntoa(PS_ipc.sin_addr), ntohs(PS_ipc.sin_port));
-	tmp_s = sizeof(CS_ipc);
-	memset(&CS_ipc, '\0', tmp_s);
-	if (getsockname(crfd_ipc, (struct sockaddr *) &CS_ipc, &tmp_s) < 0) {
+	    pwfd_ipc, tmp, sqinet_get_port(&PS_ipc));
+	tmp_s = sqinet_get_maxlength(&CS_ipc);
+	if (getsockname(crfd_ipc, sqinet_get_entry(&CS_ipc), &tmp_s) < 0) {
 	    debug(54, 0) ("ipcCreate: getsockname: %s\n", xstrerror());
 	    ipcSend(cwfd, err_string, strlen(err_string));
 	    goto cleanup;
 	}
+        sqinet_ntoa(&CS_ipc, tmp, MAX_IPSTRLEN, 0);
 	debug(54, 3) ("ipcCreate: FD %d sockaddr %s:%d\n",
-	    crfd_ipc, inet_ntoa(CS_ipc.sin_addr), ntohs(CS_ipc.sin_port));
+	    crfd_ipc, tmp, sqinet_get_port(&CS_ipc));
 
-    sqinet_init(&tmp);
-    sqinet_set_v4_sockaddr(&tmp, &CS_ipc);
-    if (comm_connect_addr(pwfd_ipc, &tmp) == COMM_ERROR) {
+    if (comm_connect_addr(pwfd_ipc, &CS_ipc) == COMM_ERROR) {
 	    ipcSend(cwfd, err_string, strlen(err_string));
 	    goto cleanup;
 	}
 	fd = crfd;
 
-    sqinet_set_v4_sockaddr(&tmp, &PS_ipc);
-    if (comm_connect_addr(crfd_ipc, &tmp) == COMM_ERROR) {
+    if (comm_connect_addr(crfd_ipc, &PS_ipc) == COMM_ERROR) {
 	    ipcSend(cwfd, err_string, strlen(err_string));
 	    goto cleanup;
 	}
@@ -726,6 +750,9 @@ ipc_thread_1(void *in_params)
 
     if (p2c[0] != -1)
 	close(p2c[0]);
+
+    sqinet_done(&PS_ipc);
+    sqinet_done(&CS_ipc);
 
     return retval;
 }
