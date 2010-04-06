@@ -92,7 +92,7 @@ struct _fde_disk *fde_disk = NULL;
 static int
 diskWriteIsComplete(int fd)
 {
-    return fde_disk[fd].disk.write_q ? 0 : 1;
+    return fde_disk[fd].write_q ? 0 : 1;
 }
 #endif
 
