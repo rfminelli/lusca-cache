@@ -54,6 +54,8 @@
 #include <psapi.h>
 #endif
 
+#include "win32_compat.h"
+
 THREADLOCAL int ws32_result;
 THREADLOCAL int _so_err;
 THREADLOCAL int _so_err_siz = sizeof(int);
