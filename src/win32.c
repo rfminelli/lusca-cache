@@ -81,8 +81,8 @@ static char *WIN32_module_name;
 static int Squid_Aborting = 0;
 
 #define VENDOR   "GNU"
-#define SOFTWARENAME "Squid"
-#define WIN32_VERSION  "2.6"
+#define SOFTWARENAME PACKAGE_TARNAME
+#define WIN32_VERSION  PACKAGE_VERSION
 #define COMMANDLINE "CommandLine"
 #define CONFIGFILE  "ConfigFile"
 #undef ChangeServiceConfig2
