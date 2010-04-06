@@ -102,7 +102,7 @@ main(int argc, const char *argv[])
 
 	bzero(&s4.sin_addr, sizeof(s4.sin_addr));
 	s4.sin_port = htons(8080);
-#if !defined(_SQUID_LINUX_)
+#if !defined(_SQUID_LINUX_) && !defined(_SQUID_WIN32_)
 	s4.sin_len = sizeof(struct sockaddr_in);
 #endif
 	sqinet_init(&lcl4);
@@ -111,7 +111,7 @@ main(int argc, const char *argv[])
 	bzero(&s6, sizeof(s6));
 	/* ANY_ADDR is all 0's here.. :) */
 	s6.sin6_port = htons(8080);
-#if !defined(_SQUID_LINUX_)
+#if !defined(_SQUID_LINUX_) && !defined(_SQUID_WIN32_)
 	s6.sin6_len = sizeof(struct sockaddr_in6);
 #endif
 	sqinet_init(&lcl6);
