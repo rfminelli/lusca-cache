@@ -89,7 +89,7 @@ main(int argc, char *argv[])
 	}
 
 	/* Output swap header to stdout */
-#if _SQUID_CYGWIN_
+#if _SQUID_WIN32_
 	setmode(fileno(stdout), O_BINARY);
 #endif
 	(void) storeSwapLogPrintHeader(stdout);
