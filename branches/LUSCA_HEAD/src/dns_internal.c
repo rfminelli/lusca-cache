@@ -85,7 +85,7 @@ idnsParseResolvConf(void)
 	debug(78, 1) ("%s: %s\n", _PATH_RESCONF, xstrerror());
 	return;
     }
-#if defined(_SQUID_CYGWIN_)
+#if defined(_SQUID_WIN32_)
     setmode(fileno(fp), O_TEXT);
 #endif
     while (fgets(buf, RESOLV_BUFSZ, fp)) {
