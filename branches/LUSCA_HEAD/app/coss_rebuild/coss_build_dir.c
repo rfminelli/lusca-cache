@@ -20,6 +20,10 @@
 #include "libsqstore/store_meta.h"
 #include "libsqstore/rebuild_entry.h"
 
+/* XXX macosx specific hack - need to generic-ify this! */
+#if !defined(O_BINARY)
+#define O_BINARY                0x0
+#endif
 
 /*
  * Rebuilding from the COSS filesystem itself is currently very, very
