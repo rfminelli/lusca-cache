@@ -54,7 +54,7 @@ main(int argc, const char *argv[])
 	 * -should- be enough to trick the rebuild process into treating
 	 * the rest of that stripe as empty.
 	 */
-	fd = open(path, O_WRONLY | O_CREAT, 0644);
+	fd = open(path, O_WRONLY | O_CREAT | O_BINARY, 0644);
 	if (fd < 0) {
 		perror("open");
 		exit(127);
