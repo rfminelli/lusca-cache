@@ -52,4 +52,9 @@ Initially we treat the following sections, which are:
 
 = Feature Wishes =
 
-[List]
+  * option to disable unlinkd (or totally remove it?)
+  * full-featured [http://en.wikipedia.org/wiki/HTTP_pipelining http pipelining]
+  * kb.c, gb.c to (very restricted) bignum
+    * could be bit slower, but cleaner
+    * int64_t isn't enouth?
+  * allow users to set numbers in any units in squid.conf (KB, MB, GB, TB!)
