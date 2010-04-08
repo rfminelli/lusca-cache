@@ -6,3 +6,5 @@ This isn't an exhaustive list!
   * Grab the SNMP changes in Squid-3 which support IPv6 related lookup keys, throw it in
   * Convert the client db code over to support IPv4/IPv6 addresses
    * .. which requires porting the SNMP client db code too
+  * The persistent connection code will need changing - can just fudge the hash code to use a longer string for the key for now; perhaps migrate to a proper tree structure later?
+  * ACL support for IPv6 - already mostly done in branches; it just needs to be committed
