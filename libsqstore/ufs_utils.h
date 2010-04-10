@@ -1,5 +1,5 @@
-#ifndef	__LUSCA_UFS_UTILS_H__
-#define	__LUSCA_UFS_UTILS_H__
+#ifndef	__LIBSQSTORE_UFS_UTILS_H__
+#define	__LIBSQSTORE_UFS_UTILS_H__
 
 struct _ufsSwapLogEntryList {
 	storeSwapLogData *buf;

@@ -1,5 +1,5 @@
-#ifndef	__LIBSQDEBUG_DEBUG_H__
-#define	__LIBSQDEBUG_DEBUG_H__
+#ifndef	__LIBSQDEBUG_DEBUG_FILE_H__
+#define	__LIBSQDEBUG_DEBUG_FILE_H__
 
 extern FILE *debug_log;         /* NULL */
 extern int opt_debug_rotate_count;

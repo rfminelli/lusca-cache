@@ -1,5 +1,5 @@
-#ifndef __LIBCORE_DEBUG_H__
-#define __LIBCORE_DEBUG_H__
+#ifndef __LIBSQDEBUG_DEBUG_H__
+#define __LIBSQDEBUG_DEBUG_H__
 
 #define MAX_DEBUG_SECTIONS 100
 
@@ -40,4 +40,4 @@ extern int _db_stderr_debug_opt(void);
 
 extern void _db_init_log(const char *logfile);
 
-#endif /* __LIBCORE_DEBUG_H__ */
+#endif /* __LIBSQDEBUG_DEBUG_H__ */

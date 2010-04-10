@@ -1,5 +1,5 @@
-#ifndef	__LIBCORE_CTX_H__
-#define	__LIBCORE_CTX_H__
+#ifndef	__LIBSQDEBUG_CTX_H__
+#define	__LIBSQDEBUG_CTX_H__
 
 typedef int Ctx;
 extern int Ctx_Lock;
