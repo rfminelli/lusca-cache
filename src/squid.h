@@ -354,6 +354,8 @@ struct rusage {
 /* Windows Port */
 #ifdef _SQUID_WIN32_ 
 #include "../include/win32_compat.h"
+#include "../include/win32_version.h"
+#include "../include/win32_error.h"
 #endif
 
 #include "../libcore/dlink.h"
