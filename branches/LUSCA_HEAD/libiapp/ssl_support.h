@@ -32,8 +32,8 @@
  *
  */
 
-#ifndef SQUID_SSL_SUPPORT_H
-#define SQUID_SSL_SUPPORT_H
+#ifndef __LIBIAPP_SSL_SUPPORT_H__
+#define __LIBIAPP_SSL_SUPPORT_H__
 
 #include "config.h"
 #if HAVE_OPENSSL_SSL_H
@@ -73,4 +73,4 @@ extern int ssl_unclean_shutdown;
 
 #endif
 
-#endif /* SQUID_SSL_SUPPORT_H */
+#endif /* __LIBIAPP_SSL_SUPPORT_H__ */

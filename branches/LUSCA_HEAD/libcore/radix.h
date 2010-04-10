@@ -57,8 +57,8 @@
 
 /* $Id: radix.h,v 1.9 2007/10/24 06:03:08 djm Exp $ */
 
-#ifndef _RADIX_H
-#define _RADIX_H
+#ifndef __LIBCORE_RADIX_H__
+#define __LIBCORE_RADIX_H__
 
 #if defined(_MSC_VER)
 #include <winsock2.h>
@@ -160,4 +160,4 @@ prefix_t *prefix_from_blob(u_char *blob, int len, int prefixlen);
 const char *prefix_addr_ntop(prefix_t *prefix, char *buf, size_t len);
 const char *prefix_ntop(prefix_t *prefix, char *buf, size_t len);
 
-#endif /* _RADIX_H */
+#endif /* __LIBCORE_RADIX_H__ */

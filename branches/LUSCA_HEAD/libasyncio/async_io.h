@@ -1,11 +1,11 @@
 /*
- * store_aufs.h
+ * async_io.h
  *
  * Internal declarations for the aufs routines
  */
 
-#ifndef __ASYNC_IO_H__
-#define __ASYNC_IO_H__
+#ifndef __LIBASYNCIO_ASYNC_IO_H__
+#define __LIBASYNCIO_ASYNC_IO_H__
 
 extern int n_asyncufs_dirs;
 extern int squidaio_nthreads;
