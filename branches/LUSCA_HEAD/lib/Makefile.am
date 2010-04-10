@@ -4,8 +4,10 @@
 #
 
 if ENABLE_WIN32SPECIFIC
+WIN32SOURCE = win32_version.c win32_error.c
 LIBSSPWIN32=libsspwin32.a
 else
+WIN32SOURCE =
 LIBSSPWIN32=
 endif
 
@@ -56,7 +58,8 @@ libmiscutil_a_SOURCES = \
 	util.c \
 	uudecode.c \
 	Vector.c \
-	$(WIN32SRC)
+	$(WIN32SRC) \
+	$(WIN32SOURCE)
 libmiscutil_a_LIBADD = \
 	@LIBOBJS@
 # $(top_srcdir)/include/version.h should be a dependency
