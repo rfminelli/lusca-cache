@@ -53,6 +53,9 @@
 #include <psapi.h>
 #endif
 
+#include "../include/win32_error.h"
+#include "../include/win32_version.h"
+
 THREADLOCAL int ws32_result;
 THREADLOCAL int _so_err;
 THREADLOCAL int _so_err_siz = sizeof(int);
