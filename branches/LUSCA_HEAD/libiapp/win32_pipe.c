@@ -53,6 +53,7 @@
 #include <psapi.h>
 #endif
 
+#include "../include/util.h"
 #include "../include/win32_error.h"
 #include "../include/win32_version.h"
 
@@ -71,11 +72,6 @@
 #include "fd_types.h"
 #include "comm_types.h"
 #include "comm.h"
-
-THREADLOCAL int ws32_result;
-THREADLOCAL int _so_err;
-THREADLOCAL int _so_err_siz = sizeof(int);
-LPCRITICAL_SECTION dbg_mutex = NULL;
 
 /* internal to Microsoft CRTLIB */
 #define FPIPE           0x08	/* file handle refers to a pipe */
@@ -147,13 +143,16 @@ WIN32_pipe(int handles[2])
     }
     closesocket(new_socket);
 
+    /* XXX fix! */
     F = &fd_table[handles[0]];
-    F->local_addr = local_addr;
+    sqinet_init(&F->local_address);
+    sqinet_set_v4_inaddr(&F->local_address, &local_addr);
     F->local_port = ntohs(serv_addr.sin_port);
 
     F = &fd_table[handles[1]];
-    F->local_addr = local_addr;
-    xstrncpy(F->ipaddr, inet_ntoa(local_addr), 16);
+    sqinet_init(&F->local_address);
+    sqinet_set_v4_inaddr(&F->local_address, &local_addr);
+    xstrncpy(F->ipaddrstr, inet_ntoa(local_addr), 16);
     F->remote_port = handle1_port;
 
     return 0;
