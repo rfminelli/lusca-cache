@@ -84,6 +84,8 @@ int squidaio_nthreads = 0;
 int squidaio_magic1 = 1;	/* dummy initializer value */
 int squidaio_magic2 = 1;	/* real value set in aiops.c */
 
+int aiops_default_ndirs = 0;
+
 static void squidaio_queue_request(squidaio_request_t *);
 static void squidaio_cleanup_request(squidaio_request_t *);
 static DWORD WINAPI squidaio_thread_loop(LPVOID lpParam);
@@ -208,7 +210,7 @@ squidaio_init(void)
     squidaio_thread_pool = memPoolCreate("aio_thread", sizeof(squidaio_thread_t));
     if (squidaio_nthreads == 0) {
 	int j = THREAD_FACTOR;
-	for (i = 0; i < n_asyncufs_dirs; i++) {
+	for (i = 0; i < aiops_default_ndirs; i++) {
 	    squidaio_nthreads += j;
 	    j = j * 2 / 3;
 	    if (j < 4)
