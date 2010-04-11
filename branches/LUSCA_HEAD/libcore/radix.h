@@ -60,7 +60,7 @@
 #ifndef __LIBCORE_RADIX_H__
 #define __LIBCORE_RADIX_H__
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(_SQUID_MSWIN_)
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #else
