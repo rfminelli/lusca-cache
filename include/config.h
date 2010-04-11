@@ -124,6 +124,8 @@
 #define _SQUID_MSWIN_
 #define _SQUID_WIN32_
 #include "squid_mswin.h"
+#include <winsock.h>
+#include <ws2tcpip.h>
 
 #elif defined(__APPLE__)
 #define _SQUID_APPLE_
