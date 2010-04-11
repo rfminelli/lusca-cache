@@ -35,6 +35,8 @@
 
 #include "../include/config.h"
 
+#if HAVE_SYSLOG
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -50,7 +52,6 @@
 int opt_syslog_enable = 0;
 int syslog_facility = LOG_LOCAL4;
 
-#if HAVE_SYSLOG
 void
 _db_print_syslog(const char *format, va_list args)
 {
@@ -65,9 +66,7 @@ _db_print_syslog(const char *format, va_list args)
     tmpbuf[BUFSIZ - 1] = '\0';
     syslog((_db_level == 0 ? LOG_WARNING : LOG_NOTICE) | syslog_facility, "%s", tmpbuf);
 }
-#endif /* HAVE_SYSLOG */
 
-#if HAVE_SYSLOG
 void
 _db_set_syslog(const char *facility)
 {
@@ -91,4 +90,5 @@ _db_set_syslog(const char *facility)
 	fprintf(stderr, "syslog facility type not supported on your system\n");
 #endif
 }
-#endif
+
+#endif	/* HAVE_SYSLOG */
