@@ -53,6 +53,7 @@ libmiscutil_a_SOURCES = \
 	rfc2617.c \
 	safe_inet_addr.c \
 	splay.c \
+	strsep.c \
 	Stack.c \
 	stub_memaccount.c \
 	util.c \
