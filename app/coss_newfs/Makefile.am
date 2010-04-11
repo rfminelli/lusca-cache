@@ -20,7 +20,7 @@ bin_PROGRAMS = coss_newfs
 
 coss_newfs_SOURCES = coss_newfs.c
 
-LDADD = -L../../lib -L../../libsqdebug -L../../libcore -L../../libmem -L../../libsqstore -lsqdebug -lcore -lm -lsqstore -lmiscutil
+LDADD = -L../../lib -L../../libsqdebug -L../../libcore -L../../libmem -L../../libsqstore -lsqdebug -lcore -lm -lsqstore -lmiscutil @XTRA_LIBS@
 
 $(OBJS): $(top_srcdir)/include/version.h ../include/autoconf.h
 
