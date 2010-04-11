@@ -93,9 +93,7 @@ static void squidaio_do_write(squidaio_request_t *);
 static void squidaio_do_close(squidaio_request_t *);
 static void squidaio_do_stat(squidaio_request_t *);
 static void squidaio_do_unlink(squidaio_request_t *);
-#if USE_TRUNCATE
 static void squidaio_do_truncate(squidaio_request_t *);
-#endif
 #if AIO_OPENDIR
 static void *squidaio_do_opendir(squidaio_request_t *);
 #endif
@@ -385,11 +383,9 @@ squidaio_thread_loop(LPVOID lpParam)
 	    case _AIO_OP_UNLINK:
 		squidaio_do_unlink(request);
 		break;
-#if USE_TRUNCATE
 	    case _AIO_OP_TRUNCATE:
 		squidaio_do_truncate(request);
 		break;
-#endif
 #if AIO_OPENDIR			/* Opendir not implemented yet */
 	    case _AIO_OP_OPENDIR:
 		squidaio_do_opendir(request);
@@ -756,7 +752,6 @@ squidaio_do_unlink(squidaio_request_t * requestp)
 }
 
 
-#if USE_TRUNCATE
 int
 squidaio_truncate(const char *path, off_t length, squidaio_result_t * resultp)
 {
@@ -780,9 +775,6 @@ squidaio_do_truncate(squidaio_request_t * requestp)
     requestp->ret = truncate(requestp->path, requestp->offset);
     requestp->err = errno;
 }
-
-#endif
-
 
 #if AIO_OPENDIR
 /* XXX squidaio_opendir NOT implemented yet.. */
