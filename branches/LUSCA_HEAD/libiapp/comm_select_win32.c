@@ -37,10 +37,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#if HAVE_STRING_H
 #include <string.h>
+#endif
 #include <math.h>
+#if HAVE_FCNTL_H
 #include <fcntl.h>
+#endif
+#if HAVE_ERR_H
 #include <err.h>
+#endif
 #if HAVE_ERRNO_H
 #include <errno.h>
 #endif
