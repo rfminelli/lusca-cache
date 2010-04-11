@@ -36,9 +36,19 @@
 
 #include "../include/config.h"
 
+#if HAVE_FCNTL_H
+#include <fcntl.h>
+#endif
+#if HAVE_ERRNO_H
+#include <errno.h>
+#endif
+
 #include "../include/util.h"
 #include "../include/Array.h"
 #include "../include/Stack.h"
+
+#include "../include/win32_compat.h"
+#include "../include/win32_version.h"
 
 #include "../libcore/tools.h"
 #include "../libcore/gb.h"
@@ -50,6 +60,8 @@
 #include "../libmem/MemPool.h"
 #include "../libmem/MemBufs.h"
 #include "../libmem/MemBuf.h"
+
+#include "../libstat/StatHist.h"
 
 #include "../libsqinet/sqinet.h"
 #include "../libiapp/fd_types.h"
