@@ -82,6 +82,9 @@
 
 #include "../libstat/StatHist.h"
  
+#ifdef _SQUID_MSWIN_
+#include "win32_pipe.h"
+#endif
 #include "iapp_ssl.h"
 #include "globals.h"
 #include "fd_types.h"
@@ -1626,6 +1629,7 @@ comm_create_fifopair(int *prfd, int *pwfd, int *crfd, int *cwfd)
 	return 1;
 }
 
+#ifndef _SQUID_MSWIN_
 int
 comm_create_unix_stream_pair(int *prfd, int *pwfd, int *crfd, int *cwfd, int buflen)
 {
@@ -1666,3 +1670,4 @@ comm_create_unix_dgram_pair(int *prfd, int *pwfd, int *crfd, int *cwfd)
 
 	return 1;
 }
+#endif
