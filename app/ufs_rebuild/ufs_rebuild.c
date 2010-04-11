@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#if HAVE_FCNTL_H
+#include <fcntl.h>
+#endif
 
 #include "include/squid_md5.h"
 #include "include/util.h"
