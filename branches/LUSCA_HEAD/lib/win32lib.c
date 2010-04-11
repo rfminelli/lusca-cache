@@ -55,6 +55,7 @@
 #endif
 
 #include "win32_compat.h"
+#include "win32_version.h"
 
 THREADLOCAL int ws32_result;
 THREADLOCAL int _so_err;
@@ -493,6 +494,12 @@ _free_osfhnd(int filehandle)
 #endif
 
 #if defined(_SQUID_MSWIN_)
+
+void
+setbuffer(FILE *stream, char *buf, size_t size)
+{
+	(void) setvbuf(stream, buf, buf ? _IOFBF : _IONBF, size);
+}
 
 int
 WIN32_getrusage(int who, struct rusage *usage)
