@@ -130,6 +130,7 @@ squidaio_fdhandler(int fd, void *data)
     char junk[256];
     FD_READ_METHOD(done_fd_read, junk, sizeof(junk));
     commSetSelect(fd, COMM_SELECT_READ, squidaio_fdhandler, NULL, 0);
+    aioCheckCallbacks();
 }
 
 void
