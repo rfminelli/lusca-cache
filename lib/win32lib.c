@@ -538,4 +538,7 @@ WIN32_getrusage(int who, struct rusage *usage)
     return 0;
 }
 
+#endif
+
 #endif /* _SQUID_MSWIN_ */
+
