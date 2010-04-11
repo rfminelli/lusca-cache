@@ -50,6 +50,7 @@
 #include <windows.h>
 #include <string.h>
 #include <sys/timeb.h>
+#include <sys/fcntl.h>
 #if HAVE_WIN32_PSAPI
 #include <psapi.h>
 #endif
@@ -370,7 +371,6 @@ statfs(const char *path, struct statfs *sfs)
     return 0;
 }
 
-#if USE_TRUNCATE
 int
 WIN32_ftruncate(int fd, off_t size)
 {
@@ -398,7 +398,7 @@ WIN32_ftruncate(int fd, off_t size)
     if ((size64.LowPart == INVALID_SET_FILE_POINTER) && ((error = GetLastError()) != NO_ERROR))
 	goto WIN32_ftruncate_error;
     else if (!SetEndOfFile(file)) {
-	int error = GetLastError();
+	error = GetLastError();
 	goto WIN32_ftruncate_error;
     }
     return 0;
@@ -433,7 +433,6 @@ WIN32_truncate(const char *pathname, off_t length)
 
     return res;
 }
-#endif
 
 struct passwd *
 getpwnam(char *unused)
