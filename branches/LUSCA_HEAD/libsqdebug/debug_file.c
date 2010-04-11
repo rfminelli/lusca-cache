@@ -37,6 +37,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
+#if HAVE_FCNTL_H
+#include <fcntl.h>
+#endif
 
 #include "../include/util.h"
 #include "../libcore/varargs.h"
