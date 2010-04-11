@@ -56,6 +56,22 @@
 #include "../include/win32_error.h"
 #include "../include/win32_version.h"
 
+#include "../include/Array.h"
+#include "../include/Stack.h"
+
+#include "../libcore/kb.h"
+#include "../libcore/gb.h"
+
+#include "../libsqinet/sqinet.h"
+
+#include "../libmem/MemPool.h"
+#include "../libmem/MemBufs.h"
+#include "../libmem/MemBuf.h"
+
+#include "fd_types.h"
+#include "comm_types.h"
+#include "comm.h"
+
 THREADLOCAL int ws32_result;
 THREADLOCAL int _so_err;
 THREADLOCAL int _so_err_siz = sizeof(int);
@@ -106,7 +122,7 @@ WIN32_pipe(int handles[2])
 
     handles[0] = handles[1] = -1;
 
-    statCounter.syscalls.sock.sockets++;
+    CommStats.syscalls.sock.sockets++;
     if ((new_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
 	return -1;
 
