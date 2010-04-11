@@ -693,7 +693,10 @@ prefix_t
 const char *
 prefix_addr_ntop(prefix_t *prefix, char *buf, size_t len)
 {
-	return (inet_ntop(prefix->family, &prefix->add, buf, len));
+	if (getnameinfo(&prefix->add, sizeof(prefix->add), NULL, 0, buf, len, NI_NUMERICHOST) == 0)
+		return buf;
+
+	return NULL;
 }
 
 const char *
