@@ -36,7 +36,7 @@
 #define STDC_HEADERS 1
 #endif
 
-#define _WIN32_WINNT 0x0500
+#define _WIN32_WINNT 0x0501
 
 #if defined _FILE_OFFSET_BITS && _FILE_OFFSET_BITS == 64
 # define __USE_FILE_OFFSET64	1
@@ -115,6 +115,9 @@ typedef unsigned long ino_t;
 #if defined(_MSC_VER) /* Microsoft C Compiler ONLY */
 #define vsnprintf _vsnprintf
 #endif
+
+#include <io.h>
+#include <stdlib.h>
 
 #define O_RDONLY        _O_RDONLY
 #define O_WRONLY        _O_WRONLY
@@ -229,6 +232,7 @@ struct timezone
 
 #define CHANGE_FD_SETSIZE 1
 #if CHANGE_FD_SETSIZE && SQUID_MAXFD > DEFAULT_FD_SETSIZE
+#undef FD_SETSIZE
 #define FD_SETSIZE SQUID_MAXFD
 #endif
 
@@ -245,8 +249,6 @@ struct timezone
 #if defined(_MSC_VER) /* Microsoft C Compiler ONLY */
 #pragma warning (pop)
 #endif
-#include <io.h>
-#include <stdlib.h>
 
 typedef char * caddr_t;
 
