@@ -34,9 +34,20 @@
  *
  */
 
+
 #include "../include/config.h"
 
-#include <windows.h>
+#include	<stdio.h>
+#include	<sys/types.h>
+#if HAVE_FCNTL_H
+#include	<fcntl.h>
+#endif
+#if HAVE_ERRNO_H
+#include	<errno.h>
+#endif
+#include	<sys/stat.h>
+#include	<dirent.h>
+#include	<signal.h>
 
 #include "../include/util.h"
 #include "../include/Array.h"
@@ -57,19 +68,11 @@
 #include "../libiapp/fd_types.h"
 #include "../libiapp/comm_types.h"
 #include "../libiapp/comm.h"
+#include "../libiapp/win32_pipe.h"
 
 #include "aiops.h"
 #include "async_io.h"
 
-#include	<stdio.h>
-#include	<sys/types.h>
-#include	<sys/stat.h>
-#include	<fcntl.h>
-#if HAVE_ERRNO_H
-#include	<errno.h>
-#endif
-#include	<dirent.h>
-#include	<signal.h>
 
 #define RIDICULOUS_LENGTH	4096
 
@@ -929,21 +932,8 @@ squidaio_debug(squidaio_request_t * request)
     }
 }
 
-void
-squidaio_stats(StoreEntry * sentry)
+squidaio_thread_t *
+squidaio_get_thread_head(void)
 {
-    squidaio_thread_t *threadp;
-    int i;
-
-    if (!squidaio_initialised)
-	return;
-
-    storeAppendPrintf(sentry, "\n\nThreads Status:\n");
-    storeAppendPrintf(sentry, "#\tID\t# Requests\n");
-
-    threadp = threads;
-    for (i = 0; i < squidaio_nthreads; i++) {
-	storeAppendPrintf(sentry, "%i\t0x%lx\t%ld\n", i + 1, threadp->dwThreadId, threadp->requests);
-	threadp = threadp->next;
-    }
+	return NULL;	/* XXX for now */
 }

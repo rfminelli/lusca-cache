@@ -50,6 +50,7 @@ typedef struct squidaio_request_t {
     squidaio_result_t *resultp;
 } squidaio_request_t;
 
+#ifndef _SQUID_MSWIN_
 typedef struct squidaio_request_queue_t {
     pthread_mutex_t mutex;
     pthread_cond_t cond;
@@ -67,6 +68,27 @@ struct squidaio_thread_t {
     struct squidaio_request_t *current_req;
     unsigned long requests;
 };
+#else
+typedef struct squidaio_request_queue_t {
+    HANDLE mutex;
+    HANDLE cond;
+    squidaio_request_t *volatile head;
+    squidaio_request_t *volatile *volatile tailp;
+    unsigned long requests;
+    unsigned long blocked;      /* main failed to lock the queue */
+} squidaio_request_queue_t;   
+    
+typedef struct squidaio_thread_t squidaio_thread_t;
+struct squidaio_thread_t {
+    squidaio_thread_t *next;
+    HANDLE thread;
+    DWORD dwThreadId;
+    squidaio_thread_status status;
+    struct squidaio_request_t *current_req;
+    unsigned long requests;
+    int volatile exit;
+};
+#endif
 
 extern int aiops_default_ndirs;
 
