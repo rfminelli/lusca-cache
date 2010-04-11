@@ -20,7 +20,7 @@ bin_PROGRAMS = ufs_newfs
 
 ufs_newfs_SOURCES = ufs_newfs.c
 
-LDADD = -L../../lib -L../../libsqdebug -L../../libcore -L../../libmem -L../../libsqstore -lsqdebug -lcore -lm -lsqstore -lmiscutil
+LDADD = -L../../lib -L../../libsqdebug -L../../libcore -L../../libmem -L../../libsqstore -lsqdebug -lcore -lm -lsqstore -lmiscutil @XTRA_LIBS@
 
 $(OBJS): $(top_srcdir)/include/version.h ../include/autoconf.h
 
