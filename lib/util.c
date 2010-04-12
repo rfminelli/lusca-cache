@@ -73,6 +73,7 @@
 #endif
 
 #include "util.h"
+#include "win32_error.h"
 
 static void default_failure_notify(const char *);
 

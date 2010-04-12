@@ -50,6 +50,8 @@
 #include	<signal.h>
 
 #include "../include/util.h"
+#include "../include/win32_error.h"
+
 #include "../include/Array.h"
 #include "../include/Stack.h"
 
