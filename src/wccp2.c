@@ -34,6 +34,8 @@
  */
 #include "squid.h"
 
+#include "../include/strsep.h"
+
 #if USE_WCCPv2
 #if HAVE_NETDB_H
 #include <netdb.h>
