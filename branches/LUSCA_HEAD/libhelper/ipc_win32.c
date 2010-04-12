@@ -252,7 +252,7 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
     params.type = type;
     params.crfd = crfd;
     params.cwfd = cwfd;
-    params.PS = PS;
+    sqinet_copy(&params.PS, &PS);
     params.prog = prog;
     params.args = (char **) args;
 
@@ -336,16 +336,14 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
     fd_table[crfd].flags.ipc = 1;
     fd_table[cwfd].flags.ipc = 1;
 
-#if 0 /* FIXME: We can't use Config here! */
-    if (Config.sleep_after_fork) {
+    if (sleep_after_fork) {
 	/* XXX emulation of usleep() */
 	DWORD sl;
-	sl = Config.sleep_after_fork / 1000;
+	sl = sleep_after_fork / 1000;
 	if (sl == 0)
 	    sl = 1;
 	Sleep(sl);
     }
-#endif
     if (GetExitCodeThread((HANDLE) thread, &ecode) && ecode == STILL_ACTIVE) {
 	if (hIpc)
 	    *hIpc = (HANDLE) thread;
