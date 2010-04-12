@@ -175,10 +175,9 @@ typedef int uid_t;
 typedef int gid_t;
 
 #if defined __USE_FILE_OFFSET64
+#include <sys/stat.h>
 #define stat _stati64
-#if defined(_MSC_VER) /* Microsoft C Compiler ONLY */
 #define lseek _lseeki64
-#endif
 #define fstat _fstati64
 #define tell _telli64
 
