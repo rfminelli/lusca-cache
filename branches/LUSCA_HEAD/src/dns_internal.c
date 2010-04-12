@@ -144,13 +144,15 @@ idnsParseResolvConf(void)
 static void
 idnsParseWIN32SearchList(const char *Separator)
 {
-    char *t;
+    const char *t;
     char *token;
     HKEY hndKey;
 
     if (RegOpenKey(HKEY_LOCAL_MACHINE,
 	    "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
 	    &hndKey) == ERROR_SUCCESS) {
+	char *t;
+
 	DWORD Type = 0;
 	DWORD Size = 0;
 	LONG Result;
@@ -186,7 +188,7 @@ idnsParseWIN32SearchList(const char *Separator)
 	}
 	RegCloseKey(hndKey);
     }
-    if (npc == 0 && ((const char *) t = getMyHostname())) {
+    if (npc == 0 && (t = getMyHostname())) {
 	t = strchr(t, '.');
 	if (t)
 	    idnsAddPathComponent(t + 1);
