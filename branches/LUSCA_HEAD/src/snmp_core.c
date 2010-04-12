@@ -35,6 +35,8 @@
 #include "squid.h"
 #include "cache_snmp.h"
 
+#include "../include/strsep.h"
+
 #define SNMP_REQUEST_SIZE 4096
 #define MAX_PROTOSTAT 5
 
