@@ -48,6 +48,7 @@
 #include "../include/Stack.h"
 
 #include "../include/win32_compat.h"
+#include "../include/win32_error.h"
 #include "../include/win32_version.h"
 
 #include "../libcore/tools.h"
