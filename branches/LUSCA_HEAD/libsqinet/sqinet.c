@@ -276,8 +276,9 @@ struct in_addr
 sqinet_get_v4_inaddr(const sqaddr_t *s, sqaddr_flags flags)
 {
 	struct sockaddr_in *v4;
-	struct in_addr none_addr = { INADDR_NONE };
+	struct in_addr none_addr;
 
+	none_addr.s_addr = INADDR_NONE;
 	assert(s->init);
 	if (flags & SQADDR_ASSERT_IS_V4) {
 		assert(s->st.ss_family == AF_INET);
@@ -375,7 +376,6 @@ sqinet_set_anyaddr(sqaddr_t *s)
 {
 	struct sockaddr_in *v4;
 	struct sockaddr_in6 *v6;
-	struct in6_addr any6addr = IN6ADDR_ANY_INIT;
 
 	assert(s->init);
 	switch(s->st.ss_family) {
@@ -385,7 +385,7 @@ sqinet_set_anyaddr(sqaddr_t *s)
 			break;
 		case AF_INET6:
 			v6 = (struct sockaddr_in6 *) &s->st;
-			v6->sin6_addr = any6addr;
+			v6->sin6_addr = in6addr_any;
 			break;
 		default:
 			assert(0);
@@ -411,7 +411,6 @@ sqinet_is_anyaddr(const sqaddr_t *s)
 {
 	struct sockaddr_in *v4;
 	struct sockaddr_in6 *v6;
-	struct in6_addr any6addr = IN6ADDR_ANY_INIT;
 
 	assert(s->init);
 	switch(s->st.ss_family) {
@@ -421,7 +420,7 @@ sqinet_is_anyaddr(const sqaddr_t *s)
 			break;
 		case AF_INET6:
 			v6 = (struct sockaddr_in6 *) &s->st;
-			return (memcmp(&v6->sin6_addr, &any6addr, sizeof(any6addr)) == 0);
+			return (memcmp(&v6->sin6_addr, &in6addr_any, sizeof(in6addr_any)) == 0);
 			break;
 		default:
 			assert(0);
