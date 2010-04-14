@@ -615,7 +615,7 @@ httpHeaderRefreshMask(HttpHeader * hdr)
     }
 }
 
-static void
+void
 httpHeaderRepack(HttpHeader * hdr)
 {
     HttpHeaderPos dp = HttpHeaderInitPos;
