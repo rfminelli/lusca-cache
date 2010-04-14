@@ -42,6 +42,7 @@
 #include "../include/Array.h"
 #include "../include/Stack.h"
 #include "../include/util.h"
+#include "../include/Vector.h"
 #include "../libcore/valgrind.h"
 #include "../libcore/varargs.h"
 #include "../libcore/debug.h"
