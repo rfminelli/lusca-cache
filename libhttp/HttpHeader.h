@@ -70,6 +70,8 @@ extern int httpHeaderIdByNameDef(const char *name, int name_len);
 extern const char *httpHeaderNameById(int id);
 extern int httpHeaderHas(const HttpHeader * hdr, http_hdr_type id);
 extern void httpHeaderRefreshMask(HttpHeader * hdr);
+extern void httpHeaderRepack(HttpHeader * hdr);
+
 /* append/update */
 extern void httpHeaderUpdate(HttpHeader * old, const HttpHeader * fresh, const HttpHeaderMask * denied_mask);
 
