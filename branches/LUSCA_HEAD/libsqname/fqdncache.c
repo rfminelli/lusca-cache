@@ -112,6 +112,8 @@ static void fqdncacheUnlockEntry(fqdncache_entry * f);
 static FREE fqdncacheFreeEntry;
 static void fqdncacheAddEntry(fqdncache_entry * f);
 
+int fqdncacheFlushAll(void);
+
 hash_table *fqdn_table = NULL;
 
 static long fqdncache_low = 180;
@@ -518,4 +520,22 @@ fqdncacheAddEntryFromHosts(char *addr, wordlist * hostnames)
     fqdncacheAddEntry(fce);
     fqdncacheLockEntry(fce);
 }
+int
+fqdncacheFlushAll(void)
+{
+    /* code from libsqname/fqdncache.c */
+    dlink_node *m;
+    dlink_node *prev = NULL;
+    fqdncache_entry *f;
+    int removed = 0;
 
+    for (m = fqdncache_lru_list.tail; m; m = prev) {
+        prev = m->prev;
+        f = m->data;
+        if (f->flags.fromhosts) /* dont flush entries from /etc/hosts */
+            continue;
+        fqdncacheRelease(f);
+        removed++;
+    }
+    return removed;
+}

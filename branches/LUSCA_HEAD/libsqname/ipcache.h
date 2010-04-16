@@ -64,7 +64,7 @@ extern void ipcacheFreeMemory(void);
 extern ipcache_addrs *ipcacheCheckNumeric(const char *name);
 extern void ipcache_restart(void);
 extern int ipcacheAddEntryFromHosts(const char *name, const char *ipaddr);
-
+extern int ipcacheFlushAll(void);
 
 
 #endif

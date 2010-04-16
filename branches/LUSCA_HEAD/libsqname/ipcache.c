@@ -110,6 +110,8 @@ static void ipcacheLockEntry(ipcache_entry *);
 static void ipcacheUnlockEntry(ipcache_entry *);
 static void ipcacheRelease(ipcache_entry *);
 
+int ipcacheFlushAll(void);
+
 static ipcache_addrs static_addrs;
 hash_table *ip_table = NULL;
 
@@ -682,4 +684,22 @@ ipcacheAddEntryFromHosts(const char *name, const char *ipaddr)
     ipcacheLockEntry(i);
     return 0;
 }
+int
+ipcacheFlushAll(void)
+{
+    /* code from libsqname/ipcache.c */
+    dlink_node *m;
+    dlink_node *prev = NULL;
+    ipcache_entry *i;
+    int removed = 0;
 
+    for (m = ipcache_lru_list.tail; m; m = prev) {
+        prev = m->prev;
+        i = m->data;
+       if (i->flags.fromhosts) /* dont flush entries from /etc/hosts */
+           continue;
+        ipcacheRelease(i);
+        removed++;
+    }
+    return removed;
+}

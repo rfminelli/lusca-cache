@@ -330,6 +330,24 @@ cachemgrPasswdGet(cachemgr_passwd * a, const char *action)
     }
     return NULL;
 }
+static void
+cachemgrFlushIpcache(StoreEntry * sentry)
+{
+    debug(16, 0) ("IP cache flushed by cachemgr...\n");
+    int removed;
+    removed = ipcacheFlushAll();
+    debug(16, 0) (" removed %d entries\n", removed);
+    storeAppendPrintf(sentry, "IP cache flushed ...\n removed %d entries\n", removed);
+}
+static void
+cachemgrFlushFqdn(StoreEntry * sentry)
+{
+    debug(16, 0) ("FQDN cache flushed by cachemgr...\n");
+    int removed;
+    removed = fqdncacheFlushAll();
+    debug(16, 0) (" removed %d entries\n", removed);
+    storeAppendPrintf(sentry, "FQDN cache flushed ...\n removed %d entries\n", removed);
+}
 
 void
 cachemgrInit(void)
@@ -346,4 +364,11 @@ cachemgrInit(void)
     cachemgrRegister("offline_toggle",
 	"Toggle offline_mode setting",
 	cachemgrOfflineToggle, 1, 1);
+    cachemgrRegister("flushdns",
+        "Flush ALL DNS Cache Entries",
+        cachemgrFlushIpcache, 0, 1);
+    cachemgrRegister("flushfqdn",
+        "Flush ALL FQDN Cache Entries",
+        cachemgrFlushFqdn, 0, 1);
+
 }
