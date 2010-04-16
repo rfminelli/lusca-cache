@@ -110,8 +110,6 @@ static void ipcacheLockEntry(ipcache_entry *);
 static void ipcacheUnlockEntry(ipcache_entry *);
 static void ipcacheRelease(ipcache_entry *);
 
-int ipcacheFlushAll(void);
-
 static ipcache_addrs static_addrs;
 hash_table *ip_table = NULL;
 

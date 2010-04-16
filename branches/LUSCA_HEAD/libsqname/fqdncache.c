@@ -112,8 +112,6 @@ static void fqdncacheUnlockEntry(fqdncache_entry * f);
 static FREE fqdncacheFreeEntry;
 static void fqdncacheAddEntry(fqdncache_entry * f);
 
-int fqdncacheFlushAll(void);
-
 hash_table *fqdn_table = NULL;
 
 static long fqdncache_low = 180;
