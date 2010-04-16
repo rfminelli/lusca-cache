@@ -1,0 +1,4 @@
+#summary Tidy up and document the various caching logic bits that make up Squid/Lusca
+#labels Project
+
+The caching logic pathways are long, complicated and twisty. This project will aim to first unwind a bit of the twistiness and document what is going on. It won't try to rewrite or heavily modify things.
