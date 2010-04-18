@@ -132,7 +132,6 @@ squid_SOURCES = \
 	errormap.c \
 	external_acl.c \
 	fd.c \
-	filemap.c \
 	forward.c \
 	fqdncache.c \
 	ftp.c \

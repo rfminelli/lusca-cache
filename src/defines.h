@@ -229,10 +229,6 @@
 #define _WIN_SQUID_RUN_MODE_SERVICE		1
 #endif
 
-/* swap_filen is 25 bits, signed */
-#define FILEMAP_MAX_SIZE (1<<24)
-#define FILEMAP_MAX (FILEMAP_MAX_SIZE - 65536)
-
 #define	LOGFILE_SEQNO(n)	( (n)->sequence_number )
 
 #define	storeSwapTLVFree	tlv_free

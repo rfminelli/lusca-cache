@@ -37,6 +37,7 @@
 
 #include "../../libasyncio/aiops.h"
 #include "../../libasyncio/async_io.h"
+#include "../../libsqstore/filemap.h"
 #include "store_asyncufs.h"
 #include "store_bitmap_aufs.h"
 #include "store_rebuild_aufs.h"
