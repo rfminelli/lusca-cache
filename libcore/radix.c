@@ -693,7 +693,25 @@ prefix_t
 const char *
 prefix_addr_ntop(prefix_t *prefix, char *buf, size_t len)
 {
-	if (getnameinfo(&prefix->add, sizeof(prefix->add), NULL, 0, buf, len, NI_NUMERICHOST) == 0)
+	struct sockaddr *s = NULL;
+	socklen_t sl;
+	struct sockaddr_in sin;
+	struct sockaddr_in6 sin6;
+
+	if (prefix->family == AF_INET) {
+		bzero(&sin, sizeof(sin));
+		memcpy(&sin.sin_addr, &prefix->add.sin, sizeof(sin.sin_addr));
+		s = (struct sockaddr *) &sin;
+		sl = sizeof(sin);
+	} else if (prefix->family == AF_INET6) {
+		bzero(&sin6, sizeof(sin6));
+		memcpy(&sin6.sin6_addr, &prefix->add.sin6, sizeof(sin6.sin6_addr));
+		s = (struct sockaddr *) &sin6;
+		sl = sizeof(sin6);
+	} else
+		return NULL;
+
+	if (getnameinfo(s, sl, NULL, 0, buf, len, NI_NUMERICHOST) == 0)
 		return buf;
 
 	return NULL;
