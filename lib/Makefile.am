@@ -46,7 +46,6 @@ libmiscutil_a_SOURCES = \
 	html_quote.c \
 	iso3307.c \
 	md5.c \
-	radix.c \
 	rfc1035.c \
 	rfc1123.c \
 	rfc1738.c \
