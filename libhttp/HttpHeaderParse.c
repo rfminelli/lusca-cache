@@ -118,13 +118,13 @@ hh_check_content_length(HttpHeader *hdr, int id, String *name, String *value)
 static int
 hh_check_other(HttpHeader *hdr, int id, String *name, String *value)
 {
-
+	if (stringHasWhitespace(strBuf(*name))) {
 	    debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
 		("WARNING: found whitespace in HTTP header name {%.*s}\n", strLen2(*name), strBuf2(*name));
 	    if (!httpConfig_relaxed_parser) {
 		return -1;
 	    }
-
+	}
 	return 1;
 }
 
@@ -139,7 +139,7 @@ httpHeaderParseCheckEntry(HttpHeader *hdr, int id, String *name, String *value)
 	if (id == HDR_CONTENT_LENGTH) {
 		return(hh_check_content_length(hdr, id, name, value));
 	}
-	if (id == HDR_OTHER && stringHasWhitespace(strBuf(*name))) {
+	if (id == HDR_OTHER) {
 		return(hh_check_other(hdr, id, name, value));
 	}
 	return 1;
