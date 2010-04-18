@@ -80,7 +80,7 @@ int HeaderEntryParsedCount = 0;
 static HttpHeaderEntry * httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char *field_end);
 
 static int
-hh_check_content_length(HttpHeader *hdr, int id, String *name, String *value)
+hh_check_content_length(HttpHeader *hdr, String *value)
 {
 	    squid_off_t l1;
 	    HttpHeaderEntry *e2;
@@ -88,7 +88,7 @@ hh_check_content_length(HttpHeader *hdr, int id, String *name, String *value)
 		debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n", strLen2(*value), strBuf2(*value));
 		return -1;
 	    }
-	    e2 = httpHeaderFindEntry(hdr, id);
+	    e2 = httpHeaderFindEntry(hdr, HDR_CONTENT_LENGTH);
 	    if (e2 && strCmp(*value, strBuf(e2->value)) != 0) {
 		squid_off_t l2;
 		debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2) ("WARNING: found two conflicting content-length headers\n");
@@ -137,7 +137,7 @@ static int
 httpHeaderParseCheckEntry(HttpHeader *hdr, int id, String *name, String *value)
 {
 	if (id == HDR_CONTENT_LENGTH) {
-		return(hh_check_content_length(hdr, id, name, value));
+		return(hh_check_content_length(hdr, value));
 	}
 	if (id == HDR_OTHER) {
 		return(hh_check_other(hdr, id, name, value));
