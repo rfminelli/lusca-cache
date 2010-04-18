@@ -775,7 +775,7 @@ strtol_n(const char *nptr, int nlen, char **endptr, int base)
 	size_t i;
 
 	/* take a copy of the string, NUL terminate it just in case */
-	memcpy(buf, nptr, XMIN(nlen, sizeof(buf) - 1));
+	memcpy(buf, nptr, MIN(nlen, sizeof(buf) - 1));
 	buf[sizeof(buf) - 1] = '\0';
 
 	/* Now do the parsing */
