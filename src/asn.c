@@ -255,7 +255,7 @@ asHandleReply(void *data, mem_node_ref nr, ssize_t size)
 	asStateFree(asState);
 	return;
     }
-    assert((nr.offset + size) < SM_PAGE_SIZE);
+    assert((nr.offset + size) <= SM_PAGE_SIZE);
     memcpy(buf, nr.node->data + nr.offset, size);
     stmemNodeUnref(&nr);
 
