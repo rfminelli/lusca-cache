@@ -56,7 +56,7 @@ extern HttpHeaderEntry *httpHeaderFindEntry(const HttpHeader * hdr, http_hdr_typ
 extern HttpHeaderEntry *httpHeaderFindLastEntry(const HttpHeader * hdr, http_hdr_type id);
 
 extern void httpHeaderAddEntryStr(HttpHeader *hdr, http_hdr_type id, const char *attrib, const char *value);
-extern HttpHeaderEntry * httpHeaderAddEntryStr2(HttpHeader *hdr, http_hdr_type id, const char *attrib, int attrib_len, const char *value, int value_len);
+extern int httpHeaderAddEntryStr2(HttpHeader *hdr, http_hdr_type id, const char *attrib, int attrib_len, const char *value, int value_len);
 extern void httpHeaderAddEntryString(HttpHeader *hdr, http_hdr_type id, const String *a, const String *v);
 
 extern void httpHeaderInsertEntryStr(HttpHeader *hdr, int pos, http_hdr_type id, const char *attrib, const char *value);
