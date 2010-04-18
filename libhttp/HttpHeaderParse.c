@@ -77,6 +77,8 @@
 int httpConfig_relaxed_parser = 0;
 int HeaderEntryParsedCount = 0;
 
+static HttpHeaderEntry * httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char *field_end);
+
 /*
  * -1: invalid header, return error
  * 0: invalid header, don't add, continue
@@ -220,7 +222,7 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
  */
 
 /* parses and inits header entry, returns new entry on success */
-HttpHeaderEntry *
+static HttpHeaderEntry *
 httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char *field_end)
 {
     HttpHeaderEntry *e;
