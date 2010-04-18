@@ -79,15 +79,9 @@ int HeaderEntryParsedCount = 0;
 
 static HttpHeaderEntry * httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char *field_end);
 
-/*
- * -1: invalid header, return error
- * 0: invalid header, don't add, continue
- * 1: valid header, add
- */
 static int
-httpHeaderParseCheckEntry(HttpHeader *hdr, int id, String *name, String *value)
+hh_check_content_length(HttpHeader *hdr, int id, String *name, String *value)
 {
-	if (id == HDR_CONTENT_LENGTH) {
 	    squid_off_t l1;
 	    HttpHeaderEntry *e2;
 	    if (!httpHeaderParseSize(strBuf(*value), &l1)) {
@@ -111,21 +105,42 @@ httpHeaderParseCheckEntry(HttpHeader *hdr, int id, String *name, String *value)
 		    return 0;
 		}
 	    } else if (e2) {
-		debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
-		    ("NOTICE: found double content-length header\n");
+		debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2) ("NOTICE: found double content-length header\n");
 		if (httpConfig_relaxed_parser) {
 		    return 0;
 		} else {
 		    return -1;
 		}
 	    }
-	}
-	if (id == HDR_OTHER && stringHasWhitespace(strBuf(*name))) {
+	return 1;
+}
+
+static int
+hh_check_other(HttpHeader *hdr, int id, String *name, String *value)
+{
+
 	    debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
 		("WARNING: found whitespace in HTTP header name {%.*s}\n", strLen2(*name), strBuf2(*name));
 	    if (!httpConfig_relaxed_parser) {
 		return -1;
 	    }
+
+	return 1;
+}
+
+/*
+ * -1: invalid header, return error
+ * 0: invalid header, don't add, continue
+ * 1: valid header, add
+ */
+static int
+httpHeaderParseCheckEntry(HttpHeader *hdr, int id, String *name, String *value)
+{
+	if (id == HDR_CONTENT_LENGTH) {
+		return(hh_check_content_length(hdr, id, name, value));
+	}
+	if (id == HDR_OTHER && stringHasWhitespace(strBuf(*name))) {
+		return(hh_check_other(hdr, id, name, value));
 	}
 	return 1;
 }
