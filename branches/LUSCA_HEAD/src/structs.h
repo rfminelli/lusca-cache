@@ -846,14 +846,6 @@ struct _ETag {
     int weak;			/* true if it is a weak validator */
 };
 
-struct _fileMap {
-    int max_n_files;
-    int n_files_in_map;
-    int toggle;
-    int nwords;
-    unsigned long *file_map;
-};
-
 /* see Packer.c for description */
 struct _Packer {
     /* protected, use interface functions instead */

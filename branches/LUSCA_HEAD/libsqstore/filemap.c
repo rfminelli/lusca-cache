@@ -33,7 +33,21 @@
  *
  */
 
-#include "squid.h"
+#include "../include/config.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#if HAVE_STRING_H
+#include <string.h>
+#endif
+
+#include "../include/util.h"
+
+#include "../libcore/varargs.h"
+#include "../libcore/debug.h"
+#include "../libcore/tools.h"
+
+#include "fileMap.h"
 
 /* Number of bits in a long */
 #if SIZEOF_LONG == 8

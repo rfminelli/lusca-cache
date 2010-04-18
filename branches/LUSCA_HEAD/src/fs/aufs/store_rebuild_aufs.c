@@ -34,6 +34,7 @@
  */
 
 #include "squid.h"
+#include "../../libsqstore/filemap.h"
 
 #include "../../libasyncio/aiops.h"
 #include "../../libasyncio/async_io.h"

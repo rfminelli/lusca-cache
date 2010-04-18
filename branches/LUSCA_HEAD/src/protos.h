@@ -151,14 +151,6 @@ extern void idnsInternalInit(void);
 /* event.c */
 extern void eventLocalInit(void);
 
-extern fileMap *file_map_create(void);
-extern int file_map_allocate(fileMap *, int);
-extern int file_map_bit_set(fileMap *, int);
-extern int file_map_bit_test(fileMap *, int);
-extern void file_map_bit_reset(fileMap *, int);
-extern void filemapFreeMemory(fileMap *);
-
-
 extern void fqdncache_local_params(void);
 extern void fqdncache_init_local(void);
 extern void fqdnStats(StoreEntry *);
