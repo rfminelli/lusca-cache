@@ -762,3 +762,29 @@ default_failure_notify(const char *message)
     write(2, "\n", 1);
     abort();
 }
+
+/*
+ * Similar to strtol, but it takes a length parameter.
+ */
+long
+strtol_n(const char *nptr, int nlen, char **endptr, int base)
+{
+	char buf[64];
+	long r;
+	char *np = NULL;
+	size_t i;
+
+	/* take a copy of the string, NUL terminate it just in case */
+	memcpy(buf, nptr, XMIN(nlen, sizeof(buf) - 1));
+	buf[sizeof(buf) - 1] = '\0';
+
+	/* Now do the parsing */
+	r = strtol(buf, &np, base);
+
+	/* The endptr is relative to buf, so convert back if required */
+	if (np != NULL) {
+		np = (char *) nptr + (np - buf);
+	}
+
+	return r;
+}

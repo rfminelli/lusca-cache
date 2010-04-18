@@ -164,4 +164,6 @@ extern int WIN32_getrusage(int, struct rusage *);
 extern void setbuffer(FILE *, char *, size_t);
 #endif
 
+extern long strtol_n(const char *nptr, int nlen, char **endptr, int base);
+
 #endif /* SQUID_UTIL_H */
