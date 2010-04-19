@@ -112,7 +112,7 @@ comp_with_mask(u_char *addr, u_char *dest, u_int mask)
 }
 
 int
-Init_Prefix(prefix_t *pfx, u_int family, void *dest, u_int bitlen)
+Init_Prefix(prefix_t *pfx, u_int family, const void *dest, u_int bitlen)
 {
 	memset(pfx, 0, sizeof(*pfx));
 	if (family == AF_INET6) {
