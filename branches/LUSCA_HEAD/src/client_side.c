@@ -1409,36 +1409,10 @@ static void clientHttpReplyAccessCheckDone(int answer, void *data);
 static void clientCheckErrorMap(clientHttpRequest * http);
 static void clientCheckHeaderDone(clientHttpRequest * http);
 
-/*
- * accepts chunk of a http message in buf, parses prefix, filters headers and
- * such, writes processed message to the client's socket
- */
-void
-clientSendHeaders(void *data, HttpReply * rep)
+static void
+clientSetClientTOS(ConnStateData *conn, clientHttpRequest *http)
 {
-    //const char *buf = ref.node->data + ref.offset;
-    clientHttpRequest *http = data;
-    StoreEntry *entry = http->entry;
-    ConnStateData *conn = http->conn;
     int fd = conn->fd;
-    assert(http->request != NULL);
-    dlinkDelete(&http->active, &ClientActiveRequests);
-    dlinkAdd(http, &http->active, &ClientActiveRequests);
-    debug(33, 5) ("clientSendHeaders: FD %d '%s'\n", fd, storeUrl(entry));
-    assert(conn->reqs.head != NULL);
-    if (DLINK_HEAD(conn->reqs) != http) {
-	/* there is another object in progress, defer this one */
-	debug(33, 2) ("clientSendHeaders: Deferring %s\n", storeUrl(entry));
-	return;
-    } else if (http->request->flags.reset_tcp) {
-	comm_reset_close(fd);
-	return;
-    } else if (!rep) {
-	/* call clientWriteComplete so the client socket gets closed */
-	clientWriteComplete(fd, NULL, 0, COMM_OK, http);
-	return;
-    }
-    assert(http->out.offset == 0);
 
     if (Config.zph_mode != ZPH_OFF) {
 	int tos = 0;
@@ -1471,6 +1445,40 @@ clientSendHeaders(void *data, HttpReply * rep)
 	    }
 	}
     }
+}
+
+/*
+ * accepts chunk of a http message in buf, parses prefix, filters headers and
+ * such, writes processed message to the client's socket
+ */
+void
+clientSendHeaders(void *data, HttpReply * rep)
+{
+    //const char *buf = ref.node->data + ref.offset;
+    clientHttpRequest *http = data;
+    StoreEntry *entry = http->entry;
+    ConnStateData *conn = http->conn;
+    int fd = conn->fd;
+    assert(http->request != NULL);
+    dlinkDelete(&http->active, &ClientActiveRequests);
+    dlinkAdd(http, &http->active, &ClientActiveRequests);
+    debug(33, 5) ("clientSendHeaders: FD %d '%s'\n", fd, storeUrl(entry));
+    assert(conn->reqs.head != NULL);
+    if (DLINK_HEAD(conn->reqs) != http) {
+	/* there is another object in progress, defer this one */
+	debug(33, 2) ("clientSendHeaders: Deferring %s\n", storeUrl(entry));
+	return;
+    } else if (http->request->flags.reset_tcp) {
+	comm_reset_close(fd);
+	return;
+    } else if (!rep) {
+	/* call clientWriteComplete so the client socket gets closed */
+	clientWriteComplete(fd, NULL, 0, COMM_OK, http);
+	return;
+    }
+    assert(http->out.offset == 0);
+    clientSetClientTOS(conn, http);
+
     rep = http->reply = clientCloneReply(http, rep);
     if (!rep) {
 	ErrorState *err = errorCon(ERR_INVALID_RESP, HTTP_BAD_GATEWAY, http->orig_request);
