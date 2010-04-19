@@ -35,6 +35,7 @@
 
 #include "squid.h"
 #include "splay.h"
+#include "client_db.h"
 
 static void aclParseDomainList(void *curlist);
 static void aclParseUserList(void **current);

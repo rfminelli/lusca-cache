@@ -35,6 +35,8 @@
 
 #include "squid.h"
 
+#include "client_db.h"
+
 static void icpLogIcp(struct in_addr, log_type, int, const char *, int);
 static void icpHandleIcpV2(int, struct sockaddr_in, char *, int);
 static void icpCount(void *, int, size_t, int);

@@ -34,6 +34,7 @@
  */
 
 #include "squid.h"
+#include "client_db.h"
 
 /* module globals */
 

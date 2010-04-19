@@ -37,6 +37,8 @@
 
 #include "../libcore/radix.h"
 
+#include "client_db.h"
+
 #define	CLIENT_DB_SCHEDULE_BACKGROUND_TIME	300
 #define	CLIENT_DB_SCHEDULE_IMMEDIATE_TIME	5
 

@@ -35,6 +35,8 @@
 
 #include "squid.h"
 
+#include "client_db.h"
+
 /* Currently Harvest cached-2.x uses ICP_VERSION_3 */
 void
 icpHandleIcpV3(int fd, struct sockaddr_in from, char *buf, int len)
