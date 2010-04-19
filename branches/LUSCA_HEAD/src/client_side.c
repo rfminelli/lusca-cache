@@ -35,6 +35,8 @@
 
 #include "squid.h"
 
+#include "client_db.h"
+
 #include "client_side_conn.h"
 #include "client_side_body.h"
 #include "client_side_request.h"
@@ -49,6 +51,7 @@
 #include "client_side.h"
 
 #include "store_vary.h"
+
 
 #if LINGERING_CLOSE
 #define comm_close comm_lingering_close
