@@ -47,7 +47,7 @@
 #include "../libcore/debug.h"
 #include "../libcore/tools.h"
 
-#include "fileMap.h"
+#include "filemap.h"
 
 /* Number of bits in a long */
 #if SIZEOF_LONG == 8
