@@ -5,9 +5,10 @@
 || Base IPv4/IPv6 support data type || Adrian Chadd || Completed ||
 || internal dns || Adrian Chadd || In Progress ||
 || external dns || || ||
+|| comm layer || Adrian Chadd || Completed ||
 || ipcache || || ||
 || fqdncache || || ||
-|| clientdb || || ||
+|| clientdb || Adrian Chadd || In Progress ||
 || pconn || || ||
 || ident || Adrian Chadd || Completed ||
 || ACL: IPv6 src/dst || Adrian Chadd || In Progress ||
