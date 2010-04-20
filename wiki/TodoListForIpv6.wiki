@@ -1,6 +1,7 @@
 #summary What stuff needs to happen for IPv6 support
 #labels Project
 
+This list is not comprehensive and is in no particular order.
 
 || Base IPv4/IPv6 support data type || Adrian Chadd || Completed ||
 || internal dns || Adrian Chadd || In Progress ||
@@ -20,3 +21,4 @@
 || http changes || || ||
 || ftp changes || || ||
 || SNMP support || || ||
+|| pinger || || ||
