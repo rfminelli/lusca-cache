@@ -772,7 +772,6 @@ strtol_n(const char *nptr, int nlen, char **endptr, int base)
 	char buf[64];
 	long r;
 	char *np = NULL;
-	size_t i;
 
 	/* take a copy of the string, NUL terminate it just in case */
 	memcpy(buf, nptr, MIN(nlen, sizeof(buf) - 1));
