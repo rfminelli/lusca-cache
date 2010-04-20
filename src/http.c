@@ -39,6 +39,7 @@
  */
 
 #include "squid.h"
+#include "pconn.h"
 
 static const char *const crlf = "\r\n";
 

@@ -35,6 +35,7 @@
 
 #include "squid.h"
 #include "client_db.h"
+#include "pconn.h"
 
 #if defined(USE_WIN32_SERVICE) && defined(_SQUID_WIN32_)
 #include <windows.h>
