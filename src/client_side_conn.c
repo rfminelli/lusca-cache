@@ -1,4 +1,5 @@
 #include "squid.h"
+#include "client_db.h"
 
 #include "client_side_conn.h"
 
