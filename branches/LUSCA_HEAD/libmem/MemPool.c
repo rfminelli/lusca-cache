@@ -46,9 +46,7 @@ struct {
 MemPoolStatInfo MemPoolStats = { 0, 0 };
 
 /* local prototypes */
-static void memShrink(size_t new_limit);
 static void memPoolDescribe(const MemPool * pool);
-static void memPoolShrink(MemPool * pool, size_t new_limit);
 
 /* Initialization */
 
@@ -111,12 +109,6 @@ memPoolClean(void)
     stackClean(&Pools);
 }
 
-
-static void
-memShrink(size_t new_limit)
-{
-	/* NULL operation */
-}
 
 /* MemPoolMeter */
 
@@ -240,12 +232,6 @@ memPoolFree(MemPool * pool, void *obj)
     memMeterDec(pool->meter.alloc);
     memMeterDel(TheMeter.alloc, pool->obj_size);
     xfree(obj);
-}
-
-static void
-memPoolShrink(MemPool * pool, size_t new_limit)
-{
-    /* NULL operation now */
 }
 
 int
