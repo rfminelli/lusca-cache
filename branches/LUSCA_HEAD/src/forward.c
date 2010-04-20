@@ -35,6 +35,7 @@
 
 
 #include "squid.h"
+#include "pconn.h"
 
 #if LINUX_NETFILTER
 #include <linux/types.h>
