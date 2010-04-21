@@ -22,3 +22,7 @@ This list is not comprehensive and is in no particular order.
 || ftp changes || || ||
 || SNMP support || || ||
 || pinger || || ||
+|| ICP: receiving || || ||
+|| ICP: sending || || ||
+|| cache peers || || ||
+|| upstream connections || || ||
