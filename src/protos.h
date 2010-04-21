@@ -1045,9 +1045,7 @@ extern int clientNatLookup(ConnStateData * conn);
 extern void clientRedirectStart(clientHttpRequest * http);
 
 /* client_side_storeurl_rewrite.c */
-extern void clientStoreURLRewriteAccessCheckDone(int answer, void *data);
 extern void clientStoreURLRewriteStart(clientHttpRequest * http);
-extern void clientStoreURLRewriteDone(void *data, char *result);
 
 /* statIapp.c */
 extern void statIappStats(StoreEntry *sentry);
