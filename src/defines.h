@@ -154,8 +154,6 @@
 #define STORE_ENTRY_WITH_MEMOBJ		1
 #define STORE_ENTRY_WITHOUT_MEMOBJ	0
 
-#define PINGER_PAYLOAD_SZ 8192
-
 #define COUNT_INTERVAL 60
 /*
  * keep 60 minutes' worth of per-minute readings (+ current reading)
