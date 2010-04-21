@@ -1357,25 +1357,6 @@ struct _ps_state {
     aclCheck_t *acl_checklist;
 };
 
-#if USE_ICMP
-struct _pingerEchoData {
-    struct in_addr to;
-    unsigned char opcode;
-    int psize;
-    char payload[PINGER_PAYLOAD_SZ];
-};
-
-struct _pingerReplyData {
-    struct in_addr from;
-    unsigned char opcode;
-    int rtt;
-    int hops;
-    int psize;
-    char payload[PINGER_PAYLOAD_SZ];
-};
-
-#endif
-
 struct _icp_common_t {
     unsigned char opcode;	/* opcode */
     unsigned char version;	/* version number */

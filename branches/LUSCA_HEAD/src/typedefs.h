@@ -93,8 +93,6 @@ typedef struct _netdbEntry netdbEntry;
 typedef struct _ping_data ping_data;
 typedef struct _ps_state ps_state;
 typedef struct _HierarchyLogEntry HierarchyLogEntry;
-typedef struct _pingerEchoData pingerEchoData;
-typedef struct _pingerReplyData pingerReplyData;
 typedef struct _icp_common_t icp_common_t;
 typedef struct _Meta_data Meta_data;
 typedef struct _iostats iostats;

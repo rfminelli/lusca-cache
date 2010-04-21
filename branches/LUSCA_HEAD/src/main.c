@@ -34,6 +34,7 @@
  */
 
 #include "squid.h"
+#include "icmp.h"
 #include "client_db.h"
 #include "pconn.h"
 
