@@ -115,19 +115,6 @@ hh_check_content_length(HttpHeader *hdr, String *value)
 	return 1;
 }
 
-static int
-hh_check_other(HttpHeader *hdr, int id, String *name, String *value)
-{
-	if (stringHasWhitespace(strBuf(*name))) {
-	    debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
-		("WARNING: found whitespace in HTTP header name {%.*s}\n", strLen2(*name), strBuf2(*name));
-	    if (!httpConfig_relaxed_parser) {
-		return -1;
-	    }
-	}
-	return 1;
-}
-
 /*
  * -1: invalid header, return error
  * 0: invalid header, don't add, continue
@@ -138,9 +125,6 @@ httpHeaderParseCheckEntry(HttpHeader *hdr, int id, String *name, String *value)
 {
 	if (id == HDR_CONTENT_LENGTH) {
 		return(hh_check_content_length(hdr, value));
-	}
-	if (id == HDR_OTHER) {
-		return(hh_check_other(hdr, id, name, value));
 	}
 	return 1;
 }
@@ -289,6 +273,17 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
 	return NULL;
     }
 
+    /* Is it an OTHER header? Verify the header contents don't have whitespace! */
+
+    if (id == HDR_OTHER && strpbrk_n(field_start, name_len, w_space)) {
+	    debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
+		("WARNING: found whitespace in HTTP header name {%.*s}\n", name_len, field_start);
+	    if (!httpConfig_relaxed_parser) {
+		return NULL;
+	    }
+    }
+
+    /* Create the entry and return it */
     e = memPoolAlloc(pool_http_header_entry);
     debug(55, 9) ("creating entry %p: near '%.*s'\n", e, charBufferSize(field_start, field_end), field_start);
     e->id = id;
