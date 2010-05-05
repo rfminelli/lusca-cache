@@ -31,7 +31,7 @@
 #endif
 
 #include "include/rfc1035.h"
-#include "include/snprintf.h"
+//#include "include/snprintf.h"
 
 #include <sys/socket.h>
 #include <sys/time.h>
