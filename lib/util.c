@@ -787,3 +787,17 @@ strtol_n(const char *nptr, int nlen, char **endptr, int base)
 
 	return r;
 }
+
+const char *
+strpbrk_n(const char *s, int len, const char *charset)
+{
+	const char *c;
+
+	for (; len >= 0; s++, len--) {
+		for (c = charset; (*c) != '\0'; c++) {
+			if ( (*s) == (*c) )
+				return s;
+		}
+	}
+	return NULL;
+}
