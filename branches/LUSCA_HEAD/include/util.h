@@ -165,5 +165,6 @@ extern void setbuffer(FILE *, char *, size_t);
 #endif
 
 extern long strtol_n(const char *nptr, int nlen, char **endptr, int base);
+extern const char * strpbrk_n(const char *s, int len, const char *charset);
 
 #endif /* SQUID_UTIL_H */
