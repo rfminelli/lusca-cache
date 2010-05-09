@@ -79,7 +79,7 @@ int HeaderEntryParsedCount = 0;
 
 static HttpHeaderEntry * httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char *field_end);
 
-static int
+int
 hh_check_content_length(HttpHeader *hdr, String *value)
 {
 	    squid_off_t l1;
