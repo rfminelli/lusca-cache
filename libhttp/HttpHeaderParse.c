@@ -106,7 +106,8 @@ hh_check_content_length(HttpHeader *hdr, String *value)
                 return 1;
 
 	    /* Do the contents match? */
-	    if (strCmp(*value, strBuf(e2->value)) == 0) {
+	    if ((strLen2(*value) == strLen2(e2->value)) &&
+		(strNCmp(e2->value, strBuf2(*value), strLen2(*value)) == 0)) {
 		debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2) ("NOTICE: found double content-length header\n");
 		if (httpConfig_relaxed_parser) {
 		    return 0;
