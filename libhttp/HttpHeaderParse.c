@@ -95,7 +95,7 @@ hh_check_content_length(HttpHeader *hdr, String *value)
 	    squid_off_t l1, l2;
 	    HttpHeaderEntry *e2;
 
-	    if (!httpHeaderParseSize(strBuf(*value), &l1)) {
+	    if (!httpHeaderParseSize2(strBuf2(*value), strLen2(*value), &l1)) {
 		debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n", strLen2(*value), strBuf2(*value));
 		return -1;
 	    }
@@ -125,7 +125,7 @@ hh_check_content_length(HttpHeader *hdr, String *value)
 	    }
 
 	    /* Is the original entry parseable? If not, definitely error out. It shouldn't be here */
-	    if (!httpHeaderParseSize(strBuf(e2->value), &l2)) {
+	    if (!httpHeaderParseSize2(strBuf2(e2->value), strLen2(e2->value), &l2)) {
 	        debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n", strLen2(*value), strBuf2(*value));
 	        return -1;
 	    }
