@@ -78,6 +78,7 @@ int httpConfig_relaxed_parser = 0;
 int HeaderEntryParsedCount = 0;
 
 static HttpHeaderEntry * httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char *field_end);
+int httpHeaderParseSize2(const char *start, int len, squid_off_t * value);
 
 /*
  * Check whether the given content length header value is "sensible".
@@ -328,6 +329,28 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
     debug(55, 9) ("created entry %p: '%.*s: %.*s'\n", e, strLen2(e->name), strBuf2(e->name), strLen2(e->value), strBuf2(e->value));
     return e;
 }
+
+
+/*
+ * like httpHeaderParseSize(), but takes a "len" parameter for the length
+ * of the string buffer.
+ */
+int
+httpHeaderParseSize2(const char *start, int len, squid_off_t * value)
+{
+    char *end;
+    errno = 0;
+    assert(value);
+
+    *value = strtol_n(start, len, &end, 10);
+    if (start == end || errno != 0) {
+        debug(66, 2) ("httpHeaderParseSize2: failed to parse a size/offset header field near '%s'\n", start);
+        *value = -1;
+        return 0;
+    }
+    return 1;
+}
+
 
 /*
  * parses an int field, complains if soemthing went wrong, returns true on
