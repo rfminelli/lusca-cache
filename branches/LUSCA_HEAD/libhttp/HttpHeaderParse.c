@@ -79,40 +79,64 @@ int HeaderEntryParsedCount = 0;
 
 static HttpHeaderEntry * httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char *field_end);
 
+/*
+ * Check whether the given content length header value is "sensible".
+ *
+ * Returns 1 on "yes, use"; 0 on "no; don't use but don't error", -1 on "error out."
+ *
+ * This routine will delete the older version of the header - it shouldn't
+ * do that! It should signify the caller that the old header value should
+ * be removed!
+ */
 int
 hh_check_content_length(HttpHeader *hdr, String *value)
 {
-	    squid_off_t l1;
+	    squid_off_t l1, l2;
 	    HttpHeaderEntry *e2;
+
 	    if (!httpHeaderParseSize(strBuf(*value), &l1)) {
 		debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n", strLen2(*value), strBuf2(*value));
 		return -1;
 	    }
 	    e2 = httpHeaderFindEntry(hdr, HDR_CONTENT_LENGTH);
-	    if (e2 && strCmp(*value, strBuf(e2->value)) != 0) {
-		squid_off_t l2;
-		debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2) ("WARNING: found two conflicting content-length headers\n");
-		if (!httpConfig_relaxed_parser) {
-		    return -1;
-		}
-		if (!httpHeaderParseSize(strBuf(e2->value), &l2)) {
-		    debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n", strLen2(*value), strBuf2(*value));
-		    return -1;
-		}
-		if (l1 > l2) {
-		    httpHeaderDelById(hdr, e2->id);
-		} else {
-		    return 0;
-		}
-	    } else if (e2) {
+
+	    /* No header found? We're safe */
+	    if (! e2)
+                return 1;
+
+	    /* Do the contents match? */
+	    if (strCmp(*value, strBuf(e2->value)) == 0) {
 		debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2) ("NOTICE: found double content-length header\n");
 		if (httpConfig_relaxed_parser) {
 		    return 0;
 		} else {
 		    return -1;
 		}
+            }
+
+            /* We have two conflicting Content-Length headers at this point */
+	    debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2) ("WARNING: found two conflicting content-length headers\n");
+
+	    /* XXX Relaxed parser is off - return an error? */
+	    /* XXX what was this before? */
+	    if (!httpConfig_relaxed_parser) {
+	        return -1;
 	    }
-	return 1;
+
+	    /* Is the original entry parseable? If not, definitely error out. It shouldn't be here */
+	    if (!httpHeaderParseSize(strBuf(e2->value), &l2)) {
+	        debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n", strLen2(*value), strBuf2(*value));
+	        return -1;
+	    }
+
+	    /* Is the new entry larger than the old one? Delete the old one */
+	    /* If not, we just don't add the new entry */
+	    if (l1 > l2) {
+	        httpHeaderDelById(hdr, e2->id);
+		return 1;
+	    } else {
+	        return 0;
+	    }
 }
 
 /*
@@ -282,6 +306,10 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
 		return NULL;
 	    }
     }
+
+    /* Is it a content length header? Do the content length checks */
+    /* XXX this function will remove the older content length header(s)
+     * XXX if needed. Ew. */
 
     /* Create the entry and return it */
     e = memPoolAlloc(pool_http_header_entry);
