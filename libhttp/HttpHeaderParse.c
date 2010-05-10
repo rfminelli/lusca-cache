@@ -90,13 +90,13 @@ int httpHeaderParseSize2(const char *start, int len, squid_off_t * value);
  * be removed!
  */
 int
-hh_check_content_length(HttpHeader *hdr, String *value)
+hh_check_content_length(HttpHeader *hdr, const char *var, int vlen)
 {
 	    squid_off_t l1, l2;
 	    HttpHeaderEntry *e2;
 
-	    if (!httpHeaderParseSize2(strBuf2(*value), strLen2(*value), &l1)) {
-		debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n", strLen2(*value), strBuf2(*value));
+	    if (!httpHeaderParseSize2(var, vlen, &l1)) {
+		debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n", vlen, var);
 		return -1;
 	    }
 	    e2 = httpHeaderFindEntry(hdr, HDR_CONTENT_LENGTH);
@@ -106,8 +106,8 @@ hh_check_content_length(HttpHeader *hdr, String *value)
                 return 1;
 
 	    /* Do the contents match? */
-	    if ((strLen2(*value) == strLen2(e2->value)) &&
-		(strNCmp(e2->value, strBuf2(*value), strLen2(*value)) == 0)) {
+	    if ((vlen == strLen2(e2->value)) &&
+		(strNCmp(e2->value, var, vlen) == 0)) {
 		debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2) ("NOTICE: found double content-length header\n");
 		if (httpConfig_relaxed_parser) {
 		    return 0;
@@ -127,7 +127,7 @@ hh_check_content_length(HttpHeader *hdr, String *value)
 
 	    /* Is the original entry parseable? If not, definitely error out. It shouldn't be here */
 	    if (!httpHeaderParseSize2(strBuf2(e2->value), strLen2(e2->value), &l2)) {
-	        debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n", strLen2(*value), strBuf2(*value));
+	        debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n", vlen, var);
 	        return -1;
 	    }
 
@@ -150,7 +150,7 @@ static int
 httpHeaderParseCheckEntry(HttpHeader *hdr, int id, String *name, String *value)
 {
 	if (id == HDR_CONTENT_LENGTH) {
-		return(hh_check_content_length(hdr, value));
+		return(hh_check_content_length(hdr, strBuf2(*value), strLen2(*value)));
 	}
 	return 1;
 }
