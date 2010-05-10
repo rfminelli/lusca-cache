@@ -43,19 +43,15 @@
 #include "libhttp/HttpHeaderMask.h"
 #include "libhttp/HttpHeaderParse.h"
 
-extern int hh_check_content_length(HttpHeader *hdr, String *value);
+extern int hh_check_content_length(HttpHeader *hdr, const char *val, int vlen);
 
 static int
 test_hh_content_length(HttpHeader *hdr, const char *str)
 {
-	String val = StringNull;
 	int r;
 
-	stringInit(&val, str);
-
 	/* XXX remember; this may delete items from the header entry array! */
-	r = hh_check_content_length(hdr, &val);
-	stringClean(&val);
+	r = hh_check_content_length(hdr, str, strlen(str));
 	return r;
 }
 
