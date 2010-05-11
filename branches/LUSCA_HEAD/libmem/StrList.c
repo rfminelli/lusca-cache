@@ -149,9 +149,10 @@ strListAdd(String *str, const char *item, char del)
 
 /*!
  * @function
- *	strListAddunique
+ *	strListAddUnique
  * @abstract
  *	Append an item to the string list if it doesn't already exist
+ *
  * @param	str	String list
  * @param	item	unique item to add
  * @param	del	list item delimiter to use

@@ -2085,7 +2085,7 @@ clientProcessRequest2(clientHttpRequest * http)
  * 	clientProcessRequest
  * @abstract
  *	Begin processing a fully validated request
- * @description
+ * @discussion
  *	This function begins the processing chain of a request and determines
  *	whether to begin forwarding upstream or whether the object already
  *	exists in some form.

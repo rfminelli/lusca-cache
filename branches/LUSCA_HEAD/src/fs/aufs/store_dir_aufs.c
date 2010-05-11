@@ -189,7 +189,7 @@ storeAufsCheckConfig(SwapDir * sd)
  *	storeAufsDirInit
  * @abstract
  *	Initialise the given configured AUFS storedir
- * @description
+ * @discussion
  *	This function completes the initial storedir setup, opens the swaplog
  *	file and begins the rebuild process.
  *
