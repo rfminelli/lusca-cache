@@ -175,7 +175,6 @@ ATF_TC_HEAD(libhttp_parse_content_length_2, tc)
 	atf_tc_set_md_var(tc, "descr", "Check that duplicate Content-Length headers are "
 	    "correctly replaced with the relaxed HTTP parser enabled");
 }
-
 ATF_TC_BODY(libhttp_parse_content_length_2, tc)
 {
 	test_core_init();
@@ -186,6 +185,16 @@ ATF_TC_BODY(libhttp_parse_content_length_2, tc)
 	libhttp_test_content_length_parser("Content-Length: 23456\r\nContent-Length: 12345\r\nContent-Length: 23456\r\n", "23456");
 }
 
+ATF_TC(libhttp_parser_other_whitespace_1);
+ATF_TC_HEAD(libhttp_parser_other_whitespace_1, tc)
+{
+	atf_tc_set_md_var(tc, "descr", "Headers must not have whitespace in the field names");
+}
+ATF_TC_BODY(libhttp_parser_other_whitespace_1, tc)
+{
+	libhttp_test_parser("Fo o: bar\r\n", 0);
+}
+
 ATF_TP_ADD_TCS(tp)
 {
 	ATF_TP_ADD_TC(tp, libhttp_parse_1);
@@ -194,6 +203,7 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, libhttp_parse_4);
 	ATF_TP_ADD_TC(tp, libhttp_parse_content_length_1);
 	ATF_TP_ADD_TC(tp, libhttp_parse_content_length_2);
+	ATF_TP_ADD_TC(tp, libhttp_parser_other_whitespace_1);
 	return atf_no_error();
 }
 
