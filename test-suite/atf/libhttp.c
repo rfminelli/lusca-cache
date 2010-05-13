@@ -63,16 +63,10 @@ ATF_TC_BODY(libhttp_parse_1, tc)
 {
 	HttpHeader hdr;
 	const char *hdrs = "Host: www.creative.net.au\r\nContent-type: text/html\r\nFoo: bar\r\n\r\n";
-	const char *hdr_start = hdrs;
-	const char *hdr_end = hdr_start + strlen(hdrs);
 
 	test_core_init();
-
 	httpHeaderInitLibrary();
-	httpHeaderInit(&hdr, hoRequest);
-
-	ATF_REQUIRE(httpHeaderParse(&hdr, hdr_start, hdr_end) == 1);
-
+	ATF_REQUIRE(test_core_parse_header(&hdr, hdrs) == 1);
 	httpHeaderClean(&hdr);
 }
 
@@ -80,7 +74,7 @@ ATF_TC_CLEANUP(libhttp_parse_1, tc)
 {
 }
 
-ATF_TC_WITH_CLEANUP(libhttp_parse_2);
+ATF_TC(libhttp_parse_2);
 ATF_TC_HEAD(libhttp_parse_2, tc)
 {
 	atf_tc_set_md_var(tc, "descr", "content-length header parsing");
@@ -90,22 +84,55 @@ ATF_TC_BODY(libhttp_parse_2, tc)
 {
 	HttpHeader hdr;
 	const char *hdrs = "Host: www.creative.net.au\r\nContent-Length: 12345\r\nContent-type: text/html\r\nFoo: bar\r\n\r\n";
-	const char *hdr_start = hdrs;
-	const char *hdr_end = hdr_start + strlen(hdrs);
 
 	test_core_init();
-
 	httpHeaderInitLibrary();
 	httpHeaderInit(&hdr, hoRequest);
-
-	ATF_REQUIRE(httpHeaderParse(&hdr, hdr_start, hdr_end) == 1);
-
+	ATF_REQUIRE(test_core_parse_header(&hdr, hdrs) == 1);
 	httpHeaderClean(&hdr);
 }
 
-ATF_TC_CLEANUP(libhttp_parse_2, tc)
+/* ** */
+
+ATF_TC(libhttp_parse_3);
+ATF_TC_HEAD(libhttp_parse_3, tc)
 {
+	atf_tc_set_md_var(tc, "descr", "content-length header parsing - failure");
 }
+
+ATF_TC_BODY(libhttp_parse_3, tc)
+{
+	HttpHeader hdr;
+	const char *hdrs = "Host: www.creative.net.au\r\nContent-Length: b12345\r\nContent-type: text/html\r\nFoo: bar\r\n\r\n";
+
+	test_core_init();
+	httpHeaderInitLibrary();
+	httpHeaderInit(&hdr, hoRequest);
+	ATF_REQUIRE(test_core_parse_header(&hdr, hdrs) == 0);
+	httpHeaderClean(&hdr);
+}
+
+/* *** */
+
+ATF_TC(libhttp_parse_4);
+ATF_TC_HEAD(libhttp_parse_4, tc)
+{
+	atf_tc_set_md_var(tc, "descr", "content-length header parsing - two conflicting Content-Length headers; failure");
+}
+
+ATF_TC_BODY(libhttp_parse_4, tc)
+{
+	HttpHeader hdr;
+	const char *hdrs = "Host: www.creative.net.au\r\nContent-Length: 12345\r\nContent-type: text/html\r\nFoo: bar\r\nContent-Length: 23456\r\n";
+
+	test_core_init();
+	httpHeaderInitLibrary();
+	httpHeaderInit(&hdr, hoRequest);
+	ATF_REQUIRE(test_core_parse_header(&hdr, hdrs) == 0);
+	httpHeaderClean(&hdr);
+}
+
+/* *** */
 
 extern int hh_check_content_length(HttpHeader *hdr, const char *val, int vlen);
 
@@ -181,6 +208,8 @@ ATF_TP_ADD_TCS(tp)
 {
 	ATF_TP_ADD_TC(tp, libhttp_parse_1);
 	ATF_TP_ADD_TC(tp, libhttp_parse_2);
+	ATF_TP_ADD_TC(tp, libhttp_parse_3);
+	ATF_TP_ADD_TC(tp, libhttp_parse_4);
 	ATF_TP_ADD_TC(tp, libhttp_parse_content_length_1);
 	return atf_no_error();
 }
