@@ -57,8 +57,6 @@ libhttp_test_parser(const char *str, int ret)
 {
 	HttpHeader hdr;
 
-	test_core_init();
-	httpHeaderInitLibrary();
 	ATF_CHECK_EQ(test_core_parse_header(&hdr, str), ret);
 	httpHeaderClean(&hdr);
 }
@@ -101,6 +99,8 @@ ATF_TC_HEAD(libhttp_parse_1, tc)
 
 ATF_TC_BODY(libhttp_parse_1, tc)
 {
+	test_core_init();
+	httpHeaderInitLibrary();
 	libhttp_test_parser("Host: www.creative.net.au\r\nContent-type: text/html\r\nFoo: bar\r\n\r\n", 1);
 }
 
@@ -112,6 +112,8 @@ ATF_TC_HEAD(libhttp_parse_2, tc)
 
 ATF_TC_BODY(libhttp_parse_2, tc)
 {
+	test_core_init();
+	httpHeaderInitLibrary();
 	libhttp_test_parser("Host: www.creative.net.au\r\nContent-Length: 12345\r\nContent-type: text/html\r\nFoo: bar\r\n\r\n", 1);
 }
 
@@ -125,6 +127,8 @@ ATF_TC_HEAD(libhttp_parse_3, tc)
 
 ATF_TC_BODY(libhttp_parse_3, tc)
 {
+	test_core_init();
+	httpHeaderInitLibrary();
 	libhttp_test_parser("Host: www.creative.net.au\r\nContent-Length: b12345\r\nContent-type: text/html\r\nFoo: bar\r\n\r\n", 0);
 }
 
@@ -138,6 +142,8 @@ ATF_TC_HEAD(libhttp_parse_4, tc)
 
 ATF_TC_BODY(libhttp_parse_4, tc)
 {
+	test_core_init();
+	httpHeaderInitLibrary();
 	libhttp_test_parser("Host: www.creative.net.au\r\nContent-Length: 12345\r\nContent-type: text/html\r\nFoo: bar\r\nContent-Length: 23456\r\n", 0);
 }
 
@@ -191,6 +197,8 @@ ATF_TC_HEAD(libhttp_parser_other_whitespace_1, tc)
 }
 ATF_TC_BODY(libhttp_parser_other_whitespace_1, tc)
 {
+	test_core_init();
+	httpHeaderInitLibrary();
 	libhttp_test_parser("Fo o: bar\r\n", 0);
 }
 
