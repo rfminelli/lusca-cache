@@ -63,6 +63,22 @@ libhttp_test_parser(const char *str, int ret)
 	httpHeaderClean(&hdr);
 }
 
+static void
+libhttp_test_content_length_parser(const char *str, const char *clength)
+{
+	HttpHeader hdr;
+	HttpHeaderEntry *e;
+
+	ATF_CHECK_EQ(test_core_parse_header(&hdr, str), 1);
+
+	/* Verify the content-length header is what it should be */
+	e = httpHeaderFindEntry(&hdr, HDR_CONTENT_LENGTH);
+	ATF_REQUIRE(e != NULL);
+	ATF_REQUIRE(strNCmp(e->value, clength, strlen(clength)) == 0);
+
+	httpHeaderClean(&hdr);
+}
+
 extern int hh_check_content_length(HttpHeader *hdr, const char *val, int vlen);
 
 static int
@@ -153,6 +169,23 @@ ATF_TC_BODY(libhttp_parse_content_length_1, tc)
 	httpHeaderClean(&hdr);
 }
 
+ATF_TC(libhttp_parse_content_length_2);
+ATF_TC_HEAD(libhttp_parse_content_length_2, tc)
+{
+	atf_tc_set_md_var(tc, "descr", "Check that duplicate Content-Length headers are "
+	    "correctly replaced with the relaxed HTTP parser enabled");
+}
+
+ATF_TC_BODY(libhttp_parse_content_length_2, tc)
+{
+	test_core_init();
+	httpHeaderInitLibrary();
+	httpConfig_relaxed_parser = 1;
+	libhttp_test_content_length_parser("Content-Length: 12345\r\nContent-Length: 23456\r\n", "23456");
+	libhttp_test_content_length_parser("Content-Length: 23456\r\nContent-Length: 12345\r\n", "23456");
+	libhttp_test_content_length_parser("Content-Length: 23456\r\nContent-Length: 12345\r\nContent-Length: 23456\r\n", "23456");
+}
+
 ATF_TP_ADD_TCS(tp)
 {
 	ATF_TP_ADD_TC(tp, libhttp_parse_1);
@@ -160,6 +193,7 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, libhttp_parse_3);
 	ATF_TP_ADD_TC(tp, libhttp_parse_4);
 	ATF_TP_ADD_TC(tp, libhttp_parse_content_length_1);
+	ATF_TP_ADD_TC(tp, libhttp_parse_content_length_2);
 	return atf_no_error();
 }
 
