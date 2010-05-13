@@ -62,11 +62,6 @@ ATF_TC_HEAD(libhttp_parse_1, tc)
 ATF_TC_BODY(libhttp_parse_1, tc)
 {
 	HttpHeader hdr;
-#if 0
-	HttpHeaderPos pos = HttpHeaderInitPos;
-	const HttpHeaderEntry *e;
-#endif
-
 	const char *hdrs = "Host: www.creative.net.au\r\nContent-type: text/html\r\nFoo: bar\r\n\r\n";
 	const char *hdr_start = hdrs;
 	const char *hdr_end = hdr_start + strlen(hdrs);
@@ -82,6 +77,33 @@ ATF_TC_BODY(libhttp_parse_1, tc)
 }
 
 ATF_TC_CLEANUP(libhttp_parse_1, tc)
+{
+}
+
+ATF_TC_WITH_CLEANUP(libhttp_parse_2);
+ATF_TC_HEAD(libhttp_parse_2, tc)
+{
+	atf_tc_set_md_var(tc, "descr", "content-length header parsing");
+}
+
+ATF_TC_BODY(libhttp_parse_2, tc)
+{
+	HttpHeader hdr;
+	const char *hdrs = "Host: www.creative.net.au\r\nContent-Length: 12345\r\nContent-type: text/html\r\nFoo: bar\r\n\r\n";
+	const char *hdr_start = hdrs;
+	const char *hdr_end = hdr_start + strlen(hdrs);
+
+	test_core_init();
+
+	httpHeaderInitLibrary();
+	httpHeaderInit(&hdr, hoRequest);
+
+	ATF_REQUIRE(httpHeaderParse(&hdr, hdr_start, hdr_end) == 1);
+
+	httpHeaderClean(&hdr);
+}
+
+ATF_TC_CLEANUP(libhttp_parse_2, tc)
 {
 }
 
@@ -158,6 +180,7 @@ ATF_TC_CLEANUP(libhttp_parse_content_length_1, tc)
 ATF_TP_ADD_TCS(tp)
 {
 	ATF_TP_ADD_TC(tp, libhttp_parse_1);
+	ATF_TP_ADD_TC(tp, libhttp_parse_2);
 	ATF_TP_ADD_TC(tp, libhttp_parse_content_length_1);
 	return atf_no_error();
 }
