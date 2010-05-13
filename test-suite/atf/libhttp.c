@@ -78,12 +78,6 @@ ATF_TC_BODY(libhttp_parse_1, tc)
 
 	ATF_REQUIRE(httpHeaderParse(&hdr, hdr_start, hdr_end) == 1);
 
-#if 0
-	printf("  retval from parse: %d\n", ret);
-	while ((e = httpHeaderGetEntry(&hdr, &pos))) {
-		printf("  Parsed Header: %s: %s\n", strBuf(e->name), strBuf(e->value));
-	}
-#endif
 	httpHeaderClean(&hdr);
 }
 
