@@ -129,7 +129,7 @@ ATF_TC_BODY(libhttp_parse_4, tc)
 /* *** */
 
 
-ATF_TC_WITH_CLEANUP(libhttp_parse_content_length_1);
+ATF_TC(libhttp_parse_content_length_1);
 
 ATF_TC_HEAD(libhttp_parse_content_length_1, tc)
 {
@@ -181,11 +181,6 @@ ATF_TC_BODY(libhttp_parse_content_length_1, tc)
 	httpHeaderReset(&hdr);
 	httpHeaderClean(&hdr);
 }
-
-ATF_TC_CLEANUP(libhttp_parse_content_length_1, tc)
-{
-}
-
 
 ATF_TP_ADD_TCS(tp)
 {
