@@ -128,7 +128,6 @@ ATF_TC_BODY(libhttp_parse_4, tc)
 
 /* *** */
 
-
 ATF_TC(libhttp_parse_content_length_1);
 
 ATF_TC_HEAD(libhttp_parse_content_length_1, tc)
@@ -139,13 +138,8 @@ ATF_TC_HEAD(libhttp_parse_content_length_1, tc)
 ATF_TC_BODY(libhttp_parse_content_length_1, tc)
 {
 	HttpHeader hdr;
-	int ret;
-	const char *hdrs = "Host: www.creative.net.au\r\nContent-Length: 12345\r\nContent-type: text/html\r\nFoo: bar\r\n\r\n";
-	const char *hdr_start = hdrs;
-	const char *hdr_end = hdr_start + strlen(hdrs);
 
 	test_core_init();
-
         httpHeaderInitLibrary();
 	httpHeaderInit(&hdr, hoRequest);
 
@@ -153,29 +147,6 @@ ATF_TC_BODY(libhttp_parse_content_length_1, tc)
 	ATF_REQUIRE(test_http_content_length(&hdr, "123b5") == 1);
 	ATF_REQUIRE(test_http_content_length(&hdr, "b1234") == -1);
 	ATF_REQUIRE(test_http_content_length(&hdr, "abcde") == -1);
-
-	/* now check duplicates */
-	ATF_REQUIRE(httpHeaderParse(&hdr, hdr_start, hdr_end) == 1);
-
-#if 0
-	printf("test1c: hh_check_content_length: 12345 = %d\n", test_hh_content_length(&hdr, "12345"));
-	printf("test1c: hh_check_content_length: 123b5 = %d\n", test_hh_content_length(&hdr, "123b5"));
-	printf("test1c: hh_check_content_length: b1234 = %d\n", test_hh_content_length(&hdr, "b1234"));
-	printf("test1c: hh_check_content_length: 12344 = %d\n", test_hh_content_length(&hdr, "12344"));
-	printf("test1c: hh_check_content_length: 12346 = %d\n", test_hh_content_length(&hdr, "12346"));
-	printf("test1c: hh_check_content_length: 12344 = %d\n", test_hh_content_length(&hdr, "12344"));
-
-	printf("test1c: hh_check_content_length: setting httpConfig_relaxed_parser to 1 (ok)\n");
-	httpConfig_relaxed_parser = 1;
-	printf("test1c: hh_check_content_length: 12345 = %d\n", test_hh_content_length(&hdr, "12345"));
-	printf("test1c: hh_check_content_length: 123b5 = %d\n", test_hh_content_length(&hdr, "123b5"));
-	printf("test1c: hh_check_content_length: b1234 = %d\n", test_hh_content_length(&hdr, "b1234"));
-
-	printf("test1c: hh_check_content_length: 12344 = %d\n", test_hh_content_length(&hdr, "12344"));
-	/* this one should result in the deletion of the "12345" entry from the original request parse */
-	printf("test1c: hh_check_content_length: 12346 = %d\n", test_hh_content_length(&hdr, "12346"));
-	printf("test1c: hh_check_content_length: 12344 = %d\n", test_hh_content_length(&hdr, "12344"));
-#endif
 
 	/* Clean up */
 	httpHeaderReset(&hdr);
