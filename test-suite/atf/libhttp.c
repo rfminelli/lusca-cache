@@ -138,7 +138,6 @@ ATF_TC_HEAD(libhttp_parse_4, tc)
 
 ATF_TC_BODY(libhttp_parse_4, tc)
 {
-	HttpHeader hdr;
 	libhttp_test_parser("Host: www.creative.net.au\r\nContent-Length: 12345\r\nContent-type: text/html\r\nFoo: bar\r\nContent-Length: 23456\r\n", 0);
 }
 
