@@ -57,3 +57,13 @@ test_core_init(void)
 	memBuffersInit();
 	memStringInit();
 }
+
+int
+test_core_parse_header(HttpHeader *hdr, const char *hdrs)
+{
+        const char *hdr_start = hdrs;
+        const char *hdr_end = hdr_start + strlen(hdrs);
+
+        httpHeaderInit(hdr, hoRequest);
+	return httpHeaderParse(hdr, hdr_start, hdr_end);
+}
