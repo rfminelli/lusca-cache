@@ -51,6 +51,9 @@ all: libhttp
 libhttp: libhttp.o core.o
 	$(CC) core.o libhttp.o -o libhttp $(LDFLAGS)
 
+check: libhttp
+	@env PATH=$$PATH:$(ATF_BINDIR) $(ATF_BINDIR)/atf-run
+
 clean:
 	rm -f libhttp *.o
 
