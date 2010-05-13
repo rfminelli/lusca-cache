@@ -52,8 +52,32 @@
 
 extern int hh_check_content_length(HttpHeader *hdr, const char *val, int vlen);
 
-ATF_TC_WITH_CLEANUP(libhttp_parse_1);
+static void
+libhttp_test_parser(const char *str, int ret)
+{
+	HttpHeader hdr;
 
+	test_core_init();
+	httpHeaderInitLibrary();
+	ATF_CHECK_EQ(test_core_parse_header(&hdr, str), ret);
+	httpHeaderClean(&hdr);
+}
+
+extern int hh_check_content_length(HttpHeader *hdr, const char *val, int vlen);
+
+static int
+test_http_content_length(HttpHeader *hdr, const char *str)
+{
+	int r;
+
+	/* XXX remember; this may delete items from the header entry array! */
+	r = hh_check_content_length(hdr, str, strlen(str));
+	return r;
+}
+
+/* *** */
+
+ATF_TC(libhttp_parse_1);
 ATF_TC_HEAD(libhttp_parse_1, tc)
 {
 	atf_tc_set_md_var(tc, "descr", "libhttp_parse_1");
@@ -61,17 +85,7 @@ ATF_TC_HEAD(libhttp_parse_1, tc)
 
 ATF_TC_BODY(libhttp_parse_1, tc)
 {
-	HttpHeader hdr;
-	const char *hdrs = "Host: www.creative.net.au\r\nContent-type: text/html\r\nFoo: bar\r\n\r\n";
-
-	test_core_init();
-	httpHeaderInitLibrary();
-	ATF_REQUIRE(test_core_parse_header(&hdr, hdrs) == 1);
-	httpHeaderClean(&hdr);
-}
-
-ATF_TC_CLEANUP(libhttp_parse_1, tc)
-{
+	libhttp_test_parser("Host: www.creative.net.au\r\nContent-type: text/html\r\nFoo: bar\r\n\r\n", 1);
 }
 
 ATF_TC(libhttp_parse_2);
@@ -82,14 +96,7 @@ ATF_TC_HEAD(libhttp_parse_2, tc)
 
 ATF_TC_BODY(libhttp_parse_2, tc)
 {
-	HttpHeader hdr;
-	const char *hdrs = "Host: www.creative.net.au\r\nContent-Length: 12345\r\nContent-type: text/html\r\nFoo: bar\r\n\r\n";
-
-	test_core_init();
-	httpHeaderInitLibrary();
-	httpHeaderInit(&hdr, hoRequest);
-	ATF_REQUIRE(test_core_parse_header(&hdr, hdrs) == 1);
-	httpHeaderClean(&hdr);
+	libhttp_test_parser("Host: www.creative.net.au\r\nContent-Length: 12345\r\nContent-type: text/html\r\nFoo: bar\r\n\r\n", 1);
 }
 
 /* ** */
@@ -102,14 +109,7 @@ ATF_TC_HEAD(libhttp_parse_3, tc)
 
 ATF_TC_BODY(libhttp_parse_3, tc)
 {
-	HttpHeader hdr;
-	const char *hdrs = "Host: www.creative.net.au\r\nContent-Length: b12345\r\nContent-type: text/html\r\nFoo: bar\r\n\r\n";
-
-	test_core_init();
-	httpHeaderInitLibrary();
-	httpHeaderInit(&hdr, hoRequest);
-	ATF_REQUIRE(test_core_parse_header(&hdr, hdrs) == 0);
-	httpHeaderClean(&hdr);
+	libhttp_test_parser("Host: www.creative.net.au\r\nContent-Length: b12345\r\nContent-type: text/html\r\nFoo: bar\r\n\r\n", 0);
 }
 
 /* *** */
@@ -123,28 +123,11 @@ ATF_TC_HEAD(libhttp_parse_4, tc)
 ATF_TC_BODY(libhttp_parse_4, tc)
 {
 	HttpHeader hdr;
-	const char *hdrs = "Host: www.creative.net.au\r\nContent-Length: 12345\r\nContent-type: text/html\r\nFoo: bar\r\nContent-Length: 23456\r\n";
-
-	test_core_init();
-	httpHeaderInitLibrary();
-	httpHeaderInit(&hdr, hoRequest);
-	ATF_REQUIRE(test_core_parse_header(&hdr, hdrs) == 0);
-	httpHeaderClean(&hdr);
+	libhttp_test_parser("Host: www.creative.net.au\r\nContent-Length: 12345\r\nContent-type: text/html\r\nFoo: bar\r\nContent-Length: 23456\r\n", 0);
 }
 
 /* *** */
 
-extern int hh_check_content_length(HttpHeader *hdr, const char *val, int vlen);
-
-static int
-test_http_content_length(HttpHeader *hdr, const char *str)
-{
-	int r;
-
-	/* XXX remember; this may delete items from the header entry array! */
-	r = hh_check_content_length(hdr, str, strlen(str));
-	return r;
-}
 
 ATF_TC_WITH_CLEANUP(libhttp_parse_content_length_1);
 
