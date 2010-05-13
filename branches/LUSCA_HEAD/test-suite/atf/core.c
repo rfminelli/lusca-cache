@@ -51,8 +51,8 @@
 void
 test_core_init(void)
 {
-	_db_init("ALL,1");
-	_db_set_stderr_debug(1);
+	_db_init("ALL,0");
+	_db_set_stderr_debug(0);
 	memPoolInit();
 	memBuffersInit();
 	memStringInit();
