@@ -120,11 +120,32 @@ ATF_TC_BODY(Vector_insert_1, tc)
 	}
 }
 
+ATF_TC(Vector_bounds_1);
+ATF_TC_HEAD(Vector_bounds_1, tc)
+{
+	atf_tc_set_md_var(tc, "descr", "Test out-of-bounds access fails");
+}
+
+ATF_TC_BODY(Vector_bounds_1, tc)
+{
+	Vector v;
+	int *n;
+
+	vector_init(&v, sizeof(int), 128);
+	(void) vector_append(&v);
+	ATF_REQUIRE(vector_get_real(&v, 0) != NULL);
+	ATF_REQUIRE(vector_get_real(&v, 1) == NULL);
+	ATF_REQUIRE(vector_get_real(&v, 2) == NULL);
+	ATF_REQUIRE(vector_get_real(&v, 129) == NULL);
+	vector_done(&v);
+}
+
 
 ATF_TP_ADD_TCS(tp)
 {
         ATF_TP_ADD_TC(tp, Vector_test_1);
         ATF_TP_ADD_TC(tp, Vector_test_2);
         ATF_TP_ADD_TC(tp, Vector_test_3);
+        ATF_TP_ADD_TC(tp, Vector_bounds_1);
         ATF_TP_ADD_TC(tp, Vector_insert_1);
 }
