@@ -52,6 +52,16 @@
 
 extern int hh_check_content_length(HttpHeader *hdr, const char *val, int vlen);
 
+static int
+test_core_parse_header(HttpHeader *hdr, const char *hdrs)
+{
+        const char *hdr_start = hdrs;
+        const char *hdr_end = hdr_start + strlen(hdrs);
+
+        httpHeaderInit(hdr, hoRequest);
+        return httpHeaderParse(hdr, hdr_start, hdr_end);
+}
+
 static void
 libhttp_test_parser(const char *str, int ret)
 {
@@ -76,8 +86,6 @@ libhttp_test_content_length_parser(const char *str, const char *clength)
 
 	httpHeaderClean(&hdr);
 }
-
-extern int hh_check_content_length(HttpHeader *hdr, const char *val, int vlen);
 
 static int
 test_http_content_length(HttpHeader *hdr, const char *str)
