@@ -304,21 +304,7 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
     }
 
     /* Create the entry and return it */
-    e = memPoolAlloc(pool_http_header_entry);
-    debug(55, 9) ("creating entry %p: near '%.*s'\n", e, charBufferSize(field_start, field_end), field_start);
-    e->id = id;
-    /* set field name */
-    if (id == HDR_OTHER)
-	stringLimitInit(&e->name, field_start, name_len);
-    else
-	e->name = Headers[id].name;
-    /* set field value */
-    stringLimitInit(&e->value, value_start, field_end - value_start);
-    e->active = 1;
-    Headers[id].stat.seenCount++;
-    Headers[id].stat.aliveCount++;
-    debug(55, 9) ("created entry %p: '%.*s: %.*s'\n", e, strLen2(e->name), strBuf2(e->name), strLen2(e->value), strBuf2(e->value));
-    httpHeaderAddEntry(hdr, e);
+    (void) httpHeaderAddEntryStr2(hdr, id, field_start, name_len, value_start, field_end - value_start);
     return 1;
 }
 
