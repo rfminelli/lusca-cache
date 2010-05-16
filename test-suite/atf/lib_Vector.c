@@ -1,4 +1,3 @@
-
 #include "include/config.h"
 
 #include <atf-c.h>
@@ -79,7 +78,7 @@ ATF_TC_BODY(Vector_test_3, tc)
 	}
 	//printf("check\n");
 	for (i = 0; i < 32; i++) {
-		n = (int *) vector_get(&v, i);
+		n = (int *) vector_get_real(&v, i);
 		if (i < 16) {
 			//printf("%d: %p; used %d\n", i, n, v.used_count);
 			ATF_REQUIRE((*n) == i);
