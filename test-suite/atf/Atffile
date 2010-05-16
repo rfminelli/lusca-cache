@@ -3,3 +3,4 @@ Content-Type: application/X-atf-atffile; version="1"
 prop: test-suite = lusca
 
 tp: libhttp
+tp: lib_Vector

@@ -46,12 +46,16 @@ LDADD=-L$(BASEDIR)/libcore \
 LDFLAGS=$(LDADD) -L$(ATF_LIBDIR)
 CFLAGS=-O -g -I$(BASEDIR) -I$(ATF_INCLUDEDIR)
 
-all: libhttp
+all: libhttp lib_Vector
 
 libhttp: libhttp.o core.o
 	$(CC) core.o libhttp.o -o libhttp $(LDFLAGS)
 
-check: libhttp
+lib_Vector: lib_Vector.o core.o
+	$(CC) core.o lib_Vector.o -o lib_Vector $(LDFLAGS)
+
+
+check: libhttp lib_Vector
 	@env PATH=$$PATH:$(ATF_BINDIR) $(ATF_BINDIR)/atf-run
 
 clean:
