@@ -14,6 +14,7 @@
 #include <netinet/in.h>
 
 #include "include/Array.h"
+#include "include/Vector.h"
 #include "include/Stack.h"
 #include "include/util.h"
 #include "libcore/valgrind.h"
