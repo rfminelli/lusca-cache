@@ -53,7 +53,7 @@ vector_done(vector_t *v)
 void *
 vector_get_real(const vector_t *v, int offset)
 {
-	if (offset > v->used_count)
+	if (offset >= v->used_count)
 		return NULL;
 	if (v->data == NULL)
 		return NULL;
