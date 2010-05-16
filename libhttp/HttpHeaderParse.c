@@ -89,6 +89,11 @@ int httpHeaderParseSize2(const char *start, int len, squid_off_t * value);
  * do that! It should signify the caller that the old header value should
  * be removed!
  */
+/*
+ * -1: invalid header, return error
+ * 0: invalid header, don't add, continue
+ * 1: valid header, add
+ */
 int
 hh_check_content_length(HttpHeader *hdr, const char *var, int vlen)
 {
@@ -139,20 +144,6 @@ hh_check_content_length(HttpHeader *hdr, const char *var, int vlen)
 	    } else {
 	        return 0;
 	    }
-}
-
-/*
- * -1: invalid header, return error
- * 0: invalid header, don't add, continue
- * 1: valid header, add
- */
-static int
-httpHeaderParseCheckEntry(HttpHeader *hdr, int id, String *name, String *value)
-{
-	if (id == HDR_CONTENT_LENGTH) {
-		return(hh_check_content_length(hdr, strBuf2(*value), strLen2(*value)));
-	}
-	return 1;
 }
 
 int
