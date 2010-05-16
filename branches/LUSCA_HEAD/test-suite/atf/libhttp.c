@@ -51,6 +51,69 @@
 
 #include "core.h"
 
+struct _http_repack_list {
+	const char *n;
+	const char *v;
+	http_hdr_type t;
+	int valid;
+};
+void
+http_hdrs_assemble(char *hdrs, struct _http_repack_list *r)
+{
+	int i;
+
+	hdrs[0] = '\0';
+	for (i = 0; r[i].n != NULL; i++) {
+		strcat(hdrs, r[i].n);
+		strcat(hdrs, ": ");
+		strcat(hdrs, r[i].v);
+		strcat(hdrs, "\r\n");
+	}
+	strcat(hdrs, "\r\n");
+}
+
+void
+http_hdrs_repack_del(HttpHeader *hdrs, struct _http_repack_list *r, int ti)
+{
+	/* Remove the Content-Length header */
+	if (r[ti].t == HDR_OTHER)
+		httpHeaderDelByName(hdrs, r[ti].n);
+	else
+		httpHeaderDelById(hdrs, r[ti].t);
+	r[ti].valid = 0;
+}
+
+void
+http_hdrs_check(HttpHeader *hdrs, struct _http_repack_list *r)
+{
+	volatile int i, j;
+	HttpHeaderPos pos;
+	HttpHeaderEntry *e;
+
+	pos = HttpHeaderInitPos;
+	for (i = 0; r[i].n != NULL; i++) {
+		if (r[i].valid == 0)
+			continue;
+		e = httpHeaderGetEntry(hdrs, &pos);
+		ATF_REQUIRE(e != NULL);
+		ATF_REQUIRE(e->id == r[i].t);
+		ATF_REQUIRE(strCmp(e->value, r[i].v) == 0);
+		if (e->id == HDR_OTHER)
+			ATF_REQUIRE(strCmp(e->name, r[i].n) == 0);
+	}
+}
+
+void
+http_hdrs_check_again(HttpHeader *hdrs, struct _http_repack_list *r)
+{
+	http_hdrs_check(hdrs, r);
+	httpHeaderRepack(hdrs);
+	http_hdrs_check(hdrs, r);
+}
+
+
+/* ** */
+
 extern int hh_check_content_length(HttpHeader *hdr, const char *val, int vlen);
 
 static int
@@ -97,6 +160,24 @@ test_http_content_length(HttpHeader *hdr, const char *str)
 	r = hh_check_content_length(hdr, str, strlen(str));
 	return r;
 }
+
+/* ** */
+
+/*
+ * This only deletes the item at the given location!
+ */
+static void
+http_hdrs_parse(HttpHeader *hdr, struct _http_repack_list *r)
+{
+	char hdrs[1024];
+
+	/* Assemble a "joined" header set for parsing */
+	http_hdrs_assemble(hdrs, r);
+
+	/* Parse header set */
+	ATF_REQUIRE(test_core_parse_header(hdr, hdrs) == 1);
+}
+
 
 /* *** */
 
@@ -211,6 +292,39 @@ ATF_TC_BODY(libhttp_parser_other_whitespace_1, tc)
 	libhttp_test_parser("Fo o: bar\r\n", 0);
 }
 
+ATF_TC(libhttp_repack_1);
+ATF_TC_HEAD(libhttp_repack_1, tc)
+{
+	atf_tc_set_md_var(tc, "descr", "Check that httpHeaderRepack() doesn't mangle the header list");
+}
+ATF_TC_BODY(libhttp_repack_1, tc)
+{
+	HttpHeader hdr;
+	char hdrs[1024];
+	int i;
+
+	struct _http_repack_list r[] =
+		{ { "Content-Type", "text/html", HDR_CONTENT_TYPE, 1 },
+		  { "Foo", "bar", HDR_OTHER, 1 },
+		  { "Content-Length", "12345", HDR_CONTENT_LENGTH, 1 },
+		  { "Accept", "*/*", HDR_ACCEPT, 1 },
+		  { NULL, NULL, HDR_UNKNOWN, 0 }};
+
+	test_core_init();
+	httpHeaderInitLibrary();
+	http_hdrs_parse(&hdr, r);
+
+	/* Ensure the headers are still as expected */
+	http_hdrs_check_again(&hdr, r);
+	http_hdrs_repack_del(&hdr, r, 2);
+	http_hdrs_check_again(&hdr, r);
+	http_hdrs_repack_del(&hdr, r, 3);
+	http_hdrs_check_again(&hdr, r);
+
+	httpHeaderReset(&hdr);
+	httpHeaderClean(&hdr);
+}
+
 ATF_TP_ADD_TCS(tp)
 {
 	ATF_TP_ADD_TC(tp, libhttp_parse_1);
@@ -220,6 +334,7 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, libhttp_parse_content_length_1);
 	ATF_TP_ADD_TC(tp, libhttp_parse_content_length_2);
 	ATF_TP_ADD_TC(tp, libhttp_parser_other_whitespace_1);
+	ATF_TP_ADD_TC(tp, libhttp_repack_1);
 	return atf_no_error();
 }
 
