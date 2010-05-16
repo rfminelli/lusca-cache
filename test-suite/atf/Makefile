@@ -59,5 +59,5 @@ check: libhttp lib_Vector
 	@env PATH=$$PATH:$(ATF_BINDIR) $(ATF_BINDIR)/atf-run
 
 clean:
-	rm -f libhttp *.o
+	rm -f libhttp lib_Vector *.o
 
