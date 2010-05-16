@@ -77,7 +77,7 @@
 int httpConfig_relaxed_parser = 0;
 int HeaderEntryParsedCount = 0;
 
-static HttpHeaderEntry * httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char *field_end);
+static int httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char *field_end);
 int httpHeaderParseSize2(const char *start, int len, squid_off_t * value);
 
 /*
@@ -217,8 +217,12 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 	    }
 	    break;		/* terminating blank line */
 	}
-	e = httpHeaderEntryParseCreate(hdr, field_start, field_end);
-	if (NULL == e) {
+
+	/* This now parses and creates the entry */
+	r = httpHeaderEntryParseCreate(hdr, field_start, field_end);
+	if (r < 0)
+	    return httpHeaderReset(hdr);
+	else if (r == 0) {
 	    debug(55, 1) ("WARNING: unparseable HTTP header field {%.*s}\n",
 		charBufferSize(field_start, field_end), field_start);
 	    debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
@@ -228,16 +232,6 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 	    else
 		return httpHeaderReset(hdr);
 	}
-	r = httpHeaderParseCheckEntry(hdr, e->id, &e->name, &e->value);
-	if (r <= 0) {
-		httpHeaderEntryDestroy(e);
-                memPoolFree(pool_http_header_entry, e);
-		e = NULL;
-	}
-	if (r < 0)
-		return httpHeaderReset(hdr);
-	if (e)
-		httpHeaderAddEntry(hdr, e);
     }
     return 1;			/* even if no fields where found, it is a valid header */
 }
@@ -247,11 +241,12 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
  */
 
 /* parses and inits header entry, returns new entry on success */
-static HttpHeaderEntry *
+int
 httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char *field_end)
 {
     HttpHeaderEntry *e;
     int id;
+    int r;
     /* note: name_start == field_start */
     const char *name_end = memchr(field_start, ':', field_end - field_start);
     int name_len = name_end ? name_end - field_start : 0;
@@ -262,11 +257,11 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
 
     /* do we have a valid field name within this field? */
     if (!name_len || name_end > field_end)
-	return NULL;
+	return 0;
     if (name_len > 65534) {
 	/* String must be LESS THAN 64K and it adds a terminating NULL */
 	debug(55, 1) ("WARNING: ignoring header name of %d bytes\n", name_len);
-	return NULL;
+	return 0;
     }
     if (httpConfig_relaxed_parser && xisspace(field_start[name_len - 1])) {
 	debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
@@ -274,11 +269,10 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
 	while (name_len > 0 && xisspace(field_start[name_len - 1]))
 	    name_len--;
 	if (!name_len)
-	    return NULL;
+	    return 0;
     }
 
     /* now we know we can parse it */
-
 
     /* is it a "known" field? */
     id = httpHeaderIdByName(field_start, name_len, Headers, HDR_ENUM_END);
@@ -296,7 +290,7 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
 	/* String must be LESS THAN 64K and it adds a terminating NULL */
 	debug(55, 1) ("WARNING: ignoring '%.*s' header of %d bytes\n",
 	   charBufferSize(field_start, field_end), field_start,  charBufferSize(value_start, field_end));
-	return NULL;
+	return 0;
     }
 
     /* Is it an OTHER header? Verify the header contents don't have whitespace! */
@@ -305,13 +299,18 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
 	    debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
 		("WARNING: found whitespace in HTTP header name {%.*s}\n", name_len, field_start);
 	    if (!httpConfig_relaxed_parser) {
-		return NULL;
+		return 0;
 	    }
     }
 
     /* Is it a content length header? Do the content length checks */
     /* XXX this function will remove the older content length header(s)
      * XXX if needed. Ew. */
+    if (id == HDR_CONTENT_LENGTH) {
+        r = hh_check_content_length(hdr, value_start, field_end - value_start);
+        if (r <= 0)
+	    return r;
+    }
 
     /* Create the entry and return it */
     e = memPoolAlloc(pool_http_header_entry);
@@ -328,7 +327,8 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
     Headers[id].stat.seenCount++;
     Headers[id].stat.aliveCount++;
     debug(55, 9) ("created entry %p: '%.*s: %.*s'\n", e, strLen2(e->name), strBuf2(e->name), strLen2(e->value), strBuf2(e->value));
-    return e;
+    httpHeaderAddEntry(hdr, e);
+    return 1;
 }
 
 
