@@ -56,7 +56,7 @@ lib_Vector: lib_Vector.o core.o
 
 
 check: libhttp lib_Vector
-	@env PATH=$$PATH:$(ATF_BINDIR) $(ATF_BINDIR)/atf-run
+	@env PATH=$$PATH:$(ATF_BINDIR) $(ATF_BINDIR)/atf-run | $(ATF_BINDIR)/atf-report
 
 clean:
 	rm -f libhttp lib_Vector *.o
