@@ -137,6 +137,7 @@ squid_SOURCES = \
 	globals.h \
 	gopher.c \
 	helper.c \
+	hierarchy_entry.c \
 	$(HTCPSOURCE) \
 	http.c \
 	HttpStatusLine.c \
