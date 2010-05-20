@@ -36,6 +36,7 @@
 
 #include "squid.h"
 #include "pconn.h"
+#include "hierarchy_entry.h"
 
 #if LINUX_NETFILTER
 #include <linux/types.h>
