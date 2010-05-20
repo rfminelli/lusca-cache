@@ -3,5 +3,6 @@
 
 extern char * escapeIAC(const char *buf);
 extern char * decodeTelnet(char *buf);
+extern int is_month(const char *buf);
 
 #endif
