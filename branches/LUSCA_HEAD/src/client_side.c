@@ -36,6 +36,7 @@
 #include "squid.h"
 
 #include "client_db.h"
+#include "hierarchy_entry.h"
 
 #include "client_side_conn.h"
 #include "client_side_body.h"
@@ -298,7 +299,7 @@ httpRequestLog(clientHttpRequest *http)
 	    }
 	    urlMethodAssign(&http->al.http.method, request->method);
 	    http->al.http.version = request->http_ver;
-	    http->al.hier = request->hier;
+	    hierarchyLogEntryCopy(&http->al.hier, &request->hier);
 	    if (request->auth_user_request) {
 		if (authenticateUserRequestUsername(request->auth_user_request))
 		    http->al.cache.authuser = xstrdup(authenticateUserRequestUsername(request->auth_user_request));
@@ -2195,7 +2196,7 @@ clientProcessRequest(clientHttpRequest * http)
 	storeLockObject(http->entry);
 	if (http->entry->store_status == STORE_PENDING && http->entry->mem_obj) {
 	    if (http->entry->mem_obj->request)
-		r->hier = http->entry->mem_obj->request->hier;
+		hierarchyLogEntryCopy(&r->hier, &http->entry->mem_obj->request->hier);
 	}
 	storeCreateMemObject(http->entry, http->uri);
         urlMethodAssign(&http->entry->mem_obj->method, r->method);

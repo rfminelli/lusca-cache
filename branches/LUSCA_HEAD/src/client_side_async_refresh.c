@@ -1,5 +1,7 @@
 #include "squid.h"
 
+#include "hierarchy_entry.h"
+
 #include "client_side_async_refresh.h"
 
 /*
@@ -57,7 +59,7 @@ clientAsyncDone(clientAsyncRefreshRequest * async)
     }
     urlMethodAssign(&al.http.method, request->method);
     al.http.version = request->http_ver;
-    al.hier = request->hier;
+    hierarchyLogEntryCopy(&al.hier, &request->hier);
     if (request->auth_user_request) {
 	if (authenticateUserRequestUsername(request->auth_user_request))
 	    al.cache.authuser = xstrdup(authenticateUserRequestUsername(request->auth_user_request));
