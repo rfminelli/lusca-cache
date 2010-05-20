@@ -9,6 +9,22 @@
 
 #include "../include/util.h"
 
+static const char *Month[] =
+{
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+};
+
+int
+is_month(const char *buf)
+{
+    int i;
+    for (i = 0; i < 12; i++)
+        if (!strcasecmp(buf, Month[i]))
+            return 1;
+    return 0;
+}
+
 /* escapes any IAC (0xFF) characters. Returns a new string */
 char *
 escapeIAC(const char *buf)

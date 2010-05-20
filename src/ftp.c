@@ -393,23 +393,6 @@ ftpListingFinish(FtpStateData * ftpState)
     storeAppendPrintf(e, "</ADDRESS></BODY></HTML>\n");
 }
 
-static const char *Month[] =
-{
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-};
-
-static int
-is_month(const char *buf)
-{
-    int i;
-    for (i = 0; i < 12; i++)
-	if (!strcasecmp(buf, Month[i]))
-	    return 1;
-    return 0;
-}
-
-
 static void
 ftpListPartsFree(ftpListParts ** parts)
 {
