@@ -1,3 +1,11 @@
+/*!
+ * @header Vector - vector data structure
+ *
+ * This is an implementation of a Vector style memory array of fixed-size,
+ * arbitrary count structures.
+ *
+ * @copyright Adrian Chadd <adrian@creative.net.au>
+ */
 #include "../include/config.h"
 
 #include <stdio.h>
@@ -25,9 +33,16 @@ vector_grow(vector_t *v, int new_count)
 	return 1;
 }
 
-/*
- * Setup a vector. We don't ever fail here - if allocation fails
- * then "get" will return NULL.
+/*!
+ * @function
+ * 	vector_init
+ * @abstract
+ *	Setup a vector for use.
+ * @discussion
+ *
+ * @param	v		pointer to allocated vector_t to initialise
+ * @param	obj_size	size of each struct being stored
+ * @param	obj_count	number of objects to initially allocate for
  */
 void
 vector_init(vector_t *v, int obj_size, int obj_count)
@@ -39,6 +54,15 @@ vector_init(vector_t *v, int obj_size, int obj_count)
 	(void) vector_grow(v, obj_count);
 }
 
+/*!
+ * @function
+ * 	vector_done
+ * @abstract
+ * 	Free memory associated with a vector_t
+ * @discussion
+ *
+ * @param	v	pointer to vector_t to clean up
+ */
 void
 vector_done(vector_t *v)
 {
@@ -48,7 +72,6 @@ vector_done(vector_t *v)
 		xfree(v->data);
 	v->data = NULL;
 }
-
 
 void *
 vector_get_real(const vector_t *v, int offset)
