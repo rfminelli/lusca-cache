@@ -140,6 +140,46 @@ ATF_TC_BODY(Vector_bounds_1, tc)
 	vector_done(&v);
 }
 
+ATF_TC(Vector_shrink_1);
+ATF_TC_HEAD(Vector_shrink_1, tc)
+{
+	atf_tc_set_md_var(tc, "descr", "Test vector_shrink() works as advertised");
+}
+ATF_TC_BODY(Vector_shrink_1, tc)
+{
+	Vector v;
+	int *n;
+	int i;
+
+	vector_init(&v, sizeof(int), 128);
+
+	/* Allocate */
+	for (i = 0; i < 10; i++) {
+		n = (int *) vector_append(&v);
+		(*n) = i;
+	}
+
+	/* Shrinking the array past the array bounds should be a no-op */
+	vector_shrink(&v, 12);
+	ATF_REQUIRE(vector_numentries(&v) == 10);
+	vector_shrink(&v, 11);
+	ATF_REQUIRE(vector_numentries(&v) == 10);
+
+	/* Shrinking the array on the array bounds should be a no-op */
+	vector_shrink(&v, 10);
+	ATF_REQUIRE(vector_numentries(&v) == 10);
+
+	/* Shrinking the array before should shrink */
+	vector_shrink(&v, 9);
+	ATF_REQUIRE(vector_numentries(&v) == 9);
+
+	vector_shrink(&v, 2);
+	ATF_REQUIRE(vector_numentries(&v) == 2);
+	
+	vector_shrink(&v, 0);
+	ATF_REQUIRE(vector_numentries(&v) == 0);
+}
+
 
 ATF_TP_ADD_TCS(tp)
 {
@@ -148,4 +188,5 @@ ATF_TP_ADD_TCS(tp)
         ATF_TP_ADD_TC(tp, Vector_test_3);
         ATF_TP_ADD_TC(tp, Vector_bounds_1);
         ATF_TP_ADD_TC(tp, Vector_insert_1);
+        ATF_TP_ADD_TC(tp, Vector_shrink_1);
 }
