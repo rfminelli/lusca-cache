@@ -46,14 +46,4 @@ struct _ftp_flags {
     unsigned int listformat_unknown:1;
 };
 
-typedef struct {
-    char type;
-    squid_off_t size;
-    char *date;
-    char *name;
-    char *showname;
-    char *link;
-} ftpListParts;
-
-
 #endif
