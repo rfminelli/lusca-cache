@@ -34,6 +34,7 @@
  */
 
 #include "squid.h"
+#include "hierarchy_entry.h"
 
 typedef struct {
     char *url;
