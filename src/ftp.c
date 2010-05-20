@@ -35,6 +35,8 @@
 
 #include "squid.h"
 
+#include "../libsqftp/ftp_util.h"
+
 static const char *const crlf = "\r\n";
 static char cbuf[1024];
 
@@ -1164,40 +1166,6 @@ ftpStart(FwdState * fwd)
 }
 
 /* ====================================================================== */
-
-/* escapes any IAC (0xFF) characters. Returns a new string */
-static char *
-escapeIAC(const char *buf)
-{
-    int n;
-    char *ret;
-    unsigned const char *p;
-    unsigned char *r;
-    for (p = (unsigned const char *) buf, n = 1; *p; n++, p++)
-	if (*p == 255)
-	    n++;
-    ret = xmalloc(n);
-    for (p = (unsigned const char *) buf, r = (unsigned char *) ret; *p; p++) {
-	*r++ = *p;
-	if (*p == 255)
-	    *r++ = 255;
-    }
-    *r++ = '\0';
-    assert((r - (unsigned char *) ret) == n);
-    return ret;
-}
-
-/* removes any telnet options. Same string returned */
-static char *
-decodeTelnet(char *buf)
-{
-    char *p = buf;
-    while ((p = strstr(p, "\377\377")) != NULL) {
-	p++;
-	memmove(p, p + 1, strlen(p + 1) + 1);
-    }
-    return buf;
-}
 
 static void
 ftpWriteCommand(const char *buf, FtpStateData * ftpState)
