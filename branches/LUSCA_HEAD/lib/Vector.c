@@ -131,8 +131,25 @@ vector_copy_item(vector_t *v, int dst, int src)
 	return 1;
 }
 
+/*!
+ * @function
+ *	vector_shrink
+ * @abstract
+ *	Shrink the given vector to the given size.
+ * @discussion
+ *	Any references to the currently-stored data that will be "deleted"
+ *	after shrinking should be removed before calling vector_shrink().
+ *
+ *	The operation is ignored if a larger size than the currently allocated
+ *	count is given.
+ *
+ * @param	v	pointer vector to shrink
+ * @param	new_size	the new size; must be smaller or equal to the current size
+ */
 void
 vector_shrink(vector_t *v, int new_size)
 {
-	v->used_count = new_size;
+	/* XXX should we have a real debugging assert() in here? */
+	if (new_size < v->used_count)
+		v->used_count = new_size;
 }
