@@ -452,6 +452,8 @@ struct rusage {
 #include "../libsqstore/store_log.h"
 #include "../libsqstore/store_file_ufs.h"
 
+#include "../libsqurl/proto.h"
+
 #include "defines.h"
 #include "enums.h"
 #include "typedefs.h"
