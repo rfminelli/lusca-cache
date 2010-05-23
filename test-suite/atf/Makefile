@@ -14,6 +14,7 @@ LDADD=-L$(BASEDIR)/libcore \
 	-L$(BASEDIR)/libstmem \
 	-L$(BASEDIR)/libiapp \
 	-L$(BASEDIR)/libhttp \
+	-L$(BASEDIR)/libsqurl \
 	-L$(BASEDIR)/libstat \
 	-L$(BASEDIR)/libsqdns \
 	-L$(BASEDIR)/libsqident \
@@ -36,6 +37,7 @@ LDADD=-L$(BASEDIR)/libcore \
 	-lmime \
 	-liapp \
 	-lhttp \
+	-lsqurl \
 	-lmem \
 	-lcore \
 	-lstat \
@@ -46,7 +48,7 @@ LDADD=-L$(BASEDIR)/libcore \
 LDFLAGS=$(LDADD) -L$(ATF_LIBDIR)
 CFLAGS=-O -g -I$(BASEDIR) -I$(ATF_INCLUDEDIR)
 
-all: libhttp lib_Vector
+all: libhttp lib_Vector libsqurl
 
 libhttp: libhttp.o core.o
 	$(CC) core.o libhttp.o -o libhttp $(LDFLAGS)
@@ -54,10 +56,12 @@ libhttp: libhttp.o core.o
 lib_Vector: lib_Vector.o core.o
 	$(CC) core.o lib_Vector.o -o lib_Vector $(LDFLAGS)
 
+libsqurl: libsqurl.o core.o
+	$(CC) core.o libsqurl.o -o libsqurl $(LDFLAGS)
 
-check: libhttp lib_Vector
+check: libhttp lib_Vector libsqurl
 	@env PATH=$$PATH:$(ATF_BINDIR) $(ATF_BINDIR)/atf-run | $(ATF_BINDIR)/atf-report
 
 clean:
-	rm -f libhttp lib_Vector *.o
+	rm -f libhttp lib_Vector libsqurl *.o
 
