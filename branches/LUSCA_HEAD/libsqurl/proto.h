@@ -19,4 +19,7 @@ typedef enum {
 
 extern const char *ProtocolStr[];
 
+extern protocol_t urlParseProtocol(const char *s);
+extern int urlDefaultPort(protocol_t p);
+
 #endif
