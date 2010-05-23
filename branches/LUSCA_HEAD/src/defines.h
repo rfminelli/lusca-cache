@@ -119,9 +119,6 @@
 
 #define MAX_FILES_PER_DIR (1<<20)
 
-#define MAX_URL  4096
-#define MAX_LOGIN_SZ  128
-
 #define PEER_MAX_ADDRESSES 10
 #define RTT_AV_FACTOR      50
 

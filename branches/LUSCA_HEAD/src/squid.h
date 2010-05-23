@@ -261,7 +261,8 @@
 #include <math.h>
 #endif
 
-#define SQUIDHOSTNAMELEN 256
+/* This is for SQUIDHOSTNAMELEN */
+#include "../libsqurl/defines.h"
 
 #if !HAVE_GETRUSAGE
 #if defined(_SQUID_HPUX_)
