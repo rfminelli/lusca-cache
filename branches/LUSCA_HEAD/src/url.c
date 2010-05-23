@@ -261,7 +261,6 @@ urnParse(method_t * method, char *urn)
 const char *
 urlCanonical(request_t * request)
 {
-    LOCAL_ARRAY(char, portbuf, 32);
     LOCAL_ARRAY(char, urlbuf, MAX_URL);
     if (request->canonical)
 	return request->canonical;
@@ -273,17 +272,8 @@ urlCanonical(request_t * request)
 	    snprintf(urlbuf, MAX_URL, "%s:%d", request->host, request->port);
 	    break;
 	default:
-	    portbuf[0] = '\0';
-	    if (request->port != urlDefaultPort(request->protocol))
-		snprintf(portbuf, 32, ":%d", request->port);
-	    snprintf(urlbuf, MAX_URL, "%s://%s%s%s%s%.*s",
-		ProtocolStr[request->protocol],
-		request->login,
-		*request->login ? "@" : null_string,
-		request->host,
-		portbuf,
-		strLen2(request->urlpath),
-		strBuf2(request->urlpath));
+	    (void) urlMakeHttpCanonical(urlbuf, request->protocol, request->login,
+	      request->host, request->port, strBuf2(request->urlpath), strLen2(request->urlpath));
 	    break;
 	}
     }
