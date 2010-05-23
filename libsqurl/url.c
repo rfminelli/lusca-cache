@@ -9,6 +9,7 @@
 
 #include "../libcore/tools.h"
 
+#include "proto.h"
 #include "defines.h"
 #include "url.h"
 
@@ -93,3 +94,30 @@ urlHostname(const char *url)
     return host;
 }
 
+/*
+ * Create a canonical HTTP style URL using the given components.
+ *
+ * "urlbuf" must be a MAX_URL sized buffer. The NUL terminated URL
+ * will be written into that.
+ */
+int
+urlMakeHttpCanonical(char *urlbuf, protocol_t protocol, const char *login,
+    const char *host, int port, const char *urlpath, int urlpath_len)
+{
+	LOCAL_ARRAY(char, portbuf, 32);    
+	int len;
+
+	portbuf[0] = '\0';
+
+	if (port != urlDefaultPort(protocol))
+		snprintf(portbuf, 32, ":%d", port);
+	len = snprintf(urlbuf, MAX_URL, "%s://%s%s%s%s%.*s",
+	    ProtocolStr[protocol],
+	    login,
+	    *login ? "@" : "",
+	    host,
+	    portbuf,
+	    urlpath_len, urlpath);
+
+	return len;
+}
