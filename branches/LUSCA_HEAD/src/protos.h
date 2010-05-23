@@ -781,7 +781,7 @@ extern void unlinkdClose(void);
 extern void unlinkdUnlink(const char *);
 #endif
 
-extern char *url_convert_hex(char *org_url, int allocate);
+/* url.c */
 extern char *url_escape(const char *url);
 extern protocol_t urlParseProtocol(const char *);
 extern void urlInitialize(void);
