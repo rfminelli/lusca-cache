@@ -37,6 +37,9 @@
 #include "splay.h"
 #include "client_db.h"
 
+#include "../libsqurl/domain.h"
+
+
 static void aclParseDomainList(void *curlist);
 static void aclParseUserList(void **current);
 static void aclParseIpList(void *curlist);

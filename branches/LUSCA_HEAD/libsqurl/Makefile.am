@@ -2,7 +2,8 @@
 
 libsqurl_a_SOURCES = \
 	url.c \
-	proto.c
+	proto.c \
+	domain.c
 
 noinst_LIBRARIES = \
 	libsqurl.a
