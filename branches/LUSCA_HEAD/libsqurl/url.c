@@ -34,3 +34,28 @@ url_convert_hex(char *org_url, int allocate)
     return url;
 }
 
+/*
+ * Test if a URL is relative.
+ *
+ * RFC 2396, Section 5 (Page 17) implies that in a relative URL, a '/' will
+ * appear before a ':'.
+ */
+int
+urlIsRelative(const char *url)
+{
+    const char *p;
+
+    if (url == NULL) {
+        return (0);
+    }
+    if (*url == '\0') {
+        return (0);
+    }
+    for (p = url; *p != '\0' && *p != ':' && *p != '/'; p++);
+
+    if (*p == ':') {
+        return (0);
+    }
+    return (1);
+}
+
