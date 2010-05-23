@@ -791,7 +791,6 @@ extern char *urlRInternal(const char *host, u_short port, const char *dir, const
 extern char *urlInternal(const char *dir, const char *name);
 extern int urlCheckRequest(const request_t *);
 extern char *urlCanonicalClean(const request_t *);
-extern char *urlHostname(const char *url);
 
 extern void useragentOpenLog(void);
 extern void useragentRotateLog(void);
