@@ -36,6 +36,8 @@
 #include "squid.h"
 #include "icmp.h"
 
+#include "../libsqurl/domain.h"
+
 /* count mcast group peers every 15 minutes */
 #define MCAST_COUNT_RATE 900
 

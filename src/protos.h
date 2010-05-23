@@ -790,7 +790,6 @@ extern int urlIsRelative(const char *);
 extern char *urlMakeAbsolute(request_t *, const char *);
 extern char *urlRInternal(const char *host, u_short port, const char *dir, const char *name);
 extern char *urlInternal(const char *dir, const char *name);
-extern int matchDomainName(const char *host, const char *domain);
 extern int urlCheckRequest(const request_t *);
 extern char *urlCanonicalClean(const request_t *);
 extern char *urlHostname(const char *url);
