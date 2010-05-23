@@ -35,24 +35,8 @@
 
 #include "squid.h"
 
-const char *ProtocolStr[] =
-{
-    "NONE",
-    "http",
-    "ftp",
-    "gopher",
-    "wais",
-    "cache_object",
-    "icp",
-#if USE_HTCP
-    "htcp",
-#endif
-    "urn",
-    "whois",
-    "internal",
-    "https",
-    "TOTAL"
-};
+#include "../libsqurl/proto.h"
+#include "../libsqurl/url.h"
 
 static request_t *urnParse(method_t * method, char *urn);
 static const char valid_hostname_chars_u[] =
