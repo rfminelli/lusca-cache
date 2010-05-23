@@ -4,3 +4,4 @@ prop: test-suite = lusca
 
 tp: libhttp
 tp: lib_Vector
+tp: libsqurl
