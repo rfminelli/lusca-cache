@@ -3294,6 +3294,7 @@ AC_OUTPUT([\
 	libsqinet/Makefile \
 	libhelper/Makefile \
 	libsqftp/Makefile \
+	libsqurl/Makefile \
 	libhttp/Makefile \
 	libiapp/Makefile \
 	libstat/Makefile \
