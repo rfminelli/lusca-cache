@@ -52,7 +52,9 @@ void
 urlInitialize(void)
 {
     debug(23, 5) ("urlInitialize: Initializing...\n");
+#if 0
     assert(sizeof(ProtocolStr) == (PROTO_MAX + 1) * sizeof(char *));
+#endif
     memset(&null_request_flags, '\0', sizeof(null_request_flags));
     /*
      * These test that our matchDomainName() function works the
