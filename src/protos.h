@@ -786,7 +786,6 @@ extern char *url_escape(const char *url);
 extern void urlInitialize(void);
 extern request_t *urlParse(method_t *, char *);
 extern const char *urlCanonical(request_t *);
-extern int urlIsRelative(const char *);
 extern char *urlMakeAbsolute(request_t *, const char *);
 extern char *urlRInternal(const char *host, u_short port, const char *dir, const char *name);
 extern char *urlInternal(const char *dir, const char *name);
