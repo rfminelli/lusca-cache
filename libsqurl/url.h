@@ -3,5 +3,7 @@
 
 extern char * url_convert_hex(char *org_url, int allocate);
 extern int urlIsRelative(const char *url);
+extern char * urlHostname(const char *url);
+
 
 #endif
