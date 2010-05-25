@@ -222,7 +222,7 @@ storeCossRebuildHelperRead(int fd, void *data)
                         case SWAP_LOG_PROGRESS:
                                 t = ((storeSwapLogProgress *)(&s))->total;
 				p = ((storeSwapLogProgress *)(&s))->progress;
-				debug(47, 1) ("storeAufsRebuildHelperRead: %s: SWAP_LOG_PROGRESS: total %d objects, progress %d objects\n", sd->path, t, p);
+				debug(47, 3) ("storeCOSSRebuildHelperRead: %s: SWAP_LOG_PROGRESS: total %d objects, progress %d objects\n", sd->path, t, p);
                                 storeRebuildProgress(rb->sd->index, t, p);
                                 break;
                         case SWAP_LOG_COMPLETED:
