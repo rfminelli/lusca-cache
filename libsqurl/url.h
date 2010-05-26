@@ -7,5 +7,8 @@ extern char * urlHostname(const char *url);
 extern int urlMakeHttpCanonical(char *urlbuf, protocol_t protocol,
     const char *login, const char *host, int port, const char *urlpath,
     int urlpath_len);
+extern int urlMakeHttpCanonical2(char *urlbuf, protocol_t protocol,
+    const char *login, const char *host, int port, const char *urlpath,
+    int urlpath_len);
 
 #endif

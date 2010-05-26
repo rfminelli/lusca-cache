@@ -122,3 +122,64 @@ urlMakeHttpCanonical(char *urlbuf, protocol_t protocol, const char *login,
 
 	return len;
 }
+
+int
+urlMakeHttpCanonical2(char *urlbuf, protocol_t protocol, const char *login,
+    const char *host, int port, const char *urlpath, int urlpath_len)
+{
+	LOCAL_ARRAY(char, buf, MAX_URL);
+	LOCAL_ARRAY(char, portbuf, 32);
+	LOCAL_ARRAY(char, loginbuf, MAX_LOGIN_SZ + 1);
+	char *t;
+	int i, j;
+	const char *s;
+	static const char ts[] = "://";
+
+	portbuf[0] = '\0';
+	if (port != urlDefaultPort(protocol))
+		snprintf(portbuf, 32, ":%d", port);
+
+	loginbuf[0] = '\0';
+	if ((int) strlen(login) > 0) {
+		strcpy(loginbuf, login);
+		if ((t = strchr(loginbuf, ':')))
+			*t = '\0';
+		strcat(loginbuf, "@");
+	}
+
+	/*
+	 * This stuff would be better if/when each of these strings is a String with
+	 * a known length..
+	*/
+	s = ProtocolStr[protocol];
+	for (i = 0; i < MAX_URL && *s != '\0'; i++, s++) {
+		buf[i] = *s;
+	}
+	s = ts;
+	for (; i < MAX_URL && *s != '\0'; i++, s++) {
+		buf[i] = *s;
+	}
+	s = loginbuf;
+	for (; i < MAX_URL && *s != '\0'; i++, s++) {
+		buf[i] = *s;
+	}
+	s = host;
+	for (; i < MAX_URL && *s != '\0'; i++, s++) {
+		buf[i] = *s;
+	}
+	s = portbuf;
+	for (; i < MAX_URL && *s != '\0'; i++, s++) {
+		buf[i] = *s;
+	}
+	for (j = 0; i < MAX_URL && j < urlpath_len; i++, j++) {
+		buf[i] = urlpath[j];
+	}
+
+	if (i >= (MAX_URL - 1)) {
+		buf[MAX_URL - 1] = '\0';
+	} else {
+		buf[i] = '\0';
+	}
+
+	return i;
+}
