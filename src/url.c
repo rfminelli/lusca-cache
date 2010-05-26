@@ -361,12 +361,7 @@ char *
 urlCanonicalClean(const request_t * request)
 {
     LOCAL_ARRAY(char, buf, MAX_URL);
-    LOCAL_ARRAY(char, portbuf, 32);
-    LOCAL_ARRAY(char, loginbuf, MAX_LOGIN_SZ + 1);
     char *t;
-    int i, j;
-    const char *s;
-    static const char ts[] = "://";
 
     if (request->protocol == PROTO_URN) {
 	snprintf(buf, MAX_URL, "urn:%.*s", strLen2(request->urlpath), strBuf2(request->urlpath));
@@ -376,48 +371,8 @@ urlCanonicalClean(const request_t * request)
 	    snprintf(buf, MAX_URL, "%s:%d", request->host, request->port);
 	    break;
 	default:
-	    portbuf[0] = '\0';
-	    if (request->port != urlDefaultPort(request->protocol))
-		snprintf(portbuf, 32, ":%d", request->port);
-	    loginbuf[0] = '\0';
-	    if ((int) strlen(request->login) > 0) {
-		strcpy(loginbuf, request->login);
-		if ((t = strchr(loginbuf, ':')))
-		    *t = '\0';
-		strcat(loginbuf, "@");
-	    }
-	    /*
-	     * This stuff would be better if/when each of these strings is a String with
-	     * a known length..
-	     */
-	    s = ProtocolStr[request->protocol];
-	    for (i = 0; i < MAX_URL && *s != '\0'; i++, s++) {
-		buf[i] = *s;
-	    }
-	    s = ts;
-	    for (; i < MAX_URL && *s != '\0'; i++, s++) {
-		buf[i] = *s;
-	    }
-	    s = loginbuf;
-	    for (; i < MAX_URL && *s != '\0'; i++, s++) {
-		buf[i] = *s;
-	    }
-	    s = request->host;
-	    for (; i < MAX_URL && *s != '\0'; i++, s++) {
-		buf[i] = *s;
-	    }
-	    s = portbuf;
-	    for (; i < MAX_URL && *s != '\0'; i++, s++) {
-		buf[i] = *s;
-	    }
-	    for (j = 0; i < MAX_URL && j < strLen2(request->urlpath); i++, j++) {
-		buf[i] = stringGetCh(&request->urlpath, j);
-	    }
-	    if (i >= (MAX_URL - 1)) {
-		buf[MAX_URL - 1] = '\0';
-	    } else {
-		buf[i] = '\0';
-	    }
+	    (void) urlMakeHttpCanonical2(buf, request->protocol, request->login,
+	      request->host, request->port, strBuf2(request->urlpath), strLen2(request->urlpath));
 
 	    /*
 	     * strip arguments AFTER a question-mark
