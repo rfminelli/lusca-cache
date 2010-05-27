@@ -48,12 +48,31 @@ ATF_TC_BODY(libsqurl_domain_1, tc)
 	ATF_REQUIRE(0 < matchDomainName("bfoo.com", "afoo.com"));
 	ATF_REQUIRE(0 > matchDomainName("afoo.com", "bfoo.com"));
 	ATF_REQUIRE(0 < matchDomainName("x-foo.com", ".foo.com"));
+}
 
+ATF_TC(libsqurl_urlmakehttpcanonical_1);
+ATF_TC_HEAD(libsqurl_urlmakehttpcanonical_1, tc)
+{
+	atf_tc_set_md_var(tc, "descr", "test urlMakeHttpCanonical()");
+}
+ATF_TC_BODY(libsqurl_urlmakehttpcanonical_1, tc)
+{
+}
+
+ATF_TC(libsqurl_urlmakehttpcanonical_2);
+ATF_TC_HEAD(libsqurl_urlmakehttpcanonical_2, tc)
+{
+	atf_tc_set_md_var(tc, "descr", "test urlMakeHttpCanonical2()");
+}
+ATF_TC_BODY(libsqurl_urlmakehttpcanonical_2, tc)
+{
 }
 
 ATF_TP_ADD_TCS(tp)
 {
 	ATF_TP_ADD_TC(tp, libsqurl_domain_1);
+	ATF_TP_ADD_TC(tp, libsqurl_urlmakehttpcanonical_1);
+	ATF_TP_ADD_TC(tp, libsqurl_urlmakehttpcanonical_2);
 	return atf_no_error();
 }
 
