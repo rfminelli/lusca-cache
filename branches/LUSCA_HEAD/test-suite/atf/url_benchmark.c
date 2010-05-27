@@ -59,11 +59,12 @@ do_run(int iloop, int nloop, const char *tag, URLFUNC *f, protocol_t proto, cons
 	int i;
 	long l;
 
+	printf(": %s\n", tag);
 	for (i = 0; i < iloop; i++) {
 		l = do_benchmark(nloop, f, proto, login, host, port, urlpath);
-		printf("Run %d: %s: %ld msec; %.3f usec per request\n", i, tag, l / 1000, (float) l / (float) nloop);
+		printf("  %d: %ld msec; %.3f usec per request\n", i, l / 1000, (float) l / (float) nloop);
 	}
-
+	printf("--\n");
 }
 
 int
@@ -71,21 +72,25 @@ main(int argc, const char *argv[])
 {
 	int i;
 
+	/* old/new, defaults */
 	do_run(10, 100000, "old", urlMakeHttpCanonical, PROTO_HTTP,
 	    "", "www.creative.net.au", 80, "/test.html");
 	do_run(10, 100000, "new", urlMakeHttpCanonical2, PROTO_HTTP,
 	    "", "www.creative.net.au", 80, "/test.html");
 
+	/* old/new, non-standard port (triggers another printf call) */
 	do_run(10, 100000, "old, port 81", urlMakeHttpCanonical, PROTO_HTTP,
 	    "", "www.creative.net.au", 81, "/test.html");
 	do_run(10, 100000, "new, port 81", urlMakeHttpCanonical2, PROTO_HTTP,
 	    "", "www.creative.net.au", 81, "/test.html");
 
+	/* old/new, login, default port */
 	do_run(10, 100000, "old, port 80, login", urlMakeHttpCanonical, PROTO_HTTP,
 	    "username", "www.creative.net.au", 80, "/test.html");
 	do_run(10, 100000, "new, port 80, login", urlMakeHttpCanonical2, PROTO_HTTP,
 	    "username", "www.creative.net.au", 80, "/test.html");
 
+	/* old/new, login, non-standard port */
 	do_run(10, 100000, "old, port 81, login", urlMakeHttpCanonical, PROTO_HTTP,
 	    "username", "www.creative.net.au", 81, "/test.html");
 	do_run(10, 100000, "new, port 81, login", urlMakeHttpCanonical2, PROTO_HTTP,
