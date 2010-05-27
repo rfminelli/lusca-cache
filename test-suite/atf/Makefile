@@ -48,7 +48,7 @@ LDADD=-L$(BASEDIR)/libcore \
 LDFLAGS=$(LDADD) -L$(ATF_LIBDIR)
 CFLAGS=-O -g -I$(BASEDIR) -I$(ATF_INCLUDEDIR)
 
-all: libhttp lib_Vector libsqurl
+all: libhttp lib_Vector libsqurl url_benchmark
 
 libhttp: libhttp.o core.o
 	$(CC) core.o libhttp.o -o libhttp $(LDFLAGS)
@@ -59,9 +59,12 @@ lib_Vector: lib_Vector.o core.o
 libsqurl: libsqurl.o core.o
 	$(CC) core.o libsqurl.o -o libsqurl $(LDFLAGS)
 
+url_benchmark: url_benchmark.o core.o
+	$(CC) core.o url_benchmark.o -o url_benchmark $(LDFLAGS)
+
 check: libhttp lib_Vector libsqurl
 	@env PATH=$$PATH:$(ATF_BINDIR) $(ATF_BINDIR)/atf-run | $(ATF_BINDIR)/atf-report
 
 clean:
-	rm -f libhttp lib_Vector libsqurl *.o
+	rm -f libhttp lib_Vector libsqurl url_benchmark *.o
 
