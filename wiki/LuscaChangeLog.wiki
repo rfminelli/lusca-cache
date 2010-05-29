@@ -75,7 +75,10 @@
 
   * Issue #56 - Some crashes with HTCP have been fixed. This was due to incorrectly initialised HTCP buffers.
   * Issue #61 - A performance issue in the Logging Helper code was fixed. This dramatically dropped CPU use in most cases where logging was enabled.
-  * Merged patchset 12597 from Squid-2.HEAD - this fixed a potential DoS where specifically crafted DNS packets would crash Squid.
+
+=== Merges from Squid ===
+
+  * Patchset 12597 from Squid-2.HEAD - this fixed a potential DoS where specifically crafted DNS packets would crash Squid.
 
 === New Features ===
 
@@ -96,7 +99,53 @@
 
 == r14371 ==
 
+=== Major Issues Resolved ===
+
+  * Issue #75 - the pinger process would be restarted without properly cleaning up after the previous one. This could potentially result in hundreds of pinger processes running on a busy Lusca install.
+
+=== New Features ===
+
+  * The client database code now uses a radix tree rather than a hash table to store per-client information. This improves performance in small object workloads.
+  * The external DNS code has been removed. The only method of doing DNS lookups now is the default internal DNS code.
+  * The --enable-coss-aio-ops option - Lusca doesn't support or use the system POSIX AIO routines.
+  * The debug options are now correctly set in the environment of helper processes. Helper processes which use the Lusca library routines now inherit the debug configuration of the main process.
+  * Issue #57 - add "ignore-no-store" to the refresh_pattern configuration.
+  * The UFS code now uses buffered IO to write swaplogs, helping with performance under high workloads.
+
+=== General Code Changes ===
+
+  * Begin implementing the Vector type - in preparation for HTTP parser/header management related improvements.
+
 == r14281 ==
+
+=== Major Issues Resolved ===
+
+  * Issue #33 - Fix a critical bug where revalidation / not modified responses would cause Lusca to crash.
+  * (r14094): URLs are now always added to aborted requests.
+
+=== New Features ===
+
+  * The storage rebuild logic now uses external helper processes to do the bulk of the disk IO. This includes reading the swaplog and rebuilding from the individual swaplog files if necessary. This reduces the complexity of the rebuild process inside Lusca and it means the rebuild process now parallelises across multiple disk spindles without affecting the performance of the main Lusca process. It dramatically decreases the rebuild time taken for large AUFS storage directories.
+
+  * (r14077) A simple templating system has been introduced for Error Pages. The English error pages have been templated. These error pages look a lot more professional than the default Squid pages.
+
+=== Changes in Behaviour ===
+
+  * The "update_headers" option has been disabled. It may be "Correct" HTTP behaviour but the current implementation scales poorly and has a number of outstanding "weird behaviour" bugs.
+  * The "UFS" directory has been removed. The default is now AUFS. AUFS can emulate UFS behaviour by simply making each IO operation non-async (src/fs/aufs/store_asyncufs.h.)
+
+=== Merges from Squid ===
+
+  * Patchset 12461 - remove duplicate peerMonitorInit() in certain circumstances
+  * Patchset 12479 - Fix store_url memory leak
+  * Patchset 12465 - Fix Solaris /dev/poll support
+  * Patchset 12462 - Fix HTTP reply chunk parsing issues that appear under FreeBSD
+  * Patchset 14247 - Fix some corner cases in the method_t handling code
+
+=== General Code Changes ===
+
+  * The code which handles Location: rewriting in the client side processing has been migrated into a separate file.
+  * The bulk of the COSS and AUFS rebuild logic has been broken out into separate source files. This makes it easier to follow the rebuild and directory management logic.
 
 == r14007 ==
 
