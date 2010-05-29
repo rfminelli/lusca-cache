@@ -1,6 +1,83 @@
 #summary Changes between Lusca Versions
 
-= Changes between Lusca-1.0 and Lusca-HEAD =
+= Snapshot release changes! =
+
+== r14705 ==
+
+=== General Code Changes ===
+
+ * Initial IPv6 DNS changes have been imported; but are not currently used.
+ * Some of the URL related code has been broken out into libsqurl/ in preparation for further work and unit tests.
+ * Some of the core FTP related routines have been broken out into libsqftp/ in preparation for further work and unit tests.
+ * Unit tests have been written for the URL routines in libsqurl.
+ * Code documentation has been written for the Vector routines.
+
+== r14674 ==
+
+=== New Features ===
+
+ * The "flushdns" and "flushfqdn" cache manager options have been added - which flush the IP cache and FQDN cache respectively.
+ * Lusca now compiles under Cygwin/MinGW to run both under Cygwin and native 32 bit Windows.
+ * The NetBSD ATF unit test framework is being evaluated. Some unit tests are being written in it to evaluate its suitability.
+ * The HTTP header management and parsing routines have been rewritten to use a Vector .type. This results in many less calls to the system memory allocator and will improve performance on small object workloads.
+
+=== General Code Changes ===
+
+ * Unit tests have been written for:
+   * Vector
+   * libhttp - HTTP header management, parsing, deletion, creation, repacking, etc
+   * sqinet - the IPv4/IPv6 data type
+ * The cbdata library has been fixed to compile and run with Valgrind.
+ * The ASN ACL type has been rewritten to use the newer-style radix tree code rather than the old-style NetBSD radix code. This greatly simplifies the ASN codebase.
+ * The NetBSD radix code has been removed from lib/.
+
+== r14535 ==
+
+=== New Features ===
+
+  * The last remaining bugs with the method_t work imported from Squid-2.HEAD have been found and fixed. This involved changing how the method_t code handled copying methods and modifying the code to use the new, clearer semantics.
+  * Set the default error pages to be English rather than "templates" - this way new, default Lusca installs will get the much nicer looking English error pages rather than the boring Squid error pages.
+
+=== General Code Changes ===
+
+  * Further work on Windows Cygwin/MinGW support - some definition changes and code reorganisation.
+  * The storage metadata routines have been moved to libsqstore/ - this makes them available for use by external programs.
+
+== r14499 ==
+
+=== New Features ===
+
+  * Issue #91 was resolved. Lusca (and all versions of Squid) would get confused if logs were rotated before the initial swaplogs were read in. Squid/Lusca would begin appending to the log file it was reading and slowly fill the swap directories up with logfiles.
+  * The issue with occasional failures to read in the swap log data was found. Swaplog rebuilding now reliably works correctly on all platforms.
+
+=== General Code Changes ===
+
+  * Initial work on Windows Cygwin/MinGW support - begin fixing autoconf/automake include declarations to include the correct files for Windows/Cygwin builds.
+
+== r14467 ==
+
+=== General Code Changes ===
+
+  * More of the client-side code (in src/client_side.c) was refactored and broken out into separate source files in src/.
+
+== r14448 ==
+
+=== General Code Changes ===
+
+  * Some of the client-side code (in src/client_side.c) was refactored and broken out into separate source files in src/. This makes it easier to understand precisely which routines belong to which stage of the client request and reply processing.
+  * The initial work to create an ACL type for the destination IP in forwarded requests (rather than "dst" which does a DNS lookup and compares those to the forwarded IP) has been committed. It is currently not used in any active code.
+
+== r14428 ==
+
+== r14371 ==
+
+== r14281 ==
+
+== r14007 ==
+
+== r13894 ==
+
+== Changes between Lusca-1.0 and Lusca-HEAD ==
 
   * The AUFS and COSS storage rebuild logic has been re-implemented using external processes to improve performance and code clarity.
   * The client and server side socket buffer sizes are now separately tunable.
@@ -13,7 +90,7 @@
   * A new refresh pattern option - "ignore-no-store" - allows the administrator to ignore "Cache-Control: no-store" from the origin/upstream server.
   * The external DNS code has been removed. The only DNS support now is the internal DNS code.
 
-= Changes between Squid-2.HEAD and Lusca-1.0 =
+== Changes between Squid-2.HEAD and Lusca-1.0 ==
 
   * Squid-2 defaults to use async disk operations for disk read() / open() ; Lusca uses the async disk operations for -all- operations. This improves performance on FreeBSD/Solaris, where write() / close() may block more often than not.
   * Wide-scale source reorganisation into separate libraries - facilitating code modularity, code reuse and much easier unit testing.
@@ -21,7 +98,7 @@
   * Various core modules have been prepared for IPv6 support - including core networking support and internal DNS routines.
   * An example single-threaded TCP proxy - see app/tcptest/ in the top-level source directory - which demonstrates re-using the core libraries in other applications.
 
-= Changes between Lusca-1.0 and Lusca-HEAD =
+== Changes between Lusca-1.0 and Lusca-HEAD ==
 
   * COSS now does not write out swap log files which it doesn't use - improving performance during normal operation and logfile rotation.
   * The server-side code (src/http.c) has been restructured to remove extra data copying and in preparation for further improvements performance and memory utilisation.
