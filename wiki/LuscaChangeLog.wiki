@@ -33,9 +33,12 @@
 
 == r14535 ==
 
-=== New Features ===
+=== Major Resolved Issues ===
 
   * The last remaining bugs with the method_t work imported from Squid-2.HEAD have been found and fixed. This involved changing how the method_t code handled copying methods and modifying the code to use the new, clearer semantics.
+
+=== New Features ===
+
   * Set the default error pages to be English rather than "templates" - this way new, default Lusca installs will get the much nicer looking English error pages rather than the boring Squid error pages.
 
 === General Code Changes ===
@@ -45,7 +48,7 @@
 
 == r14499 ==
 
-=== New Features ===
+=== Major Resolved Issues ===
 
   * Issue #91 was resolved. Lusca (and all versions of Squid) would get confused if logs were rotated before the initial swaplogs were read in. Squid/Lusca would begin appending to the log file it was reading and slowly fill the swap directories up with logfiles.
   * The issue with occasional failures to read in the swap log data was found. Swaplog rebuilding now reliably works correctly on all platforms.
@@ -64,10 +67,32 @@
 
 === General Code Changes ===
 
-  * Some of the client-side code (in src/client_side.c) was refactored and broken out into separate source files in src/. This makes it easier to understand precisely which routines belong to which stage of the client request and reply processing.
-  * The initial work to create an ACL type for the destination IP in forwarded requests (rather than "dst" which does a DNS lookup and compares those to the forwarded IP) has been committed. It is currently not used in any active code.
+  * Some of the client-side code (in src/client_side.c) was refactored and broken out into separate source files in src/.
 
 == r14428 ==
+
+=== Major Resolved Issues ===
+
+  * Issue #56 - Some crashes with HTCP have been fixed. This was due to incorrectly initialised HTCP buffers.
+  * Issue #61 - A performance issue in the Logging Helper code was fixed. This dramatically dropped CPU use in most cases where logging was enabled.
+  * Merged patchset 12597 from Squid-2.HEAD - this fixed a potential DoS where specifically crafted DNS packets would crash Squid.
+
+=== New Features ===
+
+  * The "store-stale" refresh_pattern option from Squid-2 has been ported.
+  * The "storeurl_bypass" option was introduced and documented.
+  * The default is now to build and use AUFS rather than UFS. This makes a "default" Lusca install perform a lot better than a default Squid, which uses UFS.
+  * The error page building process has been changed a little so error pages are built during the build phase rather than install phase. This makes crafting packages a lot easier.
+
+=== General Code Changes ===
+
+  * The initial work to create an ACL type for the destination IP in forwarded requests (rather than "dst" which does a DNS lookup and compares those to the forwarded IP) has been committed. It is currently not used in any active code.
+  * Begin documenting what different parts of the client-side request processing pipeline does.
+  * Some of the client-side code (in src/client_side.c) was refactored and broken out into separate source files in src/.
+   * Range request processing
+   * IMS processing
+   * ETag processing
+   * NAT related client processing (for transparently intercepted requests)
 
 == r14371 ==
 
