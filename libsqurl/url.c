@@ -127,7 +127,7 @@ int
 urlMakeHttpCanonical2(char *urlbuf, protocol_t protocol, const char *login,
     const char *host, int port, const char *urlpath, int urlpath_len)
 {
-	LOCAL_ARRAY(char, buf, MAX_URL);
+	char *buf = urlbuf;
 	LOCAL_ARRAY(char, portbuf, 32);
 	LOCAL_ARRAY(char, loginbuf, MAX_LOGIN_SZ + 1);
 	char *t;
