@@ -260,7 +260,6 @@ ATF_TC_BODY(libhttp_parse_content_length_1, tc)
 	ATF_REQUIRE(test_http_content_length(&hdr, "abcde") == -1);
 
 	/* Clean up */
-	httpHeaderReset(&hdr);
 	httpHeaderClean(&hdr);
 }
 
@@ -300,14 +299,26 @@ ATF_TC_HEAD(libhttp_repack_1, tc)
 ATF_TC_BODY(libhttp_repack_1, tc)
 {
 	HttpHeader hdr;
-	char hdrs[1024];
-	int i;
 
 	struct _http_repack_list r[] =
-		{ { "Content-Type", "text/html", HDR_CONTENT_TYPE, 1 },
+		{ { "Content-Type", "text/html; charset=UTF=8", HDR_CONTENT_TYPE, 1 },
 		  { "Foo", "bar", HDR_OTHER, 1 },
 		  { "Content-Length", "12345", HDR_CONTENT_LENGTH, 1 },
 		  { "Accept", "*/*", HDR_ACCEPT, 1 },
+		  { "Host", "www.creative.net.au", HDR_HOST, 1 },
+		  { "Set-Cookie", "@tjackson-11758> use some dyndns-ish stuff for it, or pay for a static IP from the carrier?", HDR_SET_COOKIE, 1 },
+		  { "Date", "Thu, 10 Jun 2010 15:08:25 GMT", HDR_DATE, 1 },
+		  { "Server", "Server: Apache/2.2.3 (Debian)", HDR_SERVER, 1 },
+		  { "Accept-Ranges", "bytes", HDR_ACCEPT_RANGES, 1 },
+		  { "Connection", "close", HDR_CONNECTION, 1 },
+		  { "Age", "128", HDR_AGE, 1 },
+		  { "X-Origin-Date", "Thu, 10 Jun 2010 15:00:48 GMT", HDR_OTHER, 1 },
+		  { "Via", "1.0 mirror1.jp.cacheboy.net:80 (LUSCA/Lusca_HEAD)", HDR_VIA, 1 },
+		  { "X-Cache", "HIT from mirror1.jp.cacheboy.net", HDR_X_CACHE, 1 },
+		  { "X-Cache-Age", "128", HDR_OTHER, 1 },
+		  { "X-Slashdot", "bender - she'll be right, mate!", HDR_OTHER, 1},
+		  { "X-Slashdot-2", "another bender - she'll be right, mate!", HDR_OTHER, 1},
+
 		  { NULL, NULL, HDR_UNKNOWN, 0 }};
 
 	test_core_init();
@@ -320,8 +331,12 @@ ATF_TC_BODY(libhttp_repack_1, tc)
 	http_hdrs_check_again(&hdr, r);
 	http_hdrs_repack_del(&hdr, r, 3);
 	http_hdrs_check_again(&hdr, r);
+	http_hdrs_repack_del(&hdr, r, 15);
+	http_hdrs_check_again(&hdr, r);
 
-	httpHeaderReset(&hdr);
+#if 0
+	httpHeaderInsertTime(&hdr, 14, HDR_DATE, 123456789);
+#endif
 	httpHeaderClean(&hdr);
 }
 
