@@ -391,6 +391,10 @@ rfc1035RRUnpack(const char *buf, size_t sz, int *off, rfc1035_rr * RR)
     }
     RR->rdlength = rdlength;
     switch (RR->type) {
+    /*
+     * XXX TODO: [ahc] shouldn't we treat CNAME's here? Or would that break existing code that expects RAW CNAMEs?
+     * case RFC1035_TYPE_CNAME:
+     */
     case RFC1035_TYPE_PTR:
 	RR->rdata = xmalloc(RFC1035_MAXHOSTNAMESZ);
 	rdata_off = *off;
@@ -410,6 +414,7 @@ rfc1035RRUnpack(const char *buf, size_t sz, int *off, rfc1035_rr * RR)
 	}
 	break;
     case RFC1035_TYPE_A:
+    case RFC1035_TYPE_AAAA:
     default:
 	RR->rdata = xmalloc(rdlength);
 	memcpy(RR->rdata, buf + (*off), rdlength);
