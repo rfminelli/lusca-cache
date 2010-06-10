@@ -771,7 +771,6 @@ strtol_n(const char *nptr, int nlen, char **endptr, int base)
 {
 	char buf[64];
 	long r;
-	char *np = NULL;
 	int l = MIN(nlen, sizeof(buf) - 1);
 
 	/* take a copy of the string, NUL terminate it just in case */
@@ -779,11 +778,11 @@ strtol_n(const char *nptr, int nlen, char **endptr, int base)
 	buf[l] = '\0';
 
 	/* Now do the parsing */
-	r = strtol(buf, &np, base);
+	r = strtol(buf, endptr, base);
 
 	/* The endptr is relative to buf, so convert back if required */
-	if (np != NULL) {
-		np = (char *) nptr + (np - buf);
+	if ((*endptr) != NULL) {
+		(*endptr) = (char *) nptr + ((*endptr) - buf);
 	}
 
 	return r;
