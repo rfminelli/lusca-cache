@@ -4,6 +4,9 @@
 #if HAVE_STRING_H
 #include <string.h>
 #endif
+#if HAVE_STDLIB_H
+#include <stdlib.h>
+#endif
 #include <sys/types.h>
 
 #include "../include/util.h"
