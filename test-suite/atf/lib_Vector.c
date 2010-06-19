@@ -78,7 +78,7 @@ ATF_TC_BODY(Vector_test_3, tc)
 	}
 	//printf("check\n");
 	for (i = 0; i < 32; i++) {
-		n = (int *) vector_get_real(&v, i);
+		n = (int *) vector_get(&v, i);
 		if (i < 16) {
 			//printf("%d: %p; used %d\n", i, n, v.used_count);
 			ATF_REQUIRE((*n) == i);
@@ -113,7 +113,7 @@ ATF_TC_BODY(Vector_insert_1, tc)
 		n = (int *) vector_insert(&v, i);
 	}
 	for (i = 0; i < v.used_count; i++) {
-		n = (int *) vector_get_real(&v, i);
+		n = (int *) vector_get(&v, i);
 		ATF_REQUIRE(n != NULL);
 		//printf("%d: %d (%d)\n", i, (*n), i / 2);
 		ATF_REQUIRE_EQ( (*n), i / 2);
@@ -133,10 +133,10 @@ ATF_TC_BODY(Vector_bounds_1, tc)
 
 	vector_init(&v, sizeof(int), 128);
 	(void) vector_append(&v);
-	ATF_REQUIRE(vector_get_real(&v, 0) != NULL);
-	ATF_REQUIRE(vector_get_real(&v, 1) == NULL);
-	ATF_REQUIRE(vector_get_real(&v, 2) == NULL);
-	ATF_REQUIRE(vector_get_real(&v, 129) == NULL);
+	ATF_REQUIRE(vector_get(&v, 0) != NULL);
+	ATF_REQUIRE(vector_get(&v, 1) == NULL);
+	ATF_REQUIRE(vector_get(&v, 2) == NULL);
+	ATF_REQUIRE(vector_get(&v, 129) == NULL);
 	vector_done(&v);
 }
 
