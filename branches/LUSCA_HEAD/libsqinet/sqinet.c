@@ -705,14 +705,12 @@ sqinet_assemble_rev(const sqaddr_t *s, char *buf, int len)
 			s6 = a6.s6_addr;
 			r = 0;
 			for (i = 0; i < 16; i++) {
-				printf("  %d: got %X\n", i, s6[i]);
-				r += snprintf(buf + r, len - r, "%x.%x.", s6[i] & 0x0f, (s6[i] >> 4) & 0x0f);
-				/* Make sure we've got space for the ip6.arpa bit at the end */
-				if (r + 10 >= len) {
+				/* Make sure we've got space for this AND the .ip6.arpa at the end */
+				if (r + 16 >= len) {
 					return 0;
 				}
+				r += snprintf(buf + r, len - r, "%x.%x.", s6[i] & 0x0f, (s6[i] >> 4) & 0x0f);
 			}
-			/* XXX this is very risky and doesn't verify there's space left! */
 			strcat(buf + r, "ip6.arpa");
 			return r + 8;
 			break;
