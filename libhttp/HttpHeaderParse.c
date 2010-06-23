@@ -77,7 +77,15 @@
 int httpConfig_relaxed_parser = 0;
 int HeaderEntryParsedCount = 0;
 
-static int httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char *field_end);
+typedef enum {
+	PR_NONE,
+	PR_ERROR,
+	PR_IGNORE,
+	PR_WARN,
+	PR_OK
+} parse_retval_t;
+
+static parse_retval_t httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char *field_end);
 int httpHeaderParseSize2(const char *start, int len, squid_off_t * value);
 
 /*
@@ -89,12 +97,7 @@ int httpHeaderParseSize2(const char *start, int len, squid_off_t * value);
  * do that! It should signify the caller that the old header value should
  * be removed!
  */
-/*
- * -1: invalid header, return error
- * 0: invalid header, don't add, continue
- * 1: valid header, add
- */
-int
+parse_retval_t
 hh_check_content_length(HttpHeader *hdr, const char *var, int vlen)
 {
 	    squid_off_t l1, l2;
@@ -102,22 +105,22 @@ hh_check_content_length(HttpHeader *hdr, const char *var, int vlen)
 
 	    if (!httpHeaderParseSize2(var, vlen, &l1)) {
 		debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n", vlen, var);
-		return -1;
+		return PR_ERROR;
 	    }
 	    e2 = httpHeaderFindEntry(hdr, HDR_CONTENT_LENGTH);
 
 	    /* No header found? We're safe */
 	    if (! e2)
-                return 1;
+                return PR_OK;
 
 	    /* Do the contents match? */
 	    if ((vlen == strLen2(e2->value)) &&
 		(strNCmp(e2->value, var, vlen) == 0)) {
 		debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2) ("NOTICE: found double content-length header\n");
 		if (httpConfig_relaxed_parser) {
-		    return 0;
+		    return PR_IGNORE;
 		} else {
-		    return -1;
+		    return PR_ERROR;
 		}
             }
 
@@ -127,22 +130,22 @@ hh_check_content_length(HttpHeader *hdr, const char *var, int vlen)
 	    /* XXX Relaxed parser is off - return an error? */
 	    /* XXX what was this before? */
 	    if (!httpConfig_relaxed_parser) {
-	        return -1;
+	        return PR_ERROR;
 	    }
 
 	    /* Is the original entry parseable? If not, definitely error out. It shouldn't be here */
 	    if (!httpHeaderParseSize2(strBuf2(e2->value), strLen2(e2->value), &l2)) {
 	        debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n", vlen, var);
-	        return -1;
+	        return PR_ERROR;
 	    }
 
 	    /* Is the new entry larger than the old one? Delete the old one */
 	    /* If not, we just don't add the new entry */
 	    if (l1 > l2) {
 	        httpHeaderDelById(hdr, e2->id);
-		return 1;
+		return PR_OK;
 	    } else {
-	        return 0;
+	        return PR_IGNORE;
 	    }
 }
 
@@ -151,7 +154,7 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 {
     const char *field_ptr = header_start;
     HttpHeaderEntry *e;
-    int r;
+    parse_retval_t r;
 
     assert(hdr);
     assert(header_start && header_end);
@@ -211,9 +214,9 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 
 	/* This now parses and creates the entry */
 	r = httpHeaderEntryParseCreate(hdr, field_start, field_end);
-	if (r < 0)
+	if (r == PR_ERROR)
 	    return httpHeaderReset(hdr);
-	else if (r == 0) {
+	else if (r == PR_WARN) {
 	    debug(55, 1) ("WARNING: unparseable HTTP header field {%.*s}\n",
 		charBufferSize(field_start, field_end), field_start);
 	    debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
@@ -232,12 +235,12 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
  */
 
 /* parses and inits header entry, returns new entry on success */
-int
+parse_retval_t
 httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char *field_end)
 {
     HttpHeaderEntry *e;
     int id;
-    int r;
+    parse_retval_t r;
     /* note: name_start == field_start */
     const char *name_end = memchr(field_start, ':', field_end - field_start);
     int name_len = name_end ? name_end - field_start : 0;
@@ -248,11 +251,11 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
 
     /* do we have a valid field name within this field? */
     if (!name_len || name_end > field_end)
-	return 0;
+	return PR_IGNORE;
     if (name_len > 65534) {
 	/* String must be LESS THAN 64K and it adds a terminating NULL */
 	debug(55, 1) ("WARNING: ignoring header name of %d bytes\n", name_len);
-	return 0;
+	return PR_IGNORE;
     }
     if (httpConfig_relaxed_parser && xisspace(field_start[name_len - 1])) {
 	debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
@@ -260,7 +263,7 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
 	while (name_len > 0 && xisspace(field_start[name_len - 1]))
 	    name_len--;
 	if (!name_len)
-	    return 0;
+	    return PR_IGNORE;
     }
 
     /* now we know we can parse it */
@@ -281,7 +284,7 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
 	/* String must be LESS THAN 64K and it adds a terminating NULL */
 	debug(55, 1) ("WARNING: ignoring '%.*s' header of %d bytes\n",
 	   charBufferSize(field_start, field_end), field_start,  charBufferSize(value_start, field_end));
-	return 0;
+	return PR_IGNORE;
     }
 
     /* Is it an OTHER header? Verify the header contents don't have whitespace! */
@@ -290,7 +293,7 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
 	    debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
 		("WARNING: found whitespace in HTTP header name {%.*s}\n", name_len, field_start);
 	    if (!httpConfig_relaxed_parser) {
-		return 0;
+		return PR_IGNORE;
 	    }
     }
 
@@ -299,13 +302,14 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
      * XXX if needed. Ew. */
     if (id == HDR_CONTENT_LENGTH) {
         r = hh_check_content_length(hdr, value_start, field_end - value_start);
-        if (r <= 0)
+	/* Warn is fine */
+        if (r != PR_OK && r != PR_WARN)
 	    return r;
     }
 
     /* Create the entry and return it */
     (void) httpHeaderAddEntryStr2(hdr, id, field_start, name_len, value_start, field_end - value_start);
-    return 1;
+    return r;
 }
 
 
