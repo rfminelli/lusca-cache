@@ -1,9 +1,13 @@
+#include "../include/config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#if HAVE_FCNTL_H
+#include <fcntl.h>
+#endif
 
-#include "include/config.h"
 #include "include/squid_md5.h"
 #include "include/util.h"
 
@@ -54,7 +58,7 @@ main(int argc, char *argv[])
 	char *wbuf = NULL;
 	char *debug_args = "ALL,1";
 
-	if (argc < 5) {
+	if (argc < 6) {
 		usage(argv[0]);
 		exit(1);
 	}
@@ -88,7 +92,12 @@ main(int argc, char *argv[])
 	}
 
 	/* Output swap header to stdout */
+#ifdef _SQUID_WIN32_
+	setmode(fileno(stdout), O_BINARY);
+#endif
 	(void) storeSwapLogPrintHeader(stdout);
+
+	debug(86, 1) ("ufs_rebuild: %s: rebuild type: %s\n", store_ufs_info.path, rebuild_type == REBUILD_DISK ? "REBUILD_DISK" : "REBUILD_LOG");
 
 	if (rebuild_type == REBUILD_DISK)
 		rebuild_from_dir(&store_ufs_info);

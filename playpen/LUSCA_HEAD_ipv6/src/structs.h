@@ -288,6 +288,7 @@ struct _aclCheck_t {
     struct in_addr src_addr;
     struct in_addr dst_addr;
     struct in_addr my_addr;
+    struct in_addr fwdip_addr;
     unsigned short my_port;
     request_t *request;
     /* for acls that look at reply data */
@@ -677,6 +678,7 @@ struct _SquidConfig {
 	int load_check_stopen;
 	int load_check_stcreate;
 	int download_fastest_client_speed;
+	int log_http_violations;
     } onoff;
     int collapsed_forwarding_timeout;
     acl *aclList;
@@ -844,14 +846,6 @@ struct _ETag {
     int weak;			/* true if it is a weak validator */
 };
 
-struct _fileMap {
-    int max_n_files;
-    int n_files_in_map;
-    int toggle;
-    int nwords;
-    unsigned long *file_map;
-};
-
 /* see Packer.c for description */
 struct _Packer {
     /* protected, use interface functions instead */
@@ -931,15 +925,6 @@ struct _HierarchyLogEntry {
     int n_ichoices;		/* #peers with known rtt we selected from (cd only) */
     struct timeval peer_select_start;
     struct timeval store_complete_stop;
-};
-
-struct _method_t {
-    method_code_t code;
-    const char *string;
-    struct {
-	unsigned int cachable:1;
-	unsigned int purges_all:1;
-    } flags;
 };
 
 struct _AccessLogEntry {
@@ -1372,25 +1357,6 @@ struct _ps_state {
     aclCheck_t *acl_checklist;
 };
 
-#if USE_ICMP
-struct _pingerEchoData {
-    struct in_addr to;
-    unsigned char opcode;
-    int psize;
-    char payload[PINGER_PAYLOAD_SZ];
-};
-
-struct _pingerReplyData {
-    struct in_addr from;
-    unsigned char opcode;
-    int rtt;
-    int hops;
-    int psize;
-    char payload[PINGER_PAYLOAD_SZ];
-};
-
-#endif
-
 struct _icp_common_t {
     unsigned char opcode;	/* opcode */
     unsigned char version;	/* version number */
@@ -1745,6 +1711,7 @@ struct _refresh_t {
 	unsigned int ignore_auth:1;
 #endif
 	unsigned int ignore_stale_while_revalidate:1;
+	unsigned int store_stale:1;
     } flags;
     int max_stale;
     int stale_while_revalidate;

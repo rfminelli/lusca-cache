@@ -41,11 +41,21 @@
 #include <string.h>
 #include <math.h>
 #include <fcntl.h>
-#include <sys/errno.h>
+#if HAVE_ERRNO_H
+#include <errno.h>
+#endif
+#if HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
+#endif
+#if HAVE_NETINET_IN_H
 #include <netinet/in.h>
+#endif
+#if HAVE_ARPA_INET_H
 #include <arpa/inet.h>
+#endif
+#if HAVE_NETDB_H
 #include <netdb.h>
+#endif
 
 #include "../include/Array.h"
 #include "../include/Stack.h"
@@ -508,4 +518,22 @@ fqdncacheAddEntryFromHosts(char *addr, wordlist * hostnames)
     fqdncacheAddEntry(fce);
     fqdncacheLockEntry(fce);
 }
+int
+fqdncacheFlushAll(void)
+{
+    /* code from libsqname/fqdncache.c */
+    dlink_node *m;
+    dlink_node *prev = NULL;
+    fqdncache_entry *f;
+    int removed = 0;
 
+    for (m = fqdncache_lru_list.tail; m; m = prev) {
+        prev = m->prev;
+        f = m->data;
+        if (f->flags.fromhosts) /* dont flush entries from /etc/hosts */
+            continue;
+        fqdncacheRelease(f);
+        removed++;
+    }
+    return removed;
+}

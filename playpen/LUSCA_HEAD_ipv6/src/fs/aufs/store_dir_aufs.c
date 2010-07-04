@@ -37,6 +37,7 @@
 
 #include "../../libasyncio/aiops.h"
 #include "../../libasyncio/async_io.h"
+#include "../../libsqstore/filemap.h"
 #include "store_asyncufs.h"
 #include "store_bitmap_aufs.h"
 #include "store_rebuild_aufs.h"
@@ -188,7 +189,7 @@ storeAufsCheckConfig(SwapDir * sd)
  *	storeAufsDirInit
  * @abstract
  *	Initialise the given configured AUFS storedir
- * @description
+ * @discussion
  *	This function completes the initial storedir setup, opens the swaplog
  *	file and begins the rebuild process.
  *

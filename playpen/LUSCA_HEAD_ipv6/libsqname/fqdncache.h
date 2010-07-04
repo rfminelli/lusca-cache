@@ -51,6 +51,6 @@ extern void fqdncacheFreeMemory(void);
 extern void fqdncache_restart(void);
 extern EVH fqdncache_purgelru;
 extern void fqdncacheAddEntryFromHosts(char *addr, wordlist * hostnames);
-
+extern int fqdncacheFlushAll(void);
 
 #endif

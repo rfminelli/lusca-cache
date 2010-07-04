@@ -34,6 +34,7 @@
  */
 
 #include "squid.h"
+#include "icmp.h"
 
 static MemPool * pool_netdb_name;
 static MemPool * pool_netdb_entry;

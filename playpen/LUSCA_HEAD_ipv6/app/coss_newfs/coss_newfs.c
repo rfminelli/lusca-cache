@@ -1,3 +1,5 @@
+#include "../include/config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -6,12 +8,16 @@
 #include <fcntl.h>
 #include <string.h>
 
-#include "include/config.h"
 #include "include/util.h"
 
 #include "libcore/varargs.h"
 #include "libcore/tools.h"
 #include "libsqdebug/debug.h"
+
+/* XXX macosx specific hack - need to generic-ify this! */
+#if !defined(O_BINARY)
+#define O_BINARY                0x0
+#endif
 
 int shutting_down = 0;	/* needed for debug routines for now */
 
@@ -23,7 +29,7 @@ main(int argc, const char *argv[])
 {
 	size_t sz, stripe_sz;
 	const char *path;
-	size_t i;
+	int i;
 	int fd;
 	char *buf;
 	off_t r;
@@ -53,7 +59,7 @@ main(int argc, const char *argv[])
 	 * -should- be enough to trick the rebuild process into treating
 	 * the rest of that stripe as empty.
 	 */
-	fd = open(path, O_WRONLY | O_CREAT, 0644);
+	fd = open(path, O_WRONLY | O_CREAT | O_BINARY, 0644);
 	if (fd < 0) {
 		perror("open");
 		exit(127);

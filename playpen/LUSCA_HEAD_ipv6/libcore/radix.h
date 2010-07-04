@@ -57,10 +57,10 @@
 
 /* $Id: radix.h,v 1.9 2007/10/24 06:03:08 djm Exp $ */
 
-#ifndef _RADIX_H
-#define _RADIX_H
+#ifndef __LIBCORE_RADIX_H__
+#define __LIBCORE_RADIX_H__
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(_SQUID_MSWIN_)
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #else
@@ -95,7 +95,7 @@ typedef struct _prefix_t {
 } prefix_t;
 
 void Deref_Prefix(prefix_t *prefix);
-extern int Init_Prefix(prefix_t *prefix, u_int af_family, void *dest, u_int bitlen);
+extern int Init_Prefix(prefix_t *prefix, u_int af_family, const void *dest, u_int bitlen);
 extern prefix_t *New_Prefix(int family, void *dest, int bitlen, prefix_t *prefix);
 
 /*
@@ -160,4 +160,4 @@ prefix_t *prefix_from_blob(u_char *blob, int len, int prefixlen);
 const char *prefix_addr_ntop(prefix_t *prefix, char *buf, size_t len);
 const char *prefix_ntop(prefix_t *prefix, char *buf, size_t len);
 
-#endif /* _RADIX_H */
+#endif /* __LIBCORE_RADIX_H__ */

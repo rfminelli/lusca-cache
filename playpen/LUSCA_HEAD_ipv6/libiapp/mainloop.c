@@ -1,12 +1,17 @@
+#include "../include/config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
+#if HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
+#endif
+#if HAVE_NETINET_IN_H
 #include <netinet/in.h>
+#endif
 #include <string.h>
 
-#include "../include/config.h"
 /*
  * The bulk of the following are because the disk code requires
  * the memory code, which requires everything else.

@@ -39,10 +39,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <math.h>
 #include <ctype.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 
 #include "../include/Array.h"
 #include "../include/Stack.h"

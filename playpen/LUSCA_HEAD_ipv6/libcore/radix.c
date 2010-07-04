@@ -55,11 +55,14 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include "../include/config.h"
+
 #include <sys/types.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
+#include "util.h" /* for inet_ntop() */
 #include "mem.h"
 #include "radix.h"
 
@@ -109,9 +112,9 @@ comp_with_mask(u_char *addr, u_char *dest, u_int mask)
 }
 
 int
-Init_Prefix(prefix_t *pfx, u_int family, void *dest, u_int bitlen)
+Init_Prefix(prefix_t *pfx, u_int family, const void *dest, u_int bitlen)
 {
-	bzero(pfx, sizeof(*pfx));
+	memset(pfx, 0, sizeof(*pfx));
 	if (family == AF_INET6) {
 		memcpy(&pfx->add.sin6, dest, 16);
 		pfx->bitlen = (bitlen >= 0) ? bitlen : 128;
@@ -690,7 +693,32 @@ prefix_t
 const char *
 prefix_addr_ntop(prefix_t *prefix, char *buf, size_t len)
 {
-	return (inet_ntop(prefix->family, &prefix->add, buf, len));
+	struct sockaddr *s = NULL;
+	socklen_t sl;
+	struct sockaddr_in sin;
+	struct sockaddr_in6 sin6;
+
+	if (prefix->family == AF_INET) {
+		bzero(&sin, sizeof(sin));
+		sin.sin_family = AF_INET;
+		/* sin.sin_len = sizeof(sin); */
+		memcpy(&sin.sin_addr, &prefix->add.sin, sizeof(sin.sin_addr));
+		s = (struct sockaddr *) &sin;
+		sl = sizeof(sin);
+	} else if (prefix->family == AF_INET6) {
+		bzero(&sin6, sizeof(sin6));
+		sin6.sin6_family = AF_INET6;
+		/* sin6.sin6_len = sizeof(sin6); */
+		memcpy(&sin6.sin6_addr, &prefix->add.sin6, sizeof(sin6.sin6_addr));
+		s = (struct sockaddr *) &sin6;
+		sl = sizeof(sin6);
+	} else
+		return NULL;
+
+	if (getnameinfo(s, sl, buf, len, NULL, 0, NI_NUMERICHOST) == 0)
+		return buf;
+
+	return NULL;
 }
 
 const char *

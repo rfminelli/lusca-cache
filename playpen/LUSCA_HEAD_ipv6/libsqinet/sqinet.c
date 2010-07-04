@@ -3,19 +3,29 @@
  *
  * These functions provide an IPv4/IPv6 aware end-point identifier type.
  *
- * @copyright Adrian Chadd <adrian@@squid-cache.org>
+ * @copyright Adrian Chadd <adrian@squid-cache.org>
  */
+
+#include "../include/config.h"
 
 #include <stdio.h>
 #include <stdlib.h>
+#if HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
+#endif
+#if HAVE_NETINET_IN_H
 #include <netinet/in.h>
+#endif
+#if HAVE_ARPA_INET_H
 #include <arpa/inet.h>
+#endif
 #include <assert.h>
 #include <unistd.h>
 #include <strings.h>
 #include <string.h>
+#if HAVE_NETDB_H
 #include <netdb.h>
+#endif
 
 #include "../include/util.h"		/* for memrcmp(); perhaps that should be broken out? */
 #include "../include/hash.h"		/* for hash4() */
@@ -50,7 +60,7 @@
 void
 sqinet_init(sqaddr_t *s)
 {
-	bzero(s, sizeof(*s));
+	memset(s, 0, sizeof(*s));
 	s->init = 1;
 }
 
@@ -266,8 +276,9 @@ struct in_addr
 sqinet_get_v4_inaddr(const sqaddr_t *s, sqaddr_flags flags)
 {
 	struct sockaddr_in *v4;
-	struct in_addr none_addr = { INADDR_NONE };
+	struct in_addr none_addr;
 
+	none_addr.s_addr = INADDR_NONE;
 	assert(s->init);
 	if (flags & SQADDR_ASSERT_IS_V4) {
 		assert(s->st.ss_family == AF_INET);
@@ -365,7 +376,6 @@ sqinet_set_anyaddr(sqaddr_t *s)
 {
 	struct sockaddr_in *v4;
 	struct sockaddr_in6 *v6;
-	struct in6_addr any6addr = IN6ADDR_ANY_INIT;
 
 	assert(s->init);
 	switch(s->st.ss_family) {
@@ -375,7 +385,7 @@ sqinet_set_anyaddr(sqaddr_t *s)
 			break;
 		case AF_INET6:
 			v6 = (struct sockaddr_in6 *) &s->st;
-			v6->sin6_addr = any6addr;
+			v6->sin6_addr = in6addr_any;
 			break;
 		default:
 			assert(0);
@@ -401,7 +411,6 @@ sqinet_is_anyaddr(const sqaddr_t *s)
 {
 	struct sockaddr_in *v4;
 	struct sockaddr_in6 *v6;
-	struct in6_addr any6addr = IN6ADDR_ANY_INIT;
 
 	assert(s->init);
 	switch(s->st.ss_family) {
@@ -411,7 +420,7 @@ sqinet_is_anyaddr(const sqaddr_t *s)
 			break;
 		case AF_INET6:
 			v6 = (struct sockaddr_in6 *) &s->st;
-			return (memcmp(&v6->sin6_addr, &any6addr, sizeof(any6addr)) == 0);
+			return (memcmp(&v6->sin6_addr, &in6addr_any, sizeof(in6addr_any)) == 0);
 			break;
 		default:
 			assert(0);
@@ -583,7 +592,10 @@ sqinet_ntoa(const sqaddr_t *s, char *hoststr, int hostlen, sqaddr_flags flags)
 
 	retval = getnameinfo((struct sockaddr *) (&s->st), sqinet_get_length(s), hoststr, hostlen, NULL, 0, NI_NUMERICHOST|NI_NUMERICSERV);
 	if (! (flags & SQADDR_NO_BRACKET_V6) && s->st.ss_family == AF_INET6) {
-		hoststr[strlen(hoststr)] = ']';
+		size_t len = strlen(hoststr);
+		assert(len < hostlen - 2);	/* XXX need space for ]\0 */
+		hoststr[len] = ']';
+		hoststr[len+1] = '\0';
 	}
 	return (retval == 0);
 }
@@ -619,7 +631,7 @@ sqinet_aton(sqaddr_t *s, const char *hoststr, sqaton_flags flags)
 	int err;
 
 	assert(s->init);
-	bzero(&hints, sizeof(hints));
+	memset(&hints, 0, sizeof(hints));
 	if (flags & SQATON_FAMILY_IPv4)
 		hints.ai_family = AF_INET;
 	if (flags & SQATON_FAMILY_IPv6)
@@ -693,14 +705,12 @@ sqinet_assemble_rev(const sqaddr_t *s, char *buf, int len)
 			s6 = a6.s6_addr;
 			r = 0;
 			for (i = 0; i < 16; i++) {
-				printf("  %d: got %X\n", i, s6[i]);
-				r += snprintf(buf + r, len - r, "%x.%x.", s6[i] & 0x0f, (s6[i] >> 4) & 0x0f);
-				/* Make sure we've got space for the ip6.arpa bit at the end */
-				if (r + 10 >= len) {
+				/* Make sure we've got space for this AND the .ip6.arpa at the end */
+				if (r + 16 >= len) {
 					return 0;
 				}
+				r += snprintf(buf + r, len - r, "%x.%x.", s6[i] & 0x0f, (s6[i] >> 4) & 0x0f);
 			}
-			/* XXX this is very risky and doesn't verify there's space left! */
 			strcat(buf + r, "ip6.arpa");
 			return r + 8;
 			break;

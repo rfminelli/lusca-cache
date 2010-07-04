@@ -1,10 +1,11 @@
+#include "../include/config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <string.h>
 
-#include "../include/config.h"
 #include "../include/squid_md5.h"
 
 #include "../libcore/varargs.h"
@@ -47,7 +48,7 @@ storeSwapLogPrintHeader(FILE *fp)
     char buf[sizeof(storeSwapLogData)];
     storeSwapLogHeader *sh = (storeSwapLogHeader *) buf;
 
-    bzero(buf, sizeof(buf));
+    memset(buf, 0, sizeof(buf));
     sh->op = SWAP_LOG_VERSION;
     sh->version = 1;
     sh->record_size = sizeof(storeSwapLogData);
@@ -62,7 +63,7 @@ storeSwapLogPrintCompleted(FILE *fp)
     char buf[sizeof(storeSwapLogData)];
     storeSwapLogCompleted *sh = (storeSwapLogCompleted *) buf;
 
-    bzero(buf, sizeof(buf));
+    memset(buf, 0, sizeof(buf));
     sh->op = SWAP_LOG_COMPLETED;
     if (fwrite(buf, sizeof(storeSwapLogData), 1, fp) < 1)
         return 0;
@@ -75,7 +76,7 @@ storeSwapLogPrintProgress(FILE *fp, u_int32_t progress, u_int32_t total)
         char buf[128];
         storeSwapLogProgress *sp = (storeSwapLogProgress *) buf;
 
-        bzero(buf, sizeof(buf));
+        memset(buf, 0, sizeof(buf));
         sp->op = SWAP_LOG_PROGRESS;
         sp->total = total;
         sp->progress = progress;

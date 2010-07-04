@@ -34,29 +34,11 @@
  */
 
 #include "squid.h"
-#include "radix.h"
+#include "../libcore/radix.h"
 
 #define WHOIS_PORT 43
 
-/* BEGIN of definitions for radix tree entries */
-
-/* int in memory with length */
-typedef u_char m_int[1 + sizeof(unsigned int)];
-#define store_m_int(i, m) \
-    (i = htonl(i), m[0] = sizeof(m_int), xmemcpy(m+1, &i, sizeof(unsigned int)))
-#define get_m_int(i, m) \
-    (xmemcpy(&i, m+1, sizeof(unsigned int)), ntohl(i))
-
-/* END of definitions for radix tree entries */
-
-/* Head for ip to asn radix tree */
-/* Silly union construct to get rid of GCC-3.3 warning */
-union {
-    struct squid_radix_node_head *rn;
-    void *ptr;
-} AS_tree_head_u;
-
-#define AS_tree_head AS_tree_head_u.rn
+radix_tree_t * AS_tree = NULL;
 
 /*
  * Structure for as number information. it could be simply 
@@ -82,10 +64,7 @@ typedef struct _as_info as_info;
 
 /* entry into the radix tree */
 struct _rtentry {
-    struct squid_radix_node e_nodes[2];
     as_info *e_info;
-    m_int e_addr;
-    m_int e_mask;
 };
 
 typedef struct _rtentry rtentry;
@@ -93,8 +72,7 @@ typedef struct _rtentry rtentry;
 static int asnAddNet(char *, int);
 static void asnCacheStart(int as);
 static STNCB asHandleReply;
-static int destroyRadixNode(struct squid_radix_node *rn, void *w);
-static int printRadixNode(struct squid_radix_node *rn, void *w);
+static int printRadixNode(StoreEntry *e, radix_node_t *n);
 static void asnAclInitialize(acl * acls);
 static void asStateFree(void *data);
 static void destroyRadixNodeInfo(as_info *);
@@ -105,29 +83,31 @@ static OBJH asnStats;
 int
 asnMatchIp(void *data, struct in_addr addr)
 {
-    unsigned long lh;
-    struct squid_radix_node *rn;
     as_info *e;
-    m_int m_addr;
     intlist *a = NULL;
     intlist *b = NULL;
-    lh = ntohl(addr.s_addr);
+    prefix_t *p;
+    radix_node_t *n;
+
     debug(53, 3) ("asnMatchIp: Called for %s.\n", inet_ntoa(addr));
 
-    if (AS_tree_head == NULL)
+    if (AS_tree == NULL)
 	return 0;
     if (IsNoAddr(&addr))
 	return 0;
     if (IsAnyAddr(&addr))
 	return 0;
-    store_m_int(lh, m_addr);
-    rn = squid_rn_match(m_addr, AS_tree_head);
-    if (rn == NULL) {
+
+    p = New_Prefix(AF_INET, &addr, 32, NULL);
+    n = radix_search_best(AS_tree, p);
+    Deref_Prefix(p);
+    if (n == NULL) {
 	debug(53, 3) ("asnMatchIp: Address not in as db.\n");
 	return 0;
     }
+
     debug(53, 3) ("asnMatchIp: Found in db!\n");
-    e = ((rtentry *) rn)->e_info;
+    e = ((rtentry *) (n->data))->e_info;
     assert(e);
     for (a = (intlist *) data; a; a = a->next)
 	for (b = e->as_number; b; b = b->next)
@@ -153,36 +133,46 @@ asnAclInitialize(acl * acls)
     }
 }
 
-/* initialize the radix tree structure */
-
-extern int squid_max_keylen;	/* yuck.. this is in lib/radix.c */
-
 CBDATA_TYPE(ASState);
 void
 asnInit(void)
 {
-    static int inited = 0;
-    squid_max_keylen = 40;
     CBDATA_INIT_TYPE(ASState);
-    if (0 == inited++)
-	squid_rn_init();
-    squid_rn_inithead(&AS_tree_head_u.ptr, 8);
+    AS_tree = New_Radix();
     asnAclInitialize(Config.aclList);
     cachemgrRegister("asndb", "AS Number Database", asnStats, 0, 1);
+}
+
+static void
+asnFreeRadixNode(radix_node_t *ptr, void *cbdata)
+{
+	rtentry *rt = ptr->data;
+
+	/* free the node list */
+        destroyRadixNodeInfo(rt->e_info);
+
+	/* free the node */
+	xfree(rt);
+	ptr->data = NULL;
 }
 
 void
 asnFreeMemory(void)
 {
-    squid_rn_walktree(AS_tree_head, destroyRadixNode, AS_tree_head);
-    destroyRadixNode((struct squid_radix_node *) 0, (void *) AS_tree_head);
+    Destroy_Radix(AS_tree, asnFreeRadixNode, NULL);
+    AS_tree = NULL;
 }
 
 static void
 asnStats(StoreEntry * sentry)
 {
+    radix_node_t *n;
+
     storeAppendPrintf(sentry, "Address    \tAS Numbers\n");
-    squid_rn_walktree(AS_tree_head, printRadixNode, sentry);
+
+    RADIX_WALK(AS_tree->head, n) {
+        printRadixNode(sentry, n);
+    } RADIX_WALK_END;
 }
 
 /* PRIVATE */
@@ -255,7 +245,7 @@ asHandleReply(void *data, mem_node_ref nr, ssize_t size)
 	asStateFree(asState);
 	return;
     }
-    assert((nr.offset + size) < SM_PAGE_SIZE);
+    assert((nr.offset + size) <= SM_PAGE_SIZE);
     memcpy(buf, nr.node->data + nr.offset, size);
     stmemNodeUnref(&nr);
 
@@ -323,15 +313,16 @@ static int
 asnAddNet(char *as_string, int as_number)
 {
     rtentry *e;
-    struct squid_radix_node *rn;
+    prefix_t *p;
+    radix_node_t *n;
     char dbg1[32], dbg2[32];
     intlist **Tail = NULL;
     intlist *q = NULL;
     as_info *asinfo = NULL;
-    struct in_addr in_a, in_m;
-    long mask, addr;
     char *t;
     int bitl;
+    in_addr_t mask;
+    struct in_addr in_a, in_m;
 
     t = strchr(as_string, '/');
     if (t == NULL) {
@@ -339,7 +330,7 @@ asnAddNet(char *as_string, int as_number)
 	return 0;
     }
     *t = '\0';
-    addr = inet_addr(as_string);
+    in_a.s_addr = inet_addr(as_string);
     bitl = atoi(t + 1);
     if (bitl < 0)
 	bitl = 0;
@@ -347,20 +338,19 @@ asnAddNet(char *as_string, int as_number)
 	bitl = 32;
     mask = bitl ? 0xfffffffful << (32 - bitl) : 0;
 
-    in_a.s_addr = addr;
     in_m.s_addr = mask;
     xstrncpy(dbg1, inet_ntoa(in_a), 32);
     xstrncpy(dbg2, inet_ntoa(in_m), 32);
-    addr = ntohl(addr);
-    /*mask = ntohl(mask); */
     debug(53, 3) ("asnAddNet: called for %s/%s\n", dbg1, dbg2);
-    e = xmalloc(sizeof(rtentry));
-    memset(e, '\0', sizeof(rtentry));
-    store_m_int(addr, e->e_addr);
-    store_m_int(mask, e->e_mask);
-    rn = squid_rn_lookup(e->e_addr, e->e_mask, AS_tree_head);
-    if (rn != NULL) {
-	asinfo = ((rtentry *) rn)->e_info;
+
+    e = xcalloc(1, sizeof(rtentry));
+
+    p = New_Prefix(AF_INET, &in_a, bitl, NULL);
+    n = radix_search_exact(AS_tree, p);
+
+    /* Does the entry exist? Append the given ASN to it */
+    if (n != NULL) {
+	asinfo = ((rtentry *) (n->data))->e_info;
 	if (intlistFind(asinfo->as_number, as_number)) {
 	    debug(53, 3) ("asnAddNet: Ignoring repeated network '%s/%d' for AS %d\n",
 		dbg1, bitl, as_number);
@@ -377,35 +367,13 @@ asnAddNet(char *as_string, int as_number)
 	q->i = as_number;
 	asinfo = xmalloc(sizeof(asinfo));
 	asinfo->as_number = q;
-	rn = squid_rn_addroute(e->e_addr, e->e_mask, AS_tree_head, e->e_nodes);
-	rn = squid_rn_match(e->e_addr, AS_tree_head);
-	assert(rn != NULL);
+        n = radix_lookup(AS_tree, p);
+        assert(n != NULL);
 	e->e_info = asinfo;
-	if (rn == 0) {		/* assert might expand to nothing */
-	    xfree(asinfo);
-	    xfree(q);
-	    xfree(e);
-	    debug(53, 3) ("asnAddNet: Could not add entry.\n");
-	    return 0;
-	}
+        n->data = e;
     }
     e->e_info = asinfo;
-    return 1;
-}
-
-static int
-destroyRadixNode(struct squid_radix_node *rn, void *w)
-{
-    struct squid_radix_node_head *rnh = (struct squid_radix_node_head *) w;
-
-    if (rn && !(rn->rn_flags & RNF_ROOT)) {
-	rtentry *e = (rtentry *) rn;
-	rn = squid_rn_delete(rn->rn_key, rn->rn_mask, rnh);
-	if (rn == 0)
-	    debug(53, 3) ("destroyRadixNode: internal screwup\n");
-	destroyRadixNodeInfo(e->e_info);
-	xfree(rn);
-    }
+    Deref_Prefix(p);
     return 1;
 }
 
@@ -436,20 +404,19 @@ mask_len(u_long mask)
 }
 
 static int
-printRadixNode(struct squid_radix_node *rn, void *w)
+printRadixNode(StoreEntry *sentry, radix_node_t *n)
 {
-    StoreEntry *sentry = w;
-    rtentry *e = (rtentry *) rn;
+    rtentry *e = n->data;
     intlist *q;
     as_info *asinfo;
-    struct in_addr addr;
-    struct in_addr mask;
+    char buf[128];
+
     assert(e);
     assert(e->e_info);
-    (void) get_m_int(addr.s_addr, e->e_addr);
-    (void) get_m_int(mask.s_addr, e->e_mask);
-    storeAppendPrintf(sentry, "%15s/%d\t",
-	inet_ntoa(addr), mask_len(ntohl(mask.s_addr)));
+
+    (void) prefix_ntop(n->prefix, buf, sizeof(buf)-1);
+
+    storeAppendPrintf(sentry, "%s\t", buf);
     asinfo = e->e_info;
     assert(asinfo->as_number);
     for (q = asinfo->as_number; q; q = q->next)

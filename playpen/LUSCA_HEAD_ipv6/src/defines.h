@@ -119,9 +119,6 @@
 
 #define MAX_FILES_PER_DIR (1<<20)
 
-#define MAX_URL  4096
-#define MAX_LOGIN_SZ  128
-
 #define PEER_MAX_ADDRESSES 10
 #define RTT_AV_FACTOR      50
 
@@ -153,8 +150,6 @@
 
 #define STORE_ENTRY_WITH_MEMOBJ		1
 #define STORE_ENTRY_WITHOUT_MEMOBJ	0
-
-#define PINGER_PAYLOAD_SZ 8192
 
 #define COUNT_INTERVAL 60
 /*
@@ -228,10 +223,6 @@
 #define _WIN_SQUID_RUN_MODE_INTERACTIVE		0
 #define _WIN_SQUID_RUN_MODE_SERVICE		1
 #endif
-
-/* swap_filen is 25 bits, signed */
-#define FILEMAP_MAX_SIZE (1<<24)
-#define FILEMAP_MAX (FILEMAP_MAX_SIZE - 65536)
 
 #define	LOGFILE_SEQNO(n)	( (n)->sequence_number )
 

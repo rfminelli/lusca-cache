@@ -38,15 +38,11 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <math.h>
-#include <fcntl.h>
-#include <sys/errno.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 
 #include "../include/Array.h"
 #include "../include/Stack.h"
 #include "../include/util.h"
+#include "../include/Vector.h"
 #include "../libcore/valgrind.h"
 #include "../libcore/varargs.h"
 #include "../libcore/debug.h"
@@ -316,13 +312,13 @@ httpHeaderAddEntryStr(HttpHeader *hdr, http_hdr_type id, const char *attrib, con
 /*
  * -1 means "don't know length, call strlen()
  */
-HttpHeaderEntry *
+int
 httpHeaderAddEntryStr2(HttpHeader *hdr, http_hdr_type id, const char *a, int al, const char *v, int vl)
 {
 	HttpHeaderEntry *e = memPoolAlloc(pool_http_header_entry);
 	httpHeaderEntryCreate(e, id, a, al, v, vl);
 	httpHeaderAddEntry(hdr, e);
-	return e;
+	return(hdr->entries.count - 1);
 }
 
 void
@@ -620,7 +616,7 @@ httpHeaderRefreshMask(HttpHeader * hdr)
     }
 }
 
-static void
+void
 httpHeaderRepack(HttpHeader * hdr)
 {
     HttpHeaderPos dp = HttpHeaderInitPos;

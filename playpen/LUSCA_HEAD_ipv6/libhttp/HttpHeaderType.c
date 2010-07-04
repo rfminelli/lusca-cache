@@ -39,11 +39,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <math.h>
-#include <fcntl.h>
-#include <sys/errno.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 
 #include "../libcore/varargs.h"
 #include "../libcore/tools.h"

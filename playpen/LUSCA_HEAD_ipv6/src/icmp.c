@@ -38,6 +38,9 @@
 
 #if USE_ICMP
 
+#include "pinger.h"
+#include "icmp.h"
+
 #define S_ICMP_ECHO	1
 #if ALLOW_SOURCE_PING
 #define S_ICMP_ICP	2

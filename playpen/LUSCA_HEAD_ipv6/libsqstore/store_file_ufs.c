@@ -1,9 +1,13 @@
+#include "../include/config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/errno.h>
+#if HAVE_ERRNO_H
+#include <errno.h>
+#endif
 
 #include "../include/config.h"
 #include "../include/squid_md5.h"

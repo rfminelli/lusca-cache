@@ -107,8 +107,19 @@ squid_SOURCES = \
 	cbdata.c \
 	client_db.c \
 	client_side.c \
+	client_side_body.c \
+	client_side_etag.c \
+	client_side_request.c \
+	client_side_request_parse.c \
+	client_side_reply.c \
+	client_side_conn.c \
 	client_side_nat.c \
 	client_side_rewrite.c \
+	client_side_ranges.c \
+	client_side_refresh.c \
+	client_side_ims.c \
+	client_side_purge.c \
+	client_side_async_refresh.c \
 	client_side_storeurl_rewrite.c \
 	client_side_location_rewrite.c \
 	comm.c \
@@ -120,14 +131,13 @@ squid_SOURCES = \
 	event.c \
 	errormap.c \
 	external_acl.c \
-	fd.c \
-	filemap.c \
 	forward.c \
 	fqdncache.c \
 	ftp.c \
 	globals.h \
 	gopher.c \
 	helper.c \
+	hierarchy_entry.c \
 	$(HTCPSOURCE) \
 	http.c \
 	HttpStatusLine.c \
@@ -197,6 +207,7 @@ squid_SOURCES = \
 	store_swapmeta.c \
 	store_swapout.c \
 	store_update.c \
+	store_vary.c \
 	structs.h \
 	tools.c \
 	typedefs.h \
@@ -227,6 +238,8 @@ squid_LDADD = \
 	-L../libhelper \
 	-L../libstmem \
 	-L../libiapp \
+	-L../libsqftp \
+	-L../libsqurl \
 	-L../libhttp \
 	-L../libstat \
 	-L../libsqdns \
@@ -261,6 +274,8 @@ squid_LDADD = \
 	-lhelper \
 	-lmime \
 	-liapp \
+	-lsqftp \
+	-lsqurl \
 	-lhttp \
 	-lstat \
 	-lmiscutil \
@@ -301,7 +316,7 @@ sysconf_DATA = \
 data_DATA = \
 	mib.txt
 
-LDADD = -L../lib -L../libcore -L../libsqdebug -L../libmem -L../libsqname -L../libcb -L../libhelper -L../libmime -L../libstmem -L../libiapp -L../libhttp -L../libstat -L../libsqdns -L../libsqident -L../libsqinet -L../libasyncio -L../libsqtlv -L../libsqstore -lsqstore -lsqtlv -lasyncio -lsqinet -lsqdns -lsqdebug -lcore -lmem -lsqname -lcb -lsqident -lhelper -lmime -lstmem -liapp -lhttp -lstat -lmiscutil @XTRA_LIBS@
+LDADD = -L../lib -L../libcore -L../libsqdebug -L../libmem -L../libsqname -L../libcb -L../libhelper -L../libmime -L../libstmem -L../libiapp -L../libsqftp -L../libsqurl -L../libhttp -L../libstat -L../libsqdns -L../libsqident -L../libsqinet -L../libasyncio -L../libsqtlv -L../libsqstore -lsqstore -lsqtlv -lasyncio -lsqinet -lsqdns -lsqdebug -lcore -lmem -lsqname -lcb -lsqident -lhelper -lmime -lstmem -liapp -lsqftp -lsqurl -lhttp -lstat -lmiscutil @XTRA_LIBS@
 
 EXTRA_DIST = \
 	cf_gen_defines \

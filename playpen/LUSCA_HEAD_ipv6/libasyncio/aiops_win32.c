@@ -34,17 +34,47 @@
  *
  */
 
-#include "squid.h"
-#include <windows.h>
-#include "async_io.h"
+
+#include "../include/config.h"
 
 #include	<stdio.h>
 #include	<sys/types.h>
-#include	<sys/stat.h>
+#if HAVE_FCNTL_H
 #include	<fcntl.h>
+#endif
+#if HAVE_ERRNO_H
 #include	<errno.h>
+#endif
+#include	<sys/stat.h>
 #include	<dirent.h>
 #include	<signal.h>
+
+#include "../include/util.h"
+#include "../include/win32_error.h"
+
+#include "../include/Array.h"
+#include "../include/Stack.h"
+
+#include "../libcore/varargs.h"
+#include "../libcore/tools.h"
+#include "../libcore/gb.h"
+#include "../libcore/kb.h"
+
+#include "../libsqdebug/debug.h"
+
+#include "../libmem/MemPool.h"
+#include "../libmem/MemBufs.h"
+#include "../libmem/MemBuf.h"
+
+#include "../libsqinet/sqinet.h"
+#include "../libiapp/fd_types.h"
+#include "../libiapp/comm_types.h"
+#include "../libiapp/comm.h"
+#include "../libiapp/win32_pipe.h"
+
+#include "aiops.h"
+#include "async_io.h"
+
 
 #define RIDICULOUS_LENGTH	4096
 
@@ -56,66 +86,7 @@ int squidaio_nthreads = 0;
 int squidaio_magic1 = 1;	/* dummy initializer value */
 int squidaio_magic2 = 1;	/* real value set in aiops.c */
 
-enum _squidaio_thread_status {
-    _THREAD_STARTING = 0,
-    _THREAD_WAITING,
-    _THREAD_BUSY,
-    _THREAD_FAILED,
-    _THREAD_DONE
-};
-typedef enum _squidaio_thread_status squidaio_thread_status;
-
-enum _squidaio_request_type {
-    _AIO_OP_NONE = 0,
-    _AIO_OP_OPEN,
-    _AIO_OP_READ,
-    _AIO_OP_WRITE,
-    _AIO_OP_CLOSE,
-    _AIO_OP_UNLINK,
-    _AIO_OP_TRUNCATE,
-    _AIO_OP_OPENDIR,
-    _AIO_OP_STAT
-};
-typedef enum _squidaio_request_type squidaio_request_type;
-
-typedef struct squidaio_request_t {
-    struct squidaio_request_t *next;
-    squidaio_request_type request_type;
-    int cancelled;
-    char *path;
-    int oflag;
-    mode_t mode;
-    int fd;
-    char *bufferp;
-    int buflen;
-    off_t offset;
-    int whence;
-    int ret;
-    int err;
-    struct stat *tmpstatp;
-    struct stat *statp;
-    squidaio_result_t *resultp;
-} squidaio_request_t;
-
-typedef struct squidaio_request_queue_t {
-    HANDLE mutex;
-    HANDLE cond;		/* See Event objects */
-    squidaio_request_t *volatile head;
-    squidaio_request_t *volatile *volatile tailp;
-    unsigned long requests;
-    unsigned long blocked;	/* main failed to lock the queue */
-} squidaio_request_queue_t;
-
-typedef struct squidaio_thread_t squidaio_thread_t;
-struct squidaio_thread_t {
-    squidaio_thread_t *next;
-    HANDLE thread;
-    DWORD dwThreadId;		/* thread ID */
-    squidaio_thread_status status;
-    struct squidaio_request_t *current_req;
-    unsigned long requests;
-    int volatile exit;
-};
+int aiops_default_ndirs = 0;
 
 static void squidaio_queue_request(squidaio_request_t *);
 static void squidaio_cleanup_request(squidaio_request_t *);
@@ -126,9 +97,7 @@ static void squidaio_do_write(squidaio_request_t *);
 static void squidaio_do_close(squidaio_request_t *);
 static void squidaio_do_stat(squidaio_request_t *);
 static void squidaio_do_unlink(squidaio_request_t *);
-#if USE_TRUNCATE
 static void squidaio_do_truncate(squidaio_request_t *);
-#endif
 #if AIO_OPENDIR
 static void *squidaio_do_opendir(squidaio_request_t *);
 #endif
@@ -166,6 +135,7 @@ squidaio_fdhandler(int fd, void *data)
     char junk[256];
     FD_READ_METHOD(done_fd_read, junk, sizeof(junk));
     commSetSelect(fd, COMM_SELECT_READ, squidaio_fdhandler, NULL, 0);
+    aioCheckCallbacks();
 }
 
 void
@@ -186,21 +156,21 @@ squidaio_init(void)
 	    FALSE,		/* child process's don't inherit the handle */
 	    DUPLICATE_SAME_ACCESS)) {
 	/* spit errors */
-	fatal("couldn't get current thread handle\n");
+	libcore_fatalf("couldn't get current thread handle\n");
     }
     /* Initialize request queue */
     if ((request_queue.mutex = CreateMutex(NULL,	/* no inheritance */
 		FALSE,		/* start unowned (as per mutex_init) */
 		NULL)		/* no name */
 	) == NULL) {
-	fatal("failed to create mutex\n");
+	libcore_fatalf("failed to create mutex\n");
     }
     if ((request_queue.cond = CreateEvent(NULL,		/* no inheritance */
 		FALSE,		/* auto signal reset - which I think is pthreads like ? */
 		FALSE,		/* start non signaled */
 		NULL)		/* no name */
 	) == NULL) {
-	fatal("failed to create condition event variable.\n");
+	libcore_fatalf("failed to create condition event variable.\n");
     }
     request_queue.head = NULL;
     request_queue.tailp = &request_queue.head;
@@ -212,14 +182,14 @@ squidaio_init(void)
 		FALSE,		/* start unowned (as per mutex_init) */
 		NULL)		/* no name */
 	) == NULL) {
-	fatal("failed to create mutex\n");
+	libcore_fatalf("failed to create mutex\n");
     }
     if ((done_queue.cond = CreateEvent(NULL,	/* no inheritance */
 		TRUE,		/* manually signaled - which I think is pthreads like ? */
 		FALSE,		/* start non signaled */
 		NULL)		/* no name */
 	) == NULL) {
-	fatal("failed to create condition event variable.\n");
+	libcore_fatalf("failed to create condition event variable.\n");
     }
     done_queue.head = NULL;
     done_queue.tailp = &done_queue.head;
@@ -242,7 +212,7 @@ squidaio_init(void)
     squidaio_thread_pool = memPoolCreate("aio_thread", sizeof(squidaio_thread_t));
     if (squidaio_nthreads == 0) {
 	int j = THREAD_FACTOR;
-	for (i = 0; i < n_asyncufs_dirs; i++) {
+	for (i = 0; i < aiops_default_ndirs; i++) {
 	    squidaio_nthreads += j;
 	    j = j * 2 / 3;
 	    if (j < 4)
@@ -338,7 +308,7 @@ squidaio_thread_loop(LPVOID lpParam)
 
     /* lock the thread info */
     if (WAIT_FAILED == WaitForSingleObject(request_queue.mutex, INFINITE)) {
-	fatal("Can't get ownership of mutex\n");
+	libcore_fatalf("Can't get ownership of mutex\n");
     }
     /* duplicate the handle */
     if (!DuplicateHandle(GetCurrentProcess(),	/* pseudo handle, don't close */
@@ -348,10 +318,10 @@ squidaio_thread_loop(LPVOID lpParam)
 	    0,			/* required access */
 	    FALSE,		/* child process's don't inherit the handle */
 	    DUPLICATE_SAME_ACCESS))
-	fatal("Can't duplicate mutex handle\n");
+	libcore_fatalf("Can't duplicate mutex handle\n");
     if (!ReleaseMutex(request_queue.mutex)) {
 	CloseHandle(cond);
-	fatal("Can't release mutex\n");
+	libcore_fatalf("Can't release mutex\n");
     }
     while (1) {
 	DWORD rv;
@@ -417,11 +387,9 @@ squidaio_thread_loop(LPVOID lpParam)
 	    case _AIO_OP_UNLINK:
 		squidaio_do_unlink(request);
 		break;
-#if USE_TRUNCATE
 	    case _AIO_OP_TRUNCATE:
 		squidaio_do_truncate(request);
 		break;
-#endif
 #if AIO_OPENDIR			/* Opendir not implemented yet */
 	    case _AIO_OP_OPENDIR:
 		squidaio_do_opendir(request);
@@ -486,10 +454,10 @@ squidaio_queue_request(squidaio_request_t * request)
 	    *request_queue.tailp = request;
 	    request_queue.tailp = &request->next;
 	    if (!SetEvent(request_queue.cond))
-		fatal("couldn't push queue\n");
+		libcore_fatalf("couldn't push queue\n");
 	    if (!ReleaseMutex(request_queue.mutex)) {
 		/* unexpected error */
-		fatal("couldn't push queue\n");
+		libcore_fatalf("couldn't push queue\n");
 	    }
 	} else {
 	    /* Oops, the request queue is blocked, use request_queue2 */
@@ -505,10 +473,10 @@ squidaio_queue_request(squidaio_request_t * request)
 	    *request_queue.tailp = request_queue2.head;
 	    request_queue.tailp = &request->next;
 	    if (!SetEvent(request_queue.cond))
-		fatal("couldn't push queue\n");
+		libcore_fatalf("couldn't push queue\n");
 	    if (!ReleaseMutex(request_queue.mutex)) {
 		/* unexpected error */
-		fatal("couldn't push queue\n");
+		libcore_fatalf("couldn't push queue\n");
 	    }
 	    request_queue2.head = NULL;
 	    request_queue2.tailp = &request_queue2.head;
@@ -571,14 +539,14 @@ squidaio_cleanup_request(squidaio_request_t * requestp)
     case _AIO_OP_STAT:
 	if (!cancelled && requestp->ret == 0)
 	    xmemcpy(requestp->statp, requestp->tmpstatp, sizeof(struct stat));
-	squidaio_xfree(requestp->tmpstatp, sizeof(struct stat));
-	squidaio_xstrfree(requestp->path);
+	xfree(requestp->tmpstatp);
+	xfree(requestp->path);
 	break;
     case _AIO_OP_OPEN:
 	if (cancelled && requestp->ret >= 0)
 	    /* The open() was cancelled but completed */
 	    close(requestp->ret);
-	squidaio_xstrfree(requestp->path);
+	xfree(requestp->path);
 	break;
     case _AIO_OP_CLOSE:
 	if (cancelled && requestp->ret < 0)
@@ -588,7 +556,7 @@ squidaio_cleanup_request(squidaio_request_t * requestp)
     case _AIO_OP_UNLINK:
     case _AIO_OP_TRUNCATE:
     case _AIO_OP_OPENDIR:
-	squidaio_xstrfree(requestp->path);
+	xfree(requestp->path);
 	break;
     case _AIO_OP_READ:
 	break;
@@ -628,7 +596,7 @@ squidaio_open(const char *path, int oflag, mode_t mode, squidaio_result_t * resu
     squidaio_request_t *requestp;
 
     requestp = memPoolAlloc(squidaio_request_pool);
-    requestp->path = (char *) squidaio_xstrdup(path);
+    requestp->path = (char *) xstrdup(path);
     requestp->oflag = oflag;
     requestp->mode = mode;
     requestp->resultp = resultp;
@@ -649,7 +617,7 @@ squidaio_do_open(squidaio_request_t * requestp)
 
 
 int
-squidaio_read(int fd, char *bufp, int bufs, off_t offset, int whence, squidaio_result_t * resultp)
+squidaio_read(int fd, char *bufp, int bufs, off_t offset, squidaio_result_t * resultp)
 {
     squidaio_request_t *requestp;
 
@@ -658,7 +626,6 @@ squidaio_read(int fd, char *bufp, int bufs, off_t offset, int whence, squidaio_r
     requestp->bufferp = bufp;
     requestp->buflen = bufs;
     requestp->offset = offset;
-    requestp->whence = whence;
     requestp->resultp = resultp;
     requestp->request_type = _AIO_OP_READ;
     requestp->cancelled = 0;
@@ -671,7 +638,7 @@ squidaio_read(int fd, char *bufp, int bufs, off_t offset, int whence, squidaio_r
 static void
 squidaio_do_read(squidaio_request_t * requestp)
 {
-    lseek(requestp->fd, requestp->offset, requestp->whence);
+    lseek(requestp->fd, requestp->offset, SEEK_SET);
     if (!ReadFile((HANDLE) _get_osfhandle(requestp->fd), requestp->bufferp,
 	    requestp->buflen, (LPDWORD) & requestp->ret, NULL)) {
 	WIN32_maperror(GetLastError());
@@ -682,7 +649,7 @@ squidaio_do_read(squidaio_request_t * requestp)
 
 
 int
-squidaio_write(int fd, char *bufp, int bufs, off_t offset, int whence, squidaio_result_t * resultp)
+squidaio_write(int fd, char *bufp, int bufs, off_t offset, squidaio_result_t * resultp)
 {
     squidaio_request_t *requestp;
 
@@ -691,7 +658,6 @@ squidaio_write(int fd, char *bufp, int bufs, off_t offset, int whence, squidaio_
     requestp->bufferp = bufp;
     requestp->buflen = bufs;
     requestp->offset = offset;
-    requestp->whence = whence;
     requestp->resultp = resultp;
     requestp->request_type = _AIO_OP_WRITE;
     requestp->cancelled = 0;
@@ -705,6 +671,7 @@ static void
 squidaio_do_write(squidaio_request_t * requestp)
 {
     assert(requestp->offset >= 0);
+    lseek(requestp->fd, requestp->offset, SEEK_SET);
     if (!WriteFile((HANDLE) _get_osfhandle(requestp->fd), requestp->bufferp,
 	    requestp->buflen, (LPDWORD) & requestp->ret, NULL)) {
 	WIN32_maperror(GetLastError());
@@ -745,7 +712,7 @@ squidaio_stat(const char *path, struct stat *sb, squidaio_result_t * resultp)
     squidaio_request_t *requestp;
 
     requestp = memPoolAlloc(squidaio_request_pool);
-    requestp->path = (char *) squidaio_xstrdup(path);
+    requestp->path = (char *) xstrdup(path);
     requestp->statp = sb;
     requestp->tmpstatp = (struct stat *) xcalloc(1, sizeof(struct stat));
     requestp->resultp = resultp;
@@ -771,7 +738,7 @@ squidaio_unlink(const char *path, squidaio_result_t * resultp)
     squidaio_request_t *requestp;
 
     requestp = memPoolAlloc(squidaio_request_pool);
-    requestp->path = squidaio_xstrdup(path);
+    requestp->path = xstrdup(path);
     requestp->resultp = resultp;
     requestp->request_type = _AIO_OP_UNLINK;
     requestp->cancelled = 0;
@@ -789,14 +756,13 @@ squidaio_do_unlink(squidaio_request_t * requestp)
 }
 
 
-#if USE_TRUNCATE
 int
 squidaio_truncate(const char *path, off_t length, squidaio_result_t * resultp)
 {
     squidaio_request_t *requestp;
 
     requestp = memPoolAlloc(squidaio_request_pool);
-    requestp->path = (char *) squidaio_xstrdup(path);
+    requestp->path = (char *) xstrdup(path);
     requestp->offset = length;
     requestp->resultp = resultp;
     requestp->request_type = _AIO_OP_TRUNCATE;
@@ -813,9 +779,6 @@ squidaio_do_truncate(squidaio_request_t * requestp)
     requestp->ret = truncate(requestp->path, requestp->offset);
     requestp->err = errno;
 }
-
-#endif
-
 
 #if AIO_OPENDIR
 /* XXX squidaio_opendir NOT implemented yet.. */
@@ -847,10 +810,10 @@ squidaio_poll_queues(void)
 	*request_queue.tailp = request_queue2.head;
 	request_queue.tailp = request_queue2.tailp;
 	if (!SetEvent(request_queue.cond))
-	    fatal("couldn't push queue\n");
+	    libcore_fatalf("couldn't push queue\n");
 	if (!ReleaseMutex(request_queue.mutex)) {
 	    /* unexpected error */
-	    fatal("couldn't push queue\n");
+	    libcore_fatalf("couldn't push queue\n");
 	}
 	request_queue2.head = NULL;
 	request_queue2.tailp = &request_queue2.head;
@@ -866,7 +829,7 @@ squidaio_poll_queues(void)
 	done_queue.tailp = &done_queue.head;
 	if (!ReleaseMutex(done_queue.mutex)) {
 	    /* unexpected error */
-	    fatal("couldn't poll queue\n");
+	    libcore_fatalf("couldn't poll queue\n");
 	}
 	*done_requests.tailp = requests;
 	request_queue_len -= 1;
@@ -965,21 +928,8 @@ squidaio_debug(squidaio_request_t * request)
     }
 }
 
-void
-squidaio_stats(StoreEntry * sentry)
+squidaio_thread_t *
+squidaio_get_thread_head(void)
 {
-    squidaio_thread_t *threadp;
-    int i;
-
-    if (!squidaio_initialised)
-	return;
-
-    storeAppendPrintf(sentry, "\n\nThreads Status:\n");
-    storeAppendPrintf(sentry, "#\tID\t# Requests\n");
-
-    threadp = threads;
-    for (i = 0; i < squidaio_nthreads; i++) {
-	storeAppendPrintf(sentry, "%i\t0x%lx\t%ld\n", i + 1, threadp->dwThreadId, threadp->requests);
-	threadp = threadp->next;
-    }
+	return NULL;	/* XXX for now */
 }

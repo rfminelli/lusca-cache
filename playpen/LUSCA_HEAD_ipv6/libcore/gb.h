@@ -1,5 +1,5 @@
-#ifndef	__LIBCORE_GB_UTILS_H__
-#define	__LIBCORE_GB_UTILS_H__
+#ifndef	__LIBCORE_GB_H__
+#define	__LIBCORE_GB_H__
 
 /* Origin: squid/src/typedefs.h ; squid/src/protos.h ; squid/src/defines.h */
 

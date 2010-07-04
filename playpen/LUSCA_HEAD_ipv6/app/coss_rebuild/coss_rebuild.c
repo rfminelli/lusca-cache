@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <string.h>
 
+#include "../libcore/varargs.h"
 #include "libcore/tools.h"
 #include "libsqdebug/debug.h"
 

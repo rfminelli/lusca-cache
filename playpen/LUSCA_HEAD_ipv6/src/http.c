@@ -39,6 +39,7 @@
  */
 
 #include "squid.h"
+#include "pconn.h"
 
 static const char *const crlf = "\r\n";
 
@@ -331,7 +332,7 @@ httpCachableReply(HttpStateData * httpState)
 	 * Don't cache objects that need to be refreshed on next request,
 	 * unless we know how to refresh it.
 	 */
-	if (!refreshIsCachable(httpState->entry))
+	if (!refreshIsCachable(httpState->entry) && !REFRESH_OVERRIDE(store_stale))
 	    return 0;
 	/* don't cache objects from peers w/o LMT, Date, or Expires */
 	/* check that is it enough to check headers @?@ */
@@ -518,7 +519,8 @@ httpReplySetupStuff(HttpStateData *httpState)
 	    }
 	    if (item) {
 		/* Can't handle other transfer-encodings */
-		debug(11, 1) ("Unexpected transfer encoding '%.*s'\n", strLen2(tr), strBuf2(tr));
+		if (Config.onoff.log_http_violations)
+		    debug(11, 1) ("Unexpected transfer encoding '%.*s'\n", strLen2(tr), strBuf2(tr));
 		reply->sline.status = HTTP_INVALID_HEADER;
 		return -1;
 	    }
@@ -921,17 +923,16 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
      * someone gets the time/motivation to rewrite the HTTP server-side code.
      */
     if (len > 0 && httpState->chunk_size == 0) {
-	debug(11, 1) ("httpReadReply: Unexpected reply body data from \"%s %s\"\n",
-	    urlMethodGetConstStr(orig_request->method),
-	    storeUrl(entry));
+	if (Config.onoff.log_http_violations)
+	    debug(11, 1) ("httpReadReply: Unexpected reply body data from \"%s %s\"\n",
+	        urlMethodGetConstStr(orig_request->method), storeUrl(entry));
 	comm_close(fd);
 	return;
     }
     if (len > 0) {
-	debug(11, Config.onoff.relaxed_header_parser <= 0 || keep_alive ? 1 : 2)
-	    ("httpReadReply: Excess data from \"%s %s\"\n",
-	    urlMethodGetConstStr(orig_request->method),
-	    storeUrl(entry));
+        if (Config.onoff.log_http_violations)
+	    debug(11, 1) ("httpReadReply: Excess data from \"%s %s\"\n",
+	      urlMethodGetConstStr(orig_request->method), storeUrl(entry));
 	comm_close(fd);
 	return;
     }

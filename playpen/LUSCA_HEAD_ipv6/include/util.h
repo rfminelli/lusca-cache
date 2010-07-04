@@ -149,7 +149,6 @@ extern int inet_aton(const char *, struct in_addr *);
 extern int kill(pid_t, int);
 extern int statfs(const char *, struct statfs *);
 extern int truncate(const char *, off_t);
-extern const char *wsastrerror(int);
 extern struct passwd *getpwnam(char *);
 extern struct group *getgrnam(char *);
 extern uid_t geteuid(void);
@@ -160,9 +159,12 @@ extern gid_t getgid(void);
 extern gid_t getegid(void);
 extern int setgid(gid_t);
 extern int setegid(gid_t);
-extern const char *WIN32_strerror(int);
-extern void WIN32_maperror(unsigned long);
 extern int WIN32_Close_FD_Socket(int);
+extern int WIN32_getrusage(int, struct rusage *);
+extern void setbuffer(FILE *, char *, size_t);
 #endif
+
+extern long strtol_n(const char *nptr, int nlen, char **endptr, int base);
+extern const char * strpbrk_n(const char *s, int len, const char *charset);
 
 #endif /* SQUID_UTIL_H */

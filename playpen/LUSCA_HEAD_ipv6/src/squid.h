@@ -90,6 +90,7 @@
 
 /* Increase FD_SETSIZE if SQUID_MAXFD is bigger */
 #if CHANGE_FD_SETSIZE && SQUID_MAXFD > DEFAULT_FD_SETSIZE
+#undef FD_SETSIZE
 #define FD_SETSIZE SQUID_MAXFD
 #endif
 
@@ -260,7 +261,8 @@
 #include <math.h>
 #endif
 
-#define SQUIDHOSTNAMELEN 256
+/* This is for SQUIDHOSTNAMELEN */
+#include "../libsqurl/defines.h"
 
 #if !HAVE_GETRUSAGE
 #if defined(_SQUID_HPUX_)
@@ -351,6 +353,13 @@ struct rusage {
 #include "hash.h"
 #include "rfc1035.h"
 
+/* Windows Port */
+#ifdef _SQUID_WIN32_ 
+#include "../include/win32_compat.h"
+#include "../include/win32_version.h"
+#include "../include/win32_error.h"
+#endif
+
 #include "../libcore/dlink.h"
 #include "../libcore/fifo.h"
 #include "../libcore/tools.h"
@@ -405,6 +414,7 @@ struct rusage {
 #include "../libhttp/HttpHdrContRange.h"
 #include "../libhttp/HttpBody.h"
 #include "../libhttp/HttpReply.h"
+#include "../libhttp/HttpMethod.h"
 
 #include "../libiapp/event.h"
 #include "../libiapp/iapp_ssl.h"
@@ -442,6 +452,8 @@ struct rusage {
 #include "../libsqstore/store_meta.h"
 #include "../libsqstore/store_log.h"
 #include "../libsqstore/store_file_ufs.h"
+
+#include "../libsqurl/proto.h"
 
 #include "defines.h"
 #include "enums.h"

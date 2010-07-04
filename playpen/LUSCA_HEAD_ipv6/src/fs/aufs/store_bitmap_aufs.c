@@ -34,6 +34,7 @@
  */
 
 #include "squid.h"
+#include "../../libsqstore/filemap.h"
 
 #include "store_asyncufs.h"
 #include "store_rebuild_aufs.h"

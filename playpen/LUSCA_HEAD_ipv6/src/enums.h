@@ -153,6 +153,7 @@ typedef enum {
     ACL_EXTUSER,
     ACL_EXTUSER_REGEX,
     ACL_HIER_CODE,
+    ACL_DSTFWD_IP,
     ACL_ENUM_MAX
 } squid_acl;
 
@@ -259,58 +260,6 @@ typedef enum {
     STORE_MEM_CLIENT,
     STORE_DISK_CLIENT
 } store_client_t;
-
-typedef enum {
-    METHOD_NONE,		/* 000 */
-    METHOD_GET,			/* 001 */
-    METHOD_POST,		/* 010 */
-    METHOD_PUT,			/* 011 */
-    METHOD_HEAD,		/* 100 */
-    METHOD_CONNECT,		/* 101 */
-    METHOD_TRACE,		/* 110 */
-    METHOD_PURGE,		/* 111 */
-    METHOD_OPTIONS,
-    METHOD_DELETE,		/* RFC2616 section 9.7 */
-    METHOD_PROPFIND,
-    METHOD_PROPPATCH,
-    METHOD_MKCOL,
-    METHOD_COPY,
-    METHOD_MOVE,
-    METHOD_LOCK,
-    METHOD_UNLOCK,
-    METHOD_BMOVE,
-    METHOD_BDELETE,
-    METHOD_BPROPFIND,
-    METHOD_BPROPPATCH,
-    METHOD_BCOPY,
-    METHOD_SEARCH,
-    METHOD_SUBSCRIBE,
-    METHOD_UNSUBSCRIBE,
-    METHOD_POLL,
-    METHOD_REPORT,
-    METHOD_MKACTIVITY,
-    METHOD_CHECKOUT,
-    METHOD_MERGE,
-    METHOD_OTHER,
-} method_code_t;
-
-typedef enum {
-    PROTO_NONE,
-    PROTO_HTTP,
-    PROTO_FTP,
-    PROTO_GOPHER,
-    PROTO_WAIS,
-    PROTO_CACHEOBJ,
-    PROTO_ICP,
-#if USE_HTCP
-    PROTO_HTCP,
-#endif
-    PROTO_URN,
-    PROTO_WHOIS,
-    PROTO_INTERNAL,
-    PROTO_HTTPS,
-    PROTO_MAX
-} protocol_t;
 
 /*
  * These are for StoreEntry->flag, which is defined as a SHORT
@@ -419,26 +368,6 @@ enum {
     VARY_RESTART,
     VARY_CANCEL
 };
-
-/* Windows Port */
-#ifdef _SQUID_WIN32_
-/*
- * Supported Windows OS types codes
- */
-enum {
-    _WIN_OS_UNKNOWN,
-    _WIN_OS_WIN32S,
-    _WIN_OS_WIN95,
-    _WIN_OS_WIN98,
-    _WIN_OS_WINME,
-    _WIN_OS_WINNT,
-    _WIN_OS_WIN2K,
-    _WIN_OS_WINXP,
-    _WIN_OS_WINNET,
-    _WIN_OS_WINLON
-};
-
-#endif
 
 typedef enum {
     ST_OP_NONE,

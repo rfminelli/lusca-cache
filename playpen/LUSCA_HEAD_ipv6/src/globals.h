@@ -46,7 +46,6 @@ extern char ThisCache2[SQUIDHOSTNAMELEN << 1];
 extern char config_input_line[BUFSIZ];
 extern const char *AclMatchedName;	/* NULL */
 extern const char *DefaultConfigFile;	/* DEFAULT_CONFIG_FILE */
-extern const char *ProtocolStr[];
 extern const char *cfg_filename;	/* NULL */
 extern const char *const appname;	/* "squid" */
 extern const char *const dash_str;	/* "-" */
@@ -128,8 +127,6 @@ extern hash_table *proxy_auth_username_cache;	/* NULL */
 extern int incoming_sockets_accepted;
 #ifdef _SQUID_WIN32_
 extern unsigned int WIN32_Socks_initialized;	/* 0 */
-extern unsigned int WIN32_OS_version;	/* 0 */
-extern char *WIN32_OS_string;	/* NULL */
 extern char *WIN32_Service_name;	/* NULL */
 extern char *WIN32_Command_Line;	/* NULL */
 extern char *WIN32_Service_Command_Line;	/* NULL */

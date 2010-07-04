@@ -1,17 +1,18 @@
+#include "../include/config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 #include <sys/time.h>
+#if HAVE_STRING_H
 #include <string.h>
+#endif
 
 #if HAVE_BACKTRACE_SYMBOLS_FD
 #include <execinfo.h>
 #endif
 
-#include "../include/config.h"
 #include "varargs.h"
 #include "tools.h"
 
@@ -150,7 +151,7 @@ dpercent(double a, double b)
 }   
 
 double
-uint64_percent(uint64_t a, uint64_t b)
+uint64_percent(u_int64_t a, u_int64_t b)
 {
     return (double) b ? ((double) (100.0 * (double) a / (double) b + 0.5)) : 0.0;
 }

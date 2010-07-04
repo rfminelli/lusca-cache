@@ -39,14 +39,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <math.h>
-#include <fcntl.h>
-#include <sys/errno.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 
 #include "../include/Array.h"
 #include "../include/Stack.h"
+#include "../include/Vector.h"
 #include "../include/util.h"
 #include "../libcore/valgrind.h"
 #include "../libcore/varargs.h"

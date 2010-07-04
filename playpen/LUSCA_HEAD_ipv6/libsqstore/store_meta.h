@@ -48,4 +48,7 @@ struct _storeMetaIndexNew {
 };
 typedef struct _storeMetaIndexNew storeMetaIndexNew;
 
+extern tlv * storeSwapMetaUnpack(const char *buf, int *hdr_len);
+extern char * storeSwapMetaPack(tlv * tlv_list, int *length);
+
 #endif

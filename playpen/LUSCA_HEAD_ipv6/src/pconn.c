@@ -34,6 +34,7 @@
  */
 
 #include "squid.h"
+#include "pconn.h"
 
 struct _pconn {
     hash_link hash;		/* must be first */

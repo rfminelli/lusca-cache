@@ -64,6 +64,8 @@
  * we free the memory if it is marked invalid.
  */
 
+#include "../include/config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -71,6 +73,14 @@
 #include <string.h>
 
 #include "../libcore/valgrind.h"
+#if WITH_VALGRIND
+#define HASHED_CBDATA 1
+#endif
+
+#if HASHED_CBDATA
+#include "../include/hash.h"
+#endif
+
 #include "../include/util.h"
 #include "../include/Array.h"
 #include "../include/Stack.h"
@@ -84,9 +94,6 @@
 
 #include "cbdata.h"
 
-#if WITH_VALGRIND
-#define HASHED_CBDATA 1
-#endif
 
 int cbdataCount = 0;
 

@@ -117,11 +117,15 @@
 #elif defined(__CYGWIN32__)  || defined(__CYGWIN__)
 #define _SQUID_CYGWIN_
 #define _SQUID_WIN32_
+#include <io.h>		/* for setmode() */
+#include <sys/fcntl.h>
 
 #elif defined(WIN32) || defined(WINNT) || defined(__WIN32__) || defined(__WIN32)
 #define _SQUID_MSWIN_
 #define _SQUID_WIN32_
 #include "squid_mswin.h"
+#include <winsock.h>
+#include <ws2tcpip.h>
 
 #elif defined(__APPLE__)
 #define _SQUID_APPLE_

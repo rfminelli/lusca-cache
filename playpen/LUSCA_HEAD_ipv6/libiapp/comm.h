@@ -64,6 +64,7 @@ struct _fde {
     u_short local_port;
     u_short remote_port;
     sqaddr_t local_address;
+    sqaddr_t remote_address;
     unsigned char tos;
     char ipaddrstr[MAX_IPSTRLEN]; /* dotted decimal address of peer - XXX should be MAX_IPSTRLEN */
     const char *desc;
@@ -192,6 +193,8 @@ extern void comm_reset_close(int fd);
 #if LINGERING_CLOSE
 extern void comm_lingering_close(int fd);
 #endif
+extern void commSetNoPmtuDiscover(int fd);
+
 extern int comm_connect_addr(int sock, const sqaddr_t *addr);
 extern void comm_connect_begin(int fd, const sqaddr_t *addr, CNCB *cb, void *cbdata);
 extern void comm_init(void);

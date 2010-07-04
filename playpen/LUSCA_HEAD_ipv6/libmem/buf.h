@@ -1,5 +1,5 @@
-#ifndef	__BUF_H__
-#define	__BUF_H__
+#ifndef	__LIBMEM_BUF_H__
+#define	__LIBMEM_BUF_H__
 
 #define	BUF_TRACK_BUFS		0
 

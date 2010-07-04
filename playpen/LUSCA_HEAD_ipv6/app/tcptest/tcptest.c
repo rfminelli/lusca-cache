@@ -7,10 +7,18 @@
 #include <math.h>
 #include <fcntl.h>
 #include <signal.h>
-#include <sys/errno.h>
+#if HAVE_ERRNO_H
+#include <errno.h>
+#endif
+#if HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
+#endif
+#if HAVE_NETINET_IN_H
 #include <netinet/in.h>
+#endif
+#if HAVE_ARPA_INET_H
 #include <arpa/inet.h>
+#endif
   
 #include "include/Array.h"
 #include "include/Stack.h"
@@ -94,7 +102,7 @@ main(int argc, const char *argv[])
 
 	bzero(&s4.sin_addr, sizeof(s4.sin_addr));
 	s4.sin_port = htons(8080);
-#if !defined(_SQUID_LINUX_)
+#if !defined(_SQUID_LINUX_) && !defined(_SQUID_WIN32_)
 	s4.sin_len = sizeof(struct sockaddr_in);
 #endif
 	sqinet_init(&lcl4);
@@ -103,7 +111,7 @@ main(int argc, const char *argv[])
 	bzero(&s6, sizeof(s6));
 	/* ANY_ADDR is all 0's here.. :) */
 	s6.sin6_port = htons(8080);
-#if !defined(_SQUID_LINUX_)
+#if !defined(_SQUID_LINUX_) && !defined(_SQUID_WIN32_)
 	s6.sin6_len = sizeof(struct sockaddr_in6);
 #endif
 	sqinet_init(&lcl6);

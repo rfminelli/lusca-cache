@@ -427,8 +427,10 @@ fdRemoteAddr(const fde * f)
     if (*f->ipaddrstr)
 	snprintf(buf, SQUIDHOSTNAMELEN, "%s.%d", f->ipaddrstr, (int) f->remote_port);
     else {
-	if (sqinet_is_anyaddr(&f->local_address)) {
-	    snprintf(buf, SQUIDHOSTNAMELEN, "%s.%d", inet_ntoa(sqinet_get_v4_inaddr(&f->local_address, SQADDR_ASSERT_IS_V4)), (int) f->local_port);
+	if (!sqinet_is_anyaddr(&f->local_address)) {
+	    char s[MAX_IPSTRLEN];
+	    sqinet_ntoa(&f->local_address, s, sizeof(s), 0);
+	    snprintf(buf, SQUIDHOSTNAMELEN, "%s.%d", s, (int) f->local_port);
 	} else {
 	    snprintf(buf, SQUIDHOSTNAMELEN, "*.%d", (int) f->local_port);
 	}

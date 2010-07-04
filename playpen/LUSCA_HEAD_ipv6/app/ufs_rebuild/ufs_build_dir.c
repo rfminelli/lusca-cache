@@ -8,7 +8,12 @@
  * Adrian Chadd <adrian@creative.net.au>
  */
 
-#include "config.h"
+#include "../../include/config.h"
+
+/* XXX macosx specific hack - need to generic-ify this! */
+#if !defined(O_BINARY)
+#define	O_BINARY		0x0
+#endif
 
 #if HAVE_INTTYPES_H
 #include <inttypes.h>
@@ -31,10 +36,15 @@
 #if HAVE_FCNTL_H
 #include <fcntl.h>
 #endif
-
+#if HAVE_SYS_STAT_H
 #include <sys/stat.h>
-#include <sys/errno.h>
+#endif
+#if HAVE_ERRNO_H
+#include <errno.h>
+#endif
+#if HAVE_DIRENT_H
 #include <dirent.h>
+#endif
 
 #include "include/util.h"
 #include "include/squid_md5.h"
@@ -46,13 +56,15 @@
 
 #include "libsqdebug/debug.h"
 
+#include "libsqtlv/tlv.h"
+
 #include "libsqstore/store_mgr.h"
 #include "libsqstore/store_meta.h"
 #include "libsqstore/store_log.h"
 #include "libsqstore/store_file_ufs.h"
 #include "libsqstore/rebuild_entry.h"
 
-#define	BUFSIZE		1024
+#define	BUFSIZE		4096
 
 int
 read_file(const char *path, rebuild_entry_t *re)
@@ -63,7 +75,7 @@ read_file(const char *path, rebuild_entry_t *re)
 	struct stat sb;
 
 	debug(86, 3) ("read_file: %s\n", path);
-	fd = open(path, O_RDONLY);
+	fd = open(path, O_RDONLY | O_BINARY);
  	if (fd < 0) {
 		perror("open");
 		return 0;
@@ -112,6 +124,7 @@ rebuild_from_dir(store_ufs_dir_t *sd)
 	int i, j;
 
 	getCurrentTime();
+	debug(47, 1) ("ufs_rebuild: %s: beginning rebuild from directory\n", sd->path);
 	for (i = 0; i < store_ufs_l1(sd); i++) {
 		for (j = 0; j < store_ufs_l2(sd); j++) {
 			(void) store_ufs_createDir(sd, i, j, dir);
@@ -119,7 +132,7 @@ rebuild_from_dir(store_ufs_dir_t *sd)
 				return;
 
 			getCurrentTime();
-			debug(86, 2) ("read_dir: opening dir %s\n", dir);
+			debug(86, 2) ("ufs_rebuild: %s: read_dir: opening dir %s\n", sd->path, dir);
 			d = opendir(dir);
 			if (! d) {
 				perror("opendir");

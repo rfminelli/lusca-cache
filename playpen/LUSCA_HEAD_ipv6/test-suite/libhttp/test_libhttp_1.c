@@ -43,6 +43,65 @@
 #include "libhttp/HttpHeaderMask.h"
 #include "libhttp/HttpHeaderParse.h"
 
+extern int hh_check_content_length(HttpHeader *hdr, const char *val, int vlen);
+
+static int
+test_hh_content_length(HttpHeader *hdr, const char *str)
+{
+	int r;
+
+	/* XXX remember; this may delete items from the header entry array! */
+	r = hh_check_content_length(hdr, str, strlen(str));
+	return r;
+}
+
+static int
+test1c()
+{
+	HttpHeader hdr;
+	int ret;
+	const char *hdrs = "Host: www.creative.net.au\r\nContent-Length: 12345\r\nContent-type: text/html\r\nFoo: bar\r\n\r\n";
+	const char *hdr_start = hdrs;
+	const char *hdr_end = hdr_start + strlen(hdrs);
+
+	printf("test1c: test hh_check_content_length\n");
+
+	httpHeaderInit(&hdr, hoRequest);
+
+	printf("test1c: hh_check_content_length: 12345 = %d\n", test_hh_content_length(&hdr, "12345"));
+	printf("test1c: hh_check_content_length: 123b5 = %d\n", test_hh_content_length(&hdr, "123b5"));
+	printf("test1c: hh_check_content_length: b1234 = %d\n", test_hh_content_length(&hdr, "b1234"));
+	printf("test1c: hh_check_content_length: abcde = %d\n", test_hh_content_length(&hdr, "abcde"));
+
+	/* now check duplicates */
+	ret = httpHeaderParse(&hdr, hdr_start, hdr_end);
+	printf("test1c: httpHeaderParse: Returned %d\n", ret);
+
+	printf("test1c: hh_check_content_length: 12345 = %d\n", test_hh_content_length(&hdr, "12345"));
+	printf("test1c: hh_check_content_length: 123b5 = %d\n", test_hh_content_length(&hdr, "123b5"));
+	printf("test1c: hh_check_content_length: b1234 = %d\n", test_hh_content_length(&hdr, "b1234"));
+	printf("test1c: hh_check_content_length: 12344 = %d\n", test_hh_content_length(&hdr, "12344"));
+	printf("test1c: hh_check_content_length: 12346 = %d\n", test_hh_content_length(&hdr, "12346"));
+	printf("test1c: hh_check_content_length: 12344 = %d\n", test_hh_content_length(&hdr, "12344"));
+
+	printf("test1c: hh_check_content_length: setting httpConfig_relaxed_parser to 1 (ok)\n");
+	httpConfig_relaxed_parser = 1;
+	printf("test1c: hh_check_content_length: 12345 = %d\n", test_hh_content_length(&hdr, "12345"));
+	printf("test1c: hh_check_content_length: 123b5 = %d\n", test_hh_content_length(&hdr, "123b5"));
+	printf("test1c: hh_check_content_length: b1234 = %d\n", test_hh_content_length(&hdr, "b1234"));
+
+	printf("test1c: hh_check_content_length: 12344 = %d\n", test_hh_content_length(&hdr, "12344"));
+	/* this one should result in the deletion of the "12345" entry from the original request parse */
+	printf("test1c: hh_check_content_length: 12346 = %d\n", test_hh_content_length(&hdr, "12346"));
+	printf("test1c: hh_check_content_length: 12344 = %d\n", test_hh_content_length(&hdr, "12344"));
+
+	/* Clean up */
+	httpHeaderReset(&hdr);
+	httpHeaderClean(&hdr);
+	
+	return 1;
+}
+
 static int
 test1a(void)
 {
@@ -92,6 +151,7 @@ main(int argc, const char *argv[])
 	httpHeaderInitLibrary();
 	test1a();
 	test1b();
+	test1c();
 	exit(0);
 }
 

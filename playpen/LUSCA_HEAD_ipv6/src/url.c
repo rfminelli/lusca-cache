@@ -35,130 +35,9 @@
 
 #include "squid.h"
 
-struct rms {
-    method_t method;
-    int string_len;
-};
-
-/*
- * It is currently VERY, VERY IMPORTANT that these be in order of their
- * definition in the method_code_t enum.
- */
-static struct rms request_methods[] =
-{
-    {
-	{METHOD_NONE, "NONE",
-	    {0, 0}}, 4},
-    {
-	{METHOD_GET, "GET",
-	    {1, 0}}, 3},
-    {
-	{METHOD_POST, "POST",
-	    {0, 1}}, 4},
-    {
-	{METHOD_PUT, "PUT",
-	    {0, 1}}, 3},
-    {
-	{METHOD_HEAD, "HEAD",
-	    {1, 0}}, 4},
-    {
-	{METHOD_CONNECT, "CONNECT",
-	    {0, 0}}, 7},
-    {
-	{METHOD_TRACE, "TRACE",
-	    {0, 0}}, 5},
-    {
-	{METHOD_PURGE, "PURGE",
-	    {0, 1}}, 5},
-    {
-	{METHOD_OPTIONS, "OPTIONS",
-	    {0, 0}}, 7},
-    {
-	{METHOD_DELETE, "DELETE",
-	    {0, 1}}, 6},
-    {
-	{METHOD_PROPFIND, "PROPFIND",
-	    {0, 0}}, 8},
-    {
-	{METHOD_PROPPATCH, "PROPPATCH",
-	    {0, 1}}, 9},
-    {
-	{METHOD_MKCOL, "MKCOL",
-	    {0, 1}}, 5},
-    {
-	{METHOD_COPY, "COPY",
-	    {0, 0}}, 4},
-    {
-	{METHOD_MOVE, "MOVE",
-	    {0, 1}}, 4},
-    {
-	{METHOD_LOCK, "LOCK",
-	    {0, 0}}, 4},
-    {
-	{METHOD_UNLOCK, "UNLOCK",
-	    {0, 0}}, 6},
-    {
-	{METHOD_BMOVE, "BMOVE",
-	    {0, 1}}, 5},
-    {
-	{METHOD_BDELETE, "BDELETE",
-	    {0, 1}}, 7},
-    {
-	{METHOD_BPROPFIND, "BPROPFIND",
-	    {0, 0}}, 9},
-    {
-	{METHOD_BPROPPATCH, "BPROPPATCH",
-	    {0, 0}}, 10},
-    {
-	{METHOD_BCOPY, "BCOPY",
-	    {0, 0}}, 5},
-    {
-	{METHOD_SEARCH, "SEARCH",
-	    {0, 0}}, 6},
-    {
-	{METHOD_SUBSCRIBE, "SUBSCRIBE",
-	    {0, 0}}, 9},
-    {
-	{METHOD_UNSUBSCRIBE, "UNSUBSCRIBE",
-	    {0, 0}}, 11},
-    {
-	{METHOD_POLL, "POLL",
-	    {0, 0}}, 4},
-    {
-	{METHOD_REPORT, "REPORT",
-	    {0, 0}}, 6},
-    {
-	{METHOD_MKACTIVITY, "MKACTIVITY",
-	    {0, 0}}, 10},
-    {
-	{METHOD_CHECKOUT, "CHECKOUT",
-	    {0, 0}}, 8},
-    {
-	{METHOD_MERGE, "MERGE",
-	    {0, 0}}, 5},
-    {
-	{METHOD_OTHER, NULL,
-	    {0, 0}}, 0},
-};
-
-const char *ProtocolStr[] =
-{
-    "NONE",
-    "http",
-    "ftp",
-    "gopher",
-    "wais",
-    "cache_object",
-    "icp",
-#if USE_HTCP
-    "htcp",
-#endif
-    "urn",
-    "whois",
-    "internal",
-    "https",
-    "TOTAL"
-};
+#include "../libsqurl/proto.h"
+#include "../libsqurl/domain.h"
+#include "../libsqurl/url.h"
 
 static request_t *urnParse(method_t * method, char *urn);
 static const char valid_hostname_chars_u[] =
@@ -170,39 +49,13 @@ static const char valid_hostname_chars[] =
 "abcdefghijklmnopqrstuvwxyz"
 "0123456789-.";
 
-/* convert %xx in url string to a character 
- * Allocate a new string and return a pointer to converted string */
-
-char *
-url_convert_hex(char *org_url, int allocate)
-{
-    static char code[] = "00";
-    char *url = NULL;
-    char *s = NULL;
-    char *t = NULL;
-    url = allocate ? (char *) xstrdup(org_url) : org_url;
-    if ((int) strlen(url) < 3 || !strchr(url, '%'))
-	return url;
-    for (s = t = url; *s; s++) {
-	if (*s == '%' && *(s + 1) && *(s + 2)) {
-	    code[0] = *(++s);
-	    code[1] = *(++s);
-	    *t++ = (char) strtol(code, NULL, 16);
-	} else {
-	    *t++ = *s;
-	}
-    }
-    do {
-	*t++ = *s;
-    } while (*s++);
-    return url;
-}
-
 void
 urlInitialize(void)
 {
     debug(23, 5) ("urlInitialize: Initializing...\n");
+#if 0
     assert(sizeof(ProtocolStr) == (PROTO_MAX + 1) * sizeof(char *));
+#endif
     memset(&null_request_flags, '\0', sizeof(null_request_flags));
     /*
      * These test that our matchDomainName() function works the
@@ -226,150 +79,6 @@ urlInitialize(void)
     assert(0 > matchDomainName("afoo.com", "bfoo.com"));
     assert(0 < matchDomainName("x-foo.com", ".foo.com"));
     /* more cases? */
-}
-
-method_t *
-urlMethodGetKnown(const char *s, int len)
-{
-    struct rms *rms;
-
-    for (rms = request_methods; rms->string_len != 0; rms++) {
-	if (len != rms->string_len) {
-	    continue;
-	}
-	if (strncasecmp(s, rms->method.string, len) == 0) {
-	    return (&rms->method);
-	}
-    }
-
-    return (NULL);
-}
-
-method_t *
-urlMethodGet(const char *s, int len)
-{
-    method_t *method;
-
-    method = urlMethodGetKnown(s, len);
-    if (method != NULL) {
-	return (method);
-    }
-    method = xmalloc(sizeof(method_t));
-    method->code = METHOD_OTHER;
-    method->string = xstrndup(s, len + 1);
-    method->flags.cachable = 0;
-    method->flags.purges_all = 1;
-
-    return (method);
-}
-
-method_t *
-urlMethodGetKnownByCode(method_code_t code)
-{
-    if (code < 0 || code >= METHOD_OTHER) {
-	return (NULL);
-    }
-    return (&request_methods[code].method);
-}
-
-method_t *
-urlMethodDup(method_t * orig)
-{
-    method_t *method;
-
-    if (orig == NULL) {
-	return (NULL);
-    }
-    if (orig->code != METHOD_OTHER) {
-	return (orig);
-    }
-    method = xmalloc(sizeof(method_t));
-    method->code = orig->code;
-    method->string = xstrdup(orig->string);
-    method->flags.cachable = orig->flags.cachable;
-    method->flags.purges_all = orig->flags.purges_all;
-
-    return (method);
-}
-
-/*
- * return the string for the method name
- */
-const char *
-urlMethodGetConstStr(method_t *method)
-{
-	/* XXX this should log a NULL method! */
-	if (! method)
-		return "NULL";
-	if (! method->string)
-		return "NULL";
-	return method->string;
-}
-
-void
-urlMethodFree(method_t * method)
-{
-
-    if (method == NULL) {
-	return;
-    }
-    if (method->code != METHOD_OTHER) {
-	return;
-    }
-    xfree((char *) method->string);
-    xfree(method);
-}
-
-protocol_t
-urlParseProtocol(const char *s)
-{
-    /* test common stuff first */
-    if (strcasecmp(s, "http") == 0)
-	return PROTO_HTTP;
-    if (strcasecmp(s, "ftp") == 0)
-	return PROTO_FTP;
-    if (strcasecmp(s, "https") == 0)
-	return PROTO_HTTPS;
-    if (strcasecmp(s, "file") == 0)
-	return PROTO_FTP;
-    if (strcasecmp(s, "gopher") == 0)
-	return PROTO_GOPHER;
-    if (strcasecmp(s, "wais") == 0)
-	return PROTO_WAIS;
-    if (strcasecmp(s, "cache_object") == 0)
-	return PROTO_CACHEOBJ;
-    if (strcasecmp(s, "urn") == 0)
-	return PROTO_URN;
-    if (strcasecmp(s, "whois") == 0)
-	return PROTO_WHOIS;
-    if (strcasecmp(s, "internal") == 0)
-	return PROTO_INTERNAL;
-    return PROTO_NONE;
-}
-
-
-int
-urlDefaultPort(protocol_t p)
-{
-    switch (p) {
-    case PROTO_HTTP:
-	return 80;
-    case PROTO_HTTPS:
-	return 443;
-    case PROTO_FTP:
-	return 21;
-    case PROTO_GOPHER:
-	return 70;
-    case PROTO_WAIS:
-	return 210;
-    case PROTO_CACHEOBJ:
-    case PROTO_INTERNAL:
-	return CACHE_HTTP_PORT;
-    case PROTO_WHOIS:
-	return 43;
-    default:
-	return 0;
-    }
 }
 
 /*
@@ -552,7 +261,6 @@ urnParse(method_t * method, char *urn)
 const char *
 urlCanonical(request_t * request)
 {
-    LOCAL_ARRAY(char, portbuf, 32);
     LOCAL_ARRAY(char, urlbuf, MAX_URL);
     if (request->canonical)
 	return request->canonical;
@@ -564,46 +272,12 @@ urlCanonical(request_t * request)
 	    snprintf(urlbuf, MAX_URL, "%s:%d", request->host, request->port);
 	    break;
 	default:
-	    portbuf[0] = '\0';
-	    if (request->port != urlDefaultPort(request->protocol))
-		snprintf(portbuf, 32, ":%d", request->port);
-	    snprintf(urlbuf, MAX_URL, "%s://%s%s%s%s%.*s",
-		ProtocolStr[request->protocol],
-		request->login,
-		*request->login ? "@" : null_string,
-		request->host,
-		portbuf,
-		strLen2(request->urlpath),
-		strBuf2(request->urlpath));
+	    (void) urlMakeHttpCanonical(urlbuf, request->protocol, request->login,
+	      request->host, request->port, strBuf2(request->urlpath), strLen2(request->urlpath));
 	    break;
 	}
     }
     return (request->canonical = xstrdup(urlbuf));
-}
-
-/*
- * Test if a URL is relative.
- *
- * RFC 2396, Section 5 (Page 17) implies that in a relative URL, a '/' will
- * appear before a ':'.
- */
-int
-urlIsRelative(const char *url)
-{
-    const char *p;
-
-    if (url == NULL) {
-	return (0);
-    }
-    if (*url == '\0') {
-	return (0);
-    }
-    for (p = url; *p != '\0' && *p != ':' && *p != '/'; p++);
-
-    if (*p == ':') {
-	return (0);
-    }
-    return (1);
 }
 
 /*
@@ -687,12 +361,7 @@ char *
 urlCanonicalClean(const request_t * request)
 {
     LOCAL_ARRAY(char, buf, MAX_URL);
-    LOCAL_ARRAY(char, portbuf, 32);
-    LOCAL_ARRAY(char, loginbuf, MAX_LOGIN_SZ + 1);
     char *t;
-    int i, j;
-    const char *s;
-    static const char ts[] = "://";
 
     if (request->protocol == PROTO_URN) {
 	snprintf(buf, MAX_URL, "urn:%.*s", strLen2(request->urlpath), strBuf2(request->urlpath));
@@ -702,48 +371,8 @@ urlCanonicalClean(const request_t * request)
 	    snprintf(buf, MAX_URL, "%s:%d", request->host, request->port);
 	    break;
 	default:
-	    portbuf[0] = '\0';
-	    if (request->port != urlDefaultPort(request->protocol))
-		snprintf(portbuf, 32, ":%d", request->port);
-	    loginbuf[0] = '\0';
-	    if ((int) strlen(request->login) > 0) {
-		strcpy(loginbuf, request->login);
-		if ((t = strchr(loginbuf, ':')))
-		    *t = '\0';
-		strcat(loginbuf, "@");
-	    }
-	    /*
-	     * This stuff would be better if/when each of these strings is a String with
-	     * a known length..
-	     */
-	    s = ProtocolStr[request->protocol];
-	    for (i = 0; i < MAX_URL && *s != '\0'; i++, s++) {
-		buf[i] = *s;
-	    }
-	    s = ts;
-	    for (; i < MAX_URL && *s != '\0'; i++, s++) {
-		buf[i] = *s;
-	    }
-	    s = loginbuf;
-	    for (; i < MAX_URL && *s != '\0'; i++, s++) {
-		buf[i] = *s;
-	    }
-	    s = request->host;
-	    for (; i < MAX_URL && *s != '\0'; i++, s++) {
-		buf[i] = *s;
-	    }
-	    s = portbuf;
-	    for (; i < MAX_URL && *s != '\0'; i++, s++) {
-		buf[i] = *s;
-	    }
-	    for (j = 0; i < MAX_URL && j < strLen2(request->urlpath); i++, j++) {
-		buf[i] = stringGetCh(&request->urlpath, j);
-	    }
-	    if (i >= (MAX_URL - 1)) {
-		buf[MAX_URL - 1] = '\0';
-	    } else {
-		buf[i] = '\0';
-	    }
+	    (void) urlMakeHttpCanonical2(buf, request->protocol, request->login,
+	      request->host, request->port, strBuf2(request->urlpath), strLen2(request->urlpath));
 
 	    /*
 	     * strip arguments AFTER a question-mark
@@ -757,89 +386,6 @@ urlCanonicalClean(const request_t * request)
     if (stringHasCntl(buf))
 	xstrncpy(buf, rfc1738_escape_unescaped(buf), MAX_URL);
     return buf;
-}
-
-/*
- * matchDomainName() compares a hostname with a domainname according
- * to the following rules:
- * 
- *    HOST          DOMAIN        MATCH?
- * ------------- -------------    ------
- *    foo.com       foo.com         YES
- *   .foo.com       foo.com         YES
- *  x.foo.com       foo.com          NO
- *    foo.com      .foo.com         YES
- *   .foo.com      .foo.com         YES
- *  x.foo.com      .foo.com         YES
- *
- *  We strip leading dots on hosts (but not domains!) so that
- *  ".foo.com" is is always the same as "foo.com".
- *
- *  Return values:
- *     0 means the host matches the domain
- *     1 means the host is greater than the domain
- *    -1 means the host is less than the domain
- */
-
-int
-matchDomainName(const char *h, const char *d)
-{
-    int dl;
-    int hl;
-    while ('.' == *h)
-	h++;
-    hl = strlen(h);
-    dl = strlen(d);
-    /*
-     * Start at the ends of the two strings and work towards the
-     * beginning.
-     */
-    while (xtolower(h[--hl]) == xtolower(d[--dl])) {
-	if (hl == 0 && dl == 0) {
-	    /*
-	     * We made it all the way to the beginning of both
-	     * strings without finding any difference.
-	     */
-	    return 0;
-	}
-	if (0 == hl) {
-	    /* 
-	     * The host string is shorter than the domain string.
-	     * There is only one case when this can be a match.
-	     * If the domain is just one character longer, and if
-	     * that character is a leading '.' then we call it a
-	     * match.
-	     */
-	    if (1 == dl && '.' == d[0])
-		return 0;
-	    else
-		return -1;
-	}
-	if (0 == dl) {
-	    /*
-	     * The domain string is shorter than the host string.
-	     * This is a match only if the first domain character
-	     * is a leading '.'.
-	     */
-	    if ('.' == d[0])
-		return 0;
-	    else
-		return 1;
-	}
-    }
-    /*
-     * We found different characters in the same position (from the end).
-     */
-    /*
-     * If one of those character is '.' then its special.  In order
-     * for splay tree sorting to work properly, "x-foo.com" must
-     * be greater than ".foo.com" even though '-' is less than '.'.
-     */
-    if ('.' == d[dl])
-	return 1;
-    if ('.' == h[hl])
-	return -1;
-    return (xtolower(h[hl]) - xtolower(d[dl]));
 }
 
 int
@@ -888,35 +434,4 @@ urlCheckRequest(const request_t * r)
 	break;
     }
     return rc;
-}
-
-/*
- * Quick-n-dirty host extraction from a URL.  Steps:
- *      Look for a colon
- *      Skip any '/' after the colon
- *      Copy the next SQUID_MAXHOSTNAMELEN bytes to host[]
- *      Look for an ending '/' or ':' and terminate
- *      Look for login info preceeded by '@'
- */
-char *
-urlHostname(const char *url)
-{
-    LOCAL_ARRAY(char, host, SQUIDHOSTNAMELEN);
-    char *t;
-    host[0] = '\0';
-    if (NULL == (t = strchr(url, ':')))
-	return NULL;
-    t++;
-    while (*t != '\0' && *t == '/')
-	t++;
-    xstrncpy(host, t, SQUIDHOSTNAMELEN);
-    if ((t = strchr(host, '/')))
-	*t = '\0';
-    if ((t = strchr(host, ':')))
-	*t = '\0';
-    if ((t = strrchr(host, '@'))) {
-	t++;
-	xmemmove(host, t, strlen(t) + 1);
-    }
-    return host;
 }

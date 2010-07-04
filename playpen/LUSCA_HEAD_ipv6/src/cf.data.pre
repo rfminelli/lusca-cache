@@ -516,6 +516,16 @@ DOC_START
 	acl aclname dst      ip-address/netmask ... (URL host's IP address)
 	acl aclname myip     ip-address/netmask ... (local socket IP address)
 
+	acl aclname dstfwdip ip-address/netmask
+	  # This ACL matches on the IP address of the host being forwarded to.
+	  # This will be the IP of either the upstream origin server or the
+	  # parent/sibling peer.
+	  #
+	  # Since the IP address of the forwarding host may change depending
+	  # upon the current state of the forwarding process, this ACL is only
+	  # really useful for one specific directive (which will be coded up
+	  # shortly) and will always fail when used elsewhere.
+
 	acl aclname arp      mac-address ... (xx:xx:xx:xx:xx:xx notation)
 	  # The arp ACL requires the special configure option --enable-arp-acl.
 	  # Furthermore, the arp ACL code is not portable to all operating systems.
@@ -3121,6 +3131,7 @@ DOC_START
 		 ignore-stale-while-revalidate
 		 max-stale=NN
 		 negative-ttl=NN
+		 store-stale
 
 		override-expire enforces min age even if the server
 		sent an explicit expiry time (e.g., with the
@@ -3143,6 +3154,12 @@ DOC_START
 
 		ignore-no-cache ignores any ``Pragma: no-cache'' and
 		``Cache-control: no-cache'' headers received from a server.
+		The HTTP RFC never allows the use of this (Pragma) header
+		from a server, only a client, though plenty of servers
+		send it anyway.
+
+		ignore-no-store ignores any ``Pragma: no-store'' and
+		``Cache-control: no-store'' headers received from a server.
 		The HTTP RFC never allows the use of this (Pragma) header
 		from a server, only a client, though plenty of servers
 		send it anyway.
@@ -3175,6 +3192,12 @@ DOC_START
 
 		negative-ttl=NN overrides the global negative_ttl parameter
 		selectively for URLs matching this pattern (in seconds).
+		
+		store-stale stores responses even if they don't have explicit 
+		freshness or a validator (i.e., Last-Modified or an ETag) 
+		present, or if they're already stale. By default, Squid will 
+		not cache such responses because they usually can't be
+		reused. Note that such responses will be stale by default.
 
 	Basically a cached object is:
 
@@ -3699,6 +3722,21 @@ DOC_START
 	option.
 
 	By default, headers are removed if denied.
+DOC_END
+
+NAME: log_http_violations
+COMMENT: on|off
+TYPE: onoff
+LOC: Config.onoff.log_http_violations
+DEFAULT: off
+DOC_START
+	The earlier behaviour in Squid/Lusca was to log HTTP protocol
+	violations in cache.log. Although useful for debugging, these
+	messages are increasingly becoming more frequent as various
+	poor HTTP implementations make it out into the real world.
+
+	By default, these messages are now not logged.
+	Enable this to re-enable the verbose HTTP logging.
 DOC_END
 
 NAME: relaxed_header_parser

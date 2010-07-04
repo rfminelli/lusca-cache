@@ -40,8 +40,12 @@
 #include <unistd.h>
 #include <string.h>
 #include <math.h>
+#if HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
+#endif
+#if HAVE_NETINET_IN_H
 #include <netinet/in.h>
+#endif
 
 #include "../include/Array.h"
 #include "../include/Stack.h"
@@ -213,7 +217,7 @@ fd_open(int fd, unsigned int type, const char *desc)
 	F->write_method = &file_write_method;
 	break;
     default:
-	fatalf("fd_open(): unknown FD type - FD#: %i, type: %u, desc %s\n", fd, type, desc);
+	libcore_fatalf("fd_open(): unknown FD type - FD#: %i, type: %u, desc %s\n", fd, type, desc);
     }
 #else
     F->read_method = &default_read_method;
@@ -332,7 +336,7 @@ fdAdjustReserved(void)
     /* XXX this needs to be restored as soon a possible! -adrian */
 #if 0
     if (Squid_MaxFD - new < XMIN(256, Squid_MaxFD / 2))
-	fatalf("Too few filedescriptors available in the system (%d usable of %d).\n", Squid_MaxFD - new, Squid_MaxFD);
+	libcore_fatalf("Too few filedescriptors available in the system (%d usable of %d).\n", Squid_MaxFD - new, Squid_MaxFD);
 #endif
     debug(51, 0) ("Reserved FD adjusted from %d to %d due to failures\n",
 	RESERVED_FD, new);

@@ -3,14 +3,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <sys/errno.h>
+#if HAVE_ERRNO_H
+#include <errno.h>
+#endif
 #include <fcntl.h>
 
 #include "include/squid_md5.h"
 #include "include/util.h"
+#include "libcore/varargs.h"
 #include "libcore/tools.h"
 #include "libcore/kb.h"
-#include "libcore/varargs.h"
 #include "libsqdebug/debug.h"
 #include "libsqtlv/tlv.h"
 #include "libsqstore/store_mgr.h"
@@ -18,6 +20,10 @@
 #include "libsqstore/store_meta.h"
 #include "libsqstore/rebuild_entry.h"
 
+/* XXX macosx specific hack - need to generic-ify this! */
+#if !defined(O_BINARY)
+#define O_BINARY                0x0
+#endif
 
 /*
  * Rebuilding from the COSS filesystem itself is currently very, very
@@ -100,7 +106,7 @@ coss_rebuild_dir(const char *file, size_t stripesize, int blocksize, int numstri
 		return 0;
 	}
 
-	fd = open(file, O_RDONLY);
+	fd = open(file, O_RDONLY | O_BINARY);
 	if (fd < 0) {
 		perror("open");
 		return 0;

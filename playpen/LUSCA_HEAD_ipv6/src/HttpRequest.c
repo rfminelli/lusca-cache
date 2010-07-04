@@ -34,6 +34,7 @@
  */
 
 #include "squid.h"
+#include "store_vary.h"
 
 static MemPool * pool_request_t = NULL;
 
@@ -48,7 +49,7 @@ requestCreate(method_t * method, protocol_t protocol, const char *urlpath)
 {
     request_t *req = memPoolAlloc(pool_request_t);
     if (method)
-        req->method = method;
+        urlMethodAssign(&req->method, method);
     else
         req->method = urlMethodGetKnownByCode(METHOD_NONE);
     req->protocol = protocol;

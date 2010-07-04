@@ -56,7 +56,7 @@ extern HttpHeaderEntry *httpHeaderFindEntry(const HttpHeader * hdr, http_hdr_typ
 extern HttpHeaderEntry *httpHeaderFindLastEntry(const HttpHeader * hdr, http_hdr_type id);
 
 extern void httpHeaderAddEntryStr(HttpHeader *hdr, http_hdr_type id, const char *attrib, const char *value);
-extern HttpHeaderEntry * httpHeaderAddEntryStr2(HttpHeader *hdr, http_hdr_type id, const char *attrib, int attrib_len, const char *value, int value_len);
+extern int httpHeaderAddEntryStr2(HttpHeader *hdr, http_hdr_type id, const char *attrib, int attrib_len, const char *value, int value_len);
 extern void httpHeaderAddEntryString(HttpHeader *hdr, http_hdr_type id, const String *a, const String *v);
 
 extern void httpHeaderInsertEntryStr(HttpHeader *hdr, int pos, http_hdr_type id, const char *attrib, const char *value);
@@ -70,6 +70,8 @@ extern int httpHeaderIdByNameDef(const char *name, int name_len);
 extern const char *httpHeaderNameById(int id);
 extern int httpHeaderHas(const HttpHeader * hdr, http_hdr_type id);
 extern void httpHeaderRefreshMask(HttpHeader * hdr);
+extern void httpHeaderRepack(HttpHeader * hdr);
+
 /* append/update */
 extern void httpHeaderUpdate(HttpHeader * old, const HttpHeader * fresh, const HttpHeaderMask * denied_mask);
 

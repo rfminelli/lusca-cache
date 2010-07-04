@@ -35,6 +35,8 @@
 
 #include "squid.h"
 
+#include "../libsqurl/url.h"
+
 /* gopher type code from rfc. Anawat. */
 #define GOPHER_FILE         '0'
 #define GOPHER_DIRECTORY    '1'

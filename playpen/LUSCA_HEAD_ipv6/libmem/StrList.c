@@ -39,6 +39,8 @@
  *
  */
 
+#include "../include/config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -46,7 +48,6 @@
 #include <string.h>
 #include <ctype.h>
 
-#include "../include/config.h"
 #include "../include/util.h"
 #include "../include/Stack.h"
 #include "../libcore/valgrind.h"
@@ -148,9 +149,10 @@ strListAdd(String *str, const char *item, char del)
 
 /*!
  * @function
- *	strListAddunique
+ *	strListAddUnique
  * @abstract
  *	Append an item to the string list if it doesn't already exist
+ *
  * @param	str	String list
  * @param	item	unique item to add
  * @param	del	list item delimiter to use

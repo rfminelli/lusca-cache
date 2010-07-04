@@ -20,7 +20,7 @@ libexec_PROGRAMS = coss_rebuild
 
 coss_rebuild_SOURCES = coss_rebuild.c coss_build_log.c coss_build_dir.c
 
-LDADD = -L../../lib -L../../libsqdebug -L../../libcore -L../../libmem -L../../libsqstore -L../../libsqtlv -lsqdebug -lcore -lm -lsqstore -lsqtlv -lmiscutil
+LDADD = -L../../lib -L../../libsqdebug -L../../libcore -L../../libmem -L../../libsqstore -L../../libsqtlv -lsqdebug -lcore -lm -lsqstore -lsqtlv -lmiscutil @XTRA_LIBS@
 
 $(OBJS): $(top_srcdir)/include/version.h ../include/autoconf.h
 

@@ -46,11 +46,21 @@
 #include <string.h>
 #include <math.h>
 #include <fcntl.h>
-#include <sys/errno.h>
+#if HAVE_ERRNO_H
+#include <errno.h>
+#endif
+#if HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
+#endif
+#if HAVE_NETINET_IN_H
 #include <netinet/in.h>
+#endif
+#if HAVE_ARPA_INET_H
 #include <arpa/inet.h>
+#endif
+#if HAVE_NETDB_H
 #include <netdb.h>
+#endif
 
 #include "../include/Array.h"
 #include "../include/Stack.h"
@@ -72,6 +82,9 @@
 
 #include "../libstat/StatHist.h"
  
+#ifdef _SQUID_MSWIN_
+#include "win32_pipe.h"
+#endif
 #include "iapp_ssl.h"
 #include "globals.h"
 #include "fd_types.h"
@@ -267,6 +280,7 @@ comm_fdopen6(int new_socket,
     F = &fd_table[new_socket];
 
     sqinet_init(&(F->local_address));
+    sqinet_init(&(F->remote_address));
     sqinet_copy(&(F->local_address), a);
 
     F->tos = tos;
@@ -354,7 +368,7 @@ comm_listen(int sock)
     if (iapp_useAcceptFilter && strcmp(iapp_useAcceptFilter, "none") != 0) {
 #ifdef SO_ACCEPTFILTER
 	struct accept_filter_arg afa;
-	bzero(&afa, sizeof(afa));
+	memset(&afa, 0, sizeof(afa));
 	debug(5, 0) ("Installing accept filter '%s' on FD %d\n",
 	    iapp_useAcceptFilter, sock);
 	xstrncpy(afa.af_name, iapp_useAcceptFilter, sizeof(afa.af_name));
@@ -560,6 +574,7 @@ comm_connect_addr(int sock, const sqaddr_t *addr)
     else
 	return COMM_ERROR;
     sqinet_ntoa(addr, F->ipaddrstr, MAX_IPSTRLEN, 0);
+    sqinet_copy(&F->remote_address, addr);
     F->remote_port = sqinet_get_port(addr);
     if (status == COMM_OK) {
 	debug(5, 10) ("comm_connect_addr: FD %d connected to %s:%d\n",
@@ -614,6 +629,7 @@ comm_accept(int fd, sqaddr_t *pn, sqaddr_t *me)
     fd_note_static(sock, "HTTP Request");
     F = &fd_table[sock];
     sqinet_ntoa(&rem, F->ipaddrstr, MAX_IPSTRLEN, 0);
+    sqinet_copy(&F->remote_address, &rem);
     F->remote_port = sqinet_get_port(&rem);
     F->local_port = sqinet_get_port(&loc);
     commSetNonBlocking(sock);
@@ -730,6 +746,7 @@ static inline void
 comm_close_finish(int fd)
 {
     sqinet_done(&fd_table[fd].local_address);
+    sqinet_done(&fd_table[fd].remote_address);
     fd_close(fd);		/* update fdstat */
     close(fd);
     CommStats.syscalls.sock.closes++;
@@ -1026,6 +1043,21 @@ commSetNoLinger(int fd)
     fd_table[fd].flags.nolinger = 1;
 }
 
+void
+commSetNoPmtuDiscover(int fd)
+{
+#if defined(IP_MTU_DISCOVER) && defined(IP_PMTUDISC_DONT)
+	int i = IP_PMTUDISC_DONT;
+	(void) setsockopt(fd, SOL_IP, IP_MTU_DISCOVER, &i, sizeof i);
+#else
+	static int reported = 0;
+	if (!reported) {
+		debug(33, 1) ("Notice: httpd_accel_no_pmtu_disc not supported on your platform\n");
+		reported = 1;
+	}
+#endif
+}
+
 static void
 commSetReuseAddr(int fd)
 {
@@ -1179,6 +1211,10 @@ commSetTcpKeepalive(int fd, int idle, int interval, int timeout)
  *
  * This returns the current TOS as set on the socket. It does not return
  * the "tos" field from the comm struct.
+ *
+ * Note that at least Linux/FreeBSD only return IP_TOS values which have been
+ * previously set on the socket. There is currently no supported method for
+ * fetching the TOS bits set on an incoming packet stream.
  *
  * If the socket tos could not be read, -1 is returned.
  */
@@ -1585,10 +1621,15 @@ comm_create_fifopair(int *prfd, int *pwfd, int *crfd, int *cwfd)
         sqinet_init(&fd_table[*cwfd].local_address);
         sqinet_init(&fd_table[*crfd].local_address);
         sqinet_init(&fd_table[*pwfd].local_address);
+        sqinet_init(&fd_table[*prfd].remote_address);
+        sqinet_init(&fd_table[*cwfd].remote_address);
+        sqinet_init(&fd_table[*crfd].remote_address);
+        sqinet_init(&fd_table[*pwfd].remote_address);
 
 	return 1;
 }
 
+#ifndef _SQUID_MSWIN_
 int
 comm_create_unix_stream_pair(int *prfd, int *pwfd, int *crfd, int *cwfd, int buflen)
 {
@@ -1606,6 +1647,8 @@ comm_create_unix_stream_pair(int *prfd, int *pwfd, int *crfd, int *cwfd, int buf
         fd_open(*crfd = *cwfd = fds[1], FD_PIPE, "IPC UNIX STREAM Parent");
         sqinet_init(&fd_table[*prfd].local_address);
         sqinet_init(&fd_table[*crfd].local_address);
+        sqinet_init(&fd_table[*prfd].remote_address);
+        sqinet_init(&fd_table[*crfd].remote_address);
 
 	return 1;
 }
@@ -1622,6 +1665,9 @@ comm_create_unix_dgram_pair(int *prfd, int *pwfd, int *crfd, int *cwfd)
 	fd_open(*crfd = *cwfd = fds[1], FD_PIPE, "IPC UNIX DGRAM Parent");
         sqinet_init(&fd_table[*prfd].local_address);
         sqinet_init(&fd_table[*crfd].local_address);
+        sqinet_init(&fd_table[*prfd].remote_address);
+        sqinet_init(&fd_table[*crfd].remote_address);
 
 	return 1;
 }
+#endif

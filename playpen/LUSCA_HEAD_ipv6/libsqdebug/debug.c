@@ -1,9 +1,10 @@
+#include "../include/config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 
-#include "../include/config.h"
 #include "../include/util.h"
 #include "../libcore/varargs.h"
 #include "debug.h"
@@ -78,7 +79,7 @@ void
 _db_unregister_all(void)
 {
 	db_callbacks.count = 0;
-	bzero(&db_callbacks.cbs, sizeof (db_callbacks.cbs));
+	memset(&db_callbacks.cbs, 0, sizeof (db_callbacks.cbs));
 }
 
 static void

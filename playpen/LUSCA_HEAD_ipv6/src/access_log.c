@@ -1127,6 +1127,10 @@ accessLogCommon(AccessLogEntry * al, Logfile * logfile)
 	client = inet_ntoa(al->cache.caddr);
     user1 = accessLogFormatName(al->cache.authuser);
     user2 = accessLogFormatName(al->cache.rfc931);
+    if (al->icp.opcode)
+	al->private.method_str = icp_opcode_str[al->icp.opcode];
+    else
+	al->private.method_str = urlMethodGetConstStr(al->http.method);
     logfilePrintf(logfile, "%s %s %s [%s] \"%s %s HTTP/%d.%d\" %d %" PRINTF_OFF_T " %s:%s",
 	client,
 	user2 ? user2 : dash_str,
@@ -1258,16 +1262,6 @@ accessLogClose(void)
     logfileClose(headerslog);
     headerslog = NULL;
 #endif
-}
-
-void
-hierarchyNote(HierarchyLogEntry * hl,
-    hier_code code,
-    const char *cache_peer)
-{
-    assert(hl != NULL);
-    hl->code = code;
-    xstrncpy(hl->host, cache_peer, SQUIDHOSTNAMELEN);
 }
 
 void

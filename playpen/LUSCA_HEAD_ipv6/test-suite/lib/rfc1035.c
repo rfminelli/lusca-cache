@@ -31,7 +31,6 @@
 #endif
 
 #include "include/rfc1035.h"
-#include "include/snprintf.h"
 
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -47,6 +46,8 @@ main(int argc, char *argv[])
     int s;
     int rl;
     struct sockaddr_in S;
+    struct in_addr a;
+
     if (5 != argc) {
 	fprintf(stderr, "usage: %s ip port <PTR|A|AAAA> <query>\n", argv[0]);
 	return 1;
@@ -66,14 +67,14 @@ main(int argc, char *argv[])
     qtype = argv[3];
     input = argv[4];
 
-
     do {
-	struct in_addr a;
 	memset(buf, '\0', 512);
 	sz = 512;
-	if (strcmp(qtype, "PTR") == 0) {
-	    inet_aton(input, &a);
-	    sz = rfc1035BuildPTRQuery(a, buf, sz, 1, NULL);
+	if (strcmp(qtype, "AAAA") == 0) {
+	    sz = rfc1035BuildAAAAQuery(input, buf, sz, 1, NULL);
+	} else if (strcmp(qtype, "PTR") == 0) {
+            inet_aton(input, &a);
+            sz = rfc1035BuildPTRQuery(a, buf, sz, 1, NULL);
 	} else if (strcmp(qtype, "A") == 0) {
 	    sz = rfc1035BuildAQuery(input, buf, sz, 1, NULL);
 	} else {
@@ -112,12 +113,7 @@ main(int argc, char *argv[])
 
 		printf("%d answers\n", n);
 		for (i = 0; i < n; i++) {
-		    if (answers->answer[i].type == RFC1035_TYPE_CNAME) {
-			/* XXX CNAME content isn't yet treated as a "name" and properly dot'ed? */
-			char ptr[128];
-			strncpy(ptr, answers->answer[i].rdata, answers->answer[i].rdlength);
-			printf("CNAME\t%d\t%s\n", answers->answer[i].ttl, ptr);
-		    } else if (answers->answer[i].type == RFC1035_TYPE_A) {
+		    if (answers->answer[i].type == RFC1035_TYPE_A) {
 			struct in_addr a;
 			memcpy(&a, answers->answer[i].rdata, 4);
 			printf("A\t%d\t%s\n", answers->answer[i].ttl, inet_ntoa(a));
@@ -125,21 +121,19 @@ main(int argc, char *argv[])
 			char ptr[128];
 			strncpy(ptr, answers->answer[i].rdata, answers->answer[i].rdlength);
 			printf("PTR\t%d\t%s\n", answers->answer[i].ttl, ptr);
-#if 0
-		    } else if (answers->answer[i].type == RFC1035_TYPE_AAAA) {
-			/* XXX this so should be going through getnameinfo() or something */
-			struct sockaddr_in6 s;
-			int j;
-			bzero(&s, sizeof(s));
-			memcpy(&s.sin6_addr, answers->answer[i].rdata, 16);
-			for (j = 0; j < 16; j++) {
-				printf("%.2x:", (unsigned char) answers->answer[i].rdata[j]);
-			}
-			printf("\n");
-#endif
+                   } else if (answers->answer[i].type == RFC1035_TYPE_AAAA) {
+                       /* XXX this so should be going through getnameinfo() or something */
+                       struct sockaddr_in6 s;
+                       int j;
+                       bzero(&s, sizeof(s));
+                       memcpy(&s.sin6_addr, answers->answer[i].rdata, 16);
+                       for (j = 0; j < 16; j += 2) {
+                               printf("%.2x%.2x:", (unsigned char) answers->answer[i].rdata[j], (unsigned char) answers->answer[i].rdata[j+1]);
+                       }
+                       printf("\n");
 		    } else {
-			fprintf(stderr, "can't print answer type %d, length %d\n",
-			    (int) answers->answer[i].type, (int) answers->answer[i].rdlength);
+			fprintf(stderr, "can't print answer type %d\n",
+			    (int) answers->answer[i].type);
 		    }
 	    }
 	}

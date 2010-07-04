@@ -534,7 +534,7 @@ refreshCountsStats(StoreEntry * sentry, struct RefreshCounts *rc)
     refreshCountsStatsEntry(STALE_LMFACTOR_RULE,
 	"Stale: refresh_pattern last-mod factor percentage");
     refreshCountsStatsEntry(STALE_WITHIN_DELTA,
-	"Staĺe: but within a certain delta");
+	"Stale: but within a certain delta");
     refreshCountsStatsEntry(STALE_ASYNC_REFRESH,
 	"Stale: suitable for an async refresh");
     refreshCountsStatsEntry(STALE_MAX_STALE,

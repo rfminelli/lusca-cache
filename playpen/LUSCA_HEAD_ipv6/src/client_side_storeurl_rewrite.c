@@ -35,10 +35,12 @@
 
 #include "squid.h"
 
+static void clientStoreURLRewriteDone(void *data, char *result);
+
 
 /* Local functions */
 
-void
+static void
 clientStoreURLRewriteAccessCheckDone(int answer, void *data)
 {
     clientHttpRequest *http = data;
@@ -65,7 +67,7 @@ clientStoreURLRewriteStart(clientHttpRequest * http)
     }
 }
 
-void
+static void
 clientStoreURLRewriteDone(void *data, char *result)
 {
     clientHttpRequest *http = data;

@@ -7,7 +7,8 @@ libcore_a_SOURCES = \
 	tools.c \
 	fifo.c \
 	kb.c \
-	radix.c
+	radix.c \
+	strutil.c
 
 noinst_LIBRARIES = \
 	libcore.a

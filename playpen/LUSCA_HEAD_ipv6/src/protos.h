@@ -108,14 +108,6 @@ extern void parse_sockaddr_in_list_token(sockaddr_in_list **, char *);
 /* cbdata.c */
 extern void cbdataLocalInit(void);
 
-extern void clientdbInitMem(void);
-extern void clientdbInit(void);
-extern void clientdbUpdate(struct in_addr, log_type, protocol_t, squid_off_t);
-extern int clientdbCutoffDenied(struct in_addr);
-extern void clientdbDump(StoreEntry *);
-extern void clientdbFreeMemory(void);
-extern int clientdbEstablished(struct in_addr, int);
-
 extern char *clientConstructTraceEcho(clientHttpRequest *);
 extern int checkNegativeHit(StoreEntry *);
 extern void clientOpenListenSockets(void);
@@ -150,14 +142,6 @@ extern void idnsInternalInit(void);
 
 /* event.c */
 extern void eventLocalInit(void);
-
-extern fileMap *file_map_create(void);
-extern int file_map_allocate(fileMap *, int);
-extern int file_map_bit_set(fileMap *, int);
-extern int file_map_bit_test(fileMap *, int);
-extern void file_map_bit_reset(fileMap *, int);
-extern void filemapFreeMemory(fileMap *);
-
 
 extern void fqdncache_local_params(void);
 extern void fqdncache_init_local(void);
@@ -274,11 +258,6 @@ extern int httpRequestHdrAllowed(const HttpHeaderEntry * e, String * strConnecti
 extern int httpRequestHdrAllowedByName(http_hdr_type id);
 extern void requestReadBody(request_t * request, char *buf, size_t size, CBCB * callback, void *cbdata);
 extern void requestAbortBody(request_t * request);
-
-extern void icmpOpen(void);
-extern void icmpClose(void);
-extern void icmpSourcePing(struct in_addr to, const icp_common_t *, const char *url);
-extern void icmpDomainPing(struct in_addr to, const char *domain);
 
 extern void *icpCreateMessage(icp_opcode opcode,
     int flags,
@@ -725,9 +704,7 @@ extern int storeDirGetUFSStats(const char *, int *, int *, int *, int *);
 /*
  * store_swapmeta.c
  */
-extern char *storeSwapMetaPack(tlv * tlv_list, int *length);
 extern tlv *storeSwapMetaBuild(StoreEntry * e);
-extern tlv *storeSwapMetaUnpack(const char *buf, int *hdrlen);
 extern char * storeSwapMetaAssemble(StoreEntry *e, int *length);
 
 /*
@@ -804,27 +781,16 @@ extern void unlinkdClose(void);
 extern void unlinkdUnlink(const char *);
 #endif
 
-extern char *url_convert_hex(char *org_url, int allocate);
+/* url.c */
 extern char *url_escape(const char *url);
-extern protocol_t urlParseProtocol(const char *);
-extern method_t *urlMethodGet(const char *, int len);
-extern method_t *urlMethodGetKnown(const char *, int len);
-extern method_t *urlMethodGetKnownByCode(method_code_t);
-extern method_t *urlMethodDup(method_t *);
-extern const char * urlMethodGetConstStr(method_t *method);
-extern void urlMethodFree(method_t *);
 extern void urlInitialize(void);
 extern request_t *urlParse(method_t *, char *);
 extern const char *urlCanonical(request_t *);
-extern int urlIsRelative(const char *);
 extern char *urlMakeAbsolute(request_t *, const char *);
 extern char *urlRInternal(const char *host, u_short port, const char *dir, const char *name);
 extern char *urlInternal(const char *dir, const char *name);
-extern int matchDomainName(const char *host, const char *domain);
 extern int urlCheckRequest(const request_t *);
-extern int urlDefaultPort(protocol_t p);
 extern char *urlCanonicalClean(const request_t *);
-extern char *urlHostname(const char *url);
 
 extern void useragentOpenLog(void);
 extern void useragentRotateLog(void);
@@ -845,10 +811,6 @@ extern void errorStateFree(ErrorState * err);
 extern int errorReservePageId(const char *page_name);
 extern ErrorState *errorCon(err_type type, http_status, request_t * request);
 extern int errorPageId(const char *page_name);
-
-extern void pconnPush(int, const char *host, u_short port, const char *domain, struct in_addr *client_address, u_short client_port);
-extern int pconnPop(const char *host, u_short port, const char *domain, struct in_addr *client_address, u_short client_port, int *idle);
-extern void pconnInit(void);
 
 extern int asnMatchIp(void *, struct in_addr);
 extern void asnInit(void);
@@ -997,8 +959,6 @@ extern void WIN32_Exit(void);
 extern void WIN32_SetServiceCommandLine(void);
 extern void WIN32_InstallService(void);
 extern void WIN32_RemoveService(void);
-extern int WIN32_pipe(int[2]);
-extern int WIN32_getrusage(int, struct rusage *);
 extern void WIN32_ExceptionHandlerInit(void);
 extern int SquidMain(int, char **);
 #ifdef _SQUID_MSWIN_
@@ -1052,11 +1012,6 @@ extern void peerMonitorNow(peer *);
 extern void errorMapInit(void);
 extern int errorMapStart(const errormap * map, request_t * req, HttpReply * reply, const char *aclname, ERRMAPCB * callback, void *data);
 
-/* ETag support */
-void storeLocateVaryDone(VaryData * data);
-void storeLocateVary(StoreEntry * e, int offset, const char *vary_data, String accept_encoding, STLVCB * callback, void *cbdata);
-void storeAddVary(const char *url, method_t * method, const cache_key * key, const char *etag, const char *vary, const char *vary_headers, const char *accept_encoding);
-
 rewritetoken *rewriteURLCompile(const char *urlfmt);
 char *internalRedirectProcessURL(clientHttpRequest * req, rewritetoken * head);
 
@@ -1074,6 +1029,9 @@ extern void clientInterpretRequestHeaders(clientHttpRequest * http);
 extern void clientAccessCheck2(void *data);
 extern void clientFinishRewriteStuff(clientHttpRequest * http);
 extern int connStateGetCount(void);
+extern StoreEntry *clientCreateStoreEntry(clientHttpRequest *, method_t *, request_flags);
+extern void clientProcessRequest(clientHttpRequest *);
+extern void httpRequestFree(void *data);
 
 /* client_side_nat.c */
 extern int clientNatLookup(ConnStateData * conn);
@@ -1082,9 +1040,7 @@ extern int clientNatLookup(ConnStateData * conn);
 extern void clientRedirectStart(clientHttpRequest * http);
 
 /* client_side_storeurl_rewrite.c */
-extern void clientStoreURLRewriteAccessCheckDone(int answer, void *data);
 extern void clientStoreURLRewriteStart(clientHttpRequest * http);
-extern void clientStoreURLRewriteDone(void *data, char *result);
 
 /* statIapp.c */
 extern void statIappStats(StoreEntry *sentry);

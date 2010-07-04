@@ -1,9 +1,18 @@
+/*!
+ * @header Vector - vector data structure
+ *
+ * This is an implementation of a Vector style memory array of fixed-size,
+ * arbitrary count structures.
+ *
+ * @copyright Adrian Chadd <adrian@creative.net.au>
+ */
+#include "../include/config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 
-#include "../include/config.h"
 #include "../include/util.h"
 #include "Vector.h"
 
@@ -24,9 +33,16 @@ vector_grow(vector_t *v, int new_count)
 	return 1;
 }
 
-/*
- * Setup a vector. We don't ever fail here - if allocation fails
- * then "get" will return NULL.
+/*!
+ * @function
+ * 	vector_init
+ * @abstract
+ *	Setup a vector for use.
+ * @discussion
+ *
+ * @param	v		pointer to allocated vector_t to initialise
+ * @param	obj_size	size of each struct being stored
+ * @param	obj_count	number of objects to initially allocate for
  */
 void
 vector_init(vector_t *v, int obj_size, int obj_count)
@@ -38,6 +54,15 @@ vector_init(vector_t *v, int obj_size, int obj_count)
 	(void) vector_grow(v, obj_count);
 }
 
+/*!
+ * @function
+ * 	vector_done
+ * @abstract
+ * 	Free memory associated with a vector_t
+ * @discussion
+ *
+ * @param	v	pointer to vector_t to clean up
+ */
 void
 vector_done(vector_t *v)
 {
@@ -48,11 +73,10 @@ vector_done(vector_t *v)
 	v->data = NULL;
 }
 
-
 void *
 vector_get_real(const vector_t *v, int offset)
 {
-	if (offset > v->used_count)
+	if (offset >= v->used_count)
 		return NULL;
 	if (v->data == NULL)
 		return NULL;
@@ -107,8 +131,25 @@ vector_copy_item(vector_t *v, int dst, int src)
 	return 1;
 }
 
+/*!
+ * @function
+ *	vector_shrink
+ * @abstract
+ *	Shrink the given vector to the given size.
+ * @discussion
+ *	Any references to the currently-stored data that will be "deleted"
+ *	after shrinking should be removed before calling vector_shrink().
+ *
+ *	The operation is ignored if a larger size than the currently allocated
+ *	count is given.
+ *
+ * @param	v	pointer vector to shrink
+ * @param	new_size	the new size; must be smaller or equal to the current size
+ */
 void
 vector_shrink(vector_t *v, int new_size)
 {
-	v->used_count = new_size;
+	/* XXX should we have a real debugging assert() in here? */
+	if (new_size < v->used_count)
+		v->used_count = new_size;
 }

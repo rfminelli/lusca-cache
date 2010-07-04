@@ -40,11 +40,15 @@
 
 #include "../include/config.h"
 
+#ifndef _SQUID_WIN32_
 #include        <pthread.h>
+#endif
 #include        <stdio.h>
 #include        <sys/types.h>
 #include        <sys/stat.h>
+#ifndef _SQUID_WIN32_
 #include        <sys/uio.h>
+#endif
 #include        <unistd.h>
 #include        <fcntl.h>
 #include        <errno.h>

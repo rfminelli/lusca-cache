@@ -43,10 +43,18 @@
 #include <fcntl.h>
 #include <ctype.h>
 #include <signal.h>
-#include <sys/errno.h>
+#if HAVE_ERRNO_H
+#include <errno.h>
+#endif
+#if HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
+#endif
+#if HAVE_NETINET_IN_H
 #include <netinet/in.h>
+#endif
+#if HAVE_ARPA_INET_H
 #include <arpa/inet.h>
+#endif
 
 #include "../include/Array.h"
 #include "../include/Stack.h"
@@ -76,7 +84,7 @@
 #include "ipc.h"
 
 static const char *hello_string = "hi there\n";
-#define HELLO_BUF_SZ 32
+#define HELLO_BUF_SZ 11
 static char hello_buf[HELLO_BUF_SZ];
 
 /* XXX */
@@ -274,6 +282,7 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	    sqinet_done(&CS);
 	    return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
 	}
+	debug(54, 2) ("ipcCreate: hello read: %d bytes\n", x);
 	commSetTimeout(prfd, -1, NULL, NULL);
 	commSetNonBlocking(prfd);
 	commSetNonBlocking(pwfd);

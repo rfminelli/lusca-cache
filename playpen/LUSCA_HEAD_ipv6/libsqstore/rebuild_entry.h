@@ -1,5 +1,5 @@
-#ifndef	__REBUILD_ENTRY_H__
-#define	__REBUILD_ENTRY_H__
+#ifndef	__LIBSQSTORE_REBUILD_ENTRY_H__
+#define	__LIBSQSTORE_REBUILD_ENTRY_H__
 
 
 struct _rebuild_entry {

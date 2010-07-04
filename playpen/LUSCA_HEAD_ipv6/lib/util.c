@@ -73,6 +73,7 @@
 #endif
 
 #include "util.h"
+#include "win32_error.h"
 
 static void default_failure_notify(const char *);
 
@@ -760,4 +761,43 @@ default_failure_notify(const char *message)
     write(2, message, strlen(message));
     write(2, "\n", 1);
     abort();
+}
+
+/*
+ * Similar to strtol, but it takes a length parameter.
+ */
+long
+strtol_n(const char *nptr, int nlen, char **endptr, int base)
+{
+	char buf[64];
+	long r;
+	int l = MIN(nlen, sizeof(buf) - 1);
+
+	/* take a copy of the string, NUL terminate it just in case */
+	memcpy(buf, nptr, l);
+	buf[l] = '\0';
+
+	/* Now do the parsing */
+	r = strtol(buf, endptr, base);
+
+	/* The endptr is relative to buf, so convert back if required */
+	if ((*endptr) != NULL) {
+		(*endptr) = (char *) nptr + ((*endptr) - buf);
+	}
+
+	return r;
+}
+
+const char *
+strpbrk_n(const char *s, int len, const char *charset)
+{
+	const char *c;
+
+	for (; len >= 0; s++, len--) {
+		for (c = charset; (*c) != '\0'; c++) {
+			if ( (*s) == (*c) )
+				return s;
+		}
+	}
+	return NULL;
 }
