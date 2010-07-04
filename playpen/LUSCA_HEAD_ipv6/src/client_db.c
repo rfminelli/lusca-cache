@@ -64,6 +64,7 @@ struct _ClientInfo {
 typedef struct _ClientInfo ClientInfo;
 
 static radix_tree_t *client_v4_tree = NULL;
+static radix_tree_t *client_v6_tree = NULL;
 dlink_list client_list;
 
 static ClientInfo *clientdbAdd(struct in_addr addr);
@@ -111,6 +112,7 @@ clientdbInit(void)
     if (client_v4_tree)
         return;
     client_v4_tree = New_Radix();
+    client_v6_tree = New_Radix();
     cachemgrRegister("client_list", "Cache Client List", clientdbDump, 0, 1);
 }
 
@@ -314,7 +316,9 @@ void
 clientdbFreeMemory(void)
 {
     Destroy_Radix(client_v4_tree, clientdbFreeItemRadix, NULL);
+    Destroy_Radix(client_v6_tree, clientdbFreeItemRadix, NULL);
     client_v4_tree = NULL;
+    client_v6_tree = NULL;
 }
 
 static void
