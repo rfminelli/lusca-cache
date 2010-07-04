@@ -289,6 +289,11 @@ clientdbDump(StoreEntry * sentry)
       clientdbDumpEntry(sentry, c, &ci);
     } RADIX_WALK_END;
 
+    RADIX_WALK(client_v6_tree->head, rn) {
+      c = rn->data;
+      clientdbDumpEntry(sentry, c, &ci);
+    } RADIX_WALK_END;
+
     storeAppendPrintf(sentry, "TOTALS\n");
     storeAppendPrintf(sentry, "ICP : %d Queries, %d Hits (%3d%%)\n",
 	ci.icp_total, ci.icp_hits, percent(ci.icp_hits, ci.icp_total));
