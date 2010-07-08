@@ -1682,6 +1682,7 @@ clientCheckHeaderDone(clientHttpRequest * http)
     if (mb.size > 0) {
 	comm_write_mbuf(http->conn->fd, mb, clientWriteComplete, http);
     } else {
+	memBufClean(&mb);
 	storeClientRef(http->sc, http->entry,
 	    http->out.offset,
 	    http->out.offset,
