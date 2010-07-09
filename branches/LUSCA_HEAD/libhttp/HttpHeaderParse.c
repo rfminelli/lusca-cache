@@ -240,7 +240,8 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
 {
     HttpHeaderEntry *e;
     int id;
-    parse_retval_t r;
+    parse_retval_t r = PR_OK;
+
     /* note: name_start == field_start */
     const char *name_end = memchr(field_start, ':', field_end - field_start);
     int name_len = name_end ? name_end - field_start : 0;
