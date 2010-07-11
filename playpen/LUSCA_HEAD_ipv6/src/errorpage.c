@@ -277,6 +277,18 @@ errorCon(err_type type, http_status status, request_t * request)
     return err;
 }
 
+void
+errorSetAddr(ErrorState *err, sqaddr_t *ip)
+{
+	err->src_addr = sqinet_get_v4_inaddr(ip, SQADDR_ASSERT_IS_V4);
+}
+
+void
+errorSetAddr4(ErrorState *err, struct in_addr ip)
+{
+	err->src_addr = ip;
+}
+
 /*
  * Function:  errorAppendEntry
  *

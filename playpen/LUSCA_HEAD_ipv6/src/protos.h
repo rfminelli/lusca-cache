@@ -810,6 +810,8 @@ extern void errorAppendEntry(StoreEntry *, ErrorState *);
 extern void errorStateFree(ErrorState * err);
 extern int errorReservePageId(const char *page_name);
 extern ErrorState *errorCon(err_type type, http_status, request_t * request);
+extern void errorSetAddr(ErrorState *err, sqaddr_t *ip);
+extern void errorSetAddr4(ErrorState *err, struct in_addr ip);
 extern int errorPageId(const char *page_name);
 
 extern int asnMatchIp(void *, struct in_addr);
