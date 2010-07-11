@@ -43,7 +43,7 @@
 #define	CLIENT_DB_SCHEDULE_IMMEDIATE_TIME	5
 
 struct _ClientInfo {
-    struct in_addr addr;
+    sqaddr_t saddr;
     dlink_node node;
     struct {
         int result_hist[LOG_TYPE_MAX];
@@ -87,7 +87,9 @@ clientdbAdd(struct in_addr addr)
 
     Init_Prefix(&p, AF_INET, &addr, 32);
     c = memPoolAlloc(pool_client_info);
-    c->addr = addr;
+    sqinet_init(&c->saddr);
+    sqinet_set_v4_inaddr(&c->saddr, &addr);
+    /* XXX this is a v4 address for now; will need to also handle v6 types too */
     rn = radix_lookup(client_v4_tree, &p);
     rn->data = c;
     dlinkAddTail(c, &c->node, &client_list);
@@ -114,6 +116,15 @@ clientdbInit(void)
     client_v4_tree = New_Radix();
     client_v6_tree = New_Radix();
     cachemgrRegister("client_list", "Cache Client List", clientdbDump, 0, 1);
+}
+
+void
+clientdbUpdate6(sqaddr_t *addr, log_type ltype, protocol_t p, squid_off_t size)
+{
+	struct in_addr a;
+
+	a = sqinet_get_v4_inaddr(addr, SQADDR_ASSERT_IS_V4);
+	clientdbUpdate(a, ltype, p, size);
 }
 
 void
@@ -238,9 +249,14 @@ static void
 clientdbDumpEntry(StoreEntry *sentry, ClientInfo *c, struct clientdb_iterate_stats *ci)
 {
         log_type l;
+	char sbuf[MAX_IPSTRLEN];
 
-	storeAppendPrintf(sentry, "Address: %s\n", xinet_ntoa(c->addr));
+	sqinet_ntoa(&c->saddr, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
+
+	storeAppendPrintf(sentry, "Address: %s\n", sbuf);
+#if 0
 	storeAppendPrintf(sentry, "Name: %s\n", fqdnFromAddr(c->addr));
+#endif
 	storeAppendPrintf(sentry, "Currently established connections: %d\n",
 	    c->n_established);
 	storeAppendPrintf(sentry, "    ICP Requests %d\n",
@@ -355,8 +371,21 @@ clientdbGC(void *unused)
       if (age < 60)
           continue;
 
-      Init_Prefix(&p, AF_INET, &c->addr, 32);
-      rn = radix_search_exact(client_v4_tree, &p);
+      /* Do the (conditional) lookup */
+      if (sqinet_get_family(&c->saddr) == AF_INET) {
+	struct in_addr pp;
+	pp = sqinet_get_v4_inaddr(&c->saddr, SQADDR_ASSERT_IS_V4);
+      	Init_Prefix(&p, AF_INET, &pp, 32);
+      	rn = radix_search_exact(client_v4_tree, &p);
+      } else {
+	struct in6_addr pp;
+	pp = sqinet_get_v6_inaddr(&c->saddr, SQADDR_ASSERT_IS_V6);
+      	Init_Prefix(&p, AF_INET6, &pp, 128);
+      	rn = radix_search_exact(client_v6_tree, &p);
+      }
+      /* XXX remind me why I'm not free'ing this Prefix being created by Init_Prefix again? */
+      /* XXX ah, because it's Init_Prefix, rather than New_Prefix. Ok. */
+
       rn->data = NULL;
       radix_remove(client_v4_tree, rn);
       clientdbFreeItem(c);

@@ -4,6 +4,7 @@
 extern void clientdbInitMem(void);
 extern void clientdbInit(void);
 extern void clientdbUpdate(struct in_addr, log_type, protocol_t, squid_off_t);
+extern void clientdbUpdate6(sqaddr_t *addr, log_type, protocol_t, squid_off_t);
 extern int clientdbCutoffDenied(struct in_addr);
 extern void clientdbDump(StoreEntry *);
 extern void clientdbFreeMemory(void);
