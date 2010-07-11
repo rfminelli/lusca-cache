@@ -162,6 +162,15 @@ clientdbUpdate(struct in_addr addr, log_type ltype, protocol_t p, squid_off_t si
     c->last_seen = squid_curtime;
 }
 
+int
+clientdbEstablished6(sqaddr_t *addr, int delta)
+{
+	struct in_addr a;
+
+	a = sqinet_get_v4_inaddr(addr, SQADDR_ASSERT_IS_V4);
+	return clientdbEstablished(a, delta);
+}
+
 /*
  * clientdbEstablished()
  * This function tracks the number of currently established connections

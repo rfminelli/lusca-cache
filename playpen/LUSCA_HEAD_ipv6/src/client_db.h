@@ -9,5 +9,6 @@ extern int clientdbCutoffDenied(struct in_addr);
 extern void clientdbDump(StoreEntry *);
 extern void clientdbFreeMemory(void);
 extern int clientdbEstablished(struct in_addr, int);
+extern int clientdbEstablished6(sqaddr_t *addr, int);
 
 #endif
