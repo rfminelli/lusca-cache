@@ -290,6 +290,24 @@ sqinet_get_v4_inaddr(const sqaddr_t *s, sqaddr_flags flags)
 	return v4->sin_addr;
 }
 
+struct in6_addr
+sqinet_get_v6_inaddr(const sqaddr_t *s, sqaddr_flags flags)
+{
+	struct sockaddr_in6 *v6;
+	struct in6_addr no6addr = {{{ 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff }}};
+
+	assert(s->init);
+	if (flags & SQADDR_ASSERT_IS_V6) {
+		assert(s->st.ss_family == AF_INET6);
+	}
+	if (s->st.ss_family != AF_INET6)
+		return no6addr;
+
+	v6 = (struct sockaddr_in6 *) &s->st;
+	return v6->sin6_addr;
+}
+
+
 /*!
  * @function
  *	sqinet_get_v4_sockaddr_ptr

@@ -111,7 +111,7 @@ redirectStart(clientHttpRequest * http, RH * handler, void *data)
     }
     r = cbdataAlloc(redirectStateData);
     r->orig_url = xstrdup(http->uri);
-    r->client_addr = conn->log_addr;
+    r->client_addr = sqinet_get_v4_inaddr(&conn->log_addr2, SQADDR_ASSERT_IS_V4);
     r->client_ident = NULL;
     if (http->request->auth_user_request)
 	r->client_ident = authenticateUserRequestUsername(http->request->auth_user_request);
@@ -365,6 +365,7 @@ internalRedirectProcessURL(clientHttpRequest * req, rewritetoken * head)
 	int do_free = 0;
 	unsigned long ulong = 0;
 	const char *ulong_fmt = "%lu";
+	char buf[MAX_IPSTRLEN];
 	debug(85, 5) ("internalRedirectProcessURL: token=%s str=%s urlEncode=%s\n",
 	    tokenNames[head->type], head->str, head->urlEncode ? "true" : "false");
 	switch (head->type) {
@@ -373,13 +374,15 @@ internalRedirectProcessURL(clientHttpRequest * req, rewritetoken * head)
 	    str_len = head->str_len;
 	    break;
 	case RFT_CLIENT_IPADDRESS:
-	    str = inet_ntoa(req->conn->peer.sin_addr);
+	    (void) sqinet_ntoa(&req->conn->peer2, buf, sizeof(buf), SQADDR_NONE);
+	    str = buf;
 	    break;
 	case RFT_LOCAL_IPADDRESS:
-	    str = inet_ntoa(req->conn->me.sin_addr);
+	    (void) sqinet_ntoa(&req->conn->me2, buf, sizeof(buf), SQADDR_NONE);
+	    str = buf;
 	    break;
 	case RFT_LOCAL_PORT:
-	    ulong = ntohs(req->conn->me.sin_port);
+	    ulong = sqinet_get_port(&req->conn->me2);
 	    do_ulong = 1;
 	    break;
 	case RFT_EPOCH_SECONDS:

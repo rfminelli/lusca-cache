@@ -2280,7 +2280,7 @@ aclCheck(aclCheck_t * checklist)
 	else if (checklist->state[ACL_IDENT] == ACL_LOOKUP_NEEDED) {
 	    debug(28, 3) ("aclCheck: Doing ident lookup\n");
 	    if (cbdataValid(checklist->conn)) {
-		identStart4(&checklist->conn->me, &checklist->conn->peer,
+		identStart(&checklist->conn->me2, &checklist->conn->peer2,
 		    aclLookupIdentDone, checklist);
 		checklist->state[ACL_IDENT] = ACL_LOOKUP_PENDING;
 		return;

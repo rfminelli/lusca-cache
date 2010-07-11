@@ -1504,6 +1504,7 @@ statByteHitRatio(int minutes)
 static void
 statClientRequests(StoreEntry * s)
 {
+    LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
     dlink_node *i;
     clientHttpRequest *http;
     ConnStateData *conn;
@@ -1522,12 +1523,13 @@ statClientRequests(StoreEntry * s)
 	    storeAppendPrintf(s, "\tFD desc: %s\n", fd_table[fd].desc);
 	    storeAppendPrintf(s, "\tin: buf %p, offset %ld, size %ld\n",
 		conn->in.buf, (long int) conn->in.offset, (long int) conn->in.size);
-	    storeAppendPrintf(s, "\tpeer: %s:%d\n",
-		inet_ntoa(conn->peer.sin_addr),
-		ntohs(conn->peer.sin_port));
-	    storeAppendPrintf(s, "\tme: %s:%d\n",
-		inet_ntoa(conn->me.sin_addr),
-		ntohs(conn->me.sin_port));
+
+	    (void) sqinet_ntoa(&conn->peer2, buf, sizeof(buf), SQADDR_NONE);
+	    storeAppendPrintf(s, "\tpeer: %s:%d\n", buf, sqinet_get_port(&conn->peer2));
+
+	    (void) sqinet_ntoa(&conn->me2, buf, sizeof(buf), SQADDR_NONE);
+	    storeAppendPrintf(s, "\tme: %s:%d\n", buf, sqinet_get_port(&conn->me2));
+
 	    storeAppendPrintf(s, "\tnrequests: %d\n",
 		conn->nrequests);
 	    storeAppendPrintf(s, "\tdefer: n %d, until %ld\n",

@@ -194,6 +194,7 @@ parseHttpTransparentRequest(ConnStateData *conn, clientHttpRequest *http, const 
 	int port = 0;
 	const char *host = mime_get_header(req_hdr, "Host");
 	char *portstr;
+	char hostbuf[MAX_IPSTRLEN];
 
 	if (host && (portstr = strchr(host, ':')) != NULL) {
 	    *portstr++ = '\0';
@@ -207,9 +208,11 @@ parseHttpTransparentRequest(ConnStateData *conn, clientHttpRequest *http, const 
 	if (conn->port->transparent && clientNatLookup(conn) == 0)
 	    conn->transparent = 1;
 	if (!host && conn->transparent) {
-	    port = ntohs(conn->me.sin_port);
-	    if (!host)
-		host = inet_ntoa(conn->me.sin_addr);
+	    port = sqinet_get_port(&conn->me2);
+	    if (!host) {
+		(void) sqinet_ntoa(&conn->me2, hostbuf, sizeof(hostbuf), SQADDR_NONE);
+		host = hostbuf;
+	    }
 	}
 	if (host) {
 	    size_t url_sz = 10 + strlen(host) + 6 + strlen(url) + 32 + Config.appendDomainLen;
@@ -235,6 +238,7 @@ parseHttpAccelRequest(ConnStateData *conn, clientHttpRequest *http, const char *
 	int vhost = conn->port->vhost;
 	int vport = conn->port->vport;
 	const char *t = NULL;
+	char hostbuf[MAX_IPSTRLEN];
 
 	http->flags.accel = 1;
 	if (*url != '/' && !vhost && strncasecmp(url, "cache_object://", 15) != 0) {
@@ -254,14 +258,15 @@ parseHttpAccelRequest(ConnStateData *conn, clientHttpRequest *http, const char *
 	    if (vport > 0)
 		port = vport;
 	    else
-		port = htons(http->conn->me.sin_port);
+		port = sqinet_get_port(&http->conn->me2);
 	    if (vhost && (t = mime_get_header(req_hdr, "Host")))
 		host = t;
 	    else if (conn->port->defaultsite)
 		host = conn->port->defaultsite;
-	    else if (vport == -1)
-		host = inet_ntoa(http->conn->me.sin_addr);
-	    else
+	    else if (vport == -1) {
+		(void) sqinet_ntoa(&conn->me2, hostbuf, sizeof(hostbuf), SQADDR_NONE);
+		host = hostbuf;
+            } else
 		host = getMyHostname();
 	    url_sz = strlen(url) + 32 + Config.appendDomainLen + strlen(host);
 	    http->uri = xcalloc(url_sz, 1);
@@ -482,7 +487,7 @@ clientTryParseRequest(ConnStateData * conn)
 	if (parser_return_code < 0) {
 	    debug(33, 1) ("clientTryParseRequest: FD %d (%s:%d) Invalid Request\n", fd, fd_table[fd].ipaddrstr, fd_table[fd].remote_port);
 	    err = errorCon(ERR_INVALID_REQ, HTTP_BAD_REQUEST, NULL);
-	    err->src_addr = conn->peer.sin_addr;
+	    errorSetAddr(err, &conn->peer2);
 	    err->request_hdrs = xstrdup(conn->in.buf);
 	    http->log_type = LOG_TCP_DENIED;
 	    http->entry = clientCreateStoreEntry(http, method, null_request_flags);
@@ -493,7 +498,7 @@ clientTryParseRequest(ConnStateData * conn)
 	if ((request = urlParse(method, http->uri)) == NULL) {
 	    debug(33, 5) ("Invalid URL: %s\n", http->uri);
 	    err = errorCon(ERR_INVALID_URL, HTTP_BAD_REQUEST, NULL);
-	    err->src_addr = conn->peer.sin_addr;
+	    errorSetAddr(err, &conn->peer2);
 	    err->url = xstrdup(http->uri);
 	    http->al.http.code = err->http_status;
 	    http->log_type = LOG_TCP_DENIED;
@@ -550,13 +555,13 @@ clientTryParseRequest(ConnStateData * conn)
 	request->content_length = httpHeaderGetSize(&request->header,
 	    HDR_CONTENT_LENGTH);
 	request->flags.internal = http->flags.internal;
-	request->client_addr = conn->peer.sin_addr;
-	request->client_port = ntohs(conn->peer.sin_port);
+	request->client_addr = sqinet_get_v4_inaddr(&conn->peer2, SQADDR_ASSERT_IS_V4);
+	request->client_port = sqinet_get_port(&conn->peer2);
 #if FOLLOW_X_FORWARDED_FOR
 	request->indirect_client_addr = request->client_addr;
 #endif /* FOLLOW_X_FORWARDED_FOR */
-	request->my_addr = conn->me.sin_addr;
-	request->my_port = ntohs(conn->me.sin_port);
+	request->my_addr = sqinet_get_v4_inaddr(&conn->me2, SQADDR_ASSERT_IS_V4);
+	request->my_port = sqinet_get_port(&conn->me2);
 	request->http_ver = http->http_ver;
 	if (!urlCheckRequest(request)) {
 	    err = errorCon(ERR_UNSUP_REQ, HTTP_NOT_IMPLEMENTED, request);
@@ -603,7 +608,9 @@ clientTryParseRequest(ConnStateData * conn)
 	    if (!DLINK_ISEMPTY(conn->reqs) && DLINK_HEAD(conn->reqs) == http)
 		clientCheckFollowXForwardedFor(http);
 	    else {
-		debug(33, 1) ("WARNING: pipelined CONNECT request seen from %s\n", inet_ntoa(http->conn->peer.sin_addr));
+		char buf[MAX_IPSTRLEN];
+		(void) sqinet_ntoa(&http->conn->peer2, buf, sizeof(buf), SQADDR_NONE);
+		debug(33, 1) ("WARNING: pipelined CONNECT request seen from %s\n", buf);
 		debugObj(33, 1, "Previous request:\n", ((clientHttpRequest *) DLINK_HEAD(conn->reqs))->request,
 		    (ObjPackMethod) & httpRequestPackDebug);
 		debugObj(33, 1, "This request:\n", request, (ObjPackMethod) & httpRequestPackDebug);
@@ -625,7 +632,7 @@ clientTryParseRequest(ConnStateData * conn)
 	    debug(33, 1) ("Config 'request_header_max_size'= %ld bytes.\n",
 		(long int) Config.maxRequestHeaderSize);
 	    err = errorCon(ERR_TOO_BIG, HTTP_REQUEST_URI_TOO_LONG, NULL);
-	    err->src_addr = conn->peer.sin_addr;
+	    errorSetAddr(err, &conn->peer2);
 	    http = parseHttpRequestAbort(conn, &method, "error:request-too-large");
 	    /* add to the client request queue */
 	    dlinkAddTail(http, &http->node, &conn->reqs);

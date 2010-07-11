@@ -280,7 +280,7 @@ httpRequestLog(clientHttpRequest *http)
 	    http->al.http.code = mem->reply->sline.status;
 	    http->al.http.content_type = strBuf(mem->reply->content_type);
 	}
-	http->al.cache.caddr = conn->log_addr;
+	http->al.cache.caddr = sqinet_get_v4_inaddr(&conn->log_addr2, SQADDR_ASSERT_IS_V4);
 	http->al.cache.size = http->out.size;
 	http->al.cache.code = http->log_type;
 	http->al.cache.msec = tvSubMsec(http->start, current_time);
@@ -322,7 +322,7 @@ httpRequestLog(clientHttpRequest *http)
 	    http->al.reply = http->reply;
 	    accessLogLog(&http->al, http->acl_checklist);
 	    clientUpdateCounters(http);
-	    clientdbUpdate(conn->peer.sin_addr, http->log_type, PROTO_HTTP, http->out.size);
+	    clientdbUpdate6(&conn->peer2, http->log_type, PROTO_HTTP, http->out.size);
 	}
     }
     safe_free(http->al.headers.request);
@@ -1930,11 +1930,15 @@ clientWriteComplete(int fd, char *bufnotused, size_t size, int errflag, void *da
 #if DELAY_POOLS
 	debug(33, 5) ("clientWriteComplete : Normal\n");
 	if (clientDelayBodyTooLarge(http, http->out.offset - 4096)) {
+	    struct in_addr a;
+
 	    debug(33, 5) ("clientWriteComplete: we should put this into the pool: DelayId=%i\n",
 		http->sc->delay_id);
 	    delayUnregisterDelayIdPtr(&http->sc->delay_id);
+	    a = sqinet_get_v4_inaddr(&http->conn->peer2, SQADDR_ASSERT_IS_V4);
+#warning delay pools should obviously be mapped to be ipv6 aware at some point
 	    delaySetStoreClient(http->sc, delayPoolClient(http->delayAssignedPool,
-		    (in_addr_t) http->conn->peer.sin_addr.s_addr));
+		    (in_addr_t) a.s_addr));
 	}
 #endif
 	/* More data will be coming from primary server; register with 
@@ -2518,8 +2522,10 @@ clientLifetimeTimeout(int fd, void *data)
 {
     clientHttpRequest *http = data;
     ConnStateData *conn = http->conn;
-    debug(33, 1) ("WARNING: Closing client %s connection due to lifetime timeout\n",
-	inet_ntoa(conn->peer.sin_addr));
+    LOCAL_ARRAY(char, sb, MAX_IPSTRLEN);
+
+    (void) sqinet_ntoa(&conn->peer2, sb, sizeof(sb), SQADDR_NO_BRACKET_V6);
+    debug(33, 1) ("WARNING: Closing client %s connection due to lifetime timeout\n", sb);
     debug(33, 1) ("\t%s\n", http->uri);
     comm_close(fd);
 }
@@ -2586,7 +2592,7 @@ httpAccept(int sock, void *data)
 	identChecklist.my_addr = sqinet_get_v4_inaddr(&me, SQADDR_ASSERT_IS_V4);
 	identChecklist.my_port = sqinet_get_port(&me);
 	if (aclCheckFast(Config.accessList.identLookup, &identChecklist))
-	    identStart4(&connState->me, &connState->peer, clientIdentDone, connState);
+	    identStart(&connState->me2, &connState->peer2, clientIdentDone, connState);
 #endif
 	commSetSelect(fd, COMM_SELECT_READ, clientReadRequest, connState, 0);
 	commSetDefer(fd, clientReadDefer, connState);
