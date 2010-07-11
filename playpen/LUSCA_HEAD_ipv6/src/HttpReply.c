@@ -252,8 +252,10 @@ httpReplySetHeaders(HttpReply * reply, http_status status, const char *reason,
     httpHeaderPutTime(hdr, HDR_DATE, squid_curtime);
     if (ctype) {
 	httpHeaderPutStr(hdr, HDR_CONTENT_TYPE, ctype);
+	/* XXX is this potentially overwriting an existing String? */
 	stringInit(&reply->content_type, ctype);
     } else
+	/* XXX is this potentially overwriting an existing String? */
 	reply->content_type = StringNull;
     if (clen >= 0)
 	httpHeaderPutSize(hdr, HDR_CONTENT_LENGTH, clen);
@@ -373,8 +375,10 @@ httpReplyHdrCacheInit(HttpReply * rep)
     rep->last_modified = httpHeaderGetTime(hdr, HDR_LAST_MODIFIED);
     str = httpHeaderGetStr(hdr, HDR_CONTENT_TYPE);
     if (str)
+	/* XXX is this potentially overwriting an existing String? */
 	stringLimitInit(&rep->content_type, str, strcspn(str, ";\t "));
     else
+	/* XXX is this potentially overwriting an existing String? */
 	rep->content_type = StringNull;
     rep->cache_control = httpHeaderGetCc(hdr);
     rep->content_range = httpHeaderGetContRange(hdr);
