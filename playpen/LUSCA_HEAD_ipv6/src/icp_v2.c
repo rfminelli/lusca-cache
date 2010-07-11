@@ -58,14 +58,15 @@ icpLogIcp(struct in_addr caddr, log_type logcode, int len, const char *url, int 
     clientdbUpdate(caddr, logcode, PROTO_ICP, len);
     if (!Config.onoff.log_udp)
 	return;
-    memset(&al, '\0', sizeof(al));
+    accessLogEntryInit(&al);
     al.icp.opcode = ICP_QUERY;
     al.url = url;
-    al.cache.caddr = caddr;
+    accessLogEntrySetClientAddr4(&al, caddr);
     al.cache.size = len;
     al.cache.code = logcode;
     al.cache.msec = delay;
     accessLogLog(&al, NULL);
+    accessLogEntryDone(&al);
 }
 
 void

@@ -1494,3 +1494,83 @@ headersLog(int cs, int pq, method_t * m, void *data)
 }
 
 #endif
+
+/*
+ * AccessLogEntry related routines
+ */
+void
+accessLogEntryInit(AccessLogEntry *al)
+{
+	memset(al, '\0', sizeof(*al));
+}
+
+/*
+ * This is used by httpRequestLog in src/client_side.c . It resets part of the
+ * AccessLogEntry in preparation for a subsequent request. It should really be
+ * replaced with a Done/Init pair but the client-side code uses http->al as
+ * a container for some variables which it likely shouldn't.
+ *
+ * It's quite likely that further variables should also be reset but this is
+ * all that httpRequestLog() did.
+ */
+void
+accessLogEntryClearHack(AccessLogEntry *al)
+{
+	safe_free(al->headers.request);
+	safe_free(al->headers.reply);
+	safe_free(al->cache.authuser);
+	al->request = NULL;
+}
+
+void
+accessLogEntryDone(AccessLogEntry *al)
+{
+	safe_free(al->headers.request);
+	safe_free(al->headers.reply);
+	safe_free(al->cache.authuser);
+	safe_free(al->headers.request);
+	safe_free(al->headers.reply);
+	safe_free(al->cache.authuser);
+	safe_free(al->ext_refresh);
+	/* al->url is just a pointer */
+	/* al->http.content_type is just a pointer */
+	/* al->cache.rfc931 is just a pointer */
+	/* al->cache.ssluser is just a pointer */
+
+	al->request = NULL;		/* This is just a pointer; it isn't obtained by requestLink() */
+	al->reply = NULL;		/* This is just a pointer! No reference counting */
+
+	/* al->hier is a local copy and should be separately free()'d here when the time comes */
+}
+
+void
+accessLogEntrySetReplyStatus(AccessLogEntry *al, HttpReply *reply)
+{
+	al->http.code = reply->sline.status;
+	al->http.content_type = strBuf(reply->content_type);
+}
+
+void
+accessLogEntrySetClientAddr(AccessLogEntry *al, sqaddr_t *addr)
+{
+	al->cache.caddr = sqinet_get_v4_inaddr(addr, SQADDR_ASSERT_IS_V4);
+}
+
+void
+accessLogEntrySetClientAddr4(AccessLogEntry *al, struct in_addr addr)
+{
+	al->cache.caddr = addr;
+}
+
+void
+accessLogEntrySetOutAddr(AccessLogEntry *al, sqaddr_t *addr)
+{
+	al->cache.out_ip = sqinet_get_v4_inaddr(addr, SQADDR_ASSERT_IS_V4);
+}
+
+void
+accessLogEntrySetOutAddr4(AccessLogEntry *al, struct in_addr addr)
+{
+	al->cache.out_ip = addr;
+}
+

@@ -34,6 +34,14 @@
 #ifndef SQUID_PROTOS_H
 #define SQUID_PROTOS_H
 
+extern void accessLogEntryInit(AccessLogEntry *al);
+extern void accessLogEntryDone(AccessLogEntry *al);
+extern void accessLogEntryClearHack(AccessLogEntry *al);
+extern void accessLogEntrySetReplyStatus(AccessLogEntry *al, HttpReply *reply);
+extern void accessLogEntrySetClientAddr(AccessLogEntry *al, sqaddr_t *addr);
+extern void accessLogEntrySetClientAddr4(AccessLogEntry *al, struct in_addr addr);
+extern void accessLogEntrySetOutAddr(AccessLogEntry *al, sqaddr_t *addr);
+extern void accessLogEntrySetOutAddr4(AccessLogEntry *al, struct in_addr addr);
 extern void accessLogLog(AccessLogEntry *, aclCheck_t * checklist);
 extern void accessLogRotate(void);
 extern void accessLogClose(void);

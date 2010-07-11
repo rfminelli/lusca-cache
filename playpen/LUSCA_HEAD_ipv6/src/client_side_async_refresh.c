@@ -26,7 +26,7 @@ clientAsyncDone(clientAsyncRefreshRequest * async)
     static aclCheck_t *ch;
     MemObject *mem = async->entry->mem_obj;
     request_t *request = async->request;
-    memset(&al, 0, sizeof(al));
+    accessLogEntryInit(&al);
     al.icp.opcode = ICP_INVALID;
     al.url = mem->url;
     debug(33, 9) ("clientAsyncDone: url='%s'\n", al.url);
@@ -79,9 +79,7 @@ clientAsyncDone(clientAsyncRefreshRequest * async)
     storeUnlockObject(async->entry);
     storeUnlockObject(async->old_entry);
     requestUnlink(async->request);
-    safe_free(al.headers.request);
-    safe_free(al.headers.reply);
-    safe_free(al.cache.authuser);
+    accessLogEntryDone(&al);
     cbdataFree(async);
 }
 

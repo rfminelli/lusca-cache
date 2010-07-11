@@ -162,6 +162,7 @@ parseHttpRequestAbort(ConnStateData * conn, method_t ** method_p, const char *ur
     dlinkAdd(http, &http->active, &ClientActiveRequests);
     if (method_p && !*method_p)
         *method_p = urlMethodGetKnownByCode(METHOD_NONE);
+    accessLogEntryInit(&http->al);
     return http;
 }
 
@@ -423,6 +424,7 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, 
     /* This tries to back out what is done above */
     dlinkDelete(&http->active, &ClientActiveRequests);
     safe_free(http->uri);
+    accessLogEntryDone(&http->al);
     cbdataFree(http);
     return parseHttpRequestAbort(conn, method_p, "error:invalid-request");
 }

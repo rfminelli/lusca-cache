@@ -272,15 +272,13 @@ httpRequestLog(clientHttpRequest *http)
 	if (!http->al.url)
 	    http->al.url = urlCanonicalClean(request);
 	debug(33, 9) ("httpRequestLog: al.url='%s'\n", http->al.url);
-	http->al.cache.out_ip = request->out_ip;
+	accessLogEntrySetOutAddr4(&http->al, request->out_ip);
 	if (http->reply && http->log_type != LOG_TCP_DENIED) {
-	    http->al.http.code = http->reply->sline.status;
-	    http->al.http.content_type = strBuf(http->reply->content_type);
+	    accessLogEntrySetReplyStatus(&http->al, http->reply);
 	} else if (mem) {
-	    http->al.http.code = mem->reply->sline.status;
-	    http->al.http.content_type = strBuf(mem->reply->content_type);
+	    accessLogEntrySetReplyStatus(&http->al, mem->reply);
 	}
-	http->al.cache.caddr = sqinet_get_v4_inaddr(&conn->log_addr2, SQADDR_ASSERT_IS_V4);
+	accessLogEntrySetClientAddr(&http->al, &conn->log_addr2);
 	http->al.cache.size = http->out.size;
 	http->al.cache.code = http->log_type;
 	http->al.cache.msec = tvSubMsec(http->start, current_time);
@@ -325,10 +323,7 @@ httpRequestLog(clientHttpRequest *http)
 	    clientdbUpdate6(&conn->peer2, http->log_type, PROTO_HTTP, http->out.size);
 	}
     }
-    safe_free(http->al.headers.request);
-    safe_free(http->al.headers.reply);
-    safe_free(http->al.cache.authuser);
-    http->al.request = NULL;
+    accessLogEntryClearHack(&http->al);
 }
 
 void
@@ -386,6 +381,7 @@ httpRequestFree(void *data)
 	httpReplyDestroy(http->reply);
     http->reply = NULL;
     assert(DLINK_HEAD(http->conn->reqs) != NULL);
+    accessLogEntryDone(&http->al);
     /* Unlink us from the clients request list */
     dlinkDelete(&http->node, &http->conn->reqs);
     dlinkDelete(&http->active, &ClientActiveRequests);
