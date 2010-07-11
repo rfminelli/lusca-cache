@@ -315,6 +315,23 @@ fqdncacheHandleReply(void *data, rfc1035_rr * answers, int na, const char *error
     fqdncacheCallback(f);
 }
 
+#warning fqdncache_nbgethostbyaddr6() needs fleshing out!
+void
+fqdncache_nbgethostbyaddr6(sqaddr_t *addr, FQDNH * handler, void *handlerData)
+{
+	struct in_addr a;
+
+	if (sqinet_get_family(addr) != AF_INET) {
+		debug(35, 1) ("fqdncache_nbgethostbyaddr: IPv6 not yet supported!\n");
+		dns_error_message = "IPv6 FQDNcache not yet supported!";
+		handler(NULL, handlerData);
+		return;
+	}
+
+	a = sqinet_get_v4_inaddr(addr, SQADDR_ASSERT_IS_V4);
+	return fqdncache_nbgethostbyaddr(a, handler, handlerData);
+}
+
 void
 fqdncache_nbgethostbyaddr(struct in_addr addr, FQDNH * handler, void *handlerData)
 {
@@ -382,6 +399,19 @@ fqdncache_init(void)
     n = hashPrime(fqdncache_high / 4);
     fqdn_table = hash_create((HASHCMP *) strcmp, n, hash4);
     pool_fqdncache = memPoolCreate("fqdncache_entry", sizeof(fqdncache_entry));
+}
+
+#warning fqdncache_gethostbyaddr6() needs fleshing out!
+const char *
+fqdncache_gethostbyaddr6(sqaddr_t *addr, int flags)
+{
+	struct in_addr a;
+
+	if (sqinet_get_family(addr) != AF_INET)
+		return NULL;
+
+	a = sqinet_get_v4_inaddr(addr, SQADDR_ASSERT_IS_V4);
+	return fqdncache_gethostbyaddr(a, flags);
 }
 
 const char *

@@ -42,7 +42,9 @@ extern hash_table *fqdn_table;
 extern FqdncacheStatStruct FqdncacheStats;
 
 extern void fqdncache_nbgethostbyaddr(struct in_addr, FQDNH *, void *);
+extern void fqdncache_nbgethostbyaddr6(sqaddr_t *addr, FQDNH *, void *);
 extern const char *fqdncache_gethostbyaddr(struct in_addr, int flags);
+extern const char * fqdncache_gethostbyaddr6(sqaddr_t *addr, int flags);
 extern void fqdncache_init(void);
 extern void fqdncacheReleaseInvalid(const char *);
 extern const char *fqdnFromAddr(struct in_addr);

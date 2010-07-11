@@ -2586,7 +2586,7 @@ httpAccept(int sock, void *data)
         connState->port = s;
         cbdataLock(connState->port);
 	if (Config.onoff.log_fqdn)
-	    fqdncache_gethostbyaddr(sqinet_get_v4_inaddr(&peer, SQADDR_ASSERT_IS_V4), FQDN_LOOKUP_IF_MISS);
+	    fqdncache_gethostbyaddr6(&peer, FQDN_LOOKUP_IF_MISS);
 	commSetTimeout(fd, Config.Timeout.request, requestTimeout, connState);
 #if USE_IDENT
 	identChecklist.src_addr = sqinet_get_v4_inaddr(&peer, SQADDR_ASSERT_IS_V4);
