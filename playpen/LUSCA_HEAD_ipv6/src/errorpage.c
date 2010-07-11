@@ -270,9 +270,10 @@ errorCon(err_type type, http_status status, request_t * request)
     err->page_id = type;	/* has to be reset manually if needed */
     err->type = type;
     err->http_status = status;
+    sqinet_init(&err->src_addr2);
     if (request != NULL) {
 	err->request = requestLink(request);
-	err->src_addr = request->client_addr;
+        errorSetAddr4(err, request->client_addr);
     }
     return err;
 }
@@ -280,13 +281,13 @@ errorCon(err_type type, http_status status, request_t * request)
 void
 errorSetAddr(ErrorState *err, sqaddr_t *ip)
 {
-	err->src_addr = sqinet_get_v4_inaddr(ip, SQADDR_ASSERT_IS_V4);
+	sqinet_copy(&err->src_addr2, ip);
 }
 
 void
 errorSetAddr4(ErrorState *err, struct in_addr ip)
 {
-	err->src_addr = ip;
+	sqinet_set_v4_inaddr(&err->src_addr2, &ip);
 }
 
 /*
@@ -424,6 +425,7 @@ errorStateFree(ErrorState * err)
     if (err->auth_user_request)
 	authenticateAuthUserRequestUnlock(err->auth_user_request);
     err->auth_user_request = NULL;
+    sqinet_done(&err->src_addr2);
     cbdataFree(err);
 }
 
@@ -466,6 +468,7 @@ errorConvert(char token, ErrorState * err)
     static MemBuf mb = MemBufNULL;
     const char *p = NULL;	/* takes priority over mb if set */
     int do_quote = 1;
+    LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
 
     memBufReset(&mb);
     switch (token) {
@@ -521,7 +524,8 @@ errorConvert(char token, ErrorState * err)
 	    p = "[unknown host]";
 	break;
     case 'i':
-	memBufPrintf(&mb, "%s", inet_ntoa(err->src_addr));
+	(void) sqinet_ntoa(&err->src_addr2, buf, sizeof(buf), SQADDR_NONE);
+	memBufPrintf(&mb, "%s", buf);
 	break;
     case 'I':
 	if (r && r->hier.host) {

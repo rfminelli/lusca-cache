@@ -1728,7 +1728,7 @@ struct _ErrorState {
     int xerrno;
     char *dnsserver_msg;
     time_t ttl;
-    struct in_addr src_addr;
+    sqaddr_t src_addr2;
     char *redirect_url;
     ERCB *callback;
     void *callback_data;
