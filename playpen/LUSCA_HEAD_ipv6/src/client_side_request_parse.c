@@ -387,6 +387,7 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, 
     http->req_sz = prefix_sz;
     http->range_iter.boundary = StringNull;
     http->maxRequestBodySize = -1;
+    accessLogEntryInit(&http->al);
     dlinkAdd(http, &http->active, &ClientActiveRequests);
 
     debug(33, 5) ("parseHttpRequest: Request Header is\n%s\n", hmsg->buf + hmsg->req_end);
