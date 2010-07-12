@@ -492,6 +492,7 @@ accessLogCustom(AccessLogEntry * al, customlog * log)
 	    break;
 	case LFT_OUTGOING_IP:
 	    out = xstrdup(inet_ntoa(al->cache.out_ip));
+	    dofree = 1;
 	    break;
 
 	    /* case LFT_SERVER_PORT: */
