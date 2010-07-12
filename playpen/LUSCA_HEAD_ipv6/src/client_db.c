@@ -67,7 +67,7 @@ static radix_tree_t *client_v4_tree = NULL;
 static radix_tree_t *client_v6_tree = NULL;
 dlink_list client_list;
 
-static ClientInfo *clientdbAdd(struct in_addr addr);
+static ClientInfo *clientdbAdd(sqaddr_t *s);
 static void clientdbStartGC(void);
 static void clientdbScheduledGC(void *);
 
@@ -78,20 +78,78 @@ static int cleanup_removed;
 
 static MemPool * pool_client_info;
 
+/*
+ * XXX this whole thing shouldn't require the case statement!
+ * XXX investigate and extend the sqinet later on to return
+ * XXX an opaque sockaddr * pointer!
+ */
+static void
+clientdb_Init_Prefix(prefix_t *p, const sqaddr_t *s)
+{
+	struct in_addr a4;
+	struct in6_addr a6;
+
+	switch (sqinet_get_family(s)) {
+		case AF_INET:
+			a4 = sqinet_get_v4_inaddr(s, SQADDR_NONE);
+    			Init_Prefix(p, AF_INET, &a4, 32);
+			break;
+		case AF_INET6:
+			a6 = sqinet_get_v6_inaddr(s, SQADDR_NONE);
+    			Init_Prefix(p, AF_INET6, &a6, 128);
+			break;
+		default:
+			fatal("clientdb_Init_Prefix: invalid family?!\n");
+	}
+}
+
+static radix_node_t *
+clientdb_Radix_Lookup(prefix_t *p, int family)
+{
+	switch (family) {
+		case AF_INET:
+    			return radix_lookup(client_v4_tree, p);
+			break;
+		case AF_INET6:
+    			return radix_lookup(client_v6_tree, p);
+			break;
+		default:
+			fatal("clientdb_Radix_Lookup: invalid family?!\n");
+	}
+	return NULL;
+}
+
+static radix_node_t *
+clientdb_Radix_Search_Exact(prefix_t *p, int family)
+{
+	switch (family) {
+		case AF_INET:
+    			return radix_search_exact(client_v4_tree, p);
+			break;
+		case AF_INET6:
+    			return radix_search_exact(client_v6_tree, p);
+			break;
+		default:
+			fatal("clientdb_Radix_Search_Exact: invalid family?!\n");
+	}
+	return NULL;
+}
+
 static ClientInfo *
-clientdbAdd(struct in_addr addr)
+clientdbAdd(sqaddr_t *saddr)
 {
     radix_node_t *rn;
     prefix_t p;
     ClientInfo *c;
 
-    Init_Prefix(&p, AF_INET, &addr, 32);
     c = memPoolAlloc(pool_client_info);
     sqinet_init(&c->saddr);
-    sqinet_set_v4_inaddr(&c->saddr, &addr);
-    /* XXX this is a v4 address for now; will need to also handle v6 types too */
-    rn = radix_lookup(client_v4_tree, &p);
+    sqinet_copy(&c->saddr, saddr);
+
+    clientdb_Init_Prefix(&p, saddr);
+    rn = clientdb_Radix_Lookup(&p, sqinet_get_family(saddr));
     rn->data = c;
+
     dlinkAddTail(c, &c->node, &client_list);
     statCounter.client_http.clients++;
     if ((statCounter.client_http.clients > max_clients) && !cleanup_running && !cleanup_scheduled) {
@@ -119,16 +177,7 @@ clientdbInit(void)
 }
 
 void
-clientdbUpdate6(sqaddr_t *addr, log_type ltype, protocol_t p, squid_off_t size)
-{
-	struct in_addr a;
-
-	a = sqinet_get_v4_inaddr(addr, SQADDR_ASSERT_IS_V4);
-	clientdbUpdate(a, ltype, p, size);
-}
-
-void
-clientdbUpdate(struct in_addr addr, log_type ltype, protocol_t p, squid_off_t size)
+clientdbUpdate6(sqaddr_t *sa, log_type ltype, protocol_t p, squid_off_t size)
 {
     radix_node_t *rn;
     prefix_t pr;
@@ -137,13 +186,13 @@ clientdbUpdate(struct in_addr addr, log_type ltype, protocol_t p, squid_off_t si
     if (!Config.onoff.client_db)
 	return;
 
-    Init_Prefix(&pr, AF_INET, &addr, 32);
-    rn = radix_search_exact(client_v4_tree, &pr);
+    clientdb_Init_Prefix(&pr, sa);
+    rn = clientdb_Radix_Search_Exact(&pr, sqinet_get_family(sa));
 
     if (rn)
         c = rn->data;
     if (c == NULL)
-	c = clientdbAdd(addr);
+	c = clientdbAdd(sa);
     if (c == NULL)
 	debug_trap("clientdbUpdate: Failed to add entry");
     if (p == PROTO_HTTP) {
@@ -162,13 +211,27 @@ clientdbUpdate(struct in_addr addr, log_type ltype, protocol_t p, squid_off_t si
     c->last_seen = squid_curtime;
 }
 
-int
-clientdbEstablished6(sqaddr_t *addr, int delta)
+void
+clientdbUpdate(struct in_addr addr, log_type ltype, protocol_t p, squid_off_t size)
 {
-	struct in_addr a;
+	sqaddr_t s;
+	sqinet_init(&s);
+	sqinet_set_v4_inaddr(&s, &addr);
+	clientdbUpdate6(&s, ltype, p, size);
+	sqinet_done(&s);
+}
 
-	a = sqinet_get_v4_inaddr(addr, SQADDR_ASSERT_IS_V4);
-	return clientdbEstablished(a, delta);
+int
+clientdbEstablished(struct in_addr addr, int delta)
+{
+	int r;
+	sqaddr_t s;
+
+	sqinet_init(&s);
+	sqinet_set_v4_inaddr(&s, &addr);
+	r = clientdbEstablished6(&s, delta);
+	sqinet_done(&s);
+	return r;
 }
 
 /*
@@ -179,7 +242,7 @@ clientdbEstablished6(sqaddr_t *addr, int delta)
  * -1.  To get the current value, simply call with delta = 0.
  */
 int
-clientdbEstablished(struct in_addr addr, int delta)
+clientdbEstablished6(sqaddr_t *sa, int delta)
 {
     ClientInfo *c = NULL;
     prefix_t p;
@@ -187,12 +250,14 @@ clientdbEstablished(struct in_addr addr, int delta)
 
     if (!Config.onoff.client_db)
 	return 0;
-    Init_Prefix(&p, AF_INET, &addr, 32);
-    rn = radix_search_exact(client_v4_tree, &p);
+
+    clientdb_Init_Prefix(&p, sa);
+    rn = clientdb_Radix_Search_Exact(&p, sqinet_get_family(sa));
+
     if (rn)
         c = rn->data;
     if (c == NULL)
-	c = clientdbAdd(addr);
+	c = clientdbAdd(sa);
     if (c == NULL)
 	debug_trap("clientdbUpdate: Failed to add entry");
     c->n_established += delta;
@@ -209,15 +274,19 @@ clientdbCutoffDenied(struct in_addr addr)
     ClientInfo *c = NULL;
     prefix_t pr;
     radix_node_t *rn;
+    sqaddr_t sa;
 
     if (!Config.onoff.client_db)
 	return 0;
 
-    Init_Prefix(&pr, AF_INET, &addr, 32);
-    rn = radix_search_exact(client_v4_tree, &pr);
+    sqinet_init(&sa);
+    sqinet_set_v4_inaddr(&sa, &addr);
+    clientdb_Init_Prefix(&pr, &sa);
+    rn = clientdb_Radix_Search_Exact(&pr, sqinet_get_family(&sa));
+    sqinet_done(&sa);
+
     if (rn)
         c = rn->data;
-
     if (c == NULL)
 	return 0;
     /*
@@ -330,6 +399,7 @@ static void
 clientdbFreeItem(ClientInfo *c)
 {
     dlinkDelete(&c->node, &client_list);
+    sqinet_done(&c->saddr);
     memPoolFree(pool_client_info, c);
 }
 
