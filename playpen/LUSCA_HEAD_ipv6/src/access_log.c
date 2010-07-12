@@ -450,6 +450,7 @@ accessLogCustom(AccessLogEntry * al, customlog * log)
     static MemBuf mb = MemBufNULL;
     char tmp[1024];
     String sb = StringNull;
+    LOCAL_ARRAY(char, cbuf, MAX_IPSTRLEN);
 
     memBufReset(&mb);
 
@@ -469,13 +470,16 @@ accessLogCustom(AccessLogEntry * al, customlog * log)
 	    out = fmt->data.string;
 	    break;
 	case LFT_CLIENT_IP_ADDRESS:
-	    out = inet_ntoa(al->cache.caddr);
+       	    (void) sqinet_ntoa(&al->cache.caddr2, cbuf, sizeof(cbuf), SQADDR_NONE);
+	    out = cbuf;
 	    break;
 
 	case LFT_CLIENT_FQDN:
-	    out = fqdncache_gethostbyaddr(al->cache.caddr, FQDN_LOOKUP_IF_MISS);
-	    if (!out)
-		out = inet_ntoa(al->cache.caddr);
+	    out = fqdncache_gethostbyaddr6(&al->cache.caddr2, FQDN_LOOKUP_IF_MISS);
+	    if (!out) {
+       	        (void) sqinet_ntoa(&al->cache.caddr2, cbuf, sizeof(cbuf), SQADDR_NONE);
+	        out = cbuf;
+	    }
 	    break;
 
 	case LFT_CLIENT_PORT:
@@ -491,7 +495,8 @@ accessLogCustom(AccessLogEntry * al, customlog * log)
 	    out = al->hier.host;
 	    break;
 	case LFT_OUTGOING_IP:
-	    out = xstrdup(inet_ntoa(al->cache.out_ip));
+       	    (void) sqinet_ntoa(&al->cache.out_ip2, cbuf, sizeof(cbuf), SQADDR_NONE);
+	    out = cbuf;
 	    break;
 
 	    /* case LFT_SERVER_PORT: */
@@ -1059,12 +1064,15 @@ accessLogFreeLogFormat(logformat_token ** tokens)
 static void
 accessLogSquid(AccessLogEntry * al, Logfile * logfile)
 {
+    LOCAL_ARRAY(char, cbuf, MAX_IPSTRLEN);
     const char *client = NULL;
     const char *user = NULL;
     if (Config.onoff.log_fqdn)
-	client = fqdncache_gethostbyaddr(al->cache.caddr, FQDN_LOOKUP_IF_MISS);
-    if (client == NULL)
-	client = inet_ntoa(al->cache.caddr);
+	client = fqdncache_gethostbyaddr6(&al->cache.caddr2, FQDN_LOOKUP_IF_MISS);
+    if (client == NULL) {
+       	(void) sqinet_ntoa(&al->cache.caddr2, cbuf, sizeof(cbuf), SQADDR_NONE);
+	client = cbuf;
+    }
     user = accessLogFormatName(al->cache.authuser);
     if (!user)
 	user = accessLogFormatName(al->cache.rfc931);
@@ -1119,12 +1127,15 @@ accessLogSquid(AccessLogEntry * al, Logfile * logfile)
 static void
 accessLogCommon(AccessLogEntry * al, Logfile * logfile)
 {
+    LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
     const char *client = NULL;
     char *user1 = NULL, *user2 = NULL;
     if (Config.onoff.log_fqdn)
-	client = fqdncache_gethostbyaddr(al->cache.caddr, 0);
-    if (client == NULL)
-	client = inet_ntoa(al->cache.caddr);
+	client = fqdncache_gethostbyaddr6(&al->cache.caddr2, 0);
+    if (client == NULL) {
+        (void) sqinet_ntoa(&al->cache.caddr2, buf, sizeof(buf), SQADDR_NONE);
+	client = buf;
+    }
     user1 = accessLogFormatName(al->cache.authuser);
     user2 = accessLogFormatName(al->cache.rfc931);
     if (al->icp.opcode)
@@ -1502,6 +1513,8 @@ void
 accessLogEntryInit(AccessLogEntry *al)
 {
 	memset(al, '\0', sizeof(*al));
+	sqinet_init(&al->cache.caddr2);
+	sqinet_init(&al->cache.out_ip2);
 }
 
 /*
@@ -1541,6 +1554,9 @@ accessLogEntryDone(AccessLogEntry *al)
 	al->reply = NULL;		/* This is just a pointer! No reference counting */
 
 	/* al->hier is a local copy and should be separately free()'d here when the time comes */
+
+	sqinet_done(&al->cache.caddr2);
+	sqinet_done(&al->cache.out_ip2);
 }
 
 void
@@ -1553,24 +1569,24 @@ accessLogEntrySetReplyStatus(AccessLogEntry *al, HttpReply *reply)
 void
 accessLogEntrySetClientAddr(AccessLogEntry *al, sqaddr_t *addr)
 {
-	al->cache.caddr = sqinet_get_v4_inaddr(addr, SQADDR_ASSERT_IS_V4);
+	sqinet_copy(&al->cache.caddr2, addr);
 }
 
 void
 accessLogEntrySetClientAddr4(AccessLogEntry *al, struct in_addr addr)
 {
-	al->cache.caddr = addr;
+	sqinet_set_v4_inaddr(&al->cache.caddr2, &addr);
 }
 
 void
 accessLogEntrySetOutAddr(AccessLogEntry *al, sqaddr_t *addr)
 {
-	al->cache.out_ip = sqinet_get_v4_inaddr(addr, SQADDR_ASSERT_IS_V4);
+	sqinet_copy(&al->cache.out_ip2, addr);
 }
 
 void
 accessLogEntrySetOutAddr4(AccessLogEntry *al, struct in_addr addr)
 {
-	al->cache.out_ip = addr;
+	sqinet_set_v4_inaddr(&al->cache.out_ip2, &addr);
 }
 

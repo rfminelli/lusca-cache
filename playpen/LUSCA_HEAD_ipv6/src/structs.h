@@ -939,8 +939,8 @@ struct _AccessLogEntry {
 	icp_opcode opcode;
     } icp;
     struct {
-	struct in_addr caddr;
-	struct in_addr out_ip;
+        sqaddr_t caddr2;
+        sqaddr_t out_ip2;
 	squid_off_t size;
 	size_t rq_size;
 	log_type code;
