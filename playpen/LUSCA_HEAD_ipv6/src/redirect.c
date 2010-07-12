@@ -38,7 +38,7 @@
 typedef struct {
     void *data;
     char *orig_url;
-    struct in_addr client_addr;
+    sqaddr_t client_addr2;
     const char *client_ident;
     const char *method_s;
     RH *handler;
@@ -75,6 +75,7 @@ static void
 redirectStateFree(redirectStateData * r)
 {
     safe_free(r->orig_url);
+    sqinet_done(&r->client_addr2);
     cbdataFree(r);
 }
 
@@ -98,7 +99,7 @@ redirectStart(clientHttpRequest * http, RH * handler, void *data)
     const char *fqdn;
     char *urlgroup = conn->port->urlgroup;
     char buf[8192];
-    char claddr[20];
+    char claddr[MAX_IPSTRLEN];
     char myaddr[20];
     assert(http);
     assert(handler);
@@ -111,7 +112,8 @@ redirectStart(clientHttpRequest * http, RH * handler, void *data)
     }
     r = cbdataAlloc(redirectStateData);
     r->orig_url = xstrdup(http->uri);
-    r->client_addr = sqinet_get_v4_inaddr(&conn->log_addr2, SQADDR_ASSERT_IS_V4);
+    sqinet_init(&r->client_addr2);
+    sqinet_copy(&r->client_addr2, &conn->log_addr2);
     r->client_ident = NULL;
     if (http->request->auth_user_request)
 	r->client_ident = authenticateUserRequestUsername(http->request->auth_user_request);
@@ -130,9 +132,9 @@ redirectStart(clientHttpRequest * http, RH * handler, void *data)
     r->handler = handler;
     r->data = data;
     cbdataLock(r->data);
-    if ((fqdn = fqdncache_gethostbyaddr(r->client_addr, 0)) == NULL)
+    if ((fqdn = fqdncache_gethostbyaddr6(&r->client_addr2, 0)) == NULL)
 	fqdn = dash_str;
-    xstrncpy(claddr, inet_ntoa(r->client_addr), 20);
+    (void) sqinet_ntoa(&r->client_addr2, claddr, sizeof(claddr), SQADDR_NONE);
     xstrncpy(myaddr, inet_ntoa(http->request->my_addr), 20);
     snprintf(buf, 8191, "%s %s/%s %s %s %s myip=%s myport=%d",
 	r->orig_url,
