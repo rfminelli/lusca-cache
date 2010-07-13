@@ -86,21 +86,13 @@ static MemPool * pool_client_info;
 static void
 clientdb_Init_Prefix(prefix_t *p, const sqaddr_t *s)
 {
-	struct in_addr a4;
-	struct in6_addr a6;
+	void *ptr;
+	int bitlen;
 
-	switch (sqinet_get_family(s)) {
-		case AF_INET:
-			a4 = sqinet_get_v4_inaddr(s, SQADDR_NONE);
-    			Init_Prefix(p, AF_INET, &a4, 32);
-			break;
-		case AF_INET6:
-			a6 = sqinet_get_v6_inaddr(s, SQADDR_NONE);
-    			Init_Prefix(p, AF_INET6, &a6, 128);
-			break;
-		default:
-			fatal("clientdb_Init_Prefix: invalid family?!\n");
-	}
+	bitlen = sqinet_get_bitlength(s);
+	ptr = sqinet_get_ipentry(s);
+
+	Init_Prefix(p, sqinet_get_family(s), ptr, bitlen);
 }
 
 static radix_node_t *
