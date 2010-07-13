@@ -932,3 +932,22 @@ sqinet_hash_host_key(const sqaddr_t *addr, unsigned int size)
 	return -1;
 }
 
+/*
+ * Return a pointer to the underlying storage for the address part.
+ * Maybe this should be an inline function?
+ */
+void *
+sqinet_get_ipentry(const sqaddr_t *addr)
+{
+	switch (addr->st.ss_family) {
+		case AF_INET:
+			return &(((struct sockaddr_in *) &addr->st)->sin_addr);
+			break;
+		case AF_INET6:
+			return &(((struct sockaddr_in6 *) &addr->st)->sin6_addr);
+			break;
+		default:
+			return NULL;
+	}
+	return NULL;
+}

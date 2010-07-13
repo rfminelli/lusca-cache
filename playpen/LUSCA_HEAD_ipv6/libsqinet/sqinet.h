@@ -50,8 +50,11 @@ extern int sqinet_assemble_rev(const sqaddr_t *s, char *buf, int len);
 
 static inline struct sockaddr * sqinet_get_entry(sqaddr_t *s) { return (struct sockaddr *) &(s->st); }
 static inline const struct sockaddr * sqinet_get_entry_ro(const sqaddr_t *s) { return (struct sockaddr *) &(s->st); }
+
 static inline int sqinet_get_family(const sqaddr_t *s) { return s->st.ss_family; }
+
 static inline int sqinet_get_length(const sqaddr_t *s) { if (s->st.ss_family == AF_INET) return sizeof(struct sockaddr_in); else return sizeof(struct sockaddr_in6); }
+static inline int sqinet_get_bitlength(const sqaddr_t *s) { if (s->st.ss_family == AF_INET) return 32; else if (s->st.ss_family == AF_INET6) return 128; else return 0; }
 static inline int sqinet_get_maxlength(const sqaddr_t *s) { return sizeof(s->st); }
 
 static inline int sqinet_copy(sqaddr_t *dst, const sqaddr_t *src) { *dst = *src; return 1; }
@@ -64,5 +67,7 @@ extern int sqinet_range_compare(const sqaddr_t *a, const sqaddr_t *b_start, cons
 extern int sqinet_host_is_netaddr(const sqaddr_t *a, const sqaddr_t *mask);
 
 extern unsigned int sqinet_hash_host_key(const sqaddr_t *a, unsigned int size);
+
+extern void * sqinet_get_ipentry(const sqaddr_t *s);
 
 #endif
