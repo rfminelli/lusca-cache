@@ -950,6 +950,7 @@ struct _AccessLogEntry {
 #if USE_SSL
 	const char *ssluser;
 #endif
+	int client_tos;
     } cache;
     struct {
 	char *request;
@@ -1016,6 +1017,7 @@ struct _clientHttpRequest {
     ushort delayAssignedPool;
     mem_node_ref nr;
     int is_modified;
+    int client_tos;
 };
 
 struct _ConnStateData {

@@ -2345,6 +2345,11 @@ DOC_START
 		>st	Request size including HTTP headers
 		st	Request+Reply size including HTTP headers
 		sn	Unique sequence number per log line entry
+                ct      The client-facing TOS set by ZPH/TOS-map rules -
+                        _NOT_ the TOS of the incoming connection itself.
+                        This value is an integer, not a hex value.
+                        It also defaults to "0" in the case where ZPH/TOS-map
+                        has not over-ridden the value.
 		%	a literal % character
 
 	The default formats available (which do not need re-defining) are:
