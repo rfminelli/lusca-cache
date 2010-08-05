@@ -35,6 +35,8 @@
 
 #include "squid.h"
 
+#include "../libsqurl/url.h"
+
 typedef struct _Countstr Countstr;
 typedef struct _htcpHeader htcpHeader;
 typedef struct _htcpDataHeader htcpDataHeader;
