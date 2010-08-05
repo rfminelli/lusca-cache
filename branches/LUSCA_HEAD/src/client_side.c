@@ -285,6 +285,7 @@ httpRequestLog(clientHttpRequest *http)
 	http->al.cache.code = http->log_type;
 	http->al.cache.msec = tvSubMsec(http->start, current_time);
 	http->al.cache.rq_size = http->req_sz;
+	http->al.cache.client_tos = http->client_tos;
 	if (request) {
 	    http->al.cache.rq_size += request->content_length;
 	    if (Config.onoff.log_mime_hdrs) {

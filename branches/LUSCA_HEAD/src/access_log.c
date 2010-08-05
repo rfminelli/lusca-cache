@@ -323,6 +323,8 @@ typedef enum {
 
     LFT_EXT_FRESHNESS,
 
+    LFT_CLIENT_TOS,
+
     LFT_PERCENT			/* special string cases for escaped chars */
 
 } logformat_bcode_t;
@@ -435,6 +437,8 @@ struct logformat_token_table_entry logformat_token_table[] =
     {"ea", LFT_EXT_LOG},
 
     {"ef", LFT_EXT_FRESHNESS},
+
+    {"ct", LFT_CLIENT_TOS},
 
     {"%", LFT_PERCENT},
 
@@ -721,6 +725,11 @@ accessLogCustom(AccessLogEntry * al, customlog * log)
 
 	    quote = 1;
 	    break;
+
+        case LFT_CLIENT_TOS:
+            outint = al->cache.client_tos;
+            doint = 1;
+            break;
 
 	case LFT_PERCENT:
 	    out = "%";
