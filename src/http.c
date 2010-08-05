@@ -41,6 +41,8 @@
 #include "squid.h"
 #include "pconn.h"
 
+#include "../libsqurl/url.h"
+
 static const char *const crlf = "\r\n";
 
 static CWCB httpSendComplete;
