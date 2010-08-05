@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
+#include <sys/types.h>
 
 #include "../libcore/varargs.h"
 #include "../libcore/tools.h"
