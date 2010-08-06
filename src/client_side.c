@@ -1434,6 +1434,7 @@ clientSetClientTOS(ConnStateData *conn, clientHttpRequest *http)
 		break;
 	    case ZPH_TOS:
 		commSetTos(fd, tos);
+		http->client_tos = tos;
 		break;
 	    case ZPH_PRIORITY:
 		commSetSocketPriority(fd, tos);
