@@ -315,6 +315,19 @@ errorAppendEntry(StoreEntry * entry, ErrorState * err)
 	    err->request->flags.reset_tcp = 1;
 	}
     }
+
+    /*
+     *  This is a temporary(!) hack. If we get here, an error page has
+     * been created for some error condition. This global option will
+     * set the reset_tcp flag for all requests.
+     */
+    if (Config.onoff.tcp_reset_on_all_errors) {
+	if (err->request) {
+	    debug(4, 2) ("RSTing this reply: tcp_reset_on_all_errors was set!\n");
+	    err->request->flags.reset_tcp = 1;
+        }
+    }
+
     storeLockObject(entry);
     storeBuffer(entry);
     rep = errorBuildReply(err);
