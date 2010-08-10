@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/time.h>
+#include <sys/stat.h>
 #include <strings.h>
 #include <string.h>
 #include <regex.h>
@@ -62,7 +63,6 @@ re_list_free(void)
 {
 	int i;
 	for (i = 0; i < re_list.count; i++) {
-		fprintf(stderr, "[%d]: free\n", i);
 		regfree(&re_list.r[i].re);
 		bzero(&re_list.r[i], sizeof(regex_entry_t));
 	}
@@ -153,9 +153,6 @@ load_regex_file(const char *file)
 		/* Trim trailing \r\n's */
 		trim_trailing_crlf(buf);
 		n = regex_parse_line(buf, linenum);
-		if (n > 0) {
-			printf("[%d]: %s\n", linenum, buf);
-		}
 	}
 
 	fclose(fp);
@@ -191,6 +188,8 @@ main(int argc, const char *argv[])
 	char buf[HELPERBUFSZ];
 	time_t ts;
 	int r;
+	struct stat sb;
+	time_t last_mtime = 0;
 
 	if (argc < 2) {
 		printf("%s: <config file>\n", argv[0]);
@@ -203,13 +202,26 @@ main(int argc, const char *argv[])
 	(void) setvbuf(stderr, NULL, _IONBF, 0);
 
 	/* initial load */
+	if (stat(fn, &sb) < 0) {
+		perror("stat");
+		exit(127);
+	}
+	last_mtime = sb.st_mtimespec.tv_sec;
+
 	load_regex_file(fn);
 	ts = time(NULL);
 
 	while (!feof(stdin)) {
 		if (time(NULL) - ts > RELOAD_TIME) {
+			fprintf(stderr, "re-check\n");
 			ts = time(NULL);
-			check_file_update(fn, NULL);
+			/* re-stat the file */
+			if (stat(fn, &sb) < 0) {
+				perror("stat");
+			} else if (sb.st_mtimespec.tv_sec > last_mtime) {
+				last_mtime = sb.st_mtimespec.tv_sec;
+				check_file_update(fn, NULL);
+			}
 		}
 
 		if (! fgets(buf, HELPERBUFSZ, stdin))
@@ -221,9 +233,9 @@ main(int argc, const char *argv[])
 		if (r > 0) {
 			fprintf(stderr, "HIT: line %d; rule %s\n",
 			    re_list.r[r].linenum, re_list.r[r].entry);
-			printf("YES\n");
+			printf("OK\n");
 		} else {
-			printf("NO\n");
+			printf("ERR\n");
 		}
 	}
 	re_list_free();	
