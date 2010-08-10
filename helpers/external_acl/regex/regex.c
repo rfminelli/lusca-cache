@@ -21,6 +21,8 @@
 #define	MAXLINE		8192
 #define	RELOAD_TIME	5
 
+static int debug = 0;
+
 struct _regex_entry {
 	int linenum;
 	const char *entry;
@@ -79,6 +81,7 @@ regex_init(regex_entry_t *r, const char *entry, int linenum, int re_flags)
 	r->linenum = linenum;
 	r->re_flags = re_flags;
 
+	if (debug) fprintf(stderr, "compiling: '%s'\n", entry);
 	i = regcomp(&r->re, entry, re_flags);
 	if (i) {	/* error condition */ 
 		perror("regcomp");	/* XXX should output i instead */
@@ -172,9 +175,10 @@ re_lookup(const char *url)
 	int r, i;
 
 	for (i = 0; i < re_list.count; i++) {
+		if (debug) fprintf(stderr, "checking '%s' against '%s'\n", url, re_list.r[i].entry);
 		r = regexec(&re_list.r[i].re, url, 0, NULL, 0);
 		if (r == 0) {	/* Success */
-			return r;
+			return i;
 		}
 	}
 	return 0;
@@ -213,7 +217,7 @@ main(int argc, const char *argv[])
 
 	while (!feof(stdin)) {
 		if (time(NULL) - ts > RELOAD_TIME) {
-			fprintf(stderr, "re-check\n");
+			if (debug) fprintf(stderr, "re-check\n");
 			ts = time(NULL);
 			/* re-stat the file */
 			if (stat(fn, &sb) < 0) {
@@ -227,11 +231,12 @@ main(int argc, const char *argv[])
 		if (! fgets(buf, HELPERBUFSZ, stdin))
 			break;
 		trim_trailing_crlf(buf);
-		fprintf(stderr, "read: %s\n", buf);
+		if (debug) fprintf(stderr, "read: %s\n", buf);
 		/* XXX should break out JUST the URL here! */
+		/* XXX and the URL should be unescaped and normalised properly */
 		r = re_lookup(buf);
 		if (r > 0) {
-			fprintf(stderr, "HIT: line %d; rule %s\n",
+			if (debug) fprintf(stderr, "HIT: line %d; rule %s\n",
 			    re_list.r[r].linenum, re_list.r[r].entry);
 			printf("OK\n");
 		} else {
