@@ -5218,7 +5218,7 @@ DOC_END
 NAME: blank_error_pages
 TYPE: onoff
 LOC: Config.onoff.blank_error_pages
-DEFAULT: on
+DEFAULT: off
 DOC_START
 	This option forces all error pages to simply be blank.
 
