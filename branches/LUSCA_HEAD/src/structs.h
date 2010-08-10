@@ -680,6 +680,7 @@ struct _SquidConfig {
 	int download_fastest_client_speed;
 	int log_http_violations;
 	int tcp_reset_on_all_errors;
+	int blank_error_pages;
     } onoff;
     int collapsed_forwarding_timeout;
     acl *aclList;

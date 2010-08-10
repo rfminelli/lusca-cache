@@ -663,7 +663,10 @@ errorBuildReply(ErrorState * err)
 	 */
 	httpHeaderPutStrf(&rep->header, HDR_X_SQUID_ERROR, "%s %d",
 	    name, err->xerrno);
-	httpBodySet(&rep->body, &content);
+	/* Only append the body if we need to */
+	/* XXX this shouldn't be done here? */
+	if (! Config.onoff.blank_error_pages)
+		httpBodySet(&rep->body, &content);
 	/* do not memBufClean() the content, it was absorbed by httpBody */
     }
     return rep;
