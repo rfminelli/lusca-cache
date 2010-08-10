@@ -652,7 +652,14 @@ errorBuildReply(ErrorState * err)
 	httpHeaderPutStrf(&rep->header, HDR_X_SQUID_ERROR, "%d %s", err->http_status, "Access Denied");
     } else {
 	MemBuf content = errorBuildContent(err);
-	httpReplySetHeaders(rep, err->http_status, NULL, "text/html", content.size, -1, -1);
+	size_t content_length;
+
+	if (Config.onoff.blank_error_pages)
+		content_length = 0;
+	else
+		content_length = content.size;
+
+	httpReplySetHeaders(rep, err->http_status, NULL, "text/html", content_length, -1, -1);
 	/*
 	 * include some information for downstream caches. Implicit
 	 * replaceable content. This isn't quite sufficient. xerrno is not
