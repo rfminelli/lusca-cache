@@ -3,11 +3,15 @@
  */
 
 /*
- * This is a hackish, not-quite-finished regex external ACL helper.
- * Don't even try to use it in production yet.
- * -adrian
+ * This external_acl helper is designed for evaluating the throughput of
+ * regular expression rule matching.
+ *
+ * It takes a URL only on STDIN and returns ERR if the URL matches one of
+ * the regex rules; it returns OK otherwise.
+ *
+ * It is not designed for general production use.
+ *   -- adrian
  */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -238,9 +242,11 @@ main(int argc, const char *argv[])
 		if (r > 0) {
 			if (debug) fprintf(stderr, "HIT: line %d; rule %s\n",
 			    re_list.r[r].linenum, re_list.r[r].entry);
-			printf("OK\n");
+			printf("ERR message=line%s%d log=line%s%d\n",
+			    "%20", re_list.r[r].linenum,
+			    "%20", re_list.r[r].linenum);
 		} else {
-			printf("ERR\n");
+			printf("OK\n");
 		}
 	}
 	re_list_free();	
