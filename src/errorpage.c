@@ -672,7 +672,9 @@ errorBuildReply(ErrorState * err)
 	    name, err->xerrno);
 	/* Only append the body if we need to */
 	/* XXX this shouldn't be done here? */
-	if (! Config.onoff.blank_error_pages)
+	if (Config.onoff.blank_error_pages)
+		memBufClean(&content);
+	else
 		httpBodySet(&rep->body, &content);
 	/* do not memBufClean() the content, it was absorbed by httpBody */
     }
