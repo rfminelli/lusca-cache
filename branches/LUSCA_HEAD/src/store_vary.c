@@ -1,5 +1,6 @@
 
 #include "squid.h"
+#include "store_vary.h"
 
 typedef struct {
     StoreEntry *oe;
