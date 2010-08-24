@@ -32,6 +32,7 @@ connStateFree(int fd, void *data)
     pconnHistCount(0, connState->nrequests);
     if (connState->pinning.fd >= 0)
 	comm_close(connState->pinning.fd);
+    cbdataUnlock(connState->port);
     cbdataFree(connState);
     clientside_num_conns--;
 #ifdef _SQUID_LINUX_
