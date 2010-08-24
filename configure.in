@@ -294,6 +294,26 @@ AC_ARG_WITH(valgrind-debug,
   fi
 ])
 
+AC_ARG_ENABLE(cbdata-debug,
+[ --enable-cbdata-debug	Enable cbdata debugging (note slows proxy performance],
+[ case $enableval in
+  yes)
+	cbdata_debug=1
+	;;
+  no)
+	cbdata_debug=
+	;;
+  *)
+	cbdata_debug=
+	;;
+  esac
+  if test $cbdata_debug; then
+	AC_DEFINE(CBDATA_DEBUG, 1, [callback data debugging support])
+	AC_DEFINE(HASHED_CBDATA, 1, [use hashed cbdata support (required for debugging)])
+	echo "Valgrind debug support enabled"
+  fi
+])
+
 AC_ARG_ENABLE(mempool-debug,
 [  --enable-mempool-debug  Include MemPool debug verifications])
 if test "$enable_mempool_debug" = yes; then
