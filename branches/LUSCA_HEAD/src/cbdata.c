@@ -66,7 +66,6 @@
 
 #include "squid.h"
 
-
 static OBJH cbdataDump;
 
 void
@@ -78,9 +77,30 @@ cbdataLocalInit(void)
 	cbdataDump, 0, 1);
 }
 
+#if HASHED_CBDATA
+static void
+cbdataDump(StoreEntry * sentry)
+{
+    cbdata *n;
+
+    hash_first(cbdata_htable);
+    while ((n = (cbdata *) hash_next(cbdata_htable))) {
+#if CBDATA_DEBUG
+        storeAppendPrintf(sentry, "cbdata=%p	key=%p	type=%s	locks=%d	valid=%d	%s:%d\n",
+	  n, n->hash.key, cbdata_index[n->type].pool->label, n->locks, n->valid, n->file, n->line);
+#else
+        storeAppendPrintf(sentry, "cbdata=%p	key=%p	type=%d	locks=%d	valid=%d\n",
+	  n, n->hash.key, cbdata_index[n->type].pool->label, n->locks, n->valid);
+#endif
+    }
+
+    storeAppendPrintf(sentry, "%d cbdata entries\n", cbdataCount);
+}
+#else
 static void
 cbdataDump(StoreEntry * sentry)
 {
     storeAppendPrintf(sentry, "%d cbdata entries\n", cbdataCount);
     storeAppendPrintf(sentry, "see also memory pools section\n");
 }
+#endif
