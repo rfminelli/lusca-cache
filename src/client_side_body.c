@@ -27,6 +27,27 @@ clientEatRequestBodyHandler(char *buf, ssize_t size, void *data)
     }
 }
 
+/*!
+ * @function
+ * 	clientEatRequestBody
+ *
+ * @abstract
+ * 	Consume and discard request body data from the given
+ * 	client connection.
+ * 
+ * @discussion
+ * 	This is called to eat all the request body data from a
+ * 	client connection. This is used to begin aborting a
+ * 	http request w/ a request body.
+ *
+ * 	The eat body request handler will recursively call
+ * 	itself until all incoming data is consumed. Subsequent
+ * 	data which arrives on the client connection will be fed to
+ * 	clientProcessBody() which will continue to consume
+ * 	data until the end of the request.
+ *
+ * @param	http	client HTTP request to eat the request body of
+ */
 void
 clientEatRequestBody(clientHttpRequest * http)
 {
@@ -40,6 +61,30 @@ clientEatRequestBody(clientHttpRequest * http)
 }
 
 /* Called by clientReadRequest to process body content */
+/*!
+ * @function
+ * 	clientProcessBody
+ *
+ * @abstract
+ * 	Handle incoming request body data; call the request body
+ * 	callback previously configured
+ *
+ * @discussion
+ *
+ *	clientProcessBody() assumes that conn->body.cbdata has been
+ *	set and has been cbdataRef()'ed. It will derefence the pointer
+ *	once the copying has completed and call the relevant callback
+ *	if needed.
+ *
+ * 	clientProcessBody() assumes there is -some- data available.
+ * 	It simply ignores processing if called with conn->in.offset == 0.
+ * 	This means that conn->body.cbdata won't be unlocked. Calling
+ * 	this function with conn.in.offset == 0 and not subsequently
+ * 	deref'ing the cbdata will thus cause conn->body.cbdata
+ * 	(likely a clientHttpRequest) to leak.
+ *
+ * @param	conn	The connection to handle request body data for
+ */
 void
 clientProcessBody(ConnStateData * conn)
 {
