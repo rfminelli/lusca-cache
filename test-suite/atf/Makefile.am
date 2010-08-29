@@ -54,6 +54,11 @@ lib_Vector_SOURCES= lib_Vector.c core.c
 libsqurl_SOURCES= libsqurl.c core.c
 url_benchmark_SOURCES= url_benchmark.c core.c
 
+check-local: check-atf
+
+check-atf:
+	env PATH=$$PATH:$(ATF_BINDIR) $(ATF_BINDIR)/atf-run | $(ATF_BINDIR)/atf-report
+
 #check: libhttp lib_Vector libsqurl
 #	@env PATH=$$PATH:$(ATF_BINDIR) $(ATF_BINDIR)/atf-run | $(ATF_BINDIR)/atf-report
 
