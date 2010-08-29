@@ -762,7 +762,7 @@ AC_ARG_WITH(openssl,
 if test -n "$USE_OPENSSL"; then
   echo "Using OpenSSL MD5 implementation"
   AC_DEFINE(USE_OPENSSL, 1, [Define this to make use of the OpenSSL libraries for
-	MD5 calculation rather than Squid's own MD5 implementation
+	MD5 calculation rather than Squids own MD5 implementation
 	or if building with SSL encryption (USE_SSL)])
   if test -z "$SSLLIB"; then
     SSLLIB="-lcrypto" # for MD5 routines
