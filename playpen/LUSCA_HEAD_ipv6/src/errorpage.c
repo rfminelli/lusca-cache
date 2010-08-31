@@ -328,6 +328,19 @@ errorAppendEntry(StoreEntry * entry, ErrorState * err)
 	    err->request->flags.reset_tcp = 1;
 	}
     }
+
+    /*
+     *  This is a temporary(!) hack. If we get here, an error page has
+     * been created for some error condition. This global option will
+     * set the reset_tcp flag for all requests.
+     */
+    if (Config.onoff.tcp_reset_on_all_errors) {
+	if (err->request) {
+	    debug(4, 2) ("RSTing this reply: tcp_reset_on_all_errors was set!\n");
+	    err->request->flags.reset_tcp = 1;
+        }
+    }
+
     storeLockObject(entry);
     storeBuffer(entry);
     rep = errorBuildReply(err);
@@ -655,7 +668,14 @@ errorBuildReply(ErrorState * err)
 	httpHeaderPutStrf(&rep->header, HDR_X_SQUID_ERROR, "%d %s", err->http_status, "Access Denied");
     } else {
 	MemBuf content = errorBuildContent(err);
-	httpReplySetHeaders(rep, err->http_status, NULL, "text/html", content.size, -1, -1);
+	size_t content_length;
+
+	if (Config.onoff.blank_error_pages)
+		content_length = 0;
+	else
+		content_length = content.size;
+
+	httpReplySetHeaders(rep, err->http_status, NULL, "text/html", content_length, -1, -1);
 	/*
 	 * include some information for downstream caches. Implicit
 	 * replaceable content. This isn't quite sufficient. xerrno is not
@@ -666,7 +686,12 @@ errorBuildReply(ErrorState * err)
 	 */
 	httpHeaderPutStrf(&rep->header, HDR_X_SQUID_ERROR, "%s %d",
 	    name, err->xerrno);
-	httpBodySet(&rep->body, &content);
+	/* Only append the body if we need to */
+	/* XXX this shouldn't be done here? */
+	if (Config.onoff.blank_error_pages)
+		memBufClean(&content);
+	else
+		httpBodySet(&rep->body, &content);
 	/* do not memBufClean() the content, it was absorbed by httpBody */
     }
     return rep;

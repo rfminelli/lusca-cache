@@ -35,6 +35,7 @@ connStateFree(int fd, void *data)
     sqinet_done(&connState->me2);
     sqinet_done(&connState->peer2);
     sqinet_done(&connState->log_addr2);
+    cbdataUnlock(connState->port);
     cbdataFree(connState);
     clientside_num_conns--;
 #ifdef _SQUID_LINUX_

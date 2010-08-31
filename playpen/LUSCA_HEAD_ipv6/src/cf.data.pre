@@ -2345,6 +2345,11 @@ DOC_START
 		>st	Request size including HTTP headers
 		st	Request+Reply size including HTTP headers
 		sn	Unique sequence number per log line entry
+                ct      The client-facing TOS set by ZPH/TOS-map rules -
+                        _NOT_ the TOS of the incoming connection itself.
+                        This value is an integer, not a hex value.
+                        It also defaults to "0" in the case where ZPH/TOS-map
+                        has not over-ridden the value.
 		%	a literal % character
 
 	The default formats available (which do not need re-defining) are:
@@ -5197,6 +5202,27 @@ DOC_START
 	the error template files (found in the "errors" directory).
 	Wherever you want the 'err_html_text' line to appear,
 	insert a %L tag in the error template file.
+DOC_END
+
+NAME: tcp_reset_on_all_errors
+TYPE: onoff
+LOC: Config.onoff.tcp_reset_on_all_errors
+DEFAULT: off
+DOC_START
+	This option forces a client-side connection to be forcibly
+	closed in all instances where an error page would be returned.
+
+	It defaults to "off".
+DOC_END
+
+NAME: blank_error_pages
+TYPE: onoff
+LOC: Config.onoff.blank_error_pages
+DEFAULT: off
+DOC_START
+	This option forces all error pages to simply be blank.
+
+	It defaults to "off".
 DOC_END
 
 NAME: deny_info

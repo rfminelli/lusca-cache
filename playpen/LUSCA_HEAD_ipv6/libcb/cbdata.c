@@ -97,38 +97,14 @@
 
 int cbdataCount = 0;
 
-typedef struct _cbdata {
-#if HASHED_CBDATA
-    hash_link hash;
-#endif
-    int valid;
-    int locks;
-    int type;
-#if CBDATA_DEBUG
-    const char *file;
-    int line;
-#endif
-    void *y;			/* cookie used while debugging */
-#if !HASHED_CBDATA
-    union {
-	void *pointer;
-	double double_float;
-	int integer;
-    } data;
-#endif
-} cbdata;
-
 #if HASHED_CBDATA
 static MemPool *cbdata_pool = NULL;
-static hash_table *cbdata_htable = NULL;
+hash_table *cbdata_htable = NULL;
 static HASHCMP cbdata_cmp;
 static HASHHASH cbdata_hash;
 #endif
 
-struct {
-    MemPool *pool;
-    FREE *free_func;
-}     *cbdata_index = NULL;
+struct cbdata_index_struct *cbdata_index = NULL;
 int cbdata_types = 0;
 
 #if HASHED_CBDATA

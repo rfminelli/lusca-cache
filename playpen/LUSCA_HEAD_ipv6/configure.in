@@ -294,6 +294,26 @@ AC_ARG_WITH(valgrind-debug,
   fi
 ])
 
+AC_ARG_ENABLE(cbdata-debug,
+[ --enable-cbdata-debug	Enable cbdata debugging (note slows proxy performance],
+[ case $enableval in
+  yes)
+	cbdata_debug=1
+	;;
+  no)
+	cbdata_debug=
+	;;
+  *)
+	cbdata_debug=
+	;;
+  esac
+  if test $cbdata_debug; then
+	AC_DEFINE(CBDATA_DEBUG, 1, [callback data debugging support])
+	AC_DEFINE(HASHED_CBDATA, 1, [use hashed cbdata support (required for debugging)])
+	echo "Valgrind debug support enabled"
+  fi
+])
+
 AC_ARG_ENABLE(mempool-debug,
 [  --enable-mempool-debug  Include MemPool debug verifications])
 if test "$enable_mempool_debug" = yes; then
@@ -715,6 +735,32 @@ AC_ARG_WITH(system-md5,
   esac
 ])
 
+dnl ATF may be installed in a different directory
+ATF_PREFIX=""
+AM_CONDITIONAL(ENABLE_ATF, false)
+AC_ARG_ENABLE(atf,
+[  --enable-atf[=prefix]
+			Enable compilation of test cases using the NetBSD
+			testing framework.],
+[
+  case "$enable_atf" in
+   yes)
+    AM_CONDITIONAL(ENABLE_ATF, true)
+    USE_ATF=1
+    ATF_PREFIX="/usr"
+    ;;
+   no)
+    USE ATF=0
+    ;;
+   *)
+    AM_CONDITIONAL(ENABLE_ATF, true)
+    USE_ATF=1
+    ATF_PREFIX="$enable_atf"
+   ;;
+  esac
+])
+AC_SUBST(ATF_PREFIX)
+
 dnl User may specify OpenSSL is needed from a non-standard location
 AC_ARG_WITH(openssl,
 [  --with-openssl[=prefix]
@@ -742,7 +788,7 @@ AC_ARG_WITH(openssl,
 if test -n "$USE_OPENSSL"; then
   echo "Using OpenSSL MD5 implementation"
   AC_DEFINE(USE_OPENSSL, 1, [Define this to make use of the OpenSSL libraries for
-	MD5 calculation rather than Squid's own MD5 implementation
+	MD5 calculation rather than Squids own MD5 implementation
 	or if building with SSL encryption (USE_SSL)])
   if test -z "$SSLLIB"; then
     SSLLIB="-lcrypto" # for MD5 routines
@@ -3352,5 +3398,7 @@ AC_OUTPUT([\
 	helpers/external_acl/session/Makefile \
 	helpers/external_acl/unix_group/Makefile \
 	helpers/external_acl/wbinfo_group/Makefile \
+	test-suite/Makefile \
+	test-suite/atf/Makefile \
 	tools/Makefile \
 ])

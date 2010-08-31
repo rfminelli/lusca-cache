@@ -846,6 +846,7 @@ storeComplete(StoreEntry * e)
 }
 
 /* Aborted transfer into the local cache. */
+/* This takes ownership of ErrorState *err */
 void
 storeRequestFailed(StoreEntry * e, ErrorState * err)
 {
@@ -860,10 +861,13 @@ storeRequestFailed(StoreEntry * e, ErrorState * err)
     if (e->mem_obj->inmem_hi == 0) {
 	assert(err);
 	errorAppendEntry(e, err);
+	err = NULL;
     } else {
 	EBIT_SET(e->flags, ENTRY_ABORTED);
 	EBIT_CLR(e->flags, ENTRY_FWD_HDR_WAIT);
     }
+    if (err)
+	errorStateFree(err);	
     e->store_status = STORE_OK;
     mem->object_sz = mem->inmem_hi;
     /* Notify the client side */

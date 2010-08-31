@@ -679,6 +679,8 @@ struct _SquidConfig {
 	int load_check_stcreate;
 	int download_fastest_client_speed;
 	int log_http_violations;
+	int tcp_reset_on_all_errors;
+	int blank_error_pages;
     } onoff;
     int collapsed_forwarding_timeout;
     acl *aclList;
@@ -950,6 +952,7 @@ struct _AccessLogEntry {
 #if USE_SSL
 	const char *ssluser;
 #endif
+	int client_tos;
     } cache;
     struct {
 	char *request;
@@ -1016,6 +1019,7 @@ struct _clientHttpRequest {
     ushort delayAssignedPool;
     mem_node_ref nr;
     int is_modified;
+    int client_tos;
 };
 
 struct _ConnStateData {

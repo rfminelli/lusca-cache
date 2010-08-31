@@ -35,6 +35,8 @@
 
 #include "squid.h"
 
+#include "../libsqurl/url.h"
+
 typedef struct {
     StoreEntry *entry;
     store_client *sc;
