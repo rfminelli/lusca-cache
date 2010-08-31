@@ -47,8 +47,8 @@ struct _pconn {
 
 static PF pconnRead;
 static PF pconnTimeout;
-static hash_link *pconnLookup(const char *peer, u_short port, const char *domain, struct in_addr *client_address, u_short client_port);
-static int pconnKey(char *buf, const char *host, u_short port, const char *domain, struct in_addr *client_address, u_short client_port);
+static hash_link * pconnLookup(const char *peer, u_short port, const char *domain, sqaddr_t *client_address);
+static int pconnKey(char *buf, const char *host, u_short port, const char *domain, sqaddr_t *client_address);
 static hash_table *table = NULL;
 static struct _pconn *pconnNew(const char *key);
 static void pconnDelete(struct _pconn *p);
@@ -57,20 +57,28 @@ static OBJH pconnHistDump;
 static MemPool *pconn_data_pool = NULL;
 static MemPool *pconn_fds_pool = NULL;
 
-#define	PCONN_KEYLEN	(SQUIDHOSTNAMELEN + 30)
+#define	PCONN_KEYLEN	(MAX_IPSTRLEN + SQUIDHOSTNAMELEN + 30)
 
 static int
 pconnKey(char *buf, const char *host, u_short port, const char *domain,
-    struct in_addr *client_address, u_short client_port)
+    sqaddr_t *client_address)
 {
+    char cbuf[MAX_IPSTRLEN];
+    int client_port = 0;
+
+    if (client_address) {
+        client_port = sqinet_get_port(client_address);
+        (void) sqinet_ntoa(client_address, cbuf, MAX_IPSTRLEN, SQADDR_NONE);
+    }
+
     if (domain && client_address)
 	return snprintf(buf, PCONN_KEYLEN, "%s.%d:%s.%d/%s", host, (int) port,
-	    inet_ntoa(*client_address), (int) client_port, domain);
+	    cbuf, client_port, domain);
     else if (domain && (!client_address))
 	return snprintf(buf, PCONN_KEYLEN, "%s.%d/%s", host, (int) port, domain);
     else if ((!domain) && client_address)
 	return snprintf(buf, PCONN_KEYLEN, "%s.%d:%s.%d", host, (int) port,
-	    inet_ntoa(*client_address), (int) client_port);
+	    cbuf, client_port);
     else
 	return snprintf(buf, PCONN_KEYLEN, "%s:%d", host, (int) port);
 }
@@ -193,7 +201,7 @@ pconnInit(void)
 }
 
 void
-pconnPush(int fd, const char *host, u_short port, const char *domain, struct in_addr *client_address, u_short client_port)
+pconnPush6(int fd, const char *host, u_short port, const char *domain, sqaddr_t *client_address)
 {
     struct _pconn *p;
     int *old;
@@ -208,7 +216,7 @@ pconnPush(int fd, const char *host, u_short port, const char *domain, struct in_
 	return;
     }
     assert(table != NULL);
-    pconnKey(key, host, port, domain, client_address, client_port);
+    pconnKey(key, host, port, domain, client_address);
     p = (struct _pconn *) hash_lookup(table, key);
     if (p == NULL)
 	p = pconnNew(key);
@@ -231,14 +239,26 @@ pconnPush(int fd, const char *host, u_short port, const char *domain, struct in_
     debug(48, 3) ("pconnPush: pushed FD %d for %s\n", fd, key);
 }
 
+void
+pconnPush(int fd, const char *host, u_short port, const char *domain, struct in_addr *client_address, u_short client_port)
+{
+	sqaddr_t a;
+
+	sqinet_init(&a);
+	sqinet_set_v4_inaddr(&a, client_address);
+	sqinet_set_v4_port(&a, client_port, SQADDR_ASSERT_IS_V4);
+	pconnPush6(fd, host, port, domain, &a);
+	sqinet_done(&a);
+}
+
 int
-pconnPop(const char *host, u_short port, const char *domain, struct in_addr *client_address, u_short client_port, int *idle)
+pconnPop6(const char *host, u_short port, const char *domain, sqaddr_t *client_address, int *idle)
 {
     struct _pconn *p;
     hash_link *hptr;
     int fd = -1;
     assert(table != NULL);
-    hptr = pconnLookup(host, port, domain, client_address, client_port);
+    hptr = pconnLookup(host, port, domain, client_address);
     if (hptr != NULL) {
 	p = (struct _pconn *) hptr;
 	assert(p->nfds > 0);
@@ -252,12 +272,25 @@ pconnPop(const char *host, u_short port, const char *domain, struct in_addr *cli
     return fd;
 }
 
+int
+pconnPop(const char *host, u_short port, const char *domain, struct in_addr *client_address, u_short client_port, int *idle)
+{
+	sqaddr_t a;
+	int r;
+
+	sqinet_init(&a);
+	sqinet_set_v4_inaddr(&a, client_address);
+	sqinet_set_v4_port(&a, client_port, SQADDR_ASSERT_IS_V4);
+	r = pconnPop6(host, port, domain, &a, idle);
+	sqinet_done(&a);
+	return r;
+}
+
 static hash_link *
-pconnLookup(const char *peer, u_short port, const char *domain, struct in_addr *client_address, u_short client_port)
+pconnLookup(const char *peer, u_short port, const char *domain, sqaddr_t *client_address)
 {
     LOCAL_ARRAY(char, key, PCONN_KEYLEN);
     assert(table != NULL);
-    pconnKey(key, peer, port, domain, client_address, client_port);
+    pconnKey(key, peer, port, domain, client_address);
     return hash_lookup(table, key);
 }
-
