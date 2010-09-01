@@ -2964,9 +2964,13 @@ static void
 parse_http_port_specification(http_port_list * s, char *token)
 {
     char *host = NULL;
+#if NOTYET
     const struct hostent *hp;
+#endif
     unsigned short port = 0;
     char *t;
+
+    sqinet_init(&s->ss);
     s->name = xstrdup(token);
     if ((t = strchr(token, ':'))) {
 	/* host:port */
@@ -2979,17 +2983,22 @@ parse_http_port_specification(http_port_list * s, char *token)
     }
     if (port == 0)
 	self_destruct();
-    s->s.sin_port = htons(port);
-    if (NULL == host)
-	SetAnyAddr(&s->s.sin_addr);
-    else if (1 == safe_inet_addr(host, &s->s.sin_addr))
+    if (NULL == host) {			/* Default this to v4 for now, preserves behaviour */
+	sqinet_set_family(&s->ss, AF_INET);
+	sqinet_set_anyaddr(&s->ss);
+    } else if (1 == sqinet_aton(&s->ss, host, SQATON_PASSIVE)) {
 	(void) 0;
-    else if ((hp = gethostbyname(host))) {
+#warning This needs to be ipv6-ified
+#if NOTYET		/* This should be eventually added back -adrian */
+    } else if ((hp = gethostbyname(host))) {
 	/* dont use ipcache */
 	s->s.sin_addr = inaddrFromHostent(hp);
 	s->defaultsite = xstrdup(host);
+#endif
     } else
 	self_destruct();
+
+    sqinet_set_port(&s->ss, port, SQADDR_NONE);
 }
 
 static void
@@ -3103,10 +3112,13 @@ parse_http_port_list(http_port_list ** head)
 static void
 dump_generic_http_port(StoreEntry * e, const char *n, const http_port_list * s)
 {
+    char cbuf[MAX_IPSTRLEN];
+
+    (void) sqinet_ntoa(&s->ss, cbuf, MAX_IPSTRLEN, SQADDR_NONE);
     storeAppendPrintf(e, "%s %s:%d",
 	n,
-	inet_ntoa(s->s.sin_addr),
-	ntohs(s->s.sin_port));
+        cbuf,
+	sqinet_get_port(&s->ss));
     if (s->transparent)
 	storeAppendPrintf(e, " transparent");
     if (s->accel)

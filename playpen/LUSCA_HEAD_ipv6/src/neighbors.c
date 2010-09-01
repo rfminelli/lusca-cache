@@ -394,7 +394,7 @@ neighbors_init(void)
 	    if (0 != strcmp(this->host, me))
 		continue;
 	    for (s = Config.Sockaddr.http; s; s = s->next) {
-		if (this->http_port != ntohs(s->s.sin_port))
+		if (this->http_port != sqinet_get_port(&s->ss))
 		    continue;
 		debug(15, 1) ("WARNING: Peer looks like this host\n");
 		debug(15, 1) ("         Ignoring %s %s/%d/%d\n",

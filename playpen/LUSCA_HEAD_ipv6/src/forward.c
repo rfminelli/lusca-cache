@@ -625,6 +625,7 @@ fwdConnectStart(void *data)
     if (fs->peer && fs->peer->options.no_tproxy)
 	do_tproxy = 0;
     if (fd == -1 && fwdState->request->flags.tproxy && do_tproxy)
+	/* Why is the client_port 0? Make sure you maintain this when you convert it to ipv6 -adrian */
 	fd = pconnPop(name, port, domain, &fwdState->request->client_addr, 0, NULL);
     if (fd == -1) {
 	fd = pconnPop(name, port, domain, NULL, 0, &idle);

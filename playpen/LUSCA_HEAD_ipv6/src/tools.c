@@ -491,13 +491,19 @@ getMyHostname(void)
 {
     LOCAL_ARRAY(char, host, SQUIDHOSTNAMELEN + 1);
     static int present = 0;
+#if NOTYET
     const struct hostent *h = NULL;
     struct in_addr sa;
+#endif
     if (Config.visibleHostname != NULL)
 	return Config.visibleHostname;
     if (present)
 	return host;
     host[0] = '\0';
+
+    /* This all needs to be rewritten for IPv6-ness once the dust settles -adrian */
+#warning This needs to be IPv6-ified
+#if NOTYET
     SetAnyAddr(&sa);
     if (Config.Sockaddr.http && IsAnyAddr(&sa))
 	memcpy(&sa, &Config.Sockaddr.http->s.sin_addr, sizeof(sa));
@@ -544,6 +550,7 @@ getMyHostname(void)
 	if (strchr(host, '.'))
 	    return host;
     }
+#endif
     if (opt_send_signal == -1)
 	debug(50, 1) ("Could not determine fully qualified hostname.  Please set 'visible_hostname'\n");
     if (host[0])
@@ -1079,10 +1086,10 @@ int
 getMyPort(void)
 {
     if (Config.Sockaddr.http)
-	return ntohs(Config.Sockaddr.http->s.sin_port);
+	return sqinet_get_port(&Config.Sockaddr.http->ss);
 #if USE_SSL
     if (Config.Sockaddr.https)
-	return ntohs(Config.Sockaddr.https->http.s.sin_port);
+	return sqinet_get_port(&Config.Sockaddr.https->http.ss);
 #endif
     fatal("No port defined");
     return 0;			/* NOT REACHED */
