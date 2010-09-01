@@ -244,11 +244,14 @@ pconnPush(int fd, const char *host, u_short port, const char *domain, struct in_
 {
 	sqaddr_t a;
 
-	sqinet_init(&a);
-	sqinet_set_v4_inaddr(&a, client_address);
-	sqinet_set_v4_port(&a, client_port, SQADDR_ASSERT_IS_V4);
-	pconnPush6(fd, host, port, domain, &a);
-	sqinet_done(&a);
+	if (client_address) {
+		sqinet_init(&a);
+		sqinet_set_v4_inaddr(&a, client_address);
+		sqinet_set_v4_port(&a, client_port, SQADDR_ASSERT_IS_V4);
+		pconnPush6(fd, host, port, domain, &a);
+		sqinet_done(&a);
+	} else
+		pconnPush6(fd, host, port, domain, NULL);
 }
 
 int
@@ -278,11 +281,15 @@ pconnPop(const char *host, u_short port, const char *domain, struct in_addr *cli
 	sqaddr_t a;
 	int r;
 
-	sqinet_init(&a);
-	sqinet_set_v4_inaddr(&a, client_address);
-	sqinet_set_v4_port(&a, client_port, SQADDR_ASSERT_IS_V4);
-	r = pconnPop6(host, port, domain, &a, idle);
-	sqinet_done(&a);
+	if (client_address) {
+		sqinet_init(&a);
+		sqinet_set_v4_inaddr(&a, client_address);
+		sqinet_set_v4_port(&a, client_port, SQADDR_ASSERT_IS_V4);
+		r = pconnPop6(host, port, domain, &a, idle);
+		sqinet_done(&a);
+	} else {
+		r = pconnPop6(host, port, domain, NULL, idle);
+	}
 	return r;
 }
 
