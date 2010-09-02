@@ -2753,14 +2753,14 @@ httpsAccept(int sock, void *data)
 	connState->port = (http_port_list *) s;
 	cbdataLock(connState->port);
 	if (Config.onoff.log_fqdn)
-	    fqdncache_gethostbyaddr(connState->peer.sin_addr, FQDN_LOOKUP_IF_MISS);
+	    fqdncache_gethostbyaddr6(&connState->peer2, FQDN_LOOKUP_IF_MISS);
 	commSetTimeout(fd, Config.Timeout.request, requestTimeout, connState);
 #if USE_IDENT
 	identChecklist.src_addr = sqinet_get_v4_inaddr(&peer, SQADDR_ASSERT_IS_V4);
 	identChecklist.my_addr = sqinet_get_v4_inaddr(&me, SQADDR_ASSERT_IS_V4);
 	identChecklist.my_port = sqinet_get_port(&me);
 	if (aclCheckFast(Config.accessList.identLookup, &identChecklist))
-	    identStart4(&connState->me, &connState->peer, clientIdentDone, connState);
+	    identStart(&connState->me2, &connState->peer2, clientIdentDone, connState);
 #endif
 	if (s->http.tcp_keepalive.enabled) {
 	    commSetTcpKeepalive(fd, s->http.tcp_keepalive.idle, s->http.tcp_keepalive.interval, s->http.tcp_keepalive.timeout);
@@ -2966,6 +2966,8 @@ clientHttpsConnectionsOpen(void)
 {
     https_port_list *s;
     int fd;
+    int comm_flags;
+
     char cbuf[MAX_IPSTRLEN];
     for (s = Config.Sockaddr.https; s; s = (https_port_list *) s->http.next) {
 	if (MAXHTTPPORTS == NHttpSockets) {
@@ -2973,6 +2975,7 @@ clientHttpsConnectionsOpen(void)
 	    debug(1, 1) ("         The limit is %d\n", MAXHTTPPORTS);
 	    continue;
 	}
+	comm_flags = COMM_NONBLOCKING;
 	if (!s->sslContext)
 	    continue;
 	enter_suid();
@@ -2983,7 +2986,7 @@ clientHttpsConnectionsOpen(void)
 	comm_listen(fd);
 	commSetSelect(fd, COMM_SELECT_READ, httpsAccept, s, 0);
 	commSetDefer(fd, httpAcceptDefer, NULL);
-	(void) sqinet_ntoa(&s->ss, cbuf, MAX_IPSTRLEN, SQADDR_NONE);
+	(void) sqinet_ntoa(&s->http.ss, cbuf, MAX_IPSTRLEN, SQADDR_NONE);
 	debug(1, 1) ("Accepting HTTPS connections at %s, port %d, FD %d.\n",
 	    cbuf,
 	    sqinet_get_port(&s->http.ss),
