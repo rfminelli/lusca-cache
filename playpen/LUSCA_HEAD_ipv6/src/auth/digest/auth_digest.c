@@ -727,16 +727,24 @@ authenticateDigestAuthenticateUser(auth_user_request_t * auth_user_request, requ
 		return;
 	    } else {
 		const char *useragent = httpHeaderGetStr(&request->header, HDR_USER_AGENT);
-		static struct in_addr last_broken_addr;
+		static sqaddr_t last_broken_addr;
 		static int seen_broken_client = 0;
+		struct in_addr lb;
 
 		if (!seen_broken_client) {
-		    last_broken_addr = no_addr;
+		    sqinet_init(&last_broken_addr);
+		    sqinet_set_family(&last_broken_addr, AF_INET);
+		    sqinet_set_noaddr(&last_broken_addr);
 		    seen_broken_client = 1;
 		}
-		if (memcmp(&last_broken_addr, &request->client_addr, sizeof(last_broken_addr)) != 0) {
-		    debug(29, 1) ("\nDigest POST bug detected from %s using '%s'. Please upgrade browser. See Bug #630 for details.\n", inet_ntoa(request->client_addr), useragent ? useragent : "-");
-		    last_broken_addr = request->client_addr;
+
+		lb = sqinet_get_v4_inaddr(&last_broken_addr, SQADDR_ASSERT_IS_V4);
+		if (memcmp(&lb, &request->client_addr, sizeof(struct in_addr)) == 0) {
+		    char cbuf[MAX_IPSTRLEN];
+		    (void) sqinet_ntoa(&last_broken_addr, cbuf, MAX_IPSTRLEN, SQADDR_NONE);
+		    debug(29, 1) ("\nDigest POST bug detected from %s using '%s'. Please upgrade browser. See Bug #630 for details.\n",
+			cbuf, useragent ? useragent : "-");
+		    sqinet_set_v4_inaddr(&last_broken_addr, &request->client_addr);
 		}
 	    }
 	} else {

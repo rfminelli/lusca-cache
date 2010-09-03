@@ -105,7 +105,7 @@ struct _auth_user_hash_pointer {
 struct _auth_user_ip_t {
     dlink_node node;
     /* IP addr this user authenticated from */
-    struct in_addr ipaddr;
+    sqaddr_t ipaddr;
     time_t ip_expiretime;
 };
 
