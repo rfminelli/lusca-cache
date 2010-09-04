@@ -501,7 +501,6 @@ accessLogCustom(AccessLogEntry * al, customlog * log)
 	case LFT_OUTGOING_IP:
        	    (void) sqinet_ntoa(&al->cache.out_ip2, cbuf, sizeof(cbuf), SQADDR_NONE);
 	    out = cbuf;
-	    dofree = 1;
 	    break;
 
 	    /* case LFT_SERVER_PORT: */
