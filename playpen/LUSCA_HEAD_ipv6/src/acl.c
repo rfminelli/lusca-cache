@@ -67,7 +67,7 @@ static int aclMatchUserMaxIP(void *, auth_user_request_t *, struct in_addr);
 static void aclParseHeader(void *data);
 static void aclDestroyHeader(void *data);
 static squid_acl aclStrToType(const char *s);
-static int decode_addr(const char *, struct in_addr *);
+static int decode_v4_addr(const char *, sqaddr_t *);
 static void aclCheck(aclCheck_t * checklist);
 static void aclCheckCallback(aclCheck_t * checklist, allow_t answer);
 #if USE_IDENT
@@ -457,27 +457,29 @@ aclParseType(void *current)
  * This function should NOT be called if 'asc' is a hostname!
  */
 static int
-decode_addr(const char *asc, struct in_addr *addr)
+decode_v4_addr(const char *asc, sqaddr_t *A)
 {
+    struct in_addr addr;
     int a1 = 0, a2 = 0, a3 = 0, a4 = 0;
 
     switch (sscanf(asc, "%d.%d.%d.%d", &a1, &a2, &a3, &a4)) {
     case 4:			/* a dotted quad */
-	if (!safe_inet_addr(asc, addr)) {
-	    debug(28, 0) ("decode_addr: unsafe IP address: '%s'\n", asc);
+	if (!safe_inet_addr(asc, &addr)) {
+	    debug(28, 0) ("decode_v4_addr: unsafe IP address: '%s'\n", asc);
 	    self_destruct();
 	}
 	break;
     case 1:			/* a significant bits value for a mask */
 	if (a1 >= 0 && a1 < 33) {
-	    addr->s_addr = a1 ? htonl(0xfffffffful << (32 - a1)) : 0;
+	    addr.s_addr = a1 ? htonl(0xfffffffful << (32 - a1)) : 0;
 	    break;
 	}
     default:
-	debug(28, 0) ("decode_addr: Invalid IP address '%s'\n", asc);
+	debug(28, 0) ("decode_v4_addr: Invalid IP address '%s'\n", asc);
 	return 0;		/* This is not valid address */
     }
 
+    sqinet_set_v4_inaddr(A, &addr);
     return 1;
 }
 
@@ -488,12 +490,19 @@ decode_addr(const char *asc, struct in_addr *addr)
 #define SCAN_ACL4       "%[0123456789.]%c"
 
 static acl_ip_data *
-aclParseIpData(const char *t)
+aclParseIpData(const char *t, int af_family)
 {
     LOCAL_ARRAY(char, addr1, 256);
     LOCAL_ARRAY(char, addr2, 256);
     LOCAL_ARRAY(char, mask, 256);
+    LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
     acl_ip_data *q = memPoolAlloc(acl_ip_data_pool);
+    sqinet_init(&q->addr1);
+    sqinet_init(&q->addr2);
+    sqinet_init(&q->mask);
+    sqinet_set_family(&q->addr1, af_family);
+    sqinet_set_family(&q->addr2, af_family);
+    sqinet_set_family(&q->mask, af_family);
     acl_ip_data *r;
     acl_ip_data **Q;
     struct hostent *hp;
@@ -501,12 +510,12 @@ aclParseIpData(const char *t)
     char c;
     debug(28, 5) ("aclParseIpData: %s\n", t);
     if (!strcasecmp(t, "all")) {
-	q->addr1.s_addr = 0;
-	q->addr2.s_addr = 0;
-	q->mask.s_addr = 0;
+	sqinet_set_anyaddr(&q->addr1);
+	sqinet_set_anyaddr(&q->addr2);
+	sqinet_set_anyaddr(&q->mask);
 	return q;
     }
-    SetNoAddr(&q->mask);	/* 255.255.255.255 */
+    sqinet_set_noaddr(&q->mask);	/* 255.255.255.255 / ffff:ffff:...:ffff */
     if (sscanf(t, SCAN_ACL1, addr1, addr2, mask) == 3) {
 	(void) 0;
     } else if (sscanf(t, SCAN_ACL2, addr1, addr2, &c) == 2) {
@@ -532,11 +541,21 @@ aclParseIpData(const char *t)
 	for (x = hp->h_addr_list; x != NULL && *x != NULL; x++) {
 	    if ((r = *Q) == NULL)
 		r = *Q = memPoolAlloc(acl_ip_data_pool);
-	    xmemcpy(&r->addr1.s_addr, *x, sizeof(r->addr1.s_addr));
-	    r->addr2.s_addr = 0;
-	    SetNoAddr(&r->mask);	/* 255.255.255.255 */
+	    /* XXX potentially double-init'ed here, thanks to this legacy evil C code! */
+	    sqinet_init(&r->addr1);
+	    sqinet_init(&r->addr2);
+	    sqinet_init(&r->mask);
+	    /*
+	     * XXX at some point this should be modified to support v4 and v6 hosts, 
+	     * XXX with the correct address type for this particular IP list.
+	     */
+	    /* XXX is this cast even correct?! */
+	    (void) sqinet_set_v4_inaddr(&r->addr1, (struct in_addr *) x);
+	    sqinet_set_anyaddr(&r->addr2);	/* 0.0.0.0 */
+	    sqinet_set_noaddr(&r->mask);	/* 255.255.255.255, etc */
 	    Q = &r->next;
-	    debug(28, 3) ("%s --> %s\n", addr1, inet_ntoa(r->addr1));
+	    (void) sqinet_ntoa(&r->addr1, buf, sizeof(buf), SQATON_NONE);
+	    debug(28, 3) ("%s --> %s\n", addr1, buf);
 	}
 	return q;
     } else {
@@ -545,7 +564,7 @@ aclParseIpData(const char *t)
 	return NULL;
     }
     /* Decode addr1 */
-    if (!decode_addr(addr1, &q->addr1)) {
+    if (!decode_v4_addr(addr1, &q->addr1)) {
 	debug(28, 0) ("%s line %d: %s\n",
 	    cfg_filename, config_lineno, config_input_line);
 	debug(28, 0) ("aclParseIpData: Ignoring invalid IP acl entry: unknown first address '%s'\n", addr1);
@@ -553,7 +572,7 @@ aclParseIpData(const char *t)
 	return NULL;
     }
     /* Decode addr2 */
-    if (*addr2 && !decode_addr(addr2, &q->addr2)) {
+    if (*addr2 && !decode_v4_addr(addr2, &q->addr2)) {
 	debug(28, 0) ("%s line %d: %s\n",
 	    cfg_filename, config_lineno, config_input_line);
 	debug(28, 0) ("aclParseIpData: Ignoring invalid IP acl entry: unknown second address '%s'\n", addr2);
@@ -561,18 +580,18 @@ aclParseIpData(const char *t)
 	return NULL;
     }
     /* Decode mask */
-    if (*mask && !decode_addr(mask, &q->mask)) {
+    if (*mask && !decode_v4_addr(mask, &q->mask)) {
 	debug(28, 0) ("%s line %d: %s\n",
 	    cfg_filename, config_lineno, config_input_line);
 	debug(28, 0) ("aclParseIpData: Ignoring invalid IP acl entry: unknown netmask '%s'\n", mask);
 	safe_free(q);
 	return NULL;
     }
-    if ((q->addr1.s_addr & q->mask.s_addr) != q->addr1.s_addr ||
-	(q->addr2.s_addr & q->mask.s_addr) != q->addr2.s_addr)
+    if (sqinet_host_is_netaddr(&q->addr1, &q->mask) || sqinet_host_is_netaddr(&q->addr2, &q->mask))
 	debug(28, 0) ("aclParseIpData: WARNING: Netmask masks away part of the specified IP in '%s'\n", t);
-    q->addr1.s_addr &= q->mask.s_addr;
-    q->addr2.s_addr &= q->mask.s_addr;
+    /* Store the masked version of the IP address */
+    sqinet_mask_addr(&q->addr1, &q->mask);
+    sqinet_mask_addr(&q->addr2, &q->mask);
     /* 1.2.3.4/255.255.255.0  --> 1.2.3.0 */
     return q;
 }
@@ -589,7 +608,8 @@ aclParseIpList(void *curlist)
     acl_ip_data *q = NULL;
     while ((t = strtokFile())) {
 	acl_ip_data *next;
-	for (q = aclParseIpData(t); q != NULL; q = next) {
+        /* XXX how do we determine whether the AF is INET or INET6? */
+	for (q = aclParseIpData(t, AF_INET); q != NULL; q = next) {
 	    next = q->next;
 	    *Top = splay_insert(q, *Top, aclIpNetworkCompare);
 	    if (splayLastResult == 0)
@@ -1341,6 +1361,7 @@ aclMatchIp(void *dataptr, struct in_addr c)
 {
     splayNode **Top = dataptr;
     acl_ip_data x;
+
     /*
      * aclIpAddrNetworkCompare() takes two acl_ip_data pointers as
      * arguments, so we must create a fake one for the client's IP
@@ -1350,13 +1371,23 @@ aclMatchIp(void *dataptr, struct in_addr c)
      * XXX Could eliminate these repetitive assignments with a
      * static structure.
      */
-    x.addr1 = c;
-    SetAnyAddr(&x.addr2);
-    SetNoAddr(&x.mask);
+    sqinet_init(&x.addr1);
+    sqinet_init(&x.addr2);
+    sqinet_init(&x.mask);
+
+    sqinet_set_v4_inaddr(&x.addr1, &c);
+    sqinet_set_family(&x.addr2, AF_INET);
+    sqinet_set_anyaddr(&x.addr2);
+    sqinet_set_family(&x.mask, AF_INET);
+    sqinet_set_noaddr(&x.mask);
+
     x.next = NULL;
     *Top = splay_splay(&x, *Top, aclIpAddrNetworkCompare);
     debug(28, 3) ("aclMatchIp: '%s' %s\n",
 	inet_ntoa(c), splayLastResult ? "NOT found" : "found");
+    sqinet_done(&x.addr1);
+    sqinet_done(&x.addr2);
+    sqinet_done(&x.mask);
     return !splayLastResult;
 }
 
@@ -2556,6 +2587,9 @@ aclDestroyRegexList(relist * data)
 static void
 aclFreeIpData(void *p)
 {
+    sqinet_done(&((acl_ip_data *) p)->addr1);
+    sqinet_done(&((acl_ip_data *) p)->addr2);
+    sqinet_done(&((acl_ip_data *) p)->mask);
     memPoolFree(acl_ip_data_pool, p);
 }
 
@@ -2779,17 +2813,20 @@ aclHostDomainCompare(const void *a, const void *b)
 static void
 aclIpDataToStr(const acl_ip_data * ip, char *buf, int len)
 {
-    char b1[20];
-    char b2[20];
-    char b3[20];
-    snprintf(b1, 20, "%s", inet_ntoa(ip->addr1));
-    if (! IsAnyAddr(&ip->addr2))
-	snprintf(b2, 20, "-%s", inet_ntoa(ip->addr2));
-    else
+    char b1[MAX_IPSTRLEN + 8];
+    char b2[MAX_IPSTRLEN + 8];
+    char b3[MAX_IPSTRLEN + 8];
+    (void) sqinet_ntoa(&ip->addr1, b1, sizeof(b1), SQATON_NONE);
+    if (! sqinet_is_anyaddr(&ip->addr2)) {
+        b2[0] = '-';
+        (void) sqinet_ntoa(&ip->addr2, b2 + 1, sizeof(b2) - 1, SQATON_NONE);
+    } else
 	b2[0] = '\0';
-    if (! IsNoAddr(&ip->mask))
-	snprintf(b3, 20, "/%s", inet_ntoa(ip->mask));
-    else
+
+    if (! sqinet_is_noaddr(&ip->mask)) {
+        b3[0] = '/';
+        (void) sqinet_ntoa(&ip->mask, b3 + 1, sizeof(b3) - 1, SQATON_NONE);
+    } else
 	b3[0] = '\0';
     snprintf(buf, len, "%s%s%s", b1, b2, b3);
 }
@@ -2804,26 +2841,18 @@ aclIpDataToStr(const acl_ip_data * ip, char *buf, int len)
 static int
 aclIpNetworkCompare2(const acl_ip_data * p, const acl_ip_data * q)
 {
-    struct in_addr A = p->addr1;
-    const struct in_addr B = q->addr1;
-    const struct in_addr C = q->addr2;
+    sqaddr_t A;
     int rc = 0;
-    A.s_addr &= q->mask.s_addr;	/* apply netmask */
-    if (C.s_addr == 0) {	/* single address check */
-	if (ntohl(A.s_addr) > ntohl(B.s_addr))
-	    rc = 1;
-	else if (ntohl(A.s_addr) < ntohl(B.s_addr))
-	    rc = -1;
-	else
-	    rc = 0;
+
+    sqinet_init(&A);
+    sqinet_copy(&A, &p->addr1);
+    sqinet_mask_addr(&A, &q->mask);	/* apply netmask */
+    if (sqinet_is_anyaddr(&q->addr2)) {	/* single address check */
+        rc = sqinet_host_compare(&A, &q->addr1);
     } else {			/* range address check */
-	if (ntohl(A.s_addr) > ntohl(C.s_addr))
-	    rc = 1;
-	else if (ntohl(A.s_addr) < ntohl(B.s_addr))
-	    rc = -1;
-	else
-	    rc = 0;
+        rc = sqinet_range_compare(&A, &q->addr1, &q->addr2);
     }
+    sqinet_done(&A);
     return rc;
 }
 
@@ -2848,12 +2877,12 @@ aclIpNetworkCompare(const void *a, const void *b)
 	ret = aclIpNetworkCompare2(n1, n2);
     }
     if (ret == 0) {
-	char buf_n1[60];
-	char buf_n2[60];
-	char buf_a[60];
-	aclIpDataToStr(n1, buf_n1, 60);
-	aclIpDataToStr(n2, buf_n2, 60);
-	aclIpDataToStr((acl_ip_data *) a, buf_a, 60);
+	char buf_n1[MAX_IPSTRLEN * 4];
+	char buf_n2[MAX_IPSTRLEN * 4];
+	char buf_a[MAX_IPSTRLEN * 4];
+	aclIpDataToStr(n1, buf_n1, sizeof(buf_n1));
+	aclIpDataToStr(n2, buf_n2, sizeof(buf_n2));
+	aclIpDataToStr((acl_ip_data *) a, buf_a, sizeof(buf_a));
 	debug(28, 0) ("WARNING: '%s' is a subnetwork of "
 	    "'%s'\n", buf_n1, buf_n2);
 	debug(28, 0) ("WARNING: because of this '%s' is ignored "
@@ -2904,15 +2933,23 @@ aclDumpUserList(acl_user_data * data)
 static void
 aclDumpIpListWalkee(void *node, void *state)
 {
+    LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
     acl_ip_data *ip = node;
-    MemBuf mb;
     wordlist **W = state;
+    MemBuf mb;
+
     memBufDefInit(&mb);
-    memBufPrintf(&mb, "%s", inet_ntoa(ip->addr1));
-    if (! IsAnyAddr(&ip->addr2))
-	memBufPrintf(&mb, "-%s", inet_ntoa(ip->addr2));
-    if (! IsNoAddr(&ip->mask))
-	memBufPrintf(&mb, "/%s", inet_ntoa(ip->mask));
+
+    (void) sqinet_ntoa(&ip->addr1, buf, sizeof(buf), SQATON_NONE);
+    memBufPrintf(&mb, "%s", buf);
+    if (! sqinet_is_anyaddr(&ip->addr2)) {
+        (void) sqinet_ntoa(&ip->addr2, buf, sizeof(buf), SQATON_NONE);
+    	memBufPrintf(&mb, "-%s", buf);
+    }
+    if (! sqinet_is_noaddr(&ip->mask)) {
+        (void) sqinet_ntoa(&ip->addr2, buf, sizeof(buf), SQATON_NONE);
+    	memBufPrintf(&mb, "/%s", buf);
+    }
     wordlistAdd(W, mb.buf);
     memBufClean(&mb);
 }
