@@ -230,7 +230,10 @@ icpHandleIcpV2(int fd, struct sockaddr_in from, char *buf, int len)
 	}
 	memset(&checklist, '\0', sizeof(checklist));
 	checklist.src_addr = from.sin_addr;
-	SetNoAddr(&checklist.my_addr);
+        sqinet_init(&checklist.my_address);
+#warning needs to be made v6 "my_address" aware!
+        sqinet_set_family(&checklist.my_address, AF_INET);
+        sqinet_set_noaddr(&checklist.my_address);
 	checklist.request = icp_request;
 	allow = aclCheckFast(Config.accessList.icp, &checklist);
 	if (!allow) {
@@ -318,6 +321,7 @@ icpHandleIcpV2(int fd, struct sockaddr_in from, char *buf, int len)
     }
     if (icp_request)
 	requestDestroy(icp_request);
+    sqinet_done(&checklist.my_address);
 }
 
 #ifdef ICP_PKT_DUMP

@@ -2048,7 +2048,10 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	return aclMatchIp4(&ae->data, checklist->src_addr);
 	/* NOTREACHED */
     case ACL_MY_IP:
-	return aclMatchIp4(&ae->data, checklist->my_addr);
+	if (sqinet_get_family(&checklist->my_address) == AF_INET)
+	    return aclMatchIp(&ae->data, &checklist->my_address);
+	else
+	    return 0;		/* Can't do an IPv4 lookup against IPv6 "my_addr" */
 	/* NOTREACHED */
     case ACL_DST_IP:
 	ia = ipcache_gethostbyname(r->host, IP_LOOKUP_IF_MISS);
@@ -2070,7 +2073,10 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
     case ACL_SRC_IP6:
 	return 0;	/* XXX for now; no v6 address to compare! */
     case ACL_MY_IP6:
-	return 0;	/* XXX for now; no v6 address to compare! */
+	if (sqinet_get_family(&checklist->my_address) == AF_INET6)
+	    return aclMatchIp(&ae->data, &checklist->my_address);
+	else
+	    return 0;		/* Can't do an IPv6 lookup against IPv4 "my_addr" */
     case ACL_DST_DOMAIN:
 	if (aclMatchDomainList(&ae->data, r->host))
 	    return 1;
@@ -2552,6 +2558,7 @@ aclChecklistFree(aclCheck_t * checklist)
 	checklist->callback_data = NULL;
     }
     aclCheckCleanup(checklist);
+    sqinet_done(&checklist->my_address);
     cbdataFree(checklist);
 }
 
@@ -2669,8 +2676,8 @@ aclChecklistCacheInit(aclCheck_t * checklist)
 	} else
 #endif /* FOLLOW_X_FORWARDED_FOR */
 	    checklist->src_addr = request->client_addr;
-	checklist->my_addr = request->my_addr;
-	checklist->my_port = request->my_port;
+        sqinet_set_v4_inaddr(&checklist->my_address, &request->my_addr);
+	sqinet_set_port(&checklist->my_address, request->my_port, SQADDR_ASSERT_IS_V4);
 #if 0 && USE_IDENT
 	/*
 	 * this is currently broken because 'request->user_ident' has been
@@ -2707,6 +2714,7 @@ aclChecklistCreate(const acl_access * A, request_t * request, const char *ident)
 	xstrncpy(checklist->rfc931, ident, USER_IDENT_SZ);
 #endif
     checklist->auth_user_request = NULL;
+    sqinet_init(&checklist->my_address);
     return checklist;
 }
 

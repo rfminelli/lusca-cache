@@ -652,12 +652,17 @@ htcpUnpackDetail(char *buf, int sz)
 static int
 htcpAccessCheck(acl_access * acl, htcpSpecifier * s, struct sockaddr_in *from)
 {
+    int r;
     aclCheck_t checklist;
     memset(&checklist, '\0', sizeof(checklist));
     checklist.src_addr = from->sin_addr;
-    SetNoAddr(&checklist.my_addr);
+    sqinet_init(&checklist.my_address);
+    sqinet_set_family(&checklist.my_address, AF_INET);	/* XXX will need to be taught about "from"! -adrian */
+    sqinet_set_noaddr(&checklist.my_address);
     checklist.request = s->request;
-    return aclCheckFast(acl, &checklist);
+    r = aclCheckFast(acl, &checklist);
+    sqinet_done(&checklist.my_address);
+    return r;
 }
 
 static void
