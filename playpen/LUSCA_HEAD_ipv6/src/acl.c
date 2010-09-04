@@ -56,7 +56,8 @@ static struct _acl *aclFindByName(const char *name);
 static int aclMatchAcl(struct _acl *, aclCheck_t *);
 static int aclMatchTime(acl_time_data * data, time_t when);
 static int aclMatchUser(void *proxyauth_acl, char *user);
-static int aclMatchIp(void *dataptr, struct in_addr c);
+static int aclMatchIp4(void *dataptr, struct in_addr c);
+static int aclMatchIp(void *dataptr, sqaddr_t *a);
 static int aclMatchDomainList(void *dataptr, const char *);
 static int aclMatchIntegerRange(intrange * data, int i);
 static int aclMatchWordList(wordlist *, const char *);
@@ -1481,7 +1482,7 @@ aclParseAclList(acl_list ** head)
 /**************/
 
 static int
-aclMatchIp(void *dataptr, struct in_addr c)
+aclMatchIp4(void *dataptr, struct in_addr c)
 {
     splayNode **Top = dataptr;
     acl_ip_data x;
@@ -1509,6 +1510,45 @@ aclMatchIp(void *dataptr, struct in_addr c)
     *Top = splay_splay(&x, *Top, aclIpAddrNetworkCompare);
     debug(28, 3) ("aclMatchIp: '%s' %s\n",
 	inet_ntoa(c), splayLastResult ? "NOT found" : "found");
+    sqinet_done(&x.addr1);
+    sqinet_done(&x.addr2);
+    sqinet_done(&x.mask);
+    return !splayLastResult;
+}
+
+static int
+aclMatchIp(void *dataptr, sqaddr_t *a)
+{
+    splayNode **Top = dataptr;
+    acl_ip_data x;
+
+    /*
+     * aclIpAddrNetworkCompare() takes two acl_ip_data pointers as
+     * arguments, so we must create a fake one for the client's IP
+     * address, and use a /32 netmask.  However, the current code
+     * probably only accesses the addr1 element of this argument,
+     * so it might be possible to leave addr2 and mask unset.
+     * XXX Could eliminate these repetitive assignments with a
+     * static structure.
+     */
+    sqinet_init(&x.addr1);
+    sqinet_init(&x.addr2);
+    sqinet_init(&x.mask);
+
+    sqinet_copy(&x.addr1, a);
+    sqinet_set_family(&x.addr2, sqinet_get_family(a));
+    sqinet_set_anyaddr(&x.addr2);
+    sqinet_set_family(&x.mask, sqinet_get_family(a));
+    sqinet_set_noaddr(&x.mask);
+
+    x.next = NULL;
+    *Top = splay_splay(&x, *Top, aclIpAddrNetworkCompare);
+    if (debugLevels[28] >= 3) {
+	char cbuf[MAX_IPSTRLEN];
+	(void) sqinet_ntoa(a, cbuf, MAX_IPSTRLEN, SQADDR_NONE);
+	    debug(28, 3) ("aclMatchIp: '%s' %s\n",
+		cbuf, splayLastResult ? "NOT found" : "found");
+    }
     sqinet_done(&x.addr1);
     sqinet_done(&x.addr2);
     sqinet_done(&x.mask);
@@ -2005,16 +2045,16 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
     debug(28, 3) ("aclMatchAcl: checking '%s'\n", ae->cfgline);
     switch (ae->type) {
     case ACL_SRC_IP:
-	return aclMatchIp(&ae->data, checklist->src_addr);
+	return aclMatchIp4(&ae->data, checklist->src_addr);
 	/* NOTREACHED */
     case ACL_MY_IP:
-	return aclMatchIp(&ae->data, checklist->my_addr);
+	return aclMatchIp4(&ae->data, checklist->my_addr);
 	/* NOTREACHED */
     case ACL_DST_IP:
 	ia = ipcache_gethostbyname(r->host, IP_LOOKUP_IF_MISS);
 	if (ia) {
 	    for (k = 0; k < (int) ia->count; k++) {
-		if (aclMatchIp(&ae->data, ia->in_addrs[k]))
+		if (aclMatchIp4(&ae->data, ia->in_addrs[k]))
 		    return 1;
 	    }
 	    return 0;
@@ -2275,7 +2315,7 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	 * error out in case. */
 	if (IsAnyAddr(&checklist->fwdip_addr))
 	    return -1;
-	return aclMatchIp(&ae->data, checklist->fwdip_addr);
+	return aclMatchIp4(&ae->data, checklist->fwdip_addr);
 	/* NOTREACHED */
     case ACL_NONE:
     case ACL_ENUM_MAX:
