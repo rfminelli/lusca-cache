@@ -2677,7 +2677,6 @@ aclChecklistCacheInit(aclCheck_t * checklist)
 #endif /* FOLLOW_X_FORWARDED_FOR */
 	    checklist->src_addr = request->client_addr;
         sqinet_copy(&checklist->my_address, &request->my_address);
-	sqinet_set_port(&checklist->my_address, request->my_port, SQADDR_ASSERT_IS_V4);
 #if 0 && USE_IDENT
 	/*
 	 * this is currently broken because 'request->user_ident' has been
