@@ -290,7 +290,6 @@ struct _aclCheck_t {
     struct in_addr dst_addr;
     struct in_addr fwdip_addr;
     sqaddr_t my_address;
-    unsigned short my_port;
     request_t *request;
     /* for acls that look at reply data */
     HttpReply *reply;
@@ -1655,7 +1654,6 @@ struct _request_t {
     struct in_addr indirect_client_addr;	/* after following X-Forwarded-For */
 #endif				/* FOLLOW_X_FORWARDED_FOR */
     sqaddr_t my_address;
-    unsigned short my_port;
     HttpHeader header;
     squid_off_t content_length;
     HierarchyLogEntry hier;
