@@ -100,7 +100,7 @@ storeurlStart(clientHttpRequest * http, RH * handler, void *data)
     char *urlgroup = conn->port->urlgroup;
     char buf[8192];
     char claddr[MAX_IPSTRLEN];
-    char myaddr[20];
+    char myaddr[MAX_IPSTRLEN];
     assert(http);
     assert(handler);
     debug(61, 5) ("storeurlStart: '%s'\n", http->uri);
@@ -135,7 +135,7 @@ storeurlStart(clientHttpRequest * http, RH * handler, void *data)
     if ((fqdn = fqdncache_gethostbyaddr6(&r->client_addr2, 0)) == NULL)
 	fqdn = dash_str;
     sqinet_ntoa(&r->client_addr2, claddr, sizeof(claddr), SQADDR_NONE);
-    xstrncpy(myaddr, inet_ntoa(http->request->my_addr), 20);
+    (void) sqinet_ntoa(&http->request->my_address, myaddr, sizeof(myaddr), SQADDR_NONE);
     snprintf(buf, 8191, "%s %s/%s %s %s %s myip=%s myport=%d",
 	r->orig_url,
 	claddr,
@@ -144,7 +144,7 @@ storeurlStart(clientHttpRequest * http, RH * handler, void *data)
 	r->method_s,
 	urlgroup ? urlgroup : "-",
 	myaddr,
-	http->request->my_port);
+	sqinet_get_port(&http->request->my_address));
     debug(61, 6) ("storeurlStart: sending '%s' to the helper\n", buf);
     strcat(buf, "\n");
     helperSubmit(storeurlors, buf, storeurlHandleReply, r);

@@ -141,8 +141,7 @@ clientRedirectDone(void *data, char *result)
 #if FOLLOW_X_FORWARDED_FOR
 	new_request->indirect_client_addr = old_request->indirect_client_addr;
 #endif /* FOLLOW_X_FORWARDED_FOR */
-	new_request->my_addr = old_request->my_addr;
-	new_request->my_port = old_request->my_port;
+        sqinet_copy(&new_request->my_address, &old_request->my_address);
 	new_request->flags = old_request->flags;
 	new_request->flags.redirected = 1;
 	if (old_request->auth_user_request) {

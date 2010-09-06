@@ -506,13 +506,15 @@ accessLogCustom(AccessLogEntry * al, customlog * log)
 	    /* case LFT_SERVER_PORT: */
 
 	case LFT_LOCAL_IP:
-	    if (al->request)
-		out = inet_ntoa(al->request->my_addr);
+	    if (al->request) {
+       	        (void) sqinet_ntoa(&al->request->my_address, cbuf, sizeof(cbuf), SQADDR_NONE);
+	        out = cbuf;
+	    }
 	    break;
 
 	case LFT_LOCAL_PORT:
 	    if (al->request) {
-		outint = al->request->my_port;
+		outint = sqinet_get_port(&al->request->my_address);
 		doint = 1;
 	    }
 	    break;

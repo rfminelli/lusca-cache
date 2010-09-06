@@ -563,8 +563,7 @@ clientTryParseRequest(ConnStateData * conn)
 #if FOLLOW_X_FORWARDED_FOR
 	request->indirect_client_addr = request->client_addr;
 #endif /* FOLLOW_X_FORWARDED_FOR */
-	request->my_addr = sqinet_get_v4_inaddr(&conn->me2, SQADDR_ASSERT_IS_V4);
-	request->my_port = sqinet_get_port(&conn->me2);
+        sqinet_copy(&request->my_address, &conn->me2);
 	request->http_ver = http->http_ver;
 	if (!urlCheckRequest(request)) {
 	    err = errorCon(ERR_UNSUP_REQ, HTTP_NOT_IMPLEMENTED, request);

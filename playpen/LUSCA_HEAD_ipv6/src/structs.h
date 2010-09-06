@@ -1654,7 +1654,7 @@ struct _request_t {
 #if FOLLOW_X_FORWARDED_FOR
     struct in_addr indirect_client_addr;	/* after following X-Forwarded-For */
 #endif				/* FOLLOW_X_FORWARDED_FOR */
-    struct in_addr my_addr;
+    sqaddr_t my_address;
     unsigned short my_port;
     HttpHeader header;
     squid_off_t content_length;

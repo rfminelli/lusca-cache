@@ -59,7 +59,8 @@ requestCreate(method_t * method, protocol_t protocol, const char *urlpath)
     req->lastmod = -1;
     SetAnyAddr(&req->out_ip);
     SetNoAddr(&req->client_addr);
-    SetNoAddr(&req->my_addr);
+    sqinet_init(&req->my_address);
+//    SetNoAddr(&req->my_addr);
     httpHeaderInit(&req->header, hoRequest);
     return req;
 }
@@ -80,6 +81,7 @@ requestDestroy(request_t * req)
     safe_free(req->urlgroup);
     safe_free(req->extacl_user);
     safe_free(req->extacl_passwd);
+    sqinet_done(&req->my_address);
     stringClean(&req->urlpath);
     httpHeaderClean(&req->header);
     if (req->cache_control)
@@ -141,10 +143,13 @@ httpRequestPack(const request_t * req, Packer * p)
 void
 httpRequestPackDebug(request_t * req, Packer * p)
 {
+    LOCAL_ARRAY(char, cbuf, MAX_IPSTRLEN);
+
     assert(req && p);
     /* Client info */
+    (void) sqinet_ntoa(&req->my_address, cbuf, MAX_IPSTRLEN, SQADDR_NONE);
     packerPrintf(p, "Client: %s ", inet_ntoa(req->client_addr));
-    packerPrintf(p, "http_port: %s:%d", inet_ntoa(req->my_addr), req->my_port);
+    packerPrintf(p, "http_port: %s:%d", cbuf, sqinet_get_port(&req->my_address));
     if (req->auth_user_request && authenticateUserRequestUsername(req->auth_user_request))
 	packerPrintf(p, "user: %s", authenticateUserRequestUsername(req->auth_user_request));
     packerPrintf(p, "\n");

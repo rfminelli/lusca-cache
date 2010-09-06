@@ -716,8 +716,11 @@ fwdConnectStart(void *data)
      * returned
      */
     if (fwdState->request->flags.transparent && (fwdState->n_tries > 1) && (NULL == fs->peer)) {
+#warning This needs to be made ipv6-aware
+	struct in_addr addr;
+	addr = sqinet_get_v4_inaddr(&fwdState->request->my_address, SQADDR_ASSERT_IS_V4);
 	storeRelease(fwdState->entry);
-	commConnectStart(fd, host, port, fwdConnectDone, fwdState, &fwdState->request->my_addr);
+	commConnectStart(fd, host, port, fwdConnectDone, fwdState, &addr);
     } else {
 	commConnectStart(fd, host, port, fwdConnectDone, fwdState, NULL);
     }
