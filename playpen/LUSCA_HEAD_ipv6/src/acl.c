@@ -2164,7 +2164,7 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	return aclMatchIntegerRange(ae->data, (int) r->port);
 	/* NOTREACHED */
     case ACL_MY_PORT:
-	return aclMatchIntegerRange(ae->data, (int) checklist->my_port);
+	return aclMatchIntegerRange(ae->data, (int) sqinet_get_port(&checklist->my_address));
 	/* NOTREACHED */
     case ACL_MY_PORT_NAME:
 	if (!checklist->conn)
