@@ -2590,7 +2590,6 @@ httpAccept(int sock, void *data)
 #if USE_IDENT
 	identChecklist.src_addr = sqinet_get_v4_inaddr(&peer, SQADDR_ASSERT_IS_V4);
         sqinet_copy(&identChecklist.my_address, &me);
-	identChecklist.my_port = sqinet_get_port(&me);
 	if (aclCheckFast(Config.accessList.identLookup, &identChecklist))
 	    identStart(&connState->me2, &connState->peer2, clientIdentDone, connState);
 #endif
