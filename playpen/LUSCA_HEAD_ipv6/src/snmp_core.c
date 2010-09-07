@@ -452,7 +452,8 @@ snmpDecodePacket(snmp_request_t * rq)
     rq->session.Version = SNMP_VERSION_1;
     Community = snmp_parse(&rq->session, PDU, buf, len);
     memset(&checklist, '\0', sizeof(checklist));
-    checklist.src_addr = rq->from.sin_addr;
+    aclCheckSetup(&checklist);
+    sqinet_set_v4_inaddr(&checklist.src_address, &rq->from.sin_addr);
     checklist.snmp_community = (char *) Community;
 
     if (Community)
@@ -469,6 +470,7 @@ snmpDecodePacket(snmp_request_t * rq)
     }
     if (Community)
 	xfree(Community);
+    aclCheckFinish(&checklist);
 }
 
 /*

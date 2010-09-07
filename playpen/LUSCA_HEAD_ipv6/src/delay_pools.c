@@ -324,24 +324,36 @@ delayClient(clientHttpRequest * http)
 {
     request_t *r;
     aclCheck_t ch;
+    struct in_addr a;
     ushort pool;
     assert(http);
     r = http->request;
 
     memset(&ch, '\0', sizeof(ch));
+    aclCheckSetup(&ch);
     ch.conn = http->conn;
     ch.request = r;
     if (r->client_addr.s_addr == INADDR_BROADCAST) {
 	debug(77, 2) ("delayClient: WARNING: Called with 'allones' address, ignoring\n");
+        aclCheckFinish(&ch);
 	return delayId(0, 0);
     }
     for (pool = 0; pool < Config.Delay.pools; pool++) {
 	if (Config.Delay.access[pool] && aclCheckFast(Config.Delay.access[pool], &ch))
 	    break;
     }
-    if (pool == Config.Delay.pools)
+    if (pool == Config.Delay.pools) {
+        aclCheckFinish(&ch);
 	return delayId(0, 0);
-    return delayPoolClient(pool, ch.src_addr.s_addr);
+    }
+#warning delay pools needs to be made v6 aware!
+    if (sqinet_get_family(&ch.src_address) != AF_INET) {
+        aclCheckFinish(&ch);
+        return delayId(0, 0);
+    }
+    a = sqinet_get_v4_inaddr(&ch.src_address, SQADDR_ASSERT_IS_V4);
+    aclCheckFinish(&ch);
+    return delayPoolClient(pool, a.s_addr);
 }
 
 delay_id

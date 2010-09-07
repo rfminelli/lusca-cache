@@ -64,7 +64,7 @@ static int aclMatchWordList(wordlist *, const char *);
 static void aclParseUserMaxIP(void *data);
 static void aclDestroyUserMaxIP(void *data);
 static wordlist *aclDumpUserMaxIP(void *data);
-static int aclMatchUserMaxIP(void *, auth_user_request_t *, struct in_addr);
+static int aclMatchUserMaxIP(void *, auth_user_request_t *, sqaddr_t *addr);
 static void aclParseHeader(void *data);
 static void aclDestroyHeader(void *data);
 static squid_acl aclStrToType(const char *s);
@@ -1786,7 +1786,7 @@ aclDumpUserMaxIP(void *data)
  */
 int
 aclMatchUserMaxIP(void *data, auth_user_request_t * auth_user_request,
-    struct in_addr src_addr)
+    sqaddr_t *src)
 {
 /*
  * the logic for flush the ip list when the limit is hit vs keep
@@ -1798,20 +1798,17 @@ aclMatchUserMaxIP(void *data, auth_user_request_t * auth_user_request,
     if (authenticateAuthUserRequestIPCount(auth_user_request) <= acldata->max)
 	return 0;
 
-    debug(28, 1) ("aclMatchUserMaxIP: user '%s' tries to use too many IP addresses (max %d allowed)!\n", authenticateUserRequestUsername(auth_user_request), acldata->max);
+    debug(28, 1) ("aclMatchUserMaxIP: user '%s' tries to use too many IP addresses (max %d allowed)!\n",
+      authenticateUserRequestUsername(auth_user_request), acldata->max);
 
     /* this is a match */
     if (acldata->flags.strict) {
-	sqaddr_t a;
 	/*
 	 * simply deny access - the user name is already associated with
 	 * the request 
 	 */
 	/* remove _this_ ip, as it is the culprit for going over the limit */
-        sqinet_init(&a);
-	sqinet_set_v4_inaddr(&a, &src_addr);
-	authenticateAuthUserRequestRemoveIp(auth_user_request, &a);
-	sqinet_done(&a);
+	authenticateAuthUserRequestRemoveIp(auth_user_request, src);
 	debug(28, 4) ("aclMatchUserMaxIP: Denying access in strict mode\n");
     } else {
 	/*
@@ -1954,7 +1951,6 @@ aclAuthenticated(aclCheck_t * checklist)
 {
     request_t *r = checklist->request;
     http_hdr_type headertype;
-    sqaddr_t a;
     int rv;
 
     if (NULL == r) {
@@ -1971,10 +1967,7 @@ aclAuthenticated(aclCheck_t * checklist)
     }
     /* get authed here */
     /* Note: this fills in checklist->auth_user_request when applicable (auth incomplete) */
-    sqinet_init(&a);
-    sqinet_copy_v4_inaddr(&a, &checklist->src_addr, SQADDR_NONE);
-    rv = authenticateTryToAuthenticateAndSetAuthUser(&checklist->auth_user_request, headertype, checklist->request, checklist->conn, &a);
-    sqinet_done(&a);
+    rv = authenticateTryToAuthenticateAndSetAuthUser(&checklist->auth_user_request, headertype, checklist->request, checklist->conn, &checklist->src_address);
     switch (rv) {
     case AUTH_ACL_CANNOT_AUTHENTICATE:
 	debug(28, 4) ("aclAuthenticated: returning  0 user authenticated but not authorised.\n");
@@ -2045,7 +2038,7 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
     debug(28, 3) ("aclMatchAcl: checking '%s'\n", ae->cfgline);
     switch (ae->type) {
     case ACL_SRC_IP:
-	return aclMatchIp4(&ae->data, checklist->src_addr);
+	return aclMatchIp(&ae->data, &checklist->src_address);
 	/* NOTREACHED */
     case ACL_MY_IP:
 	if (sqinet_get_family(&checklist->my_address) == AF_INET)
@@ -2094,12 +2087,14 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	return aclMatchDomainList(&ae->data, "none");
 	/* NOTREACHED */
     case ACL_SRC_DOMAIN:
-	fqdn = fqdncache_gethostbyaddr(checklist->src_addr, FQDN_LOOKUP_IF_MISS);
+	fqdn = fqdncache_gethostbyaddr6(&checklist->src_address, FQDN_LOOKUP_IF_MISS);
 	if (fqdn) {
 	    return aclMatchDomainList(&ae->data, fqdn);
 	} else if (checklist->state[ACL_SRC_DOMAIN] == ACL_LOOKUP_NONE) {
+	    LOCAL_ARRAY(char, cbuf, MAX_IPSTRLEN);
+	    (void) sqinet_ntoa(&checklist->src_address, cbuf, MAX_IPSTRLEN, SQADDR_NONE);
 	    debug(28, 3) ("aclMatchAcl: Can't yet compare '%s' ACL for '%s'\n",
-		ae->name, inet_ntoa(checklist->src_addr));
+		ae->name, cbuf);
 	    checklist->state[ACL_SRC_DOMAIN] = ACL_LOOKUP_NEEDED;
 	    return 0;
 	}
@@ -2122,12 +2117,14 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	return aclMatchRegex(ae->data, "none");
 	/* NOTREACHED */
     case ACL_SRC_DOM_REGEX:
-	fqdn = fqdncache_gethostbyaddr(checklist->src_addr, FQDN_LOOKUP_IF_MISS);
+	fqdn = fqdncache_gethostbyaddr6(&checklist->src_address, FQDN_LOOKUP_IF_MISS);
 	if (fqdn) {
 	    return aclMatchRegex(ae->data, fqdn);
 	} else if (checklist->state[ACL_SRC_DOMAIN] == ACL_LOOKUP_NONE) {
+	    LOCAL_ARRAY(char, cbuf, MAX_IPSTRLEN);
+	    (void) sqinet_ntoa(&checklist->src_address, cbuf, MAX_IPSTRLEN, SQADDR_NONE);
 	    debug(28, 3) ("aclMatchAcl: Can't yet compare '%s' ACL for '%s'\n",
-		ae->name, inet_ntoa(checklist->src_addr));
+		ae->name, cbuf);
 	    checklist->state[ACL_SRC_DOMAIN] = ACL_LOOKUP_NEEDED;
 	    return 0;
 	}
@@ -2157,7 +2154,7 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	return k;
 	/* NOTREACHED */
     case ACL_MAXCONN:
-	k = clientdbEstablished(checklist->src_addr, 0);
+	k = clientdbEstablished6(&checklist->src_address, 0);
 	return ((k > ((intlist *) ae->data)->i) ? 1 : 0);
 	/* NOTREACHED */
     case ACL_URL_PORT:
@@ -2227,7 +2224,7 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	if ((ti = aclAuthenticated(checklist)) != 1)
 	    return ti;
 	ti = aclMatchUserMaxIP(ae->data, r->auth_user_request,
-	    checklist->src_addr);
+	    &checklist->src_address);
 	return ti;
 	/* NOTREACHED */
 #if SQUID_SNMP
@@ -2236,13 +2233,13 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	/* NOTREACHED */
 #endif
     case ACL_SRC_ASN:
-	return asnMatchIp(ae->data, checklist->src_addr);
+	return asnMatchIp(ae->data, &checklist->src_address);
 	/* NOTREACHED */
     case ACL_DST_ASN:
 	ia = ipcache_gethostbyname(r->host, IP_LOOKUP_IF_MISS);
 	if (ia) {
 	    for (k = 0; k < (int) ia->count; k++) {
-		if (asnMatchIp(ae->data, ia->in_addrs[k]))
+		if (asnMatchIp4(ae->data, ia->in_addrs[k]))
 		    return 1;
 	    }
 	    return 0;
@@ -2251,7 +2248,7 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 		ae->name, r->host);
 	    checklist->state[ACL_DST_ASN] = ACL_LOOKUP_NEEDED;
 	} else {
-	    return asnMatchIp(ae->data, no_addr);
+	    return asnMatchIp4(ae->data, no_addr);
 	}
 	return 0;
 	/* NOTREACHED */
@@ -2422,10 +2419,14 @@ aclCheckFast(const acl_access * A, aclCheck_t * checklist)
 int
 aclCheckFastRequest(const acl_access * A, request_t * request)
 {
+    int r;
     aclCheck_t ch;
     memset(&ch, 0, sizeof(ch));
+    aclCheckSetup(&ch);
     ch.request = request;
-    return aclCheckFast(A, &ch);
+    r = aclCheckFast(A, &ch);
+    aclCheckFinish(&ch);
+    return r;
 }
 
 static void
@@ -2463,7 +2464,7 @@ aclCheck(aclCheck_t * checklist)
 	    return;
 	} else if (checklist->state[ACL_SRC_DOMAIN] == ACL_LOOKUP_NEEDED) {
 	    checklist->state[ACL_SRC_DOMAIN] = ACL_LOOKUP_PENDING;
-	    fqdncache_nbgethostbyaddr(checklist->src_addr,
+	    fqdncache_nbgethostbyaddr6(&checklist->src_address,
 		aclLookupSrcFQDNDone, checklist);
 	    return;
 	} else if (checklist->state[ACL_DST_DOMAIN] == ACL_LOOKUP_NEEDED) {
@@ -2558,7 +2559,7 @@ aclChecklistFree(aclCheck_t * checklist)
 	checklist->callback_data = NULL;
     }
     aclCheckCleanup(checklist);
-    sqinet_done(&checklist->my_address);
+    aclCheckFinish(checklist);
     cbdataFree(checklist);
 }
 
@@ -2669,13 +2670,21 @@ void
 aclChecklistCacheInit(aclCheck_t * checklist)
 {
     request_t *request = checklist->request;
-    if (request != NULL && checklist->src_addr.s_addr == 0) {
+#warning This sqinet_get_family check should really be a "has this sqaddr had an address set yet?"
+    /*
+     * checklist->src_address has already been init'ed but it may not have an
+     * address.
+     *
+     * The previous code checked if src_addr == 0. This new code needs to do something
+     * slightly different.
+     */
+    if (request != NULL && (sqinet_get_family(&checklist->src_address) == 0)) {
 #if FOLLOW_X_FORWARDED_FOR
 	if (Config.onoff.acl_uses_indirect_client) {
 	    checklist->src_addr = request->indirect_client_addr;
 	} else
 #endif /* FOLLOW_X_FORWARDED_FOR */
-	    checklist->src_addr = request->client_addr;
+	sqinet_set_v4_inaddr(&checklist->src_address, &request->client_addr);
         sqinet_copy(&checklist->my_address, &request->my_address);
 #if 0 && USE_IDENT
 	/*
@@ -2687,6 +2696,20 @@ aclChecklistCacheInit(aclCheck_t * checklist)
 	    xstrncpy(checklist.rfc931, request->user_ident, USER_IDENT_SZ);
 #endif
     }
+}
+
+void
+aclCheckSetup(aclCheck_t *ch)
+{
+    sqinet_init(&ch->my_address);
+    sqinet_init(&ch->src_address);
+}
+
+void
+aclCheckFinish(aclCheck_t *ch)
+{
+    sqinet_done(&ch->my_address);
+    sqinet_done(&ch->src_address);
 }
 
 void
@@ -2727,7 +2750,7 @@ aclChecklistCreate(const acl_access * A, request_t * request, const char *ident)
 	xstrncpy(checklist->rfc931, ident, USER_IDENT_SZ);
 #endif
     checklist->auth_user_request = NULL;
-    sqinet_init(&checklist->my_address);
+    aclCheckSetup(checklist);
     return checklist;
 }
 

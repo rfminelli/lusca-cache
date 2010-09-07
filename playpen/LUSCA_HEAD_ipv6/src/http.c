@@ -424,6 +424,7 @@ httpMakeVaryMark(request_t * request, HttpReply * reply)
 	if (strcmp(name, "accept-encoding") == 0) {
 	    aclCheck_t checklist;
 	    memset(&checklist, 0, sizeof(checklist));
+	    aclCheckSetup(&checklist);
 	    checklist.request = request;
 	    checklist.reply = reply;
 	    if (Config.accessList.vary_encoding && aclCheckFast(Config.accessList.vary_encoding, &checklist)) {
@@ -431,6 +432,7 @@ httpMakeVaryMark(request_t * request, HttpReply * reply)
 		request->vary_encoding = httpHeaderGetStrOrList(&request->header, HDR_ACCEPT_ENCODING);
 		strCat(request->vary_encoding, "");
 	    }
+	    aclCheckFinish(&checklist);
 	}
 	if (strcmp(name, "*") == 0) {
 	    /* Can not handle "Vary: *" efficiently, bail out making the response not cached */

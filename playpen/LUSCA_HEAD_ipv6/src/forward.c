@@ -493,22 +493,30 @@ struct in_addr
 getOutgoingAddr(request_t * request)
 {
     aclCheck_t ch;
+    struct in_addr r;
     memset(&ch, '\0', sizeof(aclCheck_t));
+    aclCheckSetup(&ch);
     if (request) {
 	ch.request = request;
     }
-    return aclMapAddr(Config.accessList.outgoing_address, &ch);
+    r = aclMapAddr(Config.accessList.outgoing_address, &ch);
+    aclCheckFinish(&ch);
+    return r;
 }
 
 unsigned long
 getOutgoingTOS(request_t * request)
 {
     aclCheck_t ch;
+    unsigned long r;
     memset(&ch, '\0', sizeof(aclCheck_t));
+    aclCheckSetup(&ch);
     if (request) {
 	ch.request = request;
     }
-    return aclMapTOS(Config.accessList.outgoing_tos, &ch);
+    r = aclMapTOS(Config.accessList.outgoing_tos, &ch);
+    aclCheckFinish(&ch);
+    return r;
 }
 
 /*

@@ -286,7 +286,7 @@ struct _acl_tos {
 
 struct _aclCheck_t {
     const acl_access *access_list;
-    struct in_addr src_addr;
+    sqaddr_t src_address;
     struct in_addr dst_addr;
     struct in_addr fwdip_addr;
     sqaddr_t my_address;

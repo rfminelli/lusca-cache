@@ -645,7 +645,8 @@ makeExternalAclKey(aclCheck_t * ch, external_acl_data * acl_data)
 	    break;
 #endif
 	case EXT_ACL_SRC:
-	    str = inet_ntoa(ch->src_addr);
+	    (void) sqinet_ntoa(&ch->src_address, buf, sizeof(buf), SQADDR_NONE);
+	    str = buf;
 	    break;
 	case EXT_ACL_SRCPORT:
 	    snprintf(buf, sizeof(buf), "%d", request->client_port);
