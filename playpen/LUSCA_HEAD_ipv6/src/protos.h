@@ -823,6 +823,7 @@ extern void errorSetAddr4(ErrorState *err, struct in_addr ip);
 extern int errorPageId(const char *page_name);
 
 extern int asnMatchIp(void *, sqaddr_t *);
+extern int asnMatchIp4(void *, struct in_addr); 
 extern void asnInit(void);
 extern void asnFreeMemory(void);
 
