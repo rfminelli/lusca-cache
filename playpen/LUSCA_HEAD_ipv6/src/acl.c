@@ -528,7 +528,6 @@ aclParseIpData6(const char *t)
 	LOCAL_ARRAY(char, addr1, MAX_IPSTRLEN);
 	LOCAL_ARRAY(char, addr2, MAX_IPSTRLEN);
 	LOCAL_ARRAY(char, mask, MAX_IPSTRLEN);
-	LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
 
 	acl_ip_data *q;
 	char c;
@@ -593,8 +592,6 @@ aclParseIpData6(const char *t)
 	safe_free(q);
 	return NULL;
     }
-    sqinet_ntoa(&q->mask, buf, sizeof(buf), SQADDR_NONE);
-
     if (sqinet_host_is_netaddr(&q->addr1, &q->mask) || sqinet_host_is_netaddr(&q->addr2, &q->mask))
 	debug(28, 0) ("aclParseIpData6: WARNING: Netmask masks away part of the specified IP in '%s'\n", t);
     /* Store the masked version of the IP address */
