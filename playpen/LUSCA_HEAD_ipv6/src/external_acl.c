@@ -649,7 +649,7 @@ makeExternalAclKey(aclCheck_t * ch, external_acl_data * acl_data)
 	    str = buf;
 	    break;
 	case EXT_ACL_SRCPORT:
-	    snprintf(buf, sizeof(buf), "%d", request->client_port);
+	    snprintf(buf, sizeof(buf), "%d", sqinet_get_port(&request->client_address));
 	    str = buf;
 	    break;
 	case EXT_ACL_MYADDR:

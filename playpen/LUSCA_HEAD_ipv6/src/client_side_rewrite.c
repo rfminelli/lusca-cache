@@ -136,10 +136,9 @@ clientRedirectDone(void *data, char *result)
 	http->log_uri = xstrdup(urlCanonicalClean(old_request));
 	new_request->http_ver = old_request->http_ver;
 	httpHeaderAppend(&new_request->header, &old_request->header);
-	new_request->client_addr = old_request->client_addr;
-	new_request->client_port = old_request->client_port;
+	sqinet_copy(&new_request->client_address, &old_request->client_address);
 #if FOLLOW_X_FORWARDED_FOR
-	new_request->indirect_client_addr = old_request->indirect_client_addr;
+	sqinet_copy(&new_request->indirect_client_address, &old_request->indirect_client_address);
 #endif /* FOLLOW_X_FORWARDED_FOR */
         sqinet_copy(&new_request->my_address, &old_request->my_address);
 	new_request->flags = old_request->flags;

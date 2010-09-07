@@ -788,6 +788,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
     const request_t *request = httpState->request;
     const request_t *orig_request = httpState->orig_request;
     struct in_addr *client_addr = NULL;
+    struct in_addr ca;
     u_short client_port = 0;
     int fd = httpState->fd;
     int complete = httpState->eof;
@@ -968,7 +969,9 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
     if (keep_alive) {
 	int pinned = 0;
 	if (orig_request->flags.tproxy) {
-	    client_addr = &httpState->request->client_addr;
+#warning TPROXY, IPv6, AIEE!
+	    ca = sqinet_get_v4_inaddr(&httpState->request->client_address, SQADDR_ASSERT_IS_V4);
+	    client_addr = &ca;
 	}
 	/* yes we have to clear all these! */
 	commSetDefer(fd, NULL, NULL);
@@ -1325,6 +1328,7 @@ httpBuildRequestHeader(request_t * request,
     /* building buffer for complex strings */
 #define BBUF_SZ (MAX_URL+32)
     LOCAL_ARRAY(char, bbuf, BBUF_SZ);
+    LOCAL_ARRAY(char, cbuf, MAX_IPSTRLEN);
     String strConnection = StringNull;
     const HttpHeader *hdr_in = &orig_request->header;
     int we_do_ranges;
@@ -1512,8 +1516,9 @@ httpBuildRequestHeader(request_t * request,
     case FORWARDED_FOR_OFF:
 	strFwd = httpHeaderGetList(hdr_in, HDR_X_FORWARDED_FOR);
     case FORWARDED_FOR_TRUNCATE:
-	strListAdd(&strFwd, (((! IsNoAddr(&orig_request->client_addr)) && opt_forwarded_for != FORWARDED_FOR_OFF) ?
-		inet_ntoa(orig_request->client_addr) : "unknown"), ',');
+	(void) sqinet_ntoa(&orig_request->client_address, cbuf, MAX_IPSTRLEN, SQADDR_NONE);
+	strListAdd(&strFwd, (((! sqinet_is_noaddr(&orig_request->client_address)) && opt_forwarded_for != FORWARDED_FOR_OFF) ?
+		cbuf : "unknown"), ',');
 	break;
     case FORWARDED_FOR_TRANSPARENT:
 	/* Handled above */
@@ -1852,9 +1857,11 @@ httpRequestBodyHandler(char *buf, ssize_t size, void *data)
     httpState->body_buf = NULL;
     if (size > 0) {
 	if (httpState->reply_hdr_state >= 2 && !httpState->flags.abuse_detected) {
+	    LOCAL_ARRAY(char, cbuf, MAX_IPSTRLEN);
 	    httpState->flags.abuse_detected = 1;
+	    (void) sqinet_ntoa(&httpState->orig_request->client_address, cbuf, MAX_IPSTRLEN, SQADDR_NONE);
 	    debug(11, 1) ("httpRequestBodyHandler: Likely proxy abuse detected '%s' -> '%s'\n",
-		inet_ntoa(httpState->orig_request->client_addr),
+		cbuf,
 		storeUrl(httpState->entry));
 	    if (httpState->entry->mem_obj->reply->sline.status == HTTP_INVALID_HEADER) {
 		memFree8K(buf);

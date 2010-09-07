@@ -494,11 +494,7 @@ authTryGetUser(auth_user_request_t ** auth_user_request, ConnStateData * conn, r
     else if (conn && conn->auth_user_request)
 	return conn->auth_user_request;
     else {
-        sqaddr_t a;
-        sqinet_init(&a);
-	sqinet_set_v4_inaddr(&a, &request->client_addr);
-	request->auth_user_request = authenticateAuthUserRequestFindByIp(&a);
-	sqinet_done(&a);
+	request->auth_user_request = authenticateAuthUserRequestFindByIp(&request->client_address);
 	if (request->auth_user_request)
 	    authenticateAuthUserRequestLock(request->auth_user_request);
 	return request->auth_user_request;

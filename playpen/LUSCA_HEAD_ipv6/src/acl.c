@@ -2684,7 +2684,7 @@ aclChecklistCacheInit(aclCheck_t * checklist)
 	    checklist->src_addr = request->indirect_client_addr;
 	} else
 #endif /* FOLLOW_X_FORWARDED_FOR */
-	sqinet_set_v4_inaddr(&checklist->src_address, &request->client_addr);
+	sqinet_copy(&checklist->src_address, &request->client_address);
         sqinet_copy(&checklist->my_address, &request->my_address);
 #if 0 && USE_IDENT
 	/*

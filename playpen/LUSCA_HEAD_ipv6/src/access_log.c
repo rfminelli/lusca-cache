@@ -488,7 +488,7 @@ accessLogCustom(AccessLogEntry * al, customlog * log)
 
 	case LFT_CLIENT_PORT:
 	    if (al->request) {
-		outint = al->request->client_port;
+		outint = sqinet_get_port(&al->request->client_address);
 		doint = 1;
 	    }
 	    break;

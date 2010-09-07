@@ -333,8 +333,8 @@ delayClient(clientHttpRequest * http)
     aclCheckSetup(&ch);
     ch.conn = http->conn;
     ch.request = r;
-    if (r->client_addr.s_addr == INADDR_BROADCAST) {
-	debug(77, 2) ("delayClient: WARNING: Called with 'allones' address, ignoring\n");
+    if (sqinet_is_noaddr(&r->client_address)) {
+	debug(77, 2) ("delayClient: WARNING: Called with 'allones'/none address, ignoring\n");
         aclCheckFinish(&ch);
 	return delayId(0, 0);
     }

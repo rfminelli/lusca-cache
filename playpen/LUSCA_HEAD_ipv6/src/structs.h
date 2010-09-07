@@ -1647,11 +1647,9 @@ struct _request_t {
     time_t ims;
     int imslen;
     int max_forwards;
-    /* these in_addr's could probably be sockaddr_in's */
-    unsigned short client_port;
-    struct in_addr client_addr;
+    sqaddr_t client_address;
 #if FOLLOW_X_FORWARDED_FOR
-    struct in_addr indirect_client_addr;	/* after following X-Forwarded-For */
+    sqaddr_t indirect_client_address;
 #endif				/* FOLLOW_X_FORWARDED_FOR */
     sqaddr_t my_address;
     HttpHeader header;

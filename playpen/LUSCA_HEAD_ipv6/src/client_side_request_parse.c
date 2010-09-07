@@ -558,10 +558,9 @@ clientTryParseRequest(ConnStateData * conn)
 	request->content_length = httpHeaderGetSize(&request->header,
 	    HDR_CONTENT_LENGTH);
 	request->flags.internal = http->flags.internal;
-	request->client_addr = sqinet_get_v4_inaddr(&conn->peer2, SQADDR_ASSERT_IS_V4);
-	request->client_port = sqinet_get_port(&conn->peer2);
+        sqinet_copy(&request->client_address, &conn->peer2);
 #if FOLLOW_X_FORWARDED_FOR
-	request->indirect_client_addr = request->client_addr;
+        sqinet_copy(&request->indirect_client_address, &conn->peer2);
 #endif /* FOLLOW_X_FORWARDED_FOR */
         sqinet_copy(&request->my_address, &conn->me2);
 	request->http_ver = http->http_ver;

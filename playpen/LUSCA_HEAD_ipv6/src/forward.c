@@ -634,7 +634,7 @@ fwdConnectStart(void *data)
 	do_tproxy = 0;
     if (fd == -1 && fwdState->request->flags.tproxy && do_tproxy)
 	/* Why is the client_port 0? Make sure you maintain this when you convert it to ipv6 -adrian */
-	fd = pconnPop(name, port, domain, &fwdState->request->client_addr, 0, NULL);
+	fd = pconnPop6(name, port, domain, &fwdState->request->client_address, NULL);
     if (fd == -1) {
 	fd = pconnPop(name, port, domain, NULL, 0, &idle);
     }
@@ -938,7 +938,7 @@ fwdStart(int fd, StoreEntry * e, request_t * r)
      * from peer_digest.c, asn.c, netdb.c, etc and should always
      * be allowed.  yuck, I know.
      */
-    if (! IsNoAddr(&r->client_addr) && r->protocol != PROTO_INTERNAL && r->protocol != PROTO_CACHEOBJ) {
+    if (! sqinet_is_noaddr(&r->client_address) && r->protocol != PROTO_INTERNAL && r->protocol != PROTO_CACHEOBJ) {
 	/*      
 	 * Check if this host is allowed to fetch MISSES from us (miss_access)
 	 */
@@ -993,9 +993,7 @@ fwdStart(int fd, StoreEntry * e, request_t * r)
     /* If we need to transparently proxy the request
      * then we need the client source address and port */
     /* XXX should we only do this if the request has the tproxy flag set?! */
-    fwdState->src.sin_family = AF_INET;
-    fwdState->src.sin_addr = r->client_addr;
-    fwdState->src.sin_port = r->client_port;
+    fwdState->src = sqinet_get_v4_sockaddr(&r->client_address, SQADDR_ASSERT_IS_V4);
 
     storeLockObject(e);
     if (!fwdState->request->flags.pinned)

@@ -58,8 +58,12 @@ requestCreate(method_t * method, protocol_t protocol, const char *urlpath)
     req->max_forwards = -1;
     req->lastmod = -1;
     SetAnyAddr(&req->out_ip);
-    SetNoAddr(&req->client_addr);
+//    SetNoAddr(&req->client_addr);
     sqinet_init(&req->my_address);
+    sqinet_init(&req->client_address);
+#if FOLLOW_X_FORWARDED_FOR
+    sqinet_init(&req->indirect_client_address);
+#endif
 //    SetNoAddr(&req->my_addr);
     httpHeaderInit(&req->header, hoRequest);
     return req;
@@ -82,6 +86,10 @@ requestDestroy(request_t * req)
     safe_free(req->extacl_user);
     safe_free(req->extacl_passwd);
     sqinet_done(&req->my_address);
+    sqinet_done(&req->client_address);
+#if FOLLOW_X_FORWARDED_FOR
+    sqinet_done(&req->indirect_client_address);
+#endif
     stringClean(&req->urlpath);
     httpHeaderClean(&req->header);
     if (req->cache_control)
@@ -147,8 +155,9 @@ httpRequestPackDebug(request_t * req, Packer * p)
 
     assert(req && p);
     /* Client info */
+    (void) sqinet_ntoa(&req->client_address, cbuf, MAX_IPSTRLEN, SQADDR_NONE);
+    packerPrintf(p, "Client: %s ", cbuf);
     (void) sqinet_ntoa(&req->my_address, cbuf, MAX_IPSTRLEN, SQADDR_NONE);
-    packerPrintf(p, "Client: %s ", inet_ntoa(req->client_addr));
     packerPrintf(p, "http_port: %s:%d", cbuf, sqinet_get_port(&req->my_address));
     if (req->auth_user_request && authenticateUserRequestUsername(req->auth_user_request))
 	packerPrintf(p, "user: %s", authenticateUserRequestUsername(req->auth_user_request));

@@ -43,9 +43,13 @@ void
 internalStart(request_t * request, StoreEntry * entry)
 {
     ErrorState *err;
+    LOCAL_ARRAY(char, cbuf, MAX_IPSTRLEN);
 
-    debug(76, 3) ("internalStart: %s requesting '%.*s'\n",
-	inet_ntoa(request->client_addr), strLen2(request->urlpath), strBuf2(request->urlpath));
+    if (debugLevels[76] >= 3) {
+        (void) sqinet_ntoa(&request->client_address, cbuf, MAX_IPSTRLEN, SQADDR_NONE);
+        debug(76, 3) ("internalStart: %s requesting '%.*s'\n",
+          cbuf, strLen2(request->urlpath), strBuf2(request->urlpath));
+    }
     if (strCmp(request->urlpath, "/squid-internal-dynamic/netdb") == 0) {
 	netdbBinaryExchange(entry);
     } else if (strCmp(request->urlpath, "/squid-internal-periodic/store_digest") == 0) {
