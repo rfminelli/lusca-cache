@@ -822,7 +822,7 @@ extern void errorSetAddr(ErrorState *err, sqaddr_t *ip);
 extern void errorSetAddr4(ErrorState *err, struct in_addr ip);
 extern int errorPageId(const char *page_name);
 
-extern int asnMatchIp(void *, struct in_addr);
+extern int asnMatchIp(void *, sqaddr_t *);
 extern void asnInit(void);
 extern void asnFreeMemory(void);
 

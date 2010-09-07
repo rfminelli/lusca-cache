@@ -81,13 +81,21 @@ static OBJH asnStats;
 /* PUBLIC */
 
 int
-asnMatchIp(void *data, struct in_addr addr)
+asnMatchIp(void *data, sqaddr_t *v6addr)
 {
     as_info *e;
     intlist *a = NULL;
     intlist *b = NULL;
     prefix_t *p;
     radix_node_t *n;
+    struct in_addr addr;
+
+#warning ASN code needs to be made ipv6 aware
+
+    if (sqinet_get_family(v6addr) != AF_INET)
+        return 0;
+
+    addr = sqinet_get_v4_inaddr(v6addr, SQADDR_ASSERT_IS_V4);
 
     debug(53, 3) ("asnMatchIp: Called for %s.\n", inet_ntoa(addr));
 
