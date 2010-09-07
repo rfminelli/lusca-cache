@@ -2967,38 +2967,40 @@ parse_http_port_specification(http_port_list * s, char *token)
 #if NOTYET
     const struct hostent *hp;
 #endif
-    unsigned short port = 0;
-    char *t;
+    int port = 0;
+    char *t = NULL;
 
     sqinet_init(&s->ss);
     s->name = xstrdup(token);
-    if ((t = strchr(token, ':'))) {
-	/* host:port */
+
+    /* Handle IPv6 [host]:port */
+    if (token[0] == '[') {
+        token++;
+	t = strchr(token, ']');
+	if (! t)
+		self_destruct();
+	*t = '\0';
+	host = token;
+	port = xatos(t + 2);
+        if (! sqinet_aton(&s->ss, host, SQATON_PASSIVE))
+	    self_destruct();
+        sqinet_set_port(&s->ss, port, SQADDR_NONE);
+    } else if ((t = strchr(token, ':'))) {
+	/* IPv4 host:port */
 	host = token;
 	*t = '\0';
 	port = xatos(t + 1);
+	sqinet_set_family(&s->ss, AF_INET);
+        if (! sqinet_aton(&s->ss, host, SQATON_PASSIVE))
+	    self_destruct();
+        sqinet_set_port(&s->ss, port, SQADDR_NONE);
     } else {
-	/* port */
+	/* it's just an IPv4 port */
 	port = xatos(token);
-    }
-    if (port == 0)
-	self_destruct();
-    if (NULL == host) {			/* Default this to v4 for now, preserves behaviour */
 	sqinet_set_family(&s->ss, AF_INET);
 	sqinet_set_anyaddr(&s->ss);
-    } else if (1 == sqinet_aton(&s->ss, host, SQATON_PASSIVE)) {
-	(void) 0;
-#warning This needs to be ipv6-ified
-#if NOTYET		/* This should be eventually added back -adrian */
-    } else if ((hp = gethostbyname(host))) {
-	/* dont use ipcache */
-	s->s.sin_addr = inaddrFromHostent(hp);
-	s->defaultsite = xstrdup(host);
-#endif
-    } else
-	self_destruct();
-
-    sqinet_set_port(&s->ss, port, SQADDR_NONE);
+        sqinet_set_port(&s->ss, port, SQADDR_NONE);
+    }
 }
 
 static void
