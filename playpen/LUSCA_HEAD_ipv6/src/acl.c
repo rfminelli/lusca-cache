@@ -2038,7 +2038,10 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
     debug(28, 3) ("aclMatchAcl: checking '%s'\n", ae->cfgline);
     switch (ae->type) {
     case ACL_SRC_IP:
-	return aclMatchIp(&ae->data, &checklist->src_address);
+	if (sqinet_get_family(&checklist->my_address) == AF_INET)
+	    return aclMatchIp(&ae->data, &checklist->src_address);
+	else
+	    return 0;		/* Can't do an IPv4 lookup against IPv6 "my_addr" */
 	/* NOTREACHED */
     case ACL_MY_IP:
 	if (sqinet_get_family(&checklist->my_address) == AF_INET)
@@ -2064,7 +2067,11 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	}
 	/* NOTREACHED */
     case ACL_SRC_IP6:
-	return 0;	/* XXX for now; no v6 address to compare! */
+	if (sqinet_get_family(&checklist->my_address) == AF_INET6)
+	    return aclMatchIp(&ae->data, &checklist->src_address);
+	else
+	    return 0;		/* Can't do an IPv4 lookup against IPv6 "my_addr" */
+	/* NOTREACHED */
     case ACL_MY_IP6:
 	if (sqinet_get_family(&checklist->my_address) == AF_INET6)
 	    return aclMatchIp(&ae->data, &checklist->my_address);
