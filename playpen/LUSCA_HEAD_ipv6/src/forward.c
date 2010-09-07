@@ -126,6 +126,7 @@ fwdStateFree(FwdState * fwdState)
 	debug(17, 3) ("fwdStateFree: closing FD %d\n", sfd);
 	comm_close(sfd);
     }
+    sqinet_done(&fwdState->src_ip);
     cbdataFree(fwdState);
 }
 
@@ -547,7 +548,10 @@ fwdConnectCreateSocket(FwdState *fwdState, FwdServer *fs)
 
     /* If tproxy then try with the tproxy details. If this fails then retry w/ non-tproxy */
     if (fwdState->request->flags.tproxy && do_tproxy) {
-        fd = comm_open(SOCK_STREAM, IPPROTO_TCP, fwdState->src.sin_addr, 0,
+	struct in_addr src;
+#warning IPv6-ify!
+	src = sqinet_get_v4_inaddr(&fwdState->src_ip, SQADDR_ASSERT_IS_V4);
+        fd = comm_open(SOCK_STREAM, IPPROTO_TCP, src, 0,
           COMM_NONBLOCKING | COMM_TPROXY_REM, tos, url);
     }
     if (fd == -1) {
@@ -919,6 +923,7 @@ fwdStartPeer(peer * p, StoreEntry * e, request_t * r)
     fwdState->request = requestLink(r);
     fwdState->start = squid_curtime;
     fwdState->orig_entry_flags = e->flags;
+    sqinet_init(&fwdState->src_ip);
     storeLockObject(e);
     if (!fwdState->request->flags.pinned)
 	EBIT_SET(e->flags, ENTRY_FWD_HDR_WAIT);
@@ -993,7 +998,7 @@ fwdStart(int fd, StoreEntry * e, request_t * r)
     /* If we need to transparently proxy the request
      * then we need the client source address and port */
     /* XXX should we only do this if the request has the tproxy flag set?! */
-    fwdState->src = sqinet_get_v4_sockaddr(&r->client_address, SQADDR_ASSERT_IS_V4);
+    sqinet_copy(&fwdState->src_ip, &r->client_address);
 
     storeLockObject(e);
     if (!fwdState->request->flags.pinned)

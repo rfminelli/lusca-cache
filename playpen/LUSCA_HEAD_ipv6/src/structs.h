@@ -1897,7 +1897,7 @@ struct _FwdState {
 	unsigned int dont_retry:1;
 	unsigned int ftp_pasv_failed:1;
     } flags;
-    struct sockaddr_in src;
+    sqaddr_t src_ip;
     u_short orig_entry_flags;	/* Hack to be able to reset the entry proper */
 };
 
