@@ -2689,6 +2689,20 @@ aclChecklistCacheInit(aclCheck_t * checklist)
     }
 }
 
+void
+aclCheckSetup(aclCheck_t *ch)
+{
+    sqinet_init(&ch->my_address);
+    sqinet_init(&ch->src_address);
+}
+
+void
+aclCheckFinish(aclCheck_t *ch)
+{
+    sqinet_done(&ch->my_address);
+    sqinet_done(&ch->src_address);
+}
+
 CBDATA_TYPE(aclCheck_t);
 
 aclCheck_t *

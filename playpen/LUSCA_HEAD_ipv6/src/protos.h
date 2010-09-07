@@ -62,6 +62,8 @@ char *log_quote(const char *header);
 
 /* acl.c */
 extern void aclInitMem(void);
+extern void aclCheckSetup(aclCheck_t *);
+extern void aclCheckFinish(aclCheck_t *);
 extern aclCheck_t *aclChecklistCreate(const struct _acl_access *,
     request_t *,
     const char *ident);
