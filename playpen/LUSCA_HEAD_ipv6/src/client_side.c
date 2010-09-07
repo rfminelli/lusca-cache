@@ -2569,14 +2569,6 @@ httpAccept(int sock, void *data)
             sqinet_done(&me);
             break;
 	}
-        if (sqinet_get_family(&peer) != AF_INET) {
-            debug(1, 1) ("httpAccept: FD %d: (%s:%d) is not an IPv4 socket!\n", fd, fd_table[fd].ipaddrstr, fd_table[fd].local_port);
-            comm_close(fd);
-            sqinet_done(&peer);
-            sqinet_done(&me);
-            break;
-       }
-
 	F = &fd_table[fd];
 	debug(33, 4) ("httpAccept: FD %d: accepted port %d client %s:%d\n", fd, F->local_port, F->ipaddrstr, F->remote_port);
 	fd_note_static(fd, "client http connect");
