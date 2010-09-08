@@ -812,7 +812,8 @@ extern int errorReservePageId(const char *page_name);
 extern ErrorState *errorCon(err_type type, http_status, request_t * request);
 extern int errorPageId(const char *page_name);
 
-extern int asnMatchIp(void *, struct in_addr);
+extern int asnMatchIp(void *, sqaddr_t *);
+extern int asnMatchIp4(void *, struct in_addr); 
 extern void asnInit(void);
 extern void asnFreeMemory(void);
 

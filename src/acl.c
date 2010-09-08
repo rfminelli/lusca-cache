@@ -2020,13 +2020,13 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	/* NOTREACHED */
 #endif
     case ACL_SRC_ASN:
-	return asnMatchIp(ae->data, checklist->src_addr);
+	return asnMatchIp4(ae->data, checklist->src_addr);
 	/* NOTREACHED */
     case ACL_DST_ASN:
 	ia = ipcache_gethostbyname(r->host, IP_LOOKUP_IF_MISS);
 	if (ia) {
 	    for (k = 0; k < (int) ia->count; k++) {
-		if (asnMatchIp(ae->data, ia->in_addrs[k]))
+		if (asnMatchIp4(ae->data, ia->in_addrs[k]))
 		    return 1;
 	    }
 	    return 0;
@@ -2035,7 +2035,7 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 		ae->name, r->host);
 	    checklist->state[ACL_DST_ASN] = ACL_LOOKUP_NEEDED;
 	} else {
-	    return asnMatchIp(ae->data, no_addr);
+	    return asnMatchIp4(ae->data, no_addr);
 	}
 	return 0;
 	/* NOTREACHED */
