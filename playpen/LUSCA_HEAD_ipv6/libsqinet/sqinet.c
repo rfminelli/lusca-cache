@@ -656,6 +656,7 @@ sqinet_aton(sqaddr_t *s, const char *hoststr, sqaton_flags flags)
 		hints.ai_family = AF_INET6;
 	if (flags & SQATON_PASSIVE)
 		hints.ai_flags |= AI_PASSIVE;
+	hints.ai_flags |= AI_NUMERICHOST;
 
 	err = getaddrinfo(hoststr, NULL, &hints, &r);
 	if (err != 0) {
