@@ -12,6 +12,7 @@
 #elif HAVE_REGEX_H
 #include <regex.h>
 #endif
+#include <ctype.h>
 
 #include "../include/util.h"
 
