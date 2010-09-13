@@ -741,6 +741,7 @@ makeExternalAclKey(aclCheck_t * ch, external_acl_data * acl_data)
 		    stringAppend(&sb, quoted, strlen(quoted));
 		} else {
 		    static MemBuf mb2 = MemBufNULL;
+		    memBufReset(&mb2);
 		    strwordquote(&mb2, arg->key);
 		    stringAppend(&sb, mb2.buf, mb2.size);
 		    memBufClean(&mb2);
