@@ -10,20 +10,25 @@ clientEatRequestBodyHandler(char *buf, ssize_t size, void *data)
     if (buf && size < 0) {
 	return;			/* Aborted, don't care */
     }
-    if (conn->body.size_left > 0) {
+    if (conn->in.offset > 0 && conn->body.size_left > 0) {
 	conn->body.callback = clientEatRequestBodyHandler;
 	conn->body.cbdata = http;
 	cbdataLock(conn->body.cbdata);
 	conn->body.buf = NULL;
 	conn->body.bufsize = SQUID_TCP_SO_RCVBUF;
 	clientProcessBody(conn);
+        return;
+    }
+
+    if (conn->in.offset == 0 && conn->body.size_left != 0) {
+        debug(1, 1) ("clientEatRequestBodyHandler: FD %d: no more data left in socket; but request header says there should be; aborting for now\n", conn->fd);
+        return;
+    }
+    if (http->request->flags.proxy_keepalive) {
+        debug(33, 5) ("clientEatRequestBodyHandler: FD %d Keeping Alive\n", conn->fd);
+        clientKeepaliveNextRequest(http);
     } else {
-	if (http->request->flags.proxy_keepalive) {
-	    debug(33, 5) ("clientEatRequestBodyHandler: FD %d Keeping Alive\n", conn->fd);
-	    clientKeepaliveNextRequest(http);
-	} else {
-	    comm_close(conn->fd);
-	}
+        comm_close(conn->fd);
     }
 }
 
@@ -95,6 +100,16 @@ clientProcessBody(ConnStateData * conn)
     request_t *request = conn->body.request;
     /* Note: request is null while eating "aborted" transfers */
     debug(33, 2) ("clientProcessBody: start fd=%d body_size=%lu in.offset=%ld cb=%p req=%p\n", conn->fd, (unsigned long int) conn->body.size_left, (long int) conn->in.offset, callback, request);
+#if 0
+    if (conn->in.offset == 0) {
+	/* This typically will only occur when some recursive call through the body eating path has occured -adrian */
+	/* XXX so no need atm to call the callback handler; the original code didn't! -adrian */
+	debug(33, 1) ("clientProcessBody: cbdata %p: would've leaked; conn->in.offset=0 here\n", cbdata);
+	cbdataUnlock(conn->body.cbdata);
+	conn->body.cbdata = conn->body.callback = NULL;
+	return;
+    }
+#endif
     if (conn->in.offset) {
 	int valid = cbdataValid(conn->body.cbdata);
 	if (!valid) {
