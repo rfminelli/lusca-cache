@@ -258,6 +258,7 @@ ATF_TC_BODY(libhttp_parse_content_length_1, tc)
 	ATF_REQUIRE(test_http_content_length(&hdr, "123b5") == 1);
 	ATF_REQUIRE(test_http_content_length(&hdr, "b1234") == -1);
 	ATF_REQUIRE(test_http_content_length(&hdr, "abcde") == -1);
+	ATF_REQUIRE(test_http_content_length(&hdr, "4790023270") == 1);
 
 	/* Clean up */
 	httpHeaderClean(&hdr);
@@ -277,6 +278,7 @@ ATF_TC_BODY(libhttp_parse_content_length_2, tc)
 	libhttp_test_content_length_parser("Content-Length: 12345\r\nContent-Length: 23456\r\n", "23456");
 	libhttp_test_content_length_parser("Content-Length: 23456\r\nContent-Length: 12345\r\n", "23456");
 	libhttp_test_content_length_parser("Content-Length: 23456\r\nContent-Length: 12345\r\nContent-Length: 23456\r\n", "23456");
+	libhttp_test_content_length_parser("Content-Length: 4790023270\r\n", "4790023270");
 }
 
 ATF_TC(libhttp_parser_other_whitespace_1);
