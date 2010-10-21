@@ -338,6 +338,7 @@ clientFollowXForwardedForDone(int answer, void *data)
 	 */
 	ConnStateData *conn = http->conn;
 	conn->log_addr = request->indirect_client_addr;
+#warning Do this for IPv6 too!
 	conn->log_addr.s_addr &= Config.Addrs.client_netmask.s_addr;
 	debug(33, 3) ("clientFollowXForwardedForDone: setting log_addr=%s\n",
 	    inet_ntoa(conn->log_addr));
