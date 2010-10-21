@@ -51,6 +51,7 @@ ConnStateData *
 connStateCreate(int fd, sqaddr_t *peer, sqaddr_t *me)
 {
         ConnStateData *connState = NULL;
+	sqaddr_t m;
 
         CBDATA_INIT_TYPE(ConnStateData);
         connState = cbdataAlloc(ConnStateData);
@@ -62,10 +63,15 @@ connStateCreate(int fd, sqaddr_t *peer, sqaddr_t *me)
 	sqinet_copy(&connState->peer2, peer);
 	sqinet_copy(&connState->log_addr2, peer);
 
-#warning XXX still need to add back client_netmask! And/or add a v6 client_netmask config option!
-#if 0
-        connState->log_addr.s_addr &= Config.Addrs.client_netmask.s_addr;
-#endif
+	if (sqinet_get_family(&connState->log_addr2) == AF_INET) {
+		sqinet_init(&m);
+		sqinet_set_v4_inaddr(&m, &Config.Addrs.client_netmask_v4);
+		sqinet_mask_addr(&connState->log_addr2, &m);
+		sqinet_done(&m);
+	} else {
+		sqinet_mask_addr(&connState->log_addr2, &Config.Addrs.client_netmask_v6);
+	}
+
 	sqinet_copy(&connState->me2, me);
 
         connState->fd = fd;

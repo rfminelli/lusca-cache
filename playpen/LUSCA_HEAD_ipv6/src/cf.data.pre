@@ -2609,13 +2609,21 @@ DOC_END
 
 NAME: client_netmask
 TYPE: address
-LOC: Config.Addrs.client_netmask
+LOC: Config.Addrs.client_netmask_v4
 DEFAULT: 255.255.255.255
 DOC_START
 	A netmask for client addresses in logfiles and cachemgr output.
 	Change this to protect the privacy of your cache clients.
 	A netmask of 255.255.255.0 will log all IP's in that range with
 	the last digit set to '0'.
+DOC_END
+
+NAME: client_netmask_v6
+TYPE: address6
+LOC: Config.Addrs.client_netmask_v6
+DEFAULT: ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+DOC_START
+	Similar to client_netmask, but for IPv6.
 DOC_END
 
 NAME: forward_log
