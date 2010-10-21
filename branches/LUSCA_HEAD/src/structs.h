@@ -792,6 +792,7 @@ struct _SquidConfig {
     char *store_dir_select_algorithm;
     int sleep_after_fork;	/* microseconds */
     time_t minimum_expiry_time;	/* seconds */
+    int externalAclMaxQueue;
     external_acl *externalAclHelperList;
     enum zph_mode {
 	ZPH_OFF = 0,
