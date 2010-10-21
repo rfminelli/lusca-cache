@@ -395,6 +395,20 @@ COMMENT_START
  -----------------------------------------------------------------------------
 COMMENT_END
 
+NAME: external_acl_maxqueue
+TYPE: int
+LOC: Config.externalAclMaxQueue
+DEFAULT: 0
+DOC_START
+	By default, the maximum queue depth for the external ACL helpers
+	is the number of helper processes. This may not be useful in larger
+	installations where multiple requests are queued to the helpers
+	before the helper can receive and service requests.
+
+	By changing it to a non-zero value, the maximum queue depth will
+	be fixed to this value, regardless of the number of helper processes.
+DOC_END
+
 NAME: external_acl_type
 TYPE: externalAclHelper
 LOC: Config.externalAclHelperList

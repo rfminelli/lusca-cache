@@ -114,7 +114,15 @@ http_hdrs_check_again(HttpHeader *hdrs, struct _http_repack_list *r)
 
 /* ** */
 
-extern int hh_check_content_length(HttpHeader *hdr, const char *val, int vlen);
+/* XXX should be in an include file from libhttp! */
+typedef enum {
+        PR_NONE,
+        PR_ERROR,
+        PR_IGNORE,
+        PR_WARN,
+        PR_OK
+} parse_retval_t;
+extern parse_retval_t hh_check_content_length(HttpHeader *hdr, const char *val, int vlen);
 
 static int
 test_core_parse_header(HttpHeader *hdr, const char *hdrs)
@@ -151,7 +159,7 @@ libhttp_test_content_length_parser(const char *str, const char *clength)
 	httpHeaderClean(&hdr);
 }
 
-static int
+static parse_retval_t
 test_http_content_length(HttpHeader *hdr, const char *str)
 {
 	int r;
@@ -254,10 +262,11 @@ ATF_TC_BODY(libhttp_parse_content_length_1, tc)
         httpHeaderInitLibrary();
 	httpHeaderInit(&hdr, hoRequest);
 
-	ATF_REQUIRE(test_http_content_length(&hdr, "12345") == 1);
-	ATF_REQUIRE(test_http_content_length(&hdr, "123b5") == 1);
-	ATF_REQUIRE(test_http_content_length(&hdr, "b1234") == -1);
-	ATF_REQUIRE(test_http_content_length(&hdr, "abcde") == -1);
+	ATF_REQUIRE(test_http_content_length(&hdr, "12345") == PR_OK);
+	ATF_REQUIRE(test_http_content_length(&hdr, "123b5") == PR_OK);
+	ATF_REQUIRE(test_http_content_length(&hdr, "b1234") == PR_ERROR);
+	ATF_REQUIRE(test_http_content_length(&hdr, "abcde") == PR_ERROR);
+	ATF_REQUIRE(test_http_content_length(&hdr, "4790023270") == PR_OK);
 
 	/* Clean up */
 	httpHeaderClean(&hdr);
@@ -277,6 +286,7 @@ ATF_TC_BODY(libhttp_parse_content_length_2, tc)
 	libhttp_test_content_length_parser("Content-Length: 12345\r\nContent-Length: 23456\r\n", "23456");
 	libhttp_test_content_length_parser("Content-Length: 23456\r\nContent-Length: 12345\r\n", "23456");
 	libhttp_test_content_length_parser("Content-Length: 23456\r\nContent-Length: 12345\r\nContent-Length: 23456\r\n", "23456");
+	libhttp_test_content_length_parser("Content-Length: 4790023270\r\n", "4790023270");
 }
 
 ATF_TC(libhttp_parser_other_whitespace_1);

@@ -498,6 +498,8 @@ aclDestroyExternal(void **dataptr)
 static inline int
 externalAclOverload(external_acl * def)
 {
+    if (Config.externalAclMaxQueue > 0)
+        return def->helper->stats.queue_size > Config.externalAclMaxQueue;
     return def->helper->stats.queue_size > def->helper->n_running;
 }
 
@@ -743,6 +745,7 @@ makeExternalAclKey(aclCheck_t * ch, external_acl_data * acl_data)
 		    stringAppend(&sb, quoted, strlen(quoted));
 		} else {
 		    static MemBuf mb2 = MemBufNULL;
+		    memBufReset(&mb2);
 		    strwordquote(&mb2, arg->key);
 		    stringAppend(&sb, mb2.buf, mb2.size);
 		    memBufClean(&mb2);

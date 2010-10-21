@@ -327,7 +327,7 @@ httpHeaderParseSize2(const char *start, int len, squid_off_t * value)
 
     *value = strtol_n(start, len, &end, 10);
     if (start == end || errno != 0) {
-        debug(66, 2) ("httpHeaderParseSize2: failed to parse a size/offset header field near '%s'\n", start);
+        debug(55, 2) ("httpHeaderParseSize2: failed to parse a size/offset header field near '%s'\n", start);
         *value = -1;
         return 0;
     }
