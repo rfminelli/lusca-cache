@@ -498,6 +498,8 @@ aclDestroyExternal(void **dataptr)
 static inline int
 externalAclOverload(external_acl * def)
 {
+    if (Config.externalAclMaxQueue > 0)
+        return def->helper->stats.queue_size > Config.externalAclMaxQueue;
     return def->helper->stats.queue_size > def->helper->n_running;
 }
 
