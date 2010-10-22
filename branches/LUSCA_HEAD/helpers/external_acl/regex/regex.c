@@ -194,6 +194,8 @@ main(int argc, const char *argv[])
 {
 	const char *fn;
 	char buf[HELPERBUFSZ];
+	char url[HELPERBUFSZ];
+	int seqnum;
 	time_t ts;
 	int r;
 	struct stat sb;
@@ -236,17 +238,21 @@ main(int argc, const char *argv[])
 			break;
 		trim_trailing_crlf(buf);
 		if (debug) fprintf(stderr, "read: %s\n", buf);
-		/* XXX should break out JUST the URL here! */
+
+		/* Split out the seqnum and URL */
+		sscanf(buf, "%d %s", &seqnum, url);
+		if (debug) fprintf(stderr, "seqnum: %d; url: '%s'\n", seqnum, url);
+ 
 		/* XXX and the URL should be unescaped and normalised properly */
-		r = re_lookup(buf);
+		r = re_lookup(url);
 		if (r > 0) {
 			if (debug) fprintf(stderr, "HIT: line %d; rule %s\n",
 			    re_list.r[r].linenum, re_list.r[r].entry);
-			printf("ERR message=line%s%d log=line%s%d\n",
+			printf("%d ERR message=line%s%d log=line%s%d\n", seqnum,
 			    "%20", re_list.r[r].linenum,
 			    "%20", re_list.r[r].linenum);
 		} else {
-			printf("OK\n");
+			printf("%d OK\n", seqnum);
 		}
 	}
 	re_list_free();	
