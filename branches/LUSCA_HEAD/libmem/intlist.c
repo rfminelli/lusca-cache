@@ -89,7 +89,7 @@ intlistAddTail(intlist * list, int i)
 {
     intlist *t, *n;
 
-    for (t = list; t; t = t->next)
+    for (t = list; t && t->next; t = t->next)
         ;
 
     intlistCheckAlloc();
