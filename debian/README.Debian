@@ -1,0 +1,62 @@
+
+The lusca homepage is at http://www.lusca.org/
+
+
+**** Configuration File ****
+
+The upstream squid.conf contains ACLs so that squid denies all
+requests by default, forcing you to configure it first. The Debian
+package allows access from 'localhost'. To use it you need to
+configure your browser to use proxyserver 'localhost', port 3128.
+
+Please see /usr/share/doc/lusca/example/squid.conf for documentation 
+on the configuration file.
+
+You can increase the maximum number of filedescriptors that squid
+uses through /etc/default/lusca.
+
+You can also run lusca with a userid different from root from the beginning
+(no just dropping root privileges after running). To do so add a CHUID=user
+line in /etc/default/lusca where 'user' is the user you want lusca to run 
+as. Please adjust permission accordingly, expecially for squid.conf that
+is installed as root with permission set to 0600.
+
+The default /etc/squid/squid.conf file turns off icmp, htcp and snmp.
+
+The following flags were passed to the squid Makefile
+to customize some locations:
+
+bindir       = /usr/sbin
+libexecdir   = /usr/lib/squid
+sysconfdir   = /etc/squid
+logdir       = /var/log/squid
+docdir       = /usr/share/doc/lusca
+datadir      = /usr/share/lusca
+
+DEFAULTS     =	logdir=$(logdir) \
+DEFAULT_CACHE_LOG=$(logdir)/cache.log \
+DEFAULT_ACCESS_LOG=$(logdir)/access.log \
+DEFAULT_STORE_LOG=$(logdir)/store.log \
+DEFAULT_PID_FILE=/var/run/squid.pid \
+DEFAULT_SWAP_DIR=/var/spool/squid \
+DEFAULT_ICON_DIR=$(datadir)/icons \
+DEFAULT_ERROR_DIR=$(datadir)/errors/English \
+DEFAULT_MIME_TABLE=$(datadir)/mime.conf \
+DEFAULT_MIB_PATH=$(datadir)/mib.txt
+
+So lusca uses the following paths:
+
+- configfile:  /etc/squid/squid.conf
+- binary:      /usr/sbin/squid
+- private dir: /usr/share/squid (mime.conf, error messages, modules)
+- logfiles:    /var/log/squid
+- cache:       /var/spool/squid
+
+**** TroubleShooting ****
+
+If you are in doubt as to why lusca doesn't cache a certain
+object or webpage, you can try the "cacheability service" at
+http://www.ircache.net/cgi-bin/cacheability.py . It will check
+an URL for you and tell you if it is or isn't cachable and why.
+
+-- Roelf Diedericks (TheRoDent) <roelf@neology.co.za>  Thu, 04 Nov 2010 00:12:28 +02

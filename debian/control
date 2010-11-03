@@ -1,0 +1,42 @@
+Source: lusca
+Section: web
+Priority: optional
+Maintainer: Roelf Diedericks <roelf@neology.co.za>
+Homepage: http://www.lusca.org/
+Standards-Version: 3.7.3
+Build-Depends: sharutils, dpatch (>= 2.0.9), po-debconf, libcap-dev, automake
+
+Package: lusca
+Architecture: any
+Section: web
+Priority: optional
+Pre-Depends: debconf (>= 1.2.9) | debconf-2.0
+Depends: ${shlibs:Depends}, netbase, adduser, logrotate (>= 3.5.4-1), lusca-common (>= ${source:Version}), lsb-base
+Conflicts: squid
+Replaces: squid
+Suggests: lusca-cgi, logcheck-database, resolvconf (>= 0.40), smbclient, winbind
+Description: Internet object cache (WWW proxy cache)
+ This package provides the Lusca Cache
+ Lusca is a fork of the Squid-2 development tree. 
+ The Lusca project aims to fix the shortcomings in the Squid-2 codebase whilst
+ maintaining the the Squid-2 functionality and stability.
+
+Package: lusca-common
+Architecture: all
+Section: web
+Conflicts: squid-common
+Replaces: squid-common
+Priority: optional
+Description: Lusca object cache (WWW proxy cache) - common files
+ This package contains common files (errors and icons)
+
+Package: lusca-cgi
+Architecture: any
+Section: web
+Conflicts: squid-cgi
+Replaces: squid-cgi
+Priority: optional
+Depends: apache2 | httpd, ${shlibs:Depends}, debconf | debconf-2.0
+Description: Lusca cache manager CGI program
+ This CGI program can be used to query and administrate a Lusca proxy
+ cache through your web browser.
