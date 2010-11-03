@@ -1,0 +1,7 @@
+lusca: non-standard-file-perm usr/share/doc/lusca/examples/squid.conf 0600 != 0644
+lusca: setgid-binary usr/lib/squid/pam_auth 2750 proxy/shadow
+lusca: setgid-binary usr/lib/squid/getpwnam_auth 2750 proxy/shadow
+lusca: executable-is-not-world-readable usr/lib/squid/pam_auth 2750
+lusca: executable-is-not-world-readable usr/lib/squid/getpwnam_auth 2750
+lusca: non-standard-dir-perm var/log/squid/ 0750 != 0755
+lusca: non-standard-dir-perm var/spool/squid/ 0750 != 0755
