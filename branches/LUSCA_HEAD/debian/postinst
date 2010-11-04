@@ -31,26 +31,6 @@ grepconf2 () {
 }
 
 #
-#	Fix old style "cache_dir /var/spool/squid 100 16 256"
-#	to include "aufs" (Async Unix File System) after "cache_dir".
-#
-conf_fix_cache_dir () {
-
-   # get value for squid/fix_lines
-   db_get squid/fix_lines
-  
-   # handle it!
-   if [ "$RET" = "true" ] ; then
-      sed -e 's/^cache_dir\(.*\)$/cache_dir aufs\1/' \
-      -e 's/^\(dns_children.*\)$/#NOT IN 2.3#\1/' \
-      -e 's/^\(dns_defnames.*\)$/#NOT IN 2.3#\1/' \
-      -e 's/^\(cache_dns_program.*\)$/#NOT IN 2.3#\1/' \
-      < /etc/squid/squid.conf > /etc/squid/squid.conf.TMP && \
-      mv /etc/squid/squid.conf.TMP /etc/squid/squid.conf
-   fi
-
-}
-#
 #	We moved from /etc/cron.d/squid to /etc/logrotate.d/squid
 #
 conf_fix_logrotate () {
@@ -104,13 +84,6 @@ case "$1" in
 			chmod 0600 /etc/squid/squid.conf
 		fi
 
-		# Check for old incompatible configs
-		case "$2" in
-			2.[12].*)
-				conf_fix_cache_dir
-				FIXLINES="$RET"
-				;;
-		esac
 		conf_fix_logrotate
 		conf_fix_http_port
 
@@ -121,23 +94,6 @@ case "$1" in
         usr=`grepconf cache_effective_user proxy`
 		grp=`grepconf cache_effective_group proxy`
 		
-		if [ "$FIXLINES" = "false" ]; then
-		  echo "squid.conf contains 2.2.5 syntax - not doing anything!" 
-		else
-			if [ "$(/usr/bin/stat -c %U $dir)" != "$usr" ] || [ "$(/usr/bin/stat -c %G $dir)" != "$grp" ] ; then
-   				db_get "squid/fix_cachedir_perms"
-   				if [ "$RET" = "true" ] ; then
-		      		chown $usr:$grp $dir -R
-				fi
-   				db_reset "squid/fix_cachedir_perms"
-			fi
-			if [ "$(/usr/bin/stat -c %U /var/log/squid)" != "$usr" ] || [ "$(/usr/bin/stat -c %G /var/log/squid)" != "$grp" ] ; then
-				# Check if there is an override of ownership
-				if [ "$(/usr/sbin/dpkg-statoverride --list /var/log/squid)" = "" ] ; then
-		  			chown $usr:$grp /var/log/squid -R
-				fi
-			fi
-		fi
 	 
 		#
 		# Create spool dirs if they don't exist.
@@ -186,11 +142,4 @@ update-rc.d squid defaults 30 >/dev/null
 
 cd /
 
-if [ "$FIXLINES" = "false" ]; then
-  echo "squid.conf contains 2.2.5 syntax - cache_dir directive - not starting "
-  echo "Run 'dpkg-reconfigure -plow squid' to fix this automatically," 
-  echo "or fix the 'cache_dir'-entry in your squid.conf manually." 
-  echo "See documentation in /usr/share/doc/lusca for more instructions."
-else
-  invoke-rc.d squid restart
-fi
+invoke-rc.d squid restart

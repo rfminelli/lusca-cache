@@ -302,10 +302,6 @@ binary-arch:	build checkroot
 	$(INSTALL_SCRIPT) debian/prerm $(tmp)/DEBIAN/prerm
 	$(INSTALL_SCRIPT) debian/postrm $(tmp)/DEBIAN/postrm
 	$(INSTALL_FILE) debian/conffiles $(tmp)/DEBIAN/conffiles
-	$(INSTALL_FILE) debian/templates $(tmp)/DEBIAN/templates
-	#no translations yet:(
-	#po2debconf debian/templates > debian/templates.merged
-	$(INSTALL_FILE) debian/templates $(tmp)/DEBIAN/templates
 	$(INSTALL_SCRIPT) debian/config $(tmp)/DEBIAN/config
 
 	# overrides file
@@ -342,7 +338,6 @@ binary-arch:	build checkroot
 	$(INSTALL_SCRIPT) debian/postrm.lusca-cgi $(tmp)/DEBIAN/postrm
 	$(INSTALL_SCRIPT) debian/prerm.lusca-cgi $(tmp)/DEBIAN/prerm
 	$(INSTALL_FILE) debian/conffiles.lusca-cgi $(tmp)/DEBIAN/conffiles
-	$(INSTALL_FILE) debian/templates $(tmp)/DEBIAN/templates
 	dpkg-shlibdeps tools/cachemgr.cgi
 	dpkg-gencontrol -isp -plusca-cgi
 	dpkg --build $(tmp) ..
@@ -364,7 +359,7 @@ clean1:	checkroot
 	rm -f helpers/external_acl/ldap_group/{Makefile,squid_ldap_group,squid_ldap_group.o}
 	rm -f helpers/external_acl/unix_group/{Makefile,squid_unix_group,check_group.o}
 	rm -f helpers/ntlm_auth/SMB/{Makefile,ntlm_auth,*.o,smbval/*.o}
-	rm -f build debian/{substvars,files,templates.merged}
+	rm -f build debian/{substvars,files}
 	rm -rf $(tmp) *~
 	find . -name '*.bak' -o -name '*~' | xargs -r rm -f --
 	#cd icons && /bin/sh ./icons.shar
