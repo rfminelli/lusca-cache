@@ -3,6 +3,8 @@ It is designed as a proof-of-concept helper and not designed
 for production use. That said, people _ARE_ using it, so it's
 up to you.
 
+The largest URL this supports currently is 16k - HELPERBUFSZ.
+
 To use:
 
 * Compile:
