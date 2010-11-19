@@ -1,0 +1,13 @@
+#!/bin/sh
+
+set -e
+
+case "$1" in
+	remove|upgrade)
+		[ -L /usr/doc/lusca-cgi ] && rm -f /usr/doc/lusca-cgi
+		;;
+	*)
+		;;
+esac
+
+exit 0
