@@ -1148,6 +1148,7 @@ httpReadReply(int fd, void *data)
         if (reply->sline.status >= 100 && reply->sline.status < 200) {
 		debug(1, 1) ("httpReadReply: FD %d: skipping 1xx response!\n", fd);
 		httpReplyReset(reply);
+		storeEntryReset(entry);
 		httpState->reply_hdr_state = 0;
 		po += done;		/* Skip the reply in the incoming buffer */
 		done = 0;		/* So we don't double-account */
