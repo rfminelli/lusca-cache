@@ -68,8 +68,8 @@ ${IPTABLES} -v -t mangle -A DIVERT -j ACCEPT
 ${IPTABLES} -v -t mangle -A PREROUTING -p tcp -m socket -j DIVERT
 ${IPTABLES} -v -t mangle -A PREROUTING -p tcp --dport 80 -j TPROXY --tproxy-mark 0x1/0x1 --on-port 3129
 
-ip rule add fwmark lookup 100
-ipfw route add local 0.0.0.0/0 dev lo table 100
+ip rule add fwmark 1 lookup 100
+ip route add local 0.0.0.0/0 dev lo table 100
 
 sysctl net.ipv4.ip_nonlocal_bind=1
 sysctl net.ipv4.ip_forward=1
