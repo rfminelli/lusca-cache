@@ -430,10 +430,7 @@ mainReconfigure(void)
     setUmask(Config.umask);
     setEffectiveUser();
     _db_init(Config.debugOptions);
-    if (opt_no_daemon)
-	_db_init_log(NULL);
-    else
-	_db_init_log(Config.Log.log);
+    _db_init_log(Config.Log.log);
 
     /* XXX the ipcache/fqdncache config variables need to be set before this is called! */
     ipcache_local_params();
@@ -583,10 +580,7 @@ mainInitialize(void)
 	Config.Port.icp = (u_short) icpPortNumOverride;
 
     _db_init(Config.debugOptions);
-    if (opt_no_daemon)
-	_db_init_log(NULL);
-    else
-	_db_init_log(Config.Log.log);
+    _db_init_log(Config.Log.log);
 
     fd_open(fileno(debug_log), FD_LOG, Config.Log.log);
 #if MEM_GEN_TRACE
