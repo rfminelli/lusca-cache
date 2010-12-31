@@ -249,6 +249,7 @@ squid_LDADD = \
 	-L../libasyncio \
 	-L../libsqtlv \
 	-L../libsqstore \
+	-L../libsqthr \
 	@XTRA_OBJS@ \
 	@REPL_OBJS@ \
 	@STORE_OBJS@ \
@@ -259,6 +260,7 @@ squid_LDADD = \
 	@LIB_MALLOC@ \
 	@SSLLIB@ \
 	@LIB_EPOLL@ \
+	-lsqthr \
 	-lsqstore \
 	-lsqtlv \
 	-lasyncio \

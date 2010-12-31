@@ -91,3 +91,4 @@ section 84    Helper process maintenance
 section 85    COSS external helpers
 section 86    UFS rebuild helper
 section 87    Logging Helper Library
+section 88    Thread Core Library
