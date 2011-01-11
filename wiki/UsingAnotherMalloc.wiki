@@ -1,0 +1,22 @@
+#summary How to build/run Lusca against another malloc (tg tcmalloc)
+#labels Configuration-Example
+
+= Introduction =
+
+Sometimes, you may want to build and/or run Lusca against another malloc implementation - for example, the google "tcmalloc" suite.
+
+In the past, there were issues using a different malloc to what the system shipped with - sometimes, libraries would make internal calls to their local malloc which ignored any other malloc implementation you'd link against. This could cause problems if memory allocated by the system malloc was freed with the local malloc, or vice versa.
+
+Thankfully, most open source today doesn't suffer this issue. It can still creep up in third-party libraries and programs which aren't built with weak symbols referencing malloc/free (ie, ones that can be overridden.) If you begin to see weird crashes and leaks when you use another malloc, this may be why.
+
+= Example - using tcmalloc under RHEL/CentOS =
+
+(From Faysal)
+
+First, install tcmalloc:
+
+# yum install google-perftools google-perftools-devel
+
+Then, when compiling Lusca, just add a LIBS to the configure line, for example:
+
+./configure 'LIBS=-ltcmalloc'
