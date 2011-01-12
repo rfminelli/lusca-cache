@@ -1,0 +1,17 @@
+--- src/Makefile.am.orig	2010-12-16 08:26:04.000000000 +0000
++++ src/Makefile.am	2010-12-16 08:27:03.000000000 +0000
+@@ -311,11 +311,11 @@
+ sysconf_DATA = \
+ 	squid.conf.default \
+ 	squid.conf.clean \
+-	mime.conf.default
+-
+-data_DATA = \
++	mime.conf.default \
+ 	mib.txt
+ 
++data_DATA =
++
+ LDADD = -L../lib -L../libcore -L../libsqdebug -L../libmem -L../libsqname -L../libcb -L../libhelper -L../libmime -L../libstmem -L../libiapp -L../libsqftp -L../libsqurl -L../libhttp -L../libstat -L../libsqdns -L../libsqident -L../libsqinet -L../libasyncio -L../libsqtlv -L../libsqstore -lsqstore -lsqtlv -lasyncio -lsqinet -lsqdns -lsqdebug -lcore -lmem -lsqname -lcb -lsqident -lhelper -lmime -lstmem -liapp -lsqftp -lsqurl -lhttp -lstat -lmiscutil @XTRA_LIBS@
+ 
+ EXTRA_DIST = \
