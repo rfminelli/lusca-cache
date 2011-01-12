@@ -73,7 +73,14 @@ ipcacheStatPrint(ipcache_entry * i, StoreEntry * sentry)
 	(int) i->addrs.count,
 	(int) i->addrs.badcount);
     for (k = 0; k < (int) i->addrs.count; k++) {
-	storeAppendPrintf(sentry, " %15s-%3s", inet_ntoa(i->addrs.in_addrs[k]),
+	char buf[MAX_IPSTRLEN];
+	sqaddr_t a;
+
+	sqinet_init(&a);
+	ipcacheGetAddr(&i->addrs, k, &a);
+	(void) sqinet_ntoa(&a, buf, MAX_IPSTRLEN, SQADDR_NONE);
+	sqinet_done(&a);
+	storeAppendPrintf(sentry, " %15s-%3s", buf,
 	    i->addrs.bad_mask[k] ? "BAD" : "OK ");
     }
     storeAppendPrintf(sentry, "\n");

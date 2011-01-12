@@ -61,15 +61,17 @@ mcastJoinGroups(const ipcache_addrs * ia, void *datanotused)
 	return;
     }
     for (i = 0; i < (int) ia->count; i++) {
+        struct in_addr a;
+        a = ipcacheGetAddrV4(ia, i);
 	debug(7, 10) ("Listening for ICP requests on %s\n",
-	    inet_ntoa(*(ia->in_addrs + i)));
-	mr.imr_multiaddr.s_addr = (ia->in_addrs + i)->s_addr;
+	    inet_ntoa(a));
+	mr.imr_multiaddr.s_addr = a.s_addr;
 	mr.imr_interface.s_addr = INADDR_ANY;
 	x = setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP,
 	    (char *) &mr, sizeof(struct ip_mreq));
 	if (x < 0)
 	    debug(7, 1) ("mcastJoinGroups: FD %d, [%s]\n",
-		fd, inet_ntoa(*(ia->in_addrs + i)));
+		fd, inet_ntoa(a));
 	x = setsockopt(fd, IPPROTO_IP, IP_MULTICAST_LOOP, &c, 1);
 	if (x < 0)
 	    debug(7, 1) ("Can't disable multicast loopback: %s\n", xstrerror());

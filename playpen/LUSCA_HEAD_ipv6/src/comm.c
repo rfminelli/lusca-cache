@@ -121,7 +121,7 @@ commConnectDnsHandle(const ipcache_addrs * ia, void *data)
     assert(ia->cur < ia->count);
     sqinet_done(&cs->in_addr6);
     sqinet_init(&cs->in_addr6);
-    sqinet_set_v4_inaddr(&cs->in_addr6, &ia->in_addrs[ia->cur]);
+    (void) ipcacheGetAddr(ia, ia->cur, &cs->in_addr6);
     if (Config.onoff.balance_on_multiple_ip)
 	ipcacheCycleAddr(cs->host, NULL);
     cs->addrcount = ia->count;

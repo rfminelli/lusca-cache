@@ -98,7 +98,7 @@ send_announce(const ipcache_addrs * ia, void *junk)
     memset(&S, '\0', sizeof(S));
     S.sin_family = AF_INET;
     S.sin_port = htons(port);
-    S.sin_addr = ia->in_addrs[0];
+    S.sin_addr = ipcacheGetAddrV4(ia, 0);
     assert(theOutIcpConnection > 0);
     x = comm_udp_sendto(theOutIcpConnection,
 	&S, sizeof(S),

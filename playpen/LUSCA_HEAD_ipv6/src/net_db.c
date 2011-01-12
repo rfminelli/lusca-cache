@@ -239,7 +239,7 @@ netdbSendPing(const ipcache_addrs * ia, void *data)
 	xfree(hostname);
 	return;
     }
-    addr = ia->in_addrs[ia->cur];
+    addr = ipcacheGetAddrV4(ia, ia->cur);
     if ((n = netdbLookupHost(hostname)) == NULL) {
 	n = netdbAdd(addr);
 	netdbHostInsert(n, hostname);
@@ -1047,7 +1047,7 @@ netdbClosestParent(request_t * request)
 	/* try IP addr */
 	ia = ipcache_gethostbyname(request->host, 0);
 	if (NULL != ia)
-	    n = netdbLookupAddr(ia->in_addrs[ia->cur]);
+	    n = netdbLookupAddr(ipcacheGetAddrV4(ia, ia->cur));
     }
     if (NULL == n)
 	return NULL;

@@ -546,10 +546,10 @@ neighborsUdpPing(request_t * request,
 		host, url);
 	    echo_hdr.reqnum = reqnum;
 	    if (icmp_sock != -1) {
-		icmpSourcePing(ia->in_addrs[ia->cur], &echo_hdr, url);
+		icmpSourcePing(ipcacheGetAddrV4(ia, ia->cur), &echo_hdr, url);
 	    } else {
 		to_addr.sin_family = AF_INET;
-		to_addr.sin_addr = ia->in_addrs[ia->cur];
+		to_addr.sin_addr = ipcacheGetAddrV4(ia, ia->cur);
 		to_addr.sin_port = htons(echo_port);
 		query = icpCreateMessage(ICP_SECHO, 0, url, reqnum, 0);
 		icpUdpSend(theOutIcpConnection,
@@ -1052,7 +1052,7 @@ peerDNSConfigure(const ipcache_addrs * ia, void *data)
 	return;
     }
     for (j = 0; j < (int) ia->count && j < PEER_MAX_ADDRESSES; j++) {
-	p->addresses[j] = ia->in_addrs[j];
+	p->addresses[j] = ipcacheGetAddrV4(ia, j);
 	debug(15, 2) ("--> IP address #%d: %s\n", j, inet_ntoa(p->addresses[j]));
 	p->n_addresses++;
     }
