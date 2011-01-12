@@ -1,0 +1,8 @@
+--- LUSCA_HEAD-r14371/contrib/url-normalizer.pl	1996-12-07 00:54:31.000000000 +0700
++++ contrib/url-normalizer.pl	2009-12-31 11:19:18.000000000 +0700
+@@ -1,4 +1,4 @@
+-#!/usr/local/bin/perl -Tw
++#!/usr/bin/perl -Tw
+ 
+ # From:    Markus Gyger <mgyger@itr.ch>
+ #
