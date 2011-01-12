@@ -715,3 +715,22 @@ ipcacheFlushAll(void)
     }
     return removed;
 }
+
+/*
+ * XXX legacy - no bounds checking!
+ */
+struct in_addr
+ipcacheGetAddrV4(const ipcache_addrs *ia, int i)
+{
+	return ia->in_addrs[i];
+}
+
+int
+ipcacheGetAddr(const ipcache_addrs *ia, int i, sqaddr_t *a)
+{
+	if (i >= ia->count)
+		return 0;
+
+	sqinet_set_v4_inaddr(a, &ia->in_addrs[i]);
+	return 1;
+}

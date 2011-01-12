@@ -65,7 +65,8 @@ extern ipcache_addrs *ipcacheCheckNumeric(const char *name);
 extern void ipcache_restart(void);
 extern int ipcacheAddEntryFromHosts(const char *name, const char *ipaddr);
 extern int ipcacheFlushAll(void);
-
+extern struct in_addr ipcacheGetAddrV4(const ipcache_addrs *, int i);
+extern int ipcacheGetAddr(const ipcache_addrs *, int i, sqaddr_t *a);
 
 #endif
 
