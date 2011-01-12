@@ -284,12 +284,12 @@ commConnectHandle(int fd, void *data)
 	commSetSelect(fd, COMM_SELECT_WRITE, commConnectHandle, cs, 0);
 	break;
     case COMM_OK:
-	ipcacheMarkGoodAddr(cs->host, sqinet_get_v4_inaddr(&cs->in_addr6, SQADDR_ASSERT_IS_V4));
+	ipcacheMarkGoodAddr(cs->host, &cs->in_addr6);
 	commConnectCallback(cs, COMM_OK);
 	break;
     default:
 	cs->tries++;
-	ipcacheMarkBadAddr(cs->host, sqinet_get_v4_inaddr(&cs->in_addr6, SQADDR_ASSERT_IS_V4));
+	ipcacheMarkBadAddr(cs->host, &cs->in_addr6);
 	if (Config.onoff.test_reachability)
 	    netdbDeleteAddrNetwork(&cs->in_addr6);
 	if (commRetryConnect(cs)) {

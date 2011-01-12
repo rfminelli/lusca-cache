@@ -565,10 +565,17 @@ ipcacheCycleAddr(const char *name, ipcache_addrs * ia)
  * advance the current pointer to the next OK address.
  */
 void
-ipcacheMarkBadAddr(const char *name, struct in_addr addr)
+ipcacheMarkBadAddr(const char *name, sqaddr_t *a)
 {
     ipcache_entry *i;
     ipcache_addrs *ia;
+    struct in_addr addr;
+
+    if (sqinet_get_family(a) != AF_INET)
+        return;
+#warning ipcacheMarkBadAddr needs to be ipv6ed!
+    addr = sqinet_get_v4_inaddr(a, SQADDR_ASSERT_IS_V4);
+
     int k;
     if ((i = ipcache_get(name)) == NULL)
 	return;
@@ -589,10 +596,17 @@ ipcacheMarkBadAddr(const char *name, struct in_addr addr)
 }
 
 void
-ipcacheMarkGoodAddr(const char *name, struct in_addr addr)
+ipcacheMarkGoodAddr(const char *name, sqaddr_t *a)
 {
     ipcache_entry *i;
     ipcache_addrs *ia;
+    struct in_addr addr;
+
+    if (sqinet_get_family(a) != AF_INET)
+        return;
+#warning ipcacheMarkGoodAddr needs to be ipv6ed!
+    addr = sqinet_get_v4_inaddr(a, SQADDR_ASSERT_IS_V4);
+
     int k;
     if ((i = ipcache_get(name)) == NULL)
 	return;
