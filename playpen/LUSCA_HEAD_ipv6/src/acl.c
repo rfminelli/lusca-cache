@@ -2243,8 +2243,14 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	ia = ipcache_gethostbyname(r->host, IP_LOOKUP_IF_MISS);
 	if (ia) {
 	    for (k = 0; k < (int) ia->count; k++) {
-		if (asnMatchIp4(ae->data, ia->in_addrs[k]))
+		sqaddr_t a;
+		sqinet_init(&a);
+		(void) ipcacheGetAddr(ia, k, &a);
+		if (asnMatchIp(ae->data, &a)) {
+		    sqinet_done(&a);
 		    return 1;
+		}
+		sqinet_done(&a);
 	    }
 	    return 0;
 	} else if (checklist->state[ACL_DST_ASN] == ACL_LOOKUP_NONE) {
