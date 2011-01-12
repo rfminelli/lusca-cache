@@ -734,3 +734,10 @@ ipcacheGetAddr(const ipcache_addrs *ia, int i, sqaddr_t *a)
 	sqinet_set_v4_inaddr(a, &ia->in_addrs[i]);
 	return 1;
 }
+
+/* XXX for now - this'll grow ipv6-ness when in_addrs is ipv6 aware */
+int
+ipcacheGetAddrFamily(const ipcache_addrs *ia, int i)
+{
+	return AF_INET;
+}
