@@ -1,0 +1,19 @@
+#!/bin/sh
+
+set -e
+
+case "$1" in
+	remove|remove-in-favour|deconfigure-in-favour)
+		#
+		#	Stop the daemon
+		#
+		invoke-rc.d squid stop
+		;;
+	upgrade)
+		[ -L /usr/doc/lusca ] && rm -f /usr/doc/lusca
+		;;
+	failed-upgrade)
+		;;
+esac
+
+exit 0

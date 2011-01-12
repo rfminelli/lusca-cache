@@ -1,0 +1,38 @@
+#!/bin/sh -e
+
+#
+#       check for old config-style in squid.conf
+#       (include "ufs" (Unix File System) after "cache_dir".)
+#
+
+# Source debconf library.
+. /usr/share/debconf/confmodule
+db_version 2.0
+          
+grepconf () {
+	w=" 	" # space tab
+	sq=/etc/squid/squid.conf
+	# sed is cool.
+	res=`sed -ne '
+		s/^'$1'['"$w"']\+\([^'"$w"']\+\).*$/\1/p;
+		t end;
+		d;
+		:end q' < $sq`
+	[ -n "$res" ] || res=$2
+	echo "$res"
+}
+
+grepconf2 () {
+	w=" 	" # space tab
+	sq=/etc/squid/squid.conf
+	# sed is cool.
+	res=`sed -ne '
+		s/^'$1'['"$w"']\+[^'"$w"']\+['"$w"']\+\([^'"$w"']\+\).*$/\1/p;
+		t end;
+		d;
+		:end q' < $sq`
+	[ -n "$res" ] || res=$2
+	echo "$res"
+}
+
+

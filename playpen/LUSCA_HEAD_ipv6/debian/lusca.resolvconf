@@ -1,0 +1,4 @@
+#!/bin/sh
+
+# Make Lusca aware of changes to resolv.conf
+/etc/init.d/squid reload || true
