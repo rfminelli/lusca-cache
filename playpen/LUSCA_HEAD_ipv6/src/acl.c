@@ -672,7 +672,8 @@ aclParseIpData(const char *t)
 	    sqinet_set_anyaddr(&r->addr2);	/* 0.0.0.0 */
 	    sqinet_set_noaddr(&r->mask);	/* 255.255.255.255, etc */
 	    Q = &r->next;
-	    (void) sqinet_ntoa(&r->addr1, buf, sizeof(buf), SQATON_NONE);
+            if (do_debug(28, 3))
+	        (void) sqinet_ntoa(&r->addr1, buf, sizeof(buf), SQATON_NONE);
 	    debug(28, 3) ("%s --> %s\n", addr1, buf);
 	}
 	return q;
@@ -1540,10 +1541,10 @@ aclMatchIp(void *dataptr, sqaddr_t *a)
 
     x.next = NULL;
     *Top = splay_splay(&x, *Top, aclIpAddrNetworkCompare);
-    if (debugLevels[28] >= 3) {
+    if (do_debug(28, 3)) {
 	char cbuf[MAX_IPSTRLEN];
 	(void) sqinet_ntoa(a, cbuf, MAX_IPSTRLEN, SQADDR_NONE);
-	    debug(28, 3) ("aclMatchIp: '%s' %s\n",
+	debug(28, 3) ("aclMatchIp: '%s' %s\n",
 		cbuf, splayLastResult ? "NOT found" : "found");
     }
     sqinet_done(&x.addr1);
@@ -2000,6 +2001,8 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
     const char *header;
     const char *browser;
     int k, ti;
+    sqaddr_t a;
+
     if (!ae)
 	return 0;
     switch (ae->type) {
@@ -2050,7 +2053,9 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	ia = ipcache_gethostbyname(r->host, IP_LOOKUP_IF_MISS);
 	if (ia) {
 	    for (k = 0; k < (int) ia->count; k++) {
-		if (aclMatchIp4(&ae->data, ia->in_addrs[k]))
+		if (ipcacheGetAddrFamily(ia, k) != AF_INET)
+			continue;
+		if (aclMatchIp4(&ae->data, ipcacheGetAddrV4(ia, k)))
 		    return 1;
 	    }
 	    return 0;
@@ -2079,15 +2084,25 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	    return 1;
 	if ((ia = ipcacheCheckNumeric(r->host)) == NULL)
 	    return 0;
-	fqdn = fqdncache_gethostbyaddr(ia->in_addrs[0], FQDN_LOOKUP_IF_MISS);
-	if (fqdn)
+	/* XXX how the heck is ipv6-ness supposed to work here? -adrian */
+	sqinet_init(&a);
+	(void) ipcacheGetAddr(ia, 0, &a);
+	fqdn = fqdncache_gethostbyaddr6(&a, FQDN_LOOKUP_IF_MISS);
+	if (fqdn) {
+	    sqinet_done(&a);
 	    return aclMatchDomainList(&ae->data, fqdn);
+	}
 	if (checklist->state[ACL_DST_DOMAIN] == ACL_LOOKUP_NONE) {
+	    LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
+    	    if (do_debug(28, 3))
+	        (void) sqinet_ntoa(&a, buf, MAX_IPSTRLEN, SQADDR_NONE);
 	    debug(28, 3) ("aclMatchAcl: Can't yet compare '%s' ACL for '%s'\n",
-		ae->name, inet_ntoa(ia->in_addrs[0]));
+		ae->name, buf);
 	    checklist->state[ACL_DST_DOMAIN] = ACL_LOOKUP_NEEDED;
+	    sqinet_done(&a);
 	    return 0;
 	}
+	sqinet_done(&a);
 	return aclMatchDomainList(&ae->data, "none");
 	/* NOTREACHED */
     case ACL_SRC_DOMAIN:
@@ -2096,7 +2111,8 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	    return aclMatchDomainList(&ae->data, fqdn);
 	} else if (checklist->state[ACL_SRC_DOMAIN] == ACL_LOOKUP_NONE) {
 	    LOCAL_ARRAY(char, cbuf, MAX_IPSTRLEN);
-	    (void) sqinet_ntoa(&checklist->src_address, cbuf, MAX_IPSTRLEN, SQADDR_NONE);
+	    if (do_debug(28, 3))
+	        (void) sqinet_ntoa(&checklist->src_address, cbuf, MAX_IPSTRLEN, SQADDR_NONE);
 	    debug(28, 3) ("aclMatchAcl: Can't yet compare '%s' ACL for '%s'\n",
 		ae->name, cbuf);
 	    checklist->state[ACL_SRC_DOMAIN] = ACL_LOOKUP_NEEDED;
@@ -2109,15 +2125,24 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	    return 1;
 	if ((ia = ipcacheCheckNumeric(r->host)) == NULL)
 	    return 0;
-	fqdn = fqdncache_gethostbyaddr(ia->in_addrs[0], FQDN_LOOKUP_IF_MISS);
-	if (fqdn)
+	sqinet_init(&a);
+	(void) ipcacheGetAddr(ia, 0, &a);
+	fqdn = fqdncache_gethostbyaddr6(&a, FQDN_LOOKUP_IF_MISS);
+	if (fqdn) {
+            sqinet_done(&a);
 	    return aclMatchRegex(ae->data, fqdn);
+	}
 	if (checklist->state[ACL_DST_DOMAIN] == ACL_LOOKUP_NONE) {
+	    LOCAL_ARRAY(char, cbuf, MAX_IPSTRLEN);
+	    if (do_debug(28, 3))
+	        (void) sqinet_ntoa(&checklist->src_address, cbuf, MAX_IPSTRLEN, SQADDR_NONE);
 	    debug(28, 3) ("aclMatchAcl: Can't yet compare '%s' ACL for '%s'\n",
-		ae->name, inet_ntoa(ia->in_addrs[0]));
+		ae->name, cbuf);
 	    checklist->state[ACL_DST_DOMAIN] = ACL_LOOKUP_NEEDED;
+            sqinet_done(&a);
 	    return 0;
 	}
+        sqinet_done(&a);
 	return aclMatchRegex(ae->data, "none");
 	/* NOTREACHED */
     case ACL_SRC_DOM_REGEX:
@@ -2126,7 +2151,8 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	    return aclMatchRegex(ae->data, fqdn);
 	} else if (checklist->state[ACL_SRC_DOMAIN] == ACL_LOOKUP_NONE) {
 	    LOCAL_ARRAY(char, cbuf, MAX_IPSTRLEN);
-	    (void) sqinet_ntoa(&checklist->src_address, cbuf, MAX_IPSTRLEN, SQADDR_NONE);
+            if (do_debug(28, 3))
+	        (void) sqinet_ntoa(&checklist->src_address, cbuf, MAX_IPSTRLEN, SQADDR_NONE);
 	    debug(28, 3) ("aclMatchAcl: Can't yet compare '%s' ACL for '%s'\n",
 		ae->name, cbuf);
 	    checklist->state[ACL_SRC_DOMAIN] = ACL_LOOKUP_NEEDED;
@@ -2243,7 +2269,6 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	ia = ipcache_gethostbyname(r->host, IP_LOOKUP_IF_MISS);
 	if (ia) {
 	    for (k = 0; k < (int) ia->count; k++) {
-		sqaddr_t a;
 		sqinet_init(&a);
 		(void) ipcacheGetAddr(ia, k, &a);
 		if (asnMatchIp(ae->data, &a)) {
@@ -2483,7 +2508,12 @@ aclCheck(aclCheck_t * checklist)
 		checklist->state[ACL_DST_DOMAIN] = ACL_LOOKUP_DONE;
 		return;
 	    }
-	    checklist->dst_addr = ia->in_addrs[0];
+	    /* XXX dst_addr will eventually grow ipv4/ipv6 awareness */
+	    /*
+	     * XXX and how the heck this is supposed to work in that instance is going
+	     * XXX to need to be figured out. -adrian
+	     */
+	    checklist->dst_addr = ipcacheGetAddrV4(ia, 0);
 	    checklist->state[ACL_DST_DOMAIN] = ACL_LOOKUP_PENDING;
 	    fqdncache_nbgethostbyaddr(checklist->dst_addr,
 		aclLookupDstFQDNDone, checklist);
