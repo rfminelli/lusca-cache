@@ -50,10 +50,9 @@
 typedef struct {
     char *host;
     u_short port;
-    struct sockaddr_in S;
     CNCB *callback;
     void *data;
-    struct in_addr in_addr;
+    sqaddr_t in_addr6;
     int fd;
     int tries;
     int addrcount;
@@ -86,8 +85,9 @@ commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *
     cs->port = port;
     cs->callback = callback;
     cs->data = data;
+    sqinet_init(&cs->in_addr6);
     if (addr != NULL) {
-	cs->in_addr = *addr;
+        sqinet_set_v4_inaddr(&cs->in_addr6, addr);
 	cs->addrcount = 1;
     } else {
 	cs->addrcount = 0;
@@ -119,7 +119,9 @@ commConnectDnsHandle(const ipcache_addrs * ia, void *data)
 	return;
     }
     assert(ia->cur < ia->count);
-    cs->in_addr = ia->in_addrs[ia->cur];
+    sqinet_done(&cs->in_addr6);
+    sqinet_init(&cs->in_addr6);
+    sqinet_set_v4_inaddr(&cs->in_addr6, &ia->in_addrs[ia->cur]);
     if (Config.onoff.balance_on_multiple_ip)
 	ipcacheCycleAddr(cs->host, NULL);
     cs->addrcount = ia->count;
@@ -151,6 +153,7 @@ commConnectFree(int fd, void *data)
     if (cs->data)
 	cbdataUnlock(cs->data);
     safe_free(cs->host);
+    sqinet_done(&cs->in_addr6);
     cbdataFree(cs);
 }
 
@@ -267,17 +270,12 @@ commConnectHandle(int fd, void *data)
     sqaddr_t a;
 
     ConnectStateData *cs = data;
-    if (cs->S.sin_addr.s_addr == 0) {
-	cs->S.sin_family = AF_INET;
-	cs->S.sin_addr = cs->in_addr;
-	cs->S.sin_port = htons(cs->port);
-    }
-    /*
-     * Create a temporary sqaddr_t for now; this should be pushed into
-     * ConnectStateData later.
-     */
+
+    /* Create a temporary sqaddr_t which also contains the port we're connecting to */
+    /* This should eventually just be folded into cs->in_addr6 -adrian */
     sqinet_init(&a);
-    sqinet_set_v4_sockaddr(&a, &cs->S);
+    sqinet_copy(&a, &cs->in_addr6);
+    sqinet_set_port(&a, cs->port, SQADDR_NONE);
     r = comm_connect_addr(fd, &a);
     sqinet_done(&a);
     switch(r) {
@@ -286,14 +284,14 @@ commConnectHandle(int fd, void *data)
 	commSetSelect(fd, COMM_SELECT_WRITE, commConnectHandle, cs, 0);
 	break;
     case COMM_OK:
-	ipcacheMarkGoodAddr(cs->host, cs->S.sin_addr);
+	ipcacheMarkGoodAddr(cs->host, sqinet_get_v4_inaddr(&cs->in_addr6, SQADDR_ASSERT_IS_V4));
 	commConnectCallback(cs, COMM_OK);
 	break;
     default:
 	cs->tries++;
-	ipcacheMarkBadAddr(cs->host, cs->S.sin_addr);
+	ipcacheMarkBadAddr(cs->host, sqinet_get_v4_inaddr(&cs->in_addr6, SQADDR_ASSERT_IS_V4));
 	if (Config.onoff.test_reachability)
-	    netdbDeleteAddrNetwork(cs->S.sin_addr);
+	    netdbDeleteAddrNetwork(sqinet_get_v4_inaddr(&cs->in_addr6, SQADDR_ASSERT_IS_V4));
 	if (commRetryConnect(cs)) {
 	    eventAdd("commReconnect", commReconnect, cs, cs->addrcount == 1 ? 0.05 : 0.0, 0);
 	} else {
