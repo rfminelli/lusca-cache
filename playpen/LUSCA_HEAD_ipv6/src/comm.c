@@ -291,7 +291,7 @@ commConnectHandle(int fd, void *data)
 	cs->tries++;
 	ipcacheMarkBadAddr(cs->host, sqinet_get_v4_inaddr(&cs->in_addr6, SQADDR_ASSERT_IS_V4));
 	if (Config.onoff.test_reachability)
-	    netdbDeleteAddrNetwork(sqinet_get_v4_inaddr(&cs->in_addr6, SQADDR_ASSERT_IS_V4));
+	    netdbDeleteAddrNetwork(&cs->in_addr6);
 	if (commRetryConnect(cs)) {
 	    eventAdd("commReconnect", commReconnect, cs, cs->addrcount == 1 ? 0.05 : 0.0, 0);
 	} else {

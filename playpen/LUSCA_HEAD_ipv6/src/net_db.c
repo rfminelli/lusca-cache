@@ -913,9 +913,17 @@ netdbExchangeUpdatePeer(struct in_addr addr, peer * e, double rtt, double hops)
 }
 
 void
-netdbDeleteAddrNetwork(struct in_addr addr)
+netdbDeleteAddrNetwork(sqaddr_t *a)
 {
+#warning netdb needs to be made ipv6 aware!
 #if USE_ICMP
+    struct in_addr addr;
+
+    if (sqinet_get_family(a) != AF_INET)
+	return;
+
+    addr = sqinet_get_v4_inaddr(a, SQADDR_ASSERT_IS_V4);
+    
     netdbEntry *n = netdbLookupAddr(addr);
     if (n == NULL)
 	return;

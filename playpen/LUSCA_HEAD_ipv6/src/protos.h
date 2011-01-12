@@ -400,7 +400,7 @@ extern void netdbFreeMemory(void);
 extern int netdbHostHops(const char *host);
 extern int netdbHostRtt(const char *host);
 extern void netdbUpdatePeer(request_t *, peer * e, int rtt, int hops);
-extern void netdbDeleteAddrNetwork(struct in_addr addr);
+extern void netdbDeleteAddrNetwork(sqaddr_t *a);
 extern void netdbBinaryExchange(StoreEntry *);
 extern EVH netdbExchangeStart;
 extern void netdbExchangeUpdatePeer(struct in_addr, peer *, double, double);
