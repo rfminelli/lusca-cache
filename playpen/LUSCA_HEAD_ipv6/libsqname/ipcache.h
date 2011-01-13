@@ -4,7 +4,7 @@
 #define IP_LOOKUP_IF_MISS       0x01
 
 struct _ipcache_addrs {
-    struct in_addr *in_addrs;
+    sqaddr_t *in_addrs6;
     unsigned char *bad_mask;
     unsigned char count;
     unsigned char cur;

@@ -92,6 +92,8 @@
 #include "../libsqdns/dns.h"
 #include "../libsqdns/dns_internal.h"
 
+#include "../libsqinet/sqinet.h"
+
 #include "namecfg.h"
 #include "ipcache.h"
 
@@ -260,10 +262,17 @@ ipcacheParse(ipcache_entry * i, rfc1035_rr * answers, int nr, const char *error_
     int j;
     int na = 0;
     int ttl = 0;
+    int n;
     const char *name = (const char *) i->hash.key;
     i->expires = squid_curtime + namecache_dns_negative_ttl;
     i->flags.negcached = 1;
-    safe_free(i->addrs.in_addrs);
+
+    /* Clean up correctly first */
+    for (k = 0; k < i->addrs.count; k++) {
+        sqinet_done(&i->addrs.in_addrs6[k]);
+    }
+    safe_free(i->addrs.in_addrs6);
+
     safe_free(i->addrs.bad_mask);
     safe_free(i->error_message);
     i->addrs.count = 0;
@@ -296,7 +305,10 @@ ipcacheParse(ipcache_entry * i, rfc1035_rr * answers, int nr, const char *error_
 	return i;
     }
     i->flags.negcached = 0;
-    i->addrs.in_addrs = xcalloc(na, sizeof(struct in_addr));
+    i->addrs.in_addrs6 = xcalloc(na, sizeof(sqaddr_t));
+    for (n = 0; n < na; n++) {
+        sqinet_init(&i->addrs.in_addrs6[n]);
+    }
     i->addrs.bad_mask = xcalloc(na, sizeof(unsigned char));
     for (j = 0, k = 0; k < nr; k++) {
 	if (answers[k].class != RFC1035_CLASS_IN)
@@ -304,10 +316,14 @@ ipcacheParse(ipcache_entry * i, rfc1035_rr * answers, int nr, const char *error_
 	if (answers[k].type == RFC1035_TYPE_A) {
 	    if (answers[k].rdlength != 4)
 		continue;
-	    xmemcpy(&i->addrs.in_addrs[j++], answers[k].rdata, 4);
-	    debug(14, 3) ("ipcacheParse: #%d %s\n",
-		j - 1,
-		inet_ntoa(i->addrs.in_addrs[j - 1]));
+	    sqinet_set_family(&i->addrs.in_addrs6[j], AF_INET);
+	    sqinet_set_v4_inaddr(&i->addrs.in_addrs6[j], (struct in_addr *) answers[k].rdata);
+	    if (do_debug(14, 3)) {
+		char buf[MAX_IPSTRLEN];
+		(void) sqinet_ntoa(&i->addrs.in_addrs6[j], buf, MAX_IPSTRLEN, SQADDR_NONE);
+	        debug(14, 3) ("ipcacheParse: #%d %s\n", j, buf);
+	    }
+	    j++;
 	} else if (answers[k].type != RFC1035_TYPE_CNAME)
 	    continue;
 	if (ttl == 0 || ttl > answers[k].ttl)
@@ -416,12 +432,14 @@ ipcache_init(wordlist *testhosts)
 	debug(14, 1) ("Successful DNS name lookup tests...\n");
     }
     memset(&static_addrs, '\0', sizeof(ipcache_addrs));
-    static_addrs.in_addrs = xcalloc(1, sizeof(struct in_addr));
+    static_addrs.in_addrs6 = xcalloc(1, sizeof(sqaddr_t));
+    sqinet_init(&static_addrs.in_addrs6[0]);
     static_addrs.bad_mask = xcalloc(1, sizeof(unsigned char));
     ipcache_high = (long) (((float) namecache_ipcache_size *
 	    (float) namecache_ipcache_high) / (float) 100);
     ipcache_low = (long) (((float) namecache_ipcache_size *
 	    (float) namecache_ipcache_low) / (float) 100);
+    /* XXX reusing n here */
     n = hashPrime(ipcache_high / 4);
     ip_table = hash_create((HASHCMP *) strcmp, n, hash4);
     pool_ipcache = memPoolCreate("ipcache_entry", sizeof(ipcache_entry));
@@ -495,6 +513,9 @@ ipcacheInvalidateNegative(const char *name)
      */
 }
 
+/*
+ * XXX this routine is not re-entrant!
+ */
 ipcache_addrs *
 ipcacheCheckNumeric(const char *name)
 {
@@ -504,7 +525,8 @@ ipcacheCheckNumeric(const char *name)
 	return NULL;
     static_addrs.count = 1;
     static_addrs.cur = 0;
-    static_addrs.in_addrs[0].s_addr = ip.s_addr;
+    sqinet_init(&static_addrs.in_addrs6[0]);
+    sqinet_set_v4_inaddr(&static_addrs.in_addrs6[0], &ip);
     static_addrs.bad_mask[0] = FALSE;
     static_addrs.badcount = 0;
     return &static_addrs;
@@ -556,8 +578,11 @@ ipcacheCycleAddr(const char *name, ipcache_addrs * ia)
 	ia->badcount = 0;
 	ia->cur = 0;
     }
-    debug(14, 3) ("ipcacheCycleAddr: %s now at %s\n", name,
-	inet_ntoa(ia->in_addrs[ia->cur]));
+    if (do_debug(14, 3)) {
+	char buf[MAX_IPSTRLEN];
+	(void) sqinet_ntoa(&ia->in_addrs6[ia->cur], buf, MAX_IPSTRLEN, SQADDR_NONE);
+        debug(14, 3) ("ipcacheCycleAddr: %s now at %s\n", name, buf);
+    }
 }
 
 /*
@@ -565,23 +590,17 @@ ipcacheCycleAddr(const char *name, ipcache_addrs * ia)
  * advance the current pointer to the next OK address.
  */
 void
-ipcacheMarkBadAddr(const char *name, sqaddr_t *a)
+ipcacheMarkBadAddr(const char *name, sqaddr_t *addr)
 {
     ipcache_entry *i;
     ipcache_addrs *ia;
-    struct in_addr addr;
-
-    if (sqinet_get_family(a) != AF_INET)
-        return;
-#warning ipcacheMarkBadAddr needs to be ipv6ed!
-    addr = sqinet_get_v4_inaddr(a, SQADDR_ASSERT_IS_V4);
 
     int k;
     if ((i = ipcache_get(name)) == NULL)
 	return;
     ia = &i->addrs;
     for (k = 0; k < (int) ia->count; k++) {
-	if (ia->in_addrs[k].s_addr == addr.s_addr)
+        if (sqinet_compare_addr(&ia->in_addrs6[k], addr))
 	    break;
     }
     if (k == (int) ia->count)	/* not found */
@@ -590,29 +609,27 @@ ipcacheMarkBadAddr(const char *name, sqaddr_t *a)
 	ia->bad_mask[k] = TRUE;
 	ia->badcount++;
 	i->expires = XMIN(squid_curtime + XMAX(60, namecache_dns_negative_ttl), i->expires);
-	debug(14, 2) ("ipcacheMarkBadAddr: %s [%s]\n", name, inet_ntoa(addr));
+        if (do_debug(14, 2)) {
+	    char buf[MAX_IPSTRLEN];
+	    (void) sqinet_ntoa(addr, buf, MAX_IPSTRLEN, SQADDR_NONE);
+	    debug(14, 2) ("ipcacheMarkBadAddr: %s [%s]\n", name, buf);
+        }
     }
     ipcacheCycleAddr(name, ia);
 }
 
 void
-ipcacheMarkGoodAddr(const char *name, sqaddr_t *a)
+ipcacheMarkGoodAddr(const char *name, sqaddr_t *addr)
 {
     ipcache_entry *i;
     ipcache_addrs *ia;
-    struct in_addr addr;
-
-    if (sqinet_get_family(a) != AF_INET)
-        return;
-#warning ipcacheMarkGoodAddr needs to be ipv6ed!
-    addr = sqinet_get_v4_inaddr(a, SQADDR_ASSERT_IS_V4);
 
     int k;
     if ((i = ipcache_get(name)) == NULL)
 	return;
     ia = &i->addrs;
     for (k = 0; k < (int) ia->count; k++) {
-	if (ia->in_addrs[k].s_addr == addr.s_addr)
+        if (sqinet_compare_addr(&ia->in_addrs6[k], addr))
 	    break;
     }
     if (k == (int) ia->count)	/* not found */
@@ -621,14 +638,24 @@ ipcacheMarkGoodAddr(const char *name, sqaddr_t *a)
 	return;
     ia->bad_mask[k] = FALSE;
     ia->badcount--;
-    debug(14, 2) ("ipcacheMarkGoodAddr: %s [%s]\n", name, inet_ntoa(addr));
+    if (do_debug(14, 2)) {
+    	char buf[MAX_IPSTRLEN];
+	(void) sqinet_ntoa(addr, buf, MAX_IPSTRLEN, SQADDR_NONE);
+        debug(14, 2) ("ipcacheMarkGoodAddr: %s [%s]\n", name, buf);
+    }
 }
 
 static void
 ipcacheFreeEntry(void *data)
 {
     ipcache_entry *i = data;
-    safe_free(i->addrs.in_addrs);
+    int k;
+
+    /* Clean up correctly first */
+    for (k = 0; k < i->addrs.count; k++) {
+        sqinet_done(&i->addrs.in_addrs6[k]);
+    }
+    safe_free(i->addrs.in_addrs6);
     safe_free(i->addrs.bad_mask);
     safe_free(i->hash.key);
     safe_free(i->error_message);
@@ -687,9 +714,10 @@ ipcacheAddEntryFromHosts(const char *name, const char *ipaddr)
     i->addrs.count = 1;
     i->addrs.cur = 0;
     i->addrs.badcount = 0;
-    i->addrs.in_addrs = xcalloc(1, sizeof(struct in_addr));
+    i->addrs.in_addrs6 = xcalloc(1, sizeof(sqaddr_t));
     i->addrs.bad_mask = xcalloc(1, sizeof(unsigned char));
-    i->addrs.in_addrs[0].s_addr = ip.s_addr;
+    sqinet_init(&i->addrs.in_addrs6[0]);
+    sqinet_set_v4_inaddr(&i->addrs.in_addrs6[0], &ip);
     i->addrs.bad_mask[0] = FALSE;
     i->flags.fromhosts = 1;
     ipcacheAddEntry(i);
@@ -722,7 +750,7 @@ ipcacheFlushAll(void)
 struct in_addr
 ipcacheGetAddrV4(const ipcache_addrs *ia, int i)
 {
-	return ia->in_addrs[i];
+	return sqinet_get_v4_inaddr(&ia->in_addrs6[i], SQADDR_ASSERT_IS_V4);
 }
 
 int
@@ -731,7 +759,7 @@ ipcacheGetAddr(const ipcache_addrs *ia, int i, sqaddr_t *a)
 	if (i >= ia->count)
 		return 0;
 
-	sqinet_set_v4_inaddr(a, &ia->in_addrs[i]);
+	sqinet_copy(a, &ia->in_addrs6[i]);
 	return 1;
 }
 
@@ -739,5 +767,7 @@ ipcacheGetAddr(const ipcache_addrs *ia, int i, sqaddr_t *a)
 int
 ipcacheGetAddrFamily(const ipcache_addrs *ia, int i)
 {
-	return AF_INET;
+	if (i >= ia->count)
+		return -1;
+	return sqinet_get_family(&ia->in_addrs6[i]);
 }
