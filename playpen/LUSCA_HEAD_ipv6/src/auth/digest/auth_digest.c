@@ -729,7 +729,6 @@ authenticateDigestAuthenticateUser(auth_user_request_t * auth_user_request, requ
 		const char *useragent = httpHeaderGetStr(&request->header, HDR_USER_AGENT);
 		static sqaddr_t last_broken_addr;
 		static int seen_broken_client = 0;
-		struct in_addr lb;
 
 		if (!seen_broken_client) {
 		    sqinet_init(&last_broken_addr);
@@ -738,13 +737,12 @@ authenticateDigestAuthenticateUser(auth_user_request_t * auth_user_request, requ
 		    seen_broken_client = 1;
 		}
 
-		lb = sqinet_get_v4_inaddr(&last_broken_addr, SQADDR_ASSERT_IS_V4);
-		if (memcmp(&lb, &request->client_addr, sizeof(struct in_addr)) == 0) {
+		if (sqinet_compare_addr(&last_broken_addr, &request->client_address)) {
 		    char cbuf[MAX_IPSTRLEN];
 		    (void) sqinet_ntoa(&last_broken_addr, cbuf, MAX_IPSTRLEN, SQADDR_NONE);
 		    debug(29, 1) ("\nDigest POST bug detected from %s using '%s'. Please upgrade browser. See Bug #630 for details.\n",
 			cbuf, useragent ? useragent : "-");
-		    sqinet_set_v4_inaddr(&last_broken_addr, &request->client_addr);
+		    sqinet_copy(&last_broken_addr, &request->client_address);
 		}
 	    }
 	} else {
