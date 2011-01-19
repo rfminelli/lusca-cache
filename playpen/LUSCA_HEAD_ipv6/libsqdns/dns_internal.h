@@ -59,6 +59,11 @@ struct _idns_query {
     char *tcp_buffer;
     size_t tcp_buffer_size;
     size_t tcp_buffer_offset;
+    int need_A;
+    struct {
+        int count;
+        rfc1035_rr *answers;
+    } initial_AAAA;
 };
 
 struct _ns {

@@ -390,6 +390,7 @@ idnsCallback(idns_query * q, rfc1035_rr * answers, int n, const char *error)
 	cbdataUnlock(q2->callback_data);
 	if (valid)
 	    q2->callback(q2->callback_data, answers, n, error);
+    	safe_free(q2->initial_AAAA.answers);
 	cbdataFree(q2);
     }
     if (q->hash.key) {
@@ -506,6 +507,16 @@ idnsRetryTcp(idns_query * q)
 }
 
 static void
+idnsDropMessage(rfc1035_message *message, idns_query *q)
+{
+    rfc1035MessageDestroy(message);
+    if (q->hash.key) {
+        hash_remove_link(idns_lookup_hash, &q->hash);
+        q->hash.key = NULL;
+    }
+}
+
+static void
 idnsGrokReply(const char *buf, size_t sz)
 {
     int n;
@@ -577,18 +588,91 @@ idnsGrokReply(const char *buf, size_t sz)
 	    q->start_t = current_time;
 	    q->id = idnsQueryID();
 	    rfc1035SetQueryID(q->buf, q->id);
-	    q->sz = rfc1035BuildAQuery(q->name, q->buf, sizeof(q->buf), q->id,
-		&q->query);
+	    /* XXX Should only do this if ipv6 is enabled? like in squid-3? -adrian */
+	    if (q->query.qtype == RFC1035_TYPE_AAAA) {
+	        q->sz = rfc1035BuildAAAAQuery(q->name, q->buf, sizeof(q->buf), q->id, &q->query);
+    		q->need_A = 1;
+	    } else {
+	        q->sz = rfc1035BuildAQuery(q->name, q->buf, sizeof(q->buf), q->id, &q->query);
+    		q->need_A = 0;
+	    }
 
 	    idnsCacheQuery(q);
 	    idnsSendQuery(q);
 	    return;
 	}
     }
+
+    /* Do we need to do a followup IPv4 lookup before we return the results? */
+    if (q->need_A == 1) {
+	debug(1, 1) ("%s: need_A == 1; re-submit an A query\n", __func__);
+
+	/* Squirrel away the message answers so we can combine them later */
+	if (n > 0) {
+		q->initial_AAAA.count = message->ancount;
+		q->initial_AAAA.answers = message->answer;
+		message->answer = NULL;
+		message->ancount = 0;
+	}
+
+	/* Drop the current message; which now has no answer in it to free */
+	idnsDropMessage(message, q);
+	
+	/* Reset the query */
+	q->nsends = 0;
+
+	/* No need to send an A if this fails */
+	q->need_A = 0;
+
+	/* Submit an A query */
+	/* XXX squid-3 says 'see EDNS notes at top of file why this sends 0'; merge! */
+	q->sz = rfc1035BuildAQuery(q->name, q->buf, sizeof(q->buf), q->id, &q->query);
+	idnsCacheQuery(q);
+	idnsSendQuery(q);
+	return;
+    }
+
+    if (q->initial_AAAA.count != 0 && n <= 0) {
+	debug(14, 1) ("%s: lookup failed but a previous AAAA lookup succeeded; using those records\n", __func__);
+    	/* There is a set of previous results from an AAAA lookup w/ no A answers; Just use those */
+	rfc1035RRDestroy(message->answer, 0);
+	/* "hand over" the original answer */
+	message->answer = q->initial_AAAA.answers;
+	message->ancount = q->initial_AAAA.count;
+	n = message->ancount;
+	q->initial_AAAA.answers = NULL;
+	q->initial_AAAA.count = 0;
+    } else if (q->initial_AAAA.count != 0 && n > 0) {
+	debug(14, 1) ("%s: merging AAAA and A records\n", __func__);
+	/* There's both a set of previous results and current results; merge them */	
+
+	rfc1035_rr *rr;
+
+	/* Allocate new rr, as a union of both */
+	rr = xcalloc(message->ancount + q->initial_AAAA.count, sizeof(rfc1035_rr));
+
+	/* Copy the contents - this copies the pointers to the rdata of each rr entry */
+	memcpy(&rr[0], q->initial_AAAA.answers, q->initial_AAAA.count * sizeof(rfc1035_rr));
+	memcpy(&rr[q->initial_AAAA.count], message->answer, message->ancount * sizeof(rfc1035_rr));
+
+	/* Free the originals here, leaving the rdata's untouched - they're now owned by the above */
+	safe_free(q->initial_AAAA.answers);
+	safe_free(message->answer);
+
+	/* shove our newly appended answer into the message */
+	message->answer = rr;
+	n = message->ancount += q->initial_AAAA.count;
+
+	/* Delete any reference to the initial AAAA lookup */
+	q->initial_AAAA.answers = NULL;
+	q->initial_AAAA.count = 0;
+    }
+
     idnsCallback(q, message->answer, n, q->error);
     rfc1035MessageDestroy(message);
 
     idnsTcpCleanup(q);
+    safe_free(q->initial_AAAA.answers);
     cbdataFree(q);
 }
 
@@ -695,6 +779,7 @@ idnsCheckQueue(void *unused)
 	    else
 		idnsCallback(q, NULL, -16, "Timeout");
 	    idnsTcpCleanup(q);
+    	    safe_free(q->initial_AAAA.answers);
 	    cbdataFree(q);
 	}
     }
@@ -855,12 +940,16 @@ idnsALookup(const char *name, IDNSCB * callback, void *data)
 	debug(78, 3) ("idnsALookup: searchpath used for %s\n",
 	    q->name);
     }
-    q->sz = rfc1035BuildAQuery(q->name, q->buf, sizeof(q->buf), q->id,
+    /* XXXX only do this if there's IPv6 enabled */
+    /* XXXX limit the number of queries to be made for AAAA + EDNS; see Squid-3 */
+    q->sz = rfc1035BuildAAAAQuery(q->name, q->buf, sizeof(q->buf), q->id,
 	&q->query);
+    q->need_A = 1;
 
     if (q->sz < 0) {
 	/* problem with query data -- query not sent */
 	callback(data, NULL, 0, "Internal error");
+    	safe_free(q->initial_AAAA.answers);
 	cbdataFree(q);
 	return;
     }
@@ -883,15 +972,21 @@ idnsPTRLookup(const struct in_addr addr, IDNSCB * callback, void *data)
     q->tcp_socket = -1;
     q->id = idnsQueryID();
     q->sz = rfc1035BuildPTRQuery(addr, q->buf, sizeof(q->buf), q->id, &q->query);
+
+    /* PTR does not do inbound A/AAAA */
+    q->need_A = 0;
+
     debug(78, 3) ("idnsPTRLookup: buf is %d bytes for %s, id = %#hx\n",
 	(int) q->sz, ip, q->id);
     if (q->sz < 0) {
 	/* problem with query data -- query not sent */
 	callback(data, NULL, 0, "Internal error");
+    	safe_free(q->initial_AAAA.answers);
 	cbdataFree(q);
 	return;
     }
     if (idnsCachedLookup(q->query.name, callback, data)) {
+    	safe_free(q->initial_AAAA.answers);
 	cbdataFree(q);
 	return;
     }
