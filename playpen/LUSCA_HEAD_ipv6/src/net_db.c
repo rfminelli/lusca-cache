@@ -1046,6 +1046,10 @@ netdbClosestParent(request_t * request)
     if (NULL == n) {
 	/* try IP addr */
 	ia = ipcache_gethostbyname(request->host, 0);
+#warning netdb really does need ipv6'ing
+	if (ia != NULL && ipcacheGetAddrFamily(ia, ia->cur) != AF_INET)
+		return NULL;
+
 	if (NULL != ia)
 	    n = netdbLookupAddr(ipcacheGetAddrV4(ia, ia->cur));
     }
