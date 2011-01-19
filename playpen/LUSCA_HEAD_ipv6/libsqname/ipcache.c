@@ -289,11 +289,20 @@ ipcacheParse(ipcache_entry * i, rfc1035_rr * answers, int nr, const char *error_
     }
     assert(answers);
     for (k = 0; k < nr; k++) {
-	if (answers[k].type != RFC1035_TYPE_A)
+        debug(14, 1) ("%s: type: %d, class: %d, rdlength: %d\n", __func__,
+	  answers[k].type,
+	  answers[k].class,
+	  answers[k].rdlength);
+
+	if (answers[k].type != RFC1035_TYPE_A && answers[k].type != RFC1035_TYPE_AAAA)
 	    continue;
 	if (answers[k].class != RFC1035_CLASS_IN)
 	    continue;
-	if (answers[k].rdlength != 4) {
+	if (answers[k].type == RFC1035_TYPE_A && answers[k].rdlength != 4) {
+	    debug(14, 1) ("ipcacheParse: Invalid IP address in response to '%s'\n", name);
+	    continue;
+	}
+	if (answers[k].type == RFC1035_TYPE_AAAA && answers[k].rdlength != 16) {
 	    debug(14, 1) ("ipcacheParse: Invalid IP address in response to '%s'\n", name);
 	    continue;
 	}
@@ -322,6 +331,21 @@ ipcacheParse(ipcache_entry * i, rfc1035_rr * answers, int nr, const char *error_
 		char buf[MAX_IPSTRLEN];
 		(void) sqinet_ntoa(&i->addrs.in_addrs6[j], buf, MAX_IPSTRLEN, SQADDR_NONE);
 	        debug(14, 3) ("ipcacheParse: #%d %s\n", j, buf);
+	    }
+	    j++;
+	} else if (answers[k].type == RFC1035_TYPE_AAAA) {
+	    struct sockaddr_in6 sin6;
+
+	    bzero(&sin6, sizeof(sin6));
+	    if (answers[k].rdlength != 16)
+		continue;
+	    memcpy(&sin6.sin6_addr, answers[k].rdata, 16);
+	    sqinet_set_family(&i->addrs.in_addrs6[j], AF_INET6);
+	    sqinet_set_v6_sockaddr(&i->addrs.in_addrs6[j], &sin6);
+	    if (do_debug(14, 1)) {
+		char buf[MAX_IPSTRLEN];
+		(void) sqinet_ntoa(&i->addrs.in_addrs6[j], buf, MAX_IPSTRLEN, SQADDR_NONE);
+	        debug(14, 1) ("ipcacheParse: #%d %s\n", j, buf);
 	    }
 	    j++;
 	} else if (answers[k].type != RFC1035_TYPE_CNAME)
@@ -689,14 +713,12 @@ int
 ipcacheAddEntryFromHosts(const char *name, const char *ipaddr)
 {
     ipcache_entry *i;
-    struct in_addr ip;
-    if (!safe_inet_addr(ipaddr, &ip)) {
-	if (strchr(ipaddr, ':') && strspn(ipaddr, "0123456789abcdefABCDEF:") == strlen(ipaddr)) {
-	    debug(14, 3) ("ipcacheAddEntryFromHosts: Skipping IPv6 address '%s'\n", ipaddr);
-	} else {
-	    debug(14, 1) ("ipcacheAddEntryFromHosts: Bad IP address '%s'\n",
-		ipaddr);
-	}
+
+    sqaddr_t ip6;
+
+    sqinet_init(&ip6);
+    if (! sqinet_aton(&ip6, ipaddr, SQATON_NONE)) {
+	    debug(14, 1) ("ipcacheAddEntryFromHosts: Bad IP address '%s'\n", ipaddr);
 	return 1;
     }
     if ((i = ipcache_get(name))) {
@@ -717,11 +739,12 @@ ipcacheAddEntryFromHosts(const char *name, const char *ipaddr)
     i->addrs.in_addrs6 = xcalloc(1, sizeof(sqaddr_t));
     i->addrs.bad_mask = xcalloc(1, sizeof(unsigned char));
     sqinet_init(&i->addrs.in_addrs6[0]);
-    sqinet_set_v4_inaddr(&i->addrs.in_addrs6[0], &ip);
+    sqinet_copy(&i->addrs.in_addrs6[0], &ip6);
     i->addrs.bad_mask[0] = FALSE;
     i->flags.fromhosts = 1;
     ipcacheAddEntry(i);
     ipcacheLockEntry(i);
+    sqinet_done(&ip6);
     return 0;
 }
 int
