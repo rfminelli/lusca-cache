@@ -462,7 +462,7 @@ rfc1035SetErrno(int n)
     }
 }
 
-static void
+void
 rfc1035RRDestroy(rfc1035_rr * rr, int n)
 {
     if (rr == NULL)

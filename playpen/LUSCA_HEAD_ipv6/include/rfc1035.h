@@ -101,6 +101,7 @@ extern int rfc1035MessageUnpack(const char *buf,
     rfc1035_message ** answer);
 extern int rfc1035QueryCompare(const rfc1035_query *, const rfc1035_query *);
 extern void rfc1035MessageDestroy(rfc1035_message * message);
+extern void rfc1035RRDestroy(rfc1035_rr * rr, int n);
 extern int rfc1035_errno;
 extern const char *rfc1035_error_message;
 
