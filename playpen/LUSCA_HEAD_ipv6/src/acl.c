@@ -2069,7 +2069,7 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	}
 	/* NOTREACHED */
     case ACL_SRC_IP6:
-	if (sqinet_get_family(&checklist->my_address) == AF_INET6)
+	if (sqinet_get_family(&checklist->src_address) == AF_INET6)
 	    return aclMatchIp(&ae->data, &checklist->src_address);
 	else
 	    return 0;		/* Can't do an IPv4 lookup against IPv6 "my_addr" */
