@@ -705,6 +705,7 @@ acl all src all
 acl all6 src6 ::0/0
 acl manager proto cache_object
 acl localhost src 127.0.0.1/32
+acl localhost6 src6 ::1/128	# It can't be inside [] or the parser get confused?
 acl to_localhost dst 127.0.0.0/8
 #
 # Example rule allowing access from your local networks.
@@ -713,6 +714,7 @@ acl to_localhost dst 127.0.0.0/8
 acl localnet src 10.0.0.0/8	# RFC1918 possible internal network
 acl localnet src 172.16.0.0/12	# RFC1918 possible internal network
 acl localnet src 192.168.0.0/16	# RFC1918 possible internal network
+acl localnet6 src6 ::1/128
 #
 acl SSL_ports port 443
 acl Safe_ports port 80		# http
@@ -774,6 +776,7 @@ http_access deny CONNECT !SSL_ports
 # Adapt localnet in the ACL section to list your (internal) IP networks
 # from where browsing should be allowed
 http_access allow localnet
+http_access allow localnet6
 
 # And finally deny all other access to this proxy
 http_access deny all
@@ -807,6 +810,10 @@ DOC_START
 	If none of the access lines cause a match the opposite of the
 	last line will apply. Thus it is good practice to end the rules
 	with an "allow all" or "deny all" entry.
+NOCOMMENT_START
+http_reply_access allow all
+http_reply_access allow all6
+NOCOMMENT_END
 DOC_END
 
 NAME: icp_access
@@ -826,6 +833,7 @@ NOCOMMENT_START
 #Allow ICP queries from local networks only
 icp_access allow localnet
 icp_access deny all
+icp_access deny all6
 NOCOMMENT_END
 DOC_END
 
@@ -850,7 +858,8 @@ DOC_START
 NOCOMMENT_START
 #Allow HTCP queries from local networks only
 # htcp_access allow localnet
-# htcp_access deny all
+htcp_access deny all
+htcp_access deny all6
 NOCOMMENT_END
 DOC_END
 
@@ -893,7 +902,8 @@ DOC_START
 
 NOCOMMENT_START
 #Default setting:
-# miss_access allow all
+miss_access allow all
+miss_access allow all6
 NOCOMMENT_END
 DOC_END
 
