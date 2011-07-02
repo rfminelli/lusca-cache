@@ -1059,7 +1059,8 @@ extern void clientStoreURLRewriteStart(clientHttpRequest * http);
 extern void statIappStats(StoreEntry *sentry);
 
 /* comm.c */
-extern void commConnectStart(int fd, const char *, u_short, CNCB *, void *, struct in_addr *addr);
+extern void commConnectStart(int fd, const char *, u_short, CNCB *, void *,
+    sqaddr_t *addr6);
 
 /* client_side_location_rewrite.c */
 extern void clientHttpLocationRewriteCheck(clientHttpRequest * http);

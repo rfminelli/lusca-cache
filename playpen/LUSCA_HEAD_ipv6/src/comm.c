@@ -68,7 +68,8 @@ static int commRetryConnect(ConnectStateData * cs);
 CBDATA_TYPE(ConnectStateData);
 
 void
-commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *data, struct in_addr *addr)
+commConnectStart(int fd, const char *host, u_short port, CNCB * callback,
+    void *data, sqaddr_t *addr6)
 {
     ConnectStateData *cs;
     debug(5, 3) ("commConnectStart: FD %d, %s:%d\n", fd, host, (int) port);
@@ -86,8 +87,9 @@ commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *
     cs->callback = callback;
     cs->data = data;
     sqinet_init(&cs->in_addr6);
-    if (addr != NULL) {
-        sqinet_set_v4_inaddr(&cs->in_addr6, addr);
+    if (addr6 != NULL) {
+        sqinet_init(&cs->in_addr6);
+	sqinet_copy(&cs->in_addr6, addr6);
 	cs->addrcount = 1;
     } else {
 	cs->addrcount = 0;

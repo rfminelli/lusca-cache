@@ -727,12 +727,11 @@ fwdConnectStart(void *data)
      * peer, then don't cache, and use the IP that the client's DNS lookup
      * returned
      */
-    if (fwdState->request->flags.transparent && (fwdState->n_tries > 1) && (NULL == fs->peer)) {
-#warning This needs to be made ipv6-aware
-	struct in_addr addr;
-	addr = sqinet_get_v4_inaddr(&fwdState->request->my_address, SQADDR_ASSERT_IS_V4);
+    if (fwdState->request->flags.transparent && (fwdState->n_tries > 1)
+      && (NULL == fs->peer)) {
 	storeRelease(fwdState->entry);
-	commConnectStart(fd, host, port, fwdConnectDone, fwdState, &addr);
+	commConnectStart(fd, host, port, fwdConnectDone, fwdState,
+          &fwdState->request->my_address);
     } else {
 	commConnectStart(fd, host, port, fwdConnectDone, fwdState, NULL);
     }
