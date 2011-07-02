@@ -57,36 +57,46 @@ typedef struct {
     int tries;
     int addrcount;
     int connstart;
+    const char *comm_note;
+    int comm_tos;
+    int comm_flags;
 } ConnectStateDataNew;
 
 static PF commConnectFree;
 static PF commConnectHandle;
 static IPH commConnectDnsHandle;
 static void commConnectCallback(ConnectStateDataNew * cs, int status);
-static int commResetFD(ConnectStateDataNew * cs);
 static int commRetryConnect(ConnectStateDataNew * cs);
 CBDATA_TYPE(ConnectStateDataNew);
 
+/*
+ * Attempt to connect to host:port.
+ * addr6 can specify a fixed v4 or v6 address; or NULL for host lookup.
+ *
+ * flags: additional comm flags
+ * tos: TOS for newly created sockets
+ * note: note for newly created sockets
+ */
 void
-commConnectStartNew(int fd, const char *host, u_short port, CNCB * callback,
-    void *data, sqaddr_t *addr6)
+commConnectStartNew(const char *host, u_short port, CNCB * callback,
+    void *data, sqaddr_t *addr6, int flags, int tos, const char *note)
 {
     ConnectStateDataNew *cs;
-    debug(5, 3) ("commConnectStart: FD %d, %s:%d\n", fd, host, (int) port);
-    /*
-     * XXX this wasn't ever here (it was in comm_init()) so its possible this may slow things
-     * XXX down a little; eventually this should migrate to a squid-specific comm_init()
-     * XXX (comm_local_init() ? comm_connect_init()? so its called once like the old init
-     * XXX function was. -adrian
-     */
+    debug(5, 3) ("%s: new connection to %s:%d\n", __func__, host, (int) port);
     CBDATA_INIT_TYPE(ConnectStateDataNew);
     cs = cbdataAlloc(ConnectStateDataNew);
-    cs->fd = fd;
+    cs->fd = -1;		/* Will need to be created */
     cs->host = xstrdup(host);
     cs->port = port;
     cs->callback = callback;
     cs->data = data;
+    cs->comm_flags = flags;
+    cs->comm_tos = tos;
+    cs->comm_flags = flags;
+
     sqinet_init(&cs->in_addr6);
+
+    /* Do we have a local address? Use it */
     if (addr6 != NULL) {
         sqinet_init(&cs->in_addr6);
 	sqinet_copy(&cs->in_addr6, addr6);
@@ -95,8 +105,64 @@ commConnectStartNew(int fd, const char *host, u_short port, CNCB * callback,
 	cs->addrcount = 0;
     }
     cbdataLock(cs->data);
-    comm_add_close_handler(fd, commConnectFree, cs);
+
+    /* Begin the host lookup */
     ipcache_nbgethostbyname(host, commConnectDnsHandle, cs);
+}
+
+
+/*
+ * Close the destination socket.
+ */
+static void
+commConnectCloseSocket(ConnectStateDataNew *cs)
+{
+	if (cs->fd == -1)
+		return;
+	debug(5, 1) ("%s: FD (%d): closing\n", __func__, cs->fd);
+	comm_remove_close_handler(cs->fd, commConnectFree, cs);
+	comm_close(cs->fd);
+	cs->fd = -1;
+}
+
+/*
+ * Create a comm socket matching the destination
+ * record.
+ */
+static int
+commConnectCreateSocket(ConnectStateDataNew *cs)
+{
+	int af;
+	sqaddr_t a;
+
+	/* Does a socket exist? It shouldn't at this point. */
+	if (cs->fd != -1) {
+		debug(5, 1) ("%s: FD (%d) exists when it shouldn't!\n",
+		    __func__, cs->fd);
+		comm_remove_close_handler(cs->fd, commConnectFree, cs);
+		comm_close(cs->fd);
+		cs->fd = -1;
+	}
+
+	/* Create a new socket for the given destination address */
+	af = sqinet_get_family(&cs->in_addr6);
+
+	/* XXX there's not outgoing address support at the present moment */
+	sqinet_init(&a);
+	sqinet_set_family(&a, af);
+	sqinet_set_anyaddr(&a);
+	cs->fd = comm_open6(SOCK_STREAM, IPPROTO_TCP, &a,
+	    cs->comm_flags | COMM_NONBLOCKING, cs->comm_tos, cs->comm_note);
+	sqinet_done(&a);
+
+	/* Did socket creation fail? Then pass it up the stack */
+	if (cs->fd == -1)
+		return -1;
+
+	/* Setup the close handler */
+	comm_add_close_handler(cs->fd, commConnectFree, cs);
+
+	return cs->fd;
 }
 
 static void
@@ -108,6 +174,11 @@ commConnectDnsHandle(const ipcache_addrs * ia, void *data)
 	if (cs->addrcount > 0) {
 	    fd_table[cs->fd].flags.dnsfailed = 1;
 	    cs->connstart = squid_curtime;
+	    if (commConnectCreateSocket(cs) == -1) {
+	        debug(5, 3) ("%s: socket problem: %s\n", __func__, cs->host);
+	        commConnectCallback(cs, COMM_ERR_CONNECT);
+		return;
+	    }
 	    commConnectHandle(cs->fd, cs);
 	} else {
 	    debug(5, 3) ("commConnectDnsHandle: Unknown host: %s\n", cs->host);
@@ -128,6 +199,13 @@ commConnectDnsHandle(const ipcache_addrs * ia, void *data)
 	ipcacheCycleAddr(cs->host, NULL);
     cs->addrcount = ia->count;
     cs->connstart = squid_curtime;
+
+    /* Create the initial outbound socket */
+    if (commConnectCreateSocket(cs) == -1) {
+        debug(5, 3) ("%s: socket problem: %s\n", __func__, cs->host);
+        commConnectCallback(cs, COMM_ERR_CONNECT);
+        return;
+    }
     commConnectHandle(cs->fd, cs);
 }
 
@@ -159,88 +237,6 @@ commConnectFree(int fd, void *data)
     cbdataFree(cs);
 }
 
-/* Reset FD so that we can connect() again */
-static int
-commResetFD(ConnectStateDataNew * cs)
-{
-    int fd2;
-    fde *F;
-    if (!cbdataValid(cs->data))
-	return 0;
-    fd2 = socket(AF_INET, SOCK_STREAM, 0);
-    CommStats.syscalls.sock.sockets++;
-    if (fd2 < 0) {
-	debug(5, 0) ("commResetFD: socket: %s\n", xstrerror());
-	if (ENFILE == errno || EMFILE == errno)
-	    fdAdjustReserved();
-	return 0;
-    }
-    /* We are about to close the fd (dup2 over it). Unregister from the event loop */
-    commSetEvents(cs->fd, 0, 0);
-#ifdef _SQUID_MSWIN_
-    /* On Windows dup2() can't work correctly on Sockets, the          */
-    /* workaround is to close the destination Socket before call them. */
-    close(cs->fd);
-#endif
-    if (dup2(fd2, cs->fd) < 0) {
-	debug(5, 0) ("commResetFD: dup2: %s\n", xstrerror());
-	if (ENFILE == errno || EMFILE == errno)
-	    fdAdjustReserved();
-	close(fd2);
-	return 0;
-    }
-    close(fd2);
-    F = &fd_table[cs->fd];
-    fd_table[cs->fd].flags.called_connect = 0;
-
-    /*
-     * The original code assumed the current local port equals the previous local port
-     * Assume this for now and bite whatever occasional failure will happen because commResetFD()
-     * results in some re-attempt to use a now-allocated local port.
-     *
-     * This should later on be modified to re-use the -original- socket address (with or without
-     * an explicitly set port) rather than F->local_address and F->local_port, which may have been
-     * updated after the initial local bind() and subsequent getsockname().
-     */
-
-    /*
-     * yuck, this has assumptions about comm_open() arguments for
-     * the original socket
-     */
-    assert(F->local_port == sqinet_get_port(&F->local_address));
-    if (F->flags.tproxy_rem) {
-        debug(5, 3) ("commResetFD: FD %d: re-starting a tproxy'ed upstream connection\n", cs->fd);
-        if (comm_ips_bind_rem(cs->fd, &F->local_address) != COMM_OK) {
-            debug(5, 1) ("commResetFD: FD %d: TPROXY comm_ips_bind_rem() failed? Why?\n", cs->fd);
-            return 0;
-        }
-    } else if (commBind(cs->fd, &F->local_address) != COMM_OK) {
-	debug(5, 0) ("commResetFD: bind: %s\n", xstrerror());
-	return 0;
-    }
-#ifdef IP_TOS
-    if (F->tos) {
-	int tos = F->tos;
-	if (setsockopt(cs->fd, IPPROTO_IP, IP_TOS, (char *) &tos, sizeof(int)) < 0)
-	        debug(5, 1) ("commResetFD: setsockopt(IP_TOS) on FD %d: %s\n", cs->fd, xstrerror());
-    }
-#endif
-    if (F->flags.close_on_exec)
-	commSetCloseOnExec(cs->fd);
-    if (F->flags.nonblocking)
-	commSetNonBlocking(cs->fd);
-#ifdef TCP_NODELAY
-    if (F->flags.nodelay)
-	commSetTcpNoDelay(cs->fd);
-#endif
-
-    /* Register the new FD with the event loop */
-    commUpdateEvents(cs->fd);
-    if (Config.tcpRcvBufsz > 0)
-	commSetTcpRcvbuf(cs->fd, Config.tcpRcvBufsz);
-    return 1;
-}
-
 static int
 commRetryConnect(ConnectStateDataNew * cs)
 {
@@ -254,7 +250,12 @@ commRetryConnect(ConnectStateDataNew * cs)
 	if (cs->tries > cs->addrcount)
 	    return 0;
     }
-    return commResetFD(cs);
+
+    /* The next retry may be a different protocol family */
+    commConnectCloseSocket(cs);
+    if (commConnectCreateSocket(cs) != -1)
+        return 0;
+    return 1;
 }
 
 static void
@@ -272,6 +273,12 @@ commConnectHandle(int fd, void *data)
     sqaddr_t a;
 
     ConnectStateDataNew *cs = data;
+
+    if (cs->fd == -1) {
+        debug(5, 1) ("%s: shouldn't have FD=-1, barfing\n", __func__);
+        commConnectCallback(cs, COMM_ERR_CONNECT);
+        return;
+    }
 
     /* Create a temporary sqaddr_t which also contains the port we're connecting to */
     /* This should eventually just be folded into cs->in_addr6 -adrian */
