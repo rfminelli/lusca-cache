@@ -1061,6 +1061,9 @@ extern void statIappStats(StoreEntry *sentry);
 /* comm.c */
 extern void commConnectStart(int fd, const char *, u_short, CNCB *, void *,
     sqaddr_t *addr6);
+extern void
+commConnectStartNew(int fd, const char *host, u_short port, CNCB * callback,
+    void *data, sqaddr_t *addr6);
 
 /* client_side_location_rewrite.c */
 extern void clientHttpLocationRewriteCheck(clientHttpRequest * http);
