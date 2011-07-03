@@ -65,7 +65,7 @@ typedef struct {
 static PF commConnectFree;
 static PF commConnectHandle;
 static IPH commConnectDnsHandle;
-static void commConnectCallback(ConnectStateDataNew * cs, int status);
+static void commConnectCallbackNew(ConnectStateDataNew * cs, int status);
 static int commRetryConnect(ConnectStateDataNew * cs);
 CBDATA_TYPE(ConnectStateDataNew);
 
@@ -176,7 +176,7 @@ commConnectDnsHandle(const ipcache_addrs * ia, void *data)
 	    cs->connstart = squid_curtime;
 	    if (commConnectCreateSocket(cs) == -1) {
 	        debug(5, 3) ("%s: socket problem: %s\n", __func__, cs->host);
-	        commConnectCallback(cs, COMM_ERR_CONNECT);
+	        commConnectCallbackNew(cs, COMM_ERR_CONNECT);
 		return;
 	    }
 	    commConnectHandle(cs->fd, cs);
@@ -187,7 +187,7 @@ commConnectDnsHandle(const ipcache_addrs * ia, void *data)
 		debug(5, 1) ("commConnectDnsHandle: Bad dns_error_message\n");
 	    }
 	    assert(dns_error_message != NULL);
-	    commConnectCallback(cs, COMM_ERR_DNS);
+	    commConnectCallbackNew(cs, COMM_ERR_DNS);
 	}
 	return;
     }
@@ -203,14 +203,14 @@ commConnectDnsHandle(const ipcache_addrs * ia, void *data)
     /* Create the initial outbound socket */
     if (commConnectCreateSocket(cs) == -1) {
         debug(5, 3) ("%s: socket problem: %s\n", __func__, cs->host);
-        commConnectCallback(cs, COMM_ERR_CONNECT);
+        commConnectCallbackNew(cs, COMM_ERR_CONNECT);
         return;
     }
     commConnectHandle(cs->fd, cs);
 }
 
 static void
-commConnectCallback(ConnectStateDataNew * cs, int status)
+commConnectCallbackNew(ConnectStateDataNew * cs, int status)
 {
     CNCB *callback = cs->callback;
     void *data = cs->data;
@@ -219,6 +219,11 @@ commConnectCallback(ConnectStateDataNew * cs, int status)
     cs->callback = NULL;
     cs->data = NULL;
     commSetTimeout(fd, -1, NULL, NULL);
+    if (status != COMM_OK) {
+        if (fd != -1)
+            comm_close(fd);
+        fd = cs->fd = -1;
+    }
     commConnectFree(fd, cs);
     if (cbdataValid(data))
 	callback(fd, status, data);
@@ -276,7 +281,7 @@ commConnectHandle(int fd, void *data)
 
     if (cs->fd == -1) {
         debug(5, 1) ("%s: shouldn't have FD=-1, barfing\n", __func__);
-        commConnectCallback(cs, COMM_ERR_CONNECT);
+        commConnectCallbackNew(cs, COMM_ERR_CONNECT);
         return;
     }
 
@@ -294,7 +299,7 @@ commConnectHandle(int fd, void *data)
 	break;
     case COMM_OK:
 	ipcacheMarkGoodAddr(cs->host, &cs->in_addr6);
-	commConnectCallback(cs, COMM_OK);
+	commConnectCallbackNew(cs, COMM_OK);
 	break;
     default:
 	cs->tries++;
@@ -304,7 +309,7 @@ commConnectHandle(int fd, void *data)
 	if (commRetryConnect(cs)) {
 	    eventAdd("commReconnect", commReconnect, cs, cs->addrcount == 1 ? 0.05 : 0.0, 0);
 	} else {
-	    commConnectCallback(cs, COMM_ERR_CONNECT);
+	    commConnectCallbackNew(cs, COMM_ERR_CONNECT);
 	}
 	break;
     }
