@@ -272,7 +272,7 @@ httpRequestLog(clientHttpRequest *http)
 	if (!http->al.url)
 	    http->al.url = urlCanonicalClean(request);
 	debug(33, 9) ("httpRequestLog: al.url='%s'\n", http->al.url);
-	accessLogEntrySetOutAddr4(&http->al, request->out_ip);
+	accessLogEntrySetOutAddr(&http->al, &request->out_ip6);
 	if (http->reply && http->log_type != LOG_TCP_DENIED) {
 	    accessLogEntrySetReplyStatus(&http->al, http->reply);
 	} else if (mem) {

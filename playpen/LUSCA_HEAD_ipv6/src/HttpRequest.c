@@ -57,10 +57,14 @@ requestCreate(method_t * method, protocol_t protocol, const char *urlpath)
 	stringReset(&req->urlpath, urlpath);
     req->max_forwards = -1;
     req->lastmod = -1;
-    SetAnyAddr(&req->out_ip);
+//    SetAnyAddr(&req->out_ip6);
 //    SetNoAddr(&req->client_addr);
     sqinet_init(&req->my_address);
     sqinet_init(&req->client_address);
+    sqinet_init(&req->out_ip6);
+    /* Give it some sensible defaults */
+    sqinet_set_family(&req->out_ip6, AF_INET);
+    sqinet_set_anyaddr(&req->out_ip6);
 #if FOLLOW_X_FORWARDED_FOR
     sqinet_init(&req->indirect_client_address);
 #endif
@@ -90,6 +94,7 @@ requestDestroy(request_t * req)
 #if FOLLOW_X_FORWARDED_FOR
     sqinet_done(&req->indirect_client_address);
 #endif
+    sqinet_done(&req->out_ip6);
     stringClean(&req->urlpath);
     httpHeaderClean(&req->header);
     if (req->cache_control)

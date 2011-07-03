@@ -1671,7 +1671,7 @@ struct _request_t {
     char *peer_domain;		/* Configured peer forceddomain */
     BODY_HANDLER *body_reader;
     void *body_reader_data;
-    struct in_addr out_ip;
+    sqaddr_t out_ip6;
     String extacl_log;		/* String to be used for access.log purposes */
     const char *extacl_user;	/* User name returned by extacl lookup */
     const char *extacl_passwd;	/* Password returned by extacl lookup */

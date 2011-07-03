@@ -539,7 +539,10 @@ fwdConnectCreateSocket(FwdState *fwdState, FwdServer *fs)
 
     outgoing = getOutgoingAddr(fwdState->request);
     tos = getOutgoingTOS(fwdState->request);
-    fwdState->request->out_ip = outgoing;
+
+    /* XXX v4 only! */
+#warning getOutgoingAddr is v4 only!
+    sqinet_set_v4_inaddr(&fwdState->request->out_ip6, &outgoing);
 
     if (fwdState->servers && fwdState->servers->peer && fwdState->servers->peer->options.no_tproxy)
         do_tproxy = 0;
@@ -796,7 +799,8 @@ fwdDispatch(FwdState * fwdState)
     fd_table[server_fd].uses++;
     if (fd_table[server_fd].uses == 1 && fs->peer)
 	peerConnectSucceded(fs->peer);
-    fwdState->request->out_ip = sqinet_get_v4_inaddr(&fd_table[server_fd].local_address, SQADDR_ASSERT_IS_V4);
+    sqinet_copy(&fwdState->request->out_ip6,
+      &fd_table[server_fd].local_address);
     netdbPingSite(request->host);
     entry->mem_obj->refresh_timestamp = squid_curtime;
     if (fwdState->servers && (p = fwdState->servers->peer)) {
