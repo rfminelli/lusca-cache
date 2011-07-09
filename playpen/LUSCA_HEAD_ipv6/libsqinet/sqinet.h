@@ -36,6 +36,7 @@ extern int sqinet_set_v4_sockaddr(sqaddr_t *s, const struct sockaddr_in *v4addr)
 extern int sqinet_set_v6_sockaddr(sqaddr_t *s, const struct sockaddr_in6 *v6addr);
 extern int sqinet_get_port(const sqaddr_t *s);
 extern void sqinet_set_port(const sqaddr_t *s, short port, sqaddr_flags flags);
+extern int sqinet_set_sockaddr(sqaddr_t *s, const struct sockaddr_storage *sa);
 extern struct in_addr sqinet_get_v4_inaddr(const sqaddr_t *s, sqaddr_flags flags);
 extern struct in6_addr sqinet_get_v6_inaddr(const sqaddr_t *s, sqaddr_flags flags);
 extern int sqinet_get_v4_sockaddr_ptr(const sqaddr_t *s, struct sockaddr_in *v4, sqaddr_flags flags);

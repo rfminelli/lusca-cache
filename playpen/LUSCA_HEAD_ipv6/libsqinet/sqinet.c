@@ -290,6 +290,22 @@ sqinet_get_v4_inaddr(const sqaddr_t *s, sqaddr_flags flags)
 	return v4->sin_addr;
 }
 
+int
+sqinet_set_sockaddr(sqaddr_t *s, const struct sockaddr_storage *sa)
+{
+	switch (sa->ss_family) {
+		case AF_INET:
+			sqinet_set_v4_sockaddr(s, (struct sockaddr_in *) sa);
+			break;
+		case AF_INET6:
+			sqinet_set_v6_sockaddr(s, (struct sockaddr_in6 *) sa);
+			break;
+		default:
+			return 0;
+	}
+	return 1;
+}
+
 struct in6_addr
 sqinet_get_v6_inaddr(const sqaddr_t *s, sqaddr_flags flags)
 {
