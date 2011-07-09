@@ -543,16 +543,20 @@ ipcacheInvalidateNegative(const char *name)
 ipcache_addrs *
 ipcacheCheckNumeric(const char *name)
 {
-    struct in_addr ip;
+    sqaddr_t s;
+    sqinet_init(&s);
     /* check if it's already a IP address in text form. */
-    if (!safe_inet_addr(name, &ip))
-	return NULL;
+    if (! sqinet_aton(&s, name, SQATON_NONE)) {
+        sqinet_done(&s);
+        return NULL;
+    }
     static_addrs.count = 1;
     static_addrs.cur = 0;
     sqinet_init(&static_addrs.in_addrs6[0]);
-    sqinet_set_v4_inaddr(&static_addrs.in_addrs6[0], &ip);
+    sqinet_copy(&static_addrs.in_addrs6[0], &s);
     static_addrs.bad_mask[0] = FALSE;
     static_addrs.badcount = 0;
+    sqinet_done(&s);
     return &static_addrs;
 }
 
