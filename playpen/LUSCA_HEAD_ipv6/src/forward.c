@@ -343,6 +343,9 @@ fwdConnectDone(int server_fd, int status, void *data)
             comm_add_close_handler(server_fd, fwdPeerClosed, fs->peer);
         }
         comm_add_close_handler(server_fd, fwdServerClosed, fwdState);
+
+        /* And whilst we're at it, populate out_ip6 */
+        sqinet_copy(&fwdState->request->out_ip6, &fd_table[server_fd].local_address);
     }
 
     if (Config.onoff.log_ip_on_direct && status != COMM_ERR_DNS && fs->code == HIER_DIRECT)
@@ -573,6 +576,7 @@ fwdConnectCreateSocket(FwdState *fwdState, FwdServer *fs)
 
     /* XXX v4 only! */
 #warning getOutgoingAddr is v4 only!
+    /* XXX this needs to be delayed until the request has completed */
     sqinet_set_v4_inaddr(&fwdState->request->out_ip6, &outgoing);
 
     if (fwdState->servers && fwdState->servers->peer && fwdState->servers->peer->options.no_tproxy)
