@@ -528,6 +528,13 @@ getOutgoingAddr(request_t * request)
     return r;
 }
 
+void
+getOutgoingAddrV6(request_t * request, sqaddr_t *a)
+{
+	sqinet_set_family(a, AF_INET6);
+	sqinet_set_anyaddr(a);
+}
+
 unsigned long
 getOutgoingTOS(request_t * request)
 {
@@ -769,6 +776,7 @@ fwdConnectStart(void *data)
      */
     cs = commConnectStartNewSetup(host, port, fwdConnectDone, fwdState,
       NULL, 0, tos, url);
+    commConnectNewSetTimeout(cs, ctimeout);
     commConnectStartNewBegin(cs);
 }
 

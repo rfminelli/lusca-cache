@@ -79,6 +79,7 @@ commConnectStartNewSetup(const char *host, u_short port, CNCB *callback,
     cs->comm_flags = flags;
     cs->comm_tos = tos;
     cs->comm_flags = flags;
+    cs->start_time = cs->timeout = 0;
 
     sqinet_init(&cs->in_addr6);
     sqinet_init(&cs->lcl_addr4);
@@ -115,6 +116,12 @@ commConnectNewSetupOutgoingV6(ConnectStateDataNew *cs, sqaddr_t *lcl)
         sqinet_copy(&cs->lcl_addr6, lcl);
 }
 
+void
+commConnectNewSetTimeout(ConnectStateDataNew *cs, int timeout)
+{
+        cs->timeout = timeout;
+}
+
 /*
  * Attempt to connect to host:port.
  * addr6 can specify a fixed v4 or v6 address; or NULL for host lookup.
@@ -126,6 +133,7 @@ commConnectNewSetupOutgoingV6(ConnectStateDataNew *cs, sqaddr_t *lcl)
 void
 commConnectStartNewBegin(ConnectStateDataNew *cs)
 {
+    cs->start_time = squid_curtime;
     /* Begin the host lookup */
     ipcache_nbgethostbyname(cs->host, commConnectDnsHandle, cs);
 }

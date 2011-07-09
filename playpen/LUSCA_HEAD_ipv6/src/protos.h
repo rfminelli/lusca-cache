@@ -437,7 +437,8 @@ extern void fwdUninit(void);
 extern void fwdLogRotate(void);
 extern void fwdStatus(FwdState *, http_status);
 #endif
-struct in_addr getOutgoingAddr(request_t * request);
+extern struct in_addr getOutgoingAddr(request_t * request);
+extern void getOutgoingAddrV6(request_t * request, sqaddr_t *a);
 unsigned long getOutgoingTOS(request_t * request);
 
 extern void urnStart(request_t *, StoreEntry *);
