@@ -1,3 +1,6 @@
+/*
+ vim:expandtab
+ */
 
 /*
  * $Id: comm.c 14853 2011-07-02 06:10:25Z adrian.chadd $
@@ -32,6 +35,7 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111, USA.
  *
  */
+
 
 /* On native Windows, squid_mswin.h needs to know when we are compiling
  * comm.c for the correct handling of FD<=>socket magic
@@ -70,7 +74,7 @@ commConnectStartNew(const char *host, u_short port, CNCB * callback,
     debug(5, 3) ("%s: new connection to %s:%d\n", __func__, host, (int) port);
     CBDATA_INIT_TYPE(ConnectStateDataNew);
     cs = cbdataAlloc(ConnectStateDataNew);
-    cs->fd = -1;		/* Will need to be created */
+    cs->fd = -1;                /* Will need to be created */
     cs->host = xstrdup(host);
     cs->port = port;
     cs->callback = callback;
@@ -84,10 +88,10 @@ commConnectStartNew(const char *host, u_short port, CNCB * callback,
     /* Do we have a local address? Use it */
     if (addr6 != NULL) {
         sqinet_init(&cs->in_addr6);
-	sqinet_copy(&cs->in_addr6, addr6);
-	cs->addrcount = 1;
+        sqinet_copy(&cs->in_addr6, addr6);
+        cs->addrcount = 1;
     } else {
-	cs->addrcount = 0;
+        cs->addrcount = 0;
     }
     cbdataLock(cs->data);
 
@@ -102,12 +106,12 @@ commConnectStartNew(const char *host, u_short port, CNCB * callback,
 static void
 commConnectCloseSocket(ConnectStateDataNew *cs)
 {
-	if (cs->fd == -1)
-		return;
-	debug(5, 1) ("%s: FD (%d): closing\n", __func__, cs->fd);
-	comm_remove_close_handler(cs->fd, commConnectFree, cs);
-	comm_close(cs->fd);
-	cs->fd = -1;
+        if (cs->fd == -1)
+                return;
+        debug(5, 1) ("%s: FD (%d): closing\n", __func__, cs->fd);
+        comm_remove_close_handler(cs->fd, commConnectFree, cs);
+        comm_close(cs->fd);
+        cs->fd = -1;
 }
 
 /*
@@ -117,37 +121,37 @@ commConnectCloseSocket(ConnectStateDataNew *cs)
 static int
 commConnectCreateSocket(ConnectStateDataNew *cs)
 {
-	int af;
-	sqaddr_t a;
+        int af;
+        sqaddr_t a;
 
-	/* Does a socket exist? It shouldn't at this point. */
-	if (cs->fd != -1) {
-		debug(5, 1) ("%s: FD (%d) exists when it shouldn't!\n",
-		    __func__, cs->fd);
-		comm_remove_close_handler(cs->fd, commConnectFree, cs);
-		comm_close(cs->fd);
-		cs->fd = -1;
-	}
+        /* Does a socket exist? It shouldn't at this point. */
+        if (cs->fd != -1) {
+                debug(5, 1) ("%s: FD (%d) exists when it shouldn't!\n",
+                    __func__, cs->fd);
+                comm_remove_close_handler(cs->fd, commConnectFree, cs);
+                comm_close(cs->fd);
+                cs->fd = -1;
+        }
 
-	/* Create a new socket for the given destination address */
-	af = sqinet_get_family(&cs->in_addr6);
+        /* Create a new socket for the given destination address */
+        af = sqinet_get_family(&cs->in_addr6);
 
-	/* XXX there's not outgoing address support at the present moment */
-	sqinet_init(&a);
-	sqinet_set_family(&a, af);
-	sqinet_set_anyaddr(&a);
-	cs->fd = comm_open6(SOCK_STREAM, IPPROTO_TCP, &a,
-	    cs->comm_flags | COMM_NONBLOCKING, cs->comm_tos, cs->comm_note);
-	sqinet_done(&a);
+        /* XXX there's not outgoing address support at the present moment */
+        sqinet_init(&a);
+        sqinet_set_family(&a, af);
+        sqinet_set_anyaddr(&a);
+        cs->fd = comm_open6(SOCK_STREAM, IPPROTO_TCP, &a,
+            cs->comm_flags | COMM_NONBLOCKING, cs->comm_tos, cs->comm_note);
+        sqinet_done(&a);
 
-	/* Did socket creation fail? Then pass it up the stack */
-	if (cs->fd == -1)
-		return -1;
+        /* Did socket creation fail? Then pass it up the stack */
+        if (cs->fd == -1)
+                return -1;
 
-	/* Setup the close handler */
-	comm_add_close_handler(cs->fd, commConnectFree, cs);
+        /* Setup the close handler */
+        comm_add_close_handler(cs->fd, commConnectFree, cs);
 
-	return cs->fd;
+        return cs->fd;
 }
 
 static void
@@ -155,33 +159,33 @@ commConnectDnsHandle(const ipcache_addrs * ia, void *data)
 {
     ConnectStateDataNew *cs = data;
     if (ia == NULL) {
-	/* If we've been given a default IP, use it */
-	if (cs->addrcount > 0) {
-	    fd_table[cs->fd].flags.dnsfailed = 1;
-	    cs->connstart = squid_curtime;
-	    if (commConnectCreateSocket(cs) == -1) {
-	        debug(5, 3) ("%s: socket problem: %s\n", __func__, cs->host);
-	        commConnectCallbackNew(cs, COMM_ERR_CONNECT);
-		return;
-	    }
-	    commConnectHandle(cs->fd, cs);
-	} else {
-	    debug(5, 3) ("commConnectDnsHandle: Unknown host: %s\n", cs->host);
-	    if (!dns_error_message) {
-		dns_error_message = "Unknown DNS error";
-		debug(5, 1) ("commConnectDnsHandle: Bad dns_error_message\n");
-	    }
-	    assert(dns_error_message != NULL);
-	    commConnectCallbackNew(cs, COMM_ERR_DNS);
-	}
-	return;
+        /* If we've been given a default IP, use it */
+        if (cs->addrcount > 0) {
+            fd_table[cs->fd].flags.dnsfailed = 1;
+            cs->connstart = squid_curtime;
+            if (commConnectCreateSocket(cs) == -1) {
+                debug(5, 3) ("%s: socket problem: %s\n", __func__, cs->host);
+                commConnectCallbackNew(cs, COMM_ERR_CONNECT);
+                return;
+            }
+            commConnectHandle(cs->fd, cs);
+        } else {
+            debug(5, 3) ("commConnectDnsHandle: Unknown host: %s\n", cs->host);
+            if (!dns_error_message) {
+                dns_error_message = "Unknown DNS error";
+                debug(5, 1) ("commConnectDnsHandle: Bad dns_error_message\n");
+            }
+            assert(dns_error_message != NULL);
+            commConnectCallbackNew(cs, COMM_ERR_DNS);
+        }
+        return;
     }
     assert(ia->cur < ia->count);
     sqinet_done(&cs->in_addr6);
     sqinet_init(&cs->in_addr6);
     (void) ipcacheGetAddr(ia, ia->cur, &cs->in_addr6);
     if (Config.onoff.balance_on_multiple_ip)
-	ipcacheCycleAddr(cs->host, NULL);
+        ipcacheCycleAddr(cs->host, NULL);
     cs->addrcount = ia->count;
     cs->connstart = squid_curtime;
 
@@ -223,7 +227,7 @@ commConnectFree(int fd, void *data)
     ConnectStateDataNew *cs = data;
     debug(5, 3) ("commConnectFree: FD %d\n", fd);
     if (cs->data)
-	cbdataUnlock(cs->data);
+        cbdataUnlock(cs->data);
     safe_free(cs->host);
     sqinet_done(&cs->in_addr6);
     cbdataFree(cs);
@@ -234,13 +238,13 @@ commRetryConnect(ConnectStateDataNew * cs)
 {
     assert(cs->addrcount > 0);
     if (cs->addrcount == 1) {
-	if (cs->tries >= Config.retry.maxtries)
-	    return 0;
-	if (squid_curtime - cs->connstart > Config.Timeout.connect)
-	    return 0;
+        if (cs->tries >= Config.retry.maxtries)
+            return 0;
+        if (squid_curtime - cs->connstart > Config.Timeout.connect)
+            return 0;
     } else {
-	if (cs->tries > cs->addrcount)
-	    return 0;
+        if (cs->tries > cs->addrcount)
+            return 0;
     }
 
     /* The next retry may be a different protocol family */
@@ -281,24 +285,24 @@ commConnectHandle(int fd, void *data)
     sqinet_done(&a);
     switch(r) {
     case COMM_INPROGRESS:
-	debug(5, 5) ("commConnectHandle: FD %d: COMM_INPROGRESS\n", fd);
-	commSetSelect(fd, COMM_SELECT_WRITE, commConnectHandle, cs, 0);
-	break;
+        debug(5, 5) ("commConnectHandle: FD %d: COMM_INPROGRESS\n", fd);
+        commSetSelect(fd, COMM_SELECT_WRITE, commConnectHandle, cs, 0);
+        break;
     case COMM_OK:
-	ipcacheMarkGoodAddr(cs->host, &cs->in_addr6);
-	commConnectCallbackNew(cs, COMM_OK);
-	break;
+        ipcacheMarkGoodAddr(cs->host, &cs->in_addr6);
+        commConnectCallbackNew(cs, COMM_OK);
+        break;
     default:
-	cs->tries++;
-	ipcacheMarkBadAddr(cs->host, &cs->in_addr6);
-	if (Config.onoff.test_reachability)
-	    netdbDeleteAddrNetwork(&cs->in_addr6);
-	if (commRetryConnect(cs)) {
-	    eventAdd("commReconnect", commReconnect, cs, cs->addrcount == 1 ? 0.05 : 0.0, 0);
-	} else {
-	    commConnectCallbackNew(cs, COMM_ERR_CONNECT);
-	}
-	break;
+        cs->tries++;
+        ipcacheMarkBadAddr(cs->host, &cs->in_addr6);
+        if (Config.onoff.test_reachability)
+            netdbDeleteAddrNetwork(&cs->in_addr6);
+        if (commRetryConnect(cs)) {
+            eventAdd("commReconnect", commReconnect, cs, cs->addrcount == 1 ? 0.05 : 0.0, 0);
+        } else {
+            commConnectCallbackNew(cs, COMM_ERR_CONNECT);
+        }
+        break;
     }
 }
 
