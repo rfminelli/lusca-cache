@@ -288,7 +288,7 @@ struct _aclCheck_t {
     const acl_access *access_list;
     sqaddr_t src_address;
     sqaddr_t dst_addr;
-    struct in_addr fwdip_addr;
+    sqaddr_t fwdip_addr;
     sqaddr_t my_address;
     request_t *request;
     /* for acls that look at reply data */

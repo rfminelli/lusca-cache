@@ -2351,9 +2351,9 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
     case ACL_DSTFWD_IP:
 	/* make sure this checks that the dstfwdip is SET to something non-blank and
 	 * error out in case. */
-	if (IsAnyAddr(&checklist->fwdip_addr))
+	if (sqinet_is_anyaddr(&checklist->fwdip_addr))
 	    return -1;
-	return aclMatchIp4(&ae->data, checklist->fwdip_addr);
+	return aclMatchIp(&ae->data, &checklist->fwdip_addr);
 	/* NOTREACHED */
     case ACL_NONE:
     case ACL_ENUM_MAX:
@@ -2739,6 +2739,9 @@ aclCheckSetup(aclCheck_t *ch)
     sqinet_init(&ch->my_address);
     sqinet_init(&ch->src_address);
     sqinet_init(&ch->dst_addr);
+    sqinet_init(&ch->fwdip_addr);
+    sqinet_set_family(&ch->fwdip_addr, AF_INET);
+    sqinet_set_anyaddr(&ch->fwdip_addr);
 }
 
 void
@@ -2747,6 +2750,7 @@ aclCheckFinish(aclCheck_t *ch)
     sqinet_done(&ch->my_address);
     sqinet_done(&ch->src_address);
     sqinet_done(&ch->dst_addr);
+    sqinet_done(&ch->fwdip_addr);
 }
 
 CBDATA_TYPE(aclCheck_t);
