@@ -242,7 +242,7 @@ struct _snmp_request_t {
     int sock;
     long reqid;
     int outlen;
-    struct sockaddr_in from;
+    sqaddr_t from;
     struct snmp_pdu *PDU;
     aclCheck_t *acl_checklist;
     u_char *community;
@@ -577,6 +577,8 @@ struct _SquidConfig {
 #if SQUID_SNMP
 	struct in_addr snmp_incoming;
 	struct in_addr snmp_outgoing;
+	sqaddr_t snmp_incoming6;
+	sqaddr_t snmp_outgoing6;
 #endif
 	struct in_addr client_netmask_v4;
 	sqaddr_t client_netmask_v6;

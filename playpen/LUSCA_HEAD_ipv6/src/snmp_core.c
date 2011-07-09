@@ -289,13 +289,16 @@ void
 snmpConnectionOpen(void)
 {
     u_short port;
+#if 0
     struct sockaddr_in xaddr;
     socklen_t len;
     int x;
+#endif
 
     debug(49, 5) ("snmpConnectionOpen: Called\n");
     if ((port = Config.Port.snmp) > (u_short) 0) {
 	enter_suid();
+
 	theInSnmpConnection = comm_open(SOCK_DGRAM,
 	    IPPROTO_UDP,
 	    Config.Addrs.snmp_incoming,
@@ -303,12 +306,25 @@ snmpConnectionOpen(void)
 	    COMM_NONBLOCKING,
 	    COMM_TOS_DEFAULT,
 	    "SNMP Port");
+
+	sqinet_set_port(&Config.Addrs.snmp_incoming6, port, SQADDR_NONE);
+	theInSnmpConnection6 = comm_open6(SOCK_DGRAM,
+	    IPPROTO_UDP,
+	    &Config.Addrs.snmp_incoming6,
+	    COMM_NONBLOCKING,
+	    COMM_TOS_DEFAULT,
+	    "SNMP Port");
+
 	leave_suid();
-	if (theInSnmpConnection < 0)
+	if (theInSnmpConnection < 0 || theInSnmpConnection6 < 0)
 	    fatal("Cannot open snmp Port");
-	commSetSelect(theInSnmpConnection, COMM_SELECT_READ, snmpHandleUdp, NULL, 0);
+	commSetSelect(theInSnmpConnection, COMM_SELECT_READ, snmpHandleUdp,
+	  NULL, 0);
+	commSetSelect(theInSnmpConnection6, COMM_SELECT_READ, snmpHandleUdp,
+	  NULL, 0);
 	debug(1, 1) ("Accepting SNMP messages on port %d, FD %d.\n",
 	    (int) port, theInSnmpConnection);
+
 	if (! IsNoAddr(&Config.Addrs.snmp_outgoing)) {
 	    enter_suid();
 	    theOutSnmpConnection = comm_open(SOCK_DGRAM,
@@ -332,6 +348,32 @@ snmpConnectionOpen(void)
 	} else {
 	    theOutSnmpConnection = theInSnmpConnection;
 	}
+
+	if (! sqinet_is_noaddr(&Config.Addrs.snmp_outgoing6)) {
+	    enter_suid();
+	    sqinet_set_port(&Config.Addrs.snmp_outgoing6, port, SQADDR_NONE);
+	    theOutSnmpConnection = comm_open6(SOCK_DGRAM,
+		IPPROTO_UDP,
+		&Config.Addrs.snmp_outgoing6,
+		COMM_NONBLOCKING,
+	        COMM_TOS_DEFAULT,
+		"SNMP Port");
+	    leave_suid();
+	    if (theOutSnmpConnection6 < 0)
+		fatal("Cannot open Outgoing SNMP Port");
+	    commSetSelect(theOutSnmpConnection6,
+		COMM_SELECT_READ,
+		snmpHandleUdp,
+		NULL, 0);
+	    debug(1, 1) ("Outgoing SNMP messages on port %d, FD %d.\n",
+		(int) port, theOutSnmpConnection);
+	    fd_note(theOutSnmpConnection6, "Outgoing SNMP socket");
+	    fd_note(theInSnmpConnection6, "Incoming SNMP socket");
+	} else {
+	    theOutSnmpConnection6 = theInSnmpConnection6;
+	}
+
+#if 0
 	memset(&theOutSNMPAddr, '\0', sizeof(struct in_addr));
 	len = sizeof(struct sockaddr_in);
 	memset(&xaddr, '\0', len);
@@ -342,32 +384,51 @@ snmpConnectionOpen(void)
 		theOutSnmpConnection, xstrerror());
 	else
 	    theOutSNMPAddr = xaddr.sin_addr;
+#endif
     }
 }
 
 void
 snmpConnectionShutdown(void)
 {
-    if (theInSnmpConnection < 0)
+    if (theInSnmpConnection < 0 && theInSnmpConnection6 < 0)
 	return;
-    if (theInSnmpConnection != theOutSnmpConnection) {
-	debug(49, 1) ("FD %d Closing SNMP socket\n", theInSnmpConnection);
-	comm_close(theInSnmpConnection);
-    }
+
     /*
      * Here we set 'theInSnmpConnection' to -1 even though the SNMP 'in'
      * and 'out' sockets might be just one FD.  This prevents this
      * function from executing repeatedly.  When we are really ready to
      * exit or restart, main will comm_close the 'out' descriptor.
-     */ theInSnmpConnection = -1;
+     */
+
+    if (theInSnmpConnection != -1) {
+        if (theInSnmpConnection != theOutSnmpConnection) {
+            debug(49, 1) ("FD %d Closing IPv4 SNMP socket\n",
+              theInSnmpConnection);
+            comm_close(theInSnmpConnection);
+            theInSnmpConnection6 = -1;
+        }
+    }
+
+    if (theInSnmpConnection6 != -1) {
+        if (theInSnmpConnection6 != theOutSnmpConnection6) {
+            debug(49, 1) ("FD %d Closing IPv6 SNMP socket\n",
+              theInSnmpConnection6);
+            comm_close(theInSnmpConnection6);
+            theInSnmpConnection6 = -1;
+        }
+    }
+
     /*
      * Normally we only write to the outgoing SNMP socket, but we
      * also have a read handler there to catch messages sent to that
      * specific interface.  During shutdown, we must disable reading
      * on the outgoing socket.
      */
-    assert(theOutSnmpConnection > -1);
-    commSetSelect(theOutSnmpConnection, COMM_SELECT_READ, NULL, NULL, 0);
+    if (theOutSnmpConnection != -1)
+        commSetSelect(theOutSnmpConnection, COMM_SELECT_READ, NULL, NULL, 0);
+    if (theOutSnmpConnection6 != -1)
+        commSetSelect(theOutSnmpConnection6, COMM_SELECT_READ, NULL, NULL, 0);
 }
 
 void
@@ -391,15 +452,15 @@ void
 snmpHandleUdp(int sock, void *not_used)
 {
     LOCAL_ARRAY(char, buf, SNMP_REQUEST_SIZE);
-    struct sockaddr_in from;
+    struct sockaddr_storage from;
     socklen_t from_len;
     snmp_request_t *snmp_rq;
     int len;
 
-    debug(49, 5) ("snmpHandleUdp: Called.\n");
+    debug(49, 5) ("snmpHandleUdp: Called: FD %d\n", sock);
 
     commSetSelect(sock, COMM_SELECT_READ, snmpHandleUdp, NULL, 0);
-    from_len = sizeof(struct sockaddr_in);
+    from_len = sizeof(from);
     memset(&from, '\0', from_len);
     memset(buf, '\0', SNMP_REQUEST_SIZE);
 
@@ -413,21 +474,29 @@ snmpHandleUdp(int sock, void *not_used)
 	&from_len);
 
     if (len > 0) {
+	char sbuf[MAX_IPSTRLEN];
 	buf[len] = '\0';
-	debug(49, 3) ("snmpHandleUdp: FD %d: received %d bytes from %s.\n",
-	    sock,
-	    len,
-	    inet_ntoa(from.sin_addr));
+	sqaddr_t f;
+	sqinet_init(&f);
+	sqinet_set_sockaddr(&f, &from);
+	if (do_debug(49, 3)) {
+	    (void) sqinet_ntoa(&f, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
+	    debug(49, 3) ("snmpHandleUdp: FD %d: received %d bytes from %s.\n",
+	      sock, len, sbuf);
+	}
 
 	snmp_rq = xcalloc(1, sizeof(snmp_request_t));
 	snmp_rq->buf = (u_char *) buf;
 	snmp_rq->len = len;
 	snmp_rq->sock = sock;
 	snmp_rq->outbuf = xmalloc(snmp_rq->outlen = SNMP_REQUEST_SIZE);
-	xmemcpy(&snmp_rq->from, &from, sizeof(struct sockaddr_in));
+	sqinet_init(&snmp_rq->from);
+	sqinet_copy(&snmp_rq->from, &f);
 	snmpDecodePacket(snmp_rq);
+	sqinet_done(&snmp_rq->from);
 	xfree(snmp_rq->outbuf);
 	xfree(snmp_rq);
+	sqinet_done(&f);
     } else {
 	debug(49, 1) ("snmpHandleUdp: FD %d recvfrom: %s\n", sock, xstrerror());
     }
@@ -453,7 +522,7 @@ snmpDecodePacket(snmp_request_t * rq)
     Community = snmp_parse(&rq->session, PDU, buf, len);
     memset(&checklist, '\0', sizeof(checklist));
     aclCheckSetup(&checklist);
-    sqinet_set_v4_inaddr(&checklist.src_address, &rq->from.sin_addr);
+    sqinet_copy(&checklist.src_address, &rq->from);
     checklist.snmp_community = (char *) Community;
 
     if (Community)
@@ -464,8 +533,9 @@ snmpDecodePacket(snmp_request_t * rq)
 	debug(49, 5) ("snmpDecodePacket: reqid=[%d]\n", PDU->reqid);
 	snmpConstructReponse(rq);
     } else {
-	debug(49, 1) ("Failed SNMP agent query from : %s.\n",
-	    inet_ntoa(rq->from.sin_addr));
+	char sbuf[MAX_IPSTRLEN];
+	(void) sqinet_ntoa(&rq->from, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
+	debug(49, 1) ("Failed SNMP agent query from : %s.\n", sbuf);
 	snmp_free_pdu(PDU);
     }
     if (Community)
@@ -485,8 +555,18 @@ snmpConstructReponse(snmp_request_t * rq)
     RespPDU = snmpAgentResponse(rq->PDU);
     snmp_free_pdu(rq->PDU);
     if (RespPDU != NULL) {
+	int family;
 	snmp_build(&rq->session, RespPDU, rq->outbuf, &rq->outlen);
-	comm_udp_sendto(rq->sock, &rq->from, sizeof(rq->from), rq->outbuf, rq->outlen);
+	/* check address family */
+	/* XXX is this needed? How's rq->sock figured out? */
+	family = sqinet_get_family(&rq->from);
+	if (family == AF_INET)
+		assert(rq->sock == theOutSnmpConnection);
+	else if (family == AF_INET6)
+		assert(rq->sock == theOutSnmpConnection6);
+	else
+		debug(49, 0) ("%s: address family=%d ?!\n", __func__, family);
+	comm_udp_sendto6(rq->sock, &rq->from, rq->outbuf, rq->outlen);
 	snmp_free_pdu(RespPDU);
     }
 }

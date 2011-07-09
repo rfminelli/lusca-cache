@@ -80,13 +80,17 @@ extern int syslog_enable;	/* 0 */
 #ifdef SQUID_SNMP
 extern int theInSnmpConnection;	/* -1 */
 extern int theOutSnmpConnection;	/* -1 */
+extern int theInSnmpConnection6;	/* -1 */
+extern int theOutSnmpConnection6;	/* -1 */
 extern char *snmp_agentinfo;
 #endif
 extern int n_disk_objects;	/* 0 */
 extern iostats IOStats;
 extern struct _acl_deny_info_list *DenyInfoList;	/* NULL */
 extern struct in_addr theOutICPAddr;
+#if 0
 extern struct in_addr theOutSNMPAddr;
+#endif
 extern struct timeval squid_start;
 extern int store_dirs_rebuilding;	/* 1 */
 extern int store_swap_size;	/* 0 */

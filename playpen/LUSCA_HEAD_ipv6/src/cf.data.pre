@@ -4789,6 +4789,18 @@ DOC_START
 	the same value since they both use port 3401.
 DOC_END
 
+NAME: snmp_outgoing_address6
+TYPE: address6
+LOC: Config.Addrs.snmp_outgoing6
+DEFAULT: ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+DOC_NONE
+
+NAME: snmp_incoming_address6
+TYPE: address6
+LOC: Config.Addrs.snmp_incoming6
+DEFAULT: ::0
+DOC_NONE
+
 COMMENT_START
  ICP OPTIONS
  -----------------------------------------------------------------------------
