@@ -7,6 +7,8 @@ typedef struct {
     CNCB *callback;
     void *data;
     sqaddr_t in_addr6;
+    sqaddr_t lcl_addr4;	/* outgoing_addr for v4 sockets */
+    sqaddr_t lcl_addr6; /* outgoing_addr for v6 sockets */
     int fd;
     int tries;
     int addrcount;
@@ -21,5 +23,9 @@ extern ConnectStateDataNew *commConnectStartNewSetup(const char *host,
   int tos, const char *note);
 
 extern void commConnectStartNewBegin(ConnectStateDataNew *cs);
+extern void commConnectNewSetupOutgoingV4(ConnectStateDataNew *cs,
+  struct in_addr lcl);
+extern void commConnectNewSetupOutgoingV6(ConnectStateDataNew *cs,
+  sqaddr_t *lcl);
 
 #endif	/* __SQUID_COMM2_H__ */

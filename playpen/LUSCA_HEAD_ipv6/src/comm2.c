@@ -81,6 +81,13 @@ commConnectStartNewSetup(const char *host, u_short port, CNCB *callback,
     cs->comm_flags = flags;
 
     sqinet_init(&cs->in_addr6);
+    sqinet_init(&cs->lcl_addr4);
+    sqinet_init(&cs->lcl_addr6);
+
+    sqinet_set_family(&cs->lcl_addr4, AF_INET);
+    sqinet_set_family(&cs->lcl_addr6, AF_INET6);
+    sqinet_set_anyaddr(&cs->lcl_addr4);
+    sqinet_set_anyaddr(&cs->lcl_addr6);
 
     /* Do we have a local address? Use it */
     if (addr6 != NULL) {
@@ -95,6 +102,18 @@ commConnectStartNewSetup(const char *host, u_short port, CNCB *callback,
     return cs;
 }
 
+void
+commConnectNewSetupOutgoingV4(ConnectStateDataNew *cs, struct in_addr lcl)
+{
+        sqinet_set_family(&cs->lcl_addr4, AF_INET);
+        sqinet_set_v4_inaddr(&cs->lcl_addr4, &lcl);
+}
+
+void
+commConnectNewSetupOutgoingV6(ConnectStateDataNew *cs, sqaddr_t *lcl)
+{
+        sqinet_copy(&cs->lcl_addr6, lcl);
+}
 
 /*
  * Attempt to connect to host:port.
@@ -134,7 +153,6 @@ static int
 commConnectCreateSocket(ConnectStateDataNew *cs)
 {
         int af;
-        sqaddr_t a;
 
         /* Does a socket exist? It shouldn't at this point. */
         if (cs->fd != -1) {
@@ -148,13 +166,10 @@ commConnectCreateSocket(ConnectStateDataNew *cs)
         /* Create a new socket for the given destination address */
         af = sqinet_get_family(&cs->in_addr6);
 
-        /* XXX there's not outgoing address support at the present moment */
-        sqinet_init(&a);
-        sqinet_set_family(&a, af);
-        sqinet_set_anyaddr(&a);
-        cs->fd = comm_open6(SOCK_STREAM, IPPROTO_TCP, &a,
+        /* Open with the correct local address */
+        cs->fd = comm_open6(SOCK_STREAM, IPPROTO_TCP, (af == AF_INET ?
+            &cs->lcl_addr4 : &cs->lcl_addr6),
             cs->comm_flags | COMM_NONBLOCKING, cs->comm_tos, cs->comm_note);
-        sqinet_done(&a);
 
         /* Did socket creation fail? Then pass it up the stack */
         if (cs->fd == -1)
@@ -242,6 +257,8 @@ commConnectFree(int fd, void *data)
         cbdataUnlock(cs->data);
     safe_free(cs->host);
     sqinet_done(&cs->in_addr6);
+    sqinet_done(&cs->lcl_addr4);
+    sqinet_done(&cs->lcl_addr6);
     cbdataFree(cs);
 }
 
