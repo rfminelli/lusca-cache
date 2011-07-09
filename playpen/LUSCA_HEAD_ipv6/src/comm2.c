@@ -106,7 +106,6 @@ commConnectStartNewSetup(const char *host, u_short port, CNCB *callback,
 void
 commConnectNewSetupOutgoingV4(ConnectStateDataNew *cs, struct in_addr lcl)
 {
-        sqinet_set_family(&cs->lcl_addr4, AF_INET);
         sqinet_set_v4_inaddr(&cs->lcl_addr4, &lcl);
 }
 
