@@ -667,9 +667,11 @@ sqinet_aton(sqaddr_t *s, const char *hoststr, sqaton_flags flags)
 	assert(s->init);
 	memset(&hints, 0, sizeof(hints));
 	if (flags & SQATON_FAMILY_IPv4)
-		hints.ai_family = AF_INET;
-	if (flags & SQATON_FAMILY_IPv6)
-		hints.ai_family = AF_INET6;
+		hints.ai_family = PF_INET;
+	else if (flags & SQATON_FAMILY_IPv6)
+		hints.ai_family = PF_INET6;
+	else
+		hints.ai_family = PF_UNSPEC;
 	if (flags & SQATON_PASSIVE)
 		hints.ai_flags |= AI_PASSIVE;
 	hints.ai_flags |= AI_NUMERICHOST;
