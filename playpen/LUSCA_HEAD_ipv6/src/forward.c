@@ -617,6 +617,7 @@ fwdConnectStart(void *data)
     int ctimeout;
     int ftimeout = Config.Timeout.forward - (squid_curtime - fwdState->start);
     struct in_addr outgoing;
+    sqaddr_t outgoing6;
     unsigned short tos;
     int idle = -1;
     int do_tproxy = 1;
@@ -775,13 +776,26 @@ fwdConnectStart(void *data)
 
 #warning re-do the transparent stuff soon!
     /*
-     * There's no outgoing address or local host support just yet, so
-     * there's no transparency support just yet.
+     * There's no v6 outgoing address or local host support just yet, so
+     * there's no v6 transparency support just yet.
      */
+
+    /*
+     * There is also no tproxy support; the transparency support is missing
+     * the connection retry logic and such.
+     */
+
+    /* Also, the timeout isn't implemented in comm2.c yet */
+
     cs = commConnectStartNewSetup(host, port, fwdConnectDone, fwdState,
       NULL, 0, url);
     commConnectNewSetTimeout(cs, ctimeout);
     commConnectNewSetTOS(cs, tos);
+    commConnectNewSetupOutgoingV4(cs, outgoing);
+    sqinet_init(&outgoing6);
+    getOutgoingAddrV6(fwdState->request, &outgoing6);
+    commConnectNewSetupOutgoingV6(cs, &outgoing6);
+    sqinet_done(&outgoing6);
     commConnectStartNewBegin(cs);
 }
 
