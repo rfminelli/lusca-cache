@@ -2508,14 +2508,9 @@ aclCheck(aclCheck_t * checklist)
 		checklist->state[ACL_DST_DOMAIN] = ACL_LOOKUP_DONE;
 		return;
 	    }
-	    /* XXX dst_addr will eventually grow ipv4/ipv6 awareness */
-	    /*
-	     * XXX and how the heck this is supposed to work in that instance is going
-	     * XXX to need to be figured out. -adrian
-	     */
-	    checklist->dst_addr = ipcacheGetAddrV4(ia, 0);
+	    ipcacheGetAddr(ia, 0, &checklist->dst_addr);
 	    checklist->state[ACL_DST_DOMAIN] = ACL_LOOKUP_PENDING;
-	    fqdncache_nbgethostbyaddr(checklist->dst_addr,
+	    fqdncache_nbgethostbyaddr6(&checklist->dst_addr,
 		aclLookupDstFQDNDone, checklist);
 	    return;
 	} else if (checklist->state[ACL_PROXY_AUTH] == ACL_LOOKUP_NEEDED) {
@@ -2743,6 +2738,7 @@ aclCheckSetup(aclCheck_t *ch)
 {
     sqinet_init(&ch->my_address);
     sqinet_init(&ch->src_address);
+    sqinet_init(&ch->dst_addr);
 }
 
 void
@@ -2750,6 +2746,7 @@ aclCheckFinish(aclCheck_t *ch)
 {
     sqinet_done(&ch->my_address);
     sqinet_done(&ch->src_address);
+    sqinet_done(&ch->dst_addr);
 }
 
 CBDATA_TYPE(aclCheck_t);
