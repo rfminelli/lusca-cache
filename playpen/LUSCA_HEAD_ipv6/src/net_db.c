@@ -239,6 +239,10 @@ netdbSendPing(const ipcache_addrs * ia, void *data)
 	xfree(hostname);
 	return;
     }
+#warning This needs to support IPv6!
+    if (ipcacheGetAddrFamily(ia, ia->cur) != AF_INET)
+        return;
+
     addr = ipcacheGetAddrV4(ia, ia->cur);
     if ((n = netdbLookupHost(hostname)) == NULL) {
 	n = netdbAdd(addr);
