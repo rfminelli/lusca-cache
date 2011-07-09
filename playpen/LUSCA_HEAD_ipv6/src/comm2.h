@@ -16,8 +16,10 @@ typedef struct {
     int comm_flags;
 } ConnectStateDataNew;
 
-extern void
-commConnectStartNew(const char *host, u_short port, CNCB * callback,
-    void *data, sqaddr_t *addr6, int flags, int tos, const char *note);
+extern ConnectStateDataNew *commConnectStartNewSetup(const char *host,
+  u_short port, CNCB * callback, void *data, sqaddr_t *addr6, int flags,
+  int tos, const char *note);
+
+extern void commConnectStartNewBegin(ConnectStateDataNew *cs);
 
 #endif	/* __SQUID_COMM2_H__ */

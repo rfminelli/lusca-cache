@@ -609,6 +609,7 @@ fwdConnectStart(void *data)
     unsigned short tos;
     int idle = -1;
     int do_tproxy = 1;
+    ConnectStateDataNew *cs;
 
     assert(fs);
     assert(fwdState->server_fd == -1);
@@ -766,8 +767,9 @@ fwdConnectStart(void *data)
      * There's no outgoing address or local host support just yet, so
      * there's no transparency support just yet.
      */
-    commConnectStartNew(host, port, fwdConnectDone, fwdState,
+    cs = commConnectStartNewSetup(host, port, fwdConnectDone, fwdState,
       NULL, 0, tos, url);
+    commConnectStartNewBegin(cs);
 }
 
 static void

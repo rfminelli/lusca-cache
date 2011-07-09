@@ -51,6 +51,8 @@
 #include <netinet/tcp.h>
 #endif
 
+#include "comm2.h"
+
 static PF commConnectFree;
 static PF commConnectHandle;
 static IPH commConnectDnsHandle;
@@ -59,15 +61,10 @@ static int commRetryConnect(ConnectStateDataNew * cs);
 CBDATA_TYPE(ConnectStateDataNew);
 
 /*
- * Attempt to connect to host:port.
- * addr6 can specify a fixed v4 or v6 address; or NULL for host lookup.
- *
- * flags: additional comm flags
- * tos: TOS for newly created sockets
- * note: note for newly created sockets
+ * Setup a comm connect (new) structure for a future "start" call.
  */
-void
-commConnectStartNew(const char *host, u_short port, CNCB * callback,
+ConnectStateDataNew *
+commConnectStartNewSetup(const char *host, u_short port, CNCB *callback,
     void *data, sqaddr_t *addr6, int flags, int tos, const char *note)
 {
     ConnectStateDataNew *cs;
@@ -95,8 +92,23 @@ commConnectStartNew(const char *host, u_short port, CNCB * callback,
     }
     cbdataLock(cs->data);
 
+    return cs;
+}
+
+
+/*
+ * Attempt to connect to host:port.
+ * addr6 can specify a fixed v4 or v6 address; or NULL for host lookup.
+ *
+ * flags: additional comm flags
+ * tos: TOS for newly created sockets
+ * note: note for newly created sockets
+ */
+void
+commConnectStartNewBegin(ConnectStateDataNew *cs)
+{
     /* Begin the host lookup */
-    ipcache_nbgethostbyname(host, commConnectDnsHandle, cs);
+    ipcache_nbgethostbyname(cs->host, commConnectDnsHandle, cs);
 }
 
 
