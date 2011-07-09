@@ -37,6 +37,7 @@
 #include "squid.h"
 #include "pconn.h"
 #include "hierarchy_entry.h"
+#include "comm2.h"	/* new connect style framework */
 
 #if LINUX_NETFILTER
 #include <linux/types.h>

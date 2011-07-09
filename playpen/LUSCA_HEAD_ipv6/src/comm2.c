@@ -47,21 +47,6 @@
 #include <netinet/tcp.h>
 #endif
 
-typedef struct {
-    char *host;
-    u_short port;
-    CNCB *callback;
-    void *data;
-    sqaddr_t in_addr6;
-    int fd;
-    int tries;
-    int addrcount;
-    int connstart;
-    const char *comm_note;
-    int comm_tos;
-    int comm_flags;
-} ConnectStateDataNew;
-
 static PF commConnectFree;
 static PF commConnectHandle;
 static IPH commConnectDnsHandle;
