@@ -29,7 +29,7 @@ typedef struct {
 
 extern ConnectStateDataNew *commConnectStartNewSetup(const char *host,
   u_short port, CNCB * callback, void *data, sqaddr_t *addr6, int flags,
-  int tos, const char *note);
+  const char *note);
 
 extern void commConnectStartNewBegin(ConnectStateDataNew *cs);
 extern void commConnectNewSetupOutgoingV4(ConnectStateDataNew *cs,
@@ -38,5 +38,6 @@ extern void commConnectNewSetupOutgoingV6(ConnectStateDataNew *cs,
   sqaddr_t *lcl);
 extern void commConnectNewSetTimeout(ConnectStateDataNew *cs,
   int timeout);
+extern void commConnectNewSetTOS(ConnectStateDataNew *cs, int tos);
 
 #endif	/* __SQUID_COMM2_H__ */

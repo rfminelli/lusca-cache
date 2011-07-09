@@ -65,7 +65,7 @@ CBDATA_TYPE(ConnectStateDataNew);
  */
 ConnectStateDataNew *
 commConnectStartNewSetup(const char *host, u_short port, CNCB *callback,
-    void *data, sqaddr_t *addr6, int flags, int tos, const char *note)
+    void *data, sqaddr_t *addr6, int flags, const char *note)
 {
     ConnectStateDataNew *cs;
     debug(5, 3) ("%s: new connection to %s:%d\n", __func__, host, (int) port);
@@ -77,7 +77,7 @@ commConnectStartNewSetup(const char *host, u_short port, CNCB *callback,
     cs->callback = callback;
     cs->data = data;
     cs->comm_flags = flags;
-    cs->comm_tos = tos;
+    cs->comm_tos = 0;
     cs->comm_flags = flags;
     cs->start_time = cs->timeout = 0;
 
@@ -120,6 +120,12 @@ void
 commConnectNewSetTimeout(ConnectStateDataNew *cs, int timeout)
 {
         cs->timeout = timeout;
+}
+
+void
+commConnectNewSetTOS(ConnectStateDataNew *cs, int tos)
+{
+        cs->comm_tos = tos;
 }
 
 /*

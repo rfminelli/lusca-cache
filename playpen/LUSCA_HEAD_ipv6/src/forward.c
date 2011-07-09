@@ -775,8 +775,9 @@ fwdConnectStart(void *data)
      * there's no transparency support just yet.
      */
     cs = commConnectStartNewSetup(host, port, fwdConnectDone, fwdState,
-      NULL, 0, tos, url);
+      NULL, 0, url);
     commConnectNewSetTimeout(cs, ctimeout);
+    commConnectNewSetTOS(cs, tos);
     commConnectStartNewBegin(cs);
 }
 
