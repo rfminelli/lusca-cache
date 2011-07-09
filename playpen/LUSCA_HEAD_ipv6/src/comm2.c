@@ -215,10 +215,12 @@ commConnectCallbackNew(ConnectStateDataNew * cs, int status)
     CNCB *callback = cs->callback;
     void *data = cs->data;
     int fd = cs->fd;
-    comm_remove_close_handler(fd, commConnectFree, cs);
+    if (fd != -1) {
+        comm_remove_close_handler(fd, commConnectFree, cs);
+        commSetTimeout(fd, -1, NULL, NULL);
+    }
     cs->callback = NULL;
     cs->data = NULL;
-    commSetTimeout(fd, -1, NULL, NULL);
     if (status != COMM_OK) {
         if (fd != -1)
             comm_close(fd);
@@ -226,7 +228,7 @@ commConnectCallbackNew(ConnectStateDataNew * cs, int status)
     }
     commConnectFree(fd, cs);
     if (cbdataValid(data))
-	callback(fd, status, data);
+        callback(fd, status, data);
     cbdataUnlock(data);
 }
 
