@@ -58,6 +58,7 @@ whoisStart(FwdState * fwd)
     int fd = fwd->server_fd;
     char *buf;
     size_t l;
+    assert(fd != -1);	/* ie, the connect() in forward.c succeeded */
     CBDATA_INIT_TYPE(WhoisState);
     p = cbdataAlloc(WhoisState);
     p->request = fwd->request;

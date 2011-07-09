@@ -179,6 +179,9 @@ fwdCheckRetriable(FwdState * fwdState)
     return 1;
 }
 
+/*
+ * Called as part of the comm_close callbacks
+ */
 static void
 fwdServerClosed(int fd, void *data)
 {
@@ -328,7 +331,19 @@ fwdConnectDone(int server_fd, int status, void *data)
     FwdServer *fs = fwdState->servers;
     ErrorState *err;
     request_t *request = fwdState->request;
-    assert(fwdState->server_fd == server_fd);
+
+    /* Even if this is -1 - ie, an error */
+    fwdState->server_fd = server_fd;
+
+    /* Hack: add close handlers now if server_fd is valid */
+    if (server_fd != -1) {
+        if (fs->peer) {
+            fs->peer->stats.conn_open++;
+            comm_add_close_handler(server_fd, fwdPeerClosed, fs->peer);
+        }
+        comm_add_close_handler(server_fd, fwdServerClosed, fwdState);
+    }
+
     if (Config.onoff.log_ip_on_direct && status != COMM_ERR_DNS && fs->code == HIER_DIRECT)
 	hierarchyNote(&fwdState->request->hier, fs->code, fd_table[server_fd].ipaddrstr);
     if (status == COMM_ERR_DNS) {
@@ -347,7 +362,8 @@ fwdConnectDone(int server_fd, int status, void *data)
 	err = errorCon(ERR_DNS_FAIL, HTTP_GATEWAY_TIMEOUT, fwdState->request);
 	err->dnsserver_msg = xstrdup(dns_error_message);
 	fwdFail(fwdState, err);
-	comm_close(server_fd);
+        assert(server_fd == -1);
+	fwdServerClosed(-1, fwdState);
     } else if (status != COMM_OK) {
 	assert(fs);
 	err = errorCon(ERR_CONNECT_FAIL, HTTP_GATEWAY_TIMEOUT, fwdState->request);
@@ -355,7 +371,8 @@ fwdConnectDone(int server_fd, int status, void *data)
 	fwdFail(fwdState, err);
 	if (fs->peer)
 	    peerConnectFailed(fs->peer);
-	comm_close(server_fd);
+        assert(server_fd == -1);
+	fwdServerClosed(-1, fwdState);
     } else {
 	debug(17, 3) ("fwdConnectDone: FD %d: '%s'\n", server_fd, storeUrl(fwdState->entry));
 #if USE_SSL
@@ -428,6 +445,11 @@ fwdConnectIdleTimeout(int fd, void *data)
     cbdataFree(idle);
 }
 
+#warning This is v4 only? Tsk!
+
+/*
+ * Open IPv4 idle connections to peers
+ */
 static void
 openIdleConn(peer * peer, const char *domain, struct in_addr outgoing, unsigned short tos, int ctimeout)
 {
@@ -520,6 +542,7 @@ getOutgoingTOS(request_t * request)
     return r;
 }
 
+#if 0
 /*
  * Create the outbound socket to the given forward server.
  *
@@ -563,6 +586,7 @@ fwdConnectCreateSocket(FwdState *fwdState, FwdServer *fs)
     }
     return fd;
 }
+#endif
 
 static void
 fwdConnectStart(void *data)
@@ -570,7 +594,9 @@ fwdConnectStart(void *data)
     FwdState *fwdState = data;
     const char *url = storeUrl(fwdState->entry);
     int fd = -1;
+#if 0
     ErrorState *err;
+#endif
     FwdServer *fs = fwdState->servers;
     const char *host;
     const char *name;
@@ -691,40 +717,34 @@ fwdConnectStart(void *data)
     outgoing = getOutgoingAddr(fwdState->request);
     tos = getOutgoingTOS(fwdState->request);
 
-    fd = fwdConnectCreateSocket(fwdState, fs);
-    if (fd < 0) {
-	debug(50, 4) ("fwdConnectStart: %s\n", xstrerror());
-	err = errorCon(ERR_SOCKET_FAILURE, HTTP_INTERNAL_SERVER_ERROR, fwdState->request);
-	err->xerrno = errno;
-	fwdFail(fwdState, err);
-	fwdStateFree(fwdState);
-	return;
-    }
-    fwdState->server_fd = fd;
-    fwdState->n_tries++;
-    if (!fs->peer)
-	fwdState->origin_tries++;
+    /* Make sure we're not trumping an existing FD */
+    assert(fwdState->server_fd == -1);
+
     /*
-     * stats.conn_open is used to account for the number of
-     * connections that we have open to the peer, so we can limit
-     * based on the max-conn option.  We need to increment here,
-     * even if the connection may fail.
+     * There's no FD at this point; so peer conn tracking
+     * and adding close handlers has to wait.
      */
-    if (fs->peer) {
-	fs->peer->stats.conn_open++;
-	comm_add_close_handler(fd, fwdPeerClosed, fs->peer);
-    }
-    comm_add_close_handler(fd, fwdServerClosed, fwdState);
+
+    /*
+     * XXX there needs to be a connection timeout included
+     * in the new connection API
+     */
+
+    fwdState->n_tries++;
+#if 0
     commSetTimeout(fd,
 	ctimeout,
 	fwdConnectTimeout,
 	fwdState);
+#endif
+
     if (fs->peer) {
 	hierarchyNote(&fwdState->request->hier, fs->code, fs->peer->name);
     } else {
 	hierarchyNote(&fwdState->request->hier, fs->code, fwdState->request->host);
     }
 
+#if 0
     /*
      * If we are retrying a transparent connection that is not being sent to a
      * peer, then don't cache, and use the IP that the client's DNS lookup
@@ -738,6 +758,15 @@ fwdConnectStart(void *data)
     } else {
 	commConnectStart(fd, host, port, fwdConnectDone, fwdState, NULL);
     }
+#endif
+
+#warning re-do the transparent stuff soon!
+    /*
+     * There's no outgoing address or local host support just yet, so
+     * there's no transparency support just yet.
+     */
+    commConnectStartNew(host, port, fwdConnectDone, fwdState,
+      NULL, 0, tos, url);
 }
 
 static void

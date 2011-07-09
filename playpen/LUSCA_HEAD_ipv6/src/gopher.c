@@ -787,6 +787,7 @@ gopherStart(FwdState * fwdState)
     int fd = fwdState->server_fd;
     StoreEntry *entry = fwdState->entry;
     GopherStateData *gopherState;
+    assert(fd != -1);	/* ie the connect() in forward.c succeeded */
     CBDATA_INIT_TYPE(GopherStateData);
     gopherState = cbdataAlloc(GopherStateData);
     gopherState->buf = memAllocate(MEM_4K_BUF);

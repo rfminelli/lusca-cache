@@ -1767,6 +1767,7 @@ httpStart(FwdState * fwd)
     HttpStateData *httpState;
     request_t *proxy_req;
     request_t *orig_req = fwd->request;
+    assert(fd != -1);	/* ie, the fwd connect() hadn't finished */
     debug(11, 3) ("httpStart: \"%s %s\"\n", urlMethodGetConstStr(orig_req->method),
 	storeUrl(fwd->entry));
     CBDATA_INIT_TYPE(HttpStateData);

@@ -859,6 +859,7 @@ ftpStart(FwdState * fwd)
     request_t *request = fwd->request;
     StoreEntry *entry = fwd->entry;
     int fd = fwd->server_fd;
+    assert(fd != -1);	/* this meant the connect() hadn't finished yet */
     LOCAL_ARRAY(char, realm, 8192);
     const char *url = storeUrl(entry);
     FtpStateData *ftpState;
