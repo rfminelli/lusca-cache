@@ -43,11 +43,11 @@ static request_t *urnParse(method_t * method, char *urn);
 static const char valid_hostname_chars_u[] =
 "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 "abcdefghijklmnopqrstuvwxyz"
-"0123456789-._";
+"0123456789-._:[]";
 static const char valid_hostname_chars[] =
 "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 "abcdefghijklmnopqrstuvwxyz"
-"0123456789-.";
+"0123456789-.:[]";
 
 void
 urlInitialize(void)
@@ -173,11 +173,14 @@ urlParse(method_t * method, char *url)
 	    *t = 0;
 	    strcpy((char *) host, t + 1);
 	}
-	/* Is there any host information? (we should eventually parse it above) */
+	/* Is there any port information? (we should eventually parse it above) */
+	/* If it's an IPv6 address, we need to ensure that it's not a "::" */
 	if ((t = strrchr(host, ':'))) {
-	    *t++ = '\0';
-	    if (*t != '\0')
-		port = atoi(t);
+	    if ((t - host > 1) && *(t-1) != ':') {
+	        *t++ = '\0';
+	        if (*t != '\0')
+	            port = atoi(t);
+	    }
 	}
     }
     for (t = host; *t; t++)
@@ -193,7 +196,9 @@ urlParse(method_t * method, char *url)
 	    *q = '\0';
 	}
     }
-    if (Config.onoff.check_hostnames && strspn(host, Config.onoff.allow_underscore ? valid_hostname_chars_u : valid_hostname_chars) != strlen(host)) {
+    if (Config.onoff.check_hostnames &&
+      strspn(host, Config.onoff.allow_underscore ?
+       valid_hostname_chars_u : valid_hostname_chars) != strlen(host)) {
 	debug(23, 1) ("urlParse: Illegal character in hostname '%s'\n", host);
 	return NULL;
     }
