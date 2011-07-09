@@ -183,6 +183,18 @@ urlParse(method_t * method, char *url)
 	    }
 	}
     }
+    /*
+     * If host begins and ends with [], strip them off ;
+     * it's likely an IPv6 address
+     * XXX this is pretty horrible
+     */
+    if (host[0] == '[') {
+        int l = strlen(host);
+        if (l > 1 && host[l-1] == ']') {
+            host[l-1] = '\0';
+            memmove(host, host+1, l-1);
+        }
+    }
     for (t = host; *t; t++)
 	*t = xtolower(*t);
     if (stringHasWhitespace(host)) {
