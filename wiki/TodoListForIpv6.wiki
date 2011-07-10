@@ -32,7 +32,10 @@ This list is not comprehensive and is in no particular order.
 || request forwarding || || completed || Yes ||
 || SSL server support || || ||
 || CONNECT support || || Completed || Yes ||
-|| Transparent client interception || || ||
+|| NAT: getsockname (bsd) || || ||
+|| NAT: IP Filter || || ||
+|| NAT: Netfilter (linux) || || ||
+|| NAT: PF || || ||
 || TPROXY || || ||
 || Connect timeouts (per-session, rather than per-attempt) || || ||
 || HTTP server idle connection pooling || || ||
