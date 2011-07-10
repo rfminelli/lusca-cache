@@ -56,7 +56,6 @@ static struct _acl *aclFindByName(const char *name);
 static int aclMatchAcl(struct _acl *, aclCheck_t *);
 static int aclMatchTime(acl_time_data * data, time_t when);
 static int aclMatchUser(void *proxyauth_acl, char *user);
-static int aclMatchIp4(void *dataptr, struct in_addr c);
 static int aclMatchIp(void *dataptr, sqaddr_t *a);
 static int aclMatchDomainList(void *dataptr, const char *);
 static int aclMatchIntegerRange(intrange * data, int i);
@@ -1480,41 +1479,6 @@ aclParseAclList(acl_list ** head)
 /**************/
 
 static int
-aclMatchIp4(void *dataptr, struct in_addr c)
-{
-    splayNode **Top = dataptr;
-    acl_ip_data x;
-
-    /*
-     * aclIpAddrNetworkCompare() takes two acl_ip_data pointers as
-     * arguments, so we must create a fake one for the client's IP
-     * address, and use a /32 netmask.  However, the current code
-     * probably only accesses the addr1 element of this argument,
-     * so it might be possible to leave addr2 and mask unset.
-     * XXX Could eliminate these repetitive assignments with a
-     * static structure.
-     */
-    sqinet_init(&x.addr1);
-    sqinet_init(&x.addr2);
-    sqinet_init(&x.mask);
-
-    sqinet_set_v4_inaddr(&x.addr1, &c);
-    sqinet_set_family(&x.addr2, AF_INET);
-    sqinet_set_anyaddr(&x.addr2);
-    sqinet_set_family(&x.mask, AF_INET);
-    sqinet_set_noaddr(&x.mask);
-
-    x.next = NULL;
-    *Top = splay_splay(&x, *Top, aclIpAddrNetworkCompare);
-    debug(28, 3) ("aclMatchIp: '%s' %s\n",
-	inet_ntoa(c), splayLastResult ? "NOT found" : "found");
-    sqinet_done(&x.addr1);
-    sqinet_done(&x.addr2);
-    sqinet_done(&x.mask);
-    return !splayLastResult;
-}
-
-static int
 aclMatchIp(void *dataptr, sqaddr_t *a)
 {
     splayNode **Top = dataptr;
@@ -2053,10 +2017,14 @@ aclMatchAcl(acl * ae, aclCheck_t * checklist)
 	ia = ipcache_gethostbyname(r->host, IP_LOOKUP_IF_MISS);
 	if (ia) {
 	    for (k = 0; k < (int) ia->count; k++) {
-		if (ipcacheGetAddrFamily(ia, k) != AF_INET)
-			continue;
-		if (aclMatchIp4(&ae->data, ipcacheGetAddrV4(ia, k)))
+		sqaddr_t a;
+		sqinet_init(&a);
+		ipcacheGetAddr(ia, k, &a);
+		if (aclMatchIp(&ae->data, &a)) {
+		    sqinet_done(&a);
 		    return 1;
+		}
+		sqinet_done(&a);
 	    }
 	    return 0;
 	} else if (checklist->state[ACL_DST_IP] == ACL_LOOKUP_NONE) {
