@@ -326,8 +326,10 @@ snmpConnectionOpen(void)
 	  NULL, 0);
 	commSetSelect(theInSnmpConnection6, COMM_SELECT_READ, snmpHandleUdp,
 	  NULL, 0);
-	debug(1, 1) ("Accepting SNMP messages on port %d, FD %d.\n",
+	debug(1, 1) ("Accepting IPv4 SNMP messages on port %d, FD %d.\n",
 	    (int) port, theInSnmpConnection);
+	debug(1, 1) ("Accepting IPv6 SNMP messages on port %d, FD %d.\n",
+	    (int) port, theInSnmpConnection6);
 
 	if (! IsNoAddr(&Config.Addrs.snmp_outgoing)) {
 	    enter_suid();
@@ -345,7 +347,7 @@ snmpConnectionOpen(void)
 		COMM_SELECT_READ,
 		snmpHandleUdp,
 		NULL, 0);
-	    debug(1, 1) ("Outgoing SNMP messages on port %d, FD %d.\n",
+	    debug(1, 1) ("Outgoing IPv4 SNMP messages on port %d, FD %d.\n",
 		(int) port, theOutSnmpConnection);
 	    fd_note(theOutSnmpConnection, "Outgoing SNMP socket");
 	    fd_note(theInSnmpConnection, "Incoming SNMP socket");
@@ -369,8 +371,8 @@ snmpConnectionOpen(void)
 		COMM_SELECT_READ,
 		snmpHandleUdp,
 		NULL, 0);
-	    debug(1, 1) ("Outgoing SNMP messages on port %d, FD %d.\n",
-		(int) port, theOutSnmpConnection);
+	    debug(1, 1) ("Outgoing IPv6 SNMP messages on port %d, FD %d.\n",
+		(int) port, theOutSnmpConnection6);
 	    fd_note(theOutSnmpConnection6, "Outgoing SNMP socket");
 	    fd_note(theInSnmpConnection6, "Incoming SNMP socket");
 	} else {
