@@ -69,8 +69,10 @@ int snmpCreateOidFromStr(const char *str, oid **name, int *nl);
 extern void (*snmplib_debug_hook) (int, char *);
 static oid *static_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn);
 static oid *time_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn);
+#if 0
 static oid *peer_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn);
 static oid *peer_InstIndex(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn);
+#endif
 #if 0
 static oid *client_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn);
 #endif
@@ -235,6 +237,7 @@ snmpInit(void)
 
 	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5", 1, NULL, NULL);
 
+#if 0
 	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1", 1, NULL, NULL);
 	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 1, snmp_meshPtblFn, peer_Inst);
 	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 2, snmp_meshPtblFn, peer_Inst);
@@ -267,6 +270,7 @@ snmpInit(void)
 	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 13, snmp_meshPtblFn, peer_InstIndex);
 	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 14, snmp_meshPtblFn, peer_InstIndex);
 	mib_tree_last = snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 15, snmp_meshPtblFn, peer_InstIndex);
+#endif
 
 #if 0
 	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5", 2, NULL, NULL);
@@ -787,6 +791,7 @@ time_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn)
     return (instance);
 }
 
+#if 0
 static oid *
 peer_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn)
 {
@@ -884,6 +889,7 @@ peer_InstIndex(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn **
     *Fn = current->parsefunction;
     return (instance);
 }
+#endif
 
 #if 0
 static oid *
