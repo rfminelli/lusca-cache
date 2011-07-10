@@ -1255,7 +1255,7 @@ struct _peer {
     int n_addresses;
     int rr_count;
     peer *next;
-    int test_fd;
+    int test_fd_pending;
     struct {
 	unsigned int hash;
 	double load_multiplier;

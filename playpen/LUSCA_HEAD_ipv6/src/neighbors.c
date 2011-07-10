@@ -36,6 +36,8 @@
 #include "squid.h"
 #include "icmp.h"
 
+#include "comm2.h"
+
 #include "../libsqurl/domain.h"
 
 /* count mcast group peers every 15 minutes */
@@ -1150,8 +1152,9 @@ static void
 peerProbeConnectTimeout(int fd, void *data)
 {
     peer *p = data;
-    comm_close(fd);
-    p->test_fd = -1;
+    if (fd != -1)
+        comm_close(fd);
+    p->test_fd_pending = 0;
     peerConnectFailedSilent(p);
 }
 
@@ -1161,27 +1164,34 @@ peerProbeConnectTimeout(int fd, void *data)
 static int
 peerProbeConnect(peer * p)
 {
-    int fd;
     time_t ctimeout = p->connect_timeout > 0 ? p->connect_timeout
     : Config.Timeout.peer_connect;
     int ret = squid_curtime - p->stats.last_connect_failure > ctimeout * 10;
-    if (p->test_fd != -1)
+    struct in_addr outgoing_v4;
+    sqaddr_t outgoing_v6;
+    ConnectStateDataNew *cs;
+
+    if (p->test_fd_pending == 1)
 	return ret;		/* probe already running */
     if (squid_curtime - p->stats.last_connect_probe == 0)
 	return ret;		/* don't probe to often */
-    fd = comm_open(SOCK_STREAM, IPPROTO_TCP, getOutgoingAddr(NULL),
-	0, COMM_NONBLOCKING, COMM_TOS_DEFAULT, p->name);
-    if (fd < 0)
-	return ret;
-    commSetTimeout(fd, ctimeout, peerProbeConnectTimeout, p);
-    p->test_fd = fd;
+
+    outgoing_v4 = getOutgoingAddr(NULL);
+    sqinet_init(&outgoing_v6);
+    getOutgoingAddrV6(NULL, &outgoing_v6);
+
+    p->test_fd_pending = 1;
     p->stats.last_connect_probe = squid_curtime;
-    commConnectStart(p->test_fd,
-	p->host,
-	p->http_port,
-	peerProbeConnectDone,
-	p,
-	NULL);
+
+    cs = commConnectStartNewSetup(p->host, p->http_port,
+      peerProbeConnectDone, p, NULL, 0, NULL);
+
+    commConnectNewSetupOutgoingV4(cs, outgoing_v4);
+    commConnectNewSetupOutgoingV6(cs, &outgoing_v6);
+    commConnectNewSetTimeout(cs, ctimeout);
+    commConnectStartNewBegin(cs);
+    sqinet_done(&outgoing_v6);
+
     return ret;
 }
 
@@ -1189,13 +1199,20 @@ static void
 peerProbeConnectDone(int fd, int status, void *data)
 {
     peer *p = data;
+
+    p->test_fd_pending = 0;
+
+    if (status == COMM_TIMEOUT) {
+        peerProbeConnectTimeout(fd, p);
+        return;
+    }
+
     if (status == COMM_OK) {
 	peerConnectSucceded(p);
     } else {
 	peerConnectFailedSilent(p);
     }
     comm_close(fd);
-    p->test_fd = -1;
     return;
 }
 

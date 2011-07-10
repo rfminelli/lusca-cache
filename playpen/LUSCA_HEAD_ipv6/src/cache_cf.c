@@ -1911,7 +1911,7 @@ parse_peer(peer ** head)
 	p->connect_fail_limit = 1;
     p->tcp_up = p->connect_fail_limit;
     p->icp.version = ICP_VERSION_CURRENT;
-    p->test_fd = -1;
+    p->test_fd_pending = 0;
 #if USE_CACHE_DIGESTS
     if (!p->options.no_digest) {
 	p->digest = peerDigestCreate(p);
