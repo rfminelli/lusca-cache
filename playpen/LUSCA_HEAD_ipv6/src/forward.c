@@ -504,6 +504,30 @@ aclMapAddr(acl_address * head, aclCheck_t * ch)
     return addr;
 }
 
+/*
+ * This is designed for IPv6 only, but eventually
+ * IPv4/IPv6 lookups should just use this function and
+ * ACL map.
+ */
+static int
+aclMapAddr6(acl_address * head, aclCheck_t * ch, sqaddr_t *a)
+{
+#if 0
+    acl_address *l;
+    struct in_addr addr;
+    aclChecklistCacheInit(ch);
+    for (l = head; l; l = l->next) {
+	if (aclMatchAclList(l->acl_list, ch))
+	    return l->addr;
+    }
+    addr.s_addr = INADDR_ANY;
+    return addr;
+#endif
+    sqinet_set_family(a, AF_INET6);
+    sqinet_set_anyaddr(a);
+    return 0;
+}
+
 static int
 aclMapTOS(acl_tos * head, aclCheck_t * ch)
 {
@@ -534,8 +558,13 @@ getOutgoingAddr(request_t * request)
 void
 getOutgoingAddrV6(request_t * request, sqaddr_t *a)
 {
-	sqinet_set_family(a, AF_INET6);
-	sqinet_set_anyaddr(a);
+    aclCheck_t ch;
+    memset(&ch, '\0', sizeof(ch));
+    aclCheckSetup(&ch);
+    if (request)
+        ch.request = request;
+    (void) aclMapAddr6(Config.accessList.outgoing_address, &ch, a);
+    aclCheckFinish(&ch);
 }
 
 unsigned long
