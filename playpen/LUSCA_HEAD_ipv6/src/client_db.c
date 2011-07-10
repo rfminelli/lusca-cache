@@ -67,7 +67,7 @@ static radix_tree_t *client_v4_tree = NULL;
 static radix_tree_t *client_v6_tree = NULL;
 dlink_list client_list;
 
-static ClientInfo *clientdbAdd(sqaddr_t *s);
+static ClientInfo *clientdbAdd(const sqaddr_t *s);
 static void clientdbStartGC(void);
 static void clientdbScheduledGC(void *);
 
@@ -128,7 +128,7 @@ clientdb_Radix_Search_Exact(prefix_t *p, int family)
 }
 
 static ClientInfo *
-clientdbAdd(sqaddr_t *saddr)
+clientdbAdd(const sqaddr_t *saddr)
 {
     radix_node_t *rn;
     prefix_t p;
@@ -169,7 +169,7 @@ clientdbInit(void)
 }
 
 void
-clientdbUpdate6(sqaddr_t *sa, log_type ltype, protocol_t p, squid_off_t size)
+clientdbUpdate6(const sqaddr_t *sa, log_type ltype, protocol_t p, squid_off_t size)
 {
     radix_node_t *rn;
     prefix_t pr;
@@ -258,7 +258,7 @@ clientdbEstablished6(sqaddr_t *sa, int delta)
 
 #define CUTOFF_SECONDS 3600
 int
-clientdbCutoffDenied(struct in_addr addr)
+clientdbCutoffDenied(const sqaddr_t *addr)
 {
     int NR;
     int ND;
@@ -266,16 +266,13 @@ clientdbCutoffDenied(struct in_addr addr)
     ClientInfo *c = NULL;
     prefix_t pr;
     radix_node_t *rn;
-    sqaddr_t sa;
+    char sbuf[MAX_IPSTRLEN];
 
     if (!Config.onoff.client_db)
 	return 0;
 
-    sqinet_init(&sa);
-    sqinet_set_v4_inaddr(&sa, &addr);
-    clientdb_Init_Prefix(&pr, &sa);
-    rn = clientdb_Radix_Search_Exact(&pr, sqinet_get_family(&sa));
-    sqinet_done(&sa);
+    clientdb_Init_Prefix(&pr, addr);
+    rn = clientdb_Radix_Search_Exact(&pr, sqinet_get_family(addr));
 
     if (rn)
         c = rn->data;
@@ -297,7 +294,8 @@ clientdbCutoffDenied(struct in_addr addr)
     p = 100.0 * ND / NR;
     if (p < 95.0)
 	return 0;
-    debug(1, 0) ("WARNING: Probable misconfigured neighbor at %s\n", inet_ntoa(addr));
+    (void) sqinet_ntoa(addr, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
+    debug(1, 0) ("WARNING: Probable misconfigured neighbor at %s\n", sbuf);
     debug(1, 0) ("WARNING: %d of the last %d ICP replies are DENIED\n", ND, NR);
     debug(1, 0) ("WARNING: No replies will be sent for the next %d seconds\n",
 	CUTOFF_SECONDS);
