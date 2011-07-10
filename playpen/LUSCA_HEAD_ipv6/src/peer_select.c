@@ -107,6 +107,8 @@ peerSelectStateFree(ps_state * psstate)
 	storeUnlockObject(psstate->entry);
 	psstate->entry = NULL;
     }
+    sqinet_done(&psstate->closest_parent_miss);
+    sqinet_done(&psstate->first_parent_miss);
     cbdataFree(psstate);
 }
 
@@ -150,6 +152,13 @@ peerSelect(request_t * request,
 #if USE_CACHE_DIGESTS
     request->hier.peer_select_start = current_time;
 #endif
+    sqinet_init(&psstate->closest_parent_miss);
+    sqinet_init(&psstate->first_parent_miss);
+    /* Set sensible defaults */
+    sqinet_set_family(&psstate->closest_parent_miss, AF_INET);
+    sqinet_set_anyaddr(&psstate->closest_parent_miss);
+    sqinet_set_family(&psstate->first_parent_miss, AF_INET);
+    sqinet_set_anyaddr(&psstate->first_parent_miss);
     if (psstate->entry)
 	storeLockObject(psstate->entry);
     cbdataLock(callback_data);
