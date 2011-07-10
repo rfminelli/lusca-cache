@@ -32,3 +32,6 @@ This list is not comprehensive and is in no particular order.
 || request forwarding || || completed || Yes ||
 || SSL server support || || ||
 || CONNECT support || || ||
+|| Transparent client interception || || ||
+|| TPROXY || || ||
+|| Connect timeouts (per-session, rather than per-attempt) || || ||
