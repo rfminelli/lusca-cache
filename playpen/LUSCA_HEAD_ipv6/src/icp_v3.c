@@ -39,7 +39,7 @@
 
 /* Currently Harvest cached-2.x uses ICP_VERSION_3 */
 void
-icpHandleIcpV3(int fd, struct sockaddr_in from, char *buf, int len)
+icpHandleIcpV3(int fd, const sqaddr_t *from, char *buf, int len)
 {
     icp_common_t header;
     icp_common_t *reply;
@@ -50,6 +50,8 @@ icpHandleIcpV3(int fd, struct sockaddr_in from, char *buf, int len)
     int allow = 0;
     aclCheck_t checklist;
     method_t *method_get;
+    char sbuf[MAX_IPSTRLEN];
+
     xmemcpy(&header, buf, sizeof(icp_common_t));
     method_get = urlMethodGetKnownByCode(METHOD_GET);
     /*
@@ -73,35 +75,36 @@ icpHandleIcpV3(int fd, struct sockaddr_in from, char *buf, int len)
 	if (strpbrk(url, w_space)) {
 	    url = rfc1738_escape(url);
 	    reply = icpCreateMessage(ICP_ERR, 0, url, header.reqnum, 0);
-	    icpUdpSend(fd, &from, reply, LOG_UDP_INVALID, 0);
+	    icpUdpSend(fd, from, reply, LOG_UDP_INVALID, 0);
 	    break;
 	}
 	if ((icp_request = urlParse(method_get, url)) == NULL) {
 	    reply = icpCreateMessage(ICP_ERR, 0, url, header.reqnum, 0);
-	    icpUdpSend(fd, &from, reply, LOG_UDP_INVALID, 0);
+	    icpUdpSend(fd, from, reply, LOG_UDP_INVALID, 0);
 	    break;
 	}
 	memset(&checklist, '\0', sizeof(checklist));
 	aclCheckSetup(&checklist);
-	sqinet_set_family(&checklist.src_address, AF_INET);
-	sqinet_set_v4_inaddr(&checklist.src_address, &from.sin_addr);
-#warning needs to be made ipv6-aware for "my_address"!
-	sqinet_set_family(&checklist.my_address, AF_INET);
+	sqinet_copy(&checklist.src_address, from);
+	sqinet_set_family(&checklist.my_address, sqinet_get_family(from));
 	sqinet_set_noaddr(&checklist.my_address);
 	checklist.request = icp_request;
 	allow = aclCheckFast(Config.accessList.icp, &checklist);
 	if (!allow) {
-	    debug(12, 2) ("icpHandleIcpV3: Access Denied for %s by %s.\n",
-		inet_ntoa(from.sin_addr), AclMatchedName);
-	    if (clientdbCutoffDenied(from.sin_addr)) {
+            if (do_debug(12, 2)) {
+                (void) sqinet_ntoa(from, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
+                debug(12, 2) ("icpHandleIcpV3: Access Denied for %s by %s.\n",
+                  sbuf, AclMatchedName);
+	    }
+	    if (clientdbCutoffDenied(from)) {
 		/*
 		 * count this DENIED query in the clientdb, even though
 		 * we're not sending an ICP reply...
 		 */
-		clientdbUpdate(from.sin_addr, LOG_UDP_DENIED, PROTO_ICP, 0);
+		clientdbUpdate6(from, LOG_UDP_DENIED, PROTO_ICP, 0);
 	    } else {
 		reply = icpCreateMessage(ICP_DENIED, 0, url, header.reqnum, 0);
-		icpUdpSend(fd, &from, reply, LOG_UDP_DENIED, 0);
+		icpUdpSend(fd, from, reply, LOG_UDP_DENIED, 0);
 	    }
 	    break;
 	}
@@ -111,19 +114,19 @@ icpHandleIcpV3(int fd, struct sockaddr_in from, char *buf, int len)
 	    icp_opcode_str[header.opcode]);
 	if (icpCheckUdpHit(entry, icp_request)) {
 	    reply = icpCreateMessage(ICP_HIT, 0, url, header.reqnum, 0);
-	    icpUdpSend(fd, &from, reply, LOG_UDP_HIT, 0);
+	    icpUdpSend(fd, from, reply, LOG_UDP_HIT, 0);
 	    break;
 	}
 	/* if store is rebuilding, return a UDP_HIT, but not a MISS */
 	if (opt_reload_hit_only && store_dirs_rebuilding) {
 	    reply = icpCreateMessage(ICP_MISS_NOFETCH, 0, url, header.reqnum, 0);
-	    icpUdpSend(fd, &from, reply, LOG_UDP_MISS_NOFETCH, 0);
+	    icpUdpSend(fd, from, reply, LOG_UDP_MISS_NOFETCH, 0);
 	} else if (hit_only_mode_until > squid_curtime) {
 	    reply = icpCreateMessage(ICP_MISS_NOFETCH, 0, url, header.reqnum, 0);
-	    icpUdpSend(fd, &from, reply, LOG_UDP_MISS_NOFETCH, 0);
+	    icpUdpSend(fd, from, reply, LOG_UDP_MISS_NOFETCH, 0);
 	} else {
 	    reply = icpCreateMessage(ICP_MISS, 0, url, header.reqnum, 0);
-	    icpUdpSend(fd, &from, reply, LOG_UDP_MISS, 0);
+	    icpUdpSend(fd, from, reply, LOG_UDP_MISS, 0);
 	}
 	break;
 
@@ -136,19 +139,23 @@ icpHandleIcpV3(int fd, struct sockaddr_in from, char *buf, int len)
     case ICP_DENIED:
     case ICP_MISS_NOFETCH:
 	if (neighbors_do_private_keys && header.reqnum == 0) {
-	    debug(12, 0) ("icpHandleIcpV3: Neighbor %s returned reqnum = 0\n",
-		inet_ntoa(from.sin_addr));
+            (void) sqinet_ntoa(from, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
+            debug(12, 0) ("icpHandleIcpV3: Neighbor %s returned reqnum = 0\n",
+              sbuf);
 	    debug(12, 0) ("icpHandleIcpV3: Disabling use of private keys\n");
 	    neighbors_do_private_keys = 0;
 	}
 	url = buf + sizeof(icp_common_t);
-	debug(12, 3) ("icpHandleIcpV3: %s from %s for '%s'\n",
-	    icp_opcode_str[header.opcode],
-	    inet_ntoa(from.sin_addr),
-	    url);
+        if (do_debug(12, 3)) {
+            (void) sqinet_ntoa(from, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
+            debug(12, 3) ("icpHandleIcpV3: %s from %s for '%s'\n",
+              icp_opcode_str[header.opcode],
+              sbuf,
+              url);
+        }
 	key = icpGetCacheKey(url, (int) header.reqnum);
 	/* call neighborsUdpAck even if ping_status != PING_WAITING */
-	neighborsUdpAck(key, &header, &from);
+	neighborsUdpAck(key, &header, from);
 	break;
 
     case ICP_INVALID:
@@ -156,8 +163,9 @@ icpHandleIcpV3(int fd, struct sockaddr_in from, char *buf, int len)
 	break;
 
     default:
+        (void) sqinet_ntoa(from, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
 	debug(12, 0) ("icpHandleIcpV3: UNKNOWN OPCODE: %d from %s\n",
-	    header.opcode, inet_ntoa(from.sin_addr));
+	    header.opcode, sbuf);
 	break;
     }
     if (icp_request)

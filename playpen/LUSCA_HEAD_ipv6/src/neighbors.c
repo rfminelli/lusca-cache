@@ -56,7 +56,7 @@ static void peerCountMcastPeersDone(void *data);
 static void peerCountMcastPeersStart(void *data);
 static void peerCountMcastPeersSchedule(peer * p, time_t when);
 static IRCB peerCountHandleIcpReply;
-static void neighborIgnoreNonPeer(const struct sockaddr_in *, icp_opcode);
+static void neighborIgnoreNonPeer(const sqaddr_t *, icp_opcode);
 static OBJH neighborDumpPeers;
 static OBJH neighborDumpNonPeers;
 static void dump_peers(StoreEntry * sentry, peer * peers);
@@ -81,16 +81,20 @@ neighborTypeStr(const peer * p)
 
 
 peer *
-whichPeer(const struct sockaddr_in * from)
+whichPeer(const sqaddr_t * from)
 {
     int j;
-    u_short port = ntohs(from->sin_port);
-    struct in_addr ip = from->sin_addr;
+    u_short port = sqinet_get_port(from);
     peer *p = NULL;
-    debug(15, 3) ("whichPeer: from %s port %d\n", inet_ntoa(ip), port);
+    if (do_debug(15, 3)) {
+        char sbuf[MAX_IPSTRLEN];
+        (void) sqinet_ntoa(from, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
+        debug(15, 3) ("whichPeer: from %s port %d\n", sbuf, port);
+    }
     for (p = Config.peers; p; p = p->next) {
 	for (j = 0; j < p->n_addresses; j++) {
-	    if (ip.s_addr == p->addresses[j].s_addr && port == p->icp.port) {
+	    if (sqinet_compare_port(from, &p->addresses[j]) &&
+              sqinet_compare_addr(from, &p->addresses[j])) {
 		return p;
 	    }
 	}
@@ -482,7 +486,7 @@ neighborsUdpPing(request_t * request,
 	    echo_hdr.reqnum = reqnum;
 	    query = icpCreateMessage(ICP_DECHO, 0, url, reqnum, 0);
 	    icpUdpSend(theOutIcpConnection,
-		&p->in_addr,
+		&p->addr,
 		query,
 		LOG_ICP_QUERY,
 		0);
@@ -493,7 +497,7 @@ neighborsUdpPing(request_t * request,
 		    flags |= ICP_FLAG_SRC_RTT;
 	    query = icpCreateMessage(ICP_QUERY, flags, url, reqnum, 0);
 	    icpUdpSend(theOutIcpConnection,
-		&p->in_addr,
+		&p->addr,
 		query,
 		LOG_ICP_QUERY,
 		0);
@@ -757,23 +761,25 @@ neighborCountIgnored(peer * p)
 static peer *non_peers = NULL;
 
 static void
-neighborIgnoreNonPeer(const struct sockaddr_in *from, icp_opcode opcode)
+neighborIgnoreNonPeer(const sqaddr_t *from, icp_opcode opcode)
 {
     peer *np;
     for (np = non_peers; np; np = np->next) {
-	if (np->in_addr.sin_addr.s_addr != from->sin_addr.s_addr)
+	if (! sqinet_compare_addr(from, &np->addr))
 	    continue;
-	if (np->in_addr.sin_port != from->sin_port)
+	if (! sqinet_compare_port(from, &np->addr))
 	    continue;
 	break;
     }
     if (np == NULL) {
+        char sbuf[MAX_IPSTRLEN];
+        (void) sqinet_ntoa(from, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
 	np = xcalloc(1, sizeof(peer));
-	np->in_addr.sin_addr = from->sin_addr;
-	np->in_addr.sin_port = from->sin_port;
-	np->icp.port = ntohl(from->sin_port);
+        sqinet_init(&np->addr);
+        sqinet_copy(&np->addr, from);
+	np->icp.port = sqinet_get_port(from);
 	np->type = PEER_NONE;
-	np->host = xstrdup(inet_ntoa(from->sin_addr));
+	np->host = xstrdup(sbuf);
 	np->next = non_peers;
 	non_peers = np;
     }
@@ -808,7 +814,8 @@ ignoreMulticastReply(peer * p, MemObject * mem)
  * If a hit process is already started, then sobeit
  */
 void
-neighborsUdpAck(const cache_key * key, icp_common_t * header, const struct sockaddr_in *from)
+neighborsUdpAck(const cache_key * key, icp_common_t * header,
+  const sqaddr_t *from)
 {
     peer *p = NULL;
     StoreEntry *entry;
@@ -898,7 +905,11 @@ neighborsUdpAck(const cache_key * key, icp_common_t * header, const struct socka
 	    mem->ping_reply_callback(NULL, ntype, PROTO_ICP, header, mem->ircb_data);
 #endif
 	} else {
-	    debug(15, 1) ("Unsolicited SECHO from %s\n", inet_ntoa(from->sin_addr));
+            if (do_debug(15, 1)) {
+                char sbuf[MAX_IPSTRLEN];
+                (void) sqinet_ntoa(from, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
+                debug(15, 1) ("Unsolicited SECHO from %s\n", sbuf);
+            }
 	}
     } else if (opcode == ICP_DENIED) {
 	if (p == NULL) {
@@ -984,6 +995,7 @@ peerDestroy(void *data)
 	safe_free(l);
     }
     aclDestroyAccessList(&p->access);
+    sqinet_done(&p->addr);
     safe_free(p->host);
     safe_free(p->name);
     safe_free(p->domain);
@@ -1034,7 +1046,6 @@ static void
 peerDNSConfigure(const ipcache_addrs * ia, void *data)
 {
     peer *p = data;
-    struct sockaddr_in *ap;
     int j;
     if (p->n_addresses == 0) {
 	debug(15, 1) ("Configuring %s %s %s/%d/%d\n", p->name, neighborTypeStr(p),
@@ -1052,17 +1063,18 @@ peerDNSConfigure(const ipcache_addrs * ia, void *data)
 	return;
     }
     for (j = 0; j < (int) ia->count && j < PEER_MAX_ADDRESSES; j++) {
-	p->addresses[j] = ipcacheGetAddrV4(ia, j);
-	debug(15, 2) ("--> IP address #%d: %s\n", j, inet_ntoa(p->addresses[j]));
-	p->n_addresses++;
+        ipcacheGetAddr(ia, j, &p->addresses[j]);
+        if (do_debug(15, 2)) {
+            char sbuf[MAX_IPSTRLEN];
+            (void) sqinet_ntoa(&p->addresses[j], sbuf, MAX_IPSTRLEN,
+              SQADDR_NONE);
+            debug(15, 2) ("--> IP address #%d: %s\n", j, sbuf);
+        }
+        p->n_addresses++;
     }
     if (!p->tcp_up)
 	peerProbeConnect((peer *) p);
-    ap = &p->in_addr;
-    memset(ap, '\0', sizeof(struct sockaddr_in));
-    ap->sin_family = AF_INET;
-    ap->sin_addr = p->addresses[0];
-    ap->sin_port = htons(p->icp.port);
+    sqinet_copy(&p->addr, &p->addresses[0]);
     if (p->type == PEER_MULTICAST)
 	peerCountMcastPeersSchedule(p, 10);
     if (p->type != PEER_MULTICAST)
@@ -1203,10 +1215,13 @@ peerCountMcastPeersStart(void *data)
     int reqnum;
     method_t *method_get;
     LOCAL_ARRAY(char, url, MAX_URL);
+    char sbuf[MAX_IPSTRLEN];
+
     assert(p->type == PEER_MULTICAST);
     method_get = urlMethodGetKnownByCode(METHOD_GET);
     p->mcast.flags.count_event_pending = 0;
-    snprintf(url, MAX_URL, "http://%s/", inet_ntoa(p->in_addr.sin_addr));
+    (void) sqinet_ntoa(&p->addr, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
+    snprintf(url, MAX_URL, "http://%s/", sbuf);
     fake = storeCreateEntry(url, null_request_flags, method_get);
     CBDATA_INIT_TYPE(ps_state);
     psstate = cbdataAlloc(ps_state);
@@ -1226,7 +1241,7 @@ peerCountMcastPeersStart(void *data)
     reqnum = icpSetCacheKey(fake->hash.key);
     query = icpCreateMessage(ICP_QUERY, 0, url, reqnum, 0);
     icpUdpSend(theOutIcpConnection,
-	&p->in_addr,
+	&p->addr,
 	query,
 	LOG_ICP_QUERY,
 	0);
@@ -1383,6 +1398,8 @@ dump_peers(StoreEntry * sentry, peer * peers)
     struct _domain_ping *d = NULL;
     icp_opcode op;
     int i;
+    char sbuf[MAX_IPSTRLEN];
+
     if (peers == NULL)
 	storeAppendPrintf(sentry, "There are no neighbors installed.\n");
     for (e = peers; e; e = e->next) {
@@ -1397,8 +1414,8 @@ dump_peers(StoreEntry * sentry, peer * peers)
 	storeAppendPrintf(sentry, "Flags      :");
 	dump_peer_options(sentry, e);
 	for (i = 0; i < e->n_addresses; i++) {
-	    storeAppendPrintf(sentry, "Address[%d] : %s\n", i,
-		inet_ntoa(e->addresses[i]));
+            (void) sqinet_ntoa(&e->addresses[i], sbuf, MAX_IPSTRLEN, SQADDR_NONE);
+	    storeAppendPrintf(sentry, "Address[%d] : %s\n", i, sbuf);
 	}
 	storeAppendPrintf(sentry, "Status     : %s\n",
 	    neighborUp(e) ? "Up" : "Down");
@@ -1466,7 +1483,8 @@ dump_peers(StoreEntry * sentry, peer * peers)
 
 #if USE_HTCP
 void
-neighborsHtcpReply(const cache_key * key, htcpReplyData * htcp, const struct sockaddr_in *from)
+neighborsHtcpReply(const cache_key * key, htcpReplyData * htcp,
+  const sqaddr_t *from)
 {
     StoreEntry *e = storeGet(key);
     MemObject *mem = NULL;
@@ -1539,7 +1557,12 @@ neighborsHtcpClear(StoreEntry * e, const char *uri, request_t * req, method_t * 
 	if (p->options.htcp_no_purge_clr && reason == HTCP_CLR_PURGE) {
 	    continue;
 	}
-	debug(15, 3) ("neighborsHtcpClear: sending CLR to %s:%d\n", inet_ntoa(p->in_addr.sin_addr), ntohs(p->in_addr.sin_port));
+        if (do_debug(15, 3)) {
+            char sbuf[MAX_IPSTRLEN];
+            (void) sqinet_ntoa(&p->addr, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
+            debug(15, 3) ("neighborsHtcpClear: sending CLR to %s:%d\n",
+              sbuf, sqinet_get_port(&p->addr));
+        }
 	htcpClear(e, uri, req, method, p, reason);
     }
 }

@@ -182,7 +182,7 @@ static int htcpOutSocket = -1;
 #define N_QUERIED_KEYS 8192
 static u_num32 queried_id[N_QUERIED_KEYS];
 static cache_key queried_keys[N_QUERIED_KEYS][SQUID_MD5_DIGEST_LENGTH];
-static struct sockaddr_in queried_addr[N_QUERIED_KEYS];
+static sqaddr_t queried_addr[N_QUERIED_KEYS];
 static MemPool *htcpSpecifierPool = NULL;
 static MemPool *htcpDetailPool = NULL;
 
@@ -198,16 +198,23 @@ static ssize_t htcpBuildSpecifier(char *buf, size_t buflen, htcpStuff * stuff);
 static ssize_t htcpBuildTstOpData(char *buf, size_t buflen, htcpStuff * stuff);
 static void htcpFreeSpecifier(htcpSpecifier * s);
 static void htcpFreeDetail(htcpDetail * s);
-static void htcpHandle(char *buf, int sz, struct sockaddr_in *from);
-static void htcpHandleMon(htcpDataHeader *, char *buf, int sz, struct sockaddr_in *from);
-static void htcpHandleNop(htcpDataHeader *, char *buf, int sz, struct sockaddr_in *from);
-static void htcpHandleSet(htcpDataHeader *, char *buf, int sz, struct sockaddr_in *from);
-static void htcpHandleTst(htcpDataHeader *, char *buf, int sz, struct sockaddr_in *from);
+static void htcpHandle(char *buf, int sz, const sqaddr_t *from);
+static void htcpHandleMon(htcpDataHeader *, char *buf, int sz,
+  const sqaddr_t *from);
+static void htcpHandleNop(htcpDataHeader *, char *buf, int sz,
+  const sqaddr_t *from);
+static void htcpHandleSet(htcpDataHeader *, char *buf, int sz,
+  const sqaddr_t *from);
+static void htcpHandleTst(htcpDataHeader *, char *buf, int sz,
+  const sqaddr_t *from);
 static void htcpRecv(int fd, void *data);
-static void htcpSend(const char *buf, int len, struct sockaddr_in *to);
-static void htcpTstReply(htcpDataHeader *, StoreEntry *, htcpSpecifier *, struct sockaddr_in *);
-static void htcpHandleTstRequest(htcpDataHeader *, char *buf, int sz, struct sockaddr_in *from);
-static void htcpHandleTstResponse(htcpDataHeader *, char *, int, struct sockaddr_in *);
+static void htcpSend(const char *buf, int len, const sqaddr_t *to);
+static void htcpTstReply(htcpDataHeader *, StoreEntry *, htcpSpecifier *,
+  const sqaddr_t *);
+static void htcpHandleTstRequest(htcpDataHeader *, char *buf, int sz,
+  const sqaddr_t *from);
+static void htcpHandleTstResponse(htcpDataHeader *, char *, int,
+  const sqaddr_t *);
 static StoreEntry *htcpCheckHit(const htcpSpecifier *);
 static void htcpForwardClr(char *buf, int sz);
 
@@ -458,15 +465,17 @@ htcpBuildPacket(char *buf, size_t buflen, htcpStuff * stuff)
 }
 
 static void
-htcpSend(const char *buf, int len, struct sockaddr_in *to)
+htcpSend(const char *buf, int len, const sqaddr_t *to)
 {
     int x;
-    debug(31, 3) ("htcpSend: %s/%d\n",
-	inet_ntoa(to->sin_addr), (int) ntohs(to->sin_port));
+    if (do_debug(31, 3)) {
+        char sbuf[MAX_IPSTRLEN];
+	(void) sqinet_ntoa(to, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
+        debug(31, 3) ("htcpSend: %s/%d\n", sbuf, sqinet_get_port(to));
+    }
     htcpHexdump("htcpSend", buf, len);
-    x = comm_udp_sendto(htcpOutSocket,
+    x = comm_udp_sendto6(htcpOutSocket,
 	to,
-	sizeof(struct sockaddr_in),
 	buf,
 	len);
     if (x < 0)
@@ -650,17 +659,15 @@ htcpUnpackDetail(char *buf, int sz)
 }
 
 static int
-htcpAccessCheck(acl_access * acl, htcpSpecifier * s, struct sockaddr_in *from)
+htcpAccessCheck(acl_access * acl, htcpSpecifier * s, const sqaddr_t *from)
 {
     int r;
     aclCheck_t checklist;
     memset(&checklist, '\0', sizeof(checklist));
     sqinet_init(&checklist.src_address);
-#warning HTCP needs to be made v6 aware!
-    sqinet_set_family(&checklist.src_address, AF_INET);
-    sqinet_set_v4_inaddr(&checklist.src_address, &from->sin_addr);
+    sqinet_copy(&checklist.src_address, from);
     sqinet_init(&checklist.my_address);
-    sqinet_set_family(&checklist.my_address, AF_INET);	/* XXX will need to be taught about "from"! -adrian */
+    sqinet_set_family(&checklist.my_address, sqinet_get_family(from));
     sqinet_set_noaddr(&checklist.my_address);
     checklist.request = s->request;
     r = aclCheckFast(acl, &checklist);
@@ -670,7 +677,8 @@ htcpAccessCheck(acl_access * acl, htcpSpecifier * s, struct sockaddr_in *from)
 }
 
 static void
-htcpTstReply(htcpDataHeader * dhdr, StoreEntry * e, htcpSpecifier * spec, struct sockaddr_in *from)
+htcpTstReply(htcpDataHeader * dhdr, StoreEntry * e, htcpSpecifier * spec,
+  const sqaddr_t *from)
 {
     htcpStuff stuff;
     static char pkt[8192];
@@ -742,7 +750,7 @@ htcpTstReply(htcpDataHeader * dhdr, StoreEntry * e, htcpSpecifier * spec, struct
 }
 
 static void
-htcpClrReply(htcpDataHeader * dhdr, int purgeSucceeded, struct sockaddr_in *from)
+htcpClrReply(htcpDataHeader * dhdr, int purgeSucceeded, const sqaddr_t *from)
 {
     htcpStuff stuff;
     static char pkt[8192];
@@ -768,7 +776,7 @@ htcpClrReply(htcpDataHeader * dhdr, int purgeSucceeded, struct sockaddr_in *from
 }
 
 static void
-htcpHandleNop(htcpDataHeader * hdr, char *buf, int sz, struct sockaddr_in *from)
+htcpHandleNop(htcpDataHeader * hdr, char *buf, int sz, const sqaddr_t *from)
 {
     debug(31, 3) ("htcpHandleNop: Unimplemented\n");
 }
@@ -850,7 +858,7 @@ htcpClrStore(const htcpSpecifier * s)
 }
 
 static void
-htcpHandleTst(htcpDataHeader * hdr, char *buf, int sz, struct sockaddr_in *from)
+htcpHandleTst(htcpDataHeader * hdr, char *buf, int sz, const sqaddr_t *from)
 {
     debug(31, 3) ("htcpHandleTst: sz = %d\n", (int) sz);
     if (hdr->RR == RR_REQUEST)
@@ -860,26 +868,32 @@ htcpHandleTst(htcpDataHeader * hdr, char *buf, int sz, struct sockaddr_in *from)
 }
 
 static void
-htcpHandleTstResponse(htcpDataHeader * hdr, char *buf, int sz, struct sockaddr_in *from)
+htcpHandleTstResponse(htcpDataHeader * hdr, char *buf, int sz,
+  const sqaddr_t *from)
 {
     htcpReplyData htcpReply;
     cache_key *key = NULL;
-    struct sockaddr_in *peer;
+    sqaddr_t *peer;
     htcpDetail *d = NULL;
     char *t;
+    char sbuf[MAX_IPSTRLEN];
+
+    /* XXX I'm being lazy -adrian */
+    (void) sqinet_ntoa(from, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
 
     if (queried_id[hdr->msg_id % N_QUERIED_KEYS] != hdr->msg_id) {
-	debug(31, 2) ("htcpHandleTstResponse: No matching query id '%d' (expected %d) from '%s'\n", hdr->msg_id, queried_id[hdr->msg_id % N_QUERIED_KEYS], inet_ntoa(from->sin_addr));
+	debug(31, 2) ("htcpHandleTstResponse: No matching query id '%d' (expected %d) from '%s'\n", hdr->msg_id, queried_id[hdr->msg_id % N_QUERIED_KEYS], sbuf);
 	return;
     }
     key = queried_keys[hdr->msg_id % N_QUERIED_KEYS];
     if (!key) {
-	debug(31, 1) ("htcpHandleTstResponse: No query key for response id '%d' from '%s'\n", hdr->msg_id, inet_ntoa(from->sin_addr));
+	debug(31, 1) ("htcpHandleTstResponse: No query key for response id '%d' from '%s'\n", hdr->msg_id, sbuf);
 	return;
     }
     peer = &queried_addr[hdr->msg_id % N_QUERIED_KEYS];
-    if (peer->sin_addr.s_addr != from->sin_addr.s_addr || peer->sin_port != from->sin_port) {
-	debug(31, 1) ("htcpHandleTstResponse: Unexpected response source %s\n", inet_ntoa(from->sin_addr));
+    if ((! sqinet_compare_addr(from, peer)) ||
+      (! sqinet_compare_port(from, peer))) {
+	debug(31, 1) ("htcpHandleTstResponse: Unexpected response source %s\n", sbuf);
 	return;
     }
     if (hdr->F1 == 1) {
@@ -915,7 +929,8 @@ htcpHandleTstResponse(htcpDataHeader * hdr, char *buf, int sz, struct sockaddr_i
 }
 
 static void
-htcpHandleTstRequest(htcpDataHeader * dhdr, char *buf, int sz, struct sockaddr_in *from)
+htcpHandleTstRequest(htcpDataHeader * dhdr, char *buf, int sz,
+  const sqaddr_t *from)
 {
     /* buf should be a SPECIFIER */
     htcpSpecifier *s;
@@ -954,19 +969,19 @@ htcpHandleTstRequest(htcpDataHeader * dhdr, char *buf, int sz, struct sockaddr_i
 }
 
 static void
-htcpHandleMon(htcpDataHeader * hdr, char *buf, int sz, struct sockaddr_in *from)
+htcpHandleMon(htcpDataHeader * hdr, char *buf, int sz, const sqaddr_t *from)
 {
     debug(31, 3) ("htcpHandleMon: Unimplemented\n");
 }
 
 static void
-htcpHandleSet(htcpDataHeader * hdr, char *buf, int sz, struct sockaddr_in *from)
+htcpHandleSet(htcpDataHeader * hdr, char *buf, int sz, const sqaddr_t *from)
 {
     debug(31, 3) ("htcpHandleSet: Unimplemented\n");
 }
 
 static void
-htcpHandleClr(htcpDataHeader * hdr, char *buf, int sz, struct sockaddr_in *from)
+htcpHandleClr(htcpDataHeader * hdr, char *buf, int sz, const sqaddr_t *from)
 {
     htcpSpecifier *s;
     /* buf[0/1] is reserved and reason */
@@ -1031,17 +1046,21 @@ htcpForwardClr(char *buf, int sz)
 	if (!p->options.htcp_forward_clr) {
 	    continue;
 	}
-	htcpSend(buf, sz, &p->in_addr);
+	htcpSend(buf, sz, &p->addr);
     }
 }
 
 static void
-htcpHandle(char *buf, int sz, struct sockaddr_in *from)
+htcpHandle(char *buf, int sz, const sqaddr_t *from)
 {
     htcpHeader htcpHdr;
     htcpDataHeader hdr;
     char *hbuf;
     int hsz;
+    char sbuf[MAX_IPSTRLEN];
+
+    /* XXX being lazy -adrian */
+    (void) sqinet_ntoa(from, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
 
     if (sz < sizeof(htcpHeader)) {
 	debug(31, 1) ("htcpHandle: msg size less than htcpHeader size\n");
@@ -1059,14 +1078,13 @@ htcpHandle(char *buf, int sz, struct sockaddr_in *from)
     debug(31, 3) ("htcpHandle: htcpHdr.minor = %d\n", (int) htcpHdr.minor);
     if (sz != htcpHdr.length) {
 	debug(31, 1) ("htcpHandle: sz/%d != htcpHdr.length/%d from %s:%d\n",
-	    sz, htcpHdr.length,
-	    inet_ntoa(from->sin_addr), (int) ntohs(from->sin_port));
+	    sz, htcpHdr.length, sbuf, sqinet_get_port(from));
 	return;
     }
     if (htcpHdr.major != 0) {
 	debug(31, 1) ("htcpHandle: Unknown major version %d from %s:%d\n",
 	    htcpHdr.major,
-	    inet_ntoa(from->sin_addr), (int) ntohs(from->sin_port));
+            sbuf, sqinet_get_port(from));
 	return;
     }
     hbuf = buf + sizeof(htcpHeader);
@@ -1095,7 +1113,7 @@ htcpHandle(char *buf, int sz, struct sockaddr_in *from)
     debug(31, 3) ("htcpHandle: length = %d\n", (int) hdr.length);
     if (hdr.opcode >= HTCP_END) {
 	debug(31, 1) ("htcpHandle: client %s, opcode %d out of range\n",
-	    inet_ntoa(from->sin_addr),
+	    sbuf,
 	    (int) hdr.opcode);
 	return;
     }
@@ -1145,19 +1163,27 @@ htcpRecv(int fd, void *data)
 {
     static char buf[8192];
     int len;
-    static struct sockaddr_in from;
-    socklen_t flen = sizeof(struct sockaddr_in);
+    struct sockaddr_storage from;
+    sqaddr_t sfrom;
+    socklen_t flen = sizeof(from);
     memset(&from, '\0', flen);
 #if NOTYET
     statCounter.syscalls.sock.recvfroms++;
 #endif
     /* Receive up to 8191 bytes, leaving room for a null */
+    sqinet_init(&sfrom);
     len = recvfrom(fd, buf, sizeof(buf) - 1, 0, (struct sockaddr *) &from, &flen);
-    debug(31, 3) ("htcpRecv: FD %d, %d bytes from %s:%d\n",
-	fd, len, inet_ntoa(from.sin_addr), ntohs(from.sin_port));
+    sqinet_set_sockaddr(&sfrom, &from);
+    if (do_debug(31, 3)) {
+        char sbuf[MAX_IPSTRLEN];
+        (void) sqinet_ntoa(&sfrom, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
+        debug(31, 3) ("htcpRecv: FD %d, %d bytes from %s:%d\n",
+          fd, len, sbuf, sqinet_get_port(&sfrom));
+    }
     if (len)
 	statCounter.htcp.pkts_recv++;
-    htcpHandle(buf, len, &from);
+    htcpHandle(buf, len, &sfrom);
+    sqinet_done(&sfrom);
     commSetSelect(fd, COMM_SELECT_READ, htcpRecv, NULL, 0);
 }
 
@@ -1255,11 +1281,11 @@ htcpQuery(StoreEntry * e, request_t * req, peer * p)
 	debug(31, 1) ("htcpQuery: htcpBuildPacket() failed\n");
 	return;
     }
-    htcpSend(pkt, (int) pktlen, &p->in_addr);
+    htcpSend(pkt, (int) pktlen, &p->addr);
     queried_id[stuff.msg_id % N_QUERIED_KEYS] = stuff.msg_id;
     save_key = queried_keys[stuff.msg_id % N_QUERIED_KEYS];
     storeKeyCopy(save_key, e->hash.key);
-    queried_addr[stuff.msg_id % N_QUERIED_KEYS] = p->in_addr;
+    sqinet_copy(&queried_addr[stuff.msg_id % N_QUERIED_KEYS], &p->addr);
     debug(31, 3) ("htcpQuery: key (%p) %s\n", save_key, storeKeyText(save_key));
 }
 
@@ -1326,7 +1352,7 @@ htcpClear(StoreEntry * e, const char *uri, request_t * req, method_t * method, p
 	debug(31, 1) ("htcpQuery: htcpBuildPacket() failed\n");
 	return;
     }
-    htcpSend(pkt, (int) pktlen, &p->in_addr);
+    htcpSend(pkt, (int) pktlen, &p->addr);
 }
 
 /*  

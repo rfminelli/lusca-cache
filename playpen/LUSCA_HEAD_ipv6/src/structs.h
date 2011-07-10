@@ -898,7 +898,7 @@ struct _HttpStateData {
 };
 
 struct _icpUdpData {
-    struct sockaddr_in address;
+    sqaddr_t addr;
     void *msg;
     size_t len;
     icpUdpData *next;
@@ -1169,7 +1169,7 @@ struct _peer {
     char *name;
     char *host;
     peer_t type;
-    struct sockaddr_in in_addr;
+    sqaddr_t addr;
     struct {
 	int pings_sent;
 	int pings_acked;
@@ -1251,7 +1251,7 @@ struct _peer {
     char *digest_url;
 #endif
     int tcp_up;			/* 0 if a connect() fails */
-    struct in_addr addresses[10];
+    sqaddr_t addresses[10];
     int n_addresses;
     int rr_count;
     peer *next;
@@ -1350,8 +1350,9 @@ struct _ps_state {
      * the peer * based on the address when we are finally ready to
      * reference the peer structure.
      */
-    struct sockaddr_in first_parent_miss;
-    struct sockaddr_in closest_parent_miss;
+    /* XXX what if a peer has >1 IP address? */
+    sqaddr_t first_parent_miss;
+    sqaddr_t closest_parent_miss;
     /*
      * ->hit and ->secho can be peer* because they should only be
      * accessed during the thread when they are set

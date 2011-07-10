@@ -38,7 +38,7 @@ extern void accessLogEntryInit(AccessLogEntry *al);
 extern void accessLogEntryDone(AccessLogEntry *al);
 extern void accessLogEntryClearHack(AccessLogEntry *al);
 extern void accessLogEntrySetReplyStatus(AccessLogEntry *al, HttpReply *reply);
-extern void accessLogEntrySetClientAddr(AccessLogEntry *al, sqaddr_t *addr);
+extern void accessLogEntrySetClientAddr(AccessLogEntry *al, const sqaddr_t *addr);
 extern void accessLogEntrySetClientAddr4(AccessLogEntry *al, struct in_addr addr);
 extern void accessLogEntrySetOutAddr(AccessLogEntry *al, sqaddr_t *addr);
 extern void accessLogEntrySetOutAddr4(AccessLogEntry *al, struct in_addr addr);
@@ -274,7 +274,7 @@ extern void *icpCreateMessage(icp_opcode opcode,
     const char *url,
     int reqnum,
     int pad);
-extern int icpUdpSend(int, const struct sockaddr_in *, icp_common_t *, log_type, int);
+extern int icpUdpSend(int, const sqaddr_t *to, icp_common_t *, log_type, int);
 extern PF icpHandleUdp;
 extern PF icpUdpSendQueue;
 extern PF httpAccept;
@@ -314,7 +314,7 @@ extern void wccp2ConnectionOpen(void);
 extern void wccp2ConnectionClose(void);
 #endif /* USE_WCCPv2 */
 
-extern void icpHandleIcpV3(int, struct sockaddr_in, char *, int);
+extern void icpHandleIcpV3(int, const sqaddr_t *, char *, int);
 extern int icpCheckUdpHit(StoreEntry *, request_t * request);
 extern void icpConnectionsOpen(void);
 extern void icpConnectionShutdown(void);
@@ -359,7 +359,8 @@ extern int neighborsUdpPing(request_t *,
     int *exprep,
     int *timeout);
 extern void neighborAddAcl(const char *, const char *);
-extern void neighborsUdpAck(const cache_key *, icp_common_t *, const struct sockaddr_in *);
+extern void neighborsUdpAck(const cache_key *, icp_common_t *,
+  const sqaddr_t *);
 extern void neighborAdd(const char *, const char *, int, int, int, int, int);
 extern void neighbors_init(void);
 #if USE_HTCP
@@ -384,9 +385,10 @@ extern void peerConnectFailed(peer *);
 extern void peerConnectSucceded(peer *);
 extern void dump_peer_options(StoreEntry *, peer *);
 extern int peerHTTPOkay(const peer *, request_t *);
-extern peer *whichPeer(const struct sockaddr_in *from);
+extern peer *whichPeer(const sqaddr_t *from);
 #if USE_HTCP
-extern void neighborsHtcpReply(const cache_key *, htcpReplyData *, const struct sockaddr_in *);
+extern void neighborsHtcpReply(const cache_key *, htcpReplyData *,
+  const sqaddr_t *);
 #endif
 extern void peerAddFwdServer(FwdServer ** FS, peer * p, hier_code code);
 extern int peerAllowedToUse(const peer *, request_t *);

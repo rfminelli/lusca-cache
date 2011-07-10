@@ -148,6 +148,7 @@ snmp_confFn(variable_list * Var, snint * ErrP)
     return Answer;
 }
 
+#if 0
 variable_list *
 snmp_meshPtblFn(variable_list * Var, snint * ErrP)
 {
@@ -270,6 +271,7 @@ snmp_meshPtblFn(variable_list * Var, snint * ErrP)
     }
     return Answer;
 }
+#endif
 
 variable_list *
 snmp_prfSysFn(variable_list * Var, snint * ErrP)

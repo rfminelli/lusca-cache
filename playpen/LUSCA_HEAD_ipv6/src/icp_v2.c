@@ -37,8 +37,8 @@
 
 #include "client_db.h"
 
-static void icpLogIcp(struct in_addr, log_type, int, const char *, int);
-static void icpHandleIcpV2(int, struct sockaddr_in, char *, int);
+static void icpLogIcp(const sqaddr_t *, log_type, int, const char *, int);
+static void icpHandleIcpV2(int, const sqaddr_t *, char *, int);
 static void icpCount(void *, int, size_t, int);
 
 /*
@@ -48,20 +48,21 @@ static void icpCount(void *, int, size_t, int);
 static icpUdpData *IcpQueueTail = NULL;
 
 static void
-icpLogIcp(struct in_addr caddr, log_type logcode, int len, const char *url, int delay)
+icpLogIcp(const sqaddr_t *caddr, log_type logcode, int len, const char *url,
+  int delay)
 {
     AccessLogEntry al;
     if (LOG_TAG_NONE == logcode)
 	return;
     if (LOG_ICP_QUERY == logcode)
 	return;
-    clientdbUpdate(caddr, logcode, PROTO_ICP, len);
+    clientdbUpdate6(caddr, logcode, PROTO_ICP, len);
     if (!Config.onoff.log_udp)
 	return;
     accessLogEntryInit(&al);
     al.icp.opcode = ICP_QUERY;
     al.url = url;
-    accessLogEntrySetClientAddr4(&al, caddr);
+    accessLogEntrySetClientAddr(&al, caddr);
     al.cache.size = len;
     al.cache.code = logcode;
     al.cache.msec = delay;
@@ -78,8 +79,9 @@ icpUdpSendQueue(int fd, void *unused)
     while ((q = IcpQueueHead) != NULL) {
 	delay = tvSubUsec(q->queue_time, current_time);
 	/* increment delay to prevent looping */
-	x = icpUdpSend(fd, &q->address, q->msg, q->logcode, ++delay);
+	x = icpUdpSend(fd, &q->addr, q->msg, q->logcode, ++delay);
 	IcpQueueHead = q->next;
+        sqinet_done(&q->addr);
 	safe_free(q);
 	if (x < 0)
 	    break;
@@ -119,7 +121,7 @@ icpCreateMessage(
 
 int
 icpUdpSend(int fd,
-    const struct sockaddr_in *to,
+    const sqaddr_t *to,
     icp_common_t * msg,
     log_type logcode,
     int delay)
@@ -128,22 +130,28 @@ icpUdpSend(int fd,
     int x;
     int len;
     len = (int) ntohs(msg->length);
-    debug(12, 5) ("icpUdpSend: FD %d sending %s, %d bytes to %s:%d\n",
-	fd,
-	icp_opcode_str[msg->opcode],
-	len,
-	inet_ntoa(to->sin_addr),
-	ntohs(to->sin_port));
-    x = comm_udp_sendto(fd, to, sizeof(*to), msg, len);
+    if (do_debug(12, 5)) {
+        char sbuf[MAX_IPSTRLEN];
+        (void) sqinet_ntoa(to, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
+
+        debug(12, 5) ("icpUdpSend: FD %d sending %s, %d bytes to %s:%d\n",
+          fd,
+          icp_opcode_str[msg->opcode],
+          len,
+          sbuf,
+          sqinet_get_port(to));
+    }
+    x = comm_udp_sendto6(fd, to, msg, len);
     if (x >= 0) {
 	/* successfully written */
-	icpLogIcp(to->sin_addr, logcode, len, (char *) (msg + 1), delay);
+	icpLogIcp(to, logcode, len, (char *) (msg + 1), delay);
 	icpCount(msg, SENT, (size_t) len, delay);
 	safe_free(msg);
     } else if (0 == delay) {
 	/* send failed, but queue it */
 	queue = xcalloc(1, sizeof(icpUdpData));
-	queue->address = *to;
+        sqinet_init(&queue->addr);
+        sqinet_copy(&queue->addr, to);
 	queue->msg = msg;
 	queue->len = (int) ntohs(msg->length);
 	queue->queue_time = current_time;
@@ -182,7 +190,7 @@ icpCheckUdpHit(StoreEntry * e, request_t * request)
 }
 
 static void
-icpHandleIcpV2(int fd, struct sockaddr_in from, char *buf, int len)
+icpHandleIcpV2(int fd, const sqaddr_t *from, char *buf, int len)
 {
     icp_common_t header;
     StoreEntry *entry = NULL;
@@ -197,6 +205,8 @@ icpHandleIcpV2(int fd, struct sockaddr_in from, char *buf, int len)
     int rtt = 0;
     int hops = 0;
     method_t *method_get;
+    char sbuf[MAX_IPSTRLEN];
+
     xmemcpy(&header, buf, sizeof(icp_common_t));
     method_get = urlMethodGetKnownByCode(METHOD_GET);
     /*
@@ -220,35 +230,36 @@ icpHandleIcpV2(int fd, struct sockaddr_in from, char *buf, int len)
 	if (strpbrk(url, w_space)) {
 	    url = rfc1738_escape(url);
 	    reply = icpCreateMessage(ICP_ERR, 0, url, header.reqnum, 0);
-	    icpUdpSend(fd, &from, reply, LOG_UDP_INVALID, 0);
+	    icpUdpSend(fd, from, reply, LOG_UDP_INVALID, 0);
 	    break;
 	}
 	if ((icp_request = urlParse(method_get, url)) == NULL) {
 	    reply = icpCreateMessage(ICP_ERR, 0, url, header.reqnum, 0);
-	    icpUdpSend(fd, &from, reply, LOG_UDP_INVALID, 0);
+	    icpUdpSend(fd, from, reply, LOG_UDP_INVALID, 0);
 	    break;
 	}
 	memset(&checklist, '\0', sizeof(checklist));
 	aclCheckSetup(&checklist);
-	sqinet_set_family(&checklist.src_address, AF_INET);
-	sqinet_set_v4_inaddr(&checklist.src_address, &from.sin_addr);
-#warning needs to be made v6 "my_address" aware!
-        sqinet_set_family(&checklist.my_address, AF_INET);
+	sqinet_copy(&checklist.src_address, from);
+        sqinet_set_family(&checklist.my_address, sqinet_get_family(from));
         sqinet_set_noaddr(&checklist.my_address);
 	checklist.request = icp_request;
 	allow = aclCheckFast(Config.accessList.icp, &checklist);
 	if (!allow) {
-	    debug(12, 2) ("icpHandleIcpV2: Access Denied for %s by %s.\n",
-		inet_ntoa(from.sin_addr), AclMatchedName);
-	    if (clientdbCutoffDenied(from.sin_addr)) {
+            if (do_debug(12, 2)) {
+                (void) sqinet_ntoa(from, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
+                debug(12, 2) ("icpHandleIcpV2: Access Denied for %s by %s.\n",
+                  sbuf, AclMatchedName);
+            }
+	    if (clientdbCutoffDenied(from)) {
 		/*
 		 * count this DENIED query in the clientdb, even though
 		 * we're not sending an ICP reply...
 		 */
-		clientdbUpdate(from.sin_addr, LOG_UDP_DENIED, PROTO_ICP, 0);
+		clientdbUpdate6(from, LOG_UDP_DENIED, PROTO_ICP, 0);
 	    } else {
 		reply = icpCreateMessage(ICP_DENIED, 0, url, header.reqnum, 0);
-		icpUdpSend(fd, &from, reply, LOG_UDP_DENIED, 0);
+		icpUdpSend(fd, from, reply, LOG_UDP_DENIED, 0);
 	    }
 	    break;
 	}
@@ -264,7 +275,7 @@ icpHandleIcpV2(int fd, struct sockaddr_in from, char *buf, int len)
 	debug(12, 5) ("icpHandleIcpV2: OPCODE %s\n", icp_opcode_str[header.opcode]);
 	if (icpCheckUdpHit(entry, icp_request)) {
 	    reply = icpCreateMessage(ICP_HIT, flags, url, header.reqnum, src_rtt);
-	    icpUdpSend(fd, &from, reply, LOG_UDP_HIT, 0);
+	    icpUdpSend(fd, from, reply, LOG_UDP_HIT, 0);
 	    break;
 	}
 	if (Config.onoff.test_reachability && rtt == 0) {
@@ -274,16 +285,16 @@ icpHandleIcpV2(int fd, struct sockaddr_in from, char *buf, int len)
 	/* if store is rebuilding, return a UDP_HIT, but not a MISS */
 	if (store_dirs_rebuilding && opt_reload_hit_only) {
 	    reply = icpCreateMessage(ICP_MISS_NOFETCH, flags, url, header.reqnum, src_rtt);
-	    icpUdpSend(fd, &from, reply, LOG_UDP_MISS_NOFETCH, 0);
+	    icpUdpSend(fd, from, reply, LOG_UDP_MISS_NOFETCH, 0);
 	} else if (hit_only_mode_until > squid_curtime) {
 	    reply = icpCreateMessage(ICP_MISS_NOFETCH, flags, url, header.reqnum, src_rtt);
-	    icpUdpSend(fd, &from, reply, LOG_UDP_MISS_NOFETCH, 0);
+	    icpUdpSend(fd, from, reply, LOG_UDP_MISS_NOFETCH, 0);
 	} else if (Config.onoff.test_reachability && rtt == 0) {
 	    reply = icpCreateMessage(ICP_MISS_NOFETCH, flags, url, header.reqnum, src_rtt);
-	    icpUdpSend(fd, &from, reply, LOG_UDP_MISS_NOFETCH, 0);
+	    icpUdpSend(fd, from, reply, LOG_UDP_MISS_NOFETCH, 0);
 	} else {
 	    reply = icpCreateMessage(ICP_MISS, flags, url, header.reqnum, src_rtt);
-	    icpUdpSend(fd, &from, reply, LOG_UDP_MISS, 0);
+	    icpUdpSend(fd, from, reply, LOG_UDP_MISS, 0);
 	}
 	break;
 
@@ -296,19 +307,23 @@ icpHandleIcpV2(int fd, struct sockaddr_in from, char *buf, int len)
     case ICP_DENIED:
     case ICP_MISS_NOFETCH:
 	if (neighbors_do_private_keys && header.reqnum == 0) {
+            (void) sqinet_ntoa(from, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
 	    debug(12, 0) ("icpHandleIcpV2: Neighbor %s returned reqnum = 0\n",
-		inet_ntoa(from.sin_addr));
+		sbuf);
 	    debug(12, 0) ("icpHandleIcpV2: Disabling use of private keys\n");
 	    neighbors_do_private_keys = 0;
 	}
 	url = buf + sizeof(icp_common_t);
-	debug(12, 3) ("icpHandleIcpV2: %s from %s for '%s'\n",
-	    icp_opcode_str[header.opcode],
-	    inet_ntoa(from.sin_addr),
-	    url);
+        if (do_debug(12, 3)) {
+            (void) sqinet_ntoa(from, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
+            debug(12, 3) ("icpHandleIcpV2: %s from %s for '%s'\n",
+              icp_opcode_str[header.opcode],
+              sbuf,
+              url);
+        }
 	key = icpGetCacheKey(url, (int) header.reqnum);
 	/* call neighborsUdpAck even if ping_status != PING_WAITING */
-	neighborsUdpAck(key, &header, &from);
+	neighborsUdpAck(key, &header, from);
 	break;
 
     case ICP_INVALID:
@@ -316,8 +331,9 @@ icpHandleIcpV2(int fd, struct sockaddr_in from, char *buf, int len)
 	break;
 
     default:
+        (void) sqinet_ntoa(from, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
 	debug(12, 0) ("icpHandleIcpV2: UNKNOWN OPCODE: %d from %s\n",
-	    header.opcode, inet_ntoa(from.sin_addr));
+	    header.opcode, sbuf);
 	break;
     }
     if (icp_request)
@@ -348,12 +364,14 @@ void
 icpHandleUdp(int sock, void *data)
 {
     int *N = &incoming_sockets_accepted;
-    struct sockaddr_in from;
+    struct sockaddr_storage from;
     socklen_t from_len;
     LOCAL_ARRAY(char, buf, SQUID_UDP_SO_RCVBUF);
     int len;
     int icp_version;
     int max = INCOMING_ICP_MAX;
+    sqaddr_t sfrom;
+
     commSetSelect(sock, COMM_SELECT_READ, icpHandleUdp, NULL, 0);
     while (max--) {
 	from_len = sizeof(from);
@@ -381,30 +399,41 @@ icpHandleUdp(int sock, void *data)
 		    sock, xstrerror());
 	    break;
 	}
+        sqinet_init(&sfrom);
+        sqinet_set_sockaddr(&sfrom, &from);
 	(*N)++;
 	icpCount(buf, RECV, (size_t) len, 0);
 	buf[len] = '\0';
-	debug(12, 4) ("icpHandleUdp: FD %d: received %d bytes from %s.\n",
-	    sock,
-	    len,
-	    inet_ntoa(from.sin_addr));
+        if (do_debug(12, 4)) {
+            char sbuf[MAX_IPSTRLEN];
+            (void) sqinet_ntoa(&sfrom, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
+                debug(12, 4) ("icpHandleUdp: FD %d: received %d bytes from %s.\n",
+                    sock,
+                    len,
+                    sbuf);
+        }
 #ifdef ICP_PACKET_DUMP
 	icpPktDump(buf);
 #endif
 	if (len < sizeof(icp_common_t)) {
 	    debug(12, 4) ("icpHandleUdp: Ignoring too-small UDP packet\n");
+            sqinet_done(&sfrom);
 	    break;
 	}
 	icp_version = (int) buf[1];	/* cheat! */
 	if (icp_version == ICP_VERSION_2)
-	    icpHandleIcpV2(sock, from, buf, len);
+	    icpHandleIcpV2(sock, &sfrom, buf, len);
 	else if (icp_version == ICP_VERSION_3)
-	    icpHandleIcpV3(sock, from, buf, len);
-	else
-	    debug(12, 1) ("WARNING: Unused ICP version %d received from %s:%d\n",
-		icp_version,
-		inet_ntoa(from.sin_addr),
-		ntohs(from.sin_port));
+	    icpHandleIcpV3(sock, &sfrom, buf, len);
+	else if (do_debug(12, 1)) {
+            char sbuf[MAX_IPSTRLEN];
+            (void) sqinet_ntoa(&sfrom, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
+            debug(12, 1) ("WARNING: Unused ICP version %d received from %s:%d\n",
+              icp_version,
+              sbuf,
+              sqinet_get_port(&sfrom));
+        }
+        sqinet_done(&sfrom);
     }
 }
 

@@ -1578,7 +1578,7 @@ accessLogEntrySetReplyStatus(AccessLogEntry *al, HttpReply *reply)
 }
 
 void
-accessLogEntrySetClientAddr(AccessLogEntry *al, sqaddr_t *addr)
+accessLogEntrySetClientAddr(AccessLogEntry *al, const sqaddr_t *addr)
 {
 	sqinet_copy(&al->cache.caddr2, addr);
 }

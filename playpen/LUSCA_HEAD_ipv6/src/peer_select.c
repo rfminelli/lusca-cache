@@ -423,10 +423,10 @@ peerGetSomeNeighborReplies(ps_state * ps)
 	code = SOURCE_FASTEST;
     } else
 #endif
-    if (! IsAnyAddr(&ps->closest_parent_miss.sin_addr)) {
+    if (! sqinet_is_anyaddr(&ps->closest_parent_miss)) {
 	p = whichPeer(&ps->closest_parent_miss);
 	code = CLOSEST_PARENT_MISS;
-    } else if (! IsAnyAddr(&ps->first_parent_miss.sin_addr)) {
+    } else if (! sqinet_is_anyaddr(&ps->first_parent_miss)) {
 	p = whichPeer(&ps->first_parent_miss);
 	code = FIRST_PARENT_MISS;
     }
@@ -551,7 +551,7 @@ peerIcpParentMiss(peer * p, icp_common_t * header, ps_state * ps)
 	    if (rtt > 0 && rtt < 0xFFFF)
 		netdbUpdatePeer(ps->request, p, rtt, hops);
 	    if (rtt && (ps->ping.p_rtt == 0 || rtt < ps->ping.p_rtt)) {
-		ps->closest_parent_miss = p->in_addr;
+		sqinet_copy(&ps->closest_parent_miss, &p->addr);
 		ps->ping.p_rtt = rtt;
 	    }
 	}
@@ -560,12 +560,12 @@ peerIcpParentMiss(peer * p, icp_common_t * header, ps_state * ps)
     if (p->options.closest_only)
 	return;
     /* set FIRST_MISS if there is no CLOSEST parent */
-    if (! IsAnyAddr(&ps->closest_parent_miss.sin_addr))
+    if (! sqinet_is_anyaddr(&ps->closest_parent_miss))
 	return;
     rtt = tvSubMsec(ps->ping.start, current_time) / p->weight;
-    if (IsAnyAddr(&ps->first_parent_miss.sin_addr) ||
+    if (sqinet_is_anyaddr(&ps->first_parent_miss) ||
 	rtt < ps->ping.w_rtt) {
-	ps->first_parent_miss = p->in_addr;
+	sqinet_copy(&ps->first_parent_miss, &p->addr);
 	ps->ping.w_rtt = rtt;
     }
 }
@@ -639,7 +639,7 @@ peerHtcpParentMiss(peer * p, htcpReplyData * htcp, ps_state * ps)
 	    hops = (int) htcp->cto.hops * 1000;
 	    netdbUpdatePeer(ps->request, p, rtt, hops);
 	    if (rtt && (ps->ping.p_rtt == 0 || rtt < ps->ping.p_rtt)) {
-		ps->closest_parent_miss = p->in_addr;
+		sqinet_copy(&ps->closest_parent_miss, &p->addr);
 		ps->ping.p_rtt = rtt;
 	    }
 	}
@@ -648,12 +648,12 @@ peerHtcpParentMiss(peer * p, htcpReplyData * htcp, ps_state * ps)
     if (p->options.closest_only)
 	return;
     /* set FIRST_MISS if there is no CLOSEST parent */
-    if (! IsAnyAddr(&ps->closest_parent_miss.sin_addr))
+    if (! sqinet_is_anyaddr(&ps->closest_parent_miss))
 	return;
     rtt = tvSubMsec(ps->ping.start, current_time) / p->weight;
-    if (IsAnyAddr(&ps->first_parent_miss.sin_addr) ||
+    if (sqinet_is_anyaddr(&ps->first_parent_miss) ||
 	rtt < ps->ping.w_rtt) {
-	ps->first_parent_miss = p->in_addr;
+	sqinet_copy(&ps->first_parent_miss, &p->addr);
 	ps->ping.w_rtt = rtt;
     }
 }
