@@ -369,6 +369,7 @@ delayPoolClient(unsigned short pool, sqaddr_t *sa)
     if (sqinet_get_family(sa) != AF_INET)
         return delayId(0, 0);
 
+#warning delay pools need to be made ipv6 aware!
     a = sqinet_get_v4_inaddr(sa, SQADDR_ASSERT_IS_V4);
     addr = a.s_addr;
 
