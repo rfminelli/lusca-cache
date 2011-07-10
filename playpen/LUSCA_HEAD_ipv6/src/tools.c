@@ -85,13 +85,20 @@ releaseServerSockets(void)
     int i;
     /* Release the main ports as early as possible */
     for (i = 0; i < NHttpSockets; i++) {
-	if (HttpSockets[i] >= 0)
-	    close(HttpSockets[i]);
+        if (HttpSockets[i] >= 0)
+            close(HttpSockets[i]);
     }
-    if (theInIcpConnection >= 0)
-	close(theInIcpConnection);
-    if (theOutIcpConnection >= 0 && theOutIcpConnection != theInIcpConnection)
-	close(theOutIcpConnection);
+    if (theInIcpConnection4 >= 0)
+        close(theInIcpConnection4);
+    if (theOutIcpConnection4 >= 0 &&
+      theOutIcpConnection4 != theInIcpConnection4)
+        close(theOutIcpConnection4);
+
+    if (theInIcpConnection6 >= 0)
+        close(theInIcpConnection6);
+    if (theOutIcpConnection6 >= 0 &&
+      theOutIcpConnection6 != theInIcpConnection6)
+        close(theOutIcpConnection6);
 }
 
 static char *

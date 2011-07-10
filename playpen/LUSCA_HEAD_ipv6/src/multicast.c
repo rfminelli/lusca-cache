@@ -47,11 +47,14 @@ mcastSetTtl(int fd, int mcast_ttl)
     return 0;
 }
 
+/*
+ * This is all ipv4 specific at the moment, unfortunately.
+ */
 void
 mcastJoinGroups(const ipcache_addrs * ia, void *datanotused)
 {
 #ifdef IP_MULTICAST_TTL
-    int fd = theInIcpConnection;
+    int fd = theInIcpConnection4;
     struct ip_mreq mr;
     int i;
     int x;

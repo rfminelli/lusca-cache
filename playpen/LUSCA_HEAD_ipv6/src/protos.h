@@ -269,6 +269,7 @@ extern int httpRequestHdrAllowedByName(http_hdr_type id);
 extern void requestReadBody(request_t * request, char *buf, size_t size, CBCB * callback, void *cbdata);
 extern void requestAbortBody(request_t * request);
 
+extern int icpGetOutSock(sqaddr_t *a);
 extern void *icpCreateMessage(icp_opcode opcode,
     int flags,
     const char *url,

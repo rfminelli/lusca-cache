@@ -47,6 +47,18 @@ static void icpCount(void *, int, size_t, int);
  */
 static icpUdpData *IcpQueueTail = NULL;
 
+int
+icpGetOutSock(sqaddr_t *a)
+{
+    if (sqinet_get_family(a) == AF_INET)
+        return theOutIcpConnection4;
+    else if (sqinet_get_family(a) == AF_INET6)
+        return theOutIcpConnection4;
+    else
+        fatal("unknown address family!");
+    return -1;
+}
+
 static void
 icpLogIcp(const sqaddr_t *caddr, log_type logcode, int len, const char *url,
   int delay)
@@ -446,33 +458,55 @@ icpConnectionsOpen(void)
     int x;
     socklen_t len;
     wordlist *s;
+    char sbuf[MAX_IPSTRLEN];
+
     if ((port = Config.Port.icp) <= 0)
 	return;
     enter_suid();
-    theInIcpConnection = comm_open(SOCK_DGRAM,
+
+    /* ipv4 */
+    theInIcpConnection4 = comm_open(SOCK_DGRAM,
 	IPPROTO_UDP,
 	Config.Addrs.udp_incoming,
 	port,
 	COMM_NONBLOCKING,
 	COMM_TOS_DEFAULT,
-	"ICP Socket");
+	"ICP IPv4 Socket");
+
+    /* ipv6 */
+    theInIcpConnection6 = comm_open6(SOCK_DGRAM,
+      IPPROTO_UDP,
+      &Config.Addrs.udp_incoming6,
+      COMM_NONBLOCKING,
+      COMM_TOS_DEFAULT,
+      "ICP IPv6 Socket");
+
     leave_suid();
-    if (theInIcpConnection < 0)
-	fatal("Cannot open ICP Port");
-    commSetSelect(theInIcpConnection,
-	COMM_SELECT_READ,
-	icpHandleUdp,
-	NULL,
-	0);
+
+    if (theInIcpConnection4 < 0)
+        fatal("Cannot open ICPv4 Port");
+    if (theInIcpConnection6 < 0)
+        fatal("Cannot open ICPv6 Port");
+
+    commSetSelect(theInIcpConnection4, COMM_SELECT_READ, icpHandleUdp, NULL, 0);
+    commSetSelect(theInIcpConnection6, COMM_SELECT_READ, icpHandleUdp, NULL, 0);
+
     for (s = Config.mcast_group_list; s; s = s->next)
-	ipcache_nbgethostbyname(s->key, mcastJoinGroups, NULL);
-    debug(12, 1) ("Accepting ICP messages at %s, port %d, FD %d.\n",
-	inet_ntoa(Config.Addrs.udp_incoming),
-	(int) port, theInIcpConnection);
+        ipcache_nbgethostbyname(s->key, mcastJoinGroups, NULL);
+
+    debug(12, 1) ("Accepting IPv4 ICP messages at %s, port %d, FD %d.\n",
+        inet_ntoa(Config.Addrs.udp_incoming), (int) port, theInIcpConnection4);
+
+    (void) sqinet_ntoa(&Config.Addrs.udp_incoming6, sbuf, MAX_IPSTRLEN,
+      SQADDR_NONE);
+    debug(12, 1) ("Accepting IPv6 ICP messages at %s, port %d, FD %d.\n",
+        sbuf, (int) port, theInIcpConnection6);
+
+    /* IPv4 outgoing */
     addr = Config.Addrs.udp_outgoing;
     if (! IsNoAddr(&addr)) {
 	enter_suid();
-	theOutIcpConnection = comm_open(SOCK_DGRAM,
+	theOutIcpConnection4 = comm_open(SOCK_DGRAM,
 	    IPPROTO_UDP,
 	    addr,
 	    port,
@@ -480,28 +514,54 @@ icpConnectionsOpen(void)
 	    COMM_TOS_DEFAULT,
 	    "ICP Port");
 	leave_suid();
-	if (theOutIcpConnection < 0)
-	    fatal("Cannot open Outgoing ICP Port");
-	commSetSelect(theOutIcpConnection,
+	if (theOutIcpConnection4 < 0)
+	    fatal("Cannot open Outgoing IPv4 ICP Port");
+	commSetSelect(theOutIcpConnection4,
 	    COMM_SELECT_READ,
 	    icpHandleUdp,
 	    NULL,
 	    0);
-	debug(12, 1) ("Outgoing ICP messages on port %d, FD %d.\n",
-	    (int) port, theOutIcpConnection);
-	fd_note(theOutIcpConnection, "Outgoing ICP socket");
-	fd_note(theInIcpConnection, "Incoming ICP socket");
+	debug(12, 1) ("Outgoing IPv4 ICP messages on port %d, FD %d.\n",
+	    (int) port, theOutIcpConnection4);
+	fd_note(theOutIcpConnection4, "Outgoing ICP socket");
+	fd_note(theInIcpConnection4, "Incoming ICP socket");
     } else {
-	theOutIcpConnection = theInIcpConnection;
+	theOutIcpConnection4 = theInIcpConnection4;
     }
+
+    /* IPv6 outgoing */
+    if (! sqinet_is_noaddr(&Config.Addrs.udp_outgoing6)) {
+	enter_suid();
+	theOutIcpConnection6 = comm_open6(SOCK_DGRAM,
+	    IPPROTO_UDP,
+	    &Config.Addrs.udp_outgoing6,
+	    COMM_NONBLOCKING,
+	    COMM_TOS_DEFAULT,
+	    "IPv6 outgoing ICP Port");
+	leave_suid();
+	if (theOutIcpConnection6 < 0)
+	    fatal("Cannot open Outgoing IPv6 ICP Port");
+	commSetSelect(theOutIcpConnection6,
+	    COMM_SELECT_READ,
+	    icpHandleUdp,
+	    NULL,
+	    0);
+	debug(12, 1) ("Outgoing IPv6 ICP messages on port %d, FD %d.\n",
+	    (int) port, theOutIcpConnection6);
+	fd_note(theOutIcpConnection4, "Outgoing IPv6 ICP socket");
+	fd_note(theInIcpConnection4, "Incoming IPv6 ICP socket");
+    } else {
+	theOutIcpConnection6 = theInIcpConnection6;
+    }
+
     memset(&theOutICPAddr, '\0', sizeof(struct in_addr));
     len = sizeof(struct sockaddr_in);
     memset(&xaddr, '\0', len);
-    x = getsockname(theOutIcpConnection,
+    x = getsockname(theOutIcpConnection4,
 	(struct sockaddr *) &xaddr, &len);
     if (x < 0)
 	debug(12, 1) ("theOutIcpConnection FD %d: getsockname: %s\n",
-	    theOutIcpConnection, xstrerror());
+	    theOutIcpConnection4, xstrerror());
     else
 	theOutICPAddr = xaddr.sin_addr;
 }
@@ -513,37 +573,59 @@ icpConnectionsOpen(void)
 void
 icpConnectionShutdown(void)
 {
-    if (theInIcpConnection < 0)
-	return;
-    if (theInIcpConnection != theOutIcpConnection) {
-	debug(12, 1) ("FD %d Closing ICP connection\n", theInIcpConnection);
-	comm_close(theInIcpConnection);
+    /* ipv4 */
+    if (theInIcpConnection4 > -1) {
+        if (theInIcpConnection4 != theOutIcpConnection4) {
+            debug(12, 1) ("FD %d Closing IPv4 ICP connection\n",
+              theInIcpConnection4);
+            comm_close(theInIcpConnection4);
+        }
+        /*
+         * Here we set 'theInIcpConnection' to -1 even though the ICP 'in'
+         * and 'out' sockets might be just one FD.  This prevents this
+         * function from executing repeatedly.  When we are really ready to
+         * exit or restart, main will comm_close the 'out' descriptor.
+         */
+        theInIcpConnection4 = -1;
+        /*
+         * Normally we only write to the outgoing ICP socket, but
+         * we also have a read handler there to catch messages sent
+         * to that specific interface.  During shutdown, we must
+         * disable reading on the outgoing socket.
+         */
+        assert(theOutIcpConnection4 > -1);
+        commSetSelect(theOutIcpConnection4, COMM_SELECT_READ, NULL, NULL, 0);
     }
-    /*
-     * Here we set 'theInIcpConnection' to -1 even though the ICP 'in'
-     * and 'out' sockets might be just one FD.  This prevents this
-     * function from executing repeatedly.  When we are really ready to
-     * exit or restart, main will comm_close the 'out' descriptor.
-     */
-    theInIcpConnection = -1;
-    /*
-     * Normally we only write to the outgoing ICP socket, but
-     * we also have a read handler there to catch messages sent
-     * to that specific interface.  During shutdown, we must
-     * disable reading on the outgoing socket.
-     */
-    assert(theOutIcpConnection > -1);
-    commSetSelect(theOutIcpConnection, COMM_SELECT_READ, NULL, NULL, 0);
+
+    /* ipv6 */
+    if (theInIcpConnection6 > -1) {
+        if (theInIcpConnection6 != theOutIcpConnection6) {
+            debug(12, 1) ("FD %d Closing IPv6 ICP connection\n",
+              theInIcpConnection6);
+            comm_close(theInIcpConnection6);
+        }
+        theInIcpConnection6 = -1;
+        assert(theOutIcpConnection6 > -1);
+        commSetSelect(theOutIcpConnection6, COMM_SELECT_READ, NULL, NULL, 0);
+    }
+
 }
 
 void
 icpConnectionClose(void)
 {
     icpConnectionShutdown();
-    if (theOutIcpConnection > -1) {
-	debug(12, 1) ("FD %d Closing ICP connection\n", theOutIcpConnection);
-	comm_close(theOutIcpConnection);
-	theOutIcpConnection = -1;
+    if (theOutIcpConnection4 > -1) {
+	debug(12, 1) ("FD %d Closing IPv4 ICP connection\n",
+          theOutIcpConnection4);
+	comm_close(theOutIcpConnection4);
+	theOutIcpConnection4 = -1;
+    }
+    if (theOutIcpConnection6 > -1) {
+	debug(12, 1) ("FD %d Closing IPv6 ICP connection\n",
+          theOutIcpConnection6);
+	comm_close(theOutIcpConnection6);
+	theOutIcpConnection6 = -1;
     }
 }
 

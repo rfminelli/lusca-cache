@@ -387,7 +387,8 @@ neighbors_init(void)
     const char *me = getMyHostname();
     peer *this;
     peer *next;
-    int fd = theInIcpConnection;
+    int fd = theInIcpConnection4;
+#warning This needs to check both ipv4 and ipv6!!
     if (fd >= 0) {
 	memset(&name, '\0', sizeof(struct sockaddr_in));
 	if (getsockname(fd, (struct sockaddr *) &name, &len) < 0)
@@ -424,7 +425,7 @@ neighbors_init(void)
     cachemgrRegister("server_list",
 	"Peer Cache Statistics",
 	neighborDumpPeers, 0, 1);
-    if (theInIcpConnection >= 0) {
+    if (theInIcpConnection4 >= 0) {
 	cachemgrRegister("non_peers",
 	    "List of Unknown sites sending ICP messages",
 	    neighborDumpNonPeers, 0, 1);
@@ -454,8 +455,10 @@ neighborsUdpPing(request_t * request,
 
     if (Config.peers == NULL)
 	return 0;
+#if 0
     if (theOutIcpConnection < 0)
 	fatal("neighborsUdpPing: There is no ICP socket!");
+#endif
     assert(entry->swap_status == SWAPOUT_NONE);
     mem->start_ping = current_time;
     mem->ping_reply_callback = callback;
@@ -471,7 +474,7 @@ neighborsUdpPing(request_t * request,
 	debug(15, 4) ("neighborsUdpPing: pinging peer %s for '%s'\n",
 	    p->name, url);
 	if (p->type == PEER_MULTICAST)
-	    mcastSetTtl(theOutIcpConnection, p->mcast.ttl);
+	    mcastSetTtl(icpGetOutSock(&p->addr), p->mcast.ttl);
 	debug(15, 3) ("neighborsUdpPing: key = '%s'\n", storeKeyText(entry->hash.key));
 	debug(15, 3) ("neighborsUdpPing: reqnum = %d\n", reqnum);
 
@@ -485,7 +488,7 @@ neighborsUdpPing(request_t * request,
 	    debug(15, 4) ("neighborsUdpPing: Looks like a dumb cache, send DECHO ping\n");
 	    echo_hdr.reqnum = reqnum;
 	    query = icpCreateMessage(ICP_DECHO, 0, url, reqnum, 0);
-	    icpUdpSend(theOutIcpConnection,
+	    icpUdpSend(icpGetOutSock(&p->addr),
 		&p->addr,
 		query,
 		LOG_ICP_QUERY,
@@ -496,7 +499,7 @@ neighborsUdpPing(request_t * request,
 		if (p->icp.version == ICP_VERSION_2)
 		    flags |= ICP_FLAG_SRC_RTT;
 	    query = icpCreateMessage(ICP_QUERY, flags, url, reqnum, 0);
-	    icpUdpSend(theOutIcpConnection,
+	    icpUdpSend(icpGetOutSock(&p->addr),
 		&p->addr,
 		query,
 		LOG_ICP_QUERY,
@@ -1240,11 +1243,11 @@ peerCountMcastPeersStart(void *data)
     mem->start_ping = current_time;
     mem->ping_reply_callback = peerCountHandleIcpReply;
     mem->ircb_data = psstate;
-    mcastSetTtl(theOutIcpConnection, p->mcast.ttl);
+    mcastSetTtl(icpGetOutSock(&p->addr), p->mcast.ttl);
     p->mcast.id = mem->id;
     reqnum = icpSetCacheKey(fake->hash.key);
     query = icpCreateMessage(ICP_QUERY, 0, url, reqnum, 0);
-    icpUdpSend(theOutIcpConnection,
+    icpUdpSend(icpGetOutSock(&p->addr),
 	&p->addr,
 	query,
 	LOG_ICP_QUERY,

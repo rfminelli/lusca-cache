@@ -41,11 +41,12 @@ void
 start_announce(void *datanotused)
 {
     if (0 == Config.onoff.announce)
-	return;
-    if (theOutIcpConnection < 0)
-	return;
+        return;
+    if (theOutIcpConnection4 < 0 || theOutIcpConnection6 < 0)
+        return;
     ipcache_nbgethostbyname(Config.Announce.host, send_announce, NULL);
-    eventAdd("send_announce", start_announce, NULL, (double) Config.Announce.period, 1);
+    eventAdd("send_announce", start_announce, NULL,
+      (double) Config.Announce.period, 1);
 }
 
 static void
@@ -95,15 +96,16 @@ send_announce(const ipcache_addrs * ia, void *junk)
 	    debug(50, 1) ("send_announce: %s: %s\n", file, xstrerror());
 	}
     }
+    /* XXX this is ipv4 specific, but noone likely uses it anymore -adrian */
     memset(&S, '\0', sizeof(S));
     S.sin_family = AF_INET;
     S.sin_port = htons(port);
     S.sin_addr = ipcacheGetAddrV4(ia, 0);
-    assert(theOutIcpConnection > 0);
-    x = comm_udp_sendto(theOutIcpConnection,
+    assert(theOutIcpConnection4 > 0);
+    x = comm_udp_sendto(theOutIcpConnection4,
 	&S, sizeof(S),
 	sndbuf, strlen(sndbuf) + 1);
     if (x < 0)
-	debug(27, 1) ("send_announce: FD %d: %s\n", theOutIcpConnection,
+	debug(27, 1) ("send_announce: FD %d: %s\n", theOutIcpConnection4,
 	    xstrerror());
 }
