@@ -27,10 +27,10 @@ This list is not comprehensive and is in no particular order.
 || HTCP: sending || || || ||
 || HTCP: receiving || || completed || No ||
 || cache peers || || completed || No ||
-|| ICP: multicast || || ||
+|| ICP: multicast || || || ||
 || upstream HTTP connections || || completed || Yes ||
 || request forwarding || || completed || Yes ||
-|| SSL server support || || ||
+|| SSL server support || || || ||
 || CONNECT support || || Completed || Yes ||
 || NAT: getsockname (bsd) || || || ||
 || NAT: IP Filter || || || ||
