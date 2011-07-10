@@ -19,7 +19,6 @@ This list is not comprehensive and is in no particular order.
 || request_t changes || || completed || Yes ||
 || client_side changes || || completed || Yes ||
 || http changes || || completed || Yes ||
-|| upstream ftp changes || || ||
 || SNMP support || || completed || No ||
 || pinger || || || ||
 || ICP: receiving || || completed || No ||
@@ -28,7 +27,12 @@ This list is not comprehensive and is in no particular order.
 || HTCP: receiving || || completed || No ||
 || cache peers || || completed || No ||
 || ICP: multicast || || || ||
-|| upstream HTTP connections || || completed || Yes ||
+|| Server: HTTP connections || || completed || Yes ||
+|| Server: ftp changes || || || ||
+|| Server: whois || || || ||
+|| Server: gopher || || || ||
+|| Server: wais || || || ||
+|| Server: ASN || || || ||
 || request forwarding || || completed || Yes ||
 || SSL server support || || || ||
 || CONNECT support || || Completed || Yes ||
