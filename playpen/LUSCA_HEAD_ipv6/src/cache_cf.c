@@ -843,9 +843,12 @@ static void
 dump_acl_address(StoreEntry * entry, const char *name, acl_address * head)
 {
     acl_address *l;
+    char buf[MAX_IPSTRLEN];
+
     for (l = head; l; l = l->next) {
-	if (l->addr.s_addr != INADDR_ANY)
-	    storeAppendPrintf(entry, "%s %s", name, inet_ntoa(l->addr));
+        (void) sqinet_ntoa(&l->addr, buf, MAX_IPSTRLEN, SQADDR_NO_BRACKET_V6);
+	if (! sqinet_is_anyaddr(&l->addr))
+	    storeAppendPrintf(entry, "%s %s", name, buf);
 	else
 	    storeAppendPrintf(entry, "%s autoselect", name);
 	dump_acl_list(entry, l->acl_list);
@@ -857,6 +860,7 @@ static void
 freed_acl_address(void *data)
 {
     acl_address *l = data;
+    sqinet_done(&l->addr);
     aclDestroyAclList(&l->acl_list);
 }
 
@@ -867,7 +871,8 @@ parse_acl_address(acl_address ** head)
     acl_address **tail = head;	/* sane name below */
     CBDATA_INIT_TYPE_FREECB(acl_address, freed_acl_address);
     l = cbdataAlloc(acl_address);
-    parse_address(&l->addr);
+    sqinet_init(&l->addr);
+    parse_address46(&l->addr);
     aclParseAclList(&l->acl_list);
     while (*tail)
 	tail = &(*tail)->next;

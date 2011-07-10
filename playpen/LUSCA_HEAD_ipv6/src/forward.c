@@ -497,8 +497,10 @@ aclMapAddr(acl_address * head, aclCheck_t * ch)
     struct in_addr addr;
     aclChecklistCacheInit(ch);
     for (l = head; l; l = l->next) {
-	if (aclMatchAclList(l->acl_list, ch))
-	    return l->addr;
+        if (sqinet_get_family(&l->addr) == AF_INET &&
+            aclMatchAclList(l->acl_list, ch)) {
+                return sqinet_get_v4_inaddr(&l->addr, SQADDR_ASSERT_IS_V4);
+        }
     }
     addr.s_addr = INADDR_ANY;
     return addr;
@@ -507,22 +509,20 @@ aclMapAddr(acl_address * head, aclCheck_t * ch)
 /*
  * This is designed for IPv6 only, but eventually
  * IPv4/IPv6 lookups should just use this function and
- * ACL map.
+ * ACL map (but call it separately for v4/v6 addresses.)
  */
 static int
 aclMapAddr6(acl_address * head, aclCheck_t * ch, sqaddr_t *a)
 {
-#if 0
     acl_address *l;
-    struct in_addr addr;
     aclChecklistCacheInit(ch);
     for (l = head; l; l = l->next) {
-	if (aclMatchAclList(l->acl_list, ch))
-	    return l->addr;
+        if (sqinet_get_family(&l->addr) == AF_INET6 &&
+            aclMatchAclList(l->acl_list, ch)) {
+                sqinet_copy(a, &l->addr);
+                return 1;
+        }
     }
-    addr.s_addr = INADDR_ANY;
-    return addr;
-#endif
     sqinet_set_family(a, AF_INET6);
     sqinet_set_anyaddr(a);
     return 0;

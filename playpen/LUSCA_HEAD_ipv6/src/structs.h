@@ -275,7 +275,7 @@ struct _acl_access {
 struct _acl_address {
     acl_address *next;
     acl_list *acl_list;
-    struct in_addr addr;
+    sqaddr_t addr;
 };
 
 struct _acl_tos {
