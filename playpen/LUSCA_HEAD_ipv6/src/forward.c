@@ -773,19 +773,7 @@ fwdConnectStart(void *data)
      * There's no FD at this point; so peer conn tracking
      * and adding close handlers has to wait.
      */
-
-    /*
-     * XXX there needs to be a connection timeout included
-     * in the new connection API
-     */
-
     fwdState->n_tries++;
-#if 0
-    commSetTimeout(fd,
-	ctimeout,
-	fwdConnectTimeout,
-	fwdState);
-#endif
 
     if (fs->peer) {
 	hierarchyNote(&fwdState->request->hier, fs->code, fs->peer->name);
@@ -793,7 +781,23 @@ fwdConnectStart(void *data)
 	hierarchyNote(&fwdState->request->hier, fs->code, fwdState->request->host);
     }
 
-#if 0
+#warning re-do the transparent stuff soon!
+    /*
+     * There is also no tproxy support; the transparency support is missing
+     * the connection retry logic and such. Here, if a connection fails
+     * and TPROXY is enabled, it should be retried without TPROXY.
+     * The older code handled a TPROXY socket creation failure gracefully;
+     * this code currently doesn't even try.
+     *
+     * The transparency logic needs to take into account what the original
+     * connection family was; TPROXY can't occur between protocol families.
+     * (ie, no V4<->V6 and V6<->V4).
+     * Non-TPROXY can, however.
+     *
+     * Also, the timeout isn't implemented in comm2.c yet.
+     */
+
+
     /*
      * If we are retrying a transparent connection that is not being sent to a
      * peer, then don't cache, and use the IP that the client's DNS lookup
@@ -801,29 +805,13 @@ fwdConnectStart(void *data)
      */
     if (fwdState->request->flags.transparent && (fwdState->n_tries > 1)
       && (NULL == fs->peer)) {
-	storeRelease(fwdState->entry);
-	commConnectStart(fd, host, port, fwdConnectDone, fwdState,
-          &fwdState->request->my_address);
+        storeRelease(fwdState->entry);
+        cs = commConnectStartNewSetup(host, port, fwdConnectDone, fwdState,
+          &fwdState->request->my_address, 0, url);
     } else {
-	commConnectStart(fd, host, port, fwdConnectDone, fwdState, NULL);
+        cs = commConnectStartNewSetup(host, port, fwdConnectDone, fwdState,
+          NULL, 0, url);
     }
-#endif
-
-#warning re-do the transparent stuff soon!
-    /*
-     * There's no v6 outgoing address or local host support just yet, so
-     * there's no v6 transparency support just yet.
-     */
-
-    /*
-     * There is also no tproxy support; the transparency support is missing
-     * the connection retry logic and such.
-     */
-
-    /* Also, the timeout isn't implemented in comm2.c yet */
-
-    cs = commConnectStartNewSetup(host, port, fwdConnectDone, fwdState,
-      NULL, 0, url);
     commConnectNewSetTimeout(cs, ctimeout);
     commConnectNewSetTOS(cs, tos);
     commConnectNewSetupOutgoingV4(cs, outgoing);
