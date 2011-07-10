@@ -985,6 +985,7 @@ void
 peerDestroy(void *data)
 {
     peer *p = data;
+    int i;
     struct _domain_ping *l = NULL;
     struct _domain_ping *nl = NULL;
     if (p == NULL)
@@ -996,6 +997,9 @@ peerDestroy(void *data)
     }
     aclDestroyAccessList(&p->access);
     sqinet_done(&p->addr);
+    for (i = 0; i < p->n_addresses; i++)
+        sqinet_done(&p->addresses[i]);
+
     safe_free(p->host);
     safe_free(p->name);
     safe_free(p->domain);

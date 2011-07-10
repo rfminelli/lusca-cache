@@ -1923,6 +1923,7 @@ parse_peer(peer ** head)
 	p->sslContext = sslCreateClientContext(p->sslcert, p->sslkey, p->sslversion, p->sslcipher, p->ssloptions, p->sslflags, p->sslcafile, p->sslcapath, p->sslcrlfile);
     }
 #endif
+    sqinet_init(&p->addr);
     while (*head != NULL)
 	head = &(*head)->next;
     *head = p;
@@ -1935,6 +1936,8 @@ parse_peer(peer ** head)
 static void
 free_peer(peer ** P)
 {
+    int i;
+
     peer *p;
     while ((p = *P) != NULL) {
 	*P = p->next;
@@ -1946,6 +1949,9 @@ free_peer(peer ** P)
 	    cbdataUnlock(pd);
 	}
 #endif
+        sqinet_done(&p->addr);
+	for (i = 0; i < p->n_addresses; i++)
+	    sqinet_done(&p->addresses[i]);
 	cbdataFree(p);
     }
     Config.npeers = 0;
