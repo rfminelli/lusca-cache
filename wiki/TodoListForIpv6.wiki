@@ -31,7 +31,8 @@ This list is not comprehensive and is in no particular order.
 || upstream HTTP connections || || completed || Yes ||
 || request forwarding || || completed || Yes ||
 || SSL server support || || ||
-|| CONNECT support || || ||
+|| CONNECT support || || Completed || Yes ||
 || Transparent client interception || || ||
 || TPROXY || || ||
 || Connect timeouts (per-session, rather than per-attempt) || || ||
+|| HTTP server idle connection pooling || || ||
