@@ -21,7 +21,7 @@ This list is not comprehensive and is in no particular order.
 || http changes || || completed || Yes ||
 || upstream ftp changes || || ||
 || SNMP support || || completed || No ||
-|| pinger || || ||
+|| pinger || || || ||
 || ICP: receiving || || completed || No ||
 || ICP: sending || || completed || No ||
 || HTCP: sending || || || ||
@@ -32,13 +32,13 @@ This list is not comprehensive and is in no particular order.
 || request forwarding || || completed || Yes ||
 || SSL server support || || ||
 || CONNECT support || || Completed || Yes ||
-|| NAT: getsockname (bsd) || || ||
-|| NAT: IP Filter || || ||
-|| NAT: Netfilter (linux) || || ||
-|| NAT: PF || || ||
-|| TPROXY: TPROXY2 || || ||
-|| TPROXY: TPROXY4 || || ||
-|| TPROXY: FreeBSD || || ||
-|| Connect timeouts (per-session, rather than per-attempt) || || ||
-|| HTTP server idle connection pooling || || ||
+|| NAT: getsockname (bsd) || || || ||
+|| NAT: IP Filter || || || ||
+|| NAT: Netfilter (linux) || || || ||
+|| NAT: PF || || || ||
+|| TPROXY: TPROXY2 || || || ||
+|| TPROXY: TPROXY4 || || || ||
+|| TPROXY: FreeBSD || || || || 
+|| Connect timeouts (per-session, rather than per-attempt) || || || ||
+|| HTTP server idle connection pooling || || || ||
 || Neighbor: health checks || adrian || Done || untested ||
