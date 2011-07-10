@@ -348,6 +348,12 @@ fwdConnectDone(int server_fd, int status, void *data)
         sqinet_copy(&fwdState->request->out_ip6, &fd_table[server_fd].local_address);
     }
 
+    /* Timeout? */
+    if (status == COMM_TIMEOUT) {
+        fwdConnectTimeout(server_fd, data);
+	return;
+    }
+
     if (Config.onoff.log_ip_on_direct && status != COMM_ERR_DNS && fs->code == HIER_DIRECT)
 	hierarchyNote(&fwdState->request->hier, fs->code, fd_table[server_fd].ipaddrstr);
     if (status == COMM_ERR_DNS) {
@@ -398,7 +404,6 @@ fwdConnectTimeout(int fd, void *data)
     FwdServer *fs = fwdState->servers;
     ErrorState *err;
     debug(17, 2) ("fwdConnectTimeout: FD %d: '%s'\n", fd, storeUrl(entry));
-    assert(fd == fwdState->server_fd);
     if (Config.onoff.log_ip_on_direct && fs->code == HIER_DIRECT && fd_table[fd].ipaddrstr[0])
 	hierarchyNote(&fwdState->request->hier, fs->code, fd_table[fd].ipaddrstr);
     if (entry->mem_obj->inmem_hi == 0) {
@@ -412,7 +417,8 @@ fwdConnectTimeout(int fd, void *data)
 	    if (fwdState->servers->peer)
 		peerConnectFailed(fwdState->servers->peer);
     }
-    comm_close(fd);
+    if (fd != -1)
+        comm_close(fd);
 }
 
 typedef struct {
