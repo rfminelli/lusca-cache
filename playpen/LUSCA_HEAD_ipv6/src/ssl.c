@@ -623,7 +623,6 @@ sslPeerConnectHost(SslStateData *sslState)
     getOutgoingAddrV6(sslState->request, &outgoing_v6);
     tos = getOutgoingTOS(sslState->request);
 
-
     cs = commConnectStartNewSetup(sslState->host,
       sslState->port, sslConnectDone, sslState, NULL, 0, NULL);
     commConnectNewSetupOutgoingV4(cs, outgoing_v4);
