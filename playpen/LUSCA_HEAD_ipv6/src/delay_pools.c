@@ -324,7 +324,6 @@ delayClient(clientHttpRequest * http)
 {
     request_t *r;
     aclCheck_t ch;
-    struct in_addr a;
     ushort pool;
     assert(http);
     r = http->request;
@@ -346,24 +345,33 @@ delayClient(clientHttpRequest * http)
         aclCheckFinish(&ch);
 	return delayId(0, 0);
     }
-#warning delay pools needs to be made v6 aware!
-    if (sqinet_get_family(&ch.src_address) != AF_INET) {
-        aclCheckFinish(&ch);
-        return delayId(0, 0);
-    }
-    a = sqinet_get_v4_inaddr(&ch.src_address, SQADDR_ASSERT_IS_V4);
     aclCheckFinish(&ch);
-    return delayPoolClient(pool, a.s_addr);
+    return delayPoolClient(pool, &ch.src_address);
 }
 
+/*
+ * Calculate the delay_id for the given pool/client IP.
+ *
+ * This code only knows about IPv4; IPv6 clients are
+ * assigned a delay id of (0, 0).
+ */
 delay_id
-delayPoolClient(unsigned short pool, in_addr_t addr)
+delayPoolClient(unsigned short pool, sqaddr_t *sa)
 {
     int i;
     int j;
     unsigned int host;
     unsigned short position;
     unsigned char class, net;
+    struct in_addr a;
+    in_addr_t addr;
+
+    if (sqinet_get_family(sa) != AF_INET)
+        return delayId(0, 0);
+
+    a = sqinet_get_v4_inaddr(sa, SQADDR_ASSERT_IS_V4);
+    addr = a.s_addr;
+
     class = Config.Delay.class[pool];
     debug(77, 2) ("delayPoolClient: pool %u , class %u\n", pool, class);
     if (class == 0)

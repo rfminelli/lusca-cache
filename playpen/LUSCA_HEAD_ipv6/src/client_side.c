@@ -1929,15 +1929,11 @@ clientWriteComplete(int fd, char *bufnotused, size_t size, int errflag, void *da
 #if DELAY_POOLS
 	debug(33, 5) ("clientWriteComplete : Normal\n");
 	if (clientDelayBodyTooLarge(http, http->out.offset - 4096)) {
-	    struct in_addr a;
-
 	    debug(33, 5) ("clientWriteComplete: we should put this into the pool: DelayId=%i\n",
 		http->sc->delay_id);
 	    delayUnregisterDelayIdPtr(&http->sc->delay_id);
-	    a = sqinet_get_v4_inaddr(&http->conn->peer2, SQADDR_ASSERT_IS_V4);
-#warning delay pools should obviously be mapped to be ipv6 aware at some point
 	    delaySetStoreClient(http->sc, delayPoolClient(http->delayAssignedPool,
-		    (in_addr_t) a.s_addr));
+		    &http->conn->peer2));
 	}
 #endif
 	/* More data will be coming from primary server; register with 
