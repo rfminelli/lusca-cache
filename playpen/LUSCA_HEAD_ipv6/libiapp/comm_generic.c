@@ -161,10 +161,18 @@ do_check_incoming(void)
     int i;
     for (i = 0; i < NHttpSockets; i++)
 	do_call_incoming(HttpSockets[i]);
-    if (theInIcpConnection >= 0)
-	do_call_incoming(theInIcpConnection);
-    if (theOutIcpConnection != theInIcpConnection)
-	do_call_incoming(theOutIcpConnection);
+
+    /* IPv4 */
+    if (theInIcpConnection4 >= 0)
+	do_call_incoming(theInIcpConnection4);
+    if (theOutIcpConnection4 != theInIcpConnection4)
+	do_call_incoming(theOutIcpConnection4);
+
+    /* IPv6 */
+    if (theInIcpConnection6 >= 0)
+	do_call_incoming(theInIcpConnection6);
+    if (theOutIcpConnection6 != theInIcpConnection6)
+	do_call_incoming(theOutIcpConnection6);
 }
 
 static inline void
