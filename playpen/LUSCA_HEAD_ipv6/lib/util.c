@@ -744,7 +744,7 @@ xitoa(int num)
 int
 memrcmp(const void *s1, const void *s2, int n)
 {
-	const unsigned char *p1 = s1 + n, *p2 = s2 + n;
+	const unsigned char *p1 = s1 + n - 1, *p2 = s2 + n - 1;
 	if (n == 0)
 		return (0);
 	do {
