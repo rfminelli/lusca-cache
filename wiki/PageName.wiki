@@ -1,23 +1,69 @@
-#summary Store IO Load Handling
+#summary Proxy Authentication: Digest
+#labels Configuration-Example,Feature
 
 = Introduction =
 
-Lusca inherited some logic for handling overloaded cache directories. This attempts to document the basic workings, the limitations/shortcomings and potential workarounds.
+HTTP Digest Authentication is an alternative to HTTP Basic Authentication which avoids sending the password in clear-text. Later revisions of Digest Authentication include anti-replay countermeasures.
 
-= Overload during storeOpen =
+= Details =
 
-The store containing an object is checked via a call to the storedir "checkload()" function. If the storedir returns error or a load higher than 1000 it increments "store_io_stats.open.loadav_fail" and returns NULL.
+Digest authentication involves:
 
-If the store layer returns NULL then the store client code returns an error via a store client callback. I have a feeling that this somehow turns into an object "delete" from cache - either explicitly somehow due to the error condition or a subsequent object fetch replaces the on-disk version. This should be further investigated.
+  * support in Squid/Lusca for the negotiation phases
+  * an external helper which returns the relevant MD5 nonces used as part of the authentication phase
 
-= Overload during storeCreate =
+= Building Lusca =
 
-The two selection algorithms, "round robin" and "least load", both check to make sure the storedir is OK (load < 1000 and > 0). Storedirs which are not OK for this object are skipped by the selection logic.
+Building digest authentication requires enabling the digest auth handling and zero or more digest auth helpers.
 
-= Overload during read / write IO =
+{{{
+  ./configure ... --enable-auth="digest" --enable-digest-auth-modules"[auth modules]"
+}}}
 
-The storage logic does not currently handle temporary IO overloading - the IO must complete or error, aborting the swapin/swapout. The storage modules will generally call some "sync" function to complete some pending IO before completing the current IO.
+= Configuration =
 
-= Problems with the load handling =
+The following is an example which uses the digest_pw_auth helper.
 
-The load handling was written for a forward proxy load where it was OK to occasionally miss an object. Reverse proxy loads with highly popular objects can confuse the above logic. In particular, a frequently requested object (say, a large one with range requests) seems to be evicted from the cache following a transient high load spike and this overloads the backends with range requests.
+First, build Lusca with the relevant helper.
+
+{{{
+  ./configure ... --enable-auth="digest" --enable-digest-auth-modules"password"
+}}}
+
+Then add the following to squid.conf to enable digest authentication:
+
+{{{
+# Authentication
+auth_param digest program /Users/adrian/work/lusca/run/libexec/digest_pw_auth -c /Users/adrian/work/lusca/run/etc/digest-passwd
+auth_param digest children 2
+auth_param digest realm test
+acl localusers proxy_auth REQUIRED
+}}}
+
+Next, use 'localusers' in http_access where appropriate to force authentication.
+
+Finally, create a password entry in digest-passwd using "digest_passwd" in the Lusca source directory (LUSCA_HEAD/helpers/digest_auth/password):
+
+{{{
+./digest_passwd [user] [password] [realm]
+}}}
+
+For example:
+
+{{{
+./digest_passwd adrian password test
+}}}
+
+The realm must match the realm configured in the authentication section in squid.conf.
+
+= Behind the scenes =
+
+The wikipedia article below gives a good introduction into how HTTP digest authentication works.
+
+The digest helper protocol involves passing the helper a string containing "username":"realm"; it then returns the "HA1" to use in authentication. Since HA1 is calculated by using the realm name, the realm in the password file AND the squid.conf must match.
+
+The digest_pw_auth helper can calculate the MD5 HA1 string given a cleartext password. The "-c" option to digest_pw_auth tells the helper that the MD5 HA1 string value is already calculated. If cleartext passwords are required, "-c" can be omitted.
+
+= Further Information =
+
+  * http://en.wikipedia.org/wiki/Digest_access_authentication
