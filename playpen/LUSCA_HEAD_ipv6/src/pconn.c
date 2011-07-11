@@ -47,8 +47,10 @@ struct _pconn {
 
 static PF pconnRead;
 static PF pconnTimeout;
-static hash_link * pconnLookup(const char *peer, u_short port, const char *domain, sqaddr_t *client_address);
-static int pconnKey(char *buf, const char *host, u_short port, const char *domain, sqaddr_t *client_address);
+static hash_link * pconnLookup(const char *peer, u_short port,
+  const char *domain, sqaddr_t *client_address);
+static int pconnKey(char *buf, const char *host, u_short port,
+  const char *domain, sqaddr_t *client_address);
 static hash_table *table = NULL;
 static struct _pconn *pconnNew(const char *key);
 static void pconnDelete(struct _pconn *p);
@@ -201,7 +203,8 @@ pconnInit(void)
 }
 
 void
-pconnPush6(int fd, const char *host, u_short port, const char *domain, sqaddr_t *client_address)
+pconnPush6(int fd, const char *host, u_short port, const char *domain,
+  sqaddr_t *client_address)
 {
     struct _pconn *p;
     int *old;
@@ -240,7 +243,8 @@ pconnPush6(int fd, const char *host, u_short port, const char *domain, sqaddr_t 
 }
 
 void
-pconnPush(int fd, const char *host, u_short port, const char *domain, struct in_addr *client_address, u_short client_port)
+pconnPush(int fd, const char *host, u_short port, const char *domain,
+  struct in_addr *client_address, u_short client_port)
 {
 	sqaddr_t a;
 
@@ -255,7 +259,8 @@ pconnPush(int fd, const char *host, u_short port, const char *domain, struct in_
 }
 
 int
-pconnPop6(const char *host, u_short port, const char *domain, sqaddr_t *client_address, int *idle)
+pconnPop6(const char *host, u_short port, const char *domain,
+  sqaddr_t *client_address, int *idle)
 {
     struct _pconn *p;
     hash_link *hptr;
@@ -276,7 +281,8 @@ pconnPop6(const char *host, u_short port, const char *domain, sqaddr_t *client_a
 }
 
 int
-pconnPop(const char *host, u_short port, const char *domain, struct in_addr *client_address, u_short client_port, int *idle)
+pconnPop(const char *host, u_short port, const char *domain,
+  struct in_addr *client_address, u_short client_port, int *idle)
 {
 	sqaddr_t a;
 	int r;
@@ -294,7 +300,8 @@ pconnPop(const char *host, u_short port, const char *domain, struct in_addr *cli
 }
 
 static hash_link *
-pconnLookup(const char *peer, u_short port, const char *domain, sqaddr_t *client_address)
+pconnLookup(const char *peer, u_short port, const char *domain,
+  sqaddr_t *client_address)
 {
     LOCAL_ARRAY(char, key, PCONN_KEYLEN);
     assert(table != NULL);
