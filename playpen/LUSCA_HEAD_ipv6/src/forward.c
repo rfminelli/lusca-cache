@@ -354,7 +354,16 @@ fwdConnectDone(int server_fd, int status, void *data)
 	return;
     }
 
-    if (Config.onoff.log_ip_on_direct && status != COMM_ERR_DNS && fs->code == HIER_DIRECT)
+    /*
+     * server_fd may now not exist at this point; so we can't set the
+     * 'ipaddrstr'. We should likely store a copy of the v4/v6 decisions
+     * so it can be logged.
+     *
+     * But then on a connection failure, we don't know what the ipaddrstr
+     * should be as multiple sources may have been tried. Le sigh.
+     */
+    if (server_fd != -1 && Config.onoff.log_ip_on_direct &&
+      status != COMM_ERR_DNS && fs->code == HIER_DIRECT)
 	hierarchyNote(&fwdState->request->hier, fs->code, fd_table[server_fd].ipaddrstr);
     if (status == COMM_ERR_DNS) {
 	/*
