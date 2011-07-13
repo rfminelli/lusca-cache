@@ -3,15 +3,20 @@
 
 #define PINGER_PAYLOAD_SZ 8192 
 
+/*
+ * Use sockaddr_storage; it's big enough to
+ * store IPv4 and IPv6 addresses.
+ */
+
 struct _pingerEchoData {
-    struct in_addr to;
+    struct sockaddr_storage to;
     unsigned char opcode;
     int psize;
     char payload[PINGER_PAYLOAD_SZ];
 };
 
 struct _pingerReplyData {
-    struct in_addr from;
+    struct sockaddr_storage from;
     unsigned char opcode;
     int rtt;
     int hops;

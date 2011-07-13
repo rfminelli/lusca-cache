@@ -60,10 +60,18 @@ static void
 icmpSendEcho(struct in_addr to, int opcode, const char *payload, int len)
 {
     static pingerEchoData pecho;
+    struct sockaddr_in *v4;
+
     if (payload && len == 0)
 	len = strlen(payload);
     assert(len <= PINGER_PAYLOAD_SZ);
-    pecho.to = to;
+
+    /* Set ipv4 address */
+#warning IPv6-ify this!
+    v4 = (struct sockaddr_in *) &pecho.to;
+    v4->sin_family = AF_INET;
+    v4->sin_port = 0;
+    v4->sin_addr = to;
     pecho.opcode = (unsigned char) opcode;
     pecho.psize = len;
     xmemcpy(pecho.payload, payload, len);
@@ -77,6 +85,7 @@ icmpRecv(int unused1, void *unused2)
     static int fail_count = 0;
     pingerReplyData preply;
     static struct sockaddr_in F;
+    struct sockaddr_in *v4;
     commSetSelect(icmp_sock, COMM_SELECT_READ, icmpRecv, NULL, 0);
     memset(&preply, '\0', sizeof(pingerReplyData));
 #if NOTYET
@@ -95,9 +104,14 @@ icmpRecv(int unused1, void *unused2)
     fail_count = 0;
     if (n == 0)			/* test probe from pinger */
 	return;
+
+    /* Only handle a IPv4 reply for now */
+#warning IPv6-ify this!
+    v4 = (struct sockaddr_in *) &preply.from;
     F.sin_family = AF_INET;
-    F.sin_addr = preply.from;
+    F.sin_addr = v4->sin_addr;
     F.sin_port = 0;
+
     switch (preply.opcode) {
     case S_ICMP_ECHO:
 	break;
@@ -119,10 +133,14 @@ static void
 icmpSend(pingerEchoData * pkt, int len)
 {
     int x;
+    struct sockaddr_in *v4;
+
     if (icmp_sock < 0)
 	return;
+#warning IPv6-ify this!
+    v4 = (struct sockaddr_in *) &pkt->to;
     debug(37, 2) ("icmpSend: to %s, opcode %d, len %d\n",
-	inet_ntoa(pkt->to), (int) pkt->opcode, pkt->psize);
+	inet_ntoa(v4->sin_addr), (int) pkt->opcode, pkt->psize);
     x = send(icmp_sock, (char *) pkt, len, 0);
     if (x < 0) {
 	debug(37, 1) ("icmpSend: send: %s\n", xstrerror());

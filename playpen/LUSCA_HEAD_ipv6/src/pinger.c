@@ -360,6 +360,7 @@ pingerRecv(void)
     icmpEchoData *echo;
     static pingerReplyData preply;
     struct timeval tv;
+    struct sockaddr_in *v4;
 
     if (pkt == NULL)
 	pkt = xmalloc(MAX_PKT_SZ);
@@ -392,7 +393,16 @@ pingerRecv(void)
     if (icmp->icmp_id != icmp_ident)
 	return;
     echo = (icmpEchoData *) (void *) (icmp + 1);
-    preply.from = from.sin_addr;
+
+    /* Assign IPv4 address */
+#warning IPv6-ify this!
+
+    v4 = (struct sockaddr_in *) &preply.from;
+    /* This should also match ss_family */
+    v4->sin_family = AF_INET;
+    v4->sin_port = 0;
+    v4->sin_addr = from.sin_addr;
+
     preply.opcode = echo->opcode;
     preply.hops = ipHops(ip->ip_ttl);
     memcpy(&tv, &echo->tv, sizeof(tv));
@@ -460,6 +470,8 @@ pingerReadRequest(void)
     static pingerEchoData pecho;
     int n;
     int guess_size;
+    struct sockaddr_in *v4;
+
     memset(&pecho, '\0', sizeof(pecho));
     n = read(socket_from_squid, (char *) &pecho, sizeof(pecho));
     if (n < 0) {
@@ -479,7 +491,10 @@ pingerReadRequest(void)
 	/* don't process this message, but keep running */
 	return 0;
     }
-    pingerSendEcho(pecho.to,
+
+#warning IPv6-ify this!
+    v4 = (struct sockaddr_in *) &pecho.to;
+    pingerSendEcho(v4->sin_addr,
 	pecho.opcode,
 	pecho.payload,
 	pecho.psize);
