@@ -443,7 +443,7 @@ sslConnectDone(int fd, int status, void *data)
 	    sslState->servers->peer->name);
     else if (Config.onoff.log_ip_on_direct)
 	hierarchyNote(&sslState->request->hier, sslState->servers->code,
-	    fd_table[sslState->server.fd].ipaddrstr);
+	    sslState->server.fd != -1 ? fd_table[sslState->server.fd].ipaddrstr : "-");
     else
 	hierarchyNote(&sslState->request->hier, sslState->servers->code,
 	    sslState->host);
