@@ -19,7 +19,7 @@ This list is not comprehensive and is in no particular order.
 || request_t changes || || completed || Yes ||
 || client_side changes || || completed || Yes ||
 || http changes || || completed || Yes ||
-|| SNMP support || || completed || No ||
+|| SNMP support || || completed || Yes ||
 || pinger || || || ||
 || ICP: receiving || || completed || No ||
 || ICP: sending || || completed || No ||
