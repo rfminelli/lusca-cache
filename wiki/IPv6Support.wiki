@@ -1,70 +1,9 @@
-#summary Current IPv6 support in Cacheboy
+#summary Current IPv6 support in Lusca
 
 = Overview =
 
-The IPv6 support in Cacheboy is not as fully-featured as Squid-3.HEAD / Squid-3.1; it is still in development.
+The IPv6 support in Lusca is not as fully-featured as Squid-3.HEAD / Squid-3.1; it is still in development.
 
-The current aim is to thoroughly test and deploy client-side IPv6 before moving onto a complete IPv6 implementation.
+The IPv6 work is in the LUSCA_HEAD_ipv6 branch.
 
-The current implementation supports very basic client-side only IPv6 functionality but at a cost of the SNMP client database MIB along with some functionality limited to IPv4. It should be enough for a small edge deployment of an IPv6 service for testing and evaluation.
-
-
-
-Adrian
-
-== Configuration Parameters ==
-
- * dns_nameserver - currently takes IPv6 addresses w/out the [] format
- * http_port - currently takes addresses in [] format
- * acl src6 - currently takes addresses w/out the [] format
- * acl myip6 - currently takes addresses w/out the [] format
-
-== Protocols ==
-
-  * Client-side handling: done
-  * Server-side handling: not done
-  * HTCP: not done
-  * ICPv2: not done
-  * ICPv3: not done
-  * SNMP: not done
-  * FTP: not done
-  * Gopher: not done
-
-== Modules ==
-
-  * External DNS: not done
-  * Internal DNS: done
-  * FQDNCache: not done
-  * IPCache: not done
-  * Incoming network connections: done
-  * Outgoing network connections: done
-  * Logging: done
-  * Redirectors: done
-  * Client database: done
-  * Persistent connection logic: done
-
-== ACLs ==
-
-  * Support for src6 and myip6
-  * No support for dst6 - requires FQDNCache to function
-  * No support for srcdomain / srcregex - requires IPCache to function
-
-== Headers ==
-
- * X-Forwarded-For: done
-
-== SNMP ==
-
- * Client database: not done
- * Peer database: not done
-
-== Other ==
-
-  * FQDN entry logging: not done; requires FQDNCache to function
-  * Hostname from http_port configuration: not done; requires DNS to function
-  * Various debugging: logging the _IP_ address requires a conditional call to sqinet_ntoa() (ie, only if the debugging call will output something); the debugging code thus needs to be extended first!
-
-== Notes ==
-
- * The proxy doesn't bind to an IPv6 HTTP incoming socket by default. Use "http_port [ v6addr ]:port" to achieve this.
- * There are currently no IPv6 default ACL rules and so by default IPv6 requests will be denied. You will need to add a http_access, http_reply_access and miss_access line for the relevant IPv6 networks you wish to allow requests/replies.
+More information is available at [TodoListForIpv6].
