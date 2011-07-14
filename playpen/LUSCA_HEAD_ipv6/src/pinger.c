@@ -70,7 +70,9 @@ static int socket_to_squid = 1;
 static SOCKET socket_to_squid = -1;
 #define socket_from_squid socket_to_squid
 
-#else /* _SQUID_CYGWIN_ */
+#else /* _SQUID_MSWIN */
+
+/* Cygwin */
 
 #include <netinet/in_systm.h>
 #include <netinet/in.h>
@@ -82,76 +84,12 @@ static SOCKET socket_to_squid = -1;
 static int socket_from_squid = 0;
 static int socket_to_squid = 1;
 
-#endif
-
-#define ICMP_ECHO 8
-#define ICMP_ECHOREPLY 0
-
-typedef struct iphdr {
-    u_int8_t ip_vhl:4;		/* Length of the header in dwords */
-    u_int8_t version:4;		/* Version of IP                  */
-    u_int8_t tos;		/* Type of service                */
-    u_int16_t total_len;	/* Length of the packet in dwords */
-    u_int16_t ident;		/* unique identifier              */
-    u_int16_t flags;		/* Flags                          */
-    u_int8_t ip_ttl;		/* Time to live                   */
-    u_int8_t proto;		/* Protocol number (TCP, UDP etc) */
-    u_int16_t checksum;		/* IP checksum                    */
-    u_int32_t source_ip;
-    u_int32_t dest_ip;
-} iphdr;
-
-/* ICMP header */
-typedef struct icmphdr {
-    u_int8_t icmp_type;		/* ICMP packet type                 */
-    u_int8_t icmp_code;		/* Type sub code                    */
-    u_int16_t icmp_cksum;
-    u_int16_t icmp_id;
-    u_int16_t icmp_seq;
-    u_int32_t timestamp;	/* not part of ICMP, but we need it */
-} icmphdr;
-
 #endif /* _SQUID_MSWIN_ */
 
-#ifndef _SQUID_LINUX_
-#ifndef _SQUID_WIN32_
-#define icmphdr icmp
-#define iphdr ip
-#endif
-#endif
+#endif /* _SQUID_WIN32_ */
 
-#if defined (_SQUID_LINUX_)
-#ifdef icmp_id
-#undef icmp_id
-#endif
-#ifdef icmp_seq
-#undef icmp_seq
-#endif
-#define icmp_type type
-#define icmp_code code
-#define icmp_cksum checksum
-#define icmp_id un.echo.id
-#define icmp_seq un.echo.sequence
-#define ip_hl ihl
-#define ip_v version
-#define ip_tos tos
-#define ip_len tot_len
-#define ip_id id
-#define ip_off frag_off
-#define ip_ttl ttl
-#define ip_p protocol
-#define ip_sum check
-#define ip_src saddr
-#define ip_dst daddr
-#endif
-
-#if ALLOW_SOURCE_PING
-#define MAX_PKT_SZ 8192
-#define MAX_PAYLOAD (MAX_PKT_SZ - sizeof(struct icmphdr) - sizeof (char) - sizeof(struct timeval) - 1)
-#else
-#define MAX_PAYLOAD SQUIDHOSTNAMELEN
-#define MAX_PKT_SZ (MAX_PAYLOAD + sizeof(struct timeval) + sizeof (char) + sizeof(struct icmphdr) + 1)
-#endif
+#include "../libpinger/icmp_v4.h"
+#include "../libpinger/icmp_v6.h"
 
 typedef struct {
     struct timeval tv;
@@ -159,34 +97,8 @@ typedef struct {
     char payload[MAX_PAYLOAD];
 } icmpEchoData;
 
-int icmp_ident = -1;
-int icmp_pkts_sent = 0;
-
-static const char *icmpPktStr[] =
-{
-    "Echo Reply",
-    "ICMP 1",
-    "ICMP 2",
-    "Destination Unreachable",
-    "Source Quench",
-    "Redirect",
-    "ICMP 6",
-    "ICMP 7",
-    "Echo",
-    "ICMP 9",
-    "ICMP 10",
-    "Time Exceeded",
-    "Parameter Problem",
-    "Timestamp",
-    "Timestamp Reply",
-    "Info Request",
-    "Info Reply",
-    "Out of Range Type"
-};
-
-static int in_cksum(unsigned short *ptr, int size);
 static void pingerRecv(void);
-static void pingerLog(struct icmphdr *, struct in_addr, int, int);
+static void pingerLog(int, struct in_addr, int, int);
 static int ipHops(int ttl);
 static void pingerSendtoSquid(pingerReplyData * preply);
 static void pingerOpen(void);
@@ -299,51 +211,24 @@ pingerClose(void)
 static void
 pingerSendEcho(struct in_addr to, int opcode, char *payload, int len)
 {
-    LOCAL_ARRAY(char, pkt, MAX_PKT_SZ);
-    struct icmphdr *icmp = NULL;
-    icmpEchoData *echo;
-    int icmp_pktsize = sizeof(struct icmphdr);
-    struct sockaddr_in S;
-    memset(pkt, '\0', MAX_PKT_SZ);
-    icmp = (struct icmphdr *) (void *) pkt;
+    icmpEchoData echo;
+    int icmp_pktsize;
 
-    /*
-     * cevans - beware signed/unsigned issues in untrusted data from
-     * the network!!
-     */
-    if (len < 0) {
-	len = 0;
-    }
-    icmp->icmp_type = ICMP_ECHO;
-    icmp->icmp_code = 0;
-    icmp->icmp_cksum = 0;
-    icmp->icmp_id = icmp_ident;
-    icmp->icmp_seq = (u_short) icmp_pkts_sent++;
-    echo = (icmpEchoData *) (icmp + 1);
-    echo->opcode = (unsigned char) opcode;
-    memcpy(&echo->tv, &current_time, sizeof(current_time));
-    icmp_pktsize += sizeof(struct timeval) + sizeof(char);
+    /* Assemble the icmpEcho payload */
+    echo.opcode = (unsigned char) opcode;
+    memcpy(&echo.tv, &current_time, sizeof(current_time));
+
+    /* size of the IcmpEchoData header */
+    icmp_pktsize = sizeof(struct timeval) + sizeof(char);
+
+    /* If there's a payload, add it */
     if (payload) {
-	if (len > MAX_PAYLOAD)
-	    len = MAX_PAYLOAD;
-	xmemcpy(echo->payload, payload, len);
-	icmp_pktsize += len;
+        memcpy(echo.payload, payload, MIN(len, MAX_PAYLOAD));
+        icmp_pktsize += MIN(len, MAX_PAYLOAD);
     }
-    icmp->icmp_cksum = in_cksum((u_short *) icmp, icmp_pktsize);
-    S.sin_family = AF_INET;
-    /*
-     * cevans: alert: trusting to-host, was supplied in network packet
-     */
-    S.sin_addr = to;
-    S.sin_port = 0;
-    assert(icmp_pktsize <= MAX_PKT_SZ);
-    sendto(icmp_sock,
-	pkt,
-	icmp_pktsize,
-	0,
-	(struct sockaddr *) &S,
-	sizeof(struct sockaddr_in));
-    pingerLog(icmp, to, 0, 0);
+
+    pingerv4SendEcho(icmp_sock, to, opcode, (char *) &echo, icmp_pktsize);
+    pingerLog(ICMP_ECHO, to, 0, 0);
 }
 
 static void
@@ -409,41 +294,18 @@ pingerRecv(void)
     preply.rtt = tvSubMsec(tv, now);
     preply.psize = n - iphdrlen - (sizeof(icmpEchoData) - MAX_PKT_SZ);
     pingerSendtoSquid(&preply);
-    pingerLog(icmp, from.sin_addr, preply.rtt, preply.hops);
-}
-
-
-static int
-in_cksum(unsigned short *ptr, int size)
-{
-    long sum;
-    unsigned short oddbyte;
-    unsigned short answer;
-    sum = 0;
-    while (size > 1) {
-	sum += *ptr++;
-	size -= 2;
-    }
-    if (size == 1) {
-	oddbyte = 0;
-	*((unsigned char *) &oddbyte) = *(unsigned char *) ptr;
-	sum += oddbyte;
-    }
-    sum = (sum >> 16) + (sum & 0xffff);
-    sum += (sum >> 16);
-    answer = (unsigned short) ~sum;
-    return (answer);
+    pingerLog(icmp->icmp_type, from.sin_addr, preply.rtt, preply.hops);
 }
 
 static void
-pingerLog(struct icmphdr *icmp, struct in_addr addr, int rtt, int hops)
+pingerLog(int icmp_type, struct in_addr addr, int rtt, int hops)
 {
     debug(42, 2) ("pingerLog: %9d.%06d %-16s %d %-15.15s %dms %d hops\n",
 	(int) current_time.tv_sec,
 	(int) current_time.tv_usec,
 	inet_ntoa(addr),
-	(int) icmp->icmp_type,
-	icmpPktStr[icmp->icmp_type],
+	(int) icmp_type,
+	icmpPktStr[icmp_type],
 	rtt,
 	hops);
 }

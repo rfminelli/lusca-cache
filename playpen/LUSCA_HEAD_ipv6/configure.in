@@ -3331,6 +3331,7 @@ AC_OUTPUT([\
 	app/ufs_rebuild/Makefile \
 	app/ufs_newfs/Makefile \
 	app/tcptest/Makefile \
+	libpinger/Makefile \
 	libsqstore/Makefile \
 	libsqtlv/Makefile \
 	libmime/Makefile \

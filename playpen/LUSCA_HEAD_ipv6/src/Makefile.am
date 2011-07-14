@@ -317,7 +317,7 @@ sysconf_DATA = \
 data_DATA = \
 	mib.txt
 
-LDADD = -L../lib -L../libcore -L../libsqdebug -L../libmem -L../libsqname -L../libcb -L../libhelper -L../libmime -L../libstmem -L../libiapp -L../libsqftp -L../libsqurl -L../libhttp -L../libstat -L../libsqdns -L../libsqident -L../libsqinet -L../libasyncio -L../libsqtlv -L../libsqstore -lsqstore -lsqtlv -lasyncio -lsqinet -lsqdns -lsqdebug -lcore -lmem -lsqname -lcb -lsqident -lhelper -lmime -lstmem -liapp -lsqftp -lsqurl -lhttp -lstat -lmiscutil @XTRA_LIBS@
+LDADD = -L../lib -L../libcore -L../libsqdebug -L../libmem -L../libsqname -L../libcb -L../libhelper -L../libmime -L../libstmem -L../libiapp -L../libsqftp -L../libsqurl -L../libhttp -L../libstat -L../libsqdns -L../libsqident -L../libsqinet -L../libasyncio -L../libsqtlv -L../libsqstore -L../libpinger -lpinger -lsqstore -lsqtlv -lasyncio -lsqinet -lsqdns -lsqdebug -lcore -lmem -lsqname -lcb -lsqident -lhelper -lmime -lstmem -liapp -lsqftp -lsqurl -lhttp -lstat -lmiscutil @XTRA_LIBS@
 
 EXTRA_DIST = \
 	cf_gen_defines \
