@@ -46,8 +46,6 @@
 
 #if !defined(_SQUID_WIN32_)
 
-#include <netinet/in_systm.h>
-#include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
 
@@ -60,11 +58,6 @@ static int socket_to_squid = 1;
 
 #ifdef _SQUID_MSWIN_
 
-#if HAVE_WINSOCK2_H
-#include <winsock2.h>
-#endif
-#include <process.h>
-
 #define PINGER_TIMEOUT 5
 
 static SOCKET socket_to_squid = -1;
@@ -72,10 +65,6 @@ static SOCKET socket_to_squid = -1;
 
 #else /* _SQUID_MSWIN */
 
-/* Cygwin */
-
-#include <netinet/in_systm.h>
-#include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
 
