@@ -38,6 +38,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <arpa/inet.h>
 
 #if !defined(_SQUID_WIN32_)
 
@@ -135,6 +136,22 @@ in_cksum(unsigned short *ptr, int size)
     return (answer);
 }
 
+static int
+ipHops(int ttl)
+{
+    if (ttl < 33)
+        return 33 - ttl;
+    if (ttl < 63)
+        return 63 - ttl;        /* 62 = (64+60)/2 */
+    if (ttl < 65)
+        return 65 - ttl;        /* 62 = (64+60)/2 */
+    if (ttl < 129)
+        return 129 - ttl;
+    if (ttl < 193)
+        return 193 - ttl;
+    return 256 - ttl;
+}
+
 /*
  * Assemble an IPv4 ICMP Echo packet.
  *
@@ -192,3 +209,74 @@ pingerv4SendEcho(int icmp_sock, struct in_addr to, int opcode, char *payload,
       sizeof(struct sockaddr_in));
 }
 
+/*
+ * Receive an ICMP packet.
+ *
+ * If NULL is returned, the packet isn't valid or is the wrong type.
+ *
+ * If non-NULL is returned, the pointer refers to the beginning of
+ * the ICMP response payload; *len is set to the payload length.
+ */
+char *
+pingerv4RecvEcho(int icmp_sock, int *icmp_type, int *payload_len,
+  struct in_addr *src, int *hops)
+{
+    int n;
+    socklen_t fromlen;
+    struct sockaddr_in from;
+    int iphdrlen = 20;
+    struct iphdr *ip = NULL;
+    struct icmphdr *icmp = NULL;
+    static char *pkt = NULL;
+
+    (*icmp_type = -1);
+
+    if (pkt == NULL)
+        pkt = xmalloc(MAX_PKT_SZ);
+    fromlen = sizeof(from);
+
+    n = recvfrom(icmp_sock,
+      pkt,
+      MAX_PKT_SZ,
+      0,
+      (struct sockaddr *) &from,
+      &fromlen);
+
+    debug(42, 9) ("pingerRecv: %d bytes from %s\n", n,
+      inet_ntoa(from.sin_addr));
+    ip = (struct iphdr *) (void *) pkt;
+    (*src) = from.sin_addr;
+
+#if HAVE_IP_HL
+    iphdrlen = ip->ip_hl << 2;
+#else /* HAVE_IP_HL */
+#if WORDS_BIGENDIAN
+    iphdrlen = (ip->ip_vhl >> 4) << 2;
+#else
+    iphdrlen = (ip->ip_vhl & 0xF) << 2;
+#endif
+#endif /* HAVE_IP_HL */
+    icmp = (struct icmphdr *) (void *) (pkt + iphdrlen);
+
+    if (icmp->icmp_type != ICMP_ECHOREPLY) {
+        debug(42, 9) ("%s: icmp_type=%d\n", __func__, icmp->icmp_type);
+        return NULL;
+    }
+    if (icmp->icmp_id != icmp_ident) {
+        debug(42, 9) ("%s: icmp_id=%d, ident should be %d\n", __func__,
+          icmp->icmp_id, icmp_ident);
+        return NULL;
+    }
+
+    /* record the ICMP results */
+    (*hops) = ipHops(ip->ip_ttl);
+    (*payload_len) = n - iphdrlen - sizeof(struct icmphdr);
+    if (*payload_len < 0)
+        return NULL;
+
+    debug(42, 9) ("%s: hops=%d, len=%d\n", __func__, ipHops(ip->ip_ttl),
+      n - iphdrlen);
+
+    /* There may be no payload; the caller should check len first */
+    return (pkt + iphdrlen + sizeof(struct icmphdr));
+}

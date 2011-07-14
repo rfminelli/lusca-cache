@@ -96,4 +96,7 @@ extern int icmp_pkts_sent;
 extern void pingerv4SendEcho(int sock, struct in_addr to, int opcode,
   char *payload, int len);
 
+extern char * pingerv4RecvEcho(int icmp_sock, int *icmp_type, int *payload_len,
+  struct in_addr *src, int *hops);
+
 #endif	/* __LIBPINGER_ICMP_V4_H__ */

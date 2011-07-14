@@ -99,7 +99,6 @@ typedef struct {
 
 static void pingerRecv(void);
 static void pingerLog(int, struct in_addr, int, int);
-static int ipHops(int ttl);
 static void pingerSendtoSquid(pingerReplyData * preply);
 static void pingerOpen(void);
 static void pingerClose(void);
@@ -231,70 +230,54 @@ pingerSendEcho(struct in_addr to, int opcode, char *payload, int len)
     pingerLog(ICMP_ECHO, to, 0, 0);
 }
 
+/*
+ * This is an IPv4-specific function for now.
+ */
 static void
 pingerRecv(void)
 {
-    int n;
-    socklen_t fromlen;
-    struct sockaddr_in from;
-    int iphdrlen = 20;
-    struct iphdr *ip = NULL;
-    struct icmphdr *icmp = NULL;
-    static char *pkt = NULL;
+    char *pkt;
     struct timeval now;
     icmpEchoData *echo;
     static pingerReplyData preply;
     struct timeval tv;
     struct sockaddr_in *v4;
 
+    int icmp_type, payload_len, hops;
+    struct in_addr from;
+
+    debug(42, 9) ("%s: called\n", __func__);
+
+    pkt = pingerv4RecvEcho(icmp_sock, &icmp_type, &payload_len,
+      &from, &hops);
+    debug(42, 9) ("%s: returned %p\n", __func__, pkt);
+
     if (pkt == NULL)
-	pkt = xmalloc(MAX_PKT_SZ);
-    fromlen = sizeof(from);
-    n = recvfrom(icmp_sock,
-	pkt,
-	MAX_PKT_SZ,
-	0,
-	(struct sockaddr *) &from,
-	&fromlen);
+        return;
+
 #if GETTIMEOFDAY_NO_TZP
     gettimeofday(&now);
 #else
     gettimeofday(&now, NULL);
 #endif
-    debug(42, 9) ("pingerRecv: %d bytes from %s\n", n, inet_ntoa(from.sin_addr));
-    ip = (struct iphdr *) (void *) pkt;
-#if HAVE_IP_HL
-    iphdrlen = ip->ip_hl << 2;
-#else /* HAVE_IP_HL */
-#if WORDS_BIGENDIAN
-    iphdrlen = (ip->ip_vhl >> 4) << 2;
-#else
-    iphdrlen = (ip->ip_vhl & 0xF) << 2;
-#endif
-#endif /* HAVE_IP_HL */
-    icmp = (struct icmphdr *) (void *) (pkt + iphdrlen);
-    if (icmp->icmp_type != ICMP_ECHOREPLY)
-	return;
-    if (icmp->icmp_id != icmp_ident)
-	return;
-    echo = (icmpEchoData *) (void *) (icmp + 1);
 
-    /* Assign IPv4 address */
-#warning IPv6-ify this!
+    debug(42, 9) ("pingerRecv: %d payload bytes from %s\n", payload_len,
+      inet_ntoa(from));
+    echo = (icmpEchoData *) pkt;
 
+    /* Set V4 address in preply */
     v4 = (struct sockaddr_in *) &preply.from;
-    /* This should also match ss_family */
     v4->sin_family = AF_INET;
     v4->sin_port = 0;
-    v4->sin_addr = from.sin_addr;
+    v4->sin_addr = from;
 
     preply.opcode = echo->opcode;
-    preply.hops = ipHops(ip->ip_ttl);
+    preply.hops = hops;
     memcpy(&tv, &echo->tv, sizeof(tv));
     preply.rtt = tvSubMsec(tv, now);
-    preply.psize = n - iphdrlen - (sizeof(icmpEchoData) - MAX_PKT_SZ);
+    preply.psize = payload_len;
     pingerSendtoSquid(&preply);
-    pingerLog(icmp->icmp_type, from.sin_addr, preply.rtt, preply.hops);
+    pingerLog(icmp_type, from, preply.rtt, preply.hops);
 }
 
 static void
@@ -308,22 +291,6 @@ pingerLog(int icmp_type, struct in_addr addr, int rtt, int hops)
 	icmpPktStr[icmp_type],
 	rtt,
 	hops);
-}
-
-static int
-ipHops(int ttl)
-{
-    if (ttl < 33)
-	return 33 - ttl;
-    if (ttl < 63)
-	return 63 - ttl;	/* 62 = (64+60)/2 */
-    if (ttl < 65)
-	return 65 - ttl;	/* 62 = (64+60)/2 */
-    if (ttl < 129)
-	return 129 - ttl;
-    if (ttl < 193)
-	return 193 - ttl;
-    return 256 - ttl;
 }
 
 static int
