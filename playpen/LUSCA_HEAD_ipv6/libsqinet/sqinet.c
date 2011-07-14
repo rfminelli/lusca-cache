@@ -755,6 +755,13 @@ sqinet_assemble_rev(const sqaddr_t *s, char *buf, int len)
 	return 0;
 }
 
+void
+sqinet_copy_tosockaddr(const sqaddr_t *s, struct sockaddr_storage *dst)
+{
+	assert(s->init);
+	memcpy(dst, &s->st, MIN(sizeof(*dst), sizeof(s->st)));
+}
+
 /*!
  * @function
  *	sqinet_compare_port
