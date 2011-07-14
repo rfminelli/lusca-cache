@@ -1320,7 +1320,7 @@ struct _net_db_peer {
 
 struct _netdbEntry {
     hash_link hash;		/* must be first */
-    char network[16];
+    char network[MAX_IPSTRLEN];
     int pings_sent;
     int pings_recv;
     double hops;

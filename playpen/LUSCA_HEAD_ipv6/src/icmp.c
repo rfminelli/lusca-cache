@@ -48,34 +48,28 @@
 #define S_ICMP_DOM	3
 
 static PF icmpRecv;
-static void icmpSend(pingerEchoData * pkt, int len);
+static void icmpSend(sqaddr_t *to, pingerEchoData * pkt, int len);
 #if ALLOW_SOURCE_PING
-static void icmpHandleSourcePing(const struct sockaddr_in *from, const char *buf);
+static void icmpHandleSourcePing(const sqaddr_t *from, const char *buf);
 #endif
 
 static void *hIpc;
 static pid_t pid;
 
 static void
-icmpSendEcho(struct in_addr to, int opcode, const char *payload, int len)
+icmpSendEcho(sqaddr_t *to, int opcode, const char *payload, int len)
 {
     static pingerEchoData pecho;
-    struct sockaddr_in *v4;
 
     if (payload && len == 0)
 	len = strlen(payload);
     assert(len <= PINGER_PAYLOAD_SZ);
 
-    /* Set ipv4 address */
-#warning IPv6-ify this!
-    v4 = (struct sockaddr_in *) &pecho.to;
-    v4->sin_family = AF_INET;
-    v4->sin_port = 0;
-    v4->sin_addr = to;
+    sqinet_copy_tosockaddr(to, &pecho.to);
     pecho.opcode = (unsigned char) opcode;
     pecho.psize = len;
     xmemcpy(pecho.payload, payload, len);
-    icmpSend(&pecho, sizeof(pingerEchoData) - PINGER_PAYLOAD_SZ + len);
+    icmpSend(to, &pecho, sizeof(pingerEchoData) - PINGER_PAYLOAD_SZ + len);
 }
 
 static void
@@ -84,8 +78,7 @@ icmpRecv(int unused1, void *unused2)
     int n;
     static int fail_count = 0;
     pingerReplyData preply;
-    static struct sockaddr_in F;
-    struct sockaddr_in *v4;
+    sqaddr_t F;
     commSetSelect(icmp_sock, COMM_SELECT_READ, icmpRecv, NULL, 0);
     memset(&preply, '\0', sizeof(pingerReplyData));
 #if NOTYET
@@ -105,12 +98,8 @@ icmpRecv(int unused1, void *unused2)
     if (n == 0)			/* test probe from pinger */
 	return;
 
-    /* Only handle a IPv4 reply for now */
-#warning IPv6-ify this!
-    v4 = (struct sockaddr_in *) &preply.from;
-    F.sin_family = AF_INET;
-    F.sin_addr = v4->sin_addr;
-    F.sin_port = 0;
+    sqinet_init(&F);
+    sqinet_set_sockaddr(&F, &preply.from);
 
     switch (preply.opcode) {
     case S_ICMP_ECHO:
@@ -127,20 +116,22 @@ icmpRecv(int unused1, void *unused2)
 	debug(37, 1) ("icmpRecv: Bad opcode: %d\n", (int) preply.opcode);
 	break;
     }
+    sqinet_done(&F);
 }
 
 static void
-icmpSend(pingerEchoData * pkt, int len)
+icmpSend(sqaddr_t *to, pingerEchoData * pkt, int len)
 {
     int x;
-    struct sockaddr_in *v4;
 
     if (icmp_sock < 0)
 	return;
-#warning IPv6-ify this!
-    v4 = (struct sockaddr_in *) &pkt->to;
-    debug(37, 2) ("icmpSend: to %s, opcode %d, len %d\n",
-	inet_ntoa(v4->sin_addr), (int) pkt->opcode, pkt->psize);
+    if (do_debug(37, 2)) {
+        char sbuf[MAX_IPSTRLEN];
+	(void) sqinet_ntoa(to, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
+        debug(37, 2) ("icmpSend: to %s, opcode %d, len %d\n",
+          sbuf, (int) pkt->opcode, pkt->psize);
+    }
     x = send(icmp_sock, (char *) pkt, len, 0);
     if (x < 0) {
 	debug(37, 1) ("icmpSend: send: %s\n", xstrerror());
@@ -155,7 +146,7 @@ icmpSend(pingerEchoData * pkt, int len)
 
 #if ALLOW_SOURCE_PING
 static void
-icmpHandleSourcePing(const struct sockaddr_in *from, const char *buf)
+icmpHandleSourcePing(const sqaddr_t *from, const char *buf)
 {
     const cache_key *key;
     icp_common_t header;
@@ -163,8 +154,12 @@ icmpHandleSourcePing(const struct sockaddr_in *from, const char *buf)
     xmemcpy(&header, buf, sizeof(icp_common_t));
     url = buf + sizeof(icp_common_t);
     key = icpGetCacheKey(url, (int) header.reqnum);
-    debug(37, 3) ("icmpHandleSourcePing: from %s, key '%s'\n",
-	inet_ntoa(from->sin_addr), storeKeyText(key));
+    if (do_debug(37, 3)) {
+        char sbuf[MAX_IPSTRLEN];
+        (void) sqinet_ntoa(from, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
+        debug(37, 3) ("icmpHandleSourcePing: from %s, key '%s'\n",
+          sbuf, storeKeyText(key));
+    }
     /* call neighborsUdpAck even if ping_status != PING_WAITING */
     neighborsUdpAck(key, &header, from);
 }
@@ -175,7 +170,7 @@ icmpHandleSourcePing(const struct sockaddr_in *from, const char *buf)
 
 #if ALLOW_SOURCE_PING
 void
-icmpSourcePing(struct in_addr to, const icp_common_t * header, const char *url)
+icmpSourcePing(sqaddr_t *to, const icp_common_t * header, const char *url)
 {
 #if USE_ICMP
     char *payload;
@@ -196,7 +191,7 @@ icmpSourcePing(struct in_addr to, const icp_common_t * header, const char *url)
 #endif
 
 void
-icmpDomainPing(struct in_addr to, const char *domain)
+icmpDomainPing(sqaddr_t *to, const char *domain)
 {
 #if USE_ICMP
     debug(37, 3) ("icmpDomainPing: '%s'\n", domain);

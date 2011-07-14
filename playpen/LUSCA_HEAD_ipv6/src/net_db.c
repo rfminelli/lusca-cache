@@ -53,9 +53,9 @@ typedef struct {
 static hash_table *addr_table = NULL;
 static hash_table *host_table = NULL;
 
-static struct in_addr networkFromInaddr(struct in_addr a);
+static void networkFromInaddr(sqaddr_t *dst, const sqaddr_t *src);
 static void netdbRelease(netdbEntry * n);
-static void netdbHashInsert(netdbEntry * n, struct in_addr addr);
+static void netdbHashInsert(netdbEntry * n, sqaddr_t *addr);
 static void netdbHashDelete(const char *key);
 static void netdbHostInsert(netdbEntry * n, const char *hostname);
 static void netdbHostDelete(const net_db_name * x);
@@ -84,12 +84,19 @@ void netdbDump(StoreEntry * sentry);
 static wordlist *peer_names = NULL;
 
 static void
-netdbHashInsert(netdbEntry * n, struct in_addr addr)
+netdbHashInsert(netdbEntry * n, sqaddr_t *addr)
 {
-    xstrncpy(n->network, inet_ntoa(networkFromInaddr(addr)), 16);
+    char sbuf[MAX_IPSTRLEN];
+    sqaddr_t a;
+
+    sqinet_init(&a);
+    networkFromInaddr(&a, addr);
+    (void) sqinet_ntoa(&a, sbuf, MAX_IPSTRLEN, SQADDR_NO_BRACKET_V6);
+    xstrncpy(n->network, sbuf, MAX_IPSTRLEN);
     n->hash.key = n->network;
     assert(hash_lookup(addr_table, n->network) == NULL);
     hash_join(addr_table, &n->hash);
+    sqinet_done(&a);
 }
 
 static void
@@ -97,8 +104,8 @@ netdbHashDelete(const char *key)
 {
     hash_link *hptr = hash_lookup(addr_table, key);
     if (hptr == NULL) {
-	debug_trap("netdbHashDelete: key not found");
-	return;
+        debug_trap("netdbHashDelete: key not found");
+        return;
     }
     hash_remove_link(addr_table, hptr);
 }
@@ -126,10 +133,10 @@ netdbHostDelete(const net_db_name * x)
     n = x->net_db_entry;
     n->link_count--;
     for (X = &n->hosts; *X; X = &(*X)->next) {
-	if (*X == x) {
-	    *X = x->next;
-	    break;
-	}
+        if (*X == x) {
+            *X = x->next;
+            break;
+        }
     }
     hash_remove_link(host_table, (hash_link *) x);
     xfree(x->hash.key);
@@ -149,8 +156,8 @@ netdbRelease(netdbEntry * n)
     net_db_name *x;
     net_db_name *next;
     for (x = n->hosts; x; x = next) {
-	next = x->next;
-	netdbHostDelete(x);
+        next = x->next;
+        netdbHostDelete(x);
     }
     n->hosts = NULL;
     safe_free(n->peers);
@@ -158,8 +165,8 @@ netdbRelease(netdbEntry * n)
     n->n_peers = 0;
     n->n_peers_alloc = 0;
     if (n->link_count == 0) {
-	netdbHashDelete(n->network);
-	memPoolFree(pool_netdb_entry, n);
+        netdbHashDelete(n->network);
+        memPoolFree(pool_netdb_entry, n);
     }
 }
 
@@ -169,9 +176,9 @@ netdbLRU(const void *A, const void *B)
     const netdbEntry *const *n1 = A;
     const netdbEntry *const *n2 = B;
     if ((*n1)->last_use_time > (*n2)->last_use_time)
-	return (1);
+        return (1);
     if ((*n1)->last_use_time < (*n2)->last_use_time)
-	return (-1);
+        return (-1);
     return (0);
 }
 
@@ -186,41 +193,47 @@ netdbPurgeLRU(void)
     list = xcalloc(memPoolInUseCount(pool_netdb_entry), sizeof(netdbEntry *));
     hash_first(addr_table);
     while ((n = (netdbEntry *) hash_next(addr_table))) {
-	assert(list_count < memPoolInUseCount(pool_netdb_entry));
-	*(list + list_count) = n;
-	list_count++;
+        assert(list_count < memPoolInUseCount(pool_netdb_entry));
+        *(list + list_count) = n;
+        list_count++;
     }
     qsort((char *) list,
-	list_count,
-	sizeof(netdbEntry *),
-	netdbLRU);
+        list_count,
+        sizeof(netdbEntry *),
+        netdbLRU);
     for (k = 0; k < list_count; k++) {
-	if (memPoolInUseCount(pool_netdb_entry) < Config.Netdb.low)
-	    break;
-	netdbRelease(*(list + k));
-	removed++;
+        if (memPoolInUseCount(pool_netdb_entry) < Config.Netdb.low)
+            break;
+        netdbRelease(*(list + k));
+        removed++;
     }
     xfree(list);
 }
 
 static netdbEntry *
-netdbLookupAddr(struct in_addr addr)
+netdbLookupAddr(const sqaddr_t *addr)
 {
+    char sbuf[MAX_IPSTRLEN];
     netdbEntry *n;
-    char *key = inet_ntoa(networkFromInaddr(addr));
-    n = (netdbEntry *) hash_lookup(addr_table, key);
+    sqaddr_t a;
+
+    sqinet_init(&a);
+    networkFromInaddr(&a, addr);
+    (void) sqinet_ntoa(&a, sbuf, MAX_IPSTRLEN, SQADDR_NO_BRACKET_V6);
+    sqinet_done(&a);
+    n = (netdbEntry *) hash_lookup(addr_table, sbuf);
     return n;
 }
 
 static netdbEntry *
-netdbAdd(struct in_addr addr)
+netdbAdd(sqaddr_t *addr)
 {
     netdbEntry *n;
     if (memPoolInUseCount(pool_netdb_entry) > Config.Netdb.high)
-	netdbPurgeLRU();
+        netdbPurgeLRU();
     if ((n = netdbLookupAddr(addr)) == NULL) {
-	n = memPoolAlloc(pool_netdb_entry);
-	netdbHashInsert(n, addr);
+        n = memPoolAlloc(pool_netdb_entry);
+        netdbHashInsert(n, addr);
     }
     return n;
 }
@@ -228,83 +241,90 @@ netdbAdd(struct in_addr addr)
 static void
 netdbSendPing(const ipcache_addrs * ia, void *data)
 {
-    struct in_addr addr;
     char *hostname = ((generic_cbdata *) data)->data;
     netdbEntry *n;
     netdbEntry *na;
     net_db_name *x;
     net_db_name **X;
     cbdataFree(data);
-    if (ia == NULL) {
-	xfree(hostname);
-	return;
-    }
-#warning This needs to support IPv6!
-    if (ipcacheGetAddrFamily(ia, ia->cur) != AF_INET)
-        return;
+    sqaddr_t addr;
 
-    addr = ipcacheGetAddrV4(ia, ia->cur);
+    if (ia == NULL) {
+        xfree(hostname);
+        return;
+    }
+
+    sqinet_init(&addr);
+    ipcacheGetAddr(ia, ia->cur, &addr);
+
     if ((n = netdbLookupHost(hostname)) == NULL) {
-	n = netdbAdd(addr);
-	netdbHostInsert(n, hostname);
-    } else if ((na = netdbLookupAddr(addr)) != n) {
-	/*
-	 *hostname moved from 'network n' to 'network na'!
-	 */
-	if (na == NULL)
-	    na = netdbAdd(addr);
-	debug(38, 3) ("netdbSendPing: %s moved from %s to %s\n",
-	    hostname, n->network, na->network);
-	x = (net_db_name *) hash_lookup(host_table, hostname);
-	if (x == NULL) {
-	    debug(38, 1) ("netdbSendPing: net_db_name list bug: %s not found\n", hostname);
-	    xfree(hostname);
-	    return;
-	}
-	/* remove net_db_name from 'network n' linked list */
-	for (X = &n->hosts; *X; X = &(*X)->next) {
-	    if (*X == x) {
-		*X = x->next;
-		break;
-	    }
-	}
-	n->link_count--;
-	/* point to 'network na' from host entry */
-	x->net_db_entry = na;
-	/* link net_db_name to 'network na' */
-	x->next = na->hosts;
-	na->hosts = x;
-	na->link_count++;
-	n = na;
+        n = netdbAdd(&addr);
+        netdbHostInsert(n, hostname);
+    } else if ((na = netdbLookupAddr(&addr)) != n) {
+        /*
+         *hostname moved from 'network n' to 'network na'!
+         */
+        if (na == NULL)
+            na = netdbAdd(&addr);
+        debug(38, 3) ("netdbSendPing: %s moved from %s to %s\n",
+            hostname, n->network, na->network);
+        x = (net_db_name *) hash_lookup(host_table, hostname);
+        if (x == NULL) {
+            debug(38, 1) ("netdbSendPing: net_db_name list bug: %s not found\n", hostname);
+            xfree(hostname);
+            return;
+        }
+        /* remove net_db_name from 'network n' linked list */
+        for (X = &n->hosts; *X; X = &(*X)->next) {
+            if (*X == x) {
+                *X = x->next;
+                break;
+            }
+        }
+        n->link_count--;
+        /* point to 'network na' from host entry */
+        x->net_db_entry = na;
+        /* link net_db_name to 'network na' */
+        x->next = na->hosts;
+        na->hosts = x;
+        na->link_count++;
+        n = na;
     }
     if (n->next_ping_time <= squid_curtime) {
-	debug(38, 3) ("netdbSendPing: pinging %s\n", hostname);
-	icmpDomainPing(addr, hostname);
-	n->pings_sent++;
-	n->next_ping_time = squid_curtime + Config.Netdb.period;
-	n->last_use_time = squid_curtime;
+        debug(38, 3) ("netdbSendPing: pinging %s\n", hostname);
+        icmpDomainPing(&addr, hostname);
+        n->pings_sent++;
+        n->next_ping_time = squid_curtime + Config.Netdb.period;
+        n->last_use_time = squid_curtime;
     }
     xfree(hostname);
+    sqinet_done(&addr);
 }
 
-static struct in_addr
-networkFromInaddr(struct in_addr a)
+/*
+ * If it is an IPv6 address, treat the network boundary as a /64.
+ * If it is an IPv4 address, treat the network boundary as a /24.
+ */
+static void
+networkFromInaddr(sqaddr_t *dst, const sqaddr_t *src)
 {
-    struct in_addr b;
-    b.s_addr = ntohl(a.s_addr);
-#if USE_CLASSFUL
-    if (IN_CLASSC(b.s_addr))
-	b.s_addr &= IN_CLASSC_NET;
-    else if (IN_CLASSB(b.s_addr))
-	b.s_addr &= IN_CLASSB_NET;
-    else if (IN_CLASSA(b.s_addr))
-	b.s_addr &= IN_CLASSA_NET;
-#else
-    /* use /24 for everything */
-    b.s_addr &= IN_CLASSC_NET;
-#endif
-    b.s_addr = htonl(b.s_addr);
-    return b;
+    sqaddr_t mask;
+
+    sqinet_init(&mask);
+    sqinet_set_family(&mask, sqinet_get_family(src));
+    if (sqinet_get_family(src) == AF_INET) {
+        sqinet_set_mask_addr(&mask, 24);
+    } else if (sqinet_get_family(src) == AF_INET6) {
+        sqinet_set_mask_addr(&mask, 64);
+    } else {
+        fatalf("%s: unknown address family: %d?!\n", __func__,
+          sqinet_get_family(src));
+    }
+
+
+    sqinet_copy(dst, src);
+    sqinet_mask_addr(dst, &mask);
+    sqinet_done(&mask);
 }
 
 static int
@@ -313,11 +333,11 @@ sortByRtt(const void *A, const void *B)
     const netdbEntry *const *n1 = A;
     const netdbEntry *const *n2 = B;
     if ((*n1)->rtt > (*n2)->rtt)
-	return 1;
+        return 1;
     else if ((*n1)->rtt < (*n2)->rtt)
-	return -1;
+        return -1;
     else
-	return 0;
+        return 0;
 }
 
 static net_db_peer *
@@ -326,8 +346,8 @@ netdbPeerByName(const netdbEntry * n, const char *peername)
     int i;
     net_db_peer *p = n->peers;
     for (i = 0; i < n->n_peers; i++, p++) {
-	if (!strcmp(p->peername, peername))
-	    return p;
+        if (!strcmp(p->peername, peername))
+            return p;
     }
     return NULL;
 }
@@ -340,20 +360,20 @@ netdbPeerAdd(netdbEntry * n, peer * e)
     int osize;
     int i;
     if (n->n_peers == n->n_peers_alloc) {
-	o = n->peers;
-	osize = n->n_peers_alloc;
-	if (n->n_peers_alloc == 0)
-	    n->n_peers_alloc = 2;
-	else
-	    n->n_peers_alloc <<= 1;
-	debug(38, 3) ("netdbPeerAdd: Growing peer list for '%s' to %d\n",
-	    n->network, n->n_peers_alloc);
-	n->peers = xcalloc(n->n_peers_alloc, sizeof(net_db_peer));
-	for (i = 0; i < osize; i++)
-	    *(n->peers + i) = *(o + i);
-	if (osize) {
-	    safe_free(o);
-	}
+        o = n->peers;
+        osize = n->n_peers_alloc;
+        if (n->n_peers_alloc == 0)
+            n->n_peers_alloc = 2;
+        else
+            n->n_peers_alloc <<= 1;
+        debug(38, 3) ("netdbPeerAdd: Growing peer list for '%s' to %d\n",
+            n->network, n->n_peers_alloc);
+        n->peers = xcalloc(n->n_peers_alloc, sizeof(net_db_peer));
+        for (i = 0; i < osize; i++)
+            *(n->peers + i) = *(o + i);
+        if (osize) {
+            safe_free(o);
+        }
     }
     p = n->peers + n->n_peers;
     p->peername = netdbPeerName(e->host);
@@ -367,11 +387,11 @@ sortPeerByRtt(const void *A, const void *B)
     const net_db_peer *p1 = A;
     const net_db_peer *p2 = B;
     if (p1->rtt > p2->rtt)
-	return 1;
+        return 1;
     else if (p1->rtt < p2->rtt)
-	return -1;
+        return -1;
     else
-	return 0;
+        return 0;
 }
 
 static void
@@ -383,7 +403,7 @@ netdbSaveState(void *foo)
     struct timeval start = current_time;
     int count = 0;
     if (strcmp(Config.netdbFilename, "none") == 0)
-	return;
+        return;
     /*
      * This was nicer when we were using stdio, but thanks to
      * Solaris bugs, its a bad idea.  fopen can fail if more than
@@ -396,31 +416,31 @@ netdbSaveState(void *foo)
     unlink(Config.netdbFilename);
     lf = logfileOpen(Config.netdbFilename, 4096, 0);
     if (NULL == lf) {
-	debug(50, 1) ("netdbSaveState: %s: %s\n", Config.netdbFilename, xstrerror());
-	return;
+        debug(50, 1) ("netdbSaveState: %s: %s\n", Config.netdbFilename, xstrerror());
+        return;
     }
     hash_first(addr_table);
     while ((n = (netdbEntry *) hash_next(addr_table))) {
-	if (n->pings_recv == 0)
-	    continue;
-	logfilePrintf(lf, "%s %d %d %10.5f %10.5f %d %d",
-	    n->network,
-	    n->pings_sent,
-	    n->pings_recv,
-	    n->hops,
-	    n->rtt,
-	    (int) n->next_ping_time,
-	    (int) n->last_use_time);
-	for (x = n->hosts; x; x = x->next)
-	    logfilePrintf(lf, " %s", hashKeyStr(&x->hash));
-	logfilePrintf(lf, "\n");
-	count++;
+        if (n->pings_recv == 0)
+            continue;
+        logfilePrintf(lf, "%s %d %d %10.5f %10.5f %d %d",
+            n->network,
+            n->pings_sent,
+            n->pings_recv,
+            n->hops,
+            n->rtt,
+            (int) n->next_ping_time,
+            (int) n->last_use_time);
+        for (x = n->hosts; x; x = x->next)
+            logfilePrintf(lf, " %s", hashKeyStr(&x->hash));
+        logfilePrintf(lf, "\n");
+        count++;
 #undef RBUF_SZ
     }
     logfileClose(lf);
     getCurrentTime();
     debug(38, 1) ("NETDB state saved; %d entries, %d msec\n",
-	count, tvSubMsec(start, current_time));
+        count, tvSubMsec(start, current_time));
     eventAddIsh("netdbSaveState", netdbSaveState, NULL, 3600.0, 1);
 }
 
@@ -435,12 +455,12 @@ netdbReloadState(void)
     struct stat sb;
     netdbEntry *n;
     netdbEntry N;
-    struct in_addr addr;
+    sqaddr_t addr;
     int count = 0;
     struct timeval start = current_time;
 
     if (strcmp(Config.netdbFilename, "none") == 0)
-	return;
+        return;
 
     /*
      * This was nicer when we were using stdio, but thanks to
@@ -449,66 +469,69 @@ netdbReloadState(void)
      */
     fd = file_open(Config.netdbFilename, O_RDONLY | O_BINARY);
     if (fd < 0)
-	return;
+        return;
     if (fstat(fd, &sb) < 0) {
-	file_close(fd);
-	return;
+        file_close(fd);
+        return;
     }
     t = buf = xcalloc(1, (size_t) sb.st_size + 1);
     l = FD_READ_METHOD(fd, buf, (int) sb.st_size);
     file_close(fd);
     if (l <= 0)
-	return;
+        return;
     while ((s = strchr(t, '\n'))) {
-	char *q;
-	assert(s - buf < l);
-	*s = '\0';
-	memset(&N, '\0', sizeof(netdbEntry));
-	q = strtok(t, w_space);
-	t = s + 1;
-	if (NULL == q)
-	    continue;
-	if (!safe_inet_addr(q, &addr))
-	    continue;
-	if (netdbLookupAddr(addr) != NULL)	/* no dups! */
-	    continue;
-	if ((q = strtok(NULL, w_space)) == NULL)
-	    continue;
-	N.pings_sent = atoi(q);
-	if ((q = strtok(NULL, w_space)) == NULL)
-	    continue;
-	N.pings_recv = atoi(q);
-	if (N.pings_recv == 0)
-	    continue;
-	/* give this measurement low weight */
-	N.pings_sent = 1;
-	N.pings_recv = 1;
-	if ((q = strtok(NULL, w_space)) == NULL)
-	    continue;
-	N.hops = atof(q);
-	if ((q = strtok(NULL, w_space)) == NULL)
-	    continue;
-	N.rtt = atof(q);
-	if ((q = strtok(NULL, w_space)) == NULL)
-	    continue;
-	N.next_ping_time = (time_t) atoi(q);
-	if ((q = strtok(NULL, w_space)) == NULL)
-	    continue;
-	N.last_use_time = (time_t) atoi(q);
-	n = memPoolAlloc(pool_netdb_entry);
-	xmemcpy(n, &N, sizeof(netdbEntry));
-	netdbHashInsert(n, addr);
-	while ((q = strtok(NULL, w_space)) != NULL) {
-	    if (netdbLookupHost(q) != NULL)	/* no dups! */
-		continue;
-	    netdbHostInsert(n, q);
-	}
-	count++;
+        char *q;
+        assert(s - buf < l);
+        *s = '\0';
+        memset(&N, '\0', sizeof(netdbEntry));
+        q = strtok(t, w_space);
+        t = s + 1;
+        if (NULL == q)
+            continue;
+        sqinet_init(&addr);
+        if (! sqinet_aton(&addr, q, SQADDR_NONE))
+            goto next;
+        if (netdbLookupAddr(&addr) != NULL)        /* no dups! */
+            goto next;
+        if ((q = strtok(NULL, w_space)) == NULL)
+            goto next;
+        N.pings_sent = atoi(q);
+        if ((q = strtok(NULL, w_space)) == NULL)
+            goto next;
+        N.pings_recv = atoi(q);
+        if (N.pings_recv == 0)
+            goto next;
+        /* give this measurement low weight */
+        N.pings_sent = 1;
+        N.pings_recv = 1;
+        if ((q = strtok(NULL, w_space)) == NULL)
+            goto next;
+        N.hops = atof(q);
+        if ((q = strtok(NULL, w_space)) == NULL)
+            goto next;
+        N.rtt = atof(q);
+        if ((q = strtok(NULL, w_space)) == NULL)
+            goto next;
+        N.next_ping_time = (time_t) atoi(q);
+        if ((q = strtok(NULL, w_space)) == NULL)
+            goto next;
+        N.last_use_time = (time_t) atoi(q);
+        n = memPoolAlloc(pool_netdb_entry);
+        xmemcpy(n, &N, sizeof(netdbEntry));
+        netdbHashInsert(n, &addr);
+        while ((q = strtok(NULL, w_space)) != NULL) {
+            if (netdbLookupHost(q) != NULL)        /* no dups! */
+                goto next;
+            netdbHostInsert(n, q);
+        }
+        count++;
     }
     xfree(buf);
     getCurrentTime();
     debug(38, 1) ("NETDB state reloaded; %d entries, %d msec\n",
-	count, tvSubMsec(start, current_time));
+        count, tvSubMsec(start, current_time));
+next:
+    sqinet_done(&addr);
 }
 
 static const char *
@@ -516,8 +539,8 @@ netdbPeerName(const char *name)
 {
     const wordlist *w;
     for (w = peer_names; w; w = w->next) {
-	if (!strcmp(w->key, name))
-	    return w->key;
+        if (!strcmp(w->key, name))
+            return w->key;
     }
     return wordlistAdd(&peer_names, name);
 }
@@ -538,6 +561,7 @@ netdbFreeNameEntry(void *data)
     memPoolFree(pool_netdb_name, x);
 }
 
+#warning netdb binary exchange needs to be updated to IPv6!
 static void
 netdbExchangeHandleReply(void *data, mem_node_ref nr, ssize_t size)
 {
@@ -545,7 +569,7 @@ netdbExchangeHandleReply(void *data, mem_node_ref nr, ssize_t size)
     netdbExchangeState *ex = data;
     int rec_sz = 0;
     ssize_t o;
-    struct in_addr addr;
+    sqaddr_t addr;
     double rtt;
     double hops;
     const char *p;
@@ -553,107 +577,110 @@ netdbExchangeHandleReply(void *data, mem_node_ref nr, ssize_t size)
     HttpReply *rep;
     size_t hdr_sz;
     int nused = 0;
+    struct in_addr addr_v4;
 
     /* Did we get any data? */
     if (nr.node) {
         assert(size <= nr.node->len - nr.offset);
-	buf = nr.node->data + nr.offset;
+        buf = nr.node->data + nr.offset;
     }
 
     rec_sz = 0;
-    rec_sz += 1 + sizeof(addr.s_addr);
+    rec_sz += 1 + sizeof(addr_v4.s_addr);
     rec_sz += 1 + sizeof(int);
     rec_sz += 1 + sizeof(int);
     ex->seen = ex->used + size;
     debug(38, 3) ("netdbExchangeHandleReply: %d bytes\n", (int) size);
     if (!cbdataValid(ex->p)) {
-	debug(38, 3) ("netdbExchangeHandleReply: Peer became invalid\n");
-	netdbExchangeDone(ex);
-	goto finish;
+        debug(38, 3) ("netdbExchangeHandleReply: Peer became invalid\n");
+        netdbExchangeDone(ex);
+        goto finish;
     }
     debug(38, 3) ("netdbExchangeHandleReply: for %s'\n", ex->p->name);
     p = buf;
     if (0 == ex->used) {
-	/* skip reply headers */
-	rep = ex->e->mem_obj->reply;
-	hdr_sz = rep->hdr_sz;
-	debug(38, 5) ("netdbExchangeHandleReply: hdr_sz = %ld\n", (long int) hdr_sz);
-	debug(38, 3) ("netdbExchangeHandleReply: reply status %d\n",
-	    rep->sline.status);
-	if (HTTP_OK != rep->sline.status) {
-	    netdbExchangeDone(ex);
-	    goto finish;
-	}
-	ex->used += hdr_sz;
-	if (size < hdr_sz) {
-	    size -= hdr_sz;
-	    p += hdr_sz;
-	} else {
-	    size = 0;
-	}
+        /* skip reply headers */
+        rep = ex->e->mem_obj->reply;
+        hdr_sz = rep->hdr_sz;
+        debug(38, 5) ("netdbExchangeHandleReply: hdr_sz = %ld\n", (long int) hdr_sz);
+        debug(38, 3) ("netdbExchangeHandleReply: reply status %d\n",
+            rep->sline.status);
+        if (HTTP_OK != rep->sline.status) {
+            netdbExchangeDone(ex);
+            goto finish;
+        }
+        ex->used += hdr_sz;
+        if (size < hdr_sz) {
+            size -= hdr_sz;
+            p += hdr_sz;
+        } else {
+            size = 0;
+        }
     }
     debug(38, 5) ("netdbExchangeHandleReply: start parsing loop, size = %ld\n",
-	(long int) size);
+        (long int) size);
     while (size >= rec_sz) {
-	debug(38, 5) ("netdbExchangeHandleReply: in parsing loop, size = %ld\n",
-	    (long int) size);
-	SetAnyAddr(&addr);
-	hops = rtt = 0.0;
-	for (o = 0; o < rec_sz;) {
-	    switch ((int) *(p + o)) {
-	    case NETDB_EX_NETWORK:
-		o++;
-		xmemcpy(&addr.s_addr, p + o, sizeof(addr.s_addr));
-		o += sizeof(addr.s_addr);
-		break;
-	    case NETDB_EX_RTT:
-		o++;
-		xmemcpy(&j, p + o, sizeof(int));
-		o += sizeof(int);
-		rtt = (double) ntohl(j) / 1000.0;
-		break;
-	    case NETDB_EX_HOPS:
-		o++;
-		xmemcpy(&j, p + o, sizeof(int));
-		o += sizeof(int);
-		hops = (double) ntohl(j) / 1000.0;
-		break;
-	    default:
-		debug(38, 1) ("netdbExchangeHandleReply: corrupt data, aborting\n");
-		netdbExchangeDone(ex);
-		goto finish;
-	    }
-	}
-	if (! IsAnyAddr(&addr) && rtt > 0)
-	    netdbExchangeUpdatePeer(addr, ex->p, rtt, hops);
-	assert(o == rec_sz);
-	ex->used += rec_sz;
-	size -= rec_sz;
-	p += rec_sz;
-	/*
-	 * This is a fairly cpu-intensive loop, break after adding
-	 * just a few
-	 */
-	if (++nused == 20)
-	    break;
+        debug(38, 5) ("netdbExchangeHandleReply: in parsing loop, size = %ld\n",
+            (long int) size);
+        sqinet_init(&addr);
+        sqinet_set_family(&addr, AF_INET);
+        sqinet_set_anyaddr(&addr);
+        hops = rtt = 0.0;
+        for (o = 0; o < rec_sz;) {
+            switch ((int) *(p + o)) {
+            case NETDB_EX_NETWORK:
+                o++;
+                xmemcpy(&addr_v4.s_addr, p + o, sizeof(addr_v4.s_addr));
+                o += sizeof(addr_v4.s_addr);
+                break;
+            case NETDB_EX_RTT:
+                o++;
+                xmemcpy(&j, p + o, sizeof(int));
+                o += sizeof(int);
+                rtt = (double) ntohl(j) / 1000.0;
+                break;
+            case NETDB_EX_HOPS:
+                o++;
+                xmemcpy(&j, p + o, sizeof(int));
+                o += sizeof(int);
+                hops = (double) ntohl(j) / 1000.0;
+                break;
+            default:
+                debug(38, 1) ("netdbExchangeHandleReply: corrupt data, aborting\n");
+                netdbExchangeDone(ex);
+                goto finish;
+            }
+        }
+        if (! sqinet_is_anyaddr(&addr) && rtt > 0)
+            netdbExchangeUpdatePeer(&addr, ex->p, rtt, hops);
+        assert(o == rec_sz);
+        ex->used += rec_sz;
+        size -= rec_sz;
+        p += rec_sz;
+        /*
+         * This is a fairly cpu-intensive loop, break after adding
+         * just a few
+         */
+        if (++nused == 20)
+            break;
     }
     debug(38, 3) ("netdbExchangeHandleReply: used %d entries, (x %d bytes) == %d bytes total\n",
-	nused, rec_sz, nused * rec_sz);
+        nused, rec_sz, nused * rec_sz);
     debug(38, 3) ("netdbExchangeHandleReply: seen %ld, used %ld\n", (long int) ex->seen, (long int) ex->used);
     if (EBIT_TEST(ex->e->flags, ENTRY_ABORTED)) {
-	debug(38, 3) ("netdbExchangeHandleReply: ENTRY_ABORTED\n");
-	netdbExchangeDone(ex);
+        debug(38, 3) ("netdbExchangeHandleReply: ENTRY_ABORTED\n");
+        netdbExchangeDone(ex);
     } else if (ex->e->store_status == STORE_PENDING) {
-	debug(38, 3) ("netdbExchangeHandleReply: STORE_PENDING\n");
-	storeClientRef(ex->sc, ex->e, ex->seen, ex->used, SM_PAGE_SIZE,
-	    netdbExchangeHandleReply, ex);
+        debug(38, 3) ("netdbExchangeHandleReply: STORE_PENDING\n");
+        storeClientRef(ex->sc, ex->e, ex->seen, ex->used, SM_PAGE_SIZE,
+            netdbExchangeHandleReply, ex);
     } else if (ex->seen < ex->e->mem_obj->inmem_hi) {
-	debug(38, 3) ("netdbExchangeHandleReply: ex->e->mem_obj->inmem_hi\n");
-	storeClientRef(ex->sc, ex->e, ex->seen, ex->used, SM_PAGE_SIZE,
-	    netdbExchangeHandleReply, ex);
+        debug(38, 3) ("netdbExchangeHandleReply: ex->e->mem_obj->inmem_hi\n");
+        storeClientRef(ex->sc, ex->e, ex->seen, ex->used, SM_PAGE_SIZE,
+            netdbExchangeHandleReply, ex);
     } else {
-	debug(38, 3) ("netdbExchangeHandleReply: Done\n");
-	netdbExchangeDone(ex);
+        debug(38, 3) ("netdbExchangeHandleReply: Done\n");
+        netdbExchangeDone(ex);
     }
   finish:
     buf = NULL;
@@ -689,7 +716,7 @@ netdbInit(void)
 #if USE_ICMP
     int n;
     if (addr_table)
-	return;
+        return;
     n = hashPrime(Config.Netdb.high / 4);
     addr_table = hash_create((HASHCMP *) strcmp, n, hash_string);
     n = hashPrime(3 * Config.Netdb.high / 4);
@@ -697,8 +724,8 @@ netdbInit(void)
     eventAddIsh("netdbSaveState", netdbSaveState, NULL, 3600.0, 1);
     netdbReloadState();
     cachemgrRegister("netdb",
-	"Network Measurement Database",
-	netdbDump, 0, 1);
+        "Network Measurement Database",
+        netdbDump, 0, 1);
 #endif
 }
 
@@ -709,8 +736,8 @@ netdbPingSite(const char *hostname)
     netdbEntry *n;
     generic_cbdata *h;
     if ((n = netdbLookupHost(hostname)) != NULL)
-	if (n->next_ping_time > squid_curtime)
-	    return;
+        if (n->next_ping_time > squid_curtime)
+            return;
     CBDATA_INIT_TYPE(generic_cbdata);
     h = cbdataAlloc(generic_cbdata);
     h->data = xstrdup(hostname);
@@ -719,25 +746,29 @@ netdbPingSite(const char *hostname)
 }
 
 void
-netdbHandlePingReply(const struct sockaddr_in *from, int hops, int rtt)
+netdbHandlePingReply(const sqaddr_t *from, int hops, int rtt)
 {
 #if USE_ICMP
     netdbEntry *n;
     int N;
-    debug(38, 3) ("netdbHandlePingReply: from %s\n", inet_ntoa(from->sin_addr));
-    if ((n = netdbLookupAddr(from->sin_addr)) == NULL)
-	return;
+    if (do_debug(38, 3)) {
+        char sbuf[MAX_IPSTRLEN];
+        (void) sqinet_ntoa(from, sbuf, MAX_IPSTRLEN, SQADDR_NO_BRACKET_V6);
+        debug(38, 3) ("netdbHandlePingReply: from %s\n", sbuf);
+    }
+    if ((n = netdbLookupAddr(from)) == NULL)
+        return;
     N = ++n->pings_recv;
     if (N > 5)
-	N = 5;
+        N = 5;
     if (rtt < 1.0)
-	rtt = 1.0;
+        rtt = 1.0;
     n->hops = ((n->hops * (N - 1)) + hops) / N;
     n->rtt = ((n->rtt * (N - 1)) + rtt) / N;
     debug(38, 3) ("netdbHandlePingReply: %s; rtt=%5.1f  hops=%4.1f\n",
-	n->network,
-	n->rtt,
-	n->hops);
+        n->network,
+        n->rtt,
+        n->hops);
 #endif
 }
 
@@ -757,13 +788,13 @@ netdbFreeMemory(void)
 }
 
 int
-netdbHops(struct in_addr addr)
+netdbHops(sqaddr_t *addr)
 {
 #if USE_ICMP
     netdbEntry *n = netdbLookupAddr(addr);
     if (n && n->pings_recv) {
-	n->last_use_time = squid_curtime;
-	return (int) (n->hops + 0.5);
+        n->last_use_time = squid_curtime;
+        return (int) (n->hops + 0.5);
     }
 #endif
     return 256;
@@ -781,42 +812,42 @@ netdbDump(StoreEntry * sentry)
     int j;
     net_db_peer *p;
     storeAppendPrintf(sentry, "Network DB Statistics:\n");
-    storeAppendPrintf(sentry, "%-16.16s %9s %7s %5s %s\n",
-	"Network",
-	"recv/sent",
-	"RTT",
-	"Hops",
-	"Hostnames");
+    storeAppendPrintf(sentry, "%-22.22s %9s %7s %5s %s\n",
+        "Network",
+        "recv/sent",
+        "RTT",
+        "Hops",
+        "Hostnames");
     list = xcalloc(memPoolInUseCount(pool_netdb_entry), sizeof(netdbEntry *));
     i = 0;
     hash_first(addr_table);
     while ((n = (netdbEntry *) hash_next(addr_table)))
-	*(list + i++) = n;
+        *(list + i++) = n;
     if (i != memPoolInUseCount(pool_netdb_entry))
-	debug(38, 0) ("WARNING: netdb_addrs count off, found %d, expected %d\n",
-	    i, memPoolInUseCount(pool_netdb_entry));
+        debug(38, 0) ("WARNING: netdb_addrs count off, found %d, expected %d\n",
+            i, memPoolInUseCount(pool_netdb_entry));
     qsort((char *) list,
-	i,
-	sizeof(netdbEntry *),
-	sortByRtt);
+        i,
+        sizeof(netdbEntry *),
+        sortByRtt);
     for (k = 0; k < i; k++) {
-	n = *(list + k);
-	storeAppendPrintf(sentry, "%-16.16s %4d/%4d %7.1f %5.1f",
-	    n->network,
-	    n->pings_recv,
-	    n->pings_sent,
-	    n->rtt,
-	    n->hops);
-	for (x = n->hosts; x; x = x->next)
-	    storeAppendPrintf(sentry, " %s", hashKeyStr(&x->hash));
-	storeAppendPrintf(sentry, "\n");
-	p = n->peers;
-	for (j = 0; j < n->n_peers; j++, p++) {
-	    storeAppendPrintf(sentry, "    %-22.22s %7.1f %5.1f\n",
-		p->peername,
-		p->rtt,
-		p->hops);
-	}
+        n = *(list + k);
+        storeAppendPrintf(sentry, "%-22.22s %4d/%4d %7.1f %5.1f",
+            n->network,
+            n->pings_recv,
+            n->pings_sent,
+            n->rtt,
+            n->hops);
+        for (x = n->hosts; x; x = x->next)
+            storeAppendPrintf(sentry, " %s", hashKeyStr(&x->hash));
+        storeAppendPrintf(sentry, "\n");
+        p = n->peers;
+        for (j = 0; j < n->n_peers; j++, p++) {
+            storeAppendPrintf(sentry, "    %-22.22s %7.1f %5.1f\n",
+                p->peername,
+                p->rtt,
+                p->hops);
+        }
     }
     xfree(list);
 }
@@ -828,8 +859,8 @@ netdbHostHops(const char *host)
 #if USE_ICMP
     netdbEntry *n = netdbLookupHost(host);
     if (n) {
-	n->last_use_time = squid_curtime;
-	return (int) (n->hops + 0.5);
+        n->last_use_time = squid_curtime;
+        return (int) (n->hops + 0.5);
     }
 #endif
     return 0;
@@ -841,8 +872,8 @@ netdbHostRtt(const char *host)
 #if USE_ICMP
     netdbEntry *n = netdbLookupHost(host);
     if (n) {
-	n->last_use_time = squid_curtime;
-	return (int) (n->rtt + 0.5);
+        n->last_use_time = squid_curtime;
+        return (int) (n->rtt + 0.5);
     }
 #endif
     return 0;
@@ -854,7 +885,7 @@ netdbHostData(const char *host, int *samp, int *rtt, int *hops)
 #if USE_ICMP
     netdbEntry *n = netdbLookupHost(host);
     if (n == NULL)
-	return;
+        return;
     *samp = n->pings_recv;
     *rtt = (int) (n->rtt + 0.5);
     *hops = (int) (n->hops + 0.5);
@@ -873,69 +904,66 @@ netdbUpdatePeer(request_t * r, peer * e, int irtt, int ihops)
     debug(38, 3) ("netdbUpdatePeer: '%s', %d hops, %d rtt\n", r->host, ihops, irtt);
     n = netdbLookupHost(r->host);
     if (n == NULL) {
-	debug(38, 3) ("netdbUpdatePeer: host '%s' not found\n", r->host);
-	return;
+        debug(38, 3) ("netdbUpdatePeer: host '%s' not found\n", r->host);
+        return;
     }
     if ((p = netdbPeerByName(n, e->host)) == NULL)
-	p = netdbPeerAdd(n, e);
+        p = netdbPeerAdd(n, e);
     p->rtt = rtt;
     p->hops = hops;
     p->expires = squid_curtime + 3600;
     if (n->n_peers < 2)
-	return;
+        return;
     qsort((char *) n->peers,
-	n->n_peers,
-	sizeof(net_db_peer),
-	sortPeerByRtt);
+        n->n_peers,
+        sizeof(net_db_peer),
+        sortPeerByRtt);
 #endif
 }
 
 void
-netdbExchangeUpdatePeer(struct in_addr addr, peer * e, double rtt, double hops)
+netdbExchangeUpdatePeer(sqaddr_t *addr, peer * e, double rtt, double hops)
 {
 #if USE_ICMP
     netdbEntry *n;
     net_db_peer *p;
-    debug(38, 5) ("netdbExchangeUpdatePeer: '%s', %0.1f hops, %0.1f rtt\n",
-	inet_ntoa(addr), hops, rtt);
+    if (do_debug(38, 5)) {
+        char sbuf[MAX_IPSTRLEN];
+        (void) sqinet_ntoa(addr, sbuf, MAX_IPSTRLEN, SQADDR_NO_BRACKET_V6);
+        debug(38, 5) ("netdbExchangeUpdatePeer: '%s', %0.1f hops, %0.1f rtt\n",
+          sbuf, hops, rtt);
+    }
     n = netdbLookupAddr(addr);
     if (n == NULL)
-	n = netdbAdd(addr);
+        n = netdbAdd(addr);
     assert(NULL != n);
     if ((p = netdbPeerByName(n, e->host)) == NULL)
-	p = netdbPeerAdd(n, e);
+        p = netdbPeerAdd(n, e);
     p->rtt = rtt;
     p->hops = hops;
-    p->expires = squid_curtime + 3600;	/* XXX ? */
+    p->expires = squid_curtime + 3600;        /* XXX ? */
     if (n->n_peers < 2)
-	return;
+        return;
     qsort((char *) n->peers,
-	n->n_peers,
-	sizeof(net_db_peer),
-	sortPeerByRtt);
+        n->n_peers,
+        sizeof(net_db_peer),
+        sortPeerByRtt);
 #endif
 }
 
 void
 netdbDeleteAddrNetwork(sqaddr_t *a)
 {
-#warning netdb needs to be made ipv6 aware!
 #if USE_ICMP
-    struct in_addr addr;
-
-    if (sqinet_get_family(a) != AF_INET)
-	return;
-
-    addr = sqinet_get_v4_inaddr(a, SQADDR_ASSERT_IS_V4);
-    
-    netdbEntry *n = netdbLookupAddr(addr);
+    netdbEntry *n = netdbLookupAddr(a);
     if (n == NULL)
-	return;
+        return;
     debug(38, 3) ("netdbDeleteAddrNetwork: %s\n", n->network);
     netdbRelease(n);
 #endif
 }
 
+#warning netdb binary exchange needs to be updated to IPv6!
 void
 netdbBinaryExchange(StoreEntry * s)
 {
@@ -952,38 +980,38 @@ netdbBinaryExchange(StoreEntry * s)
     httpReplySetHeaders(reply, HTTP_OK, "OK", NULL, -1, squid_curtime, -1);
     httpReplySwapOut(reply, s);
     rec_sz = 0;
-    rec_sz += 1 + sizeof(addr.s_addr);
+    rec_sz += 1 + sizeof(addr.s_addr);  /* XXX assumes all entries are ipv4! */
     rec_sz += 1 + sizeof(int);
     rec_sz += 1 + sizeof(int);
     buf = memAllocate(MEM_4K_BUF);
     i = 0;
     hash_first(addr_table);
     while ((n = (netdbEntry *) hash_next(addr_table))) {
-	if (0.0 == n->rtt)
-	    continue;
-	if (n->rtt > 60000)	/* RTT > 1 MIN probably bogus */
-	    continue;
-	if (!safe_inet_addr(n->network, &addr))
-	    continue;
-	buf[i++] = (char) NETDB_EX_NETWORK;
-	xmemcpy(&buf[i], &addr.s_addr, sizeof(addr.s_addr));
-	i += sizeof(addr.s_addr);
-	buf[i++] = (char) NETDB_EX_RTT;
-	j = htonl((int) (n->rtt * 1000));
-	xmemcpy(&buf[i], &j, sizeof(int));
-	i += sizeof(int);
-	buf[i++] = (char) NETDB_EX_HOPS;
-	j = htonl((int) (n->hops * 1000));
-	xmemcpy(&buf[i], &j, sizeof(int));
-	i += sizeof(int);
-	if (i + rec_sz > 4096) {
-	    storeAppend(s, buf, i);
-	    i = 0;
-	}
+        if (0.0 == n->rtt)
+            continue;
+        if (n->rtt > 60000)        /* RTT > 1 MIN probably bogus */
+            continue;
+        if (!safe_inet_addr(n->network, &addr))
+            continue;
+        buf[i++] = (char) NETDB_EX_NETWORK;
+        xmemcpy(&buf[i], &addr.s_addr, sizeof(addr.s_addr));
+        i += sizeof(addr.s_addr);
+        buf[i++] = (char) NETDB_EX_RTT;
+        j = htonl((int) (n->rtt * 1000));
+        xmemcpy(&buf[i], &j, sizeof(int));
+        i += sizeof(int);
+        buf[i++] = (char) NETDB_EX_HOPS;
+        j = htonl((int) (n->hops * 1000));
+        xmemcpy(&buf[i], &j, sizeof(int));
+        i += sizeof(int);
+        if (i + rec_sz > 4096) {
+            storeAppend(s, buf, i);
+            i = 0;
+        }
     }
     if (i > 0) {
-	storeAppend(s, buf, i);
-	i = 0;
+        storeAppend(s, buf, i);
+        i = 0;
     }
     assert(0 == i);
     storeBufferFlush(s);
@@ -1019,8 +1047,8 @@ netdbExchangeStart(void *data)
     method_get = urlMethodGetKnownByCode(METHOD_GET);
     ex->r = urlParse(method_get, uri);
     if (NULL == ex->r) {
-	debug(38, 1) ("netdbExchangeStart: Bad URI %s\n", uri);
-	return;
+        debug(38, 1) ("netdbExchangeStart: Bad URI %s\n", uri);
+        return;
     }
     requestLink(ex->r);
     assert(NULL != ex->r);
@@ -1029,10 +1057,10 @@ netdbExchangeStart(void *data)
     assert(NULL != ex->e);
     ex->sc = storeClientRegister(ex->e, ex);
     storeClientRef(ex->sc, ex->e, ex->seen, ex->used, SM_PAGE_SIZE,
-	netdbExchangeHandleReply, ex);
-    ex->r->flags.loopdetect = 1;	/* cheat! -- force direct */
+        netdbExchangeHandleReply, ex);
+    ex->r->flags.loopdetect = 1;        /* cheat! -- force direct */
     if (p->login)
-	xstrncpy(ex->r->login, p->login, MAX_LOGIN_SZ);
+        xstrncpy(ex->r->login, p->login, MAX_LOGIN_SZ);
     fwdStart(-1, ex->e, ex->r);
 #endif
 }
@@ -1048,19 +1076,20 @@ netdbClosestParent(request_t * request)
     int i;
     n = netdbLookupHost(request->host);
     if (NULL == n) {
-	/* try IP addr */
-	ia = ipcache_gethostbyname(request->host, 0);
-#warning netdb really does need ipv6'ing
-	if (ia != NULL && ipcacheGetAddrFamily(ia, ia->cur) != AF_INET)
-		return NULL;
-
-	if (NULL != ia)
-	    n = netdbLookupAddr(ipcacheGetAddrV4(ia, ia->cur));
+        /* try IP addr */
+        ia = ipcache_gethostbyname(request->host, 0);
+        if (NULL != ia) {
+            sqaddr_t a;
+            sqinet_init(&a);
+            ipcacheGetAddr(ia, ia->cur, &a);
+            n = netdbLookupAddr(&a);
+            sqinet_done(&a);
+        }
     }
     if (NULL == n)
-	return NULL;
+        return NULL;
     if (0 == n->n_peers)
-	return NULL;
+        return NULL;
     n->last_use_time = squid_curtime;
     /* 
      * Find the parent with the least RTT to the origin server.
@@ -1068,18 +1097,18 @@ netdbClosestParent(request_t * request)
      * we are.  Note, the n->peers list is pre-sorted by RTT.
      */
     for (i = 0; i < n->n_peers; i++) {
-	h = &n->peers[i];
-	if (n->rtt > 0)
-	    if (n->rtt < h->rtt)
-		break;
-	p = peerFindByName(h->peername);
-	if (NULL == p)		/* not found */
-	    continue;
-	if (neighborType(p, request) != PEER_PARENT)
-	    continue;
-	if (!peerHTTPOkay(p, request))	/* not allowed */
-	    continue;
-	return p;
+        h = &n->peers[i];
+        if (n->rtt > 0)
+            if (n->rtt < h->rtt)
+                break;
+        p = peerFindByName(h->peername);
+        if (NULL == p)                /* not found */
+            continue;
+        if (neighborType(p, request) != PEER_PARENT)
+            continue;
+        if (!peerHTTPOkay(p, request))        /* not allowed */
+            continue;
+        return p;
     }
 #endif
     return NULL;

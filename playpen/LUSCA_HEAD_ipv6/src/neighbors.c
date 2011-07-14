@@ -555,7 +555,11 @@ neighborsUdpPing(request_t * request,
 		host, url);
 	    echo_hdr.reqnum = reqnum;
 	    if (icmp_sock != -1) {
-		icmpSourcePing(ipcacheGetAddrV4(ia, ia->cur), &echo_hdr, url);
+		sqaddr_t to;    /* XXX should be a reference */
+		sqinet_init(&to);
+		ipcacheGetAddr(ia, ia->cur, &to);
+		icmpSourcePing(&to, &echo_hdr, url);
+		sqinet_done(&to);
 	    } else {
 		to_addr.sin_family = AF_INET;
 		to_addr.sin_addr = ipcacheGetAddrV4(ia, ia->cur);

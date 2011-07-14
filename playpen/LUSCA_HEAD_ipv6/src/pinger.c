@@ -214,6 +214,7 @@ pingerSendEcho(struct in_addr to, int opcode, char *payload, int len)
 /*
  * This is an IPv4-specific function for now.
  */
+#warning IPv6-ify this!
 static void
 pingerRecv(void)
 {
@@ -302,13 +303,18 @@ pingerReadRequest(void)
 	return 0;
     }
 
-#warning IPv6-ify this!
-    v4 = (struct sockaddr_in *) &pecho.to;
-    pingerSendEcho(v4->sin_addr,
-	pecho.opcode,
-	pecho.payload,
-	pecho.psize);
-    return n;
+    if (pecho.to.ss_family == AF_INET) {
+        v4 = (struct sockaddr_in *) &pecho.to;
+        pingerSendEcho(v4->sin_addr,
+          pecho.opcode,
+          pecho.payload,
+          pecho.psize);
+          return n;
+    } else if (pecho.to.ss_family == AF_INET6) {
+        debug(42, 1) ("%s: AF_INET6; not supported yet\n", __func__);
+        return 0;    /* Not currently supported */
+    } else
+        return 0;
 }
 
 static void

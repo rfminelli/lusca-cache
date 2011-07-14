@@ -396,9 +396,9 @@ extern int peerAllowedToUse(const peer *, request_t *);
 
 extern void netdbInitMem(void);
 extern void netdbInit(void);
-extern void netdbHandlePingReply(const struct sockaddr_in *from, int hops, int rtt);
+extern void netdbHandlePingReply(const sqaddr_t *from, int hops, int rtt);
 extern void netdbPingSite(const char *hostname);
-extern int netdbHops(struct in_addr);
+extern int netdbHops(sqaddr_t *addr);
 extern void netdbFreeMemory(void);
 extern int netdbHostHops(const char *host);
 extern int netdbHostRtt(const char *host);
@@ -406,7 +406,7 @@ extern void netdbUpdatePeer(request_t *, peer * e, int rtt, int hops);
 extern void netdbDeleteAddrNetwork(sqaddr_t *a);
 extern void netdbBinaryExchange(StoreEntry *);
 extern EVH netdbExchangeStart;
-extern void netdbExchangeUpdatePeer(struct in_addr, peer *, double, double);
+extern void netdbExchangeUpdatePeer(sqaddr_t *, peer *, double, double);
 extern peer *netdbClosestParent(request_t *);
 extern void netdbHostData(const char *host, int *samp, int *rtt, int *hops);
 
