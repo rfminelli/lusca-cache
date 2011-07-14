@@ -39,6 +39,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <arpa/inet.h>
+#include <netdb.h>
 
 #if !defined(_SQUID_WIN32_)
 
@@ -60,9 +61,6 @@
 
 #define PINGER_TIMEOUT 5
 
-static SOCKET socket_to_squid = -1;
-#define socket_from_squid socket_to_squid
-
 #else /* _SQUID_MSWIN */
 
 /* Cygwin */
@@ -73,9 +71,6 @@ static SOCKET socket_to_squid = -1;
 #include <netinet/ip_icmp.h>
 
 #define PINGER_TIMEOUT 10
-
-static int socket_from_squid = 0;
-static int socket_to_squid = 1;
 
 #endif /* _SQUID_MSWIN_ */
 
@@ -159,8 +154,8 @@ ipHops(int ttl)
  * packet and fires it off.
  */
 void
-pingerv4SendEcho(int icmp_sock, struct in_addr to, int opcode, char *payload,
-  int len)
+pingerv4SendEcho(struct pingerv4_state *state, struct in_addr to,
+  int opcode, char *payload, int len)
 {
     LOCAL_ARRAY(char, pkt, MAX_PKT_SZ);
     struct icmphdr *icmp = NULL;
@@ -180,8 +175,8 @@ pingerv4SendEcho(int icmp_sock, struct in_addr to, int opcode, char *payload,
     icmp->icmp_type = ICMP_ECHO;
     icmp->icmp_code = 0;
     icmp->icmp_cksum = 0;
-    icmp->icmp_id = icmp_ident;
-    icmp->icmp_seq = (u_short) icmp_pkts_sent++;
+    icmp->icmp_id = state->icmp_ident;
+    icmp->icmp_seq = (u_short) state->icmp_pkts_sent++;
 
     /* The ICMP payload is the entire 'payload' + 'len' */
     /* The caller will setup the tmimestamp and icmpEchoData */
@@ -201,7 +196,7 @@ pingerv4SendEcho(int icmp_sock, struct in_addr to, int opcode, char *payload,
     S.sin_addr = to;
     S.sin_port = 0;
     assert(icmp_pktsize <= MAX_PKT_SZ);
-    sendto(icmp_sock,
+    sendto(state->icmp_sock,
       pkt,
       icmp_pktsize,
       0,
@@ -218,7 +213,7 @@ pingerv4SendEcho(int icmp_sock, struct in_addr to, int opcode, char *payload,
  * the ICMP response payload; *len is set to the payload length.
  */
 char *
-pingerv4RecvEcho(int icmp_sock, int *icmp_type, int *payload_len,
+pingerv4RecvEcho(struct pingerv4_state *state, int *icmp_type, int *payload_len,
   struct in_addr *src, int *hops)
 {
     int n;
@@ -235,7 +230,7 @@ pingerv4RecvEcho(int icmp_sock, int *icmp_type, int *payload_len,
         pkt = xmalloc(MAX_PKT_SZ);
     fromlen = sizeof(from);
 
-    n = recvfrom(icmp_sock,
+    n = recvfrom(state->icmp_sock,
       pkt,
       MAX_PKT_SZ,
       0,
@@ -262,7 +257,7 @@ pingerv4RecvEcho(int icmp_sock, int *icmp_type, int *payload_len,
         debug(42, 9) ("%s: icmp_type=%d\n", __func__, icmp->icmp_type);
         return NULL;
     }
-    if (icmp->icmp_id != icmp_ident) {
+    if (icmp->icmp_id != state->icmp_ident) {
         debug(42, 9) ("%s: icmp_id=%d, ident should be %d\n", __func__,
           icmp->icmp_id, icmp_ident);
         return NULL;
@@ -280,3 +275,36 @@ pingerv4RecvEcho(int icmp_sock, int *icmp_type, int *payload_len,
     /* There may be no payload; the caller should check len first */
     return (pkt + iphdrlen + sizeof(struct icmphdr));
 }
+
+void
+pingerv4_state_init(struct pingerv4_state *state, int icmp_ident)
+{
+    state->icmp_sock = -1;
+    state->icmp_pkts_sent = 0;
+    state->icmp_ident = icmp_ident;
+}
+
+int
+pingerv4_open_icmpsock(struct pingerv4_state *state)
+{
+    struct protoent *proto = NULL;
+    if ((proto = getprotobyname("icmp")) == 0) {
+        debug(42, 0) ("pingerOpen: unknown protocol: icmp\n");
+        return 0;
+    }
+
+    state->icmp_sock = socket(PF_INET, SOCK_RAW, proto->p_proto);
+    if (state->icmp_sock < 0) {
+        debug(42, 0) ("pingerOpen: icmp_sock: %s\n", xstrerror());
+        return 0;
+    }
+    return 1;
+}
+
+void
+pingerv4_close_icmpsock(struct pingerv4_state *state)
+{
+    close(state->icmp_sock);
+    state->icmp_sock = -1;
+}
+

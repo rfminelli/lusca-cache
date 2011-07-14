@@ -90,13 +90,20 @@ typedef struct icmphdr {
 
 extern const char *icmpPktStr[];
 
-extern int icmp_ident;
-extern int icmp_pkts_sent;
+struct pingerv4_state {
+	int icmp_ident;
+	int icmp_pkts_sent;
+	int icmp_sock;
+};
 
-extern void pingerv4SendEcho(int sock, struct in_addr to, int opcode,
-  char *payload, int len);
+extern void pingerv4SendEcho(struct pingerv4_state *, struct in_addr to,
+  int opcode, char *payload, int len);
 
-extern char * pingerv4RecvEcho(int icmp_sock, int *icmp_type, int *payload_len,
-  struct in_addr *src, int *hops);
+extern char * pingerv4RecvEcho(struct pingerv4_state *, int *icmp_type,
+  int *payload_len, struct in_addr *src, int *hops);
+
+extern void pingerv4_state_init(struct pingerv4_state *, int icmp_ident);
+extern int pingerv4_open_icmpsock(struct pingerv4_state *);
+extern void pingerv4_close_icmpsock(struct pingerv4_state *);
 
 #endif	/* __LIBPINGER_ICMP_V4_H__ */

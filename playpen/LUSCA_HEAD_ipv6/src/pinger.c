@@ -112,10 +112,12 @@ Win32SockCleanup(void)
 }
 #endif /* ifdef _SQUID_MSWIN_ */
 
+
+struct pingerv4_state v4_state;
+
 void
 pingerOpen(void)
 {
-    struct protoent *proto = NULL;
 #ifdef _SQUID_MSWIN_
     WSADATA wsaData;
     WSAPROTOCOL_INFO wpi;
@@ -131,6 +133,7 @@ pingerOpen(void)
     setmode(0, O_BINARY);
     setmode(1, O_BINARY);
     x = read(0, buf, sizeof(wpi));
+
     if (x < sizeof(wpi)) {
 	getCurrentTime();
 	debug(42, 0) ("pingerOpen: read: FD 0: %s\n", xstrerror());
@@ -149,16 +152,7 @@ pingerOpen(void)
     }
     xmemcpy(&PS, buf, sizeof(PS));
 #endif
-    if ((proto = getprotobyname("icmp")) == 0) {
-	debug(42, 0) ("pingerOpen: unknown protocol: icmp\n");
-	exit(1);
-    }
-    icmp_sock = socket(PF_INET, SOCK_RAW, proto->p_proto);
-    if (icmp_sock < 0) {
-	debug(42, 0) ("pingerOpen: icmp_sock: %s\n", xstrerror());
-	exit(1);
-    }
-    icmp_ident = getpid() & 0xffff;
+
     debug(42, 0) ("pingerOpen: ICMP socket opened\n");
 #ifdef _SQUID_MSWIN_
     socket_to_squid =
@@ -197,14 +191,12 @@ pingerOpen(void)
 void
 pingerClose(void)
 {
-    close(icmp_sock);
+    pingerv4_close_icmpsock(&v4_state);
 #ifdef _SQUID_MSWIN_
     shutdown(socket_to_squid, SD_BOTH);
     close(socket_to_squid);
     socket_to_squid = -1;
 #endif
-    icmp_sock = -1;
-    icmp_ident = 0;
 }
 
 static void
@@ -226,7 +218,7 @@ pingerSendEcho(struct in_addr to, int opcode, char *payload, int len)
         icmp_pktsize += MIN(len, MAX_PAYLOAD);
     }
 
-    pingerv4SendEcho(icmp_sock, to, opcode, (char *) &echo, icmp_pktsize);
+    pingerv4SendEcho(&v4_state, to, opcode, (char *) &echo, icmp_pktsize);
     pingerLog(ICMP_ECHO, to, 0, 0);
 }
 
@@ -248,7 +240,7 @@ pingerRecv(void)
 
     debug(42, 9) ("%s: called\n", __func__);
 
-    pkt = pingerv4RecvEcho(icmp_sock, &icmp_type, &payload_len,
+    pkt = pingerv4RecvEcho(&v4_state, &icmp_type, &payload_len,
       &from, &hops);
     debug(42, 9) ("%s: returned %p\n", __func__, pkt);
 
@@ -361,7 +353,14 @@ main(int argc, char *argv[])
     _db_init(debug_args);
     _db_set_stderr_debug(1);
 
+    /* Open the IPC sockets */
     pingerOpen();
+
+    /* Setup the IPv4 ICMP socket */
+    pingerv4_state_init(&v4_state, getpid() & 0xffff);
+    if (! pingerv4_open_icmpsock(&v4_state))
+        exit(1);
+
     setgid(getgid());
     setuid(getuid());
 
@@ -370,8 +369,8 @@ main(int argc, char *argv[])
 	tv.tv_usec = 0;
 	FD_ZERO(&R);
 	FD_SET(socket_from_squid, &R);
-	FD_SET(icmp_sock, &R);
-	x = select(icmp_sock + 1, &R, NULL, NULL, &tv);
+	FD_SET(v4_state.icmp_sock, &R);
+	x = select(v4_state.icmp_sock + 1, &R, NULL, NULL, &tv);
 	getCurrentTime();
 	if (x < 0 && errno == EINTR)
 		continue;
@@ -385,7 +384,7 @@ main(int argc, char *argv[])
 		pingerClose();
 		exit(1);
 	    }
-	if (FD_ISSET(icmp_sock, &R))
+	if (FD_ISSET(v4_state.icmp_sock, &R))
 	    pingerRecv();
 	if (PINGER_TIMEOUT + last_check_time < squid_curtime) {
 	    debug(42, 2) ("pinger: timeout occured\n");
