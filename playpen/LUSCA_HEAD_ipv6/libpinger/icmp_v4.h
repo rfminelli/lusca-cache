@@ -1,8 +1,6 @@
 #ifndef	__LIBPINGER_ICMP_V4_H__
 #define	__LIBPINGER_ICMP_V4_H__
 
-
-
 #if	defined(_SQUID_WIN32_)
 
 /*
