@@ -20,7 +20,9 @@ This list is not comprehensive and is in no particular order.
 || client_side changes || || completed || Yes ||
 || http changes || || completed || Yes ||
 || SNMP support || || completed || Yes ||
-|| pinger || || || ||
+|| netdb: pinger || || completed || yes ||
+|| netdb: core || || completed || yes ||
+|| netdb: icmp || || completed || yes ||
 || ICP: receiving || || completed || No ||
 || ICP: sending || || completed || No ||
 || HTCP: sending || || || ||
