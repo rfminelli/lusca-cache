@@ -86,8 +86,9 @@ typedef struct {
     char payload[MAX_PAYLOAD];
 } icmpEchoData;
 
-static void pingerRecv(void);
-static void pingerLog(int, struct in_addr, int, int);
+static void pingerRecv4(void);
+static void pingerRecv6(void);
+static void pingerLog(int, sqaddr_t *, int, int);
 static void pingerSendtoSquid(pingerReplyData * preply);
 static void pingerOpen(void);
 static void pingerClose(void);
@@ -101,8 +102,8 @@ Win32SockCleanup(void)
 }
 #endif /* ifdef _SQUID_MSWIN_ */
 
-
 struct pingerv4_state v4_state;
+struct pingerv6_state v6_state;
 
 void
 pingerOpen(void)
@@ -181,6 +182,7 @@ void
 pingerClose(void)
 {
     pingerv4_close_icmpsock(&v4_state);
+    pingerv6_close_icmpsock(&v6_state);
 #ifdef _SQUID_MSWIN_
     shutdown(socket_to_squid, SD_BOTH);
     close(socket_to_squid);
@@ -189,7 +191,7 @@ pingerClose(void)
 }
 
 static void
-pingerSendEcho(struct in_addr to, int opcode, char *payload, int len)
+pingerSendEcho(sqaddr_t *to, int opcode, char *payload, int len)
 {
     icmpEchoData echo;
     int icmp_pktsize;
@@ -207,16 +209,20 @@ pingerSendEcho(struct in_addr to, int opcode, char *payload, int len)
         icmp_pktsize += MIN(len, MAX_PAYLOAD);
     }
 
-    pingerv4SendEcho(&v4_state, to, opcode, (char *) &echo, icmp_pktsize);
+    if (sqinet_get_family(to) == AF_INET) {
+        pingerv4SendEcho(&v4_state, sqinet_get_v4_inaddr(to,
+          SQADDR_ASSERT_IS_V4), opcode, (char *) &echo, icmp_pktsize);
+    } else if (sqinet_get_family(to) == AF_INET6) {
+        pingerv6SendEcho(&v6_state, to, opcode, (char *) &echo, icmp_pktsize);
+    }
     pingerLog(ICMP_ECHO, to, 0, 0);
 }
 
 /*
  * This is an IPv4-specific function for now.
  */
-#warning IPv6-ify this!
 static void
-pingerRecv(void)
+pingerRecv4(void)
 {
     char *pkt;
     struct timeval now;
@@ -224,6 +230,7 @@ pingerRecv(void)
     static pingerReplyData preply;
     struct timeval tv;
     struct sockaddr_in *v4;
+    sqaddr_t from6;
 
     int icmp_type, payload_len, hops;
     struct in_addr from;
@@ -259,20 +266,77 @@ pingerRecv(void)
     preply.rtt = tvSubMsec(tv, now);
     preply.psize = payload_len;
     pingerSendtoSquid(&preply);
-    pingerLog(icmp_type, from, preply.rtt, preply.hops);
+    sqinet_init(&from6);
+    sqinet_set_v4_inaddr(&from6, &from);
+    pingerLog(icmp_type, &from6, preply.rtt, preply.hops);
+    sqinet_done(&from6);
 }
 
 static void
-pingerLog(int icmp_type, struct in_addr addr, int rtt, int hops)
+pingerRecv6(void)
 {
-    debug(42, 2) ("pingerLog: %9d.%06d %-16s %d %-15.15s %dms %d hops\n",
-	(int) current_time.tv_sec,
-	(int) current_time.tv_usec,
-	inet_ntoa(addr),
-	(int) icmp_type,
-	icmpPktStr[icmp_type],
-	rtt,
-	hops);
+    char *pkt;
+    struct timeval now;
+    icmpEchoData *echo;
+    static pingerReplyData preply;
+    struct timeval tv;
+    sqaddr_t from;
+    int icmp_type, payload_len, hops;
+    char sbuf[MAX_IPSTRLEN];
+
+    sqinet_init(&from);
+
+    debug(42, 1) ("%s: called\n", __func__);
+
+    pkt = pingerv6RecvEcho(&v6_state, &icmp_type, &payload_len, &from, &hops);
+    debug(42, 1) ("%s: returned %p\n", __func__, pkt);
+
+    if (pkt == NULL) {
+        sqinet_done(&from);
+        return;
+    }
+
+#if GETTIMEOFDAY_NO_TZP
+    gettimeofday(&now);
+#else
+    gettimeofday(&now, NULL);
+#endif
+
+    if (do_debug(42, 9)) {
+        (void) sqinet_ntoa(&from, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
+        debug(42, 9) ("pingerRecv: %d payload bytes from %s\n", payload_len,
+          sbuf);
+    }
+
+    echo = (icmpEchoData *) pkt;
+    sqinet_copy_tosockaddr(&from, &preply.from);
+    preply.opcode = echo->opcode;
+    preply.hops = hops;
+    memcpy(&tv, &echo->tv, sizeof(tv));
+    preply.rtt = tvSubMsec(tv, now);
+    preply.psize = payload_len;
+    pingerSendtoSquid(&preply);
+    pingerLog(icmp_type, &from, preply.rtt, preply.hops);
+    sqinet_done(&from);
+}
+
+
+
+static void
+pingerLog(int icmp_type, sqaddr_t *addr, int rtt, int hops)
+{
+    char sbuf[MAX_IPSTRLEN];
+    if (do_debug(42, 2)) {
+        (void) sqinet_ntoa(addr, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
+        debug(42, 2) ("pingerLog: %9d.%06d %-16s %d %-15.15s %dms %d hops\n",
+          (int) current_time.tv_sec,
+          (int) current_time.tv_usec,
+          sbuf,
+          (int) icmp_type,
+          icmpPktStr[icmp_type],
+          rtt,
+          hops);
+    }
 }
 
 static int
@@ -281,7 +345,7 @@ pingerReadRequest(void)
     static pingerEchoData pecho;
     int n;
     int guess_size;
-    struct sockaddr_in *v4;
+    sqaddr_t to;
 
     memset(&pecho, '\0', sizeof(pecho));
     n = read(socket_from_squid, (char *) &pecho, sizeof(pecho));
@@ -303,18 +367,13 @@ pingerReadRequest(void)
 	return 0;
     }
 
-    if (pecho.to.ss_family == AF_INET) {
-        v4 = (struct sockaddr_in *) &pecho.to;
-        pingerSendEcho(v4->sin_addr,
-          pecho.opcode,
-          pecho.payload,
-          pecho.psize);
-          return n;
-    } else if (pecho.to.ss_family == AF_INET6) {
-        debug(42, 1) ("%s: AF_INET6; not supported yet\n", __func__);
-        return 0;    /* Not currently supported */
-    } else
-        return 0;
+    sqinet_init(&to);
+    sqinet_set_sockaddr(&to, &pecho.to);
+    pingerSendEcho(&to,
+      pecho.opcode,
+      pecho.payload,
+      pecho.psize);
+    return n;
 }
 
 static void
@@ -337,6 +396,7 @@ main(int argc, char *argv[])
     const char *debug_args = "ALL,1";
     char *t;
     time_t last_check_time = 0;
+    int maxfd = 0;
 
 /*
  * cevans - do this first. It grabs a raw socket. After this we can
@@ -356,8 +416,16 @@ main(int argc, char *argv[])
     if (! pingerv4_open_icmpsock(&v4_state))
         exit(1);
 
+    pingerv6_state_init(&v6_state, getpid() & 0xffff);
+    if (! pingerv6_open_icmpsock(&v6_state))
+        exit(1);
+
     setgid(getgid());
     setuid(getuid());
+
+    /* Calculate the maximum FD for select() */
+    maxfd = MAX(maxfd, v4_state.icmp_sock);
+    maxfd = MAX(maxfd, v6_state.icmp_sock);
 
     for (;;) {
 	tv.tv_sec = PINGER_TIMEOUT;
@@ -365,7 +433,8 @@ main(int argc, char *argv[])
 	FD_ZERO(&R);
 	FD_SET(socket_from_squid, &R);
 	FD_SET(v4_state.icmp_sock, &R);
-	x = select(v4_state.icmp_sock + 1, &R, NULL, NULL, &tv);
+	FD_SET(v6_state.icmp_sock, &R);
+	x = select(maxfd + 1, &R, NULL, NULL, &tv);
 	getCurrentTime();
 	if (x < 0 && errno == EINTR)
 		continue;
@@ -380,7 +449,9 @@ main(int argc, char *argv[])
 		exit(1);
 	    }
 	if (FD_ISSET(v4_state.icmp_sock, &R))
-	    pingerRecv();
+	    pingerRecv4();
+	if (FD_ISSET(v6_state.icmp_sock, &R))
+	    pingerRecv6();
 	if (PINGER_TIMEOUT + last_check_time < squid_curtime) {
 	    debug(42, 2) ("pinger: timeout occured\n");
 	    if (send(socket_to_squid, (char *) &tv, 0, 0) < 0) {
