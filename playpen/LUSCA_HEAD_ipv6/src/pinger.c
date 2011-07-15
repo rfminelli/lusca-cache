@@ -88,7 +88,7 @@ typedef struct {
 
 static void pingerRecv4(void);
 static void pingerRecv6(void);
-static void pingerLog(int, sqaddr_t *, int, int);
+static void pingerLog(const char *, sqaddr_t *, int, int);
 static void pingerSendtoSquid(pingerReplyData * preply);
 static void pingerOpen(void);
 static void pingerClose(void);
@@ -215,7 +215,7 @@ pingerSendEcho(sqaddr_t *to, int opcode, char *payload, int len)
     } else if (sqinet_get_family(to) == AF_INET6) {
         pingerv6SendEcho(&v6_state, to, opcode, (char *) &echo, icmp_pktsize);
     }
-    pingerLog(ICMP_ECHO, to, 0, 0);
+    pingerLog("ICMP_ECHO", to, 0, 0);
 }
 
 /*
@@ -268,7 +268,7 @@ pingerRecv4(void)
     pingerSendtoSquid(&preply);
     sqinet_init(&from6);
     sqinet_set_v4_inaddr(&from6, &from);
-    pingerLog(icmp_type, &from6, preply.rtt, preply.hops);
+    pingerLog("ICMP_ECHO_RESPONSE", &from6, preply.rtt, preply.hops);
     sqinet_done(&from6);
 }
 
@@ -316,24 +316,21 @@ pingerRecv6(void)
     preply.rtt = tvSubMsec(tv, now);
     preply.psize = payload_len;
     pingerSendtoSquid(&preply);
-    pingerLog(icmp_type, &from, preply.rtt, preply.hops);
+    pingerLog("ICMP_ECHO_RESPONSE", &from, preply.rtt, preply.hops);
     sqinet_done(&from);
 }
 
-
-
 static void
-pingerLog(int icmp_type, sqaddr_t *addr, int rtt, int hops)
+pingerLog(const char *icmp_type, sqaddr_t *addr, int rtt, int hops)
 {
     char sbuf[MAX_IPSTRLEN];
     if (do_debug(42, 2)) {
         (void) sqinet_ntoa(addr, sbuf, MAX_IPSTRLEN, SQADDR_NONE);
-        debug(42, 2) ("pingerLog: %9d.%06d %-16s %d %-15.15s %dms %d hops\n",
+        debug(42, 2) ("pingerLog: %9d.%06d %-16s %-15.15s %dms %d hops\n",
           (int) current_time.tv_sec,
           (int) current_time.tv_usec,
           sbuf,
-          (int) icmp_type,
-          icmpPktStr[icmp_type],
+          icmp_type,
           rtt,
           hops);
     }
