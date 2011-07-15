@@ -189,7 +189,7 @@ pingerv6RecvEcho(struct pingerv6_state *state, int *icmp_type,
     icmp6header = (struct icmp6_hdr *) pkt;
 
     if (icmp6header->icmp6_type != ICMP6_ECHO_REPLY) {
-        debug(42, 1) ("%s: unknown ICMP response, code %d\n",
+        debug(42, 5) ("%s: unknown ICMP response, code %d\n",
           __func__, icmp6header->icmp6_type);
         return NULL;
     }
