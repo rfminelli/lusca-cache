@@ -286,10 +286,10 @@ pingerRecv6(void)
 
     sqinet_init(&from);
 
-    debug(42, 1) ("%s: called\n", __func__);
+    debug(42, 9) ("%s: called\n", __func__);
 
     pkt = pingerv6RecvEcho(&v6_state, &icmp_type, &payload_len, &from, &hops);
-    debug(42, 1) ("%s: returned %p\n", __func__, pkt);
+    debug(42, 9) ("%s: returned %p\n", __func__, pkt);
 
     if (pkt == NULL) {
         sqinet_done(&from);
