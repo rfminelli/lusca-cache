@@ -641,7 +641,8 @@ rfc1035MessageUnpack(const char *buf,
  * Returns the size of the query
  */
 ssize_t
-rfc1035BuildAQuery(const char *hostname, char *buf, size_t sz, unsigned short qid, rfc1035_query * query)
+rfc1035BuildAQuery(const char *hostname, char *buf, size_t sz,
+  unsigned short qid, rfc1035_query * query)
 {
     static rfc1035_message h;
     size_t offset = 0;
@@ -704,7 +705,8 @@ rfc1035BuildAAAAQuery(const char *hostname, char *buf, size_t sz,
  * Returns the size of the query
  */
 ssize_t
-rfc1035BuildPTRQuery(const struct in_addr addr, char *buf, size_t sz, unsigned short qid, rfc1035_query * query)
+rfc1035BuildPTRQuery(const struct in_addr addr, char *buf, size_t sz,
+  unsigned short qid, rfc1035_query * query)
 {
     static rfc1035_message h;
     size_t offset = 0;
@@ -736,6 +738,49 @@ rfc1035BuildPTRQuery(const struct in_addr addr, char *buf, size_t sz, unsigned s
     assert(offset <= sz);
     return offset;
 }
+
+/*
+ * XXX this doesn't belong here?
+ */
+ssize_t
+rfc3596BuildPTR6Query(const struct in6_addr addr6, char *buf, size_t sz,
+    unsigned short qid, rfc1035_query * query)
+{
+    static rfc1035_message h;
+    size_t offset = 0;
+    static char rev[RFC1035_MAXHOSTNAMESZ];
+    int i;
+    const uint8_t *r = addr6.s6_addr;
+    char *p = rev;
+
+    /* Encode the IPv6 address in reverse */
+    for (i = 15; i >= 0; i--, p+=4) {
+        snprintf(p, 5, "%1x.%1x.", ((r[i]) & 0xf), (r[i] >> 4) & 0xf);
+    }
+    snprintf(p,10,"ip6.arpa.");
+
+    memset(&h, '\0', sizeof(h));
+    h.id = qid;
+    h.qr = 0;
+    h.rd = 1;
+    h.opcode = 0;		/* QUERY */
+    h.qdcount = (unsigned int) 1;
+    offset += rfc1035HeaderPack(buf + offset, sz - offset, &h);
+    offset += rfc1035QuestionPack(buf + offset,
+        sz - offset,
+        rev,
+        RFC1035_TYPE_PTR,
+        RFC1035_CLASS_IN);
+    if (query) {
+        query->qtype = RFC1035_TYPE_PTR;
+        query->qclass = RFC1035_CLASS_IN;
+        xstrncpy(query->name, rev, sizeof(query->name));
+    }
+    assert(offset <= sz);
+    return offset;
+}
+
+
 
 /*
  * We're going to retry a former query, but we

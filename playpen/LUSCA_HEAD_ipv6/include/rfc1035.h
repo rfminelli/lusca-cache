@@ -95,6 +95,9 @@ extern ssize_t rfc1035BuildPTRQuery(const struct in_addr,
     size_t sz,
     unsigned short qid,
     rfc1035_query * query);
+extern ssize_t rfc3596BuildPTR6Query(const struct in6_addr addr6,
+    char *buf, size_t sz, unsigned short qid, rfc1035_query * query);
+
 extern void rfc1035SetQueryID(char *, unsigned short qid);
 extern int rfc1035MessageUnpack(const char *buf,
     size_t sz,
