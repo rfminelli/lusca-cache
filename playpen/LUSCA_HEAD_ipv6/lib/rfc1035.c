@@ -667,7 +667,8 @@ rfc1035BuildAQuery(const char *hostname, char *buf, size_t sz, unsigned short qi
 }
 
 ssize_t
-rfc1035BuildAAAAQuery(const char *hostname, char *buf, size_t sz, unsigned short qid, rfc1035_query * query)
+rfc1035BuildAAAAQuery(const char *hostname, char *buf, size_t sz,
+    unsigned short qid, rfc1035_query * query)
 {
 	static rfc1035_message h;
 	size_t offset = 0;
