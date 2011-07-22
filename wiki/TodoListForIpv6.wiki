@@ -8,7 +8,7 @@ This list is not comprehensive and is in no particular order.
 || external dns || || N/A || N/A ||
 || comm layer || Adrian Chadd || Completed || Yes ||
 || ipcache || adrian || Completed || Yes ||
-|| fqdncache || adrian || Completed || Yes ||
+|| fqdncache || adrian || no || no ||
 || clientdb || Adrian Chadd || Completed || Yes ||
 || pconn || || completed || No ||
 || ident || Adrian Chadd || Completed || No ||
