@@ -87,16 +87,14 @@ static void
 netdbHashInsert(netdbEntry * n, sqaddr_t *addr)
 {
     char sbuf[MAX_IPSTRLEN];
-    sqaddr_t a;
 
-    sqinet_init(&a);
-    networkFromInaddr(&a, addr);
-    (void) sqinet_ntoa(&a, sbuf, MAX_IPSTRLEN, SQADDR_NO_BRACKET_V6);
+    sqinet_init(&n->net);
+    networkFromInaddr(&n->net, addr);
+    (void) sqinet_ntoa(&n->net, sbuf, MAX_IPSTRLEN, SQADDR_NO_BRACKET_V6);
     xstrncpy(n->network, sbuf, MAX_IPSTRLEN);
     n->hash.key = n->network;
     assert(hash_lookup(addr_table, n->network) == NULL);
     hash_join(addr_table, &n->hash);
-    sqinet_done(&a);
 }
 
 static void
@@ -166,6 +164,7 @@ netdbRelease(netdbEntry * n)
     n->n_peers_alloc = 0;
     if (n->link_count == 0) {
         netdbHashDelete(n->network);
+        sqinet_done(&n->net);
         memPoolFree(pool_netdb_entry, n);
     }
 }
@@ -233,6 +232,7 @@ netdbAdd(sqaddr_t *addr)
         netdbPurgeLRU();
     if ((n = netdbLookupAddr(addr)) == NULL) {
         n = memPoolAlloc(pool_netdb_entry);
+        sqinet_init(&n->net);
         netdbHashInsert(n, addr);
     }
     return n;
@@ -518,6 +518,11 @@ netdbReloadState(void)
         N.last_use_time = (time_t) atoi(q);
         n = memPoolAlloc(pool_netdb_entry);
         xmemcpy(n, &N, sizeof(netdbEntry));
+        /*
+         * XXX this is ugly, but setup the net variable -after-
+         * XXX the struct has been copied in-place. ew.
+         */
+        sqinet_init(&n->net);
         netdbHashInsert(n, &addr);
         while ((q = strtok(NULL, w_space)) != NULL) {
             if (netdbLookupHost(q) != NULL)        /* no dups! */
@@ -550,6 +555,7 @@ netdbFreeNetdbEntry(void *data)
 {
     netdbEntry *n = data;
     safe_free(n->peers);
+    sqinet_done(&n->net);
     memPoolFree(pool_netdb_entry, n);
 }
 
