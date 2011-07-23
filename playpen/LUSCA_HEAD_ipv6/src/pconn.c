@@ -180,6 +180,18 @@ pconnHistDump(StoreEntry * e)
     }
 }
 
+static void
+pconnDump(StoreEntry * e)
+{
+    struct _pconn *p;
+
+    hash_first(table);
+    while ((p = (struct _pconn *) hash_next(table))) {
+        storeAppendPrintf(e, "\t%s  %d fds\n",
+          (const char *) p->hash.key, p->nfds);
+    }
+}
+
 /* ========== PUBLIC FUNCTIONS ============================================ */
 
 
@@ -199,6 +211,9 @@ pconnInit(void)
     cachemgrRegister("pconn",
 	"Persistent Connection Utilization Histograms",
 	pconnHistDump, 0, 1);
+    cachemgrRegister("pconn_list",
+        "Persistent Connection List",
+        pconnDump, 0, 1);
     debug(48, 3) ("persistent connection module initialized\n");
 }
 
