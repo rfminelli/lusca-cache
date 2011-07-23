@@ -470,6 +470,7 @@ sslConnectDone(int fd, int status, void *data)
 	errorSend(sslState->client.fd, err);
     } else {
 	sslState->connected = 1;
+	assert(sslState->server.fd != -1);
 	if (sslState->servers->peer)
 	    sslProxyConnected(sslState->server.fd, sslState);
 	else
