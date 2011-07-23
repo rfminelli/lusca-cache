@@ -997,3 +997,46 @@ idnsPTRLookup(const struct in_addr addr, IDNSCB * callback, void *data)
     idnsCacheQuery(q);
     idnsSendQuery(q);
 }
+
+void
+idnsPTR6Lookup(const sqaddr_t *addr, IDNSCB *callback, void *data)
+{
+    idns_query *q;
+    struct in6_addr addr6;
+
+    addr6 = sqinet_get_v6_inaddr(addr, SQADDR_ASSERT_IS_V6);
+
+    q = cbdataAlloc(idns_query);
+    q->tcp_socket = -1;
+    q->id = idnsQueryID();
+    q->sz = rfc3596BuildPTR6Query(addr6, q->buf, sizeof(q->buf), q->id,
+      &q->query);
+
+    /* PTR does not do inbound A/AAAA */
+    q->need_A = 0;
+
+    if (do_debug(78, 3)) {
+        char sbuf[MAX_IPSTRLEN];
+        (void) sqinet_ntoa(addr, sbuf, sizeof(sbuf), SQADDR_NONE);
+        debug(78, 3) ("%s: buf is %d bytes for %s, id = %#hx\n",
+          __func__, (int) q->sz, sbuf, q->id);
+    }
+    if (q->sz < 0) {
+        /* problem with query data -- query not sent */
+        callback(data, NULL, 0, "Internal error");
+        safe_free(q->initial_AAAA.answers);
+        cbdataFree(q);
+        return;
+    }
+    if (idnsCachedLookup(q->query.name, callback, data)) {
+        safe_free(q->initial_AAAA.answers);
+        cbdataFree(q);
+        return;
+    }
+    q->callback = callback;
+    q->callback_data = data;
+    cbdataLock(q->callback_data);
+    q->start_t = current_time;
+    idnsCacheQuery(q);
+    idnsSendQuery(q);
+}
