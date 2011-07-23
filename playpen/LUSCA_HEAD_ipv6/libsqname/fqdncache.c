@@ -315,38 +315,37 @@ fqdncacheHandleReply(void *data, rfc1035_rr * answers, int na, const char *error
     fqdncacheCallback(f);
 }
 
-#warning fqdncache_nbgethostbyaddr6() needs fleshing out!
 void
-fqdncache_nbgethostbyaddr6(sqaddr_t *addr, FQDNH * handler, void *handlerData)
+fqdncache_nbgethostbyaddr(struct in_addr addr, FQDNH * handler,
+  void *handlerData)
 {
-        struct in_addr a;
+        sqaddr_t a;
 
-        if (sqinet_get_family(addr) != AF_INET) {
-                debug(35, 1) ("fqdncache_nbgethostbyaddr: IPv6 not yet supported!\n");
-                dns_error_message = "IPv6 FQDNcache not yet supported!";
-                handler(NULL, handlerData);
-                return;
-        }
-
-        a = sqinet_get_v4_inaddr(addr, SQADDR_ASSERT_IS_V4);
-        return fqdncache_nbgethostbyaddr(a, handler, handlerData);
+        sqinet_init(&a);
+        sqinet_set_v4_inaddr(&a, &addr);
+        fqdncache_nbgethostbyaddr(addr, handler, handlerData);
+        sqinet_done(&a);
 }
 
 void
-fqdncache_nbgethostbyaddr(struct in_addr addr, FQDNH * handler, void *handlerData)
+fqdncache_nbgethostbyaddr6(sqaddr_t *addr, FQDNH * handler, void *handlerData)
 {
     fqdncache_entry *f = NULL;
-    char *name = inet_ntoa(addr);
+    char name[MAX_IPSTRLEN];
     generic_cbdata *c;
     assert(handler);
     debug(35, 4) ("fqdncache_nbgethostbyaddr: Name '%s'.\n", name);
     FqdncacheStats.requests++;
-    if (name == NULL || name[0] == '\0') {
-        debug(35, 4) ("fqdncache_nbgethostbyaddr: Invalid name!\n");
-        dns_error_message = "Invalid hostname";
+
+    if (sqinet_get_family(addr) != AF_INET &&
+      sqinet_get_family(addr) != AF_INET6) {
+        debug(35, 1) ("%s: invalid address family!\n", __func__);
+        dns_error_message = "Invalid address record to lookup";
         handler(NULL, handlerData);
         return;
     }
+
+    sqinet_ntoa(addr, name, sizeof(name), SQADDR_NONE);
     f = fqdncache_get(name);
     if (NULL == f) {
         /* miss */
@@ -379,7 +378,15 @@ fqdncache_nbgethostbyaddr(struct in_addr addr, FQDNH * handler, void *handlerDat
     CBDATA_INIT_TYPE(generic_cbdata);
     c = cbdataAlloc(generic_cbdata);
     c->data = f;
-    idnsPTRLookup(addr, fqdncacheHandleReply, c);
+    switch (sqinet_get_family(addr)) {
+        case AF_INET:
+            idnsPTRLookup(sqinet_get_v4_inaddr(addr, SQADDR_ASSERT_IS_V4),
+              fqdncacheHandleReply, c);
+        case AF_INET6:
+            idnsPTR6Lookup(addr, fqdncacheHandleReply, c);
+        default:
+            libcore_fatalf("%s: invalid address family\n", __func__);
+    }
 }
 
 /* initialize the fqdncache */
@@ -401,26 +408,37 @@ fqdncache_init(void)
     pool_fqdncache = memPoolCreate("fqdncache_entry", sizeof(fqdncache_entry));
 }
 
-#warning fqdncache_gethostbyaddr6() needs fleshing out!
-const char *
-fqdncache_gethostbyaddr6(sqaddr_t *addr, int flags)
-{
-        struct in_addr a;
-
-        if (sqinet_get_family(addr) != AF_INET)
-                return NULL;
-
-        a = sqinet_get_v4_inaddr(addr, SQADDR_ASSERT_IS_V4);
-        return fqdncache_gethostbyaddr(a, flags);
-}
-
 const char *
 fqdncache_gethostbyaddr(struct in_addr addr, int flags)
 {
-    char *name = inet_ntoa(addr);
+        sqaddr_t a;
+        const char *r;
+
+        sqinet_init(&a);
+        sqinet_set_v4_inaddr(&a, &addr);
+        r = fqdncache_gethostbyaddr6(&a, flags);
+        sqinet_done(&a);
+        return r;
+}
+
+/*
+ * XXX this function isn't thread safe!
+ */
+const char *
+fqdncache_gethostbyaddr6(sqaddr_t *addr, int flags)
+{
+    static char name[MAX_IPSTRLEN];
     fqdncache_entry *f = NULL;
     struct in_addr ip;
-    assert(name);
+
+    if (sqinet_get_family(addr) != AF_INET &&
+      sqinet_get_family(addr) != AF_INET6) {
+        dns_error_message = "Invalid address passed to fqdncache_gethostbyaddr";
+        return NULL;
+    }
+
+    (void) sqinet_ntoa(addr, name, sizeof(name), SQADDR_NONE);
+
     FqdncacheStats.requests++;
     f = fqdncache_get(name);
     if (NULL == f) {
@@ -444,7 +462,7 @@ fqdncache_gethostbyaddr(struct in_addr addr, int flags)
         return name;
     FqdncacheStats.misses++;
     if (flags & FQDN_LOOKUP_IF_MISS)
-        fqdncache_nbgethostbyaddr(addr, dummy_handler, NULL);
+        fqdncache_nbgethostbyaddr6(addr, dummy_handler, NULL);
     return NULL;
 }
 
@@ -455,6 +473,9 @@ dummy_handler(const char *bufnotused, void *datanotused)
     return;
 }
 
+/*
+ * XXX this isn't threadsafe!
+ */
 const char *
 fqdnFromAddr(struct in_addr addr)
 {
