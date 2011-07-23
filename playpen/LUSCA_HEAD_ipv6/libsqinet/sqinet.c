@@ -200,6 +200,21 @@ sqinet_set_v4_inaddr(sqaddr_t *s, struct in_addr *v4addr)
 	return 1;
 }
 
+int
+sqinet_set_v6_inaddr(sqaddr_t *s, struct in6_addr *v6addr)
+{
+	struct sockaddr_in6 *v6;
+
+	assert(s->init);
+	s->st.ss_family = AF_INET6;
+
+	v6 = (struct sockaddr_in6 *) &s->st;
+	v6->sin6_family = AF_INET6;
+	memcpy(&v6->sin6_addr, v6addr, sizeof(struct in6_addr));
+	v6->sin6_port = 0;
+	return 1;
+}
+
 /*!
  * @function
  *	sqinet_set_v4_port
