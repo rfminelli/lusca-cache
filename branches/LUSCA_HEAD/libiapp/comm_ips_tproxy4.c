@@ -27,6 +27,8 @@ typedef uint32_t __u32;
 #endif
 #endif
 
+#include <linux/capability.h>
+
 #if HAVE_SYS_PRCTL_H
 #include <sys/prctl.h>
 #endif
