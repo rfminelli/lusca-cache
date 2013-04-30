@@ -28,6 +28,6 @@ in the Store_URL_Rewrite i look for the ID file and read the referer and reply w
 thus no matter what id's youtube use that shall always refer to the same video being watched  
 
 and in the store url rewrite i just read the id of the <i>videoplayback</i> and read teh contents referer stored in the file and hola i have fixed related to the url of the page saved.
-
+more info can be found <a href='https://code.google.com/p/squid-cacheboy-helper-tools/downloads/list'>here</a>
 
 happy caching.
