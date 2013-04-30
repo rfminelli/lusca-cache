@@ -11,15 +11,21 @@ Recently there has been lots of modifications done at youtube servers that refle
 
 Changes were made by youtube guys affected badly on the way cache engines worked. And thus there has been many attempts some of them were reading log files generated with referer header logged, which is a good trick by the way:
 1- but what if we are using buffered logs?.
+
 2- what if we are running a busy server with heavy traffic being logged?
+
 3- what if we are using the accelerators like in upxl that i wrote years ago.? 
+
 4- what if .......??? the list continues.
+
 the method i took was to separate the request on a different branch giving the possibility to tamper the request outside of squid environment.
+
 i wrote a simple NodeJS server doing nothing but proxying the generate_204 request to youtube and saving the id and referer header of this request in a flat file (used flat files one file per id/referer for simplicity, would make it a database later on if things getting more complicated)
 
+
 and thus to summarize:
-Purpose of this project is to catchup with the changes done by youtube guys
-to reflect the new changes and get videos cacheable once again.
+
+Purpose of this project is to catchup with the changes done by youtube guys to reflect the new changes and get videos cacheable once again.
 it grabs the request sent from squid mainly the one contains <b>http://(.*)\.youtube.com/generate_204\?(.*)?&id=([0-9a-zA-Z\-\_]+)(.*)?</b>
 then take the referer header should look something like 
 	<b>referer : 	'http://www.youtube.com/watch?v=([0-9a-zA-Z\-\_]+)'</b>
