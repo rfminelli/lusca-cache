@@ -1,0 +1,37 @@
+# Introduction #
+
+Lusca uses external processes for a variety of tasks. The IPC library implements a simple wrapper for running and communicating with external processes.
+
+# Overview #
+
+The IPC code is in libhelper/ipc.[ch](ch.md). This implements the basic function which executes an external helper (ipcCreate()) and creates the read and write sockets used for communication.
+
+The IPC code uses the libiapp/ library for socket communication events.
+
+# Different IPC types #
+
+There is a variety of IPC types implemented in the IPC layer.
+
+  * ICP\_TCP\_SOCKET
+  * IPC\_UDP\_SOCKET
+  * IPC\_FIFO
+  * IPC\_UNIX\_STREAM
+  * IPC\_UNIX\_DGRAM
+
+It isn't immediately clear what the specific circumstances surrounding each of these IPC methods is for. By and large, one should use the stream tyeps (TCP, STREAM, FIFO) rather than the datagram types unless you are certain you know what you're doing.
+
+As far as the existing code is concerned - all the modules use IPC\_STREAM (mapping to one of the TCP/FIFO/STREAM types) save for the ICMP code which uses IPC\_DGRAM (mapping to one of the UDP/DGRAM types.)
+
+# Implementation #
+
+ipcCreate() will fork() Lusca, setup the socket environment as per the requested IPC type, and execute the new process. The new process will have STDIN/STDOUT mapped to the requested socket types. The new process will have STDERR mapped to the Lusca debug log filedescriptor. This means that printing to stderr from a helper will appear in the lusca debug.log file.
+
+There is an initial "chat" session between the main Lusca process and the newly-forked child process before the child exec's the replacement process. This is done to ensure that basic bidirectional IO is possible over the newly created socket pairs. The helper program doesn't need to do any of this.
+
+Lusca will close all other open file descriptors (save STDIN/STDOUT/STDERR) after exec().
+
+# Using the API #
+
+ipcCreate() implements the public facing API. It returns the pid of the child process or -1 on failure. If successful, the rfd/wfd pointers will be set to the filedescriptors used for reading and writing to the child process. These file descriptors can then be passed to commSetSelect() to schedule for comm IO readiness just like any other socket.
+
+Like any normal socket, EOF is detected by the read socket being ready for reading but a read returning 0. Similarly, an error is detected by the read socket being ready for reading but a read returning an error.

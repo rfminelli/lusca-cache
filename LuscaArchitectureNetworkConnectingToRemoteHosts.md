@@ -1,0 +1,36 @@
+# Introduction #
+
+There is a set of routines designed to simplify connecting a TCP socket to a remote host. The API handles the asynchronous socket trickery needed to complete the connection; checking whether the callback is still valid before calling it, and handles retrying failed connections.
+
+# Details #
+
+The caller begins by creating a socket with comm\_open() / comm\_open6(). That takes care of the socket creation, setting flags and setting up the local address.
+
+## Beginning the process ##
+
+A call to commConnectStart() begins the connect process.
+
+```
+void
+commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *data, struct in_addr *addr)
+```
+
+  * "host" is a DNS name to resolve, or NULL if "addr" is to be used to specify the remote host
+  * "port" is the remote port to connect to
+  * "callback" and "data" form the callback to be performed on completion or error. Note the callback data must be allocated via the cbdata framework.
+  * "addr" is the remote host address to connect to (overriding "host"), or NULL
+
+## Aborting ##
+
+There is no explicit connection cancellation - the code registers a close handler which tidies up as needed. A call to comm\_close(fd) will abort the pending connection attempt and tidy up the relevant resources.
+
+## Notification ##
+
+## DNS Lookup ##
+
+## Handling retries ##
+
+
+# Shortcomings #
+
+  * Handling the retry is noble. Handling the retry when the opaque structure being passed in as the "state" anchor is a fildescriptor - not noble. A whole lot of crap goes on in commResetFD() to create a new filedescriptor and "dup" the socket state from the previous file descriptor onto it. This includes the original local IP and port; and -must- therefore retry the TPROXY related stuff.

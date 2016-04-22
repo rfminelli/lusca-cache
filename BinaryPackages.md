@@ -1,0 +1,15 @@
+# Introduction #
+
+Actually some of these are not binaries and sources of the binaries, but who cares?
+
+# Linux #
+
+Some efforts must be required here, it's a big advocacy. :)
+
+# FreeBSD #
+
+Always available at the ports collection in the fresh state.
+
+# Windows #
+
+Experimental binaries are available at [here](http://sites.google.com/site/luscaweb/file-cabinet).

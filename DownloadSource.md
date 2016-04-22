@@ -1,0 +1,18 @@
+# Development #
+
+The current development playpen is a branch off trunk - CACHEBOY\_HEAD.
+
+To grab it (read-only) via Subversion:
+
+**svn checkout http://cacheboy.googlecode.com/svn/branches/CACHEBOY_HEAD**
+
+You will need to run "bootstrap.sh" in the source tree to generate the build environment. Make sure you've read AutoTools to install a known working autoconf/automake environment.
+
+If you'd like to checkout a specific revision then you can try:
+
+**svn checkout -r revisionid http://cacheboy.googlecode.com/svn/branches/CACHEBOYHEAD**
+
+# Cacheboy-1.6 #
+
+To grab it (read-only) via Subversion:
+

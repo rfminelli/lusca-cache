@@ -1,0 +1,92 @@
+# Introduction #
+
+The RoadMap page may be .. cluttered and disorganised. Its primarily designed so Adrian can document and keep track of what is going on.
+
+This is a higher-level summary.
+
+# Cacheboy-1.X #
+
+Cacheboy-1.X is mostly focused on breaking apart the Squid codebase into higher level modules. These modules can then be tested and re-used independently of the Squid application.
+
+## Cacheboy-1.0 ##
+
+| What | Status | Begun Date | Completed Date | URL |
+|:-----|:-------|:-----------|:---------------|:----|
+| Initial Subversion Port | Completed |            |                |     |
+
+## Cacheboy-1.1 ##
+
+| What | Status | Begun Date | Completed Date | URL |
+|:-----|:-------|:-----------|:---------------|:----|
+| Modularity - debugging | Completed |            |                |     |
+| Modularity - core | Completed |            |                |     |
+| Modularity - basic HTTP types | Completed |            |                |     |
+
+## Cacheboy-1.2 ##
+
+| What | Status | Begun Date | Completed Date | URL |
+|:-----|:-------|:-----------|:---------------|:----|
+| Modularity - MemBuf | Completed |            |                |     |
+| Modularity - String Allocation | Completed |            |                |     |
+| Modularity - MemPools | Completed |            |                |     |
+
+## Cacheboy-1.3 ##
+
+| What | Status | Begun Date | Completed Date | URL |
+|:-----|:-------|:-----------|:---------------|:----|
+| Modularity - network communication | Completed |            |                |     |
+| Modularity - event scheduling | Completed |            |                |     |
+| Modularity - legacy disk IO | Completed |            |                |     |
+| Merge - Squid-2.HEAD changes | Completed |            |                |     |
+
+## Cacheboy-1.4 ##
+
+| What | Status | Begun Date | Completed Date | URL |
+|:-----|:-------|:-----------|:---------------|:----|
+| Modularity - communications | Completed |            |                |     |
+| Modularity - callback management | Completed |            |                |     |
+| Merge - Squid-2.HEAD changes | Completed |            |                |     |
+
+## Cacheboy-1.5 ##
+
+| What | Status | Begun Date | Completed Date | URL |
+|:-----|:-------|:-----------|:---------------|:----|
+| Modularity - DNS | Completed | August 2008 | August 2008    |     |
+| Modularity - IPC | Completed | August 2008 | August 2008    |     |
+| Modularity - Helpers | Completed | August 2008 | August 2008    |     |
+| IPv6 - communication core | Completed | August 2008 | August 2008    |     |
+| IPv6 - DNS transport - internal | Completed | August 2008 | 5-Sep-2008     |     |
+| IPv6 - DNS transport - external | In Progress | August 2008 |                |     |
+
+## Cacheboy-1.6 ##
+
+| What | Status | Begun Date | Completed Date | URL |
+|:-----|:-------|:-----------|:---------------|:----|
+| Modularity - fqdncache | Not Started |            |                |     |
+| Modularity - ipcache | Not Started |            |                |     |
+| IPv6 - DNS records (internal) | In Progress | 01-Sep-2008 |                |     |
+| IPv6 - DNS records (external) | Not Started |            |                |     |
+| IPv6 - ACL - src/dst IP | Not Started |            |                |     |
+| IPv6 - ACL - src/dst forward DNS | Not Started |            |                |     |
+| IPv6 - ACL - src/dst reverse DNS | Not Started |            |                |     |
+| IPv6 - client-side | Not Started |            |                |     |
+| IPv6 - SNMP | Not Started |            |                |     |
+
+## Cacheboy-1.7 ##
+
+| What | Status | Begun Date | Completed Date | URL |
+|:-----|:-------|:-----------|:---------------|:----|
+| Modularity - HTTP - Headers | In Progress | August 2008 |                |     |
+| Modularity - HTTP - Header Parsing | In Progress | August 2008 |                |     |
+| Modularity - HTTP - Response Packing | Not Started |            |                |     |
+| Performance - HTTP - Header Parsing | In Progress | August 2008 |                |     |
+
+## Cacheboy-1.8 ##
+
+| What | Status | Begun Date | Completed Date | URL |
+|:-----|:-------|:-----------|:---------------|:----|
+| Performance - refcounted buffers | Pending | August 2007 |                |     |
+| Performance - refcounted strings | In Progress | August 2007 |                |     |
+| Performance - replacement HTTP parsers | In Progress | August 2007 |                |     |
+| Modularity - HTTP - Server-side | Not Started |            |                |     |
+| Modularity - HTTP - Client-side | Not Started |            |                |     |

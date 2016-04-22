@@ -1,0 +1,15 @@
+# Introduction #
+
+One nice medium term aim would be to support some kind of very simple worker thread model to allow events to be pushed into other threads.
+
+They could be used in the short term for some very simple, easily broken out code modules (eg the bulk of the current thread based async IO; some storedir rebuild and scanning logic, etc) but in the longer term the worker threads could run entire network and disk IO loops and form mini-Lusca instances.
+
+# Details #
+
+Worker threads and worker thread queues are somewhat related problems. Worker threads would implement a "queue callback, dispatch, report completion" pattern, with worker queues gluing some kind of work queue on top of that.
+
+None of the current core code is at all thread safe. This should be rectified. :(
+
+Callback data protected pointers can't be passed into a thread - there's no way to know that the pointer will remain valid for the duration of the callback.
+
+The trick is going to be figuring out how to schedule work into a worker thread and dequeue work when its completed without constantly polling the thread queues. A naive implementation for the early work may do (ie, something to handle say, AUFS storedir rebuilds, a file logging module) but later work which may include thousands of enqueue/dequeue operations a second may end up with performance issues. Further research into this (and how its been solved elsewhere - this is a solved problem damnit!) should be attempted.

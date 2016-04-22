@@ -1,0 +1,7 @@
+# Introduction #
+
+There's a few mailing lists:
+
+  * cacheboy-dev@googlegroups.com - http://groups.google.com/group/cacheboy-dev - development discussion
+  * cacheboy-users@googlegroups.com - http://groups.google.com/group/cacheboy-users - user discussion
+  * cacheboy-commit@googlegroups.com - http://groups.google.com/group/cacheboy-commit - commit messages

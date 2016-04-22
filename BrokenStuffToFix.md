@@ -1,0 +1,17 @@
+# Introduction #
+
+There's plenty of gremlins in the original Squid code. This is a non-exhaustive list of things which need to be looked at and fixed.
+
+# socket connect / reset path #
+
+See [Issue 34](https://code.google.com/p/lusca-cache/issues/detail?id=34).
+
+Also, audit the commConnectStart() users (and the non-DNS version in libiapp/, in case!) and see if any of the users are -not- properly closing the filedescriptor afterwards and/or handling errors correctly.
+
+The API tries to guarantee that there will be a filedescriptor available (and hopefully it was the same one as was handed to commConnectStart() !) but there's at least one place that doesn't check responses (the idle code - check fwdConnectIdleDone() to see what it -doesn't- do to check return values); also commResetFD() may fail badly and trash the FD. This mess absolutely needs to be tidied up.
+
+(TODO)
+
+# storeIOState allocation and free #
+
+(TODO)

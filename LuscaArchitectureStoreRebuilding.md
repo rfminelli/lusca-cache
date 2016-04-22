@@ -1,0 +1,63 @@
+# Introduction #
+
+Squid and Lusca load in the entire object index into memory upon startup. This process has changed significantly in Lusca from around [r14221](https://code.google.com/p/lusca-cache/source/detail?r=14221). This page will document both methods.
+
+# Overview #
+
+Squid and Lusca both begin the process of rebuilding the storage indexes at process startup. Each store dir begins the process of rebuilding itself via the storedir "init" function.
+
+At startup, "store\_dirs\_rebuild" is set to 1 and storeRebuildStart() is called to setup the rebuild progress structures.
+
+The storedir rebuild code is responsible for loading in objects, comparing newly loaded in objects with the contents of the cache to see whether an object is "fresher" than an existing copy.
+
+The storedir rebuild code periodically calls storeRebuildProcess() to log how far the rebuild process has progressed.
+
+A storedir calls "storeRebuildComplete()" when the rebuild process has completed. This schedules "storeCleanup()" to begin periodically running to remove invalid and expired entries.
+
+The cache is then ready to serve and store content once validation and cleanup is complete.
+
+# Running during rebuilding #
+
+This needs to be better documented. How the proxy stores or doesn't store content during rebuild, whether temporary disk files are still used anywhere, etc.
+
+# Swap metadata #
+
+Each swap file has a small binary TLV-encoded metadata header which contains information about the object - including size, URL, store key, refresh/expiry information and such.
+
+# Swap log entries #
+
+A swap log contains one header entry and zero or more swap log entries. The swap log header and support code attempts to support "small" (32-bit) and "large" (64-bit) swap log formats where the default system "off\_t" is 32 bits. This needs to be documented better (ie, the --enable-large-cache-files stuff.)
+
+The first entry is type SWAP\_LOG\_VERSION. This contains a version and record\_size. The record size is compared against the size of the 32-bit and 64-bit versions of the structure. It chooses the correct one and uses that for subsequent records.
+
+# Squid Rebuild Information #
+
+This following section documents the legacy Squid method for rebuilding the in-memory index from the on-disk contents.
+
+## AUFS ##
+
+The AUFS rebuild process starts via a call to storeAufsDirRebuild(). This attempts to determine whether a valid swap log is available and chooses whether to rebuild by log or by directory.
+
+If the storedir is being rebuilt via swaplog, a periodic event is scheduled which reads in a fixed number of entries from the swaplog file, adds them to the cache as appropriate, and re-schedules a subsequent read to occur at a later time.
+
+If the storedir is being rebuild via directory, a periodic event is scheduled which walks the storedir and reads in the metadata from a fixed number of swap files. It then re-schedules a subsequent event to occur at a later time to repeat the process until all directories have been checked.
+
+Both of these processes use blocking POSIX IO and as such do not parallelise well. In some very limited cases (eg when the operating system is doing read-ahead) the rebuild-by-log process can parallelise but it requires the read-ahead to keep ahead of how much data is being read at any given time. The process will block on disk IO if more data is requested.
+
+## COSS ##
+
+The COSS rebuild process simply schedules an async read (via aioRead()) to read in a stripe at a time. It then looks through the stripe for valid swap objects and adds them to the cache as appropriate.
+
+This process is IO and CPU intensive. The large, linear reads performed to read the entire stripe contents may easily saturate available bus resources on a large cache.
+
+This process however does happen asynchronously.
+
+# Lusca Rebuild Process #
+
+Lusca has modified the rebuild process to use external helpers to implement the rebuild decision and logic.
+
+The rebuild helpers pipe swap log entries to the main process. The main process thus does not need to know how the cache is being rebuilt; only the resultant cache entries.
+
+The swap log format has been extended to include a SWAP\_LOG\_PROGRESS entry to report the rebuild process, and SWAP\_LOG\_COMPLETED to properly delineate the end of the rebuild process.
+
+More information can be gleaned from the source - src/app/coss\_rebuild/ and src/app/ufs\_rebuild/ for the rebuild applications.

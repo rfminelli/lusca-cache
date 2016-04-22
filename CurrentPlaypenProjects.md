@@ -1,0 +1,58 @@
+# Introduction #
+
+Here's a link to current and past "playpen" projects where various bits of experimentation is going on.
+
+## sockaddr\_change ##
+
+  * Link: http://code.google.com/p/cacheboy/source/list?path=/playpen/sockaddr_change
+  * Overview: Introduce IPv4/IPv6 agnostic types and code into selected parts of the Squid core whilst maintaining the IPv4-only Squid src/ code.
+  * Status: Complete; merged (link?)
+
+## http\_work ##
+
+  * Link: http://code.google.com/p/cacheboy/source/list?path=/playpen/http_work
+
+### First stage ###
+
+  * Overview: reorganise the HTTP parser related code into libhttp/ in preparation for a partial rewrite
+  * Status: Complete; merged (link?)
+
+### Second stage ###
+
+  * Overview: optimise the header parser by introducing a Vector type and allocating header entries out of that rather than malloc'ing each individually
+  * Status: Complete; writing unit tests
+
+## mempools ##
+
+  * Link: http://code.google.com/p/cacheboy/source/list?path=/playpen/mempools
+  * Overview: remove the caching part of mempools, turning it into just an allocator wrapper w/ statistics
+  * Status: Complete; not merged
+
+## string\_work ##
+
+  * Link: http://code.google.com/p/cacheboy/source/list?path=/playpen/string_work
+  * Overview: tidy up the use of String in Squid in preparation for a more sensible string library
+  * Status: complete; not merged
+
+## hash\_work ##
+
+  * Link: http://code.google.com/p/cacheboy/source/list?path=/playpen/hash_work
+  * Overview: Implement a hash table which doesn't require text data as the hash key
+  * Overview
+  * Status: In progress
+
+## ipv6 dns ##
+
+  * Link: http://code.google.com/p/cacheboy/source/list?path=/playpen/ipv6_dns
+  * Overview: implement IPv6 support in the internal DNS code
+  * Status: Completed basic stuff
+
+## ipv6\_acl ##
+
+  * Link: http://code.google.com/p/cacheboy/source/list?path=/playpen/ipv6_acl
+  * Overview: ACL support for src/myip IPv6 support
+  * Status - completed
+
+## ipv6\_clientdb ##
+
+## ipv6\_request ##

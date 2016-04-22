@@ -1,0 +1,7 @@
+# Profiling Cacheboy #
+
+## OProfile notes ##
+
+Tested under Ubuntu 8.10:
+
+  * http://www.nabble.com/callgraph-on-x86_64-td15172083.html points out that optimisation on AMD64 may kill callgraphs in oprofile. Compiling Squid under Linux/AMD64 with this seems to work: **env CFLAGS="-O2 -g -fno-omit-frame-pointer" ./configure ...**

@@ -1,0 +1,23 @@
+# Introduction #
+
+Lusca has a very powerful and flexible method for building complex networks of HTTP proxies and upstream servers. These can be used to build both forward proxy networks and reverse proxy / content delivery networks.
+
+# Overview #
+
+[TODO](TODO.md)
+
+# Options #
+
+The general options are documented in squid.conf.default.
+
+# Differences to Squid #
+
+  * In the case of a fully transparent interception proxy (eg tproxy), upstream peers may or may not need to have the client IP address spoofed. In this case, the option "no-tproxy" forces connections to the cache peer to use the traditional outbound IP address selection versus the client spoofed address.
+
+# Examples #
+
+[TODO](TODO.md)
+
+# Implementation Details #
+
+[TODO](TODO.md)

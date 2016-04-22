@@ -1,0 +1,24 @@
+# HierarchyLogEntry #
+
+This shows up as taking ~ 1.5% of userland CPU - memcpy() in general under the workload in question takes ~ 3.3% of CPU, and this drops it from 2nd in the ranking order of CPU hogs down to 5th or 6th.
+
+(The apachebench-adrian "./ab-k -c 10000 -n 100000 ![http://10.61.10.10:3128/squid-internal-static/icons/anthony-box.gif](http://10.61.10.10:3128/squid-internal-static/icons/anthony-box.gif)") workload.
+
+  * It has two SQUIDMAXNAMELEN static buffers in it, almost all of which won't ever be used
+  * They're copied in FULL in at least one place (as in, regardless of how long the source string is)
+  * The client\_side.c code bit which assigns it for logging (al.hier = request.hier) ends up being  a ~ 630 byte memory copy; most of which is garbage.
+
+What should be done:
+
+  * The host and cd\_host buffers should be converted into String's
+  * There should be an explicit set of functions for creation, destruction, cloning, and assignment - turning this into a sort of class in itself, as it should be)
+  * Once other bits of code use Strings in the right places, almost all of the String assignments here will be references w/ no copying
+  * And specifically - the assignment above for logging will become a reference count, versus a buffer copy, giving the majority of the CPU winnings before the more tricky intrusive changes above to the rest of the codebase occur.
+
+# request\_t #
+
+Its just too big. Its ~ 1.3k a request, half of which are the ident and host buffers. (256 + 128 bytes.) This makes scaling to large numbers of concurrent clients very difficult.
+
+These should be turned into String's as well, and assigned/referenced as required.
+
+There are other things to consider when trying to support tens of thousands of concurrent clients, such as proper buffer management and some of the per-FD state data, but request\_t is one of the larger abusers.

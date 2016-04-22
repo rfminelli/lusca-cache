@@ -1,0 +1,15 @@
+# Introduction #
+
+I'm evaluating the usefulness of JavaDoc comments in Cacheboy.
+
+# Details #
+
+I'm probably going to settle on HeaderDoc from Apple. It seems sensible enough and caters for C code.
+
+I've got some examples at http://www.cacheboy.net/headerdoc/ .
+
+# Links #
+
+  * HeaderDoc - http://developer.apple.com/opensource/tools/headerdoc.html
+  * The Java API Documentation Generator - http://java.sun.com/j2se/1.5.0/docs/tooldocs/windows/javadoc.html
+  * How To Write JavaDoc - http://java.sun.com/j2se/javadoc/writingdoccomments/

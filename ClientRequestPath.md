@@ -1,0 +1,134 @@
+# Introduction #
+
+src/client\_side.c contains all of the twisted incoming request processing - parsing, replying, cache logic, revalidation, refreshing.. its all in here.
+
+This isn't **complete** nor will it really be - I have a project to try and "fix" a few things in this codebase so I'm using this purely as a place to remember where I'm at..
+
+# TODO #
+
+  * Where's the vary/etag/refresh logic processing happening? They don't show up in this pipeline!
+
+# Details #
+
+
+
+clientReadRequest() - the general read handler
+
+  * conn->in.offset > 0 && conn->body.callback != NULL ? call clientProcessBody(conn);
+  * call clientTryParseRequest(); consume x bytes from input buffer
+
+clientTryParseRequest() - parse a request
+
+  * parseHttpRequest() - parse the request
+  * urlParse() - parse the URL, post-accelerator-munging, but pre rewrite munging
+  * check for internal requests; if so; assemble a replacement "internal" URI
+  * urlCheckRequest() - can this request be handled?
+  * check content length; reject transfer encoding
+  * check request-body size?
+  * set keepalive flag - clientSetKeepaliveFlag()
+  * if (there is a request body) - set body handler; set request->body\_reader = clientReadBody;
+  * call clientCheckFollowXForwardedFor()
+
+clientCheckFollowXForwardedFor()
+
+  * if followXFF ACL and XFF header; clientFollowXForwardedForStart()
+  * .. else clientAccessCheck()
+
+clientFollowXForwardedForStart()
+
+  * walk the XFF header, doing ACL checks against those IPs
+  * when complete, clientAccessCheck()
+
+
+
+clientAccessCheck()
+
+  * Config.accessList.http -> clientAccessCheckDone()
+
+clientAccessCheckDone()
+  * ALLOWED ? redirect\_state = REDIRECT\_PENDING; -> clientRedirectStart()
+  * DENIED ? If authentication required; add authentication headers; errorCon(); errorAppendEntry(); STOP
+
+clientRedirectStart()
+  * clientInternalRedirectAccessCheckDone() ; clientRedirectAccessCheckDone() ; clientRedirectDone()
+
+clientRedirectDone()
+  * redirect\_state = REDIRECT\_DONE -> clientStoreURLRewriteStart()
+
+
+clientStoreURLRewriteStart()
+  * clientStoreURLRewriteAccessCheckDone() ; clientStoreURLRewriteDone()
+
+clientStoreURLRewriteDone()
+  * -> clientFinishRewriteStuff()
+
+clientFinishRewriteStuff()
+  * -> clientInterpretRequestHeaders()
+  * -> clientAccessCheck2()
+
+clientInterpretRequestHeaders()
+  * (just fiddle with the headers after processing)
+
+clientAccessCheck2()
+  * -> Config.accessList.http2 and clientAccessCheckDone2(); or clientCheckNoCache()
+
+clientAccessCheckDone2()
+  * -> auth? add auth stuff. fail auth/acl? errorCon(); errorAppendEntry(); STOP
+  * -> clientCheckNoCache()
+
+clientCheckNoCache()
+  * -> Config.accessList.noCache and clientCheckNoCacheDone(); or clientCheckNoCacheDone()
+
+clientCheckNoCacheDone()
+  * -> clientProcessRequest()
+
+clientProcessRequest() (called from a variety of places!)
+  * Do method based stuff - CONNECT, TRACE, PURGE, handle 100-continue here? um..
+  * A GET? clientProcessRequest2()
+
+clientProcessRequest2() - I think http->entry may be set at this point if the object is in the cache, and NULL if it isn't!
+  * storeGetPublicByRequest() on the request to perform the store lookup, only the cachable / internal requests go here
+
+.. not cachable? (ie, didn't get a http->entry) ..
+
+clientProcessMiss() - this is the beginning of the fowarding logic
+  * Handle left over entry from a failed hit / ims
+  * handle purge
+  * clientOnlyIfCached() ? -> clientProcessOnlyIfCachedMiss()
+  * deny double loops
+  * Create the store entry
+  * collapsed forwarding stuff?
+  * fwdStart() <- this is where the request forwarding occurs
+
+
+## What about the Squid-2 body reader stuff? ##
+
+### Variables involved ###
+
+  * request\_t->body\_reader
+  * request\_t->body\_reader\_data
+
+  * connStateData->body.callback
+  * connStateData->body.cbdata
+  * connStateData->body.request
+  * connStateData->body.buf
+  * connStateData->body.bufsize
+
+### How does it work? ###
+
+  * clientTryParseRequest() determines there's an expected request body and sets request->body\_reader = clientReadBody and request->body\_reader\_data to conn.
+  * mumble, something needs to set conn->body.{callback,cbdata,request,buf,bufsize}
+  * clientReadRequest() checks if there's a conn->body.callback ; if so, it'll call clientProcessBody()
+    * lots of other places call clientProcessBody(), gah
+  * clientProcessBody() consumes data from conn->in.{buf,offset}, calls the conn->body.callback callback (and zero's all of that out for the next request)
+  * the client-side deferred read callback stops reading client-side data if there's a request body and the conn->in buffer is full
+
+### Random notes to think about ###
+
+  * So the client-side code assigns the body reader
+  * then at some later point, the server-side (http.c) code schedules a read via:
+    * httpSendRequest() on completed connect()
+    * -> httpSendRequestEntry() if httpState->orig\_request->body\_reader != NULL
+    * ----> requestReadBody()
+    * ------> if (request->body\_reader) then request->body\_reader() ; else call the callback immediately signifying end-of-body
+    * And at this point, request->body\_reader is clientReadBody(); which sets up the conn->body.{stuff} entries and calls clientProcessBody() to grab whatevers accumulated.

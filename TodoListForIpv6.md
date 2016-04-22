@@ -1,0 +1,48 @@
+This list is not comprehensive and is in no particular order.
+
+| Base IPv4/IPv6 support data type | Adrian Chadd | Completed | Tested |
+|:---------------------------------|:-------------|:----------|:-------|
+| internal dns                     | Adrian Chadd | In Progress | Yes    |
+| external dns                     |              | N/A       | N/A    |
+| comm layer                       | Adrian Chadd | Completed | Yes    |
+| ipcache                          | adrian       | Completed | Yes    |
+| fqdncache                        | adrian       | no        | no     |
+| clientdb                         | Adrian Chadd | Completed | Yes    |
+| pconn                            |              | completed | No     |
+| ident                            | Adrian Chadd | Completed | No     |
+| ACL: IPv6 src/dst                | Adrian Chadd | Completed | Yes    |
+| ACL: IPv6 lookups                | Adrian Chadd | Completed | Yes    |
+| ACL: IPv6 DNS                    |              | completed | Yes    |
+| access\_log                      |              | completed | Yes    |
+| request\_t changes               |              | completed | Yes    |
+| client\_side changes             |              | completed | Yes    |
+| http changes                     |              | completed | Yes    |
+| SNMP support                     |              | completed | Yes    |
+| netdb: pinger                    |              | completed | yes    |
+| netdb: core                      |              | completed | yes    |
+| netdb: icmp                      |              | completed | yes    |
+| ICP: receiving                   |              | completed | No     |
+| ICP: sending                     |              | completed | No     |
+| HTCP: sending                    |              |           |        |
+| HTCP: receiving                  |              | completed | No     |
+| cache peers                      |              | completed | No     |
+| ICP: multicast                   |              |           |        |
+| Server: HTTP connections         |              | completed | Yes    |
+| Server: ftp changes              |              |           |        |
+| Server: whois                    |              |           |        |
+| Server: gopher                   |              |           |        |
+| Server: wais                     |              |           |        |
+| Server: ASN                      |              |           |        |
+| request forwarding               |              | completed | Yes    |
+| SSL server support               |              |           |        |
+| CONNECT support                  |              | Completed | Yes    |
+| NAT: getsockname (bsd)           |              |           |        |
+| NAT: IP Filter                   |              |           |        |
+| NAT: Netfilter (linux)           |              |           |        |
+| NAT: PF                          |              |           |        |
+| TPROXY: TPROXY2                  |              |           |        |
+| TPROXY: TPROXY4                  |              |           |        |
+| TPROXY: FreeBSD                  |              |           |        |
+| Connect timeouts (per-session, rather than per-attempt) |              |           |        |
+| HTTP server idle connection pooling |              |           |        |
+| Neighbor: health checks          | adrian       | Done      | untested |

@@ -1,0 +1,43 @@
+# Introduction #
+
+The Lusca range request support handles range request replies to cache content. It does not currently handle caching range replies from upstreams/origins; it also has some issues with complicated and overlapping range requests.
+
+# Overview #
+
+There are multiple parts to the range request support.
+
+The client-side code (src/client\_side.c) parses the headers, sets the range request field in the request\_t object with the range lists and then forwards the request normally.
+
+The decision whether to issue a range request or a full object request is done in the server-side code (src/http.c).
+
+The client-side code then parses the headers from the store and determines whether the reply should be returned as-is (ie, the reply is a partial reply itself) or whether the reply is a full object reply and the request ranges should be fetched in-order, skipping regions which are not requested.
+
+# Details #
+
+## Parsing Range Requests ##
+
+## Determining whether to forward a Range request ##
+
+## Handling range replies from the store ##
+
+## Aborting transfers (and not caching) ##
+
+One of the current side-effects with the range request handling is that a forwarded request is aborted once the last active client has been satisfied. This turns potentially cachable replies into aborted, uncachable replies.
+
+For now, the only way to work around is to twiddle quick\_abort\_min to never abort an in-progress, cachable request.
+
+# Issues and Limitations #
+
+## Aborting transfers on cachable range request replies ##
+
+TODO: flesh this out and think about how a "slightly better" hack would look
+
+## Inability to cache actual range replies! ##
+
+## Non-range replies to range requests ##
+
+TODO: I'm not certain what will happen if an upstream/origin returns a partial reply that contains more than the requested ranges. I -believe- it will just be returned verbatim. This hasn't yet been an issue in the wild?
+
+## Overlapping range requests ##
+
+TODO: find the reference to the Squid issue with overlapping/complicated ranges!

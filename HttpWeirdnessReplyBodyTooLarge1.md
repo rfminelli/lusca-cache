@@ -1,0 +1,48 @@
+URL example: http://sugg.search.yahoo.net/sg/?output=fxjsonp&nresults=10&command=scrim
+
+Example session:
+
+```
+GET /sg/?output=fxjsonp&nresults=10&command=scrim HTTP/1.0
+User-Agent: Wget/1.11.4
+Accept: */*
+Host: sugg.search.yahoo.net
+Via: 1.0 cindy.cacheboy.net:3128 (Lusca/LUSCA_HEAD)
+X-Forwarded-For: 192.168.1.8
+Cache-Control: max-age=259200
+Connection: keep-alive
+
+HTTP/1.0 200 OK
+Date: Mon, 06 Jul 2009 08:51:40 GMT
+P3P: policyref="http://info.yahoo.com/w3c/p3p.xml", CP="CAO DSP COR CUR ADM DEV TAI PSA PSD IVAi IVDi CONi TELo OTPi OUR DELi SAMi OTRi UNRi PUBi IND PHY ONL UNI PUR FIN COM NAV INT DEM CNT STA POL HEA PRE LOC GOV"
+Content-Length: 159
+Expires: Mon, 06 Jul 2009 09:51:40 GMT
+Vary: Accept-Encoding
+Content-Type: application/json; charset=UTF-8
+Age: 0
+Connection: close
+Server: YTS/1.17.13
+
+fxsearch(["scrim",["scrimshaw","scrimmage","scrimp","scrim fabric","scrimgeour","angus scrimm","scrimmage vests","scrim cloth","scrim city","scrima"],[],[]])
+```
+
+.. but looking at the hexdump:
+
+```
+
+000001A0  69 6f 6e 3a 20 63 6c 6f  73 65 0d 0a 53 65 72 76 ion: clo se..Serv
+000001B0  65 72 3a 20 59 54 53 2f  31 2e 31 37 2e 31 33 0d er: YTS/ 1.17.13.
+000001C0  0a 0d 0a 66 78 73 65 61  72 63 68 28 5b 22 73 63 ...fxsea rch(["sc
+000001D0  72 69 6d 22 2c 5b 22 73  63 72 69 6d 73 68 61 77 rim",["s crimshaw
+000001E0  22 2c 22 73 63 72 69 6d  6d 61 67 65 22 2c 22 73 ","scrim mage","s
+000001F0  63 72 69 6d 70 22 2c 22  73 63 72 69 6d 20 66 61 crimp"," scrim fa
+00000200  62 72 69 63 22 2c 22 73  63 72 69 6d 67 65 6f 75 bric","s crimgeou
+00000210  72 22 2c 22 61 6e 67 75  73 20 73 63 72 69 6d 6d r","angu s scrimm
+00000220  22 2c 22 73 63 72 69 6d  6d 61 67 65 20 76 65 73 ","scrim mage ves
+00000230  74 73 22 2c                                      ts",
+00000234  22 73 63 72 69 6d 20 63  6c 6f 74 68 22 2c 22 73 "scrim c loth","s
+00000244  63 72 69 6d 20 63 69 74  79 22 2c 22 73 63 72 69 crim cit y","scri
+00000254  6d 61 22 5d 2c 5b 5d 2c  5b 5d 5d 29 0d 0a 20 0a ma"],[], []]).. .
+```
+
+Notice the trailing "20 0a" at the end; that makes the reply body 161 bytes.

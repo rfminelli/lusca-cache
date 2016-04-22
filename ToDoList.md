@@ -1,0 +1,166 @@
+# Introduction #
+
+A whole lot of cleanup work needs to be done to make the more difficult work less painful.
+
+This page is meant primarily as a kick for Adrian to remember what he needs to do.
+
+# Current Focus #
+
+  * HTTP Code Restructuring
+    * Shuffle the httpHeader routines which append/insert/delete header entries to work with attribute/value/id's direct rather than taking a HttpHeaderEntry **(done in http\_work branch)**
+      * (This removes the requirement that HttpHeaderEntry 'ies are seperately created from the HttpHeader items list; I can then cut back on individually allocating Entries and just allocate one big lot in one hit.)
+    * Introduce the replacement header parser, lifted from other work
+      * Is more efficient, is prepped for copy-free parsing, is prepped for incremental parsing
+
+  * HTTP Code replacement
+    * Look at lifting out the messy parsing related stuff from client\_side.c and http.c; replace with a single call to a parsing function which returns a completely parsed and checked HTTP request and/or reply + headers.
+
+  * String and refcounted buffer stuff
+    * See if buf\_t's can be introduced into this codebase with a new, completely replacement String implementation
+      * ie, try "skipping" the requirement for converting String users over to non-NUL-terminated stuff, even though the work has been done elsewhere and seems to work out fine
+    * What else in the short term?
+
+  * Storage / disk changes
+    * See about breaking out the aufs ops stuff into a seperate library
+    * See about implementing some scatter/gathering API addons to disk**_and aio_**
+    * Modify the disk write API so stmem's can be written and free'd without the current "hack" (which god is so god forsaken ugly it doesn't deserve mention) - this way stmem's can be made >4k where appropriate and can finally have metadata separated from the data again! (so malloc implementations such as freebsd can suddenly a] have efficient memory use rather than rounding up to the nearest 4k page for that 4108 byte allocation (ie, allocating 8k :) and b] provide page-aligned data accesses for reading, just to make socket and disk IO optimisations by the OS possible.
+
+  * Network / disk API changes
+    * implement cancel'able comm\_read and comm\_write (and comm\_readv/comm\_writev analogues) variants so "other" routines can start using them
+      * ie, don't have them rely on cbdata'ed callback data to determine whether the IO can happen
+      * this makes things like POSIX AIO for socket (and later, disk) IO completely possible!
+      * Changing the existing code over to use these functions should be a priority at this point - but it'll be potentially very, very tricky!
+
+# Code Changes #
+
+  * Begin shuffling stuff out of src/ that isn't strictly required to be there and is trivial to reorganise (makes code reuse and unit testing easier to sort out)
+    * dlink list **done**
+    * debug/ctx **done**
+    * gb\_t **done**
+    * kb\_t - **done**
+    * mem **done**
+      * Move initialisation of types init'ed in mem.c out into component modules **done**
+      * Convert the legacy mem.c types into locally-scoped MemPool types, reducing the mem.c stuff to buffers only **done**
+    * mempool **done**
+    * memstr **done**
+    * cbdata **done**
+    * string **done**
+    * membuf **done**
+
+  * Next - error pages
+    * write some simple sed one-liners to take a CSS + template file and generate a static error page **done**
+    * Convert the English directory to use this - ignore the other languages for now! **done**
+
+  * Next - whatever bits of the http code can easily be moved
+    * HttpVersion **done**
+    * HttpStatusLine **done**
+    * Header / HeaderEntry **done**
+    * Shuffle the header sanity checks (eg one-Content-Length header only! check) out of httpHeaderParse() and into a seperate function - make httpHeaderParse() _JUST_ parse headers - **done, somewhat, in http\_work branch**
+    * HttpRequest
+    * HttpReply
+    * Body related callback pipeline?
+    * HdrCC stuff **done**
+    * Range request stuff **basic stuff done**
+    * What else?
+
+  * IPv6 core changes
+    * bring over ipv6 support utilities **done**
+    * modify libiapp/ comm core to support v6 **done**
+    * write unit tests **in progress**
+    * modify src/ to support new API, but only v4 sockets for client-side handling for now **done in v6 branch**
+    * modify app/tcptest to test v4/v6 sockets **done**
+    * write documentation of new core
+
+  * IPv6 DNS changes
+    * External DNS - worry about later
+    * Internal DNS - using husni's Squid-2.6 IPv6 patch as inspiration
+      * Migrate bits of core comm code to support it - **done**
+      * Convert socket level code to support querying/replying v4/v6 sockets - **done**
+      * Bring over AAAA record support - **in progress**
+      * Handle IPv4 and IPv6 PTR records **in progress**
+      * Tie it all together? What else is needed?
+    * FQDN cache (hostname -> IP)
+    * IP cache (IP -> hostname)
+    * Modify Squid internals which issue DNS lookups to use sqinet instead of in\_addr
+
+  * IPv6 ACL changes
+    * convert IP code over to use sqaddr for the splay tree - **done in v6 branch**
+    * implement src6 - **done in v6 branch**
+    * implement myip6 - **done in v6 branch**
+    * implement dst6
+    * .. what else?
+
+  * IPv6 request handling changes
+    * connstatedata - **done**
+    * error state - **done**
+    * request\_t
+    * .. what else?
+
+  * Bring out the event **done**, comm **done**, fd **done**, disk code **done**
+  * Think about how to bring signal handlers out into registered event callbacks, rather than calling signal handlers in the signal context and then checking for global variables each pass through the comm loop!
+    * This may end up requiring an AsyncCalls like event/callback queue to be written, which isn't a bad thing!
+    * .. just don't use it for comm! Use it for signals, timed/immediate "newschool" events (which don't rely on cbdata validity to run; require the user to unregister the event instead!) and disk callbacks (without cbdata requirements too!)
+  * Bring out the async io code
+
+  * Improve communications code, cut #1
+    * callback based recvfrom(); keep calling the handler for each recvfrom() called until deregistered
+    * convert over recvfrom() users to use this - src/dns\_internal.c ; src/htcp.c ; src/icmp.c ; src/icp\_v2.c ; src/snmp\_core.c ; src/wccp.c ; src/wccp2.c
+    * what else? a comm\_read() ? Remember the old argument of "provide buffer" versus "receive buffer"
+  * Wrap up the initialisation and event run stuff in libiapp/ so the main loop can be used outside of squid's src/ - **done**
+  * .. And then write some example code which reuses the core Squid libraries in Yet Another Test TCP proxy! There should be enough code to do this - perhaps break out the source/destination interception code into a pair of libraries..? - **done**
+
+  * Next phase - improving the communication code #2
+    * Bring over a very naive reference-counted buffer type
+    * Bring over a very, very basic writev() and readv() wrapper - remember about SSL and the FD\_READ/WRITE\_METHOD() stuff!
+    * Use the writev() wrapper for writing HTTP replies, avoiding the copying
+
+  * Next - resolve [issue #10](https://code.google.com/p/lusca-cache/issues/detail?id=#10) (Service time differences!) if it hasn't been resolved already.
+
+# Benchmarking #
+
+  * Benchmark with / without mempools - try to establish which areas of the codebase are (ab)using malloc far too often
+  * Try to figure out the 'best' buffer sizes for doing socket and disk IO
+
+# Comm restructuring #
+
+This is more difficult than I thought. fd, disk and event moved out fine (but needed to move as one big chunk thanks to how everything is packed into the struct _fde); comm seems to initiate DNS lookups!_
+
+commConnectStart() takes a host -and- a struct in\_addr for some reason. Its only used in one place in forward.c, when the connection is using the original client destination after name resolution failed.
+
+This may need to be broken up into two bits - the "do dns lookup and call commConnect() with an IP address" bit (which will live in src/ for now, with the rest of the DNS code) and a commConnect() which simply initiates a connection to a single remote ip:port. This all may be slightly too intrusive to do in this pass, and may need to wait for a bit..
+
+# Removing all the inet\_ntoa() calls, etc #
+
+This is slightly more difficult than it should be. Unfortunately, the output of inet\_ntoa() that is squizzled away in the fde is then used when assembling various hash table entries.
+
+The hash table code assumes that keys are NUL terminated.
+
+The first pass to tidying up this mess is to rework the hash code so it can take a length parameter. "0" should be "NUL-terminated", an explicit length should be said explicit length. This should be attempted so to not introduce a performance regression due to lots of strlen() type calls to calculate lengths where they're unknown.
+
+The next pass is to find the places where hashes including text versions of IP addresses and port numbers are used, and instead convert -those- to binary data + length keys. i bet a more special-purpose data structure could be used in each case where a hash is used involving an IP address (client db, pconn db, etc) but this'll do for now.
+
+Finally, once all the places where inet\_ntoa() and fde.desc are used and begin using binary versions where appropriate. This should cut back on the number of inet\_ntoa() calls which abuse stdio functions inappropriately (its implemented using snprintf()!) and reduce the CPU overhead a % or two.
+
+# Storage related stuff #
+
+Eventually, once all of the data pipeline has been rescued and fixed, disk IO should be done in chunks greater than 4k. Finding the balance will take some time, but i bet 4k isn't it.
+
+The swaplog writing is blocking, even for AUFS. Thats just plain stupid.
+
+The rebuilding logic for COSS sucks because there's no per-stripe metadata being kept. That should really be revisited!
+
+The rebuild logic for AUFS sucks because both the swaplog reading is blocking and the directory rebuilding is blocking. This should be taught to properly use the async IO routines.
+
+It'd be nice if ufs and aufs were merged. It'd be doubly nice if ufs, aufs and diskd were merged -but- diskd's concept of disk IO is quite restrictive (there's an upper limit on the number of IOs that can be scheduled due to sysvshm and msgq limits.) Ideally, diskd IO would be scheduled through an AUFS-like intermediary queue so more IO can be queued versus dispatched, but .. save FreeBSD-4 and badly-setup Solaris machines, there's no need for diskd any more. Leave it as is, tidy up the disk code to provide blocking/aufs/POSIX AIO versions of the IO routines, then unify ufs/aufs.
+
+POSIX AIO under FreeBSD **should** allow for copy-free data in and out for disk IO (re-read the code to make sure!) In any case, FreeBSD's POSIX AIO + kqueue notification is probably sensible enough to do the bulk of IO with. Its just a shame there's no AIO open/close operators - AUFS threads are still needed for that.
+
+# TLV / Swap Metadata #
+
+It doesn't show up in any obvious fashion in the oprofile traces but there are a lot of small memory allocations going on due to the TLV code used by the swap metadata codebase. About 8 or so allocations are done for the TLV data along with allocations from the mempool. The allocations are all very short-lived and thus only show up in the counter data - they're never around long enough to show up in the cachemgr mgr:mem page.
+
+It should be relatively trivial to rework the swap metadata / TLV code to not use temporary buffers at all but to operate on a fixed sized buffer (for packing) and to do the unpacking on the currently supplied store buffer. This should drop the malloc()/free() rate by about 15 to 20%.
+
+# Statistics #
+
+Squid keeps historical statistics for a lot of stuff which may end up being shared between threads. Trying to fine-grain lock all of that crap is probably going to hurt. Perhaps a lot of the statistics need to come -out- of Squid and be implemented externally. This is all pie-in-the-sky at the moment; it will be relevant when the core code begins to be threaded as there are shared comm statistics which I will be removing out of the normal histograms.

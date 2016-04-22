@@ -1,0 +1,181 @@
+# Snapshot release changes! #
+
+## [r14705](https://code.google.com/p/lusca-cache/source/detail?r=14705) ##
+
+### General Code Changes ###
+
+  * Initial IPv6 DNS changes have been imported; but are not currently used.
+  * Some of the URL related code has been broken out into libsqurl/ in preparation for further work and unit tests.
+  * Some of the core FTP related routines have been broken out into libsqftp/ in preparation for further work and unit tests.
+  * Unit tests have been written for the URL routines in libsqurl.
+  * Code documentation has been written for the Vector routines.
+
+## [r14674](https://code.google.com/p/lusca-cache/source/detail?r=14674) ##
+
+### New Features ###
+
+  * The "flushdns" and "flushfqdn" cache manager options have been added - which flush the IP cache and FQDN cache respectively.
+  * Lusca now compiles under Cygwin/MinGW to run both under Cygwin and native 32 bit Windows.
+  * The NetBSD ATF unit test framework is being evaluated. Some unit tests are being written in it to evaluate its suitability.
+  * The HTTP header management and parsing routines have been rewritten to use a Vector .type. This results in many less calls to the system memory allocator and will improve performance on small object workloads.
+
+### General Code Changes ###
+
+  * Unit tests have been written for:
+    * Vector
+    * libhttp - HTTP header management, parsing, deletion, creation, repacking, etc
+    * sqinet - the IPv4/IPv6 data type
+  * The cbdata library has been fixed to compile and run with Valgrind.
+  * The ASN ACL type has been rewritten to use the newer-style radix tree code rather than the old-style NetBSD radix code. This greatly simplifies the ASN codebase.
+  * The NetBSD radix code has been removed from lib/.
+
+## [r14535](https://code.google.com/p/lusca-cache/source/detail?r=14535) ##
+
+### Major Resolved Issues ###
+
+  * The last remaining bugs with the method\_t work imported from Squid-2.HEAD have been found and fixed. This involved changing how the method\_t code handled copying methods and modifying the code to use the new, clearer semantics.
+
+### New Features ###
+
+  * Set the default error pages to be English rather than "templates" - this way new, default Lusca installs will get the much nicer looking English error pages rather than the boring Squid error pages.
+
+### General Code Changes ###
+
+  * Further work on Windows Cygwin/MinGW support - some definition changes and code reorganisation.
+  * The storage metadata routines have been moved to libsqstore/ - this makes them available for use by external programs.
+
+## [r14499](https://code.google.com/p/lusca-cache/source/detail?r=14499) ##
+
+### Major Resolved Issues ###
+
+  * [Issue #91](https://code.google.com/p/lusca-cache/issues/detail?id=#91) was resolved. Lusca (and all versions of Squid) would get confused if logs were rotated before the initial swaplogs were read in. Squid/Lusca would begin appending to the log file it was reading and slowly fill the swap directories up with logfiles.
+  * The issue with occasional failures to read in the swap log data was found. Swaplog rebuilding now reliably works correctly on all platforms.
+
+### General Code Changes ###
+
+  * Initial work on Windows Cygwin/MinGW support - begin fixing autoconf/automake include declarations to include the correct files for Windows/Cygwin builds.
+
+## [r14467](https://code.google.com/p/lusca-cache/source/detail?r=14467) ##
+
+### General Code Changes ###
+
+  * More of the client-side code (in src/client\_side.c) was refactored and broken out into separate source files in src/.
+
+## [r14448](https://code.google.com/p/lusca-cache/source/detail?r=14448) ##
+
+### General Code Changes ###
+
+  * Some of the client-side code (in src/client\_side.c) was refactored and broken out into separate source files in src/.
+
+## [r14428](https://code.google.com/p/lusca-cache/source/detail?r=14428) ##
+
+### Major Resolved Issues ###
+
+  * [Issue #56](https://code.google.com/p/lusca-cache/issues/detail?id=#56) - Some crashes with HTCP have been fixed. This was due to incorrectly initialised HTCP buffers.
+  * [Issue #61](https://code.google.com/p/lusca-cache/issues/detail?id=#61) - A performance issue in the Logging Helper code was fixed. This dramatically dropped CPU use in most cases where logging was enabled.
+
+### Merges from Squid ###
+
+  * Patchset 12597 from Squid-2.HEAD - this fixed a potential DoS where specifically crafted DNS packets would crash Squid.
+
+### New Features ###
+
+  * The "store-stale" refresh\_pattern option from Squid-2 has been ported.
+  * The "storeurl\_bypass" option was introduced and documented.
+  * The default is now to build and use AUFS rather than UFS. This makes a "default" Lusca install perform a lot better than a default Squid, which uses UFS.
+  * The error page building process has been changed a little so error pages are built during the build phase rather than install phase. This makes crafting packages a lot easier.
+
+### General Code Changes ###
+
+  * The initial work to create an ACL type for the destination IP in forwarded requests (rather than "dst" which does a DNS lookup and compares those to the forwarded IP) has been committed. It is currently not used in any active code.
+  * Begin documenting what different parts of the client-side request processing pipeline does.
+  * Some of the client-side code (in src/client\_side.c) was refactored and broken out into separate source files in src/.
+    * Range request processing
+    * IMS processing
+    * ETag processing
+    * NAT related client processing (for transparently intercepted requests)
+
+## [r14371](https://code.google.com/p/lusca-cache/source/detail?r=14371) ##
+
+### Major Issues Resolved ###
+
+  * [Issue #75](https://code.google.com/p/lusca-cache/issues/detail?id=#75) - the pinger process would be restarted without properly cleaning up after the previous one. This could potentially result in hundreds of pinger processes running on a busy Lusca install.
+
+### New Features ###
+
+  * The client database code now uses a radix tree rather than a hash table to store per-client information. This improves performance in small object workloads.
+  * The external DNS code has been removed. The only method of doing DNS lookups now is the default internal DNS code.
+  * The --enable-coss-aio-ops option - Lusca doesn't support or use the system POSIX AIO routines.
+  * The debug options are now correctly set in the environment of helper processes. Helper processes which use the Lusca library routines now inherit the debug configuration of the main process.
+  * [Issue #57](https://code.google.com/p/lusca-cache/issues/detail?id=#57) - add "ignore-no-store" to the refresh\_pattern configuration.
+  * The UFS code now uses buffered IO to write swaplogs, helping with performance under high workloads.
+
+### General Code Changes ###
+
+  * Begin implementing the Vector type - in preparation for HTTP parser/header management related improvements.
+
+## [r14281](https://code.google.com/p/lusca-cache/source/detail?r=14281) ##
+
+### Major Issues Resolved ###
+
+  * [Issue #33](https://code.google.com/p/lusca-cache/issues/detail?id=#33) - Fix a critical bug where revalidation / not modified responses would cause Lusca to crash.
+  * ([r14094](https://code.google.com/p/lusca-cache/source/detail?r=14094)): URLs are now always added to aborted requests.
+
+### New Features ###
+
+  * The storage rebuild logic now uses external helper processes to do the bulk of the disk IO. This includes reading the swaplog and rebuilding from the individual swaplog files if necessary. This reduces the complexity of the rebuild process inside Lusca and it means the rebuild process now parallelises across multiple disk spindles without affecting the performance of the main Lusca process. It dramatically decreases the rebuild time taken for large AUFS storage directories.
+
+  * ([r14077](https://code.google.com/p/lusca-cache/source/detail?r=14077)) A simple templating system has been introduced for Error Pages. The English error pages have been templated. These error pages look a lot more professional than the default Squid pages.
+
+### Changes in Behaviour ###
+
+  * The "update\_headers" option has been disabled. It may be "Correct" HTTP behaviour but the current implementation scales poorly and has a number of outstanding "weird behaviour" bugs.
+  * The "UFS" directory has been removed. The default is now AUFS. AUFS can emulate UFS behaviour by simply making each IO operation non-async (src/fs/aufs/store\_asyncufs.h.)
+
+### Merges from Squid ###
+
+  * Patchset 12461 - remove duplicate peerMonitorInit() in certain circumstances
+  * Patchset 12479 - Fix store\_url memory leak
+  * Patchset 12465 - Fix Solaris /dev/poll support
+  * Patchset 12462 - Fix HTTP reply chunk parsing issues that appear under FreeBSD
+  * Patchset 14247 - Fix some corner cases in the method\_t handling code
+
+### General Code Changes ###
+
+  * The code which handles Location: rewriting in the client side processing has been migrated into a separate file.
+  * The bulk of the COSS and AUFS rebuild logic has been broken out into separate source files. This makes it easier to follow the rebuild and directory management logic.
+
+## [r14007](https://code.google.com/p/lusca-cache/source/detail?r=14007) ##
+
+## [r13894](https://code.google.com/p/lusca-cache/source/detail?r=13894) ##
+
+## Changes between Lusca-1.0 and Lusca-HEAD ##
+
+  * The AUFS and COSS storage rebuild logic has been re-implemented using external processes to improve performance and code clarity.
+  * The client and server side socket buffer sizes are now separately tunable.
+  * The async IO thread count is now configurable at run-time rather than compile time.
+  * The async IO code has been moved into a separate library and tweaked to perform slightly better under load.
+  * TPROXY2, TPROXY4 and FreeBSD TPROXY support has been added and is in production in a variety of sites. This all needs to be better documented though!
+
+  * COSS will now start writing from the last known written stripe, rather than starting from the beginning of the disk.
+  * A new cache\_peer option has been added - "no-tproxy" - which forces the cache peer to ignore client-spoofing for connections to it and instead use the normal source address selection mechanism via tcp\_outgoing\_address.
+  * A new refresh pattern option - "ignore-no-store" - allows the administrator to ignore "Cache-Control: no-store" from the origin/upstream server.
+  * The external DNS code has been removed. The only DNS support now is the internal DNS code.
+
+## Changes between Squid-2.HEAD and Lusca-1.0 ##
+
+  * Squid-2 defaults to use async disk operations for disk read() / open() ; Lusca uses the async disk operations for -all- operations. This improves performance on FreeBSD/Solaris, where write() / close() may block more often than not.
+  * Wide-scale source reorganisation into separate libraries - facilitating code modularity, code reuse and much easier unit testing.
+  * An IPv4/IPv6 aware socket address type has been added - see libsqinet/ in the top-level source directory.
+  * Various core modules have been prepared for IPv6 support - including core networking support and internal DNS routines.
+  * An example single-threaded TCP proxy - see app/tcptest/ in the top-level source directory - which demonstrates re-using the core libraries in other applications.
+
+## Changes between Lusca-1.0 and Lusca-HEAD ##
+
+  * COSS now does not write out swap log files which it doesn't use - improving performance during normal operation and logfile rotation.
+  * The server-side code (src/http.c) has been restructured to remove extra data copying and in preparation for further improvements performance and memory utilisation.
+  * The memory caching layer ("MemPools") has been turned into purely statistics - this is in preparation for fully threading the core libraries.
+  * The majority of code which uses String has been adapted (and rewritten in some places) in preparation for reference counted string management.
+  * The threaded IO code (via aufs) has been turned into a generic library for doing asynchronous IO. A new option exists for tweaking the number of IO threads to use - "n\_aiops\_threads" The default is to use 4 threads per AUFS storedir and 3 threads per COSS storedir.
+  * The diskd and ufs storage types have been removed, leaving only aufs, coss and null. These types will return later on when the disk io layers have been tidied up and re-unified.
+  * The ZPH code has been slightly reworked (in [r14164](https://code.google.com/p/lusca-cache/source/detail?r=14164) / [issue 40](https://code.google.com/p/lusca-cache/issues/detail?id=40)) to make the evaluation order both clearer (it now is documented in the configuration file!) and hopefully more useful in production.

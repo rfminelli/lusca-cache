@@ -1,0 +1,78 @@
+# Introduction #
+
+What to do to make Cacheboy (and squid, for that matter) suck less under FreeBSD.
+
+# Network #
+
+FreeBSD needs more mbufs and a deeper connection queue by default.
+
+Here are my settings:
+
+```
+# Don't rate limit incoming TCP connections
+net.inet.icmp.icmplim=0
+net.inet.icmp.icmplim_output=0
+
+# Tweak MSL to 30 seconds
+net.inet.tcp.msl=3000
+
+# Set send/receive TCP windows to 8k - you can bump these up for production caches but be aware of how much
+# RAM each socket will use!
+
+net.inet.tcp.sendspace=8192
+net.inet.tcp.recvspace=8192
+
+# How many files per process and per system
+kern.maxfilesperproc=65536
+kern.maxfiles=262144
+
+# How many sockets?
+kern.ipc.maxsockets=32768
+
+# How deep is the incoming queue - I bump this right up because I'm generally testing
+# at ~ 10,000 req/sec loads; you may want to leave it around 1000-2000.
+kern.ipc.somaxconn=10240
+
+# How many mbuf clusters to allow?
+kern.ipc.nmbclusters=131072
+```
+
+# Disk / Filesystem #
+
+## Tweaking the syncer ##
+
+FreeBSD's buffer caching needs a bit of a kick or it'll take too long to flush changes. "man syncer" shows the default settings - ~ 30 seconds for metadata, directory and file changes.
+
+Since Squid/Cacheboy do some sync disk writes even in the most optimal UFS disk caching condition (aufs or diskd, with logging daemon for logging) the best thing to do is keep the disks busy and try to keep the buffer cache from filling up.
+
+I've tweaked /etc/sysctl.conf as follows for the syncer:
+
+```
+# squid and freebsd-current and lots of RAM?
+kern.dirdelay=6
+kern.metadelay=5
+kern.filedelay=7
+```
+
+That seems to have stopped the frequency of blocking disk writes in the main process and halted the "WARNING - Disk I/O Overloading" / "WARNING - Queue Congestion" messages.
+
+## Filesystems ##
+
+Create the cache partitions with softupdates. Duh.
+
+I haven't yet sat down and tweaked the FS parameters and recorded the results, sorry. I'll do that at some point.
+
+Mount the filesystems noatime - softupdates helps, but not bothering to even -update- metadata on file reads helps even more, especially on read-heavy workloads.
+
+For example, from my fstab:
+
+```
+/dev/aacd1s1d           /local/2                ufs     rw,noatime              2       2
+/dev/aacd2s1d           /local/3                ufs     rw,noatime              2       2
+/dev/aacd3s1d           /local/4                ufs     rw,noatime              2       2
+```
+
+Use aufs and plenty of threads. FreeBSD 7 and above have excellent threading support. FreeBSD-6 can do disk threads as long as you choose the correct threading library. Have a play.
+
+
+# Other #

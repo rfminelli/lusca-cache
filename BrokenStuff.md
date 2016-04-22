@@ -1,0 +1,11 @@
+## DNS statistics ##
+
+The core histogram code is in a library but updating the histograms still occurs in code found in src/.  The DNS statistics stuff has been disabled to avoid code in libsqname/ relying on stuff in src/.
+
+The "true" fix would be to allow code modules to register histogram structs with a histogram management instance that would handle the updating and reporting.
+
+## Adding COSS to a live system ##
+
+The COSS startup/rebuild code does not handle being "added" to a running system very well. It is very likely to crash Lusca if you do it.
+
+Do not add a storedir to a running Lusca system without restarting the whole proxy.

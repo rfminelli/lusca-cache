@@ -1,0 +1,26 @@
+# Introduction #
+
+Threading? Are you mad?
+
+# Details #
+
+There's a few things to think about:
+
+  * What actually takes the CPU time up in Squid? Is it ACL processing? What about URL rewrites? What about some stuff that could be like external\_acl type behaviour? etc.
+  * Are you targetting dual/quad core machines (ie, with one memory bus) and/or multi-chip machines with different memory busses?
+    * Ie - squid is pretty inefficient at the moment - if the memory bus is being maxed out at the present time then running a second copy may be a bit pointless..
+  * What should be parallelised?
+    * Provide a framework for servicing job queues using threads, a sort of generic async-io type workqueue?
+    * parallelise the core libraries and run multiple concurrent event loops?
+    * both?
+
+How should it look?
+  * Multiple concurrent event loops? (libevent style)
+  * Worker threads doing non-blocking stuff and blocking stuff in seperate thread pools? (Windows completion IO style)
+  * What else?
+
+How difficult is it going to be?
+  * Is it worth parallelising everything?
+  * For example, could you get away with parallelising say, a work queue for ACL/URL/content related stuff, a work queue for "new" protocol modules, a work queue for the storage layer, and leave the current code alone for now?
+
+More to come..

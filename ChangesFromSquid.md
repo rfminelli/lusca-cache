@@ -1,0 +1,28 @@
+# Features #
+
+  * Internal DNS code supports IPv6 and IPv4 DNS hosts (but still currently only implements an IPv4 aware API even if most of the internal code implements IPv4/IPv6 lookups.)
+  * AUFS defaults to all operations being async, versus Squid's default of only open(), read() and unlink() - improving Solaris and FreeBSD performance.
+  * Parts of the Swap Metadata TLV code were rewritten to dramatically reduce the number of malloc() and free() calls made during object creation and swapout/swapin.
+
+# Structural Changes #
+
+A large amount of code has been moved out of src/ and into individual top-level libraries:
+
+  * Shared core routines are in libcore/
+  * Debugging (file, stderr, syslog) is in libsqdebug/
+  * Memory and String handling in libmem/
+  * IPC and helper handling in libhelper/
+  * basic network socket, disk, pipe, fifo FD handling, event loop and signal handling in libiapp/
+  * callback data handling in libcb/
+  * a couple of MIME related routines (specifically headersEnd()) in libmime/
+  * Various HTTP header, header entry and parser routines in libhttp/
+  * Ident support in libsqident/
+  * Statistical manipulation routines (for histograms, etc) in libstat/
+  * storage memory pipeline in libstmem/
+  * Internal and external DNS code in libsqdns/
+  * name-resolution related functions (fqdncache and ipcache) in libsqname/
+  * IPv4/IPv6 address manipulation routines in libsqinet/
+
+# Bug Fixes #
+
+  * Some fixes to the namedb and cache digests code relating to the storeClientRef() changes, which eventually need to be brought back into Squid-2.HEAD.
